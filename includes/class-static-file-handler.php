@@ -1,8 +1,10 @@
 <?php
 
+namespace PerformanceOptimise\Inc;
+
 class Static_File_Handler {
 
-	private static $handler_file = WP_CONTENT_DIR . '/cache/qtpm/cache-handler.php';
+	private static $handler_file = WP_CONTENT_DIR . '/cache/qtpo/cache-handler.php';
 
 	public static function create() {
 
@@ -20,7 +22,7 @@ class Static_File_Handler {
 \$root_directory = \$_SERVER['DOCUMENT_ROOT'];
 \$site_domain    = \$_SERVER['HTTP_HOST'];
 \$request_uri    = parse_url( \$_SERVER['REQUEST_URI'], PHP_URL_PATH );
-\$file_path      = \$root_directory . '/wp-content/cache/qtpm/' . \$site_domain . \$request_uri . 'index.html';
+\$file_path      = \$root_directory . '/wp-content/cache/qtpo/' . \$site_domain . \$request_uri . 'index.html';
 \$gzip_file_path = \$file_path . '.gz';
 
 function is_user_logged_in_without_wp( \$site_url ) {

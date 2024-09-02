@@ -1,5 +1,7 @@
 <?php
 
+namespace PerformanceOptimise\Inc;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
@@ -9,15 +11,14 @@ class Htaccess {
 		$htaccess_path = ABSPATH . '.htaccess';
 		error_log( $htaccess_path );
 		$rules         = <<<EOD
-# BEGIN Performance Optimisation
 <IfModule mod_rewrite.c>
 	RewriteEngine On
 	RewriteCond %{REQUEST_METHOD} !POST
 	RewriteCond %{QUERY_STRING} ^$
-	RewriteCond %{DOCUMENT_ROOT}/wp-content/cache/qtpm/%{HTTP_HOST}%{REQUEST_URI}index.html.gz -f
-	RewriteRule ^(.*)$ wp-content/cache/qtpm/cache-handler.php?file=%{REQUEST_URI} [L]
-	RewriteCond %{DOCUMENT_ROOT}/wp-content/cache/qtpm/%{HTTP_HOST}%{REQUEST_URI}index.html -f
-	RewriteRule ^(.*)$ wp-content/cache/qtpm/cache-handler.php?file=%{REQUEST_URI} [L]
+	RewriteCond %{DOCUMENT_ROOT}/wp-content/cache/qtpo/%{HTTP_HOST}%{REQUEST_URI}index.html.gz -f
+	RewriteRule ^(.*)$ wp-content/cache/qtpo/cache-handler.php?file=%{REQUEST_URI} [L]
+	RewriteCond %{DOCUMENT_ROOT}/wp-content/cache/qtpo/%{HTTP_HOST}%{REQUEST_URI}index.html -f
+	RewriteRule ^(.*)$ wp-content/cache/qtpo/cache-handler.php?file=%{REQUEST_URI} [L]
 	
 	# Serve compressed CSS and JS files if they exist
 	RewriteCond %{REQUEST_FILENAME}\.gz -f
@@ -107,7 +108,6 @@ class Htaccess {
 	Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	Header set Referrer-Policy "no-referrer-when-downgrade"
 </IfModule>
-# END Performance Optimisation
 EOD;
 
 		insert_with_markers( $htaccess_path, 'Performance Optimisation', explode( "\n", $rules ) );
