@@ -1,22 +1,48 @@
 <?php
 
+/**
+ * Static_File_Handler class for the PerformanceOptimise plugin.
+ *
+ * Handles the creation and removal of a cache handler PHP file used for serving cached content.
+ *
+ * @package PerformanceOptimise\Inc
+ */
+
 namespace PerformanceOptimise\Inc;
 
-class Static_File_Handler {
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
-	private static $handler_file = WP_CONTENT_DIR . '/cache/qtpo/cache-handler.php';
+if ( ! class_exists( 'PerformanceOptimise\Inc\Static_File_Handler' ) ) {
+	class Static_File_Handler {
 
-	public static function create() {
+		/**
+		 * Path to the cache handler file.
+		 *
+		 * @var string
+		 */
+		private static $handler_file = WP_CONTENT_DIR . '/cache/qtpo/cache-handler.php';
 
-		global $wp_filesystem;
+		/**
+		 * Creates the cache handler file.
+		 *
+		 * This method generates a PHP file that handles serving cached content, including gzip and non-gzip versions,
+		 * and ensures that required directories exist.
+		 *
+		 * @return void
+		 */
+		public static function create(): void {
 
-		if ( ! $wp_filesystem && ! self::init_wp_filesystem() ) {
-			return;
-		}
+			global $wp_filesystem;
 
-		$site_url = home_url();
+			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
+				return;
+			}
 
-		$handler_code = <<<PHP
+			$site_url = home_url();
+
+			$handler_code = <<<PHP
 <?php
 \$site_url       = '{$site_url}';
 \$root_directory = \$_SERVER['DOCUMENT_ROOT'];
@@ -82,58 +108,28 @@ if ( file_exists( \$gzip_file_path ) ) {
 
 PHP;
 
-		$cache_dir = dirname( self::$handler_file );
+			$cache_dir = dirname( self::$handler_file );
 
-		if ( ! $wp_filesystem->is_dir( WP_CONTENT_DIR . '/cache' ) ) {
-			$wp_filesystem->mkdir( WP_CONTENT_DIR . '/cache', FS_CHMOD_DIR );
+			// Ensure the cache directory exists
+			Util::prepare_cache_dir( $cache_dir );
+
+			// Write the handler file
+			$wp_filesystem->put_contents( self::$handler_file, $handler_code, FS_CHMOD_FILE );
 		}
 
-		if ( ! $wp_filesystem->is_dir( $cache_dir ) ) {
-			$wp_filesystem->mkdir( $cache_dir, FS_CHMOD_DIR );
-		}
+		/**
+		 * Removes the cache handler file.
+		 *
+		 * This method deletes the cache handler PHP file if it exists.
+		 *
+		 * @return void
+		 */
+		public static function remove(): void {
+			global $wp_filesystem;
 
-		// Write the handler file
-		$wp_filesystem->put_contents( self::$handler_file, $handler_code, FS_CHMOD_FILE );
-	}
-
-	public static function remove() {
-		global $wp_filesystem;
-
-		if ( self::init_wp_filesystem() && $wp_filesystem->exists( self::$handler_file ) ) {
-			$wp_filesystem->delete( self::$handler_file );
-		}
-	}
-
-	private static function init_wp_filesystem() {
-		global $wp_filesystem;
-
-		if ( ! function_exists( 'WP_Filesystem' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-		}
-
-		return WP_Filesystem();
-	}
-
-	private function prepare_cache_dir( $cache_dir ) {
-		global $wp_filesystem;
-
-		// Check if the directory already exists
-		if ( ! $wp_filesystem->is_dir( $cache_dir ) ) {
-
-			// Recursively create parent directories first
-			$parent_dir = dirname( $cache_dir );
-			error_log( '$parent_dir: ' . $parent_dir );
-			if ( ! $wp_filesystem->is_dir( $parent_dir ) ) {
-				$this->prepare_cache_dir( $parent_dir );
-			}
-
-			// Create the final directory
-			if ( ! $wp_filesystem->mkdir( $cache_dir, FS_CHMOD_DIR ) ) {
-				error_log( "Failed to create directory using WP_Filesystem: $cache_dir" );
-				return false;
+			if ( Util::init_filesystem() && $wp_filesystem->exists( self::$handler_file ) ) {
+				$wp_filesystem->delete( self::$handler_file );
 			}
 		}
-
-		return true;
 	}
 }

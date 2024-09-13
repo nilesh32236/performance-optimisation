@@ -1,4 +1,11 @@
 <?php
+/**
+ * Htaccess class for the PerformanceOptimise plugin.
+ *
+ * Handles modifications and removal of rules in the .htaccess file for performance optimization.
+ *
+ * @package PerformanceOptimise\Inc
+ */
 
 namespace PerformanceOptimise\Inc;
 
@@ -6,19 +13,33 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
 
-class Htaccess {
-	public static function modify_htaccess() {
-		$htaccess_path = ABSPATH . '.htaccess';
-		error_log( $htaccess_path );
-		$rules         = <<<EOD
+if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess' ) ) {
+	/**
+	 * Class Htaccess
+	 *
+	 * Provides methods to modify and remove performance optimization rules in the .htaccess file.
+	 */
+	class Htaccess {
+
+		/**
+		 * Adds performance optimization rules to the .htaccess file.
+		 *
+		 * This method writes the rules to the top of the .htaccess file, including caching,
+		 * compression, and security headers.
+		 *
+		 * @return void
+		 */
+		public static function modify_htaccess(): void {
+			$rules = <<<EOD
+# BEGIN Performance Optimisation
 <IfModule mod_rewrite.c>
 	RewriteEngine On
 	RewriteCond %{REQUEST_METHOD} !POST
 	RewriteCond %{QUERY_STRING} ^$
 	RewriteCond %{DOCUMENT_ROOT}/wp-content/cache/qtpo/%{HTTP_HOST}%{REQUEST_URI}index.html.gz -f
-	RewriteRule ^(.*)$ wp-content/cache/qtpo/cache-handler.php?file=%{REQUEST_URI} [L]
+	RewriteRule ^(.*)$ wp-content/cache/qtpo/cache-handler.php [L]
 	RewriteCond %{DOCUMENT_ROOT}/wp-content/cache/qtpo/%{HTTP_HOST}%{REQUEST_URI}index.html -f
-	RewriteRule ^(.*)$ wp-content/cache/qtpo/cache-handler.php?file=%{REQUEST_URI} [L]
+	RewriteRule ^(.*)$ wp-content/cache/qtpo/cache-handler.php [L]
 	
 	# Serve compressed CSS and JS files if they exist
 	RewriteCond %{REQUEST_FILENAME}\.gz -f
@@ -108,13 +129,54 @@ class Htaccess {
 	Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
 	Header set Referrer-Policy "no-referrer-when-downgrade"
 </IfModule>
+# END Performance Optimisation
 EOD;
 
-		insert_with_markers( $htaccess_path, 'Performance Optimisation', explode( "\n", $rules ) );
-	}
+			global $wp_filesystem;
 
-	public static function remove_htaccess() {
-		$htaccess_path = ABSPATH . '.htaccess';
-		insert_with_markers( $htaccess_path, 'Performance Optimisation', array() );
+			if ( ! Util::init_filesystem() ) {
+				return;
+			}
+
+			$htaccess_path     = ABSPATH . '.htaccess';
+			$htaccess_contents = '';
+			if ( $wp_filesystem->exists( $htaccess_path ) ) {
+				$htaccess_contents = $wp_filesystem->get_contents( $htaccess_path );
+			}
+
+			// Add the new rules at the top
+			$new_htaccess_contents = $rules . "\n\n" . $htaccess_contents;
+
+			// Write the contents back to the .htaccess file
+			$wp_filesystem->put_contents( $htaccess_path, $new_htaccess_contents, FS_CHMOD_FILE );
+		}
+
+		/**
+		 * Removes performance optimization rules from the .htaccess file.
+		 *
+		 * This method removes the section of the .htaccess file that was added for
+		 * performance optimization, if it exists.
+		 *
+		 * @return void
+		 */
+		public static function remove_htaccess(): void {
+			global $wp_filesystem;
+
+			if ( ! Util::init_filesystem() ) {
+				return;
+			}
+
+			$htaccess_path = ABSPATH . '.htaccess';
+
+			if ( $wp_filesystem->exists( $htaccess_path ) ) {
+				$htaccess_contents = $wp_filesystem->get_contents( $htaccess_path );
+
+				// Remove the section marked with "# BEGIN Performance Optimisation" and "# END Performance Optimisation"
+				$htaccess_contents = preg_replace( '/# BEGIN Performance Optimisation.*?# END Performance Optimisation\s*/is', '', $htaccess_contents );
+
+				// Write the cleaned contents back to the .htaccess file
+				$wp_filesystem->put_contents( $htaccess_path, $htaccess_contents, FS_CHMOD_FILE );
+			}
+		}
 	}
 }

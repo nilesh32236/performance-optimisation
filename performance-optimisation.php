@@ -19,6 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly
 }
 
+// Define plugin constants.
 if ( ! defined( 'QTPO_PLUGIN_PATH' ) ) {
 	define( 'QTPO_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 }
@@ -27,25 +28,48 @@ if ( ! defined( 'QTPO_PLUGIN_URL' ) ) {
 	define( 'QTPO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 }
 
-require_once QTPO_PLUGIN_PATH . 'vendor/autoload.php';
+// Include the main class file.
 require_once QTPO_PLUGIN_PATH . 'includes/class-main.php';
-require_once QTPO_PLUGIN_PATH . 'includes/class-activate.php';
-require_once QTPO_PLUGIN_PATH . 'includes/class-htaccess.php';
-require_once QTPO_PLUGIN_PATH . 'includes/class-deactivate.php';
 
+// Initialize the main class.
 new Main();
 
-register_activation_hook(
-	__FILE__,
-	function () {
-		Activate::init();
-	}
-);
+/**
+ * Activation hook callback function.
+ *
+ * Includes the activation class and runs the activation process.
+ *
+ * @return void
+ */
+function qtpo_activate(): void {
+	require_once QTPO_PLUGIN_PATH . 'includes/class-activate.php';
+	Activate::init();
+}
+register_activation_hook( __FILE__, 'qtpo_activate' );
 
-register_deactivation_hook(
-	__FILE__,
-	function () {
-		Deactivate::init();
-	}
-);
+/**
+ * Deactivation hook callback function.
+ *
+ * Includes the deactivation class and runs the deactivation process.
+ *
+ * @return void
+ */
+function qtpo_deactivate(): void {
+	require_once QTPO_PLUGIN_PATH . 'includes/class-deactivate.php';
+	Deactivate::init();
+}
+register_deactivation_hook( __FILE__, 'qtpo_deactivate' );
 
+
+// add_action( 'init', 'unschedule_all_wp_cron_jobs' );
+// function unschedule_all_wp_cron_jobs() {
+// 	$crons = _get_cron_array();
+// 	foreach ( $crons as $timestamp => $cron ) {
+// 		foreach ( $cron as $hook => $dings ) {
+// 			foreach ( $dings as $sig => $data ) {
+// 				// Unschedule each cron event
+// 				wp_unschedule_event( $timestamp, $hook, $data['args'] );
+// 			}
+// 		}
+// 	}
+// }
