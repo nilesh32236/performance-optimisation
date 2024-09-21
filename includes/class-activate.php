@@ -30,25 +30,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @return void
 		 */
 		public static function init(): void {
+			require_once QTPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 
-			// Check if the Htaccess class exists before including the file.
-			if ( ! class_exists( 'Htaccess' ) ) {
-				require_once QTPO_PLUGIN_PATH . 'includes/class-htaccess.php';
+			Advanced_Cache_Handler::create();
+
+			// Add WP_CACHE constant to wp-config.php if not already defined.
+			self::add_wp_cache_constant();
+		}
+
+		private static function add_wp_cache_constant(): void {
+			$wp_config_path = ABSPATH . 'wp-config.php'; // Path to wp-config.php
+
+			if ( ! file_exists( $wp_config_path ) || ! is_writable( $wp_config_path ) ) {
+				return; // Exit if the file doesn't exist or is not writable
+			}
+			global $wp_filesystem;
+
+			Util::init_filesystem();
+
+			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
+				return;
 			}
 
-			// Check if the Static_File_Handler class exists before including the file.
-			if ( ! class_exists( 'Static_File_Handler' ) ) {
-				require_once QTPO_PLUGIN_PATH . 'includes/class-static-file-handler.php';
+			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
+				return;
 			}
+			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
 
-			// Modify the .htaccess file if the Htaccess class is available.
-			if ( class_exists( 'Htaccess' ) ) {
-				Htaccess::modify_htaccess();
-			}
+			// Check if WP_CACHE is already defined
+			if ( strpos( $wp_config_content, "define('WP_CACHE', true);" ) === false &&
+				strpos( $wp_config_content, 'define( "WP_CACHE", true );' ) === false ) {
 
-			// Create static files if the Static_File_Handler class is available.
-			if ( class_exists( 'Static_File_Handler' ) ) {
-				Static_File_Handler::create();
+				// Insert WP_CACHE just before the line that says "That's all, stop editing!" or at the end.
+				$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
+
+				$constant_code = "\n/** Enables WordPress Cache */\ndefine( 'WP_CACHE', true );\n";
+
+				if ( false !== $insert_position ) {
+					// Insert WP_CACHE constant before "That's all, stop editing!"
+					$wp_config_content = substr_replace( $wp_config_content, $constant_code, $insert_position, 0 );
+				} else {
+					// If the marker isn't found, append the constant at the end of the file.
+					$wp_config_content .= $constant_code;
+				}
+
+				// Write the modified content back to wp-config.php
+				$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
 			}
 		}
 	}

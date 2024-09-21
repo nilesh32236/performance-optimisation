@@ -53,6 +53,7 @@ class Main {
 		add_action( 'admin_menu', array( $this, 'init_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 3 );
+		add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
 		new Cron();
 	}
@@ -96,12 +97,41 @@ class Main {
 	 */
 	public function admin_enqueue_scripts(): void {
 		$screen = get_current_screen();
+
+		if ( is_admin_bar_showing() ) {
+			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), '1.0.0', true );
+		}
+
 		if ( 'toplevel_page_performance-optimisation' !== $screen->base ) {
 			return;
 		}
 
 		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/index.css', array(), '1.0.0', 'all' );
 		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-element' ), '1.0.0', true );
+	}
+
+	public function add_setting_to_admin_bar( $wp_admin_bar ) {
+		$wp_admin_bar->add_node(
+			array(
+				'id'    => 'qtpo_setting',
+				'title' => __( 'Performance Optimisation', 'performance-optimisation' ),
+				'href'  => admin_url( 'admin.php?page=performance-optimisation' ),
+				'meta'  => array(
+					'class' => 'performance-optimisation-setting',
+					'title' => __( 'Go to Performance Optimisation Setting', 'performance-optimisation' ),
+				),
+			),
+		);
+
+		// Add a submenu under the custom setting
+		$wp_admin_bar->add_node(
+			array(
+				'id'     => 'qtpo_submenu',
+				'parent' => 'qtpo_setting',
+				'title'  => __( 'Clear All Cache', 'performance-optimisation' ),
+				'href'   => '#',
+			)
+		);
 	}
 
 	/**
@@ -116,8 +146,6 @@ class Main {
 			return;
 		}
 
-		global $wp_filesystem;
-
 		$domain         = sanitize_text_field( $_SERVER['HTTP_HOST'] );
 		$url_path       = trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
 		$cache_root_dir = WP_CONTENT_DIR . '/cache/qtpo';
@@ -129,10 +157,6 @@ class Main {
 			return;
 		}
 
-		if ( ! $wp_filesystem->exists( "{$cache_root_dir}/cache-handler.php" ) ) {
-			require_once QTPO_PLUGIN_PATH . 'includes/class-static-file-handler.php';
-			Static_File_Handler::create();
-		}
 		$cache_expiry = 5 * HOUR_IN_SECONDS;
 		$current_time = time();
 
@@ -298,7 +322,7 @@ class Main {
 				$is_json = ( isset( $content[0] ) && ( '{' === $content[0] || '[' === $content[0] ) );
 
 				if ( $is_json && strpos( $matches[1], 'application/ld+json' ) !== false ) {
-					$minified_json = json_encode( json_decode( $content, true ) );
+					$minified_json = wp_json_encode( json_decode( $content, true ) );
 					return '<script' . $matches[1] . '>' . $minified_json . '</script>';
 				}
 
@@ -328,6 +352,10 @@ class Main {
 	 */
 	public function add_defer_attribute( $tag, $handle, $src ): string {
 		if ( is_admin() ) {
+			return $tag;
+		}
+
+		if ( in_array( $handle, array( 'wp-hooks', 'wp-i18n' ), true ) ) {
 			return $tag;
 		}
 		return str_replace( ' src', ' defer="defer" src', $tag );
