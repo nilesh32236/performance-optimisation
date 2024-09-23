@@ -9,11 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 	class Rest {
 
-		const NAMESPACE = 'performance-monitor/v1';
-
-		public function __construct() {
-			add_action( 'rest_api_init', array( $this, 'register_routes' ) );
-		}
+		const NAMESPACE = 'performance-optimisation/v1';
 
 		public function register_routes() {
 			$routes = $this->get_routes();
@@ -34,10 +30,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		public function permission_callback() {
-			return current_user_can( 'manage_options' );
+			$nonce       = isset( $_SERVER['HTTP_X_WP_NONCE'] ) ? $_SERVER['HTTP_X_WP_NONCE'] : '';
+			$nonce_valid = wp_verify_nonce( $nonce, 'wp_rest' );
+
+			return current_user_can( 'manage_options' ) && $nonce_valid;
 		}
 
-		public function clear_cache() {
+		public function clear_cache( \WP_REST_Request $request ) {
+			$params = $request->get_params();
+			if ( 'clear_single_page_cahce' === $params['action'] ) {
+				Cache::clear_cache( $params['id'] );
+			} else {
+				Cache::clear_cache();
+			}
 			return $this->send_response( true );
 		}
 

@@ -136,17 +136,13 @@ class Cron {
 	 * @return array List of page IDs to process.
 	 */
 	private static function get_all_pages(): array {
-		// Get the front page ID
 		$front_page_id = get_option( 'page_on_front' );
 
-		// Get all public post types
 		$post_types = get_post_types( array( 'public' => true ), 'names' );
 
-		// Exclude unwanted post types
 		$excluded_post_types = array( 'attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset' );
 		$post_types          = array_diff( $post_types, $excluded_post_types );
 
-		// Ensure 'page' and 'post' types are included
 		$post_types = array_unique( array_merge( array_values( $post_types ), array( 'page', 'post' ) ) );
 
 		// Get all posts of these types
@@ -154,8 +150,8 @@ class Cron {
 			array(
 				'post_type'   => $post_types,
 				'post_status' => 'publish',
-				'numberposts' => -1, // Get all posts
-				'fields'      => 'ids', // Only retrieve IDs
+				'numberposts' => -1,
+				'fields'      => 'ids',
 			)
 		);
 
@@ -178,7 +174,7 @@ class Cron {
 	private function load_page( $page_id ): void {
 		$permalink = get_permalink( $page_id );
 		if ( $permalink ) {
-			wp_remote_get( $permalink, array( 'timeout' => 10 ) );
+			wp_remote_get( $permalink, array( 'timeout' => 30 ) );
 		}
 	}
 
@@ -199,7 +195,7 @@ class Cron {
 
 		$cache_dir = WP_CONTENT_DIR . "/cache/qtpo/{$domain}/{$url_path}";
 
-		if ( $this->init_filesystem() ) {
+		if ( Util::init_filesystem() ) {
 			global $wp_filesystem;
 			$file_path      = "{$cache_dir}/index.html";
 			$gzip_file_path = "{$file_path}.gz";
@@ -212,24 +208,5 @@ class Cron {
 				$wp_filesystem->delete( $gzip_file_path );
 			}
 		}
-	}
-
-	/**
- * Initialize the WordPress filesystem.
- *
- * This method sets up the global `$wp_filesystem` object used to interact with the file system.
- * It requires the WordPress `WP_Filesystem` API to be available, which is loaded if necessary.
- *
- * @return bool|null True if the filesystem was initialized successfully, null if initialization fails
- *                   or the `WP_Filesystem` function is unavailable.
- */
-	private function init_filesystem(): bool {
-		global $wp_filesystem;
-
-		if ( ! function_exists( 'WP_Filesystem' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-		}
-
-		return WP_Filesystem();
 	}
 }
