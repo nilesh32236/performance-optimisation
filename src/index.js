@@ -1,7 +1,7 @@
 import App from "./App";
 import { createRoot } from 'react-dom/client';
 
-import './css/style.css';
+import './css/style.scss';
 
 const rootElement = document.getElementById('performance-optimisation');
 if (rootElement) {

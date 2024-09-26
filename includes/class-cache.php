@@ -120,7 +120,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->delete_cache_files( $file_path );
 
 			if ( ! wp_next_scheduled( 'qtpo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + rand( 0, 30 ), 'qtpo_generate_static_page', array( $post_id ) );
+				wp_schedule_single_event( time() + rand( 0, 5 ), 'qtpo_generate_static_page', array( $page_id ) );
 			}
 		}
 

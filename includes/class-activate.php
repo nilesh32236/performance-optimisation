@@ -36,6 +36,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			// Add WP_CACHE constant to wp-config.php if not already defined.
 			self::add_wp_cache_constant();
+			self::create_activity_log_table();
 		}
 
 		private static function add_wp_cache_constant(): void {
@@ -77,6 +78,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				// Write the modified content back to wp-config.php
 				$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
 			}
+		}
+
+		private static function create_activity_log_table() {
+			global $wpdb;
+
+			$table_name      = $wpdb->prefix . 'qtpo_activity_logs'; // Table name
+			$charset_collate = $wpdb->get_charset_collate();
+
+			// Check if the table already exists
+			if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) !== $table_name ) {
+				// SQL to create the table if it doesn't exist
+				$sql = "CREATE TABLE $table_name (
+					id mediumint(9) NOT NULL AUTO_INCREMENT,
+					activity varchar(255) NOT NULL,
+					created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
+					PRIMARY KEY (id)
+				) $charset_collate;";
+
+				// Include the required file for dbDelta function
+				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+				dbDelta( $sql );
+			}
+
+			new Log( 'Plugin activated on ' . current_time( 'mysql' ) );
 		}
 	}
 }

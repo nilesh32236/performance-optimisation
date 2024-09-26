@@ -21,9 +21,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 		private function get_routes() {
 			return array(
-				'clear_cache' => array(
+				'clear_cache'     => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'clear_cache' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
+				'update_settings' => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'update_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
 			);
@@ -40,10 +45,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			if ( 'clear_single_page_cahce' === $params['action'] ) {
 				Cache::clear_cache( $params['id'] );
+				new Log( 'Clear cache of ' . get_permalink( $params['id'] ) . ' on ' . current_time( 'mysql' ) );
 			} else {
 				Cache::clear_cache();
+				new Log( 'Clear all cache on ' . current_time( 'mysql' ) );
 			}
 			return $this->send_response( true );
+		}
+
+		public function update_settings( \WP_REST_Request $request ) {
+			$params  = $request->get_params();
+			$options = get_option( 'qtpo_settings', array() );
+
+			$options[ $params['tab'] ] = $params['settings'];
+			update_option( 'qtpo_settings', $options );
+			return $this->send_response( $options );
 		}
 
 		private function send_response( $data, $success = true, $status_code = 200, $message = null ) {

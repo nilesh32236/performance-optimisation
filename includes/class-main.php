@@ -33,6 +33,7 @@ class Main {
 	 */
 	private function includes(): void {
 		require_once QTPO_PLUGIN_PATH . 'vendor/autoload.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/class-log.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-util.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cache.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cron.php';
@@ -90,7 +91,7 @@ class Main {
 	 * @return void
 	 */
 	public function admin_page(): void {
-		require_once QTPO_PLUGIN_PATH . 'templates/app.php';
+		require_once QTPO_PLUGIN_PATH . 'templates/app.html';
 	}
 
 	/**
@@ -107,8 +108,18 @@ class Main {
 			return;
 		}
 
-		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/index.css', array(), '1.0.0', 'all' );
+		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/style-index.css', array(), '1.0.0', 'all' );
 		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-element' ), '1.0.0', true );
+
+		wp_localize_script(
+			'performance-optimisation-script',
+			'qtpoSettings',
+			array(
+				'apiUrl'   => get_rest_url( null, 'performance-optimisation/v1/' ),
+				'nonce'    => wp_create_nonce( 'wp_rest' ),
+				'settings' => get_option( 'qtpo_settings', array() ),
+			),
+		);
 	}
 
 	public function enqueue_scripts() {
@@ -118,8 +129,8 @@ class Main {
 				'qtpo-admin-bar-script',
 				'qtpoObject',
 				array(
-					'rest_url' => get_rest_url( null, 'performance-optimisation/v1' ),
-					'nonce'    => wp_create_nonce( 'wp_rest' ),
+					'apiUrl' => get_rest_url( null, 'performance-optimisation/v1' ),
+					'nonce'  => wp_create_nonce( 'wp_rest' ),
 				)
 			);
 		}
