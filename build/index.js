@@ -465,13 +465,15 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react */ "react");
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
-/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
 /* harmony import */ var _components_FileOptimization__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./components/FileOptimization */ "./src/components/FileOptimization.js");
 /* harmony import */ var _components_MediaOptimization__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./components/MediaOptimization */ "./src/components/MediaOptimization.js");
 /* harmony import */ var _components_PreloadSettings__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./components/PreloadSettings */ "./src/components/PreloadSettings.js");
 /* harmony import */ var _components_DatabaseOptimization__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./components/DatabaseOptimization */ "./src/components/DatabaseOptimization.js");
 /* harmony import */ var _components_ImageOptimization__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./components/ImageOptimization */ "./src/components/ImageOptimization.js");
 /* harmony import */ var _components_Dashboard__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./components/Dashboard */ "./src/components/Dashboard.js");
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./lib/apiRequest */ "./src/lib/apiRequest.js");
+
 
 
 
@@ -486,6 +488,8 @@ const App = () => {
   const [activeTab, setActiveTab] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)('dashboard');
   const [transition, setTransition] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
   const [sidebarCollapsed, setSidebarCollapsed] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [recentActivities, setRecentActivities] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)([]);
+  const hasFetchedActivities = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(false);
   (0,react__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
@@ -501,6 +505,18 @@ const App = () => {
 
   // Animate tab changes
   (0,react__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    const fetchActivities = async () => {
+      if (activeTab === 'dashboard' && !hasFetchedActivities.current) {
+        try {
+          const data = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_8__.fetchRecentActivities)(); // Await the returned data
+          setRecentActivities(data); // Set the state with the fetched data
+          hasFetchedActivities.current = true; // Mark as fetched
+        } catch (error) {
+          console.error('Failed to fetch activities:', error);
+        }
+      }
+    };
+    fetchActivities();
     // Add transition when tab changes
     setTransition(true);
     const timeout = setTimeout(() => {
@@ -531,7 +547,9 @@ const App = () => {
           options: qtpoSettings.settings.image_optimisation
         });
       default:
-        return (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_components_Dashboard__WEBPACK_IMPORTED_MODULE_7__["default"], null);
+        return (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_components_Dashboard__WEBPACK_IMPORTED_MODULE_7__["default"], {
+          activities: recentActivities?.activities
+        });
     }
   };
   return (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
@@ -542,43 +560,43 @@ const App = () => {
     className: "toggle-sidebar",
     onClick: () => setSidebarCollapsed(!sidebarCollapsed)
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
-    icon: sidebarCollapsed ? _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_8__.faAngleRight : _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_8__.faAngleLeft
+    icon: sidebarCollapsed ? _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faAngleRight : _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faAngleLeft
   })), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Performance Settings"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("ul", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
     className: activeTab === 'dashboard' ? 'active' : '',
     onClick: () => setActiveTab('dashboard')
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
     className: "sidebar-icon",
-    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_8__.faTachometerAlt
+    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faTachometerAlt
   }), !sidebarCollapsed && ' Dashboard'), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
     className: activeTab === 'fileOptimization' ? 'active' : '',
     onClick: () => setActiveTab('fileOptimization')
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
     className: "sidebar-icon",
-    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_8__.faFileAlt
+    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faFileAlt
   }), !sidebarCollapsed && ' File Optimization'), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
     className: activeTab === 'media' ? 'active' : '',
     onClick: () => setActiveTab('media')
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
     className: "sidebar-icon",
-    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_8__.faImage
+    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faImage
   }), !sidebarCollapsed && ' Media Optimization'), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
     className: activeTab === 'preload' ? 'active' : '',
     onClick: () => setActiveTab('preload')
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
     className: "sidebar-icon",
-    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_8__.faBullseye
+    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faBullseye
   }), !sidebarCollapsed && ' Preload'), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
     className: activeTab === 'database' ? 'active' : '',
     onClick: () => setActiveTab('database')
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
     className: "sidebar-icon",
-    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_8__.faDatabase
+    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faDatabase
   }), !sidebarCollapsed && ' Database Optimization'), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
     className: activeTab === 'imageOptimization' ? 'active' : '',
     onClick: () => setActiveTab('imageOptimization')
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
     className: "sidebar-icon",
-    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_8__.faCog
+    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faCog
   }), !sidebarCollapsed && ' Image Optimization'))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: `content ${transition ? 'fadeIn' : ''}`
   }, renderContent()));
@@ -642,15 +660,32 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var react__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react__WEBPACK_IMPORTED_MODULE_0__);
 
 
-const Dashboard = () => {
+const Dashboard = ({
+  activities
+}) => {
+  const totalCacheSize = qtpoSettings.cache_size;
+  const onClickHandle = e => {
+    e.preventDefault();
+    fetch(qtpoSettings.apiUrl + 'clear_cache', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-WP-Nonce': qtpoSettings.nonce
+      },
+      body: JSON.stringify({
+        action: 'clear_cache'
+      })
+    }).then(response => response.json()).then(data => console.log('Cache cleared successfully: ', data)).catch(error => console.error('Error clearing cache: ', error));
+  };
   return (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "settings-form"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h2", null, "Performance Optimization Dashboard"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "dashboard-overview"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "dashboard-card"
-  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Cache Status"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Current Cache Size: 45 MB"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Last Cache Cleared: 2 days ago"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
-    className: "clear-cache-btn"
+  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Cache Status"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Current Cache Size: ", totalCacheSize), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Last Cache Cleared: 2 days ago"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
+    className: "clear-cache-btn",
+    onClick: onClickHandle
   }, "Clear Cache Now")), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "dashboard-card"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Image Optimization"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Images Optimized: 320"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Images Converted to WebP: 150"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
@@ -661,7 +696,9 @@ const Dashboard = () => {
     className: "optimize-assets-btn"
   }, "Minify Assets"))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "recent-activities"
-  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Recent Activities"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("ul", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", null, "Cache cleared on September 22, 2024"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", null, "150 images converted to WebP format"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", null, "JavaScript files minified on September 20, 2024"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", null, "Lazy loading enabled for images"))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
+  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Recent Activities"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("ul", null, activities?.length > 0 ? activities.map((activity, index) => (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
+    key: index
+  }, activity.activity)) : (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", null, "Loading recent activities..."))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "plugin-info"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Plugin Information"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("strong", null, "Version:"), " 1.0.0"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("strong", null, "Last Updated:"), " September 21, 2024"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Get the best performance for your website by optimizing images, caching, and assets like JavaScript and CSS files. Stay updated with new features and improvements in each release!")));
 };
@@ -1157,6 +1194,35 @@ if (rootElement) {
   const root = (0,react_dom_client__WEBPACK_IMPORTED_MODULE_2__.createRoot)(rootElement);
   root.render((0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_App__WEBPACK_IMPORTED_MODULE_1__["default"], null));
 }
+
+/***/ }),
+
+/***/ "./src/lib/apiRequest.js":
+/*!*******************************!*\
+  !*** ./src/lib/apiRequest.js ***!
+  \*******************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   fetchRecentActivities: () => (/* binding */ fetchRecentActivities)
+/* harmony export */ });
+const fetchRecentActivities = () => {
+  return fetch(qtpoSettings.apiUrl + 'recent_activities', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-WP-Nonce': qtpoSettings.nonce
+    },
+    body: JSON.stringify({
+      page: '1'
+    })
+  }).then(response => response.json()).catch(error => {
+    console.error('Error fetching recent activities:', error);
+    throw error; // Re-throw the error for further handling if needed
+  });
+};
 
 /***/ }),
 

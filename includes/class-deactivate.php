@@ -38,7 +38,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			// Remove WP_CACHE constant from wp-config.php
 			self::remove_wp_cache_constant();
-			new Log( 'Plugin deactivated on ' . current_time( 'mysql' ) );
+			new Log( 'Plugin deactivated on ' );
 		}
 
 		/**

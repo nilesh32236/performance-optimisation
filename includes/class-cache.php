@@ -24,8 +24,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
+			$url_path = trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
+			$ext      = pathinfo( $url_path, PATHINFO_EXTENSION );
+
+			if ( $ext && ! in_array( $ext, array( 'html', '' ), true ) ) {
+				return;
+			}
+
 			$domain         = sanitize_text_field( $_SERVER['HTTP_HOST'] );
-			$url_path       = trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
 			$cache_root_dir = WP_CONTENT_DIR . '/cache/qtpo';
 			$cache_dir      = "{$cache_root_dir}/{$domain}" . ( '' === $url_path ? '' : "/{$url_path}" );
 			$file_path      = "{$cache_dir}/index.html";
@@ -42,8 +48,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				try {
 					ob_start(
 						function ( $buffer ) use ( $file_path, $gzip_file_path ) {
-							$last_error = error_get_last();
 
+							$last_error = error_get_last();
 							if ( $last_error && in_array( $last_error['type'], array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR ), true ) ) {
 								error_log( 'Skipping static file generation due to a critical error: ' . print_r( $last_error, true ) );
 								return $buffer;
@@ -51,6 +57,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 							$buffer = $this->minify_html( $buffer );
 
+							$last_error = error_get_last();
 							if ( $last_error && in_array( $last_error['type'], array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR ), true ) ) {
 								error_log( 'Skipping static file saving due to a critical error after minification: ' . print_r( $last_error, true ) );
 								return $buffer;
@@ -169,6 +176,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$wp_filesystem->delete( $cache_dir, true ); // `true` ensures recursive deletion
 				}
 			}
+		}
+
+		public static function get_cache_size() {
+			global $wp_filesystem;
+
+			if ( ! Util::init_filesystem() ) {
+				return 'Unable to initialize filesystem.';
+			}
+
+			$domain    = sanitize_text_field( $_SERVER['HTTP_HOST'] );
+			$cache_dir = WP_CONTENT_DIR . "/cache/qtpo/{$domain}";
+
+			if ( ! $wp_filesystem->is_dir( $cache_dir ) ) {
+				return 'Cache directory does not exist.';
+			}
+
+			$total_size = self::calculate_directory_size( $cache_dir );
+
+			return size_format( $total_size );
+		}
+
+		public static function calculate_directory_size( $directory ) {
+			global $wp_filesystem;
+
+			$total_size = 0;
+
+			$files = $wp_filesystem->dirlist( $directory );
+
+			if ( ! $files ) {
+				return $total_size;
+			}
+
+			foreach ( $files as $file ) {
+				$file_path = trailingslashit( $directory ) . $file['name'];
+
+				if ( 'd' === $file['type'] ) {
+					$total_size += self::calculate_directory_size( $file_path );
+				} else {
+					$total_size += $wp_filesystem->size( $file_path );
+				}
+			}
+
+			return $total_size;
 		}
 
 		public static function clear_cache( $page_id = null ) {

@@ -1,15 +1,32 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-const Dashboard = () => {
+const Dashboard = ({activities}) => {
+	const totalCacheSize = qtpoSettings.cache_size;
+
+	const onClickHandle = (e) => {
+		e.preventDefault();
+		fetch(qtpoSettings.apiUrl + 'clear_cache', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-WP-Nonce': qtpoSettings.nonce
+			},
+			body: JSON.stringify({ action: 'clear_cache' })
+		})
+			.then(response => response.json())
+			.then(data => console.log('Cache cleared successfully: ', data))
+			.catch(error => console.error('Error clearing cache: ', error));
+	};
+
 	return (
 		<div className="settings-form">
 			<h2>Performance Optimization Dashboard</h2>
 			<div className="dashboard-overview">
 				<div className="dashboard-card">
 					<h3>Cache Status</h3>
-					<p>Current Cache Size: 45 MB</p>
+					<p>Current Cache Size: {totalCacheSize}</p>
 					<p>Last Cache Cleared: 2 days ago</p>
-					<button className="clear-cache-btn">Clear Cache Now</button>
+					<button className="clear-cache-btn" onClick={onClickHandle}>Clear Cache Now</button>
 				</div>
 
 				<div className="dashboard-card">
@@ -30,10 +47,13 @@ const Dashboard = () => {
 			<div className="recent-activities">
 				<h3>Recent Activities</h3>
 				<ul>
-					<li>Cache cleared on September 22, 2024</li>
-					<li>150 images converted to WebP format</li>
-					<li>JavaScript files minified on September 20, 2024</li>
-					<li>Lazy loading enabled for images</li>
+					{activities?.length > 0 ? (
+						activities.map((activity, index) => (
+							<li key={index}>{activity.activity}</li>
+						))
+					) : (
+						<li>Loading recent activities...</li>
+					)}
 				</ul>
 			</div>
 

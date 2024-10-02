@@ -21,14 +21,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 		private function get_routes() {
 			return array(
-				'clear_cache'     => array(
+				'clear_cache'       => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'clear_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'update_settings' => array(
+				'update_settings'   => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'update_settings' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
+				'recent_activities' => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'get_recent_activities' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
 			);
@@ -45,10 +50,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			if ( 'clear_single_page_cahce' === $params['action'] ) {
 				Cache::clear_cache( $params['id'] );
-				new Log( 'Clear cache of ' . get_permalink( $params['id'] ) . ' on ' . current_time( 'mysql' ) );
+				new Log( 'Clear cache of ' . get_permalink( $params['id'] ) . ' on ' );
 			} else {
 				Cache::clear_cache();
-				new Log( 'Clear all cache on ' . current_time( 'mysql' ) );
+				new Log( 'Clear all cache on ' );
 			}
 			return $this->send_response( true );
 		}
@@ -60,6 +65,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$options[ $params['tab'] ] = $params['settings'];
 			update_option( 'qtpo_settings', $options );
 			return $this->send_response( $options );
+		}
+
+		public function get_recent_activities( \WP_REST_Request $request ) {
+			$params = $request->get_params();
+
+			$data = Log::get_recent_activities( $params );
+
+			return new \WP_REST_Response( $data, 200 );
 		}
 
 		private function send_response( $data, $success = true, $status_code = 200, $message = null ) {

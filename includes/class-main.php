@@ -115,9 +115,10 @@ class Main {
 			'performance-optimisation-script',
 			'qtpoSettings',
 			array(
-				'apiUrl'   => get_rest_url( null, 'performance-optimisation/v1/' ),
-				'nonce'    => wp_create_nonce( 'wp_rest' ),
-				'settings' => get_option( 'qtpo_settings', array() ),
+				'apiUrl'     => get_rest_url( null, 'performance-optimisation/v1/' ),
+				'nonce'      => wp_create_nonce( 'wp_rest' ),
+				'settings'   => get_option( 'qtpo_settings', array() ),
+				'cache_size' => Cache::get_cache_size(),
 			),
 		);
 	}

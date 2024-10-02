@@ -101,7 +101,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				dbDelta( $sql );
 			}
 
-			new Log( 'Plugin activated on ' . current_time( 'mysql' ) );
+			new Log( 'Plugin activated on ' );
 		}
 	}
 }
