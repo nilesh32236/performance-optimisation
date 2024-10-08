@@ -255,6 +255,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $this->filesystem && $this->filesystem->is_dir( $cache_dir ) ) {
 				$this->filesystem->delete( $cache_dir, true ); // 'true' ensures recursive deletion
 			}
+
+			$min_dir = "{$this->cache_root_dir}/min";
+
+			if ( $this->filesystem && $this->filesystem->is_dir( $min_dir ) ) {
+				$this->filesystem->delete( $min_dir, true ); // 'true' ensures recursive deletion
+			}
 		}
 
 		/**

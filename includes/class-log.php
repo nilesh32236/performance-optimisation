@@ -44,8 +44,6 @@ class Log {
 			ARRAY_A
 		);
 
-		error_log( print_r( $results, true ) );
-
 		foreach ( $results as $index => $result ) {
 			$results[ $index ]['activity'] = $result['activity'] . $result['created_at'];
 		}

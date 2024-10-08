@@ -16,19 +16,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Main {
 
-	private array $minify_exclude = array(
+	private array $exclude_css = array();
+	private array $exclude_js  = array(
 		'jquery',
 	);
 	private $filesystem;
+
+	private $options;
 	/**
 	 * Constructor.
 	 *
 	 * Initializes the class by including necessary files and setting up hooks.
 	 */
 	public function __construct() {
+		$this->options = get_option( 'qtpo_settings', array() );
+
 		$this->includes();
 		$this->setup_hooks();
-
 		$this->filesystem = Util::init_filesystem();
 	}
 
@@ -77,6 +81,23 @@ class Main {
 		add_filter( 'wp_generate_attachment_metadata', array( $this, 'convert_images_to_webp' ), 10, 2 );
 		add_filter( 'wp_get_attachment_image_src', array( $this, 'maybe_serve_webp_image' ), 10, 4 );
 
+		if ( isset( $this->options['file_optimisation']['minifyJS'] ) && (bool) $this->options['file_optimisation']['minifyJS'] ) {
+			if ( isset( $this->options['file_optimisation']['excludeJS'] ) && ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
+				$this->exclude_js = array_merge( $this->exclude_js, (array) $this->options['file_optimisation']['excludeJS'] );
+			}
+
+			error_log( 'exclude_js: ' . print_r( $this->exclude_js, true ) );
+			add_filter( 'script_loader_tag', array( $this, 'minify_js' ), 10, 3 );
+		}
+
+		if ( isset( $this->options['file_optimisation']['minifyCSS'] ) && (bool) $this->options['file_optimisation']['minifyCSS'] ) {
+			if ( isset( $this->options['file_optimisation']['excludeCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCSS'] ) ) {
+				$this->exclude_css = array_merge( $this->exclude_css, (array) $this->options['file_optimisation']['excludeCSS'] );
+			}
+
+			error_log( 'exclude_css: ' . print_r( $this->exclude_css, true ) );
+			add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
+		}
 		new Cron();
 	}
 
@@ -131,10 +152,11 @@ class Main {
 			'performance-optimisation-script',
 			'qtpoSettings',
 			array(
-				'apiUrl'     => get_rest_url( null, 'performance-optimisation/v1/' ),
-				'nonce'      => wp_create_nonce( 'wp_rest' ),
-				'settings'   => get_option( 'qtpo_settings', array() ),
-				'cache_size' => Cache::get_cache_size(),
+				'apiUrl'       => get_rest_url( null, 'performance-optimisation/v1/' ),
+				'nonce'        => wp_create_nonce( 'wp_rest' ),
+				'settings'     => $this->options,
+				'cache_size'   => Cache::get_cache_size(),
+				'total_js_css' => Util::get_js_css_minified_file(),
 			),
 		);
 	}
@@ -216,37 +238,11 @@ class Main {
 		return str_replace( ' src', ' defer="defer" src', $tag );
 	}
 
-	public function minify_assets() {
-		global $wp_styles, $wp_scripts;
+	public function minify_css( $tag, $handle, $href ) {
+		$local_path = Util::get_local_path( $href );
 
-		foreach ( $wp_styles->queue as $handle ) {
-			$style = $wp_styles->registered[ $handle ];
-
-			if ( in_array( $handle, $this->minify_exclude, true ) || empty( $style->src ) ) {
-				continue;
-			}
-
-			$this->minify_css( $style );
-		}
-
-		foreach ( $wp_scripts->queue as $handle ) {
-			$script = $wp_scripts->registered[ $handle ];
-
-			if ( in_array( $handle, $this->minify_exclude, true ) || empty( $script->src ) ) {
-				error_log( 'continue: ' . $handle );
-				continue; // Skip excluded handles
-			}
-
-			$this->minify_js( $script );
-		}
-	}
-
-	private function minify_css( $style ) {
-		$local_path = Util::get_local_path( $style->src );
-
-		if ( $this->is_css_minified( $local_path ) ) {
-			error_log( 'Skipping minification for already minified CSS: ' . $local_path );
-			return;
+		if ( in_array( $handle, $this->exclude_css, true ) || empty( $href ) || $this->is_css_minified( $local_path ) || is_user_logged_in() ) {
+			return $tag;
 		}
 
 		$css_minifier = new Minify\CSS( $local_path, WP_CONTENT_DIR . '/cache/qtpo/min/css' );
@@ -254,17 +250,21 @@ class Main {
 
 		if ( $cached_file ) {
 			$file_version = fileatime( Util::get_local_path( $cached_file ) );
-			wp_deregister_style( $style->handle );
-			wp_register_style( $style->handle, $cached_file, $style->deps, $file_version, $style->args );
+			$new_href     = content_url( 'cache/qtpo/min/css/' . basename( $cached_file ) ) . '?ver=' . $file_version;
+			$new_tag      = str_replace( $href, $new_href, $tag );
+			return $new_tag;
 		}
+
+		return $tag;
 	}
 
-	private function minify_js( $script ) {
-		$local_path = Util::get_local_path( $script->src );
+	public function minify_js( $tag, $handle, $src ) {
+		global $wp_scripts;
 
-		if ( $this->is_js_minified( $local_path ) ) {
-			error_log( 'Skipping minification for already minified JS: ' . $local_path );
-			return;
+		$local_path = Util::get_local_path( $src );
+
+		if ( in_array( $handle, $this->exclude_js, true ) || empty( $src ) || $this->is_js_minified( $local_path ) || is_user_logged_in() ) {
+			return $tag;
 		}
 
 		$js_minifier = new Minify\JS( $local_path, WP_CONTENT_DIR . '/cache/qtpo/min/js' );
@@ -272,9 +272,13 @@ class Main {
 
 		if ( $cached_file ) {
 			$file_version = fileatime( Util::get_local_path( $cached_file ) );
-			wp_deregister_script( $script->handle );
-			wp_register_script( $script->handle, $cached_file, $script->deps, $file_version, $script->args );
+
+			$new_src = content_url( 'cache/qtpo/min/js/' . basename( $cached_file ) ) . '?ver=' . $file_version;
+			$new_tag = str_replace( $src, $new_src, $tag );
+			return $new_tag;
 		}
+
+		return $tag;
 	}
 
 	private function is_css_minified( $file_path ) {

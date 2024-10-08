@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const Dashboard = ({activities}) => {
 	const totalCacheSize = qtpoSettings.cache_size;
+	const total_js       = qtpoSettings.total_js_css.js;
+	const total_css      = qtpoSettings.total_js_css.css;
 
 	const onClickHandle = (e) => {
 		e.preventDefault();
@@ -38,8 +40,8 @@ const Dashboard = ({activities}) => {
 
 				<div className="dashboard-card">
 					<h3>JavaScript & CSS Optimization</h3>
-					<p>JavaScript Files Minified: 18</p>
-					<p>CSS Files Minified: 12</p>
+					<p>JavaScript Files Minified: {total_js}</p>
+					<p>CSS Files Minified: {total_css}</p>
 					<button className="optimize-assets-btn">Minify Assets</button>
 				</div>
 			</div>

@@ -664,6 +664,8 @@ const Dashboard = ({
   activities
 }) => {
   const totalCacheSize = qtpoSettings.cache_size;
+  const total_js = qtpoSettings.total_js_css.js;
+  const total_css = qtpoSettings.total_js_css.css;
   const onClickHandle = e => {
     e.preventDefault();
     fetch(qtpoSettings.apiUrl + 'clear_cache', {
@@ -692,7 +694,7 @@ const Dashboard = ({
     className: "optimize-images-btn"
   }, "Optimize Now")), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "dashboard-card"
-  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "JavaScript & CSS Optimization"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "JavaScript Files Minified: 18"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "CSS Files Minified: 12"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
+  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "JavaScript & CSS Optimization"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "JavaScript Files Minified: ", total_js), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "CSS Files Minified: ", total_css), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
     className: "optimize-assets-btn"
   }, "Minify Assets"))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "recent-activities"

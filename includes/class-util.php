@@ -69,8 +69,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		public static function get_local_path( string $url ): string {
-			$relative_path = str_replace( home_url(), '', $url );
+			// Parse the URL to get the path
+			$parsed_url = wp_parse_url( $url );
+
+			// Get the path from the parsed URL
+			$relative_path = $parsed_url['path'] ?? '';
+
+			// If home_url is present, remove it from the path
+			$relative_path = str_replace( home_url(), '', $relative_path );
+
+			// Return the full local path
 			return ABSPATH . ltrim( $relative_path, '/' );
+		}
+
+
+		public static function get_js_css_minified_file() {
+			$filesystem = self::init_filesystem();
+			$minify_dir = WP_CONTENT_DIR . '/cache/qtpo/min';
+
+			$total_js  = 0;
+			$total_css = 0;
+
+			$js_files = $filesystem->dirlist( $minify_dir . '/js' );
+
+			if ( ! empty( $js_files ) ) {
+				foreach ( $js_files as $js_file ) {
+					if ( isset( $js_file['name'] ) && pathinfo( $js_file['name'], PATHINFO_EXTENSION ) === 'js' ) {
+						++$total_js;
+					}
+				}
+			}
+
+			$css_files = $filesystem->dirlist( $minify_dir . '/css' );
+
+			if ( ! empty( $css_files ) ) {
+				foreach ( $css_files as $css_file ) {
+					if ( isset( $css_file['name'] ) && pathinfo( $css_file['name'], PATHINFO_EXTENSION ) === 'css' ) {
+						++$total_css;
+					}
+				}
+			}
+
+			return array(
+				'js'  => $total_js,
+				'css' => $total_css,
+			);
 		}
 	}
 }
