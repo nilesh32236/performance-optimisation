@@ -14,6 +14,11 @@ class WebP_Converter {
 	public function convert_to_webp( string $source_image, string $destination, int $quality = 80 ): bool {
 		error_log( $source_image );
 		$image_info = getimagesize( $source_image );
+
+		if ( empty( $image_info ) ) {
+			return false;
+		}
+
 		error_log( 'image_info: ' . print_r( $image_info, true ) );
 		$image_type = $image_info[2];
 

@@ -19,7 +19,7 @@ class Main {
 	private array $minify_exclude = array(
 		'jquery',
 	);
-
+	private $filesystem;
 	/**
 	 * Constructor.
 	 *
@@ -28,6 +28,8 @@ class Main {
 	public function __construct() {
 		$this->includes();
 		$this->setup_hooks();
+
+		$this->filesystem = Util::init_filesystem();
 	}
 
 	/**
@@ -64,7 +66,7 @@ class Main {
 		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 3 );
 		add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
-		add_action( 'wp_enqueue_scripts', array( $this, 'minify_assets' ) );
+		// add_action( 'wp_enqueue_scripts', array( $this, 'minify_assets' ), 100 );
 		$cache = new Cache();
 		add_action( 'template_redirect', array( $cache, 'generate_dynamic_static_html' ) );
 		add_action( 'save_post', array( $cache, 'invalidate_dynamic_static_html' ) );
@@ -282,8 +284,9 @@ class Main {
 			return true;
 		}
 
-		$css_content = file_get_contents( $file_path );
+		$css_content = $this->filesystem->get_contents( $file_path );
 		$line        = preg_split( '/\r\n|\r|\n/', $css_content );
+		error_log( 'Line : ' . count( $line ) . ' File name: ' . $file_name );
 
 		if ( 10 >= count( $line ) ) {
 			return true;
@@ -298,7 +301,7 @@ class Main {
 			return true;
 		}
 
-		$js_content = file_get_contents( $file_path );
+		$js_content = $this->filesystem->get_contents( $file_path );
 		$line       = preg_split( '/\r\n|\r|\n/', $js_content );
 
 		error_log( 'Line : ' . count( $line ) . ' File name: ' . $file_name );
@@ -358,8 +361,7 @@ class Main {
 	 * @return array Modified image source with WebP if applicable.
 	 */
 	public function maybe_serve_webp_image( $image, $attachment_id, $size, $icon ) {
-		error_log( '$webp_image_path: ' . $_SERVER['HTTP_ACCEPT'] );
-		if ( strpos( $_SERVER['HTTP_ACCEPT'], 'image/webp' ) === false ) {
+		if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) || empty( $image[0] ) || strpos( $_SERVER['HTTP_ACCEPT'], 'image/webp' ) === false ) {
 			return $image;
 		}
 

@@ -49,7 +49,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						return $this->process_buffer( $buffer, $file_path );
 					}
 				);
-				add_action( 'shutdown', 'ob_end_flush', 0, 0 );
+				// add_action( 'shutdown', 'ob_end_flush', 0, 0 );
 			} catch ( \Exception $e ) {
 				error_log( 'Error generating static HTML: ' . $e->getMessage() );
 			}
