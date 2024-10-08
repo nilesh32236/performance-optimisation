@@ -1,6 +1,8 @@
 <?php
 namespace PerformanceOptimise\Inc;
 
+use PerformanceOptimise\Inc\Minify;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -13,6 +15,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 
 class Main {
+
+	private array $minify_exclude = array(
+		'jquery',
+	);
 
 	/**
 	 * Constructor.
@@ -35,6 +41,10 @@ class Main {
 		require_once QTPO_PLUGIN_PATH . 'vendor/autoload.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-log.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-util.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/class-webp-converter.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-html.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-css.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-js.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cache.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cron.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-rest.php';
@@ -54,12 +64,16 @@ class Main {
 		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 3 );
 		add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
+		add_action( 'wp_enqueue_scripts', array( $this, 'minify_assets' ) );
 		$cache = new Cache();
 		add_action( 'template_redirect', array( $cache, 'generate_dynamic_static_html' ) );
 		add_action( 'save_post', array( $cache, 'invalidate_dynamic_static_html' ) );
 
 		$rest = new Rest();
 		add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
+
+		add_filter( 'wp_generate_attachment_metadata', array( $this, 'convert_images_to_webp' ), 10, 2 );
+		add_filter( 'wp_get_attachment_image_src', array( $this, 'maybe_serve_webp_image' ), 10, 4 );
 
 		new Cron();
 	}
@@ -198,5 +212,174 @@ class Main {
 			return $tag;
 		}
 		return str_replace( ' src', ' defer="defer" src', $tag );
+	}
+
+	public function minify_assets() {
+		global $wp_styles, $wp_scripts;
+
+		foreach ( $wp_styles->queue as $handle ) {
+			$style = $wp_styles->registered[ $handle ];
+
+			if ( in_array( $handle, $this->minify_exclude, true ) || empty( $style->src ) ) {
+				continue;
+			}
+
+			$this->minify_css( $style );
+		}
+
+		foreach ( $wp_scripts->queue as $handle ) {
+			$script = $wp_scripts->registered[ $handle ];
+
+			if ( in_array( $handle, $this->minify_exclude, true ) || empty( $script->src ) ) {
+				error_log( 'continue: ' . $handle );
+				continue; // Skip excluded handles
+			}
+
+			$this->minify_js( $script );
+		}
+	}
+
+	private function minify_css( $style ) {
+		$local_path = Util::get_local_path( $style->src );
+
+		if ( $this->is_css_minified( $local_path ) ) {
+			error_log( 'Skipping minification for already minified CSS: ' . $local_path );
+			return;
+		}
+
+		$css_minifier = new Minify\CSS( $local_path, WP_CONTENT_DIR . '/cache/qtpo/min/css' );
+		$cached_file  = $css_minifier->minify();
+
+		if ( $cached_file ) {
+			$file_version = fileatime( Util::get_local_path( $cached_file ) );
+			wp_deregister_style( $style->handle );
+			wp_register_style( $style->handle, $cached_file, $style->deps, $file_version, $style->args );
+		}
+	}
+
+	private function minify_js( $script ) {
+		$local_path = Util::get_local_path( $script->src );
+
+		if ( $this->is_js_minified( $local_path ) ) {
+			error_log( 'Skipping minification for already minified JS: ' . $local_path );
+			return;
+		}
+
+		$js_minifier = new Minify\JS( $local_path, WP_CONTENT_DIR . '/cache/qtpo/min/js' );
+		$cached_file = $js_minifier->minify();
+
+		if ( $cached_file ) {
+			$file_version = fileatime( Util::get_local_path( $cached_file ) );
+			wp_deregister_script( $script->handle );
+			wp_register_script( $script->handle, $cached_file, $script->deps, $file_version, $script->args );
+		}
+	}
+
+	private function is_css_minified( $file_path ) {
+		$file_name = basename( $file_path );
+
+		if ( preg_match( '/(\.min\.css|\.bundle\.css|\.bundle\.min\.css)$/i', $file_name ) ) {
+			return true;
+		}
+
+		$css_content = file_get_contents( $file_path );
+		$line        = preg_split( '/\r\n|\r|\n/', $css_content );
+
+		if ( 10 >= count( $line ) ) {
+			return true;
+		}
+
+		return false;
+	}
+	private function is_js_minified( $file_path ) {
+		$file_name = basename( $file_path );
+
+		if ( preg_match( '/(\.min\.js|\.bundle\.js|\.bundle\.min\.js)$/i', $file_name ) ) {
+			return true;
+		}
+
+		$js_content = file_get_contents( $file_path );
+		$line       = preg_split( '/\r\n|\r|\n/', $js_content );
+
+		error_log( 'Line : ' . count( $line ) . ' File name: ' . $file_name );
+
+		if ( 10 >= count( $line ) ) {
+			return true;
+		}
+
+		return false;
+	}
+
+	/**
+	 * Convert uploaded images to WebP format.
+	 *
+	 * @param array $metadata The attachment metadata.
+	 * @param int $attachment_id The attachment ID.
+	 * @return array The modified attachment metadata.
+	 */
+	public function convert_images_to_webp( $metadata, $attachment_id ) {
+		$upload_dir     = wp_upload_dir();
+		$webp_converter = new WebP_Converter();
+
+		error_log( print_r( $upload_dir, true ) );
+		// Get the full file path of the original image
+		$file = get_attached_file( $attachment_id );
+
+		// Convert the original image to WebP
+		$webp_file = $webp_converter->get_webp_path( $file );
+		$converted = $webp_converter->convert_to_webp( $file, $webp_file );
+
+		if ( $converted ) {
+			error_log( 'WebP conversion successful: ' . $webp_file );
+		} else {
+			error_log( 'WebP conversion failed: ' . $file );
+		}
+
+		// Convert additional image sizes to WebP
+		if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
+			foreach ( $metadata['sizes'] as $size => $size_data ) {
+				$image_path = $upload_dir['path'] . '/' . $size_data['file'];
+				$webp_path  = $webp_converter->get_webp_path( $image_path );
+
+				$webp_converter->convert_to_webp( $image_path, $webp_path );
+			}
+		}
+
+		return $metadata;
+	}
+
+	/**
+	 * Serve WebP images if available and supported by the browser.
+	 *
+	 * @param array $image The image source array.
+	 * @param int $attachment_id The attachment ID.
+	 * @param string|array $size The requested size.
+	 * @param bool $icon Whether the image is an icon.
+	 * @return array Modified image source with WebP if applicable.
+	 */
+	public function maybe_serve_webp_image( $image, $attachment_id, $size, $icon ) {
+		error_log( '$webp_image_path: ' . $_SERVER['HTTP_ACCEPT'] );
+		if ( strpos( $_SERVER['HTTP_ACCEPT'], 'image/webp' ) === false ) {
+			return $image;
+		}
+
+		// Check if the image is already in WebP format
+		$image_extension = pathinfo( $image[0], PATHINFO_EXTENSION );
+		if ( 'webp' === strtolower( $image_extension ) ) {
+			// If the image is already a WebP, return it as is
+			error_log( 'Image is already in WebP format, skipping conversion. ' . $image[0] );
+			return $image;
+		}
+
+		$webp_converter  = new WebP_Converter();
+		$webp_image_path = $webp_converter->get_webp_path( $image[0] );
+
+		error_log( '$webp_image_path: ' . $webp_image_path );
+		if ( file_exists( $webp_image_path ) ) {
+			// Replace the original image URL with the WebP version
+			$image[0] = str_replace( pathinfo( $image[0], PATHINFO_EXTENSION ), 'webp', $image[0] );
+		}
+
+		return $image;
 	}
 }

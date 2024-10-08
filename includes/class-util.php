@@ -33,7 +33,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// Recursively create parent directories first
 				$parent_dir = dirname( $cache_dir );
-				( 'Parent directory: ' . $parent_dir );
+
 				if ( ! $wp_filesystem->is_dir( $parent_dir ) ) {
 					self::prepare_cache_dir( $parent_dir );
 				}
@@ -53,16 +53,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * This method ensures that the WP_Filesystem API is available and initializes it.
 		 *
-		 * @return bool True if the WP_Filesystem API was initialized successfully, false otherwise.
 		 */
-		public static function init_filesystem(): bool {
+		public static function init_filesystem() {
 			global $wp_filesystem;
 
 			if ( ! function_exists( 'WP_Filesystem' ) ) {
 				require_once ABSPATH . 'wp-admin/includes/file.php';
 			}
 
-			return WP_Filesystem();
+			if ( WP_Filesystem() ) {
+				return $wp_filesystem;
+			} else {
+				return false;
+			}
+		}
+
+		public static function get_local_path( string $url ): string {
+			$relative_path = str_replace( home_url(), '', $url );
+			return ABSPATH . ltrim( $relative_path, '/' );
 		}
 	}
 }

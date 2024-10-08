@@ -2,7 +2,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	const clearAllCacheBtn = document.querySelector( '#wp-admin-bar-qtpo_clear_all .ab-item' );
 
 	clearAllCacheBtn.addEventListener( 'click', function () {
-		fetch( qtpoObject.rest_url + '/clear_cache', {
+		fetch( qtpoObject.apiUrl + '/clear_cache', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
@@ -19,7 +19,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
 	clearCacheBtn.addEventListener( 'click', function () {
 		const id = clearCacheBtn.parentElement.classList.value.replace( 'page-', '' );
-		fetch( qtpoObject.rest_url + '/clear_cache', {
+		fetch( qtpoObject.apiUrl + '/clear_cache', {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',

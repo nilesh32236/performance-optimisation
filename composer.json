@@ -14,5 +14,11 @@
     "require": {
         "voku/html-min": "^4.5",
         "matthiasmullie/minify": "^1.3"
+    },
+    "extra": {
+        "cleanup": {
+            "dirs": ["bin","tests", "docs"],
+            "exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
+        }
     }
 }

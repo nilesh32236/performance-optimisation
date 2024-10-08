@@ -2,8 +2,7 @@
 
 namespace PerformanceOptimise\Inc;
 
-use voku\helper\HtmlMin;
-use MatthiasMullie\Minify;
+use PerformanceOptimise\Inc\Minify;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	die();
@@ -11,6 +10,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 	class Cache {
+
+
+		private const CACHE_DIR = '/cache/qtpo';
+
+		private string $domain;
+		private string $cache_root_dir;
+		private $filesystem;
+
+		public function __construct() {
+			$this->domain         = sanitize_text_field( $_SERVER['HTTP_HOST'] );
+			$this->cache_root_dir = WP_CONTENT_DIR . self::CACHE_DIR;
+			$this->filesystem     = Util::init_filesystem();
+		}
 
 		/**
 		 * Generate dynamic static HTML.
@@ -20,75 +32,133 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 */
 		public function generate_dynamic_static_html(): void {
-			if ( is_user_logged_in() || is_404() ) {
+			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
 				return;
 			}
 
-			$url_path = trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
-			$ext      = pathinfo( $url_path, PATHINFO_EXTENSION );
+			$url_path  = trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
+			$file_path = $this->get_cache_file_path( $url_path );
 
-			if ( $ext && ! in_array( $ext, array( 'html', '' ), true ) ) {
+			if ( ! $this->filesystem || ! $this->prepare_cache_dir( $url_path ) ) {
 				return;
 			}
 
-			$domain         = sanitize_text_field( $_SERVER['HTTP_HOST'] );
-			$cache_root_dir = WP_CONTENT_DIR . '/cache/qtpo';
-			$cache_dir      = "{$cache_root_dir}/{$domain}" . ( '' === $url_path ? '' : "/{$url_path}" );
-			$file_path      = "{$cache_dir}/index.html";
-			$gzip_file_path = "{$cache_dir}/index.html.gz";
-
-			if ( ! Util::init_filesystem() || ! Util::prepare_cache_dir( $cache_dir ) ) {
-				return;
-			}
-
-			$cache_expiry = 5 * HOUR_IN_SECONDS;
-			$current_time = time();
-
-			if ( ! $this->is_cache_valid( $file_path, $cache_expiry, $current_time ) ) {
-				try {
-					ob_start(
-						function ( $buffer ) use ( $file_path, $gzip_file_path ) {
-
-							$last_error = error_get_last();
-							if ( $last_error && in_array( $last_error['type'], array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR ), true ) ) {
-								error_log( 'Skipping static file generation due to a critical error: ' . print_r( $last_error, true ) );
-								return $buffer;
-							}
-
-							$buffer = $this->minify_html( $buffer );
-
-							$last_error = error_get_last();
-							if ( $last_error && in_array( $last_error['type'], array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR ), true ) ) {
-								error_log( 'Skipping static file saving due to a critical error after minification: ' . print_r( $last_error, true ) );
-								return $buffer;
-							}
-
-							$this->save_cache_files( $buffer, $file_path, $gzip_file_path );
-
-							return $buffer;
-						}
-					);
-					add_action( 'shutdown', 'ob_end_flush', 0, 0 );
-				} catch ( \Exception $e ) {
-					error_log( 'Error generating static HTML: ' . $e->getMessage() );
-				}
+			try {
+				ob_start(
+					function ( $buffer ) use ( $file_path ) {
+						return $this->process_buffer( $buffer, $file_path );
+					}
+				);
+				add_action( 'shutdown', 'ob_end_flush', 0, 0 );
+			} catch ( \Exception $e ) {
+				error_log( 'Error generating static HTML: ' . $e->getMessage() );
 			}
 		}
 
 		/**
-		 * Check if the cache is valid.
+		 * Process the buffer by minifying it and saving cache files.
 		 *
-		 * Determines if the cached file exists and is within the cache expiry time.
-		 *
-		 * @param string $file_path    Path to the cached HTML file.
-		 * @param int    $cache_expiry Cache expiry time in seconds.
-		 * @param int    $current_time Current timestamp.
-		 * @return bool True if cache is valid, false otherwise.
+		 * @param string $buffer
+		 * @param string $file_path
+		 * @return string
 		 */
-		private function is_cache_valid( $file_path, $cache_expiry, $current_time ): bool {
-			global $wp_filesystem;
+		private function process_buffer( $buffer, $file_path ) {
+			$buffer          = $this->serve_webp_images( $buffer );
+			$minified_buffer = $this->minify_buffer( $buffer );
 
-			return $wp_filesystem->exists( $file_path ) && $cache_expiry >= ( $current_time - $wp_filesystem->mtime( $file_path ) );
+			if ( $minified_buffer !== $buffer ) {
+				$this->save_cache_files( $minified_buffer, $file_path );
+			}
+
+			return $minified_buffer;
+		}
+
+		private function serve_webp_images( $buffer ) {
+			// Check if the browser supports WebP
+			if ( strpos( $_SERVER['HTTP_ACCEPT'], 'image/webp' ) === false ) {
+				return $buffer;
+			}
+
+			// Replace all image src URLs with their WebP equivalents
+			return preg_replace_callback(
+				'#<img\b[^>]*src=["\']([^"\']+)["\'][^>]*>#i',
+				function ( $matches ) {
+					$img_url       = $matches[1];
+					$img_extension = pathinfo( $img_url, PATHINFO_EXTENSION );
+
+					error_log( '$img_url: ' . $img_url );
+
+					// Skip if the image is already a WebP
+					if ( strtolower( $img_extension ) === 'webp' ) {
+						return $matches[0]; // Return the original image tag
+					}
+
+					$webp_converter  = new WebP_Converter();
+					$webp_img_url    = str_replace( $img_extension, 'webp', $img_url );
+					$webp_image_path = Util::get_local_path( $webp_converter->get_webp_path( $img_url ) );
+
+					error_log( '$webp_image_path: ' . $webp_image_path );
+					if ( ! file_exists( $webp_image_path ) ) {
+						$source_image_path = Util::get_local_path( $img_url );
+
+						if ( file_exists( $source_image_path ) ) {
+							error_log( 'Converting image to WebP: ' . $source_image_path );
+							$webp_converter->convert_to_webp( $source_image_path, $webp_image_path );
+						}
+					}
+
+					if ( file_exists( $webp_image_path ) ) {
+						// Replace the original src with the WebP version
+						return str_replace( $img_url, $webp_img_url, $matches[0] );
+					}
+
+					error_log( $matches[0] );
+					// Return the original image tag if WebP conversion fails
+					return $matches[0];
+				},
+				$buffer
+			);
+		}
+
+		/**
+		 * Minify the output buffer.
+		 *
+		 * @param string $buffer
+		 * @return string
+		 */
+		private function minify_buffer( $buffer ) {
+			$minifier = new Minify\HTML( $buffer );
+			return $minifier->get_minified_html();
+		}
+
+		/**
+		 * Check if the page is not cacheable.
+		 *
+		 * @return bool
+		 */
+		private function is_not_cacheable(): bool {
+			$path_info = pathinfo( trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' ), PATHINFO_EXTENSION );
+			return is_404() || ! empty( $path_info );
+		}
+
+		/**
+		 * Get the cache file path based on the URL path.
+		 *
+		 * @param string $url_path
+		 * @return string
+		 */
+		private function get_cache_file_path( string $url_path ): string {
+			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? 'index.html' : "{$url_path}/index.html" );
+		}
+
+		/**
+		 * Prepare the cache directory for storing files.
+		 *
+		 * @param string $url_path
+		 * @return bool
+		 */
+		private function prepare_cache_dir( string $url_path ): bool {
+			return Util::prepare_cache_dir( "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? '' : "/{$url_path}" ) );
 		}
 
 		/**
@@ -98,18 +168,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $buffer         The minified HTML content.
 		 * @param string $file_path      Path to save the regular HTML file.
-		 * @param string $gzip_file_path Path to save the gzip compressed HTML file.
 		 * @return void
 		 */
-		private function save_cache_files( $buffer, $file_path, $gzip_file_path ): void {
-			global $wp_filesystem;
+		private function save_cache_files( $buffer, $file_path ): void {
+			$gzip_file_path = $file_path . '.gz';
 
-			if ( ! $wp_filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE ) ) {
+			if ( ! $this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE ) ) {
 				error_log( 'Error writing static HTML file.' );
 			}
 
 			$gzip_output = gzencode( $buffer, 9 );
-			if ( ! $wp_filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE ) ) {
+			if ( ! $this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE ) ) {
 				error_log( 'Error writing gzipped static HTML file.' );
 			}
 		}
@@ -131,15 +200,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 		}
 
-		private static function get_file_path( $page_id = null ) {
-			$domain    = sanitize_text_field( $_SERVER['HTTP_HOST'] );
-			$url_path  = trim( wp_parse_url( get_permalink( $page_id ), PHP_URL_PATH ), '/' );
-			$file_name = ( '' === $url_path ) ? 'index.html' : "{$url_path}/index.html";
-			$cache_dir = WP_CONTENT_DIR . "/cache/qtpo/{$domain}";
-			$file_path = "{$cache_dir}/{$file_name}";
-
-			return $file_path;
+		/**
+		 * Get the file path for a page.
+		 *
+		 * @param int|null $page_id
+		 * @return string
+		 */
+		private function get_file_path( int $page_id = null ): string {
+			$url_path = trim( wp_parse_url( get_permalink( $page_id ), PHP_URL_PATH ), '/' );
+			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? 'index.html' : "{$url_path}/index.html" );
 		}
+
 		/**
 		 * Delete cache files.
 		 *
@@ -149,151 +220,87 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $gzip_file_path Path to the gzip compressed HTML file.
 		 * @return void
 		 */
-		private static function delete_cache_files( $file_path ): void {
-			global $wp_filesystem;
-
+		private function delete_cache_files( $file_path ): void {
 			$gzip_file_path = $file_path . '.gz';
-			if ( Util::init_filesystem() && $wp_filesystem ) {
-				if ( $wp_filesystem->exists( $file_path ) ) {
-					$wp_filesystem->delete( $file_path );
-				}
-
-				if ( $wp_filesystem->exists( $gzip_file_path ) ) {
-					$wp_filesystem->delete( $gzip_file_path );
-				}
+			if ( $this->filesystem ) {
+				$this->filesystem->delete( $file_path );
+				$this->filesystem->delete( $gzip_file_path );
 			}
 		}
 
-		private static function delete_all_cache_files() {
-			global $wp_filesystem;
-
-			$domain    = sanitize_text_field( $_SERVER['HTTP_HOST'] );
-			$cache_dir = WP_CONTENT_DIR . "/cache/qtpo/{$domain}";
-
-			if ( Util::init_filesystem() && $wp_filesystem ) {
-				if ( $wp_filesystem->is_dir( $cache_dir ) ) {
-					// Remove all files and folders inside the cache directory
-					$wp_filesystem->delete( $cache_dir, true ); // `true` ensures recursive deletion
-				}
+		/**
+		 * Clear the cache for a specific page or all pages.
+		 *
+		 * @param int|null $page_id
+		 * @return void
+		 */
+		public static function clear_cache( $page_id = null ) {
+			$instance = new self();
+			if ( $page_id ) {
+				$file_path = $instance->get_file_path( $page_id );
+				$instance->delete_cache_files( $file_path );
+			} else {
+				$instance->delete_all_cache_files();
 			}
 		}
 
+		/**
+		 * Delete all cache files.
+		 *
+		 * @return void
+		 */
+		private function delete_all_cache_files() {
+			$cache_dir = "{$this->cache_root_dir}/{$this->domain}";
+
+			if ( $this->filesystem && $this->filesystem->is_dir( $cache_dir ) ) {
+				$this->filesystem->delete( $cache_dir, true ); // 'true' ensures recursive deletion
+			}
+		}
+
+		/**
+		 * Get the size of the cache.
+		 *
+		 * @return string
+		 */
 		public static function get_cache_size() {
-			global $wp_filesystem;
+			$instance = new self();
 
-			if ( ! Util::init_filesystem() ) {
+			if ( ! $instance->filesystem ) {
 				return 'Unable to initialize filesystem.';
 			}
 
-			$domain    = sanitize_text_field( $_SERVER['HTTP_HOST'] );
-			$cache_dir = WP_CONTENT_DIR . "/cache/qtpo/{$domain}";
+			$cache_dir = "{$instance->cache_root_dir}/{$instance->domain}";
 
-			if ( ! $wp_filesystem->is_dir( $cache_dir ) ) {
+			if ( ! $instance->filesystem->is_dir( $cache_dir ) ) {
 				return 'Cache directory does not exist.';
 			}
 
-			$total_size = self::calculate_directory_size( $cache_dir );
-
+			$total_size = $instance->calculate_directory_size( $cache_dir );
 			return size_format( $total_size );
 		}
 
-		public static function calculate_directory_size( $directory ) {
-			global $wp_filesystem;
-
+		/**
+		 * Calculate the size of a directory.
+		 *
+		 * @param string $directory
+		 * @return int
+		 */
+		private function calculate_directory_size( string $directory ): int {
 			$total_size = 0;
-
-			$files = $wp_filesystem->dirlist( $directory );
+			$files      = $this->filesystem->dirlist( $directory );
 
 			if ( ! $files ) {
 				return $total_size;
 			}
 
 			foreach ( $files as $file ) {
-				$file_path = trailingslashit( $directory ) . $file['name'];
-
-				if ( 'd' === $file['type'] ) {
-					$total_size += self::calculate_directory_size( $file_path );
-				} else {
-					$total_size += $wp_filesystem->size( $file_path );
-				}
+				$file_path   = trailingslashit( $directory ) . $file['name'];
+				$total_size += ( 'd' === $file['type'] )
+					? $this->calculate_directory_size( $file_path )
+					: $this->filesystem->size( $file_path );
 			}
 
 			return $total_size;
 		}
-
-		public static function clear_cache( $page_id = null ) {
-			if ( $page_id ) {
-				$file_path = self::get_file_path( $page_id );
-				self::delete_cache_files( $file_path );
-			} else {
-				self::delete_all_cache_files();
-			}
-		}
-
-		/**
-		 * Minify HTML content.
-		 *
-		 * Uses HtmlMin and Minify libraries to minify HTML, inline CSS, and inline JavaScript.
-		 *
-		 * @param string $html The HTML content to minify.
-		 * @return string The minified HTML content.
-		 */
-		public function minify_html( $html ): string {
-			$html_min = new HtmlMin();
-			$html_min->doOptimizeViaHtmlDomParser( true )
-			->doOptimizeAttributes( true )
-			->doRemoveWhitespaceAroundTags( true )
-			->doRemoveComments( true )
-			->doSumUpWhitespace( true )
-			->doRemoveEmptyAttributes( true )
-			->doRemoveValueFromEmptyInput( true )
-			->doSortCssClassNames( true )
-			->doSortHtmlAttributes( true )
-			->doRemoveSpacesBetweenTags( true );
-
-			// Minify inline CSS
-			$html = preg_replace_callback(
-				'#<style\b[^>]*>(.*?)</style>#is',
-				function ( $matches ) {
-					$css_minifier = new Minify\CSS( $matches[1] );
-					$minified_css = $css_minifier->minify();
-					return '<style>' . $minified_css . '</style>';
-				},
-				$html
-			);
-
-			// Minify inline JS
-			$html = preg_replace_callback(
-				'#<script\b([^>]*)>(.*?)</script>#is',
-				function ( $matches ) {
-					$content = trim( $matches[2] );
-
-					// Check if the content is empty or not
-					if ( empty( $content ) ) {
-						return $matches[0];
-					}
-
-					// Detect JSON content
-					$is_json = ( isset( $content[0] ) && ( '{' === $content[0] || '[' === $content[0] ) );
-
-					if ( $is_json && strpos( $matches[1], 'application/ld+json' ) !== false ) {
-						$minified_json = wp_json_encode( json_decode( $content, true ) );
-						return '<script' . $matches[1] . '>' . $minified_json . '</script>';
-					}
-
-					if ( ! $is_json ) {
-						$js_minifier = new Minify\JS( $matches[2] );
-						$minified_js = $js_minifier->minify();
-						return '<script' . $matches[1] . ' defer="defer">' . $minified_js . '</script>';
-					}
-
-					return $matches[0];
-				},
-				$html
-			);
-
-			return $html_min->minify( $html );
-		}
-
 	}
 }
