@@ -126,6 +126,13 @@ class HTML {
 			return $this->safe_json_encode( $content, $attributes );
 		}
 
+		$attributes = preg_replace(
+			'/type=("|\')text\/javascript("|\')/',
+			'type="qtpo/javascript" qtpo-type="text/javascript"',
+			$attributes
+		);
+
+		error_log( '$attributes: ' . $attributes );
 		try {
 			$js_minifier = new JSMinifier( $content );
 			return '<script' . $attributes . ' defer="defer">' . $js_minifier->minify() . '</script>';

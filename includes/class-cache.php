@@ -17,11 +17,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private string $domain;
 		private string $cache_root_dir;
 		private $filesystem;
-
+		private $options;
 		public function __construct() {
 			$this->domain         = sanitize_text_field( $_SERVER['HTTP_HOST'] );
 			$this->cache_root_dir = WP_CONTENT_DIR . self::CACHE_DIR;
 			$this->filesystem     = Util::init_filesystem();
+			$this->options        = get_option( 'qtpo_settings', array() );
 		}
 
 		/**
@@ -63,14 +64,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return string
 		 */
 		private function process_buffer( $buffer, $file_path ) {
-			$buffer          = $this->serve_webp_images( $buffer );
-			$minified_buffer = $this->minify_buffer( $buffer );
+			$buffer = $this->serve_webp_images( $buffer );
 
-			if ( $minified_buffer !== $buffer ) {
-				$this->save_cache_files( $minified_buffer, $file_path );
+			if ( isset( $this->options['file_optimisation']['minifyHTML'] ) && (bool) $this->options['file_optimisation']['minifyHTML'] ) {
+				$buffer = $this->minify_buffer( $buffer );
 			}
 
-			return $minified_buffer;
+			$this->save_cache_files( $buffer, $file_path );
+
+			return $buffer;
 		}
 
 		private function serve_webp_images( $buffer ) {
@@ -97,12 +99,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$webp_img_url    = str_replace( $img_extension, 'webp', $img_url );
 					$webp_image_path = Util::get_local_path( $webp_converter->get_webp_path( $img_url ) );
 
-					error_log( '$webp_image_path: ' . $webp_image_path );
 					if ( ! file_exists( $webp_image_path ) ) {
 						$source_image_path = Util::get_local_path( $img_url );
 
 						if ( file_exists( $source_image_path ) ) {
-							error_log( 'Converting image to WebP: ' . $source_image_path );
 							$webp_converter->convert_to_webp( $source_image_path, $webp_image_path );
 						}
 					}

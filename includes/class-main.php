@@ -70,7 +70,6 @@ class Main {
 		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 3 );
 		add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
-		// add_action( 'wp_enqueue_scripts', array( $this, 'minify_assets' ), 100 );
 		$cache = new Cache();
 		add_action( 'template_redirect', array( $cache, 'generate_dynamic_static_html' ) );
 		add_action( 'save_post', array( $cache, 'invalidate_dynamic_static_html' ) );
@@ -78,27 +77,36 @@ class Main {
 		$rest = new Rest();
 		add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
 
-		add_filter( 'wp_generate_attachment_metadata', array( $this, 'convert_images_to_webp' ), 10, 2 );
-		add_filter( 'wp_get_attachment_image_src', array( $this, 'maybe_serve_webp_image' ), 10, 4 );
+		$webp_converter = new WebP_Converter();
+		add_filter( 'wp_generate_attachment_metadata', array( $webp_converter, 'convert_images_to_webp' ), 10, 2 );
+		add_filter( 'wp_get_attachment_image_src', array( $webp_converter, 'maybe_serve_webp_image' ), 10, 4 );
 
 		if ( isset( $this->options['file_optimisation']['minifyJS'] ) && (bool) $this->options['file_optimisation']['minifyJS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeJS'] ) && ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
-				$this->exclude_js = array_merge( $this->exclude_js, (array) $this->options['file_optimisation']['excludeJS'] );
+				$exclude_js = explode( "\n", $this->options['file_optimisation']['excludeJS'] );
+				$exclude_js = array_map( 'trim', $exclude_js );
+				$exclude_js = array_filter( $exclude_js );
+
+				$this->exclude_js = array_merge( $this->exclude_js, (array) $exclude_js );
 			}
 
-			error_log( 'exclude_js: ' . print_r( $this->exclude_js, true ) );
 			add_filter( 'script_loader_tag', array( $this, 'minify_js' ), 10, 3 );
 		}
 
 		if ( isset( $this->options['file_optimisation']['minifyCSS'] ) && (bool) $this->options['file_optimisation']['minifyCSS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCSS'] ) ) {
-				$this->exclude_css = array_merge( $this->exclude_css, (array) $this->options['file_optimisation']['excludeCSS'] );
+				$exclude_css = explode( "\n", $this->options['file_optimisation']['excludeCSS'] );
+				$exclude_css = array_map( 'trim', $exclude_css );
+				$exclude_css = array_filter( $exclude_css );
+
+				$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
 			}
 
-			error_log( 'exclude_css: ' . print_r( $this->exclude_css, true ) );
 			add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 		}
 		new Cron();
+
+		add_action( 'wp_head', array( $this, 'add_preload_prefatch' ) );
 	}
 
 	/**
@@ -141,6 +149,18 @@ class Main {
 	public function admin_enqueue_scripts(): void {
 		$screen = get_current_screen();
 
+		if ( is_admin_bar_showing() ) {
+			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), '1.0.0', true );
+			wp_localize_script(
+				'qtpo-admin-bar-script',
+				'qtpoObject',
+				array(
+					'apiUrl' => get_rest_url( null, 'performance-optimisation/v1' ),
+					'nonce'  => wp_create_nonce( 'wp_rest' ),
+				)
+			);
+		}
+
 		if ( 'toplevel_page_performance-optimisation' !== $screen->base ) {
 			return;
 		}
@@ -173,6 +193,10 @@ class Main {
 				)
 			);
 		}
+
+		if ( ! is_user_logged_in() ) {
+			wp_enqueue_script( 'qtpo-lazyload', QTPO_PLUGIN_URL . 'src/lazyload.js', array(), '1.0.0', true );
+		}
 	}
 
 	public function add_setting_to_admin_bar( $wp_admin_bar ) {
@@ -201,7 +225,6 @@ class Main {
 		if ( ! is_admin() ) {
 			$current_id = get_the_ID();
 
-			error_log( var_export( $current_id, true ) );
 			$wp_admin_bar->add_node(
 				array(
 					'id'     => 'qtpo_clear_this_page',
@@ -228,14 +251,112 @@ class Main {
 	 * @return string Modified script tag with defer attribute.
 	 */
 	public function add_defer_attribute( $tag, $handle, $src ): string {
-		if ( is_admin() ) {
+		if ( is_user_logged_in() ) {
 			return $tag;
 		}
 
-		if ( in_array( $handle, array( 'wp-hooks', 'wp-i18n' ), true ) ) {
-			return $tag;
+		$exclude_js = array( 'qtpo-lazyload' );
+
+		if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
+
+			if ( isset( $this->options['file_optimisation']['excludeDeferJS'] ) && ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
+				$exclude_defer = explode( "\n", $this->options['file_optimisation']['excludeDeferJS'] );
+				$exclude_defer = array_map( 'trim', $exclude_defer );
+				$exclude_defer = array_filter( $exclude_defer );
+
+				$exclude_defer = array_merge( $exclude_js, (array) $exclude_defer );
+			} else {
+				$exclude_defer = $exclude_js;
+			}
+
+			if ( ! in_array( $handle, $exclude_defer, true ) ) {
+				$tag = str_replace( ' src', ' defer="defer" src', $tag );
+			}
 		}
-		return str_replace( ' src', ' defer="defer" src', $tag );
+
+		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
+
+			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
+				$exclude_delay = explode( "\n", $this->options['file_optimisation']['excludeDelayJS'] );
+				$exclude_delay = array_map( 'trim', $exclude_delay );
+				$exclude_delay = array_filter( $exclude_delay );
+
+				$exclude_delay = array_merge( $exclude_js, (array) $exclude_delay );
+			} else {
+				$exclude_delay = $exclude_js;
+			}
+
+			if ( ! in_array( $handle, $exclude_delay, true ) ) {
+				$tag = str_replace( ' src', ' qtpo-src', $tag );
+			}
+		}
+
+		return $tag;
+	}
+
+	public function add_preload_prefatch() {
+		// Preconnect origins
+		if ( isset( $this->options['preload_settings']['preconnect'] ) && (bool) $this->options['preload_settings']['preconnect'] ) {
+			if ( isset( $this->options['preload_settings']['preconnectOrigins'] ) && ! empty( $this->options['preload_settings']['preconnectOrigins'] ) ) {
+				$preconnect_origins = explode( "\n", $this->options['preload_settings']['preconnectOrigins'] );
+				$preconnect_origins = array_map( 'trim', $preconnect_origins );
+				$preconnect_origins = array_filter( $preconnect_origins );
+
+				foreach ( $preconnect_origins as $origin ) {
+					echo '<link rel="preconnect" href="' . esc_url( $origin ) . '" crossorigin="anonymous">';
+				}
+			}
+		}
+
+		// Prefetch DNS origins
+		if ( isset( $this->options['preload_settings']['prefetchDNS'] ) && (bool) $this->options['preload_settings']['prefetchDNS'] ) {
+			if ( isset( $this->options['preload_settings']['dnsPrefetchOrigins'] ) && ! empty( $this->options['preload_settings']['dnsPrefetchOrigins'] ) ) {
+				$dns_prefetch_origins = explode( "\n", $this->options['preload_settings']['dnsPrefetchOrigins'] );
+				$dns_prefetch_origins = array_map( 'trim', $dns_prefetch_origins );
+				$dns_prefetch_origins = array_filter( $dns_prefetch_origins );
+
+				foreach ( $dns_prefetch_origins as $origin ) {
+					echo '<link rel="dns-prefetch" href="' . esc_url( $origin ) . '">';
+				}
+			}
+		}
+
+		// Preload fonts
+		if ( isset( $this->options['preload_settings']['preloadFonts'] ) && (bool) $this->options['preload_settings']['preloadFonts'] ) {
+			if ( isset( $this->options['preload_settings']['preloadFontsUrls'] ) && ! empty( $this->options['preload_settings']['preloadFontsUrls'] ) ) {
+				$preload_fonts_urls = explode( "\n", $this->options['preload_settings']['preloadFontsUrls'] );
+				$preload_fonts_urls = array_map( 'trim', $preload_fonts_urls );
+				$preload_fonts_urls = array_filter( $preload_fonts_urls );
+
+				foreach ( $preload_fonts_urls as $font_url ) {
+
+					if ( ! preg_match( '/^https?:\/\//i', $font_url ) ) {
+						$font_url = content_url( $font_url );
+					}
+
+					$font_extension = pathinfo( $font_url, PATHINFO_EXTENSION );
+					$font_type      = '';
+
+					switch ( strtolower( $font_extension ) ) {
+						case 'woff2':
+							$font_type = 'font/woff2';
+							break;
+						case 'woff':
+							$font_type = 'font/woff';
+							break;
+						case 'ttf':
+							$font_type = 'font/ttf';
+							break;
+						default:
+							$font_type = ''; // Fallback if unknown extension
+					}
+
+					if ( ! empty( $font_type ) ) {
+						echo '<link rel="preload" href="' . esc_url( $font_url ) . '" as="font" type="' . esc_attr( $font_type ) . '" crossorigin="anonymous">';
+					}
+				}
+			}
+		}
 	}
 
 	public function minify_css( $tag, $handle, $href ) {
@@ -315,77 +436,5 @@ class Main {
 		}
 
 		return false;
-	}
-
-	/**
-	 * Convert uploaded images to WebP format.
-	 *
-	 * @param array $metadata The attachment metadata.
-	 * @param int $attachment_id The attachment ID.
-	 * @return array The modified attachment metadata.
-	 */
-	public function convert_images_to_webp( $metadata, $attachment_id ) {
-		$upload_dir     = wp_upload_dir();
-		$webp_converter = new WebP_Converter();
-
-		error_log( print_r( $upload_dir, true ) );
-		// Get the full file path of the original image
-		$file = get_attached_file( $attachment_id );
-
-		// Convert the original image to WebP
-		$webp_file = $webp_converter->get_webp_path( $file );
-		$converted = $webp_converter->convert_to_webp( $file, $webp_file );
-
-		if ( $converted ) {
-			error_log( 'WebP conversion successful: ' . $webp_file );
-		} else {
-			error_log( 'WebP conversion failed: ' . $file );
-		}
-
-		// Convert additional image sizes to WebP
-		if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
-			foreach ( $metadata['sizes'] as $size => $size_data ) {
-				$image_path = $upload_dir['path'] . '/' . $size_data['file'];
-				$webp_path  = $webp_converter->get_webp_path( $image_path );
-
-				$webp_converter->convert_to_webp( $image_path, $webp_path );
-			}
-		}
-
-		return $metadata;
-	}
-
-	/**
-	 * Serve WebP images if available and supported by the browser.
-	 *
-	 * @param array $image The image source array.
-	 * @param int $attachment_id The attachment ID.
-	 * @param string|array $size The requested size.
-	 * @param bool $icon Whether the image is an icon.
-	 * @return array Modified image source with WebP if applicable.
-	 */
-	public function maybe_serve_webp_image( $image, $attachment_id, $size, $icon ) {
-		if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) || empty( $image[0] ) || strpos( $_SERVER['HTTP_ACCEPT'], 'image/webp' ) === false ) {
-			return $image;
-		}
-
-		// Check if the image is already in WebP format
-		$image_extension = pathinfo( $image[0], PATHINFO_EXTENSION );
-		if ( 'webp' === strtolower( $image_extension ) ) {
-			// If the image is already a WebP, return it as is
-			error_log( 'Image is already in WebP format, skipping conversion. ' . $image[0] );
-			return $image;
-		}
-
-		$webp_converter  = new WebP_Converter();
-		$webp_image_path = $webp_converter->get_webp_path( $image[0] );
-
-		error_log( '$webp_image_path: ' . $webp_image_path );
-		if ( file_exists( $webp_image_path ) ) {
-			// Replace the original image URL with the WebP version
-			$image[0] = str_replace( pathinfo( $image[0], PATHINFO_EXTENSION ), 'webp', $image[0] );
-		}
-
-		return $image;
 	}
 }

@@ -9,6 +9,7 @@ const FileOptimization = ({ options }) => {
 		excludeCSS: options?.excludeCSS || '',
 		minifyHTML: options?.minifyHTML || false,
 		deferJS: options?.deferJS || false,
+		excludeDeferJS: options?.excludeDeferJS || '',
 		delayJS: options?.delayJS || false,
 		excludeDelayJS: options?.excludeDelayJS || '',
 	});
@@ -93,6 +94,15 @@ const FileOptimization = ({ options }) => {
 					/>
 					Defer Loading JavaScript
 				</label>
+				{settings.deferJS && (
+					<textarea
+						className="text-area-field"
+						placeholder="Exclude specific JavaScript files"
+						name="excludeDeferJS"
+						value={settings.excludeDeferJS}
+						onChange={handleChange(setSettings)}
+					/>
+				)}
 			</div>
 
 			<div className="checkbox-option">
