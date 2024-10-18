@@ -47,10 +47,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			try {
 				ob_start(
 					function ( $buffer ) use ( $file_path ) {
-						return $this->process_buffer( $buffer, $file_path );
+						$processed_buffer = $this->process_buffer( $buffer, $file_path );
+
+						if ( ! headers_sent() && isset( $_SERVER['HTTP_ACCEPT_ENCODING'] ) && false !== strpos( $_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip' ) ) {
+							return ob_gzhandler( $processed_buffer, PHP_OUTPUT_HANDLER_FINAL );
+						}
+
+						return $processed_buffer;
 					}
 				);
-				// add_action( 'shutdown', 'ob_end_flush', 0, 0 );
 			} catch ( \Exception $e ) {
 				error_log( 'Error generating static HTML: ' . $e->getMessage() );
 			}
@@ -70,9 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$buffer = $this->minify_buffer( $buffer );
 			}
 
-			if ( empty( $_SERVER['QUERY_STRING'] ) ) {
-				$this->save_cache_files( $buffer, $file_path );
-			}
+			$this->save_cache_files( $buffer, $file_path );
 
 			return $buffer;
 		}
@@ -170,6 +173,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 */
 		private function save_cache_files( $buffer, $file_path ): void {
+
+			if ( ! $this->maybe_store_cache() ) {
+				return;
+			}
+
 			$gzip_file_path = $file_path . '.gz';
 
 			if ( ! $this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE ) ) {
@@ -180,6 +188,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! $this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE ) ) {
 				error_log( 'Error writing gzipped static HTML file.' );
 			}
+		}
+
+		private function maybe_store_cache() {
+			if ( ! empty( $_SERVER['QUERY_STRING'] ) ) {
+				return false;
+			}
+
+			if ( isset( $this->options['preload_settings']['enablePreloadCache'] ) && (bool) $this->options['preload_settings']['enablePreloadCache'] ) {
+				if ( isset( $this->options['preload_settings']['excludePreloadCache'] ) && ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
+					$exclude_urls = explode( "\n", $this->options['preload_settings']['excludePreloadCache'] );
+					$exclude_urls = array_map( 'trim', $exclude_urls );
+					$exclude_urls = array_filter( $exclude_urls );
+
+					$exclude_urls = array_map( 'home_url', $exclude_urls );
+
+					$current_url = home_url( $_SERVER['REQUEST_URI'] );
+					$current_url = rtrim( $current_url, '/' );
+
+					foreach ( $exclude_urls as $exclude_url ) {
+						$exclude_url = rtrim( $exclude_url, '/' );
+
+						if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+							$$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
+
+							if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
+								return false;
+							}
+						}
+
+						if ( $current_url === $exclude_url ) {
+							return false;
+						}
+					}
+				}
+
+				return true;
+			}
+
+			return false;
 		}
 
 		/**
