@@ -88,8 +88,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$img_url       = $matches[1];
 					$img_extension = pathinfo( $img_url, PATHINFO_EXTENSION );
 
-					error_log( '$img_url: ' . $img_url );
-
 					// Skip if the image is already a WebP
 					if ( strtolower( $img_extension ) === 'webp' ) {
 						return $matches[0]; // Return the original image tag
@@ -112,7 +110,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						return str_replace( $img_url, $webp_img_url, $matches[0] );
 					}
 
-					error_log( $matches[0] );
 					// Return the original image tag if WebP conversion fails
 					return $matches[0];
 				},
@@ -127,7 +124,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return string
 		 */
 		private function minify_buffer( $buffer ) {
-			$minifier = new Minify\HTML( $buffer );
+			$minifier = new Minify\HTML( $buffer, $this->options );
 			return $minifier->get_minified_html();
 		}
 

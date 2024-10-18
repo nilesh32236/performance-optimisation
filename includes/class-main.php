@@ -106,7 +106,7 @@ class Main {
 		}
 		new Cron();
 
-		add_action( 'wp_head', array( $this, 'add_preload_prefatch' ) );
+		add_action( 'wp_head', array( $this, 'add_preload_prefatch' ), 0 );
 	}
 
 	/**
@@ -288,6 +288,11 @@ class Main {
 
 			if ( ! in_array( $handle, $exclude_delay, true ) ) {
 				$tag = str_replace( ' src', ' qtpo-src', $tag );
+				$tag = preg_replace(
+					'/type=("|\')text\/javascript("|\')/',
+					'type="qtpo/javascript" qtpo-type="text/javascript"',
+					$tag
+				);
 			}
 		}
 
@@ -411,7 +416,6 @@ class Main {
 
 		$css_content = $this->filesystem->get_contents( $file_path );
 		$line        = preg_split( '/\r\n|\r|\n/', $css_content );
-		error_log( 'Line : ' . count( $line ) . ' File name: ' . $file_name );
 
 		if ( 10 >= count( $line ) ) {
 			return true;
@@ -428,8 +432,6 @@ class Main {
 
 		$js_content = $this->filesystem->get_contents( $file_path );
 		$line       = preg_split( '/\r\n|\r|\n/', $js_content );
-
-		error_log( 'Line : ' . count( $line ) . ' File name: ' . $file_name );
 
 		if ( 10 >= count( $line ) ) {
 			return true;
