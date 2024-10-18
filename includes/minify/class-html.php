@@ -25,10 +25,13 @@ class HTML {
 	 * @var string
 	 */
 	private string $minified_html;
+
+	private array $options;
 	/**
 	 * Minify constructor.
 	 */
-	public function __construct( $html ) {
+	public function __construct( $html, $options ) {
+		$this->options  = (array) $options;
 		$this->html_min = new HtmlMin();
 		$this->initialize_minification_settings();
 		$this->minified_html = $this->minify_html( $html );
@@ -126,16 +129,36 @@ class HTML {
 			return $this->safe_json_encode( $content, $attributes );
 		}
 
-		$attributes = preg_replace(
-			'/type=("|\')text\/javascript("|\')/',
-			'type="qtpo/javascript" qtpo-type="text/javascript"',
-			$attributes
-		);
+		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 
-		error_log( '$attributes: ' . $attributes );
+			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
+				$exclude_delay = explode( "\n", $this->options['file_optimisation']['excludeDelayJS'] );
+				$exclude_delay = array_map( 'trim', $exclude_delay );
+				$exclude_delay = array_filter( $exclude_delay );
+			}
+
+			$should_exclude = false;
+			if ( ! empty( $exclude_delay ) ) {
+				foreach ( $exclude_delay as $exclude ) {
+					if ( false !== strpos( $attributes, trim( $exclude ) ) ) {
+						$should_exclude = true;
+						break;
+					}
+				}
+			}
+
+			if ( ! $should_exclude ) {
+				$attributes = preg_replace(
+					'/type=("|\')text\/javascript("|\')/',
+					'type="qtpo/javascript" qtpo-type="text/javascript"',
+					$attributes
+				);
+			}
+		}
+
 		try {
 			$js_minifier = new JSMinifier( $content );
-			return '<script' . $attributes . ' defer="defer">' . $js_minifier->minify() . '</script>';
+			return '<script' . $attributes . '>' . $js_minifier->minify() . '</script>';
 		} catch ( \Exception $e ) {
 			// Log the error (optional)
 			error_log( 'JavaScript minification error: ' . $e->getMessage() );
