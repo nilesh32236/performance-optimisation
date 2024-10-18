@@ -70,7 +70,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$buffer = $this->minify_buffer( $buffer );
 			}
 
-			$this->save_cache_files( $buffer, $file_path );
+			if ( empty( $_SERVER['QUERY_STRING'] ) ) {
+				$this->save_cache_files( $buffer, $file_path );
+			}
 
 			return $buffer;
 		}

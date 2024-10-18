@@ -63,7 +63,7 @@ function is_user_logged_in_without_wp( \$site_url ) {
 	return false;
 }
 
-if ( ! is_user_logged_in_without_wp( \$site_url ) ) {
+if ( ! is_user_logged_in_without_wp( \$site_url ) && empty( \$_SERVER['QUERY_STRING'] ) ) {
 	if ( file_exists( \$gzip_file_path ) ) {
 		\$last_modified_time = filemtime( \$gzip_file_path );
 		\$etag               = md5_file( \$gzip_file_path );
