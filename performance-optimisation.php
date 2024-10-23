@@ -59,17 +59,3 @@ function qtpo_deactivate(): void {
 	Deactivate::init();
 }
 register_deactivation_hook( __FILE__, 'qtpo_deactivate' );
-
-
-// add_action( 'init', 'unschedule_all_wp_cron_jobs' );
-// function unschedule_all_wp_cron_jobs() {
-// 	$crons = _get_cron_array();
-// 	foreach ( $crons as $timestamp => $cron ) {
-// 		foreach ( $cron as $hook => $dings ) {
-// 			foreach ( $dings as $sig => $data ) {
-// 				// Unschedule each cron event
-// 				wp_unschedule_event( $timestamp, $hook, $data['args'] );
-// 			}
-// 		}
-// 	}
-// }

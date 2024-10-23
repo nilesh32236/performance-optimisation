@@ -6,6 +6,7 @@ const FileOptimization = ({ options }) => {
 		minifyJS: options?.minifyJS || false,
 		excludeJS: options?.excludeJS || '',
 		minifyCSS: options?.minifyCSS || false,
+		extractInlineCSS: options?.extractInlineCSS || false,
 		excludeCSS: options?.excludeCSS || '',
 		minifyHTML: options?.minifyHTML || false,
 		deferJS: options?.deferJS || false,
@@ -70,6 +71,18 @@ const FileOptimization = ({ options }) => {
 						onChange={handleChange(setSettings)}
 					/>
 				)}
+			</div>
+
+			<div className="checkbox-option">
+				<label>
+					<input
+						type="checkbox"
+						name="extractInlineCSS"
+						checked={settings.extractInlineCSS}
+						onChange={handleChange(setSettings)}
+					/>
+					Extract Inline CSS
+				</label>
 			</div>
 
 			<div className="checkbox-option">

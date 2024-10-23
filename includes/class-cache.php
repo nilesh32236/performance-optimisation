@@ -16,11 +16,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 		private string $domain;
 		private string $cache_root_dir;
+		private string $cache_root_url;
+		private string $url_path;
+		private string $extracted_css;
 		private $filesystem;
 		private $options;
 		public function __construct() {
 			$this->domain         = sanitize_text_field( $_SERVER['HTTP_HOST'] );
 			$this->cache_root_dir = WP_CONTENT_DIR . self::CACHE_DIR;
+			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
+			$this->url_path       = trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
 			$this->filesystem     = Util::init_filesystem();
 			$this->options        = get_option( 'qtpo_settings', array() );
 		}
@@ -37,25 +42,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			$url_path  = trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
-			$file_path = $this->get_cache_file_path( $url_path );
+			$file_path = $this->get_cache_file_path();
 
-			if ( ! $this->filesystem || ! $this->prepare_cache_dir( $url_path ) ) {
+			if ( ! $this->filesystem || ! $this->prepare_cache_dir() ) {
 				return;
 			}
 
 			try {
 				ob_start(
 					function ( $buffer ) use ( $file_path ) {
-						$processed_buffer = $this->process_buffer( $buffer, $file_path );
-
-						if ( ! headers_sent() && isset( $_SERVER['HTTP_ACCEPT_ENCODING'] ) && false !== strpos( $_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip' ) ) {
-							return ob_gzhandler( $processed_buffer, PHP_OUTPUT_HANDLER_FINAL );
-						}
-
-						return $processed_buffer;
+						return $this->process_buffer( $buffer, $file_path );
 					}
 				);
+
 			} catch ( \Exception $e ) {
 				error_log( 'Error generating static HTML: ' . $e->getMessage() );
 			}
@@ -69,10 +68,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return string
 		 */
 		private function process_buffer( $buffer, $file_path ) {
-			$buffer = $this->serve_webp_images( $buffer );
+			$is_extract_css = isset( $this->options['file_optimisation']['extractInlineCSS'] ) && (bool) $this->options['file_optimisation']['extractInlineCSS'];
+			$buffer         = $this->serve_webp_images( $buffer );
+
+			if ( $is_extract_css ) {
+				$buffer = $this->add_extracted_css_url( $buffer );
+			}
 
 			if ( isset( $this->options['file_optimisation']['minifyHTML'] ) && (bool) $this->options['file_optimisation']['minifyHTML'] ) {
 				$buffer = $this->minify_buffer( $buffer );
+			}
+
+			if ( $is_extract_css ) {
+				$this->save_extracted_css();
 			}
 
 			$this->save_cache_files( $buffer, $file_path );
@@ -130,7 +138,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function minify_buffer( $buffer ) {
 			$minifier = new Minify\HTML( $buffer, $this->options );
-			return $minifier->get_minified_html();
+			$buffer   = $minifier->get_minified_html();
+
+			$this->extracted_css = $minifier->get_extracted_css();
+			return $buffer;
 		}
 
 		/**
@@ -146,21 +157,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Get the cache file path based on the URL path.
 		 *
-		 * @param string $url_path
 		 * @return string
 		 */
-		private function get_cache_file_path( string $url_path ): string {
-			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? 'index.html' : "{$url_path}/index.html" );
+		private function get_cache_file_path( $type = 'html' ): string {
+			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index.{$type}" : "{$this->url_path}/index.{$type}" );
 		}
 
+		private function get_cache_file_url( $type = 'html' ): string {
+			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index.{$type}" : "{$this->url_path}/index.{$type}" );
+		}
 		/**
 		 * Prepare the cache directory for storing files.
 		 *
-		 * @param string $url_path
 		 * @return bool
 		 */
-		private function prepare_cache_dir( string $url_path ): bool {
-			return Util::prepare_cache_dir( "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? '' : "/{$url_path}" ) );
+		private function prepare_cache_dir(): bool {
+			return Util::prepare_cache_dir( "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? '' : "/{$this->url_path}" ) );
 		}
 
 		/**
@@ -172,9 +184,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $file_path      Path to save the regular HTML file.
 		 * @return void
 		 */
-		private function save_cache_files( $buffer, $file_path ): void {
+		private function save_cache_files( $buffer, $file_path, $type = 'html' ): void {
 
-			if ( ! $this->maybe_store_cache() ) {
+			if ( ! $this->maybe_store_cache() && 'html' === $type ) {
 				return;
 			}
 
@@ -188,6 +200,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! $this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE ) ) {
 				error_log( 'Error writing gzipped static HTML file.' );
 			}
+		}
+
+		private function save_extracted_css() {
+			if ( ! empty( $this->extracted_css ) ) {
+				$file_path = $this->get_cache_file_path( 'css' );
+				$this->save_cache_files( $this->extracted_css, $file_path, 'css' );
+			}
+		}
+
+		private function add_extracted_css_url( $html ) {
+			$css_url          = $this->get_cache_file_url( 'css' );
+			$minified_css_tag = '<link rel="stylesheet" href="' . $css_url . '">';
+			$html             = preg_replace( '#</head>#is', $minified_css_tag . '</head>', $html );
+
+			return $html;
 		}
 
 		private function maybe_store_cache() {

@@ -26,13 +26,14 @@ class HTML {
 	 */
 	private string $minified_html;
 
+	private ?string $extracted_css = null;
+
 	private array $options;
 	/**
 	 * Minify constructor.
 	 */
 	public function __construct( $html, $options ) {
-		$this->options  = (array) $options;
-		$this->html_min = new HtmlMin();
+		$this->options = (array) $options;
 		$this->initialize_minification_settings();
 		$this->minified_html = $this->minify_html( $html );
 	}
@@ -45,16 +46,24 @@ class HTML {
 	 * @return void
 	 */
 	private function initialize_minification_settings(): void {
+		$this->html_min = new HtmlMin();
 		$this->html_min->doOptimizeViaHtmlDomParser( true )
-			->doOptimizeAttributes( true )
-			->doRemoveWhitespaceAroundTags( true )
 			->doRemoveComments( true )
 			->doSumUpWhitespace( true )
+			->doRemoveWhitespaceAroundTags( true )
+			->doOptimizeAttributes( true )
+			->doRemoveDefaultAttributes( true )
+			->doRemoveDeprecatedAnchorName( true )
+			->doRemoveDeprecatedScriptCharsetAttribute( true )
+			->doRemoveDefaultMediaTypeFromStyleAndLinkTag( true )
 			->doRemoveEmptyAttributes( true )
 			->doRemoveValueFromEmptyInput( true )
 			->doSortCssClassNames( true )
 			->doSortHtmlAttributes( true )
-			->doRemoveSpacesBetweenTags( true );
+			->doRemoveSpacesBetweenTags( true )
+			->doRemoveOmittedQuotes( true )
+			->doRemoveOmittedHtmlTags( true )
+			->doMakeSameDomainsLinksRelative( array( home_url() ) );
 	}
 
 	/**
@@ -64,12 +73,55 @@ class HTML {
 	 * @return string The minified HTML content.
 	 */
 	private function minify_html( string $html ): string {
+		$html = $this->modify_canonical_link( $html );
+
 		$html = $this->minify_inline_css( $html );
 		$html = $this->minify_inline_js( $html );
 
-		return $this->html_min->minify( $html );
+		$html = $this->html_min->minify( $html );
+
+		$html = $this->restore_canonical_link( $html );
+
+		return $html;
 	}
 
+	/**
+	 * Extract the canonical link from the HTML.
+	 *
+	 * @param string $html The HTML content.
+	 * @return string|null The extracted canonical link or null if not found.
+	 */
+	private function modify_canonical_link( string $html ): ?string {
+		return preg_replace_callback(
+			'#<link\b[^>]*\brel=["\'](canonical|shortlink)["\'][^>]*>#i',
+			function ( $matches ) {
+				$link_tag = str_replace( 'href', 'qtpo-href', $matches[0] );
+
+				return $link_tag;
+			},
+			$html
+		);
+
+	}
+
+	/**
+	 * Restore the canonical link in the HTML content.
+	 *
+	 * @param string $html The minified HTML content.
+	 * @param string $canonical_link The original canonical link to restore.
+	 * @return string The HTML content with the restored canonical link.
+	 */
+	private function restore_canonical_link( string $html ): string {
+		return preg_replace_callback(
+			'#<link\b[^>]*\brel=["\'\](canonical|shortlink)["\'\][^>]*>#i',
+			function ( $matches ) {
+				$link_tag = str_replace( 'qtpo-href', 'href', $matches[0] );
+
+				return $link_tag;
+			},
+			$html
+		);
+	}
 	/**
 	 * Minify inline CSS.
 	 *
@@ -77,21 +129,35 @@ class HTML {
 	 * @return string The HTML content with minified CSS.
 	 */
 	private function minify_inline_css( string $html ): string {
-		return preg_replace_callback(
+
+		$is_extract_css = false;
+		if ( isset( $this->options['file_optimisation']['extractInlineCSS'] ) && (bool) $this->options['file_optimisation']['extractInlineCSS'] ) {
+			$is_extract_css = true;
+		}
+
+		$html = preg_replace_callback(
 			'#<style\b[^>]*>(.*?)</style>#is',
-			function ( $matches ) {
-				try {
-					$css_minifier = new CSSMinifier( $matches[1] );
-					return '<style>' . $css_minifier->minify() . '</style>';
-				} catch ( \Exception $e ) {
-					// Log the error (optional)
-					error_log( 'CSS minification error: ' . $e->getMessage() );
-					// Return original content if there's an error
-					return $matches[0];
+			function ( $matches ) use ( $is_extract_css ) {
+
+				if ( $is_extract_css ) {
+					$this->extracted_css .= $matches[1] . "\n";
+					return '';
+				} else {
+					try {
+						$css_minifier = new CSSMinifier( $matches[1] );
+						return '<style>' . $css_minifier->minify() . '</style>';
+					} catch ( \Exception $e ) {
+						// Log the error (optional)
+						error_log( 'CSS minification error: ' . $e->getMessage() );
+						// Return original content if there's an error
+						return $matches[0];
+					}
 				}
 			},
 			$html
 		);
+
+		return $html;
 	}
 
 	/**
@@ -192,5 +258,14 @@ class HTML {
 	 */
 	public function get_minified_html(): string {
 		return $this->minified_html;
+	}
+
+	public function get_extracted_css() :string {
+		try {
+			$css_minifier = new CSSMinifier( $this->extracted_css );
+			return $css_minifier->minify();
+		} catch ( \Exception $e ) {
+			return $this->extracted_css;
+		}
 	}
 }
