@@ -52,6 +52,7 @@ class Main {
 		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-css.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-js.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cache.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/class-db-optimisation.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cron.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-rest.php';
 	}

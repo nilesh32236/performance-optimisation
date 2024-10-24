@@ -19,7 +19,7 @@ class Cron {
 	 * Registers WordPress actions and filters for cron jobs.
 	 */
 	public function __construct() {
-		add_action( 'init', array( $this, 'schedule_all_pages_cron_jobs' ) );
+		add_action( 'init', array( $this, 'init' ) );
 		add_action( 'qtpo_page_cron_hook', array( $this, 'qtpo_page_cron_callback' ) );
 		add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 
@@ -49,9 +49,13 @@ class Cron {
 	 *
 	 * @return void
 	 */
-	public function schedule_all_pages_cron_jobs(): void {
+	public function init(): void {
 		if ( ! wp_next_scheduled( 'qtpo_page_cron_hook' ) ) {
 			wp_schedule_event( time(), 'every_5_hours', 'qtpo_page_cron_hook' );
+		}
+
+		if ( ! wp_next_scheduled( 'qtpo_database_optimisation' ) ) {
+			wp_schedule_event( time(), 'daily', 'qtpo_database_optimisation' );
 		}
 	}
 
