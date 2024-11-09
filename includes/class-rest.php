@@ -63,7 +63,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$options = get_option( 'qtpo_settings', array() );
 
 			$options[ $params['tab'] ] = $params['settings'];
-			update_option( 'qtpo_settings', $options );
+
+			if ( update_option( 'qtpo_settings', $options ) ) {
+				Cache::clear_cache();
+			}
+
 			return $this->send_response( $options );
 		}
 

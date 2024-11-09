@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import debounce from '../lib/Debonce';
 import { handleChange, handleSubmit } from '../lib/formUtils';
 
 const PreloadSettings = ({ options }) => {
@@ -14,18 +15,27 @@ const PreloadSettings = ({ options }) => {
 	});
 
 	const [isLoading, setIsLoading] = useState(false);
+
+	const debouncedHandleSubmit = useCallback(
+		debounce( async() => {
+			setIsLoading(true);
+
+			try {
+				await handleSubmit(settings, 'preload_settings');
+			} catch (error) {
+				console.error('Form submission error:', error);
+			} finally {
+				setIsLoading(false);
+			}
+		}, 500 ),
+		[settings]
+	)
+
 	const onSubmit = async (e) => {
 		e.preventDefault();
-		setIsLoading(true); // Start the loading state
-
-		try {
-			await handleSubmit(settings, 'preload_settings');
-		} catch (error) {
-			console.error('Form submission error:', error);
-		} finally {
-			setIsLoading(false);
-		}
+		debouncedHandleSubmit();
 	}
+
 	return (
 		<form onSubmit={onSubmit} className="settings-form">
 			<h2>Preload Settings</h2>

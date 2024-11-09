@@ -1,4 +1,6 @@
 export const handleChange = (setSettings) => (e) => {
+	// console.log( 'setSettings : ' , setSettings );
+
 	const { name, type, value, checked } = e.target;
 	setSettings((prevState) => ({
 		...prevState,

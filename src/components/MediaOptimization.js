@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import debounce from '../lib/Debonce';
 import { handleChange, handleSubmit } from '../lib/formUtils';
 
 const MediaOptimization = ({ options }) => {
@@ -11,17 +12,25 @@ const MediaOptimization = ({ options }) => {
 	});
 
 	const [isLoading, setIsLoading] = useState(false);
+
+	const debouncedHandleSubmit = useCallback(
+		debounce( async () => {
+				setIsLoading( true );
+
+				try {
+					await handleSubmit( settings, 'media_optimisation' );
+				} catch (error) {
+					console.error( 'Form submission error:', error );
+				} finally {
+					setIsLoading( false );
+				}
+			}, 500 ),
+		[settings]
+	);
+
 	const onSubmit = async (e) => {
 		e.preventDefault();
-		setIsLoading(true); // Start the loading state
-
-		try {
-			await handleSubmit(settings, 'media_optimisation');
-		} catch (error) {
-			console.error('Form submission error:', error);
-		} finally {
-			setIsLoading(false);
-		}
+		debouncedHandleSubmit();
 	}
 
 	return (

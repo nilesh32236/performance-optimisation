@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import debounce from '../lib/Debonce';
+
 import { handleChange, handleSubmit } from '../lib/formUtils';
 
 const ImageOptimization = ({ options }) => {
@@ -10,18 +12,27 @@ const ImageOptimization = ({ options }) => {
 	});
 
 	const [isLoading, setIsLoading] = useState(false);
-	const onSubmit = async (e) => {
-		e.preventDefault();
-		setIsLoading(true);
 
-		try {
-			await handleSubmit(settings, 'image_optimisation');
-		} catch (error) {
-			console.error('Form submission error:', error);
-		} finally {
-			setIsLoading(false);
-		}
-	}
+	// Debounced submit handler
+	const debouncedHandleSubmit = useCallback(
+		debounce( async () => {
+			setIsLoading(true);
+			try {
+				await handleSubmit(settings, 'image_optimisation');
+			} catch (error) {
+				console.error('Form submission error:', error);
+			} finally {
+				setIsLoading(false);
+			}
+		}, 500 ),
+		[settings]
+	);
+
+	const onSubmit = (e) => {
+		e.preventDefault();
+		debouncedHandleSubmit();
+	};
+
 	return (
 		<form onSubmit={onSubmit} className="settings-form">
 			<h2>Image Optimization Settings</h2>

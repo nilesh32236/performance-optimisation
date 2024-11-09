@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import debounce from '../lib/Debonce';
 import CheckboxOption from './CheckboxOption';
 import { handleChange, handleSubmit } from '../lib/formUtils';
 
@@ -10,17 +11,26 @@ const DatabaseOptimization = ({ options }) => {
 	});
 
 	const [isLoading, setIsLoading] = useState(false);
+
+	const debouncedHandleSubmit = useCallback(
+		debounce( async() => {
+			setIsLoading(true); // Start the loading state
+
+			try {
+				await handleSubmit(settings, 'database_optimization');
+			} catch (error) {
+				console.error('Form submission error:', error);
+			} finally {
+				setIsLoading(false);
+			}
+	
+		}, 500 ),
+		[ settings ]
+	)
+
 	const onSubmit = async (e) => {
 		e.preventDefault();
-		setIsLoading(true); // Start the loading state
-
-		try {
-			await handleSubmit(settings, 'database_optimization');
-		} catch (error) {
-			console.error('Form submission error:', error);
-		} finally {
-			setIsLoading(false);
-		}
+		debouncedHandleSubmit();
 	}
 
 	return (

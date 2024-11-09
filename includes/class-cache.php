@@ -69,7 +69,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function process_buffer( $buffer, $file_path ) {
 			$is_extract_css = isset( $this->options['file_optimisation']['extractInlineCSS'] ) && (bool) $this->options['file_optimisation']['extractInlineCSS'];
-			$buffer         = $this->serve_webp_images( $buffer );
+			if ( isset( $this->options['image_optimisation']['convertToWebP'] ) && (bool) $this->options['image_optimisation']['convertToWebP'] ) {
+				$buffer = $this->serve_webp_images( $buffer );
+			}
 
 			if ( $is_extract_css ) {
 				$buffer = $this->add_extracted_css_url( $buffer );
