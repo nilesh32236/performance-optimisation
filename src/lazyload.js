@@ -5,7 +5,7 @@ async function loadScripts() {
 	if (scriptLoading) return scriptLoadPromise;
 	scriptLoading = true;
 
-	const inlineScripts = Array.from(document.querySelectorAll('script[type="qtpo/javascript"]'));
+	const inlineScripts = Array.from(document.querySelectorAll('script[type="qtpo/javascript"], script[qtpo-src]'));
 
 	const loadScript = (script) => {
 
@@ -18,22 +18,22 @@ async function loadScripts() {
 				const type = script.getAttribute('qtpo-type');
 				script.removeAttribute('qtpo-type');
 				script.setAttribute('type', type);
-				const src = script.getAttribute('qtpo-src');
+			}
 
-				if (src) {
-					script.removeAttribute('qtpo-src');
-					script.setAttribute('src', src);
-					script.onload = resolve;
-					script.onerror = reject;
-				} else {
-					script.src = "data:text/javascript;base64," + window.btoa(unescape(encodeURIComponent(script.text)));
-					resolve();
-				}
+			const src = script.getAttribute('qtpo-src');
+
+			if (src) {
+				script.removeAttribute('qtpo-src');
+				script.setAttribute('src', src);
+				script.onload = resolve;
+				script.onerror = reject;
 			} else {
+				script.src = "data:text/javascript;base64," + window.btoa(unescape(encodeURIComponent(script.text)));
 				resolve();
 			}
 		});
 	};
+
 	for (let script of inlineScripts) {
 		try {
 			await loadScript(script);
