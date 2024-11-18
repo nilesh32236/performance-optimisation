@@ -7,9 +7,27 @@ const ImageOptimization = ({ options }) => {
 		excludeCompressedImages: options?.excludeCompressedImages || '',
 		convertToWebP: options?.convertToWebP || false,
 		excludeWebPImages: options?.excludeWebPImages || '',
+		replacePlaceholderWithSVG: options?.replacePlaceholderWithSVG || false,
+		preloadFrontPageImages: options?.preloadFrontPageImages || '',
+		preloadFrontPageImagesUrls: options?.preloadFrontPageImagesUrls || '',
+		preloadPostTypeImage: options?.preloadPostTypeImage || false,
+		selectedPostType: options?.selectedPostType || [],
+		availablePostTypes: options?.availablePostTypes,
+		excludePostTypeImgUrl: options?.excludePostTypeImgUrl || '',
+		maxWidthImgSize: options?.maxWidthImgSize || 0,
 	});
 
+	console.log(settings.availablePostTypes);
 	const [isLoading, setIsLoading] = useState(false);
+	const togglePostType = (postType) => {
+		setSettings((prevSettings) => ({
+			...prevSettings,
+			selectedPostType: prevSettings.selectedPostType.includes(postType)
+				? prevSettings.selectedPostType.filter((type) => type !== postType)
+				: [...prevSettings.selectedPostType, postType],
+		}));
+	};
+
 	const onSubmit = async (e) => {
 		e.preventDefault();
 		setIsLoading(true);
@@ -22,12 +40,13 @@ const ImageOptimization = ({ options }) => {
 			setIsLoading(false);
 		}
 	}
+
 	return (
 		<form onSubmit={onSubmit} className="settings-form">
 			<h2>Image Optimization Settings</h2>
 
 			{/* Compress Images */}
-			<div className="checkbox-option">
+			{/* <div className="checkbox-option">
 				<label>
 					<input
 						type="checkbox"
@@ -49,7 +68,7 @@ const ImageOptimization = ({ options }) => {
 						onChange={handleChange(setSettings)}
 					/>
 				)}
-			</div>
+			</div> */}
 
 			{/* Convert to WebP */}
 			<div className="checkbox-option">
@@ -73,6 +92,98 @@ const ImageOptimization = ({ options }) => {
 						value={settings.excludeWebPImages}
 						onChange={handleChange(setSettings)}
 					/>
+				)}
+			</div>
+
+			{/* Replace Low-Resolution Placeholder with SVG */}
+			<div className="checkbox-option">
+				<label>
+					<input
+						type="checkbox"
+						name="replacePlaceholderWithSVG"
+						checked={settings.replacePlaceholderWithSVG}
+						onChange={handleChange(setSettings)}
+					/>
+					Replace Low-Resolution Placeholder with SVG
+				</label>
+				<p className="option-description">
+					Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance.
+				</p>
+			</div>
+
+			{/* Preload Front Page Images */}
+			<div className="checkbox-option">
+				<label>
+					<input
+						type="checkbox"
+						name="preloadFrontPageImages"
+						checked={settings.preloadFrontPageImages}
+						onChange={handleChange(setSettings)}
+					/>
+					Preload Images on Front Page
+				</label>
+				<p className="option-description">
+					Preload critical images on the front page to enhance initial load performance.
+				</p>
+				{settings.preloadFrontPageImages && (
+					<textarea
+						className="text-area-field"
+						placeholder="Enter img url (full/partial) to preload this img in front page."
+						name="preloadFrontPageImagesUrls"
+						value={settings.preloadFrontPageImagesUrls}
+						onChange={handleChange(setSettings)}
+					/>
+				)}
+			</div>
+
+			{/* Preload Feature Images for Specific Post Types */}
+			<div className="checkbox-option">
+				<label>
+					<input
+						type="checkbox"
+						name="preloadPostTypeImage"
+						checked={settings.preloadPostTypeImage}
+						onChange={handleChange(setSettings)}
+					/>
+					Preload Feature Images for Post Types
+				</label>
+				<p className="option-description">
+					Select post types where feature images should be preloaded for better performance.
+				</p>
+				{settings.preloadPostTypeImage && (
+					<div className='sub-fields'>
+						{settings.availablePostTypes && settings.availablePostTypes.map((postType) => (
+							<div key={postType} className="post-type-option">
+								<label>
+									<input
+										type="checkbox"
+										checked={settings.selectedPostType.includes(postType)}
+										onChange={() => togglePostType(postType)}
+									/>
+									{postType.charAt(0).toUpperCase() + postType.slice(1)}
+								</label>
+							</div>
+						))}
+						<textarea
+							className="text-area-field"
+							placeholder="Exclude specific img to preload."
+							name="excludePostTypeImgUrl"
+							value={settings.excludePostTypeImgUrl}
+							onChange={handleChange(setSettings)}
+						/>
+						<span>
+							<input
+								className='input-field'
+								type="number"
+								name="maxWidthImgSize"
+								value={settings.maxWidthImgSize}
+								onChange={handleChange(setSettings)}
+							/>
+							<p className="option-description">
+								Set max width so it can't load bigger img than it. <code>0</code> default.
+							</p>
+						</span>
+					</div>
 				)}
 			</div>
 

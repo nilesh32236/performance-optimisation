@@ -3,6 +3,8 @@
 namespace PerformanceOptimise\Inc;
 
 use PerformanceOptimise\Inc\Minify;
+use PerformanceOptimise\Inc\Minify\CSS;
+use MatthiasMullie\Minify\CSS as CSSMinifier;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	die();
@@ -28,6 +30,89 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->url_path       = trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
 			$this->filesystem     = Util::init_filesystem();
 			$this->options        = get_option( 'qtpo_settings', array() );
+		}
+
+		public function combine_css() {
+			global $wp_styles;
+			$styles = $wp_styles->queue;
+
+			if ( empty( $styles ) ) {
+				return;
+			}
+
+			$exclude_combine_css = array();
+			if ( isset( $this->options['file_optimisation']['excludeCombineCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCombineCSS'] ) ) {
+				$exclude_combine_css = explode( "\n", $this->options['file_optimisation']['excludeCombineCSS'] );
+				$exclude_combine_css = array_map( 'trim', $exclude_combine_css );
+				$exclude_combine_css = array_filter( $exclude_combine_css );
+			}
+
+			$combined_css = '';
+
+			foreach ( $styles as $handle ) {
+
+				if ( in_array( $handle, $exclude_combine_css, true ) ) {
+					continue;
+				}
+
+				$style_data = $wp_styles->registered[ $handle ];
+
+				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
+					continue; // Exclude styles where args are not 'all'
+				}
+
+				$src = $wp_styles->registered[ $handle ]->src;
+
+				$css_content = $this->fetch_remote_css( $src );
+
+				if ( false === $css_content ) {
+					continue;
+				}
+
+				if ( ! empty( $style_data->extra['before'] ) ) {
+					$combined_css .= implode( "\n", $style_data->extra['before'] ) . "\n";
+				}
+
+				if ( ! empty( $css_content ) ) {
+					$combined_css .= $css_content . "\n";
+				}
+
+				if ( ! empty( $style_data->extra['after'] ) ) {
+					$combined_css .= implode( "\n", $style_data->extra['after'] ) . "\n";
+				}
+
+				wp_dequeue_style( $handle ); // Remove individual style
+			}
+
+			if ( ! empty( $combined_css ) ) {
+				$css_minifier  = new CSSMinifier( $combined_css );
+				$combined_css  = $css_minifier->minify();
+				$css_file_path = $this->get_cache_file_path( 'css' );
+
+				$this->save_cache_files( $combined_css, $css_file_path, 'css' );
+
+				$css_url = $this->get_cache_file_url( 'css' );
+
+				wp_enqueue_style( 'qtpo-combine-css', $css_url, array(), fileatime( $css_file_path ), 'all' );
+			}
+		}
+
+		private function fetch_remote_css( $url ) {
+			if ( empty( $url ) ) {
+				return '';
+			}
+
+			$css_file = Util::get_local_path( $url );
+			if ( $this->filesystem ) {
+				$css_content = $this->filesystem->get_contents( $css_file );
+
+				if ( false !== $css_content ) {
+					$css_content = CSS::update_image_paths( $css_content, $css_file );
+					return $css_content;
+				}
+			}
+
+			return false;
 		}
 
 		/**
@@ -70,10 +155,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function process_buffer( $buffer, $file_path ) {
 			$is_extract_css = isset( $this->options['file_optimisation']['extractInlineCSS'] ) && (bool) $this->options['file_optimisation']['extractInlineCSS'];
 			$buffer         = $this->serve_webp_images( $buffer );
-
-			if ( $is_extract_css ) {
-				$buffer = $this->add_extracted_css_url( $buffer );
-			}
+			$buffer         = $this->add_delay_load_img( $buffer );
 
 			if ( isset( $this->options['file_optimisation']['minifyHTML'] ) && (bool) $this->options['file_optimisation']['minifyHTML'] ) {
 				$buffer = $this->minify_buffer( $buffer );
@@ -81,6 +163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( $is_extract_css ) {
 				$this->save_extracted_css();
+				$buffer = $this->add_extracted_css_url( $buffer );
 			}
 
 			$this->save_cache_files( $buffer, $file_path );
@@ -130,6 +213,83 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			);
 		}
 
+		private function add_delay_load_img( $buffer ) {
+			$img_counter = 0;
+
+			// Add 'qtpo-src' and 'loading="lazy"' to <img> tags only if 'data-src' is not already present
+			return preg_replace_callback(
+				'#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i',
+				function( $matches ) use ( &$img_counter ) {
+					$img_counter++;
+
+					if ( 5 > $img_counter ) {
+						return $matches[0];
+					}
+
+					$img_tag      = $matches[0];
+					$original_src = $matches[2];
+
+					// Check if the img tag already has 'data-src'
+					if ( strpos( $img_tag, 'data-src' ) === false ) {
+						// if ( strpos( $img_tag, 'loading="lazy"' ) === false ) {
+						// 	$img_tag = preg_replace(
+						// 		'#<img\b([^>]*)>#i',
+						// 		'<img $1 loading="lazy">',
+						// 		$img_tag
+						// 	);
+						// }
+
+						$img_tag = preg_replace(
+							'#src=["\']([^"\']+)["\']#i',
+							'data-src="' . $original_src . '"',
+							$img_tag
+						);
+
+						$new_src = $this->generate_svg_base64( $matches[0] ); // Pass the img attributes to generate SVG
+
+						$img_tag = preg_replace(
+							'#<img\b([^>]*)#i',
+							'<img $1 src="' . $new_src . '"',
+							$img_tag
+						);
+
+						if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
+							$img_tag = preg_replace(
+								'#srcset=["\']([^"\']+)["\']#i',
+								'data-srcset="' . $srcset_matches[1] . '"',
+								$img_tag
+							);
+						}
+
+						if ( preg_match( '#^data:image/#i', $original_src ) ) {
+							return $matches[0];
+						}
+					}
+
+					return $img_tag;
+				},
+				$buffer
+			);
+		}
+
+		/**
+		 * Generates a base64-encoded SVG image with the given width and height.
+		 *
+		 * @param string $img_attributes The image's attributes (including width and height).
+		 * @return string The base64-encoded SVG.
+		 */
+		private function generate_svg_base64( $img_attributes ) {
+			preg_match( '/width=["\'](\d+)["\']/', $img_attributes, $width_matches );
+			preg_match( '/height=["\'](\d+)["\']/', $img_attributes, $height_matches );
+
+			$width  = isset( $width_matches[1] ) ? $width_matches[1] : '100';
+			$height = isset( $height_matches[1] ) ? $height_matches[1] : '100';
+
+			$svg_content = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '"><rect width="100%" height="100%" fill="#cfd4db" /></svg>';
+
+			return 'data:image/svg+xml;base64,' . base64_encode( $svg_content );
+		}
+
 		/**
 		 * Minify the output buffer.
 		 *
@@ -163,7 +323,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index.{$type}" : "{$this->url_path}/index.{$type}" );
 		}
 
-		private function get_cache_file_url( $type = 'html' ): string {
+		public function get_cache_file_url( $type = 'html' ): string {
 			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index.{$type}" : "{$this->url_path}/index.{$type}" );
 		}
 		/**
@@ -190,15 +350,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
+			$this->prepare_cache_dir();
 			$gzip_file_path = $file_path . '.gz';
 
 			if ( ! $this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE ) ) {
-				error_log( 'Error writing static HTML file.' );
+				error_log( 'Error writing static ' . $type . ' file.' );
 			}
 
 			$gzip_output = gzencode( $buffer, 9 );
 			if ( ! $this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE ) ) {
-				error_log( 'Error writing gzipped static HTML file.' );
+				error_log( 'Error writing gzipped static ' . $type . ' file.' );
 			}
 		}
 
@@ -210,9 +371,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		private function add_extracted_css_url( $html ) {
-			$css_url          = $this->get_cache_file_url( 'css' );
+			$css_url  = $this->get_cache_file_url( 'css' );
+			$css_file = $this->get_cache_file_path( 'css' );
+
+			error_log( '$css_file: ' . $css_file );
+			if ( ! file_exists( $css_file ) ) {
+				error_log( '$css_file: exists' );
+				return $html;
+			}
+
 			$minified_css_tag = '<link rel="stylesheet" href="' . $css_url . '">';
-			$html             = preg_replace( '#</head>#is', $minified_css_tag . '</head>', $html );
+			$html             = preg_replace( '#<head>#is', '<head>' . $minified_css_tag, $html );
 
 			return $html;
 		}
@@ -265,8 +434,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 */
 		public function invalidate_dynamic_static_html( $page_id ): void {
-			$file_path = $this->get_file_path( $page_id );
-			$this->delete_cache_files( $file_path );
+			$html_file_path = $this->get_file_path( $page_id, 'html' );
+			$css_file_path  = $this->get_file_path( $page_id, 'css' );
+			$this->delete_cache_files( $html_file_path );
+			$this->delete_cache_files( $css_file_path );
 
 			if ( ! wp_next_scheduled( 'qtpo_generate_static_page', array( $page_id ) ) ) {
 				wp_schedule_single_event( time() + rand( 0, 5 ), 'qtpo_generate_static_page', array( $page_id ) );
@@ -279,9 +450,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param int|null $page_id
 		 * @return string
 		 */
-		private function get_file_path( int $page_id = null ): string {
+		private function get_file_path( int $page_id = null, string $type = 'html' ): string {
 			$url_path = trim( wp_parse_url( get_permalink( $page_id ), PHP_URL_PATH ), '/' );
-			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? 'index.html' : "{$url_path}/index.html" );
+			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? "index.{$type}" : "{$url_path}/index.{$type}" );
 		}
 
 		/**

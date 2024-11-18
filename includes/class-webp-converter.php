@@ -151,11 +151,14 @@ class WebP_Converter {
 				return $image;
 			}
 
-			$webp_image_path = $this->get_webp_path( $image[0] );
+			$img_path        = Util::get_local_path( $image[0] );
+			$webp_image_path = $this->get_webp_path( $img_path );
 
 			if ( ! file_exists( $webp_image_path ) ) {
-				error_log( 'WebP image file not found: ' . $webp_image_path );
-				return $image;
+				if ( ! $this->convert_to_webp( $img_path, $webp_image_path ) ) {
+					error_log( 'WebP image file not found: ' . $webp_image_path );
+					return $image;
+				}
 			}
 
 			// Replace the original image URL with the WebP version

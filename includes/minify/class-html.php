@@ -197,6 +197,7 @@ class HTML {
 
 		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 
+			$exclude_delay = array();
 			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
 				$exclude_delay = explode( "\n", $this->options['file_optimisation']['excludeDelayJS'] );
 				$exclude_delay = array_map( 'trim', $exclude_delay );
@@ -210,15 +211,26 @@ class HTML {
 						$should_exclude = true;
 						break;
 					}
+
+					if ( false !== strpos( $content, trim( $exclude ) ) ) {
+						$should_exclude = true;
+						break;
+					}
 				}
 			}
 
 			if ( ! $should_exclude ) {
-				$attributes = preg_replace(
-					'/type=("|\')text\/javascript("|\')/',
-					'type="qtpo/javascript" qtpo-type="text/javascript"',
-					$attributes
-				);
+				if ( preg_match( '/type=("|\')[^"\']*("|\')/', $attributes ) ) {
+					// If the 'type' attribute exists, modify it
+					$attributes = preg_replace(
+						'/type=("|\')text\/javascript("|\')/',
+						'type="qtpo/javascript" qtpo-type="text/javascript"',
+						$attributes
+					);
+				} else {
+					// If the 'type' attribute doesn't exist, add a new one
+					$attributes .= ' type="qtpo/javascript" qtpo-type="text/javascript"';
+				}
 			}
 		}
 

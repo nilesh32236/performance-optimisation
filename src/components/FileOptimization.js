@@ -6,8 +6,9 @@ const FileOptimization = ({ options }) => {
 		minifyJS: options?.minifyJS || false,
 		excludeJS: options?.excludeJS || '',
 		minifyCSS: options?.minifyCSS || false,
-		extractInlineCSS: options?.extractInlineCSS || false,
 		excludeCSS: options?.excludeCSS || '',
+		combineCSS: options?.combineCSS || false,
+		excludeCombineCSS: options?.excludeCombineCSS || '',
 		minifyHTML: options?.minifyHTML || false,
 		deferJS: options?.deferJS || false,
 		excludeDeferJS: options?.excludeDeferJS || '',
@@ -77,12 +78,21 @@ const FileOptimization = ({ options }) => {
 				<label>
 					<input
 						type="checkbox"
-						name="extractInlineCSS"
-						checked={settings.extractInlineCSS}
+						name="combineCSS"
+						checked={settings.combineCSS}
 						onChange={handleChange(setSettings)}
 					/>
-					Extract Inline CSS
+					Combine CSS
 				</label>
+				{settings.combineCSS && (
+					<textarea
+						className="text-area-field"
+						placeholder="Exclude CSS files to combine"
+						name="excludeCombineCSS"
+						value={settings.excludeCombineCSS}
+						onChange={handleChange(setSettings)}
+					/>
+				)}
 			</div>
 
 			<div className="checkbox-option">

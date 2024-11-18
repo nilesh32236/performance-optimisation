@@ -27,7 +27,7 @@ class CSS {
 		if ( ! $this->filesystem->exists( $cache_file ) ) {
 			try {
 				$css_content  = $this->filesystem->get_contents( $this->file_path );
-				$css_content  = $this->update_image_paths( $css_content );
+				$css_content  = self::update_image_paths( $css_content, $this->file_path );
 				$css_minifier = new Minify\CSS( $css_content );
 				$minified_css = $css_minifier->minify();
 
@@ -68,9 +68,9 @@ class CSS {
 		}
 	}
 
-	private function update_image_paths( $css_content ) {
+	public static function update_image_paths( $css_content, $file_path ) {
 		$pattern     = '/url\((\'|\"|)(.*?)(\'|\"|)\)/';
-		$css_dir_url = content_url( str_replace( WP_CONTENT_DIR, '', dirname( $this->file_path ) ) );
+		$css_dir_url = content_url( str_replace( WP_CONTENT_DIR, '', dirname( $file_path ) ) );
 
 		return preg_replace_callback(
 			$pattern,

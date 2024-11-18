@@ -57,3 +57,69 @@ if (!scriptLoading) {
 	document.addEventListener('touchstart', loadScripts);
 	document.addEventListener('scroll', loadScripts);
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+
+	const lazyloadImages = document.querySelectorAll('img[data-src], img[data-srcset]');
+
+	if ('IntersectionObserver' in window) {
+
+		const observer = new IntersectionObserver((entries, observer) => {
+			entries.forEach(entry => {
+				if (entry.isIntersecting) {
+					const img = entry.target;
+
+					// Load the image's src and srcset
+					if (img.hasAttribute('data-src')) {
+						img.src = img.getAttribute('data-src');
+						img.removeAttribute('data-src');
+					}
+
+					if (img.hasAttribute('data-srcset')) {
+						img.srcset = img.getAttribute('data-srcset');
+						img.removeAttribute('data-srcset');
+					}
+
+					observer.unobserve(img);
+				}
+			});
+		}, {
+			rootMargin: '200px'
+		});
+
+		lazyloadImages.forEach(img => {
+			observer.observe(img);
+		});
+
+	} else {
+		function lazyLoadFallback() {
+			lazyloadImages.forEach(img => {
+				if (isElementInViewport(img)) {
+					if (img.hasAttribute('data-src')) {
+						img.src = img.getAttribute('data-src');
+						img.removeAttribute('data-src');
+					}
+
+					if (img.hasAttribute('data-srcset')) {
+						img.srcset = img.getAttribute('data-srcset');
+						img.removeAttribute('data-srcset');
+					}
+				}
+			});
+		}
+
+		function isElementInViewport(el) {
+			const rect = el.getBoundingClientRect();
+			return (
+				rect.top >= 0 &&
+				rect.left >= 0 &&
+				rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+				rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+			);
+		}
+
+		window.addEventListener('scroll', lazyLoadFallback);
+		lazyLoadFallback();
+	}
+
+});

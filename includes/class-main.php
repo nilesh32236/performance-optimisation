@@ -31,6 +31,7 @@ class Main {
 	public function __construct() {
 		$this->options = get_option( 'qtpo_settings', array() );
 
+		// $this->add_available_post_types_to_options();
 		$this->includes();
 		$this->setup_hooks();
 		$this->filesystem = Util::init_filesystem();
@@ -73,6 +74,9 @@ class Main {
 		$cache = new Cache();
 		add_action( 'template_redirect', array( $cache, 'generate_dynamic_static_html' ) );
 		add_action( 'save_post', array( $cache, 'invalidate_dynamic_static_html' ) );
+		if ( isset( $this->options['file_optimisation']['combineCSS'] ) && (bool) $this->options['file_optimisation']['combineCSS'] ) {
+			add_action( 'wp_enqueue_scripts', array( $cache, 'combine_css' ), PHP_INT_MAX );
+		}
 
 		$rest = new Rest();
 		add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
@@ -106,7 +110,7 @@ class Main {
 		}
 		new Cron();
 
-		add_action( 'wp_head', array( $this, 'add_preload_prefatch' ), 0 );
+		add_action( 'wp_head', array( $this, 'add_preload_prefatch_preconnect' ), 0 );
 	}
 
 	/**
@@ -139,6 +143,15 @@ class Main {
 		require_once QTPO_PLUGIN_PATH . 'templates/app.html';
 	}
 
+	private function add_available_post_types_to_options() {
+		$post_types = get_post_types( array( 'public' => true ), 'names' );
+
+		$excluded            = array( 'attachment' );
+		$filtered_post_types = array_keys( array_diff( $post_types, $excluded ) );
+
+		$this->options['image_optimisation']['availablePostTypes'] = $filtered_post_types;
+	}
+
 	/**
 	 * Enqueue admin scripts and styles.
 	 *
@@ -168,6 +181,7 @@ class Main {
 		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/style-index.css', array(), '1.0.0', 'all' );
 		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-element' ), '1.0.0', true );
 
+		$this->add_available_post_types_to_options();
 		wp_localize_script(
 			'performance-optimisation-script',
 			'qtpoSettings',
@@ -299,7 +313,7 @@ class Main {
 		return $tag;
 	}
 
-	public function add_preload_prefatch() {
+	public function add_preload_prefatch_preconnect() {
 		// Preconnect origins
 		if ( isset( $this->options['preload_settings']['preconnect'] ) && (bool) $this->options['preload_settings']['preconnect'] ) {
 			if ( isset( $this->options['preload_settings']['preconnectOrigins'] ) && ! empty( $this->options['preload_settings']['preconnectOrigins'] ) ) {
@@ -322,6 +336,130 @@ class Main {
 
 				foreach ( $dns_prefetch_origins as $origin ) {
 					echo '<link rel="dns-prefetch" href="' . esc_url( $origin ) . '">';
+				}
+			}
+		}
+
+		if ( isset( $this->options['image_optimisation']['preloadFrontPageImages'] ) && (bool) $this->options['image_optimisation']['preloadFrontPageImages'] && is_front_page() ) {
+			if ( isset( $this->options['image_optimisation']['preloadFrontPageImagesUrls'] ) && ! empty( $this->options['image_optimisation']['preloadFrontPageImagesUrls'] ) ) {
+				$preload_img_urls = explode( "\n", $this->options['image_optimisation']['preloadFrontPageImagesUrls'] );
+				$preload_img_urls = array_map( 'trim', $preload_img_urls );
+				$preload_img_urls = array_filter( array_unique( $preload_img_urls ) );
+
+				foreach ( $preload_img_urls as $img_url ) {
+					if ( 0 === strpos( $img_url, 'mobile:' ) ) {
+						$mobile_url = trim( str_replace( 'mobile:', '', $img_url ) );
+
+						if ( 0 !== strpos( $img_url, 'http' ) ) {
+							$mobile_url = content_url( $mobile_url );
+						}
+
+						echo '<link rel="preload" href="' . esc_url( $mobile_url ) . '" as="image" media="(max-width: 768px)">';
+					} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
+						$desktop_url = trim( str_replace( 'desktop:', '', $img_url ) );
+
+						if ( 0 !== strpos( $img_url, 'http' ) ) {
+							$desktop_url = content_url( $desktop_url );
+						}
+
+						echo '<link rel="preload" href="' . esc_url( $desktop_url ) . '" as="image" media="(min-width: 769px)">';
+					} else {
+						$img_url = trim( $img_url );
+
+						if ( 0 !== strpos( $img_url, 'http' ) ) {
+							$img_url = content_url( $img_url );
+						}
+
+						echo '<link rel="preload" href="' . esc_url( $img_url ) . '" as="image">';
+					}
+				}
+			}
+		}
+
+		if ( isset( $this->options['image_optimisation']['preloadPostTypeImage'] ) && (bool) $this->options['image_optimisation']['preloadPostTypeImage'] ) {
+			if ( isset( $this->options['image_optimisation']['selectedPostType'] ) && ! empty( $this->options['image_optimisation']['selectedPostType'] ) ) {
+				$selected_post_types = (array) $this->options['image_optimisation']['selectedPostType'];
+
+				if ( is_singular( $selected_post_types ) && has_post_thumbnail() ) {
+					global $post;
+					$thumbnail_id = get_post_thumbnail_id( $post );
+
+					if ( $thumbnail_id ) {
+						$exclude_img_urls = array();
+						if ( isset( $this->options['image_optimisation']['excludePostTypeImgUrl'] ) && ! empty( $this->options['image_optimisation']['excludePostTypeImgUrl'] ) ) {
+							$exclude_img_urls = explode( "\n", $this->options['image_optimisation']['excludePostTypeImgUrl'] );
+							$exclude_img_urls = array_map( 'trim', $exclude_img_urls );
+							$exclude_img_urls = array_filter( array_unique( $exclude_img_urls ) );
+						}
+
+						if ( 'product' === $post->post_type && class_exists( 'WooCommerce' ) ) {
+							$image_size = apply_filters( 'woocommerce_gallery_image_size', 'woocommerce_single' );
+							$img_url    = wp_get_attachment_image_url( $thumbnail_id, $image_size );
+
+							if ( is_array( $img_url ) ) {
+								$img_url = $img_url[0];
+							}
+						} else {
+							$img_url = wp_get_attachment_image_url( $thumbnail_id, 'medium' );
+						}
+
+						$should_exclude = false;
+						foreach ( $exclude_img_urls as $url ) {
+							if ( false !== strpos( $img_url, $url ) ) {
+								$should_exclude = true;
+								break;
+							}
+						}
+
+						$max_width = $this->options['image_optimisation']['maxWidthImgSize'] ? $this->options['image_optimisation']['maxWidthImgSize'] : 1480;
+
+						if ( ! $should_exclude ) {
+							$srcset = wp_get_attachment_image_srcset( $thumbnail_id, 'full' );
+							if ( $srcset ) {
+								$sources = array_map( 'trim', explode( ',', $srcset ) );
+
+								$parsed_sources = array();
+								foreach ( $sources as $source ) {
+									list( $url, $descriptor ) = array_map( 'trim', explode( ' ', $source ) );
+									$width                    = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
+									$parsed_sources[]         = array(
+										'url'   => $url,
+										'width' => $width,
+									);
+								}
+
+								usort(
+									$parsed_sources,
+									function ( $a, $b ) {
+										return $a['width'] - $b['width'];
+									}
+								);
+
+								$previous_width = 0;
+								foreach ( $parsed_sources as $index => $source ) {
+									$current_width = $source['width'];
+									$next_width    = isset( $parsed_sources[ $index + 1 ] ) ? $parsed_sources[ $index + 1 ]['width'] : null;
+
+									if ( $current_width > $max_width ) {
+										continue;
+									}
+
+									$media = '(min-width: ' . $previous_width . 'px)';
+									if ( $next_width && $next_width <= $max_width ) {
+										$media .= ' and (max-width: ' . $current_width . 'px)';
+									}
+
+									echo '<link rel="preload" href="' . esc_url( $source['url'] ) . '" as="image" media="' . esc_attr( $media ) . '">';
+
+									$previous_width = $current_width;
+								}
+							} else {
+								echo '<link rel="preload" href="' . esc_url( $img_url ) . '" as="image" media="(min-width: 0px)">';
+							}
+						} else {
+							error_log( "Image excluded: $img_url" );
+						}
+					}
 				}
 			}
 		}
