@@ -3,7 +3,10 @@ import { handleChange, handleSubmit } from '../lib/formUtils';
 
 const ImageOptimization = ({ options }) => {
 	const [settings, setSettings] = useState({
-		compressImages: options?.compressImages || false,
+		lazyLoadImages: options?.lazyLoadImages || false,
+		excludeFistImages: options?.excludeFistImages || 0,
+		excludeImages: options?.excludeImages || '',
+		// compressImages: options?.compressImages || false,
 		excludeCompressedImages: options?.excludeCompressedImages || '',
 		convertToWebP: options?.convertToWebP || false,
 		excludeWebPImages: options?.excludeWebPImages || '',
@@ -15,6 +18,7 @@ const ImageOptimization = ({ options }) => {
 		availablePostTypes: options?.availablePostTypes,
 		excludePostTypeImgUrl: options?.excludePostTypeImgUrl || '',
 		maxWidthImgSize: options?.maxWidthImgSize || 0,
+		excludeSize: options?.options || '',
 	});
 
 	console.log(settings.availablePostTypes);
@@ -70,6 +74,56 @@ const ImageOptimization = ({ options }) => {
 				)}
 			</div> */}
 
+			{/* Lazy Load Images */}
+			<div className="checkbox-option">
+				<label>
+					<input
+						type="checkbox"
+						name="lazyLoadImages"
+						checked={settings.lazyLoadImages}
+						onChange={handleChange(setSettings)}
+					/>
+					Lazy Load Images
+				</label>
+				<p className="option-description">
+					Enable lazy loading for images to improve the initial load speed by loading images only when they appear in the viewport.
+				</p>
+				{settings.lazyLoadImages && (
+					<>
+						<input
+							className='input-field'
+							placeholder='Enter number you want to exclude first'
+							name='excludeFistImages'
+							value={settings.excludeFistImages}
+							onChange={handleChange(setSettings)}
+						/>
+						<textarea
+							className="text-area-field"
+							placeholder="Exclude specific image URLs"
+							name="excludeImages"
+							value={settings.excludeImages}
+							onChange={handleChange(setSettings)}
+						/>
+
+						{/* Replace Low-Resolution Placeholder with SVG */}
+						<div className="checkbox-option sub-fields">
+							<label>
+								<input
+									type="checkbox"
+									name="replacePlaceholderWithSVG"
+									checked={settings.replacePlaceholderWithSVG}
+									onChange={handleChange(setSettings)}
+								/>
+								Replace Low-Resolution Placeholder with SVG
+							</label>
+							<p className="option-description">
+								Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance.
+							</p>
+						</div>
+					</>
+				)}
+			</div>
+
 			{/* Convert to WebP */}
 			<div className="checkbox-option">
 				<label>
@@ -93,22 +147,6 @@ const ImageOptimization = ({ options }) => {
 						onChange={handleChange(setSettings)}
 					/>
 				)}
-			</div>
-
-			{/* Replace Low-Resolution Placeholder with SVG */}
-			<div className="checkbox-option">
-				<label>
-					<input
-						type="checkbox"
-						name="replacePlaceholderWithSVG"
-						checked={settings.replacePlaceholderWithSVG}
-						onChange={handleChange(setSettings)}
-					/>
-					Replace Low-Resolution Placeholder with SVG
-				</label>
-				<p className="option-description">
-					Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance.
-				</p>
 			</div>
 
 			{/* Preload Front Page Images */}
@@ -151,7 +189,7 @@ const ImageOptimization = ({ options }) => {
 					Select post types where feature images should be preloaded for better performance.
 				</p>
 				{settings.preloadPostTypeImage && (
-					<div className='sub-fields'>
+					<div>
 						{settings.availablePostTypes && settings.availablePostTypes.map((postType) => (
 							<div key={postType} className="post-type-option">
 								<label>
@@ -182,6 +220,17 @@ const ImageOptimization = ({ options }) => {
 							<p className="option-description">
 								Set max width so it can't load bigger img than it. <code>0</code> default.
 							</p>
+						</span>
+
+						<span>
+							<textarea
+								className='text-area-field'
+								placeholder="Exclude specific size to preload."
+								type="number"
+								name="excludeSize"
+								value={settings.excludeSize}
+								onChange={handleChange(setSettings)}
+							/>
 						</span>
 					</div>
 				)}

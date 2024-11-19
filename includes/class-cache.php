@@ -33,6 +33,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		public function combine_css() {
+			if ( is_user_logged_in() ) {
+				return;
+			}
+
 			global $wp_styles;
 			$styles = $wp_styles->queue;
 
@@ -50,12 +54,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$combined_css = '';
 
 			foreach ( $styles as $handle ) {
-
-				if ( in_array( $handle, $exclude_combine_css, true ) ) {
-					continue;
-				}
-
 				$style_data = $wp_styles->registered[ $handle ];
+
+				if ( ! empty( $exclude_combine_css ) ) {
+					if ( in_array( $handle, $exclude_combine_css, true ) ) {
+						continue;
+					}
+
+					$should_exclude = false;
+					foreach ( $exclude_combine_css as $exclude_css ) {
+						if ( false !== strpos( $style_data->src, $exclude_css ) ) {
+							$should_exclude = true;
+						}
+					}
+
+					if ( $should_exclude ) {
+						continue;
+					}
+				}
 
 				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
 					continue; // Exclude styles where args are not 'all'
@@ -172,104 +188,140 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		private function serve_webp_images( $buffer ) {
-			// Check if the browser supports WebP
-			if ( strpos( $_SERVER['HTTP_ACCEPT'], 'image/webp' ) === false ) {
-				return $buffer;
+			if ( isset( $this->options['image_optimisation']['convertToWebP'] ) && (bool) $this->options['image_optimisation']['convertToWebP'] ) {
+				// Check if the browser supports WebP
+				if ( strpos( $_SERVER['HTTP_ACCEPT'], 'image/webp' ) === false ) {
+					return $buffer;
+				}
+
+				$exclude_imgs = array();
+
+				if ( isset( $this->options['image_optimisation']['excludeWebPImages'] ) && ! empty( $this->options['image_optimisation']['excludeWebPImages'] ) ) {
+					$exclude_imgs = explode( "\n", $this->options['image_optimisation']['excludeWebPImages'] );
+					$exclude_imgs = array_map( 'trim', $exclude_imgs );
+					$exclude_imgs = array_filter( array_unique( $exclude_imgs ) );
+				}
+
+				// Replace all image src URLs with their WebP equivalents
+				return preg_replace_callback(
+					'#<img\b[^>]*src=["\']([^"\']+)["\'][^>]*>#i',
+					function ( $matches ) use ( $exclude_imgs ) {
+						$img_url       = $matches[1];
+						$img_extension = pathinfo( $img_url, PATHINFO_EXTENSION );
+
+						// Skip if the image is already a WebP
+						if ( strtolower( $img_extension ) === 'webp' ) {
+							return $matches[0]; // Return the original image tag
+						}
+
+						if ( ! empty( $exclude_imgs ) ) {
+							foreach ( $exclude_imgs as $exclude_img ) {
+								if ( false !== strpos( $img_url, $exclude_img ) ) {
+									return $matches[0];
+								}
+							}
+						}
+
+						$webp_converter  = new WebP_Converter();
+						$webp_img_url    = str_replace( $img_extension, 'webp', $img_url );
+						$webp_image_path = Util::get_local_path( $webp_converter->get_webp_path( $img_url ) );
+
+						if ( ! file_exists( $webp_image_path ) ) {
+							$source_image_path = Util::get_local_path( $img_url );
+
+							if ( file_exists( $source_image_path ) ) {
+								$webp_converter->convert_to_webp( $source_image_path, $webp_image_path );
+							}
+						}
+
+						if ( file_exists( $webp_image_path ) ) {
+							// Replace the original src with the WebP version
+							return str_replace( $img_url, $webp_img_url, $matches[0] );
+						}
+
+						// Return the original image tag if WebP conversion fails
+						return $matches[0];
+					},
+					$buffer
+				);
 			}
 
-			// Replace all image src URLs with their WebP equivalents
-			return preg_replace_callback(
-				'#<img\b[^>]*src=["\']([^"\']+)["\'][^>]*>#i',
-				function ( $matches ) {
-					$img_url       = $matches[1];
-					$img_extension = pathinfo( $img_url, PATHINFO_EXTENSION );
-
-					// Skip if the image is already a WebP
-					if ( strtolower( $img_extension ) === 'webp' ) {
-						return $matches[0]; // Return the original image tag
-					}
-
-					$webp_converter  = new WebP_Converter();
-					$webp_img_url    = str_replace( $img_extension, 'webp', $img_url );
-					$webp_image_path = Util::get_local_path( $webp_converter->get_webp_path( $img_url ) );
-
-					if ( ! file_exists( $webp_image_path ) ) {
-						$source_image_path = Util::get_local_path( $img_url );
-
-						if ( file_exists( $source_image_path ) ) {
-							$webp_converter->convert_to_webp( $source_image_path, $webp_image_path );
-						}
-					}
-
-					if ( file_exists( $webp_image_path ) ) {
-						// Replace the original src with the WebP version
-						return str_replace( $img_url, $webp_img_url, $matches[0] );
-					}
-
-					// Return the original image tag if WebP conversion fails
-					return $matches[0];
-				},
-				$buffer
-			);
+			return $buffer;
 		}
 
 		private function add_delay_load_img( $buffer ) {
-			$img_counter = 0;
 
-			// Add 'qtpo-src' and 'loading="lazy"' to <img> tags only if 'data-src' is not already present
-			return preg_replace_callback(
-				'#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i',
-				function( $matches ) use ( &$img_counter ) {
-					$img_counter++;
+			if ( isset( $this->options['image_optimisation']['lazyLoadImages'] ) && (bool) $this->options['image_optimisation']['lazyLoadImages'] ) {
+				$exclude_img_count = $this->options['image_optimisation']['excludeFistImages'] ?? 0;
+				$exclude_imgs      = array();
 
-					if ( 5 > $img_counter ) {
-						return $matches[0];
-					}
+				if ( isset( $this->options['image_optimisation']['excludeImages'] ) && ! empty( $this->options['image_optimisation']['excludeImages'] ) ) {
+					$exclude_imgs = explode( "\n", $this->options['image_optimisation']['excludeImages'] );
+					$exclude_imgs = array_map( 'trim', $exclude_imgs );
+					$exclude_imgs = array_filter( array_unique( $exclude_imgs ) );
+				}
+				$img_counter = 0;
 
-					$img_tag      = $matches[0];
-					$original_src = $matches[2];
+				return preg_replace_callback(
+					'#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i',
+					function( $matches ) use ( &$img_counter, $exclude_img_count, $exclude_imgs ) {
+						$img_counter++;
 
-					// Check if the img tag already has 'data-src'
-					if ( strpos( $img_tag, 'data-src' ) === false ) {
-						// if ( strpos( $img_tag, 'loading="lazy"' ) === false ) {
-						// 	$img_tag = preg_replace(
-						// 		'#<img\b([^>]*)>#i',
-						// 		'<img $1 loading="lazy">',
-						// 		$img_tag
-						// 	);
-						// }
-
-						$img_tag = preg_replace(
-							'#src=["\']([^"\']+)["\']#i',
-							'data-src="' . $original_src . '"',
-							$img_tag
-						);
-
-						$new_src = $this->generate_svg_base64( $matches[0] ); // Pass the img attributes to generate SVG
-
-						$img_tag = preg_replace(
-							'#<img\b([^>]*)#i',
-							'<img $1 src="' . $new_src . '"',
-							$img_tag
-						);
-
-						if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
-							$img_tag = preg_replace(
-								'#srcset=["\']([^"\']+)["\']#i',
-								'data-srcset="' . $srcset_matches[1] . '"',
-								$img_tag
-							);
-						}
-
-						if ( preg_match( '#^data:image/#i', $original_src ) ) {
+						if ( $exclude_img_count > $img_counter ) {
 							return $matches[0];
 						}
-					}
 
-					return $img_tag;
-				},
-				$buffer
-			);
+						$img_tag      = $matches[0];
+						$original_src = $matches[2];
+
+						if ( ! empty( $exclude_imgs ) ) {
+							foreach ( $exclude_imgs as $exclude_img ) {
+								if ( false !== strpos( $original_src, $exclude_img ) ) {
+									return $matches[0];
+								}
+							}
+						}
+
+						// Check if the img tag already has 'data-src'
+						if ( strpos( $img_tag, 'data-src' ) === false ) {
+							$img_tag = preg_replace(
+								'#src=["\']([^"\']+)["\']#i',
+								'data-src="' . $original_src . '"',
+								$img_tag
+							);
+
+							if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
+								$new_src = $this->generate_svg_base64( $matches[0] ); // Pass the img attributes to generate SVG
+
+								if ( ! empty( $new_src ) ) {
+									$img_tag = preg_replace(
+										'#<img\b([^>]*)#i',
+										'<img $1 src="' . $new_src . '"',
+										$img_tag
+									);
+								}
+							}
+
+							if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
+								$img_tag = preg_replace(
+									'#srcset=["\']([^"\']+)["\']#i',
+									'data-srcset="' . $srcset_matches[1] . '"',
+									$img_tag
+								);
+							}
+
+							if ( preg_match( '#^data:image/#i', $original_src ) ) {
+								return $matches[0];
+							}
+						}
+
+						return $img_tag;
+					},
+					$buffer
+				);
+			}
+
+			return $buffer;
 		}
 
 		/**
@@ -447,11 +499,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Get the file path for a page.
 		 *
-		 * @param int|null $page_id
+		 * @param string|null $url_path
 		 * @return string
 		 */
-		private function get_file_path( int $page_id = null, string $type = 'html' ): string {
-			$url_path = trim( wp_parse_url( get_permalink( $page_id ), PHP_URL_PATH ), '/' );
+		private function get_file_path( string $url_path = null, string $type = 'html' ): string {
+			$url_path = trim( $url_path, '/' );
 			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? "index.{$type}" : "{$url_path}/index.{$type}" );
 		}
 
@@ -475,14 +527,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Clear the cache for a specific page or all pages.
 		 *
-		 * @param int|null $page_id
+		 * @param string|null $url_path
 		 * @return void
 		 */
-		public static function clear_cache( $page_id = null ) {
+		public static function clear_cache( $url_path = null ) {
 			$instance = new self();
-			if ( $page_id ) {
-				$file_path = $instance->get_file_path( $page_id );
-				$instance->delete_cache_files( $file_path );
+			if ( $url_path ) {
+				$html_file_path = $instance->get_file_path( $url_path, 'html' );
+				$css_file_path  = $instance->get_file_path( $url_path, 'css' );
+				$instance->delete_cache_files( $html_file_path );
+				$instance->delete_cache_files( $css_file_path );
 			} else {
 				$instance->delete_all_cache_files();
 			}

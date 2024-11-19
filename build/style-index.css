@@ -164,6 +164,9 @@
   font-size: 18px;
   font-weight: 600;
 }
+.settings-form .sub-fields {
+  margin: 15px;
+}
 .settings-form .text-area-field,
 .settings-form .input-field {
   border: 1px solid #ccc;

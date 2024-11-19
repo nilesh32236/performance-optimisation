@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const Dashboard = ({activities}) => {
+const Dashboard = ({ activities }) => {
 	const totalCacheSize = qtpoSettings.cache_size;
-	const total_js       = qtpoSettings.total_js_css.js;
-	const total_css      = qtpoSettings.total_js_css.css;
-
+	const total_js = qtpoSettings.total_js_css.js;
+	const total_css = qtpoSettings.total_js_css.css;
+	const webpConverted = qtpoSettings.webp_converted;
 	const onClickHandle = (e) => {
 		e.preventDefault();
 		fetch(qtpoSettings.apiUrl + 'clear_cache', {
@@ -27,22 +27,22 @@ const Dashboard = ({activities}) => {
 				<div className="dashboard-card">
 					<h3>Cache Status</h3>
 					<p>Current Cache Size: {totalCacheSize}</p>
-					<p>Last Cache Cleared: 2 days ago</p>
+					{/* <p>Last Cache Cleared: 2 days ago</p> */}
 					<button className="clear-cache-btn" onClick={onClickHandle}>Clear Cache Now</button>
 				</div>
 
 				<div className="dashboard-card">
 					<h3>Image Optimization</h3>
-					<p>Images Optimized: 320</p>
-					<p>Images Converted to WebP: 150</p>
-					<button className="optimize-images-btn">Optimize Now</button>
+					{/* <p>Images Optimized: 320</p> */}
+					<p>Images Converted to WebP: {webpConverted}</p>
+					{/* <button className="optimize-images-btn">Optimize Now</button> */}
 				</div>
 
 				<div className="dashboard-card">
 					<h3>JavaScript & CSS Optimization</h3>
 					<p>JavaScript Files Minified: {total_js}</p>
 					<p>CSS Files Minified: {total_css}</p>
-					<button className="optimize-assets-btn">Minify Assets</button>
+					{/* <button className="optimize-assets-btn">Minify Assets</button> */}
 				</div>
 			</div>
 
@@ -51,7 +51,9 @@ const Dashboard = ({activities}) => {
 				<ul>
 					{activities?.length > 0 ? (
 						activities.map((activity, index) => (
-							<li key={index}>{activity.activity}</li>
+							<li key={index}>
+								<div dangerouslySetInnerHTML={{ __html: activity.activity }} />
+							</li>
 						))
 					) : (
 						<li>Loading recent activities...</li>

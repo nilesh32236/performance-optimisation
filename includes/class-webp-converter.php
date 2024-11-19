@@ -3,6 +3,18 @@ namespace PerformanceOptimise\Inc;
 
 class WebP_Converter {
 
+	private $options;
+	private $exclude_imgs = array();
+	public function __construct( $options ) {
+		$this->options = $options;
+
+		if ( isset( $this->options['image_optimisation']['excludeWebPImages'] ) && ! empty( $this->options['image_optimisation']['excludeWebPImages'] ) ) {
+			$exclude_imgs       = explode( "\n", $this->options['image_optimisation']['excludeWebPImages'] );
+			$exclude_imgs       = array_map( 'trim', $exclude_imgs );
+			$this->exclude_imgs = array_filter( array_unique( $exclude_imgs ) );
+		}
+	}
+
 	/**
 	 * Convert an image to WebP format.
 	 *
@@ -48,6 +60,10 @@ class WebP_Converter {
 				return false;
 			}
 
+			$current_count = get_option( 'qtpo_webp_converted', 0 );
+			$new_count     = $current_count + 1;
+			update_option( 'qtpo_webp_converted', $new_count );
+
 			error_log( 'WebP conversion successful: ' . $destination );
 			imagedestroy( $image ); // Clean up memory
 			return true;
@@ -62,7 +78,6 @@ class WebP_Converter {
 
 			return false;
 		}
-
 	}
 
 	/**
@@ -92,6 +107,15 @@ class WebP_Converter {
 			if ( ! file_exists( $file ) ) {
 				error_log( 'Original image file not found: ' . $file );
 				return $metadata;
+			}
+
+			$img_url = wp_get_attachment_url( $attachment_id );
+			if ( ! empty( $this->exclude_imgs ) ) {
+				foreach ( $this->exclude_imgs as $exclude_img ) {
+					if ( false !== strpos( $img_url, $exclude_img ) ) {
+						return $metadata;
+					}
+				}
 			}
 
 			// Convert the original image to WebP
@@ -149,6 +173,14 @@ class WebP_Converter {
 			$image_extension = pathinfo( $image[0], PATHINFO_EXTENSION );
 			if ( 'webp' === strtolower( $image_extension ) ) {
 				return $image;
+			}
+
+			if ( ! empty( $this->exclude_imgs ) ) {
+				foreach ( $this->exclude_imgs as $exclude_img ) {
+					if ( false !== strpos( $image[0], $exclude_img ) ) {
+						return $image;
+					}
+				}
 			}
 
 			$img_path        = Util::get_local_path( $image[0] );

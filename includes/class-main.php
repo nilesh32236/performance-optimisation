@@ -81,9 +81,12 @@ class Main {
 		$rest = new Rest();
 		add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
 
-		$webp_converter = new WebP_Converter();
-		add_filter( 'wp_generate_attachment_metadata', array( $webp_converter, 'convert_images_to_webp' ), 10, 2 );
-		add_filter( 'wp_get_attachment_image_src', array( $webp_converter, 'maybe_serve_webp_image' ), 10, 4 );
+		$webp_converter = new WebP_Converter( $this->options );
+
+		if ( isset( $this->options['image_optimisation']['convertToWebP'] ) && (bool) $this->options['image_optimisation']['convertToWebP'] ) {
+			add_filter( 'wp_generate_attachment_metadata', array( $webp_converter, 'convert_images_to_webp' ), 10, 2 );
+			add_filter( 'wp_get_attachment_image_src', array( $webp_converter, 'maybe_serve_webp_image' ), 10, 4 );
+		}
 
 		if ( isset( $this->options['file_optimisation']['minifyJS'] ) && (bool) $this->options['file_optimisation']['minifyJS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeJS'] ) && ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
@@ -186,11 +189,12 @@ class Main {
 			'performance-optimisation-script',
 			'qtpoSettings',
 			array(
-				'apiUrl'       => get_rest_url( null, 'performance-optimisation/v1/' ),
-				'nonce'        => wp_create_nonce( 'wp_rest' ),
-				'settings'     => $this->options,
-				'cache_size'   => Cache::get_cache_size(),
-				'total_js_css' => Util::get_js_css_minified_file(),
+				'apiUrl'         => get_rest_url( null, 'performance-optimisation/v1/' ),
+				'nonce'          => wp_create_nonce( 'wp_rest' ),
+				'settings'       => $this->options,
+				'webp_converted' => get_option( 'qtpo_webp_converted', 0 ),
+				'cache_size'     => Cache::get_cache_size(),
+				'total_js_css'   => Util::get_js_css_minified_file(),
 			),
 		);
 	}
@@ -411,18 +415,33 @@ class Main {
 							}
 						}
 
-						$max_width = $this->options['image_optimisation']['maxWidthImgSize'] ? $this->options['image_optimisation']['maxWidthImgSize'] : 1480;
+						$max_width    = $this->options['image_optimisation']['maxWidthImgSize'] ? $this->options['image_optimisation']['maxWidthImgSize'] : 1480;
+						$exclude_size = 0;
+
+						if ( isset( $this->options['image_optimisation']['excludeSize'] ) && ! empty( $this->options['image_optimisation']['excludeSize'] ) ) {
+							$exclude_size = explode( "\n", $this->options['image_optimisation']['excludeSize'] );
+							$exclude_size = array_map( 'trim', $exclude_size );
+							$exclude_size = array_map( 'absint', $exclude_size );
+							$exclude_size = array_filter( array_unique( $exclude_size ) );
+						}
 
 						if ( ! $should_exclude ) {
-							$srcset = wp_get_attachment_image_srcset( $thumbnail_id, 'full' );
+							$srcset = wp_get_attachment_image_srcset( $thumbnail_id );
+
 							if ( $srcset ) {
 								$sources = array_map( 'trim', explode( ',', $srcset ) );
 
 								$parsed_sources = array();
+								error_log( '$source: ' . print_r( $sources, true ) );
 								foreach ( $sources as $source ) {
 									list( $url, $descriptor ) = array_map( 'trim', explode( ' ', $source ) );
 									$width                    = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
-									$parsed_sources[]         = array(
+
+									if ( in_array( (int) $width, $exclude_size, true ) ) {
+										continue;
+									}
+
+									$parsed_sources[] = array(
 										'url'   => $url,
 										'width' => $width,
 									);
@@ -451,6 +470,7 @@ class Main {
 
 									echo '<link rel="preload" href="' . esc_url( $source['url'] ) . '" as="image" media="' . esc_attr( $media ) . '">';
 
+									error_log( '<link rel="preload" href="' . esc_url( $source['url'] ) . '" as="image" media="' . esc_attr( $media ) . '">' );
 									$previous_width = $current_width;
 								}
 							} else {

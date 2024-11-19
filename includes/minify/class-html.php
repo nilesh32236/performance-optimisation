@@ -129,29 +129,17 @@ class HTML {
 	 * @return string The HTML content with minified CSS.
 	 */
 	private function minify_inline_css( string $html ): string {
-
-		$is_extract_css = false;
-		if ( isset( $this->options['file_optimisation']['extractInlineCSS'] ) && (bool) $this->options['file_optimisation']['extractInlineCSS'] ) {
-			$is_extract_css = true;
-		}
-
 		$html = preg_replace_callback(
 			'#<style\b[^>]*>(.*?)</style>#is',
-			function ( $matches ) use ( $is_extract_css ) {
-
-				if ( $is_extract_css ) {
-					$this->extracted_css .= $matches[1] . "\n";
-					return '';
-				} else {
-					try {
-						$css_minifier = new CSSMinifier( $matches[1] );
-						return '<style>' . $css_minifier->minify() . '</style>';
-					} catch ( \Exception $e ) {
-						// Log the error (optional)
-						error_log( 'CSS minification error: ' . $e->getMessage() );
-						// Return original content if there's an error
-						return $matches[0];
-					}
+			function ( $matches ) {
+				try {
+					$css_minifier = new CSSMinifier( $matches[1] );
+					return '<style>' . $css_minifier->minify() . '</style>';
+				} catch ( \Exception $e ) {
+					// Log the error (optional)
+					error_log( 'CSS minification error: ' . $e->getMessage() );
+					// Return original content if there's an error
+					return $matches[0];
 				}
 			},
 			$html

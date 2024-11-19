@@ -56,12 +56,12 @@ const App = () => {
 		switch (activeTab) {
 			case 'fileOptimization':
 				return <FileOptimization options={qtpoSettings.settings.file_optimisation} />;
-			case 'media':
-				return <MediaOptimization options={qtpoSettings.settings.media_optimisation} />;
+			// case 'media':
+			// 	return <MediaOptimization options={qtpoSettings.settings.media_optimisation} />;
 			case 'preload':
 				return <PreloadSettings options={qtpoSettings.settings.preload_settings} />;
-			case 'database':
-				return <DatabaseOptimization options={qtpoSettings.settings.database_optimization} />;
+			// case 'database':
+			// 	return <DatabaseOptimization options={qtpoSettings.settings.database_optimization} />;
 			case 'imageOptimization':
 				return <ImageOptimization options={qtpoSettings.settings.image_optimisation} />;
 			default:
@@ -85,18 +85,18 @@ const App = () => {
 						<FontAwesomeIcon className="sidebar-icon" icon={faFileAlt} />
 						{!sidebarCollapsed && ' File Optimization'}
 					</li>
-					<li className={activeTab === 'media' ? 'active' : ''} onClick={() => setActiveTab('media')}>
+					{/* <li className={activeTab === 'media' ? 'active' : ''} onClick={() => setActiveTab('media')}>
 						<FontAwesomeIcon className="sidebar-icon" icon={faImage} />
 						{!sidebarCollapsed && ' Media Optimization'}
-					</li>
+					</li> */}
 					<li className={activeTab === 'preload' ? 'active' : ''} onClick={() => setActiveTab('preload')}>
 						<FontAwesomeIcon className="sidebar-icon" icon={faBullseye} />
 						{!sidebarCollapsed && ' Preload'}
 					</li>
-					<li className={activeTab === 'database' ? 'active' : ''} onClick={() => setActiveTab('database')}>
+					{/* <li className={activeTab === 'database' ? 'active' : ''} onClick={() => setActiveTab('database')}>
 						<FontAwesomeIcon className="sidebar-icon" icon={faDatabase} />
 						{!sidebarCollapsed && ' Database Optimization'}
-					</li>
+					</li> */}
 					<li className={activeTab === 'imageOptimization' ? 'active' : ''} onClick={() => setActiveTab('imageOptimization')}>
 						<FontAwesomeIcon className="sidebar-icon" icon={faCog} />
 						{!sidebarCollapsed && ' Image Optimization'}

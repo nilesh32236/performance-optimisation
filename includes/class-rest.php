@@ -49,8 +49,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function clear_cache( \WP_REST_Request $request ) {
 			$params = $request->get_params();
 			if ( 'clear_single_page_cahce' === $params['action'] ) {
-				Cache::clear_cache( $params['id'] );
-				new Log( 'Clear cache of ' . get_permalink( $params['id'] ) . ' on ' );
+				Cache::clear_cache( $params['path'] );
+				new Log( 'Clear cache of <a href="' . home_url( $params['path'] ) . '">' . home_url( $params['path'] ) . '</a> on ' );
 			} else {
 				Cache::clear_cache();
 				new Log( 'Clear all cache on ' );

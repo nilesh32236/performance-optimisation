@@ -530,18 +530,14 @@ const App = () => {
         return (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_components_FileOptimization__WEBPACK_IMPORTED_MODULE_2__["default"], {
           options: qtpoSettings.settings.file_optimisation
         });
-      case 'media':
-        return (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_components_MediaOptimization__WEBPACK_IMPORTED_MODULE_3__["default"], {
-          options: qtpoSettings.settings.media_optimisation
-        });
+      // case 'media':
+      // 	return <MediaOptimization options={qtpoSettings.settings.media_optimisation} />;
       case 'preload':
         return (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_components_PreloadSettings__WEBPACK_IMPORTED_MODULE_4__["default"], {
           options: qtpoSettings.settings.preload_settings
         });
-      case 'database':
-        return (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_components_DatabaseOptimization__WEBPACK_IMPORTED_MODULE_5__["default"], {
-          options: qtpoSettings.settings.database_optimization
-        });
+      // case 'database':
+      // 	return <DatabaseOptimization options={qtpoSettings.settings.database_optimization} />;
       case 'imageOptimization':
         return (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_components_ImageOptimization__WEBPACK_IMPORTED_MODULE_6__["default"], {
           options: qtpoSettings.settings.image_optimisation
@@ -574,24 +570,12 @@ const App = () => {
     className: "sidebar-icon",
     icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faFileAlt
   }), !sidebarCollapsed && ' File Optimization'), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
-    className: activeTab === 'media' ? 'active' : '',
-    onClick: () => setActiveTab('media')
-  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
-    className: "sidebar-icon",
-    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faImage
-  }), !sidebarCollapsed && ' Media Optimization'), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
     className: activeTab === 'preload' ? 'active' : '',
     onClick: () => setActiveTab('preload')
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
     className: "sidebar-icon",
     icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faBullseye
   }), !sidebarCollapsed && ' Preload'), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
-    className: activeTab === 'database' ? 'active' : '',
-    onClick: () => setActiveTab('database')
-  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
-    className: "sidebar-icon",
-    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_9__.faDatabase
-  }), !sidebarCollapsed && ' Database Optimization'), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
     className: activeTab === 'imageOptimization' ? 'active' : '',
     onClick: () => setActiveTab('imageOptimization')
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
@@ -666,6 +650,7 @@ const Dashboard = ({
   const totalCacheSize = qtpoSettings.cache_size;
   const total_js = qtpoSettings.total_js_css.js;
   const total_css = qtpoSettings.total_js_css.css;
+  const webpConverted = qtpoSettings.webp_converted;
   const onClickHandle = e => {
     e.preventDefault();
     fetch(qtpoSettings.apiUrl + 'clear_cache', {
@@ -685,22 +670,22 @@ const Dashboard = ({
     className: "dashboard-overview"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "dashboard-card"
-  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Cache Status"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Current Cache Size: ", totalCacheSize), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Last Cache Cleared: 2 days ago"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
+  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Cache Status"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Current Cache Size: ", totalCacheSize), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
     className: "clear-cache-btn",
     onClick: onClickHandle
   }, "Clear Cache Now")), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "dashboard-card"
-  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Image Optimization"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Images Optimized: 320"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Images Converted to WebP: 150"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
-    className: "optimize-images-btn"
-  }, "Optimize Now")), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
+  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Image Optimization"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Images Converted to WebP: ", webpConverted)), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "dashboard-card"
-  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "JavaScript & CSS Optimization"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "JavaScript Files Minified: ", total_js), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "CSS Files Minified: ", total_css), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
-    className: "optimize-assets-btn"
-  }, "Minify Assets"))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
+  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "JavaScript & CSS Optimization"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "JavaScript Files Minified: ", total_js), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "CSS Files Minified: ", total_css))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "recent-activities"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Recent Activities"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("ul", null, activities?.length > 0 ? activities.map((activity, index) => (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", {
     key: index
-  }, activity.activity)) : (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", null, "Loading recent activities..."))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
+  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
+    dangerouslySetInnerHTML: {
+      __html: activity.activity
+    }
+  }))) : (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("li", null, "Loading recent activities..."))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "plugin-info"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("h3", null, "Plugin Information"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("strong", null, "Version:"), " 1.0.0"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("strong", null, "Last Updated:"), " September 21, 2024"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", null, "Get the best performance for your website by optimizing images, caching, and assets like JavaScript and CSS files. Stay updated with new features and improvements in each release!")));
 };
@@ -931,7 +916,10 @@ const ImageOptimization = ({
   options
 }) => {
   const [settings, setSettings] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)({
-    compressImages: options?.compressImages || false,
+    lazyLoadImages: options?.lazyLoadImages || false,
+    excludeFistImages: options?.excludeFistImages || 0,
+    excludeImages: options?.excludeImages || '',
+    // compressImages: options?.compressImages || false,
     excludeCompressedImages: options?.excludeCompressedImages || '',
     convertToWebP: options?.convertToWebP || false,
     excludeWebPImages: options?.excludeWebPImages || '',
@@ -942,7 +930,8 @@ const ImageOptimization = ({
     selectedPostType: options?.selectedPostType || [],
     availablePostTypes: options?.availablePostTypes,
     excludePostTypeImgUrl: options?.excludePostTypeImgUrl || '',
-    maxWidthImgSize: options?.maxWidthImgSize || 0
+    maxWidthImgSize: options?.maxWidthImgSize || 0,
+    excludeSize: options?.options || ''
   });
   console.log(settings.availablePostTypes);
   const [isLoading, setIsLoading] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
@@ -970,6 +959,36 @@ const ImageOptimization = ({
     className: "checkbox-option"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("label", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("input", {
     type: "checkbox",
+    name: "lazyLoadImages",
+    checked: settings.lazyLoadImages,
+    onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
+  }), "Lazy Load Images"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", {
+    className: "option-description"
+  }, "Enable lazy loading for images to improve the initial load speed by loading images only when they appear in the viewport."), settings.lazyLoadImages && (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("input", {
+    className: "input-field",
+    placeholder: "Enter number you want to exclude first",
+    name: "excludeFistImages",
+    value: settings.excludeFistImages,
+    onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
+  }), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("textarea", {
+    className: "text-area-field",
+    placeholder: "Exclude specific image URLs",
+    name: "excludeImages",
+    value: settings.excludeImages,
+    onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
+  }), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
+    className: "checkbox-option sub-fields"
+  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("label", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("input", {
+    type: "checkbox",
+    name: "replacePlaceholderWithSVG",
+    checked: settings.replacePlaceholderWithSVG,
+    onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
+  }), "Replace Low-Resolution Placeholder with SVG"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", {
+    className: "option-description"
+  }, "Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance.")))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
+    className: "checkbox-option"
+  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("label", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("input", {
+    type: "checkbox",
     name: "convertToWebP",
     checked: settings.convertToWebP,
     onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
@@ -982,15 +1001,6 @@ const ImageOptimization = ({
     value: settings.excludeWebPImages,
     onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
   })), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
-    className: "checkbox-option"
-  }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("label", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("input", {
-    type: "checkbox",
-    name: "replacePlaceholderWithSVG",
-    checked: settings.replacePlaceholderWithSVG,
-    onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
-  }), "Replace Low-Resolution Placeholder with SVG"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", {
-    className: "option-description"
-  }, "Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance.")), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     className: "checkbox-option"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("label", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("input", {
     type: "checkbox",
@@ -1014,9 +1024,7 @@ const ImageOptimization = ({
     onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
   }), "Preload Feature Images for Post Types"), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", {
     className: "option-description"
-  }, "Select post types where feature images should be preloaded for better performance."), settings.preloadPostTypeImage && (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
-    className: "sub-fields"
-  }, settings.availablePostTypes && settings.availablePostTypes.map(postType => (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
+  }, "Select post types where feature images should be preloaded for better performance."), settings.preloadPostTypeImage && (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", null, settings.availablePostTypes && settings.availablePostTypes.map(postType => (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("div", {
     key: postType,
     className: "post-type-option"
   }, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("label", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("input", {
@@ -1037,7 +1045,14 @@ const ImageOptimization = ({
     onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
   }), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("p", {
     className: "option-description"
-  }, "Set max width so it can't load bigger img than it. ", (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("code", null, "0"), " default.")))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
+  }, "Set max width so it can't load bigger img than it. ", (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("code", null, "0"), " default.")), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("span", null, (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("textarea", {
+    className: "text-area-field",
+    placeholder: "Exclude specific size to preload.",
+    type: "number",
+    name: "excludeSize",
+    value: settings.excludeSize,
+    onChange: (0,_lib_formUtils__WEBPACK_IMPORTED_MODULE_1__.handleChange)(setSettings)
+  })))), (0,react__WEBPACK_IMPORTED_MODULE_0__.createElement)("button", {
     type: "submit",
     className: "submit-button",
     disabled: isLoading
