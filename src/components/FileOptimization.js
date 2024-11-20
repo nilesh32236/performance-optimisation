@@ -9,6 +9,9 @@ const FileOptimization = ({ options }) => {
 		excludeCSS: options?.excludeCSS || '',
 		combineCSS: options?.combineCSS || false,
 		excludeCombineCSS: options?.excludeCombineCSS || '',
+		removeWooCSSJS: options?.removeWooCSSJS || false,
+		excludeUrlToKeepJSCSS: options?.excludeUrlToKeepJSCSS || "shop/(.*)\nproduct/(.*)\nmy-account/(.*)\ncart/(.*)\ncheckout/(.*)",
+		removeCssJsHandle: options?.removeCssJsHandle || "style: woocommerce-layout\nstyle: woocommerce-general\nstyle: woocommerce-smallscreen\nstyle: wc-blocks-style\nscript: woocommerce\nscript: wc-cart-fragments\nscript: wc-add-to-cart\nscript: jquery-blockui\nscript: wc-order-attribution\nscript: sourcebuster-js",
 		minifyHTML: options?.minifyHTML || false,
 		deferJS: options?.deferJS || false,
 		excludeDeferJS: options?.excludeDeferJS || '',
@@ -92,6 +95,36 @@ const FileOptimization = ({ options }) => {
 						value={settings.excludeCombineCSS}
 						onChange={handleChange(setSettings)}
 					/>
+				)}
+			</div>
+
+			<div className="checkbox-option">
+				<label>
+					<input
+						type="checkbox"
+						name="removeWooCSSJS"
+						checked={settings.removeWooCSSJS}
+						onChange={handleChange(setSettings)}
+					/>
+					Remove woocommerce css and js from other page
+				</label>
+				{settings.removeWooCSSJS && (
+					<div>
+						<textarea
+							className="text-area-field"
+							placeholder="Exclude Url to keep woocommerce css and js"
+							name="excludeUrlToKeepJSCSS"
+							value={settings.excludeUrlToKeepJSCSS}
+							onChange={handleChange(setSettings)}
+						/>
+						<textarea
+							className="text-area-field"
+							placeholder="Enter handal which script and style you want to remove"
+							name="removeCssJsHandle"
+							value={settings.removeCssJsHandle}
+							onChange={handleChange(setSettings)}
+						/>
+					</div>
 				)}
 			</div>
 

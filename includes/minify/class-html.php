@@ -26,8 +26,6 @@ class HTML {
 	 */
 	private string $minified_html;
 
-	private ?string $extracted_css = null;
-
 	private array $options;
 	/**
 	 * Minify constructor.
@@ -258,14 +256,5 @@ class HTML {
 	 */
 	public function get_minified_html(): string {
 		return $this->minified_html;
-	}
-
-	public function get_extracted_css() :string {
-		try {
-			$css_minifier = new CSSMinifier( $this->extracted_css );
-			return $css_minifier->minify();
-		} catch ( \Exception $e ) {
-			return $this->extracted_css;
-		}
 	}
 }

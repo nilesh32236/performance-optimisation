@@ -31,7 +31,6 @@ class Main {
 	public function __construct() {
 		$this->options = get_option( 'qtpo_settings', array() );
 
-		// $this->add_available_post_types_to_options();
 		$this->includes();
 		$this->setup_hooks();
 		$this->filesystem = Util::init_filesystem();
@@ -70,6 +69,10 @@ class Main {
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 3 );
 		add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
+
+		if ( isset( $this->options['file_optimisation']['removeWooCSSJS'] ) && (bool) $this->options['file_optimisation']['removeWooCSSJS'] ) {
+			add_action( 'wp_enqueue_scripts', array( $this, 'remove_woocommerce_scripts' ), 999 );
+		}
 
 		$cache = new Cache();
 		add_action( 'template_redirect', array( $cache, 'generate_dynamic_static_html' ) );
@@ -214,6 +217,61 @@ class Main {
 
 		if ( ! is_user_logged_in() ) {
 			wp_enqueue_script( 'qtpo-lazyload', QTPO_PLUGIN_URL . 'src/lazyload.js', array(), '1.0.0', true );
+		}
+	}
+
+	public function remove_woocommerce_scripts() {
+		$exclude_url_to_keep_js_css = array();
+		if ( isset( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) && ! empty( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) ) {
+			$exclude_url_to_keep_js_css = explode( "\n", $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] );
+			$exclude_url_to_keep_js_css = array_map( 'trim', $exclude_url_to_keep_js_css );
+			$exclude_url_to_keep_js_css = array_filter( array_unique( $exclude_url_to_keep_js_css ) );
+
+			$current_url = home_url( $_SERVER['REQUEST_URI'] );
+			$current_url = rtrim( $current_url, '/' );
+
+			foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {
+				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+					$exclude_url = home_url( $exclude_url );
+					$exclude_url = rtrim( $exclude_url, '/' );
+				}
+
+				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
+					$exclude_prefix = rtrim( $exclude_prefix, '/' );
+
+					if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
+						return;
+					}
+				}
+
+				if ( $current_url === $exclude_url ) {
+					return;
+				}
+			}
+		}
+
+		$remove_css_js_handle = array();
+		if ( isset( $this->options['file_optimisation']['removeCssJsHandle'] ) && ! empty( $this->options['file_optimisation']['removeCssJsHandle'] ) ) {
+			$remove_css_js_handle = explode( "\n", $this->options['file_optimisation']['removeCssJsHandle'] );
+			$remove_css_js_handle = array_map( 'trim', $remove_css_js_handle );
+			$remove_css_js_handle = array_filter( array_unique( $remove_css_js_handle ) );
+		}
+
+		if ( ! empty( $remove_css_js_handle ) ) {
+			foreach ( $remove_css_js_handle as $handle ) {
+				if ( 0 === strpos( $handle, 'style:' ) ) {
+					$handle = str_replace( 'style:', '', $handle );
+					$handle = trim( $handle );
+
+					wp_dequeue_style( $handle );
+				} elseif ( 0 === strpos( $handle, 'script:' ) ) {
+					$handle = str_replace( 'script:', '', $handle );
+					$handle = trim( $handle );
+
+					wp_dequeue_script( $handle );
+				}
+			}
 		}
 	}
 
@@ -416,7 +474,7 @@ class Main {
 						}
 
 						$max_width    = $this->options['image_optimisation']['maxWidthImgSize'] ? $this->options['image_optimisation']['maxWidthImgSize'] : 1480;
-						$exclude_size = 0;
+						$exclude_size = array();
 
 						if ( isset( $this->options['image_optimisation']['excludeSize'] ) && ! empty( $this->options['image_optimisation']['excludeSize'] ) ) {
 							$exclude_size = explode( "\n", $this->options['image_optimisation']['excludeSize'] );
@@ -432,7 +490,6 @@ class Main {
 								$sources = array_map( 'trim', explode( ',', $srcset ) );
 
 								$parsed_sources = array();
-								error_log( '$source: ' . print_r( $sources, true ) );
 								foreach ( $sources as $source ) {
 									list( $url, $descriptor ) = array_map( 'trim', explode( ' ', $source ) );
 									$width                    = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
@@ -470,7 +527,6 @@ class Main {
 
 									echo '<link rel="preload" href="' . esc_url( $source['url'] ) . '" as="image" media="' . esc_attr( $media ) . '">';
 
-									error_log( '<link rel="preload" href="' . esc_url( $source['url'] ) . '" as="image" media="' . esc_attr( $media ) . '">' );
 									$previous_width = $current_width;
 								}
 							} else {
