@@ -45,6 +45,12 @@ class HTML {
 	 */
 	private function initialize_minification_settings(): void {
 		$this->html_min = new HtmlMin();
+		// Get the home URL (e.g., http://localhost/awm)
+		$home_url = home_url();
+
+		// Parse the home URL and extract just the base domain (e.g., http://localhost)
+		$parsed_url = wp_parse_url( $home_url );
+		$base_url   = $parsed_url['scheme'] . '://' . $parsed_url['host'];
 		$this->html_min->doOptimizeViaHtmlDomParser( true )
 			->doRemoveComments( true )
 			->doSumUpWhitespace( true )
@@ -61,7 +67,7 @@ class HTML {
 			->doRemoveSpacesBetweenTags( true )
 			->doRemoveOmittedQuotes( true )
 			->doRemoveOmittedHtmlTags( true )
-			->doMakeSameDomainsLinksRelative( array( home_url() ) );
+			->doMakeSameDomainsLinksRelative( array( $base_url ) );
 	}
 
 	/**

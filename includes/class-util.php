@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$relative_path = $parsed_url['path'] ?? '';
 
 			// If home_url is present, remove it from the path
-			$relative_path = str_replace( home_url(), '', $relative_path );
+			$relative_path = str_replace( wp_parse_url( home_url() )['path'], '', $url );
 
 			// Return the full local path
 			return ABSPATH . ltrim( $relative_path, '/' );
