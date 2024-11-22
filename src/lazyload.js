@@ -5,44 +5,54 @@ async function loadScripts() {
 	if (scriptLoading) return scriptLoadPromise;
 	scriptLoading = true;
 
-	const inlineScripts = Array.from(document.querySelectorAll('script[type="qtpo/javascript"]'));
+	const inlineScripts = Array.from(document.querySelectorAll('script[type="qtpo/javascript"], script[qtpo-src]'));
 
 	const loadScript = (script) => {
-
 		return new Promise((resolve, reject) => {
-			if (script.hasAttribute('type') && 'qtpo/javascript' === script.getAttribute('type')) {
+			if ('qtpo/javascript' === script.getAttribute('type')) {
 				script.removeAttribute('type');
+				script.setAttribute('type', 'text/javascript');
 			}
 
-			if (script.hasAttribute('qtpo-type')) {
-				const type = script.getAttribute('qtpo-type');
+			const qtpoType = script.getAttribute('qtpo-type');
+			if (qtpoType) {
 				script.removeAttribute('qtpo-type');
-				script.setAttribute('type', type);
-				const src = script.getAttribute('qtpo-src');
+				script.setAttribute('type', qtpoType);
+			}
 
-				if (src) {
-					script.removeAttribute('qtpo-src');
-					script.setAttribute('src', src);
-					script.onload = resolve;
-					script.onerror = reject;
-				} else {
-					script.src = "data:text/javascript;base64," + window.btoa(unescape(encodeURIComponent(script.text)));
-					resolve();
-				}
+			const src = script.getAttribute('qtpo-src');
+
+			if (src) {
+				script.removeAttribute('qtpo-src');
+				script.setAttribute('src', src);
+
+				script.onload = resolve;
+				script.onerror = reject;
 			} else {
-				resolve();
+				try {
+					const base64Script = btoa(unescape(encodeURIComponent(script.text)));
+					script.setAttribute('src', `data:text/javascript;base64,${base64Script}`);
+					resolve();
+				} catch (err) {
+					reject(`Error encoding inline script: ${err.message}`);
+				}
 			}
 		});
 	};
-	for (let script of inlineScripts) {
-		try {
+
+	try {
+		// Sequentially process all inline scripts
+		for (const script of inlineScripts) {
 			await loadScript(script);
-		} catch (err) {
-			console.error('Error loading script', err);
 		}
+	} catch (err) {
+		console.error('Error loading script:', err);
+	} finally {
+		scriptLoading = false;
 	}
 
 	document.dispatchEvent(new Event("DOMContentLoaded"));
+	window.dispatchEvent( new Event("DOMContentLoaded"));
 
 	if (typeof jQuery !== 'undefined') {
 		jQuery(document).triggerHandler("ready");
@@ -50,12 +60,15 @@ async function loadScripts() {
 	return;
 }
 
+// Attach event listeners to trigger the loading process
 if (!scriptLoading) {
-	document.addEventListener('mouseenter', loadScripts);
-	document.addEventListener('mousedown', loadScripts);
-	document.addEventListener('mouseover', loadScripts);
-	document.addEventListener('touchstart', loadScripts);
-	document.addEventListener('scroll', loadScripts);
+	const triggerEvents = ['mouseenter', 'mousedown', 'mouseover', 'touchstart', 'scroll'];
+	const loadHandler = () => {
+		triggerEvents.forEach((event) => document.removeEventListener(event, loadHandler));
+		loadScripts();
+	};
+
+	triggerEvents.forEach((event) => document.addEventListener(event, loadHandler, { once: true }));
 }
 
 document.addEventListener('DOMContentLoaded', function () {

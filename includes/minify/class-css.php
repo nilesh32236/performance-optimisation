@@ -77,7 +77,7 @@ class CSS {
 			function ( $matches ) use ( $css_dir_url ) {
 				$image_path = trim( $matches[2] );
 
-				if ( false === strpos( $image_path, 'http' ) && ! preg_match( '/^data:image/', $image_path ) ) {
+				if ( false === strpos( $image_path, 'http' ) && ! preg_match( '/^data:/', $image_path ) ) {
 					$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
 					return 'url("' . $image_path . '")';
 				}

@@ -51,6 +51,11 @@ class HTML {
 		// Parse the home URL and extract just the base domain (e.g., http://localhost)
 		$parsed_url = wp_parse_url( $home_url );
 		$base_url   = $parsed_url['scheme'] . '://' . $parsed_url['host'];
+
+		if ( isset( $parsed_url['port'] ) && ! empty( $parsed_url['port'] ) ) {
+			$base_url .= ( ':' . $parsed_url['port'] );
+		}
+
 		$this->html_min->doOptimizeViaHtmlDomParser( true )
 			->doRemoveComments( true )
 			->doSumUpWhitespace( true )

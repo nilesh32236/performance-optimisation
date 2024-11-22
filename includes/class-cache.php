@@ -417,9 +417,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( isset( $this->options['preload_settings']['excludePreloadCache'] ) && ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
 					$exclude_urls = explode( "\n", $this->options['preload_settings']['excludePreloadCache'] );
 					$exclude_urls = array_map( 'trim', $exclude_urls );
-					$exclude_urls = array_filter( $exclude_urls );
-
-					$exclude_urls = array_map( 'home_url', $exclude_urls );
+					$exclude_urls = array_filter( array_unique( $exclude_urls ) );
 
 					$current_url = home_url( $_SERVER['REQUEST_URI'] );
 					$current_url = rtrim( $current_url, '/' );
@@ -427,8 +425,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					foreach ( $exclude_urls as $exclude_url ) {
 						$exclude_url = rtrim( $exclude_url, '/' );
 
+						if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+							$exclude_url = home_url( $exclude_url );
+						}
+
+
 						if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-							$$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
+							$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
 
 							if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
 								return false;
