@@ -80,7 +80,42 @@ class Cron {
 			return;
 		}
 
+		$options = get_option( 'qtpo_settings', array() );
+
+		if ( isset( $options['preload_settings']['excludePreloadCache'] ) && ! empty( $options['preload_settings']['excludePreloadCache'] ) ) {
+			$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
+		}
+
 		foreach ( $pages as $page_id ) {
+			$page_url       = get_permalink( $page_id );
+			$should_exclude = false;
+
+			foreach ( $exclude_urls as $exclude_url ) {
+				$exclude_url = rtrim( $exclude_url, '/' );
+
+				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+					$exclude_url = home_url( $exclude_url );
+				}
+
+				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
+
+					if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
+						$should_exclude = true;
+						break;
+					}
+				}
+
+				if ( $page_url === $exclude_url ) {
+					$should_exclude = true;
+					break;
+				}
+			}
+
+			if ( $should_exclude ) {
+				continue;
+			}
+
 			if ( ! wp_next_scheduled( 'qtpo_generate_static_page', array( $page_id ) ) ) {
 				wp_schedule_single_event( time() + rand( 0, 3600 ), 'qtpo_generate_static_page', array( $page_id ) );
 			}

@@ -47,11 +47,11 @@ class Main {
 		require_once QTPO_PLUGIN_PATH . 'vendor/autoload.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-log.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-util.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/class-webp-converter.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-html.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-css.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-js.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cache.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/class-metabox.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cron.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-rest.php';
 	}
@@ -84,18 +84,17 @@ class Main {
 		$rest = new Rest();
 		add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
 
-		$webp_converter = new WebP_Converter( $this->options );
-
 		if ( isset( $this->options['image_optimisation']['convertToWebP'] ) && (bool) $this->options['image_optimisation']['convertToWebP'] ) {
+			require_once QTPO_PLUGIN_PATH . 'includes/class-webp-converter.php';
+			$webp_converter = new WebP_Converter( $this->options );
+
 			add_filter( 'wp_generate_attachment_metadata', array( $webp_converter, 'convert_images_to_webp' ), 10, 2 );
 			add_filter( 'wp_get_attachment_image_src', array( $webp_converter, 'maybe_serve_webp_image' ), 10, 4 );
 		}
 
 		if ( isset( $this->options['file_optimisation']['minifyJS'] ) && (bool) $this->options['file_optimisation']['minifyJS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeJS'] ) && ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
-				$exclude_js = explode( "\n", $this->options['file_optimisation']['excludeJS'] );
-				$exclude_js = array_map( 'trim', $exclude_js );
-				$exclude_js = array_filter( $exclude_js );
+				$exclude_js = Util::process_urls( $this->options['file_optimisation']['excludeJS'] );
 
 				$this->exclude_js = array_merge( $this->exclude_js, (array) $exclude_js );
 			}
@@ -105,18 +104,18 @@ class Main {
 
 		if ( isset( $this->options['file_optimisation']['minifyCSS'] ) && (bool) $this->options['file_optimisation']['minifyCSS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCSS'] ) ) {
-				$exclude_css = explode( "\n", $this->options['file_optimisation']['excludeCSS'] );
-				$exclude_css = array_map( 'trim', $exclude_css );
-				$exclude_css = array_filter( $exclude_css );
+				$exclude_css = Util::process_urls( $this->options['file_optimisation']['excludeCSS'] );
 
 				$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
 			}
 
 			add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 		}
-		new Cron();
 
 		add_action( 'wp_head', array( $this, 'add_preload_prefatch_preconnect' ), 1 );
+
+		new Metabox();
+		new Cron();
 	}
 
 	/**
@@ -223,23 +222,23 @@ class Main {
 	public function remove_woocommerce_scripts() {
 		$exclude_url_to_keep_js_css = array();
 		if ( isset( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) && ! empty( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) ) {
-			$exclude_url_to_keep_js_css = explode( "\n", $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] );
-			$exclude_url_to_keep_js_css = array_map( 'trim', $exclude_url_to_keep_js_css );
-			$exclude_url_to_keep_js_css = array_filter( array_unique( $exclude_url_to_keep_js_css ) );
+			$exclude_url_to_keep_js_css = Util::process_urls( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] );
 
-			$current_url = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $_SERVER['REQUEST_URI'] );
+			$current_url = home_url( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $_SERVER['REQUEST_URI'] ) );
 			$current_url = rtrim( $current_url, '/' );
 
+			error_log( '$current_url: ' . $current_url );
 			foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {
 				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
 					$exclude_url = home_url( $exclude_url );
 					$exclude_url = rtrim( $exclude_url, '/' );
 				}
-
+				
 				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
 					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
 					$exclude_prefix = rtrim( $exclude_prefix, '/' );
-
+					
+					error_log( '$exclude_prefix: ' . print_r( $exclude_prefix, true ) );
 					if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
 						return;
 					}
@@ -253,9 +252,7 @@ class Main {
 
 		$remove_css_js_handle = array();
 		if ( isset( $this->options['file_optimisation']['removeCssJsHandle'] ) && ! empty( $this->options['file_optimisation']['removeCssJsHandle'] ) ) {
-			$remove_css_js_handle = explode( "\n", $this->options['file_optimisation']['removeCssJsHandle'] );
-			$remove_css_js_handle = array_map( 'trim', $remove_css_js_handle );
-			$remove_css_js_handle = array_filter( array_unique( $remove_css_js_handle ) );
+			$remove_css_js_handle = Util::process_urls( $this->options['file_optimisation']['removeCssJsHandle'] );
 		}
 
 		if ( ! empty( $remove_css_js_handle ) ) {
@@ -336,9 +333,7 @@ class Main {
 		if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
 
 			if ( isset( $this->options['file_optimisation']['excludeDeferJS'] ) && ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
-				$exclude_defer = explode( "\n", $this->options['file_optimisation']['excludeDeferJS'] );
-				$exclude_defer = array_map( 'trim', $exclude_defer );
-				$exclude_defer = array_filter( $exclude_defer );
+				$exclude_defer = Util::process_urls( $this->options['file_optimisation']['excludeDeferJS'] );
 
 				$exclude_defer = array_merge( $exclude_js, (array) $exclude_defer );
 			} else {
@@ -353,9 +348,7 @@ class Main {
 		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 
 			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
-				$exclude_delay = explode( "\n", $this->options['file_optimisation']['excludeDelayJS'] );
-				$exclude_delay = array_map( 'trim', $exclude_delay );
-				$exclude_delay = array_filter( $exclude_delay );
+				$exclude_delay = Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] );
 
 				$exclude_delay = array_merge( $exclude_js, (array) $exclude_delay );
 			} else {
@@ -398,45 +391,62 @@ class Main {
 		}
 	}
 
+	private function generate_link( $href, $rel, $as = '', $crossorigin = false, $type = '', $media = '' ) {
+		$attributes = array(
+			'rel'  => esc_attr( $rel ),
+			'href' => esc_url( $href ),
+		);
+
+		if ( $as ) {
+			$attributes['as'] = esc_attr( $as );
+		}
+		if ( $crossorigin ) {
+			$attributes['crossorigin'] = 'anonymous';
+		}
+		if ( $type ) {
+			$attributes['type'] = esc_attr( $type );
+		}
+		if ( $media ) {
+			$attributes['media'] = esc_attr( $media );
+		}
+
+		echo '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>' . PHP_EOL;
+	}
 	public function add_preload_prefatch_preconnect() {
+
+		$preload_settings   = $this->options['preload_settings'] ?? array();
+		$image_optimisation = $this->options['image_optimisation'] ?? array();
+
 		// Preconnect origins
-		if ( isset( $this->options['preload_settings']['preconnect'] ) && (bool) $this->options['preload_settings']['preconnect'] ) {
-			if ( isset( $this->options['preload_settings']['preconnectOrigins'] ) && ! empty( $this->options['preload_settings']['preconnectOrigins'] ) ) {
-				$preconnect_origins = explode( "\n", $this->options['preload_settings']['preconnectOrigins'] );
-				$preconnect_origins = array_map( 'trim', $preconnect_origins );
-				$preconnect_origins = array_filter( $preconnect_origins );
+		if ( isset( $preload_settings['preconnect'] ) && (bool) $preload_settings['preconnect'] ) {
+			if ( isset( $preload_settings['preconnectOrigins'] ) && ! empty( $preload_settings['preconnectOrigins'] ) ) {
+				$preconnect_origins = Util::process_urls( $preload_settings['preconnectOrigins'] );
 
 				foreach ( $preconnect_origins as $origin ) {
-					echo '<link rel="preconnect" href="' . esc_url( $origin ) . '" crossorigin="anonymous">';
+					$this->generate_link( $origin, 'preconnect', '', true );
 				}
 			}
 		}
 
 		// Prefetch DNS origins
-		if ( isset( $this->options['preload_settings']['prefetchDNS'] ) && (bool) $this->options['preload_settings']['prefetchDNS'] ) {
-			if ( isset( $this->options['preload_settings']['dnsPrefetchOrigins'] ) && ! empty( $this->options['preload_settings']['dnsPrefetchOrigins'] ) ) {
-				$dns_prefetch_origins = explode( "\n", $this->options['preload_settings']['dnsPrefetchOrigins'] );
-				$dns_prefetch_origins = array_map( 'trim', $dns_prefetch_origins );
-				$dns_prefetch_origins = array_filter( $dns_prefetch_origins );
+		if ( isset( $preload_settings['prefetchDNS'] ) && (bool) $preload_settings['prefetchDNS'] ) {
+			if ( isset( $preload_settings['dnsPrefetchOrigins'] ) && ! empty( $preload_settings['dnsPrefetchOrigins'] ) ) {
+				$dns_prefetch_origins = Util::process_urls( $preload_settings['dnsPrefetchOrigins'] );
 
 				foreach ( $dns_prefetch_origins as $origin ) {
-					echo '<link rel="dns-prefetch" href="' . esc_url( $origin ) . '">';
+					$this->generate_link( $origin, 'dns-prefetch' );
 				}
 			}
 		}
 
 		// Preload fonts
-		if ( isset( $this->options['preload_settings']['preloadFonts'] ) && (bool) $this->options['preload_settings']['preloadFonts'] ) {
-			if ( isset( $this->options['preload_settings']['preloadFontsUrls'] ) && ! empty( $this->options['preload_settings']['preloadFontsUrls'] ) ) {
-				$preload_fonts_urls = explode( "\n", $this->options['preload_settings']['preloadFontsUrls'] );
-				$preload_fonts_urls = array_map( 'trim', $preload_fonts_urls );
-				$preload_fonts_urls = array_filter( $preload_fonts_urls );
+		if ( isset( $preload_settings['preloadFonts'] ) && (bool) $preload_settings['preloadFonts'] ) {
+			if ( isset( $preload_settings['preloadFontsUrls'] ) && ! empty( $preload_settings['preloadFontsUrls'] ) ) {
+				$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
 
 				foreach ( $preload_fonts_urls as $font_url ) {
 
-					if ( ! preg_match( '/^https?:\/\//i', $font_url ) ) {
-						$font_url = content_url( $font_url );
-					}
+					$font_url = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : content_url( $font_url );
 
 					$font_extension = pathinfo( wp_parse_url( $font_url, PHP_URL_PATH ), PATHINFO_EXTENSION );
 					$font_type      = '';
@@ -455,84 +465,58 @@ class Main {
 							$font_type = ''; // Fallback if unknown extension
 					}
 
-					echo '<link rel="preload" href="' . esc_url( $font_url ) . '" as="font" crossorigin="anonymous"' . ( ! empty( $font_type ) ? ' type="' . esc_attr( $font_type ) . '"' : '' ) . '>';
+					$this->generate_link( $font_url, 'preload', 'font', true, $font_type );
 				}
 			}
 		}
 
-		if ( isset( $this->options['preload_settings']['preloadCSS'] ) && (bool) $this->options['preload_settings']['preloadCSS'] ) {
-			if ( isset( $this->options['preload_settings']['preloadCSSUrls'] ) && ! empty( $this->options['preload_settings']['preloadCSSUrls'] ) ) {
-				$preload_css_urls = explode( "\n", $this->options['preload_settings']['preloadCSSUrls'] );
-				$preload_css_urls = array_map( 'trim', $preload_css_urls );
-				$preload_css_urls = array_filter( $preload_css_urls );
+		if ( isset( $preload_settings['preloadCSS'] ) && (bool) $preload_settings['preloadCSS'] ) {
+			if ( isset( $preload_settings['preloadCSSUrls'] ) && ! empty( $preload_settings['preloadCSSUrls'] ) ) {
+				$preload_css_urls = Util::process_urls( $preload_settings['preloadCSSUrls'] );
 
 				foreach ( $preload_css_urls as $css_url ) {
+					$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : content_url( $css_url );
 
-					if ( ! preg_match( '/^https?:\/\//i', $css_url ) ) {
-						$css_url = content_url( $css_url );
-					}
-
-					echo '<link rel="preload" href="' . esc_url( $css_url ) . '" as="style">';
+					$this->generate_link( $css_url, 'preload', 'style' );
 				}
 			}
 		}
 
-		if ( isset( $this->options['image_optimisation']['preloadFrontPageImages'] ) && (bool) $this->options['image_optimisation']['preloadFrontPageImages'] && is_front_page() ) {
-			if ( isset( $this->options['image_optimisation']['preloadFrontPageImagesUrls'] ) && ! empty( $this->options['image_optimisation']['preloadFrontPageImagesUrls'] ) ) {
-				$preload_img_urls = explode( "\n", $this->options['image_optimisation']['preloadFrontPageImagesUrls'] );
-				$preload_img_urls = array_map( 'trim', $preload_img_urls );
-				$preload_img_urls = array_filter( array_unique( $preload_img_urls ) );
+		if ( isset( $image_optimisation['preloadFrontPageImages'] ) && (bool) $image_optimisation['preloadFrontPageImages'] && is_front_page() ) {
+			if ( isset( $image_optimisation['preloadFrontPageImagesUrls'] ) && ! empty( $image_optimisation['preloadFrontPageImagesUrls'] ) ) {
+				$preload_img_urls = Util::process_urls( $image_optimisation['preloadFrontPageImagesUrls'] );
 
 				foreach ( $preload_img_urls as $img_url ) {
-					if ( 0 === strpos( $img_url, 'mobile:' ) ) {
-						$mobile_url = trim( str_replace( 'mobile:', '', $img_url ) );
-
-						if ( 0 !== strpos( $img_url, 'http' ) ) {
-							$mobile_url = content_url( $mobile_url );
-						}
-
-						$mime_type = $this->get_image_mime_type( $mobile_url );
-						echo '<link rel="preload" href="' . esc_url( $mobile_url ) . '" as="image" media="(max-width: 768px)"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
-					} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
-						$desktop_url = trim( str_replace( 'desktop:', '', $img_url ) );
-
-						if ( 0 !== strpos( $img_url, 'http' ) ) {
-							$desktop_url = content_url( $desktop_url );
-						}
-
-						$mime_type = $this->get_image_mime_type( $desktop_url );
-						echo '<link rel="preload" href="' . esc_url( $desktop_url ) . '" as="image" media="(min-width: 769px)"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
-					} else {
-						$img_url = trim( $img_url );
-
-						if ( 0 !== strpos( $img_url, 'http' ) ) {
-							$img_url = content_url( $img_url );
-						}
-
-						$mime_type = $this->get_image_mime_type( $img_url );
-						echo '<link rel="preload" href="' . esc_url( $img_url ) . '" as="image"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
-					}
+					$this->generate_img_preload( $img_url );
 				}
 			}
 		}
 
-		if ( isset( $this->options['image_optimisation']['preloadPostTypeImage'] ) && (bool) $this->options['image_optimisation']['preloadPostTypeImage'] ) {
-			if ( isset( $this->options['image_optimisation']['selectedPostType'] ) && ! empty( $this->options['image_optimisation']['selectedPostType'] ) ) {
-				$selected_post_types = (array) $this->options['image_optimisation']['selectedPostType'];
+		$page_img_urls = get_post_meta( get_the_ID(), '_qtpo_preload_image_url', true );
+
+		if ( ! empty( $page_img_urls ) ) {
+			$page_img_urls = Util::process_urls( $page_img_urls );
+
+			foreach ( $page_img_urls as $img_url ) {
+
+				$this->generate_img_preload( $img_url );
+			}
+		}
+
+		if ( isset( $image_optimisation['preloadPostTypeImage'] ) && (bool) $image_optimisation['preloadPostTypeImage'] ) {
+			if ( isset( $image_optimisation['selectedPostType'] ) && ! empty( $image_optimisation['selectedPostType'] ) ) {
+				$selected_post_types = (array) $image_optimisation['selectedPostType'];
 
 				if ( is_singular( $selected_post_types ) && has_post_thumbnail() ) {
-					global $post;
-					$thumbnail_id = get_post_thumbnail_id( $post );
+					$thumbnail_id = get_post_thumbnail_id();
 
 					if ( $thumbnail_id ) {
 						$exclude_img_urls = array();
-						if ( isset( $this->options['image_optimisation']['excludePostTypeImgUrl'] ) && ! empty( $this->options['image_optimisation']['excludePostTypeImgUrl'] ) ) {
-							$exclude_img_urls = explode( "\n", $this->options['image_optimisation']['excludePostTypeImgUrl'] );
-							$exclude_img_urls = array_map( 'trim', $exclude_img_urls );
-							$exclude_img_urls = array_filter( array_unique( $exclude_img_urls ) );
+						if ( isset( $image_optimisation['excludePostTypeImgUrl'] ) && ! empty( $image_optimisation['excludePostTypeImgUrl'] ) ) {
+							$exclude_img_urls = Util::process_urls( $image_optimisation['excludePostTypeImgUrl'] );
 						}
 
-						if ( 'product' === $post->post_type && class_exists( 'WooCommerce' ) ) {
+						if ( 'product' === get_post_type() && class_exists( 'WooCommerce' ) ) {
 							$image_size = apply_filters( 'woocommerce_gallery_image_size', 'woocommerce_single' );
 							$img_url    = wp_get_attachment_image_url( $thumbnail_id, $image_size );
 
@@ -551,14 +535,12 @@ class Main {
 							}
 						}
 
-						$max_width    = $this->options['image_optimisation']['maxWidthImgSize'] ? $this->options['image_optimisation']['maxWidthImgSize'] : 1480;
+						$max_width    = $image_optimisation['maxWidthImgSize'] ? $image_optimisation['maxWidthImgSize'] : 1480;
 						$exclude_size = array();
 
-						if ( isset( $this->options['image_optimisation']['excludeSize'] ) && ! empty( $this->options['image_optimisation']['excludeSize'] ) ) {
-							$exclude_size = explode( "\n", $this->options['image_optimisation']['excludeSize'] );
-							$exclude_size = array_map( 'trim', $exclude_size );
+						if ( isset( $image_optimisation['excludeSize'] ) && ! empty( $image_optimisation['excludeSize'] ) ) {
+							$exclude_size = Util::process_urls( $image_optimisation['excludeSize'] );
 							$exclude_size = array_map( 'absint', $exclude_size );
-							$exclude_size = array_filter( array_unique( $exclude_size ) );
 						}
 
 						if ( ! $should_exclude ) {
@@ -603,14 +585,12 @@ class Main {
 										$media .= ' and (max-width: ' . $current_width . 'px)';
 									}
 
-									$mime_type = $this->get_image_mime_type( $source['url'] );
-									echo '<link rel="preload" href="' . esc_url( $source['url'] ) . '" as="image" media="' . esc_attr( $media ) . '"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
+									$this->generate_link( $source['url'], 'preload', 'image', false, $this->get_image_mime_type( $source['url'] ), $media );
 
 									$previous_width = $current_width;
 								}
 							} else {
-								$mime_type = $this->get_image_mime_type( $img_url );
-								echo '<link rel="preload" href="' . esc_url( $img_url ) . '" as="image" media="(min-width: 0px)"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
+								$this->generate_link( $img_url, 'preload', 'image', false, $this->get_image_mime_type( $img_url ), '(min-width: 0px)' );
 							}
 						} else {
 							error_log( "Image excluded: $img_url" );
@@ -618,6 +598,34 @@ class Main {
 					}
 				}
 			}
+		}
+	}
+
+	private function generate_img_preload( $img_url ) {
+		if ( 0 === strpos( $img_url, 'mobile:' ) ) {
+			$mobile_url = trim( str_replace( 'mobile:', '', $img_url ) );
+
+			if ( 0 !== strpos( $img_url, 'http' ) ) {
+				$mobile_url = content_url( $mobile_url );
+			}
+
+			$this->generate_link( $mobile_url, 'preload', 'image', false, $this->get_image_mime_type( $mobile_url ), '(max-width: 768px)' );
+		} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
+			$desktop_url = trim( str_replace( 'desktop:', '', $img_url ) );
+
+			if ( 0 !== strpos( $img_url, 'http' ) ) {
+				$desktop_url = content_url( $desktop_url );
+			}
+
+			$this->generate_link( $desktop_url, 'preload', 'image', false, $this->get_image_mime_type( $desktop_url ), '(min-width: 768px)' );
+		} else {
+			$img_url = trim( $img_url );
+
+			if ( 0 !== strpos( $img_url, 'http' ) ) {
+				$img_url = content_url( $img_url );
+			}
+
+			$this->generate_link( $img_url, 'preload', 'image', false, $this->get_image_mime_type( $img_url ) );
 		}
 	}
 
@@ -642,8 +650,6 @@ class Main {
 	}
 
 	public function minify_js( $tag, $handle, $src ) {
-		global $wp_scripts;
-
 		$local_path = Util::get_local_path( $src );
 
 		if ( in_array( $handle, $this->exclude_js, true ) || empty( $src ) || $this->is_js_minified( $local_path ) || is_user_logged_in() ) {

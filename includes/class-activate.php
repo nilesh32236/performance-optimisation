@@ -59,9 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
 
 			// Check if WP_CACHE is already defined
-			if ( strpos( $wp_config_content, "define('WP_CACHE', true);" ) === false &&
-				strpos( $wp_config_content, 'define( "WP_CACHE", true );' ) === false ) {
-
+			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
 				// Insert WP_CACHE just before the line that says "That's all, stop editing!" or at the end.
 				$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
 

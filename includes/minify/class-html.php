@@ -5,6 +5,7 @@ namespace PerformanceOptimise\Inc\Minify;
 use voku\helper\HtmlMin;
 use MatthiasMullie\Minify\CSS as CSSMinifier;
 use MatthiasMullie\Minify\JS as JSMinifier;
+use PerformanceOptimise\Inc\Util;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	die();
@@ -196,9 +197,7 @@ class HTML {
 
 			$exclude_delay = array();
 			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
-				$exclude_delay = explode( "\n", $this->options['file_optimisation']['excludeDelayJS'] );
-				$exclude_delay = array_map( 'trim', $exclude_delay );
-				$exclude_delay = array_filter( $exclude_delay );
+				$exclude_delay = Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] );
 			}
 
 			$should_exclude = false;

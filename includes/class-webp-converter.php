@@ -9,9 +9,7 @@ class WebP_Converter {
 		$this->options = $options;
 
 		if ( isset( $this->options['image_optimisation']['excludeWebPImages'] ) && ! empty( $this->options['image_optimisation']['excludeWebPImages'] ) ) {
-			$exclude_imgs       = explode( "\n", $this->options['image_optimisation']['excludeWebPImages'] );
-			$exclude_imgs       = array_map( 'trim', $exclude_imgs );
-			$this->exclude_imgs = array_filter( array_unique( $exclude_imgs ) );
+			$this->exclude_imgs = Util::process_urls( $this->options['image_optimisation']['excludeWebPImages'] );
 		}
 	}
 

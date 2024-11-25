@@ -46,9 +46,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$exclude_combine_css = array();
 			if ( isset( $this->options['file_optimisation']['excludeCombineCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCombineCSS'] ) ) {
-				$exclude_combine_css = explode( "\n", $this->options['file_optimisation']['excludeCombineCSS'] );
-				$exclude_combine_css = array_map( 'trim', $exclude_combine_css );
-				$exclude_combine_css = array_filter( $exclude_combine_css );
+				$exclude_combine_css = Util::process_urls( $this->options['file_optimisation']['excludeCombineCSS'] );
 			}
 
 			$combined_css = '';
@@ -210,18 +208,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$exclude_imgs = array();
 
 				if ( isset( $this->options['image_optimisation']['excludeWebPImages'] ) && ! empty( $this->options['image_optimisation']['excludeWebPImages'] ) ) {
-					$exclude_imgs = explode( "\n", $this->options['image_optimisation']['excludeWebPImages'] );
-					$exclude_imgs = array_map( 'trim', $exclude_imgs );
-					$exclude_imgs = array_filter( array_unique( $exclude_imgs ) );
+					$exclude_imgs = Util::process_urls( $this->options['image_optimisation']['excludeWebPImages'] );
 				}
 
 				return preg_replace_callback(
 					'#<img\b[^>]*((?:src|srcset)=["\'][^"\']+["\'])[^>]*>#i',
 					function ( $matches ) use ( $exclude_imgs ) {
-						$img_tag   = $matches[0];
-						$attribute = $matches[1];
+						$img_tag = $matches[0];
 
-						error_log( '$img_tag 1 : ' . $img_tag );
 						$updated_img_tag = preg_replace_callback(
 							'#src=["\']([^"\']+)["\']#i',
 							function ( $src_match ) use ( $exclude_imgs ) {
@@ -230,7 +224,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							$img_tag
 						);
 
-						error_log( '$img_tag 2 : ' . $updated_img_tag );
 						$updated_img_tag = preg_replace_callback(
 							'#srcset=["\']([^"\']+)["\']#i',
 							function ( $srcset_match ) use ( $exclude_imgs ) {
@@ -253,7 +246,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							$updated_img_tag
 						);
 
-						error_log( '$img_tag 2 : ' . $updated_img_tag );
 						return $updated_img_tag;
 					},
 					$buffer
@@ -304,9 +296,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$exclude_imgs      = array();
 
 				if ( isset( $this->options['image_optimisation']['excludeImages'] ) && ! empty( $this->options['image_optimisation']['excludeImages'] ) ) {
-					$exclude_imgs = explode( "\n", $this->options['image_optimisation']['excludeImages'] );
-					$exclude_imgs = array_map( 'trim', $exclude_imgs );
-					$exclude_imgs = array_filter( array_unique( $exclude_imgs ) );
+					$exclude_imgs = Util::process_urls( $this->options['image_optimisation']['excludeImages'] );
 				}
 				$img_counter = 0;
 
@@ -469,11 +459,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( isset( $this->options['preload_settings']['enablePreloadCache'] ) && (bool) $this->options['preload_settings']['enablePreloadCache'] ) {
 				if ( isset( $this->options['preload_settings']['excludePreloadCache'] ) && ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
-					$exclude_urls = explode( "\n", $this->options['preload_settings']['excludePreloadCache'] );
-					$exclude_urls = array_map( 'trim', $exclude_urls );
-					$exclude_urls = array_filter( array_unique( $exclude_urls ) );
+					$exclude_urls = Util::process_urls( $this->options['preload_settings']['excludePreloadCache'] );
 
-					$current_url = home_url( $_SERVER['REQUEST_URI'] );
+					$current_url = home_url( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $_SERVER['REQUEST_URI'] ) );
 					$current_url = rtrim( $current_url, '/' );
 
 					foreach ( $exclude_urls as $exclude_url ) {

@@ -82,7 +82,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			return ABSPATH . ltrim( $relative_path, '/' );
 		}
 
-
 		public static function get_js_css_minified_file() {
 			$filesystem = self::init_filesystem();
 			$minify_dir = WP_CONTENT_DIR . '/cache/qtpo/min';
@@ -114,6 +113,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				'js'  => $total_js,
 				'css' => $total_css,
 			);
+		}
+
+		public static function process_urls( $urls ) {
+			return array_filter( array_unique( array_map( 'trim', explode( "\n", $urls ) ) ) );
 		}
 	}
 }

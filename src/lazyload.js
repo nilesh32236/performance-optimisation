@@ -2,44 +2,55 @@ let scriptLoading = false;
 let imgLoaded     = false;
 let scriptLoadPromise;
 
-async function loadScripts() {
-	if (scriptLoading) return scriptLoadPromise;
-	scriptLoading = true;
+const loadScript = (script) => {
+	return new Promise((resolve, reject) => {
+		if ('qtpo/javascript' === script.getAttribute('type')) {
+			script.removeAttribute('type');
+			// script.setAttribute('type', 'text/javascript');
+		}
 
-	const inlineScripts = Array.from(document.querySelectorAll('script[type="qtpo/javascript"], script[qtpo-src]'));
+		const qtpoType = script.getAttribute('qtpo-type');
+		if (qtpoType) {
+			script.removeAttribute('qtpo-type');
+			script.setAttribute('type', qtpoType);
+		}
 
-	const loadScript = (script) => {
-		return new Promise((resolve, reject) => {
+		const src = script.getAttribute('qtpo-src');
+
+		if (src) {
+			script.removeAttribute('qtpo-src');
+			script.setAttribute('src', src);
+
+			script.onload = resolve;
+			script.onerror = reject;
+		} else {
 			if ('qtpo/javascript' === script.getAttribute('type')) {
 				script.removeAttribute('type');
-				script.setAttribute('type', 'text/javascript');
+				// script.setAttribute('type', 'text/javascript');
 			}
-
+	
 			const qtpoType = script.getAttribute('qtpo-type');
 			if (qtpoType) {
 				script.removeAttribute('qtpo-type');
 				script.setAttribute('type', qtpoType);
 			}
 
-			const src = script.getAttribute('qtpo-src');
-
-			if (src) {
-				script.removeAttribute('qtpo-src');
-				script.setAttribute('src', src);
-
-				script.onload = resolve;
-				script.onerror = reject;
-			} else {
-				try {
-					const base64Script = btoa(unescape(encodeURIComponent(script.text)));
-					script.setAttribute('src', `data:text/javascript;base64,${base64Script}`);
-					resolve();
-				} catch (err) {
-					reject(`Error encoding inline script: ${err.message}`);
-				}
+			try {
+				const base64Script = btoa(unescape(encodeURIComponent(script.text)));
+				script.setAttribute('src', `data:text/javascript;base64,${base64Script}`);
+				resolve();
+			} catch (err) {
+				reject(`Error encoding inline script: ${err.message}`);
 			}
-		});
-	};
+		}
+	});
+};
+
+async function loadScripts() {
+	if (scriptLoading) return scriptLoadPromise;
+	scriptLoading = true;
+
+	const inlineScripts = Array.from(document.querySelectorAll('script[type="qtpo/javascript"], script[qtpo-src]'));
 
 	try {
 		// Sequentially process all inline scripts
@@ -72,8 +83,13 @@ if (!scriptLoading) {
 	triggerEvents.forEach((event) => document.addEventListener(event, loadHandler, { once: true }));
 }
 
+if ( ! scriptLoading ) {
+	setTimeout( loadScripts, 6000 );
+}
+
 const loadImages = () => {
 	const lazyloadImages = document.querySelectorAll('img[data-src], img[data-srcset]');
+	imgLoaded = true;
 
 	if ('IntersectionObserver' in window) {
 
