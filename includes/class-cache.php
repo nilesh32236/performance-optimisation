@@ -101,6 +101,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			if ( ! empty( $combined_css ) ) {
+				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: swap;', $combined_css );
+
+				$combined_css = preg_replace_callback(
+					'/@font-face\s*{[^}]*}/',
+					function ( $matches ) {
+						$font_face = $matches[0];
+						if ( strpos( $font_face, 'font-display' ) === false ) {
+							// Add 'font-display: swap;' if it's not already there
+							$font_face = preg_replace( '/(})$/', 'font-display: swap;$1', $font_face );
+						}
+						return $font_face;
+					},
+					$combined_css
+				);
+
 				$css_minifier  = new CSSMinifier( $combined_css );
 				$combined_css  = $css_minifier->minify();
 				$css_file_path = $this->get_cache_file_path( 'css' );
@@ -109,7 +124,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$css_url = $this->get_cache_file_url( 'css' );
 
-				wp_enqueue_style( 'qtpo-combine-css', $css_url, array(), fileatime( $css_file_path ), 'all' );
+				$version = fileatime( $css_file_path );
+				wp_enqueue_style( 'qtpo-combine-css', $css_url, array(), $version, 'all' );
+
+				$css_url_with_version = $css_url . "?ver=$version";
+				echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
 			}
 		}
 
@@ -196,51 +215,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$exclude_imgs = array_filter( array_unique( $exclude_imgs ) );
 				}
 
-				// Replace all image src URLs with their WebP equivalents
 				return preg_replace_callback(
-					'#<img\b[^>]*src=["\']([^"\']+)["\'][^>]*>#i',
+					'#<img\b[^>]*((?:src|srcset)=["\'][^"\']+["\'])[^>]*>#i',
 					function ( $matches ) use ( $exclude_imgs ) {
-						$img_url       = $matches[1];
-						$img_extension = pathinfo( $img_url, PATHINFO_EXTENSION );
+						$img_tag   = $matches[0];
+						$attribute = $matches[1];
 
-						// Skip if the image is already a WebP
-						if ( strtolower( $img_extension ) === 'webp' ) {
-							return $matches[0]; // Return the original image tag
-						}
+						error_log( '$img_tag 1 : ' . $img_tag );
+						$updated_img_tag = preg_replace_callback(
+							'#src=["\']([^"\']+)["\']#i',
+							function ( $src_match ) use ( $exclude_imgs ) {
+								return 'src="' . $this->replace_image_with_webp( $src_match[1], $exclude_imgs ) . '"';
+							},
+							$img_tag
+						);
 
-						if ( ! empty( $exclude_imgs ) ) {
-							foreach ( $exclude_imgs as $exclude_img ) {
-								if ( false !== strpos( $img_url, $exclude_img ) ) {
-									return $matches[0];
-								}
-							}
-						}
+						error_log( '$img_tag 2 : ' . $updated_img_tag );
+						$updated_img_tag = preg_replace_callback(
+							'#srcset=["\']([^"\']+)["\']#i',
+							function ( $srcset_match ) use ( $exclude_imgs ) {
+								$srcset = $srcset_match[1];
 
-						$webp_converter  = new WebP_Converter( $this->options );
-						$webp_img_url    = str_replace( $img_extension, 'webp', $img_url );
-						$webp_image_path = Util::get_local_path( $webp_converter->get_webp_path( $img_url ) );
+								$new_srcset = implode(
+									', ',
+									array_map(
+										function ( $srcset_item ) use ( $exclude_imgs ) {
+											list( $url, $descriptor ) = array_pad( explode( ' ', trim( $srcset_item ), 2 ), 2, '' );
+											$new_url                  = $this->replace_image_with_webp( $url, $exclude_imgs );
+											return $new_url . ( $descriptor ? " $descriptor" : '' );
+										},
+										explode( ',', $srcset )
+									)
+								);
 
-						if ( ! file_exists( $webp_image_path ) ) {
-							$source_image_path = Util::get_local_path( $img_url );
+								return 'srcset="' . esc_attr( $new_srcset ) . '"';
+							},
+							$updated_img_tag
+						);
 
-							if ( file_exists( $source_image_path ) ) {
-								$webp_converter->convert_to_webp( $source_image_path, $webp_image_path );
-							}
-						}
-
-						if ( file_exists( $webp_image_path ) ) {
-							// Replace the original src with the WebP version
-							return str_replace( $img_url, $webp_img_url, $matches[0] );
-						}
-
-						// Return the original image tag if WebP conversion fails
-						return $matches[0];
+						error_log( '$img_tag 2 : ' . $updated_img_tag );
+						return $updated_img_tag;
 					},
 					$buffer
 				);
 			}
 
 			return $buffer;
+		}
+
+		private function replace_image_with_webp( $img_url, $exclude_imgs ) {
+			$img_extension = pathinfo( $img_url, PATHINFO_EXTENSION );
+
+			if ( 'webp' === strtolower( $img_extension ) ) {
+				return $img_url;
+			}
+
+			if ( ! empty( $exclude_imgs ) ) {
+				foreach ( $exclude_imgs as $exclude_img ) {
+					if ( false !== strpos( $img_url, $exclude_img ) ) {
+						return $img_url;
+					}
+				}
+			}
+
+			$webp_converter = new WebP_Converter( $this->options );
+			$webp_img_url   = str_replace( $img_extension, 'webp', $img_url );
+			$webp_img_path  = Util::get_local_path( $webp_converter->get_webp_path( $img_url ) );
+
+			if ( ! file_exists( $webp_img_path ) ) {
+				$source_image_path = Util::get_local_path( $img_url );
+
+				if ( file_exists( $source_image_path ) ) {
+					$webp_converter->convert_to_webp( $source_image_path, $webp_img_path );
+				}
+			}
+
+			if ( file_exists( $webp_img_path ) ) {
+				return $webp_img_url;
+			}
+
+			return $img_url;
 		}
 
 		private function add_delay_load_img( $buffer ) {
@@ -428,7 +482,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						if ( 0 !== strpos( $exclude_url, 'http' ) ) {
 							$exclude_url = home_url( $exclude_url );
 						}
-
 
 						if ( false !== strpos( $exclude_url, '(.*)' ) ) {
 							$exclude_prefix = str_replace( '(.*)', '', $exclude_url );

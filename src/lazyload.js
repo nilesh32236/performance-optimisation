@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', function () {
 				}
 			});
 		}, {
-			rootMargin: '200px'
+			rootMargin: '100px'
 		});
 
 		lazyloadImages.forEach(img => {

@@ -10,7 +10,9 @@ const PreloadSettings = ({ options }) => {
 		prefetchDNS: options?.prefetchDNS || false,
 		dnsPrefetchOrigins: options?.dnsPrefetchOrigins || '',
 		preloadFonts: options?.preloadFonts || false,
-		preloadFontsUrls: options?.preloadFontsUrls || ''
+		preloadFontsUrls: options?.preloadFontsUrls || '',
+		preloadCSS: options?.preloadCSS || false,
+		preloadCSSUrls: options?.preloadCSSUrls || '',
 	});
 
 	const [isLoading, setIsLoading] = useState(false);
@@ -125,6 +127,31 @@ const PreloadSettings = ({ options }) => {
 						placeholder={`Enter fonts for preloading, one per line (e.g., https://example.com/fonts/font.woff2)\n/your-theme/fonts/font.woff2`}
 						name="preloadFontsUrls"
 						value={settings.preloadFontsUrls}
+						onChange={handleChange(setSettings)}
+					/>
+				)}
+			</div>
+
+			{/* Preload CSS */}
+			<div className="checkbox-option">
+				<label>
+					<input
+						type="checkbox"
+						name="preloadCSS"
+						checked={settings.preloadCSS}
+						onChange={handleChange(setSettings)}
+					/>
+					Preload CSS
+				</label>
+				<p className="option-description">
+					Preload CSS to ensure faster rendering and style application.
+				</p>
+				{settings.preloadCSS && (
+					<textarea
+						className="text-area-field"
+						placeholder={`Enter CSS for preloading, one per line (e.g., https://example.com/style.css)\n/your-theme/css/style.css`}
+						name="preloadCSSUrls"
+						value={settings.preloadCSSUrls}
 						onChange={handleChange(setSettings)}
 					/>
 				)}

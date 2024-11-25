@@ -116,7 +116,7 @@ class Main {
 		}
 		new Cron();
 
-		add_action( 'wp_head', array( $this, 'add_preload_prefatch_preconnect' ), 0 );
+		add_action( 'wp_head', array( $this, 'add_preload_prefatch_preconnect' ), 1 );
 	}
 
 	/**
@@ -375,6 +375,29 @@ class Main {
 		return $tag;
 	}
 
+	private function get_image_mime_type( $url ) {
+		// Infer MIME type from URL extension.
+		$extension = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+
+		switch ( $extension ) {
+			case 'jpg':
+			case 'jpeg':
+				return 'image/jpeg';
+			case 'png':
+				return 'image/png';
+			case 'webp':
+				return 'image/webp';
+			case 'gif':
+				return 'image/gif';
+			case 'svg':
+				return 'image/svg+xml';
+			case 'avif':
+				return 'image/avif';
+			default:
+				return '';
+		}
+	}
+
 	public function add_preload_prefatch_preconnect() {
 		// Preconnect origins
 		if ( isset( $this->options['preload_settings']['preconnect'] ) && (bool) $this->options['preload_settings']['preconnect'] ) {
@@ -402,6 +425,58 @@ class Main {
 			}
 		}
 
+		// Preload fonts
+		if ( isset( $this->options['preload_settings']['preloadFonts'] ) && (bool) $this->options['preload_settings']['preloadFonts'] ) {
+			if ( isset( $this->options['preload_settings']['preloadFontsUrls'] ) && ! empty( $this->options['preload_settings']['preloadFontsUrls'] ) ) {
+				$preload_fonts_urls = explode( "\n", $this->options['preload_settings']['preloadFontsUrls'] );
+				$preload_fonts_urls = array_map( 'trim', $preload_fonts_urls );
+				$preload_fonts_urls = array_filter( $preload_fonts_urls );
+
+				foreach ( $preload_fonts_urls as $font_url ) {
+
+					if ( ! preg_match( '/^https?:\/\//i', $font_url ) ) {
+						$font_url = content_url( $font_url );
+					}
+
+					$font_extension = pathinfo( wp_parse_url( $font_url, PHP_URL_PATH ), PATHINFO_EXTENSION );
+					$font_type      = '';
+
+					switch ( strtolower( $font_extension ) ) {
+						case 'woff2':
+							$font_type = 'font/woff2';
+							break;
+						case 'woff':
+							$font_type = 'font/woff';
+							break;
+						case 'ttf':
+							$font_type = 'font/ttf';
+							break;
+						default:
+							$font_type = ''; // Fallback if unknown extension
+					}
+
+					echo '<link rel="preload" href="' . esc_url( $font_url ) . '" as="font" crossorigin="anonymous"' . ( ! empty( $font_type ) ? ' type="' . esc_attr( $font_type ) . '"' : '' ) . '>';
+				}
+			}
+		}
+
+		if ( isset( $this->options['preload_settings']['preloadCSS'] ) && (bool) $this->options['preload_settings']['preloadCSS'] ) {
+			if ( isset( $this->options['preload_settings']['preloadCSSUrls'] ) && ! empty( $this->options['preload_settings']['preloadCSSUrls'] ) ) {
+				$preload_css_urls = explode( "\n", $this->options['preload_settings']['preloadCSSUrls'] );
+				$preload_css_urls = array_map( 'trim', $preload_css_urls );
+				$preload_css_urls = array_filter( $preload_css_urls );
+
+				foreach ( $preload_css_urls as $css_url ) {
+
+					if ( ! preg_match( '/^https?:\/\//i', $css_url ) ) {
+						$css_url = content_url( $css_url );
+					}
+
+					echo '<link rel="preload" href="' . esc_url( $css_url ) . '" as="style">';
+				}
+			}
+		}
+
 		if ( isset( $this->options['image_optimisation']['preloadFrontPageImages'] ) && (bool) $this->options['image_optimisation']['preloadFrontPageImages'] && is_front_page() ) {
 			if ( isset( $this->options['image_optimisation']['preloadFrontPageImagesUrls'] ) && ! empty( $this->options['image_optimisation']['preloadFrontPageImagesUrls'] ) ) {
 				$preload_img_urls = explode( "\n", $this->options['image_optimisation']['preloadFrontPageImagesUrls'] );
@@ -416,7 +491,8 @@ class Main {
 							$mobile_url = content_url( $mobile_url );
 						}
 
-						echo '<link rel="preload" href="' . esc_url( $mobile_url ) . '" as="image" media="(max-width: 768px)">';
+						$mime_type = $this->get_image_mime_type( $mobile_url );
+						echo '<link rel="preload" href="' . esc_url( $mobile_url ) . '" as="image" media="(max-width: 768px)"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
 					} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
 						$desktop_url = trim( str_replace( 'desktop:', '', $img_url ) );
 
@@ -424,7 +500,8 @@ class Main {
 							$desktop_url = content_url( $desktop_url );
 						}
 
-						echo '<link rel="preload" href="' . esc_url( $desktop_url ) . '" as="image" media="(min-width: 769px)">';
+						$mime_type = $this->get_image_mime_type( $desktop_url );
+						echo '<link rel="preload" href="' . esc_url( $desktop_url ) . '" as="image" media="(min-width: 769px)"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
 					} else {
 						$img_url = trim( $img_url );
 
@@ -432,7 +509,8 @@ class Main {
 							$img_url = content_url( $img_url );
 						}
 
-						echo '<link rel="preload" href="' . esc_url( $img_url ) . '" as="image">';
+						$mime_type = $this->get_image_mime_type( $img_url );
+						echo '<link rel="preload" href="' . esc_url( $img_url ) . '" as="image"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
 					}
 				}
 			}
@@ -525,53 +603,18 @@ class Main {
 										$media .= ' and (max-width: ' . $current_width . 'px)';
 									}
 
-									echo '<link rel="preload" href="' . esc_url( $source['url'] ) . '" as="image" media="' . esc_attr( $media ) . '">';
+									$mime_type = $this->get_image_mime_type( $source['url'] );
+									echo '<link rel="preload" href="' . esc_url( $source['url'] ) . '" as="image" media="' . esc_attr( $media ) . '"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
 
 									$previous_width = $current_width;
 								}
 							} else {
-								echo '<link rel="preload" href="' . esc_url( $img_url ) . '" as="image" media="(min-width: 0px)">';
+								$mime_type = $this->get_image_mime_type( $img_url );
+								echo '<link rel="preload" href="' . esc_url( $img_url ) . '" as="image" media="(min-width: 0px)"' . ( ! empty( $mime_type ) ? ' type="' . esc_attr( $mime_type ) . '"' : '' ) . '>';
 							}
 						} else {
 							error_log( "Image excluded: $img_url" );
 						}
-					}
-				}
-			}
-		}
-
-		// Preload fonts
-		if ( isset( $this->options['preload_settings']['preloadFonts'] ) && (bool) $this->options['preload_settings']['preloadFonts'] ) {
-			if ( isset( $this->options['preload_settings']['preloadFontsUrls'] ) && ! empty( $this->options['preload_settings']['preloadFontsUrls'] ) ) {
-				$preload_fonts_urls = explode( "\n", $this->options['preload_settings']['preloadFontsUrls'] );
-				$preload_fonts_urls = array_map( 'trim', $preload_fonts_urls );
-				$preload_fonts_urls = array_filter( $preload_fonts_urls );
-
-				foreach ( $preload_fonts_urls as $font_url ) {
-
-					if ( ! preg_match( '/^https?:\/\//i', $font_url ) ) {
-						$font_url = content_url( $font_url );
-					}
-
-					$font_extension = pathinfo( $font_url, PATHINFO_EXTENSION );
-					$font_type      = '';
-
-					switch ( strtolower( $font_extension ) ) {
-						case 'woff2':
-							$font_type = 'font/woff2';
-							break;
-						case 'woff':
-							$font_type = 'font/woff';
-							break;
-						case 'ttf':
-							$font_type = 'font/ttf';
-							break;
-						default:
-							$font_type = ''; // Fallback if unknown extension
-					}
-
-					if ( ! empty( $font_type ) ) {
-						echo '<link rel="preload" href="' . esc_url( $font_url ) . '" as="font" type="' . esc_attr( $font_type ) . '" crossorigin="anonymous">';
 					}
 				}
 			}
