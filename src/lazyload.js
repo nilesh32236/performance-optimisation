@@ -1,4 +1,5 @@
 let scriptLoading = false;
+let imgLoaded     = false;
 let scriptLoadPromise;
 
 async function loadScripts() {
@@ -71,8 +72,7 @@ if (!scriptLoading) {
 	triggerEvents.forEach((event) => document.addEventListener(event, loadHandler, { once: true }));
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-
+const loadImages = () => {
 	const lazyloadImages = document.querySelectorAll('img[data-src], img[data-srcset]');
 
 	if ('IntersectionObserver' in window) {
@@ -134,5 +134,14 @@ document.addEventListener('DOMContentLoaded', function () {
 		window.addEventListener('scroll', lazyLoadFallback);
 		lazyLoadFallback();
 	}
+}
 
+document.addEventListener('DOMContentLoaded', function () {
+	if (imgLoaded) {
+		setTimeout(() => {
+			loadImages();
+		}, 500);
+	} else {
+		loadImages();
+	}
 });

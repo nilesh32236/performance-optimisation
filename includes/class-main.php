@@ -227,7 +227,7 @@ class Main {
 			$exclude_url_to_keep_js_css = array_map( 'trim', $exclude_url_to_keep_js_css );
 			$exclude_url_to_keep_js_css = array_filter( array_unique( $exclude_url_to_keep_js_css ) );
 
-			$current_url = home_url( $_SERVER['REQUEST_URI'] );
+			$current_url = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $_SERVER['REQUEST_URI'] );
 			$current_url = rtrim( $current_url, '/' );
 
 			foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {
@@ -540,7 +540,7 @@ class Main {
 								$img_url = $img_url[0];
 							}
 						} else {
-							$img_url = wp_get_attachment_image_url( $thumbnail_id, 'medium' );
+							$img_url = wp_get_attachment_image_url( $thumbnail_id, 'blog-single-image' );
 						}
 
 						$should_exclude = false;
