@@ -115,6 +115,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			);
 		}
 
+		public static function get_image_mime_type( $url ) {
+			// Infer MIME type from URL extension.
+			$extension = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+
+			switch ( $extension ) {
+				case 'jpg':
+				case 'jpeg':
+					return 'image/jpeg';
+				case 'png':
+					return 'image/png';
+				case 'webp':
+					return 'image/webp';
+				case 'gif':
+					return 'image/gif';
+				case 'svg':
+					return 'image/svg+xml';
+				case 'avif':
+					return 'image/avif';
+				default:
+					return '';
+			}
+		}
+
+		public static function generate_preload_link( $href, $rel, $as = '', $crossorigin = false, $type = '', $media = '' ) {
+			$attributes = array(
+				'rel'  => esc_attr( $rel ),
+				'href' => esc_url( $href ),
+			);
+
+			if ( $as ) {
+				$attributes['as'] = esc_attr( $as );
+			}
+			if ( $crossorigin ) {
+				$attributes['crossorigin'] = 'anonymous';
+			}
+			if ( $type ) {
+				$attributes['type'] = esc_attr( $type );
+			}
+			if ( $media ) {
+				$attributes['media'] = esc_attr( $media );
+			}
+
+			echo '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>' . PHP_EOL;
+		}
+
 		public static function process_urls( $urls ) {
 			return array_filter( array_unique( array_map( 'trim', explode( "\n", $urls ) ) ) );
 		}

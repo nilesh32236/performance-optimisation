@@ -22,6 +22,8 @@ class Main {
 	);
 	private $filesystem;
 
+	private Image_Optimisation $image_optimisation;
+
 	private $options;
 	/**
 	 * Constructor.
@@ -33,7 +35,8 @@ class Main {
 
 		$this->includes();
 		$this->setup_hooks();
-		$this->filesystem = Util::init_filesystem();
+		$this->filesystem         = Util::init_filesystem();
+		$this->image_optimisation = new Image_Optimisation( $this->options );
 	}
 
 	/**
@@ -52,6 +55,7 @@ class Main {
 		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-js.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cache.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-metabox.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cron.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-rest.php';
 	}
@@ -83,14 +87,6 @@ class Main {
 
 		$rest = new Rest();
 		add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
-
-		if ( isset( $this->options['image_optimisation']['convertToWebP'] ) && (bool) $this->options['image_optimisation']['convertToWebP'] ) {
-			require_once QTPO_PLUGIN_PATH . 'includes/class-webp-converter.php';
-			$webp_converter = new WebP_Converter( $this->options );
-
-			add_filter( 'wp_generate_attachment_metadata', array( $webp_converter, 'convert_images_to_webp' ), 10, 2 );
-			add_filter( 'wp_get_attachment_image_src', array( $webp_converter, 'maybe_serve_webp_image' ), 10, 4 );
-		}
 
 		if ( isset( $this->options['file_optimisation']['minifyJS'] ) && (bool) $this->options['file_optimisation']['minifyJS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeJS'] ) && ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
@@ -233,11 +229,11 @@ class Main {
 					$exclude_url = home_url( $exclude_url );
 					$exclude_url = rtrim( $exclude_url, '/' );
 				}
-				
+
 				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
 					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
 					$exclude_prefix = rtrim( $exclude_prefix, '/' );
-					
+
 					error_log( '$exclude_prefix: ' . print_r( $exclude_prefix, true ) );
 					if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
 						return;
@@ -368,54 +364,9 @@ class Main {
 		return $tag;
 	}
 
-	private function get_image_mime_type( $url ) {
-		// Infer MIME type from URL extension.
-		$extension = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
-
-		switch ( $extension ) {
-			case 'jpg':
-			case 'jpeg':
-				return 'image/jpeg';
-			case 'png':
-				return 'image/png';
-			case 'webp':
-				return 'image/webp';
-			case 'gif':
-				return 'image/gif';
-			case 'svg':
-				return 'image/svg+xml';
-			case 'avif':
-				return 'image/avif';
-			default:
-				return '';
-		}
-	}
-
-	private function generate_link( $href, $rel, $as = '', $crossorigin = false, $type = '', $media = '' ) {
-		$attributes = array(
-			'rel'  => esc_attr( $rel ),
-			'href' => esc_url( $href ),
-		);
-
-		if ( $as ) {
-			$attributes['as'] = esc_attr( $as );
-		}
-		if ( $crossorigin ) {
-			$attributes['crossorigin'] = 'anonymous';
-		}
-		if ( $type ) {
-			$attributes['type'] = esc_attr( $type );
-		}
-		if ( $media ) {
-			$attributes['media'] = esc_attr( $media );
-		}
-
-		echo '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>' . PHP_EOL;
-	}
 	public function add_preload_prefatch_preconnect() {
 
-		$preload_settings   = $this->options['preload_settings'] ?? array();
-		$image_optimisation = $this->options['image_optimisation'] ?? array();
+		$preload_settings = $this->options['preload_settings'] ?? array();
 
 		// Preconnect origins
 		if ( isset( $preload_settings['preconnect'] ) && (bool) $preload_settings['preconnect'] ) {
@@ -423,7 +374,7 @@ class Main {
 				$preconnect_origins = Util::process_urls( $preload_settings['preconnectOrigins'] );
 
 				foreach ( $preconnect_origins as $origin ) {
-					$this->generate_link( $origin, 'preconnect', '', true );
+					Util::generate_preload_link( $origin, 'preconnect', '', true );
 				}
 			}
 		}
@@ -434,7 +385,7 @@ class Main {
 				$dns_prefetch_origins = Util::process_urls( $preload_settings['dnsPrefetchOrigins'] );
 
 				foreach ( $dns_prefetch_origins as $origin ) {
-					$this->generate_link( $origin, 'dns-prefetch' );
+					Util::generate_preload_link( $origin, 'dns-prefetch' );
 				}
 			}
 		}
@@ -465,7 +416,7 @@ class Main {
 							$font_type = ''; // Fallback if unknown extension
 					}
 
-					$this->generate_link( $font_url, 'preload', 'font', true, $font_type );
+					Util::generate_preload_link( $font_url, 'preload', 'font', true, $font_type );
 				}
 			}
 		}
@@ -477,156 +428,12 @@ class Main {
 				foreach ( $preload_css_urls as $css_url ) {
 					$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : content_url( $css_url );
 
-					$this->generate_link( $css_url, 'preload', 'style' );
+					Util::generate_preload_link( $css_url, 'preload', 'style' );
 				}
 			}
 		}
 
-		if ( isset( $image_optimisation['preloadFrontPageImages'] ) && (bool) $image_optimisation['preloadFrontPageImages'] && is_front_page() ) {
-			if ( isset( $image_optimisation['preloadFrontPageImagesUrls'] ) && ! empty( $image_optimisation['preloadFrontPageImagesUrls'] ) ) {
-				$preload_img_urls = Util::process_urls( $image_optimisation['preloadFrontPageImagesUrls'] );
-
-				foreach ( $preload_img_urls as $img_url ) {
-					$this->generate_img_preload( $img_url );
-				}
-			}
-		}
-
-		$page_img_urls = get_post_meta( get_the_ID(), '_qtpo_preload_image_url', true );
-
-		if ( ! empty( $page_img_urls ) ) {
-			$page_img_urls = Util::process_urls( $page_img_urls );
-
-			foreach ( $page_img_urls as $img_url ) {
-
-				$this->generate_img_preload( $img_url );
-			}
-		}
-
-		if ( isset( $image_optimisation['preloadPostTypeImage'] ) && (bool) $image_optimisation['preloadPostTypeImage'] ) {
-			if ( isset( $image_optimisation['selectedPostType'] ) && ! empty( $image_optimisation['selectedPostType'] ) ) {
-				$selected_post_types = (array) $image_optimisation['selectedPostType'];
-
-				if ( is_singular( $selected_post_types ) && has_post_thumbnail() ) {
-					$thumbnail_id = get_post_thumbnail_id();
-
-					if ( $thumbnail_id ) {
-						$exclude_img_urls = array();
-						if ( isset( $image_optimisation['excludePostTypeImgUrl'] ) && ! empty( $image_optimisation['excludePostTypeImgUrl'] ) ) {
-							$exclude_img_urls = Util::process_urls( $image_optimisation['excludePostTypeImgUrl'] );
-						}
-
-						if ( 'product' === get_post_type() && class_exists( 'WooCommerce' ) ) {
-							$image_size = apply_filters( 'woocommerce_gallery_image_size', 'woocommerce_single' );
-							$img_url    = wp_get_attachment_image_url( $thumbnail_id, $image_size );
-
-							if ( is_array( $img_url ) ) {
-								$img_url = $img_url[0];
-							}
-						} else {
-							$img_url = wp_get_attachment_image_url( $thumbnail_id, 'blog-single-image' );
-						}
-
-						$should_exclude = false;
-						foreach ( $exclude_img_urls as $url ) {
-							if ( false !== strpos( $img_url, $url ) ) {
-								$should_exclude = true;
-								break;
-							}
-						}
-
-						$max_width    = $image_optimisation['maxWidthImgSize'] ? $image_optimisation['maxWidthImgSize'] : 1480;
-						$exclude_size = array();
-
-						if ( isset( $image_optimisation['excludeSize'] ) && ! empty( $image_optimisation['excludeSize'] ) ) {
-							$exclude_size = Util::process_urls( $image_optimisation['excludeSize'] );
-							$exclude_size = array_map( 'absint', $exclude_size );
-						}
-
-						if ( ! $should_exclude ) {
-							$srcset = wp_get_attachment_image_srcset( $thumbnail_id );
-
-							if ( $srcset ) {
-								$sources = array_map( 'trim', explode( ',', $srcset ) );
-
-								$parsed_sources = array();
-								foreach ( $sources as $source ) {
-									list( $url, $descriptor ) = array_map( 'trim', explode( ' ', $source ) );
-									$width                    = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
-
-									if ( in_array( (int) $width, $exclude_size, true ) ) {
-										continue;
-									}
-
-									$parsed_sources[] = array(
-										'url'   => $url,
-										'width' => $width,
-									);
-								}
-
-								usort(
-									$parsed_sources,
-									function ( $a, $b ) {
-										return $a['width'] - $b['width'];
-									}
-								);
-
-								$previous_width = 0;
-								foreach ( $parsed_sources as $index => $source ) {
-									$current_width = $source['width'];
-									$next_width    = isset( $parsed_sources[ $index + 1 ] ) ? $parsed_sources[ $index + 1 ]['width'] : null;
-
-									if ( $current_width > $max_width ) {
-										continue;
-									}
-
-									$media = '(min-width: ' . $previous_width . 'px)';
-									if ( $next_width && $next_width <= $max_width ) {
-										$media .= ' and (max-width: ' . $current_width . 'px)';
-									}
-
-									$this->generate_link( $source['url'], 'preload', 'image', false, $this->get_image_mime_type( $source['url'] ), $media );
-
-									$previous_width = $current_width;
-								}
-							} else {
-								$this->generate_link( $img_url, 'preload', 'image', false, $this->get_image_mime_type( $img_url ), '(min-width: 0px)' );
-							}
-						} else {
-							error_log( "Image excluded: $img_url" );
-						}
-					}
-				}
-			}
-		}
-	}
-
-	private function generate_img_preload( $img_url ) {
-		if ( 0 === strpos( $img_url, 'mobile:' ) ) {
-			$mobile_url = trim( str_replace( 'mobile:', '', $img_url ) );
-
-			if ( 0 !== strpos( $img_url, 'http' ) ) {
-				$mobile_url = content_url( $mobile_url );
-			}
-
-			$this->generate_link( $mobile_url, 'preload', 'image', false, $this->get_image_mime_type( $mobile_url ), '(max-width: 768px)' );
-		} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
-			$desktop_url = trim( str_replace( 'desktop:', '', $img_url ) );
-
-			if ( 0 !== strpos( $img_url, 'http' ) ) {
-				$desktop_url = content_url( $desktop_url );
-			}
-
-			$this->generate_link( $desktop_url, 'preload', 'image', false, $this->get_image_mime_type( $desktop_url ), '(min-width: 768px)' );
-		} else {
-			$img_url = trim( $img_url );
-
-			if ( 0 !== strpos( $img_url, 'http' ) ) {
-				$img_url = content_url( $img_url );
-			}
-
-			$this->generate_link( $img_url, 'preload', 'image', false, $this->get_image_mime_type( $img_url ) );
-		}
+		$this->image_optimisation->preload_images();
 	}
 
 	public function minify_css( $tag, $handle, $href ) {

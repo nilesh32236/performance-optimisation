@@ -83,10 +83,6 @@ if (!scriptLoading) {
 	triggerEvents.forEach((event) => document.addEventListener(event, loadHandler, { once: true }));
 }
 
-if ( ! scriptLoading ) {
-	setTimeout( loadScripts, 6000 );
-}
-
 const loadImages = () => {
 	const lazyloadImages = document.querySelectorAll('img[data-src], img[data-srcset]');
 	imgLoaded = true;

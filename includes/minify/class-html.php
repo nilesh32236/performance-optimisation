@@ -28,8 +28,12 @@ class HTML {
 	private string $minified_html;
 
 	private array $options;
+
 	/**
-	 * Minify constructor.
+	 * Constructor
+	 *
+	 * @param string $html The HTML content to minify.
+	 * @param array $options Minification options.
 	 */
 	public function __construct( $html, $options ) {
 		$this->options = (array) $options;
@@ -66,6 +70,7 @@ class HTML {
 			->doRemoveDeprecatedAnchorName( true )
 			->doRemoveDeprecatedScriptCharsetAttribute( true )
 			->doRemoveDefaultMediaTypeFromStyleAndLinkTag( true )
+			->doRemoveDeprecatedTypeFromScriptTag( true )
 			->doRemoveEmptyAttributes( true )
 			->doRemoveValueFromEmptyInput( true )
 			->doSortCssClassNames( true )
@@ -85,10 +90,17 @@ class HTML {
 	private function minify_html( string $html ): string {
 		$html = $this->modify_canonical_link( $html );
 
-		$html = $this->minify_inline_css( $html );
-		$html = $this->minify_inline_js( $html );
+		$content_aray = $this->extract_and_preserve_scripts_template( $html );
+		$html         = $content_aray[0];
+		$scripts      = $content_aray[1];
+		$html         = $this->minify_inline_css( $html );
+		$html         = $this->minify_inline_js( $html );
 
 		$html = $this->html_min->minify( $html );
+
+		if ( ! empty( $scripts ) ) {
+			$html = $this->restore_preserved_scripts_template( $html, $scripts );
+		}
 
 		$html = $this->restore_canonical_link( $html );
 
@@ -112,6 +124,48 @@ class HTML {
 			$html
 		);
 
+	}
+
+	/**
+	 * Extract and preserve scripts to prevent them from being minified.
+	 *
+	 * @param string $html The HTML content.
+	 * @return array Updated HTML and preserved scripts.
+	 */
+	private function extract_and_preserve_scripts_template( $html ) {
+		$scripts = array();
+
+		$html = preg_replace_callback(
+			'#<script\b([^>]*)>(.*?)</script>#is',
+			function ( $matches ) use ( &$scripts ) {
+				$attributes = $matches[1];
+
+				if ( preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches ) ) {
+					$type = $type_matches[2];
+
+					if ( 'text/javascript' !== strtolower( $type ) ) {
+						$scripts[] = $matches[0];
+						return '<script data-qtpo-preserve="' . ( count( $scripts ) - 1 ) . '"></script>';
+					}
+				}
+
+				return $matches[0];
+			},
+			$html
+		);
+
+		return array( $html, $scripts );
+	}
+
+	/**
+	 * Restore preserved scripts.
+	 */
+	private function restore_preserved_scripts_template( $html, $scripts ) {
+		foreach ( $scripts as $index => $script ) {
+			$html = str_replace( '<script data-qtpo-preserve=' . ( $index ) . '></script>', $script, $html );
+		}
+
+		return $html;
 	}
 
 	/**
@@ -188,6 +242,15 @@ class HTML {
 			return '<script' . $attributes . '></script>'; // Return empty script tag if content is empty
 		}
 
+		// Check if type is 'text/javascript' or type is not defined
+		$type_matches = array();
+		preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches );
+
+		if ( isset( $type_matches[2] ) && 'text/javascript' !== $type_matches[2] ) {
+			// If a type attribute exists and is not 'text/javascript', return unmodified content
+			return '<script' . $attributes . '>' . $content . '</script>';
+		}
+
 		$is_json = isset( $content[0] ) && ( '{' === $content[0] || '[' === $content[0] );
 		if ( $is_json && strpos( $attributes, 'application/ld+json' ) !== false ) {
 			return $this->safe_json_encode( $content, $attributes );
@@ -203,12 +266,7 @@ class HTML {
 			$should_exclude = false;
 			if ( ! empty( $exclude_delay ) ) {
 				foreach ( $exclude_delay as $exclude ) {
-					if ( false !== strpos( $attributes, trim( $exclude ) ) ) {
-						$should_exclude = true;
-						break;
-					}
-
-					if ( false !== strpos( $content, trim( $exclude ) ) ) {
+					if ( false !== strpos( $attributes, trim( $exclude ) ) || false !== strpos( $content, trim( $exclude ) ) ) {
 						$should_exclude = true;
 						break;
 					}
