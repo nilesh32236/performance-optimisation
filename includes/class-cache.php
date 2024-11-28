@@ -274,7 +274,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		private function maybe_store_cache() {
-			if ( ! empty( $_SERVER['QUERY_STRING'] ) ) {
+			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
+				preg_match( '/(?:^|&)(s|ver)(?:=|&|$)/', $_SERVER['QUERY_STRING'] )
+			) {
 				return false;
 			}
 
