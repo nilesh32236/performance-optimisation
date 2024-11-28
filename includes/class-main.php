@@ -164,7 +164,7 @@ class Main {
 		$screen = get_current_screen();
 
 		if ( is_admin_bar_showing() ) {
-			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), '1.0.0', true );
+			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), QTPO_VERSION, true );
 			wp_localize_script(
 				'qtpo-admin-bar-script',
 				'qtpoObject',
@@ -179,8 +179,8 @@ class Main {
 			return;
 		}
 
-		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/style-index.css', array(), '1.0.0', 'all' );
-		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-element' ), '1.0.0', true );
+		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/style-index.css', array(), QTPO_VERSION, 'all' );
+		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-element' ), QTPO_VERSION, true );
 
 		$this->add_available_post_types_to_options();
 		wp_localize_script(
@@ -199,7 +199,7 @@ class Main {
 
 	public function enqueue_scripts() {
 		if ( is_admin_bar_showing() ) {
-			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), '1.0.0', true );
+			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), QTPO_VERSION, true );
 			wp_localize_script(
 				'qtpo-admin-bar-script',
 				'qtpoObject',
@@ -211,7 +211,7 @@ class Main {
 		}
 
 		if ( ! is_user_logged_in() ) {
-			wp_enqueue_script( 'qtpo-lazyload', QTPO_PLUGIN_URL . 'src/lazyload.js', array(), '1.0.0', true );
+			wp_enqueue_script( 'qtpo-lazyload', QTPO_PLUGIN_URL . 'src/lazyload.js', array(), QTPO_VERSION, true );
 		}
 	}
 
