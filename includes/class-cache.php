@@ -277,6 +277,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
 				preg_match( '/(?:^|&)(s|ver)(?:=|&|$)/', $_SERVER['QUERY_STRING'] )
 			) {
+                error_log( 'return false' );
 				return false;
 			}
 

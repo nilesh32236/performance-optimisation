@@ -34,7 +34,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 */
 		public static function create(): void {
 
-			error_log( 'create ' );
 			global $wp_filesystem;
 
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
@@ -63,8 +62,7 @@ function is_user_logged_in_without_wp( \$site_url ) {
 	return false;
 }
 
-if ( 
-	! is_user_logged_in_without_wp( \$site_url ) && 
+if ( ! is_user_logged_in_without_wp( \$site_url ) &&
 	( empty( \$_SERVER['QUERY_STRING'] ) || ! preg_match( '/(?:^|&)(s|ver)(?:=|&|$)/', \$_SERVER['QUERY_STRING'] ) )
 ) {
 	if ( file_exists( \$gzip_file_path ) ) {
@@ -110,7 +108,6 @@ PHP;
 			// Write the handler file in the wp-content directory as advanced-cache.php
 			$create_file = $wp_filesystem->put_contents( self::$handler_file, $handler_code, FS_CHMOD_FILE );
 
-			error_log( var_export( $create_file, true ) );
 		}
 
 		/**

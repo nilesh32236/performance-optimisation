@@ -223,7 +223,6 @@ class Main {
 			$current_url = home_url( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $_SERVER['REQUEST_URI'] ) );
 			$current_url = rtrim( $current_url, '/' );
 
-			error_log( '$current_url: ' . $current_url );
 			foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {
 				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
 					$exclude_url = home_url( $exclude_url );
@@ -234,7 +233,6 @@ class Main {
 					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
 					$exclude_prefix = rtrim( $exclude_prefix, '/' );
 
-					error_log( '$exclude_prefix: ' . print_r( $exclude_prefix, true ) );
 					if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
 						return;
 					}
