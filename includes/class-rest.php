@@ -36,6 +36,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'get_recent_activities' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
+				'import_settings'   => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'import_settings' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
 			);
 		}
 
@@ -84,6 +89,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				),
 				$status_code
 			);
+		}
+
+		public function import_settings( \WP_REST_Request $request ) {
+			$data = $request->get_json_params();
+
+			if ( 'import_settings' !== $data['action'] && empty( $data['settings'] ) ) {
+				return $this->send_response( 'invalid action' );
+			}
+
+			if ( ! update_option( 'qtpo_settings', $data['settings'] ) ) {
+				return $this->send_response( 'option update failed', false );
+			}
+			return $this->send_response( 'updated the option successfully' );
 		}
 	}
 }
