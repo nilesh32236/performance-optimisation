@@ -69,6 +69,7 @@ class Img_Converter {
 					$image = imagecreatefrompng( $source_image );
 
 					if ( ! $image ) {
+						$this->update_conversion_status( $source_image, 'failed', $format );
 						error_log( 'Failed to create image from PNG: ' . $source_image );
 						return false;
 					}
@@ -89,14 +90,17 @@ class Img_Converter {
 
 						$image = imagecreatefromwebp( $source_image );
 						if ( ! $image ) {
+							$this->update_conversion_status( $source_image, 'failed', $format );
 							error_log( 'Failed to create image resource from WebP: ' . $source_image );
 							return false;
 						}
 
 						$avif_path = $this->get_img_path( $source_image, 'avif' );
 						if ( imageavif( $image, $avif_path, $quality ) ) {
+							$this->update_conversion_status( $source_image, 'completed', $format );
 							error_log( 'Successfully converted WebP to AVIF: ' . $avif_path );
 						} else {
+							$this->update_conversion_status( $source_image, 'failed', $format );
 							error_log( 'Failed to convert WebP to AVIF: ' . $source_image );
 							imagedestroy( $image );
 							return false;
@@ -104,7 +108,59 @@ class Img_Converter {
 						imagedestroy( $image );
 					}
 					return true;
+				case IMAGETYPE_GIF:
+					if ( ! extension_loaded( 'imagick' ) ) {
+						error_log( 'Imagick extension is not installed.' );
+						return false;
+					}
+
+					try {
+
+						$webp_path = $this->get_img_path( $source_image, 'avif' );
+
+						if ( file_exists( $webp_path ) ) {
+							error_log( 'Webp file already exists: ' . $webp_path );
+							return true;
+						}
+						// Initialize Imagick and read the image file
+						$imagick = new \Imagick();
+						$imagick->readImage( $source_image );
+
+						// Check if the image has transparency (alpha channel)
+						$has_transparency = $imagick->getImageAlphaChannel() === \Imagick::ALPHACHANNEL_ACTIVATE;
+
+						// Set WebP format
+						$imagick->setImageFormat( 'avif' );
+
+						// If transparent, use lossless compression for WebP to retain transparency
+						if ( $has_transparency ) {
+							$imagick->setImageCompressionQuality( $quality );
+							$imagick->setImageAlphaChannel( \Imagick::ALPHACHANNEL_KEEP );  // Keep transparency
+							$imagick->setOption( 'avif:lossless', 'true' );
+						} else {
+							// For non-transparent images, use lossy compression
+							$imagick->setImageCompressionQuality( $quality );
+							$imagick->setOption( 'avif:lossless', 'false' );
+						}
+
+						// Write the WebP file
+						if ( $imagick->writeImages( $webp_path, true ) ) {
+							$this->update_conversion_status( $source_image, 'completed', 'avif' );
+							error_log( 'WebP conversion successful: ' . $webp_path );
+						} else {
+							$this->update_conversion_status( $source_image, 'failed', 'avif' );
+							error_log( 'Failed to convert to WebP: ' . $source_image );
+							return false;
+						}
+
+						$imagick->clear();
+						return true;
+					} catch ( \Exception $e ) {
+						error_log( 'WebP conversion error: ' . $e->getMessage() );
+						return false;
+					}
 				default:
+					$this->update_conversion_status( $source_image, 'failed', $format );
 					error_log( 'Unsupported image type for WebP conversion: ' . $source_image );
 					return false; // Unsupported format
 			}
@@ -117,11 +173,10 @@ class Img_Converter {
 				if ( ! file_exists( $webp_path ) ) {
 					if ( ! function_exists( 'imagewebp' ) || ! imagewebp( $image, $webp_path, $quality ) ) {
 						$success = false;
+						$this->update_conversion_status( $source_image, 'failed', 'webp' );
 						error_log( 'Failed to convert image to WebP: ' . $source_image );
 					} else {
-						$current_count = get_option( 'qtpo_webp_converted', 0 );
-						$new_count     = $current_count + 1;
-						update_option( 'qtpo_webp_converted', $new_count );
+						$this->update_conversion_status( $source_image, 'completed', 'webp' );
 						error_log( 'WebP conversion successful: ' . $webp_path );
 					}
 				}
@@ -132,13 +187,11 @@ class Img_Converter {
 
 				if ( ! file_exists( $avif_path ) ) {
 					if ( ! function_exists( 'imageavif' ) || ! imageavif( $image, $avif_path, $quality ) ) {
+						$this->update_conversion_status( $source_image, 'failed', 'avif' );
 						error_log( 'Failed to convert image to AVIF: ' . $source_image );
 					} else {
-						$current_count = get_option( 'qtpo_avif_converted', 0 );
-						$new_count     = $current_count + 1;
-						update_option( 'qtpo_avif_converted', $new_count );
+						$this->update_conversion_status( $source_image, 'completed', 'avif' );
 						error_log( 'AVIF conversion successful: ' . $avif_path );
-
 					}
 				}
 			}
@@ -149,6 +202,7 @@ class Img_Converter {
 
 			error_log( 'WebP conversion error: ' . $e->getMessage() );
 
+			$this->update_conversion_status( $source_image, 'failed', $format );
 			// Clean up memory if image resource was created
 			if ( is_resource( $image ) ) {
 				imagedestroy( $image );
@@ -212,29 +266,28 @@ class Img_Converter {
 				}
 			}
 
-			// Convert the original image to WebP
-			// $webp_file = $this->get_img_path( $file );
-			$converted = $this->convert_image( $file, $this->format );
-
-			if ( ! $converted ) {
-				error_log( 'Failed to convert original image to WebP: ' . $file );
-				return $metadata;
+			if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
+				$this->add_img_into_queue( $file );
 			}
 
-			// Convert additional image sizes to WebP
+			if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
+				$this->add_img_into_queue( $file, 'avif' );
+			}
+
+			// Queue additional image sizes for conversion
 			if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
 				foreach ( $metadata['sizes'] as $size => $size_data ) {
 					$image_path = $upload_dir['path'] . '/' . $size_data['file'];
-					if ( ! file_exists( $image_path ) ) {
+					if ( file_exists( $image_path ) ) {
+						if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
+							$this->add_img_into_queue( $image_path );
+						}
+
+						if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
+							$this->add_img_into_queue( $image_path, 'avif' );
+						}
+					} else {
 						error_log( 'Image size file not found: ' . $image_path );
-						continue;
-					}
-
-					$size_converted = $this->convert_image( $image_path, $this->format );
-
-					if ( ! $size_converted ) {
-						error_log( 'Failed to convert image size to WebP: ' . $image_path );
-						continue;
 					}
 				}
 			}
@@ -242,7 +295,7 @@ class Img_Converter {
 			return $metadata;
 
 		} catch ( \Exception $e ) {
-			error_log( 'WebP conversion error: ' . $e->getMessage() );
+			error_log( 'Error queuing images for next-gen conversion: ' . $e->getMessage() );
 			return $metadata;
 		}
 	}
@@ -261,7 +314,8 @@ class Img_Converter {
 			return $image;
 		}
 
-		$img_path = Util::get_local_path( $image[0] );
+		$img_path   = Util::get_local_path( $image[0] );
+		$to_convert = false;
 
 		if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
 			if ( false !== strpos( $_SERVER['HTTP_ACCEPT'], 'image/avif' ) ) {
@@ -271,10 +325,7 @@ class Img_Converter {
 					$image[0] = str_replace( pathinfo( $image[0], PATHINFO_EXTENSION ), 'avif', $image[0] );
 					return $image;
 				} else {
-					if ( $this->convert_image( $img_path, 'avif' ) ) {
-						$image[0] = str_replace( pathinfo( $image[0], PATHINFO_EXTENSION ), 'avif', $image[0] );
-						return $image;
-					}
+					$this->add_img_into_queue( $img_path, 'avif' );
 				}
 			}
 		}
@@ -287,14 +338,39 @@ class Img_Converter {
 					$image[0] = str_replace( pathinfo( $image[0], PATHINFO_EXTENSION ), 'webp', $image[0] );
 					return $image;
 				} else {
-					if ( $this->convert_image( $img_path, 'webp' ) ) {
-						$image[0] = str_replace( pathinfo( $image[0], PATHINFO_EXTENSION ), 'webp', $image[0] );
-						return $image;
-					}
+					$this->add_img_into_queue( $img_path );
 				}
 			}
 		}
 
 		return $image;
+	}
+
+	public function update_conversion_status( $img_path, $status = 'completed', $type = 'webp' ) {
+		$img_path = str_replace( ABSPATH, '', $img_path );
+
+		$img_info = get_option( 'qtpo_img_info', array() );
+
+		if ( 'completed' === $status ) {
+			if ( in_array( $img_path, $img_info['pending'] ?? array(), true ) || in_array( $img_path, $img_info['failed'] ?? array(), true ) ) {
+				unset( $img_info['pending'][ $img_path ], $img_info['failed'][ $img_path ] );
+			}
+		}
+		if ( ! in_array( $img_path, $img_info[ $status ][ $type ] ?? array(), true ) ) {
+			$img_info[ $status ][ $type ][] = $img_path;
+			update_option( 'qtpo_img_info', $img_info );
+		}
+	}
+
+	public function add_img_into_queue( $img_path, $type = 'webp' ) {
+		$img_path = str_replace( ABSPATH, '', $img_path );
+
+		$img_info = get_option( 'qtpo_img_info', array() );
+
+		if ( ! in_array( $img_path, $img_info['pending'][ $type ] ?? array(), true ) ) {
+			$img_info['pending'][ $type ][] = $img_path;
+
+			update_option( 'qtpo_img_info', $img_info );
+		}
 	}
 }

@@ -35,7 +35,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$this->preload_post_type_images( $image_optimisation );
 		}
 
-		public function serve_next_gen_images( $buffer ) {
+		public function maybe_serve_next_gen_images( $buffer ) {
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
 				$conversion_format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
 
@@ -127,7 +127,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$source_image_path = Util::get_local_path( $img_url );
 
 					if ( file_exists( $source_image_path ) ) {
-						$img_converter->convert_image( $source_image_path, 'avif' );
+						$img_converter->add_img_into_queue( $source_image_path, 'avif' );
 					}
 				}
 			}
@@ -138,7 +138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$source_image_path = Util::get_local_path( $img_url );
 
 					if ( file_exists( $source_image_path ) ) {
-						$img_converter->convert_image( $source_image_path, 'webp' );
+						$img_converter->add_img_into_queue( $source_image_path );
 					}
 				}
 			}

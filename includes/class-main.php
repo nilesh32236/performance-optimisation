@@ -190,7 +190,7 @@ class Main {
 				'apiUrl'         => get_rest_url( null, 'performance-optimisation/v1/' ),
 				'nonce'          => wp_create_nonce( 'wp_rest' ),
 				'settings'       => $this->options,
-				'webp_converted' => get_option( 'qtpo_webp_converted', 0 ),
+				'image_info'     => get_option( 'qtpo_img_info', array() ),
 				'cache_size'     => Cache::get_cache_size(),
 				'total_js_css'   => Util::get_js_css_minified_file(),
 			),
