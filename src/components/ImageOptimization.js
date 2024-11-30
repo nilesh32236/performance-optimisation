@@ -7,9 +7,10 @@ const ImageOptimization = ({ options }) => {
 		excludeFistImages: options?.excludeFistImages || 0,
 		excludeImages: options?.excludeImages || '',
 		// compressImages: options?.compressImages || false,
-		excludeCompressedImages: options?.excludeCompressedImages || '',
-		convertToWebP: options?.convertToWebP || false,
-		excludeWebPImages: options?.excludeWebPImages || '',
+		// excludeCompressedImages: options?.excludeCompressedImages || '',
+		convertImg: options?.convertImg || false,
+		conversionFormat: options?.conversionFormat || 'webp',
+		excludeConvertImages: options?.excludeConvertImages || '',
 		replacePlaceholderWithSVG: options?.replacePlaceholderWithSVG || false,
 		preloadFrontPageImages: options?.preloadFrontPageImages || '',
 		preloadFrontPageImagesUrls: options?.preloadFrontPageImagesUrls || '',
@@ -129,23 +130,37 @@ const ImageOptimization = ({ options }) => {
 				<label>
 					<input
 						type="checkbox"
-						name="convertToWebP"
-						checked={settings.convertToWebP}
+						name="convertImg"
+						checked={settings.convertImg}
 						onChange={handleChange(setSettings)}
 					/>
-					Convert Images to WebP
+					Enable Image Conversion
 				</label>
 				<p className="option-description">
-					Convert images to WebP format to reduce image size while maintaining quality.
+					Convert images to WebP/AVIF format to reduce image size while maintaining quality.
 				</p>
-				{settings.convertToWebP && (
-					<textarea
-						className="text-area-field"
-						placeholder="Exclude specific images from WebP conversion"
-						name="excludeWebPImages"
-						value={settings.excludeWebPImages}
-						onChange={handleChange(setSettings)}
-					/>
+				{settings.convertImg && (
+					<div>
+						<label className='sub-fields'>
+							Conversion Format:
+							<select
+								name='conversionFormat'
+								value={settings.conversionFormat}
+								onChange={handleChange(setSettings)}
+							>
+								<option value='webp'>WebP</option>
+								<option value='avif'>AVIF	</option>
+								<option value='both'>Both</option>
+							</select>
+						</label>
+						<textarea
+							className="text-area-field"
+							placeholder="Exclude specific images from conversion"
+							name="excludeConvertImages"
+							value={settings.excludeConvertImages}
+							onChange={handleChange(setSettings)}
+						/>
+					</div>
 				)}
 			</div>
 
