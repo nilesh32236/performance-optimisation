@@ -6,7 +6,8 @@ const Dashboard = ({ activities }) => {
 	const totalCacheSize = qtpoSettings.cache_size;
 	const total_js = qtpoSettings.total_js_css.js;
 	const total_css = qtpoSettings.total_js_css.css;
-	const webpConverted = qtpoSettings?.webp_converted?.image_info;
+	// const webpConverted = qtpoSettings?.image_info;
+	const webpConverted = 0;
 	const onClickHandle = (e) => {
 		e.preventDefault();
 		fetch(qtpoSettings.apiUrl + 'clear_cache', {

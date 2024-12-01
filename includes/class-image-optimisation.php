@@ -115,11 +115,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$img_converter = new Img_Converter( $this->options );
 
-			$avif_img_url  = str_replace( $img_extension, 'avif', $img_url );
-			$avif_img_path = Util::get_local_path( $img_converter->get_img_path( $img_url, 'avif' ) );
-
-			$webp_img_url  = str_replace( $img_extension, 'webp', $img_url );
-			$webp_img_path = Util::get_local_path( $img_converter->get_img_path( $img_url, 'webp' ) );
+			$avif_img_path = $img_converter->get_img_path( $img_url, 'avif' );
+			$webp_img_path = $img_converter->get_img_path( $img_url, 'webp' );
 
 			if ( 'avif' === $conversion_format || 'both' === $conversion_format ) {
 				// Convert to AVIF if supported and not already converted
@@ -144,11 +141,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			if ( ( 'avif' === $conversion_format || 'both' === $conversion_format ) && $supports_avif && file_exists( $avif_img_path ) ) {
-				return $avif_img_url;
+				return $img_converter->get_img_url( $img_url, 'avif' );
 			}
 
 			if ( ( 'webp' === $conversion_format || 'both' === $conversion_format ) && $supports_webp && file_exists( $webp_img_path ) ) {
-				return $webp_img_url;
+				return $img_converter->get_img_url( $img_url );
 			}
 
 			// Fallback to original image URL
@@ -315,7 +312,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				return preg_replace_callback(
 					'#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i',
-					function( $matches ) use ( &$img_counter, $exclude_img_count, $exclude_imgs ) {
+					function ( $matches ) use ( &$img_counter, $exclude_img_count, $exclude_imgs ) {
 						$img_counter++;
 
 						$img_tag      = $matches[0];
