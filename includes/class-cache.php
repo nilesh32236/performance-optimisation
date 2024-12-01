@@ -189,7 +189,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$image_optimisation = new Image_Optimisation( $this->options );
 
-			$buffer = $image_optimisation->serve_webp_images( $buffer );
+			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
 			$buffer = $image_optimisation->add_delay_load_img( $buffer );
 
 			if ( isset( $this->options['file_optimisation']['minifyHTML'] ) && (bool) $this->options['file_optimisation']['minifyHTML'] ) {
