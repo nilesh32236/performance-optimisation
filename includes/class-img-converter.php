@@ -285,7 +285,7 @@ class Img_Converter {
 			$converted_img = $path_info['dirname'] . '/' . $path_info['filename'] . '.' . $format;
 
 			// Adjust for the qtpo directory
-			$converted_img = str_replace( WP_CONTENT_URL, WP_CONTENT_URL . '/qtpo/', $converted_img );
+			$converted_img = str_replace( WP_CONTENT_URL, WP_CONTENT_URL . '/qtpo', $converted_img );
 
 			return $converted_img;
 		}

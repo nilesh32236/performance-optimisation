@@ -327,7 +327,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						}
 
 						if ( $exclude_img_count > $img_counter ) {
-							return $matches[0];
+							return preg_replace( '/\sfetchpriority=["\']high["\']/i', '', $matches[0] );;
 						}
 
 						// Check if the img tag already has 'data-src'
