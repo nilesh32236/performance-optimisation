@@ -98,14 +98,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function import_settings( \WP_REST_Request $request ) {
 			$data = $request->get_json_params();
 
-			if ( 'import_settings' !== $data['action'] && empty( $data['settings'] ) ) {
-				return $this->send_response( 'invalid action' );
+			if ( 'import_settings' !== $data['action'] || empty( $data['settings'] ) ) {
+				return $this->send_response( null, false, 400, 'Invalid action or missing settings' );
+			}
+
+			// Retrieve the existing settings
+			$existing_settings = get_option( 'qtpo_settings', array() );
+
+			// Check if the settings are the same
+			if ( $existing_settings === $data['settings'] ) {
+				return $this->send_response( $existing_settings, true, 200, 'No changes detected, settings are already up-to-date' );
 			}
 
 			if ( ! update_option( 'qtpo_settings', $data['settings'] ) ) {
-				return $this->send_response( 'option update failed', false );
+				return $this->send_response( null, false, 500, 'Failed to update settings' );
 			}
-			return $this->send_response( 'updated the option successfully' );
+
+			return $this->send_response( $data['settings'], true, 200, 'Settings updated successfully' );
 		}
 	}
 }
