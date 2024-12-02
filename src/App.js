@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faAngleLeft, faAngleRight, faTachometerAlt, faFileAlt, faImage, faDatabase, faBullseye, faCog } from '@fortawesome/free-solid-svg-icons';
+import { faAngleLeft, faAngleRight, faTachometerAlt, faFileAlt,faTools, faImage, faDatabase, faBullseye, faCog } from '@fortawesome/free-solid-svg-icons';
 import FileOptimization from './components/FileOptimization';
 import MediaOptimization from './components/MediaOptimization';
 import PreloadSettings from './components/PreloadSettings';
 import DatabaseOptimization from './components/DatabaseOptimization';
 import ImageOptimization from './components/ImageOptimization';
 import Dashboard from './components/Dashboard';
+import PluginSettings from './components/PluginSetting';
 import { fetchRecentActivities } from './lib/apiRequest';
 
 const App = () => {
@@ -64,6 +65,8 @@ const App = () => {
 			// 	return <DatabaseOptimization options={qtpoSettings.settings.database_optimization} />;
 			case 'imageOptimization':
 				return <ImageOptimization options={qtpoSettings.settings.image_optimisation} />;
+			case 'tools':
+				return <PluginSettings options={qtpoSettings.settings} />;
 			default:
 				return <Dashboard activities={recentActivities?.activities} />;
 		}
@@ -100,6 +103,10 @@ const App = () => {
 					<li className={activeTab === 'imageOptimization' ? 'active' : ''} onClick={() => setActiveTab('imageOptimization')}>
 						<FontAwesomeIcon className="sidebar-icon" icon={faCog} />
 						{!sidebarCollapsed && ' Image Optimization'}
+					</li>
+					<li className={activeTab === 'Tools' ? 'active' : ''} onClick={() => setActiveTab('tools')}>
+						<FontAwesomeIcon className="sidebar-icon" icon={faTools} />
+						{!sidebarCollapsed && '  Tools'}
 					</li>
 				</ul>
 			</div>
