@@ -296,6 +296,109 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 		}
 
+		public function process_img_tag( $img_tag, $original_src, $exclude_imgs ) {
+			if ( ! empty( $exclude_imgs ) ) {
+				foreach ( $exclude_imgs as $exclude_img ) {
+					if ( false !== strpos( $original_src, $exclude_img ) ) {
+						if ( strpos( $img_tag, 'decoding' ) === false ) {
+							$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 decoding="async"', $img_tag );
+						}
+
+						// if ( false === strpos( $img_tag, 'fetchpriority' ) ) {
+						// 	$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="high"', $img_tag );
+						// }
+
+						// return $img_tag;
+					}
+				}
+			}
+
+			// If the image does not have 'data-src', replace 'src' with 'data-src'
+			if ( strpos( $img_tag, 'data-src' ) === false ) {
+				$img_tag = preg_replace( '#src=["\']([^"\']+)["\']#i', 'data-src="' . $original_src . '"', $img_tag );
+
+				// Replace with SVG placeholder if the option is enabled
+				if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
+					$new_src = $this->generate_svg_base64( $img_tag );
+					if ( ! empty( $new_src ) ) {
+						$img_tag = preg_replace( '#<img\b([^>]*)#i', '<img $1 src="' . $new_src . '"', $img_tag );
+					}
+				}
+
+				// Replace 'srcset' with 'data-srcset' if 'srcset' is present
+				if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
+					$img_tag = preg_replace( '#srcset=["\']([^"\']+)["\']#i', 'data-srcset="' . $srcset_matches[1] . '"', $img_tag );
+				}
+
+				// Skip base64 images to avoid rewriting them
+				if ( preg_match( '#^data:image/#i', $original_src ) ) {
+					return $img_tag;
+				}
+			}
+
+			return $img_tag;
+		}
+
+		// Function to wrap <img> in a <picture> tag, or modify the <picture> if it exists
+		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
+			if ( ! preg_match( '#<picture\b[^>]*>.*?</picture>#is', $matches[0] ) ) {
+				$img_tag = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
+
+				$srcset = '';
+				if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
+					$srcset = $srcset_matches[1];
+				}
+
+				$sizes = '';
+				if ( preg_match( '#sizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
+					$sizes = $sizes_matches[1];
+				}
+
+				$source_tag     = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
+				$should_exclude = true;
+
+				foreach ( $exclude_imgs as $exclude_img ) {
+					if ( false !== strpos( $original_src, $exclude_img ) ) {
+						$should_exclude = false;
+						break;
+					}
+				}
+
+				if ( ! $should_exclude ) {
+					if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
+						if ( ! empty( $srcset ) ) {
+							$source_tag .= ' srcset="' . $srcset . '"';
+						}
+
+						if ( ! empty( $sizes ) ) {
+							$source_tag .= ' sizes="' . $sizes . '"\>';
+						}
+					} else {
+						$source_tag .= ' srcset="' . $original_src . '"\>';
+					}
+				} else {
+					$source_tag .= '\>';
+				}
+
+				// Wrap <img> tag inside <picture>
+				$img_tag = '<picture>' . $source_tag . $img_tag . '</picture>';
+				return $img_tag;
+			} else {
+				preg_match( '#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches );
+				if ( ! empty( $img_matches ) ) {
+					$img_tag      = $img_matches[0]; // Extract <img> tag from <picture>
+					$original_src = $img_matches[2]; // Get the original src attribute
+					$img_tag      = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs ); // Process the <img> tag
+
+					// Replace the modified <img> tag inside the <picture>
+					$matches[0] = preg_replace( '#<img\b[^>]*?>#i', $img_tag, $matches[0] );
+				}
+			}
+
+			return $matches[0];
+		}
+
+		// The main function that adds the delay load image functionality
 		public function add_delay_load_img( $buffer ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 			$exclude_img_count  = $image_optimisation['excludeFistImages'] ?? 0;
@@ -305,65 +408,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$exclude_imgs = Util::process_urls( $image_optimisation['excludeImages'] ?? array() );
 
 				$preload_img_urls = $this->get_preload_images_urls();
-
-				$exclude_imgs = array_unique( array_merge( $exclude_imgs, $preload_img_urls ) );
+				$exclude_imgs     = array_unique( array_merge( $exclude_imgs, $preload_img_urls ) );
 
 				$img_counter = 0;
 
 				return preg_replace_callback(
-					'#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i',
+					'#<picture\b[^>]*>.*?</picture>|<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#is',
 					function ( $matches ) use ( &$img_counter, $exclude_img_count, $exclude_imgs ) {
 						$img_counter++;
 
-						$img_tag      = $matches[0];
-						$original_src = $matches[2];
-
-						if ( ! empty( $exclude_imgs ) ) {
-							foreach ( $exclude_imgs as $exclude_img ) {
-								if ( false !== strpos( $original_src, $exclude_img ) ) {
-									return preg_replace( '/\sfetchpriority=["\']high["\']/i', '', $matches[0] );
-								}
-							}
-						}
-
 						if ( $exclude_img_count > $img_counter ) {
-							return preg_replace( '/\sfetchpriority=["\']high["\']/i', '', $matches[0] );;
+							$exclude_imgs[] = $matches[2];
 						}
 
-						// Check if the img tag already has 'data-src'
-						if ( strpos( $img_tag, 'data-src' ) === false ) {
-							$img_tag = preg_replace(
-								'#src=["\']([^"\']+)["\']#i',
-								'data-src="' . $original_src . '"',
-								$img_tag
-							);
-
-							if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
-								$new_src = $this->generate_svg_base64( $matches[0] ); // Pass the img attributes to generate SVG
-
-								if ( ! empty( $new_src ) ) {
-									$img_tag = preg_replace(
-										'#<img\b([^>]*)#i',
-										'<img $1 src="' . $new_src . '"',
-										$img_tag
-									);
-								}
-							}
-
-							if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
-								$img_tag = preg_replace(
-									'#srcset=["\']([^"\']+)["\']#i',
-									'data-srcset="' . $srcset_matches[1] . '"',
-									$img_tag
-								);
-							}
-
-							if ( preg_match( '#^data:image/#i', $original_src ) ) {
-								return $matches[0];
+						if ( isset( $matches[0] ) ) {
+							if ( preg_match( '#<picture\b[^>]*>.*?</picture>#is', $matches[0] ) ) {
+								return $this->process_picture_tag( $matches, $matches[0], $matches[2], $exclude_imgs );
+							} else {
+								$img_tag      = $matches[0];
+								$original_src = $matches[2];
+								return $this->process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs );
 							}
 						}
 
-						return $img_tag;
+						return $matches[0];
 					},
 					$buffer
 				);

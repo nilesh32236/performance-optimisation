@@ -64,7 +64,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( WP_Filesystem() ) {
 				return $wp_filesystem;
 			} else {
-				return false;
+				new \WP_Filesystem_Direct( null );
+				return $wp_filesystem;
 			}
 		}
 

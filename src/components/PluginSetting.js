@@ -78,7 +78,7 @@ const PluginSetting = ({ options }) => {
 	};
 
 	return (
-		<div>
+		<div className='settings-form'>
 			<h2>Tools</h2>
 			<button className="submit-button" onClick={exportSettings}>
 				Export Settings

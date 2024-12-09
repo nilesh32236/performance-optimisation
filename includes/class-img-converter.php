@@ -93,24 +93,38 @@ class Img_Converter {
 							return false;
 						}
 
-						$image = imagecreatefromwebp( $source_image );
-						if ( ! $image ) {
+						if ( $this->is_animated_webp( $source_image ) ) {
+							error_log( 'Image is an animated WebP: ' . $source_image );
 							$this->update_conversion_status( $source_image, 'failed', $format );
-							error_log( 'Failed to create image resource from WebP: ' . $source_image );
 							return false;
 						}
 
-						$avif_path = $this->get_img_path( $source_image, 'avif' );
-						if ( imageavif( $image, $avif_path, $quality ) ) {
-							$this->update_conversion_status( $source_image, 'completed', $format );
-							error_log( 'Successfully converted WebP to AVIF: ' . $avif_path );
-						} else {
-							$this->update_conversion_status( $source_image, 'failed', $format );
-							error_log( 'Failed to convert WebP to AVIF: ' . $source_image );
+						try {
+							$image = imagecreatefromwebp( $source_image );
+							if ( ! $image ) {
+								$this->update_conversion_status( $source_image, 'failed', $format );
+								error_log( 'Failed to create image resource from WebP: ' . $source_image );
+								return false;
+							}
+
+							$avif_path = $this->get_img_path( $source_image, 'avif' );
+							Util::prepare_cache_dir( dirname( $avif_path ) );
+
+							if ( imageavif( $image, $avif_path, $quality ) ) {
+								$this->update_conversion_status( $source_image, 'completed', $format );
+								error_log( 'Successfully converted WebP to AVIF: ' . $avif_path );
+							} else {
+								$this->update_conversion_status( $source_image, 'failed', $format );
+								error_log( 'Failed to convert WebP to AVIF: ' . $source_image );
+								imagedestroy( $image );
+								return false;
+							}
 							imagedestroy( $image );
+						} catch ( \Exception $e ) {
+							error_log( 'Failed to create webp to avif: ' . $e->getMessage() );
+							$this->update_conversion_status( $source_image, 'failed', $format );
 							return false;
 						}
-						imagedestroy( $image );
 					}
 					return true;
 				case IMAGETYPE_GIF:
@@ -205,6 +219,7 @@ class Img_Converter {
 				$avif_path = $this->get_img_path( $source_image, 'avif' );
 
 				if ( ! file_exists( $avif_path ) ) {
+					Util::prepare_cache_dir( dirname( $avif_path ) );
 					if ( ! function_exists( 'imageavif' ) || ! imageavif( $image, $avif_path, $quality ) ) {
 						$this->update_conversion_status( $source_image, 'failed', 'avif' );
 						error_log( 'Failed to convert image to AVIF: ' . $source_image );
@@ -250,6 +265,24 @@ class Img_Converter {
 		return $image;
 	}
 
+	private function is_animated_webp( $file ) {
+		$file_handle = fopen( $file, 'rb' );
+		if ( ! $file_handle ) {
+			return false;
+		}
+
+		$header = fread( $file_handle, 40 );
+		fclose( $file_handle );
+
+		if ( substr( $header, 0, 4 ) !== 'RIFF' || substr( $header, 8, 4 ) !== 'WEBP' ) {
+			error_log( 'Not a WebP file' );
+			return false;
+		}
+
+		return strpos( $header, 'ANIM' ) !== false;
+	}
+
+
 	/**
 	 * Get the WebP file path.
 	 *
@@ -266,13 +299,13 @@ class Img_Converter {
 
 		// If home_url is present, remove it from the path
 		if ( 0 === strpos( $relative_path, ABSPATH ) ) {
-			$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/qtpo/', $relative_path );
+			$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/qtpo', $relative_path );
 			return $local_path;
 		}
 
 		$relative_path = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $relative_path );
 
-		$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/qtpo/', ABSPATH . ltrim( $relative_path, '/' ) );
+		$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/qtpo', ABSPATH . ltrim( $relative_path, '/' ) );
 
 		return $local_path;
 	}

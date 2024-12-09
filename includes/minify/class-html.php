@@ -143,7 +143,7 @@ class HTML {
 				if ( preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches ) ) {
 					$type = $type_matches[2];
 
-					if ( 'text/javascript' !== strtolower( $type ) ) {
+					if ( 'text/javascript' !== strtolower( $type ) && 'application/ld+json' !== strtolower( $type ) ) {
 						$scripts[] = $matches[0];
 						return '<script data-qtpo-preserve="' . ( count( $scripts ) - 1 ) . '"></script>';
 					}
@@ -238,35 +238,35 @@ class HTML {
 	private function safe_minify_js( string $attributes, string $content ): string {
 		$content = trim( $content );
 
-		if ( empty( $content ) ) {
-			return '<script' . $attributes . '></script>'; // Return empty script tag if content is empty
-		}
+		// if ( empty( $content ) ) {
+		// 	return '<script' . $attributes . '></script>'; // Return empty script tag if content is empty
+		// }
 
 		// Check if type is 'text/javascript' or type is not defined
 		$type_matches = array();
 		preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches );
+
+		$is_json = isset( $content[0] ) && ( '{' === $content[0] || '[' === $content[0] );
+		if ( $is_json || false !== strpos( $attributes, 'application/ld+json' ) ) {
+			return $this->safe_json_encode( $content, $attributes );
+		}
 
 		if ( isset( $type_matches[2] ) && 'text/javascript' !== $type_matches[2] ) {
 			// If a type attribute exists and is not 'text/javascript', return unmodified content
 			return '<script' . $attributes . '>' . $content . '</script>';
 		}
 
-		$is_json = isset( $content[0] ) && ( '{' === $content[0] || '[' === $content[0] );
-		if ( $is_json && strpos( $attributes, 'application/ld+json' ) !== false ) {
-			return $this->safe_json_encode( $content, $attributes );
-		}
-
 		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 
-			$exclude_delay = array();
-			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
-				$exclude_delay = Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] );
-			}
+			$exclude_delay = array_merge( array( 'qtpo-lazyload', 'data-qtpo-preserve' ), Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() ) );
 
 			$should_exclude = false;
 			if ( ! empty( $exclude_delay ) ) {
 				foreach ( $exclude_delay as $exclude ) {
-					if ( false !== strpos( $attributes, trim( $exclude ) ) || false !== strpos( $content, trim( $exclude ) ) ) {
+					if (
+						false !== strpos( $attributes, trim( $exclude ) ) ||
+						false !== strpos( $content, trim( $exclude ) )
+						) {
 						$should_exclude = true;
 						break;
 					}
@@ -307,6 +307,7 @@ class HTML {
 	 * @return string The encoded JSON-LD or original content if an error occurs.
 	 */
 	private function safe_json_encode( string $content, string $attributes ): string {
+		error_log( '$content: ' . $content );
 		try {
 			return '<script' . $attributes . '>' . wp_json_encode( json_decode( $content, true ) ) . '</script>';
 		} catch ( \Exception $e ) {
