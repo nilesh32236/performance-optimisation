@@ -40,7 +40,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// Create the final directory
 				if ( ! $wp_filesystem->mkdir( $cache_dir, FS_CHMOD_DIR ) ) {
-					error_log( "Failed to create directory using WP_Filesystem: $cache_dir" );
+					// error_log( "Failed to create directory using WP_Filesystem: $cache_dir" );
 					return false;
 				}
 			}
@@ -139,14 +139,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 		}
 
-		public static function generate_preload_link( $href, $rel, $as = '', $crossorigin = false, $type = '', $media = '' ) {
+		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '' ) {
 			$attributes = array(
 				'rel'  => esc_attr( $rel ),
 				'href' => esc_url( $href ),
 			);
 
-			if ( $as ) {
-				$attributes['as'] = esc_attr( $as );
+			if ( $resource_type ) {
+				$attributes['as'] = esc_attr( $resource_type );
 			}
 			if ( $crossorigin ) {
 				$attributes['crossorigin'] = 'anonymous';
@@ -158,6 +158,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$attributes['media'] = esc_attr( $media );
 			}
 
+			// Attributes are sanitized earlier in the code; output is safe.
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			echo '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>' . PHP_EOL;
 		}
 

@@ -24,12 +24,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private $options;
 
 		public function __construct() {
-			$this->domain         = sanitize_text_field( $_SERVER['HTTP_HOST'] );
+			// Check and sanitize $_SERVER['HTTP_HOST']
+			$this->domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+
+			// Define cache root directory and URL
 			$this->cache_root_dir = WP_CONTENT_DIR . self::CACHE_DIR;
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
-			$this->url_path       = trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' );
-			$this->filesystem     = Util::init_filesystem();
-			$this->options        = get_option( 'qtpo_settings', array() );
+
+			// Check and sanitize $_SERVER['REQUEST_URI']
+			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			$this->url_path = trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' );
+
+			// Initialize filesystem and options
+			$this->filesystem = Util::init_filesystem();
+			$this->options    = get_option( 'qtpo_settings', array() );
 		}
 
 		public function combine_css() {
@@ -166,16 +174,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			try {
-				ob_start(
-					function ( $buffer ) use ( $file_path ) {
-						return $this->process_buffer( $buffer, $file_path );
-					}
-				);
-
-			} catch ( \Exception $e ) {
-				error_log( 'Error generating static HTML: ' . $e->getMessage() );
-			}
+			ob_start(
+				function ( $buffer ) use ( $file_path ) {
+					return $this->process_buffer( $buffer, $file_path );
+				}
+			);
 		}
 
 		/**
@@ -220,7 +223,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool
 		 */
 		private function is_not_cacheable(): bool {
-			$path_info = pathinfo( trim( wp_parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH ), '/' ), PATHINFO_EXTENSION );
+			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			$parsed_path = wp_parse_url( $request_uri, PHP_URL_PATH );
+			$path_info   = pathinfo( trim( $parsed_path, '/' ), PATHINFO_EXTENSION );
 			return is_404() || ! empty( $path_info );
 		}
 
@@ -263,21 +268,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->prepare_cache_dir();
 			$gzip_file_path = $file_path . '.gz';
 
-			if ( ! $this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE ) ) {
-				error_log( 'Error writing static ' . $type . ' file.' );
-			}
+			$this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
 
 			$gzip_output = gzencode( $buffer, 9 );
-			if ( ! $this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE ) ) {
-				error_log( 'Error writing gzipped static ' . $type . ' file.' );
-			}
+			$this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
 		}
 
 		private function maybe_store_cache() {
 			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
-				preg_match( '/(?:^|&)(s|ver)(?:=|&|$)/', $_SERVER['QUERY_STRING'] )
+				preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
 			) {
-                error_log( 'return false' );
 				return false;
 			}
 
@@ -285,7 +285,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( isset( $this->options['preload_settings']['excludePreloadCache'] ) && ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
 					$exclude_urls = Util::process_urls( $this->options['preload_settings']['excludePreloadCache'] );
 
-					$current_url = home_url( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $_SERVER['REQUEST_URI'] ) );
+					$current_url = home_url( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ) ) ) );
 					$current_url = rtrim( $current_url, '/' );
 
 					foreach ( $exclude_urls as $exclude_url ) {
@@ -330,7 +330,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->delete_cache_files( $css_file_path );
 
 			if ( ! wp_next_scheduled( 'qtpo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + rand( 0, 5 ), 'qtpo_generate_static_page', array( $page_id ) );
+				wp_schedule_single_event( time() + \wp_rand( 0, 5 ), 'qtpo_generate_static_page', array( $page_id ) );
 			}
 		}
 

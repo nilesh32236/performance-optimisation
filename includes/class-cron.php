@@ -38,7 +38,7 @@ class Cron {
 	public function add_custom_cron_interval( $schedules ): array {
 		$schedules['every_5_hours'] = array(
 			'interval' => 5 * 60 * 60,
-			'display'  => __( 'Every 5 Hours' ),
+			'display'  => __( 'Every 5 Hours', 'performance-optimisation' ),
 		);
 		return $schedules;
 	}
@@ -120,7 +120,7 @@ class Cron {
 			}
 
 			if ( ! wp_next_scheduled( 'qtpo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + rand( 0, 3600 ), 'qtpo_generate_static_page', array( $page_id ) );
+				wp_schedule_single_event( time() + \wp_rand( 0, 3600 ), 'qtpo_generate_static_page', array( $page_id ) );
 			}
 		}
 	}

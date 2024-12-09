@@ -21,7 +21,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		public function add_metabox() {
 			add_meta_box(
 				'preload_image_metabox',
-				__( 'Preload Image URL', 'performance-optimise' ),
+				__( 'Preload Image URL', 'performance-optimisation' ),
 				array( $this, 'render_metabox' ),
 				'',
 				'side',
@@ -55,7 +55,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 */
 		public function save_metabox( $post_id ) {
 			// Verify the nonce
-			if ( ! isset( $_POST['qtpo_preload_image_nonce'] ) || ! wp_verify_nonce( $_POST['qtpo_preload_image_nonce'], 'save_preload_image_url' ) ) {
+			if ( ! isset( $_POST['qtpo_preload_image_nonce'] ) ||
+			! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['qtpo_preload_image_nonce'] ) ), 'save_preload_image_url' ) ) {
 				return;
 			}
 
@@ -73,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 			// Sanitize and save the data
 			if ( isset( $_POST['qtpo_preload_image_url'] ) ) {
-				$preload_urls = sanitize_textarea_field( $_POST['qtpo_preload_image_url'] );
+				$preload_urls = sanitize_textarea_field( wp_unslash( $_POST['qtpo_preload_image_url'] ) );
 				update_post_meta( $post_id, '_qtpo_preload_image_url', $preload_urls );
 			}
 		}

@@ -39,9 +39,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
 				$conversion_format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
 
+				$http_accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? wp_unslash( $_SERVER['HTTP_ACCEPT'] ) : '';
+
 				// Check if the browser supports WebP
-				$supports_avif = strpos( $_SERVER['HTTP_ACCEPT'], 'image/avif' ) !== false;
-				$supports_webp = strpos( $_SERVER['HTTP_ACCEPT'], 'image/webp' ) !== false;
+				$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;
+				$supports_webp = strpos( $http_accept, 'image/webp' ) !== false;
 
 				if ( 'avif' === $conversion_format && ! $supports_avif ) {
 					return $buffer; // AVIF is selected but not supported
@@ -194,7 +196,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$image_url        = $this->get_image_url_by_post_type( $thumbnail_id );
 
 			if ( $this->should_exclude_image( $image_url, $exclude_img_urls ) ) {
-				error_log( "Image excluded: $image_url" );
+				// error_log( "Image excluded: $image_url" );
 				return;
 			}
 
@@ -301,14 +303,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				foreach ( $exclude_imgs as $exclude_img ) {
 					if ( false !== strpos( $original_src, $exclude_img ) ) {
 						if ( strpos( $img_tag, 'decoding' ) === false ) {
-							$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 decoding="async"', $img_tag );
+							$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 decoding="sync"', $img_tag );
 						}
 
-						// if ( false === strpos( $img_tag, 'fetchpriority' ) ) {
-						// 	$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="high"', $img_tag );
-						// }
+						if ( false === strpos( $img_tag, 'fetchpriority' ) ) {
+							$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="high"', $img_tag );
+						}
 
-						// return $img_tag;
+						return $img_tag;
 					}
 				}
 			}
@@ -319,10 +321,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				// Replace with SVG placeholder if the option is enabled
 				if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
+					// phpcs:disable PluginCheck.CodeAnalysis.ImageFunctions.NonEnqueuedImage
+					// Directly modifying the image tag is necessary here because we are replacing
+					// the image's `src` attribute with a dynamically generated SVG placeholder.
+					// This operation cannot be handled by `wp_get_attachment_image()` or similar functions.
+
 					$new_src = $this->generate_svg_base64( $img_tag );
 					if ( ! empty( $new_src ) ) {
 						$img_tag = preg_replace( '#<img\b([^>]*)#i', '<img $1 src="' . $new_src . '"', $img_tag );
 					}
+
+					// phpcs:enable
 				}
 
 				// Replace 'srcset' with 'data-srcset' if 'srcset' is present
@@ -412,6 +421,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				$img_counter = 0;
 
+				// The following code dynamically modifies <img> tags for lazy loading optimization.
+				// This approach is necessary for advanced optimizations such as adding placeholders or replacing 'src' with 'data-src'.
+				// PHPCS: ignore PluginCheck.CodeAnalysis.ImageFunctions.NonEnqueuedImage -- Images are being processed directly for custom functionality.
 				return preg_replace_callback(
 					'#<picture\b[^>]*>.*?</picture>|<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#is',
 					function ( $matches ) use ( &$img_counter, $exclude_img_count, $exclude_imgs ) {
@@ -543,8 +555,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								} else {
 									$preload_img_urls[] = $img_url;
 								}
-							} else {
-								error_log( "Image excluded: $img_url" );
 							}
 						}
 					}
@@ -592,6 +602,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$svg_content = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '"><rect width="100%" height="100%" fill="#cfd4db" /></svg>';
 
+			// PHPCS: ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Base64 is used here to embed SVG content directly in the page.
 			return 'data:image/svg+xml;base64,' . base64_encode( $svg_content );
 		}
 	}

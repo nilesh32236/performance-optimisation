@@ -123,7 +123,6 @@ class HTML {
 			},
 			$html
 		);
-
 	}
 
 	/**
@@ -200,8 +199,6 @@ class HTML {
 					$css_minifier = new CSSMinifier( $matches[1] );
 					return '<style>' . $css_minifier->minify() . '</style>';
 				} catch ( \Exception $e ) {
-					// Log the error (optional)
-					error_log( 'CSS minification error: ' . $e->getMessage() );
 					// Return original content if there's an error
 					return $matches[0];
 				}
@@ -237,10 +234,6 @@ class HTML {
 	 */
 	private function safe_minify_js( string $attributes, string $content ): string {
 		$content = trim( $content );
-
-		// if ( empty( $content ) ) {
-		// 	return '<script' . $attributes . '></script>'; // Return empty script tag if content is empty
-		// }
 
 		// Check if type is 'text/javascript' or type is not defined
 		$type_matches = array();
@@ -292,8 +285,6 @@ class HTML {
 			$js_minifier = new JSMinifier( $content );
 			return '<script' . $attributes . '>' . $js_minifier->minify() . '</script>';
 		} catch ( \Exception $e ) {
-			// Log the error (optional)
-			error_log( 'JavaScript minification error: ' . $e->getMessage() );
 			// Return original content if there's an error
 			return '<script' . $attributes . '>' . $content . '</script>';
 		}
@@ -307,12 +298,9 @@ class HTML {
 	 * @return string The encoded JSON-LD or original content if an error occurs.
 	 */
 	private function safe_json_encode( string $content, string $attributes ): string {
-		error_log( '$content: ' . $content );
 		try {
 			return '<script' . $attributes . '>' . wp_json_encode( json_decode( $content, true ) ) . '</script>';
 		} catch ( \Exception $e ) {
-			// Log the error (optional)
-			error_log( 'JSON decode error: ' . $e->getMessage() );
 			// Return original content if there's an error
 			return '<script' . $attributes . '>' . $content . '</script>';
 		}

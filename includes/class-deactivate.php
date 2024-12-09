@@ -47,12 +47,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * @return void
 		 */
 		private static function remove_wp_cache_constant(): void {
-			$wp_config_path = ABSPATH . 'wp-config.php'; // Path to wp-config.php
-
-			if ( ! file_exists( $wp_config_path ) || ! is_writable( $wp_config_path ) ) {
-				return; // Exit if the file doesn't exist or is not writable
-			}
-
 			global $wp_filesystem;
 
 			Util::init_filesystem();
@@ -61,8 +55,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				return;
 			}
 
+			$wp_config_path = ABSPATH . 'wp-config.php'; // Path to wp-config.php
+
 			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return;
+			}
+
+			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
+				return; // Exit if the file doesn't exist or is not writable
 			}
 
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
