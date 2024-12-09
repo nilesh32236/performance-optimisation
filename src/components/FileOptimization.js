@@ -33,7 +33,7 @@ const FileOptimization = ({ options }) => {
 	}
 	return (
 		<form onSubmit={onSubmit} className="settings-form">
-			<h2>File Optimization</h2>
+			<h2>File Optimization Settings</h2>
 
 			<div className="checkbox-option">
 				<label>

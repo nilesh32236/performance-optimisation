@@ -36,8 +36,14 @@ const loadScript = (script) => {
 			}
 
 			try {
-				const base64Script = btoa(unescape(encodeURIComponent(script.text)));
-				script.setAttribute('src', `data:text/javascript;base64,${base64Script}`);
+				if ( script.text ) {
+					if ( ! script.src ) {
+						const base64Script = btoa(unescape(encodeURIComponent(script.text)));
+						script.setAttribute('src', `data:text/javascript;base64,${base64Script}`);
+					}
+				} else {
+					console.log( script );
+				}
 				resolve();
 			} catch (err) {
 				reject(`Error encoding inline script: ${err.message}`);

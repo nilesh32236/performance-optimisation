@@ -87,9 +87,7 @@ class Cron {
 
 		$options = get_option( 'qtpo_settings', array() );
 
-		if ( isset( $options['preload_settings']['excludePreloadCache'] ) && ! empty( $options['preload_settings']['excludePreloadCache'] ) ) {
-			$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
-		}
+		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
 
 		foreach ( $pages as $page_id ) {
 			$page_url       = get_permalink( $page_id );

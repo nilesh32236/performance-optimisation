@@ -21,22 +21,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 		private function get_routes() {
 			return array(
-				'clear_cache'       => array(
+				'clear_cache'            => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'clear_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'update_settings'   => array(
+				'update_settings'        => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'update_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'recent_activities' => array(
+				'optimise_image'         => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'optimise_image' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
+				'delete_optimised_image' => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'delete_optimised_image' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
+				'recent_activities'      => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'get_recent_activities' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'import_settings'   => array(
+				'import_settings'        => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'import_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
@@ -82,6 +92,92 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$data = Log::get_recent_activities( $params );
 
 			return new \WP_REST_Response( $data, 200 );
+		}
+
+		public function optimise_image( \WP_REST_Request $request ) {
+			$options       = get_option( 'qtpo_settings', array() );
+			$img_converter = new Img_Converter( $options );
+			$params        = $request->get_params();
+
+			$webp_images = $params['webp'] ?? array();
+			$avif_images = $params['avif'] ?? array();
+
+			$response = array(
+				'webp' => array(
+					'converted' => array(),
+					'failed'    => array(),
+					'skipped'   => array(),
+				),
+				'avif' => array(
+					'converted' => array(),
+					'failed'    => array(),
+					'skipped'   => array(),
+				),
+			);
+
+			foreach ( $webp_images as $webp_image ) {
+				$source_path = ABSPATH . $webp_image;
+
+				if ( file_exists( $source_path ) ) {
+					$result = $img_converter->convert_image( $source_path, 'webp' );
+					if ( $result ) {
+						$response['webp']['converted'][] = $webp_image;
+					} else {
+						$response['webp']['failed'][] = $webp_image;
+					}
+				} else {
+					$response['webp']['skipped'][] = $webp_image;
+				}
+			}
+
+			foreach ( $avif_images as $avif_image ) {
+				$source_path = ABSPATH . $avif_image;
+
+				if ( file_exists( $source_path ) ) {
+					$result = $img_converter->convert_image( $source_path, 'avif' );
+					if ( $result ) {
+						$response['avif']['converted'][] = $avif_image;
+					} else {
+						$response['avif']['failed'][] = $avif_image;
+					}
+				} else {
+					$response['avif']['skipped'][] = $avif_image;
+				}
+			}
+
+			Cache::clear_cache();
+			return new \WP_REST_Response( $response, 200 );
+		}
+
+		public function delete_optimised_image() {
+			global $wp_filesystem;
+			if ( ! Util::init_filesystem() ) {
+				require_once ABSPATH . 'wp-admin/includes/file.php';
+				new \WP_Filesystem_Direct( null );
+			}
+
+			$qtpo_dir = WP_CONTENT_DIR . '/qtpo';
+
+			if ( $wp_filesystem && $wp_filesystem->is_dir( $qtpo_dir ) ) {
+				if ( $wp_filesystem->delete( $qtpo_dir, true ) ) {
+					Cache::clear_cache();
+					return new \WP_REST_Response(
+						array(
+							'success' => true,
+							'message' => 'Optimized images folder deleted successfully.',
+						),
+						200
+					);
+				}
+			} else {
+				return new \WP_REST_Response(
+					array(
+						'success' => false,
+						'message' => 'Optimized images folder does not exist.',
+					),
+					404
+				);
+			}
 		}
 
 		private function send_response( $data, $success = true, $status_code = 200, $message = null ) {

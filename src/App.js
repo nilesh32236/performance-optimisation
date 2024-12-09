@@ -1,28 +1,29 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faAngleLeft, faAngleRight, faTachometerAlt, faFileAlt,faTools, faImage, faDatabase, faBullseye, faCog } from '@fortawesome/free-solid-svg-icons';
+import { faAngleLeft, faAngleRight, faTachometerAlt, faFileAlt, faTools, faBullseye, faCog, faBars } from '@fortawesome/free-solid-svg-icons';
 import FileOptimization from './components/FileOptimization';
-import MediaOptimization from './components/MediaOptimization';
 import PreloadSettings from './components/PreloadSettings';
-import DatabaseOptimization from './components/DatabaseOptimization';
 import ImageOptimization from './components/ImageOptimization';
-import Dashboard from './components/Dashboard';
 import PluginSettings from './components/PluginSetting';
+import Dashboard from './components/Dashboard';
 import { fetchRecentActivities } from './lib/apiRequest';
 
 const App = () => {
 	const [activeTab, setActiveTab] = useState('dashboard');
 	const [transition, setTransition] = useState(false);
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+	const [sidebarHide, setSidebarHide] = useState(false);
 	const [recentActivities, setRecentActivities] = useState([]);
 	const hasFetchedActivities = useRef(false);
 
 	useEffect(() => {
 		const handleResize = () => {
 			if (window.innerWidth < 768) {
-				setSidebarCollapsed(true);
+				setSidebarCollapsed(true);  // Collapse sidebar on mobile initially
+				setSidebarHide(true)
 			} else {
-				setSidebarCollapsed(false);
+				setSidebarCollapsed(false);  // Expand sidebar on desktop
+				setSidebarHide(false)
 			}
 		};
 
@@ -45,7 +46,6 @@ const App = () => {
 			}
 		};
 		fetchActivities();
-		// Add transition when tab changes
 		setTransition(true);
 		const timeout = setTimeout(() => {
 			setTransition(false);
@@ -57,12 +57,8 @@ const App = () => {
 		switch (activeTab) {
 			case 'fileOptimization':
 				return <FileOptimization options={qtpoSettings.settings.file_optimisation} />;
-			// case 'media':
-			// 	return <MediaOptimization options={qtpoSettings.settings.media_optimisation} />;
 			case 'preload':
 				return <PreloadSettings options={qtpoSettings.settings.preload_settings} />;
-			// case 'database':
-			// 	return <DatabaseOptimization options={qtpoSettings.settings.database_optimization} />;
 			case 'imageOptimization':
 				return <ImageOptimization options={qtpoSettings.settings.image_optimisation} />;
 			case 'tools':
@@ -74,10 +70,17 @@ const App = () => {
 
 	return (
 		<div className="container">
-			<div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
-				<button className="toggle-sidebar" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
+			{/* Mobile menu icon */}
+			{/* <button className="hamburger-menu" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
+				<FontAwesomeIcon icon={sidebarCollapsed ? faAngleRight : faAngleLeft} />
+			</button> */}
+			<button className="hamburger-menu" onClick={() => setSidebarHide(!sidebarHide)} style={{ left: sidebarHide ? '0px' : '110px' }}>
+				<FontAwesomeIcon icon={sidebarHide ? faAngleRight: faAngleLeft} />
+			</button>
+			<div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${sidebarHide ? 'hide' : ''}`}>
+				{/* <button className="toggle-sidebar" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
 					<FontAwesomeIcon icon={sidebarCollapsed ? faAngleRight : faAngleLeft} />
-				</button>
+				</button> */}
 				<h3>Performance Settings</h3>
 				<ul>
 					<li className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>
@@ -88,28 +91,21 @@ const App = () => {
 						<FontAwesomeIcon className="sidebar-icon" icon={faFileAlt} />
 						{!sidebarCollapsed && ' File Optimization'}
 					</li>
-					{/* <li className={activeTab === 'media' ? 'active' : ''} onClick={() => setActiveTab('media')}>
-						<FontAwesomeIcon className="sidebar-icon" icon={faImage} />
-						{!sidebarCollapsed && ' Media Optimization'}
-					</li> */}
 					<li className={activeTab === 'preload' ? 'active' : ''} onClick={() => setActiveTab('preload')}>
 						<FontAwesomeIcon className="sidebar-icon" icon={faBullseye} />
 						{!sidebarCollapsed && ' Preload'}
 					</li>
-					{/* <li className={activeTab === 'database' ? 'active' : ''} onClick={() => setActiveTab('database')}>
-						<FontAwesomeIcon className="sidebar-icon" icon={faDatabase} />
-						{!sidebarCollapsed && ' Database Optimization'}
-					</li> */}
 					<li className={activeTab === 'imageOptimization' ? 'active' : ''} onClick={() => setActiveTab('imageOptimization')}>
 						<FontAwesomeIcon className="sidebar-icon" icon={faCog} />
 						{!sidebarCollapsed && ' Image Optimization'}
 					</li>
 					<li className={activeTab === 'Tools' ? 'active' : ''} onClick={() => setActiveTab('tools')}>
 						<FontAwesomeIcon className="sidebar-icon" icon={faTools} />
-						{!sidebarCollapsed && '  Tools'}
+						{!sidebarCollapsed && ' Tools'}
 					</li>
 				</ul>
 			</div>
+
 			<div className={`content ${transition ? 'fadeIn' : ''}`}>
 				{renderContent()}
 			</div>
