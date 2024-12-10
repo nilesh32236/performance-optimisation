@@ -32,6 +32,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 */
 		public static function init(): void {
 
+			self::unschedule_crons();
+
 			require_once QTPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 
 			Advanced_Cache_Handler::remove();
@@ -39,6 +41,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			// Remove WP_CACHE constant from wp-config.php
 			self::remove_wp_cache_constant();
 			new Log( 'Plugin deactivated on ' );
+			Cache::clear_cache();
+		}
+
+		/**
+		 * Unschedule cron jobs.
+		 *
+		 * This method checks if the cron jobs are scheduled and unschedules them if found.
+		 *
+		 * @return void
+		 */
+		private static function unschedule_crons(): void {
+			// Unschedule the 'qtpo_page_cron_hook' event if it is scheduled
+			$timestamp = wp_next_scheduled( 'qtpo_page_cron_hook' );
+			if ( $timestamp ) {
+				wp_unschedule_event( $timestamp, 'qtpo_page_cron_hook' );
+			}
+
+			// Unschedule the 'qtpo_img_conversation' event if it is scheduled
+			$timestamp = wp_next_scheduled( 'qtpo_img_conversation' );
+			if ( $timestamp ) {
+				wp_unschedule_event( $timestamp, 'qtpo_img_conversation' );
+			}
+
+			$timestamp = wp_next_scheduled( 'qtpo_generate_static_page' );
+			if ( $timestamp ) {
+				wp_unschedule_event( $timestamp, 'qtpo_img_conversation' );
+			}
 		}
 
 		/**
@@ -47,12 +76,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * @return void
 		 */
 		private static function remove_wp_cache_constant(): void {
-			$wp_config_path = ABSPATH . 'wp-config.php'; // Path to wp-config.php
-
-			if ( ! file_exists( $wp_config_path ) || ! is_writable( $wp_config_path ) ) {
-				return; // Exit if the file doesn't exist or is not writable
-			}
-
 			global $wp_filesystem;
 
 			Util::init_filesystem();
@@ -61,8 +84,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				return;
 			}
 
+			$wp_config_path = ABSPATH . 'wp-config.php'; // Path to wp-config.php
+
 			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return;
+			}
+
+			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
+				return; // Exit if the file doesn't exist or is not writable
 			}
 
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );

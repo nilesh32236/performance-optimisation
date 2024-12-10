@@ -40,7 +40,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// Create the final directory
 				if ( ! $wp_filesystem->mkdir( $cache_dir, FS_CHMOD_DIR ) ) {
-					error_log( "Failed to create directory using WP_Filesystem: $cache_dir" );
+					// error_log( "Failed to create directory using WP_Filesystem: $cache_dir" );
 					return false;
 				}
 			}
@@ -64,7 +64,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( WP_Filesystem() ) {
 				return $wp_filesystem;
 			} else {
-				return false;
+				new \WP_Filesystem_Direct( null );
+				return $wp_filesystem;
 			}
 		}
 
@@ -76,12 +77,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$relative_path = $parsed_url['path'] ?? '';
 
 			// If home_url is present, remove it from the path
-			$relative_path = str_replace( home_url(), '', $relative_path );
+			$relative_path = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $relative_path );
 
 			// Return the full local path
 			return ABSPATH . ltrim( $relative_path, '/' );
 		}
-
 
 		public static function get_js_css_minified_file() {
 			$filesystem = self::init_filesystem();
@@ -114,6 +114,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				'js'  => $total_js,
 				'css' => $total_css,
 			);
+		}
+
+		public static function get_image_mime_type( $url ) {
+			// Infer MIME type from URL extension.
+			$extension = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+
+			switch ( $extension ) {
+				case 'jpg':
+				case 'jpeg':
+					return 'image/jpeg';
+				case 'png':
+					return 'image/png';
+				case 'webp':
+					return 'image/webp';
+				case 'gif':
+					return 'image/gif';
+				case 'svg':
+					return 'image/svg+xml';
+				case 'avif':
+					return 'image/avif';
+				default:
+					return '';
+			}
+		}
+
+		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '' ) {
+			$attributes = array(
+				'rel'  => esc_attr( $rel ),
+				'href' => esc_url( $href ),
+			);
+
+			if ( $resource_type ) {
+				$attributes['as'] = esc_attr( $resource_type );
+			}
+			if ( $crossorigin ) {
+				$attributes['crossorigin'] = 'anonymous';
+			}
+			if ( $type ) {
+				$attributes['type'] = esc_attr( $type );
+			}
+			if ( $media ) {
+				$attributes['media'] = esc_attr( $media );
+			}
+
+			// Attributes are sanitized earlier in the code; output is safe.
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>' . PHP_EOL;
+		}
+
+		public static function process_urls( $urls ) {
+			return array_filter( array_unique( array_map( 'trim', explode( "\n", $urls ) ) ) );
 		}
 	}
 }

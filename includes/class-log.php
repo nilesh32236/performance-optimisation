@@ -8,53 +8,86 @@ class Log {
 
 		$table_name = $wpdb->prefix . 'qtpo_activity_logs';
 
-		$wpdb->insert(
+		/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
+		// Direct query is required for inserting into a custom table.
+		$result = $wpdb->insert(
 			$table_name,
 			array(
-				'activity' => $activity,
+				'activity' => sanitize_text_field( $activity ),
 			),
 			array(
 				'%s',
 			)
 		);
+		/* phpcs:enable */
+
+		if ( $result ) {
+			wp_cache_delete( 'qtpo_activity_logs' );
+		}
 	}
 
+	/**
+	 * Get recent activities with pagination and caching.
+	 *
+	 * @param array $params Pagination parameters, including 'page' and 'per_page'.
+	 * @return array Cached or freshly queried results.
+	 */
 	public static function get_recent_activities( $params ) {
 		global $wpdb;
 
-		$page     = isset( $params['page'] ) ? (int) $params['page'] : 1;
-		$per_page = isset( $params['per_page'] ) ? (int) $params['per_page'] : 10;
+		$page     = isset( $params['page'] ) ? absint( $params['page'] ) : 1;
+		$per_page = isset( $params['per_page'] ) ? absint( $params['per_page'] ) : 10;
 
 		// Calculate offset for pagination
 		$offset = ( $page - 1 ) * $per_page;
 
-		// Get total number of activities
-		$total_items = $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}qtpo_activity_logs" );
+		// Cache key
+		$cache_key = 'qtpo_activity_logs_page_' . $page . '_per_page_' . $per_page;
 
-		// Calculate total pages
-		$total_pages = ceil( $total_items / $per_page );
+		// Attempt to fetch cached data
+		$data = wp_cache_get( $cache_key, 'qtpo_activity_logs' );
 
-		// Fetch paginated results
-		$results = $wpdb->get_results(
-			$wpdb->prepare(
-				"SELECT * FROM {$wpdb->prefix}qtpo_activity_logs ORDER BY created_at DESC LIMIT %d OFFSET %d",
-				$per_page,
-				$offset
-			),
-			ARRAY_A
-		);
+		if ( false === $data ) {
+			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
+			// Direct query is required for custom table operations.
 
-		foreach ( $results as $index => $result ) {
-			$results[ $index ]['activity'] = $result['activity'] . $result['created_at'];
+			// Get total number of activities
+			$total_items = (int) $wpdb->get_var(
+				"SELECT COUNT(*) FROM {$wpdb->prefix}qtpo_activity_logs"
+			);
+
+			// Calculate total pages
+			$total_pages = ceil( $total_items / $per_page );
+
+			// Fetch paginated results
+			$results = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT * FROM {$wpdb->prefix}qtpo_activity_logs ORDER BY created_at DESC LIMIT %d OFFSET %d",
+					$per_page,
+					$offset
+				),
+				ARRAY_A
+			);
+			/* phpcs:enable */
+
+			// Append additional data
+			foreach ( $results as $index => $result ) {
+				$results[ $index ]['activity'] .= ' ' . esc_html( $result['created_at'] );
+			}
+
+			// Prepare data for caching
+			$data = array(
+				'activities'   => $results,
+				'total_items'  => $total_items,
+				'current_page' => $page,
+				'total_pages'  => $total_pages,
+				'per_page'     => $per_page,
+			);
+
+			// Store data in cache
+			wp_cache_set( $cache_key, $data, 'qtpo_activity_logs', HOUR_IN_SECONDS );
 		}
 
-		// Response data
-		return array(
-			'activities'   => $results,
-			'total_items'  => (int) $total_items,
-			'current_page' => (int) $page,
-			'total_pages'  => (int) $total_pages,
-			'per_page'     => (int) $per_page,
-		);
+		return $data;
 	}
 }

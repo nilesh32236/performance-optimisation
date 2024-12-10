@@ -36,7 +36,6 @@ class JS {
 
 				$this->save_min_file( $minified_js, $cache_file );
 			} catch ( \Exception $e ) {
-				error_log( 'JS minification error: ' . $e->getMessage() );
 				return null;
 			}
 		}
@@ -57,13 +56,9 @@ class JS {
 	private function save_min_file( $js, $file_path ) {
 		$gzip_file_path = $file_path . '.gz';
 
-		if ( ! $this->filesystem->put_contents( $file_path, $js, FS_CHMOD_FILE ) ) {
-			error_log( 'Error writing static JS file.' );
-		}
+		$this->filesystem->put_contents( $file_path, $js, FS_CHMOD_FILE );
 
 		$gzip_output = gzencode( $js, 9 );
-		if ( ! $this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE ) ) {
-			error_log( 'Error writing gzipped static JS file.' );
-		}
+		$this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
 	}
 }

@@ -21,14 +21,14 @@ document.addEventListener( 'DOMContentLoaded', function () {
 
 	if ( clearCacheBtn ) {
 		clearCacheBtn.addEventListener( 'click', function () {
-			const id = clearCacheBtn.parentElement.classList.value.replace( 'page-', '' );
+			const path = window.location.pathname;
 			fetch( qtpoObject.apiUrl + '/clear_cache', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'X-WP-Nonce': qtpoObject.nonce
 				},
-				body: JSON.stringify( { action: 'clear_single_page_cahce', id } )
+				body: JSON.stringify( { action: 'clear_single_page_cahce', path } )
 			} )
 				.then( response => response.json() )
 				.then( data => console.log( 'Cache cleared successfully: ', data ) )

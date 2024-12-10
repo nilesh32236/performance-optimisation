@@ -34,7 +34,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 */
 		public static function create(): void {
 
-			error_log( 'create ' );
 			global $wp_filesystem;
 
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
@@ -43,71 +42,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 			$site_url = home_url();
 
-			$handler_code = <<<PHP
-<?php
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
+			$handler_code = '<?php' . PHP_EOL .
+			'if ( ! defined( \'ABSPATH\' ) ) {' . PHP_EOL .
+			'    exit;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+			'$site_url       = \'' . $site_url . '\';' . PHP_EOL .
+			'$root_directory = $_SERVER[\'DOCUMENT_ROOT\'];' . PHP_EOL .
+			'$site_domain    = $_SERVER[\'HTTP_HOST\'];' . PHP_EOL .
+			'$request_uri    = parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH );' . PHP_EOL .
+			'$file_path      = WP_CONTENT_DIR . \'/cache/qtpo/\' . $site_domain . $request_uri . \'index.html\';' . PHP_EOL .
+			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL . PHP_EOL .
 
-\$site_url       = '{$site_url}';
-\$root_directory = \$_SERVER['DOCUMENT_ROOT'];
-\$site_domain    = \$_SERVER['HTTP_HOST'];
-\$request_uri    = parse_url( \$_SERVER['REQUEST_URI'], PHP_URL_PATH );
-\$file_path      = WP_CONTENT_DIR . '/cache/qtpo/' . \$site_domain . \$request_uri . 'index.html';
-\$gzip_file_path = \$file_path . '.gz';
+			'function is_user_logged_in_without_wp( $site_url ) {' . PHP_EOL .
+			'	if ( isset( $_COOKIE[ \'wordpress_logged_in_\' . md5( $site_url ) ] ) ) {' . PHP_EOL .
+			'		return true;' . PHP_EOL .
+			'	}' . PHP_EOL .
+			'	return false;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
 
-function is_user_logged_in_without_wp( \$site_url ) {
-	if ( isset( \$_COOKIE[ 'wordpress_logged_in_' . md5( \$site_url ) ] ) ) {
-		return true;
-	}
-	return false;
-}
+			'if ( ! is_user_logged_in_without_wp( $site_url ) &&' . PHP_EOL .
+			'	( empty( $_SERVER[\'QUERY_STRING\'] ) || ! preg_match( \'/(?:^|&)(s|ver)(?:=|&|$)/\', $_SERVER[\'QUERY_STRING\'] ) )' . PHP_EOL .
+			') {' . PHP_EOL .
+			'	if ( file_exists( $gzip_file_path ) ) {' . PHP_EOL .
+			'		$last_modified_time = filemtime( $gzip_file_path );' . PHP_EOL .
+			'		$etag               = md5_file( $gzip_file_path );' . PHP_EOL .
+			'		header( \'Last-Modified: \' . gmdate( \'D, d M Y H:i:s\', $last_modified_time ) . \' GMT\' );' . PHP_EOL .
+			'		header( \'ETag: "\' . $etag . \'"\');' . PHP_EOL .
+			'		header( \'Content-Type: text/html\' );' . PHP_EOL .
+			'		header( \'Content-Encoding: gzip\' );' . PHP_EOL . PHP_EOL .
 
-if ( ! is_user_logged_in_without_wp( \$site_url ) && empty( \$_SERVER['QUERY_STRING'] ) ) {
-	if ( file_exists( \$gzip_file_path ) ) {
-		\$last_modified_time = filemtime( \$gzip_file_path );
-		\$etag               = md5_file( \$gzip_file_path );
+			'	if ( ( isset( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) && strtotime( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) >= $last_modified_time ) ||' . PHP_EOL .
+			'	( isset( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) && trim( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) === $etag ) ) {' . PHP_EOL .
+			'		header( \'HTTP/1.1 304 Not Modified\' );' . PHP_EOL .
+			'		header( \'Connection: close\' );' . PHP_EOL .
+			'		exit;' . PHP_EOL .
+			'	}' . PHP_EOL . PHP_EOL .
 
-		header( 'Last-Modified: ' . gmdate( 'D, d M Y H:i:s', \$last_modified_time ) . ' GMT' );
-		header( 'ETag: "' . \$etag . '"' );
-		header( 'Content-Type: text/html' );
-		header( 'Content-Encoding: gzip' );
+			'		readfile( $gzip_file_path );' . PHP_EOL .
+			'		exit;' . PHP_EOL .
+			'	} elseif ( file_exists( $file_path ) ) {' . PHP_EOL .
+			'		$last_modified_time = filemtime( $file_path );' . PHP_EOL .
+			'		$etag               = md5_file( $file_path );' . PHP_EOL .
+			'		header( \'Last-Modified: \' . gmdate( \'D, d M Y H:i:s\', $last_modified_time ) . \' GMT\' );' . PHP_EOL .
+			'		header( \'ETag: "\' . $etag . \'"\');' . PHP_EOL .
+			'		header( \'Content-Type: text/html\' );' . PHP_EOL . PHP_EOL .
 
-		if ( ( isset( \$_SERVER['HTTP_IF_MODIFIED_SINCE'] ) && strtotime( \$_SERVER['HTTP_IF_MODIFIED_SINCE'] ) >= \$last_modified_time ) ||
-			( isset( \$_SERVER['HTTP_IF_NONE_MATCH'] ) && trim( \$_SERVER['HTTP_IF_NONE_MATCH'] ) === \$etag ) ) {
-			header( 'HTTP/1.1 304 Not Modified' );
-			header( 'Connection: close' );
-			exit;
-		}
+			'		if ( ( isset( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) && strtotime( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) >= $last_modified_time ) ||' . PHP_EOL .
+			'		( isset( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) && trim( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) === $etag ) ) {' . PHP_EOL .
+			'			header( \'HTTP/1.1 304 Not Modified\' );' . PHP_EOL .
+			'			header( \'Connection: close\' );' . PHP_EOL .
+			'			exit;' . PHP_EOL .
+			'		}' . PHP_EOL . PHP_EOL .
 
-		readfile( \$gzip_file_path );
-		exit;
-	} elseif ( file_exists( \$file_path ) ) {
-		\$last_modified_time = filemtime( \$file_path );
-		\$etag               = md5_file( \$file_path );
-
-		header( 'Last-Modified: ' . gmdate( 'D, d M Y H:i:s', \$last_modified_time ) . ' GMT' );
-		header( 'ETag: "' . \$etag . '"' );
-		header( 'Content-Type: text/html' );
-
-		if ( ( isset( \$_SERVER['HTTP_IF_MODIFIED_SINCE'] ) && strtotime( \$_SERVER['HTTP_IF_MODIFIED_SINCE'] ) >= \$last_modified_time ) ||
-			( isset( \$_SERVER['HTTP_IF_NONE_MATCH'] ) && trim( \$_SERVER['HTTP_IF_NONE_MATCH'] ) === \$etag ) ) {
-			header( 'HTTP/1.1 304 Not Modified' );
-			header( 'Connection: close' );
-			exit;
-		}
-
-		readfile( \$file_path );
-		exit;
-	}
-}
-
-PHP;
+			'		readfile( $file_path );' . PHP_EOL .
+			'		exit;' . PHP_EOL .
+			'	}' . PHP_EOL .
+			'}' . PHP_EOL;
 
 			// Write the handler file in the wp-content directory as advanced-cache.php
 			$create_file = $wp_filesystem->put_contents( self::$handler_file, $handler_code, FS_CHMOD_FILE );
-
-			error_log( var_export( $create_file, true ) );
 		}
 
 		/**

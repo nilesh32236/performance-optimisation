@@ -19,8 +19,9 @@ class Cron {
 	 * Registers WordPress actions and filters for cron jobs.
 	 */
 	public function __construct() {
-		add_action( 'init', array( $this, 'schedule_all_pages_cron_jobs' ) );
+		add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
 		add_action( 'qtpo_page_cron_hook', array( $this, 'qtpo_page_cron_callback' ) );
+		add_action( 'qtpo_img_conversation', array( $this, 'img_convert_cron' ) );
 		add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 
 		add_action( 'qtpo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
@@ -37,7 +38,7 @@ class Cron {
 	public function add_custom_cron_interval( $schedules ): array {
 		$schedules['every_5_hours'] = array(
 			'interval' => 5 * 60 * 60,
-			'display'  => __( 'Every 5 Hours' ),
+			'display'  => __( 'Every 5 Hours', 'performance-optimisation' ),
 		);
 		return $schedules;
 	}
@@ -49,9 +50,13 @@ class Cron {
 	 *
 	 * @return void
 	 */
-	public function schedule_all_pages_cron_jobs(): void {
+	public function schedule_cron_jobs(): void {
 		if ( ! wp_next_scheduled( 'qtpo_page_cron_hook' ) ) {
 			wp_schedule_event( time(), 'every_5_hours', 'qtpo_page_cron_hook' );
+		}
+
+		if ( ! wp_next_scheduled( 'qtpo_img_conversation' ) ) {
+			wp_schedule_event( time(), 'hourly', 'qtpo_img_conversation' );
 		}
 	}
 
@@ -80,9 +85,42 @@ class Cron {
 			return;
 		}
 
+		$options = get_option( 'qtpo_settings', array() );
+
+		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
+
 		foreach ( $pages as $page_id ) {
+			$page_url       = get_permalink( $page_id );
+			$should_exclude = false;
+
+			foreach ( $exclude_urls as $exclude_url ) {
+				$exclude_url = rtrim( $exclude_url, '/' );
+
+				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+					$exclude_url = home_url( $exclude_url );
+				}
+
+				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
+
+					if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
+						$should_exclude = true;
+						break;
+					}
+				}
+
+				if ( $page_url === $exclude_url ) {
+					$should_exclude = true;
+					break;
+				}
+			}
+
+			if ( $should_exclude ) {
+				continue;
+			}
+
 			if ( ! wp_next_scheduled( 'qtpo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + rand( 0, 3600 ), 'qtpo_generate_static_page', array( $page_id ) );
+				wp_schedule_single_event( time() + \wp_rand( 0, 3600 ), 'qtpo_generate_static_page', array( $page_id ) );
 			}
 		}
 	}
@@ -206,6 +244,47 @@ class Cron {
 
 			if ( $wp_filesystem->exists( $gzip_file_path ) ) {
 				$wp_filesystem->delete( $gzip_file_path );
+			}
+		}
+	}
+
+	public function img_convert_cron() {
+		$options       = get_option( 'qtpo_settings', array() );
+		$img_converter = new Img_Converter( $options );
+
+		$img_info = get_option( 'qtpo_img_info', array() );
+
+		$conversation_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
+
+		$batch_size = $options['image_optimisation']['batch'] ?? 50;
+
+		if ( in_array( $conversation_format, array( 'avif', 'both' ), true ) ) {
+			$images = $img_info['pending']['avif'] ?? array();
+
+			$counter = 0;
+			if ( ! empty( $images ) ) {
+				foreach ( $images as $img ) {
+					++$counter;
+
+					if ( $counter <= $batch_size ) {
+						$img_converter->convert_image( ABSPATH . $img, 'avif' );
+					}
+				}
+			}
+		}
+
+		if ( in_array( $conversation_format, array( 'webp', 'both' ), true ) ) {
+			$images = $img_info['pending']['webp'] ?? array();
+
+			$counter = 0;
+			if ( ! empty( $images ) ) {
+				foreach ( $images as $img ) {
+					++$counter;
+
+					if ( $counter <= $batch_size ) {
+						$img_converter->convert_image( ABSPATH . $img );
+					}
+				}
 			}
 		}
 	}

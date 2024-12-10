@@ -40,11 +40,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		}
 
 		private static function add_wp_cache_constant(): void {
-			$wp_config_path = ABSPATH . 'wp-config.php'; // Path to wp-config.php
-
-			if ( ! file_exists( $wp_config_path ) || ! is_writable( $wp_config_path ) ) {
-				return; // Exit if the file doesn't exist or is not writable
-			}
 			global $wp_filesystem;
 
 			Util::init_filesystem();
@@ -53,15 +48,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return;
 			}
 
+			$wp_config_path = ABSPATH . 'wp-config.php'; // Path to wp-config.php
+
+			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
+				return; // Exit if the file doesn't exist or is not writable
+			}
+
 			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return;
 			}
+
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
 
 			// Check if WP_CACHE is already defined
-			if ( strpos( $wp_config_content, "define('WP_CACHE', true);" ) === false &&
-				strpos( $wp_config_content, 'define( "WP_CACHE", true );' ) === false ) {
-
+			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
 				// Insert WP_CACHE just before the line that says "That's all, stop editing!" or at the end.
 				$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
 
@@ -80,16 +80,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			}
 		}
 
+		/**
+		 * Create the activity log table if it doesn't already exist.
+		 *
+		 * This uses a direct database query because WordPress does not provide APIs
+		 * for custom table creation or schema management. The `dbDelta()` function
+		 * is the standard approach for such tasks and ensures compatibility.
+		 *
+		 * @SuppressWarnings WordPress.DB.DirectDatabaseQuery.SchemaChange
+		 * Suppression Reason: Schema changes are necessary during plugin activation
+		 * to create a custom table for storing plugin-specific data.
+		 */
+
 		private static function create_activity_log_table() {
 			global $wpdb;
 
 			$table_name      = $wpdb->prefix . 'qtpo_activity_logs'; // Table name
 			$charset_collate = $wpdb->get_charset_collate();
 
-			// Check if the table already exists
-			if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) !== $table_name ) {
+			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching */
+			// Direct query is required here because WordPress does not offer APIs for custom table creation.
+			// This operation is performed during plugin activation, so it does not require caching.
+			if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
 				// SQL to create the table if it doesn't exist
-				$sql = "CREATE TABLE $table_name (
+				$create_table_sql = "CREATE TABLE $table_name (
 					id mediumint(9) NOT NULL AUTO_INCREMENT,
 					activity varchar(255) NOT NULL,
 					created_at datetime DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -98,9 +112,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 				// Include the required file for dbDelta function
 				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-				dbDelta( $sql );
+				dbDelta( $create_table_sql );
 			}
 
+			/* phpcs:enable */
 			new Log( 'Plugin activated on ' );
 		}
 	}

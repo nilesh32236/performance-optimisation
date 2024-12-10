@@ -22,6 +22,8 @@ class Main {
 	);
 	private $filesystem;
 
+	private Image_Optimisation $image_optimisation;
+
 	private $options;
 	/**
 	 * Constructor.
@@ -33,7 +35,8 @@ class Main {
 
 		$this->includes();
 		$this->setup_hooks();
-		$this->filesystem = Util::init_filesystem();
+		$this->filesystem         = Util::init_filesystem();
+		$this->image_optimisation = new Image_Optimisation( $this->options );
 	}
 
 	/**
@@ -47,11 +50,12 @@ class Main {
 		require_once QTPO_PLUGIN_PATH . 'vendor/autoload.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-log.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-util.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/class-webp-converter.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-html.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-css.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-js.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cache.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/class-metabox.php';
+		require_once QTPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-cron.php';
 		require_once QTPO_PLUGIN_PATH . 'includes/class-rest.php';
 	}
@@ -70,22 +74,23 @@ class Main {
 		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 3 );
 		add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
+		if ( isset( $this->options['file_optimisation']['removeWooCSSJS'] ) && (bool) $this->options['file_optimisation']['removeWooCSSJS'] ) {
+			add_action( 'wp_enqueue_scripts', array( $this, 'remove_woocommerce_scripts' ), 999 );
+		}
+
 		$cache = new Cache();
 		add_action( 'template_redirect', array( $cache, 'generate_dynamic_static_html' ) );
 		add_action( 'save_post', array( $cache, 'invalidate_dynamic_static_html' ) );
+		if ( isset( $this->options['file_optimisation']['combineCSS'] ) && (bool) $this->options['file_optimisation']['combineCSS'] ) {
+			add_action( 'wp_enqueue_scripts', array( $cache, 'combine_css' ), PHP_INT_MAX );
+		}
 
 		$rest = new Rest();
 		add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
 
-		$webp_converter = new WebP_Converter();
-		add_filter( 'wp_generate_attachment_metadata', array( $webp_converter, 'convert_images_to_webp' ), 10, 2 );
-		add_filter( 'wp_get_attachment_image_src', array( $webp_converter, 'maybe_serve_webp_image' ), 10, 4 );
-
 		if ( isset( $this->options['file_optimisation']['minifyJS'] ) && (bool) $this->options['file_optimisation']['minifyJS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeJS'] ) && ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
-				$exclude_js = explode( "\n", $this->options['file_optimisation']['excludeJS'] );
-				$exclude_js = array_map( 'trim', $exclude_js );
-				$exclude_js = array_filter( $exclude_js );
+				$exclude_js = Util::process_urls( $this->options['file_optimisation']['excludeJS'] );
 
 				$this->exclude_js = array_merge( $this->exclude_js, (array) $exclude_js );
 			}
@@ -95,18 +100,18 @@ class Main {
 
 		if ( isset( $this->options['file_optimisation']['minifyCSS'] ) && (bool) $this->options['file_optimisation']['minifyCSS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCSS'] ) ) {
-				$exclude_css = explode( "\n", $this->options['file_optimisation']['excludeCSS'] );
-				$exclude_css = array_map( 'trim', $exclude_css );
-				$exclude_css = array_filter( $exclude_css );
+				$exclude_css = Util::process_urls( $this->options['file_optimisation']['excludeCSS'] );
 
 				$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
 			}
 
 			add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 		}
-		new Cron();
 
-		add_action( 'wp_head', array( $this, 'add_preload_prefatch' ), 0 );
+		add_action( 'wp_head', array( $this, 'add_preload_prefatch_preconnect' ), 1 );
+
+		new Metabox();
+		new Cron();
 	}
 
 	/**
@@ -139,6 +144,15 @@ class Main {
 		require_once QTPO_PLUGIN_PATH . 'templates/app.html';
 	}
 
+	private function add_available_post_types_to_options() {
+		$post_types = get_post_types( array( 'public' => true ), 'names' );
+
+		$excluded            = array( 'attachment' );
+		$filtered_post_types = array_keys( array_diff( $post_types, $excluded ) );
+
+		$this->options['image_optimisation']['availablePostTypes'] = $filtered_post_types;
+	}
+
 	/**
 	 * Enqueue admin scripts and styles.
 	 *
@@ -150,7 +164,7 @@ class Main {
 		$screen = get_current_screen();
 
 		if ( is_admin_bar_showing() ) {
-			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), '1.0.0', true );
+			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), QTPO_VERSION, true );
 			wp_localize_script(
 				'qtpo-admin-bar-script',
 				'qtpoObject',
@@ -165,9 +179,10 @@ class Main {
 			return;
 		}
 
-		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/style-index.css', array(), '1.0.0', 'all' );
-		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-element' ), '1.0.0', true );
+		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/style-index.css', array(), QTPO_VERSION, 'all' );
+		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-element' ), QTPO_VERSION, true );
 
+		$this->add_available_post_types_to_options();
 		wp_localize_script(
 			'performance-optimisation-script',
 			'qtpoSettings',
@@ -175,6 +190,7 @@ class Main {
 				'apiUrl'       => get_rest_url( null, 'performance-optimisation/v1/' ),
 				'nonce'        => wp_create_nonce( 'wp_rest' ),
 				'settings'     => $this->options,
+				'image_info'   => get_option( 'qtpo_img_info', array() ),
 				'cache_size'   => Cache::get_cache_size(),
 				'total_js_css' => Util::get_js_css_minified_file(),
 			),
@@ -183,7 +199,7 @@ class Main {
 
 	public function enqueue_scripts() {
 		if ( is_admin_bar_showing() ) {
-			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), '1.0.0', true );
+			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), QTPO_VERSION, true );
 			wp_localize_script(
 				'qtpo-admin-bar-script',
 				'qtpoObject',
@@ -195,7 +211,61 @@ class Main {
 		}
 
 		if ( ! is_user_logged_in() ) {
-			wp_enqueue_script( 'qtpo-lazyload', QTPO_PLUGIN_URL . 'src/lazyload.js', array(), '1.0.0', true );
+			wp_enqueue_script( 'qtpo-lazyload', QTPO_PLUGIN_URL . 'src/lazyload.js', array(), QTPO_VERSION, true );
+		}
+	}
+
+	public function remove_woocommerce_scripts() {
+		$exclude_url_to_keep_js_css = array();
+		if ( isset( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) && ! empty( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) ) {
+			$exclude_url_to_keep_js_css = Util::process_urls( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] );
+
+			// Safely retrieve and sanitize the current URL
+			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			$parsed_uri  = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $request_uri );
+			$current_url = home_url( sanitize_text_field( $parsed_uri ) );
+			$current_url = rtrim( $current_url, '/' );
+
+			foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {
+				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+					$exclude_url = home_url( $exclude_url );
+					$exclude_url = rtrim( $exclude_url, '/' );
+				}
+
+				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
+					$exclude_prefix = rtrim( $exclude_prefix, '/' );
+
+					if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
+						return;
+					}
+				}
+
+				if ( $current_url === $exclude_url ) {
+					return;
+				}
+			}
+		}
+
+		$remove_css_js_handle = array();
+		if ( isset( $this->options['file_optimisation']['removeCssJsHandle'] ) && ! empty( $this->options['file_optimisation']['removeCssJsHandle'] ) ) {
+			$remove_css_js_handle = Util::process_urls( $this->options['file_optimisation']['removeCssJsHandle'] );
+		}
+
+		if ( ! empty( $remove_css_js_handle ) ) {
+			foreach ( $remove_css_js_handle as $handle ) {
+				if ( 0 === strpos( $handle, 'style:' ) ) {
+					$handle = str_replace( 'style:', '', $handle );
+					$handle = trim( $handle );
+
+					wp_dequeue_style( $handle );
+				} elseif ( 0 === strpos( $handle, 'script:' ) ) {
+					$handle = str_replace( 'script:', '', $handle );
+					$handle = trim( $handle );
+
+					wp_dequeue_script( $handle );
+				}
+			}
 		}
 	}
 
@@ -260,9 +330,7 @@ class Main {
 		if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
 
 			if ( isset( $this->options['file_optimisation']['excludeDeferJS'] ) && ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
-				$exclude_defer = explode( "\n", $this->options['file_optimisation']['excludeDeferJS'] );
-				$exclude_defer = array_map( 'trim', $exclude_defer );
-				$exclude_defer = array_filter( $exclude_defer );
+				$exclude_defer = Util::process_urls( $this->options['file_optimisation']['excludeDeferJS'] );
 
 				$exclude_defer = array_merge( $exclude_js, (array) $exclude_defer );
 			} else {
@@ -277,9 +345,7 @@ class Main {
 		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 
 			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
-				$exclude_delay = explode( "\n", $this->options['file_optimisation']['excludeDelayJS'] );
-				$exclude_delay = array_map( 'trim', $exclude_delay );
-				$exclude_delay = array_filter( $exclude_delay );
+				$exclude_delay = Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] );
 
 				$exclude_delay = array_merge( $exclude_js, (array) $exclude_delay );
 			} else {
@@ -299,47 +365,42 @@ class Main {
 		return $tag;
 	}
 
-	public function add_preload_prefatch() {
+	public function add_preload_prefatch_preconnect() {
+
+		$preload_settings = $this->options['preload_settings'] ?? array();
+
 		// Preconnect origins
-		if ( isset( $this->options['preload_settings']['preconnect'] ) && (bool) $this->options['preload_settings']['preconnect'] ) {
-			if ( isset( $this->options['preload_settings']['preconnectOrigins'] ) && ! empty( $this->options['preload_settings']['preconnectOrigins'] ) ) {
-				$preconnect_origins = explode( "\n", $this->options['preload_settings']['preconnectOrigins'] );
-				$preconnect_origins = array_map( 'trim', $preconnect_origins );
-				$preconnect_origins = array_filter( $preconnect_origins );
+		if ( isset( $preload_settings['preconnect'] ) && (bool) $preload_settings['preconnect'] ) {
+			if ( isset( $preload_settings['preconnectOrigins'] ) && ! empty( $preload_settings['preconnectOrigins'] ) ) {
+				$preconnect_origins = Util::process_urls( $preload_settings['preconnectOrigins'] );
 
 				foreach ( $preconnect_origins as $origin ) {
-					echo '<link rel="preconnect" href="' . esc_url( $origin ) . '" crossorigin="anonymous">';
+					Util::generate_preload_link( $origin, 'preconnect', '', true );
 				}
 			}
 		}
 
 		// Prefetch DNS origins
-		if ( isset( $this->options['preload_settings']['prefetchDNS'] ) && (bool) $this->options['preload_settings']['prefetchDNS'] ) {
-			if ( isset( $this->options['preload_settings']['dnsPrefetchOrigins'] ) && ! empty( $this->options['preload_settings']['dnsPrefetchOrigins'] ) ) {
-				$dns_prefetch_origins = explode( "\n", $this->options['preload_settings']['dnsPrefetchOrigins'] );
-				$dns_prefetch_origins = array_map( 'trim', $dns_prefetch_origins );
-				$dns_prefetch_origins = array_filter( $dns_prefetch_origins );
+		if ( isset( $preload_settings['prefetchDNS'] ) && (bool) $preload_settings['prefetchDNS'] ) {
+			if ( isset( $preload_settings['dnsPrefetchOrigins'] ) && ! empty( $preload_settings['dnsPrefetchOrigins'] ) ) {
+				$dns_prefetch_origins = Util::process_urls( $preload_settings['dnsPrefetchOrigins'] );
 
 				foreach ( $dns_prefetch_origins as $origin ) {
-					echo '<link rel="dns-prefetch" href="' . esc_url( $origin ) . '">';
+					Util::generate_preload_link( $origin, 'dns-prefetch' );
 				}
 			}
 		}
 
 		// Preload fonts
-		if ( isset( $this->options['preload_settings']['preloadFonts'] ) && (bool) $this->options['preload_settings']['preloadFonts'] ) {
-			if ( isset( $this->options['preload_settings']['preloadFontsUrls'] ) && ! empty( $this->options['preload_settings']['preloadFontsUrls'] ) ) {
-				$preload_fonts_urls = explode( "\n", $this->options['preload_settings']['preloadFontsUrls'] );
-				$preload_fonts_urls = array_map( 'trim', $preload_fonts_urls );
-				$preload_fonts_urls = array_filter( $preload_fonts_urls );
+		if ( isset( $preload_settings['preloadFonts'] ) && (bool) $preload_settings['preloadFonts'] ) {
+			if ( isset( $preload_settings['preloadFontsUrls'] ) && ! empty( $preload_settings['preloadFontsUrls'] ) ) {
+				$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
 
 				foreach ( $preload_fonts_urls as $font_url ) {
 
-					if ( ! preg_match( '/^https?:\/\//i', $font_url ) ) {
-						$font_url = content_url( $font_url );
-					}
+					$font_url = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : content_url( $font_url );
 
-					$font_extension = pathinfo( $font_url, PATHINFO_EXTENSION );
+					$font_extension = pathinfo( wp_parse_url( $font_url, PHP_URL_PATH ), PATHINFO_EXTENSION );
 					$font_type      = '';
 
 					switch ( strtolower( $font_extension ) ) {
@@ -356,12 +417,24 @@ class Main {
 							$font_type = ''; // Fallback if unknown extension
 					}
 
-					if ( ! empty( $font_type ) ) {
-						echo '<link rel="preload" href="' . esc_url( $font_url ) . '" as="font" type="' . esc_attr( $font_type ) . '" crossorigin="anonymous">';
-					}
+					Util::generate_preload_link( $font_url, 'preload', 'font', true, $font_type );
 				}
 			}
 		}
+
+		if ( isset( $preload_settings['preloadCSS'] ) && (bool) $preload_settings['preloadCSS'] ) {
+			if ( isset( $preload_settings['preloadCSSUrls'] ) && ! empty( $preload_settings['preloadCSSUrls'] ) ) {
+				$preload_css_urls = Util::process_urls( $preload_settings['preloadCSSUrls'] );
+
+				foreach ( $preload_css_urls as $css_url ) {
+					$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : content_url( $css_url );
+
+					Util::generate_preload_link( $css_url, 'preload', 'style' );
+				}
+			}
+		}
+
+		$this->image_optimisation->preload_images();
 	}
 
 	public function minify_css( $tag, $handle, $href ) {
@@ -385,8 +458,6 @@ class Main {
 	}
 
 	public function minify_js( $tag, $handle, $src ) {
-		global $wp_scripts;
-
 		$local_path = Util::get_local_path( $src );
 
 		if ( in_array( $handle, $this->exclude_js, true ) || empty( $src ) || $this->is_js_minified( $local_path ) || is_user_logged_in() ) {
