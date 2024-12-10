@@ -87,9 +87,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * for custom table creation or schema management. The `dbDelta()` function
 		 * is the standard approach for such tasks and ensures compatibility.
 		 *
-		 * @SuppressWarnings WordPress.DB.DirectDatabaseQuery.SchemaChange
-		 * Suppression Reason: Schema changes are necessary during plugin activation
-		 * to create a custom table for storing plugin-specific data.
 		 */
 
 		private static function create_activity_log_table() {
@@ -98,9 +95,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			$table_name      = $wpdb->prefix . 'qtpo_activity_logs'; // Table name
 			$charset_collate = $wpdb->get_charset_collate();
 
-			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching */
+			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange */
 			// Direct query is required here because WordPress does not offer APIs for custom table creation.
 			// This operation is performed during plugin activation, so it does not require caching.
+			// Schema changes are necessary during plugin activation to create a custom table for storing plugin-specific data.
 			if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) !== $table_name ) {
 				// SQL to create the table if it doesn't exist
 				$create_table_sql = "CREATE TABLE $table_name (
