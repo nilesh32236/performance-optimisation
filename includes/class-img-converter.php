@@ -388,7 +388,7 @@ class Img_Converter {
 		$to_convert = false;
 
 		if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
-			if ( $supports_avif || DOING_CRON ) {
+			if ( $supports_avif || ( defined( 'DOING_CRON' ) && \DOING_CRON ) ) {
 				$avif_path = $this->get_img_path( $img_path, 'avif' );
 
 				if ( file_exists( $avif_path ) ) {
@@ -401,7 +401,7 @@ class Img_Converter {
 		}
 
 		if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
-			if ( $supports_webp || DOING_CRON ) {
+			if ( $supports_webp || ( defined( 'DOING_CRON' ) && \DOING_CRON ) ) {
 				$webp_path = $this->get_img_path( $img_path, 'webp' );
 
 				if ( file_exists( $webp_path ) ) {
