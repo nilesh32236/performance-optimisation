@@ -379,7 +379,7 @@ class Img_Converter {
 			return $image;
 		}
 
-		$http_accept = wp_unslash( $_SERVER['HTTP_ACCEPT'] );
+		$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
 
 		// Check if the browser supports WebP
 		$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;

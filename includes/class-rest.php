@@ -55,7 +55,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		public function permission_callback() {
-			$nonce       = isset( $_SERVER['HTTP_X_WP_NONCE'] ) ? $_SERVER['HTTP_X_WP_NONCE'] : '';
+			$nonce       = isset( $_SERVER['HTTP_X_WP_NONCE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] ) ) : '';
 			$nonce_valid = wp_verify_nonce( $nonce, 'wp_rest' );
 
 			return current_user_can( 'manage_options' ) && $nonce_valid;
