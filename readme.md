@@ -1,105 +1,188 @@
-Dashboard.
-    - Display overview of cache status js and css minified. image optimise.
+# Performance Optimisation Plugin
 
-    cache status
-        - Display current cache size and clear cache button.
-    JavaScript & CSS Optimization
-        - Display javascript and css minified count.
-    Image optimisation
-        - Display webp and avif converted count like this.
-        WebP
-            Completed: 0
-            Pending: 0
-            Failed: 0
-        AVIF
-            Completed: 0
-            Pending: 0
-            Failed: 0
+A comprehensive WordPress plugin designed to optimize your website's performance by managing cache, optimizing JavaScript and CSS files, and improving image loading with advanced features like lazy loading, preloading, and more.
 
-        and add two button Optimise now and remove optimised.
-    Recent Activities
-        In this section i display recent activity like this.
-            Plugin activated on 2024-12-08 05:28:15
-            Plugin deactivated on 2024-12-08 05:28:09
-            Clear all cache on 2024-11-28 12:30:09
-            Clear all cache on 2024-11-28 12:29:33
-            Clear all cache on 2024-11-28 12:25:51
-            Plugin activated on 2024-11-28 12:24:35
-            Plugin deactivated on 2024-11-28 12:12:29
-            Clear all cache on 2024-11-28 12:10:41
-            Clear all cache on 2024-11-28 11:35:13
-            Clear all cache on 2024-11-28 11:34:58
+---
 
-File Optimization Settings
-    In this tab i add many options like.
+## Features
 
-    checkbox: Minify JavaScript
-    textarea: Exclude specific javascript files.
+### Dashboard
+- Overview of:
+  - Cache status (size and clear cache option).
+  - Minified JavaScript and CSS count.
+  - WebP and AVIF image optimization status:
+    - **WebP**: Completed, Pending, Failed.
+    - **AVIF**: Completed, Pending, Failed.
+  - Recent activities (e.g., plugin activation, cache clearing logs).
 
-    checkbox: Minify css.
-    textarea: Exclude specific css files.
+### File Optimization Settings
+- Minify JavaScript and CSS.
+- Combine CSS and exclude specific files.
+- Defer or delay JavaScript loading.
+- Minify HTML.
+- Remove WooCommerce CSS/JS from non-relevant pages.
+- Save settings with a single click.
 
-    checkbox: Combine CSS
-    textarea: Exclude css file to combine.
+### Preload Settings
+- Enable cache preloading (generate static HTML and GZIP files).
+- Add preconnect origins.
+- Prefetch DNS domains.
+- Preload fonts, CSS files, and specific images.
+- Preload feature images for specific post types with configurable exclusions.
 
-    checkbox: Remove woocommerce css and js from other page
-    textarea: Exclude URL to keep woocommerce css and js.
-    default value: shop/(.*)
-                product/(.*)
-                my-account/(.*)
-                cart/(.*)
-                checkout/(.*)
+### Image Optimization Settings
+- Lazy load images with:
+  - SVG placeholders for smoother rendering.
+  - Exclusion of a specified number of images.
+- Convert images to **WebP** or **AVIF** formats.
+- Preload images for the front page or feature images by post type.
+- Limit preloaded image sizes with exclusions.
 
-    checkbox: Minify HTML
+### Tools
+- Import/export plugin settings.
 
-    checkbox: Defer Loading JavaScript
-    textarea: Exclude specific JavaScript files.
+---
 
-    checkbox: Delay Loading JavaScript
-    textarea: Exclude specific Javascript files.
+## Installation
 
-    button: Save Settings.
+### For End Users
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/performance-optimisation.git
+   ```
+2. Navigate to the plugin directory:
+   ```bash
+   cd performance-optimisation
+   ```
+3. Install Composer dependencies:
+   ```bash
+   composer install
+   ```
+4. Install npm dependencies:
+   ```bash
+   npm install
+   ```
+5. Build the plugin assets:
+   ```bash
+   npm run build
+   ```
+6. Upload the plugin folder to your WordPress site's `wp-content/plugins/` directory or install it through the WordPress admin dashboard.
+7. Activate the plugin from the **Plugins** menu in WordPress.
 
-Preload Settings
-    checkbox: Enable Preloading Cache
-        This checkbox create static html and gzip file to serve direcly this.
-    textarea:Exclude specific url to exclude preloading cache.
+### For Developers
+1. Follow the above steps.
+2. To start the development environment:
+   ```bash
+   npm run start
+   ```
 
-    checkbox: Preconnect
-    textarea: Add preconnect origins, one per line (eg: https://fonts.gstatic.com)
+---
 
-    checkbox: Prefetch DNS
-    textarea: Enter domains for DNS Prefetching, one per line (eg: https:example.com)
+## Usage
 
-    checkbox: Preload Fonts
-    textarea: Enter fonts for preloading, one per line (e.g., https://example.com/fonts/font.woff2)
-            /your-theme/fonts/font.woff2
+1. Navigate to the **Performance Optimisation** menu in the WordPress admin panel.
+2. Explore the following sections:
+   - **Dashboard** for an overview of optimization status.
+   - **File Optimization Settings** for JavaScript, CSS, and HTML optimization.
+   - **Preload Settings** to configure caching and preloading options.
+   - **Image Optimization Settings** for lazy loading and format conversion.
+   - **Tools** for importing/exporting settings.
 
-    checkbox: Preload CSS
-    textarea: Enter CSS for preloading, one per line (e.g., https://example.com/style.css)
-            /your-theme/css/style.css
+---
 
-Image Optimization Settings
-    checkbox: Lazy Load Images
-    number: Enter number you want to exclude first.
-    textarea: Exclude specific image urls.
-    checkbox: Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance.
+## Dependencies
 
-    checkbox: Enable Image Conversion
-    select: Conversion Format:
-        options: WebP, AVIF, Both.
-    textarea: Exclude specific images from Conversion
+This plugin utilizes the following libraries:
 
-    checkbox: Preload image on Front page.
-    textarea: Enter Image url(full/partial) to preload this image in front page
-    example: desktop: uploads/2024/11/home-hero-banner-large.webp
-            mobile: uploads/2024/11/home-hero-banner-small-1.webp
+- [voku/html-min](https://github.com/voku/HtmlMin) - HTML minification.
+- [matthiasmullie/minify](https://github.com/matthiasmullie/minify) - JavaScript and CSS minification.
+- [@wordpress/scripts](https://developer.wordpress.org/block-editor/reference-guides/packages/packages-scripts/) - Build tools for modern WordPress development.
+- [Font Awesome Free Solid Icons](https://fontawesome.com/v6/icons?o=r&s=solid) and [React FontAwesome](https://github.com/FortAwesome/react-fontawesome) for icons.
 
-    checkbox: Preload Feature Images for Post Types
-    checkboxes: available post Types.
-    textarea: Exclude specific image to preload.
-    number: Set max width so it can't load bigger img than it. 0 default.
-    textarea: Exclude specific size to preload
+---
 
-Tools
-    import export plugin settings functionality
+## Composer Configuration
+
+```json
+{
+    "name": "qrolic/performance-optimisation",
+    "autoload": {
+        "psr-4": {
+            "Qrolic\\PerformanceOptimisation\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Nilesh Kanzariya",
+            "email": "nilesh32236@gmail.com"
+        }
+    ],
+    "require": {
+        "voku/html-min": "^4.5",
+        "matthiasmullie/minify": "^1.3"
+    },
+    "extra": {
+        "cleanup": {
+            "dirs": ["bin","tests", "docs"],
+            "exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
+        }
+    }
+}
+```
+
+---
+
+## NPM Configuration
+
+```json
+{
+  "name": "performance-optimisation",
+  "version": "1.0.0",
+  "description": "Performance optimisation plugin for WordPress",
+  "main": "./src/index.js",
+  "scripts": {
+    "build": "wp-scripts build",
+    "start": "wp-scripts start"
+  },
+  "author": "Nilesh Kanzariya <nilesh32236@gmail.com>",
+  "license": "GPL-2.0",
+  "devDependencies": {
+    "@wordpress/scripts": "^27.9.0"
+  },
+  "dependencies": {
+    "@fortawesome/free-solid-svg-icons": "^6.6.0",
+    "@fortawesome/react-fontawesome": "^0.2.2"
+  }
+}
+```
+
+---
+
+## Changelog
+
+### v1.0.0
+- Initial release
+  - Dashboard overview.
+  - Cache management.
+  - JavaScript, CSS, and HTML optimization.
+  - Image optimization and lazy loading.
+  - Preloading for cache, fonts, and images.
+  - Import/export tools.
+
+---
+
+## Contributing
+
+Contributions, issues, and feature requests are welcome!  
+Feel free to check the [issues page](https://github.com/nilesh-32236/performance-optimisation/issues).
+
+---
+
+## License
+
+This project is licensed under the GPLv2 license. See the LICENSE file for more details.
+
+---
+
+## Author
+Created by Nilesh Kanzariya.

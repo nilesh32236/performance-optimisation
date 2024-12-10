@@ -353,7 +353,6 @@ class Img_Converter {
 						if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
 							$this->add_img_into_queue( $image_path, 'avif' );
 						}
-					} else {
 					}
 				}
 			}

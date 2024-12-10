@@ -1,105 +1,122 @@
-Dashboard.
-    - Display overview of cache status js and css minified. image optimise.
+=== Performance Optimisation ===
+Contributors: nilesh32236
+Tags: performance, optimization, cache, minify, image optimization
+Requires at least: 5.0
+Requires PHP: 7.4
+Tested up to: 6.7
+Stable tag: 1.0.0
+License: GPLv2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-    cache status
-        - Display current cache size and clear cache button.
-    JavaScript & CSS Optimization
-        - Display javascript and css minified count.
-    Image optimisation
-        - Display webp and avif converted count like this.
-        WebP
-            Completed: 0
-            Pending: 0
-            Failed: 0
-        AVIF
-            Completed: 0
-            Pending: 0
-            Failed: 0
+A plugin to enhance website performance by managing cache, minifying JavaScript, CSS, and optimizing images.
 
-        and add two button Optimise now and remove optimised.
-    Recent Activities
-        In this section i display recent activity like this.
-            Plugin activated on 2024-12-08 05:28:15
-            Plugin deactivated on 2024-12-08 05:28:09
-            Clear all cache on 2024-11-28 12:30:09
-            Clear all cache on 2024-11-28 12:29:33
-            Clear all cache on 2024-11-28 12:25:51
-            Plugin activated on 2024-11-28 12:24:35
-            Plugin deactivated on 2024-11-28 12:12:29
-            Clear all cache on 2024-11-28 12:10:41
-            Clear all cache on 2024-11-28 11:35:13
-            Clear all cache on 2024-11-28 11:34:58
+== Description ==
 
-File Optimization Settings
-    In this tab i add many options like.
+Performance Optimisation helps you optimize your website's speed by offering features like cache management, JavaScript and CSS minification, image conversion, lazy loading, preloading, and more. With an intuitive dashboard, detailed settings, and useful tools, it simplifies performance enhancement for your website.
 
-    checkbox: Minify JavaScript
-    textarea: Exclude specific javascript files.
+**Features:**
 
-    checkbox: Minify css.
-    textarea: Exclude specific css files.
+ - Dashboard with an overview of cache, JavaScript, CSS, and image optimization status.
+ - Cache management tools, including size display and a "Clear Cache" button.
+ - JavaScript & CSS Optimization: Minify, combine, and exclude specific files.
+ - Image optimization: Convert images to WebP and AVIF formats.
+ - Preload settings for cache, fonts, DNS, and images.
+ - Advanced lazy loading options.
+ - Import/export plugin settings.
 
-    checkbox: Combine CSS
-    textarea: Exclude css file to combine.
+== Installation ==
 
-    checkbox: Remove woocommerce css and js from other page
-    textarea: Exclude URL to keep woocommerce css and js.
-    default value: shop/(.*)
-                product/(.*)
-                my-account/(.*)
-                cart/(.*)
-                checkout/(.*)
+1. Upload the plugin files to the `/wp-content/plugins/performance-optimisation` directory, or install the plugin through the WordPress plugins screen directly.
+2. Activate the plugin through the 'Plugins' screen in WordPress.
+3. Configure the settings via the **Performance Optimisation** menu in the WordPress admin panel.
 
-    checkbox: Minify HTML
+== Usage ==
 
-    checkbox: Defer Loading JavaScript
-    textarea: Exclude specific JavaScript files.
+1. **Dashboard Overview**  
+ - View cache size and clear cache.  
+ - Check the number of minified JavaScript and CSS files.  
+ - Monitor image optimization (WebP/AVIF status).  
+ - Review recent plugin activities.  
 
-    checkbox: Delay Loading JavaScript
-    textarea: Exclude specific Javascript files.
+2. **File Optimization Settings**  
+ - Minify JavaScript, CSS, and HTML.  
+ - Combine CSS and exclude specific files.  
+ - Defer and delay JavaScript loading.  
 
-    button: Save Settings.
+3. **Preload Settings**  
+ - Enable cache preloading.  
+ - Preconnect to origins and prefetch DNS.  
+ - Preload fonts, CSS, and images.  
 
-Preload Settings
-    checkbox: Enable Preloading Cache
-        This checkbox create static html and gzip file to serve direcly this.
-    textarea:Exclude specific url to exclude preloading cache.
+4. **Image Optimization Settings**  
+ - Lazy load images with SVG placeholders.  
+ - Convert images to WebP/AVIF formats and exclude specific images.  
+ - Preload feature images for selected post types.  
 
-    checkbox: Preconnect
-    textarea: Add preconnect origins, one per line (eg: https://fonts.gstatic.com)
+5. **Tools**  
+ - Import/export plugin settings for quick setup.
 
-    checkbox: Prefetch DNS
-    textarea: Enter domains for DNS Prefetching, one per line (eg: https:example.com)
+== Composer Libraries ==
 
-    checkbox: Preload Fonts
-    textarea: Enter fonts for preloading, one per line (e.g., https://example.com/fonts/font.woff2)
-            /your-theme/fonts/font.woff2
+This plugin uses the following composer libraries:
 
-    checkbox: Preload CSS
-    textarea: Enter CSS for preloading, one per line (e.g., https://example.com/style.css)
-            /your-theme/css/style.css
+ - `voku/html-min` - For HTML minification.
+ - `matthiasmullie/minify` - For JavaScript and CSS minification.
 
-Image Optimization Settings
-    checkbox: Lazy Load Images
-    number: Enter number you want to exclude first.
-    textarea: Exclude specific image urls.
-    checkbox: Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance.
+Composer configuration:
 
-    checkbox: Enable Image Conversion
-    select: Conversion Format:
-        options: WebP, AVIF, Both.
-    textarea: Exclude specific images from Conversion
+`
+{
+	"name": "qrolic/performance-optimisation",
+	"autoload": {
+		"psr-4": {
+			"Qrolic\\PerformanceOptimisation\\": "src/"
+		}
+	},
+	"authors": [
+		{
+			"name": "nilesh32236",
+			"email": "nilesh32236@gmail.com"
+		}
+	],
+	"require": {
+		"voku/html-min": "^4.5",
+		"matthiasmullie/minify": "^1.3"
+	},
+	"extra": {
+		"cleanup": {
+			"dirs": ["bin","tests", "docs"],
+			"exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
+		}
+	}
+}
+`
 
-    checkbox: Preload image on Front page.
-    textarea: Enter Image url(full/partial) to preload this image in front page
-    example: desktop: uploads/2024/11/home-hero-banner-large.webp
-            mobile: uploads/2024/11/home-hero-banner-small-1.webp
+== Changelog ==
 
-    checkbox: Preload Feature Images for Post Types
-    checkboxes: available post Types.
-    textarea: Exclude specific image to preload.
-    number: Set max width so it can't load bigger img than it. 0 default.
-    textarea: Exclude specific size to preload
+= 1.0.0 =
 
-Tools
-    import export plugin settings functionality
+Initial release with full functionality:
+Dashboard overview.
+Cache management.
+JavaScript, CSS, and HTML optimization.
+Advanced image optimization and lazy loading.
+Preloading settings for cache, fonts, and images.
+Import/export settings tools.
+
+== Frequently Asked Questions ==
+ = How do I optimize images using this plugin? =
+ Go to the Image Optimization Settings tab, enable image conversion, and choose the format (WebP, AVIF, or both). Click "Optimize Now" to start the process.
+
+ = Can I exclude specific JavaScript or CSS files from minification? =
+ Yes, in the File Optimization Settings tab, use the provided text areas to list files you want to exclude.
+
+ = Does the plugin support lazy loading for images? =
+ Yes, lazy loading can be enabled in the Image Optimization Settings tab. You can also use SVG placeholders for better performance.
+
+ = How can I import/export plugin settings? =
+ Use the Tools section to export your current settings or import settings from another instance.
+
+== Upgrade Notice ==
+
+= 1.0.0 = Initial release. Install to enhance your website's performance.
