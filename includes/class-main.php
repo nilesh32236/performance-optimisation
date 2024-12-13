@@ -180,7 +180,7 @@ class Main {
 		}
 
 		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/style-index.css', array(), QTPO_VERSION, 'all' );
-		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-element' ), QTPO_VERSION, true );
+		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-i18n', 'wp-element' ), QTPO_VERSION, true );
 
 		$this->add_available_post_types_to_options();
 		wp_localize_script(
@@ -193,6 +193,18 @@ class Main {
 				'image_info'   => get_option( 'qtpo_img_info', array() ),
 				'cache_size'   => Cache::get_cache_size(),
 				'total_js_css' => Util::get_js_css_minified_file(),
+				'translations' => array(
+					'performanceSettings'   => __( 'Performance Settings', 'performance-optimisation' ),
+					'dashboard'             => __( ' Dashboard', 'performance-optimisation' ),
+					'fileOptimization'      => __( ' File Optimization', 'performance-optimisation' ),
+					'preload'               => __( ' Preload', 'performance-optimisation' ),
+					'imageOptimization'     => __( ' Image Optimization', 'performance-optimisation' ),
+					'tools'                 => __( ' Tools', 'performance-optimisation' ),
+					'failedFetchActivities' => __( 'Failed to fetch activities:', 'performance-optimisation' ),
+					'clearCacheSuccess'     => __( 'Cache cleared successfully: ', 'performance-optimisation' ),
+					'errorClearCache'       => __( 'Error clearing cache: ', 'performance-optimisation' ),
+					'noPendingImage'        => __( 'No pending images to convert!', 'performance-optimisation' ),
+				),
 			),
 		);
 	}

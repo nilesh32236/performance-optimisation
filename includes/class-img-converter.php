@@ -314,7 +314,7 @@ class Img_Converter {
 	 * @param int $attachment_id The attachment ID.
 	 * @return array|\WP_Error The modified attachment metadata, or WP_Error on failure.
 	 */
-	public function convert_images_to_next_gen( $metadata, $attachment_id ) {
+	public function convert_image_to_next_gen_format( $metadata, $attachment_id ) {
 		$upload_dir = wp_upload_dir();
 
 		try {

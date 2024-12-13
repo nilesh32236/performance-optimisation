@@ -1,182 +1,179 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { apiCall } from '../lib/apiRequest';
+
+const translations = qtpoSettings.translations;
 
 const Dashboard = ({ activities }) => {
-	console.log(qtpoSettings);
-
-	const [totalCacheSize, setTotalCacheSize] = useState(qtpoSettings.cache_size);
-	const [total_js, setTotal_js] = useState(qtpoSettings.total_js_css.js);
-	const [total_css, setTotal_css] = useState(qtpoSettings.total_js_css.css);
-	const [imageInfo, setImageInfo] = useState(qtpoSettings.image_info || []);
-	const [loading, setLoading] = useState({
-		clear_cache: false,
-		optimize_images: false,
-		remove_images: false,
+	// Manage the state
+	const [state, setState] = useState({
+		totalCacheSize: qtpoSettings.cache_size,
+		total_js: qtpoSettings.total_js_css.js,
+		total_css: qtpoSettings.total_js_css.css,
+		imageInfo: qtpoSettings.image_info || [],
+		loading: {
+			clear_cache: false,
+			optimize_images: false,
+			remove_images: false
+		}
 	});
 
-	const handleLoading = (key, isLoading) => {
-		setLoading((prevState) => ({ ...prevState, [key]: isLoading }));
-	};
+	// Memoizing the image information to reduce unnecessary re-renders
+	const { imageInfo } = state;
+	const { completed = {}, pending = {}, failed = {} } = imageInfo;
 
-	const onClickHandle = (e) => {
+	// Handle loading state changes
+	const handleLoading = useCallback((key, isLoading) => {
+		setState((prevState) => ({
+			...prevState,
+			loading: { ...prevState.loading, [key]: isLoading }
+		}));
+	}, []);
+
+	// Update cache values in state
+	const updateCache = useCallback(() => {
+		setState((prevState) => ({
+			...prevState,
+			totalCacheSize: 0,
+			total_js: 0,
+			total_css: 0
+		}));
+	}, []);
+
+	// Clear Cache Handler
+	const onClickHandle = useCallback((e) => {
 		e.preventDefault();
 		handleLoading('clear_cache', true);
-		fetch(qtpoSettings.apiUrl + 'clear_cache', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'X-WP-Nonce': qtpoSettings.nonce
-			},
-			body: JSON.stringify({ action: 'clear_cache' })
-		})
-			.then(response => response.json())
+		apiCall('clear_cache', 'POST', { action: 'clear_cache' })
 			.then((data) => {
-				console.log('Cache cleared successfully: ', data)
-				setTotalCacheSize(0);
-				setTotal_js(0);
-				setTotal_css(0);
+				console.log(translations.clearCacheSuccess, data);
+				updateCache();
 			})
-			.catch(error => console.error('Error clearing cache: ', error))
+			.catch((error) => console.error(translations.errorClearCache, error))
 			.finally(() => handleLoading('clear_cache', false));
-	};
+	}, [handleLoading, updateCache]);
 
-	const convertPendingImages = () => {
+	// Convert Pending Images
+	const convertPendingImages = useCallback(() => {
 		handleLoading('optimize_images', true);
 
-		const pendingWebP = imageInfo?.pending?.webp || [];
-		const pendingAVIF = imageInfo?.pending?.avif || [];
+		const { webp = [], avif = [] } = pending || {};
 
-		if (pendingWebP.length === 0 && pendingAVIF.length === 0) {
-			alert('No pending images to convert!');
+		if (webp.length === 0 && avif.length === 0) {
+			alert(translations.noPendingImage);
 			handleLoading('optimize_images', false);
 			return;
 		}
 
-		fetch(qtpoSettings.apiUrl + 'optimise_image', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'X-WP-Nonce': qtpoSettings.nonce
-			},
-			body: JSON.stringify({ webp: pendingWebP, avif: pendingAVIF })
-		})
-			.then(response => response.json())
-			.then((data) => {
-				console.log('Cache cleared successfully: ', data)
-				setTotalCacheSize(0);
-				setTotal_js(0);
-				setTotal_css(0);
+		apiCall('optimise_image', 'POST', { webp, avif })
+			.then(() => {
+				console.log('Images optimized successfully');
+				updateCache();
 			})
-			.catch(error => console.error('Error clearing cache: ', error))
+			.catch((error) => console.error('Error optimizing images: ', error))
 			.finally(() => handleLoading('optimize_images', false));
-	};
+	}, [handleLoading, pending, updateCache]);
 
-	const removeOptimizedImages = () => {
+	// Remove Optimized Images
+	const removeOptimizedImages = useCallback(() => {
 		handleLoading('remove_images', true);
 
-		const completedWebP = imageInfo?.completed?.webp || [];
-		const completedAVIF = imageInfo?.completed?.avif || [];
+		const { webp = [], avif = [] } = completed || {};
 
-		if (completedWebP.length === 0 && completedAVIF.length === 0) {
+		if (webp.length === 0 && avif.length === 0) {
 			alert('No optimized images to remove!');
 			handleLoading('remove_images', false);
 			return;
 		}
 
-		// Call the API to remove optimized images
-		fetch(qtpoSettings.apiUrl + 'delete_optimised_image', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'X-WP-Nonce': qtpoSettings.nonce
-			}
-		})
-			.then(response => {
-				if (!response.ok) {
-					throw new Error('Failed to remove optimized images');
-				}
-				return response.json();
-			})
-			.then(data => {
+		apiCall('delete_optimised_image', 'POST', {})
+			.then((data) => {
 				if (data.success) {
 					alert('Optimized images removed successfully!');
 					console.log('Removed images:', data.deleted);
-					// Optionally reset the completed image lists
-					imageInfo.completed.webp = [];
-					imageInfo.completed.avif = [];
 				} else {
-					alert('Some images could not be removed. Check logs for details.');
+					alert('Some images could not be removed.');
 					console.error('Failed to remove:', data.failed);
 				}
 			})
-			.catch(error => {
+			.catch((error) => {
 				console.error('Error removing optimized images:', error);
 				alert('An error occurred while removing optimized images.');
 			})
 			.finally(() => handleLoading('remove_images', false));
-	};
+	}, [handleLoading, completed]);
 
-	qtpoSettings.cache_size = totalCacheSize;
-	qtpoSettings.total_js_css.js = total_js;
-	qtpoSettings.total_js_css.css = total_css;
+	// When qtpoSettings changes, update the state (for example, for the cache size)
+	useEffect(() => {
+		setState((prevState) => ({
+			...prevState,
+			totalCacheSize: qtpoSettings.cache_size,
+			total_js: qtpoSettings.total_js_css.js,
+			total_css: qtpoSettings.total_js_css.css,
+			imageInfo: qtpoSettings.image_info || prevState.imageInfo
+		}));
+	}, [qtpoSettings]);
 
 	return (
 		<div className="settings-form">
 			<h2>Dashboard</h2>
 			<div className="dashboard-overview">
+				{/* Cache Section */}
 				<div className="dashboard-card">
 					<h3>Cache Status</h3>
-					<p>Current Cache Size: {totalCacheSize}</p>
+					<p>Current Cache Size: {state.totalCacheSize}</p>
 					<button
 						className="clear-cache-btn"
 						onClick={onClickHandle}
-						disabled={loading.clear_cache}
+						disabled={state.loading.clear_cache}
 					>
-						{loading.clear_cache ? 'Clearing...' : 'Clear Cache Now'}
+						{state.loading.clear_cache ? 'Clearing...' : 'Clear Cache Now'}
 					</button>
 				</div>
 
+				{/* JavaScript & CSS Optimization Section */}
 				<div className="dashboard-card">
 					<h3>JavaScript & CSS Optimization</h3>
-					<p>JavaScript Files Minified: {total_js}</p>
-					<p>CSS Files Minified: {total_css}</p>
-					{/* <button className="optimize-assets-btn">Minify Assets</button> */}
+					<p>JavaScript Files Minified: {state.total_js}</p>
+					<p>CSS Files Minified: {state.total_css}</p>
 				</div>
 
+				{/* Image Optimization Section */}
 				<div className="dashboard-card image-overview">
 					<h3>Image Optimization</h3>
 					<div className="status-group">
 						<div className="status-item">
 							<h4>WebP</h4>
-							<p>Completed: {imageInfo?.completed?.webp?.length || 0}</p>
-							<p>Pending: {imageInfo?.pending?.webp?.length || 0}</p>
-							<p>Failed: {imageInfo?.failed?.webp?.length || 0}</p>
+							<p>Completed: {completed?.webp?.length || 0}</p>
+							<p>Pending: {pending?.webp?.length || 0}</p>
+							<p>Failed: {failed?.webp?.length || 0}</p>
 						</div>
 						<div className="status-item">
 							<h4>AVIF</h4>
-							<p>Completed: {imageInfo?.completed?.avif?.length || 0}</p>
-							<p>Pending: {imageInfo?.pending?.avif?.length || 0}</p>
-							<p>Failed: {Object.keys(imageInfo?.failed?.avif || {}).length}</p>
+							<p>Completed: {completed?.avif?.length || 0}</p>
+							<p>Pending: {pending?.avif?.length || 0}</p>
+							<p>Failed: {Object.keys(failed?.avif || {}).length}</p>
 						</div>
 					</div>
 					<div className="action-buttons">
 						<button
 							className="optimize-images-btn"
 							onClick={convertPendingImages}
-							disabled={loading.optimize_images}
+							disabled={state.loading.optimize_images}
 						>
-							{loading.optimize_images ? 'Optimizing...' : 'Optimize Now'}
+							{state.loading.optimize_images ? 'Optimizing...' : 'Optimize Now'}
 						</button>
 						<button
 							className="remove-optimized-btn"
 							onClick={removeOptimizedImages}
-							disabled={loading.remove_images}
+							disabled={state.loading.remove_images}
 						>
-							{loading.remove_images ? 'Removing...' : 'Remove Optimized'}
+							{state.loading.remove_images ? 'Removing...' : 'Remove Optimized'}
 						</button>
 					</div>
 				</div>
 			</div>
 
+			{/* Recent Activities */}
 			<div className="recent-activities">
 				<h3>Recent Activities</h3>
 				<ul>
@@ -192,6 +189,7 @@ const Dashboard = ({ activities }) => {
 				</ul>
 			</div>
 
+			{/* Plugin Information */}
 			<div className="plugin-info">
 				<h3>Plugin Information</h3>
 				<p><strong>Version:</strong> 1.0.0</p>
