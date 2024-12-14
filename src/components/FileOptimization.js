@@ -1,32 +1,28 @@
 import React, { useState } from 'react';
-import { CheckboxOption } from '../lib/util';
+import { CheckboxOption, handleChange } from '../lib/util';
+import { apiCall } from '../lib/apiRequest';
 
-const FileOptimization = ({ options }) => {
-	const [settings, setSettings] = useState({
-		minifyJS: options?.minifyJS || false,
-		excludeJS: options?.excludeJS || '',
-		minifyCSS: options?.minifyCSS || false,
-		excludeCSS: options?.excludeCSS || '',
-		combineCSS: options?.combineCSS || false,
-		excludeCombineCSS: options?.excludeCombineCSS || '',
-		removeWooCSSJS: options?.removeWooCSSJS || false,
-		excludeUrlToKeepJSCSS: options?.excludeUrlToKeepJSCSS || "shop/(.*)\nproduct/(.*)\nmy-account/(.*)\ncart/(.*)\ncheckout/(.*)",
-		removeCssJsHandle: options?.removeCssJsHandle || "style: woocommerce-layout\nstyle: woocommerce-general\nstyle: woocommerce-smallscreen\nstyle: wc-blocks-style\nscript: woocommerce\nscript: wc-cart-fragments\nscript: wc-add-to-cart\nscript: jquery-blockui\nscript: wc-order-attribution\nscript: sourcebuster-js",
-		minifyHTML: options?.minifyHTML || false,
-		deferJS: options?.deferJS || false,
-		excludeDeferJS: options?.excludeDeferJS || '',
-		delayJS: options?.delayJS || false,
-		excludeDelayJS: options?.excludeDelayJS || '',
-	});
+const FileOptimization = ({ options = {} }) => {
+	const defaultSettings = {
+		minifyJS: false,
+		excludeJS: '',
+		minifyCSS: false,
+		excludeCSS: '',
+		combineCSS: false,
+		excludeCombineCSS: '',
+		removeWooCSSJS: false,
+		excludeUrlToKeepJSCSS: "shop/(.*)\nproduct/(.*)\nmy-account/(.*)\ncart/(.*)\ncheckout/(.*)",
+		removeCssJsHandle: "style: woocommerce-layout\nstyle: woocommerce-general\nstyle: woocommerce-smallscreen\nstyle: wc-blocks-style\nscript: woocommerce\nscript: wc-cart-fragments\nscript: wc-add-to-cart\nscript: jquery-blockui\nscript: wc-order-attribution\nscript: sourcebuster-js",
+		minifyHTML: false,
+		deferJS: false,
+		excludeDeferJS: '',
+		delayJS: false,
+		excludeDelayJS: '',
+		...options,
+	}
+
+	const [settings, setSettings] = useState(defaultSettings);
 	const [isLoading, setIsLoading] = useState(false);
-
-	const handleChange = (e) => {
-		const { name, value, type, checked } = e.target;
-		setSettings((prevState) => ({
-			...prevState,
-			[name]: type === 'checkbox' ? checked : value,
-		}));
-	};
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
@@ -35,7 +31,7 @@ const FileOptimization = ({ options }) => {
 		try {
 			// Submit settings (mock function for now)
 			console.log('Form Submitted:', settings);
-			// await apiCall(settings, 'file_optimisation'); // Replace with real API call
+			await apiCall('update_settings', { tab: 'file_optimisation', settings });
 		} catch (error) {
 			console.error('Form submission error:', error);
 		} finally {
@@ -50,37 +46,40 @@ const FileOptimization = ({ options }) => {
 			<CheckboxOption
 				label="Minify JavaScript"
 				checked={settings.minifyJS}
-				onChange={handleChange}
+				onChange={handleChange(setSettings)}
 				name="minifyJS"
+				textareaName='excludeJS'
 				textareaPlaceholder="Exclude specific JavaScript files"
 				textareaValue={settings.excludeJS}
-				onTextareaChange={handleChange}
+				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<CheckboxOption
 				label="Minify CSS"
 				checked={settings.minifyCSS}
-				onChange={handleChange}
+				onChange={handleChange(setSettings)}
 				name="minifyCSS"
+				textareaName='excludeCSS'
 				textareaPlaceholder="Exclude specific CSS files"
 				textareaValue={settings.excludeCSS}
-				onTextareaChange={handleChange}
+				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<CheckboxOption
 				label="Combine CSS"
 				checked={settings.combineCSS}
-				onChange={handleChange}
+				onChange={handleChange(setSettings)}
 				name="combineCSS"
+				textareaName='excludeCombineCSS'
 				textareaPlaceholder="Exclude CSS files to combine"
 				textareaValue={settings.excludeCombineCSS}
-				onTextareaChange={handleChange}
+				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<CheckboxOption
 				label="Remove woocommerce css and js from other page"
 				checked={settings.removeWooCSSJS}
-				onChange={handleChange}
+				onChange={handleChange(setSettings)}
 				name="removeWooCSSJS"
 			/>
 
@@ -92,14 +91,14 @@ const FileOptimization = ({ options }) => {
 						placeholder="Exclude Url to keep woocommerce css and js"
 						name="excludeUrlToKeepJSCSS"
 						value={settings.excludeUrlToKeepJSCSS}
-						onChange={handleChange}
+						onChange={handleChange(setSettings)}
 					/>
 					<textarea
 						className="text-area-field"
 						placeholder="Enter handle which script and style you want to remove"
 						name="removeCssJsHandle"
 						value={settings.removeCssJsHandle}
-						onChange={handleChange}
+						onChange={handleChange(setSettings)}
 					/>
 				</div>
 			)}
@@ -107,28 +106,30 @@ const FileOptimization = ({ options }) => {
 			<CheckboxOption
 				label="Minify HTML"
 				checked={settings.minifyHTML}
-				onChange={handleChange}
+				onChange={handleChange(setSettings)}
 				name="minifyHTML"
 			/>
 
 			<CheckboxOption
 				label="Defer Loading JavaScript"
 				checked={settings.deferJS}
-				onChange={handleChange}
+				onChange={handleChange(setSettings)}
 				name="deferJS"
+				textareaName='excludeDeferJS'
 				textareaPlaceholder="Exclude specific JavaScript files"
 				textareaValue={settings.excludeDeferJS}
-				onTextareaChange={handleChange}
+				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<CheckboxOption
 				label="Delay Loading JavaScript"
 				checked={settings.delayJS}
-				onChange={handleChange}
+				onChange={handleChange(setSettings)}
 				name="delayJS"
+				textareaName='excludeDelayJS'
 				textareaPlaceholder="Exclude specific JavaScript files"
 				textareaValue={settings.excludeDelayJS}
-				onTextareaChange={handleChange}
+				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<button type="submit" className="submit-button" disabled={isLoading}>

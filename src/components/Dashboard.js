@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiCall } from '../lib/apiRequest';
 
-const translations = qtpoSettings.translations;
 
 const Dashboard = ({ activities }) => {
-	// Manage the state
+	const translations = qtpoSettings.translations;
+
+	// Initialize state
 	const [state, setState] = useState({
 		totalCacheSize: qtpoSettings.cache_size,
 		total_js: qtpoSettings.total_js_css.js,
@@ -18,47 +19,52 @@ const Dashboard = ({ activities }) => {
 	});
 
 	// Memoizing the image information to reduce unnecessary re-renders
-	const { imageInfo } = state;
+	const { imageInfo, loading, totalCacheSize, total_js, total_css } = state;
 	const { completed = {}, pending = {}, failed = {} } = imageInfo;
+
+	// General function to update state
+	const updateState = useCallback((updates) => {
+		setState((prevState) => ({ ...prevState, ...updates }));
+	}, []);
 
 	// Handle loading state changes
 	const handleLoading = useCallback((key, isLoading) => {
-		setState((prevState) => ({
-			...prevState,
-			loading: { ...prevState.loading, [key]: isLoading }
-		}));
+		updateState({
+			loading: { ...state.loading, [key]: isLoading },
+		});
 	}, []);
 
 	// Update cache values in state
 	const updateCache = useCallback(() => {
-		setState((prevState) => ({
-			...prevState,
+		updateState({
 			totalCacheSize: 0,
 			total_js: 0,
-			total_css: 0
-		}));
-	}, []);
+			total_css: 0,
+		});
+	}, [updateState]);
 
 	// Clear Cache Handler
-	const onClickHandle = useCallback((e) => {
-		e.preventDefault();
-		handleLoading('clear_cache', true);
-		apiCall('clear_cache', 'POST', { action: 'clear_cache' })
-			.then((data) => {
-				console.log(translations.clearCacheSuccess, data);
-				updateCache();
-			})
-			.catch((error) => console.error(translations.errorClearCache, error))
-			.finally(() => handleLoading('clear_cache', false));
-	}, [handleLoading, updateCache]);
+	const onClearCache = useCallback(
+		(e) => {
+			e.preventDefault();
+			handleLoading('clear_cache', true);
+			apiCall('clear_cache', { action: 'clear_cache' })
+				.then((data) => {
+					console.log(translations.clearCacheSuccess, data);
+					updateCache();
+				})
+				.catch((error) => console.error(translations.errorClearCache, error))
+				.finally(() => handleLoading('clear_cache', false));
+		},
+		[handleLoading, updateCache, translations]
+	);
 
-	// Convert Pending Images
-	const convertPendingImages = useCallback(() => {
+	// Optimize Pending Images
+	const optimizeImages = useCallback(() => {
 		handleLoading('optimize_images', true);
 
-		const { webp = [], avif = [] } = pending || {};
-
-		if (webp.length === 0 && avif.length === 0) {
+		const { webp = [], avif = [] } = pending;
+		if (!webp.length && !avif.length) {
 			alert(translations.noPendingImage);
 			handleLoading('optimize_images', false);
 			return;
@@ -66,21 +72,20 @@ const Dashboard = ({ activities }) => {
 
 		apiCall('optimise_image', 'POST', { webp, avif })
 			.then(() => {
-				console.log('Images optimized successfully');
+				console.log(translations.imgOptimiseSuccess);
 				updateCache();
 			})
-			.catch((error) => console.error('Error optimizing images: ', error))
+			.catch((error) => console.error(translations.errorOptimiseImg, error))
 			.finally(() => handleLoading('optimize_images', false));
-	}, [handleLoading, pending, updateCache]);
+	}, [handleLoading, pending, updateCache, translations]);
 
 	// Remove Optimized Images
-	const removeOptimizedImages = useCallback(() => {
+	const removeImages = useCallback(() => {
 		handleLoading('remove_images', true);
 
-		const { webp = [], avif = [] } = completed || {};
-
-		if (webp.length === 0 && avif.length === 0) {
-			alert('No optimized images to remove!');
+		const { webp = [], avif = [] } = completed;
+		if (!webp.length && !avif.length) {
+			alert(translations.noImgRemove);
 			handleLoading('remove_images', false);
 			return;
 		}
@@ -88,86 +93,81 @@ const Dashboard = ({ activities }) => {
 		apiCall('delete_optimised_image', 'POST', {})
 			.then((data) => {
 				if (data.success) {
-					alert('Optimized images removed successfully!');
-					console.log('Removed images:', data.deleted);
+					alert(translations.removedOptimiseImg);
+					console.log(translations.removedImg, data.deleted);
 				} else {
-					alert('Some images could not be removed.');
-					console.error('Failed to remove:', data.failed);
+					alert(translations.someImgNotRemoved);
+					console.error(translations.failedToRemove, data.failed);
 				}
 			})
 			.catch((error) => {
-				console.error('Error removing optimized images:', error);
-				alert('An error occurred while removing optimized images.');
+				console.error(translations.errorRemovingImg, error);
+				alert(translations.errorEccurredRemovingImg);
 			})
 			.finally(() => handleLoading('remove_images', false));
 	}, [handleLoading, completed]);
 
-	// When qtpoSettings changes, update the state (for example, for the cache size)
+	// Sync state with qtpoSettings changes
 	useEffect(() => {
-		setState((prevState) => ({
-			...prevState,
+		updateState({
 			totalCacheSize: qtpoSettings.cache_size,
 			total_js: qtpoSettings.total_js_css.js,
 			total_css: qtpoSettings.total_js_css.css,
-			imageInfo: qtpoSettings.image_info || prevState.imageInfo
-		}));
-	}, [qtpoSettings]);
+			imageInfo: qtpoSettings.image_info || state.imageInfo,
+		});
+	}, [qtpoSettings, updateState, state.imageInfo]);
 
 	return (
 		<div className="settings-form">
-			<h2>Dashboard</h2>
+			<h2>{translations.dashboard}</h2>
 			<div className="dashboard-overview">
 				{/* Cache Section */}
 				<div className="dashboard-card">
-					<h3>Cache Status</h3>
-					<p>Current Cache Size: {state.totalCacheSize}</p>
+					<h3>{translations.cacheStatus}</h3>
+					<p>{translations.currentCacheSize} {totalCacheSize}</p>
 					<button
 						className="clear-cache-btn"
-						onClick={onClickHandle}
-						disabled={state.loading.clear_cache}
+						onClick={onClearCache}
+						disabled={loading.clear_cache}
 					>
-						{state.loading.clear_cache ? 'Clearing...' : 'Clear Cache Now'}
+						{loading.clear_cache ? translations.clearing : translations.clearCacheNow}
 					</button>
 				</div>
 
 				{/* JavaScript & CSS Optimization Section */}
 				<div className="dashboard-card">
-					<h3>JavaScript & CSS Optimization</h3>
-					<p>JavaScript Files Minified: {state.total_js}</p>
-					<p>CSS Files Minified: {state.total_css}</p>
+					<h3>{translations.JSCSSOptimisation}</h3>
+					<p>{translations.JSFilesMinified} {total_js}</p>
+					<p>{translations.CSSFilesMinified} {total_css}</p>
 				</div>
 
 				{/* Image Optimization Section */}
 				<div className="dashboard-card image-overview">
-					<h3>Image Optimization</h3>
+					<h3>{translations.imageOptimization}</h3>
 					<div className="status-group">
-						<div className="status-item">
-							<h4>WebP</h4>
-							<p>Completed: {completed?.webp?.length || 0}</p>
-							<p>Pending: {pending?.webp?.length || 0}</p>
-							<p>Failed: {failed?.webp?.length || 0}</p>
-						</div>
-						<div className="status-item">
-							<h4>AVIF</h4>
-							<p>Completed: {completed?.avif?.length || 0}</p>
-							<p>Pending: {pending?.avif?.length || 0}</p>
-							<p>Failed: {Object.keys(failed?.avif || {}).length}</p>
-						</div>
+						{['webp', 'avif'].map((format) => (
+							<div key={format} className="status-item">
+								<h4>{format.toUpperCase()}</h4>
+								<p>Completed: {completed[format]?.length || 0}</p>
+								<p>Pending: {pending[format]?.length || 0}</p>
+								<p>Failed: {failed[format]?.length || 0}</p>
+							</div>
+						))}
 					</div>
 					<div className="action-buttons">
 						<button
 							className="optimize-images-btn"
-							onClick={convertPendingImages}
-							disabled={state.loading.optimize_images}
+							onClick={optimizeImages}
+							disabled={loading.optimize_images}
 						>
-							{state.loading.optimize_images ? 'Optimizing...' : 'Optimize Now'}
+							{loading.optimize_images ? 'Optimizing...' : 'Optimize Now'}
 						</button>
 						<button
 							className="remove-optimized-btn"
-							onClick={removeOptimizedImages}
-							disabled={state.loading.remove_images}
+							onClick={removeImages}
+							disabled={loading.remove_images}
 						>
-							{state.loading.remove_images ? 'Removing...' : 'Remove Optimized'}
+							{loading.remove_images ? 'Removing...' : 'Remove Optimized'}
 						</button>
 					</div>
 				</div>
@@ -177,7 +177,7 @@ const Dashboard = ({ activities }) => {
 			<div className="recent-activities">
 				<h3>Recent Activities</h3>
 				<ul>
-					{activities?.length > 0 ? (
+					{activities?.length ? (
 						activities.map((activity, index) => (
 							<li key={index}>
 								<div dangerouslySetInnerHTML={{ __html: activity.activity }} />

@@ -1,13 +1,19 @@
 // Utility function to handle API calls
-export const apiCall = (action, method, body) => {
+export const apiCall = (action, body) => {
 	return fetch(qtpoSettings.apiUrl + action, {
-		method,
+		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			'X-WP-Nonce': qtpoSettings.nonce
 		},
 		body: JSON.stringify(body)
-	}).then((response) => response.json());
+	}).then(async (response) => {
+		const data = await response.json();
+		if ('update_settings' === action && data.success) {
+			qtpoSettings.settings = data.data;
+		}
+		return data;
+	});
 };
 
 export const fetchRecentActivities = () => {
