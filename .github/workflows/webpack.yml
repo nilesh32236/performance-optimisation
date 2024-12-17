@@ -3,6 +3,8 @@ name: NodeJS with Webpack
 on:
   push:
     branches: [ "master" ]
+    paths-ignore:
+      - 'build/**'
 
 jobs:
   build:
@@ -34,12 +36,16 @@ jobs:
     - name: Build
       run: npm run build
 
-    - name: Commit and Push Changes
+    - name: Pull Latest Changes
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git pull origin master --rebase
+
+    - name: Commit and Push Changes
+      run: |
         git add build/
-        git commit -m "Update build output"
-        git push
+        git commit -m "Update build output" || echo "No changes to commit"
+        git push origin master
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
