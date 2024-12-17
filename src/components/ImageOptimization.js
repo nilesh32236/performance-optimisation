@@ -3,6 +3,8 @@ import { CheckboxOption, handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 
 const ImageOptimization = ({ options = {} }) => {
+	const translations = qtpoSettings.translations;
+
 	const defaultSettings = {
 		lazyLoadImages: false,
 		excludeFistImages: 0,
@@ -41,7 +43,7 @@ const ImageOptimization = ({ options = {} }) => {
 		try {
 			await apiCall('update_settings', { tab: 'image_optimisation', settings });
 		} catch (error) {
-			console.error('Form submission error:', error);
+			console.error(translations.formSubmissionError, error);
 		} finally {
 			setIsLoading(false);
 		}
@@ -49,25 +51,25 @@ const ImageOptimization = ({ options = {} }) => {
 
 	return (
 		<form onSubmit={onSubmit} className="settings-form">
-			<h2>Image Optimization Settings</h2>
+			<h2>{translations.imgOptimizationsettings}</h2>
 
 			{/* Lazy Load Images */}
 			<CheckboxOption
-				label='Lazy Load Images'
+				label={translations.lazyLoadImages}
 				checked={settings.lazyLoadImages}
 				onChange={handleChange(setSettings)}
 				name='lazyLoadImages'
 				textareaName='excludeImages'
-				textareaPlaceholder='Exclude specific image URLs'
+				textareaPlaceholder={translations.excludeImages}
 				textareaValue={settings.excludeImages}
 				onTextareaChange={handleChange(setSettings)}
-				description='Enable lazy loading for images to improve the initial load speed by loading images only when they appear in the viewport.'
+				description={translations.lazyLoadImagesDesc}
 			>
 				{settings.lazyLoadImages && (
 					<>
 						<input
 							className='input-field'
-							placeholder='Enter number you want to exclude first'
+							placeholder={translations.excludeFistImages}
 							name='excludeFistImages'
 							value={settings.excludeFistImages}
 							onChange={handleChange(setSettings)}
@@ -82,10 +84,10 @@ const ImageOptimization = ({ options = {} }) => {
 									checked={settings.replacePlaceholderWithSVG}
 									onChange={handleChange(setSettings)}
 								/>
-								Replace Low-Resolution Placeholder with SVG
+								{translations.replaceImgToSVG}
 							</label>
 							<p className="option-description">
-								Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance.
+								{translations.replaceImgToSVGDesc}
 							</p>
 						</div>
 					</>
@@ -94,28 +96,28 @@ const ImageOptimization = ({ options = {} }) => {
 
 			{/* Convert to WebP */}
 			<CheckboxOption
-				label='Enable Image Conversion'
+				label={translations.convertImg}
 				checked={settings.convertImg}
 				onChange={handleChange(setSettings)}
 				name='convertImg'
 				textareaName='excludeConvertImages'
-				textareaPlaceholder='Exclude specific images from conversion'
+				textareaPlaceholder={translations.excludeConvertImages}
 				textareaValue={settings.excludeConvertImages}
 				onTextareaChange={handleChange(setSettings)}
-				description='Convert images to WebP/AVIF format to reduce image size while maintaining quality.'
+				description={translations.convertImgDesc}
 			>
 				{settings.convertImg && (
 					<div>
 						<label className='sub-fields'>
-							Conversion Format:
+							{translations.conversationFormat}
 							<select
 								name='conversionFormat'
 								value={settings.conversionFormat}
 								onChange={handleChange(setSettings)}
 							>
-								<option value='webp'>WebP</option>
-								<option value='avif'>AVIF</option>
-								<option value='both'>Both</option>
+								<option value='webp'>{translations.webp}</option>
+								<option value='avif'>{translations.avif}</option>
+								<option value='both'>{translations.both}</option>
 							</select>
 						</label>
 					</div>
@@ -124,25 +126,25 @@ const ImageOptimization = ({ options = {} }) => {
 
 			{/* Preload Front Page Images */}
 			<CheckboxOption
-				label='Preload Images on Front Page'
+				label={translations.preloadFrontPageImg}
 				checked={settings.preloadFrontPageImages}
 				onChange={handleChange(setSettings)}
 				name='preloadFrontPageImages'
 				textareaName='preloadFrontPageImagesUrls'
-				textareaPlaceholder='Enter img url (full/partial) to preload this img in front page.'
+				textareaPlaceholder={translations.preloadFrontPageImgUrl}
 				textareaValue={settings.preloadFrontPageImagesUrls}
 				onTextareaChange={handleChange(setSettings)}
-				description='Preload critical images on the front page to enhance initial load performance.'
+				description={translations.preloadFrontPageImgDesc}
 			/>
 
 
 			{/* Preload Feature Images for Specific Post Types */}
 			<CheckboxOption
-				label='Preload Feature Images for Post Types'
+				label={translations.preloadPostTypeImg}
 				checked={settings.preloadPostTypeImage}
 				onChange={handleChange(setSettings)}
 				name='preloadPostTypeImage'
-				description='Select post types where feature images should be preloaded for better performance.'
+				description={translations.preloadPostTypeImgDesc}
 			>
 				{settings.preloadPostTypeImage && (
 					<div>
@@ -160,7 +162,7 @@ const ImageOptimization = ({ options = {} }) => {
 						))}
 						<textarea
 							className="text-area-field"
-							placeholder="Exclude specific img to preload."
+							placeholder={translations.excludePostTypeImgUrl}
 							name="excludePostTypeImgUrl"
 							value={settings.excludePostTypeImgUrl}
 							onChange={handleChange(setSettings)}
@@ -174,14 +176,14 @@ const ImageOptimization = ({ options = {} }) => {
 								onChange={handleChange(setSettings)}
 							/>
 							<p className="option-description">
-								Set max width so it can't load bigger img than it. <code>0</code> default.
+								{translations.maxWidthImgSize}
 							</p>
 						</span>
 
 						<span>
 							<textarea
 								className='text-area-field'
-								placeholder="Exclude specific size to preload."
+								placeholder={translations.excludeSize}
 								type="number"
 								name="excludeSize"
 								value={settings.excludeSize}
@@ -193,7 +195,7 @@ const ImageOptimization = ({ options = {} }) => {
 			</CheckboxOption>
 
 			<button type="submit" className="submit-button" disabled={isLoading}>
-				{isLoading ? 'Saving...' : 'Save Settings'}
+				{isLoading ? translations.saving : translations.saveSettings}
 			</button>
 		</form>
 	);

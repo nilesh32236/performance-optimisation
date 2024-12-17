@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { apiCall } from '../lib/apiRequest';
 
 const PluginSetting = ({ options }) => {
+	const translations = qtpoSettings.translations;
+
 	const [selectedFile, setSelectedFile] = useState(null);
 	const [notification, setNotification] = useState({ message: '', success: false });
 	const fileInputRef = useRef(null);
@@ -34,7 +36,7 @@ const PluginSetting = ({ options }) => {
 
 	const importSettings = () => {
 		if (!selectedFile) {
-			setNotification({ message: 'Please select a file.', success: false });
+			setNotification({ message: translations.selectFiles, success: false });
 			return;
 		}
 
@@ -54,17 +56,17 @@ const PluginSetting = ({ options }) => {
 						}
 
 						setNotification({
-							message: data.message || 'File imported successfully.',
+							message: data.message || translations.fileImported,
 							success: data.success,
 						});
 					})
 					.catch((error) => {
-						console.error('Error importing settings:', error);
-						setNotification({ message: 'An error occurred during import.', success: false });
+						console.error(translations.fileImporting, error);
+						setNotification({ message: translations.fileErrorImport, success: false });
 					});
 			} catch (error) {
-				console.error('Invalid JSON file:', error);
-				setNotification({ message: 'Invalid file format. Please select a valid JSON file.', success: false });
+				console.error(translations.invalidJSON, error);
+				setNotification({ message: translations.invalidFileFormat, success: false });
 			}
 		};
 
@@ -73,13 +75,13 @@ const PluginSetting = ({ options }) => {
 
 	return (
 		<div className='settings-form'>
-			<h2>Tools</h2>
+			<h2>{translations.tools}</h2>
 
 			{/* Export Settings */}
 			<button className="submit-button" onClick={exportSettings}>
-				Export Settings
+				{translations.exportSettings}
 			</button>
-			<p>Export performance optimization plugin settings.</p>
+			<p>{translations.exportPluginSettings}</p>
 
 			{/* File Input for Import */}
 			<input
@@ -95,10 +97,10 @@ const PluginSetting = ({ options }) => {
 				className="submit-button"
 				disabled={!selectedFile}
 			>
-				Import Settings
+				{translations.importSettings}
 			</button>
 
-			<p>Import performance optimization plugin settings.</p>
+			<p>{translations.importPluginSettings}</p>
 
 			{/* Notification Message */}
 			{notification.message && (

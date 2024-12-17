@@ -157,9 +157,9 @@ const Dashboard = ({ activities }) => {
 						{['webp', 'avif'].map((format) => (
 							<div key={format} className="status-item">
 								<h4>{format.toUpperCase()}</h4>
-								<p>Completed: {completed[format]?.length || 0}</p>
-								<p>Pending: {pending[format]?.length || 0}</p>
-								<p>Failed: {failed[format]?.length || 0}</p>
+								<p>{translations.completed}: {completed[format]?.length || 0}</p>
+								<p>{translations.pending}: {pending[format]?.length || 0}</p>
+								<p>{translations.failed}: {failed[format]?.length || 0}</p>
 							</div>
 						))}
 					</div>
@@ -169,14 +169,14 @@ const Dashboard = ({ activities }) => {
 							onClick={optimizeImages}
 							disabled={loading.optimize_images}
 						>
-							{loading.optimize_images ? 'Optimizing...' : 'Optimize Now'}
+							{loading.optimize_images ? translations.optimizing : translations.optimiseNow}
 						</button>
 						<button
 							className="remove-optimized-btn"
 							onClick={removeImages}
 							disabled={loading.remove_images}
 						>
-							{loading.remove_images ? 'Removing...' : 'Remove Optimized'}
+							{loading.remove_images ? translations.removing : translations.removeOptimized}
 						</button>
 					</div>
 				</div>
@@ -184,7 +184,7 @@ const Dashboard = ({ activities }) => {
 
 			{/* Recent Activities */}
 			<div className="recent-activities">
-				<h3>Recent Activities</h3>
+				<h3>{translations.recentActivities}</h3>
 				<ul>
 					{activities?.length ? (
 						activities.map((activity, index) => (
@@ -193,17 +193,9 @@ const Dashboard = ({ activities }) => {
 							</li>
 						))
 					) : (
-						<li>Loading recent activities...</li>
+						<li>{translations.loadingRecentActivities}</li>
 					)}
 				</ul>
-			</div>
-
-			{/* Plugin Information */}
-			<div className="plugin-info">
-				<h3>Plugin Information</h3>
-				<p><strong>Version:</strong> 1.0.0</p>
-				<p><strong>Last Updated:</strong> September 21, 2024</p>
-				<p>Get the best performance for your website by optimizing images, caching, and assets like JavaScript and CSS files. Stay updated with new features and improvements in each release!</p>
 			</div>
 		</div>
 	);

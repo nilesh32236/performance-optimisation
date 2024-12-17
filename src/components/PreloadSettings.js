@@ -3,6 +3,8 @@ import { CheckboxOption, handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 
 const PreloadSettings = ({ options = {} }) => {
+	const translations = qtpoSettings.translations;
+
 	const defaultSettings = {
 		enablePreloadCache: false,
 		excludePreloadCache: '',
@@ -27,81 +29,81 @@ const PreloadSettings = ({ options = {} }) => {
 		try {
 			await apiCall('update_settings', { tab: 'preload_settings', settings });
 		} catch (error) {
-			console.error('Form submission error:', error);
+			console.error(translations.formSubmissionError, error);
 		} finally {
 			setIsLoading(false);
 		}
 	}
 	return (
 		<form onSubmit={handleSubmit} className="settings-form">
-			<h2>Preload Settings</h2>
+			<h2>{translations.preloadSettings}</h2>
 
 			{/* Preload Cache */}
 			<CheckboxOption
-				label="Enable Preloading Cache"
+				label={translations.enablePreloadCache}
 				checked={settings.enablePreloadCache}
 				onChange={handleChange(setSettings)}
 				name="enablePreloadCache"
 				textareaName='excludePreloadCache'
-				textareaPlaceholder="Exclude specific resources from preloading"
+				textareaPlaceholder={translations.excludePreloadCache}
 				textareaValue={settings.excludePreloadCache}
 				onTextareaChange={handleChange(setSettings)}
-				description="Preload the cache to improve page load times by caching key resources."
+				description={translations.enablePreloadCacheDesc}
 			/>
 
 			<CheckboxOption
-				label='Preconnect'
+				label={translations.preconnect}
 				checked={settings.preconnect}
 				onChange={handleChange(setSettings)}
 				name='preconnect'
 				textareaName='preconnectOrigins'
-				textareaPlaceholder='Add preconnect origins, one per line (e.g., https://fonts.gstatic.com)'
+				textareaPlaceholder={translations.preconnectOrigins}
 				textareaValue={settings.preconnectOrigins}
 				onTextareaChange={handleChange(setSettings)}
-				description='Add origins to preconnect, improving the speed of resource loading.'
+				description={translations.preconnectDesc}
 			/>
 
 			{/* DNS Prefetch */}
 			<CheckboxOption
-				label='Prefetch DNS'
+				label={translations.prefetchDNS}
 				checked={settings.prefetchDNS}
 				onChange={handleChange(setSettings)}
 				name='prefetchDNS'
 				textareaName='dnsPrefetchOrigins'
-				textareaPlaceholder='Enter domains for DNS prefetching, one per line (e.g., https://example.com)'
+				textareaPlaceholder={translations.dnsPrefetchOrigins}
 				textareaValue={settings.dnsPrefetchOrigins}
 				onTextareaChange={handleChange(setSettings)}
-				description='Prefetch DNS for external domains to reduce DNS lookup times.'
+				description={translations.prefetchDNSDesc}
 			/>
 
 			{/* Preload Fonts */}
 			<CheckboxOption
-				label='Preload Fonts'
+				label={translations.preloadFonts}
 				checked={settings.preloadFonts}
 				onChange={handleChange(setSettings)}
 				name='preloadFonts'
 				textareaName='preloadFontsUrls'
-				textareaPlaceholder="Enter fonts for preloading, one per line (e.g., https://example.com/fonts/font.woff2)\n/your-theme/fonts/font.woff2"
+				textareaPlaceholder={translations.preloadFontsUrls}
 				textareaValue={settings.preloadFontsUrls}
 				onTextareaChange={handleChange(setSettings)}
-				description='Preload fonts to ensure faster loading and rendering of text.'
+				description={translations.preloadFontsDesc}
 			/>
 
 			{/* Preload CSS */}
 			<CheckboxOption
-				label='Preload CSS'
+				label={translations.preloadCSS}
 				checked={settings.preloadCSS}
 				onChange={handleChange(setSettings)}
 				name='preloadCSS'
 				textareaName='preloadCSSUrls'
-				textareaPlaceholder="Enter CSS for preloading, one per line (e.g., https://example.com/style.css)\n/your-theme/css/style.css"
+				textareaPlaceholder={translations.preloadCSSUrls}
 				textareaValue={settings.preloadCSSUrls}
 				onTextareaChange={handleChange(setSettings)}
-				description='Preload CSS to ensure faster rendering and style application'
+				description={translations.preloadCSSDesc}
 			/>
 
 			<button type="submit" className="submit-button" disabled={isLoading}>
-				{isLoading ? 'Saving...' : 'Save Settings'}
+				{isLoading ? translations.saving : translations.saveSettings}
 			</button>
 		</form>
 	);

@@ -3,6 +3,8 @@ import { CheckboxOption, handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 
 const FileOptimization = ({ options = {} }) => {
+	const translations = qtpoSettings.translations;
+
 	const defaultSettings = {
 		minifyJS: false,
 		excludeJS: '',
@@ -30,10 +32,10 @@ const FileOptimization = ({ options = {} }) => {
 
 		try {
 			// Submit settings (mock function for now)
-			console.log('Form Submitted:', settings);
+			console.log(translations.formSubmitted, settings);
 			await apiCall('update_settings', { tab: 'file_optimisation', settings });
 		} catch (error) {
-			console.error('Form submission error:', error);
+			console.error(translations.formSubmissionError, error);
 		} finally {
 			setIsLoading(false);
 		}
@@ -41,43 +43,43 @@ const FileOptimization = ({ options = {} }) => {
 
 	return (
 		<form onSubmit={handleSubmit} className="settings-form">
-			<h2>File Optimization Settings</h2>
+			<h2>{translations.fileOptimizationSettings}</h2>
 
 			<CheckboxOption
-				label="Minify JavaScript"
+				label={translations.minifyJS}
 				checked={settings.minifyJS}
 				onChange={handleChange(setSettings)}
-				name="minifyJS"
+				name='minifyJS'
 				textareaName='excludeJS'
-				textareaPlaceholder="Exclude specific JavaScript files"
+				textareaPlaceholder={translations.excludeJSFiles}
 				textareaValue={settings.excludeJS}
 				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<CheckboxOption
-				label="Minify CSS"
+				label={translations.minifyCSS}
 				checked={settings.minifyCSS}
 				onChange={handleChange(setSettings)}
 				name="minifyCSS"
 				textareaName='excludeCSS'
-				textareaPlaceholder="Exclude specific CSS files"
+				textareaPlaceholder={translations.excludeCSSFiles}
 				textareaValue={settings.excludeCSS}
 				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<CheckboxOption
-				label="Combine CSS"
+				label={translations.combineCSS}
 				checked={settings.combineCSS}
 				onChange={handleChange(setSettings)}
 				name="combineCSS"
 				textareaName='excludeCombineCSS'
-				textareaPlaceholder="Exclude CSS files to combine"
+				textareaPlaceholder={translations.excludeCombineCSS}
 				textareaValue={settings.excludeCombineCSS}
 				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<CheckboxOption
-				label="Remove woocommerce css and js from other page"
+				label={translations.removeWooCSSJS}
 				checked={settings.removeWooCSSJS}
 				onChange={handleChange(setSettings)}
 				name="removeWooCSSJS"
@@ -88,14 +90,14 @@ const FileOptimization = ({ options = {} }) => {
 				<div className='checkbox-option'>
 					<textarea
 						className="text-area-field"
-						placeholder="Exclude Url to keep woocommerce css and js"
+						placeholder={translations.excludeUrlToKeepJSCSS}
 						name="excludeUrlToKeepJSCSS"
 						value={settings.excludeUrlToKeepJSCSS}
 						onChange={handleChange(setSettings)}
 					/>
 					<textarea
 						className="text-area-field"
-						placeholder="Enter handle which script and style you want to remove"
+						placeholder={translations.removeCssJsHandle}
 						name="removeCssJsHandle"
 						value={settings.removeCssJsHandle}
 						onChange={handleChange(setSettings)}
@@ -104,36 +106,36 @@ const FileOptimization = ({ options = {} }) => {
 			)}
 
 			<CheckboxOption
-				label="Minify HTML"
+				label={translations.minifyHTML}
 				checked={settings.minifyHTML}
 				onChange={handleChange(setSettings)}
 				name="minifyHTML"
 			/>
 
 			<CheckboxOption
-				label="Defer Loading JavaScript"
+				label={translations.deferJS}
 				checked={settings.deferJS}
 				onChange={handleChange(setSettings)}
 				name="deferJS"
 				textareaName='excludeDeferJS'
-				textareaPlaceholder="Exclude specific JavaScript files"
+				textareaPlaceholder={translations.excludeDeferJS}
 				textareaValue={settings.excludeDeferJS}
 				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<CheckboxOption
-				label="Delay Loading JavaScript"
+				label={translations.delayJS}
 				checked={settings.delayJS}
 				onChange={handleChange(setSettings)}
 				name="delayJS"
 				textareaName='excludeDelayJS'
-				textareaPlaceholder="Exclude specific JavaScript files"
+				textareaPlaceholder={translations.excludeDelayJS}
 				textareaValue={settings.excludeDelayJS}
 				onTextareaChange={handleChange(setSettings)}
 			/>
 
 			<button type="submit" className="submit-button" disabled={isLoading}>
-				{isLoading ? 'Saving...' : 'Save Settings'}
+				{isLoading ? translations.saving : translations.saveSettings}
 			</button>
 		</form>
 	);
