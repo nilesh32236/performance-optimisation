@@ -69,6 +69,7 @@ async function loadScripts() {
 
 	document.dispatchEvent(new Event("DOMContentLoaded"));
 	window.dispatchEvent( new Event("DOMContentLoaded"));
+	window.dispatchEvent( new Event("pageshow") );
 
 	if (typeof jQuery !== 'undefined') {
 		jQuery(document).triggerHandler("ready");

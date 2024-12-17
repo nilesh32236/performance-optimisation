@@ -32,7 +32,7 @@ class Img_Converter {
 	 * @param int $quality Quality level of the converted image (0-100).
 	 * @return bool True on success, false on failure.
 	 */
-	public function convert_image( string $source_image, string $format = 'webp', int $quality = 80 ): bool {
+	public function convert_image( string $source_image, string $format = 'webp', int $quality = -1 ): bool {
 
 		if ( ! in_array( $format, $this->available_format, true ) ) {
 			$this->update_conversion_status( $source_image, 'failed', $format );
@@ -269,7 +269,7 @@ class Img_Converter {
 	 * @param string $source_image The source image path.
 	 * @return string The path where the WebP image will be saved.
 	 */
-	public function get_img_path( string $source_image, string $format = 'webp' ): string {
+	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
 		$info = pathinfo( $source_image );
 
 		$parsed_url = wp_parse_url( $info['dirname'] . '/' . $info['filename'] . '.' . $format );
@@ -290,7 +290,7 @@ class Img_Converter {
 		return $local_path;
 	}
 
-	public function get_img_url( string $source_image, string $format = 'webp' ): string {
+	public static function get_img_url( string $source_image, string $format = 'webp' ): string {
 
 		if ( 0 === strpos( $source_image, home_url() ) ) {
 			// Replace the extension only at the end of the file name
@@ -455,7 +455,7 @@ class Img_Converter {
 		update_option( 'qtpo_img_info', $img_info );
 	}
 
-	public function add_img_into_queue( $img_path, $type = 'webp' ) {
+	public static function add_img_into_queue( $img_path, $type = 'webp' ) {
 		if ( pathinfo( $img_path, PATHINFO_EXTENSION ) === $type ) {
 			return;
 		}

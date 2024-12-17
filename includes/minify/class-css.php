@@ -3,6 +3,7 @@
 namespace PerformanceOptimise\Inc\Minify;
 
 use MatthiasMullie\Minify;
+use PerformanceOptimise\Inc\Img_Converter;
 use PerformanceOptimise\Inc\Util;
 
 class CSS {
@@ -71,6 +72,30 @@ class CSS {
 			$pattern,
 			function ( $matches ) use ( $css_dir_url ) {
 				$image_path = trim( $matches[2] );
+
+				if ( preg_match( '/\.(jpg|jpeg|png|gif)$/i', $image_path ) ) {
+					if ( false === strpos( $image_path, 'http' ) && ! preg_match( '/^data:/', $image_path ) ) {
+						$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
+					}
+
+					$local_path = Util::get_local_path( $image_path );
+
+					// Check if corresponding .avif image exists
+					if ( file_exists( Img_Converter::get_img_path( $image_path, 'avif' ) ) ) {
+						return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';
+					} else {
+						Img_Converter::add_img_into_queue( $local_path, 'avif' );
+					}
+
+					// Check if corresponding .webp image exists
+					if ( file_exists( Img_Converter::get_img_path( $image_path ) ) ) {
+						return 'url("' . Img_Converter::get_img_url( $image_path ) . '")';
+					} else {
+						Img_Converter::add_img_into_queue( $local_path, 'webp' );
+					}
+
+					return 'url("' . $image_path . '")';
+				}
 
 				if ( false === strpos( $image_path, 'http' ) && ! preg_match( '/^data:/', $image_path ) ) {
 					$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
