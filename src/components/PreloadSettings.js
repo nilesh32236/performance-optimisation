@@ -1,164 +1,109 @@
 import React, { useState } from 'react';
-import { handleChange, handleSubmit } from '../lib/formUtils';
+import { CheckboxOption, handleChange } from '../lib/util';
+import { apiCall } from '../lib/apiRequest';
 
-const PreloadSettings = ({ options }) => {
-	const [settings, setSettings] = useState({
-		enablePreloadCache: options?.enablePreloadCache || false,
-		excludePreloadCache: options?.excludePreloadCache || '',
-		preconnect: options?.preconnect || false,
-		preconnectOrigins: options?.preconnectOrigins || '',
-		prefetchDNS: options?.prefetchDNS || false,
-		dnsPrefetchOrigins: options?.dnsPrefetchOrigins || '',
-		preloadFonts: options?.preloadFonts || false,
-		preloadFontsUrls: options?.preloadFontsUrls || '',
-		preloadCSS: options?.preloadCSS || false,
-		preloadCSSUrls: options?.preloadCSSUrls || '',
-	});
+const PreloadSettings = ({ options = {} }) => {
+	const translations = qtpoSettings.translations;
 
+	const defaultSettings = {
+		enablePreloadCache: false,
+		excludePreloadCache: '',
+		preconnect: false,
+		preconnectOrigins: '',
+		prefetchDNS: false,
+		dnsPrefetchOrigins: '',
+		preloadFonts: false,
+		preloadFontsUrls: '',
+		preloadCSS: false,
+		preloadCSSUrls: '',
+		...options
+	}
+
+	const [settings, setSettings] = useState(defaultSettings);
 	const [isLoading, setIsLoading] = useState(false);
-	const onSubmit = async (e) => {
+
+	const handleSubmit = async (e) => {
 		e.preventDefault();
 		setIsLoading(true); // Start the loading state
 
 		try {
-			await handleSubmit(settings, 'preload_settings');
+			await apiCall('update_settings', { tab: 'preload_settings', settings });
 		} catch (error) {
-			console.error('Form submission error:', error);
+			console.error(translations.formSubmissionError, error);
 		} finally {
 			setIsLoading(false);
 		}
 	}
 	return (
-		<form onSubmit={onSubmit} className="settings-form">
-			<h2>Preload Settings</h2>
+		<form onSubmit={handleSubmit} className="settings-form">
+			<h2>{translations.preloadSettings}</h2>
 
 			{/* Preload Cache */}
-			<div className="checkbox-option">
-				<label>
-					<input
-						type="checkbox"
-						name="enablePreloadCache"
-						checked={settings.enablePreloadCache}
-						onChange={handleChange(setSettings)}
-					/>
-					Enable Preloading Cache
-				</label>
-				<p className="option-description">
-					Preload the cache to improve page load times by caching key resources.
-				</p>
-				{settings.enablePreloadCache && (
-					<textarea
-						className="text-area-field"
-						placeholder="Exclude specific resources from preloading"
-						name="excludePreloadCache"
-						value={settings.excludePreloadCache}
-						onChange={handleChange(setSettings)}
-					/>
-				)}
-			</div>
+			<CheckboxOption
+				label={translations.enablePreloadCache}
+				checked={settings.enablePreloadCache}
+				onChange={handleChange(setSettings)}
+				name="enablePreloadCache"
+				textareaName='excludePreloadCache'
+				textareaPlaceholder={translations.excludePreloadCache}
+				textareaValue={settings.excludePreloadCache}
+				onTextareaChange={handleChange(setSettings)}
+				description={translations.enablePreloadCacheDesc}
+			/>
 
-			<div className="checkbox-option">
-				<label>
-					<input
-						type="checkbox"
-						name="preconnect"
-						checked={settings.preconnect}
-						onChange={handleChange(setSettings)}
-					/>
-					Preconnect
-				</label>
-				<p className="option-description">
-					Add origins to preconnect, improving the speed of resource loading.
-				</p>
-				{settings.preconnect && (
-					<textarea
-						className="text-area-field"
-						placeholder="Add preconnect origins, one per line (e.g., https://fonts.gstatic.com)"
-						name="preconnectOrigins"
-						value={settings.preconnectOrigins}
-						onChange={handleChange(setSettings)}
-					/>
-				)}
-			</div>
-
+			<CheckboxOption
+				label={translations.preconnect}
+				checked={settings.preconnect}
+				onChange={handleChange(setSettings)}
+				name='preconnect'
+				textareaName='preconnectOrigins'
+				textareaPlaceholder={translations.preconnectOrigins}
+				textareaValue={settings.preconnectOrigins}
+				onTextareaChange={handleChange(setSettings)}
+				description={translations.preconnectDesc}
+			/>
 
 			{/* DNS Prefetch */}
-			<div className="checkbox-option">
-				<label>
-					<input
-						type="checkbox"
-						name="prefetchDNS"
-						checked={settings.prefetchDNS}
-						onChange={handleChange(setSettings)}
-					/>
-					Prefetch DNS
-				</label>
-				<p className="option-description">
-					Prefetch DNS for external domains to reduce DNS lookup times.
-				</p>
-				{settings.prefetchDNS && (
-					<textarea
-						className="text-area-field"
-						placeholder="Enter domains for DNS prefetching, one per line (e.g., https://example.com)"
-						name="dnsPrefetchOrigins"
-						value={settings.dnsPrefetchOrigins}
-						onChange={handleChange(setSettings)}
-					/>
-				)}
-			</div>
+			<CheckboxOption
+				label={translations.prefetchDNS}
+				checked={settings.prefetchDNS}
+				onChange={handleChange(setSettings)}
+				name='prefetchDNS'
+				textareaName='dnsPrefetchOrigins'
+				textareaPlaceholder={translations.dnsPrefetchOrigins}
+				textareaValue={settings.dnsPrefetchOrigins}
+				onTextareaChange={handleChange(setSettings)}
+				description={translations.prefetchDNSDesc}
+			/>
 
 			{/* Preload Fonts */}
-			<div className="checkbox-option">
-				<label>
-					<input
-						type="checkbox"
-						name="preloadFonts"
-						checked={settings.preloadFonts}
-						onChange={handleChange(setSettings)}
-					/>
-					Preload Fonts
-				</label>
-				<p className="option-description">
-					Preload fonts to ensure faster loading and rendering of text.
-				</p>
-				{settings.preloadFonts && (
-					<textarea
-						className="text-area-field"
-						placeholder={`Enter fonts for preloading, one per line (e.g., https://example.com/fonts/font.woff2)\n/your-theme/fonts/font.woff2`}
-						name="preloadFontsUrls"
-						value={settings.preloadFontsUrls}
-						onChange={handleChange(setSettings)}
-					/>
-				)}
-			</div>
+			<CheckboxOption
+				label={translations.preloadFonts}
+				checked={settings.preloadFonts}
+				onChange={handleChange(setSettings)}
+				name='preloadFonts'
+				textareaName='preloadFontsUrls'
+				textareaPlaceholder={translations.preloadFontsUrls}
+				textareaValue={settings.preloadFontsUrls}
+				onTextareaChange={handleChange(setSettings)}
+				description={translations.preloadFontsDesc}
+			/>
 
 			{/* Preload CSS */}
-			<div className="checkbox-option">
-				<label>
-					<input
-						type="checkbox"
-						name="preloadCSS"
-						checked={settings.preloadCSS}
-						onChange={handleChange(setSettings)}
-					/>
-					Preload CSS
-				</label>
-				<p className="option-description">
-					Preload CSS to ensure faster rendering and style application.
-				</p>
-				{settings.preloadCSS && (
-					<textarea
-						className="text-area-field"
-						placeholder={`Enter CSS for preloading, one per line (e.g., https://example.com/style.css)\n/your-theme/css/style.css`}
-						name="preloadCSSUrls"
-						value={settings.preloadCSSUrls}
-						onChange={handleChange(setSettings)}
-					/>
-				)}
-			</div>
+			<CheckboxOption
+				label={translations.preloadCSS}
+				checked={settings.preloadCSS}
+				onChange={handleChange(setSettings)}
+				name='preloadCSS'
+				textareaName='preloadCSSUrls'
+				textareaPlaceholder={translations.preloadCSSUrls}
+				textareaValue={settings.preloadCSSUrls}
+				onTextareaChange={handleChange(setSettings)}
+				description={translations.preloadCSSDesc}
+			/>
 
 			<button type="submit" className="submit-button" disabled={isLoading}>
-				{isLoading ? 'Saving...' : 'Save Settings'}
+				{isLoading ? translations.saving : translations.saveSettings}
 			</button>
 		</form>
 	);

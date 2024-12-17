@@ -102,31 +102,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$webp_images = $params['webp'] ?? array();
 			$avif_images = $params['avif'] ?? array();
 
-			$response = array(
-				'webp' => array(
-					'converted' => array(),
-					'failed'    => array(),
-					'skipped'   => array(),
-				),
-				'avif' => array(
-					'converted' => array(),
-					'failed'    => array(),
-					'skipped'   => array(),
-				),
-			);
-
 			foreach ( $webp_images as $webp_image ) {
 				$source_path = ABSPATH . $webp_image;
 
 				if ( file_exists( $source_path ) ) {
-					$result = $img_converter->convert_image( $source_path, 'webp' );
-					if ( $result ) {
-						$response['webp']['converted'][] = $webp_image;
-					} else {
-						$response['webp']['failed'][] = $webp_image;
-					}
-				} else {
-					$response['webp']['skipped'][] = $webp_image;
+					$img_converter->convert_image( $source_path, 'webp' );
 				}
 			}
 
@@ -134,18 +114,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$source_path = ABSPATH . $avif_image;
 
 				if ( file_exists( $source_path ) ) {
-					$result = $img_converter->convert_image( $source_path, 'avif' );
-					if ( $result ) {
-						$response['avif']['converted'][] = $avif_image;
-					} else {
-						$response['avif']['failed'][] = $avif_image;
-					}
-				} else {
-					$response['avif']['skipped'][] = $avif_image;
+					$img_converter->convert_image( $source_path, 'avif' );
 				}
 			}
 
 			Cache::clear_cache();
+
+			$response = get_option( 'qtpo_img_info', array() );
+
 			return new \WP_REST_Response( $response, 200 );
 		}
 
@@ -157,6 +133,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			$qtpo_dir = WP_CONTENT_DIR . '/qtpo';
+
+			$img_info = get_option( 'qtpo_img_info', array() );
+
+			$img_info['completed'] = array(
+				'webp' => array(),
+				'avif' => array(),
+			);
+
+			update_option( 'qtpo_img_info', $img_info );
 
 			if ( $wp_filesystem && $wp_filesystem->is_dir( $qtpo_dir ) ) {
 				if ( $wp_filesystem->delete( $qtpo_dir, true ) ) {

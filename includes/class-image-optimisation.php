@@ -22,7 +22,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				require_once QTPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 				$img_converter = new Img_Converter( $this->options );
 
-				add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_images_to_next_gen' ), 10, 2 );
+				add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
 				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ), 10, 4 );
 			}
 		}

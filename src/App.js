@@ -1,12 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faAngleLeft, faAngleRight, faTachometerAlt, faFileAlt, faTools, faBullseye, faCog, faBars } from '@fortawesome/free-solid-svg-icons';
+import { faAngleLeft, faAngleRight, faTachometerAlt, faFileAlt, faTools, faBullseye, faCog } from '@fortawesome/free-solid-svg-icons';
 import FileOptimization from './components/FileOptimization';
 import PreloadSettings from './components/PreloadSettings';
 import ImageOptimization from './components/ImageOptimization';
 import PluginSettings from './components/PluginSetting';
 import Dashboard from './components/Dashboard';
 import { fetchRecentActivities } from './lib/apiRequest';
+
+const translations = qtpoSettings.translations;
 
 const App = () => {
 	const [activeTab, setActiveTab] = useState('dashboard');
@@ -16,98 +18,93 @@ const App = () => {
 	const [recentActivities, setRecentActivities] = useState([]);
 	const hasFetchedActivities = useRef(false);
 
-	useEffect(() => {
-		const handleResize = () => {
-			if (window.innerWidth < 768) {
-				setSidebarCollapsed(true);  // Collapse sidebar on mobile initially
-				setSidebarHide(true)
-			} else {
-				setSidebarCollapsed(false);  // Expand sidebar on desktop
-				setSidebarHide(false)
-			}
+	// Memoize the sidebar items to avoid unnecessary re-calculation
+	const sidebarItems = useMemo(() => [
+		{ name: 'dashboard', icon: faTachometerAlt, label: translations.dashboard },
+		{ name: 'fileOptimization', icon: faFileAlt, label: translations.fileOptimization },
+		{ name: 'preload', icon: faBullseye, label: translations.preload },
+		{ name: 'imageOptimization', icon: faCog, label: translations.imageOptimization },
+		{ name: 'tools', icon: faTools, label: translations.tools }
+	], [translations]);
+
+	// Memoize the renderContent function to avoid recalculating on each render
+	const renderContent = useMemo(() => {
+		const components = {
+			dashboard: <Dashboard activities={recentActivities?.activities} />,
+			fileOptimization: <FileOptimization options={qtpoSettings.settings.file_optimisation} />,
+			preload: <PreloadSettings options={qtpoSettings.settings.preload_settings} />,
+			imageOptimization: <ImageOptimization options={qtpoSettings.settings.image_optimisation} />,
+			tools: <PluginSettings options={qtpoSettings.settings} />
 		};
 
-		handleResize(); // Call it initially
+		return components[activeTab] || components.dashboard;
+	}, [activeTab, recentActivities]);
+
+	// Handle sidebar toggle visibility
+	const toggleSidebar = () => setSidebarHide(prevState => !prevState);
+
+	// Set sidebar collapse behavior based on screen width
+	useEffect(() => {
+		const handleResize = () => {
+			const isMobile = window.innerWidth < 768;
+			setSidebarCollapsed(isMobile);
+			setSidebarHide(isMobile);
+		};
+
+		handleResize();  // Initial check
 		window.addEventListener('resize', handleResize);
 		return () => window.removeEventListener('resize', handleResize);
 	}, []);
 
-	// Animate tab changes
+	// Fetch recent activities when the tab changes to "dashboard"
 	useEffect(() => {
-		const fetchActivities = async () => {
-			if (activeTab === 'dashboard' && !hasFetchedActivities.current) {
+		if (activeTab === 'dashboard' && !hasFetchedActivities.current) {
+			const fetchActivities = async () => {
 				try {
-					const data = await fetchRecentActivities(); // Await the returned data
-					setRecentActivities(data); // Set the state with the fetched data
-					hasFetchedActivities.current = true; // Mark as fetched
+					const data = await fetchRecentActivities();
+					setRecentActivities(data);
+					hasFetchedActivities.current = true;
 				} catch (error) {
-					console.error('Failed to fetch activities:', error);
+					console.error(translations.failedFetchActivities, error);
 				}
-			}
-		};
-		fetchActivities();
-		setTransition(true);
-		const timeout = setTimeout(() => {
-			setTransition(false);
-		}, 500);
-		return () => clearTimeout(timeout);
-	}, [activeTab]);
+			};
 
-	const renderContent = () => {
-		switch (activeTab) {
-			case 'fileOptimization':
-				return <FileOptimization options={qtpoSettings.settings.file_optimisation} />;
-			case 'preload':
-				return <PreloadSettings options={qtpoSettings.settings.preload_settings} />;
-			case 'imageOptimization':
-				return <ImageOptimization options={qtpoSettings.settings.image_optimisation} />;
-			case 'tools':
-				return <PluginSettings options={qtpoSettings.settings} />;
-			default:
-				return <Dashboard activities={recentActivities?.activities} />;
+			fetchActivities();
 		}
-	};
+
+		setTransition(true);
+		const timeout = setTimeout(() => setTransition(false), 500);
+		return () => clearTimeout(timeout);
+	}, [activeTab, translations.failedFetchActivities]);
 
 	return (
 		<div className="container">
-			{/* Mobile menu icon */}
-			{/* <button className="hamburger-menu" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
-				<FontAwesomeIcon icon={sidebarCollapsed ? faAngleRight : faAngleLeft} />
-			</button> */}
-			<button className="hamburger-menu" onClick={() => setSidebarHide(!sidebarHide)} style={{ left: sidebarHide ? '0px' : '110px' }}>
-				<FontAwesomeIcon icon={sidebarHide ? faAngleRight: faAngleLeft} />
+			<button
+				className="hamburger-menu"
+				onClick={toggleSidebar}
+				style={{ left: sidebarHide ? '0px' : '110px' }}
+			>
+				<FontAwesomeIcon icon={sidebarHide ? faAngleRight : faAngleLeft} />
 			</button>
+
 			<div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${sidebarHide ? 'hide' : ''}`}>
-				{/* <button className="toggle-sidebar" onClick={() => setSidebarCollapsed(!sidebarCollapsed)}>
-					<FontAwesomeIcon icon={sidebarCollapsed ? faAngleRight : faAngleLeft} />
-				</button> */}
-				<h3>Performance Settings</h3>
+				<h3>{translations.performanceSettings}</h3>
 				<ul>
-					<li className={activeTab === 'dashboard' ? 'active' : ''} onClick={() => setActiveTab('dashboard')}>
-						<FontAwesomeIcon className="sidebar-icon" icon={faTachometerAlt} />
-						{!sidebarCollapsed && ' Dashboard'}
-					</li>
-					<li className={activeTab === 'fileOptimization' ? 'active' : ''} onClick={() => setActiveTab('fileOptimization')}>
-						<FontAwesomeIcon className="sidebar-icon" icon={faFileAlt} />
-						{!sidebarCollapsed && ' File Optimization'}
-					</li>
-					<li className={activeTab === 'preload' ? 'active' : ''} onClick={() => setActiveTab('preload')}>
-						<FontAwesomeIcon className="sidebar-icon" icon={faBullseye} />
-						{!sidebarCollapsed && ' Preload'}
-					</li>
-					<li className={activeTab === 'imageOptimization' ? 'active' : ''} onClick={() => setActiveTab('imageOptimization')}>
-						<FontAwesomeIcon className="sidebar-icon" icon={faCog} />
-						{!sidebarCollapsed && ' Image Optimization'}
-					</li>
-					<li className={activeTab === 'Tools' ? 'active' : ''} onClick={() => setActiveTab('tools')}>
-						<FontAwesomeIcon className="sidebar-icon" icon={faTools} />
-						{!sidebarCollapsed && ' Tools'}
-					</li>
+					{sidebarItems.map(item => (
+						<li
+							key={item.name}
+							className={activeTab === item.name ? 'active' : ''}
+							onClick={() => setActiveTab(item.name)}
+						>
+							<FontAwesomeIcon className="sidebar-icon" icon={item.icon} />
+							{!sidebarCollapsed && item.label}
+						</li>
+					))}
 				</ul>
 			</div>
 
 			<div className={`content ${transition ? 'fadeIn' : ''}`}>
-				{renderContent()}
+				{renderContent}
 			</div>
 		</div>
 	);
