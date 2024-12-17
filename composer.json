@@ -1,5 +1,7 @@
 {
     "name": "qrolic/performance-optimisation",
+    "description": "A package for performance optimization, including HTML minification and code minification tools.",
+    "license": "MIT",
     "autoload": {
         "psr-4": {
             "Qrolic\\PerformanceOptimisation\\": "src/"
@@ -17,7 +19,7 @@
     },
     "extra": {
         "cleanup": {
-            "dirs": ["bin","tests", "docs"],
+            "dirs": ["bin", "tests", "docs"],
             "exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
         }
     }
