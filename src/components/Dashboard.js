@@ -70,14 +70,22 @@ const Dashboard = ({ activities }) => {
 			return;
 		}
 
-		apiCall('optimise_image', 'POST', { webp, avif })
-			.then(() => {
+		apiCall('optimise_image', { webp, avif })
+			.then((response) => {
 				console.log(translations.imgOptimiseSuccess);
-				updateCache();
+				// console.log( response );
+				qtpoSettings.imageInfo = response;
+				console.log( response );
+				
+				// updateState((prevState) => ({
+				// 	...prevState,
+				// 	imageInfo: response,
+				// }));
+				// updateCache();
 			})
 			.catch((error) => console.error(translations.errorOptimiseImg, error))
 			.finally(() => handleLoading('optimize_images', false));
-	}, [handleLoading, pending, updateCache, translations]);
+	}, [handleLoading, pending, completed, failed]);
 
 	// Remove Optimized Images
 	const removeImages = useCallback(() => {
@@ -90,13 +98,14 @@ const Dashboard = ({ activities }) => {
 			return;
 		}
 
-		apiCall('delete_optimised_image', 'POST', {})
+		apiCall('delete_optimised_image', {})
 			.then((data) => {
 				if (data.success) {
-					alert(translations.removedOptimiseImg);
+					// alert(translations.removedOptimiseImg);
 					console.log(translations.removedImg, data.deleted);
+					qtpoSettings.image_info.completed = {webp: [], avif: []};
 				} else {
-					alert(translations.someImgNotRemoved);
+					// alert(translations.someImgNotRemoved);
 					console.error(translations.failedToRemove, data.failed);
 				}
 			})
