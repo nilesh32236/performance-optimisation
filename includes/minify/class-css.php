@@ -73,7 +73,7 @@ class CSS {
 			function ( $matches ) use ( $css_dir_url ) {
 				$image_path = trim( $matches[2] );
 
-				if ( preg_match( '/\.(jpg|jpeg|png|gif)$/i', $image_path ) ) {
+				if ( preg_match( '/\.(jpg|jpeg|png|gif|webp)$/i', $image_path, $ext_matches ) ) {
 					if ( false === strpos( $image_path, 'http' ) && ! preg_match( '/^data:/', $image_path ) ) {
 						$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
 					}
@@ -85,6 +85,10 @@ class CSS {
 						return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';
 					} else {
 						Img_Converter::add_img_into_queue( $local_path, 'avif' );
+					}
+
+					if ( 'webp' === $ext_matches[1] ) {
+						return 'url("' . $image_path . '")';
 					}
 
 					// Check if corresponding .webp image exists
