@@ -3,7 +3,7 @@ name: Prepare Plugin for WordPress Submission on Tag Push
 on:
   push:
     tags:
-      - '*'
+      - '*'  # Trigger the workflow on any tag push
 
 jobs:
   clean_up_and_package:
@@ -11,7 +11,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Remove .git, .gitignore, .github, and node_modules files
       run: |
@@ -24,13 +24,10 @@ jobs:
         # Remove node_modules directory
         rm -rf node_modules
 
-    - name: Create zip file for WordPress submission
-      run: |
-        # Create a zip file for the plugin 'performance-optimisation' while excluding unnecessary files
-        zip -r performance-optimisation.zip . -x ".git/*" ".gitignore" ".github/*" "node_modules/*"
-
-    - name: Upload zip file as artifact (optional)
-      uses: actions/upload-artifact@v3
+    - name: Upload files as artifact (with zip compression)
+      uses: actions/upload-artifact@v4
       with:
         name: performance-optimisation
-        path: performance-optimisation.zip
+        path: .
+        compression-level: 9
+        overwrite: true
