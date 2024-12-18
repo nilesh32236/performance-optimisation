@@ -3,7 +3,7 @@
         'name' => 'qrolic/performance-optimisation',
         'pretty_version' => 'dev-master',
         'version' => 'dev-master',
-        'reference' => '0e4b5362c7d28f9f789413dfab9d5e53bfe182e0',
+        'reference' => '96c77b8378af02515bc3aeb83e35f1df06f07f2b',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -31,7 +31,7 @@
         'qrolic/performance-optimisation' => array(
             'pretty_version' => 'dev-master',
             'version' => 'dev-master',
-            'reference' => '0e4b5362c7d28f9f789413dfab9d5e53bfe182e0',
+            'reference' => '96c77b8378af02515bc3aeb83e35f1df06f07f2b',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
