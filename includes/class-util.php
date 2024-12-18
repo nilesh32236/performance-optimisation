@@ -2,9 +2,11 @@
 /**
  * Utility class for the PerformanceOptimise plugin.
  *
- * Provides methods for preparing cache directories and initializing the WP_Filesystem API.
+ * Provides methods for preparing cache directories, initializing WP_Filesystem API,
+ * handling file paths, and managing resources like JS, CSS, and images.
  *
  * @package PerformanceOptimise\Inc
+ * @since 1.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -17,13 +19,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 	class Util {
 
 		/**
-		 * Recursively prepares the cache directory by creating it if it does not exist.
-		 *
-		 * This method ensures that the specified directory and all its parent directories
-		 * are created if they do not already exist.
+		 * Recursively creates cache directory if not exists.
 		 *
 		 * @param string $cache_dir Path to the cache directory.
-		 * @return bool True if the directory was created successfully or already exists, false otherwise.
+		 * @return bool True if created or exists, false otherwise.
+		 * @since 1.0.0
 		 */
 		public static function prepare_cache_dir( $cache_dir ): bool {
 			global $wp_filesystem;
@@ -50,8 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Initializes the WP_Filesystem API.
 		 *
-		 * This method ensures that the WP_Filesystem API is available and initializes it.
-		 *
+		 * @since 1.0.0
 		 */
 		public static function init_filesystem() {
 			global $wp_filesystem;
@@ -68,6 +67,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 		}
 
+		/**
+		 * Gets the local file path from a URL.
+		 *
+		 * @param string $url The URL to process.
+		 * @return string The local file path.
+		 * @since 1.0.0
+		 */
 		public static function get_local_path( string $url ): string {
 			// Parse the URL to get the path
 			$parsed_url = wp_parse_url( $url );
@@ -82,6 +88,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			return ABSPATH . ltrim( $relative_path, '/' );
 		}
 
+		/**
+		 * Gets the number of minified JS and CSS files.
+		 *
+		 * @return array Associative array with counts for JS and CSS files.
+		 * @since 1.0.0
+		 */
 		public static function get_js_css_minified_file() {
 			$filesystem = self::init_filesystem();
 			$minify_dir = WP_CONTENT_DIR . '/cache/wppo/min';
@@ -115,6 +127,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			);
 		}
 
+		/**
+		 * Gets MIME type based on image URL extension.
+		 *
+		 * @param string $url The image URL.
+		 * @return string The MIME type.
+		 * @since 1.0.0
+		 */
 		public static function get_image_mime_type( $url ) {
 			// Infer MIME type from URL extension.
 			$extension = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
@@ -138,6 +157,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 		}
 
+		/**
+		 * Generates a preload link tag for resources.
+		 *
+		 * @param string $href The resource URL.
+		 * @param string $rel The relationship attribute.
+		 * @param string $resource_type The type of the resource (optional).
+		 * @param bool   $crossorigin If the resource should be crossorigin (optional).
+		 * @param string $type The type attribute (optional).
+		 * @param string $media The media attribute (optional).
+		 * @since 1.0.0
+		 */
 		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '' ) {
 			$attributes = array(
 				'rel'  => esc_attr( $rel ),
@@ -162,6 +192,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			echo '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>' . PHP_EOL;
 		}
 
+		/**
+		 * Processes and cleans up a list of URLs.
+		 *
+		 * @param string $urls The raw URLs to process.
+		 * @return array The cleaned-up list of unique URLs.
+		 * @since 1.0.0
+		 */
 		public static function process_urls( $urls ) {
 			return array_filter( array_unique( array_map( 'trim', explode( "\n", $urls ) ) ) );
 		}

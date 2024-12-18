@@ -10,6 +10,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Class Cron
  *
  * This class handles scheduling, managing, and processing cron jobs related to static page generation.
+ *
+ * @since 1.0.0
  */
 class Cron {
 
@@ -17,6 +19,8 @@ class Cron {
 	 * Constructor function.
 	 *
 	 * Registers WordPress actions and filters for cron jobs.
+	 *
+	 * @since 1.0.0
 	 */
 	public function __construct() {
 		add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
@@ -34,6 +38,8 @@ class Cron {
 	 *
 	 * @param array $schedules Existing cron schedules.
 	 * @return array Modified schedules with 'every_5_hours' added.
+	 *
+	 * @since 1.0.0
 	 */
 	public function add_custom_cron_interval( $schedules ): array {
 		$schedules['every_5_hours'] = array(
@@ -48,7 +54,7 @@ class Cron {
 	 *
 	 * Schedules the `wppo_page_cron_hook` to run every 5 hours if it's not already scheduled.
 	 *
-	 * @return void
+	 * @since 1.0.0
 	 */
 	public function schedule_cron_jobs(): void {
 		if ( ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
@@ -65,7 +71,7 @@ class Cron {
 	 *
 	 * Triggers the scheduling of individual page processing jobs.
 	 *
-	 * @return void
+	 * @since 1.0.0
 	 */
 	public function wppo_page_cron_callback(): void {
 		$this->schedule_page_cron_jobs();
@@ -76,7 +82,7 @@ class Cron {
 	 *
 	 * Schedules a single event for each page to generate a static version.
 	 *
-	 * @return void
+	 * @since 1.0.0
 	 */
 	private function schedule_page_cron_jobs(): void {
 		$pages = $this->get_all_pages();
@@ -130,7 +136,7 @@ class Cron {
 	 *
 	 * Unschedules all page processing cron jobs and clears the main hook.
 	 *
-	 * @return void
+	 * @since 1.0.0
 	 */
 	public static function clear_cron_jobs(): void {
 		$pages = self::get_all_pages();
@@ -157,7 +163,7 @@ class Cron {
 	 * This method will be triggered by the cron job to mark the page as processed and load it.
 	 *
 	 * @param int $page_id The ID of the page to process.
-	 * @return void
+	 * @since 1.0.0
 	 */
 	public function process_page( $page_id ): void {
 		if ( $page_id ) {
@@ -172,6 +178,8 @@ class Cron {
 	 * Retrieves all public pages and posts and ensures the front page is included.
 	 *
 	 * @return array List of page IDs to process.
+	 *
+	 * @since 1.0.0
 	 */
 	private static function get_all_pages(): array {
 		$front_page_id = get_option( 'page_on_front' );
@@ -207,7 +215,7 @@ class Cron {
 	 * This method fetches the page via `wp_remote_get` to generate the static page.
 	 *
 	 * @param int $page_id The ID of the page to load.
-	 * @return void
+	 * @since 1.0.0
 	 */
 	private function load_page( $page_id ): void {
 		$permalink = get_permalink( $page_id );
@@ -222,7 +230,7 @@ class Cron {
 	 * Deletes both the `.html` and `.gz` cached versions of the page, if they exist.
 	 *
 	 * @param int $page_id The ID of the page to mark as processed.
-	 * @return void
+	 * @since 1.0.0
 	 */
 	private function mark_page_as_processed( $page_id ): void {
 		$permalink  = get_permalink( $page_id );
@@ -248,6 +256,14 @@ class Cron {
 		}
 	}
 
+	/**
+	 * Convert images to optimized formats.
+	 *
+	 * Processes pending images and converts them to `webp` and/or `avif` formats
+	 * based on the plugin settings. Handles images in batches to optimize performance.
+	 *
+	 * @since 1.0.0
+	 */
 	public function img_convert_cron() {
 		$options       = get_option( 'wppo_settings', array() );
 		$img_converter = new Img_Converter( $options );

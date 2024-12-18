@@ -6,8 +6,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
+
+	/**
+	 * Handles the functionality for adding and saving the preload image metabox.
+	 *
+	 * @since 1.0.0
+	 */
 	class Metabox {
 
+		/**
+		 * Constructor to hook into WordPress actions for adding and saving the metabox.
+		 *
+		 * @since 1.0.0
+		 */
 		public function __construct() {
 			// Hook into WordPress to add the metabox
 			add_action( 'add_meta_boxes', array( $this, 'add_metabox' ) );
@@ -16,7 +27,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		}
 
 		/**
-		 * Add Metabox.
+		 * Adds the preload image metabox to the post editor.
+		 *
+		 * @since 1.0.0
 		 */
 		public function add_metabox() {
 			add_meta_box(
@@ -30,9 +43,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		}
 
 		/**
-		 * Render the Metabox.
+		 * Renders the content of the preload image URL metabox.
 		 *
 		 * @param \WP_Post $post The current post object.
+		 * @since 1.0.0
 		 */
 		public function render_metabox( $post ) {
 			// Retrieve current meta value
@@ -49,9 +63,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		}
 
 		/**
-		 * Save the Metabox data.
+		 * Saves the preload image URLs when the post is saved.
 		 *
 		 * @param int $post_id The ID of the post being saved.
+		 * @since 1.0.0
 		 */
 		public function save_metabox( $post_id ) {
 			// Verify the nonce

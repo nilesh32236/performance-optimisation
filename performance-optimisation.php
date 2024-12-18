@@ -12,6 +12,7 @@
  * Domain Path:       /languages
  */
 
+// Import required classes
 use PerformanceOptimise\Inc\Activate;
 use PerformanceOptimise\Inc\Deactivate;
 use PerformanceOptimise\Inc\Main;
@@ -32,6 +33,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 if ( ! defined( 'WPPO_VERSION' ) ) {
 	define( 'WPPO_VERSION', '0.1.1' );
 }
+
 // Include the main class file.
 require_once WPPO_PLUGIN_PATH . 'includes/class-main.php';
 
@@ -41,9 +43,8 @@ new Main();
 /**
  * Activation hook callback function.
  *
+ * @since 1.0.0
  * Includes the activation class and runs the activation process.
- *
- * @return void
  */
 function wppo_activate(): void {
 	require_once WPPO_PLUGIN_PATH . 'includes/class-activate.php';
@@ -54,9 +55,8 @@ register_activation_hook( __FILE__, 'wppo_activate' );
 /**
  * Deactivation hook callback function.
  *
+ * @since 1.0.0
  * Includes the deactivation class and runs the deactivation process.
- *
- * @return void
  */
 function wppo_deactivate(): void {
 	require_once WPPO_PLUGIN_PATH . 'includes/class-deactivate.php';
@@ -66,8 +66,10 @@ register_deactivation_hook( __FILE__, 'wppo_deactivate' );
 
 /**
  * Load the plugin's text domain for translation.
+ *
+ * @since 1.0.0
  */
-function wppo_load_textdomain() {
+function wppo_load_textdomain(): void {
 	load_plugin_textdomain( 'performance-optimisation', false, dirname( plugin_basename( __FILE__ ) ) . '/languages/' );
 }
 add_action( 'plugins_loaded', 'wppo_load_textdomain' );
