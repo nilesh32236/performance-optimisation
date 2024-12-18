@@ -26,14 +26,14 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-php-
 
-    - name: Install dependencies
-      run: composer install --prefer-dist --no-progress
-
     - name: Pull Latest Changes
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git pull origin master --rebase
+
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress
 
     - name: Commit and Push Vendor Changes
       run: |
