@@ -8,7 +8,7 @@ import PluginSettings from './components/PluginSetting';
 import Dashboard from './components/Dashboard';
 import { fetchRecentActivities } from './lib/apiRequest';
 
-const translations = qtpoSettings.translations;
+const translations = wppoSettings.translations;
 
 const App = () => {
 	const [activeTab, setActiveTab] = useState('dashboard');
@@ -31,10 +31,10 @@ const App = () => {
 	const renderContent = useMemo(() => {
 		const components = {
 			dashboard: <Dashboard activities={recentActivities?.activities} />,
-			fileOptimization: <FileOptimization options={qtpoSettings.settings.file_optimisation} />,
-			preload: <PreloadSettings options={qtpoSettings.settings.preload_settings} />,
-			imageOptimization: <ImageOptimization options={qtpoSettings.settings.image_optimisation} />,
-			tools: <PluginSettings options={qtpoSettings.settings} />
+			fileOptimization: <FileOptimization options={wppoSettings.settings.file_optimisation} />,
+			preload: <PreloadSettings options={wppoSettings.settings.preload_settings} />,
+			imageOptimization: <ImageOptimization options={wppoSettings.settings.image_optimisation} />,
+			tools: <PluginSettings options={wppoSettings.settings} />
 		};
 
 		return components[activeTab] || components.dashboard;

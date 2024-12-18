@@ -1,5 +1,5 @@
 === Performance Optimisation ===
-Contributors: nilesh32236
+Contributors: nilesh912
 Tags: performance, optimization, cache, minify, image optimization
 Requires at least: 5.0
 Requires PHP: 7.4
@@ -67,16 +67,13 @@ Composer configuration:
 
 `
 {
-	"name": "qrolic/performance-optimisation",
-	"autoload": {
-		"psr-4": {
-			"Qrolic\\PerformanceOptimisation\\": "src/"
-		}
-	},
+	"name": "nilesh/performance-optimisation",
+	"description": "A package for performance optimization, including HTML minification and code minification tools.",
+	"license": "GPL-2.0-or-later",
 	"authors": [
 		{
-			"name": "nilesh32236",
-			"email": "nilesh32236@gmail.com"
+			"name": "nilesh",
+			"email": "nilesh.kanzariya912@gmail.com"
 		}
 	],
 	"require": {
@@ -85,7 +82,7 @@ Composer configuration:
 	},
 	"extra": {
 		"cleanup": {
-			"dirs": ["bin","tests", "docs"],
+			"dirs": ["bin", "tests", "docs"],
 			"exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
 		}
 	}

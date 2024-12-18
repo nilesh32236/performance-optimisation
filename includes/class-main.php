@@ -12,11 +12,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Handles the inclusion of necessary files, setup of hooks, and core functionalities
  * such as generating and invalidating dynamic static HTML.
+ *
+ * @since 1.0.0
  */
 
 class Main {
 
-	private array $exclude_css = array( 'qtpo-combine-css' );
+	private array $exclude_css = array( 'wppo-combine-css' );
 	private array $exclude_js  = array(
 		'jquery',
 	);
@@ -25,13 +27,16 @@ class Main {
 	private Image_Optimisation $image_optimisation;
 
 	private $options;
+
 	/**
 	 * Constructor.
 	 *
 	 * Initializes the class by including necessary files and setting up hooks.
+	 *
+	 * @since 1.0.0
 	 */
 	public function __construct() {
-		$this->options = get_option( 'qtpo_settings', array() );
+		$this->options = get_option( 'wppo_settings', array() );
 
 		$this->includes();
 		$this->setup_hooks();
@@ -45,19 +50,20 @@ class Main {
 	 * Loads the autoloader and includes other class files needed for the plugin.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	private function includes(): void {
-		require_once QTPO_PLUGIN_PATH . 'vendor/autoload.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/class-log.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/class-util.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-html.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-css.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/minify/class-js.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/class-cache.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/class-metabox.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/class-cron.php';
-		require_once QTPO_PLUGIN_PATH . 'includes/class-rest.php';
+		require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/minify/class-html.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/minify/class-css.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/minify/class-js.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-metabox.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-rest.php';
 	}
 
 	/**
@@ -66,6 +72,7 @@ class Main {
 	 * Registers actions and filters used by the plugin.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	private function setup_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'init_menu' ) );
@@ -120,6 +127,7 @@ class Main {
 	 * Adds the Performance Optimisation menu to the WordPress admin dashboard.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	public function init_menu(): void {
 		add_menu_page(
@@ -139,11 +147,20 @@ class Main {
 	 * Includes the admin page template for rendering.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	public function admin_page(): void {
-		require_once QTPO_PLUGIN_PATH . 'templates/app.html';
+		require_once WPPO_PLUGIN_PATH . 'templates/app.html';
 	}
 
+	/**
+	 * Add available post types to options.
+	 *
+	 * Filters out non-public post types and adds the available post types to options.
+	 *
+	 * @return void
+	 * @since 1.0.0
+	 */
 	private function add_available_post_types_to_options() {
 		$post_types = get_post_types( array( 'public' => true ), 'names' );
 
@@ -159,15 +176,16 @@ class Main {
 	 * Loads CSS and JavaScript files for the admin dashboard page.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	public function admin_enqueue_scripts(): void {
 		$screen = get_current_screen();
 
 		if ( is_admin_bar_showing() ) {
-			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), QTPO_VERSION, true );
+			wp_enqueue_script( 'wppo-admin-bar-script', WPPO_PLUGIN_URL . 'src/main.js', array(), WPPO_VERSION, true );
 			wp_localize_script(
-				'qtpo-admin-bar-script',
-				'qtpoObject',
+				'wppo-admin-bar-script',
+				'wppoObject',
 				array(
 					'apiUrl' => get_rest_url( null, 'performance-optimisation/v1' ),
 					'nonce'  => wp_create_nonce( 'wp_rest' ),
@@ -179,18 +197,18 @@ class Main {
 			return;
 		}
 
-		wp_enqueue_style( 'performance-optimisation-style', QTPO_PLUGIN_URL . 'build/style-index.css', array(), QTPO_VERSION, 'all' );
-		wp_enqueue_script( 'performance-optimisation-script', QTPO_PLUGIN_URL . 'build/index.js', array( 'wp-i18n', 'wp-element' ), QTPO_VERSION, true );
+		wp_enqueue_style( 'performance-optimisation-style', WPPO_PLUGIN_URL . 'build/style-index.css', array(), WPPO_VERSION, 'all' );
+		wp_enqueue_script( 'performance-optimisation-script', WPPO_PLUGIN_URL . 'build/index.js', array( 'wp-i18n', 'wp-element' ), WPPO_VERSION, true );
 
 		$this->add_available_post_types_to_options();
 		wp_localize_script(
 			'performance-optimisation-script',
-			'qtpoSettings',
+			'wppoSettings',
 			array(
 				'apiUrl'       => get_rest_url( null, 'performance-optimisation/v1/' ),
 				'nonce'        => wp_create_nonce( 'wp_rest' ),
 				'settings'     => $this->options,
-				'image_info'   => get_option( 'qtpo_img_info', array() ),
+				'image_info'   => get_option( 'wppo_img_info', array() ),
 				'cache_size'   => Cache::get_cache_size(),
 				'total_js_css' => Util::get_js_css_minified_file(),
 				'translations' => array(
@@ -301,12 +319,17 @@ class Main {
 		);
 	}
 
+	/**
+	 * Enqueues scripts for performance optimization.
+	 *
+	 * @since 1.0.0
+	 */
 	public function enqueue_scripts() {
 		if ( is_admin_bar_showing() ) {
-			wp_enqueue_script( 'qtpo-admin-bar-script', QTPO_PLUGIN_URL . 'src/main.js', array(), QTPO_VERSION, true );
+			wp_enqueue_script( 'wppo-admin-bar-script', WPPO_PLUGIN_URL . 'src/main.js', array(), WPPO_VERSION, true );
 			wp_localize_script(
-				'qtpo-admin-bar-script',
-				'qtpoObject',
+				'wppo-admin-bar-script',
+				'wppoObject',
 				array(
 					'apiUrl' => get_rest_url( null, 'performance-optimisation/v1' ),
 					'nonce'  => wp_create_nonce( 'wp_rest' ),
@@ -315,10 +338,15 @@ class Main {
 		}
 
 		if ( ! is_user_logged_in() ) {
-			wp_enqueue_script( 'qtpo-lazyload', QTPO_PLUGIN_URL . 'src/lazyload.js', array(), QTPO_VERSION, true );
+			wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'src/lazyload.js', array(), WPPO_VERSION, true );
 		}
 	}
 
+	/**
+	 * Removes WooCommerce-related scripts and styles based on settings.
+	 *
+	 * @since 1.0.0
+	 */
 	public function remove_woocommerce_scripts() {
 		$exclude_url_to_keep_js_css = array();
 		if ( isset( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) && ! empty( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) ) {
@@ -373,10 +401,15 @@ class Main {
 		}
 	}
 
+	/**
+	 * Adds custom settings to the WordPress admin bar.
+	 *
+	 * @since 1.0.0
+	 */
 	public function add_setting_to_admin_bar( $wp_admin_bar ) {
 		$wp_admin_bar->add_node(
 			array(
-				'id'    => 'qtpo_setting',
+				'id'    => 'wppo_setting',
 				'title' => __( 'Performance Optimisation', 'performance-optimisation' ),
 				'href'  => admin_url( 'admin.php?page=performance-optimisation' ),
 				'meta'  => array(
@@ -389,8 +422,8 @@ class Main {
 		// Add a submenu under the custom setting
 		$wp_admin_bar->add_node(
 			array(
-				'id'     => 'qtpo_clear_all',
-				'parent' => 'qtpo_setting',
+				'id'     => 'wppo_clear_all',
+				'parent' => 'wppo_setting',
 				'title'  => __( 'Clear All Cache', 'performance-optimisation' ),
 				'href'   => '#',
 			)
@@ -401,8 +434,8 @@ class Main {
 
 			$wp_admin_bar->add_node(
 				array(
-					'id'     => 'qtpo_clear_this_page',
-					'parent' => 'qtpo_setting',
+					'id'     => 'wppo_clear_this_page',
+					'parent' => 'wppo_setting',
 					'title'  => __( 'Clear This Page Cache', 'performance-optimisation' ),
 					'href'   => '#', // You can replace with actual URL or function if needed
 					'meta'   => array(
@@ -415,9 +448,9 @@ class Main {
 	}
 
 	/**
-	 * Add defer attribute to scripts.
+	 * Adds defer attribute to non-logged-in users' scripts.
 	 *
-	 * Filters script tags to add the defer attribute for non-admin pages.
+	 * @since 1.0.0
 	 *
 	 * @param string $tag    The script tag HTML.
 	 * @param string $handle The script's registered handle.
@@ -429,7 +462,7 @@ class Main {
 			return $tag;
 		}
 
-		$exclude_js = array( 'qtpo-lazyload' );
+		$exclude_js = array( 'wppo-lazyload' );
 
 		if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
 
@@ -457,10 +490,10 @@ class Main {
 			}
 
 			if ( ! in_array( $handle, $exclude_delay, true ) ) {
-				$tag = str_replace( ' src', ' qtpo-src', $tag );
+				$tag = str_replace( ' src', ' wppo-src', $tag );
 				$tag = preg_replace(
 					'/type=("|\')text\/javascript("|\')/',
-					'type="qtpo/javascript" qtpo-type="text/javascript"',
+					'type="wppo/javascript" wppo-type="text/javascript"',
 					$tag
 				);
 			}
@@ -469,6 +502,11 @@ class Main {
 		return $tag;
 	}
 
+	/**
+	 * Adds preload, prefetch, and preconnect links to optimize resource loading.
+	 *
+	 * @since 1.0.0
+	 */
 	public function add_preload_prefatch_preconnect() {
 
 		$preload_settings = $this->options['preload_settings'] ?? array();
@@ -541,6 +579,16 @@ class Main {
 		$this->image_optimisation->preload_images();
 	}
 
+	/**
+	 * Minifies CSS files and serves them from cache.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $tag    The link tag HTML.
+	 * @param string $handle The CSS file's handle.
+	 * @param string $href   The CSS file's source URL.
+	 * @return string Modified link tag with minified CSS.
+	 */
 	public function minify_css( $tag, $handle, $href ) {
 		$local_path = Util::get_local_path( $href );
 
@@ -548,12 +596,12 @@ class Main {
 			return $tag;
 		}
 
-		$css_minifier = new Minify\CSS( $local_path, WP_CONTENT_DIR . '/cache/qtpo/min/css' );
+		$css_minifier = new Minify\CSS( $local_path, WP_CONTENT_DIR . '/cache/wppo/min/css' );
 		$cached_file  = $css_minifier->minify();
 
 		if ( $cached_file ) {
 			$file_version = fileatime( Util::get_local_path( $cached_file ) );
-			$new_href     = content_url( 'cache/qtpo/min/css/' . basename( $cached_file ) ) . '?ver=' . $file_version;
+			$new_href     = content_url( 'cache/wppo/min/css/' . basename( $cached_file ) ) . '?ver=' . $file_version;
 			$new_tag      = str_replace( $href, $new_href, $tag );
 			return $new_tag;
 		}
@@ -561,6 +609,16 @@ class Main {
 		return $tag;
 	}
 
+	/**
+	 * Minifies JavaScript files and serves them from cache.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $tag    The script tag HTML.
+	 * @param string $handle The script's registered handle.
+	 * @param string $src    The script's source URL.
+	 * @return string Modified script tag with minified JavaScript.
+	 */
 	public function minify_js( $tag, $handle, $src ) {
 		$local_path = Util::get_local_path( $src );
 
@@ -568,13 +626,13 @@ class Main {
 			return $tag;
 		}
 
-		$js_minifier = new Minify\JS( $local_path, WP_CONTENT_DIR . '/cache/qtpo/min/js' );
+		$js_minifier = new Minify\JS( $local_path, WP_CONTENT_DIR . '/cache/wppo/min/js' );
 		$cached_file = $js_minifier->minify();
 
 		if ( $cached_file ) {
 			$file_version = fileatime( Util::get_local_path( $cached_file ) );
 
-			$new_src = content_url( 'cache/qtpo/min/js/' . basename( $cached_file ) ) . '?ver=' . $file_version;
+			$new_src = content_url( 'cache/wppo/min/js/' . basename( $cached_file ) ) . '?ver=' . $file_version;
 			$new_tag = str_replace( $src, $new_src, $tag );
 			return $new_tag;
 		}
@@ -582,6 +640,14 @@ class Main {
 		return $tag;
 	}
 
+	/**
+	 * Checks if a CSS file is already minified.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $file_path Path to the CSS file.
+	 * @return bool True if the file is minified, false otherwise.
+	 */
 	private function is_css_minified( $file_path ) {
 		$file_name = basename( $file_path );
 
@@ -598,6 +664,15 @@ class Main {
 
 		return false;
 	}
+
+	/**
+	 * Checks if a JavaScript file is already minified.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $file_path Path to the JavaScript file.
+	 * @return bool True if the file is minified, false otherwise.
+	 */
 	private function is_js_minified( $file_path ) {
 		$file_name = basename( $file_path );
 

@@ -2,11 +2,27 @@
 
 namespace PerformanceOptimise\Inc;
 
+/**
+ * Log Class
+ *
+ * A class to handle logging activities and fetching recent activity logs with pagination.
+ *
+ * @since 1.0.0
+ */
 class Log {
+
+	/**
+	 * Log constructor.
+	 *
+	 * Inserts a new activity log entry into the database.
+	 *
+	 * @param string $activity The activity description to log.
+	 * @since 1.0.0
+	 */
 	public function __construct( $activity ) {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'qtpo_activity_logs';
+		$table_name = $wpdb->prefix . 'wppo_activity_logs';
 
 		/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
 		// Direct query is required for inserting into a custom table.
@@ -22,15 +38,18 @@ class Log {
 		/* phpcs:enable */
 
 		if ( $result ) {
-			wp_cache_delete( 'qtpo_activity_logs' );
+			wp_cache_delete( 'wppo_activity_logs' );
 		}
 	}
 
 	/**
 	 * Get recent activities with pagination and caching.
 	 *
-	 * @param array $params Pagination parameters, including 'page' and 'per_page'.
-	 * @return array Cached or freshly queried results.
+	 * Retrieves recent activity logs from the database, using cache if available.
+	 *
+	 * @param array $params Pagination parameters including 'page' and 'per_page'.
+	 * @return array Cached or freshly queried results with pagination details.
+	 * @since 1.0.0
 	 */
 	public static function get_recent_activities( $params ) {
 		global $wpdb;
@@ -42,10 +61,10 @@ class Log {
 		$offset = ( $page - 1 ) * $per_page;
 
 		// Cache key
-		$cache_key = 'qtpo_activity_logs_page_' . $page . '_per_page_' . $per_page;
+		$cache_key = 'wppo_activity_logs_page_' . $page . '_per_page_' . $per_page;
 
 		// Attempt to fetch cached data
-		$data = wp_cache_get( $cache_key, 'qtpo_activity_logs' );
+		$data = wp_cache_get( $cache_key, 'wppo_activity_logs' );
 
 		if ( false === $data ) {
 			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
@@ -53,7 +72,7 @@ class Log {
 
 			// Get total number of activities
 			$total_items = (int) $wpdb->get_var(
-				"SELECT COUNT(*) FROM {$wpdb->prefix}qtpo_activity_logs"
+				"SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs"
 			);
 
 			// Calculate total pages
@@ -62,7 +81,7 @@ class Log {
 			// Fetch paginated results
 			$results = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT * FROM {$wpdb->prefix}qtpo_activity_logs ORDER BY created_at DESC LIMIT %d OFFSET %d",
+					"SELECT * FROM {$wpdb->prefix}wppo_activity_logs ORDER BY created_at DESC LIMIT %d OFFSET %d",
 					$per_page,
 					$offset
 				),
@@ -85,7 +104,7 @@ class Log {
 			);
 
 			// Store data in cache
-			wp_cache_set( $cache_key, $data, 'qtpo_activity_logs', HOUR_IN_SECONDS );
+			wp_cache_set( $cache_key, $data, 'wppo_activity_logs', HOUR_IN_SECONDS );
 		}
 
 		return $data;

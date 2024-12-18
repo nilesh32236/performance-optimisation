@@ -10,6 +10,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Class Cron
  *
  * This class handles scheduling, managing, and processing cron jobs related to static page generation.
+ *
+ * @since 1.0.0
  */
 class Cron {
 
@@ -17,14 +19,16 @@ class Cron {
 	 * Constructor function.
 	 *
 	 * Registers WordPress actions and filters for cron jobs.
+	 *
+	 * @since 1.0.0
 	 */
 	public function __construct() {
 		add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
-		add_action( 'qtpo_page_cron_hook', array( $this, 'qtpo_page_cron_callback' ) );
-		add_action( 'qtpo_img_conversation', array( $this, 'img_convert_cron' ) );
+		add_action( 'wppo_page_cron_hook', array( $this, 'wppo_page_cron_callback' ) );
+		add_action( 'wppo_img_conversation', array( $this, 'img_convert_cron' ) );
 		add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 
-		add_action( 'qtpo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
+		add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
 	}
 
 	/**
@@ -34,6 +38,8 @@ class Cron {
 	 *
 	 * @param array $schedules Existing cron schedules.
 	 * @return array Modified schedules with 'every_5_hours' added.
+	 *
+	 * @since 1.0.0
 	 */
 	public function add_custom_cron_interval( $schedules ): array {
 		$schedules['every_5_hours'] = array(
@@ -46,17 +52,17 @@ class Cron {
 	/**
 	 * Schedule the main cron job that triggers the processing of all pages.
 	 *
-	 * Schedules the `qtpo_page_cron_hook` to run every 5 hours if it's not already scheduled.
+	 * Schedules the `wppo_page_cron_hook` to run every 5 hours if it's not already scheduled.
 	 *
-	 * @return void
+	 * @since 1.0.0
 	 */
 	public function schedule_cron_jobs(): void {
-		if ( ! wp_next_scheduled( 'qtpo_page_cron_hook' ) ) {
-			wp_schedule_event( time(), 'every_5_hours', 'qtpo_page_cron_hook' );
+		if ( ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
+			wp_schedule_event( time(), 'every_5_hours', 'wppo_page_cron_hook' );
 		}
 
-		if ( ! wp_next_scheduled( 'qtpo_img_conversation' ) ) {
-			wp_schedule_event( time(), 'hourly', 'qtpo_img_conversation' );
+		if ( ! wp_next_scheduled( 'wppo_img_conversation' ) ) {
+			wp_schedule_event( time(), 'hourly', 'wppo_img_conversation' );
 		}
 	}
 
@@ -65,9 +71,9 @@ class Cron {
 	 *
 	 * Triggers the scheduling of individual page processing jobs.
 	 *
-	 * @return void
+	 * @since 1.0.0
 	 */
-	public function qtpo_page_cron_callback(): void {
+	public function wppo_page_cron_callback(): void {
 		$this->schedule_page_cron_jobs();
 	}
 
@@ -76,7 +82,7 @@ class Cron {
 	 *
 	 * Schedules a single event for each page to generate a static version.
 	 *
-	 * @return void
+	 * @since 1.0.0
 	 */
 	private function schedule_page_cron_jobs(): void {
 		$pages = $this->get_all_pages();
@@ -85,7 +91,7 @@ class Cron {
 			return;
 		}
 
-		$options = get_option( 'qtpo_settings', array() );
+		$options = get_option( 'wppo_settings', array() );
 
 		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
 
@@ -119,8 +125,8 @@ class Cron {
 				continue;
 			}
 
-			if ( ! wp_next_scheduled( 'qtpo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + \wp_rand( 0, 3600 ), 'qtpo_generate_static_page', array( $page_id ) );
+			if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
+				wp_schedule_single_event( time() + \wp_rand( 0, 3600 ), 'wppo_generate_static_page', array( $page_id ) );
 			}
 		}
 	}
@@ -130,7 +136,7 @@ class Cron {
 	 *
 	 * Unschedules all page processing cron jobs and clears the main hook.
 	 *
-	 * @return void
+	 * @since 1.0.0
 	 */
 	public static function clear_cron_jobs(): void {
 		$pages = self::get_all_pages();
@@ -140,7 +146,7 @@ class Cron {
 		}
 
 		foreach ( $pages as $page_id ) {
-			$hook      = 'qtpo_generate_static_page_' . $page_id;
+			$hook      = 'wppo_generate_static_page_' . $page_id;
 			$timestamp = wp_next_scheduled( $hook );
 
 			if ( $timestamp ) {
@@ -148,7 +154,7 @@ class Cron {
 			}
 		}
 
-		wp_clear_scheduled_hook( 'qtpo_page_cron_hook' );
+		wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 	}
 
 	/**
@@ -157,7 +163,7 @@ class Cron {
 	 * This method will be triggered by the cron job to mark the page as processed and load it.
 	 *
 	 * @param int $page_id The ID of the page to process.
-	 * @return void
+	 * @since 1.0.0
 	 */
 	public function process_page( $page_id ): void {
 		if ( $page_id ) {
@@ -172,6 +178,8 @@ class Cron {
 	 * Retrieves all public pages and posts and ensures the front page is included.
 	 *
 	 * @return array List of page IDs to process.
+	 *
+	 * @since 1.0.0
 	 */
 	private static function get_all_pages(): array {
 		$front_page_id = get_option( 'page_on_front' );
@@ -207,7 +215,7 @@ class Cron {
 	 * This method fetches the page via `wp_remote_get` to generate the static page.
 	 *
 	 * @param int $page_id The ID of the page to load.
-	 * @return void
+	 * @since 1.0.0
 	 */
 	private function load_page( $page_id ): void {
 		$permalink = get_permalink( $page_id );
@@ -222,7 +230,7 @@ class Cron {
 	 * Deletes both the `.html` and `.gz` cached versions of the page, if they exist.
 	 *
 	 * @param int $page_id The ID of the page to mark as processed.
-	 * @return void
+	 * @since 1.0.0
 	 */
 	private function mark_page_as_processed( $page_id ): void {
 		$permalink  = get_permalink( $page_id );
@@ -231,7 +239,7 @@ class Cron {
 		$parsed_url = wp_parse_url( $site_url );
 		$domain     = sanitize_text_field( $parsed_url['host'] . ( $parsed_url['port'] ?? '' ) );
 
-		$cache_dir = WP_CONTENT_DIR . "/cache/qtpo/{$domain}/{$url_path}";
+		$cache_dir = WP_CONTENT_DIR . "/cache/wppo/{$domain}/{$url_path}";
 
 		if ( Util::init_filesystem() ) {
 			global $wp_filesystem;
@@ -248,11 +256,19 @@ class Cron {
 		}
 	}
 
+	/**
+	 * Convert images to optimized formats.
+	 *
+	 * Processes pending images and converts them to `webp` and/or `avif` formats
+	 * based on the plugin settings. Handles images in batches to optimize performance.
+	 *
+	 * @since 1.0.0
+	 */
 	public function img_convert_cron() {
-		$options       = get_option( 'qtpo_settings', array() );
+		$options       = get_option( 'wppo_settings', array() );
 		$img_converter = new Img_Converter( $options );
 
-		$img_info = get_option( 'qtpo_img_info', array() );
+		$img_info = get_option( 'wppo_img_info', array() );
 
 		$conversation_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
 

@@ -11,11 +11,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+	/**
+	 * Class Cache
+	 *
+	 * Handles caching functionalities such as combining CSS and generating static HTML.
+	 *
+	 * @since 1.0.0
+	 */
 	class Cache {
 
 
-		private const CACHE_DIR = '/cache/qtpo';
-
+		private const CACHE_DIR = '/cache/wppo';
 		private string $domain;
 		private string $cache_root_dir;
 		private string $cache_root_url;
@@ -23,6 +29,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private $filesystem;
 		private $options;
 
+		/**
+		 * Constructor to initialize cache settings and configurations.
+		 *
+		 * @since 1.0.0
+		 */
 		public function __construct() {
 			// Check and sanitize $_SERVER['HTTP_HOST']
 			$this->domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
@@ -37,9 +48,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Initialize filesystem and options
 			$this->filesystem = Util::init_filesystem();
-			$this->options    = get_option( 'qtpo_settings', array() );
+			$this->options    = get_option( 'wppo_settings', array() );
 		}
 
+		/**
+		 * Combines all enqueued CSS files into a single file.
+		 *
+		 * @since 1.0.0
+		 */
 		public function combine_css() {
 			if ( is_user_logged_in() ) {
 				return;
@@ -131,13 +147,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$css_url = $this->get_cache_file_url( 'css' );
 
 				$version = fileatime( $css_file_path );
-				wp_enqueue_style( 'qtpo-combine-css', $css_url, array(), $version, 'all' );
+				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 
 				$css_url_with_version = $css_url . "?ver=$version";
 				echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
 			}
 		}
 
+		/**
+		 * Fetches CSS content from a remote URL or local path.
+		 *
+		 * @param string $url The URL of the CSS file.
+		 * @return string The CSS content or an empty string if fetching fails.
+		 *
+		 * @since 1.0.0
+		 */
 		private function fetch_remote_css( $url ) {
 			if ( empty( $url ) ) {
 				return '';
@@ -162,6 +186,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Creates a static HTML version of the page if not logged in and not a 404 page.
 		 *
 		 * @return void
+		 *
+		 * @since 1.0.0
 		 */
 		public function generate_dynamic_static_html(): void {
 			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
@@ -187,6 +213,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $buffer
 		 * @param string $file_path
 		 * @return string
+		 *
+		 * @since 1.0.0
 		 */
 		private function process_buffer( $buffer, $file_path ) {
 
@@ -209,6 +237,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $buffer
 		 * @return string
+		 *
+		 * @since 1.0.0
 		 */
 		private function minify_buffer( $buffer ) {
 			$minifier = new Minify\HTML( $buffer, $this->options );
@@ -221,6 +251,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Check if the page is not cacheable.
 		 *
 		 * @return bool
+		 *
+		 * @since 1.0.0
 		 */
 		private function is_not_cacheable(): bool {
 			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
@@ -232,32 +264,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Get the cache file path based on the URL path.
 		 *
-		 * @return string
+		 * @param string $type The file type (default: 'html').
+		 * @return string The cache file path.
+		 *
+		 * @since 1.0.0
 		 */
 		private function get_cache_file_path( $type = 'html' ): string {
 			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index.{$type}" : "{$this->url_path}/index.{$type}" );
 		}
 
+		/**
+		 * Get the cache file URL based on the URL path.
+		 *
+		 * @param string $type The file type (default: 'html').
+		 * @return string The cache file URL.
+		 *
+		 * @since 1.0.0
+		 */
 		public function get_cache_file_url( $type = 'html' ): string {
 			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index.{$type}" : "{$this->url_path}/index.{$type}" );
 		}
+
 		/**
 		 * Prepare the cache directory for storing files.
 		 *
-		 * @return bool
+		 * @return bool True if successful, false otherwise.
+		 *
+		 * @since 1.0.0
 		 */
 		private function prepare_cache_dir(): bool {
 			return Util::prepare_cache_dir( "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? '' : "/{$this->url_path}" ) );
 		}
 
 		/**
-		 * Save cache files.
+		 * Save cache files with optional gzip compression.
 		 *
-		 * Writes the minified HTML content to both regular and gzip compressed files.
-		 *
-		 * @param string $buffer         The minified HTML content.
-		 * @param string $file_path      Path to save the regular HTML file.
+		 * @param string $buffer The content to save.
+		 * @param string $file_path The file path for saving.
+		 * @param string $type The file type (default: 'html').
 		 * @return void
+		 *
+		 * @since 1.0.0
 		 */
 		private function save_cache_files( $buffer, $file_path, $type = 'html' ): void {
 
@@ -274,6 +321,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
 		}
 
+		/**
+		 * Determine if cache storage is allowed.
+		 *
+		 * @return bool True if cache can be stored, false otherwise.
+		 *
+		 * @since 1.0.0
+		 */
 		private function maybe_store_cache() {
 			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
 				preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
@@ -316,29 +370,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Invalidate dynamic static HTML.
+		 * Invalidate dynamic static HTML cache for a specific page.
 		 *
-		 * Deletes the cached HTML files when a page is saved and schedules regeneration.
-		 *
-		 * @param int $page_id The ID of the page being saved.
+		 * @param int $page_id The page ID.
 		 * @return void
+		 *
+		 * @since 1.0.0
 		 */
 		public function invalidate_dynamic_static_html( $page_id ): void {
-			$html_file_path = $this->get_file_path( $page_id, 'html' );
-			$css_file_path  = $this->get_file_path( $page_id, 'css' );
+			$path = str_replace( home_url(), '', get_permalink( $page_id ) );
+
+			$html_file_path = $this->get_file_path( $path, 'html' );
+			$css_file_path  = $this->get_file_path( $path, 'css' );
 			$this->delete_cache_files( $html_file_path );
 			$this->delete_cache_files( $css_file_path );
 
-			if ( ! wp_next_scheduled( 'qtpo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + \wp_rand( 0, 5 ), 'qtpo_generate_static_page', array( $page_id ) );
+			if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
+				wp_schedule_single_event( time() + \wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $page_id ) );
 			}
 		}
 
 		/**
-		 * Get the file path for a page.
+		 * Get the file path for a specific page.
 		 *
-		 * @param string|null $url_path
-		 * @return string
+		 * @param string|null $url_path The URL path (optional).
+		 * @param string $type The file type (default: 'html').
+		 * @return string The file path.
+		 *
+		 * @since 1.0.0
 		 */
 		private function get_file_path( string $url_path = null, string $type = 'html' ): string {
 			$url_path = trim( $url_path, '/' );
@@ -346,13 +405,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Delete cache files.
+		 * Delete cache files for a specific file path.
 		 *
-		 * Removes the cached HTML and gzip files for a specific page.
-		 *
-		 * @param string $file_path      Path to the regular HTML file.
-		 * @param string $gzip_file_path Path to the gzip compressed HTML file.
+		 * @param string $file_path The file path.
 		 * @return void
+		 *
+		 * @since 1.0.0
 		 */
 		private function delete_cache_files( $file_path ): void {
 			$gzip_file_path = $file_path . '.gz';
@@ -367,6 +425,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string|null $url_path
 		 * @return void
+		 *
+		 * @since 1.0.0
 		 */
 		public static function clear_cache( $url_path = null ) {
 			$instance = new self();
@@ -384,6 +444,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Delete all cache files.
 		 *
 		 * @return void
+		 *
+		 * @since 1.0.0
 		 */
 		private function delete_all_cache_files() {
 			$cache_dir = "{$this->cache_root_dir}/{$this->domain}";
@@ -403,8 +465,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Get the size of the cache.
 		 *
 		 * @return string
+		 *
+		 * @since 1.0.0
 		 */
-		public static function get_cache_size() {
+		public static function get_cache_size(): string {
 			$instance = new self();
 
 			if ( ! $instance->filesystem ) {
@@ -426,6 +490,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $directory
 		 * @return int
+		 *
+		 * @since 1.0.0
 		 */
 		private function calculate_directory_size( string $directory ): int {
 			$total_size = 0;

@@ -1,6 +1,13 @@
 <?php
 namespace PerformanceOptimise\Inc;
 
+/**
+ * Img_Converter Class
+ *
+ * A class to handle image format conversions (WebP and AVIF) for performance optimization.
+ *
+ * @since 1.0.0
+ */
 class Img_Converter {
 
 	private $options;
@@ -14,6 +21,13 @@ class Img_Converter {
 	private $format;
 
 	private $exclude_imgs = array();
+
+	/**
+	 * Img_Converter constructor.
+	 *
+	 * @param array $options Options for configuring image optimization.
+	 * @since 1.0.0
+	 */
 	public function __construct( $options ) {
 		$this->options = $options;
 
@@ -31,6 +45,7 @@ class Img_Converter {
 	 * @param string $format The desired format ('webp' or 'avif').
 	 * @param int $quality Quality level of the converted image (0-100).
 	 * @return bool True on success, false on failure.
+	 * @since 1.0.0
 	 */
 	public function convert_image( string $source_image, string $format = 'webp', int $quality = -1 ): bool {
 
@@ -221,6 +236,13 @@ class Img_Converter {
 		}
 	}
 
+	/**
+	 * Convert an image palette to true color if it is not already in true color.
+	 *
+	 * @param \GdImage $image The image resource.
+	 * @return \GdImage The true color image resource.
+	 * @since 1.0.0
+	 */
 	private function convert_palette_to_truecolor( $image ) {
 		if ( ! imageistruecolor( $image ) ) {
 			$width     = imagesx( $image );
@@ -237,6 +259,13 @@ class Img_Converter {
 		return $image;
 	}
 
+	/**
+	 * Check if a WebP image is animated.
+	 *
+	 * @param string $file Path to the WebP file.
+	 * @return bool True if the WebP image is animated, false otherwise.
+	 * @since 1.0.0
+	 */
 	private function is_animated_webp( $file ) {
 		global $wp_filesystem;
 
@@ -267,7 +296,9 @@ class Img_Converter {
 	 * Get the WebP file path.
 	 *
 	 * @param string $source_image The source image path.
-	 * @return string The path where the WebP image will be saved.
+	 * @param string $format The desired format ('webp' or 'avif').
+	 * @return string The path where the converted image will be saved.
+	 * @since 1.0.0
 	 */
 	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
 		$info = pathinfo( $source_image );
@@ -279,17 +310,25 @@ class Img_Converter {
 
 		// If home_url is present, remove it from the path
 		if ( 0 === strpos( $relative_path, ABSPATH ) ) {
-			$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/qtpo', $relative_path );
+			$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/wppo', $relative_path );
 			return $local_path;
 		}
 
 		$relative_path = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $relative_path );
 
-		$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/qtpo', ABSPATH . ltrim( $relative_path, '/' ) );
+		$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/wppo', ABSPATH . ltrim( $relative_path, '/' ) );
 
 		return $local_path;
 	}
 
+	/**
+	 * Get the URL of the converted image.
+	 *
+	 * @param string $source_image The source image URL.
+	 * @param string $format The desired format ('webp' or 'avif').
+	 * @return string The URL of the converted image.
+	 * @since 1.0.0
+	 */
 	public static function get_img_url( string $source_image, string $format = 'webp' ): string {
 
 		if ( 0 === strpos( $source_image, home_url() ) ) {
@@ -297,8 +336,8 @@ class Img_Converter {
 			$path_info     = pathinfo( $source_image );
 			$converted_img = $path_info['dirname'] . '/' . $path_info['filename'] . '.' . $format;
 
-			// Adjust for the qtpo directory
-			$converted_img = str_replace( WP_CONTENT_URL, WP_CONTENT_URL . '/qtpo', $converted_img );
+			// Adjust for the wppo directory
+			$converted_img = str_replace( WP_CONTENT_URL, WP_CONTENT_URL . '/wppo', $converted_img );
 
 			return $converted_img;
 		}
@@ -308,11 +347,12 @@ class Img_Converter {
 
 
 	/**
-	 * Convert uploaded images to WebP format with error handling.
+	 * Convert uploaded images to WebP or AVIF format upon attachment upload.
 	 *
 	 * @param array $metadata The attachment metadata.
 	 * @param int $attachment_id The attachment ID.
 	 * @return array|\WP_Error The modified attachment metadata, or WP_Error on failure.
+	 * @since 1.0.0
 	 */
 	public function convert_image_to_next_gen_format( $metadata, $attachment_id ) {
 		$upload_dir = wp_upload_dir();
@@ -365,13 +405,14 @@ class Img_Converter {
 	}
 
 	/**
-	 * Serve WebP images if available and supported by the browser, with error handling.
+	 * Serve WebP or AVIF images if supported by the browser.
 	 *
 	 * @param array $image The image source array.
 	 * @param int $attachment_id The attachment ID.
 	 * @param string|array $size The requested size.
 	 * @param bool $icon Whether the image is an icon.
-	 * @return array Modified image source with WebP if applicable, or original image if an error occurs.
+	 * @return array Modified image source with WebP/AVIF if applicable, or original image if not.
+	 * @since 1.0.0
 	 */
 	public function maybe_serve_next_gen_image( $image, $attachment_id, $size, $icon ) {
 		if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) || empty( $image[0] ) ) {
@@ -416,10 +457,18 @@ class Img_Converter {
 		return $image;
 	}
 
+	/**
+	 * Update the conversion status of an image.
+	 *
+	 * @param string $img_path The image path.
+	 * @param string $status The status to update ('completed', 'failed', etc.).
+	 * @param string $type The image format type ('webp', 'avif').
+	 * @since 1.0.0
+	 */
 	public function update_conversion_status( $img_path, $status = 'completed', $type = 'webp' ) {
 		$img_path = str_replace( ABSPATH, '', $img_path );
 
-		$img_info = get_option( 'qtpo_img_info', array() );
+		$img_info = get_option( 'wppo_img_info', array() );
 
 		if ( 'completed' === $status ) {
 			// Check and remove from 'pending' list
@@ -452,9 +501,16 @@ class Img_Converter {
 			$img_info[ $status ][ $type ][] = $img_path;
 		}
 
-		update_option( 'qtpo_img_info', $img_info );
+		update_option( 'wppo_img_info', $img_info );
 	}
 
+	/**
+	 * Add an image to the conversion queue.
+	 *
+	 * @param string $img_path The image path.
+	 * @param string $type The image format type ('webp', 'avif').
+	 * @since 1.0.0
+	 */
 	public static function add_img_into_queue( $img_path, $type = 'webp' ) {
 		if ( pathinfo( $img_path, PATHINFO_EXTENSION ) === $type ) {
 			return;
@@ -462,12 +518,12 @@ class Img_Converter {
 
 		$img_path = str_replace( ABSPATH, '', $img_path );
 
-		$img_info = get_option( 'qtpo_img_info', array() );
+		$img_info = get_option( 'wppo_img_info', array() );
 
 		if ( ! in_array( $img_path, $img_info['pending'][ $type ] ?? array(), true ) ) {
 			$img_info['pending'][ $type ][] = $img_path;
 
-			update_option( 'qtpo_img_info', $img_info );
+			update_option( 'wppo_img_info', $img_info );
 		}
 	}
 }

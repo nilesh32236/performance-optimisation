@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { apiCall } from '../lib/apiRequest';
 
 const PluginSetting = ({ options }) => {
-	const translations = qtpoSettings.translations;
+	const translations = wppoSettings.translations;
 
 	const [selectedFile, setSelectedFile] = useState(null);
 	const [notification, setNotification] = useState({ message: '', success: false });
@@ -51,7 +51,7 @@ const PluginSetting = ({ options }) => {
 				})
 					.then((data) => {
 						if (data.success) {
-							qtpoSettings.settings = fileData; // Update global settings
+							wppoSettings.settings = fileData; // Update global settings
 							resetFileInput();
 						}
 

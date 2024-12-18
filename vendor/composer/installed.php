@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
-        'name' => 'qrolic/performance-optimisation',
+        'name' => 'nilesh/performance-optimisation',
         'pretty_version' => 'dev-master',
         'version' => 'dev-master',
-        'reference' => '96c77b8378af02515bc3aeb83e35f1df06f07f2b',
+        'reference' => 'b55ca511369531178ce91dfcc069e8506c364d08',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -28,10 +28,10 @@
             'aliases' => array(),
             'dev_requirement' => false,
         ),
-        'qrolic/performance-optimisation' => array(
+        'nilesh/performance-optimisation' => array(
             'pretty_version' => 'dev-master',
             'version' => 'dev-master',
-            'reference' => '96c77b8378af02515bc3aeb83e35f1df06f07f2b',
+            'reference' => 'b55ca511369531178ce91dfcc069e8506c364d08',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

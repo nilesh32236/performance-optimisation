@@ -19,22 +19,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 	 * Class Deactivate
 	 *
 	 * Handles the deactivation logic for the plugin.
+	 *
+	 * @since 1.0.0
 	 */
 	class Deactivate {
 
 		/**
 		 * Initialize the deactivation process.
 		 *
-		 * This method checks if the necessary classes exist before including them.
-		 * Then it triggers the removal of static files and htaccess modifications.
+		 * Cleans up resources by removing cron jobs, static files,
+		 * .htaccess modifications, and WP_CACHE constant.
 		 *
+		 * @since 1.0.0
 		 * @return void
 		 */
 		public static function init(): void {
 
 			self::unschedule_crons();
 
-			require_once QTPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 
 			Advanced_Cache_Handler::remove();
 
@@ -47,32 +50,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		/**
 		 * Unschedule cron jobs.
 		 *
-		 * This method checks if the cron jobs are scheduled and unschedules them if found.
+		 * Removes any scheduled cron jobs created by the plugin.
 		 *
+		 * @since 1.0.0
 		 * @return void
 		 */
 		private static function unschedule_crons(): void {
-			// Unschedule the 'qtpo_page_cron_hook' event if it is scheduled
-			$timestamp = wp_next_scheduled( 'qtpo_page_cron_hook' );
+			// Unschedule the 'wppo_page_cron_hook' event if it is scheduled
+			$timestamp = wp_next_scheduled( 'wppo_page_cron_hook' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'qtpo_page_cron_hook' );
+				wp_unschedule_event( $timestamp, 'wppo_page_cron_hook' );
 			}
 
-			// Unschedule the 'qtpo_img_conversation' event if it is scheduled
-			$timestamp = wp_next_scheduled( 'qtpo_img_conversation' );
+			// Unschedule the 'wppo_img_conversation' event if it is scheduled
+			$timestamp = wp_next_scheduled( 'wppo_img_conversation' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'qtpo_img_conversation' );
+				wp_unschedule_event( $timestamp, 'wppo_img_conversation' );
 			}
 
-			$timestamp = wp_next_scheduled( 'qtpo_generate_static_page' );
+			$timestamp = wp_next_scheduled( 'wppo_generate_static_page' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'qtpo_img_conversation' );
+				wp_unschedule_event( $timestamp, 'wppo_img_conversation' );
 			}
 		}
 
 		/**
 		 * Removes WP_CACHE constant from wp-config.php file if present.
 		 *
+		 * Ensures that the constant enabling WordPress caching is deleted
+		 * during deactivation to prevent conflicts.
+		 *
+		 * @since 1.0.0
 		 * @return void
 		 */
 		private static function remove_wp_cache_constant(): void {

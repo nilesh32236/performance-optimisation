@@ -15,25 +15,34 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Class HTML
  *
  * Handles the minification of HTML, inline CSS, and inline JavaScript.
+ *
+ * @since 1.0.0
  */
 class HTML {
 	/**
 	 * @var HtmlMin
+	 * @since 1.0.0
 	 */
 	private HtmlMin $html_min;
 
 	/**
 	 * @var string
+	 * @since 1.0.0
 	 */
 	private string $minified_html;
 
+	/**
+	 * @var array
+	 * @since 1.0.0
+	 */
 	private array $options;
 
 	/**
-	 * Constructor
+	 * Constructor to initialize HTML minification.
 	 *
 	 * @param string $html The HTML content to minify.
 	 * @param array $options Minification options.
+	 * @since 1.0.0
 	 */
 	public function __construct( $html, $options ) {
 		$this->options = (array) $options;
@@ -44,9 +53,7 @@ class HTML {
 	/**
 	 * Initialize minification settings.
 	 *
-	 * Configure the HTML minification options.
-	 *
-	 * @return void
+	 * @since 1.0.0
 	 */
 	private function initialize_minification_settings(): void {
 		$this->html_min = new HtmlMin();
@@ -85,7 +92,8 @@ class HTML {
 	 * Minify HTML content.
 	 *
 	 * @param string $html The HTML content to minify.
-	 * @return string The minified HTML content.
+	 * @return string Minified HTML content.
+	 * @since 1.0.0
 	 */
 	private function minify_html( string $html ): string {
 		$html = $this->modify_canonical_link( $html );
@@ -108,16 +116,17 @@ class HTML {
 	}
 
 	/**
-	 * Extract the canonical link from the HTML.
+	 * Modify the canonical link in HTML.
 	 *
 	 * @param string $html The HTML content.
-	 * @return string|null The extracted canonical link or null if not found.
+	 * @return string Modified HTML content.
+	 * @since 1.0.0
 	 */
 	private function modify_canonical_link( string $html ): ?string {
 		return preg_replace_callback(
 			'#<link\b[^>]*\brel=["\'](canonical|shortlink)["\'][^>]*>#i',
 			function ( $matches ) {
-				$link_tag = str_replace( 'href', 'qtpo-href', $matches[0] );
+				$link_tag = str_replace( 'href', 'wppo-href', $matches[0] );
 
 				return $link_tag;
 			},
@@ -126,10 +135,11 @@ class HTML {
 	}
 
 	/**
-	 * Extract and preserve scripts to prevent them from being minified.
+	 * Extract and preserve script tags for later restoration.
 	 *
 	 * @param string $html The HTML content.
-	 * @return array Updated HTML and preserved scripts.
+	 * @return array Updated HTML and preserved script tags.
+	 * @since 1.0.0
 	 */
 	private function extract_and_preserve_scripts_template( $html ) {
 		$scripts = array();
@@ -144,7 +154,7 @@ class HTML {
 
 					if ( 'text/javascript' !== strtolower( $type ) && 'application/ld+json' !== strtolower( $type ) ) {
 						$scripts[] = $matches[0];
-						return '<script data-qtpo-preserve="' . ( count( $scripts ) - 1 ) . '"></script>';
+						return '<script data-wppo-preserve="' . ( count( $scripts ) - 1 ) . '"></script>';
 					}
 				}
 
@@ -157,39 +167,46 @@ class HTML {
 	}
 
 	/**
-	 * Restore preserved scripts.
+	 * Restore preserved script tags in HTML.
+	 *
+	 * @param string $html The HTML content.
+	 * @param array $scripts The preserved scripts.
+	 * @return string Updated HTML content.
+	 * @since 1.0.0
 	 */
 	private function restore_preserved_scripts_template( $html, $scripts ) {
 		foreach ( $scripts as $index => $script ) {
-			$html = str_replace( '<script data-qtpo-preserve=' . ( $index ) . '></script>', $script, $html );
+			$html = str_replace( '<script data-wppo-preserve=' . ( $index ) . '></script>', $script, $html );
 		}
 
 		return $html;
 	}
 
 	/**
-	 * Restore the canonical link in the HTML content.
+	 * Restore the canonical link in HTML.
 	 *
-	 * @param string $html The minified HTML content.
-	 * @param string $canonical_link The original canonical link to restore.
-	 * @return string The HTML content with the restored canonical link.
+	 * @param string $html The HTML content.
+	 * @return string HTML content with the canonical link restored.
+	 * @since 1.0.0
 	 */
 	private function restore_canonical_link( string $html ): string {
 		return preg_replace_callback(
 			'#<link\b[^>]*\brel=["\'\](canonical|shortlink)["\'\][^>]*>#i',
 			function ( $matches ) {
-				$link_tag = str_replace( 'qtpo-href', 'href', $matches[0] );
+				$link_tag = str_replace( 'wppo-href', 'href', $matches[0] );
 
 				return $link_tag;
 			},
 			$html
 		);
 	}
+
 	/**
-	 * Minify inline CSS.
+	 * Minify inline CSS in HTML.
 	 *
 	 * @param string $html The HTML content containing inline CSS.
-	 * @return string The HTML content with minified CSS.
+	 * @return string HTML content with minified CSS.
+	 * @since 1.0.0
 	 */
 	private function minify_inline_css( string $html ): string {
 		$html = preg_replace_callback(
@@ -210,10 +227,11 @@ class HTML {
 	}
 
 	/**
-	 * Minify inline JavaScript.
+	 * Minify inline JavaScript in HTML.
 	 *
 	 * @param string $html The HTML content containing inline JS.
-	 * @return string The HTML content with minified JS.
+	 * @return string HTML content with minified JS.
+	 * @since 1.0.0
 	 */
 	private function minify_inline_js( string $html ): string {
 		return preg_replace_callback(
@@ -230,7 +248,8 @@ class HTML {
 	 *
 	 * @param string $attributes The script attributes.
 	 * @param string $content The JavaScript content to minify.
-	 * @return string The minified JS or original if an error occurs.
+	 * @return string Minified JS or original content if error occurs.
+	 * @since 1.0.0
 	 */
 	private function safe_minify_js( string $attributes, string $content ): string {
 		$content = trim( $content );
@@ -251,7 +270,7 @@ class HTML {
 
 		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 
-			$exclude_delay = array_merge( array( 'qtpo-lazyload', 'data-qtpo-preserve' ), Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() ) );
+			$exclude_delay = array_merge( array( 'wppo-lazyload', 'data-wppo-preserve' ), Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() ) );
 
 			$should_exclude = false;
 			if ( ! empty( $exclude_delay ) ) {
@@ -271,12 +290,12 @@ class HTML {
 					// If the 'type' attribute exists, modify it
 					$attributes = preg_replace(
 						'/type=("|\')text\/javascript("|\')/',
-						'type="qtpo/javascript" qtpo-type="text/javascript"',
+						'type="wppo/javascript" wppo-type="text/javascript"',
 						$attributes
 					);
 				} else {
 					// If the 'type' attribute doesn't exist, add a new one
-					$attributes .= ' type="qtpo/javascript" qtpo-type="text/javascript"';
+					$attributes .= ' type="wppo/javascript" wppo-type="text/javascript"';
 				}
 			}
 		}
@@ -291,11 +310,12 @@ class HTML {
 	}
 
 	/**
-	 * Safely JSON encode the content.
+	 * Safely JSON encode content.
 	 *
 	 * @param string $content The JSON-LD content to encode.
 	 * @param string $attributes The script attributes.
-	 * @return string The encoded JSON-LD or original content if an error occurs.
+	 * @return string Encoded JSON-LD or original content if error occurs.
+	 * @since 1.0.0
 	 */
 	private function safe_json_encode( string $content, string $attributes ): string {
 		try {
@@ -309,7 +329,8 @@ class HTML {
 	/**
 	 * Get the minified HTML content.
 	 *
-	 * @return string The minified HTML content.
+	 * @return string Minified HTML content.
+	 * @since 1.0.0
 	 */
 	public function get_minified_html(): string {
 		return $this->minified_html;

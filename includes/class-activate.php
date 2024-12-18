@@ -5,6 +5,7 @@
  * Handles the activation process by modifying .htaccess and creating static files.
  *
  * @package PerformanceOptimise\Inc
+ * @since 1.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -17,20 +18,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 	/**
 	 * Class Activate
 	 *
-	 * Handles the activation logic for the plugin.
+	 * Handles the plugin activation logic.
+	 * @since 1.0.0
 	 */
 	class Activate {
 
 		/**
-		 * Initialize the activation process.
+		 * Initializes the activation process.
 		 *
-		 * This method checks if the necessary classes exist before including them.
-		 * Then it triggers the required static file and htaccess modifications.
+		 * Includes required files and triggers necessary modifications.
 		 *
 		 * @return void
+		 * @since 1.0.0
 		 */
 		public static function init(): void {
-			require_once QTPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 
 			Advanced_Cache_Handler::create();
 
@@ -39,6 +41,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			self::create_activity_log_table();
 		}
 
+		/**
+		 * Adds the WP_CACHE constant to wp-config.php if not already defined.
+		 *
+		 * @return void
+		 * @since 1.0.0
+		 */
 		private static function add_wp_cache_constant(): void {
 			global $wp_filesystem;
 
@@ -81,18 +89,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		}
 
 		/**
-		 * Create the activity log table if it doesn't already exist.
+		 * Creates the activity log table in the database if it doesn't exist.
 		 *
-		 * This uses a direct database query because WordPress does not provide APIs
-		 * for custom table creation or schema management. The `dbDelta()` function
-		 * is the standard approach for such tasks and ensures compatibility.
-		 *
+		 * @return void
+		 * @since 1.0.0
 		 */
-
 		private static function create_activity_log_table() {
 			global $wpdb;
 
-			$table_name      = $wpdb->prefix . 'qtpo_activity_logs'; // Table name
+			$table_name      = $wpdb->prefix . 'wppo_activity_logs'; // Table name
 			$charset_collate = $wpdb->get_charset_collate();
 
 			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange */

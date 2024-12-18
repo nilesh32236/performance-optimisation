@@ -3,7 +3,7 @@ import { CheckboxOption, handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 
 const FileOptimization = ({ options = {} }) => {
-	const translations = qtpoSettings.translations;
+	const translations = wppoSettings.translations;
 
 	const defaultSettings = {
 		minifyJS: false,

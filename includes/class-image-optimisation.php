@@ -7,19 +7,39 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
+
+	/**
+	 * Image Optimisation class.
+	 *
+	 * Handles image conversion, preloading, and serving optimized images.
+	 *
+	 * @since 1.0.0
+	 */
 	class Image_Optimisation {
 
 		private array $options;
 
+		/**
+		 * Constructor.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param array $options Configuration options for image optimization.
+		 */
 		public function __construct( $options ) {
 			$this->options = $options;
 
 			$this->setup_hooks();
 		}
 
+		/**
+		 * Sets up hooks for image optimization features.
+		 *
+		 * @since 1.0.0
+		 */
 		private function setup_hooks() {
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
-				require_once QTPO_PLUGIN_PATH . 'includes/class-img-converter.php';
+				require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 				$img_converter = new Img_Converter( $this->options );
 
 				add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
@@ -27,6 +47,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 		}
 
+		/**
+		 * Preloads images for optimization.
+		 *
+		 * @since 1.0.0
+		 */
 		public function preload_images() {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 
@@ -35,6 +60,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$this->preload_post_type_images( $image_optimisation );
 		}
 
+		/**
+		 * Serves next-generation images if supported by the browser.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $buffer The HTML content buffer.
+		 *
+		 * @return string Modified HTML content buffer.
+		 */
 		public function maybe_serve_next_gen_images( $buffer ) {
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
 				$conversion_format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
@@ -99,6 +133,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return $buffer;
 		}
 
+		/**
+		 * Replaces image URLs with next-generation formats.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string  $img_url        The image URL.
+		 * @param array   $exclude_imgs   Images to exclude.
+		 * @param boolean $supports_avif  Whether AVIF is supported.
+		 * @param boolean $supports_webp  Whether WebP is supported.
+		 *
+		 * @return string Updated image URL.
+		 */
 		private function replace_image_with_next_gen( $img_url, $exclude_imgs, $supports_avif, $supports_webp ) {
 			$img_extension = pathinfo( $img_url, PATHINFO_EXTENSION );
 
@@ -122,7 +168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			if ( 'avif' === $conversion_format || 'both' === $conversion_format ) {
 				// Convert to AVIF if supported and not already converted
-				if ( $supports_avif && ! file_exists( $avif_img_path ) ) {
+				if ( ! file_exists( $avif_img_path ) ) {
 					$source_image_path = Util::get_local_path( $img_url );
 
 					if ( file_exists( $source_image_path ) ) {
@@ -133,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			if ( 'webp' === $conversion_format || 'both' === $conversion_format ) {
 				// Convert to WebP if supported and not already converted
-				if ( $supports_webp && ! file_exists( $webp_img_path ) ) {
+				if ( ! file_exists( $webp_img_path ) ) {
 					$source_image_path = Util::get_local_path( $img_url );
 
 					if ( file_exists( $source_image_path ) ) {
@@ -154,6 +200,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return $img_url;
 		}
 
+		/**
+		 * Preloads front page images based on the provided optimization settings.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param array $image_optimisation Image optimization configuration array.
+		 * @return void
+		 */
 		private function preload_front_page_images( $image_optimisation ) {
 			if ( empty( $image_optimisation['preloadFrontPageImages'] ) || ! is_front_page() ) {
 				return;
@@ -166,8 +220,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 		}
 
+		/**
+		 * Preloads meta images stored in post meta.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @return void
+		 */
 		private function preload_meta_images() {
-			$page_img_urls = get_post_meta( get_the_ID(), '_qtpo_preload_image_url', true );
+			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
 
 			if ( ! empty( $page_img_urls ) ) {
 				foreach ( Util::process_urls( $page_img_urls ) as $img_url ) {
@@ -176,6 +237,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 		}
 
+		/**
+		 * Preloads images for specific post types if applicable.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param array $image_optimisation Image optimization configuration array.
+		 * @return void
+		 */
 		private function preload_post_type_images( $image_optimisation ) {
 			if ( empty( $image_optimisation['preloadPostTypeImage'] ) ) {
 				return;
@@ -196,7 +265,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$image_url        = $this->get_image_url_by_post_type( $thumbnail_id );
 
 			if ( $this->should_exclude_image( $image_url, $exclude_img_urls ) ) {
-				// error_log( "Image excluded: $image_url" );
 				return;
 			}
 
@@ -204,6 +272,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$this->process_srcset_for_preload( $srcset, $image_url, $image_optimisation );
 		}
 
+		/**
+		 * Retrieves the URL of the featured image for the current post type.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param int $thumbnail_id The ID of the thumbnail image.
+		 * @return string The URL of the image.
+		 */
 		private function get_image_url_by_post_type( int $thumbnail_id ): string {
 			if ( 'product' === get_post_type() && class_exists( 'WooCommerce' ) ) {
 				$image_size = apply_filters( 'woocommerce_gallery_image_size', 'woocommerce_single' );
@@ -213,6 +289,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return wp_get_attachment_image_url( $thumbnail_id, 'blog-single-image' ) ?? '';
 		}
 
+		/**
+		 * Determines whether an image should be excluded from preloading.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $image_url The URL of the image.
+		 * @param array  $exclude_img_urls Array of URLs to exclude.
+		 * @return bool True if the image should be excluded, false otherwise.
+		 */
 		private function should_exclude_image( string $image_url, array $exclude_img_urls ): bool {
 			foreach ( $exclude_img_urls as $url ) {
 				if ( str_contains( $image_url, $url ) ) {
@@ -222,6 +307,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return false;
 		}
 
+		/**
+		 * Processes a srcset string to determine which images to preload.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $srcset The srcset string from the image tag.
+		 * @param string $default_image The fallback image URL.
+		 * @param array  $image_optimisation Image optimization configuration array.
+		 * @return void
+		 */
 		private function process_srcset_for_preload( $srcset, $default_image, $image_optimisation ) {
 			if ( ! $srcset ) {
 				$this->generate_img_preload( $default_image );
@@ -253,6 +348,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$this->generate_media_preloads( $parsed_sources, $max_width );
 		}
 
+		/**
+		 * Generates media preloads for parsed image sources.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param array $parsed_sources Array of parsed image sources.
+		 * @param int   $max_width Maximum allowed width for preloading.
+		 * @return void
+		 */
 		private function generate_media_preloads( $parsed_sources, $max_width ) {
 			$previous_width = 0;
 
@@ -270,6 +374,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 		}
 
+		/**
+		 * Generates a preload link for a given image URL.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $img_url The URL of the image to preload.
+		 * @return void
+		 */
 		public function generate_img_preload( $img_url ) {
 			if ( 0 === strpos( $img_url, 'mobile:' ) ) {
 				$mobile_url = trim( str_replace( 'mobile:', '', $img_url ) );
@@ -298,6 +410,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 		}
 
+		/**
+		 * Processes an <img> tag for optimization, including lazy loading.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $img_tag The original <img> tag.
+		 * @param string $original_src The original src attribute of the image.
+		 * @param array  $exclude_imgs Array of images to exclude from processing.
+		 * @return string The modified <img> tag.
+		 */
 		public function process_img_tag( $img_tag, $original_src, $exclude_imgs ) {
 			if ( ! empty( $exclude_imgs ) ) {
 				foreach ( $exclude_imgs as $exclude_img ) {
@@ -348,7 +470,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return $img_tag;
 		}
 
-		// Function to wrap <img> in a <picture> tag, or modify the <picture> if it exists
+		/**
+		 * Processes a <picture> tag or wraps an <img> tag with a <picture> tag for optimization.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param array  $matches Matches from the regex.
+		 * @param string $img_tag The original <img> tag.
+		 * @param string $original_src The original src attribute of the image.
+		 * @param array  $exclude_imgs Array of images to exclude from processing.
+		 * @return string The modified or new <picture> tag.
+		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
 			if ( ! preg_match( '#<picture\b[^>]*>.*?</picture>#is', $matches[0] ) ) {
 				$img_tag = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
@@ -407,7 +539,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return $matches[0];
 		}
 
-		// The main function that adds the delay load image functionality
+		/**
+		 * Adds lazy loading and delay load functionality to images in the HTML buffer.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The modified HTML buffer.
+		 */
 		public function add_delay_load_img( $buffer ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 			$exclude_img_count  = $image_optimisation['excludeFistImages'] ?? 0;
@@ -452,6 +591,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return $buffer;
 		}
 
+		/**
+		 * Retrieves URLs of images to preload.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @return array List of preload image URLs.
+		 */
 		private function get_preload_images_urls() {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 			$preload_img_urls   = array();
@@ -460,7 +606,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$preload_img_urls = array_merge( $preload_img_urls, $this->process_preload_urls( $image_optimisation['preloadFrontPageImagesUrls'] ?? array() ) );
 			}
 
-			$page_img_urls = get_post_meta( get_the_ID(), '_qtpo_preload_image_url', true );
+			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
 
 			if ( ! empty( $page_img_urls ) ) {
 				$preload_img_urls = array_merge( $preload_img_urls, $this->process_preload_urls( $page_img_urls ) );
@@ -564,6 +710,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return array_unique( $preload_img_urls );
 		}
 
+		/**
+		 * Processes an URLs for preloading.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $urls URLs to process.
+		 * @return array Processed URLs ready for preloading.
+		 */
 		private function process_preload_urls( $urls ) {
 			$preload_urls = array();
 			if ( ! empty( $urls ) ) {
@@ -574,6 +728,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return $preload_urls;
 		}
 
+		/**
+		 * Prepares a URL for preloading, handling specific prefixes like 'mobile:' or 'desktop:'.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $url The original URL to prepare.
+		 * @return string The prepared URL.
+		 */
 		private function prepare_url_for_preload( $url ) {
 			$url = trim( $url );
 
@@ -589,6 +751,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 		/**
 		 * Generates a base64-encoded SVG image with the given width and height.
+		 *
+		 * @since 1.0.0
 		 *
 		 * @param string $img_attributes The image's attributes (including width and height).
 		 * @return string The base64-encoded SVG.

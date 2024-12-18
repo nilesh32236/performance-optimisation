@@ -3,11 +3,11 @@ import { CheckboxOption, handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 
 const PreloadSettings = ({ options = {} }) => {
-	const translations = qtpoSettings.translations;
+	const translations = wppoSettings.translations;
 
 	const defaultSettings = {
 		enablePreloadCache: false,
-		excludePreloadCache: '',
+		excludePreloadCache: "my-account/(.*)\ncart/(.*)\ncheckout/(.*)",
 		preconnect: false,
 		preconnectOrigins: '',
 		prefetchDNS: false,

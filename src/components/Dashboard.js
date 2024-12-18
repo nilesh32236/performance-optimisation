@@ -3,14 +3,14 @@ import { apiCall } from '../lib/apiRequest';
 
 
 const Dashboard = ({ activities }) => {
-	const translations = qtpoSettings.translations;
+	const translations = wppoSettings.translations;
 
 	// Initialize state
 	const [state, setState] = useState({
-		totalCacheSize: qtpoSettings.cache_size,
-		total_js: qtpoSettings.total_js_css.js,
-		total_css: qtpoSettings.total_js_css.css,
-		imageInfo: qtpoSettings.image_info || [],
+		totalCacheSize: wppoSettings.cache_size,
+		total_js: wppoSettings.total_js_css.js,
+		total_css: wppoSettings.total_js_css.css,
+		imageInfo: wppoSettings.image_info || [],
 		loading: {
 			clear_cache: false,
 			optimize_images: false,
@@ -74,7 +74,7 @@ const Dashboard = ({ activities }) => {
 			.then((response) => {
 				console.log(translations.imgOptimiseSuccess);
 				// console.log( response );
-				qtpoSettings.imageInfo = response;
+				wppoSettings.imageInfo = response;
 				console.log( response );
 				
 				// updateState((prevState) => ({
@@ -103,7 +103,7 @@ const Dashboard = ({ activities }) => {
 				if (data.success) {
 					// alert(translations.removedOptimiseImg);
 					console.log(translations.removedImg, data.deleted);
-					qtpoSettings.image_info.completed = {webp: [], avif: []};
+					wppoSettings.image_info.completed = {webp: [], avif: []};
 				} else {
 					// alert(translations.someImgNotRemoved);
 					console.error(translations.failedToRemove, data.failed);
@@ -116,15 +116,15 @@ const Dashboard = ({ activities }) => {
 			.finally(() => handleLoading('remove_images', false));
 	}, [handleLoading, completed]);
 
-	// Sync state with qtpoSettings changes
+	// Sync state with wppoSettings changes
 	useEffect(() => {
 		updateState({
-			totalCacheSize: qtpoSettings.cache_size,
-			total_js: qtpoSettings.total_js_css.js,
-			total_css: qtpoSettings.total_js_css.css,
-			imageInfo: qtpoSettings.image_info || state.imageInfo,
+			totalCacheSize: wppoSettings.cache_size,
+			total_js: wppoSettings.total_js_css.js,
+			total_css: wppoSettings.total_js_css.css,
+			imageInfo: wppoSettings.image_info || state.imageInfo,
 		});
-	}, [qtpoSettings, updateState, state.imageInfo]);
+	}, [wppoSettings, updateState, state.imageInfo]);
 
 	return (
 		<div className="settings-form">
