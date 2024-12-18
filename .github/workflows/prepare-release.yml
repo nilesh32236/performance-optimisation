@@ -17,20 +17,17 @@ jobs:
       run: |
         # Remove .git directory
         rm -rf .git
-
         # Remove .gitignore file
         rm -f .gitignore
-
         # Remove .github directory
         rm -rf .github
-
         # Remove node_modules directory
         rm -rf node_modules
 
     - name: Create zip file for WordPress submission
       run: |
         # Create a zip file for the plugin 'performance-optimisation' while excluding unnecessary files
-        zip -r performance-optimisation.zip * -x ".git/*" ".gitignore" ".github/*" "node_modules/*"
+        zip -r performance-optimisation.zip . -x ".git/*" ".gitignore" ".github/*" "node_modules/*"
 
     - name: Upload zip file as artifact (optional)
       uses: actions/upload-artifact@v3
