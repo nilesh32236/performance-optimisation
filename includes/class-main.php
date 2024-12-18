@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class Main {
 
-	private array $exclude_css = array();
+	private array $exclude_css = array( 'qtpo-combine-css' );
 	private array $exclude_js  = array(
 		'jquery',
 	);
