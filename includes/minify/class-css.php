@@ -1,4 +1,15 @@
 <?php
+/**
+ * Minify CSS class for the PerformanceOptimise plugin.
+ *
+ * This class is responsible for minifying CSS files, caching them, and updating
+ * image URLs within the CSS to point to the appropriate optimized versions.
+ * It uses the MatthiasMullie\Minify library to minify the CSS content and handles
+ * the conversion of image formats to WebP and AVIF where applicable.
+ *
+ * @package PerformanceOptimise\Inc\Minify
+ * @since 1.0.0
+ */
 
 namespace PerformanceOptimise\Inc\Minify;
 
@@ -17,6 +28,12 @@ class CSS {
 		$this->filesystem = Util::init_filesystem();
 	}
 
+	/**
+	 * Minifies the CSS file and stores it in the cache directory.
+	 *
+	 * @return string|null The URL of the minified CSS file, or null on failure.
+	 * @since 1.0.0
+	 */
 	public function minify() {
 		$cache_file = $this->get_cache_file_path();
 
@@ -46,15 +63,23 @@ class CSS {
 	}
 
 	/**
-	 * Get the cache file path for the minified CSS.
+	 * Gets the cache file path for the minified CSS.
 	 *
 	 * @return string The full path to the cache file.
+	 * @since 1.0.0
 	 */
 	private function get_cache_file_path(): string {
 		$filename = md5( $this->file_path ) . '.css';
 		return "{$this->cache_dir}/{$filename}";
 	}
 
+	/**
+	 * Saves the minified CSS and its gzip version to the cache.
+	 *
+	 * @param string $css The minified CSS content.
+	 * @param string $file_path The file path to save the minified CSS.
+	 * @since 1.0.0
+	 */
 	private function save_min_file( $css, $file_path ) {
 		$gzip_file_path = $file_path . '.gz';
 
@@ -64,6 +89,14 @@ class CSS {
 		$this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
 	}
 
+	/**
+	 * Updates image paths in the CSS content.
+	 *
+	 * @param string $css_content The CSS content to modify.
+	 * @param string $file_path The file path of the original CSS file.
+	 * @return string The updated CSS content with modified image paths.
+	 * @since 1.0.0
+	 */
 	public static function update_image_paths( $css_content, $file_path ) {
 		$pattern     = '/url\((\'|\"|)(.*?)(\'|\"|)\)/';
 		$css_dir_url = content_url( str_replace( WP_CONTENT_DIR, '', dirname( $file_path ) ) );

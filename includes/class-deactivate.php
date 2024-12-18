@@ -19,15 +19,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 	 * Class Deactivate
 	 *
 	 * Handles the deactivation logic for the plugin.
+	 *
+	 * @since 1.0.0
 	 */
 	class Deactivate {
 
 		/**
 		 * Initialize the deactivation process.
 		 *
-		 * This method checks if the necessary classes exist before including them.
-		 * Then it triggers the removal of static files and htaccess modifications.
+		 * Cleans up resources by removing cron jobs, static files,
+		 * .htaccess modifications, and WP_CACHE constant.
 		 *
+		 * @since 1.0.0
 		 * @return void
 		 */
 		public static function init(): void {
@@ -47,8 +50,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		/**
 		 * Unschedule cron jobs.
 		 *
-		 * This method checks if the cron jobs are scheduled and unschedules them if found.
+		 * Removes any scheduled cron jobs created by the plugin.
 		 *
+		 * @since 1.0.0
 		 * @return void
 		 */
 		private static function unschedule_crons(): void {
@@ -73,6 +77,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		/**
 		 * Removes WP_CACHE constant from wp-config.php file if present.
 		 *
+		 * Ensures that the constant enabling WordPress caching is deleted
+		 * during deactivation to prevent conflicts.
+		 *
+		 * @since 1.0.0
 		 * @return void
 		 */
 		private static function remove_wp_cache_constant(): void {

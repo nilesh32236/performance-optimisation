@@ -2,7 +2,23 @@
 
 namespace PerformanceOptimise\Inc;
 
+/**
+ * Log Class
+ *
+ * A class to handle logging activities and fetching recent activity logs with pagination.
+ *
+ * @since 1.0.0
+ */
 class Log {
+
+	/**
+	 * Log constructor.
+	 *
+	 * Inserts a new activity log entry into the database.
+	 *
+	 * @param string $activity The activity description to log.
+	 * @since 1.0.0
+	 */
 	public function __construct( $activity ) {
 		global $wpdb;
 
@@ -29,8 +45,11 @@ class Log {
 	/**
 	 * Get recent activities with pagination and caching.
 	 *
-	 * @param array $params Pagination parameters, including 'page' and 'per_page'.
-	 * @return array Cached or freshly queried results.
+	 * Retrieves recent activity logs from the database, using cache if available.
+	 *
+	 * @param array $params Pagination parameters including 'page' and 'per_page'.
+	 * @return array Cached or freshly queried results with pagination details.
+	 * @since 1.0.0
 	 */
 	public static function get_recent_activities( $params ) {
 		global $wpdb;

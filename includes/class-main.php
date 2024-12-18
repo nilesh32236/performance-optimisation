@@ -12,6 +12,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Handles the inclusion of necessary files, setup of hooks, and core functionalities
  * such as generating and invalidating dynamic static HTML.
+ *
+ * @since 1.0.0
  */
 
 class Main {
@@ -25,10 +27,13 @@ class Main {
 	private Image_Optimisation $image_optimisation;
 
 	private $options;
+
 	/**
 	 * Constructor.
 	 *
 	 * Initializes the class by including necessary files and setting up hooks.
+	 *
+	 * @since 1.0.0
 	 */
 	public function __construct() {
 		$this->options = get_option( 'wppo_settings', array() );
@@ -45,6 +50,7 @@ class Main {
 	 * Loads the autoloader and includes other class files needed for the plugin.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	private function includes(): void {
 		require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
@@ -66,6 +72,7 @@ class Main {
 	 * Registers actions and filters used by the plugin.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	private function setup_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'init_menu' ) );
@@ -120,6 +127,7 @@ class Main {
 	 * Adds the Performance Optimisation menu to the WordPress admin dashboard.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	public function init_menu(): void {
 		add_menu_page(
@@ -139,11 +147,20 @@ class Main {
 	 * Includes the admin page template for rendering.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	public function admin_page(): void {
 		require_once WPPO_PLUGIN_PATH . 'templates/app.html';
 	}
 
+	/**
+	 * Add available post types to options.
+	 *
+	 * Filters out non-public post types and adds the available post types to options.
+	 *
+	 * @return void
+	 * @since 1.0.0
+	 */
 	private function add_available_post_types_to_options() {
 		$post_types = get_post_types( array( 'public' => true ), 'names' );
 
@@ -159,6 +176,7 @@ class Main {
 	 * Loads CSS and JavaScript files for the admin dashboard page.
 	 *
 	 * @return void
+	 * @since 1.0.0
 	 */
 	public function admin_enqueue_scripts(): void {
 		$screen = get_current_screen();
@@ -301,6 +319,11 @@ class Main {
 		);
 	}
 
+	/**
+	 * Enqueues scripts for performance optimization.
+	 *
+	 * @since 1.0.0
+	 */
 	public function enqueue_scripts() {
 		if ( is_admin_bar_showing() ) {
 			wp_enqueue_script( 'wppo-admin-bar-script', WPPO_PLUGIN_URL . 'src/main.js', array(), WPPO_VERSION, true );
@@ -319,6 +342,11 @@ class Main {
 		}
 	}
 
+	/**
+	 * Removes WooCommerce-related scripts and styles based on settings.
+	 *
+	 * @since 1.0.0
+	 */
 	public function remove_woocommerce_scripts() {
 		$exclude_url_to_keep_js_css = array();
 		if ( isset( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) && ! empty( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) ) {
@@ -373,6 +401,11 @@ class Main {
 		}
 	}
 
+	/**
+	 * Adds custom settings to the WordPress admin bar.
+	 *
+	 * @since 1.0.0
+	 */
 	public function add_setting_to_admin_bar( $wp_admin_bar ) {
 		$wp_admin_bar->add_node(
 			array(
@@ -415,9 +448,9 @@ class Main {
 	}
 
 	/**
-	 * Add defer attribute to scripts.
+	 * Adds defer attribute to non-logged-in users' scripts.
 	 *
-	 * Filters script tags to add the defer attribute for non-admin pages.
+	 * @since 1.0.0
 	 *
 	 * @param string $tag    The script tag HTML.
 	 * @param string $handle The script's registered handle.
@@ -469,6 +502,11 @@ class Main {
 		return $tag;
 	}
 
+	/**
+	 * Adds preload, prefetch, and preconnect links to optimize resource loading.
+	 *
+	 * @since 1.0.0
+	 */
 	public function add_preload_prefatch_preconnect() {
 
 		$preload_settings = $this->options['preload_settings'] ?? array();
@@ -541,6 +579,16 @@ class Main {
 		$this->image_optimisation->preload_images();
 	}
 
+	/**
+	 * Minifies CSS files and serves them from cache.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $tag    The link tag HTML.
+	 * @param string $handle The CSS file's handle.
+	 * @param string $href   The CSS file's source URL.
+	 * @return string Modified link tag with minified CSS.
+	 */
 	public function minify_css( $tag, $handle, $href ) {
 		$local_path = Util::get_local_path( $href );
 
@@ -561,6 +609,16 @@ class Main {
 		return $tag;
 	}
 
+	/**
+	 * Minifies JavaScript files and serves them from cache.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $tag    The script tag HTML.
+	 * @param string $handle The script's registered handle.
+	 * @param string $src    The script's source URL.
+	 * @return string Modified script tag with minified JavaScript.
+	 */
 	public function minify_js( $tag, $handle, $src ) {
 		$local_path = Util::get_local_path( $src );
 
@@ -582,6 +640,14 @@ class Main {
 		return $tag;
 	}
 
+	/**
+	 * Checks if a CSS file is already minified.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $file_path Path to the CSS file.
+	 * @return bool True if the file is minified, false otherwise.
+	 */
 	private function is_css_minified( $file_path ) {
 		$file_name = basename( $file_path );
 
@@ -598,6 +664,15 @@ class Main {
 
 		return false;
 	}
+
+	/**
+	 * Checks if a JavaScript file is already minified.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string $file_path Path to the JavaScript file.
+	 * @return bool True if the file is minified, false otherwise.
+	 */
 	private function is_js_minified( $file_path ) {
 		$file_name = basename( $file_path );
 

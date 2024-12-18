@@ -1,5 +1,5 @@
 === Performance Optimisation ===
-Contributors: nilesh32236
+Contributors: nilesh912
 Tags: performance, optimization, cache, minify, image optimization
 Requires at least: 5.0
 Requires PHP: 7.4
