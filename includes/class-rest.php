@@ -8,7 +8,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
-    /**
+	/**
 	 * Registers REST API routes and handles requests for various performance optimization features.
 	 *
 	 * @since 1.0.0
@@ -17,7 +17,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 		const NAMESPACE = 'performance-optimisation/v1';
 
-        /**
+		/**
 		 * Registers the REST API routes.
 		 *
 		 * @since 1.0.0
@@ -30,7 +30,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 		}
 
-        /**
+		/**
 		 * Returns the routes for the REST API.
 		 *
 		 * @since 1.0.0
@@ -71,7 +71,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			);
 		}
 
-        /**
+		/**
 		 * Checks if the user has permission to access the route.
 		 *
 		 * @since 1.0.0
@@ -84,7 +84,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			return current_user_can( 'manage_options' ) && $nonce_valid;
 		}
 
-        /**
+		/**
 		 * Clears the cache based on the given action.
 		 *
 		 * @param \WP_REST_Request $request The request object.
@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			return $this->send_response( true );
 		}
 
-        /**
+		/**
 		 * Updates the settings for the plugin.
 		 *
 		 * @param \WP_REST_Request $request The request object.
@@ -123,7 +123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			return $this->send_response( $options );
 		}
 
-        /**
+		/**
 		 * Retrieves the recent activities.
 		 *
 		 * @param \WP_REST_Request $request The request object.
@@ -138,7 +138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			return new \WP_REST_Response( $data, 200 );
 		}
 
-        /**
+		/**
 		 * Optimizes the images and converts them to WebP or AVIF format.
 		 *
 		 * @param \WP_REST_Request $request The request object.
@@ -176,7 +176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			return new \WP_REST_Response( $response, 200 );
 		}
 
-        /**
+		/**
 		 * Deletes the optimized images from the filesystem.
 		 *
 		 * @since 1.0.0
@@ -222,7 +222,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 		}
 
-        /**
+		/**
+		 * Imports settings via the REST API.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.0.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function import_settings( \WP_REST_Request $request ) {
+			$data = $request->get_json_params();
+
+			if ( 'import_settings' !== $data['action'] || empty( $data['settings'] ) ) {
+				return $this->send_response( null, false, 400, 'Invalid action or missing settings' );
+			}
+
+			// Retrieve the existing settings
+			$existing_settings = get_option( 'wppo_settings', array() );
+
+			// Check if the settings are the same
+			if ( $existing_settings === $data['settings'] ) {
+				return $this->send_response( $existing_settings, true, 200, 'No changes detected, settings are already up-to-date' );
+			}
+
+			if ( ! update_option( 'wppo_settings', $data['settings'] ) ) {
+				return $this->send_response( null, false, 500, 'Failed to update settings' );
+			}
+
+			return $this->send_response( $data['settings'], true, 200, 'Settings updated successfully' );
+		}
+
+		/**
 		 * Sends a REST API response.
 		 *
 		 * @param mixed $data The data to return in the response.
