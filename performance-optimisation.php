@@ -21,19 +21,19 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Define plugin constants.
-if ( ! defined( 'QTPO_PLUGIN_PATH' ) ) {
-	define( 'QTPO_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
+if ( ! defined( 'WPPO_PLUGIN_PATH' ) ) {
+	define( 'WPPO_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 }
 
-if ( ! defined( 'QTPO_PLUGIN_URL' ) ) {
-	define( 'QTPO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
+	define( 'WPPO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 }
 
-if ( ! defined( 'QTPO_VERSION' ) ) {
-	define( 'QTPO_VERSION', '0.1.1' );
+if ( ! defined( 'WPPO_VERSION' ) ) {
+	define( 'WPPO_VERSION', '0.1.1' );
 }
 // Include the main class file.
-require_once QTPO_PLUGIN_PATH . 'includes/class-main.php';
+require_once WPPO_PLUGIN_PATH . 'includes/class-main.php';
 
 // Initialize the main class.
 new Main();
@@ -45,11 +45,11 @@ new Main();
  *
  * @return void
  */
-function qtpo_activate(): void {
-	require_once QTPO_PLUGIN_PATH . 'includes/class-activate.php';
+function wppo_activate(): void {
+	require_once WPPO_PLUGIN_PATH . 'includes/class-activate.php';
 	Activate::init();
 }
-register_activation_hook( __FILE__, 'qtpo_activate' );
+register_activation_hook( __FILE__, 'wppo_activate' );
 
 /**
  * Deactivation hook callback function.
@@ -58,8 +58,8 @@ register_activation_hook( __FILE__, 'qtpo_activate' );
  *
  * @return void
  */
-function qtpo_deactivate(): void {
-	require_once QTPO_PLUGIN_PATH . 'includes/class-deactivate.php';
+function wppo_deactivate(): void {
+	require_once WPPO_PLUGIN_PATH . 'includes/class-deactivate.php';
 	Deactivate::init();
 }
-register_deactivation_hook( __FILE__, 'qtpo_deactivate' );
+register_deactivation_hook( __FILE__, 'wppo_deactivate' );

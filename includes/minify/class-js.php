@@ -40,7 +40,7 @@ class JS {
 			}
 		}
 
-		return content_url( 'cache/qtpo/min/js/' . basename( $cache_file ) );
+		return content_url( 'cache/wppo/min/js/' . basename( $cache_file ) );
 	}
 
 	/**

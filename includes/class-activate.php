@@ -30,7 +30,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @return void
 		 */
 		public static function init(): void {
-			require_once QTPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 
 			Advanced_Cache_Handler::create();
 
@@ -92,7 +92,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		private static function create_activity_log_table() {
 			global $wpdb;
 
-			$table_name      = $wpdb->prefix . 'qtpo_activity_logs'; // Table name
+			$table_name      = $wpdb->prefix . 'wppo_activity_logs'; // Table name
 			$charset_collate = $wpdb->get_charset_collate();
 
 			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange */

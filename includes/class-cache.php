@@ -14,7 +14,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 	class Cache {
 
 
-		private const CACHE_DIR = '/cache/qtpo';
+		private const CACHE_DIR = '/cache/wppo';
 
 		private string $domain;
 		private string $cache_root_dir;
@@ -37,7 +37,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Initialize filesystem and options
 			$this->filesystem = Util::init_filesystem();
-			$this->options    = get_option( 'qtpo_settings', array() );
+			$this->options    = get_option( 'wppo_settings', array() );
 		}
 
 		public function combine_css() {
@@ -131,7 +131,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$css_url = $this->get_cache_file_url( 'css' );
 
 				$version = fileatime( $css_file_path );
-				wp_enqueue_style( 'qtpo-combine-css', $css_url, array(), $version, 'all' );
+				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 
 				$css_url_with_version = $css_url . "?ver=$version";
 				echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
@@ -329,8 +329,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->delete_cache_files( $html_file_path );
 			$this->delete_cache_files( $css_file_path );
 
-			if ( ! wp_next_scheduled( 'qtpo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + \wp_rand( 0, 5 ), 'qtpo_generate_static_page', array( $page_id ) );
+			if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
+				wp_schedule_single_event( time() + \wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $page_id ) );
 			}
 		}
 

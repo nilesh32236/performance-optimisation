@@ -36,14 +36,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 */
 		public function render_metabox( $post ) {
 			// Retrieve current meta value
-			$preload_urls = get_post_meta( $post->ID, '_qtpo_preload_image_url', true );
+			$preload_urls = get_post_meta( $post->ID, '_wppo_preload_image_url', true );
 
 			// Add a nonce for security
-			wp_nonce_field( 'save_preload_image_url', 'qtpo_preload_image_nonce' );
+			wp_nonce_field( 'save_preload_image_url', 'wppo_preload_image_nonce' );
 			?>
 			<p>
-				<label for="qtpo_preload_image_url"><?php esc_html_e( 'Preload Image URL:', 'performance-optimisation' ); ?></label>
-				<textarea id="qtpo_preload_image_url" name="qtpo_preload_image_url" rows="5" style="width: 100%;" placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"><?php echo esc_textarea( $preload_urls ); ?></textarea>
+				<label for="wppo_preload_image_url"><?php esc_html_e( 'Preload Image URL:', 'performance-optimisation' ); ?></label>
+				<textarea id="wppo_preload_image_url" name="wppo_preload_image_url" rows="5" style="width: 100%;" placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"><?php echo esc_textarea( $preload_urls ); ?></textarea>
 			</p>
 			<?php
 		}
@@ -55,8 +55,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 */
 		public function save_metabox( $post_id ) {
 			// Verify the nonce
-			if ( ! isset( $_POST['qtpo_preload_image_nonce'] ) ||
-			! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['qtpo_preload_image_nonce'] ) ), 'save_preload_image_url' ) ) {
+			if ( ! isset( $_POST['wppo_preload_image_nonce'] ) ||
+			! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wppo_preload_image_nonce'] ) ), 'save_preload_image_url' ) ) {
 				return;
 			}
 
@@ -73,9 +73,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			}
 
 			// Sanitize and save the data
-			if ( isset( $_POST['qtpo_preload_image_url'] ) ) {
-				$preload_urls = sanitize_textarea_field( wp_unslash( $_POST['qtpo_preload_image_url'] ) );
-				update_post_meta( $post_id, '_qtpo_preload_image_url', $preload_urls );
+			if ( isset( $_POST['wppo_preload_image_url'] ) ) {
+				$preload_urls = sanitize_textarea_field( wp_unslash( $_POST['wppo_preload_image_url'] ) );
+				update_post_meta( $post_id, '_wppo_preload_image_url', $preload_urls );
 			}
 		}
 	}

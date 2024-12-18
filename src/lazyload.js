@@ -4,35 +4,35 @@ let scriptLoadPromise;
 
 const loadScript = (script) => {
 	return new Promise((resolve, reject) => {
-		if ('qtpo/javascript' === script.getAttribute('type')) {
+		if ('wppo/javascript' === script.getAttribute('type')) {
 			script.removeAttribute('type');
 			// script.setAttribute('type', 'text/javascript');
 		}
 
-		const qtpoType = script.getAttribute('qtpo-type');
-		if (qtpoType) {
-			script.removeAttribute('qtpo-type');
-			script.setAttribute('type', qtpoType);
+		const wppoType = script.getAttribute('wppo-type');
+		if (wppoType) {
+			script.removeAttribute('wppo-type');
+			script.setAttribute('type', wppoType);
 		}
 
-		const src = script.getAttribute('qtpo-src');
+		const src = script.getAttribute('wppo-src');
 
 		if (src) {
-			script.removeAttribute('qtpo-src');
+			script.removeAttribute('wppo-src');
 			script.setAttribute('src', src);
 
 			script.onload = resolve;
 			script.onerror = reject;
 		} else {
-			if ('qtpo/javascript' === script.getAttribute('type')) {
+			if ('wppo/javascript' === script.getAttribute('type')) {
 				script.removeAttribute('type');
 				// script.setAttribute('type', 'text/javascript');
 			}
 	
-			const qtpoType = script.getAttribute('qtpo-type');
-			if (qtpoType) {
-				script.removeAttribute('qtpo-type');
-				script.setAttribute('type', qtpoType);
+			const wppoType = script.getAttribute('wppo-type');
+			if (wppoType) {
+				script.removeAttribute('wppo-type');
+				script.setAttribute('type', wppoType);
 			}
 
 			try {
@@ -54,7 +54,7 @@ async function loadScripts() {
 	if (scriptLoading) return scriptLoadPromise;
 	scriptLoading = true;
 
-	const inlineScripts = Array.from(document.querySelectorAll('script[type="qtpo/javascript"], script[qtpo-src]'));
+	const inlineScripts = Array.from(document.querySelectorAll('script[type="wppo/javascript"], script[wppo-src]'));
 
 	try {
 		// Sequentially process all inline scripts

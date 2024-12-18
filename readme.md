@@ -105,28 +105,25 @@ This plugin utilizes the following libraries:
 
 ```json
 {
-    "name": "qrolic/performance-optimisation",
-    "autoload": {
-        "psr-4": {
-            "Qrolic\\PerformanceOptimisation\\": "src/"
-        }
-    },
-    "authors": [
-        {
-            "name": "Nilesh Kanzariya",
-            "email": "nilesh32236@gmail.com"
-        }
-    ],
-    "require": {
-        "voku/html-min": "^4.5",
-        "matthiasmullie/minify": "^1.3"
-    },
-    "extra": {
-        "cleanup": {
-            "dirs": ["bin","tests", "docs"],
-            "exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
-        }
-    }
+	"name": "nilesh/performance-optimisation",
+	"description": "A package for performance optimization, including HTML minification and code minification tools.",
+	"license": "GPL-2.0-or-later",
+	"authors": [
+		{
+			"name": "nilesh",
+			"email": "nilesh.kanzariya912@gmail.com"
+		}
+	],
+	"require": {
+		"voku/html-min": "^4.5",
+		"matthiasmullie/minify": "^1.3"
+	},
+	"extra": {
+		"cleanup": {
+			"dirs": ["bin", "tests", "docs"],
+			"exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
+		}
+	}
 }
 ```
 
@@ -136,23 +133,23 @@ This plugin utilizes the following libraries:
 
 ```json
 {
-  "name": "performance-optimisation",
-  "version": "1.0.0",
-  "description": "Performance optimisation plugin for WordPress",
-  "main": "./src/index.js",
-  "scripts": {
-    "build": "wp-scripts build",
-    "start": "wp-scripts start"
-  },
-  "author": "Nilesh Kanzariya <nilesh32236@gmail.com>",
-  "license": "GPL-2.0",
-  "devDependencies": {
-    "@wordpress/scripts": "^27.9.0"
-  },
-  "dependencies": {
-    "@fortawesome/free-solid-svg-icons": "^6.6.0",
-    "@fortawesome/react-fontawesome": "^0.2.2"
-  }
+	"name": "performance-optimisation",
+	"version": "1.0.0",
+	"description": "Performance optimisation plugin for WordPress",
+	"main": "./src/index.js",
+	"scripts": {
+		"build": "wp-scripts build",
+		"start": "wp-scripts start"
+	},
+	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
+	"license": "GPL-2.0-or-later",
+	"devDependencies": {
+		"@wordpress/scripts": "^27.9.0"
+	},
+	"dependencies": {
+		"@fortawesome/free-solid-svg-icons": "^6.7.1",
+		"@fortawesome/react-fontawesome": "^0.2.2"
+	}
 }
 ```
 

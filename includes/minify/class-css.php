@@ -42,7 +42,7 @@ class CSS {
 			}
 		}
 
-		return content_url( 'cache/qtpo/min/css/' . basename( $cache_file ) );
+		return content_url( 'cache/wppo/min/css/' . basename( $cache_file ) );
 	}
 
 	/**

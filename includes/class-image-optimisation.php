@@ -19,7 +19,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 		private function setup_hooks() {
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
-				require_once QTPO_PLUGIN_PATH . 'includes/class-img-converter.php';
+				require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 				$img_converter = new Img_Converter( $this->options );
 
 				add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
@@ -122,7 +122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			if ( 'avif' === $conversion_format || 'both' === $conversion_format ) {
 				// Convert to AVIF if supported and not already converted
-				if ( $supports_avif && ! file_exists( $avif_img_path ) ) {
+				if ( ! file_exists( $avif_img_path ) ) {
 					$source_image_path = Util::get_local_path( $img_url );
 
 					if ( file_exists( $source_image_path ) ) {
@@ -133,7 +133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			if ( 'webp' === $conversion_format || 'both' === $conversion_format ) {
 				// Convert to WebP if supported and not already converted
-				if ( $supports_webp && ! file_exists( $webp_img_path ) ) {
+				if ( ! file_exists( $webp_img_path ) ) {
 					$source_image_path = Util::get_local_path( $img_url );
 
 					if ( file_exists( $source_image_path ) ) {
@@ -167,7 +167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		private function preload_meta_images() {
-			$page_img_urls = get_post_meta( get_the_ID(), '_qtpo_preload_image_url', true );
+			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
 
 			if ( ! empty( $page_img_urls ) ) {
 				foreach ( Util::process_urls( $page_img_urls ) as $img_url ) {
@@ -460,7 +460,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$preload_img_urls = array_merge( $preload_img_urls, $this->process_preload_urls( $image_optimisation['preloadFrontPageImagesUrls'] ?? array() ) );
 			}
 
-			$page_img_urls = get_post_meta( get_the_ID(), '_qtpo_preload_image_url', true );
+			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
 
 			if ( ! empty( $page_img_urls ) ) {
 				$preload_img_urls = array_merge( $preload_img_urls, $this->process_preload_urls( $page_img_urls ) );

@@ -34,7 +34,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			self::unschedule_crons();
 
-			require_once QTPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 
 			Advanced_Cache_Handler::remove();
 
@@ -52,21 +52,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * @return void
 		 */
 		private static function unschedule_crons(): void {
-			// Unschedule the 'qtpo_page_cron_hook' event if it is scheduled
-			$timestamp = wp_next_scheduled( 'qtpo_page_cron_hook' );
+			// Unschedule the 'wppo_page_cron_hook' event if it is scheduled
+			$timestamp = wp_next_scheduled( 'wppo_page_cron_hook' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'qtpo_page_cron_hook' );
+				wp_unschedule_event( $timestamp, 'wppo_page_cron_hook' );
 			}
 
-			// Unschedule the 'qtpo_img_conversation' event if it is scheduled
-			$timestamp = wp_next_scheduled( 'qtpo_img_conversation' );
+			// Unschedule the 'wppo_img_conversation' event if it is scheduled
+			$timestamp = wp_next_scheduled( 'wppo_img_conversation' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'qtpo_img_conversation' );
+				wp_unschedule_event( $timestamp, 'wppo_img_conversation' );
 			}
 
-			$timestamp = wp_next_scheduled( 'qtpo_generate_static_page' );
+			$timestamp = wp_next_scheduled( 'wppo_generate_static_page' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'qtpo_img_conversation' );
+				wp_unschedule_event( $timestamp, 'wppo_img_conversation' );
 			}
 		}
 

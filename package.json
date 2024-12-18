@@ -1,19 +1,19 @@
 {
-    "name": "performance-optimisation",
-    "version": "1.0.0",
-    "description": "Performance optimisation plugin for WordPress",
-    "main": "./src/index.js",
-    "scripts": {
-        "build": "wp-scripts build",
-        "start": "wp-scripts start"
-    },
-    "author": "Nilesh Kanzariya <nilesh32236@gmail.com>",
-    "license": "GPL-2.0",
-    "devDependencies": {
-        "@wordpress/scripts": "^27.9.0"
-    },
-    "dependencies": {
-        "@fortawesome/free-solid-svg-icons": "^6.7.1",
-        "@fortawesome/react-fontawesome": "^0.2.2"
-    }
+	"name": "performance-optimisation",
+	"version": "1.0.0",
+	"description": "Performance optimisation plugin for WordPress",
+	"main": "./src/index.js",
+	"scripts": {
+		"build": "wp-scripts build",
+		"start": "wp-scripts start"
+	},
+	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
+	"license": "GPL-2.0-or-later",
+	"devDependencies": {
+		"@wordpress/scripts": "^27.9.0"
+	},
+	"dependencies": {
+		"@fortawesome/free-solid-svg-icons": "^6.7.1",
+		"@fortawesome/react-fontawesome": "^0.2.2"
+	}
 }

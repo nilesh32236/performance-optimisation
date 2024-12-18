@@ -50,7 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$root_directory = $_SERVER[\'DOCUMENT_ROOT\'];' . PHP_EOL .
 			'$site_domain    = $_SERVER[\'HTTP_HOST\'];' . PHP_EOL .
 			'$request_uri    = parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH );' . PHP_EOL .
-			'$file_path      = WP_CONTENT_DIR . \'/cache/qtpo/\' . $site_domain . $request_uri . \'index.html\';' . PHP_EOL .
+			'$file_path      = WP_CONTENT_DIR . \'/cache/wppo/\' . $site_domain . $request_uri . \'index.html\';' . PHP_EOL .
 			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL . PHP_EOL .
 
 			'function is_user_logged_in_without_wp( $site_url ) {' . PHP_EOL .

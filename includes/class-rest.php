@@ -75,11 +75,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 		public function update_settings( \WP_REST_Request $request ) {
 			$params  = $request->get_params();
-			$options = get_option( 'qtpo_settings', array() );
+			$options = get_option( 'wppo_settings', array() );
 
 			$options[ $params['tab'] ] = $params['settings'];
 
-			if ( update_option( 'qtpo_settings', $options ) ) {
+			if ( update_option( 'wppo_settings', $options ) ) {
 				Cache::clear_cache();
 			}
 
@@ -95,7 +95,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		public function optimise_image( \WP_REST_Request $request ) {
-			$options       = get_option( 'qtpo_settings', array() );
+			$options       = get_option( 'wppo_settings', array() );
 			$img_converter = new Img_Converter( $options );
 			$params        = $request->get_params();
 
@@ -120,7 +120,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			Cache::clear_cache();
 
-			$response = get_option( 'qtpo_img_info', array() );
+			$response = get_option( 'wppo_img_info', array() );
 
 			return new \WP_REST_Response( $response, 200 );
 		}
@@ -132,19 +132,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				new \WP_Filesystem_Direct( null );
 			}
 
-			$qtpo_dir = WP_CONTENT_DIR . '/qtpo';
+			$wppo_dir = WP_CONTENT_DIR . '/wppo';
 
-			$img_info = get_option( 'qtpo_img_info', array() );
+			$img_info = get_option( 'wppo_img_info', array() );
 
 			$img_info['completed'] = array(
 				'webp' => array(),
 				'avif' => array(),
 			);
 
-			update_option( 'qtpo_img_info', $img_info );
+			update_option( 'wppo_img_info', $img_info );
 
-			if ( $wp_filesystem && $wp_filesystem->is_dir( $qtpo_dir ) ) {
-				if ( $wp_filesystem->delete( $qtpo_dir, true ) ) {
+			if ( $wp_filesystem && $wp_filesystem->is_dir( $wppo_dir ) ) {
+				if ( $wp_filesystem->delete( $wppo_dir, true ) ) {
 					Cache::clear_cache();
 					return new \WP_REST_Response(
 						array(
@@ -184,14 +184,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			// Retrieve the existing settings
-			$existing_settings = get_option( 'qtpo_settings', array() );
+			$existing_settings = get_option( 'wppo_settings', array() );
 
 			// Check if the settings are the same
 			if ( $existing_settings === $data['settings'] ) {
 				return $this->send_response( $existing_settings, true, 200, 'No changes detected, settings are already up-to-date' );
 			}
 
-			if ( ! update_option( 'qtpo_settings', $data['settings'] ) ) {
+			if ( ! update_option( 'wppo_settings', $data['settings'] ) ) {
 				return $this->send_response( null, false, 500, 'Failed to update settings' );
 			}
 

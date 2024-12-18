@@ -21,10 +21,6 @@ class ComposerStaticIniteaaf0ce8c5d6982526050d48d10770a1
             'Symfony\\Polyfill\\Php80\\' => 23,
             'Symfony\\Component\\CssSelector\\' => 30,
         ),
-        'Q' => 
-        array (
-            'Qrolic\\PerformanceOptimisation\\' => 31,
-        ),
         'M' => 
         array (
             'MatthiasMullie\\PathConverter\\' => 29,
@@ -48,10 +44,6 @@ class ComposerStaticIniteaaf0ce8c5d6982526050d48d10770a1
         'Symfony\\Component\\CssSelector\\' => 
         array (
             0 => __DIR__ . '/..' . '/symfony/css-selector',
-        ),
-        'Qrolic\\PerformanceOptimisation\\' => 
-        array (
-            0 => __DIR__ . '/../..' . '/src',
         ),
         'MatthiasMullie\\PathConverter\\' => 
         array (

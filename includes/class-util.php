@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 		public static function get_js_css_minified_file() {
 			$filesystem = self::init_filesystem();
-			$minify_dir = WP_CONTENT_DIR . '/cache/qtpo/min';
+			$minify_dir = WP_CONTENT_DIR . '/cache/wppo/min';
 
 			$total_js  = 0;
 			$total_css = 0;

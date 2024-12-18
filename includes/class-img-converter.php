@@ -279,13 +279,13 @@ class Img_Converter {
 
 		// If home_url is present, remove it from the path
 		if ( 0 === strpos( $relative_path, ABSPATH ) ) {
-			$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/qtpo', $relative_path );
+			$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/wppo', $relative_path );
 			return $local_path;
 		}
 
 		$relative_path = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $relative_path );
 
-		$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/qtpo', ABSPATH . ltrim( $relative_path, '/' ) );
+		$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/wppo', ABSPATH . ltrim( $relative_path, '/' ) );
 
 		return $local_path;
 	}
@@ -297,8 +297,8 @@ class Img_Converter {
 			$path_info     = pathinfo( $source_image );
 			$converted_img = $path_info['dirname'] . '/' . $path_info['filename'] . '.' . $format;
 
-			// Adjust for the qtpo directory
-			$converted_img = str_replace( WP_CONTENT_URL, WP_CONTENT_URL . '/qtpo', $converted_img );
+			// Adjust for the wppo directory
+			$converted_img = str_replace( WP_CONTENT_URL, WP_CONTENT_URL . '/wppo', $converted_img );
 
 			return $converted_img;
 		}
@@ -419,7 +419,7 @@ class Img_Converter {
 	public function update_conversion_status( $img_path, $status = 'completed', $type = 'webp' ) {
 		$img_path = str_replace( ABSPATH, '', $img_path );
 
-		$img_info = get_option( 'qtpo_img_info', array() );
+		$img_info = get_option( 'wppo_img_info', array() );
 
 		if ( 'completed' === $status ) {
 			// Check and remove from 'pending' list
@@ -452,7 +452,7 @@ class Img_Converter {
 			$img_info[ $status ][ $type ][] = $img_path;
 		}
 
-		update_option( 'qtpo_img_info', $img_info );
+		update_option( 'wppo_img_info', $img_info );
 	}
 
 	public static function add_img_into_queue( $img_path, $type = 'webp' ) {
@@ -462,12 +462,12 @@ class Img_Converter {
 
 		$img_path = str_replace( ABSPATH, '', $img_path );
 
-		$img_info = get_option( 'qtpo_img_info', array() );
+		$img_info = get_option( 'wppo_img_info', array() );
 
 		if ( ! in_array( $img_path, $img_info['pending'][ $type ] ?? array(), true ) ) {
 			$img_info['pending'][ $type ][] = $img_path;
 
-			update_option( 'qtpo_img_info', $img_info );
+			update_option( 'wppo_img_info', $img_info );
 		}
 	}
 }

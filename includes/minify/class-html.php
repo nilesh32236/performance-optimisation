@@ -117,7 +117,7 @@ class HTML {
 		return preg_replace_callback(
 			'#<link\b[^>]*\brel=["\'](canonical|shortlink)["\'][^>]*>#i',
 			function ( $matches ) {
-				$link_tag = str_replace( 'href', 'qtpo-href', $matches[0] );
+				$link_tag = str_replace( 'href', 'wppo-href', $matches[0] );
 
 				return $link_tag;
 			},
@@ -144,7 +144,7 @@ class HTML {
 
 					if ( 'text/javascript' !== strtolower( $type ) && 'application/ld+json' !== strtolower( $type ) ) {
 						$scripts[] = $matches[0];
-						return '<script data-qtpo-preserve="' . ( count( $scripts ) - 1 ) . '"></script>';
+						return '<script data-wppo-preserve="' . ( count( $scripts ) - 1 ) . '"></script>';
 					}
 				}
 
@@ -161,7 +161,7 @@ class HTML {
 	 */
 	private function restore_preserved_scripts_template( $html, $scripts ) {
 		foreach ( $scripts as $index => $script ) {
-			$html = str_replace( '<script data-qtpo-preserve=' . ( $index ) . '></script>', $script, $html );
+			$html = str_replace( '<script data-wppo-preserve=' . ( $index ) . '></script>', $script, $html );
 		}
 
 		return $html;
@@ -178,7 +178,7 @@ class HTML {
 		return preg_replace_callback(
 			'#<link\b[^>]*\brel=["\'\](canonical|shortlink)["\'\][^>]*>#i',
 			function ( $matches ) {
-				$link_tag = str_replace( 'qtpo-href', 'href', $matches[0] );
+				$link_tag = str_replace( 'wppo-href', 'href', $matches[0] );
 
 				return $link_tag;
 			},
@@ -251,7 +251,7 @@ class HTML {
 
 		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 
-			$exclude_delay = array_merge( array( 'qtpo-lazyload', 'data-qtpo-preserve' ), Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() ) );
+			$exclude_delay = array_merge( array( 'wppo-lazyload', 'data-wppo-preserve' ), Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() ) );
 
 			$should_exclude = false;
 			if ( ! empty( $exclude_delay ) ) {
@@ -271,12 +271,12 @@ class HTML {
 					// If the 'type' attribute exists, modify it
 					$attributes = preg_replace(
 						'/type=("|\')text\/javascript("|\')/',
-						'type="qtpo/javascript" qtpo-type="text/javascript"',
+						'type="wppo/javascript" wppo-type="text/javascript"',
 						$attributes
 					);
 				} else {
 					// If the 'type' attribute doesn't exist, add a new one
-					$attributes .= ' type="qtpo/javascript" qtpo-type="text/javascript"';
+					$attributes .= ' type="wppo/javascript" wppo-type="text/javascript"';
 				}
 			}
 		}

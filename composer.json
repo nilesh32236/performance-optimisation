@@ -1,16 +1,11 @@
 {
-    "name": "qrolic/performance-optimisation",
+    "name": "nilesh/performance-optimisation",
     "description": "A package for performance optimization, including HTML minification and code minification tools.",
-    "license": "MIT",
-    "autoload": {
-        "psr-4": {
-            "Qrolic\\PerformanceOptimisation\\": "src/"
-        }
-    },
+    "license": "GPL-2.0-or-later",
     "authors": [
         {
-            "name": "nilesh32236",
-            "email": "nilesh32236@gmail.com"
+            "name": "nilesh",
+            "email": "nilesh.kanzariya912@gmail.com"
         }
     ],
     "require": {
