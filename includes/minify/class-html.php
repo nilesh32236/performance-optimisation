@@ -31,7 +31,7 @@ class HTML {
 	 */
 	private string $minified_html;
 
-    /**
+	/**
 	 * @var array
 	 * @since 1.0.0
 	 */

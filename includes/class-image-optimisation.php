@@ -265,7 +265,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$image_url        = $this->get_image_url_by_post_type( $thumbnail_id );
 
 			if ( $this->should_exclude_image( $image_url, $exclude_img_urls ) ) {
-				// error_log( "Image excluded: $image_url" );
 				return;
 			}
 
@@ -712,11 +711,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Processes an array of URLs for preloading.
+		 * Processes an URLs for preloading.
 		 *
 		 * @since 1.0.0
 		 *
-		 * @param array $urls Array of URLs to process.
+		 * @param string $urls URLs to process.
 		 * @return array Processed URLs ready for preloading.
 		 */
 		private function process_preload_urls( $urls ) {

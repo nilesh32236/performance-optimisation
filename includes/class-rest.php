@@ -95,10 +95,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			if ( 'clear_single_page_cahce' === $params['action'] ) {
 				Cache::clear_cache( $params['path'] );
-				new Log( 'Clear cache of <a href="' . home_url( $params['path'] ) . '">' . home_url( $params['path'] ) . '</a> on ' );
+				new Log(
+					sprintf(
+					/* translators: %s: The URL of the page */
+						__( 'Clear cache of <a href="%1$s">%2$s</a> on ', 'performance-optimisation' ),
+						home_url( $params['path'] ),
+						home_url( $params['path'] )
+					)
+				);
 			} else {
 				Cache::clear_cache();
-				new Log( 'Clear all cache on ' );
+				new Log( __( 'Clear all cache on ', 'performance-optimisation' ) );
 			}
 			return $this->send_response( true );
 		}
@@ -182,7 +189,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.0.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function delete_optimised_image() {
+		public function delete_optimised_image(): \WP_REST_Response {
 			global $wp_filesystem;
 			if ( ! Util::init_filesystem() ) {
 				require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -206,16 +213,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					return new \WP_REST_Response(
 						array(
 							'success' => true,
-							'message' => 'Optimized images folder deleted successfully.',
+							'message' => __( 'Optimized images folder deleted successfully.', 'performance-optimisation' ),
 						),
 						200
+					);
+				} else {
+					return new \WP_REST_Response(
+						array(
+							'success' => false,
+							'message' => __( 'Failed to delete the optimized images folder.', 'performance-optimisation' ),
+						),
+						500
 					);
 				}
 			} else {
 				return new \WP_REST_Response(
 					array(
 						'success' => false,
-						'message' => 'Optimized images folder does not exist.',
+						'message' => __( 'Optimized images folder does not exist.', 'performance-optimisation' ),
 					),
 					404
 				);
@@ -233,7 +248,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$data = $request->get_json_params();
 
 			if ( 'import_settings' !== $data['action'] || empty( $data['settings'] ) ) {
-				return $this->send_response( null, false, 400, 'Invalid action or missing settings' );
+				return $this->send_response( null, false, 400, __( 'Invalid action or missing settings', 'performance-optimisation' ) );
 			}
 
 			// Retrieve the existing settings
@@ -241,14 +256,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Check if the settings are the same
 			if ( $existing_settings === $data['settings'] ) {
-				return $this->send_response( $existing_settings, true, 200, 'No changes detected, settings are already up-to-date' );
+				return $this->send_response( $existing_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
 			}
 
 			if ( ! update_option( 'wppo_settings', $data['settings'] ) ) {
-				return $this->send_response( null, false, 500, 'Failed to update settings' );
+				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 
-			return $this->send_response( $data['settings'], true, 200, 'Settings updated successfully' );
+			return $this->send_response( $data['settings'], true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
 		}
 
 		/**

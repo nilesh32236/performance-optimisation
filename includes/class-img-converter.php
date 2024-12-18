@@ -239,8 +239,8 @@ class Img_Converter {
 	/**
 	 * Convert an image palette to true color if it is not already in true color.
 	 *
-	 * @param resource $image The image resource.
-	 * @return resource The true color image resource.
+	 * @param \GdImage $image The image resource.
+	 * @return \GdImage The true color image resource.
 	 * @since 1.0.0
 	 */
 	private function convert_palette_to_truecolor( $image ) {

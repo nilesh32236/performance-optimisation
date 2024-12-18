@@ -41,7 +41,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			self::create_activity_log_table();
 		}
 
-        /**
+		/**
 		 * Adds the WP_CACHE constant to wp-config.php if not already defined.
 		 *
 		 * @return void
