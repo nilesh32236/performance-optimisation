@@ -7,7 +7,7 @@ const PreloadSettings = ({ options = {} }) => {
 
 	const defaultSettings = {
 		enablePreloadCache: false,
-		excludePreloadCache: '',
+		excludePreloadCache: "my-account/(.*)\ncart/(.*)\ncheckout/(.*)",
 		preconnect: false,
 		preconnectOrigins: '',
 		prefetchDNS: false,

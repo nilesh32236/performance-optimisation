@@ -40,7 +40,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// Create the final directory
 				if ( ! $wp_filesystem->mkdir( $cache_dir, FS_CHMOD_DIR ) ) {
-					// error_log( "Failed to create directory using WP_Filesystem: $cache_dir" );
 					return false;
 				}
 			}

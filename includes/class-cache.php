@@ -324,8 +324,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return void
 		 */
 		public function invalidate_dynamic_static_html( $page_id ): void {
-			$html_file_path = $this->get_file_path( $page_id, 'html' );
-			$css_file_path  = $this->get_file_path( $page_id, 'css' );
+			$path = str_replace( home_url(), '', get_permalink( $page_id ) );
+
+			$html_file_path = $this->get_file_path( $path, 'html' );
+			$css_file_path  = $this->get_file_path( $path, 'css' );
 			$this->delete_cache_files( $html_file_path );
 			$this->delete_cache_files( $css_file_path );
 
