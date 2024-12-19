@@ -44,6 +44,20 @@ jobs:
         run: |
           composer global require "wp-coding-standards/wpcs" --no-progress --no-suggest
           phpcs --config-set installed_paths $(composer global config home)/vendor/wp-coding-standards/wpcs
+      
+      - name: Verify Installed Coding Standards
+        run: |
+          # List installed standards
+          installed_standards=$(phpcs -i)
+          echo "Installed coding standards: $installed_standards"
+
+          # Verify if WordPress standards are available
+          if [[ "$installed_standards" == *"WordPress"* ]]; then
+            echo "WordPress coding standards are available."
+          else
+            echo "WordPress coding standards are NOT available. Exiting."
+            exit 1
+          fi
 
       # Step 5: Run WPCS check, excluding vendor directory
       - name: Run WPCS check, excluding specific directories
