@@ -46,18 +46,24 @@ jobs:
           phpcs --config-set installed_paths $(composer global config home)/vendor/wp-coding-standards/wpcs
 
       # Step 5: Run WPCS check, excluding vendor directory
-      # Step 5: Run WPCS check, excluding vendor directory
-      - name: Run WPCS
+      - name: Run WPCS check, excluding vendor directory
         id: wpcs
         run: |
+          # Run the PHPCS check and capture the result
           result=$(phpcs --standard=WordPress --ignore=vendor .)
+
+          # Echo the result (for debugging)
+          echo "PHPCS check result: $result"
+
+          # If there are any issues, write them to a report and exit with failure code
           if [[ "$result" != "" ]]; then
             echo "$result" >> wpcs_report.txt
-            echo "WPCS issues found."
+            echo "WPCS issues found. Please check the wpcs_report.txt for details."
             exit 1
           else
             echo "No WPCS issues found."
           fi
+
 
       # Step 6: Psalm Security Scan
       - name: Psalm Security Scan
