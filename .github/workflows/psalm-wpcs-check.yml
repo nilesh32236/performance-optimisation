@@ -66,9 +66,9 @@ jobs:
       - name: Create GitHub Issue on Errors
         if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
         run: |
-          # Create an issue with WPCS or Psalm errors
+          # Initialize the issue body
           body="### WPCS errors detected in the codebase.\n\n"
-          
+
           # Add WPCS errors to the issue body if they exist
           if [ -f wpcs_report.txt ]; then
             body+="#### WPCS Issues:\n\`\`\`\n$(cat wpcs_report.txt)\n\`\`\`\n"
@@ -79,16 +79,12 @@ jobs:
             body+="#### Psalm Issues:\n\`\`\`\n$(cat results.sarif)\n\`\`\`\n"
           fi
 
-          # Include the outcome (failure) in the body
-          body+="#### WPCS Check Outcome: ${steps.wpcs_check.outcome}"
+          # Include the WPCS Check Outcome
+          body+="#### WPCS Check Outcome: ${{ steps.wpcs_check.outcome }}"
 
           # Create a GitHub issue via GitHub API
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            -d '{
-              "title": "Code Quality Issues Found",
-              "body": "'"${body}"'",
-              "labels": ["bug", "wpcs", "security"]
-            }' \
+            -d "$(jq -n --arg title 'Code Quality Issues Found' --arg body "$body" --argjson labels '["bug", "wpcs", "security"]' '{title: $title, body: $body, labels: $labels}')" \
             https://api.github.com/repos/${{ github.repository }}/issues
