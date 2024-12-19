@@ -3,7 +3,7 @@ name: Prepare Plugin for WordPress Submission on Tag Push
 on:
   push:
     tags:
-      - '*'  # Trigger the workflow on any tag push
+      - '*'
 
 jobs:
   clean_up_and_package:
@@ -13,12 +13,14 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Remove .git, .gitignore, .github, and node_modules files
+    - name: Remove .git, .gitignore, .nvmrc, .github, and node_modules files
       run: |
         # Remove .git directory
         rm -rf .git
         # Remove .gitignore file
         rm -f .gitignore
+        # Remove .nvmrc file
+        rm -f .nvmrc
         # Remove .github directory
         rm -rf .github
         # Remove node_modules directory

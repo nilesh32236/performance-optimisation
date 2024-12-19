@@ -197,8 +197,16 @@ class Main {
 			return;
 		}
 
-		wp_enqueue_style( 'performance-optimisation-style', WPPO_PLUGIN_URL . 'build/style-index.css', array(), WPPO_VERSION, 'all' );
-		wp_enqueue_script( 'performance-optimisation-script', WPPO_PLUGIN_URL . 'build/index.js', array( 'wp-i18n', 'wp-element' ), WPPO_VERSION, true );
+		$asset_file = WPPO_PLUGIN_PATH . 'build/index.asset.php';
+
+		// Include the asset file to retrieve dependencies and version.
+		$asset_data = file_exists( $asset_file ) ? include $asset_file : array(
+			'dependencies' => array(),
+			'version'      => false,
+		);
+
+		wp_enqueue_style( 'performance-optimisation-style', WPPO_PLUGIN_URL . 'build/style-index.css', array(), $asset_data['version'], 'all' );
+		wp_enqueue_script( 'performance-optimisation-script', WPPO_PLUGIN_URL . 'build/index.js', $asset_data['dependencies'], $asset_data['version'], true );
 
 		$this->add_available_post_types_to_options();
 		wp_localize_script(

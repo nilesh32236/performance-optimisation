@@ -10,45 +10,63 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x, 22.x]
-
     steps:
-    - uses: actions/checkout@v4
+    # Step 1: Checkout repository
+    - name: Checkout Code
+      uses: actions/checkout@v4
 
+    # Step 2: Read Node.js version from .nvmrc
+    - name: Read Node.js version from .nvmrc
+      id: nvmrc
+      run: |
+        if [ -f .nvmrc ]; then
+          echo "Using Node.js version from .nvmrc"
+          echo "node-version=$(cat .nvmrc | tr -d '[:space:]')" >> $GITHUB_ENV
+        else
+          echo "Error: .nvmrc file not found."
+          exit 1
+        fi
+
+    # Step 3: Setup Node.js with the version from .nvmrc
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.node-version }}
+
+    # Step 4: Cache Node.js modules
     - name: Cache Node.js modules
       uses: actions/cache@v3
       with:
         path: ~/.npm
-        key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
+        key: ${{ runner.os }}-node-${{ env.node-version }}-${{ hashFiles('**/package-lock.json') }}
         restore-keys: |
-          ${{ runner.os }}-node-${{ matrix.node-version }}
+          ${{ runner.os }}-node-${{ env.node-version }}
 
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-
+    # Step 5: Install dependencies
     - name: Install Dependencies
       run: npm install
 
+    # Step 6: Build the project
     - name: Build
       run: npm run build
 
-    - name: Stash any unstaged changes
+    # Step 7: Stash changes (if build modifies files)
+    - name: Stash unstaged changes
       run: |
         git stash -u
 
+    # Step 8: Pull latest changes from master
     - name: Pull Latest Changes
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git pull origin master --rebase
 
-    - name: Apply stashed changes
+    # Step 9: Apply stashed changes
+    - name: Apply Stashed Changes
       run: git stash pop || echo "No stashed changes"
 
+    # Step 10: Commit and Push Changes
     - name: Commit and Push Changes
       run: |
         git add build/
