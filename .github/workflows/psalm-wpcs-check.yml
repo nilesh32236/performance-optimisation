@@ -96,15 +96,12 @@ jobs:
             body+=$(cat <<EOF
 
           #### Psalm Issues:
-          \`\`\`
+          \`\`\`json
           ${psalm_issues}
           \`\`\`
           EOF
             )
           fi
-
-          # Include the WPCS Check Outcome
-          body+="#### WPCS Check Outcome: ${{ steps.wpcs_check.outcome }}"
 
           # Create a GitHub issue via API
           curl -X POST \
