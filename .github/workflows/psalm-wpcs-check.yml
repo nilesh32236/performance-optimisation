@@ -44,7 +44,8 @@ jobs:
         run: |
           composer global require "wp-coding-standards/wpcs" --no-progress --no-suggest
           phpcs --config-set installed_paths $(composer global config home)/vendor/wp-coding-standards/wpcs
-      
+
+      # Step 5: Verify Installed Coding Standards
       - name: Verify Installed Coding Standards
         run: |
           # List installed standards
@@ -59,40 +60,42 @@ jobs:
             exit 1
           fi
 
-      # Step 5: Run WPCS check, excluding vendor directory
-      - name: Run WPCS check, excluding specific directories
-        id: wpcs
-        continue-on-error: true
+      # Step 6: Run WPCS check using 10up action and save output to file
+      - name: Run WPCS check using 10up action and save output to file
+        id: wpcs_check
+        uses: 10up/wpcs-action@stable
+        with:
+          enable_warnings: false  # Set to true to check warnings
+          paths: '.'  # Path to check, use '.' for the entire repository
+          excludes: 'vendor,node_modules,.git'  # Exclude these directories
+          standard: 'WordPress-Extra'  # The WordPress standard you want to use
+          phpcs_bin_path: 'phpcs'  # Path to the PHPCS binary
+          use_local_config: 'false'  # If you want to use a local PHPCS config file
+          extra_args: ''  # Any extra arguments you want to pass to PHPCS (e.g., '--severity=2')
+          only_changed_files: 'false'  # Set to 'true' to check only changed files in the PR
+          only_changed_lines: 'false'  # Set to 'true' to check only changed lines
+        continue-on-error: true  # Continue even if this step fails
+
+      # Step 7: Save WPCS check output to a file
+      - name: Save WPCS check output to wpcs_report.txt
+        if: failure()  # Only run this if the previous step failed (i.e., found issues)
         run: |
-          # Run the PHPCS check and capture the output and exit code
-          phpcs_output=$(phpcs --standard=WordPress-Extra --ignore=vendor,build,node_modules,.git,src . 2>&1)
-          phpcs_exit_code=$?
+          echo "WPCS issues found. Saving output to wpcs_report.txt."
+          echo "${{ steps.wpcs_check.outputs.stdout }}" > wpcs_report.txt
 
-          # Echo the output for debugging purposes
-          echo "$phpcs_output"
-
-          # If PHPCS found issues, save them to a report and handle gracefully
-          if [[ $phpcs_exit_code -ne 0 ]]; then
-            echo "$phpcs_output" > wpcs_report.txt
-            echo "WPCS issues found. Report saved to wpcs_report.txt."
-            # Optionally, do not exit here to continue workflow or handle further logic
-          else
-            echo "No WPCS issues found."
-          fi
-
-      # Step 6: Psalm Security Scan
+      # Step 8: Psalm Security Scan
       - name: Psalm Security Scan
         id: psalm
         uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
         continue-on-error: true  # Continue the workflow even if Psalm fails
 
-      # Step 7: Upload Security Analysis results to GitHub
+      # Step 9: Upload Security Analysis results to GitHub
       - name: Upload Security Analysis results to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
 
-      # Step 8: Create GitHub issue if WPCS or Psalm errors are found
+      # Step 10: Create GitHub issue if WPCS or Psalm errors are found
       - name: Create GitHub Issue on Errors
         if: failure()  # Only run this step if any previous step failed
         run: |
