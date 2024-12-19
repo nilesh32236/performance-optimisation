@@ -26,30 +26,38 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up PHP
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+      # Step 2: Run WPCS check using 10up action
+      - name: Run WPCS check using 10up action
+        id: wpcs_check
+        uses: 10up/wpcs-action@stable
         with:
-          php-version: '8.1'
-          extensions: mbstring, tokenizer, xml
-          tools: composer
+          enable_warnings: true  # Enable warnings
+          paths: '.'  # Path to check, use '.' for the entire repository
+          excludes: 'vendor src'  # Exclude these directories
+          standard: 'WordPress'  # The WordPress standard you want to use
+          phpcs_bin_path: 'phpcs'  # Path to the PHPCS binary
+          use_local_config: false  # If you want to use a local PHPCS config file
+          only_changed_files: false  # Set to 'true' to check only changed files in the PR
+          only_changed_lines: false  # Set to 'true' to check only changed lines
+          repo_branch: master  # Branch of standard repository
+          extra_args: '--report-json=./phpcs.json'
+        continue-on-error: true  # Continue even if this step fails
 
-      # Step 3: Install WPCS and PHP_CodeSniffer
-      - name: Install WPCS and PHP_CodeSniffer
+      # Step 3: Generate Markdown from PHPCS JSON output
+      - name: Generate Markdown Report
+        if: always()  # Always run this step
         run: |
-          composer global require "wp-coding-standards/wpcs" --no-progress --no-suggest
-          phpcs --config-set installed_paths $(composer global config home)/vendor/wp-coding-standards/wpcs
+          npm i -g github:10up/phpcs-json-to-md
+          phpcs-json-to-md --path ./phpcs.json --output ./phpcs.md
+          cat phpcs.md >> $GITHUB_STEP_SUMMARY
 
-      # Step 4: Run WPCS check, excluding vendor directory
-      - name: Run WPCS
-        id: wpcs
+      # Step 4: Save WPCS check output to wpcs_report.txt
+      - name: Save WPCS check output to wpcs_report.txt
+        if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
         run: |
-          result=$(phpcs --standard=WordPress --ignore=vendor .)
-          if [[ "$result" != "" ]]; then
-            echo "$result" >> wpcs_report.txt
-            exit 1
-          fi
-          echo "No WPCS issues found."
+          echo "WPCS issues found. Saving output to wpcs_report.txt."
+          echo "${{ steps.wpcs_check.outputs.stdout }}" > wpcs_report.txt
+          cat wpcs_report.txt  # Print the output for visibility
 
       # Step 5: Psalm Security Scan
       - name: Psalm Security Scan
@@ -57,36 +65,69 @@ jobs:
         uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
         continue-on-error: true  # Continue the workflow even if Psalm fails
 
-      # Step 6: Upload Security Analysis results to GitHub
-      - name: Upload Security Analysis results to GitHub
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
-
-      # Step 7: Create GitHub issue if WPCS or Psalm errors are found
-      - name: Create GitHub Issue on Errors
-        if: failure()  # Only run this step if any previous step failed
+      # Step 6: Prettify SARIF output for readability
+      - name: Prettify SARIF output
+        id: prettify_sarif
+        if: always()  # Always run this step
         run: |
-          # Create an issue with WPCS or Psalm errors
-          body="### WPCS or Psalm errors detected in the codebase.\n\n"
-          
-          # Add WPCS errors to the issue body if they exist
-          if [ -f wpcs_report.txt ]; then
-            body+="#### WPCS Issues:\n\`\`\`\n$(cat wpcs_report.txt)\n\`\`\`\n"
-          fi
-
-          # Add Psalm errors to the issue body if they exist
           if [ -f results.sarif ]; then
-            body+="#### Psalm Issues:\n\`\`\`\n$(cat results.sarif)\n\`\`\`\n"
+            jq '.' results.sarif > pretty_results.sarif
           fi
 
-          # Create a GitHub issue via GitHub API
+      # Step 7: Create GitHub issue on WPCS errors
+      - name: Create GitHub Issue on Errors
+        if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
+        run: |
+          # Get branch or PR information
+          branch_name=${{ github.ref_name }}
+          pr_title=""
+          pr_url=""
+
+          # Check if the event is a pull request
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            pr_title="${{ github.event.pull_request.title }}"
+            pr_url="${{ github.event.pull_request.html_url }}"
+          else
+            pr_title="Branch: ${branch_name}"
+            pr_url="N/A"
+          fi
+
+          # Initialize the issue body
+          body=$(cat <<EOF
+          ### Code Quality Issues Detected.
+
+          ### Reference:
+          - Branch/PR: \`${branch_name}\`
+          - PR URL: [${pr_url}](${pr_url})
+
+
+          #### WPCS Issues:
+          $(cat phpcs.md)
+
+          #### WPCS Check Outcome: ${{ steps.wpcs_check.outcome }}
+
+          EOF
+          )
+
+          # Add the contents of the Markdown file to the issue body
+          if [ -f pretty_results.sarif ]; then
+            psalm_issues=$(cat pretty_results.sarif)
+            body+=$(cat <<EOF
+
+          #### Psalm Issues:
+          \`\`\`json
+          ${psalm_issues}
+          \`\`\`
+          EOF
+            )
+          fi
+
+          # Construct the issue title
+          issue_title="Code Quality Issues Found in ${pr_title}"
+
+          # Create a GitHub issue via API
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            -d '{
-              "title": "Code Quality Issues Found",
-              "body": "'"${body}"'",
-              "labels": ["bug", "wpcs", "security"]
-            }' \
+            -d "$(jq -n --arg title "$issue_title" --arg body "$body" --argjson labels '["bug", "wpcs", "security"]' '{title: $title, body: $body, labels: $labels}')" \
             https://api.github.com/repos/${{ github.repository }}/issues

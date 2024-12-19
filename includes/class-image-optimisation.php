@@ -766,8 +766,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$svg_content = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '"><rect width="100%" height="100%" fill="#cfd4db" /></svg>';
 
-			// PHPCS: ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- Base64 is used here to embed SVG content directly in the page.
+			// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
 			return 'data:image/svg+xml;base64,' . base64_encode( $svg_content );
+			// phpcs:enable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
 		}
 	}
 }

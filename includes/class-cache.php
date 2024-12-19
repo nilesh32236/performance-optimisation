@@ -35,14 +35,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function __construct() {
-			// Check and sanitize $_SERVER['HTTP_HOST']
 			$this->domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
 			// Define cache root directory and URL
 			$this->cache_root_dir = WP_CONTENT_DIR . self::CACHE_DIR;
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
 
-			// Check and sanitize $_SERVER['REQUEST_URI']
 			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$this->url_path = trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' );
 
@@ -394,7 +392,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Get the file path for a specific page.
 		 *
 		 * @param string|null $url_path The URL path (optional).
-		 * @param string $type The file type (default: 'html').
+		 * @param string      $type The file type (default: 'html').
 		 * @return string The file path.
 		 *
 		 * @since 1.0.0

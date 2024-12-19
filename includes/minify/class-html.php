@@ -41,7 +41,7 @@ class HTML {
 	 * Constructor to initialize HTML minification.
 	 *
 	 * @param string $html The HTML content to minify.
-	 * @param array $options Minification options.
+	 * @param array  $options Minification options.
 	 * @since 1.0.0
 	 */
 	public function __construct( $html, $options ) {
@@ -170,7 +170,7 @@ class HTML {
 	 * Restore preserved script tags in HTML.
 	 *
 	 * @param string $html The HTML content.
-	 * @param array $scripts The preserved scripts.
+	 * @param array  $scripts The preserved scripts.
 	 * @return string Updated HTML content.
 	 * @since 1.0.0
 	 */

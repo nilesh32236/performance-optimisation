@@ -1,0 +1,35 @@
+name: Prepare Plugin for WordPress Submission on Tag Push
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  clean_up_and_package:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Remove .git, .gitignore, .nvmrc, .github, and node_modules files
+      run: |
+        # Remove .git directory
+        rm -rf .git
+        # Remove .gitignore file
+        rm -f .gitignore
+        # Remove .nvmrc file
+        rm -f .nvmrc
+        # Remove .github directory
+        rm -rf .github
+        # Remove node_modules directory
+        rm -rf node_modules
+
+    - name: Upload files as artifact (with zip compression)
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-optimisation
+        path: .
+        compression-level: 9
+        overwrite: true
