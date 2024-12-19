@@ -76,11 +76,27 @@ jobs:
         if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
         run: |
           # Initialize the issue body
-          body="### WPCS errors detected in the codebase.\n\n"
+          body=$(cat <<EOF
+          ### WPCS errors detected in the codebase.
+
+          #### WPCS Issues:
+          $(cat phpcs.md)
+
+          #### WPCS Check Outcome: ${{ steps.wpcs_check.outcome }}
+
+          EOF
+          )
 
           # Add the contents of the Markdown file to the issue body
           if [ -f phpcs.md ]; then
-            body+="#### WPCS Issues:\n\n$(cat phpcs.md)\n\n"
+             body+=$(cat <<EOF
+
+          #### Psalm Issues:
+          \`\`\`
+          ${sarif_content}
+          \`\`\`
+          EOF
+            )
           fi
 
           # Add Psalm errors to the issue body if they exist
