@@ -67,8 +67,8 @@ jobs:
         with:
           enable_warnings: false  # Set to true to check warnings
           paths: '.'  # Path to check, use '.' for the entire repository
-          excludes: 'vendor,node_modules,.git'  # Exclude these directories
-          standard: 'WordPress-Extra'  # The WordPress standard you want to use
+          excludes: 'vendor,node_modules,.git,src'  # Exclude these directories
+          standard: 'WordPress'  # The WordPress standard you want to use
           phpcs_bin_path: 'phpcs'  # Path to the PHPCS binary
           use_local_config: 'false'  # If you want to use a local PHPCS config file
           extra_args: ''  # Any extra arguments you want to pass to PHPCS (e.g., '--severity=2')
