@@ -78,9 +78,19 @@ jobs:
       - name: Create GitHub Issue on Errors
         if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
         run: |
+          # Get branch or PR information
+          branch_name=${{ github.ref_name }}
+          pr_title=${{ github.event.pull_request.title || 'Branch: ' + github.ref_name }}
+          pr_url=${{ github.event.pull_request.html_url || 'N/A' }}
+
           # Initialize the issue body
           body=$(cat <<EOF
-          ### WPCS errors detected in the codebase.
+          ### Code Quality Issues Detected.
+
+          ### Reference:
+          - Branch/PR: \`${branch_name}\`
+          - PR URL: [${pr_url}](${pr_url})
+
 
           #### WPCS Issues:
           $(cat phpcs.md)
@@ -103,9 +113,12 @@ jobs:
             )
           fi
 
+          # Construct the issue title
+          issue_title="Code Quality Issues Found in PR: ${pr_title}"
+
           # Create a GitHub issue via API
           curl -X POST \
             -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            -d "$(jq -n --arg title 'Code Quality Issues Found' --arg body "$body" --argjson labels '["bug", "wpcs", "security"]' '{title: $title, body: $body, labels: $labels}')" \
+            -d "$(jq -n --arg title "$issue_title" --arg body "$body" --argjson labels '["bug", "wpcs", "security"]' '{title: $title, body: $body, labels: $labels}')" \
             https://api.github.com/repos/${{ github.repository }}/issues
