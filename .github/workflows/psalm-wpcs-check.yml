@@ -26,28 +26,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Run WPCS check using 10up action and save output to file
-      - name: Run WPCS check using 10up action and save output to file
+      # Step 2: Run WPCS check using 10up action
+      - name: Run WPCS check using 10up action
         id: wpcs_check
         uses: 10up/wpcs-action@stable
         with:
-          enable_warnings: true  # Set to true to check warnings
+          enable_warnings: true  # Enable warnings
           paths: '.'  # Path to check, use '.' for the entire repository
-          excludes: 'vendor src'  # Exclude these directories
+          excludes: 'vendor,node_modules,.git,src'  # Exclude these directories
           standard: 'WordPress'  # The WordPress standard you want to use
           phpcs_bin_path: 'phpcs'  # Path to the PHPCS binary
-          use_local_config: 'false'  # If you want to use a local PHPCS config file
-          extra_args: ''  # Any extra arguments you want to pass to PHPCS (e.g., '--severity=2')
-          only_changed_files: 'false'  # Set to 'true' to check only changed files in the PR
-          only_changed_lines: 'false'  # Set to 'true' to check only changed lines
+          use_local_config: false  # If you want to use a local PHPCS config file
+          only_changed_files: false  # Set to 'true' to check only changed files in the PR
+          only_changed_lines: false  # Set to 'true' to check only changed lines
+          repo_branch: master  # Branch of standard repository
         continue-on-error: true  # Continue even if this step fails
 
-      # Step 3: Save WPCS check output to a file
+      # Step 3: Save WPCS check output to wpcs_report.txt
       - name: Save WPCS check output to wpcs_report.txt
-        if: failure()  # Only run this if the previous step failed (i.e., found issues)
+        if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
         run: |
           echo "WPCS issues found. Saving output to wpcs_report.txt."
           echo "${{ steps.wpcs_check.outputs.stdout }}" > wpcs_report.txt
+          cat wpcs_report.txt  # Print the output for visibility
 
       # Step 4: Psalm Security Scan
       - name: Psalm Security Scan
@@ -61,12 +62,12 @@ jobs:
         with:
           sarif_file: results.sarif
 
-      # Step 6: Create GitHub issue if WPCS or Psalm errors are found
+      # Step 6: Create GitHub issue on WPCS errors
       - name: Create GitHub Issue on Errors
-        if: failure()  # Only run this step if any previous step failed
+        if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
         run: |
           # Create an issue with WPCS or Psalm errors
-          body="### WPCS or Psalm errors detected in the codebase.\n\n"
+          body="### WPCS errors detected in the codebase.\n\n"
           
           # Add WPCS errors to the issue body if they exist
           if [ -f wpcs_report.txt ]; then
@@ -77,6 +78,9 @@ jobs:
           if [ -f results.sarif ]; then
             body+="#### Psalm Issues:\n\`\`\`\n$(cat results.sarif)\n\`\`\`\n"
           fi
+
+          # Include the outcome (failure) in the body
+          body+="#### WPCS Check Outcome: ${steps.wpcs_check.outcome}"
 
           # Create a GitHub issue via GitHub API
           curl -X POST \
