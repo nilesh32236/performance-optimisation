@@ -1,0 +1,92 @@
+name: Psalm and WPCS Checks
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  schedule:
+    - cron: '28 13 * * 0'
+
+permissions:
+  contents: read
+  issues: write  # Required for creating issues
+
+jobs:
+  php-security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      issues: write  # Allow creating issues
+
+    steps:
+      # Step 1: Checkout the code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up PHP
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring, tokenizer, xml
+          tools: composer
+
+      # Step 3: Install WPCS and PHP_CodeSniffer
+      - name: Install WPCS and PHP_CodeSniffer
+        run: |
+          composer global require "wp-coding-standards/wpcs" --no-progress --no-suggest
+          phpcs --config-set installed_paths $(composer global config home)/vendor/wp-coding-standards/wpcs
+
+      # Step 4: Run WPCS check, excluding vendor directory
+      - name: Run WPCS
+        id: wpcs
+        run: |
+          result=$(phpcs --standard=WordPress --ignore=vendor .)
+          if [[ "$result" != "" ]]; then
+            echo "$result" >> wpcs_report.txt
+            exit 1
+          fi
+          echo "No WPCS issues found."
+
+      # Step 5: Psalm Security Scan
+      - name: Psalm Security Scan
+        id: psalm
+        uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
+        continue-on-error: true  # Continue the workflow even if Psalm fails
+
+      # Step 6: Upload Security Analysis results to GitHub
+      - name: Upload Security Analysis results to GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+      # Step 7: Create GitHub issue if WPCS or Psalm errors are found
+      - name: Create GitHub Issue on Errors
+        if: failure()  # Only run this step if any previous step failed
+        run: |
+          # Create an issue with WPCS or Psalm errors
+          body="### WPCS or Psalm errors detected in the codebase.\n\n"
+          
+          # Add WPCS errors to the issue body if they exist
+          if [ -f wpcs_report.txt ]; then
+            body+="#### WPCS Issues:\n\`\`\`\n$(cat wpcs_report.txt)\n\`\`\`\n"
+          fi
+
+          # Add Psalm errors to the issue body if they exist
+          if [ -f results.sarif ]; then
+            body+="#### Psalm Issues:\n\`\`\`\n$(cat results.sarif)\n\`\`\`\n"
+          fi
+
+          # Create a GitHub issue via GitHub API
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d '{
+              "title": "Code Quality Issues Found",
+              "body": "'"${body}"'",
+              "labels": ["bug", "wpcs", "security"]
+            }' \
+            https://api.github.com/repos/${{ github.repository }}/issues
