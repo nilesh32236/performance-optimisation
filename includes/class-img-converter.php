@@ -43,7 +43,7 @@ class Img_Converter {
 	 *
 	 * @param string $source_image Path to the source image.
 	 * @param string $format The desired format ('webp' or 'avif').
-	 * @param int $quality Quality level of the converted image (0-100).
+	 * @param int    $quality Quality level of the converted image (0-100).
 	 * @return bool True on success, false on failure.
 	 * @since 1.0.0
 	 */
@@ -350,7 +350,7 @@ class Img_Converter {
 	 * Convert uploaded images to WebP or AVIF format upon attachment upload.
 	 *
 	 * @param array $metadata The attachment metadata.
-	 * @param int $attachment_id The attachment ID.
+	 * @param int   $attachment_id The attachment ID.
 	 * @return array|\WP_Error The modified attachment metadata, or WP_Error on failure.
 	 * @since 1.0.0
 	 */
@@ -407,10 +407,10 @@ class Img_Converter {
 	/**
 	 * Serve WebP or AVIF images if supported by the browser.
 	 *
-	 * @param array $image The image source array.
-	 * @param int $attachment_id The attachment ID.
+	 * @param array        $image The image source array.
+	 * @param int          $attachment_id The attachment ID.
 	 * @param string|array $size The requested size.
-	 * @param bool $icon Whether the image is an icon.
+	 * @param bool         $icon Whether the image is an icon.
 	 * @return array Modified image source with WebP/AVIF if applicable, or original image if not.
 	 * @since 1.0.0
 	 */

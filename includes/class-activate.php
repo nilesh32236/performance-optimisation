@@ -19,6 +19,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 	 * Class Activate
 	 *
 	 * Handles the plugin activation logic.
+	 *
 	 * @since 1.0.0
 	 */
 	class Activate {

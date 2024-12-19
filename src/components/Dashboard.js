@@ -75,8 +75,7 @@ const Dashboard = ({ activities }) => {
 				console.log(translations.imgOptimiseSuccess);
 				// console.log( response );
 				wppoSettings.imageInfo = response;
-				console.log( response );
-				
+
 				// updateState((prevState) => ({
 				// 	...prevState,
 				// 	imageInfo: response,

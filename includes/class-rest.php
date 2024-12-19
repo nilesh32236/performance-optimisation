@@ -269,9 +269,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Sends a REST API response.
 		 *
-		 * @param mixed $data The data to return in the response.
-		 * @param bool  $success Indicates whether the request was successful.
-		 * @param int   $status_code The HTTP status code.
+		 * @param mixed       $data The data to return in the response.
+		 * @param bool        $success Indicates whether the request was successful.
+		 * @param int         $status_code The HTTP status code.
 		 * @param string|null $message The response message.
 		 * @since 1.0.0
 		 * @return \WP_REST_Response The response object.

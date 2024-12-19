@@ -20,6 +20,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 	 * Class Advanced_Cache_Handler
 	 *
 	 * Manages the creation and removal of the advanced-cache.php file.
+	 *
 	 * @since 1.0.0
 	 */
 	class Advanced_Cache_Handler {
