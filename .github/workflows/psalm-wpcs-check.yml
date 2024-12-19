@@ -65,11 +65,14 @@ jobs:
         uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
         continue-on-error: true  # Continue the workflow even if Psalm fails
 
-      # Step 6: Upload Security Analysis results to GitHub
-      - name: Upload Security Analysis results to GitHub
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: results.sarif
+      # Step 6: Prettify SARIF output for readability
+      - name: Prettify SARIF output
+        id: prettify_sarif
+        if: always()  # Always run this step
+        run: |
+          if [ -f results.sarif ]; then
+            jq '.' results.sarif > pretty_results.sarif
+          fi
 
       # Step 7: Create GitHub issue on WPCS errors
       - name: Create GitHub Issue on Errors
@@ -88,20 +91,16 @@ jobs:
           )
 
           # Add the contents of the Markdown file to the issue body
-          if [ -f phpcs.md ]; then
-             body+=$(cat <<EOF
+          if [ -f pretty_results.sarif ]; then
+            psalm_issues=$(cat pretty_results.sarif)
+            body+=$(cat <<EOF
 
           #### Psalm Issues:
           \`\`\`
-          ${sarif_content}
+          ${psalm_issues}
           \`\`\`
           EOF
             )
-          fi
-
-          # Add Psalm errors to the issue body if they exist
-          if [ -f results.sarif ]; then
-            body+="#### Psalm Issues:\n\`\`\`\n$(cat results.sarif)\n\`\`\`\n"
           fi
 
           # Include the WPCS Check Outcome
