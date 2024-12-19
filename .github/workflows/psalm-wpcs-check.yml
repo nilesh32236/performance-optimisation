@@ -80,8 +80,17 @@ jobs:
         run: |
           # Get branch or PR information
           branch_name=${{ github.ref_name }}
-          pr_title=${{ github.event.pull_request.title || 'Branch: ' + github.ref_name }}
-          pr_url=${{ github.event.pull_request.html_url || 'N/A' }}
+          pr_title=""
+          pr_url=""
+
+          # Check if the event is a pull request
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            pr_title="${{ github.event.pull_request.title }}"
+            pr_url="${{ github.event.pull_request.html_url }}"
+          else
+            pr_title="Branch: ${branch_name}"
+            pr_url="N/A"
+          fi
 
           # Initialize the issue body
           body=$(cat <<EOF
@@ -114,7 +123,7 @@ jobs:
           fi
 
           # Construct the issue title
-          issue_title="Code Quality Issues Found in PR: ${pr_title}"
+          issue_title="Code Quality Issues Found in ${pr_title}"
 
           # Create a GitHub issue via API
           curl -X POST \
