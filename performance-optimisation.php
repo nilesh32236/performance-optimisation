@@ -4,7 +4,7 @@
  * Description:       A Performance Optimisation plugin for WordPress.
  * Requires at least: 5.5.3
  * Requires PHP:      7.0
- * Version:           1.0.0
+ * Version:           1.0.1
  * Author:            Nilesh kanzariya
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
@@ -31,7 +31,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 }
 
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '0.1.1' );
+	define( 'WPPO_VERSION', '1.0.1' );
 }
 
 // Include the main class file.
