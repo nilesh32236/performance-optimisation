@@ -43,14 +43,15 @@ jobs:
           extra_args: '--report-json=./phpcs.json'
         continue-on-error: true  # Continue even if this step fails
 
-        - name: Update summary
-          run: |
-            npm i -g github:10up/phpcs-json-to-md
-            phpcs-json-to-md --path ./phpcs.json --output ./phpcs.md
-            cat phpcs.md >> $GITHUB_STEP_SUMMARY
-          if: always()
+      # Step 3: Generate Markdown from PHPCS JSON output
+      - name: Generate Markdown Report
+        if: always()  # Always run this step
+        run: |
+          npm i -g github:10up/phpcs-json-to-md
+          phpcs-json-to-md --path ./phpcs.json --output ./phpcs.md
+          cat phpcs.md >> $GITHUB_STEP_SUMMARY
 
-      # Step 3: Save WPCS check output to wpcs_report.txt
+      # Step 4: Save WPCS check output to wpcs_report.txt
       - name: Save WPCS check output to wpcs_report.txt
         if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
         run: |
@@ -58,19 +59,19 @@ jobs:
           echo "${{ steps.wpcs_check.outputs.stdout }}" > wpcs_report.txt
           cat wpcs_report.txt  # Print the output for visibility
 
-      # Step 4: Psalm Security Scan
+      # Step 5: Psalm Security Scan
       - name: Psalm Security Scan
         id: psalm
         uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
         continue-on-error: true  # Continue the workflow even if Psalm fails
 
-      # Step 5: Upload Security Analysis results to GitHub
+      # Step 6: Upload Security Analysis results to GitHub
       - name: Upload Security Analysis results to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
 
-      # Step 6: Create GitHub issue on WPCS errors
+      # Step 7: Create GitHub issue on WPCS errors
       - name: Create GitHub Issue on Errors
         if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
         run: |
