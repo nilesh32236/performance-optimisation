@@ -26,46 +26,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up PHP
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.1'
-          extensions: mbstring, tokenizer, xml
-          tools: composer
-
-      # Step 3: Configure Composer to allow the plugin
-      - name: Allow Composer Plugin
-        run: |
-          composer global config allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
-
-      # Step 4: Install WPCS and PHP_CodeSniffer
-      - name: Install WPCS and PHP_CodeSniffer
-        run: |
-          composer global require "wp-coding-standards/wpcs" --no-progress --no-suggest
-          phpcs --config-set installed_paths $(composer global config home)/vendor/wp-coding-standards/wpcs
-
-      # Step 5: Verify Installed Coding Standards
-      - name: Verify Installed Coding Standards
-        run: |
-          # List installed standards
-          installed_standards=$(phpcs -i)
-          echo "Installed coding standards: $installed_standards"
-
-          # Verify if WordPress standards are available
-          if [[ "$installed_standards" == *"WordPress"* ]]; then
-            echo "WordPress coding standards are available."
-          else
-            echo "WordPress coding standards are NOT available. Exiting."
-            exit 1
-          fi
-
-      # Step 6: Run WPCS check using 10up action and save output to file
+      # Step 2: Run WPCS check using 10up action and save output to file
       - name: Run WPCS check using 10up action and save output to file
         id: wpcs_check
         uses: 10up/wpcs-action@stable
         with:
-          enable_warnings: false  # Set to true to check warnings
+          enable_warnings: true  # Set to true to check warnings
           paths: '.'  # Path to check, use '.' for the entire repository
           excludes: 'vendor,node_modules,.git,src'  # Exclude these directories
           standard: 'WordPress'  # The WordPress standard you want to use
@@ -76,26 +42,26 @@ jobs:
           only_changed_lines: 'false'  # Set to 'true' to check only changed lines
         continue-on-error: true  # Continue even if this step fails
 
-      # Step 7: Save WPCS check output to a file
+      # Step 3: Save WPCS check output to a file
       - name: Save WPCS check output to wpcs_report.txt
         if: failure()  # Only run this if the previous step failed (i.e., found issues)
         run: |
           echo "WPCS issues found. Saving output to wpcs_report.txt."
           echo "${{ steps.wpcs_check.outputs.stdout }}" > wpcs_report.txt
 
-      # Step 8: Psalm Security Scan
+      # Step 4: Psalm Security Scan
       - name: Psalm Security Scan
         id: psalm
         uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
         continue-on-error: true  # Continue the workflow even if Psalm fails
 
-      # Step 9: Upload Security Analysis results to GitHub
+      # Step 5: Upload Security Analysis results to GitHub
       - name: Upload Security Analysis results to GitHub
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: results.sarif
 
-      # Step 10: Create GitHub issue if WPCS or Psalm errors are found
+      # Step 6: Create GitHub issue if WPCS or Psalm errors are found
       - name: Create GitHub Issue on Errors
         if: failure()  # Only run this step if any previous step failed
         run: |
