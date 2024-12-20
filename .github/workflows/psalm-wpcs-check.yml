@@ -84,8 +84,10 @@ jobs:
           fi
 
           # Construct issue body
-          body="### Code Quality Issues Detected for $branch_name\n"
-          body+="#### WPCS Issues:\n$(cat phpcs.md)\n"
+          body="### Code Quality Issues Detected for $branch_name
+          #### WPCS Issues:
+          $(cat phpcs.md)"
+
           if [ -f pretty_results.sarif ]; then
             psalm_issues=$(cat pretty_results.sarif)
             body+=$(cat <<EOF
