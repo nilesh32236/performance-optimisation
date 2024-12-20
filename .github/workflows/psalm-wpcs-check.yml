@@ -41,7 +41,7 @@ jobs:
 
       - name: Psalm Security Scan
         id: psalm
-        uses: psalm/psalm-github-security-scan@latest
+        uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
         continue-on-error: true
 
       - name: Prettify SARIF Output
