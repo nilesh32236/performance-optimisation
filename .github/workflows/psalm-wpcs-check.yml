@@ -88,7 +88,13 @@ jobs:
           body+="#### WPCS Issues:\n$(cat phpcs.md)\n"
           if [ -f pretty_results.sarif ]; then
             psalm_issues=$(cat pretty_results.sarif)
-            body+="#### Psalm Issues:\n\`\`\`json\n$psalm_issues\n\`\`\`\n"
+            body+=$(cat <<EOF
+              #### Psalm Issues:
+              \`\`\`json
+              ${psalm_issues}
+              \`\`\`
+              EOF
+            )
           fi
 
           # Create or update issue
