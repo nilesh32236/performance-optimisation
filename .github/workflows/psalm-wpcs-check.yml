@@ -61,10 +61,12 @@ jobs:
           actor="${{ github.actor }}"
           pr_title=""
           pr_url=""
+          pr_number=""
           
           if [ "$event_name" == "pull_request" ]; then
             pr_title="${{ github.event.pull_request.title }}"
             pr_url="${{ github.event.pull_request.html_url }}"
+            pr_number="${{ github.event.pull_request.number }}"
           fi
 
           # Check for existing issues
@@ -121,4 +123,14 @@ jobs:
               -H "Accept: application/vnd.github.v3+json" \
               -d "$(jq -n --arg assignee "$actor" '{assignees: [$assignee]}')" \
               "https://api.github.com/repos/${{ github.repository }}/issues/$new_issue_number/assignees"
+          fi
+
+          # Mention the issue in the PR
+          if [ "$pr_number" ]; then
+            comment_body="Linked Issue: $issue_url"
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "$(jq -n --arg body "$comment_body" '{body: $body}')" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/$pr_number/comments"
           fi
