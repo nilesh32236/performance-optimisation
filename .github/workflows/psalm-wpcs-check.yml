@@ -25,7 +25,7 @@ jobs:
         with:
           enable_warnings: true
           paths: '.'
-          excludes: 'vendor src'
+          excludes: 'vendor src build'
           standard: 'WordPress'
           phpcs_bin_path: 'phpcs'
           use_local_config: false
