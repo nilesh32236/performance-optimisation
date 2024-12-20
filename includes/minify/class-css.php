@@ -17,11 +17,37 @@ use MatthiasMullie\Minify;
 use PerformanceOptimise\Inc\Img_Converter;
 use PerformanceOptimise\Inc\Util;
 
+/**
+ * CSS Minification and Image Optimization.
+ */
 class CSS {
+	/**
+	 * Path to the original CSS file.
+	 *
+	 * @var string
+	 */
 	private string $file_path;
+
+	/**
+	 * Directory for caching minified files.
+	 *
+	 * @var string
+	 */
 	private string $cache_dir;
+
+	/**
+	 * Filesystem handler instance.
+	 *
+	 * @var object
+	 */
 	private $filesystem;
 
+	/**
+	 * Constructor for the CSS class.
+	 *
+	 * @param string $file_path  Path to the CSS file to be minified.
+	 * @param string $cache_dir  Directory where the minified file will be cached.
+	 */
 	public function __construct( $file_path, $cache_dir ) {
 		$this->file_path  = $file_path;
 		$this->cache_dir  = $cache_dir;
@@ -113,7 +139,7 @@ class CSS {
 
 					$local_path = Util::get_local_path( $image_path );
 
-					// Check if corresponding .avif image exists
+					// Check if corresponding .avif image exists.
 					if ( file_exists( Img_Converter::get_img_path( $image_path, 'avif' ) ) ) {
 						return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';
 					} else {
@@ -124,7 +150,7 @@ class CSS {
 						return 'url("' . $image_path . '")';
 					}
 
-					// Check if corresponding .webp image exists
+					// Check if corresponding .webp image exists.
 					if ( file_exists( Img_Converter::get_img_path( $image_path ) ) ) {
 						return 'url("' . Img_Converter::get_img_url( $image_path ) . '")';
 					} else {

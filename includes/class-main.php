@@ -1,4 +1,15 @@
 <?php
+/**
+ * Performance Optimisation main functionality.
+ *
+ * This file includes the main class for the performance optimisation plugin,
+ * which handles tasks like including necessary files, setting up hooks, and managing
+ * image optimisation, JS and CSS minification, and more.
+ *
+ * @package PerformanceOptimise
+ * @since 1.0.0
+ */
+
 namespace PerformanceOptimise\Inc;
 
 use PerformanceOptimise\Inc\Minify;
@@ -15,17 +26,48 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @since 1.0.0
  */
-
 class Main {
 
+	/**
+	 * List of CSS handles to exclude from combining.
+	 *
+	 * @var array
+	 * @since 1.0.0
+	 */
 	private array $exclude_css = array( 'wppo-combine-css' );
-	private array $exclude_js  = array(
+
+	/**
+	 * List of JavaScript handles to exclude from minification.
+	 *
+	 * @var array
+	 * @since 1.0.0
+	 */
+	private array $exclude_js = array(
 		'jquery',
 	);
+
+	/**
+	 * Filesystem instance for file operations.
+	 *
+	 * @var object
+	 * @since 1.0.0
+	 */
 	private $filesystem;
 
+	/**
+	 * Image Optimisation instance for handling image optimization.
+	 *
+	 * @var Image_Optimisation
+	 * @since 1.0.0
+	 */
 	private Image_Optimisation $image_optimisation;
 
+	/**
+	 * Options for performance optimisation settings.
+	 *
+	 * @var array
+	 * @since 1.0.0
+	 */
 	private $options;
 
 	/**
@@ -78,7 +120,7 @@ class Main {
 		add_action( 'admin_menu', array( $this, 'init_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
-		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 3 );
+		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
 		add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
 		if ( isset( $this->options['file_optimisation']['removeWooCSSJS'] ) && (bool) $this->options['file_optimisation']['removeWooCSSJS'] ) {
@@ -360,7 +402,7 @@ class Main {
 		if ( isset( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) && ! empty( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) ) {
 			$exclude_url_to_keep_js_css = Util::process_urls( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] );
 
-			// Safely retrieve and sanitize the current URL
+			// Safely retrieve and sanitize the current URL.
 			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$parsed_uri  = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $request_uri );
 			$current_url = home_url( sanitize_text_field( $parsed_uri ) );
@@ -412,6 +454,8 @@ class Main {
 	/**
 	 * Adds custom settings to the WordPress admin bar.
 	 *
+	 * @param WP_Admin_Bar $wp_admin_bar The WordPress admin bar object used to add nodes and settings.
+	 *
 	 * @since 1.0.0
 	 */
 	public function add_setting_to_admin_bar( $wp_admin_bar ) {
@@ -427,7 +471,7 @@ class Main {
 			),
 		);
 
-		// Add a submenu under the custom setting
+		// Add a submenu under the custom setting.
 		$wp_admin_bar->add_node(
 			array(
 				'id'     => 'wppo_clear_all',
@@ -445,7 +489,7 @@ class Main {
 					'id'     => 'wppo_clear_this_page',
 					'parent' => 'wppo_setting',
 					'title'  => __( 'Clear This Page Cache', 'performance-optimisation' ),
-					'href'   => '#', // You can replace with actual URL or function if needed
+					'href'   => '#', // You can replace with actual URL or function if needed.
 					'meta'   => array(
 						'title' => __( 'Clear cache for this specific page or post', 'performance-optimisation' ),
 						'class' => 'page-' . $current_id,
@@ -462,10 +506,9 @@ class Main {
 	 *
 	 * @param string $tag    The script tag HTML.
 	 * @param string $handle The script's registered handle.
-	 * @param string $src    The script's source URL.
 	 * @return string Modified script tag with defer attribute.
 	 */
-	public function add_defer_attribute( $tag, $handle, $src ): string {
+	public function add_defer_attribute( $tag, $handle ): string {
 		if ( is_user_logged_in() ) {
 			return $tag;
 		}
@@ -519,7 +562,7 @@ class Main {
 
 		$preload_settings = $this->options['preload_settings'] ?? array();
 
-		// Preconnect origins
+		// Preconnect origins.
 		if ( isset( $preload_settings['preconnect'] ) && (bool) $preload_settings['preconnect'] ) {
 			if ( isset( $preload_settings['preconnectOrigins'] ) && ! empty( $preload_settings['preconnectOrigins'] ) ) {
 				$preconnect_origins = Util::process_urls( $preload_settings['preconnectOrigins'] );
@@ -530,7 +573,7 @@ class Main {
 			}
 		}
 
-		// Prefetch DNS origins
+		// Prefetch DNS origins.
 		if ( isset( $preload_settings['prefetchDNS'] ) && (bool) $preload_settings['prefetchDNS'] ) {
 			if ( isset( $preload_settings['dnsPrefetchOrigins'] ) && ! empty( $preload_settings['dnsPrefetchOrigins'] ) ) {
 				$dns_prefetch_origins = Util::process_urls( $preload_settings['dnsPrefetchOrigins'] );
@@ -541,7 +584,7 @@ class Main {
 			}
 		}
 
-		// Preload fonts
+		// Preload fonts.
 		if ( isset( $preload_settings['preloadFonts'] ) && (bool) $preload_settings['preloadFonts'] ) {
 			if ( isset( $preload_settings['preloadFontsUrls'] ) && ! empty( $preload_settings['preloadFontsUrls'] ) ) {
 				$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
@@ -564,7 +607,7 @@ class Main {
 							$font_type = 'font/ttf';
 							break;
 						default:
-							$font_type = ''; // Fallback if unknown extension
+							$font_type = ''; // Fallback if unknown extension.
 					}
 
 					Util::generate_preload_link( $font_url, 'preload', 'font', true, $font_type );

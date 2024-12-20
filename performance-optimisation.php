@@ -10,15 +10,17 @@
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       performance-optimisation
  * Domain Path:       /languages
+ *
+ * @package PerformanceOptimise
  */
 
-// Import required classes
+// Import required classes.
 use PerformanceOptimise\Inc\Activate;
 use PerformanceOptimise\Inc\Deactivate;
 use PerformanceOptimise\Inc\Main;
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit; // Exit if accessed directly
+	exit; // Exit if accessed directly.
 }
 
 // Define plugin constants.

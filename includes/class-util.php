@@ -1,11 +1,12 @@
 <?php
 /**
- * Utility class for the PerformanceOptimise plugin.
+ * PerformanceOptimise Utility Class
  *
- * Provides methods for preparing cache directories, initializing WP_Filesystem API,
- * handling file paths, and managing resources like JS, CSS, and images.
+ * This file contains the `Util` class, which provides various utility methods
+ * for file system and resource management tasks, including cache directory creation,
+ * filesystem initialization, URL processing, generating preload links, and handling image MIME types.
  *
- * @package PerformanceOptimise\Inc
+ * @package PerformanceOptimise
  * @since 1.0.0
  */
 
@@ -16,6 +17,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
+	/**
+	 * Utility class for performing various file system and resource management tasks.
+	 *
+	 * This class provides helper methods for managing cache directories, interacting
+	 * with the WordPress filesystem API, processing URLs, generating preload links,
+	 * and handling image MIME types.
+	 *
+	 * @since 1.0.0
+	 */
 	class Util {
 
 		/**
@@ -28,17 +38,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function prepare_cache_dir( $cache_dir ): bool {
 			global $wp_filesystem;
 
-			// Check if the directory already exists
+			// Check if the directory already exists.
 			if ( ! $wp_filesystem->is_dir( $cache_dir ) ) {
 
-				// Recursively create parent directories first
+				// Recursively create parent directories first.
 				$parent_dir = dirname( $cache_dir );
 
 				if ( ! $wp_filesystem->is_dir( $parent_dir ) ) {
 					self::prepare_cache_dir( $parent_dir );
 				}
 
-				// Create the final directory
+				// Create the final directory.
 				if ( ! $wp_filesystem->mkdir( $cache_dir, FS_CHMOD_DIR ) ) {
 					return false;
 				}
@@ -75,16 +85,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function get_local_path( string $url ): string {
-			// Parse the URL to get the path
+			// Parse the URL to get the path.
 			$parsed_url = wp_parse_url( $url );
 
-			// Get the path from the parsed URL
+			// Get the path from the parsed URL.
 			$relative_path = $parsed_url['path'] ?? '';
 
-			// If home_url is present, remove it from the path
+			// If home_url is present, remove it from the path.
 			$relative_path = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $relative_path );
 
-			// Return the full local path
+			// Return the full local path.
 			return ABSPATH . ltrim( $relative_path, '/' );
 		}
 

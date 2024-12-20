@@ -1,4 +1,15 @@
 <?php
+/**
+ * Handles HTML, CSS, and JS minification for improved website performance.
+ *
+ * This file defines the HTML class, which leverages third-party libraries to minify
+ * HTML, inline CSS, and inline JavaScript. It provides functionality to optimize
+ * and preserve specific HTML structures, ensuring compatibility with WordPress and
+ * other web technologies.
+ *
+ * @category PerformanceOptimization
+ * @package  PerformanceOptimise\Inc\Minify
+ */
 
 namespace PerformanceOptimise\Inc\Minify;
 
@@ -20,20 +31,26 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class HTML {
 	/**
-	 * @var HtmlMin
+	 * Instance of the HtmlMin class used for minifying HTML content.
+	 *
 	 * @since 1.0.0
+	 * @var HtmlMin $html_min
 	 */
 	private HtmlMin $html_min;
 
 	/**
-	 * @var string
+	 * The resulting minified HTML content after processing.
+	 *
 	 * @since 1.0.0
+	 * @var string $minified_html
 	 */
 	private string $minified_html;
 
 	/**
-	 * @var array
+	 * Configuration options for minification, including settings for inline CSS and JavaScript.
+	 *
 	 * @since 1.0.0
+	 * @var array $options
 	 */
 	private array $options;
 
@@ -57,10 +74,10 @@ class HTML {
 	 */
 	private function initialize_minification_settings(): void {
 		$this->html_min = new HtmlMin();
-		// Get the home URL (e.g., http://localhost/awm)
+		// Get the home URL (e.g., http://localhost/awm).
 		$home_url = home_url();
 
-		// Parse the home URL and extract just the base domain (e.g., http://localhost)
+		// Parse the home URL and extract just the base domain (e.g., http://localhost).
 		$parsed_url = wp_parse_url( $home_url );
 		$base_url   = $parsed_url['scheme'] . '://' . $parsed_url['host'];
 
@@ -216,7 +233,7 @@ class HTML {
 					$css_minifier = new CSSMinifier( $matches[1] );
 					return '<style>' . $css_minifier->minify() . '</style>';
 				} catch ( \Exception $e ) {
-					// Return original content if there's an error
+					// Return original content if there's an error.
 					return $matches[0];
 				}
 			},
@@ -254,7 +271,7 @@ class HTML {
 	private function safe_minify_js( string $attributes, string $content ): string {
 		$content = trim( $content );
 
-		// Check if type is 'text/javascript' or type is not defined
+		// Check if type is 'text/javascript' or type is not defined.
 		$type_matches = array();
 		preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches );
 
@@ -264,7 +281,7 @@ class HTML {
 		}
 
 		if ( isset( $type_matches[2] ) && 'text/javascript' !== $type_matches[2] ) {
-			// If a type attribute exists and is not 'text/javascript', return unmodified content
+			// If a type attribute exists and is not 'text/javascript', return unmodified content.
 			return '<script' . $attributes . '>' . $content . '</script>';
 		}
 
@@ -287,14 +304,14 @@ class HTML {
 
 			if ( ! $should_exclude ) {
 				if ( preg_match( '/type=("|\')[^"\']*("|\')/', $attributes ) ) {
-					// If the 'type' attribute exists, modify it
+					// If the 'type' attribute exists, modify it.
 					$attributes = preg_replace(
 						'/type=("|\')text\/javascript("|\')/',
 						'type="wppo/javascript" wppo-type="text/javascript"',
 						$attributes
 					);
 				} else {
-					// If the 'type' attribute doesn't exist, add a new one
+					// If the 'type' attribute doesn't exist, add a new one.
 					$attributes .= ' type="wppo/javascript" wppo-type="text/javascript"';
 				}
 			}
@@ -304,7 +321,7 @@ class HTML {
 			$js_minifier = new JSMinifier( $content );
 			return '<script' . $attributes . '>' . $js_minifier->minify() . '</script>';
 		} catch ( \Exception $e ) {
-			// Return original content if there's an error
+			// Return original content if there's an error.
 			return '<script' . $attributes . '>' . $content . '</script>';
 		}
 	}
@@ -321,7 +338,7 @@ class HTML {
 		try {
 			return '<script' . $attributes . '>' . wp_json_encode( json_decode( $content, true ) ) . '</script>';
 		} catch ( \Exception $e ) {
-			// Return original content if there's an error
+			// Return original content if there's an error.
 			return '<script' . $attributes . '>' . $content . '</script>';
 		}
 	}

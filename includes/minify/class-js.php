@@ -1,4 +1,14 @@
 <?php
+/**
+ * Minify JavaScript File Class
+ *
+ * This class is responsible for minifying a JavaScript file and saving it to a cache directory.
+ * It uses the MatthiasMullie Minify library for minification. The minified file is saved in a cache
+ * directory with a gzipped version. If the minified file already exists, it returns its URL.
+ *
+ * @package PerformanceOptimise\Inc\Minify
+ * @since 1.0.0
+ */
 
 namespace PerformanceOptimise\Inc\Minify;
 
@@ -6,28 +16,35 @@ use MatthiasMullie\Minify;
 use PerformanceOptimise\Inc\Util;
 
 /**
- * Handles the minification of JavaScript files.
+ * Class JS
  *
- * This class takes a JavaScript file, minifies it, and stores the minified version
- * in a cache directory. It also supports serving the minified file if it exists.
+ * Handles the minification of JavaScript files and caching of the results.
+ * The minified JavaScript file is stored in a cache directory and can be retrieved via a URL.
  *
+ * @package PerformanceOptimise\Inc\Minify
  * @since 1.0.0
  */
 class JS {
 	/**
-	 * @var string The file path of the original JavaScript file.
+	 * The file path of the original JavaScript file.
+	 *
+	 * @var string $file_path The path to the JavaScript file to minify.
 	 * @since 1.0.0
 	 */
 	private string $file_path;
 
 	/**
-	 * @var string The directory where minified files will be cached.
+	 * The directory where minified files will be cached.
+	 *
+	 * @var string $cache_dir The directory to store the minified file.
 	 * @since 1.0.0
 	 */
 	private string $cache_dir;
 
 	/**
-	 * @var object The filesystem object used for file operations.
+	 * The filesystem object used for file operations.
+	 *
+	 * @var object $filesystem The object responsible for file read/write operations.
 	 * @since 1.0.0
 	 */
 	private $filesystem;

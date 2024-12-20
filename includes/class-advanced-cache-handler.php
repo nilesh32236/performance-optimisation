@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Advanced_Cache_Handler class for the PerformanceOptimise plugin.
  *
@@ -109,7 +108,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	}' . PHP_EOL .
 			'}' . PHP_EOL;
 
-			// Write the handler file in the wp-content directory as advanced-cache.php
+			// Write the handler file in the wp-content directory as advanced-cache.php.
 			$create_file = $wp_filesystem->put_contents( self::$handler_file, $handler_code, FS_CHMOD_FILE );
 		}
 
