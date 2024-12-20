@@ -9,125 +9,108 @@ on:
     - cron: '28 13 * * 0'
 
 permissions:
-  contents: read
-  issues: write  # Required for creating issues
+  contents: write
+  issues: write
 
 jobs:
   php-security:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-      issues: write  # Allow creating issues
-
     steps:
-      # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Run WPCS check using 10up action
-      - name: Run WPCS check using 10up action
+      - name: Run WPCS check
         id: wpcs_check
         uses: 10up/wpcs-action@stable
         with:
-          enable_warnings: true  # Enable warnings
-          paths: '.'  # Path to check, use '.' for the entire repository
-          excludes: 'vendor src'  # Exclude these directories
-          standard: 'WordPress'  # The WordPress standard you want to use
-          phpcs_bin_path: 'phpcs'  # Path to the PHPCS binary
-          use_local_config: false  # If you want to use a local PHPCS config file
-          only_changed_files: false  # Set to 'true' to check only changed files in the PR
-          only_changed_lines: false  # Set to 'true' to check only changed lines
-          repo_branch: master  # Branch of standard repository
+          enable_warnings: true
+          paths: '.'
+          excludes: 'vendor src'
+          standard: 'WordPress'
+          phpcs_bin_path: 'phpcs'
+          use_local_config: false
+          only_changed_files: false
           extra_args: '--report-json=./phpcs.json'
-        continue-on-error: true  # Continue even if this step fails
+        continue-on-error: true
 
-      # Step 3: Generate Markdown from PHPCS JSON output
-      - name: Generate Markdown Report
-        if: always()  # Always run this step
+      - name: Generate WPCS Markdown Report
+        if: always()
         run: |
           npm i -g github:10up/phpcs-json-to-md
           phpcs-json-to-md --path ./phpcs.json --output ./phpcs.md
-          cat phpcs.md >> $GITHUB_STEP_SUMMARY
 
-      # Step 4: Save WPCS check output to wpcs_report.txt
-      - name: Save WPCS check output to wpcs_report.txt
-        if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
-        run: |
-          echo "WPCS issues found. Saving output to wpcs_report.txt."
-          echo "${{ steps.wpcs_check.outputs.stdout }}" > wpcs_report.txt
-          cat wpcs_report.txt  # Print the output for visibility
-
-      # Step 5: Psalm Security Scan
       - name: Psalm Security Scan
         id: psalm
-        uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
-        continue-on-error: true  # Continue the workflow even if Psalm fails
+        uses: psalm/psalm-github-security-scan@latest
+        continue-on-error: true
 
-      # Step 6: Prettify SARIF output for readability
-      - name: Prettify SARIF output
-        id: prettify_sarif
-        if: always()  # Always run this step
+      - name: Prettify SARIF Output
+        if: always()
         run: |
           if [ -f results.sarif ]; then
             jq '.' results.sarif > pretty_results.sarif
           fi
 
-      # Step 7: Create GitHub issue on WPCS errors
-      - name: Create GitHub Issue on Errors
-        if: steps.wpcs_check.outcome == 'failure'  # Only run this if the WPCS check fails
+      - name: Manage GitHub Issue
+        id: manage_issue
+        if: always()
         run: |
-          # Get branch or PR information
-          branch_name=${{ github.ref_name }}
+          # Define variables
+          branch_name="${{ github.ref_name }}"
+          event_name="${{ github.event_name }}"
+          actor="${{ github.actor }}"
           pr_title=""
           pr_url=""
-
-          # Check if the event is a pull request
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
+          
+          if [ "$event_name" == "pull_request" ]; then
             pr_title="${{ github.event.pull_request.title }}"
             pr_url="${{ github.event.pull_request.html_url }}"
-          else
-            pr_title="Branch: ${branch_name}"
-            pr_url="N/A"
           fi
 
-          # Initialize the issue body
-          body=$(cat <<EOF
-          ### Code Quality Issues Detected.
+          # Check for existing issues
+          existing_issue=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues" | \
+            jq -r ".[] | select(.title | contains(\"Code Quality Issues Found in $branch_name\")) | .number")
 
-          ### Reference:
-          - Branch/PR: \`${branch_name}\`
-          - PR URL: [${pr_url}](${pr_url})
+          # Close existing issue if there are no errors
+          if [[ "$existing_issue" && "${{ steps.wpcs_check.outcome }}" == "success" ]]; then
+            curl -X PATCH \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d '{"state": "closed"}' \
+              "https://api.github.com/repos/${{ github.repository }}/issues/$existing_issue"
+            exit 0
+          fi
 
-
-          #### WPCS Issues:
-          $(cat phpcs.md)
-
-          #### WPCS Check Outcome: ${{ steps.wpcs_check.outcome }}
-
-          EOF
-          )
-
-          # Add the contents of the Markdown file to the issue body
+          # Construct issue body
+          body="### Code Quality Issues Detected for $branch_name\n"
+          body+="#### WPCS Issues:\n$(cat phpcs.md)\n"
           if [ -f pretty_results.sarif ]; then
             psalm_issues=$(cat pretty_results.sarif)
-            body+=$(cat <<EOF
-
-          #### Psalm Issues:
-          \`\`\`json
-          ${psalm_issues}
-          \`\`\`
-          EOF
-            )
+            body+="#### Psalm Issues:\n\`\`\`json\n$psalm_issues\n\`\`\`\n"
           fi
 
-          # Construct the issue title
-          issue_title="Code Quality Issues Found in ${pr_title}"
+          # Create or update issue
+          if [ "$existing_issue" ]; then
+            curl -X PATCH \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "$(jq -n --arg body "$body" '{body: $body}')" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/$existing_issue"
+          else
+            issue_title="Code Quality Issues Found in $branch_name"
+            new_issue=$(curl -s -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "$(jq -n --arg title "$issue_title" --arg body "$body" --argjson labels '["bug", "code-quality"]' '{title: $title, body: $body, labels: $labels}')" \
+              "https://api.github.com/repos/${{ github.repository }}/issues")
+            new_issue_number=$(echo "$new_issue" | jq -r '.number')
 
-          # Create a GitHub issue via API
-          curl -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -d "$(jq -n --arg title "$issue_title" --arg body "$body" --argjson labels '["bug", "wpcs", "security"]' '{title: $title, body: $body, labels: $labels}')" \
-            https://api.github.com/repos/${{ github.repository }}/issues
+            # Assign issue to the author
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "$(jq -n --arg assignee "$actor" '{assignees: [$assignee]}')" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/$new_issue_number/assignees"
+          fi
