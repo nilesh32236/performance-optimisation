@@ -1,4 +1,15 @@
 <?php
+/**
+ * Cache class for handling caching functionalities in PerformanceOptimise plugin.
+ *
+ * This class is responsible for caching tasks such as combining CSS files,
+ * generating static HTML files, and managing cache files in the WordPress
+ * content directory. It also provides mechanisms to clear the cache and
+ * retrieve cached files when necessary.
+ *
+ * @package PerformanceOptimise\Inc
+ * @since 1.0.0
+ */
 
 namespace PerformanceOptimise\Inc;
 
@@ -19,14 +30,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 	 * @since 1.0.0
 	 */
 	class Cache {
-
-
+		/**
+		 * The directory where cache files are stored.
+		 *
+		 * @var string
+		 * @since 1.0.0
+		 */
 		private const CACHE_DIR = '/cache/wppo';
+
+		/**
+		 * The domain name of the site.
+		 *
+		 * @var string
+		 * @since 1.0.0
+		 */
 		private string $domain;
+
+		/**
+		 * The root directory for cache files.
+		 *
+		 * @var string
+		 * @since 1.0.0
+		 */
 		private string $cache_root_dir;
+
+		/**
+		 * The URL to access cache files.
+		 *
+		 * @var string
+		 * @since 1.0.0
+		 */
 		private string $cache_root_url;
+
+		/**
+		 * The URL path for the current request.
+		 *
+		 * @var string
+		 * @since 1.0.0
+		 */
 		private string $url_path;
+
+		/**
+		 * The filesystem object used for file operations.
+		 *
+		 * @var object
+		 * @since 1.0.0
+		 */
 		private $filesystem;
+
+		/**
+		 * The options/settings for the cache system.
+		 *
+		 * @var array
+		 * @since 1.0.0
+		 */
 		private $options;
 
 		/**
@@ -37,14 +94,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public function __construct() {
 			$this->domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
-			// Define cache root directory and URL
+			// Define cache root directory and URL.
 			$this->cache_root_dir = WP_CONTENT_DIR . self::CACHE_DIR;
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
 
 			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$this->url_path = trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' );
 
-			// Initialize filesystem and options
+			// Initialize filesystem and options.
 			$this->filesystem = Util::init_filesystem();
 			$this->options    = get_option( 'wppo_settings', array() );
 		}
@@ -117,7 +174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$combined_css .= implode( "\n", $style_data->extra['after'] ) . "\n";
 				}
 
-				wp_dequeue_style( $handle ); // Remove individual style
+				wp_dequeue_style( $handle ); // Remove individual style.
 			}
 
 			if ( ! empty( $combined_css ) ) {
@@ -128,7 +185,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					function ( $matches ) {
 						$font_face = $matches[0];
 						if ( strpos( $font_face, 'font-display' ) === false ) {
-							// Add 'font-display: swap;' if it's not already there
+							// Add 'font-display: swap;' if it's not already there.
 							$font_face = preg_replace( '/(})$/', 'font-display: swap;$1', $font_face );
 						}
 						return $font_face;
@@ -208,14 +265,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Process the buffer by minifying it and saving cache files.
 		 *
-		 * @param string $buffer
-		 * @param string $file_path
-		 * @return string
+		 * @param string $buffer The content to be processed, potentially containing HTML.
+		 * @param string $file_path The path to the file being processed.
+		 * @return string The processed and minified buffer content.
 		 *
 		 * @since 1.0.0
 		 */
 		private function process_buffer( $buffer, $file_path ) {
-
 			$image_optimisation = new Image_Optimisation( $this->options );
 
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
@@ -233,8 +289,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Minify the output buffer.
 		 *
-		 * @param string $buffer
-		 * @return string
+		 * @param string $buffer The HTML content to be minified.
+		 * @return string The minified HTML content.
 		 *
 		 * @since 1.0.0
 		 */
@@ -244,6 +300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			return $buffer;
 		}
+
 
 		/**
 		 * Check if the page is not cacheable.
@@ -421,7 +478,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Clear the cache for a specific page or all pages.
 		 *
-		 * @param string|null $url_path
+		 * @param string|null $url_path The URL path of the page for which to clear the cache. If null, all cache will be cleared.
 		 * @return void
 		 *
 		 * @since 1.0.0
@@ -486,8 +543,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Calculate the size of a directory.
 		 *
-		 * @param string $directory
-		 * @return int
+		 * @param string $directory The path to the directory whose size is to be calculated.
+		 * @return int The total size of the directory in bytes.
 		 *
 		 * @since 1.0.0
 		 */

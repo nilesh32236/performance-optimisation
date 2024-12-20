@@ -1,4 +1,13 @@
 <?php
+/**
+ * Image Optimisation class for handling image conversion, preloading, and serving optimized images.
+ *
+ * This class is responsible for converting images to optimized formats (such as WebP or AVIF),
+ * managing image preloading, and serving the optimized images based on the plugin settings.
+ *
+ * @package PerformanceOptimise\Inc
+ * @since 1.0.0
+ */
 
 namespace PerformanceOptimise\Inc;
 
@@ -17,6 +26,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 	 */
 	class Image_Optimisation {
 
+		/**
+		 * Configuration options for image optimization.
+		 *
+		 * @var array
+		 * @since 1.0.0
+		 */
 		private array $options;
 
 		/**
@@ -43,7 +58,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$img_converter = new Img_Converter( $this->options );
 
 				add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
-				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ), 10, 4 );
+				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ) );
 			}
 		}
 
@@ -75,16 +90,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				$http_accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
 
-				// Check if the browser supports WebP
+				// Check if the browser supports WebP.
 				$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;
 				$supports_webp = strpos( $http_accept, 'image/webp' ) !== false;
 
 				if ( 'avif' === $conversion_format && ! $supports_avif ) {
-					return $buffer; // AVIF is selected but not supported
+					return $buffer; // AVIF is selected but not supported.
 				}
 
 				if ( 'webp' === $conversion_format && ! $supports_webp ) {
-					return $buffer; // WebP is selected but not supported
+					return $buffer; // WebP is selected but not supported.
 				}
 
 				$exclude_imgs = Util::process_urls( $this->options['image_optimisation']['excludeConvertImages'] ?? array() );
@@ -167,7 +182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$webp_img_path = $img_converter->get_img_path( $img_url, 'webp' );
 
 			if ( 'avif' === $conversion_format || 'both' === $conversion_format ) {
-				// Convert to AVIF if supported and not already converted
+				// Convert to AVIF if supported and not already converted.
 				if ( ! file_exists( $avif_img_path ) ) {
 					$source_image_path = Util::get_local_path( $img_url );
 
@@ -178,7 +193,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			if ( 'webp' === $conversion_format || 'both' === $conversion_format ) {
-				// Convert to WebP if supported and not already converted
+				// Convert to WebP if supported and not already converted.
 				if ( ! file_exists( $webp_img_path ) ) {
 					$source_image_path = Util::get_local_path( $img_url );
 
@@ -196,7 +211,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $img_converter->get_img_url( $img_url );
 			}
 
-			// Fallback to original image URL
+			// Fallback to original image URL.
 			return $img_url;
 		}
 
@@ -437,11 +452,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			// If the image does not have 'data-src', replace 'src' with 'data-src'
+			// If the image does not have 'data-src', replace 'src' with 'data-src'.
 			if ( strpos( $img_tag, 'data-src' ) === false ) {
 				$img_tag = preg_replace( '#src=["\']([^"\']+)["\']#i', 'data-src="' . $original_src . '"', $img_tag );
 
-				// Replace with SVG placeholder if the option is enabled
+				// Replace with SVG placeholder if the option is enabled.
 				if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
 					// phpcs:disable PluginCheck.CodeAnalysis.ImageFunctions.NonEnqueuedImage
 					// Directly modifying the image tag is necessary here because we are replacing
@@ -456,12 +471,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// phpcs:enable
 				}
 
-				// Replace 'srcset' with 'data-srcset' if 'srcset' is present
+				// Replace 'srcset' with 'data-srcset' if 'srcset' is present.
 				if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
 					$img_tag = preg_replace( '#srcset=["\']([^"\']+)["\']#i', 'data-srcset="' . $srcset_matches[1] . '"', $img_tag );
 				}
 
-				// Skip base64 images to avoid rewriting them
+				// Skip base64 images to avoid rewriting them.
 				if ( preg_match( '#^data:image/#i', $original_src ) ) {
 					return $img_tag;
 				}
@@ -521,17 +536,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$source_tag .= '\>';
 				}
 
-				// Wrap <img> tag inside <picture>
+				// Wrap <img> tag inside <picture>.
 				$img_tag = '<picture>' . $source_tag . $img_tag . '</picture>';
 				return $img_tag;
 			} else {
 				preg_match( '#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches );
 				if ( ! empty( $img_matches ) ) {
-					$img_tag      = $img_matches[0]; // Extract <img> tag from <picture>
-					$original_src = $img_matches[2]; // Get the original src attribute
-					$img_tag      = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs ); // Process the <img> tag
+					$img_tag      = $img_matches[0]; // Extract <img> tag from <picture>.
+					$original_src = $img_matches[2]; // Get the original src attribute.
+					$img_tag      = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs ); // Process the <img> tag.
 
-					// Replace the modified <img> tag inside the <picture>
+					// Replace the modified <img> tag inside the <picture>.
 					$matches[0] = preg_replace( '#<img\b[^>]*?>#i', $img_tag, $matches[0] );
 				}
 			}
@@ -739,7 +754,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function prepare_url_for_preload( $url ) {
 			$url = trim( $url );
 
-			// Handle mobile and desktop specific URLs
+			// Handle mobile and desktop specific URLs.
 			if ( 0 === strpos( $url, 'mobile:' ) ) {
 				return content_url( trim( str_replace( 'mobile:', '', $url ) ) );
 			} elseif ( 0 === strpos( $url, 'desktop:' ) ) {

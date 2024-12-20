@@ -1,4 +1,14 @@
 <?php
+/**
+ * Log Class
+ *
+ * This file contains the Log class, which handles the insertion and retrieval of activity logs in the database.
+ * It supports logging activities with a description and allows fetching recent activity logs with pagination and caching.
+ * The class provides methods for inserting log entries and retrieving them efficiently, with caching to improve performance.
+ *
+ * @package PerformanceOptimise\Inc
+ * @since 1.0.0
+ */
 
 namespace PerformanceOptimise\Inc;
 
@@ -57,28 +67,28 @@ class Log {
 		$page     = isset( $params['page'] ) ? absint( $params['page'] ) : 1;
 		$per_page = isset( $params['per_page'] ) ? absint( $params['per_page'] ) : 10;
 
-		// Calculate offset for pagination
+		// Calculate offset for pagination.
 		$offset = ( $page - 1 ) * $per_page;
 
-		// Cache key
+		// Cache key.
 		$cache_key = 'wppo_activity_logs_page_' . $page . '_per_page_' . $per_page;
 
-		// Attempt to fetch cached data
+		// Attempt to fetch cached data.
 		$data = wp_cache_get( $cache_key, 'wppo_activity_logs' );
 
 		if ( false === $data ) {
 			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
 			// Direct query is required for custom table operations.
 
-			// Get total number of activities
+			// Get total number of activities.
 			$total_items = (int) $wpdb->get_var(
 				"SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs"
 			);
 
-			// Calculate total pages
+			// Calculate total pages.
 			$total_pages = ceil( $total_items / $per_page );
 
-			// Fetch paginated results
+			// Fetch paginated results.
 			$results = $wpdb->get_results(
 				$wpdb->prepare(
 					"SELECT * FROM {$wpdb->prefix}wppo_activity_logs ORDER BY created_at DESC LIMIT %d OFFSET %d",
@@ -89,12 +99,12 @@ class Log {
 			);
 			/* phpcs:enable */
 
-			// Append additional data
+			// Append additional data.
 			foreach ( $results as $index => $result ) {
 				$results[ $index ]['activity'] .= ' ' . esc_html( $result['created_at'] );
 			}
 
-			// Prepare data for caching
+			// Prepare data for caching.
 			$data = array(
 				'activities'   => $results,
 				'total_items'  => $total_items,
@@ -103,7 +113,7 @@ class Log {
 				'per_page'     => $per_page,
 			);
 
-			// Store data in cache
+			// Store data in cache.
 			wp_cache_set( $cache_key, $data, 'wppo_activity_logs', HOUR_IN_SECONDS );
 		}
 

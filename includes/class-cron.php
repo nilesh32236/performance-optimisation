@@ -1,4 +1,15 @@
 <?php
+/**
+ * Cron Class for scheduling and managing cron jobs in the PerformanceOptimise plugin.
+ *
+ * This class handles scheduling, managing, and processing cron jobs related to
+ * static page generation and image optimization tasks. It includes scheduling
+ * the main cron jobs, adding custom cron intervals, scheduling individual page
+ * processing jobs, clearing scheduled jobs, and processing image conversions.
+ *
+ * @package PerformanceOptimise\Inc
+ * @since 1.0.0
+ */
 
 namespace PerformanceOptimise\Inc;
 
@@ -191,7 +202,7 @@ class Cron {
 
 		$post_types = array_unique( array_merge( array_values( $post_types ), array( 'page', 'post' ) ) );
 
-		// Get all posts of these types
+		// Get all posts of these types.
 		$posts = get_posts(
 			array(
 				'post_type'   => $post_types,
@@ -201,7 +212,7 @@ class Cron {
 			)
 		);
 
-		// Add the front page ID at the beginning if it's not already included
+		// Add the front page ID at the beginning if it's not already included.
 		if ( $front_page_id && ! in_array( $front_page_id, $posts, true ) ) {
 			array_unshift( $posts, $front_page_id );
 		}

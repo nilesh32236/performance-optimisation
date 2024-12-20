@@ -1,4 +1,15 @@
 <?php
+/**
+ * Handles the functionality for adding and saving the preload image metabox.
+ *
+ * This file includes the `Metabox` class, which integrates with the WordPress post editor
+ * to allow users to add and save a list of image URLs to preload. The metabox is rendered
+ * in the post editor and the values are saved as post metadata.
+ *
+ * @package PerformanceOptimise
+ * @since 1.0.0
+ */
+
 namespace PerformanceOptimise\Inc;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -8,9 +19,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 	/**
-	 * Handles the functionality for adding and saving the preload image metabox.
+	 * Metabox Class for Preload Image URL.
+	 *
+	 * This class handles the functionality for adding and saving the preload image
+	 * metabox to the WordPress post editor. It allows the user to add URLs for images
+	 * to be preloaded on the page.
 	 *
 	 * @since 1.0.0
+	 * @package PerformanceOptimise
 	 */
 	class Metabox {
 
@@ -20,9 +36,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @since 1.0.0
 		 */
 		public function __construct() {
-			// Hook into WordPress to add the metabox
+			// Hook into WordPress to add the metabox.
 			add_action( 'add_meta_boxes', array( $this, 'add_metabox' ) );
-			// Hook to save the metabox data
+			// Hook to save the metabox data.
 			add_action( 'save_post', array( $this, 'save_metabox' ) );
 		}
 
@@ -49,10 +65,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @since 1.0.0
 		 */
 		public function render_metabox( $post ) {
-			// Retrieve current meta value
+			// Retrieve current meta value.
 			$preload_urls = get_post_meta( $post->ID, '_wppo_preload_image_url', true );
 
-			// Add a nonce for security
+			// Add a nonce for security.
 			wp_nonce_field( 'save_preload_image_url', 'wppo_preload_image_nonce' );
 			?>
 			<p>
@@ -69,25 +85,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @since 1.0.0
 		 */
 		public function save_metabox( $post_id ) {
-			// Verify the nonce
+			// Verify the nonce.
 			if ( ! isset( $_POST['wppo_preload_image_nonce'] ) ||
 			! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wppo_preload_image_nonce'] ) ), 'save_preload_image_url' ) ) {
 				return;
 			}
 
-			// Prevent autosave from overwriting
+			// Prevent autosave from overwriting.
 			if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
 				return;
 			}
 
-			// Check the user's permissions
+			// Check the user's permissions.
 			if ( isset( $_POST['post_type'] ) && 'post' === $_POST['post_type'] ) {
 				if ( ! current_user_can( 'edit_post', $post_id ) ) {
 					return;
 				}
 			}
 
-			// Sanitize and save the data
+			// Sanitize and save the data.
 			if ( isset( $_POST['wppo_preload_image_url'] ) ) {
 				$preload_urls = sanitize_textarea_field( wp_unslash( $_POST['wppo_preload_image_url'] ) );
 				update_post_meta( $post_id, '_wppo_preload_image_url', $preload_urls );

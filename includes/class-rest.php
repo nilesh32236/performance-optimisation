@@ -1,4 +1,14 @@
 <?php
+/**
+ * PerformanceOptimise\Inc\Rest
+ *
+ * This class registers and manages the REST API routes related to performance optimization
+ * functionalities, such as clearing the cache, optimizing images, updating settings, and more.
+ * It provides endpoints for interacting with the plugin's features programmatically.
+ *
+ * @since 1.0.0
+ * @package PerformanceOptimise
+ */
 
 namespace PerformanceOptimise\Inc;
 
@@ -251,10 +261,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid action or missing settings', 'performance-optimisation' ) );
 			}
 
-			// Retrieve the existing settings
+			// Retrieve the existing settings.
 			$existing_settings = get_option( 'wppo_settings', array() );
 
-			// Check if the settings are the same
+			// Check if the settings are the same.
 			if ( $existing_settings === $data['settings'] ) {
 				return $this->send_response( $existing_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
 			}

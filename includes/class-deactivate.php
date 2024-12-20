@@ -11,7 +11,7 @@
 namespace PerformanceOptimise\Inc;
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit; // Exit if accessed directly
+	exit; // Exit if accessed directly.
 }
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
@@ -41,7 +41,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			Advanced_Cache_Handler::remove();
 
-			// Remove WP_CACHE constant from wp-config.php
+			// Remove WP_CACHE constant from wp-config.php.
 			self::remove_wp_cache_constant();
 			new Log( 'Plugin deactivated on ' );
 			Cache::clear_cache();
@@ -56,13 +56,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * @return void
 		 */
 		private static function unschedule_crons(): void {
-			// Unschedule the 'wppo_page_cron_hook' event if it is scheduled
+			// Unschedule the 'wppo_page_cron_hook' event if it is scheduled.
 			$timestamp = wp_next_scheduled( 'wppo_page_cron_hook' );
 			if ( $timestamp ) {
 				wp_unschedule_event( $timestamp, 'wppo_page_cron_hook' );
 			}
 
-			// Unschedule the 'wppo_img_conversation' event if it is scheduled
+			// Unschedule the 'wppo_img_conversation' event if it is scheduled.
 			$timestamp = wp_next_scheduled( 'wppo_img_conversation' );
 			if ( $timestamp ) {
 				wp_unschedule_event( $timestamp, 'wppo_img_conversation' );
@@ -92,26 +92,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				return;
 			}
 
-			$wp_config_path = ABSPATH . 'wp-config.php'; // Path to wp-config.php
+			$wp_config_path = ABSPATH . 'wp-config.php';
 
 			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return;
 			}
 
 			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
-				return; // Exit if the file doesn't exist or is not writable
+				return;
 			}
 
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
 
-			// Check if WP_CACHE is defined and remove it
+			// Check if WP_CACHE is defined and remove it.
 			$pattern = '/\n?\/\*\* Enables WordPress Cache \*\/\n\s*define\(\s*\'WP_CACHE\',\s*true\s*\);\s*/';
 
 			if ( preg_match( $pattern, $wp_config_content ) ) {
-				// Remove the WP_CACHE line
+				// Remove the WP_CACHE line.
 				$wp_config_content = preg_replace( $pattern, '', $wp_config_content );
 
-				// Write the modified content back to wp-config.php
+				// Write the modified content back to wp-config.php.
 				$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
 			}
 		}

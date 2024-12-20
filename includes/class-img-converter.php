@@ -1,4 +1,15 @@
 <?php
+/**
+ * Img_Converter Class
+ *
+ * A class to handle image format conversions (WebP and AVIF) for performance optimization.
+ * This class performs image conversion based on the configuration options provided,
+ * allowing optimization of images for improved website performance.
+ *
+ * @package PerformanceOptimise\Inc
+ * @since 1.0.0
+ */
+
 namespace PerformanceOptimise\Inc;
 
 /**
@@ -10,16 +21,40 @@ namespace PerformanceOptimise\Inc;
  */
 class Img_Converter {
 
+	/**
+	 * Configuration options for image optimization.
+	 *
+	 * @var array
+	 * @since 1.0.0
+	 */
 	private $options;
 
+	/**
+	 * Available formats for image conversion.
+	 *
+	 * @var array
+	 * @since 1.0.0
+	 */
 	private array $available_format = array(
 		'webp',
 		'avif',
 		'both',
 	);
 
+	/**
+	 * The format to convert images to (webp, avif, or both).
+	 *
+	 * @var string
+	 * @since 1.0.0
+	 */
 	private $format;
 
+	/**
+	 * List of images to exclude from conversion.
+	 *
+	 * @var array
+	 * @since 1.0.0
+	 */
 	private $exclude_imgs = array();
 
 	/**
@@ -89,7 +124,7 @@ class Img_Converter {
 					}
 
 					$image = $this->convert_palette_to_truecolor( $image );
-					imagealphablending( $image, true ); // For transparency
+					imagealphablending( $image, true ); // For transparency.
 					imagesavealpha( $image, true );
 					break;
 
@@ -148,29 +183,29 @@ class Img_Converter {
 							$this->update_conversion_status( $source_image, 'completed', $format );
 							return true;
 						}
-						// Initialize Imagick and read the image file
+						// Initialize Imagick and read the image file.
 						$imagick = new \Imagick();
 						$imagick->readImage( $source_image );
 
-						// Check if the image has transparency (alpha channel)
+						// Check if the image has transparency (alpha channel).
 						$has_transparency = $imagick->getImageAlphaChannel() === \Imagick::ALPHACHANNEL_ACTIVATE;
 
-						// Set WebP format
+						// Set WebP format.
 						$imagick->setImageFormat( 'webp' );
 
-						// If transparent, use lossless compression for WebP to retain transparency
+						// If transparent, use lossless compression for WebP to retain transparency.
 						if ( $has_transparency ) {
 							$imagick->setImageCompressionQuality( $quality );
-							$imagick->setImageAlphaChannel( \Imagick::ALPHACHANNEL_KEEP );  // Keep transparency
+							$imagick->setImageAlphaChannel( \Imagick::ALPHACHANNEL_KEEP );  // Keep transparency.
 							$imagick->setOption( 'webp:lossless', 'true' );
 						} else {
-							// For non-transparent images, use lossy compression
+							// For non-transparent images, use lossy compression.
 							$imagick->setImageCompressionQuality( $quality );
 							$imagick->setOption( 'webp:lossless', 'false' );
 						}
 
 						Util::prepare_cache_dir( dirname( $webp_path ) );
-						// Write the WebP file
+						// Write the WebP file.
 						if ( $imagick->writeImages( $webp_path, true ) ) {
 							$this->update_conversion_status( $source_image, 'completed', 'webp' );
 						} else {
@@ -187,7 +222,7 @@ class Img_Converter {
 					}
 				default:
 					$this->update_conversion_status( $source_image, 'failed', $format );
-					return false; // Unsupported format
+					return false; // Unsupported format.
 			}
 
 			$success = true;
@@ -222,12 +257,12 @@ class Img_Converter {
 				}
 			}
 
-			imagedestroy( $image ); // Clean up memory
+			imagedestroy( $image ); // Clean up memory.
 			return $success;
 		} catch ( \Exception $e ) {
 
 			$this->update_conversion_status( $source_image, 'failed', $format );
-			// Clean up memory if image resource was created
+			// Clean up memory if image resource was created.
 			if ( is_resource( $image ) ) {
 				imagedestroy( $image );
 			}
@@ -305,10 +340,10 @@ class Img_Converter {
 
 		$parsed_url = wp_parse_url( $info['dirname'] . '/' . $info['filename'] . '.' . $format );
 
-		// Get the path from the parsed URL
+		// Get the path from the parsed URL.
 		$relative_path = $parsed_url['path'] ?? '';
 
-		// If home_url is present, remove it from the path
+		// If home_url is present, remove it from the path.
 		if ( 0 === strpos( $relative_path, ABSPATH ) ) {
 			$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/wppo', $relative_path );
 			return $local_path;
@@ -332,11 +367,11 @@ class Img_Converter {
 	public static function get_img_url( string $source_image, string $format = 'webp' ): string {
 
 		if ( 0 === strpos( $source_image, home_url() ) ) {
-			// Replace the extension only at the end of the file name
+			// Replace the extension only at the end of the file name.
 			$path_info     = pathinfo( $source_image );
 			$converted_img = $path_info['dirname'] . '/' . $path_info['filename'] . '.' . $format;
 
-			// Adjust for the wppo directory
+			// Adjust for the wppo directory.
 			$converted_img = str_replace( WP_CONTENT_URL, WP_CONTENT_URL . '/wppo', $converted_img );
 
 			return $converted_img;
@@ -358,7 +393,7 @@ class Img_Converter {
 		$upload_dir = wp_upload_dir();
 
 		try {
-			// Get the full file path of the original image
+			// Get the full file path of the original image.
 			$file = get_attached_file( $attachment_id );
 			if ( ! file_exists( $file ) ) {
 				return $metadata;
@@ -381,7 +416,7 @@ class Img_Converter {
 				$this->add_img_into_queue( $file, 'avif' );
 			}
 
-			// Queue additional image sizes for conversion
+			// Queue additional image sizes for conversion.
 			if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
 				foreach ( $metadata['sizes'] as $size => $size_data ) {
 					$image_path = $upload_dir['path'] . '/' . $size_data['file'];
@@ -407,21 +442,18 @@ class Img_Converter {
 	/**
 	 * Serve WebP or AVIF images if supported by the browser.
 	 *
-	 * @param array        $image The image source array.
-	 * @param int          $attachment_id The attachment ID.
-	 * @param string|array $size The requested size.
-	 * @param bool         $icon Whether the image is an icon.
+	 * @param array $image The image source array.
 	 * @return array Modified image source with WebP/AVIF if applicable, or original image if not.
 	 * @since 1.0.0
 	 */
-	public function maybe_serve_next_gen_image( $image, $attachment_id, $size, $icon ) {
+	public function maybe_serve_next_gen_image( $image ) {
 		if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) || empty( $image[0] ) ) {
 			return $image;
 		}
 
 		$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
 
-		// Check if the browser supports WebP
+		// Check if the browser supports WebP.
 		$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;
 		$supports_webp = strpos( $http_accept, 'image/webp' ) !== false;
 
@@ -471,7 +503,7 @@ class Img_Converter {
 		$img_info = get_option( 'wppo_img_info', array() );
 
 		if ( 'completed' === $status ) {
-			// Check and remove from 'pending' list
+			// Check and remove from 'pending' list.
 			if ( isset( $img_info['pending'][ $type ] ) ) {
 				$key = array_search( $img_path, $img_info['pending'][ $type ], true );
 				if ( false !== $key ) {
@@ -479,7 +511,7 @@ class Img_Converter {
 				}
 			}
 
-			// Check and remove from 'failed' list
+			// Check and remove from 'failed' list.
 			if ( isset( $img_info['failed'][ $type ] ) ) {
 				$key = array_search( $img_path, $img_info['failed'][ $type ], true );
 				if ( false !== $key ) {
