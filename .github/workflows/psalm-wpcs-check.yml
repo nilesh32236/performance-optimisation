@@ -89,11 +89,11 @@ jobs:
           if [ -f pretty_results.sarif ]; then
             psalm_issues=$(cat pretty_results.sarif)
             body+=$(cat <<EOF
-              #### Psalm Issues:
-              \`\`\`json
-              ${psalm_issues}
-              \`\`\`
-              EOF
+          #### Psalm Issues:
+          \`\`\`json
+          ${psalm_issues}
+          \`\`\`
+          EOF
             )
           fi
 
