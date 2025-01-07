@@ -10,7 +10,7 @@ on:
 
 permissions:
   contents: write
-  issues: write
+  pull-requests: write
 
 jobs:
   php-security:
@@ -51,86 +51,48 @@ jobs:
             jq '.' results.sarif > pretty_results.sarif
           fi
 
-      - name: Manage GitHub Issue
-        id: manage_issue
+      - name: Add Review Comments for Issues
         if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Define variables
-          branch_name="${{ github.ref_name }}"
-          event_name="${{ github.event_name }}"
-          actor="${{ github.actor }}"
-          pr_title=""
-          pr_url=""
-          pr_number=""
-          
-          if [ "$event_name" == "pull_request" ]; then
-            pr_title="${{ github.event.pull_request.title }}"
-            pr_url="${{ github.event.pull_request.html_url }}"
-            pr_number="${{ github.event.pull_request.number }}"
+          # Parse WPCS JSON and add review comments
+          if [ -f ./phpcs.json ]; then
+            wpcs_issues=$(jq -c '.files[] | select(.messages != null) | {file: .file, messages: .messages}' ./phpcs.json)
+
+            echo "$wpcs_issues" | while read -r issue; do
+              file=$(echo "$issue" | jq -r '.file')
+              messages=$(echo "$issue" | jq -c '.messages[]')
+
+              echo "$messages" | while read -r message; do
+                line=$(echo "$message" | jq -r '.line')
+                message_text=$(echo "$message" | jq -r '.message')
+                severity=$(echo "$message" | jq -r '.type')
+
+                # Add a review comment
+                curl -s -X POST \
+                  -H "Authorization: token $GITHUB_TOKEN" \
+                  -H "Accept: application/vnd.github.v3+json" \
+                  -d "$(jq -n --arg path "$file" --arg body "$severity: $message_text" --argjson position "$line" '{body: $body, path: $path, line: $position, side: "RIGHT"}')" \
+                  "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
+              done
+            done
           fi
 
-          # Check for existing issues
-          existing_issue=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues" | \
-            jq -r ".[] | select(.title | contains(\"Code Quality Issues Found in $branch_name\")) | .number")
-
-          # Close existing issue if there are no errors
-          if [[ "$existing_issue" && "${{ steps.wpcs_check.outcome }}" == "success" ]]; then
-            curl -X PATCH \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d '{"state": "closed"}' \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$existing_issue"
-            exit 0
-          fi
-
-          # Construct issue body
-          body="### Code Quality Issues Detected for $branch_name
-          #### WPCS Issues:
-          $(cat phpcs.md)"
-
+          # Parse Psalm SARIF output and add review comments
           if [ -f pretty_results.sarif ]; then
-            psalm_issues=$(cat pretty_results.sarif)
-            body+=$(cat <<EOF
-          #### Psalm Issues:
-          \`\`\`json
-          ${psalm_issues}
-          \`\`\`
-          EOF
-            )
-          fi
+            psalm_issues=$(jq -c '.runs[].results[] | {message: .message.text, locations: .locations[]}' pretty_results.sarif)
 
-          # Create or update issue
-          if [ "$existing_issue" ]; then
-            curl -X PATCH \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg body "$body" '{body: $body}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$existing_issue"
-          else
-            issue_title="Code Quality Issues Found in $branch_name"
-            new_issue=$(curl -s -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg title "$issue_title" --arg body "$body" --argjson labels '["bug", "code-quality"]' '{title: $title, body: $body, labels: $labels}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues")
-            new_issue_number=$(echo "$new_issue" | jq -r '.number')
+            echo "$psalm_issues" | while read -r issue; do
+              file=$(echo "$issue" | jq -r '.locations.physicalLocation.artifactLocation.uri')
+              line=$(echo "$issue" | jq -r '.locations.physicalLocation.region.startLine')
+              message_text=$(echo "$issue" | jq -r '.message')
 
-            # Assign issue to the author
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg assignee "$actor" '{assignees: [$assignee]}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$new_issue_number/assignees"
-          fi
-
-          # Mention the issue in the PR
-          if [ "$pr_number" ]; then
-            comment_body="Linked Issue: $issue_url"
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg body "$comment_body" '{body: $body}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$pr_number/comments"
+              # Add a review comment
+              curl -s -X POST \
+                -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                -d "$(jq -n --arg path "$file" --arg body "$message_text" --argjson position "$line" '{body: $body, path: $path, line: $position, side: "RIGHT"}')" \
+                "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
+            done
           fi

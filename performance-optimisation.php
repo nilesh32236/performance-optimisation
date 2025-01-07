@@ -20,11 +20,11 @@ use PerformanceOptimise\Inc\Deactivate;
 use PerformanceOptimise\Inc\Main;
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit; // Exit if accessed directly.
+	exit; // Exit if accessed directly
 }
 
 // Define plugin constants.
-if ( ! defined( 'WPPO_PLUGIN_PATH' ) ) {
+if ( ! defined( 'WPPO_PLUGIN_PATH')) {
 	define( 'WPPO_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 }
 
