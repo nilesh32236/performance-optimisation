@@ -10,7 +10,7 @@ on:
 
 permissions:
   contents: write
-  issues: write
+  pull-requests: write
 
 jobs:
   php-security:
@@ -33,104 +33,79 @@ jobs:
           extra_args: '--report-json=./phpcs.json'
         continue-on-error: true
 
-      - name: Generate WPCS Markdown Report
-        if: always()
+      - name: Get PR Head SHA
+        if: github.event_name == 'pull_request'
+        id: pr_head
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm i -g github:10up/phpcs-json-to-md
-          phpcs-json-to-md --path ./phpcs.json --output ./phpcs.md
+          PR_DATA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}")
+          HEAD_SHA=$(echo "$PR_DATA" | jq -r '.head.sha')
+          echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
 
-      - name: Psalm Security Scan
-        id: psalm
-        uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
-        continue-on-error: true
-
-      - name: Prettify SARIF Output
-        if: always()
+      - name: Add Review Comments for Issues
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_HEAD_SHA: ${{ steps.pr_head.outputs.head_sha }}
         run: |
-          if [ -f results.sarif ]; then
-            jq '.' results.sarif > pretty_results.sarif
-          fi
-
-      - name: Manage GitHub Issue
-        id: manage_issue
-        if: always()
-        run: |
-          # Define variables
-          branch_name="${{ github.ref_name }}"
-          event_name="${{ github.event_name }}"
-          actor="${{ github.actor }}"
-          pr_title=""
-          pr_url=""
-          pr_number=""
-          
-          if [ "$event_name" == "pull_request" ]; then
-            pr_title="${{ github.event.pull_request.title }}"
-            pr_url="${{ github.event.pull_request.html_url }}"
-            pr_number="${{ github.event.pull_request.number }}"
-          fi
-
-          # Check for existing issues
-          existing_issue=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues" | \
-            jq -r ".[] | select(.title | contains(\"Code Quality Issues Found in $branch_name\")) | .number")
-
-          # Close existing issue if there are no errors
-          if [[ "$existing_issue" && "${{ steps.wpcs_check.outcome }}" == "success" ]]; then
-            curl -X PATCH \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d '{"state": "closed"}' \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$existing_issue"
+          if [ ! -f ./phpcs.json ] || [ ! -s ./phpcs.json ]; then
+            echo "phpcs.json is missing or empty"
             exit 0
           fi
 
-          # Construct issue body
-          body="### Code Quality Issues Detected for $branch_name
-          #### WPCS Issues:
-          $(cat phpcs.md)"
+          # Process files with messages
+          echo "Processing PHPCS results..."
+          
+          jq -r 'to_entries | .[] | select(.key == "files") | .value | to_entries[] | select(.value.messages | length > 0) | @base64' ./phpcs.json | while read -r file_entry; do
+            if [ -n "$file_entry" ]; then
+              decoded=$(echo "$file_entry" | base64 --decode)
+              
+              # Extract file path and clean it
+              file=$(echo "$decoded" | jq -r '.key | sub("^/github/workspace/"; "")')
+              
+              # Process messages for the file
+              echo "$decoded" | jq -c '.value.messages[]?' | while read -r message; do
+                if [ -n "$message" ] && [ "$message" != "null" ]; then
+                  # Extract message details
+                  line=$(echo "$message" | jq -r '.line // empty')
+                  message_text=$(echo "$message" | jq -r '.message // empty')
+                  severity=$(echo "$message" | jq -r '.type // empty')
 
-          if [ -f pretty_results.sarif ]; then
-            psalm_issues=$(cat pretty_results.sarif)
-            body+=$(cat <<EOF
-          #### Psalm Issues:
-          \`\`\`json
-          ${psalm_issues}
-          \`\`\`
-          EOF
-            )
-          fi
-
-          # Create or update issue
-          if [ "$existing_issue" ]; then
-            curl -X PATCH \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg body "$body" '{body: $body}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$existing_issue"
-          else
-            issue_title="Code Quality Issues Found in $branch_name"
-            new_issue=$(curl -s -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg title "$issue_title" --arg body "$body" --argjson labels '["bug", "code-quality"]' '{title: $title, body: $body, labels: $labels}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues")
-            new_issue_number=$(echo "$new_issue" | jq -r '.number')
-
-            # Assign issue to the author
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg assignee "$actor" '{assignees: [$assignee]}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$new_issue_number/assignees"
-          fi
-
-          # Mention the issue in the PR
-          if [ "$pr_number" ]; then
-            comment_body="Linked Issue: $issue_url"
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg body "$comment_body" '{body: $body}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$pr_number/comments"
-          fi
+                  if [ -n "$line" ] && [ -n "$message_text" ]; then
+                    echo "Adding comment for $file:$line - $severity: $message_text"
+                    
+                    response=$(curl -s -w "\n%{http_code}" -X POST \
+                      -H "Authorization: token $GITHUB_TOKEN" \
+                      -H "Accept: application/vnd.github.v3+json" \
+                      -d "$(jq -n --arg path "$file" \
+                                  --arg body "$severity: $message_text" \
+                                  --argjson line "$line" \
+                                  --arg commit_id "$PR_HEAD_SHA" \
+                                  '{
+                                    body: $body,
+                                    path: $path,
+                                    line: $line,
+                                    commit_id: $commit_id,
+                                    side: "RIGHT"
+                                  }')" \
+                      "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments")
+                    
+                    # Split response into body and status code
+                    http_code=$(echo "$response" | tail -n1)
+                    response_body=$(echo "$response" | head -n -1)
+                    
+                    if [ "$http_code" != "201" ]; then
+                      echo "Error creating comment. Status code: $http_code"
+                      echo "Response: $response_body"
+                      # Continue processing other comments even if one fails
+                      continue
+                    fi
+                  else
+                    echo "Skipping invalid message for $file (missing line or message)"
+                  fi
+                fi
+              done
+            fi
+          done
