@@ -33,34 +33,22 @@ jobs:
           extra_args: '--report-json=./phpcs.json'
         continue-on-error: true
 
-      - name: Validate and Parse WPCS JSON
-        if: always()
+      - name: Get PR Head SHA
+        if: github.event_name == 'pull_request'
+        id: pr_head
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ ! -f ./phpcs.json ]; then
-            echo "phpcs.json file not found"
-            exit 0
-          fi
-
-          # Check if file is empty
-          if [ ! -s ./phpcs.json ]; then
-            echo "phpcs.json is empty"
-            exit 0
-          fi
-
-          # Print file contents for debugging
-          echo "Contents of phpcs.json:"
-          cat ./phpcs.json
-
-          # Validate JSON structure
-          if ! jq -e . ./phpcs.json > /dev/null 2>&1; then
-            echo "Invalid JSON format in phpcs.json"
-            exit 0
-          fi
+          PR_DATA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}")
+          HEAD_SHA=$(echo "$PR_DATA" | jq -r '.head.sha')
+          echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
 
       - name: Add Review Comments for Issues
         if: always() && github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_HEAD_SHA: ${{ steps.pr_head.outputs.head_sha }}
         run: |
           if [ ! -f ./phpcs.json ] || [ ! -s ./phpcs.json ]; then
             echo "phpcs.json is missing or empty"
@@ -88,13 +76,13 @@ jobs:
                   if [ -n "$line" ] && [ -n "$message_text" ]; then
                     echo "Adding comment for $file:$line - $severity: $message_text"
                     
-                    curl -s -X POST \
+                    response=$(curl -s -w "\n%{http_code}" -X POST \
                       -H "Authorization: token $GITHUB_TOKEN" \
                       -H "Accept: application/vnd.github.v3+json" \
                       -d "$(jq -n --arg path "$file" \
                                   --arg body "$severity: $message_text" \
                                   --argjson line "$line" \
-                                  --arg commit_id "${{ github.sha }}" \
+                                  --arg commit_id "$PR_HEAD_SHA" \
                                   '{
                                     body: $body,
                                     path: $path,
@@ -102,7 +90,18 @@ jobs:
                                     commit_id: $commit_id,
                                     side: "RIGHT"
                                   }')" \
-                      "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
+                      "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments")
+                    
+                    # Split response into body and status code
+                    http_code=$(echo "$response" | tail -n1)
+                    response_body=$(echo "$response" | head -n -1)
+                    
+                    if [ "$http_code" != "201" ]; then
+                      echo "Error creating comment. Status code: $http_code"
+                      echo "Response: $response_body"
+                      # Continue processing other comments even if one fails
+                      continue
+                    fi
                   else
                     echo "Skipping invalid message for $file (missing line or message)"
                   fi
