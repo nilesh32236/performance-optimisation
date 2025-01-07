@@ -62,7 +62,8 @@ jobs:
         run: |
           # Parse WPCS JSON and add review comments
           if [ -s ./phpcs.json ]; then
-              wpcs_issues=$(jq -c '.files[] | select(.messages != null) | {file: .file, messages: .messages}' ./phpcs.json)
+              # Filter files with non-empty messages
+              wpcs_issues=$(jq -c '.files[] | select(.messages | length > 0) | {file: .file, messages: .messages}' ./phpcs.json)
 
               echo "$wpcs_issues" | while read -r issue; do
                   file=$(echo "$issue" | jq -r '.file | sub("^.*/repo-root/"; "")')
