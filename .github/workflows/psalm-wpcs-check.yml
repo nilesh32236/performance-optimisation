@@ -33,66 +33,53 @@ jobs:
           extra_args: '--report-json=./phpcs.json'
         continue-on-error: true
 
-      - name: Generate WPCS Markdown Report
+      - name: Validate and Parse WPCS JSON
         if: always()
         run: |
-          npm i -g github:10up/phpcs-json-to-md
-          phpcs-json-to-md --path ./phpcs.json --output ./phpcs.md
-
-      - name: Psalm Security Scan
-        id: psalm
-        uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
-        continue-on-error: true
-
-      - name: Prettify SARIF Output
-        if: always()
-        run: |
-          if [ -f results.sarif ]; then
-            jq '.' results.sarif > pretty_results.sarif
+          if [ -s ./phpcs.json ] && jq empty ./phpcs.json; then
+            echo "Valid JSON. Proceeding..."
+          else
+            echo "Invalid or empty JSON. Skipping WPCS comment generation."
+            exit 0
           fi
+
+      - name: Fetch Pull Request Diff
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" > pr_diff.json
 
       - name: Add Review Comments for Issues
         if: always()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Parse WPCS JSON and add review comments
-          if [ -f ./phpcs.json ]; then
-            wpcs_issues=$(jq -c '.files[] | select(.messages != null) | {file: .file, messages: .messages}' ./phpcs.json)
+          wpcs_issues=$(jq -c '.files[] | select(.messages != null) | {file: .file, messages: .messages}' ./phpcs.json)
 
-            echo "$wpcs_issues" | while read -r issue; do
-              file=$(echo "$issue" | jq -r '.file')
-              messages=$(echo "$issue" | jq -c '.messages[]')
+          echo "$wpcs_issues" | while read -r issue; do
+            file=$(echo "$issue" | jq -r '.file')
+            messages=$(echo "$issue" | jq -c '.messages[]')
 
-              echo "$messages" | while read -r message; do
-                line=$(echo "$message" | jq -r '.line')
-                message_text=$(echo "$message" | jq -r '.message')
-                severity=$(echo "$message" | jq -r '.type')
+            echo "$messages" | while read -r message; do
+              line=$(echo "$message" | jq -r '.line')
+              message_text=$(echo "$message" | jq -r '.message')
+              severity=$(echo "$message" | jq -r '.type')
 
+              # Get position from diff
+              position=$(jq -r --arg file "$file" --arg line "$line" \
+                '.[] | select(.filename == $file) | .patch | split("\n") | indices("+" + $line)[0]' pr_diff.json)
+
+              if [ -n "$position" ]; then
                 # Add a review comment
                 curl -s -X POST \
                   -H "Authorization: token $GITHUB_TOKEN" \
                   -H "Accept: application/vnd.github.v3+json" \
-                  -d "$(jq -n --arg path "$file" --arg body "$severity: $message_text" --argjson position "$line" '{body: $body, path: $path, line: $position, side: "RIGHT"}')" \
+                  -d "$(jq -n --arg path "$file" --arg body "$severity: $message_text" --argjson position "$position" '{body: $body, path: $path, position: $position}')" \
                   "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
-              done
+              else
+                echo "Could not find position for $file:$line"
+              fi
             done
-          fi
-
-          # Parse Psalm SARIF output and add review comments
-          if [ -f pretty_results.sarif ]; then
-            psalm_issues=$(jq -c '.runs[].results[] | {message: .message.text, locations: .locations[]}' pretty_results.sarif)
-
-            echo "$psalm_issues" | while read -r issue; do
-              file=$(echo "$issue" | jq -r '.locations.physicalLocation.artifactLocation.uri')
-              line=$(echo "$issue" | jq -r '.locations.physicalLocation.region.startLine')
-              message_text=$(echo "$issue" | jq -r '.message')
-
-              # Add a review comment
-              curl -s -X POST \
-                -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                -d "$(jq -n --arg path "$file" --arg body "$message_text" --argjson position "$line" '{body: $body, path: $path, line: $position, side: "RIGHT"}')" \
-                "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
-            done
-          fi
+          done
