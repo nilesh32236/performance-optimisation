@@ -36,6 +36,10 @@ jobs:
       - name: Validate and Parse WPCS JSON
         if: always()
         run: |
+          # Debugging: Print the contents of phpcs.json
+          echo "Contents of phpcs.json:"
+          cat ./phpcs.json
+
           if [ -s ./phpcs.json ] && jq empty ./phpcs.json; then
             echo "Valid JSON. Proceeding..."
           else
@@ -56,30 +60,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          wpcs_issues=$(jq -c '.files[] | select(.messages != null) | {file: .file, messages: .messages}' ./phpcs.json)
+          # Parse WPCS JSON and add review comments
+          if [ -s ./phpcs.json ]; then
+              wpcs_issues=$(jq -c '.files[] | select(.messages != null) | {file: .file, messages: .messages}' ./phpcs.json)
 
-          echo "$wpcs_issues" | while read -r issue; do
-            file=$(echo "$issue" | jq -r '.file')
-            messages=$(echo "$issue" | jq -c '.messages[]')
+              echo "$wpcs_issues" | while read -r issue; do
+                  file=$(echo "$issue" | jq -r '.file | sub("^.*/repo-root/"; "")')
+                  messages=$(echo "$issue" | jq -c '.messages[]')
 
-            echo "$messages" | while read -r message; do
-              line=$(echo "$message" | jq -r '.line')
-              message_text=$(echo "$message" | jq -r '.message')
-              severity=$(echo "$message" | jq -r '.type')
+                  echo "$messages" | while read -r message; do
+                      line=$(echo "$message" | jq -r '.line // empty')
+                      message_text=$(echo "$message" | jq -r '.message')
+                      severity=$(echo "$message" | jq -r '.type')
 
-              # Get position from diff
-              position=$(jq -r --arg file "$file" --arg line "$line" \
-                '.[] | select(.filename == $file) | .patch | split("\n") | indices("+" + $line)[0]' pr_diff.json)
-
-              if [ -n "$position" ]; then
-                # Add a review comment
-                curl -s -X POST \
-                  -H "Authorization: token $GITHUB_TOKEN" \
-                  -H "Accept: application/vnd.github.v3+json" \
-                  -d "$(jq -n --arg path "$file" --arg body "$severity: $message_text" --argjson position "$position" '{body: $body, path: $path, position: $position}')" \
-                  "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
-              else
-                echo "Could not find position for $file:$line"
-              fi
-            done
-          done
+                      if [ -n "$line" ]; then
+                          curl -s -X POST \
+                            -H "Authorization: token $GITHUB_TOKEN" \
+                            -H "Accept: application/vnd.github.v3+json" \
+                            -d "$(jq -n --arg path "$file" --arg body "$severity: $message_text" --argjson position "$line" --arg commit_id "${{ github.sha }}" \
+                                '{body: $body, path: $path, line: $position, commit_id: $commit_id, side: "RIGHT"}')" \
+                            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
+                      else
+                          echo "Could not find position for file: $file"
+                      fi
+                  done
+              done
+          else
+              echo "phpcs.json is empty or not generated."
+              exit 1
+          fi
