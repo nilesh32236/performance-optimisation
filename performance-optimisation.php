@@ -20,7 +20,7 @@ use PerformanceOptimise\Inc\Deactivate;
 use PerformanceOptimise\Inc\Main;
 
 if ( ! defined( 'ABSPATH' ) ) {
-	exit; // Exit if accessed directly.
+	exit; // Exit if accessed directly
 }
 
 // Define plugin constants.
@@ -29,11 +29,11 @@ if ( ! defined( 'WPPO_PLUGIN_PATH' ) ) {
 }
 
 if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
-	define( 'WPPO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+    define( 'WPPO_PLUGIN_URL', plugin_dir_url( __FILE__) );
 }
 
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.0.1' );
+	define('WPPO_VERSION','1.0.1');
 }
 
 // Include the main class file.
