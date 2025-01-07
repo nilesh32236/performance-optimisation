@@ -71,10 +71,11 @@ jobs:
 
                   echo "$messages" | while read -r message; do
                       line=$(echo "$message" | jq -r '.line // empty')
-                      message_text=$(echo "$message" | jq -r '.message')
-                      severity=$(echo "$message" | jq -r '.type')
+                      message_text=$(echo "$message" | jq -r '.message // empty')
+                      severity=$(echo "$message" | jq -r '.type // empty')
 
-                      if [ -n "$line" ]; then
+                      # Ensure line and message_text are not empty
+                      if [ -n "$line" ] && [ -n "$message_text" ]; then
                           curl -s -X POST \
                             -H "Authorization: token $GITHUB_TOKEN" \
                             -H "Accept: application/vnd.github.v3+json" \
@@ -82,7 +83,7 @@ jobs:
                                 '{body: $body, path: $path, line: $position, commit_id: $commit_id, side: "RIGHT"}')" \
                             "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
                       else
-                          echo "Could not find position for file: $file"
+                          echo "Skipping comment for file: $file, line: $line, message: $message_text"
                       fi
                   done
               done
