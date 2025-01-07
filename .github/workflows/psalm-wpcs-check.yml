@@ -36,58 +36,76 @@ jobs:
       - name: Validate and Parse WPCS JSON
         if: always()
         run: |
-          # Debugging: Print the contents of phpcs.json
-          echo "Contents of phpcs.json:"
-          cat ./phpcs.json
-
-          if [ -s ./phpcs.json ] && jq empty ./phpcs.json; then
-            echo "Valid JSON. Proceeding..."
-          else
-            echo "Invalid or empty JSON. Skipping WPCS comment generation."
+          if [ ! -f ./phpcs.json ]; then
+            echo "phpcs.json file not found"
             exit 0
           fi
 
-      - name: Fetch Pull Request Diff
-        if: always()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" > pr_diff.json
+          # Check if file is empty
+          if [ ! -s ./phpcs.json ]; then
+            echo "phpcs.json is empty"
+            exit 0
+          fi
+
+          # Print file contents for debugging
+          echo "Contents of phpcs.json:"
+          cat ./phpcs.json
+
+          # Validate JSON structure
+          if ! jq -e . ./phpcs.json > /dev/null 2>&1; then
+            echo "Invalid JSON format in phpcs.json"
+            exit 0
+          fi
+
+          # Check if files array exists and is not empty
+          if [ "$(jq 'has("files")' ./phpcs.json)" = "false" ] || [ "$(jq '.files | length' ./phpcs.json)" = "0" ]; then
+            echo "No files with issues found in phpcs.json"
+            exit 0
+          fi
 
       - name: Add Review Comments for Issues
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Parse WPCS JSON and add review comments
-          if [ -s ./phpcs.json ]; then
-              # Filter files with non-empty messages
-              wpcs_issues=$(jq -c '.files[] | select(.messages | length > 0) | {file: .file, messages: .messages}' ./phpcs.json)
-
-              echo "$wpcs_issues" | while read -r issue; do
-                  file=$(echo "$issue" | jq -r '.file | sub("^.*/repo-root/"; "")')
-                  messages=$(echo "$issue" | jq -c '.messages[]')
-
-                  echo "$messages" | while read -r message; do
-                      line=$(echo "$message" | jq -r '.line // empty')
-                      message_text=$(echo "$message" | jq -r '.message // empty')
-                      severity=$(echo "$message" | jq -r '.type // empty')
-
-                      # Ensure line and message_text are not empty
-                      if [ -n "$line" ] && [ -n "$message_text" ]; then
-                          curl -s -X POST \
-                            -H "Authorization: token $GITHUB_TOKEN" \
-                            -H "Accept: application/vnd.github.v3+json" \
-                            -d "$(jq -n --arg path "$file" --arg body "$severity: $message_text" --argjson position "$line" --arg commit_id "${{ github.sha }}" \
-                                '{body: $body, path: $path, line: $position, commit_id: $commit_id, side: "RIGHT"}')" \
-                            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
-                      else
-                          echo "Skipping comment for file: $file, line: $line, message: $message_text"
-                      fi
-                  done
-              done
-          else
-              echo "phpcs.json is empty or not generated."
-              exit 1
+          if [ ! -f ./phpcs.json ] || [ ! -s ./phpcs.json ]; then
+            echo "phpcs.json is missing or empty"
+            exit 0
           fi
+
+          # Process each file with issues
+          jq -r '.files[] | select(.messages != null and .messages | length > 0) | @base64' ./phpcs.json | while read -r file_json; do
+            decoded_file=$(echo "$file_json" | base64 --decode)
+            
+            file=$(echo "$decoded_file" | jq -r '.file | sub("^.*/repo-root/"; "")')
+            
+            echo "$decoded_file" | jq -c '.messages[]?' | while read -r message; do
+              if [ -n "$message" ] && [ "$message" != "null" ]; then
+                line=$(echo "$message" | jq -r '.line // empty')
+                message_text=$(echo "$message" | jq -r '.message // empty')
+                severity=$(echo "$message" | jq -r '.type // empty')
+
+                if [ -n "$line" ] && [ -n "$message_text" ]; then
+                  echo "Adding comment for $file:$line - $severity: $message_text"
+                  
+                  curl -s -X POST \
+                    -H "Authorization: token $GITHUB_TOKEN" \
+                    -H "Accept: application/vnd.github.v3+json" \
+                    -d "$(jq -n --arg path "$file" \
+                                --arg body "$severity: $message_text" \
+                                --argjson line "$line" \
+                                --arg commit_id "${{ github.sha }}" \
+                                '{
+                                  body: $body,
+                                  path: $path,
+                                  line: $line,
+                                  commit_id: $commit_id,
+                                  side: "RIGHT"
+                                }')" \
+                    "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments"
+                else
+                  echo "Skipping invalid message for $file (missing line or message)"
+                fi
+              fi
+            done
+          done
