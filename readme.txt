@@ -19,6 +19,7 @@ Performance Optimisation helps you optimize your website's speed by offering fea
  - Dashboard with an overview of cache, JavaScript, CSS, and image optimization status.
  - Cache management tools, including size display and a "Clear Cache" button.
  - JavaScript & CSS Optimization: Minify, combine, and exclude specific files.
+ - **Inline CSS Minification:** Minifies inline `<style>` elements directly in the rendered HTML for better performance. *(See FAQ for details)*
  - Image optimization: Convert images to WebP and AVIF formats.
  - Preload settings for cache, fonts, DNS, and images.
  - Advanced lazy loading options.
@@ -102,6 +103,21 @@ Preloading settings for cache, fonts, and images.
 Import/export settings tools.
 
 == Frequently Asked Questions ==
+
+ = How does the plugin handle inline CSS? =
+
+ The plugin includes a `minify_inline_css()` function that minifies inline `<style>` elements directly in the rendered HTML. This is essential for optimizing inline CSS added dynamically by themes, plugins, or custom templates.
+ 
+ = Why not use wp_enqueue_style or wp_add_inline_style? =
+ 
+ The `minify_inline_css()` function operates on fully-rendered HTML during the `template_redirect` phase. This allows it to handle inline CSS that has already been embedded into the page. WordPress functions like `wp_enqueue_style` are not applicable for such cases because they focus on pre-registration of CSS files.
+ 
+ **Key Benefits:**
+ 
+ 1. **Necessity:** It handles dynamically injected inline CSS that cannot be pre-registered or enqueued.
+ 2. **Error Handling:** The function preserves the original CSS if an error occurs during minification, ensuring stability.
+ 3. **Performance Impact:** Minifying inline CSS reduces the size of the final HTML document, improving page load times.
+
  = How do I optimize images using this plugin? =
  Go to the Image Optimization Settings tab, enable image conversion, and choose the format (WebP, AVIF, or both). Click "Optimize Now" to start the process.
 

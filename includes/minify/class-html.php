@@ -221,9 +221,19 @@ class HTML {
 	/**
 	 * Minify inline CSS in HTML.
 	 *
+	 * This function processes the HTML output to minify inline `<style>` elements.
+	 * It is invoked during the `template_redirect` hook to optimize inline CSS
+	 * before the content is sent to the browser.
+	 *
+	 * Note: WordPress functions such as wp_enqueue_style or wp_add_inline_style
+	 * cannot be used in this case because the function operates on fully-rendered
+	 * HTML, not on individual enqueued styles. This is necessary to handle inline
+	 * styles embedded directly in the HTML.
+	 *
 	 * @param string $html The HTML content containing inline CSS.
 	 * @return string HTML content with minified CSS.
 	 * @since 1.0.0
+	 * @throws \Exception If an error occurs during CSS minification.
 	 */
 	private function minify_inline_css( string $html ): string {
 		$html = preg_replace_callback(
