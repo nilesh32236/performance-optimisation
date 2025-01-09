@@ -3,11 +3,11 @@
         'name' => 'nilesh/performance-optimisation',
         'pretty_version' => 'dev-master',
         'version' => 'dev-master',
-        'reference' => '6de095f5d293b06b2de3b8b776bf1148750cd2af',
+        'reference' => '3de72edd967fd9be4d272e73beb7dda2e632ffe2',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'dev' => true,
+        'dev' => false,
     ),
     'versions' => array(
         'matthiasmullie/minify' => array(
@@ -31,7 +31,7 @@
         'nilesh/performance-optimisation' => array(
             'pretty_version' => 'dev-master',
             'version' => 'dev-master',
-            'reference' => '6de095f5d293b06b2de3b8b776bf1148750cd2af',
+            'reference' => '3de72edd967fd9be4d272e73beb7dda2e632ffe2',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
