@@ -65,13 +65,3 @@ function wppo_deactivate(): void {
 	Deactivate::init();
 }
 register_deactivation_hook( __FILE__, 'wppo_deactivate' );
-
-/**
- * Load the plugin's text domain for translation.
- *
- * @since 1.0.0
- */
-function wppo_load_textdomain(): void {
-	load_plugin_textdomain( 'performance-optimisation', false, dirname( plugin_basename( __FILE__ ) ) . '/languages/' );
-}
-add_action( 'plugins_loaded', 'wppo_load_textdomain' );

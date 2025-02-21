@@ -199,9 +199,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$attributes['media'] = esc_attr( $media );
 			}
 
-			// Attributes are sanitized earlier in the code; output is safe.
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-			echo '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>' . PHP_EOL;
+			$link_tag = '<link ' . implode( ' ', array_map( fn ( $k, $v ) => esc_attr( $k ) . '="' . esc_attr( $v ) . '"', array_keys( $attributes ), $attributes ) ) . '>';
+
+			$allowed_html = array(
+				'link' => array(
+					'rel'         => array(),
+					'href'        => array(),
+					'as'          => array(),
+					'crossorigin' => array(),
+					'type'        => array(),
+					'media'       => array(),
+				),
+			);
+
+			// Output the sanitized link tag.
+			echo wp_kses( $link_tag, $allowed_html ) . PHP_EOL;
 		}
 
 		/**

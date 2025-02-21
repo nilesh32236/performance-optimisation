@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				// Insert WP_CACHE just before the line that says "That's all, stop editing!" or at the end.
 				$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
 
-				$constant_code = "\n/** Enables WordPress Cache */\ndefine( 'WP_CACHE', true );\n";
+				$constant_code = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
 
 				if ( false !== $insert_position ) {
 					// Insert WP_CACHE constant before "That's all, stop editing!".
