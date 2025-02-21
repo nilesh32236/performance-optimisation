@@ -57,7 +57,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return;
 			}
 
-			$wp_config_path = ABSPATH . 'wp-config.php';
+			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 
 			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return; // Exit if the file doesn't exist or is not writable.
@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				// Insert WP_CACHE just before the line that says "That's all, stop editing!" or at the end.
 				$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
 
-				$constant_code = "\n/** Enables WordPress Cache */\ndefine( 'WP_CACHE', true );\n";
+				$constant_code = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
 
 				if ( false !== $insert_position ) {
 					// Insert WP_CACHE constant before "That's all, stop editing!".
@@ -114,7 +114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				) $charset_collate;";
 
 				// Include the required file for dbDelta function.
-				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+				require_once wp_normalize_path( ABSPATH . 'wp-admin/includes/upgrade.php' );
 				dbDelta( $create_table_sql );
 			}
 

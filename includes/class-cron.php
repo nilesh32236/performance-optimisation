@@ -250,7 +250,7 @@ class Cron {
 		$parsed_url = wp_parse_url( $site_url );
 		$domain     = sanitize_text_field( $parsed_url['host'] . ( $parsed_url['port'] ?? '' ) );
 
-		$cache_dir = WP_CONTENT_DIR . "/cache/wppo/{$domain}/{$url_path}";
+		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . "/cache/wppo/{$domain}/{$url_path}" );
 
 		if ( Util::init_filesystem() ) {
 			global $wp_filesystem;
@@ -294,7 +294,7 @@ class Cron {
 					++$counter;
 
 					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( ABSPATH . $img, 'avif' );
+						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
 					}
 				}
 			}
@@ -309,7 +309,7 @@ class Cron {
 					++$counter;
 
 					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( ABSPATH . $img );
+						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
 					}
 				}
 			}

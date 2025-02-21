@@ -92,7 +92,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				return;
 			}
 
-			$wp_config_path = ABSPATH . 'wp-config.php';
+			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 
 			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return;
@@ -104,16 +104,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
 
-			// Check if WP_CACHE is defined and remove it.
-			$pattern = '/\n?\/\*\* Enables WordPress Cache \*\/\n\s*define\(\s*\'WP_CACHE\',\s*true\s*\);\s*/';
+			$pattern = '/\/\*\*\s*Enables WordPress Cache\s*\*\/\s*\nif\s*\(\s*!\s*defined\s*\(\s*[\'"]WP_CACHE[\'"]\s*\)\s*\)\s*\{\s*define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\s*\)\s*;\s*\}\s*/';
 
-			if ( preg_match( $pattern, $wp_config_content ) ) {
+			if ( preg_match( $pattern, $wp_config_content, $matches ) ) {
+				error_log( '$matches: ' . print_r( $matches, true ) );
 				// Remove the WP_CACHE line.
 				$wp_config_content = preg_replace( $pattern, '', $wp_config_content );
-
-				// Write the modified content back to wp-config.php.
-				$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+			} else {
+				$wp_config_content = preg_replace( "/\n?define\(\s*'WP_CACHE'\s*,\s*true\s*\);\s*/", '', $wp_config_content );
 			}
+
+			// Write the modified content back to wp-config.php.
+			$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
 		}
 	}
 }

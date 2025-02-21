@@ -454,7 +454,7 @@ class Main {
 	/**
 	 * Adds custom settings to the WordPress admin bar.
 	 *
-	 * @param WP_Admin_Bar $wp_admin_bar The WordPress admin bar object used to add nodes and settings.
+	 * @param \WP_Admin_Bar $wp_admin_bar The WordPress admin bar object used to add nodes and settings.
 	 *
 	 * @since 1.0.0
 	 */
@@ -647,7 +647,7 @@ class Main {
 			return $tag;
 		}
 
-		$css_minifier = new Minify\CSS( $local_path, WP_CONTENT_DIR . '/cache/wppo/min/css' );
+		$css_minifier = new Minify\CSS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css' ) );
 		$cached_file  = $css_minifier->minify();
 
 		if ( $cached_file ) {
@@ -677,7 +677,7 @@ class Main {
 			return $tag;
 		}
 
-		$js_minifier = new Minify\JS( $local_path, WP_CONTENT_DIR . '/cache/wppo/min/js' );
+		$js_minifier = new Minify\JS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/js' ) );
 		$cached_file = $js_minifier->minify();
 
 		if ( $cached_file ) {

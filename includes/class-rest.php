@@ -171,7 +171,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$avif_images = $params['avif'] ?? array();
 
 			foreach ( $webp_images as $webp_image ) {
-				$source_path = ABSPATH . $webp_image;
+				$source_path = wp_normalize_path( ABSPATH . $webp_image );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'webp' );
@@ -179,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			foreach ( $avif_images as $avif_image ) {
-				$source_path = ABSPATH . $avif_image;
+				$source_path = wp_normalize_path( ABSPATH . $avif_image );
 
 				if ( file_exists( $source_path ) ) {
 					$img_converter->convert_image( $source_path, 'avif' );
@@ -202,11 +202,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function delete_optimised_image(): \WP_REST_Response {
 			global $wp_filesystem;
 			if ( ! Util::init_filesystem() ) {
-				require_once ABSPATH . 'wp-admin/includes/file.php';
+				require_once wp_normalize_path( ABSPATH . 'wp-admin/includes/file.php' );
 				new \WP_Filesystem_Direct( null );
 			}
 
-			$wppo_dir = WP_CONTENT_DIR . '/wppo';
+			$wppo_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
 
 			$img_info = get_option( 'wppo_img_info', array() );
 

@@ -79,7 +79,7 @@ async function loadScripts() {
 
 // Attach event listeners to trigger the loading process
 if (!scriptLoading) {
-	const triggerEvents = ['mouseenter', 'mousedown', 'mouseover', 'touchstart', 'scroll'];
+	const triggerEvents = ['mouseenter', 'mousedown', 'mouseover', 'touchstart'];
 	const loadHandler = () => {
 		triggerEvents.forEach((event) => document.removeEventListener(event, loadHandler));
 		loadScripts();
@@ -89,50 +89,56 @@ if (!scriptLoading) {
 }
 
 const loadImages = () => {
-	const lazyloadImages = document.querySelectorAll('img[data-src], img[data-srcset]');
+	const lazyloadImages  = document.querySelectorAll('img[data-src], img[data-srcset]');
+	const lazyloadIframes = document.querySelectorAll('iframe[data-src]');
+
 	imgLoaded = true;
 
 	if ('IntersectionObserver' in window) {
-
 		const observer = new IntersectionObserver((entries, observer) => {
 			entries.forEach(entry => {
 				if (entry.isIntersecting) {
-					const img = entry.target;
+					const el = entry.target;
 
-					// Load the image's src and srcset
-					if (img.hasAttribute('data-src')) {
-						img.src = img.getAttribute('data-src');
-						img.removeAttribute('data-src');
+					if (el.tagName === 'IMG') {
+						if (el.hasAttribute('data-src')) {
+							el.src = el.getAttribute('data-src');
+							el.removeAttribute('data-src');
+						}
+
+						if (el.hasAttribute('data-srcset')) {
+							el.srcset = el.getAttribute('data-srcset');
+							el.removeAttribute('data-srcset');
+						}
+					} else if (el.tagName === 'IFRAME') {
+						if (el.hasAttribute('data-src')) {
+							el.src = el.getAttribute('data-src');
+							el.removeAttribute('data-src');
+						}
 					}
 
-					if (img.hasAttribute('data-srcset')) {
-						img.srcset = img.getAttribute('data-srcset');
-						img.removeAttribute('data-srcset');
-					}
-
-					observer.unobserve(img);
+					observer.unobserve(el);
 				}
 			});
 		}, {
 			rootMargin: '100px'
 		});
 
-		lazyloadImages.forEach(img => {
-			observer.observe(img);
-		});
+		lazyloadImages.forEach(img => observer.observe(img));
+		lazyloadIframes.forEach(iframe => observer.observe(iframe));
 
 	} else {
 		function lazyLoadFallback() {
-			lazyloadImages.forEach(img => {
-				if (isElementInViewport(img)) {
-					if (img.hasAttribute('data-src')) {
-						img.src = img.getAttribute('data-src');
-						img.removeAttribute('data-src');
+			[...lazyloadImages, ...lazyloadIframes].forEach(el => {
+				if (isElementInViewport(el)) {
+					if (el.hasAttribute('data-src')) {
+						el.src = el.getAttribute('data-src');
+						el.removeAttribute('data-src');
 					}
 
-					if (img.hasAttribute('data-srcset')) {
-						img.srcset = img.getAttribute('data-srcset');
-						img.removeAttribute('data-srcset');
+					if (el.hasAttribute('data-srcset')) {
+						el.srcset = el.getAttribute('data-srcset');
+						el.removeAttribute('data-srcset');
 					}
 				}
 			});

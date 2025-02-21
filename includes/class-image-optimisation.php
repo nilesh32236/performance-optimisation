@@ -53,8 +53,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.0.0
 		 */
 		private function setup_hooks() {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 				$img_converter = new Img_Converter( $this->options );
 
 				add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
@@ -112,7 +112,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$updated_img_tag = preg_replace_callback(
 							'#src=["\']([^"\']+)["\']#i',
 							function ( $src_match ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
-								return 'src="' . $this->replace_image_with_next_gen( $src_match[1], $exclude_imgs, $supports_avif, $supports_webp ) . '"';
+								$url = $src_match[1];
+								if ( $this->is_valid_url( $url ) ) {
+									return 'src="' . $this->replace_image_with_next_gen( $src_match[1], $exclude_imgs, $supports_avif, $supports_webp ) . '"';
+								}
+								return $src_match[0];
 							},
 							$img_tag
 						);
@@ -213,6 +217,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			// Fallback to original image URL.
 			return $img_url;
+		}
+
+		/**
+		 * Checks if the given URL is valid.
+		 *
+		 * @param string $url The URL to validate.
+		 * @return bool True if the URL is valid, false otherwise.
+		 */
+		private function is_valid_url( $url ) {
+			return filter_var( $url, FILTER_VALIDATE_URL ) !== false;
 		}
 
 		/**
@@ -454,7 +468,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			// If the image does not have 'data-src', replace 'src' with 'data-src'.
 			if ( strpos( $img_tag, 'data-src' ) === false ) {
-				$img_tag = preg_replace( '#src=["\']([^"\']+)["\']#i', 'data-src="' . $original_src . '"', $img_tag );
+				$original_src = htmlspecialchars_decode( $original_src, ENT_QUOTES );
+
+				$img_tag = preg_replace_callback(
+					'#src=["\']([^"\']+)["\']#i',
+					function () use ( $original_src ) {
+						return 'data-src="' . esc_attr( $original_src ) . '"';
+					},
+					$img_tag
+				);
 
 				// Replace with SVG placeholder if the option is enabled.
 				if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
@@ -465,7 +487,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					$new_src = $this->generate_svg_base64( $img_tag );
 					if ( ! empty( $new_src ) ) {
-						$img_tag = preg_replace( '#<img\b([^>]*)#i', '<img $1 src="' . $new_src . '"', $img_tag );
+						$img_tag = preg_replace_callback(
+							'#<img\b([^>]*)#i',
+							function ( $matches ) use ( $new_src ) {
+								return '<img src="' . esc_attr( $new_src ) . '"' . $matches[1];
+							},
+							$img_tag
+						);
 					}
 
 					// phpcs:enable
@@ -473,7 +501,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				// Replace 'srcset' with 'data-srcset' if 'srcset' is present.
 				if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
-					$img_tag = preg_replace( '#srcset=["\']([^"\']+)["\']#i', 'data-srcset="' . $srcset_matches[1] . '"', $img_tag );
+					$img_tag = preg_replace(
+						'#srcset=["\']([^"\']+)["\']#i',
+						'data-srcset="' . esc_attr( $srcset_matches[1] ) . '"',
+						$img_tag
+					);
 				}
 
 				// Skip base64 images to avoid rewriting them.
@@ -483,6 +515,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return $img_tag;
+		}
+
+		/**
+		 * Processes an <iframe> tag for optimization, including lazy loading.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $iframe_tag The original <img> tag.
+		 * @param string $original_src The original src attribute of the image.
+		 * @param array  $exclude_imgs Array of images to exclude from processing.
+		 * @return string The modified <iframe> tag.
+		 */
+		public function process_iframe_tag( $iframe_tag, $original_src, $exclude_imgs ) {
+			foreach ( $exclude_imgs as $exclude_img ) {
+				if ( false !== strpos( $original_src, $exclude_img ) ) {
+					return $iframe_tag;
+				}
+			}
+
+			$iframe_tag = preg_replace( '#src=["\']([^"\']+)["\']#i', 'data-src="' . $original_src . '"', $iframe_tag );
+
+			return $iframe_tag;
 		}
 
 		/**
@@ -498,6 +552,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
 			if ( ! preg_match( '#<picture\b[^>]*>.*?</picture>#is', $matches[0] ) ) {
+
 				$img_tag = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
 
 				$srcset = '';
@@ -527,13 +582,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						}
 
 						if ( ! empty( $sizes ) ) {
-							$source_tag .= ' sizes="' . $sizes . '"\>';
+							$source_tag .= ' sizes="' . $sizes . '">';
 						}
 					} else {
-						$source_tag .= ' srcset="' . $original_src . '"\>';
+						$source_tag .= ' srcset="' . $original_src . '">';
 					}
 				} else {
-					$source_tag .= '\>';
+					$source_tag .= '>';
 				}
 
 				// Wrap <img> tag inside <picture>.
@@ -579,9 +634,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// This approach is necessary for advanced optimizations such as adding placeholders or replacing 'src' with 'data-src'.
 				// PHPCS: ignore PluginCheck.CodeAnalysis.ImageFunctions.NonEnqueuedImage -- Images are being processed directly for custom functionality.
 				return preg_replace_callback(
-					'#<picture\b[^>]*>.*?</picture>|<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#is',
+					'#<picture\b[^>]*>.*?</picture>|<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>|<iframe\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#is',
 					function ( $matches ) use ( &$img_counter, $exclude_img_count, $exclude_imgs ) {
 						$img_counter++;
+
+						if ( 5 === count( $matches ) ) {
+							return $this->process_iframe_tag( $matches[0], $matches[4], $exclude_imgs );
+						}
 
 						if ( $exclude_img_count > $img_counter ) {
 							$exclude_imgs[] = $matches[2];
