@@ -85,7 +85,8 @@ class HTML {
 			$base_url .= ( ':' . $parsed_url['port'] );
 		}
 
-		$this->html_min->doOptimizeViaHtmlDomParser( true )
+		$this->html_min
+			->doOptimizeViaHtmlDomParser( true )
 			->doRemoveComments( true )
 			->doSumUpWhitespace( true )
 			->doRemoveWhitespaceAroundTags( true )
@@ -169,7 +170,8 @@ class HTML {
 				if ( preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches ) ) {
 					$type = $type_matches[2];
 
-					if ( 'text/javascript' !== strtolower( $type ) && 'application/ld+json' !== strtolower( $type ) ) {
+					$exclude_types = array( 'text/javascript', 'application/ld+json', 'module', 'importmap' );
+					if ( ! in_array( strtolower( $type ), $exclude_types, true ) ) {
 						$scripts[] = $matches[0];
 						return '<script data-wppo-preserve="' . ( count( $scripts ) - 1 ) . '"></script>';
 					}
@@ -208,7 +210,7 @@ class HTML {
 	 */
 	private function restore_canonical_link( string $html ): string {
 		return preg_replace_callback(
-			'#<link\b[^>]*\brel=["\'\](canonical|shortlink)["\'\][^>]*>#i',
+			'#<link\b[^>]*\brel=(?:["\']?)(canonical|shortlink)(?:["\']?)[^>]*>#i',
 			function ( $matches ) {
 				$link_tag = str_replace( 'wppo-href', 'href', $matches[0] );
 

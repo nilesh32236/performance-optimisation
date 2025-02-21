@@ -95,7 +95,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
 			// Define cache root directory and URL.
-			$this->cache_root_dir = WP_CONTENT_DIR . self::CACHE_DIR;
+			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR );
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
 
 			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';

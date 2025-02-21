@@ -25,14 +25,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 	class Advanced_Cache_Handler {
 
 		/**
-		 * Path to the advanced cache file.
-		 *
-		 * @var string
-		 * @since 1.0.0
-		 */
-		private static $handler_file = WP_CONTENT_DIR . '/advanced-cache.php';
-
-		/**
 		 * Creates the advanced-cache.php file.
 		 *
 		 * Generates the file to serve cached content, including gzip versions, and ensures required directories exist.
@@ -59,7 +51,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$root_directory = $_SERVER[\'DOCUMENT_ROOT\'];' . PHP_EOL .
 			'$site_domain    = $_SERVER[\'HTTP_HOST\'];' . PHP_EOL .
 			'$request_uri    = parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH );' . PHP_EOL .
+
+			'if ( \'/\' !== substr( $request_uri, -1 ) ) {' . PHP_EOL .
+			'	$request_uri .= \'/\';' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'$file_path      = WP_CONTENT_DIR . \'/cache/wppo/\' . $site_domain . $request_uri . \'index.html\';' . PHP_EOL .
+			'$file_path      = str_replace( \'\\\\\', \'/\', $file_path );' . PHP_EOL .
+			'$file_path      = preg_replace( \'#/+#\', \'/\', $file_path );' . PHP_EOL .
+			'$file_path      = rtrim( $file_path, \'/\' );' . PHP_EOL .
 			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL . PHP_EOL .
 
 			'function is_user_logged_in_without_wp( $site_url ) {' . PHP_EOL .
@@ -70,7 +70,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'}' . PHP_EOL . PHP_EOL .
 
 			'if ( ! is_user_logged_in_without_wp( $site_url ) &&' . PHP_EOL .
-			'	( empty( $_SERVER[\'QUERY_STRING\'] ) || ! preg_match( \'/(?:^|&)(s|ver)(?:=|&|$)/\', $_SERVER[\'QUERY_STRING\'] ) )' . PHP_EOL .
+			'	( empty( $_SERVER[\'QUERY_STRING\'] ) )' . PHP_EOL .
 			') {' . PHP_EOL .
 			'	if ( file_exists( $gzip_file_path ) ) {' . PHP_EOL .
 			'		$last_modified_time = filemtime( $gzip_file_path );' . PHP_EOL .
@@ -109,7 +109,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'}' . PHP_EOL;
 
 			// Write the handler file in the wp-content directory as advanced-cache.php.
-			$create_file = $wp_filesystem->put_contents( self::$handler_file, $handler_code, FS_CHMOD_FILE );
+			$create_file = $wp_filesystem->put_contents( wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' ), $handler_code, FS_CHMOD_FILE );
 		}
 
 		/**
@@ -123,8 +123,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		public static function remove(): void {
 			global $wp_filesystem;
 
-			if ( Util::init_filesystem() && $wp_filesystem->exists( self::$handler_file ) ) {
-				$wp_filesystem->delete( self::$handler_file );
+			$handler_file = wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' );
+
+			if ( Util::init_filesystem() && $wp_filesystem->exists( $handler_file ) ) {
+				$wp_filesystem->delete( $handler_file );
 			}
 		}
 	}

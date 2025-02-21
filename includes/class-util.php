@@ -38,6 +38,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function prepare_cache_dir( $cache_dir ): bool {
 			global $wp_filesystem;
 
+			self::init_filesystem();
+
 			// Check if the directory already exists.
 			if ( ! $wp_filesystem->is_dir( $cache_dir ) ) {
 
@@ -66,7 +68,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			global $wp_filesystem;
 
 			if ( ! function_exists( 'WP_Filesystem' ) ) {
-				require_once ABSPATH . 'wp-admin/includes/file.php';
+				require_once wp_normalize_path( ABSPATH . 'wp-admin/includes/file.php' );
 			}
 
 			if ( WP_Filesystem() ) {
@@ -89,13 +91,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$parsed_url = wp_parse_url( $url );
 
 			// Get the path from the parsed URL.
-			$relative_path = $parsed_url['path'] ?? '';
+			$relative_path = wp_normalize_path( $parsed_url['path'] ) ?? '';
 
 			// If home_url is present, remove it from the path.
-			$relative_path = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $relative_path );
+			$relative_path = str_replace( wp_normalize_path( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '' ), '', $relative_path );
 
 			// Return the full local path.
-			return ABSPATH . ltrim( $relative_path, '/' );
+			return wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) );
 		}
 
 		/**
@@ -106,7 +108,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function get_js_css_minified_file() {
 			$filesystem = self::init_filesystem();
-			$minify_dir = WP_CONTENT_DIR . '/cache/wppo/min';
+			$minify_dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
 
 			$total_js  = 0;
 			$total_css = 0;

@@ -57,7 +57,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return;
 			}
 
-			$wp_config_path = ABSPATH . 'wp-config.php';
+			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 
 			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return; // Exit if the file doesn't exist or is not writable.
@@ -114,7 +114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				) $charset_collate;";
 
 				// Include the required file for dbDelta function.
-				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+				require_once wp_normalize_path( ABSPATH . 'wp-admin/includes/upgrade.php' );
 				dbDelta( $create_table_sql );
 			}
 

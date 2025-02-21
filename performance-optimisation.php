@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Define plugin constants.
 if ( ! defined( 'WPPO_PLUGIN_PATH' ) ) {
-	define( 'WPPO_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
+	define( 'WPPO_PLUGIN_PATH', wp_normalize_path( plugin_dir_path( __FILE__ ) ) );
 }
 
 if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {

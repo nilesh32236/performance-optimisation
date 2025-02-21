@@ -92,7 +92,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				return;
 			}
 
-			$wp_config_path = ABSPATH . 'wp-config.php';
+			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 
 			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return;

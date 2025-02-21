@@ -124,8 +124,9 @@ class CSS {
 	 * @since 1.0.0
 	 */
 	public static function update_image_paths( $css_content, $file_path ) {
+		$file_path   = wp_normalize_path( $file_path );
 		$pattern     = '/url\((\'|\"|)(.*?)(\'|\"|)\)/';
-		$css_dir_url = content_url( str_replace( WP_CONTENT_DIR, '', dirname( $file_path ) ) );
+		$css_dir_url = content_url( str_replace( wp_normalize_path( WP_CONTENT_DIR ), '', dirname( $file_path ) ) );
 
 		return preg_replace_callback(
 			$pattern,

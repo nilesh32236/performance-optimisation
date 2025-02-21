@@ -338,20 +338,27 @@ class Img_Converter {
 	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
 		$info = pathinfo( $source_image );
 
-		$parsed_url = wp_parse_url( $info['dirname'] . '/' . $info['filename'] . '.' . $format );
+		$new_file_name = $info['filename'] . '.' . $format;
 
-		// Get the path from the parsed URL.
-		$relative_path = $parsed_url['path'] ?? '';
+		$new_image_path = wp_normalize_path( $info['dirname'] . '/' . $new_file_name );
 
 		// If home_url is present, remove it from the path.
-		if ( 0 === strpos( $relative_path, ABSPATH ) ) {
-			$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/wppo', $relative_path );
+		if ( 0 === strpos( $new_image_path, wp_normalize_path( ABSPATH ) ) ) {
+			$local_path = str_replace(
+				wp_normalize_path( WP_CONTENT_DIR ),
+				wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
+				$new_image_path
+			);
 			return $local_path;
 		}
 
-		$relative_path = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $relative_path );
+		$relative_path = wp_normalize_path( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $new_image_path ) );
 
-		$local_path = str_replace( WP_CONTENT_DIR, WP_CONTENT_DIR . '/wppo', ABSPATH . ltrim( $relative_path, '/' ) );
+		$local_path = str_replace(
+			wp_normalize_path( WP_CONTENT_DIR ),
+			wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
+			wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) )
+		);
 
 		return $local_path;
 	}
@@ -419,7 +426,7 @@ class Img_Converter {
 			// Queue additional image sizes for conversion.
 			if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
 				foreach ( $metadata['sizes'] as $size => $size_data ) {
-					$image_path = $upload_dir['path'] . '/' . $size_data['file'];
+					$image_path = wp_normalize_path( $upload_dir['path'] . '/' . $size_data['file'] );
 					if ( file_exists( $image_path ) ) {
 						if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
 							$this->add_img_into_queue( $image_path );
@@ -498,7 +505,7 @@ class Img_Converter {
 	 * @since 1.0.0
 	 */
 	public function update_conversion_status( $img_path, $status = 'completed', $type = 'webp' ) {
-		$img_path = str_replace( ABSPATH, '', $img_path );
+		$img_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $img_path ) );
 
 		$img_info = get_option( 'wppo_img_info', array() );
 
@@ -548,7 +555,7 @@ class Img_Converter {
 			return;
 		}
 
-		$img_path = str_replace( ABSPATH, '', $img_path );
+		$img_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $img_path ) );
 
 		$img_info = get_option( 'wppo_img_info', array() );
 
