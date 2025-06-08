@@ -3,7 +3,7 @@
         'name' => 'nilesh/performance-optimisation',
         'pretty_version' => 'dev-master',
         'version' => 'dev-master',
-        'reference' => '1069ba2deddfa2bbd0c56528fe9b390c60638a20',
+        'reference' => '3b411bd200805a948472a1c6df7676ce69e88aa5',
         'type' => 'wordpress-plugin',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -31,7 +31,7 @@
         'nilesh/performance-optimisation' => array(
             'pretty_version' => 'dev-master',
             'version' => 'dev-master',
-            'reference' => '1069ba2deddfa2bbd0c56528fe9b390c60638a20',
+            'reference' => '3b411bd200805a948472a1c6df7676ce69e88aa5',
             'type' => 'wordpress-plugin',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
