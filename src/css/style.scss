@@ -1,94 +1,123 @@
-/* Base Styles */
-.container {
+// src/css/style.scss
+
+// Variables
+$primary-color: #0073aa;
+$primary-color-hover: #005177;
+$primary-color-active: #003d66;
+$secondary-color: #f7f7f7;
+$border-color: #ddd;
+$text-color: #333;
+$text-color-light: #555;
+$white-color: #fff;
+$disabled-color: #cccccc;
+
+$breakpoint-tablet: 768px;
+
+// Base Styles
+// -----------------------------------------------------------------------------
+.wppo-container {
 	display: flex;
 	flex-direction: column;
 	margin: 0 auto;
 	max-width: 1200px;
 	padding: 20px;
 
-	@media (min-width: 768px) {
+	@media (min-width: $breakpoint-tablet) {
 		flex-direction: row;
 	}
 }
 
-.sidebar {
-	background-color: #f7f7f7;
-	border: 1px solid #ddd;
+// Sidebar Styles
+// -----------------------------------------------------------------------------
+.wppo-sidebar {
+	background-color: $secondary-color;
+	border: 1px solid $border-color;
 	border-radius: 5px;
 	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-	max-width: 250px;
-	padding: 20px;
-	width: 100%;
-	margin: 0px;
-	margin-right: 20px;
-	min-height: 100vh;
-	transition: 0.3s ease;
-	z-index: 1000;
-	transform: translateX(0);
-	opacity: 1;
 	box-sizing: border-box;
+	margin: 0 20px 0 0;
+	max-width: 250px;
+	min-height: 100vh;
+	opacity: 1;
+	padding: 20px;
 	transform: translateX(0);
+	transition: transform 0.3s ease, opacity 0.3s ease;
+	width: 100%;
+	z-index: 1000;
 
-	&.hide {
-		transform: translateX(-150%);
+	&.wppo-sidebar--hide {
 		opacity: 0;
+		transform: translateX(-150%);
 	}
 
 	h3 {
-		color: #0073aa;
+		color: $primary-color;
 		font-size: 18px;
+		margin-top: 0;
 		margin-bottom: 15px;
 	}
 
 	ul {
 		list-style-type: none;
-		// padding: 0;
+		padding-left: 0;
+		margin-bottom: 0;
 
-		li:not(.hamburger-menu) {
+		li:not(.wppo-hamburger-menu-item) {
 			border-radius: 5px;
-			color: #333;
+			color: $text-color;
 			cursor: pointer;
 			padding: 12px;
-			transition: background-color 0.3s ease;
+			transition: background-color 0.3s ease, color 0.3s ease;
 
-			.sidebar-icon {
+			.wppo-sidebar-icon {
 				font-size: 18px;
+				margin-right: 8px;
 			}
 
 			&.active,
 			&:hover {
-				background-color: #0073aa;
-				color: #fff;
+				background-color: $primary-color;
+				color: $white-color;
 			}
 
-			@media (max-width: 768px) {
+			@media (max-width: $breakpoint-tablet) {
 				text-align: center;
+
+				.wppo-sidebar-icon {
+					margin-right: 0;
+				}
 			}
 		}
 	}
 
-	@media (max-width: 768px) {
+	@media (max-width: $breakpoint-tablet) {
+		height: 100vh;
+		margin-right: 0;
+		padding: 10px;
 		position: fixed;
 		width: 80px;
-		padding: 10px;
-		height: 100vh;
+
 		h3 {
 			display: none;
 		}
 	}
 }
 
-.hamburger-menu {
-	text-align: center;
-	display: none;
+.wppo-hamburger-menu {
 	background: none;
 	border: none;
-	color: #0073aa;
+	color: $primary-color;
 	cursor: pointer;
+	display: none;
 	font-size: 28px;
-	transition: 0.3s ease;
+	padding: 5px;
+	transition: color 0.3s ease;
 
-	@media (max-width: 768px) {
+	&:hover {
+		color: $primary-color-hover;
+	}
+
+	@media (max-width: $breakpoint-tablet) {
 		display: block;
 		position: fixed;
 		top: 88px;
@@ -97,214 +126,371 @@
 	}
 }
 
-.content {
-	animation: fadeIn 0.5s forwards;
-	background-color: #fff;
-	border: 1px solid #ddd;
+// Content Area Styles
+// -----------------------------------------------------------------------------
+.wppo-content {
+	animation: wppoFadeIn 0.5s forwards;
+	background-color: $white-color;
+	border: 1px solid $border-color;
 	border-radius: 8px;
-	margin-left: 0;
-	width: 100%;
-	// margin-top: 20px;
+	box-sizing: border-box;
 	padding: 20px;
 	transition: margin-left 0.3s ease;
+	width: 100%;
 
-	@media (max-width: 768px) {
-		margin-left: 0;
-	}
-
-	&.fadeIn {
+	&.wppo-content--fade-in-active {
 		opacity: 0;
 	}
+
+	@media (max-width: $breakpoint-tablet) {
+		margin-left: 0;
+		margin-top: 20px;
+	}
 }
 
-/* Dashboard Styles */
-.dashboard-container {
-	background-color: #f7f7f7;
-	border: 1px solid #ddd;
+// Dashboard Specific Styles
+// -----------------------------------------------------------------------------
+.wppo-dashboard-container {
 	border-radius: 8px;
 	margin: 0 auto;
-	max-width: 1000px;
-	padding: 20px;
+	padding: 0;
 }
 
-.dashboard-overview {
+.wppo-dashboard-overview {
 	display: flex;
 	flex-wrap: wrap;
-	justify-content: space-between;
 	gap: 20px;
+	justify-content: space-between;
 
-	@media (max-width: 768px) {
+	@media (max-width: $breakpoint-tablet) {
 		flex-direction: column;
-		gap: 10px;
+		gap: 15px;
 	}
 }
 
-.dashboard-card {
-	background-color: #fff;
-	border: 1px solid #ddd;
+.wppo-dashboard-card {
+	background-color: $white-color;
+	border: 1px solid $border-color;
 	border-radius: 8px;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
 	margin-bottom: 20px;
-	max-width: 300px;
 	padding: 20px;
-	transition: transform 0.3s ease;
-	width: 100%;
+	transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+
+	flex: 1 1 calc(33.333% - 20px);
+	min-width: 280px;
 
 	&:hover {
-		transform: translateY(-5px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+		transform: translateY(-3px);
 	}
 
-	.status-group {
+	.wppo-status-group {
 		display: flex;
 		flex-wrap: wrap;
+		gap: 10px;
 		justify-content: space-between;
-		gap: 10px;
+		margin-top: auto;
 	}
 
-	.status-item {
+	.wppo-status-item {
+		background-color: $secondary-color;
+		border: 1px solid darken($border-color, 5%);
+		border-radius: 6px;
 		flex: 1;
-		padding: 16px;
-		background-color: #fff;
-		border: 1px solid #ddd;
-		border-radius: 8px;
+		min-width: 120px;
+		padding: 15px;
+
+		h4 {
+			font-size: 1em;
+			margin-top: 0;
+			margin-bottom: 8px;
+		}
+
+		p {
+			font-size: 0.9em;
+			margin: 4px 0;
+		}
 	}
 
-	.status-item h4 {
-		margin-bottom: 8px;
-	}
+	&.wppo-dashboard-card--image-overview {
+		flex-basis: 100%;
+		max-width: 100%;
 
-	.status-item p {
-		margin: 4px 0;
+		@media (min-width: $breakpoint-tablet) {}
 	}
 }
 
-.image-overview {
-	max-width: 100%;
-	width: 100%;
-
-	@media (max-width: 768px) {
-		max-width: 300px;
-	}
-}
-
-.action-buttons {
+.wppo-action-buttons {
 	display: flex;
-	gap: 16px;
+	flex-wrap: wrap;
+	gap: 10px;
+	justify-content: flex-start;
 	margin-top: 16px;
-	justify-content: start;
 
-	@media (max-width: 768px) {
+	@media (max-width: $breakpoint-tablet) {
 		flex-direction: column;
-		gap: 10px;
 		width: 100%;
 	}
 }
 
-/* Button Styles */
+// Button Styles
+// -----------------------------------------------------------------------------
+.wppo-button {
+	background-color: $primary-color;
+	border: none;
+	border-radius: 4px;
+	color: $white-color;
+	cursor: pointer;
+	display: inline-block;
+	font-size: 1em;
+	line-height: 1.5;
+	margin-top: 10px;
+	padding: 8px 15px;
+	text-align: center;
+	text-decoration: none;
+	transition: background-color 0.2s ease, transform 0.1s ease;
+	user-select: none;
+
+	&:hover {
+		background-color: $primary-color-hover;
+	}
+
+	&:active {
+		background-color: $primary-color-active;
+		transform: translateY(1px);
+	}
+
+	&:disabled,
+	&.wppo-button--disabled {
+		background-color: $disabled-color;
+		cursor: not-allowed;
+		transform: none;
+	}
+
+	&--danger {
+		background-color: #dc3545;
+
+		&:hover {
+			background-color: #c82333;
+		}
+
+		&:active {
+			background-color: #bd2130;
+		}
+	}
+
+
+	@media (max-width: $breakpoint-tablet) {
+		font-size: 0.9em;
+		padding: 8px 12px;
+		width: 100%;
+	}
+}
+
+.wppo-warning-text {
+	color: #856404;
+	background-color: #fff3cd;
+	border: 1px solid #ffeeba;
+	padding: 8px 12px;
+	border-radius: 4px;
+	font-size: 0.9em;
+	margin-top: 10px;
+
+	svg {
+		margin-right: 5px;
+	}
+}
+
+.wppo-notice {
+	padding: 10px 15px;
+	margin-top: 15px;
+	border-radius: 4px;
+	border: 1px solid transparent;
+	font-size: 0.95em;
+
+	&.wppo-notice--error {
+		color: #721c24;
+		background-color: #f8d7da;
+		border-color: #f5c6cb;
+	}
+
+	&.wppo-notice--success {
+		color: #155724;
+		background-color: #d4edda;
+		border-color: #c3e6cb;
+	}
+}
+
+// Apply base button style to existing classes
 .clear-cache-btn,
 .optimize-assets-btn,
 .optimize-images-btn,
 .submit-button,
 .remove-optimized-btn {
-	background-color: #0073aa;
-	border: none;
-	border-radius: 4px;
-	color: #fff;
-	cursor: pointer;
-	font-size: 16px;
-	margin-top: 10px;
-	padding: 10px;
-	transition: background-color 0.3s ease, transform 0.2s ease;
-
-	&:hover {
-		background-color: #005177;
-	}
-
-	&:active {
-		background-color: #003d66;
-		transform: translateY(2px);
-	}
-
-	&:disabled {
-		background-color: #cccccc;
-		cursor: not-allowed;
-		transform: none;
-	}
-
-	@media (max-width: 768px) {
-		font-size: 14px;
-		padding: 8px;
-		width: 100%;
-	}
+	@extend .wppo-button;
 }
 
-/* Form Styles */
-.settings-form {
+// Form Styles
+// -----------------------------------------------------------------------------
+.wppo-settings-form {
+
 	h2 {
-		color: #0073aa;
+		color: $primary-color;
+		font-size: 1.5em;
+		margin-top: 0;
 		margin-bottom: 20px;
 	}
 
-	.checkbox-option {
+	.wppo-form-section {
+		margin-bottom: 30px;
+		padding-bottom: 20px;
+		border-bottom: 1px dashed $border-color;
+
+		&:last-child {
+			border-bottom: none;
+			margin-bottom: 0;
+		}
+	}
+
+	.wppo-field-group {
+		margin-bottom: 20px;
+	}
+
+	.wppo-checkbox-option {
+		align-items: flex-start;
+		display: flex;
 		margin-bottom: 15px;
 
+		input[type="checkbox"] {
+			margin-right: 8px;
+			margin-top: 0.2em;
+		}
+
 		label {
-			font-size: 18px;
+			color: $text-color;
+			cursor: pointer;
+			font-size: 1.1em;
 			font-weight: 600;
 		}
 	}
 
-	.sub-fields {
-		margin: 15px;
-	}
-
-	.text-area-field,
-	.input-field {
-		border: 1px solid #ccc;
-		border-radius: 4px;
-		display: block;
-		font-size: 14px;
-		margin-left: 25px;
+	.wppo-sub-fields {
+		border-left: 3px solid lighten($primary-color, 40%);
+		margin-left: 15px;
+		padding-left: 15px;
 		margin-top: 10px;
+	}
+
+	.wppo-label {
+		display: block;
+		font-weight: normal;
+		margin-bottom: 5px;
+		color: $text-color;
+	}
+
+	.wppo-text-area-field,
+	.wppo-input-field,
+	.wppo-select-field {
+		background-color: $white-color;
+		border: 1px solid $border-color;
+		border-radius: 4px;
+		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.07);
+		box-sizing: border-box;
+		display: block;
+		font-size: 1em;
+		margin-top: 5px;
 		max-width: 500px;
-		padding: 8px;
+		padding: 8px 10px;
 		width: 100%;
+
+		&:focus {
+			border-color: $primary-color;
+			box-shadow: 0 0 0 1px $primary-color;
+			outline: none;
+		}
 	}
 
-	.post-type-option {
-		margin-left: 25px;
+	.wppo-text-area-field {
+		min-height: 100px;
 	}
 
-	.option-description {
-		color: #555;
-		font-size: 14px;
-		margin-left: 25px;
+
+	.wppo-post-type-option {
+
+		label {
+			font-size: 1em;
+			font-weight: normal;
+		}
+	}
+
+	.wppo-option-description {
+		color: $text-color-light;
+		display: block;
+		font-size: 0.9em;
+		margin-top: 5px;
 	}
 }
 
-/* Recent Activities and Plugin Info */
-.plugin-info,
-.recent-activities {
-	margin-top: 40px;
-
-	background-color: #fff;
-	border: 1px solid #ddd;
+// Recent Activities and Plugin Info Section
+// -----------------------------------------------------------------------------
+.wppo-info-section,
+// Renamed for prefixing and generalization
+.wppo-recent-activities {
+	background-color: $white-color;
+	border: 1px solid $border-color;
 	border-radius: 8px;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+	margin-top: 30px;
 	padding: 20px;
+
+	h3 {
+		color: $primary-color;
+		font-size: 1.2em;
+		margin-top: 0;
+		margin-bottom: 15px;
+	}
 
 	ul {
 		list-style-type: none;
+		margin: 0;
 		padding-left: 0;
 
 		li {
-			border-bottom: 1px solid #ddd;
+			border-bottom: 1px solid lighten($border-color, 5%);
 			padding: 10px 0;
+			font-size: 0.95em;
+			color: $text-color;
+
+			&:last-child {
+				border-bottom: none;
+			}
+
+			a {
+				color: $primary-color;
+				text-decoration: none;
+
+				&:hover {
+					text-decoration: underline;
+				}
+			}
 		}
+	}
+
+	p {
+		color: $text-color-light;
+		font-size: 0.9em;
+		margin-bottom: 10px;
 	}
 }
 
-/* Animation */
-@keyframes fadeIn {
+// Animation
+// -----------------------------------------------------------------------------
+@keyframes wppoFadeIn {
+
 	from {
 		opacity: 0;
 		transform: translateY(10px);
@@ -316,9 +502,11 @@
 	}
 }
 
-/* Responsive Styles */
-@media (max-width: 768px) {
-	.dashboard-card {
-		width: 100%;
+// Responsive Adjustments (General)
+// -----------------------------------------------------------------------------
+@media (max-width: $breakpoint-tablet) {
+	.wppo-dashboard-card {
+		flex-basis: 100%;
+		max-width: 100%;
 	}
 }

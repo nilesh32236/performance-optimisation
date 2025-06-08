@@ -9,6 +9,7 @@
  *
  * @category PerformanceOptimization
  * @package  PerformanceOptimise\Inc\Minify
+ * @since 1.0.0
  */
 
 namespace PerformanceOptimise\Inc\Minify;
@@ -18,8 +19,9 @@ use MatthiasMullie\Minify\CSS as CSSMinifier;
 use MatthiasMullie\Minify\JS as JSMinifier;
 use PerformanceOptimise\Inc\Util;
 
+// Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
-	die();
+	exit;
 }
 
 /**
@@ -34,7 +36,7 @@ class HTML {
 	 * Instance of the HtmlMin class used for minifying HTML content.
 	 *
 	 * @since 1.0.0
-	 * @var HtmlMin $html_min
+	 * @var HtmlMin
 	 */
 	private HtmlMin $html_min;
 
@@ -42,7 +44,7 @@ class HTML {
 	 * The resulting minified HTML content after processing.
 	 *
 	 * @since 1.0.0
-	 * @var string $minified_html
+	 * @var string
 	 */
 	private string $minified_html;
 
@@ -50,19 +52,19 @@ class HTML {
 	 * Configuration options for minification, including settings for inline CSS and JavaScript.
 	 *
 	 * @since 1.0.0
-	 * @var array $options
+	 * @var array<string, mixed>
 	 */
 	private array $options;
 
 	/**
 	 * Constructor to initialize HTML minification.
 	 *
-	 * @param string $html The HTML content to minify.
-	 * @param array  $options Minification options.
 	 * @since 1.0.0
+	 * @param string               $html The HTML content to minify.
+	 * @param array<string, mixed> $options Minification options.
 	 */
-	public function __construct( $html, $options ) {
-		$this->options = (array) $options;
+	public function __construct( string $html, array $options ) {
+		$this->options = $options;
 		$this->initialize_minification_settings();
 		$this->minified_html = $this->minify_html( $html );
 	}
@@ -74,20 +76,18 @@ class HTML {
 	 */
 	private function initialize_minification_settings(): void {
 		$this->html_min = new HtmlMin();
-		// Get the home URL (e.g., http://localhost/awm).
-		$home_url = home_url();
+		$home_url       = home_url();
 
-		// Parse the home URL and extract just the base domain (e.g., http://localhost).
 		$parsed_url = wp_parse_url( $home_url );
-		$base_url   = $parsed_url['scheme'] . '://' . $parsed_url['host'];
+		$base_url   = ( $parsed_url['scheme'] ?? 'http' ) . '://' . ( $parsed_url['host'] ?? '' );
 
 		if ( isset( $parsed_url['port'] ) && ! empty( $parsed_url['port'] ) ) {
-			$base_url .= ( ':' . $parsed_url['port'] );
+			$base_url .= ':' . $parsed_url['port'];
 		}
 
 		$this->html_min
 			->doOptimizeViaHtmlDomParser( true )
-			->doRemoveComments( true )
+			->doRemoveComments( true )      // This is the culprit for comment-based placeholders.
 			->doSumUpWhitespace( true )
 			->doRemoveWhitespaceAroundTags( true )
 			->doOptimizeAttributes( true )
@@ -109,55 +109,101 @@ class HTML {
 	/**
 	 * Minify HTML content.
 	 *
+	 * @since 1.0.0
 	 * @param string $html The HTML content to minify.
 	 * @return string Minified HTML content.
-	 * @since 1.0.0
 	 */
 	private function minify_html( string $html ): string {
-		$html = $this->modify_canonical_link( $html );
+		$html = $this->modify_canonical_link_for_preservation( $html );
 
-		$content_aray = $this->extract_and_preserve_scripts_template( $html );
-		$html         = $content_aray[0];
-		$scripts      = $content_aray[1];
-		$html         = $this->minify_inline_css( $html );
-		$html         = $this->minify_inline_js( $html );
+		list($html_before_minify, $preserved_elements) = $this->extract_and_preserve_scripts_template( $html );
 
-		$html = $this->html_min->minify( $html );
+		$html_to_process = $html_before_minify;
 
-		if ( ! empty( $scripts ) ) {
-			$html = $this->restore_preserved_scripts_template( $html, $scripts );
+		if ( ! empty( $this->options['file_optimisation']['minifyInlineCSS'] ) && (bool) $this->options['file_optimisation']['minifyInlineCSS'] ) {
+			$html_to_process = $this->minify_inline_css( $html_to_process );
+		}
+		if ( ! empty( $this->options['file_optimisation']['minifyInlineJS'] ) && (bool) $this->options['file_optimisation']['minifyInlineJS'] ) {
+			$html_to_process = $this->minify_inline_js( $html_to_process );
 		}
 
-		$html = $this->restore_canonical_link( $html );
+		$minified_html_content = $this->html_min->minify( $html_to_process );
 
-		return $html;
+		if ( ! empty( $preserved_elements ) ) {
+			$minified_html_content = $this->restore_preserved_scripts_template( $minified_html_content, $preserved_elements );
+		}
+
+		$minified_html_content = $this->restore_preserved_canonical_link( $minified_html_content );
+
+		return $minified_html_content;
 	}
 
 	/**
-	 * Modify the canonical link in HTML.
+	 * Modify the canonical and shortlink href attributes to prevent minifier from altering them.
+	 * Uses data-wppo-href for preservation.
 	 *
+	 * @since 1.0.0
 	 * @param string $html The HTML content.
 	 * @return string Modified HTML content.
-	 * @since 1.0.0
 	 */
-	private function modify_canonical_link( string $html ): ?string {
+	private function modify_canonical_link_for_preservation( string $html ): string {
+		// This regex tries to be flexible with attributes before/after rel and href.
 		return preg_replace_callback(
-			'#<link\b[^>]*\brel=["\'](canonical|shortlink)["\'][^>]*>#i',
+			'#<link\b(?P<before_rel>[^>]*?)\brel=(?P<quote_rel>["\'])(?P<rel_val>canonical|shortlink)(?P=quote_rel)(?P<between_rel_href>[^>]*?)href=(?P<quote_href>["\'])(?P<href_val>[^"\']+)(?P=quote_href)(?P<after_href>[^>]*?)>#i',
 			function ( $matches ) {
-				$link_tag = str_replace( 'href', 'wppo-href', $matches[0] );
-
-				return $link_tag;
+				// Reconstruct the tag using data-wppo-href.
+				return sprintf(
+					'<link %s rel=%s%s%s %s data-wppo-href=%s%s%s %s>',
+					trim( $matches['before_rel'] ),
+					$matches['quote_rel'],
+					$matches['rel_val'],
+					$matches['quote_rel'],
+					trim( $matches['between_rel_href'] ),
+					$matches['quote_href'],
+					$matches['href_val'], // Already captured without quotes
+					$matches['quote_href'],
+					trim( $matches['after_href'] )
+				);
 			},
 			$html
 		);
 	}
 
 	/**
-	 * Extract and preserve script tags for later restoration.
+	 * Restore the canonical and shortlink href attributes.
 	 *
-	 * @param string $html The HTML content.
-	 * @return array Updated HTML and preserved script tags.
 	 * @since 1.0.0
+	 * @param string $html The HTML content.
+	 * @return string HTML content with the canonical link restored.
+	 */
+	private function restore_preserved_canonical_link( string $html ): string {
+		// This regex needs to find data-wppo-href.
+		// Minifiers might change attribute order or spacing, so make it flexible.
+		return preg_replace_callback(
+			'#<link\b(?P<before_data_href>[^>]*?)\bdata-wppo-href=(?P<quote_data_href>["\'])(?P<data_href_val>[^"\']+)(?P=quote_data_href)(?P<after_data_href>[^>]*?)>#i',
+			function ( $matches ) {
+				// Reconstruct with href.
+				return sprintf(
+					'<link %s href=%s%s%s %s>',
+					trim( $matches['before_data_href'] ),
+					$matches['quote_data_href'],
+					$matches['data_href_val'],
+					$matches['quote_data_href'],
+					trim( $matches['after_data_href'] )
+				);
+			},
+			$html
+		);
+	}
+
+
+	/**
+	 * Extract and preserve script tags with specific types, and pre/code/textarea blocks
+	 * using a script tag placeholder.
+	 *
+	 * @since 1.0.0
+	 * @param string $html The HTML content.
+	 * @return array{string, array<string>} Updated HTML and preserved elements.
 	 */
 	private function extract_and_preserve_scripts_template( $html ) {
 		$scripts = array();
@@ -186,14 +232,15 @@ class HTML {
 	}
 
 	/**
-	 * Restore preserved script tags in HTML.
+	 * Restore preserved elements in HTML using script tag placeholders.
 	 *
-	 * @param string $html The HTML content.
-	 * @param array  $scripts The preserved scripts.
-	 * @return string Updated HTML content.
 	 * @since 1.0.0
+	 * @param string        $html The HTML content (potentially minified).
+	 * @param array<string> $scripts The preserved elements.
+	 * @return string Updated HTML content.
 	 */
 	private function restore_preserved_scripts_template( $html, $scripts ) {
+
 		foreach ( $scripts as $index => $script ) {
 			$html = str_replace( '<script data-wppo-preserve=' . ( $index ) . '></script>', $script, $html );
 		}
@@ -202,61 +249,54 @@ class HTML {
 	}
 
 	/**
-	 * Restore the canonical link in HTML.
-	 *
-	 * @param string $html The HTML content.
-	 * @return string HTML content with the canonical link restored.
-	 * @since 1.0.0
-	 */
-	private function restore_canonical_link( string $html ): string {
-		return preg_replace_callback(
-			'#<link\b[^>]*\brel=(?:["\']?)(canonical|shortlink)(?:["\']?)[^>]*>#i',
-			function ( $matches ) {
-				$link_tag = str_replace( 'wppo-href', 'href', $matches[0] );
-
-				return $link_tag;
-			},
-			$html
-		);
-	}
-
-	/**
 	 * Minify inline CSS in HTML.
 	 *
+	 * @since 1.0.0
 	 * @param string $html The HTML content containing inline CSS.
 	 * @return string HTML content with minified CSS.
-	 * @since 1.0.0
 	 */
 	private function minify_inline_css( string $html ): string {
-		$html = preg_replace_callback(
-			'#<style\b[^>]*>(.*?)</style>#is',
+		return preg_replace_callback(
+			'#<style\b(?P<attributes>[^>]*)>(?P<content>.*?)</style>#is',
 			function ( $matches ) {
+				if ( stripos( $matches['attributes'], 'data-wppo-preserve' ) !== false ) {
+					return $matches[0];
+				}
 				try {
-					$css_minifier = new CSSMinifier( $matches[1] );
-					return '<style>' . $css_minifier->minify() . '</style>';
+					$css_content = trim( $matches['content'] );
+					if ( empty( $css_content ) ) {
+						return $matches[0];
+					}
+					$css_minifier = new CSSMinifier( $css_content );
+					$minified_css = $css_minifier->minify();
+					return '<style' . $matches['attributes'] . '>' . $minified_css . '</style>';
 				} catch ( \Exception $e ) {
-					// Return original content if there's an error.
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( 'Inline CSS Minification Error: ' . $e->getMessage() . ' - Content sample: ' . substr( $matches['content'], 0, 100 ) );
+					}
 					return $matches[0];
 				}
 			},
 			$html
 		);
-
-		return $html;
 	}
 
 	/**
 	 * Minify inline JavaScript in HTML.
 	 *
+	 * @since 1.0.0
 	 * @param string $html The HTML content containing inline JS.
 	 * @return string HTML content with minified JS.
-	 * @since 1.0.0
 	 */
 	private function minify_inline_js( string $html ): string {
 		return preg_replace_callback(
-			'#<script\b([^>]*)>(.*?)</script>#is',
+			'#<script\b(?P<attributes>[^>]*)>(?P<content>.*?)</script>#is',
 			function ( $matches ) {
-				return $this->safe_minify_js( $matches[1], $matches[2] );
+				if ( stripos( $matches['attributes'], 'src=' ) !== false || stripos( $matches['attributes'], 'data-wppo-preserve' ) !== false || stripos( $matches['attributes'], 'data-wppo-placeholder-id=' ) !== false ) {
+					return $matches[0]; // Skip external scripts, preserved scripts, and our placeholders.
+				}
+				return $this->safe_minify_js( $matches['attributes'], $matches['content'] );
 			},
 			$html
 		);
@@ -265,91 +305,109 @@ class HTML {
 	/**
 	 * Minify inline JavaScript safely.
 	 *
-	 * @param string $attributes The script attributes.
-	 * @param string $content The JavaScript content to minify.
-	 * @return string Minified JS or original content if error occurs.
 	 * @since 1.0.0
+	 * @param string $attributes The script attributes.
+	 * @param string $js_content The JavaScript content to minify.
+	 * @return string Minified JS or original content if error occurs.
 	 */
-	private function safe_minify_js( string $attributes, string $content ): string {
-		$content = trim( $content );
+	private function safe_minify_js( string $attributes, string $js_content ): string {
+		$trimmed_content = trim( $js_content );
 
-		// Check if type is 'text/javascript' or type is not defined.
+		if ( empty( $trimmed_content ) ) {
+			return '<script' . $attributes . '>' . $trimmed_content . '</script>';
+		}
+
 		$type_matches = array();
-		preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches );
+		preg_match( '/type=(["\'])(?P<type>[^"\']+)\1/i', $attributes, $type_matches );
+		$script_type = strtolower( $type_matches['type'] ?? 'text/javascript' );
 
-		$is_json = isset( $content[0] ) && ( '{' === $content[0] || '[' === $content[0] );
-		if ( $is_json || false !== strpos( $attributes, 'application/ld+json' ) ) {
-			return $this->safe_json_encode( $content, $attributes );
+		$is_json_char = '{' === $trimmed_content[0] || '[' === $trimmed_content[0];
+		if ( 'application/ld+json' === $script_type || ( 'text/javascript' === $script_type && $is_json_char ) ) {
+			return $this->safe_json_encode( $trimmed_content, $attributes );
 		}
 
-		if ( isset( $type_matches[2] ) && 'text/javascript' !== $type_matches[2] ) {
-			// If a type attribute exists and is not 'text/javascript', return unmodified content.
-			return '<script' . $attributes . '>' . $content . '</script>';
+		$allowed_js_types = array( 'text/javascript', 'application/javascript', 'application/ecmascript', 'module' );
+		if ( ! in_array( $script_type, $allowed_js_types, true ) ) {
+			return '<script ' . $attributes . '>' . $js_content . '</script>';
 		}
 
-		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
+		$delay_js_enabled = ! empty( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'];
+		if ( $delay_js_enabled ) {
+			$exclude_delay_js_config = $this->options['file_optimisation']['excludeDelayJS'] ?? '';
+			$exclude_delay_keywords  = array_merge( array( 'wppo-lazyload', 'data-wppo-preserve', 'jquery.min.js', 'jquery.js' ), Util::process_urls( (string) $exclude_delay_js_config ) );
+			$should_exclude_delay    = false;
 
-			$exclude_delay = array_merge( array( 'wppo-lazyload', 'data-wppo-preserve' ), Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() ) );
-
-			$should_exclude = false;
-			if ( ! empty( $exclude_delay ) ) {
-				foreach ( $exclude_delay as $exclude ) {
-					if (
-						false !== strpos( $attributes, trim( $exclude ) ) ||
-						false !== strpos( $content, trim( $exclude ) )
-						) {
-						$should_exclude = true;
-						break;
-					}
+			foreach ( $exclude_delay_keywords as $exclude_keyword ) {
+				if ( ! empty( $exclude_keyword ) && ( stripos( $attributes, $exclude_keyword ) !== false || stripos( $js_content, $exclude_keyword ) !== false ) ) {
+					$should_exclude_delay = true;
+					break;
 				}
 			}
 
-			if ( ! $should_exclude ) {
-				if ( preg_match( '/type=("|\')[^"\']*("|\')/', $attributes ) ) {
-					// If the 'type' attribute exists, modify it.
-					$attributes = preg_replace(
-						'/type=("|\')text\/javascript("|\')/',
-						'type="wppo/javascript" wppo-type="text/javascript"',
-						$attributes
-					);
+			if ( ! $should_exclude_delay ) {
+				$new_type_attr = 'type="wppo/javascript" data-wppo-type="' . esc_attr( $script_type ) . '"';
+				if ( isset( $type_matches[0] ) ) {
+					$attributes = str_replace( $type_matches[0], $new_type_attr, $attributes );
 				} else {
-					// If the 'type' attribute doesn't exist, add a new one.
-					$attributes .= ' type="wppo/javascript" wppo-type="text/javascript"';
+					// Prepend the type attribute to avoid issues if attributes string is empty.
+					$attributes = $new_type_attr . ( ! empty( $attributes ) ? ' ' . $attributes : '' );
 				}
 			}
 		}
 
 		try {
-			$js_minifier = new JSMinifier( $content );
-			return '<script' . $attributes . '>' . $js_minifier->minify() . '</script>';
+			$js_minifier = new JSMinifier( $trimmed_content );
+			$minified_js = $js_minifier->minify();
+			return '<script ' . $attributes . '>' . $minified_js . '</script>';
 		} catch ( \Exception $e ) {
-			// Return original content if there's an error.
-			return '<script' . $attributes . '>' . $content . '</script>';
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'Inline JS Minification Error: ' . $e->getMessage() . ' - Attributes: ' . $attributes . ' - Content sample: ' . substr( $trimmed_content, 0, 100 ) );
+			}
+			return '<script ' . $attributes . '>' . $js_content . '</script>';
 		}
 	}
 
 	/**
-	 * Safely JSON encode content.
+	 * Safely JSON encode content for ld+json scripts.
+	 * It minifies by re-encoding.
 	 *
-	 * @param string $content The JSON-LD content to encode.
+	 * @since 1.0.0
+	 * @param string $json_content The JSON-LD content to encode.
 	 * @param string $attributes The script attributes.
 	 * @return string Encoded JSON-LD or original content if error occurs.
-	 * @since 1.0.0
 	 */
-	private function safe_json_encode( string $content, string $attributes ): string {
+	private function safe_json_encode( string $json_content, string $attributes ): string {
 		try {
-			return '<script' . $attributes . '>' . wp_json_encode( json_decode( $content, true ) ) . '</script>';
+			// Basic check for valid JSON start/end.
+			$trimmed_json = trim( $json_content );
+			if ( ! ( ( str_starts_with( $trimmed_json, '{' ) && str_ends_with( $trimmed_json, '}' ) ) ||
+					( str_starts_with( $trimmed_json, '[' ) && str_ends_with( $trimmed_json, ']' ) ) ) ) {
+				// Not a typical JSON structure, return as is.
+				return '<script' . $attributes . '>' . $json_content . '</script>';
+			}
+
+			$decoded_json = json_decode( $trimmed_json, true );
+			if ( json_last_error() === JSON_ERROR_NONE ) {
+				return '<script' . $attributes . '>' . wp_json_encode( $decoded_json ) . '</script>';
+			}
+			// If decoding fails, it might be malformed or contain comments (which PHP json_decode doesn't support).
+			// Return original content. A more robust solution might involve a JSON cleaner/minifier library.
+			return '<script' . $attributes . '>' . $json_content . '</script>';
 		} catch ( \Exception $e ) {
-			// Return original content if there's an error.
-			return '<script' . $attributes . '>' . $content . '</script>';
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'JSON-LD Minification Error: ' . $e->getMessage() . ' - Content sample: ' . substr( $json_content, 0, 100 ) );
+			}
+			return '<script' . $attributes . '>' . $json_content . '</script>';
 		}
 	}
 
 	/**
 	 * Get the minified HTML content.
 	 *
-	 * @return string Minified HTML content.
 	 * @since 1.0.0
+	 * @return string Minified HTML content.
 	 */
 	public function get_minified_html(): string {
 		return $this->minified_html;
