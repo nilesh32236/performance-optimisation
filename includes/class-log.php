@@ -12,6 +12,11 @@
 
 namespace PerformanceOptimise\Inc;
 
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 /**
  * Log Class
  *
@@ -22,33 +27,72 @@ namespace PerformanceOptimise\Inc;
 class Log {
 
 	/**
+	 * Database table name for activity logs.
+	 *
+	 * @var string
+	 */
+	private static string $table_name = '';
+
+	/**
+	 * Cache group for activity logs.
+	 *
+	 * @var string
+	 */
+	private const CACHE_GROUP = 'wppo_activity_logs';
+
+	/**
 	 * Log constructor.
 	 *
 	 * Inserts a new activity log entry into the database.
 	 *
-	 * @param string $activity The activity description to log.
 	 * @since 1.0.0
+	 * @param string $activity The activity description to log.
 	 */
-	public function __construct( $activity ) {
+	public function __construct( string $activity ) {
 		global $wpdb;
+		self::init_table_name();
 
-		$table_name = $wpdb->prefix . 'wppo_activity_logs';
-
-		/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
-		// Direct query is required for inserting into a custom table.
-		$result = $wpdb->insert(
-			$table_name,
+		$sanitized_activity = wp_kses(
+			$activity,
 			array(
-				'activity' => sanitize_text_field( $activity ),
+				'a' => array(
+					'href'   => true,
+					'target' => true,
+				),
+			)
+		);
+
+		if ( empty( $sanitized_activity ) ) {
+			return;
+		}
+
+		/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching */
+		// Direct query is used for inserting into a custom table. Caching is handled at retrieval.
+		$result = $wpdb->insert(
+			self::$table_name,
+			array(
+				'activity'   => $sanitized_activity,
+				'created_at' => current_time( 'mysql', 1 ),
 			),
 			array(
+				'%s',
 				'%s',
 			)
 		);
 		/* phpcs:enable */
 
 		if ( $result ) {
-			wp_cache_delete( 'wppo_activity_logs' );
+			wp_cache_flush_group( self::CACHE_GROUP );
+		}
+	}
+
+	/**
+	 * Initializes the table name.
+	 */
+	private static function init_table_name(): void {
+		global $wpdb;
+		if ( empty( self::$table_name ) ) {
+			self::$table_name = $wpdb->prefix . 'wppo_activity_logs';
 		}
 	}
 
@@ -57,64 +101,61 @@ class Log {
 	 *
 	 * Retrieves recent activity logs from the database, using cache if available.
 	 *
-	 * @param array $params Pagination parameters including 'page' and 'per_page'.
-	 * @return array Cached or freshly queried results with pagination details.
 	 * @since 1.0.0
+	 * @param array<string,int> $params Pagination parameters including 'page' and 'per_page'.
+	 * @return array<string,mixed> Cached or freshly queried results with pagination details.
 	 */
-	public static function get_recent_activities( $params ) {
+	public static function get_recent_activities( array $params ): array {
 		global $wpdb;
+		self::init_table_name();
 
 		$page     = isset( $params['page'] ) ? absint( $params['page'] ) : 1;
 		$per_page = isset( $params['per_page'] ) ? absint( $params['per_page'] ) : 10;
-
-		// Calculate offset for pagination.
-		$offset = ( $page - 1 ) * $per_page;
+		$offset   = ( $page - 1 ) * $per_page;
 
 		// Cache key.
-		$cache_key = 'wppo_activity_logs_page_' . $page . '_per_page_' . $per_page;
-
-		// Attempt to fetch cached data.
-		$data = wp_cache_get( $cache_key, 'wppo_activity_logs' );
+		$cache_key = 'page_' . $page . '_per_page_' . $per_page;
+		$data      = wp_cache_get( $cache_key, self::CACHE_GROUP );
 
 		if ( false === $data ) {
-			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
-			// Direct query is required for custom table operations.
+			/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching */
+			// Direct query is used for custom table operations. Caching is handled here.
+			$total_items_query = 'SELECT COUNT(*) FROM ' . self::$table_name;
+			$total_items       = (int) $wpdb->get_var( $total_items_query ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 
-			// Get total number of activities.
-			$total_items = (int) $wpdb->get_var(
-				"SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs"
+			$results_query = $wpdb->prepare(
+				'SELECT id, activity, created_at FROM ' . self::$table_name . ' ORDER BY created_at DESC LIMIT %d OFFSET %d',
+				$per_page,
+				$offset
 			);
-
-			// Calculate total pages.
-			$total_pages = ceil( $total_items / $per_page );
-
-			// Fetch paginated results.
-			$results = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT * FROM {$wpdb->prefix}wppo_activity_logs ORDER BY created_at DESC LIMIT %d OFFSET %d",
-					$per_page,
-					$offset
-				),
-				ARRAY_A
-			);
+			$results       = $wpdb->get_results( $results_query, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 			/* phpcs:enable */
 
-			// Append additional data.
-			foreach ( $results as $index => $result ) {
-				$results[ $index ]['activity'] .= ' ' . esc_html( $result['created_at'] );
+			$total_pages = ( $per_page > 0 && $total_items > 0 ) ? ceil( $total_items / $per_page ) : 0;
+
+			$formatted_activities = array();
+			if ( is_array( $results ) ) {
+				foreach ( $results as $result ) {
+					$timestamp              = strtotime( $result['created_at'] );
+					$formatted_date         = date_i18n( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $timestamp );
+					$formatted_activities[] = array(
+						'id'           => (int) $result['id'],
+						'activity'     => $result['activity'],
+						'created_at'   => $formatted_date,
+						'raw_activity' => $result['activity'] . ' (' . $formatted_date . ')',
+					);
+				}
 			}
 
-			// Prepare data for caching.
 			$data = array(
-				'activities'   => $results,
+				'activities'   => $formatted_activities,
 				'total_items'  => $total_items,
 				'current_page' => $page,
 				'total_pages'  => $total_pages,
 				'per_page'     => $per_page,
 			);
 
-			// Store data in cache.
-			wp_cache_set( $cache_key, $data, 'wppo_activity_logs', HOUR_IN_SECONDS );
+			wp_cache_set( $cache_key, $data, self::CACHE_GROUP, HOUR_IN_SECONDS );
 		}
 
 		return $data;

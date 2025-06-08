@@ -1,19 +1,38 @@
 {
 	"name": "performance-optimisation",
-	"version": "1.0.0",
-	"description": "Performance optimisation plugin for WordPress",
-	"main": "./src/index.js",
+	"version": "1.0.1",
+	"description": "A WordPress plugin for performance optimization, including caching, HTML/CSS/JS minification, and image optimization.",
+	"main": "src/index.js",
+	"private": true,
 	"scripts": {
-		"build": "wp-scripts build",
-		"start": "wp-scripts start"
+		"build": "wp-scripts build src/index.js src/admin-bar.js src/lazyload.js --output-path=assets/js",
+		"start": "wp-scripts start src/index.js src/admin-bar.js src/lazyload.js --output-path=assets/js",
+		"lint:js": "wp-scripts lint-js src/**/*.js",
+		"lint:css": "wp-scripts lint-style 'src/css/**/*.scss'",
+		"lint": "npm run lint:js && npm run lint:css",
+		"format": "wp-scripts format src/**/*.js 'src/css/**/*.scss'",
+		"packages-update": "wp-scripts packages-update"
 	},
-	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
+	"author": {
+		"name": "Nilesh Kanzariya",
+		"email": "nilesh.kanzariya912@gmail.com",
+		"url": "https://profiles.wordpress.org/nileshkanzariya/"
+	},
 	"license": "GPL-2.0-or-later",
-	"devDependencies": {
-		"@wordpress/scripts": "^30.7.0"
-	},
 	"dependencies": {
-		"@fortawesome/free-solid-svg-icons": "^6.7.1",
-		"@fortawesome/react-fontawesome": "^0.2.2"
-	}
+		"@fortawesome/fontawesome-svg-core": "^6.5.1",
+		"@fortawesome/free-solid-svg-icons": "^6.5.1",
+		"@fortawesome/react-fontawesome": "^0.2.0",
+		"classnames": "^2.5.1",
+		"react-select": "^5.8.0",
+		"react-tabs": "^6.0.2",
+		"react-toastify": "^10.0.4"
+	},
+	"devDependencies": {
+		"@wordpress/scripts": "^27.6.0",
+		"eslint-plugin-jsx-a11y": "^6.8.0"
+	},
+	"browserslist": [
+		"extends @wordpress/browserslist-config"
+	]
 }

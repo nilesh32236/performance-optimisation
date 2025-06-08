@@ -13,18 +13,47 @@
 
 namespace PerformanceOptimise\Inc;
 
+// Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
-	exit; // Exit if accessed directly.
+	exit;
 }
 
 /**
  * Class Cron
  *
- * This class handles scheduling, managing, and processing cron jobs related to static page generation.
+ * This class handles scheduling, managing, and processing cron jobs related to static page generation and image optimization.
  *
  * @since 1.0.0
  */
 class Cron {
+
+	/**
+	 * Hook name for the main page preloading cron.
+	 *
+	 * @var string
+	 */
+	const PAGE_CRON_HOOK = 'wppo_page_cron_hook';
+
+	/**
+	 * Hook name for the image conversion cron.
+	 *
+	 * @var string
+	 */
+	const IMG_CRON_HOOK = 'wppo_img_conversation';
+
+	/**
+	 * Hook name for individual page generation.
+	 *
+	 * @var string
+	 */
+	const GENERATE_PAGE_HOOK = 'wppo_generate_static_page';
+
+	/**
+	 * Plugin options.
+	 *
+	 * @var array<string,mixed>
+	 */
+	private array $options;
 
 	/**
 	 * Constructor function.
@@ -34,12 +63,14 @@ class Cron {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
+		$this->options = get_option( 'wppo_settings', array() );
+
 		add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
-		add_action( 'wppo_page_cron_hook', array( $this, 'wppo_page_cron_callback' ) );
-		add_action( 'wppo_img_conversation', array( $this, 'img_convert_cron' ) );
 		add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 
-		add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
+		add_action( self::PAGE_CRON_HOOK, array( $this, 'run_page_preloading_tasks' ) );
+		add_action( self::IMG_CRON_HOOK, array( $this, 'run_image_conversion_tasks' ) );
+		add_action( self::GENERATE_PAGE_HOOK, array( $this, 'process_single_page_for_preloading' ), 10, 1 );
 	}
 
 	/**
@@ -47,86 +78,101 @@ class Cron {
 	 *
 	 * Adds a custom cron schedule that runs every 5 hours.
 	 *
-	 * @param array $schedules Existing cron schedules.
-	 * @return array Modified schedules with 'every_5_hours' added.
-	 *
 	 * @since 1.0.0
+	 * @param array<string,array<string,mixed>> $schedules Existing cron schedules.
+	 * @return array<string,array<string,mixed>> Modified schedules.
 	 */
-	public function add_custom_cron_interval( $schedules ): array {
-		$schedules['every_5_hours'] = array(
-			'interval' => 5 * 60 * 60,
-			'display'  => __( 'Every 5 Hours', 'performance-optimisation' ),
-		);
+	public function add_custom_cron_interval( array $schedules ): array {
+		if ( ! isset( $schedules['every_5_hours'] ) ) {
+			$schedules['every_5_hours'] = array(
+				'interval' => 5 * HOUR_IN_SECONDS,
+				'display'  => esc_html__( 'Every 5 Hours (Performance Optimise)', 'performance-optimisation' ),
+			);
+		}
 		return $schedules;
 	}
 
 	/**
-	 * Schedule the main cron job that triggers the processing of all pages.
-	 *
-	 * Schedules the `wppo_page_cron_hook` to run every 5 hours if it's not already scheduled.
+	 * Schedule the main cron jobs if enabled in settings.
 	 *
 	 * @since 1.0.0
 	 */
 	public function schedule_cron_jobs(): void {
-		if ( ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
-			wp_schedule_event( time(), 'every_5_hours', 'wppo_page_cron_hook' );
+		$enable_cron = $this->options['preload_settings']['enableCronJobs'] ?? true;
+
+		if ( ! $enable_cron ) {
+			self::clear_all_plugin_cron_jobs();
+			return;
 		}
 
-		if ( ! wp_next_scheduled( 'wppo_img_conversation' ) ) {
-			wp_schedule_event( time(), 'hourly', 'wppo_img_conversation' );
+		if ( ! empty( $this->options['preload_settings']['enablePreloadCache'] ) && ! wp_next_scheduled( self::PAGE_CRON_HOOK ) ) {
+			wp_schedule_event( time(), 'every_5_hours', self::PAGE_CRON_HOOK );
+		} elseif ( empty( $this->options['preload_settings']['enablePreloadCache'] ) && wp_next_scheduled( self::PAGE_CRON_HOOK ) ) {
+			wp_clear_scheduled_hook( self::PAGE_CRON_HOOK ); // Unschedule if feature disabled.
+		}
+
+		if ( ! empty( $this->options['image_optimisation']['convertImg'] ) && ! wp_next_scheduled( self::IMG_CRON_HOOK ) ) {
+			wp_schedule_event( time(), 'hourly', self::IMG_CRON_HOOK );
+		} elseif ( empty( $this->options['image_optimisation']['convertImg'] ) && wp_next_scheduled( self::IMG_CRON_HOOK ) ) {
+			wp_clear_scheduled_hook( self::IMG_CRON_HOOK ); // Unschedule if feature disabled.
 		}
 	}
 
 	/**
-	 * Callback for the main cron job.
-	 *
+	 * Callback for the main page preloading cron job.
 	 * Triggers the scheduling of individual page processing jobs.
 	 *
 	 * @since 1.0.0
 	 */
-	public function wppo_page_cron_callback(): void {
-		$this->schedule_page_cron_jobs();
+	public function run_page_preloading_tasks(): void {
+		if ( empty( $this->options['preload_settings']['enablePreloadCache'] ) ) {
+			return;
+		}
+		$this->schedule_individual_page_cache_generation();
 	}
 
 	/**
-	 * Schedule individual cron jobs for each page.
-	 *
-	 * Schedules a single event for each page to generate a static version.
+	 * Schedule individual cron jobs for each page to generate its static cache.
 	 *
 	 * @since 1.0.0
 	 */
-	private function schedule_page_cron_jobs(): void {
-		$pages = $this->get_all_pages();
+	private function schedule_individual_page_cache_generation(): void {
+		$page_ids = self::get_all_cacheable_post_ids();
 
-		if ( empty( $pages ) ) {
+		if ( empty( $page_ids ) ) {
 			return;
 		}
 
-		$options = get_option( 'wppo_settings', array() );
+		$exclude_urls_patterns = array();
+		if ( ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
+			$exclude_urls_patterns = Util::process_urls( (string) $this->options['preload_settings']['excludePreloadCache'] );
+		}
 
-		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
+		$delay_interval = 5;
+		$max_delay      = HOUR_IN_SECONDS / 2;
 
-		foreach ( $pages as $page_id ) {
-			$page_url       = get_permalink( $page_id );
+		foreach ( $page_ids as $page_id ) {
+			$page_url = get_permalink( $page_id );
+			if ( ! $page_url || is_wp_error( $page_url ) ) {
+				continue;
+			}
+			$page_url = rtrim( $page_url, '/' );
+
 			$should_exclude = false;
-
-			foreach ( $exclude_urls as $exclude_url ) {
-				$exclude_url = rtrim( $exclude_url, '/' );
-
-				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-					$exclude_url = home_url( $exclude_url );
+			foreach ( $exclude_urls_patterns as $pattern ) {
+				$pattern = rtrim( $pattern, '/' );
+				if ( 0 !== strpos( $pattern, 'http' ) ) {
+					$pattern = home_url( $pattern ); // Assume relative to home_url.
+					$pattern = rtrim( $pattern, '/' );
 				}
 
-				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-
-					if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
+				if ( str_ends_with( $pattern, '(.*)' ) ) {
+					$base_pattern = rtrim( str_replace( '(.*)', '', $pattern ), '/' );
+					if ( 0 === strpos( $page_url, $base_pattern ) ) {
 						$should_exclude = true;
 						break;
 					}
-				}
-
-				if ( $page_url === $exclude_url ) {
+				} elseif ( $page_url === $pattern ) {
 					$should_exclude = true;
 					break;
 				}
@@ -136,183 +182,166 @@ class Cron {
 				continue;
 			}
 
-			if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + \wp_rand( 0, 3600 ), 'wppo_generate_static_page', array( $page_id ) );
+			if ( ! wp_next_scheduled( self::GENERATE_PAGE_HOOK, array( $page_id ) ) ) {
+				wp_schedule_single_event( time() + $delay_interval, self::GENERATE_PAGE_HOOK, array( $page_id ) );
+				$delay_interval += wp_rand( 5, 15 );
+				if ( $delay_interval > $max_delay ) {
+					$delay_interval = $max_delay;
+				}
 			}
 		}
 	}
 
 	/**
-	 * Clear scheduled cron jobs.
-	 *
-	 * Unschedules all page processing cron jobs and clears the main hook.
+	 * Clear all scheduled cron jobs related to this plugin.
 	 *
 	 * @since 1.0.0
 	 */
-	public static function clear_cron_jobs(): void {
-		$pages = self::get_all_pages();
+	public static function clear_all_plugin_cron_jobs(): void {
+		wp_clear_scheduled_hook( self::PAGE_CRON_HOOK );
+		wp_clear_scheduled_hook( self::IMG_CRON_HOOK );
 
-		if ( empty( $pages ) ) {
+		// phpcs:ignore WordPress.PHP.DiscouragedFunctions.CronControl_get_cron_array
+		$crons = _get_cron_array();
+		if ( empty( $crons ) ) {
 			return;
 		}
 
-		foreach ( $pages as $page_id ) {
-			$hook      = 'wppo_generate_static_page_' . $page_id;
-			$timestamp = wp_next_scheduled( $hook );
-
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, $hook, array( $page_id ) );
+		foreach ( $crons as $timestamp => $cron_hooks ) {
+			if ( isset( $cron_hooks[ self::GENERATE_PAGE_HOOK ] ) ) {
+				foreach ( $cron_hooks[ self::GENERATE_PAGE_HOOK ] as $hook_details ) {
+					wp_unschedule_event( $timestamp, self::GENERATE_PAGE_HOOK, $hook_details['args'] );
+				}
 			}
 		}
-
-		wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 	}
 
 	/**
-	 * Process a specific page by generating its static version.
+	 * Process a specific page by invalidating its cache and triggering a visit to regenerate it.
 	 *
-	 * This method will be triggered by the cron job to mark the page as processed and load it.
-	 *
+	 * @since 1.0.0
 	 * @param int $page_id The ID of the page to process.
-	 * @since 1.0.0
 	 */
-	public function process_page( $page_id ): void {
-		if ( $page_id ) {
-			$this->mark_page_as_processed( $page_id );
-			$this->load_page( $page_id );
+	public function process_single_page_for_preloading( int $page_id ): void {
+		if ( ! $page_id ) {
+			return;
 		}
-	}
 
-	/**
-	 * Get a list of all pages to process.
-	 *
-	 * Retrieves all public pages and posts and ensures the front page is included.
-	 *
-	 * @return array List of page IDs to process.
-	 *
-	 * @since 1.0.0
-	 */
-	private static function get_all_pages(): array {
-		$front_page_id = get_option( 'page_on_front' );
+		$permalink = get_permalink( $page_id );
+		if ( ! $permalink || is_wp_error( $permalink ) ) {
+			return;
+		}
+		$url_path = trim( wp_parse_url( $permalink, PHP_URL_PATH ), '/' );
 
-		$post_types = get_post_types( array( 'public' => true ), 'names' );
+		$cache_manager = new Cache();
+		Cache::clear_cache( $url_path );
 
-		$excluded_post_types = array( 'attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset' );
-		$post_types          = array_diff( $post_types, $excluded_post_types );
-
-		$post_types = array_unique( array_merge( array_values( $post_types ), array( 'page', 'post' ) ) );
-
-		// Get all posts of these types.
-		$posts = get_posts(
+		wp_remote_get(
+			$permalink,
 			array(
-				'post_type'   => $post_types,
-				'post_status' => 'publish',
-				'numberposts' => -1,
-				'fields'      => 'ids',
+				'timeout'   => 15,
+				'blocking'  => false,
+				'sslverify' => apply_filters( 'https_local_ssl_verify', false ), // Handle self-signed certs in local dev.
 			)
 		);
-
-		// Add the front page ID at the beginning if it's not already included.
-		if ( $front_page_id && ! in_array( $front_page_id, $posts, true ) ) {
-			array_unshift( $posts, $front_page_id );
-		}
-
-		return $posts;
 	}
 
 	/**
-	 * Load a specific page.
+	 * Get a list of all public, cacheable post IDs.
 	 *
-	 * This method fetches the page via `wp_remote_get` to generate the static page.
-	 *
-	 * @param int $page_id The ID of the page to load.
 	 * @since 1.0.0
+	 * @return array<int> List of post IDs.
 	 */
-	private function load_page( $page_id ): void {
-		$permalink = get_permalink( $page_id );
-		if ( $permalink ) {
-			wp_remote_get( $permalink, array( 'timeout' => 30 ) );
+	private static function get_all_cacheable_post_ids(): array {
+		$post_types = get_post_types( array( 'public' => true ), 'names' );
+
+		$excluded_post_types = array( 'attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset', 'user_request' );
+		$post_types          = array_diff( $post_types, $excluded_post_types );
+		$post_types = array_unique( array_merge( array_values( $post_types ), array( 'page', 'post' ) ) );
+
+		$query_args = array(
+			'post_type'      => $post_types,
+			'post_status'    => 'publish',
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+		);
+
+		$post_ids = get_posts( $query_args );
+
+		$front_page_id = get_option( 'page_on_front' );
+		if ( $front_page_id && 'page' === get_post_type( (int) $front_page_id ) && ! in_array( (int) $front_page_id, $post_ids, true ) ) {
+			array_unshift( $post_ids, (int) $front_page_id );
 		}
+		$posts_page_id = get_option( 'page_for_posts' );
+		if ( $posts_page_id && 'page' === get_post_type( (int) $posts_page_id ) && ! in_array( (int) $posts_page_id, $post_ids, true ) ) {
+			$post_ids[] = (int) $posts_page_id;
+		}
+
+		return array_unique( array_map( 'intval', $post_ids ) );
 	}
 
+
 	/**
-	 * Mark a page as processed by clearing any previously generated cache files.
+	 * Callback for the image conversion cron.
+	 * Processes pending images in batches.
 	 *
-	 * Deletes both the `.html` and `.gz` cached versions of the page, if they exist.
-	 *
-	 * @param int $page_id The ID of the page to mark as processed.
 	 * @since 1.0.0
 	 */
-	private function mark_page_as_processed( $page_id ): void {
-		$permalink  = get_permalink( $page_id );
-		$url_path   = trim( wp_parse_url( $permalink, PHP_URL_PATH ), '/' );
-		$site_url   = get_option( 'siteurl' );
-		$parsed_url = wp_parse_url( $site_url );
-		$domain     = sanitize_text_field( $parsed_url['host'] . ( $parsed_url['port'] ?? '' ) );
-
-		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . "/cache/wppo/{$domain}/{$url_path}" );
-
-		if ( Util::init_filesystem() ) {
-			global $wp_filesystem;
-			$file_path      = "{$cache_dir}/index.html";
-			$gzip_file_path = "{$file_path}.gz";
-
-			if ( $wp_filesystem->exists( $file_path ) ) {
-				$wp_filesystem->delete( $file_path );
-			}
-
-			if ( $wp_filesystem->exists( $gzip_file_path ) ) {
-				$wp_filesystem->delete( $gzip_file_path );
-			}
+	public function run_image_conversion_tasks(): void {
+		if ( empty( $this->options['image_optimisation']['convertImg'] ) ) {
+			return;
 		}
-	}
 
-	/**
-	 * Convert images to optimized formats.
-	 *
-	 * Processes pending images and converts them to `webp` and/or `avif` formats
-	 * based on the plugin settings. Handles images in batches to optimize performance.
-	 *
-	 * @since 1.0.0
-	 */
-	public function img_convert_cron() {
-		$options       = get_option( 'wppo_settings', array() );
-		$img_converter = new Img_Converter( $options );
+		if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
+		}
+		$img_converter = new Img_Converter( $this->options );
+		$img_info      = get_option( 'wppo_img_info', array() );
 
-		$img_info = get_option( 'wppo_img_info', array() );
+		$conversion_format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp'; // Default to webp.
+		$batch_size        = isset( $this->options['image_optimisation']['batch'] ) ? absint( $this->options['image_optimisation']['batch'] ) : 50;
+		if ( $batch_size <= 0 ) {
+			$batch_size = 50;
+		}
 
-		$conversation_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
+		$processed_count = 0;
 
-		$batch_size = $options['image_optimisation']['batch'] ?? 50;
-
-		if ( in_array( $conversation_format, array( 'avif', 'both' ), true ) ) {
-			$images = $img_info['pending']['avif'] ?? array();
-
-			$counter = 0;
-			if ( ! empty( $images ) ) {
-				foreach ( $images as $img ) {
-					++$counter;
-
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
+		if ( in_array( $conversion_format, array( 'avif', 'both' ), true ) ) {
+			$avif_pending_images = $img_info['pending']['avif'] ?? array();
+			if ( ! empty( $avif_pending_images ) ) {
+				foreach ( $avif_pending_images as $image_relative_path ) {
+					if ( $processed_count >= $batch_size ) {
+						break;
 					}
+					$full_image_path = wp_normalize_path( ABSPATH . ltrim( $image_relative_path, '/' ) );
+					$img_converter->convert_image( $full_image_path, 'avif' );
+					++$processed_count;
 				}
 			}
 		}
 
-		if ( in_array( $conversation_format, array( 'webp', 'both' ), true ) ) {
-			$images = $img_info['pending']['webp'] ?? array();
-
-			$counter = 0;
-			if ( ! empty( $images ) ) {
-				foreach ( $images as $img ) {
-					++$counter;
-
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
+		if ( $processed_count < $batch_size && in_array( $conversion_format, array( 'webp', 'both' ), true ) ) {
+			$webp_pending_images = $img_info['pending']['webp'] ?? array();
+			if ( ! empty( $webp_pending_images ) ) {
+				foreach ( $webp_pending_images as $image_relative_path ) {
+					if ( $processed_count >= $batch_size ) {
+						break;
 					}
+					$full_image_path = wp_normalize_path( ABSPATH . ltrim( $image_relative_path, '/' ) );
+					$img_converter->convert_image( $full_image_path, 'webp' ); // Default format for convert_image is webp.
+					++$processed_count;
 				}
 			}
+		}
+
+		$img_info_after_batch = get_option( 'wppo_img_info', array() ); // Re-fetch.
+		$has_more_pending     = ( ! empty( $img_info_after_batch['pending']['avif'] ) && in_array( $conversion_format, array( 'avif', 'both' ), true ) ) ||
+								( ! empty( $img_info_after_batch['pending']['webp'] ) && in_array( $conversion_format, array( 'webp', 'both' ), true ) );
+
+		if ( $has_more_pending && ! wp_next_scheduled( self::IMG_CRON_HOOK ) ) {
+			wp_schedule_single_event( time() + ( 5 * MINUTE_IN_SECONDS ), self::IMG_CRON_HOOK );
+		} elseif ( ! $has_more_pending && ! wp_next_scheduled( self::IMG_CRON_HOOK ) && ! empty( $this->options['image_optimisation']['convertImg'] ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'hourly', self::IMG_CRON_HOOK );
 		}
 	}
 }

@@ -12,10 +12,15 @@
 
 namespace PerformanceOptimise\Inc;
 
+// Exit if accessed directly.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 /**
  * Img_Converter Class
  *
- * A class to handle image format conversions (WebP and AVIF) for performance optimization.
+ * Handles image format conversions to WebP and AVIF.
  *
  * @since 1.0.0
  */
@@ -24,520 +29,372 @@ class Img_Converter {
 	/**
 	 * Configuration options for image optimization.
 	 *
-	 * @var array
+	 * @var array<string, mixed>
 	 * @since 1.0.0
 	 */
-	private $options;
+	private array $options;
 
 	/**
-	 * Available formats for image conversion.
+	 * Image optimization specific settings.
 	 *
-	 * @var array
+	 * @var array<string, mixed>
 	 * @since 1.0.0
 	 */
-	private array $available_format = array(
-		'webp',
-		'avif',
-		'both',
-	);
+	private array $img_opt_settings;
 
 	/**
-	 * The format to convert images to (webp, avif, or both).
+	 * Filesystem object.
 	 *
-	 * @var string
-	 * @since 1.0.0
+	 * @var \WP_Filesystem_Base|null
 	 */
-	private $format;
-
-	/**
-	 * List of images to exclude from conversion.
-	 *
-	 * @var array
-	 * @since 1.0.0
-	 */
-	private $exclude_imgs = array();
+	private ?\WP_Filesystem_Base $filesystem;
 
 	/**
 	 * Img_Converter constructor.
 	 *
-	 * @param array $options Options for configuring image optimization.
 	 * @since 1.0.0
+	 * @param array<string, mixed> $options Options for configuring image optimization.
 	 */
-	public function __construct( $options ) {
-		$this->options = $options;
-
-		if ( isset( $this->options['image_optimisation']['excludeWebPImages'] ) && ! empty( $this->options['image_optimisation']['excludeWebPImages'] ) ) {
-			$this->exclude_imgs = Util::process_urls( $this->options['image_optimisation']['excludeWebPImages'] );
-		}
-
-		$this->format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
+	public function __construct( array $options ) {
+		$this->options          = $options;
+		$this->img_opt_settings = $this->options['image_optimisation'] ?? array();
+		$this->filesystem       = Util::init_filesystem();
 	}
 
 	/**
 	 * Convert an image to WebP or AVIF format.
 	 *
-	 * @param string $source_image Path to the source image.
-	 * @param string $format The desired format ('webp' or 'avif').
-	 * @param int    $quality Quality level of the converted image (0-100).
+	 * @since 1.0.0
+	 * @param string $source_image_path Absolute path to the source image.
+	 * @param string $target_format     The desired format ('webp' or 'avif'). Default 'webp'.
+	 * @param int    $quality           Quality level of the converted image (1-100). Default -1 (uses GD default or Imagick quality).
 	 * @return bool True on success, false on failure.
-	 * @since 1.0.0
 	 */
-	public function convert_image( string $source_image, string $format = 'webp', int $quality = -1 ): bool {
-
-		if ( ! in_array( $format, $this->available_format, true ) ) {
-			$this->update_conversion_status( $source_image, 'failed', $format );
+	public function convert_image( string $source_image_path, string $target_format = 'webp', int $quality = -1 ): bool {
+		if ( ! $this->filesystem || ! $this->filesystem->exists( $source_image_path ) || ! $this->filesystem->is_readable( $source_image_path ) ) {
+			$this->update_conversion_status( $source_image_path, 'failed', $target_format, 'Source file not found or not readable.' );
 			return false;
 		}
 
-		if ( ! function_exists( 'imagecreatefromjpeg' ) || ! function_exists( 'imagecreatefrompng' ) ) {
-			$this->update_conversion_status( $source_image, 'failed', $format );
+		// Ensure target format is valid.
+		if ( ! in_array( $target_format, array( 'webp', 'avif' ), true ) ) {
+			$this->update_conversion_status( $source_image_path, 'failed', $target_format, 'Invalid target format specified.' );
 			return false;
 		}
 
-		if ( ! file_exists( $source_image ) ) {
-			$this->update_conversion_status( $source_image, 'failed', $format );
+		if ( 'webp' === $target_format && ! function_exists( 'imagewebp' ) ) {
+			$this->update_conversion_status( $source_image_path, 'failed', $target_format, 'WebP support (imagewebp) not available in GD.' );
+			return false;
+		}
+		if ( 'avif' === $target_format && ! function_exists( 'imageavif' ) ) {
+			$this->update_conversion_status( $source_image_path, 'failed', $target_format, 'AVIF support (imageavif) not available in GD.' );
 			return false;
 		}
 
-		$image_info = getimagesize( $source_image );
+		$converted_image_path = self::get_img_path( $source_image_path, $target_format );
+		if ( $this->filesystem->exists( $converted_image_path ) && $this->filesystem->mtime( $converted_image_path ) >= $this->filesystem->mtime( $source_image_path ) ) {
+			$this->update_conversion_status( $source_image_path, 'completed', $target_format, 'Converted file already exists and is up-to-date.' );
+			return true;
+		}
 
-		if ( empty( $image_info ) ) {
-			$this->update_conversion_status( $source_image, 'failed', $format );
+		if ( ! Util::prepare_cache_dir( dirname( $converted_image_path ) ) ) {
+			$this->update_conversion_status( $source_image_path, 'failed', $target_format, 'Could not create cache directory for converted image.' );
 			return false;
 		}
 
+		$image_info = getimagesize( $source_image_path );
+		if ( false === $image_info ) {
+			$this->update_conversion_status( $source_image_path, 'failed', $target_format, 'Could not get image size/type.' );
+			return false;
+		}
 		$image_type = $image_info[2];
-		$image      = null;
 
-		try {
-			switch ( $image_type ) {
-				case IMAGETYPE_JPEG:
-					$image = imagecreatefromjpeg( $source_image );
-					break;
+		if ( $quality < 1 || $quality > 100 ) {
+			$quality = 'webp' === $target_format ? 82 : 50; // Common defaults.
+			$quality = apply_filters( "wppo_conversion_quality_{$target_format}", $quality, $source_image_path );
+		}
 
-				case IMAGETYPE_PNG:
-					$image = imagecreatefrompng( $source_image );
+		if ( IMAGETYPE_GIF === $image_type ) {
+			if ( 'webp' === $target_format && class_exists( '\Imagick' ) ) {
+				return $this->convert_gif_to_webp_imagick( $source_image_path, $converted_image_path, $quality );
+			} elseif ( 'avif' === $target_format ) {
+				$this->update_conversion_status( $source_image_path, 'skipped', $target_format, 'AVIF conversion for GIF not supported well by GD.' );
+				return false;
+			}
+		}
 
-					if ( ! $image ) {
-						$this->update_conversion_status( $source_image, 'failed', $format );
-						return false;
-					}
-
-					$image = $this->convert_palette_to_truecolor( $image );
-					imagealphablending( $image, true ); // For transparency.
-					imagesavealpha( $image, true );
-					break;
-
-				case IMAGETYPE_WEBP:
-					if ( in_array( $format, array( 'avif', 'both' ), true ) ) {
-						if ( ! function_exists( 'imageavif' ) ) {
-							$this->update_conversion_status( $source_image, 'failed', $format );
-							return false;
-						}
-
-						if ( $this->is_animated_webp( $source_image ) ) {
-							$this->update_conversion_status( $source_image, 'failed', $format );
-							return false;
-						}
-
-						try {
-							$image = imagecreatefromwebp( $source_image );
-							if ( ! $image ) {
-								$this->update_conversion_status( $source_image, 'failed', $format );
-								return false;
-							}
-
-							$avif_path = $this->get_img_path( $source_image, 'avif' );
-							Util::prepare_cache_dir( dirname( $avif_path ) );
-
-							if ( imageavif( $image, $avif_path, $quality ) ) {
-								$this->update_conversion_status( $source_image, 'completed', $format );
-							} else {
-								$this->update_conversion_status( $source_image, 'failed', $format );
-								imagedestroy( $image );
-								return false;
-							}
-							imagedestroy( $image );
-						} catch ( \Exception $e ) {
-							$this->update_conversion_status( $source_image, 'failed', $format );
-							return false;
-						}
-					}
+		$image_resource = null;
+		switch ( $image_type ) {
+			case IMAGETYPE_JPEG:
+				$image_resource = imagecreatefromjpeg( $source_image_path );
+				break;
+			case IMAGETYPE_PNG:
+				$image_resource = imagecreatefrompng( $source_image_path );
+				if ( $image_resource ) {
+					imagepalettetotruecolor( $image_resource ); // Ensure truecolor for alpha blending.
+					imagealphablending( $image_resource, true );
+					imagesavealpha( $image_resource, true );
+				}
+				break;
+			case IMAGETYPE_GIF:
+				$image_resource = imagecreatefromgif( $source_image_path );
+				break;
+			case IMAGETYPE_WEBP:
+				if ( 'avif' === $target_format ) {
+					$image_resource = imagecreatefromwebp( $source_image_path );
+				} else {
+					$this->update_conversion_status( $source_image_path, 'skipped', $target_format, 'Source is already WebP.' );
 					return true;
-				case IMAGETYPE_GIF:
-					if ( ! extension_loaded( 'imagick' ) ) {
-						$this->update_conversion_status( $source_image, 'failed', $format );
-						return false;
-					}
-
-					if ( 'webp' !== $format ) {
-						$this->update_conversion_status( $source_image, 'completed', $format );
-						return false;
-					}
-
-					$webp_path = $this->get_img_path( $source_image, 'webp' );
-
-					try {
-
-						if ( file_exists( $webp_path ) ) {
-							$this->update_conversion_status( $source_image, 'completed', $format );
-							return true;
-						}
-						// Initialize Imagick and read the image file.
-						$imagick = new \Imagick();
-						$imagick->readImage( $source_image );
-
-						// Check if the image has transparency (alpha channel).
-						$has_transparency = $imagick->getImageAlphaChannel() === \Imagick::ALPHACHANNEL_ACTIVATE;
-
-						// Set WebP format.
-						$imagick->setImageFormat( 'webp' );
-
-						// If transparent, use lossless compression for WebP to retain transparency.
-						if ( $has_transparency ) {
-							$imagick->setImageCompressionQuality( $quality );
-							$imagick->setImageAlphaChannel( \Imagick::ALPHACHANNEL_KEEP );  // Keep transparency.
-							$imagick->setOption( 'webp:lossless', 'true' );
-						} else {
-							// For non-transparent images, use lossy compression.
-							$imagick->setImageCompressionQuality( $quality );
-							$imagick->setOption( 'webp:lossless', 'false' );
-						}
-
-						Util::prepare_cache_dir( dirname( $webp_path ) );
-						// Write the WebP file.
-						if ( $imagick->writeImages( $webp_path, true ) ) {
-							$this->update_conversion_status( $source_image, 'completed', 'webp' );
-						} else {
-							$this->update_conversion_status( $source_image, 'failed', 'webp' );
-							return false;
-						}
-
-						$imagick->clear();
-						return true;
-					} catch ( \Exception $e ) {
-						$this->update_conversion_status( $source_image, 'failed', $format );
-						wp_delete_file( $webp_path );
-						return false;
-					}
-				default:
-					$this->update_conversion_status( $source_image, 'failed', $format );
-					return false; // Unsupported format.
-			}
-
-			$success = true;
-
-			if ( in_array( $format, array( 'webp', 'both' ), true ) ) {
-				$webp_path = $this->get_img_path( $source_image, 'webp' );
-
-				if ( ! file_exists( $webp_path ) ) {
-					if ( ! function_exists( 'imagewebp' ) || ! Util::prepare_cache_dir( dirname( $webp_path ) ) || ! imagewebp( $image, $webp_path, $quality ) ) {
-						$success = false;
-						$this->update_conversion_status( $source_image, 'failed', 'webp' );
-					} else {
-						$this->update_conversion_status( $source_image, 'completed', 'webp' );
-					}
-				} else {
-					$this->update_conversion_status( $source_image, 'completed', 'webp' );
 				}
+				break;
+			default:
+				$this->update_conversion_status( $source_image_path, 'failed', $target_format, 'Unsupported source image type for GD conversion.' );
+				return false;
+		}
+
+		if ( ! $image_resource ) {
+			$this->update_conversion_status( $source_image_path, 'failed', $target_format, 'Could not create image resource from source.' );
+			return false;
+		}
+
+		$conversion_success = false;
+		if ( 'webp' === $target_format ) {
+			$conversion_success = imagewebp( $image_resource, $converted_image_path, $quality );
+		} elseif ( 'avif' === $target_format ) {
+			$conversion_success = imageavif( $image_resource, $converted_image_path, $quality, -1 ); // AVIF speed can be -1 for default.
+		}
+
+		imagedestroy( $image_resource );
+
+		if ( $conversion_success ) {
+			$this->update_conversion_status( $source_image_path, 'completed', $target_format );
+			return true;
+		} else {
+			if ( $this->filesystem->exists( $converted_image_path ) ) {
+				$this->filesystem->delete( $converted_image_path );
+			}
+			$this->update_conversion_status( $source_image_path, 'failed', $target_format, 'GD conversion function failed.' );
+			return false;
+		}
+	}
+
+	/**
+	 * Converts GIF to animated WebP using Imagick.
+	 *
+	 * @param string $source_gif_path Path to the source GIF.
+	 * @param string $target_webp_path Path to save the converted WebP.
+	 * @param int    $quality Conversion quality.
+	 * @return bool True on success, false on failure.
+	 */
+	private function convert_gif_to_webp_imagick( string $source_gif_path, string $target_webp_path, int $quality ): bool {
+		try {
+			$imagick = new \Imagick();
+			$imagick->readImage( $source_gif_path );
+			$imagick = $imagick->coalesceImages(); // Important for animations.
+
+			$imagick->setImageFormat( 'webp' );
+			$imagick->setImageCompressionQuality( $quality ); // General quality.
+			$imagick->setOption( 'webp:lossless', 'false' ); // Or true based on needs.
+			if ( $imagick->getImageAlphaChannel() ) {
+				$imagick->setOption( 'webp:alpha-compression', '1' ); // Enable alpha compression.
+				$imagick->setOption( 'webp:alpha-quality', '100' ); // Lossless alpha.
 			}
 
-			if ( in_array( $format, array( 'avif', 'both' ), true ) ) {
-				$avif_path = $this->get_img_path( $source_image, 'avif' );
-
-				if ( ! file_exists( $avif_path ) ) {
-					Util::prepare_cache_dir( dirname( $avif_path ) );
-					if ( ! function_exists( 'imageavif' ) || ! imageavif( $image, $avif_path, $quality ) ) {
-						$this->update_conversion_status( $source_image, 'failed', 'avif' );
-					} else {
-						$this->update_conversion_status( $source_image, 'completed', 'avif' );
-					}
-				} else {
-					$this->update_conversion_status( $source_image, 'completed', 'avif' );
-				}
+			if ( $imagick->writeImages( $target_webp_path, true ) ) {
+				$this->update_conversion_status( $source_gif_path, 'completed', 'webp', 'Converted GIF to WebP using Imagick.' );
+				$imagick->clear();
+				return true;
+			} else {
+				$this->update_conversion_status( $source_gif_path, 'failed', 'webp', 'Imagick writeImages failed for GIF to WebP.' );
 			}
-
-			imagedestroy( $image ); // Clean up memory.
-			return $success;
+			$imagick->clear();
 		} catch ( \Exception $e ) {
-
-			$this->update_conversion_status( $source_image, 'failed', $format );
-			// Clean up memory if image resource was created.
-			if ( is_resource( $image ) ) {
-				imagedestroy( $image );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'Imagick GIF to WebP conversion error: ' . $e->getMessage() );
 			}
-
-			return false;
+			$this->update_conversion_status( $source_gif_path, 'failed', 'webp', 'Exception during Imagick GIF to WebP conversion: ' . $e->getMessage() );
 		}
-	}
-
-	/**
-	 * Convert an image palette to true color if it is not already in true color.
-	 *
-	 * @param \GdImage $image The image resource.
-	 * @return \GdImage The true color image resource.
-	 * @since 1.0.0
-	 */
-	private function convert_palette_to_truecolor( $image ) {
-		if ( ! imageistruecolor( $image ) ) {
-			$width     = imagesx( $image );
-			$height    = imagesy( $image );
-			$truecolor = imagecreatetruecolor( $width, $height );
-			imagealphablending( $truecolor, false );
-			imagesavealpha( $truecolor, true );
-			$transparent = imagecolorallocatealpha( $truecolor, 255, 255, 255, 127 );
-			imagefill( $truecolor, 0, 0, $transparent );
-			imagecopy( $truecolor, $image, 0, 0, 0, 0, $width, $height );
-			imagedestroy( $image );
-			return $truecolor;
-		}
-		return $image;
-	}
-
-	/**
-	 * Check if a WebP image is animated.
-	 *
-	 * @param string $file Path to the WebP file.
-	 * @return bool True if the WebP image is animated, false otherwise.
-	 * @since 1.0.0
-	 */
-	private function is_animated_webp( $file ) {
-		global $wp_filesystem;
-
-		if ( ! Util::init_filesystem() ) {
-			return false;
-		}
-
-		if ( ! $wp_filesystem->exists( $file ) || ! $wp_filesystem->is_readable( $file ) ) {
-			return false;
-		}
-
-		$header = $wp_filesystem->get_contents( $file );
-		if ( false === $header ) {
-			return false;
-		}
-
-		$header = substr( $header, 0, 40 );
-
-		if ( 'RIFF' !== substr( $header, 0, 4 ) || 'WEBP' !== substr( $header, 8, 4 ) ) {
-			return false;
-		}
-
-		return false !== strpos( $header, 'ANIM' );
+		return false;
 	}
 
 
 	/**
-	 * Get the WebP file path.
+	 * Get the local filesystem path for the converted image.
+	 * The converted images are stored in `wp-content/wppo/uploads/...`
+	 * mirroring the original structure from `wp-content/uploads/...`.
 	 *
-	 * @param string $source_image The source image path.
-	 * @param string $format The desired format ('webp' or 'avif').
-	 * @return string The path where the converted image will be saved.
 	 * @since 1.0.0
+	 * @param string $source_image_local_path Absolute local path to the source image.
+	 * @param string $target_format           The desired format ('webp' or 'avif'). Default 'webp'.
+	 * @return string The absolute local path where the converted image will be saved.
 	 */
-	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
-		$info = pathinfo( $source_image );
+	public static function get_img_path( string $source_image_local_path, string $target_format = 'webp' ): string {
+		$normalized_source_path = wp_normalize_path( $source_image_local_path );
+		$wp_content_dir         = wp_normalize_path( WP_CONTENT_DIR );
 
-		$new_file_name = $info['filename'] . '.' . $format;
+		$filename_no_ext = pathinfo( $normalized_source_path, PATHINFO_FILENAME );
+		$new_filename    = $filename_no_ext . '.' . $target_format;
 
-		$new_image_path = wp_normalize_path( $info['dirname'] . '/' . $new_file_name );
+		if ( str_starts_with( $normalized_source_path, $wp_content_dir ) ) {
+			$relative_path_from_content = ltrim( str_replace( $wp_content_dir, '', $normalized_source_path ), '/\\' );
+			$original_dirname_relative  = dirname( $relative_path_from_content );
 
-		// If home_url is present, remove it from the path.
-		if ( 0 === strpos( $new_image_path, wp_normalize_path( ABSPATH ) ) ) {
-			$local_path = str_replace(
-				wp_normalize_path( WP_CONTENT_DIR ),
-				wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
-				$new_image_path
-			);
-			return $local_path;
+			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . '/wppo/' . $original_dirname_relative );
+		} else {
+			$abspath                    = wp_normalize_path( ABSPATH );
+			$relative_path_from_abspath = ltrim( str_replace( $abspath, '', $normalized_source_path ), '/\\' );
+			$original_dirname_relative  = dirname( $relative_path_from_abspath );
+
+			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . '/wppo/' . $original_dirname_relative );
 		}
 
-		$relative_path = wp_normalize_path( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $new_image_path ) );
-
-		$local_path = str_replace(
-			wp_normalize_path( WP_CONTENT_DIR ),
-			wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
-			wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) )
-		);
-
-		return $local_path;
+		return trailingslashit( $new_image_dir_absolute ) . $new_filename;
 	}
+
 
 	/**
 	 * Get the URL of the converted image.
 	 *
-	 * @param string $source_image The source image URL.
-	 * @param string $format The desired format ('webp' or 'avif').
-	 * @return string The URL of the converted image.
 	 * @since 1.0.0
+	 * @param string $source_image_url URL of the source image.
+	 * @param string $target_format    The desired format ('webp' or 'avif'). Default 'webp'.
+	 * @return string The URL of the converted image.
 	 */
-	public static function get_img_url( string $source_image, string $format = 'webp' ): string {
-
-		if ( 0 === strpos( $source_image, home_url() ) ) {
-			// Replace the extension only at the end of the file name.
-			$path_info     = pathinfo( $source_image );
-			$converted_img = $path_info['dirname'] . '/' . $path_info['filename'] . '.' . $format;
-
-			// Adjust for the wppo directory.
-			$converted_img = str_replace( WP_CONTENT_URL, WP_CONTENT_URL . '/wppo', $converted_img );
-
-			return $converted_img;
+	public static function get_img_url( string $source_image_url, string $target_format = 'webp' ): string {
+		$source_url_path = wp_parse_url( $source_image_url, PHP_URL_PATH );
+		if ( empty( $source_url_path ) ) {
+			return $source_image_url;
 		}
 
-		return $source_image;
+		$filename_no_ext = pathinfo( $source_url_path, PATHINFO_FILENAME );
+		$new_filename    = $filename_no_ext . '.' . $target_format;
+
+		$source_image_dir_path = dirname( $source_url_path );
+
+		$content_url            = content_url();
+		$site_url               = site_url();
+		$converted_path_segment = '';
+
+		if ( str_starts_with( $source_image_url, $content_url ) ) {
+			$relative_dir_from_content = ltrim( str_replace( $content_url, '', $source_image_dir_path ), '/' );
+			$relative_dir_from_content = ltrim( str_replace( 'wp-content', '', $relative_dir_from_content ), '/' );
+			$converted_path_segment    = 'wppo/' . $relative_dir_from_content;
+		} elseif ( str_starts_with( $source_image_url, $site_url ) ) {
+			$relative_dir_from_site = ltrim( str_replace( $site_url, '', $source_image_dir_path ), '/' );
+			$converted_path_segment = 'wppo/' . $relative_dir_from_site;
+		} else {
+			return $source_image_url;
+		}
+		$converted_path_segment = preg_replace( '#/+#', '/', $converted_path_segment ); // Remove double slashes.
+		$converted_path_segment = rtrim( $converted_path_segment, '/' );
+
+		return trailingslashit( $content_url ) . trailingslashit( $converted_path_segment ) . $new_filename;
 	}
 
 
 	/**
-	 * Convert uploaded images to WebP or AVIF format upon attachment upload.
+	 * Convert uploaded images (and their generated sizes) to WebP or AVIF format upon attachment metadata generation.
+	 * This method queues images for conversion.
 	 *
-	 * @param array $metadata The attachment metadata.
-	 * @param int   $attachment_id The attachment ID.
-	 * @return array|\WP_Error The modified attachment metadata, or WP_Error on failure.
 	 * @since 1.0.0
+	 * @param array<string,mixed> $metadata      The attachment metadata.
+	 * @param int                 $attachment_id The attachment ID.
+	 * @return array<string,mixed> The (unmodified) attachment metadata.
 	 */
-	public function convert_image_to_next_gen_format( $metadata, $attachment_id ) {
-		$upload_dir = wp_upload_dir();
+	public function convert_uploaded_image_and_sizes( array $metadata, int $attachment_id ): array {
+		$original_file_path = get_attached_file( $attachment_id ); // Absolute path.
+		if ( ! $original_file_path || ! file_exists( $original_file_path ) ) {
+			return $metadata;
+		}
 
-		try {
-			// Get the full file path of the original image.
-			$file = get_attached_file( $attachment_id );
-			if ( ! file_exists( $file ) ) {
+		$original_image_url = wp_get_attachment_url( $attachment_id );
+		$exclude_patterns   = Util::process_urls( (string) ( $this->img_opt_settings['excludeConvertImages'] ?? '' ) );
+		foreach ( $exclude_patterns as $pattern ) {
+			if ( str_contains( $original_image_url, $pattern ) ) {
 				return $metadata;
 			}
+		}
 
-			$img_url = wp_get_attachment_url( $attachment_id );
-			if ( ! empty( $this->exclude_imgs ) ) {
-				foreach ( $this->exclude_imgs as $exclude_img ) {
-					if ( false !== strpos( $img_url, $exclude_img ) ) {
-						return $metadata;
-					}
-				}
-			}
+		$target_formats_to_queue   = array();
+		$conversion_format_setting = $this->img_opt_settings['conversionFormat'] ?? 'webp';
+		if ( in_array( $conversion_format_setting, array( 'webp', 'both' ), true ) ) {
+			$target_formats_to_queue[] = 'webp';
+		}
+		if ( in_array( $conversion_format_setting, array( 'avif', 'both' ), true ) ) {
+			$target_formats_to_queue[] = 'avif';
+		}
 
-			if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
-				$this->add_img_into_queue( $file );
-			}
+		if ( empty( $target_formats_to_queue ) ) {
+			return $metadata;
+		}
 
-			if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
-				$this->add_img_into_queue( $file, 'avif' );
-			}
+		foreach ( $target_formats_to_queue as $format ) {
+			self::add_img_into_queue( $original_file_path, $format );
+		}
 
-			// Queue additional image sizes for conversion.
-			if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
-				foreach ( $metadata['sizes'] as $size => $size_data ) {
-					$image_path = wp_normalize_path( $upload_dir['path'] . '/' . $size_data['file'] );
-					if ( file_exists( $image_path ) ) {
-						if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
-							$this->add_img_into_queue( $image_path );
-						}
-
-						if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
-							$this->add_img_into_queue( $image_path, 'avif' );
+		if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
+			$upload_dir_info = wp_upload_dir();
+			foreach ( $metadata['sizes'] as $size_data ) {
+				if ( isset( $size_data['file'] ) ) {
+					$size_file_path = wp_normalize_path( trailingslashit( $upload_dir_info['path'] ) . $size_data['file'] );
+					if ( file_exists( $size_file_path ) ) {
+						foreach ( $target_formats_to_queue as $format ) {
+							self::add_img_into_queue( $size_file_path, $format );
 						}
 					}
 				}
 			}
-
-			return $metadata;
-
-		} catch ( \Exception $e ) {
-			return $metadata;
 		}
+
+		return $metadata;
 	}
 
-	/**
-	 * Serve WebP or AVIF images if supported by the browser.
-	 *
-	 * @param array $image The image source array.
-	 * @return array Modified image source with WebP/AVIF if applicable, or original image if not.
-	 * @since 1.0.0
-	 */
-	public function maybe_serve_next_gen_image( $image ) {
-		if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) || empty( $image[0] ) ) {
-			return $image;
-		}
-
-		$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
-
-		// Check if the browser supports WebP.
-		$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;
-		$supports_webp = strpos( $http_accept, 'image/webp' ) !== false;
-
-		$img_path   = Util::get_local_path( $image[0] );
-		$to_convert = false;
-
-		if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
-			if ( $supports_avif || ( defined( 'DOING_CRON' ) && \DOING_CRON ) ) {
-				$avif_path = $this->get_img_path( $img_path, 'avif' );
-
-				if ( file_exists( $avif_path ) ) {
-					$image[0] = $this->get_img_url( $image[0], 'avif' );
-					return $image;
-				} else {
-					$this->add_img_into_queue( $img_path, 'avif' );
-				}
-			}
-		}
-
-		if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
-			if ( $supports_webp || ( defined( 'DOING_CRON' ) && \DOING_CRON ) ) {
-				$webp_path = $this->get_img_path( $img_path, 'webp' );
-
-				if ( file_exists( $webp_path ) ) {
-					$image[0] = $this->get_img_url( $image[0] );
-					return $image;
-				} else {
-					$this->add_img_into_queue( $img_path );
-				}
-			}
-		}
-
-		return $image;
-	}
 
 	/**
 	 * Update the conversion status of an image.
 	 *
-	 * @param string $img_path The image path.
-	 * @param string $status The status to update ('completed', 'failed', etc.).
-	 * @param string $type The image format type ('webp', 'avif').
 	 * @since 1.0.0
+	 * @param string $source_image_path Absolute path of the source image.
+	 * @param string $status            The status ('completed', 'failed', 'skipped').
+	 * @param string $target_format     The image format type ('webp', 'avif').
+	 * @param string $message           Optional message regarding the status.
 	 */
-	public function update_conversion_status( $img_path, $status = 'completed', $type = 'webp' ) {
-		$img_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $img_path ) );
+	public function update_conversion_status( string $source_image_path, string $status, string $target_format, string $message = '' ): void {
+		$relative_img_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image_path ) );
+		$relative_img_path = ltrim( $relative_img_path, '/' );
 
 		$img_info = get_option( 'wppo_img_info', array() );
 
-		if ( 'completed' === $status ) {
-			// Check and remove from 'pending' list.
-			if ( isset( $img_info['pending'][ $type ] ) ) {
-				$key = array_search( $img_path, $img_info['pending'][ $type ], true );
-				if ( false !== $key ) {
-					unset( $img_info['pending'][ $type ][ $key ] );
-				}
-			}
+		$img_info['pending'][ $target_format ]   = $img_info['pending'][ $target_format ] ?? array();
+		$img_info['completed'][ $target_format ] = $img_info['completed'][ $target_format ] ?? array();
+		$img_info['failed'][ $target_format ]    = $img_info['failed'][ $target_format ] ?? array();
+		$img_info['skipped'][ $target_format ]   = $img_info['skipped'][ $target_format ] ?? array();
 
-			// Check and remove from 'failed' list.
-			if ( isset( $img_info['failed'][ $type ] ) ) {
-				$key = array_search( $img_path, $img_info['failed'][ $type ], true );
-				if ( false !== $key ) {
-					unset( $img_info['failed'][ $type ][ $key ] );
-				}
+		$pending_key = array_search( $relative_img_path, $img_info['pending'][ $target_format ], true );
+		if ( false !== $pending_key ) {
+			unset( $img_info['pending'][ $target_format ][ $pending_key ] );
+			$img_info['pending'][ $target_format ] = array_values( $img_info['pending'][ $target_format ] );
+		}
+
+		foreach ( array( 'completed', 'failed', 'skipped' ) as $list_type ) {
+			if ( $list_type === $status ) {
+				continue;
+			}
+			$key_in_other_list = array_search( $relative_img_path, $img_info[ $list_type ][ $target_format ], true );
+			if ( false !== $key_in_other_list ) {
+				unset( $img_info[ $list_type ][ $target_format ][ $key_in_other_list ] );
+				$img_info[ $list_type ][ $target_format ] = array_values( $img_info[ $list_type ][ $target_format ] );
 			}
 		}
 
-		if ( 'failed' === $status ) {
-			if ( isset( $img_info['pending'][ $type ] ) ) {
-				$key = array_search( $img_path, $img_info['pending'][ $type ], true );
-				if ( false !== $key ) {
-					unset( $img_info['pending'][ $type ][ $key ] );
-				}
-			}
+		if ( ! in_array( $relative_img_path, $img_info[ $status ][ $target_format ], true ) ) {
+			$img_info[ $status ][ $target_format ][] = $relative_img_path;
 		}
 
-		if ( ! in_array( $img_path, $img_info[ $status ][ $type ] ?? array(), true ) ) {
-			$img_info[ $status ][ $type ][] = $img_path;
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG && ! empty( $message ) && ( 'failed' === $status || 'skipped' === $status ) ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( "WPPO Img Convert [{$target_format}][{$status}]: {$relative_img_path} - {$message}" );
 		}
 
 		update_option( 'wppo_img_info', $img_info );
@@ -546,22 +403,34 @@ class Img_Converter {
 	/**
 	 * Add an image to the conversion queue.
 	 *
-	 * @param string $img_path The image path.
-	 * @param string $type The image format type ('webp', 'avif').
 	 * @since 1.0.0
+	 * @param string $source_image_path Absolute path of the source image.
+	 * @param string $target_format     The image format type ('webp', 'avif'). Default 'webp'.
 	 */
-	public static function add_img_into_queue( $img_path, $type = 'webp' ) {
-		if ( pathinfo( $img_path, PATHINFO_EXTENSION ) === $type ) {
+	public static function add_img_into_queue( string $source_image_path, string $target_format = 'webp' ): void {
+		$source_extension = strtolower( pathinfo( $source_image_path, PATHINFO_EXTENSION ) );
+		if ( $source_extension === $target_format ) {
 			return;
 		}
 
-		$img_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $img_path ) );
+		$relative_img_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image_path ) );
+		$relative_img_path = ltrim( $relative_img_path, '/' ); // Ensure it's relative from ABSPATH root.
 
 		$img_info = get_option( 'wppo_img_info', array() );
 
-		if ( ! in_array( $img_path, $img_info['pending'][ $type ] ?? array(), true ) ) {
-			$img_info['pending'][ $type ][] = $img_path;
+		$img_info['pending'][ $target_format ]   = $img_info['pending'][ $target_format ] ?? array();
+		$img_info['completed'][ $target_format ] = $img_info['completed'][ $target_format ] ?? array();
+		$img_info['failed'][ $target_format ]    = $img_info['failed'][ $target_format ] ?? array();
+		$img_info['skipped'][ $target_format ]   = $img_info['skipped'][ $target_format ] ?? array();
 
+		if ( in_array( $relative_img_path, $img_info['completed'][ $target_format ], true ) ||
+			in_array( $relative_img_path, $img_info['failed'][ $target_format ], true ) ||
+			in_array( $relative_img_path, $img_info['skipped'][ $target_format ], true ) ) {
+			return;
+		}
+
+		if ( ! in_array( $relative_img_path, $img_info['pending'][ $target_format ], true ) ) {
+			$img_info['pending'][ $target_format ][] = $relative_img_path;
 			update_option( 'wppo_img_info', $img_info );
 		}
 	}
