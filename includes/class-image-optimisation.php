@@ -105,6 +105,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @param string $image_url_config The image URL string from settings (may include mobile:/desktop: prefixes).
 		 */
 		private function generate_preload_link_for_image_url( string $image_url_config ): void {
+			list( $actual_image_url, $media_query ) = $this->parse_image_url_config( $image_url_config );
+
+			if ( ! preg_match( '/^https?:\/\//i', $actual_image_url ) ) {
+				$actual_image_url = content_url( ltrim( $actual_image_url, '/' ) );
+			}
+
+			Util::generate_preload_link( $actual_image_url, 'preload', 'image', false, Util::get_image_mime_type( $actual_image_url ), $media_query );
+		}
+
+		/**
+		 * Parses an image URL config string into an actual URL and a media query.
+		 *
+		 * @param string $image_url_config The image URL string from settings (may include mobile:/desktop: prefixes).
+		 * @return array{string, string} An array containing the actual image URL and the media query.
+		 */
+		private function parse_image_url_config( string $image_url_config ): array {
 			$image_url_config = trim( $image_url_config );
 			$media_query      = '';
 			$actual_image_url = $image_url_config;
@@ -117,15 +133,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$media_query      = '(min-width: 769px)';
 			}
 
-			if ( ! preg_match( '/^https?:\/\//i', $actual_image_url ) ) {
-				$actual_image_url = content_url( ltrim( $actual_image_url, '/' ) );
-			}
-
-			Util::generate_preload_link( $actual_image_url, 'preload', 'image', false, Util::get_image_mime_type( $actual_image_url ), $media_query );
+			return array( $actual_image_url, $media_query );
 		}
 
 		/**
-		 * Preloads a featured image, considering srcset and specified size constraints.
+		 * Preloads a featured image.
 		 *
 		 * @param int                  $thumbnail_id   Attachment ID of the featured image.
 		 * @param array<string, mixed> $settings       Image optimization settings.
@@ -145,80 +157,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			$srcset = wp_get_attachment_image_srcset( $thumbnail_id, $default_image_size );
-			if ( ! $srcset ) {
-				$this->generate_preload_link_for_image_url( $default_image_url );
-				return;
-			}
-
-			$parsed_srcset = $this->parse_srcset( $srcset );
-			$max_width     = isset( $settings['maxWidthImgSize'] ) ? absint( $settings['maxWidthImgSize'] ) : 1478; // Example default.
-			$exclude_sizes = array_map( 'absint', Util::process_urls( (string) ( $settings['excludeSize'] ?? '' ) ) );
-
-			$sources_for_preload = array();
-			foreach ( $parsed_srcset as $source ) {
-				if ( ( $max_width > 0 && $source['width'] > $max_width ) || in_array( $source['width'], $exclude_sizes, true ) ) {
-					continue;
-				}
-				$exclude_this_source = false;
-				foreach ( $exclude_img_urls_patterns as $pattern ) {
-					if ( str_contains( $source['url'], $pattern ) ) {
-						$exclude_this_source = true;
-						break;
-					}
-				}
-				if ( ! $exclude_this_source ) {
-					$sources_for_preload[] = $source;
-				}
-			}
-
-			usort(
-				$sources_for_preload,
-				function ( $a, $b ) {
-					return $a['width'] <=> $b['width'];
-				}
-			);
-
-			$previous_width = 0;
-			foreach ( $sources_for_preload as $index => $source ) {
-				$current_width = $source['width'];
-				$media_query   = "(min-width: {$previous_width}px)";
-
-				if ( isset( $sources_for_preload[ $index + 1 ] ) ) {
-					$media_query .= " and (max-width: {$current_width}px)";
-				}
-
-				Util::generate_preload_link( $source['url'], 'preload', 'image', false, Util::get_image_mime_type( $source['url'] ), $media_query );
-				$previous_width = $current_width + 1;
-			}
+			$this->generate_preload_link_for_image_url( $default_image_url );
 		}
-
-		/**
-		 * Parses a srcset string into an array of sources with URLs and widths.
-		 *
-		 * @param string $srcset The srcset string.
-		 * @return array<int, array{url: string, width: int}> Parsed sources.
-		 */
-		private function parse_srcset( string $srcset ): array {
-			$parsed_sources = array();
-			$sources        = explode( ',', $srcset );
-			foreach ( $sources as $source ) {
-				$parts = preg_split( '/\s+/', trim( $source ) );
-				if ( count( $parts ) >= 2 && str_ends_with( $parts[1], 'w' ) ) {
-					$parsed_sources[] = array(
-						'url'   => $parts[0],
-						'width' => absint( rtrim( $parts[1], 'w' ) ),
-					);
-				} elseif ( count( $parts ) === 1 ) {
-					$parsed_sources[] = array(
-						'url'   => $parts[0],
-						'width' => 0,
-					);
-				}
-			}
-			return $parsed_sources;
-		}
-
 
 		/**
 		 * Modifies image tags in the HTML buffer to serve next-generation formats (WebP/AVIF) if supported.
@@ -250,87 +190,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$exclude_conversion_patterns = Util::process_urls( (string) ( $this->options['image_optimisation']['excludeConvertImages'] ?? '' ) );
 
-			return preg_replace_callback(
-				'#<img\s+(.*?)\s*\/?>#is',
-				function ( $matches ) use ( $preferred_format, $exclude_conversion_patterns ) {
-					$attributes_string = $matches[1];
-					$original_img_tag  = $matches[0];
+			$dom = new \DOMDocument();
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			@$dom->loadHTML( $buffer, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
 
-					$src_match    = array();
-					$srcset_match = array();
+			$images = $dom->getElementsByTagName( 'img' );
 
-					preg_match( '/\bsrc\s*=\s*([\'"])(.*?)\1/is', $attributes_string, $src_match );
-					preg_match( '/\bsrcset\s*=\s*([\'"])(.*?)\1/is', $attributes_string, $srcset_match );
-
-					$original_src    = $src_match[2] ?? null;
-					$original_srcset = $srcset_match[2] ?? null;
-
-					if ( $original_src ) {
-						foreach ( $exclude_conversion_patterns as $pattern ) {
-							if ( str_contains( $original_src, $pattern ) ) {
-								return $original_img_tag; // Excluded.
-							}
+			foreach ( $images as $image ) {
+				$original_src = $image->getAttribute( 'src' );
+				if ( $original_src ) {
+					foreach ( $exclude_conversion_patterns as $pattern ) {
+						if ( str_contains( $original_src, $pattern ) ) {
+							continue 2; // Excluded.
 						}
 					}
 
-					$new_src = $original_src;
-					if ( $original_src && $this->is_url_eligible_for_conversion( $original_src ) ) {
+					if ( $this->is_url_eligible_for_conversion( $original_src ) ) {
 						$converted_url = $this->get_converted_image_url_if_exists( $original_src, $preferred_format );
 						if ( $converted_url ) {
-							$new_src = $converted_url;
+							$image->setAttribute( 'src', $converted_url );
 						}
 					}
+				}
 
-					$new_srcset = $original_srcset;
-					if ( $original_srcset ) {
-						$temp_srcset_parts = array();
-						$srcset_parts      = explode( ',', $original_srcset );
-						foreach ( $srcset_parts as $part ) {
-							$trimmed_part             = trim( $part );
-							list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', $trimmed_part, 2 ), 2, '' );
+				$original_srcset = $image->getAttribute( 'srcset' );
+				if ( $original_srcset ) {
+					$temp_srcset_parts = array();
+					$srcset_parts      = explode( ',', $original_srcset );
+					foreach ( $srcset_parts as $part ) {
+						$trimmed_part             = trim( $part );
+						list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', $trimmed_part, 2 ), 2, '' );
 
-							$excluded = false;
-							foreach ( $exclude_conversion_patterns as $pattern ) {
-								if ( str_contains( $url, $pattern ) ) {
-									$excluded = true;
-									break;
-								}
+						$excluded = false;
+						foreach ( $exclude_conversion_patterns as $pattern ) {
+							if ( str_contains( $url, $pattern ) ) {
+								$excluded = true;
+								break;
 							}
-							if ( $excluded ) {
-								$temp_srcset_parts[] = $trimmed_part;
-								continue;
-							}
+						}
+						if ( $excluded ) {
+							$temp_srcset_parts[] = $trimmed_part;
+							continue;
+						}
 
-							if ( $this->is_url_eligible_for_conversion( $url ) ) {
-								$converted_url = $this->get_converted_image_url_if_exists( $url, $preferred_format );
-								if ( $converted_url ) {
-									$temp_srcset_parts[] = $converted_url . ( $descriptor ? " {$descriptor}" : '' );
-								} else {
-									$temp_srcset_parts[] = $trimmed_part;
-								}
+						if ( $this->is_url_eligible_for_conversion( $url ) ) {
+							$converted_url = $this->get_converted_image_url_if_exists( $url, $preferred_format );
+							if ( $converted_url ) {
+								$temp_srcset_parts[] = $converted_url . ( $descriptor ? " {$descriptor}" : '' );
 							} else {
 								$temp_srcset_parts[] = $trimmed_part;
 							}
+						} else {
+							$temp_srcset_parts[] = $trimmed_part;
 						}
-						$new_srcset = implode( ', ', $temp_srcset_parts );
 					}
+					$new_srcset = implode( ', ', $temp_srcset_parts );
+					$image->setAttribute( 'srcset', $new_srcset );
+				}
+			}
 
-					$modified_attributes_string = $attributes_string;
-					if ( $new_src && $new_src !== $original_src ) {
-						$modified_attributes_string = preg_replace( '/\bsrc\s*=\s*([\'"])(.*?)\1/is', 'src=$1' . esc_attr( $new_src ) . '$1', $modified_attributes_string, 1 );
-					}
-					if ( $new_srcset && $new_srcset !== $original_srcset ) {
-						$modified_attributes_string = preg_replace( '/\bsrcset\s*=\s*([\'"])(.*?)\1/is', 'srcset=$1' . esc_attr( $new_srcset ) . '$1', $modified_attributes_string, 1 );
-					}
-
-					if ( str_ends_with( $original_img_tag, '/>' ) ) {
-						return '<img ' . $modified_attributes_string . ' />';
-					} else {
-						return '<img ' . $modified_attributes_string . '>';
-					}
-				},
-				$buffer
-			);
+			return $dom->saveHTML();
 		}
 
 
@@ -409,187 +328,160 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$element_counter        = 0;
 			$exclude_first_n_images = $enable_lazy_load_images ? ( absint( $settings['excludeFistImages'] ?? 0 ) ) : 0;
 
+			$dom = new \DOMDocument();
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			@$dom->loadHTML( $buffer, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD );
+
 			if ( $enable_lazy_load_images ) {
-				$buffer = preg_replace_callback(
-					'#(<picture\b[^>]*>)(.*?)(</picture>)|<img\s+(.*?)\s*\/?>#is',
-					function ( $matches ) use ( &$element_counter, $exclude_first_n_images, $exclude_lazy_load_patterns, $settings ) {
-						$element_counter++;
-						if ( $exclude_first_n_images >= $element_counter ) {
-							return $matches[0];
-						}
+				$images = $dom->getElementsByTagName( 'img' );
+				foreach ( $images as $image ) {
+					$element_counter++;
+					if ( $exclude_first_n_images >= $element_counter ) {
+						continue;
+					}
 
-						if ( ! empty( $matches[1] ) ) {
-							$picture_tag_open  = $matches[1];
-							$picture_content   = $matches[2];
-							$picture_tag_close = $matches[3];
-
-							if ( preg_match( '/\bsrc\s*=\s*([\'"])([^"\']+)\1/is', $picture_content, $img_src_match ) ) {
-								foreach ( $exclude_lazy_load_patterns as $pattern ) {
-									if ( str_contains( $img_src_match[2], $pattern ) ) {
-										return $matches[0];
-									}
-								}
-							}
-
-							$picture_content = preg_replace_callback(
-								'#<source\s+(.*?)\s*\/?>#is',
-								function ( $source_matches ) {
-									$source_attrs = $source_matches[1];
-									if ( preg_match( '/\bsrcset\s*=\s*([\'"])([^"\']+)\1/is', $source_attrs, $srcset_attr_match ) ) {
-										$source_attrs = str_replace( $srcset_attr_match[0], 'data-srcset=' . $srcset_attr_match[1] . esc_attr( $srcset_attr_match[2] ) . $srcset_attr_match[1], $source_attrs );
-									}
-									return '<source ' . $source_attrs . ( str_ends_with( $source_matches[0], '/>' ) ? ' />' : '>' );
-								},
-								$picture_content
-							);
-							$picture_content = preg_replace_callback(
-								'#<img\s+(.*?)\s*\/?>#is',
-								function ( $img_matches ) use ( $settings ) {
-									return $this->modify_img_attributes_for_lazy_load( $img_matches[1], $img_matches[0] );
-								},
-								$picture_content
-							);
-							return $picture_tag_open . $picture_content . $picture_tag_close;
-
-						} elseif ( ! empty( $matches[4] ) ) { // It's an <img> element.
-							$img_attributes_string = $matches[4];
-							if ( preg_match( '/\bsrc\s*=\s*([\'"])([^"\']+)\1/is', $img_attributes_string, $src_attr_match ) ) {
-								foreach ( $exclude_lazy_load_patterns as $pattern ) {
-									if ( str_contains( $src_attr_match[2], $pattern ) ) {
-										return $matches[0];
-									}
-								}
-							}
-							$modified_attributes = $this->modify_img_attributes_for_lazy_load( $img_attributes_string, $matches[0] );
-							if ( str_ends_with( $matches[0], '/>' ) ) {
-								return '<img ' . $modified_attributes . ' />';
-							} else {
-								return '<img ' . $modified_attributes . '>';
+					$original_src = $image->getAttribute( 'src' );
+					if ( $original_src ) {
+						foreach ( $exclude_lazy_load_patterns as $pattern ) {
+							if ( str_contains( $original_src, $pattern ) ) {
+								continue 2;
 							}
 						}
-						return $matches[0];
-					},
-					$buffer
-				);
-			}
+					}
 
-			if ( $enable_lazy_load_videos ) {
-				$buffer = preg_replace_callback(
-					'#<iframe\s+(.*?)\s*><\/iframe>|<iframe\s+(.*?)\s*\/>#is',
-					function ( $matches ) use ( $exclude_lazy_load_patterns ) {
-						$iframe_attributes_string = ! empty( $matches[1] ) ? $matches[1] : $matches[2];
-						$original_iframe_tag      = $matches[0];
+					$this->modify_img_attributes_for_lazy_load_dom( $image );
+				}
 
-						if ( preg_match( '/\bsrc\s*=\s*([\'"])([^"\']+)\1/is', $iframe_attributes_string, $src_match ) ) {
+				$pictures = $dom->getElementsByTagName( 'picture' );
+				foreach ( $pictures as $picture ) {
+					$element_counter++;
+					if ( $exclude_first_n_images >= $element_counter ) {
+						continue;
+					}
+
+					$img = $picture->getElementsByTagName( 'img' )->item( 0 );
+					if ( $img ) {
+						$original_src = $img->getAttribute( 'src' );
+						if ( $original_src ) {
 							foreach ( $exclude_lazy_load_patterns as $pattern ) {
-								if ( str_contains( $src_match[2], $pattern ) ) {
-									return $original_iframe_tag; // Excluded.
-								}
-							}
-							$new_attributes = preg_replace( '/\bsrc\s*=\s*([\'"])([^"\']+)\1/is', 'data-src=$1' . esc_attr( $src_match[2] ) . '$1', $iframe_attributes_string, 1 );
-							if ( ! preg_match( '/\bclass\s*=/is', $new_attributes ) ) {
-								$new_attributes .= ' class="wppo-lazy-iframe"';
-							} else {
-								$new_attributes = preg_replace( '/\bclass\s*=\s*([\'"])(.*?)\1/is', 'class=$1$2 wppo-lazy-iframe$1', $new_attributes, 1 );
-							}
-							if ( str_ends_with( $original_iframe_tag, '</iframe>' ) ) {
-								return '<iframe ' . $new_attributes . '></iframe>';
-							} else {
-								return '<iframe ' . $new_attributes . ' />';
-							}
-						}
-						return $original_iframe_tag;
-					},
-					$buffer
-				);
-
-				$buffer = preg_replace_callback(
-					'#<video\s+(.*?)>(.*?)</video>#is',
-					function ( $matches ) use ( $exclude_lazy_load_patterns ) {
-						$video_attributes_string = $matches[1];
-						$video_source_tags       = $matches[2];
-						$original_video_tag      = $matches[0];
-
-						if ( preg_match( '/\bsrc\s*=\s*([\'"])([^"\']+)\1/is', $video_attributes_string, $src_match ) ) {
-							foreach ( $exclude_lazy_load_patterns as $pattern ) {
-								if ( str_contains( $src_match[2], $pattern ) ) {
-									return $original_video_tag;
+								if ( str_contains( $original_src, $pattern ) ) {
+									continue 2;
 								}
 							}
 						}
-						if ( preg_match_all( '/<source\s+[^>]*\bsrc\s*=\s*([\'"])([^"\']+)\1[^>]*>/is', $video_source_tags, $source_src_matches ) ) {
-							foreach ( $source_src_matches[2] as $source_src ) {
-								foreach ( $exclude_lazy_load_patterns as $pattern ) {
-									if ( str_contains( $source_src, $pattern ) ) {
-										return $original_video_tag;
-									}
-								}
-							}
+					}
+
+					$sources = $picture->getElementsByTagName( 'source' );
+					foreach ( $sources as $source ) {
+						$original_srcset = $source->getAttribute( 'srcset' );
+						if ( $original_srcset ) {
+							$source->setAttribute( 'data-srcset', $original_srcset );
+							$source->removeAttribute( 'srcset' );
 						}
+					}
 
-						$new_attributes = $video_attributes_string;
-						if ( ! preg_match( '/\bclass\s*=/is', $new_attributes ) ) {
-							$new_attributes .= ' class="wppo-lazy-video"';
-						} else {
-							$new_attributes = preg_replace( '/\bclass\s*=\s*([\'"])(.*?)\1/is', 'class=$1$2 wppo-lazy-video$1', $new_attributes, 1 );
-						}
-						$new_attributes = preg_replace( '/\bsrc\s*=\s*([\'"])([^"\']+)\1/is', 'data-src=$1' . esc_attr( '$2' ) . '$1', $new_attributes );
-						$new_attributes = preg_replace( '/\bposter\s*=\s*([\'"])([^"\']+)\1/is', 'data-poster=$1' . esc_attr( '$2' ) . '$1', $new_attributes );
-						if ( ! preg_match( '/\bpreload\s*=/is', $new_attributes ) ) {
-							$new_attributes .= ' preload="none"'; // Good practice for lazy loaded videos.
-						}
-
-						$new_source_tags = preg_replace_callback(
-							'#<source\s+([^>]*)\bsrc\s*=\s*([\'"])([^"\']+)\2([^>]*)>#is',
-							function ( $source_matches_inner ) {
-								return '<source ' . $source_matches_inner[1] . 'data-src=' . $source_matches_inner[2] . esc_attr( $source_matches_inner[3] ) . $source_matches_inner[2] . $source_matches_inner[4] . '>';
-							},
-							$video_source_tags
-						);
-
-						return '<video ' . $new_attributes . '>' . $new_source_tags . '</video>';
-					},
-					$buffer
-				);
-			}
-
-			return $buffer;
-		}
-
-		/**
-		 * Helper to modify <img> attributes for lazy loading.
-		 *
-		 * @param string $attributes_string The string of attributes from the <img> tag.
-		 * @param string $original_img_tag The original full <img> tag.
-		 * @return string The modified attributes string.
-		 */
-		private function modify_img_attributes_for_lazy_load( string $attributes_string, string $original_img_tag ): string {
-			$settings       = $this->options['image_optimisation'] ?? array();
-			$new_attributes = $attributes_string;
-
-			if ( preg_match( '/\bsrc\s*=\s*([\'"])(?P<srcval>[^"\']+)\1/is', $new_attributes, $src_attr_match ) ) {
-				$new_attributes = str_replace( $src_attr_match[0], 'data-src=' . $src_attr_match[1] . esc_attr( $src_attr_match['srcval'] ) . $src_attr_match[1], $new_attributes );
-				if ( ! empty( $settings['replacePlaceholderWithSVG'] ) && (bool) $settings['replacePlaceholderWithSVG'] ) {
-					$svg_placeholder = $this->generate_svg_placeholder_from_attributes( $attributes_string );
-					$new_attributes  = 'src="' . esc_attr( $svg_placeholder ) . '" ' . $new_attributes;
+					if ( $img ) {
+						$this->modify_img_attributes_for_lazy_load_dom( $img );
+					}
 				}
 			}
 
-			if ( preg_match( '/\bsrcset\s*=\s*([\'"])(?P<srcsetval>[^"\']+)\1/is', $new_attributes, $srcset_attr_match ) ) {
-				$new_attributes = str_replace( $srcset_attr_match[0], 'data-srcset=' . $srcset_attr_match[1] . esc_attr( $srcset_attr_match['srcsetval'] ) . $srcset_attr_match[1], $new_attributes );
+			if ( $enable_lazy_load_videos ) {
+				$iframes = $dom->getElementsByTagName( 'iframe' );
+				foreach ( $iframes as $iframe ) {
+					$original_src = $iframe->getAttribute( 'src' );
+					if ( $original_src ) {
+						foreach ( $exclude_lazy_load_patterns as $pattern ) {
+							if ( str_contains( $original_src, $pattern ) ) {
+								continue 2;
+							}
+						}
+
+						$iframe->setAttribute( 'data-src', $original_src );
+						$iframe->removeAttribute( 'src' );
+						$iframe->setAttribute( 'class', $iframe->getAttribute( 'class' ) . ' wppo-lazy-iframe' );
+					}
+				}
+
+				$videos = $dom->getElementsByTagName( 'video' );
+				foreach ( $videos as $video ) {
+					$original_src = $video->getAttribute( 'src' );
+					if ( $original_src ) {
+						foreach ( $exclude_lazy_load_patterns as $pattern ) {
+							if ( str_contains( $original_src, $pattern ) ) {
+								continue 2;
+							}
+						}
+					}
+
+					$sources = $video->getElementsByTagName( 'source' );
+					foreach ( $sources as $source ) {
+						$original_src = $source->getAttribute( 'src' );
+						if ( $original_src ) {
+							foreach ( $exclude_lazy_load_patterns as $pattern ) {
+								if ( str_contains( $original_src, $pattern ) ) {
+									continue 3;
+								}
+							}
+						}
+					}
+
+					$video->setAttribute( 'class', $video->getAttribute( 'class' ) . ' wppo-lazy-video' );
+					if ( $original_src ) {
+						$video->setAttribute( 'data-src', $original_src );
+						$video->removeAttribute( 'src' );
+					}
+
+					$poster = $video->getAttribute( 'poster' );
+					if ( $poster ) {
+						$video->setAttribute( 'data-poster', $poster );
+						$video->removeAttribute( 'poster' );
+					}
+
+					$video->setAttribute( 'preload', 'none' );
+
+					foreach ( $sources as $source ) {
+						$original_src = $source->getAttribute( 'src' );
+						if ( $original_src ) {
+							$source->setAttribute( 'data-src', $original_src );
+							$source->removeAttribute( 'src' );
+						}
+					}
+				}
 			}
 
-			if ( ! preg_match( '/\bclass\s*=/is', $new_attributes ) ) {
-				$new_attributes .= ' class="wppo-lazy-image"';
-			} else {
-				$new_attributes = preg_replace( '/\bclass\s*=\s*([\'"])(.*?)\1/is', 'class=$1$2 wppo-lazy-image$1', $new_attributes, 1 );
+			return $dom->saveHTML();
+		}
+
+		/**
+		 * Helper to modify <img> attributes for lazy loading using DOMElement.
+		 *
+		 * @param \DOMElement $image The image element.
+		 */
+		private function modify_img_attributes_for_lazy_load_dom( \DOMElement $image ): void {
+			$settings = $this->options['image_optimisation'] ?? array();
+
+			$original_src = $image->getAttribute( 'src' );
+			if ( $original_src ) {
+				$image->setAttribute( 'data-src', $original_src );
+				if ( ! empty( $settings['replacePlaceholderWithSVG'] ) && (bool) $settings['replacePlaceholderWithSVG'] ) {
+					$svg_placeholder = $this->generate_svg_placeholder_from_attributes( $image->ownerDocument->saveHTML( $image ) );
+					$image->setAttribute( 'src', $svg_placeholder );
+				} else {
+					$image->removeAttribute( 'src' );
+				}
 			}
 
-			if ( stripos( $new_attributes, 'loading=' ) === false ) {
-				$new_attributes .= ' loading="lazy"';
+			$original_srcset = $image->getAttribute( 'srcset' );
+			if ( $original_srcset ) {
+				$image->setAttribute( 'data-srcset', $original_srcset );
+				$image->removeAttribute( 'srcset' );
 			}
 
-			return $new_attributes;
+			$image->setAttribute( 'class', $image->getAttribute( 'class' ) . ' wppo-lazy-image' );
+			if ( ! $image->hasAttribute( 'loading' ) ) {
+				$image->setAttribute( 'loading', 'lazy' );
+			}
 		}
 
 		/**
