@@ -5,8 +5,8 @@
 	"main": "src/index.js",
 	"private": true,
 	"scripts": {
-		"build": "wp-scripts build src/index.js src/admin-bar.js src/lazyload.js --output-path=assets/js",
-		"start": "wp-scripts start src/index.js src/admin-bar.js src/lazyload.js --output-path=assets/js",
+		"build": "wp-scripts build",
+		"start": "wp-scripts start",
 		"lint:js": "wp-scripts lint-js src/**/*.js",
 		"lint:css": "wp-scripts lint-style 'src/css/**/*.scss'",
 		"lint": "npm run lint:js && npm run lint:css",
