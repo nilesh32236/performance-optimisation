@@ -115,6 +115,40 @@ const Dashboard = ({
 		}
 	};
 
+	const handleRerunWizard = async () => {
+		// eslint-disable-next-line no-alert
+		if (!window.confirm(translations.confirmRerunWizard || 'Are you sure you want to re-run the setup wizard? This will reset the wizard and allow you to reconfigure your settings.')) {
+			return;
+		}
+		setIsLoading(true);
+		try {
+			const response = await fetch(`${apiUrl}wizard-reset`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-WP-Nonce': nonce,
+				},
+			});
+			const result = await response.json();
+			if (result.success) {
+				// toast?.success(result.data?.message || 'Setup wizard reset successfully!');
+				console.log(result.data?.message || 'Setup wizard reset successfully!');
+				// Redirect to wizard
+				if (result.data?.redirect_url) {
+					window.location.href = result.data.redirect_url;
+				}
+			} else {
+				// toast?.error(result.data?.message || translations.errorRerunWizard || 'Error resetting setup wizard.');
+				console.error(result.data?.message || translations.errorRerunWizard || 'Error resetting setup wizard.');
+			}
+		} catch (error) {
+			// toast?.error(translations.errorRerunWizard || 'Error resetting setup wizard.');
+			console.error(translations.errorRerunWizard || 'Error resetting setup wizard:', error);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
 	const totalPendingImages = (imageInfo?.pending?.webp?.length || 0) + (imageInfo?.pending?.avif?.length || 0);
 	const totalCompletedImages = (imageInfo?.completed?.webp?.length || 0) + (imageInfo?.completed?.avif?.length || 0);
 	const totalFailedImages = (imageInfo?.failed?.webp?.length || 0) + (imageInfo?.failed?.avif?.length || 0);
@@ -143,7 +177,7 @@ const Dashboard = ({
 					</p>
 					<div className="wppo-action-buttons">
 						<button className="wppo-button" onClick={handleClearAllCache}>
-							<FontAwesomeIcon icon={faBroom} style={{ marginRight: '5px' }}/>
+							<FontAwesomeIcon icon={faBroom} style={{ marginRight: '5px' }} />
 							{translations.clearCacheNow || 'Clear All Cache'}
 						</button>
 					</div>
@@ -198,7 +232,7 @@ const Dashboard = ({
 							onClick={handleOptimizeImages}
 							disabled={totalPendingImages === 0}
 						>
-							<FontAwesomeIcon icon={faImagesSolid} style={{ marginRight: '5px' }}/>
+							<FontAwesomeIcon icon={faImagesSolid} style={{ marginRight: '5px' }} />
 							{translations.optimiseImagesNow || 'Optimize Pending Images'} ({totalPendingImages})
 						</button>
 						<button
@@ -206,8 +240,20 @@ const Dashboard = ({
 							onClick={handleDeleteOptimizedImages}
 							disabled={totalCompletedImages === 0 && totalFailedImages === 0 && totalSkippedImages === 0 && totalPendingImages === 0}
 						>
-							<FontAwesomeIcon icon={faTrashAlt} style={{ marginRight: '5px' }}/>
+							<FontAwesomeIcon icon={faTrashAlt} style={{ marginRight: '5px' }} />
 							{translations.deleteOptimizedImages || 'Delete Converted Images'}
+						</button>
+					</div>
+				</div>
+
+				<div className="wppo-dashboard-card">
+					<h3>{translations.setupWizard || 'Setup Wizard'}</h3>
+					<p>
+						{translations.setupWizardDesc || 'Re-run the setup wizard to reconfigure your performance optimization settings.'}
+					</p>
+					<div className="wppo-action-buttons">
+						<button className="wppo-button wppo-button--secondary" onClick={handleRerunWizard}>
+							{translations.rerunSetupWizard || 'Re-run Setup Wizard'}
 						</button>
 					</div>
 				</div>

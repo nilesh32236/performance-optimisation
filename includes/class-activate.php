@@ -34,15 +34,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @return void
 		 */
 		public static function init(): void {
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
-			}
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
-			}
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-			}
+			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
 
 			Advanced_Cache_Handler::create();
 
@@ -51,13 +46,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			self::create_activity_log_table();
 
 			// Ensure cron jobs are scheduled on activation if enabled.
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
-			}
 			$cron_manager = new Cron();
 			$cron_manager->schedule_cron_jobs();
 
 			flush_rewrite_rules();
+
+			new Log( __( 'Plugin activated', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -78,11 +72,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			}
 
 			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
-
-			if ( ! $wp_filesystem->exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
+			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO Activation: wp-config.php does not exist or is not writable at ' . $wp_config_path );
+					error_log( 'WPPO Activation: wp-config.php is not writable at ' . esc_html( $wp_config_path ) );
 				}
 				return;
 			}
@@ -96,7 +89,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return;
 			}
 
-			if ( defined( 'WP_CACHE' ) && true === WP_CACHE ) {
+			if ( defined( 'WP_CACHE' ) && WP_CACHE ) {
 				return; // Already correctly defined.
 			}
 
@@ -104,27 +97,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			$comment             = '/** Enables WordPress Cache (Performance Optimisation Plugin) */';
 			$new_content_block   = PHP_EOL . $comment . PHP_EOL . $constant_definition . PHP_EOL;
 
-			if ( preg_match( '/^define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\)\s*;/m', $config_content, $matches, PREG_OFFSET_CAPTURE ) ) {
-				$config_content = substr_replace( $config_content, $comment . PHP_EOL . $constant_definition, $matches[0][1], strlen( $matches[0][0] ) );
+			if ( preg_match( '/^define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\)\s*;/m', $config_content ) ) {
+				$config_content = preg_replace( '/^define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\)\s*;/m', $comment . PHP_EOL . $constant_definition, $config_content );
 			} elseif ( ! preg_match( '/^define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)\s*;/m', $config_content ) ) {
 				$stop_editing_marker = "/* That's all, stop editing!";
-				$insert_position     = strpos( $config_content, $stop_editing_marker );
-
-				if ( false !== $insert_position ) {
-					$config_content = substr_replace( $config_content, $new_content_block, $insert_position, 0 );
+				if ( strpos( $config_content, $stop_editing_marker ) !== false ) {
+					$config_content = str_replace( $stop_editing_marker, $new_content_block . $stop_editing_marker, $config_content );
 				} else {
-					$settings_marker = 'require_once ABSPATH . \'wp-settings.php\'';
-					$insert_position = strpos( $config_content, $settings_marker );
-					if ( false !== $insert_position ) {
-						$config_content = substr_replace( $config_content, $new_content_block, $insert_position, 0 );
-					} else {
-						$closing_php_tag = strrpos( $config_content, '?>' );
-						if ( false !== $closing_php_tag ) {
-							$config_content = substr_replace( $config_content, $new_content_block, $closing_php_tag, 0 );
-						} else {
-							$config_content .= $new_content_block;
-						}
-					}
+					$config_content .= $new_content_block;
 				}
 			}
 
@@ -152,14 +132,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 					PRIMARY KEY (id)
 				) {$charset_collate};";
 
-				if ( ! function_exists( 'dbDelta' ) ) {
-					require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-				}
+				require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 				dbDelta( $sql );
-			}
-
-			if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-				new Log( __( 'Plugin activated on', 'performance-optimisation' ) . ' ' . current_time( 'mysql' ) );
 			}
 		}
 	}

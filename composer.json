@@ -27,8 +27,13 @@
         "source": "https://github.com/example-repo/performance-optimisation"
     },
     "require": {
+        "php": ">=7.4",
         "voku/html-min": "^4.5",
         "matthiasmullie/minify": "^1.3"
+    },
+    "require-dev": {
+        "wp-coding-standards/wpcs": "^3.0",
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0"
     },
     "scripts": {
         "lint": "phpcs . --standard=WordPress --extensions=php --ignore=vendor/,node_modules/,build/",
@@ -46,10 +51,6 @@
     },
     "extra": {
         "wordpress-plugin-slug": "performance-optimisation",
-        "primary-branch": "main",
-        "cleanup": {
-            "dirs": ["bin", "tests", "docs"],
-            "exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
-        }
+        "primary-branch": "main"
     }
 }

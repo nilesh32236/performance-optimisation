@@ -7,9 +7,9 @@
  *
  * Plugin Name:       Performance Optimisation
  * Description:       Enhances WordPress site speed through various optimization techniques including caching, minification, and image optimization.
- * Requires at least: 6.0
+ * Requires at least: 6.2
  * Requires PHP:      7.4
- * Version:           1.0.1
+ * Version:           1.1.0
  * Author:            Nilesh Kanzariya
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
@@ -17,33 +17,21 @@
  * Domain Path:       /languages
  */
 
-use PerformanceOptimise\Inc\Activate;
-use PerformanceOptimise\Inc\Deactivate;
-use PerformanceOptimise\Inc\Main;
-
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 // Define plugin constants.
-if ( ! defined( 'WPPO_PLUGIN_FILE' ) ) {
-	define( 'WPPO_PLUGIN_FILE', __FILE__ );
-}
-if ( ! defined( 'WPPO_PLUGIN_PATH' ) ) {
-	define( 'WPPO_PLUGIN_PATH', plugin_dir_path( WPPO_PLUGIN_FILE ) );
-}
-if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
-	define( 'WPPO_PLUGIN_URL', plugin_dir_url( WPPO_PLUGIN_FILE ) );
-}
-if ( ! defined( 'WPPO_VERSION' ) ) {
-	if ( ! function_exists( 'get_plugin_data' ) ) {
-		require_once ABSPATH . 'wp-admin/includes/plugin.php';
-	}
-	$plugin_data = get_plugin_data( WPPO_PLUGIN_FILE );
-	define( 'WPPO_VERSION', $plugin_data['Version'] ?? '1.0.1' );
-}
+define( 'WPPO_PLUGIN_FILE', __FILE__ );
+define( 'WPPO_PLUGIN_PATH', plugin_dir_path( WPPO_PLUGIN_FILE ) );
+define( 'WPPO_PLUGIN_URL', plugin_dir_url( WPPO_PLUGIN_FILE ) );
 
+if ( ! function_exists( 'get_plugin_data' ) ) {
+	require_once ABSPATH . 'wp-admin/includes/plugin.php';
+}
+$plugin_data = get_plugin_data( WPPO_PLUGIN_FILE );
+define( 'WPPO_VERSION', $plugin_data['Version'] ?? '1.1.0' );
 
 /**
  * Includes the main plugin class file and initializes the plugin.
@@ -52,24 +40,22 @@ if ( ! defined( 'WPPO_VERSION' ) ) {
  * @since 1.0.0
  */
 function wppo_initialize_plugin() {
-	if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
-		$main_class_file = WPPO_PLUGIN_PATH . 'includes/class-main.php';
-		if ( file_exists( $main_class_file ) ) {
-			require_once $main_class_file;
-		} else {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'Performance Optimisation: Main class file not found at ' . $main_class_file );
-			}
-			return;
+	$main_class_file = WPPO_PLUGIN_PATH . 'includes/class-main.php';
+
+	if ( file_exists( $main_class_file ) ) {
+		require_once $main_class_file;
+	} else {
+		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'Performance Optimisation: Main class file not found at ' . esc_html( $main_class_file ) );
 		}
+		return;
 	}
 
 	// Initialize the main plugin class.
-	new Main();
+	\PerformanceOptimise\Inc\Main::get_instance();
 }
 add_action( 'plugins_loaded', 'wppo_initialize_plugin' );
-
 
 /**
  * Activation hook callback function.
@@ -78,14 +64,14 @@ add_action( 'plugins_loaded', 'wppo_initialize_plugin' );
  * @since 1.0.0
  */
 function wppo_activate_plugin(): void {
-	// Ensure the activation class file is loaded.
 	$activate_class_file = WPPO_PLUGIN_PATH . 'includes/class-activate.php';
+
 	if ( file_exists( $activate_class_file ) ) {
 		require_once $activate_class_file;
-		Activate::init();
+		\PerformanceOptimise\Inc\Activate::init();
 	} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'Performance Optimisation: Activation class file not found at ' . $activate_class_file );
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		error_log( 'Performance Optimisation: Activation class file not found at ' . esc_html( $activate_class_file ) );
 	}
 }
 register_activation_hook( WPPO_PLUGIN_FILE, 'wppo_activate_plugin' );
@@ -100,10 +86,10 @@ function wppo_deactivate_plugin(): void {
 	$deactivate_class_file = WPPO_PLUGIN_PATH . 'includes/class-deactivate.php';
 	if ( file_exists( $deactivate_class_file ) ) {
 		require_once $deactivate_class_file;
-		Deactivate::init();
+		\PerformanceOptimise\Inc\Deactivate::init();
 	} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'Performance Optimisation: Deactivation class file not found at ' . $deactivate_class_file );
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		error_log( 'Performance Optimisation: Deactivation class file not found at ' . esc_html( $deactivate_class_file ) );
 	}
 }
 register_deactivation_hook( WPPO_PLUGIN_FILE, 'wppo_deactivate_plugin' );
@@ -131,7 +117,11 @@ add_action( 'init', 'wppo_load_textdomain' );
  * @return array<string,string> Modified plugin action links.
  */
 function wppo_add_settings_link( array $links ): array {
-	$settings_link = '<a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Settings', 'performance-optimisation' ) . '</a>';
+	$settings_link = sprintf(
+		'<a href="%s">%s</a>',
+		esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ),
+		esc_html__( 'Settings', 'performance-optimisation' )
+	);
 	array_unshift( $links, $settings_link );
 	return $links;
 }

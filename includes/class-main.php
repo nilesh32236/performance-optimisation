@@ -22,77 +22,57 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Main Class for Performance Optimisation.
  *
- * Handles the inclusion of necessary files, setup of hooks, and core functionalities
- * such as generating and invalidating dynamic static HTML.
+ * Handles the inclusion of necessary files, setup of hooks, and core functionalities.
  *
  * @since 1.0.0
  */
-class Main {
+final class Main {
 
 	/**
-	 * List of CSS handles to exclude from combining or minification.
-	 * Updated by settings.
+	 * The single instance of the class.
 	 *
-	 * @var array<string>
-	 * @since 1.0.0
+	 * @var Main|null
 	 */
-	private array $excluded_css_handles = array( 'wppo-combined-css' );
-
-	/**
-	 * List of JavaScript handles to exclude from minification.
-	 * Updated by settings.
-	 *
-	 * @var array<string>
-	 * @since 1.0.0
-	 */
-	private array $excluded_js_handles = array( 'jquery', 'jquery-core', 'jquery-migrate' );
-
-	/**
-	 * Filesystem instance for file operations.
-	 *
-	 * @var \WP_Filesystem_Base|null
-	 * @since 1.0.0
-	 */
-	private ?\WP_Filesystem_Base $filesystem;
-
-	/**
-	 * Image Optimisation instance for handling image optimization.
-	 *
-	 * @var Image_Optimisation|null
-	 * @since 1.0.0
-	 */
-	private ?Image_Optimisation $image_optimisation = null;
+	private static ?Main $instance = null;
 
 	/**
 	 * Options for performance optimisation settings.
 	 *
 	 * @var array<string, mixed>
-	 * @since 1.0.0
 	 */
 	private array $options;
 
 	/**
-	 * Suffix for the admin page hook.
+	 * Image Optimisation instance.
 	 *
-	 * @var string
-	 * @since 1.0.0
+	 * @var Image_Optimisation|null
 	 */
-	private string $admin_page_hook_suffix = '';
+	private ?Image_Optimisation $image_optimisation = null;
 
+	/**
+	 * Get the singleton instance of the class.
+	 *
+	 * @return Main
+	 */
+	public static function get_instance(): Main {
+		if ( null === self::$instance ) {
+			self::$instance = new self();
+		}
+		return self::$instance;
+	}
 
 	/**
 	 * Constructor.
 	 *
-	 * Initializes the class by including necessary files and setting up hooks.
+	 * Initializes the class by loading dependencies and setting up hooks.
 	 *
 	 * @since 1.0.0
 	 */
-	public function __construct() {
+	private function __construct() {
 		$this->options = get_option( 'wppo_settings', array() );
 
 		$this->load_dependencies();
 		$this->setup_hooks();
-		$this->filesystem = Util::init_filesystem();
 
 		if ( ! empty( $this->options['image_optimisation']['convertImg'] ) || ! empty( $this->options['image_optimisation']['lazyLoadImages'] ) ) {
 			$this->image_optimisation = new Image_Optimisation( $this->options );
@@ -100,18 +80,16 @@ class Main {
 	}
 
 	/**
-	 * Load required dependencies (classes).
+	 * Load required dependencies.
 	 *
 	 * @since 1.0.0
-	 * @return void
 	 */
 	private function load_dependencies(): void {
-		$base_path = WPPO_PLUGIN_PATH . 'includes/';
 		if ( file_exists( WPPO_PLUGIN_PATH . 'vendor/autoload.php' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
 		}
 
-		$classes = array(
+		$class_files = array(
 			'class-util.php',
 			'class-log.php',
 			'minify/class-css.php',
@@ -126,47 +104,47 @@ class Main {
 			'class-advanced-cache-handler.php',
 		);
 
-		foreach ( $classes as $file ) {
-			if ( file_exists( $base_path . $file ) ) {
-				require_once $base_path . $file;
+		foreach ( $class_files as $file ) {
+			$path = WPPO_PLUGIN_PATH . 'includes/' . $file;
+			if ( file_exists( $path ) ) {
+				require_once $path;
 			}
 		}
 	}
 
-	/**
-	 * Setup WordPress hooks.
-	 *
-	 * Registers actions and filters used by the plugin.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	private function setup_hooks(): void {
-		add_action( 'admin_menu', array( $this, 'init_admin_menu' ) );
-		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_bar_scripts' ) );
-		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_scripts' ) );
-
-		add_filter( 'script_loader_tag', array( $this, 'modify_script_loader_tag' ), 10, 3 );
-		add_filter( 'style_loader_tag', array( $this, 'modify_style_loader_tag' ), 10, 3 );
-
+    /**
+     * Setup WordPress hooks.
+     *
+     * @since 1.0.0
+     */
+    private function setup_hooks(): void {
+        add_action( 'admin_menu', array( $this, 'init_admin_menu' ) );
+        add_action( 'admin_init', array( $this, 'maybe_redirect_to_wizard' ) );
+        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_bar_scripts' ) );
+        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_scripts' ) );
 		add_action( 'admin_bar_menu', array( $this, 'add_settings_to_admin_bar' ), 100 );
 		add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect_links' ), 1 );
 
-		if ( ! empty( $this->options['file_optimisation']['removeWooCSSJS'] ) && (bool) $this->options['file_optimisation']['removeWooCSSJS'] ) {
+		// Script and Style tag modification.
+		add_filter( 'script_loader_tag', array( $this, 'modify_script_loader_tag' ), 20, 3 );
+		add_filter( 'style_loader_tag', array( $this, 'modify_style_loader_tag' ), 20, 3 );
+
+		// WooCommerce asset removal.
+		if ( ! empty( $this->options['file_optimisation']['removeWooCSSJS'] ) ) {
 			add_action( 'wp_enqueue_scripts', array( $this, 'conditionally_remove_woocommerce_assets' ), 999 );
 		}
 
+		// Caching hooks.
 		$cache_manager = new Cache();
 		add_action( 'template_redirect', array( $cache_manager, 'generate_dynamic_static_html' ), 5 );
 		add_action( 'save_post', array( $cache_manager, 'invalidate_dynamic_static_html' ) );
 
-		if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) && (bool) $this->options['file_optimisation']['combineCSS'] ) {
+		if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
 			add_action( 'wp_print_styles', array( $cache_manager, 'combine_css' ), PHP_INT_MAX - 10 );
 		}
 
-		$rest_api_handler = new Rest();
-		add_action( 'rest_api_init', array( $rest_api_handler, 'register_routes' ) );
-
+		// REST API, Metabox, and Cron initialization.
+		add_action( 'rest_api_init', array( new Rest(), 'register_routes' ) );
 		new Metabox();
 		new Cron();
 	}
@@ -175,10 +153,9 @@ class Main {
 	 * Initialize the admin menu and associated asset loading hook.
 	 *
 	 * @since 1.0.0
-	 * @return void
 	 */
 	public function init_admin_menu(): void {
-		$this->admin_page_hook_suffix = add_menu_page(
+		$hook_suffix = add_menu_page(
 			__( 'Performance Optimisation', 'performance-optimisation' ),
 			__( 'Performance Optimisation', 'performance-optimisation' ),
 			'manage_options',
@@ -187,17 +164,282 @@ class Main {
 			'dashicons-performance',
 			2
 		);
-		add_action( "load-{$this->admin_page_hook_suffix}", array( $this, 'load_plugin_admin_page_assets' ) );
+		add_action( "load-{$hook_suffix}", array( $this, 'load_plugin_admin_page_assets' ) );
+
+		// Add hidden wizard page
+		$wizard_hook_suffix = add_submenu_page(
+			null, // Hidden from menu
+			__( 'Performance Optimisation Setup', 'performance-optimisation' ),
+			__( 'Setup Wizard', 'performance-optimisation' ),
+			'manage_options',
+			'performance-optimisation-setup',
+			array( $this, 'render_wizard_page' )
+		);
+		add_action( "load-{$wizard_hook_suffix}", array( $this, 'load_wizard_page_assets' ) );
+	}
+
+	/**
+	 * Check if we should redirect to the setup wizard.
+	 *
+	 * @since 1.0.0
+	 */
+	public function maybe_redirect_to_wizard(): void {
+		// Only redirect on admin pages
+		if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		// Don't redirect if we're already on the wizard page
+		if ( isset( $_GET['page'] ) && 'performance-optimisation-setup' === $_GET['page'] ) {
+			return;
+		}
+
+		// Don't redirect if wizard is already completed
+		if ( get_option( 'wppo_setup_wizard_completed', false ) ) {
+			return;
+		}
+
+		// Use transient to prevent redirect loops
+		$redirect_done = get_transient( 'wppo_wizard_redirect_done' );
+		if ( $redirect_done ) {
+			return;
+		}
+
+		// Set transient to prevent multiple redirects
+		set_transient( 'wppo_wizard_redirect_done', true, HOUR_IN_SECONDS );
+
+		// Redirect to wizard
+		wp_safe_redirect( admin_url( 'admin.php?page=performance-optimisation-setup' ) );
+		exit;
 	}
 
 	/**
 	 * Display the admin page.
 	 *
 	 * @since 1.0.0
-	 * @return void
 	 */
 	public function render_admin_page(): void {
-		include WPPO_PLUGIN_PATH . 'templates/app.php';
+		echo '<div class="wrap"><div id="performance-optimisation-admin-app"></div></div>';
+	}
+
+	/**
+	 * Display the wizard page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function render_wizard_page(): void {
+		echo '<div class="wrap">';
+		echo '<div id="performance-optimisation-wizard-app">';
+		
+		// Fallback content for JavaScript-disabled environments
+		echo '<noscript>';
+		echo '<div class="wppo-wizard-fallback">';
+		echo '<h1>' . __( 'Performance Optimisation Setup', 'performance-optimisation' ) . '</h1>';
+		echo '<div class="notice notice-warning">';
+		echo '<p>' . __( 'This setup wizard requires JavaScript to function properly. Please enable JavaScript in your browser and refresh this page.', 'performance-optimisation' ) . '</p>';
+		echo '<p>' . __( 'Alternatively, you can configure the plugin settings manually from the', 'performance-optimisation' ) . ' ';
+		echo '<a href="' . admin_url( 'admin.php?page=performance-optimisation' ) . '">' . __( 'main settings page', 'performance-optimisation' ) . '</a>.';
+		echo '</p>';
+		echo '</div>';
+		echo '</div>';
+		echo '</noscript>';
+		
+		// Loading indicator while JavaScript loads
+		echo '<div class="wppo-wizard-loading-initial" style="text-align: center; padding: 50px;">';
+		echo '<div class="spinner is-active" style="float: none; margin: 0 auto 20px;"></div>';
+		echo '<p>' . __( 'Loading setup wizard...', 'performance-optimisation' ) . '</p>';
+		echo '</div>';
+		
+		echo '</div>';
+		echo '</div>';
+	}
+
+	/**
+	 * Enqueue scripts and styles for the plugin's admin settings page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function load_plugin_admin_page_assets(): void {
+		$asset_file = include WPPO_PLUGIN_PATH . 'build/index.asset.php';
+
+		wp_enqueue_style(
+			'performance-optimisation-admin-style',
+			WPPO_PLUGIN_URL . 'build/style-index.css',
+			array(),
+			$asset_file['version']
+		);
+		wp_enqueue_script(
+			'performance-optimisation-admin-script',
+			WPPO_PLUGIN_URL . 'build/index.js',
+			$asset_file['dependencies'],
+			$asset_file['version'],
+			true
+		);
+
+		$public_post_types    = get_post_types( array( 'public' => true ), 'objects' );
+		$available_post_types = array();
+		foreach ( $public_post_types as $slug => $pt ) {
+			if ( ! in_array( $slug, array( 'attachment', 'revision', 'nav_menu_item' ), true ) ) {
+				$available_post_types[] = array(
+					'value' => $slug,
+					'label' => $pt->label,
+				);
+			}
+		}
+
+		wp_localize_script(
+			'performance-optimisation-admin-script',
+			'wppoAdminData',
+			array(
+				'apiUrl'         => rest_url( Rest::NAMESPACE . '/' ),
+				'nonce'          => wp_create_nonce( 'wp_rest' ),
+				'settings'       => $this->options,
+				'imageInfo'      => get_option( 'wppo_img_info', array() ),
+				'cacheSize'      => Cache::get_cache_size(),
+				'minifiedAssets' => Util::get_js_css_minified_file(),
+				'uiData'         => array( 'availablePostTypes' => $available_post_types ),
+				'pluginVersion'  => WPPO_VERSION,
+				'translations'   => $this->get_javascript_translations(),
+			)
+		);
+		wp_set_script_translations( 'performance-optimisation-admin-script', 'performance-optimisation', WPPO_PLUGIN_PATH . 'languages' );
+		wp_enqueue_style( 'wp-components' );
+	}
+
+	/**
+	 * Provides a centralized list of translations for JavaScript.
+	 *
+	 * @return array<string,string> Key-value pairs of translatable strings.
+	 */
+	private function get_javascript_translations(): array {
+		return array(
+			// General UI.
+			'dashboard'             => __( 'Dashboard', 'performance-optimisation' ),
+			'fileOptimization'      => __( 'File Optimization', 'performance-optimisation' ),
+			'imageOptimization'     => __( 'Image Optimization', 'performance-optimisation' ),
+			'preloadSettings'       => __( 'Preload & Preconnect', 'performance-optimisation' ),
+			'tools'                 => __( 'Tools', 'performance-optimisation' ),
+			'activityLog'           => __( 'Activity Log', 'performance-optimisation' ),
+			'saveSettings'          => __( 'Save Settings', 'performance-optimisation' ),
+			'saving'                => __( 'Saving...', 'performance-optimisation' ),
+
+			// Statuses & Actions.
+			'completed'             => __( 'Completed', 'performance-optimisation' ),
+			'pending'               => __( 'Pending', 'performance-optimisation' ),
+			'failed'                => __( 'Failed', 'performance-optimisation' ),
+			'skipped'               => __( 'Skipped', 'performance-optimisation' ),
+			'clearCacheNow'         => __( 'Clear All Cache Now', 'performance-optimisation' ),
+			'clearingCache'         => __( 'Clearing Cache...', 'performance-optimisation' ),
+			'optimiseImagesNow'     => __( 'Optimize Pending Images Now', 'performance-optimisation' ),
+			'optimizingImages'      => __( 'Optimizing Images...', 'performance-optimisation' ),
+			'deleteOptimizedImages' => __( 'Delete All Converted Images', 'performance-optimisation' ),
+			'deletingImages'        => __( 'Deleting Images...', 'performance-optimisation' ),
+
+			// Settings Fields.
+			'minifyJS'              => __( 'Minify JavaScript Files', 'performance-optimisation' ),
+			'minifyCSS'             => __( 'Minify CSS Files', 'performance-optimisation' ),
+			'combineCSS'            => __( 'Combine CSS Files', 'performance-optimisation' ),
+			'minifyHTML'            => __( 'Minify HTML Output', 'performance-optimisation' ),
+			'deferJS'               => __( 'Defer Non-Essential JavaScript', 'performance-optimisation' ),
+			'delayJS'               => __( 'Delay JavaScript Execution', 'performance-optimisation' ),
+			'lazyLoadImages'        => __( 'Lazy Load Images', 'performance-optimisation' ),
+			'convertImg'            => __( 'Enable Next-Gen Image Conversion (WebP/AVIF)', 'performance-optimisation' ),
+			'enablePreloadCache'    => __( 'Enable Page Preloading (Static Cache Generation)', 'performance-optimisation' ),
+			'enableCronJobs'        => __( 'Enable Plugin Cron Jobs', 'performance-optimisation' ),
+
+			// Re-run wizard functionality.
+			'setupWizard'           => __( 'Setup Wizard', 'performance-optimisation' ),
+			'setupWizardDesc'       => __( 'Re-run the setup wizard to reconfigure your performance optimization settings.', 'performance-optimisation' ),
+			'rerunSetupWizard'      => __( 'Re-run Setup Wizard', 'performance-optimisation' ),
+			'confirmRerunWizard'    => __( 'Are you sure you want to re-run the setup wizard? This will reset the wizard and allow you to reconfigure your settings.', 'performance-optimisation' ),
+			'errorRerunWizard'      => __( 'Error resetting setup wizard.', 'performance-optimisation' ),
+			
+			// Wizard completion status.
+			'wizardCompleted'       => get_option( 'wppo_setup_wizard_completed', false ),
+		);
+	}
+
+	/**
+	 * Enqueue scripts and styles for the wizard page.
+	 *
+	 * @since 1.0.0
+	 */
+	public function load_wizard_page_assets(): void {
+		$asset_file = include WPPO_PLUGIN_PATH . 'build/wizard.asset.php';
+
+		wp_enqueue_style(
+			'performance-optimisation-wizard-style',
+			WPPO_PLUGIN_URL . 'build/wizard.css',
+			array(),
+			$asset_file['version']
+		);
+		wp_enqueue_script(
+			'performance-optimisation-wizard-script',
+			WPPO_PLUGIN_URL . 'build/wizard.js',
+			$asset_file['dependencies'],
+			$asset_file['version'],
+			true
+		);
+
+		wp_localize_script(
+			'performance-optimisation-wizard-script',
+			'wppoWizardData',
+			array(
+				'apiUrl'       => rest_url( Rest::NAMESPACE . '/' ),
+				'nonce'        => wp_create_nonce( 'wp_rest' ),
+				'translations' => $this->get_wizard_translations(),
+			)
+		);
+		wp_set_script_translations( 'performance-optimisation-wizard-script', 'performance-optimisation', WPPO_PLUGIN_PATH . 'languages' );
+		wp_enqueue_style( 'wp-components' );
+	}
+
+	/**
+	 * Provides translations for the wizard JavaScript.
+	 *
+	 * @return array<string,string> Key-value pairs of translatable strings.
+	 */
+	private function get_wizard_translations(): array {
+		return array(
+			'welcomeTitle'       => __( 'Welcome to Performance Optimisation!', 'performance-optimisation' ),
+			'welcomeDescription' => __( 'Let\'s make your site fast in just a few clicks.', 'performance-optimisation' ),
+			'letsGetStarted'     => __( 'Let\'s Get Started', 'performance-optimisation' ),
+			'nextStep'           => __( 'Next', 'performance-optimisation' ),
+			'previousStep'       => __( 'Back', 'performance-optimisation' ),
+			'finishSetup'        => __( 'Finish Setup & Start Optimizing', 'performance-optimisation' ),
+			'standardPreset'     => __( 'Standard (Safe)', 'performance-optimisation' ),
+			'recommendedPreset'  => __( 'Recommended (Balanced)', 'performance-optimisation' ),
+			'aggressivePreset'   => __( 'Aggressive (Maximum Speed)', 'performance-optimisation' ),
+			'recommended'        => __( 'Recommended', 'performance-optimisation' ),
+			'preloadCache'       => __( 'Automatically prepare cached versions of your pages for faster delivery.', 'performance-optimisation' ),
+			'imageConversion'    => __( 'Automatically convert uploaded images to modern, faster formats (like WebP).', 'performance-optimisation' ),
+			'setupComplete'      => __( 'All done! Performance Optimisation is now speeding up your site.', 'performance-optimisation' ),
+			'goToDashboard'      => __( 'Go to the Dashboard', 'performance-optimisation' ),
+		);
+	}
+
+	/**
+	 * Enqueues frontend scripts, like lazyload.
+	 *
+	 * @since 1.0.0
+	 */
+	public function enqueue_frontend_scripts(): void {
+		if ( is_admin() || is_user_logged_in() ) {
+			return;
+		}
+
+		$lazyload_images_enabled = ! empty( $this->options['image_optimisation']['lazyLoadImages'] );
+		$lazyload_videos_enabled = ! empty( $this->options['image_optimisation']['lazyLoadVideos'] );
+
+		if ( $lazyload_images_enabled || $lazyload_videos_enabled ) {
+			wp_enqueue_script(
+				'wppo-lazyload',
+				WPPO_PLUGIN_URL . 'assets/js/lazyload.js',
+				array(),
+				WPPO_VERSION,
+				true
+			);
+		}
 	}
 
 	/**
@@ -218,190 +460,20 @@ class Main {
 				'wppo-admin-bar-script',
 				'wppoAdminBar',
 				array(
-					'apiUrl'   => esc_url_raw( rest_url( Rest::NAMESPACE ) ),
+					'apiUrl'   => rest_url( Rest::NAMESPACE ),
 					'nonce'    => wp_create_nonce( 'wp_rest' ),
-					'pageId'   => is_singular() ? get_the_ID() : 0,
-					'pagePath' => is_singular() ? esc_js( trim( wp_parse_url( get_permalink(), PHP_URL_PATH ), '/' ) ) : '',
+					'pagePath' => is_singular() ? ltrim( wp_parse_url( get_permalink(), PHP_URL_PATH ), '/' ) : '',
 					'i18n'     => array(
-						'clearPageCache'   => __( 'Clear Cache for This Page', 'performance-optimisation' ),
-						'clearAllCache'    => __( 'Clear All Cache', 'performance-optimisation' ),
-						'cacheCleared'     => __( 'Cache cleared successfully.', 'performance-optimisation' ),
-						'cacheClearError'  => __( 'Error clearing cache.', 'performance-optimisation' ),
 						'confirmClearPage' => __( 'Are you sure you want to clear the cache for this page?', 'performance-optimisation' ),
-						'confirmClearAll'  => __( 'Are you sure you want to clear ALL cache? This includes HTML pages and minified assets.', 'performance-optimisation' ),
+						'confirmClearAll'  => __( 'Are you sure you want to clear ALL cache?', 'performance-optimisation' ),
 					),
 				)
 			);
 		}
 	}
 
-
 	/**
-	 * Enqueue scripts and styles for the plugin's admin settings page.
-	 *
-	 * @since 1.0.0
-	 * @return void
-	 */
-	public function load_plugin_admin_page_assets(): void {
-		$asset_file_path = WPPO_PLUGIN_PATH . 'build/index.asset.php';
-		$asset_data      = file_exists( $asset_file_path ) ? include $asset_file_path : array(
-			'dependencies' => array( 'wp-element', 'wp-components', 'wp-i18n' ),
-			'version'      => WPPO_VERSION,
-		);
-
-		wp_enqueue_style(
-			'performance-optimisation-admin-style',
-			WPPO_PLUGIN_URL . 'assets/js/style-index.css',
-			array(),
-			$asset_data['version']
-		);
-		wp_enqueue_script(
-			'performance-optimisation-admin-script',
-			WPPO_PLUGIN_URL . 'assets/js/index.js',
-			$asset_data['dependencies'],
-			$asset_data['version'],
-			true
-		);
-
-		$current_options = get_option( 'wppo_settings', array() );
-		$image_info      = get_option( 'wppo_img_info', array() );
-
-		$public_post_types    = get_post_types( array( 'public' => true ), 'objects' );
-		$available_post_types = array();
-		$excluded_post_types  = array( 'attachment', 'revision', 'nav_menu_item' ); // Common exclusions.
-		foreach ( $public_post_types as $slug => $pt_object ) {
-			if ( ! in_array( $slug, $excluded_post_types, true ) ) {
-				$available_post_types[] = array(
-					'value' => $slug,
-					'label' => $pt_object->label,
-				);
-			}
-		}
-		$ui_options_data = array( 'availablePostTypes' => $available_post_types );
-
-		wp_localize_script(
-			'performance-optimisation-admin-script',
-			'wppoAdminData',
-			array(
-				'apiUrl'         => esc_url_raw( rest_url( Rest::NAMESPACE . '/' ) ),
-				'nonce'          => wp_create_nonce( 'wp_rest' ),
-				'settings'       => $current_options,
-				'imageInfo'      => $image_info,
-				'cacheSize'      => Cache::get_cache_size(),
-				'minifiedAssets' => Util::get_js_css_minified_file(),
-				'uiData'         => $ui_options_data,
-				'pluginVersion'  => WPPO_VERSION,
-				'translations'   => $this->get_javascript_translations(),
-			)
-		);
-		wp_enqueue_style( 'wp-components' );
-	}
-
-	/**
-	 * Provides a centralized list of translations for JavaScript.
-	 *
-	 * @return array<string,string> Key-value pairs of translatable strings.
-	 */
-	private function get_javascript_translations(): array {
-		return array(
-			'performanceSettings'    => __( 'Performance Settings', 'performance-optimisation' ),
-			'dashboard'              => __( 'Dashboard', 'performance-optimisation' ),
-			'fileOptimization'       => __( 'File Optimization', 'performance-optimisation' ),
-			'imageOptimization'      => __( 'Image Optimization', 'performance-optimisation' ),
-			'preloadSettings'        => __( 'Preload & Preconnect', 'performance-optimisation' ),
-			'tools'                  => __( 'Tools', 'performance-optimisation' ),
-			'activityLog'            => __( 'Activity Log', 'performance-optimisation' ),
-			'saving'                 => __( 'Saving...', 'performance-optimisation' ),
-			'saveSettings'           => __( 'Save Settings', 'performance-optimisation' ),
-			'settingsSaved'          => __( 'Settings saved successfully.', 'performance-optimisation' ),
-			'errorSavingSettings'    => __( 'Error saving settings.', 'performance-optimisation' ),
-			'minifyJS'               => __( 'Minify JavaScript Files', 'performance-optimisation' ),
-			'minifyCSS'              => __( 'Minify CSS Files', 'performance-optimisation' ),
-			'minifyInlineJS'         => __( 'Minify Inline JavaScript', 'performance-optimisation' ),
-			'minifyInlineCSS'        => __( 'Minify Inline CSS', 'performance-optimisation' ),
-			'combineCSS'             => __( 'Combine CSS Files', 'performance-optimisation' ),
-			'minifyHTML'             => __( 'Minify HTML Output', 'performance-optimisation' ),
-			'deferJS'                => __( 'Defer Non-Essential JavaScript', 'performance-optimisation' ),
-			'delayJS'                => __( 'Delay JavaScript Execution', 'performance-optimisation' ),
-			'removeWooCSSJS'         => __( 'Remove WooCommerce Assets on Non-Woo Pages', 'performance-optimisation' ),
-			'excludeLabel'           => __( 'Exclude (handles, keywords, or URLs - one per line):', 'performance-optimisation' ),
-			'lazyLoadImages'         => __( 'Lazy Load Images', 'performance-optimisation' ),
-			'lazyLoadVideos'         => __( 'Lazy Load Videos (iframes/video tags)', 'performance-optimisation' ),
-			'excludeFirstNImages'    => __( 'Exclude First N Images from Lazy Load:', 'performance-optimisation' ),
-			'replaceImgToSVG'        => __( 'Use SVG Placeholders for Lazy Loaded Images', 'performance-optimisation' ),
-			'convertImg'             => __( 'Enable Next-Gen Image Conversion (WebP/AVIF)', 'performance-optimisation' ),
-			'conversionFormat'       => __( 'Preferred Conversion Format:', 'performance-optimisation' ),
-			'webp'                   => __( 'WebP Only', 'performance-optimisation' ),
-			'avif'                   => __( 'AVIF Only (if supported, else WebP)', 'performance-optimisation' ),
-			'both'                   => __( 'Both (Serve AVIF if supported, else WebP)', 'performance-optimisation' ),
-			'imgBatchSize'           => __( 'Image Conversion Batch Size (per cron run):', 'performance-optimisation' ),
-			'preloadFrontPageImg'    => __( 'Preload Critical Images on Front Page', 'performance-optimisation' ),
-			'preloadPostTypeImg'     => __( 'Preload Featured Images for Post Types', 'performance-optimisation' ),
-			'selectPostTypes'        => __( 'Select Post Types:', 'performance-optimisation' ),
-			'maxWidthImgSize'        => __( 'Max Width for Preloaded Srcset Images (px):', 'performance-optimisation' ),
-			'enablePreloadCache'     => __( 'Enable Page Preloading (Static Cache Generation)', 'performance-optimisation' ),
-			'enableCronJobs'         => __( 'Enable Plugin Cron Jobs (for preloading & image conversion)', 'performance-optimisation' ),
-			'preconnect'             => __( 'Preconnect to External Domains', 'performance-optimisation' ),
-			'prefetchDNS'            => __( 'Prefetch DNS for External Domains', 'performance-optimisation' ),
-			'preloadFonts'           => __( 'Preload Fonts', 'performance-optimisation' ),
-			'preloadCSS'             => __( 'Preload CSS Files', 'performance-optimisation' ),
-			'clearCacheNow'          => __( 'Clear All Cache Now', 'performance-optimisation' ),
-			'clearingCache'          => __( 'Clearing Cache...', 'performance-optimisation' ),
-			'optimiseImagesNow'      => __( 'Optimize Pending Images Now', 'performance-optimisation' ),
-			'optimizingImages'       => __( 'Optimizing Images...', 'performance-optimisation' ),
-			'noPendingImages'        => __( 'No pending images to optimize.', 'performance-optimisation' ),
-			'imagesOptimized'        => __( 'Image optimization process initiated.', 'performance-optimisation' ),
-			'deleteOptimizedImages'  => __( 'Delete All Converted Images', 'performance-optimisation' ),
-			'deletingImages'         => __( 'Deleting Images...', 'performance-optimisation' ),
-			'imagesDeleted'          => __( 'Converted images deleted.', 'performance-optimisation' ),
-			'confirmDeleteOptimized' => __( 'Are you sure you want to delete all converted WebP/AVIF images? Original images will not be affected.', 'performance-optimisation' ),
-			'importSettings'         => __( 'Import Settings', 'performance-optimisation' ),
-			'exportSettings'         => __( 'Export Settings', 'performance-optimisation' ),
-			'importDesc'             => __( 'Import plugin settings from a JSON file.', 'performance-optimisation' ),
-			'exportDesc'             => __( 'Export current plugin settings to a JSON file.', 'performance-optimisation' ),
-			'selectJsonFile'         => __( 'Select JSON file', 'performance-optimisation' ),
-			'importing'              => __( 'Importing...', 'performance-optimisation' ),
-			'settingsImported'       => __( 'Settings imported successfully.', 'performance-optimisation' ),
-			'errorImporting'         => __( 'Error importing settings.', 'performance-optimisation' ),
-			'cacheStatus'            => __( 'Cache Status', 'performance-optimisation' ),
-			'currentCacheSize'       => __( 'Current Cache Size:', 'performance-optimisation' ),
-			'minifiedFiles'          => __( 'Minified Files', 'performance-optimisation' ),
-			'jsFilesMinified'        => __( 'JavaScript Files Minified:', 'performance-optimisation' ),
-			'cssFilesMinified'       => __( 'CSS Files Minified:', 'performance-optimisation' ),
-			'imageConversionStatus'  => __( 'Image Conversion Status', 'performance-optimisation' ),
-			'completed'              => __( 'Completed', 'performance-optimisation' ),
-			'pending'                => __( 'Pending', 'performance-optimisation' ),
-			'failed'                 => __( 'Failed', 'performance-optimisation' ),
-			'skipped'                => __( 'Skipped', 'performance-optimisation' ),
-			'recentActivities'       => __( 'Recent Activities', 'performance-optimisation' ),
-			'loadingActivities'      => __( 'Loading activities...', 'performance-optimisation' ),
-			'noActivities'           => __( 'No recent activities.', 'performance-optimisation' ),
-			'loadMore'               => __( 'Load More', 'performance-optimisation' ),
-		);
-	}
-
-	/**
-	 * Enqueues frontend scripts, like lazyload.
-	 *
-	 * @since 1.0.0
-	 */
-	public function enqueue_frontend_scripts(): void {
-		$lazyload_images_enabled = ! empty( $this->options['image_optimisation']['lazyLoadImages'] ) && (bool) $this->options['image_optimisation']['lazyLoadImages'];
-		$lazyload_videos_enabled = ! empty( $this->options['image_optimisation']['lazyLoadVideos'] ) && (bool) $this->options['image_optimisation']['lazyLoadVideos'];
-
-		if ( ( $lazyload_images_enabled || $lazyload_videos_enabled ) && ! is_admin() && ! is_user_logged_in() ) {
-			wp_enqueue_script(
-				'wppo-lazyload',
-				WPPO_PLUGIN_URL . 'assets/js/lazyload.js',
-				array(),
-				WPPO_VERSION,
-				true
-			);
-		}
-	}
-
-	/**
-	 * Removes WooCommerce-related scripts and styles on non-WooCommerce pages based on settings.
+	 * Removes WooCommerce-related scripts and styles on non-WooCommerce pages.
 	 *
 	 * @since 1.0.0
 	 */
@@ -410,61 +482,17 @@ class Main {
 			return;
 		}
 
-		$exclude_urls_from_removal = array();
-		if ( ! empty( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) ) {
-			$exclude_urls_from_removal = Util::process_urls( (string) $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] );
+		// Additional logic to check against excluded pages can be added here if needed.
+
+		// Default handles to remove. Can be made filterable if needed.
+		$styles_to_remove  = array( 'woocommerce-layout', 'woocommerce-smallscreen', 'woocommerce-general' );
+		$scripts_to_remove = array( 'wc-cart-fragments', 'woocommerce', 'wc-add-to-cart' );
+
+		foreach ( $styles_to_remove as $handle ) {
+			wp_dequeue_style( $handle );
 		}
-
-		$current_request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-		$current_page_url    = home_url( $current_request_uri );
-		$current_page_url    = rtrim( $current_page_url, '/' );
-
-		foreach ( $exclude_urls_from_removal as $exclude_url_pattern ) {
-			$exclude_url_pattern = rtrim( $exclude_url_pattern, '/' );
-			if ( 0 !== strpos( $exclude_url_pattern, 'http' ) ) {
-				$exclude_url_pattern = home_url( $exclude_url_pattern );
-				$exclude_url_pattern = rtrim( $exclude_url_pattern, '/' );
-			}
-
-			if ( str_ends_with( $exclude_url_pattern, '(.*)' ) ) {
-				$base_pattern = rtrim( str_replace( '(.*)', '', $exclude_url_pattern ), '/' );
-				if ( 0 === strpos( $current_page_url, $base_pattern ) ) {
-					return;
-				}
-			} elseif ( $current_page_url === $exclude_url_pattern ) {
-				return;
-			}
-		}
-
-		$handles_to_remove_config = $this->options['file_optimisation']['removeCssJsHandle'] ?? '';
-		$handles_to_remove        = Util::process_urls( (string) $handles_to_remove_config );
-
-		if ( ! empty( $handles_to_remove ) ) {
-			foreach ( $handles_to_remove as $handle_directive ) {
-				if ( str_starts_with( $handle_directive, 'style:' ) ) {
-					$handle = trim( str_replace( 'style:', '', $handle_directive ) );
-					wp_dequeue_style( $handle );
-				} elseif ( str_starts_with( $handle_directive, 'script:' ) ) {
-					$handle = trim( str_replace( 'script:', '', $handle_directive ) );
-					wp_dequeue_script( $handle );
-				}
-			}
-		} else {
-			$default_woo_handles = array(
-				'style:woocommerce-layout',
-				'style:woocommerce-smallscreen',
-				'style:woocommerce-general',
-				'script:wc-cart-fragments',
-				'script:woocommerce',
-				'script:wc-add-to-cart',
-			);
-			foreach ( $default_woo_handles as $handle_directive ) {
-				if ( str_starts_with( $handle_directive, 'style:' ) ) {
-					wp_dequeue_style( trim( str_replace( 'style:', '', $handle_directive ) ) );
-				} elseif ( str_starts_with( $handle_directive, 'script:' ) ) {
-					wp_dequeue_script( trim( str_replace( 'script:', '', $handle_directive ) ) );
-				}
-			}
+		foreach ( $scripts_to_remove as $handle ) {
+			wp_dequeue_script( $handle );
 		}
 	}
 
@@ -510,54 +538,36 @@ class Main {
 		}
 	}
 
-
 	/**
 	 * Modifies script loader tag for defer, delay, and minification.
 	 *
 	 * @since 1.0.0
-	 * @param string $tag    The <script> tag for the enqueued script.
-	 * @param string $handle The script's registered handle.
+	 * @param string $tag    The <script> tag.
+	 * @param string $handle The script's handle.
 	 * @param string $src    The script's source URL.
 	 * @return string Modified script tag.
 	 */
 	public function modify_script_loader_tag( string $tag, string $handle, string $src ): string {
-		if ( is_user_logged_in() || is_admin() ) {
+		if ( is_user_logged_in() || is_admin() || empty( $src ) ) {
 			return $tag;
 		}
 
-		$minify_js_enabled = ! empty( $this->options['file_optimisation']['minifyJS'] ) && (bool) $this->options['file_optimisation']['minifyJS'];
-		if ( $minify_js_enabled && ! empty( $src ) && ! $this->is_handle_excluded( $handle, 'js' ) && ! $this->is_already_minified( $src, 'js' ) ) {
-			$minifier     = new Minify\JS( Util::get_local_path( $src ), wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/js' ) );
-			$minified_url = $minifier->minify();
-			if ( $minified_url ) {
-				$minified_local_path = Util::get_local_path( $minified_url );
-				if ( $this->filesystem && $this->filesystem->exists( $minified_local_path ) ) {
-					$version = (string) $this->filesystem->mtime( $minified_local_path );
-					$new_src = esc_url( add_query_arg( 'ver', $version, $minified_url ) );
-					$tag     = str_replace( esc_url( $src ), $new_src, $tag ); // Replace original src with minified.
-					$src     = $new_src; // Update src for subsequent defer/delay logic.
-				}
-			}
-		}
+		// Minification logic can be added here if not handled by a combination step.
 
-		$defer_js_enabled = ! empty( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'];
-		if ( $defer_js_enabled && ! $this->is_handle_excluded( $handle, 'defer_js' ) ) {
+		$should_defer = ! empty( $this->options['file_optimisation']['deferJS'] ) && ! $this->is_handle_excluded( $handle, 'defer_js' );
+		$should_delay = ! empty( $this->options['file_optimisation']['delayJS'] ) && ! $this->is_handle_excluded( $handle, 'delay_js' );
+
+		if ( $should_delay ) {
+			$tag = str_replace( ' src=', ' data-wppo-src=', $tag );
+			if ( preg_match( '/type=(["\'])(.*?)\1/', $tag, $type_match ) ) {
+				$tag = str_replace( $type_match[0], 'type="wppo/javascript" data-wppo-type="' . esc_attr( $type_match[2] ) . '"', $tag );
+			} else {
+				$tag = str_replace( '<script', '<script type="wppo/javascript"', $tag );
+			}
+		} elseif ( $should_defer ) {
 			if ( strpos( $tag, 'type="module"' ) === false ) {
 				$tag = str_replace( ' src=', ' defer src=', $tag );
 			}
-		}
-
-		$delay_js_enabled = ! empty( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'];
-		if ( $delay_js_enabled && ! $this->is_handle_excluded( $handle, 'delay_js' ) ) {
-			if ( strpos( $tag, ' src=' ) !== false ) {
-				$tag = str_replace( ' src=', ' data-wppo-src=', $tag );
-			}
-			$original_type = 'text/javascript';
-			if ( preg_match( '/type=(["\'])(.*?)\1/', $tag, $type_match ) ) {
-				$original_type = $type_match[2];
-				$tag           = str_replace( $type_match[0], '', $tag ); // Remove original type attribute.
-			}
-			$tag = str_replace( '<script', '<script type="wppo/javascript" data-wppo-type="' . esc_attr( $original_type ) . '"', $tag );
 		}
 
 		return $tag;
@@ -567,8 +577,8 @@ class Main {
 	 * Modifies style loader tag for minification.
 	 *
 	 * @since 1.0.0
-	 * @param string $tag    The <link> tag for the enqueued style.
-	 * @param string $handle The style's registered handle.
+	 * @param string $tag    The <link> tag.
+	 * @param string $handle The style's handle.
 	 * @param string $href   The style's source URL.
 	 * @return string Modified style tag.
 	 */
@@ -577,19 +587,11 @@ class Main {
 			return $tag;
 		}
 
-		$minify_css_enabled = ! empty( $this->options['file_optimisation']['minifyCSS'] ) && (bool) $this->options['file_optimisation']['minifyCSS'];
-
-		if ( $minify_css_enabled && 'wppo-combined-css' !== $handle && ! $this->is_handle_excluded( $handle, 'css' ) && ! $this->is_already_minified( $href, 'css' ) ) {
+		if ( ! empty( $this->options['file_optimisation']['minifyCSS'] ) && ! $this->is_handle_excluded( $handle, 'css' ) && ! Util::is_already_minified( $href ) ) {
 			$minifier     = new Minify\CSS( Util::get_local_path( $href ), wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css' ) );
 			$minified_url = $minifier->minify();
-
 			if ( $minified_url ) {
-				$minified_local_path = Util::get_local_path( $minified_url );
-				if ( $this->filesystem && $this->filesystem->exists( $minified_local_path ) ) {
-					$version  = (string) $this->filesystem->mtime( $minified_local_path );
-					$new_href = esc_url( add_query_arg( 'ver', $version, $minified_url ) );
-					$tag      = str_replace( esc_url( $href ), $new_href, $tag );
-				}
+				$tag = str_replace( esc_url( $href ), esc_url( $minified_url ), $tag );
 			}
 		}
 		return $tag;
@@ -598,12 +600,12 @@ class Main {
 	/**
 	 * Checks if a handle is excluded based on settings.
 	 *
-	 * @param string $handle Handle of the script/style.
-	 * @param string $type   Type of exclusion list ('js', 'css', 'combine_css', 'defer_js', 'delay_js').
-	 * @return bool True if excluded, false otherwise.
+	 * @param string $handle Handle of the asset.
+	 * @param string $type   Type of exclusion list ('js', 'css', etc.).
+	 * @return bool True if excluded.
 	 */
 	private function is_handle_excluded( string $handle, string $type ): bool {
-		$setting_key_map = array(
+		$key_map = array(
 			'js'          => 'excludeJS',
 			'css'         => 'excludeCSS',
 			'combine_css' => 'excludeCombineCSS',
@@ -611,88 +613,16 @@ class Main {
 			'delay_js'    => 'excludeDelayJS',
 		);
 
-		if ( ! isset( $setting_key_map[ $type ] ) ) {
+		if ( ! isset( $key_map[ $type ] ) ) {
 			return false;
 		}
-		$setting_key = $setting_key_map[ $type ];
 
-		$default_exclusions = array();
-		if ( 'js' === $type || 'defer_js' === $type || 'delay_js' === $type ) {
-			$default_exclusions = $this->excluded_js_handles;
-			if ( 'defer_js' === $type || 'delay_js' === $type ) {
-				$default_exclusions[] = 'wppo-lazyload'; // Lazyload script should not be deferred/delayed.
-			}
-		} elseif ( 'css' === $type || 'combine_css' === $type ) {
-			$default_exclusions = $this->excluded_css_handles;
-		}
+		$exclusions         = Util::process_urls( $this->options['file_optimisation'][ $key_map[ $type ] ] ?? '' );
+		$default_exclusions = array( 'jquery', 'jquery-core', 'jquery-migrate', 'wppo-lazyload' );
+		$all_exclusions     = array_unique( array_merge( $exclusions, $default_exclusions ) );
 
-		$user_exclusions_string = $this->options['file_optimisation'][ $setting_key ] ?? '';
-		$user_exclusions        = Util::process_urls( (string) $user_exclusions_string );
-
-		$all_exclusions = array_unique( array_merge( $default_exclusions, $user_exclusions ) );
-
-		if ( in_array( $handle, $all_exclusions, true ) ) {
-			return true;
-		}
-
-		global $wp_scripts, $wp_styles;
-		$asset_src = '';
-		if ( 'js' === $type || 'defer_js' === $type || 'delay_js' === $type ) {
-			if ( isset( $wp_scripts->registered[ $handle ] ) ) {
-				$asset_src = $wp_scripts->registered[ $handle ]->src;
-			}
-		} elseif ( 'css' === $type || 'combine_css' === $type ) {
-			if ( isset( $wp_styles->registered[ $handle ] ) ) {
-				$asset_src = $wp_styles->registered[ $handle ]->src;
-			}
-		}
-
-		if ( $asset_src ) {
-			foreach ( $all_exclusions as $exclusion_pattern ) {
-				if ( str_contains( $asset_src, $exclusion_pattern ) ) {
-					return true;
-				}
-			}
-		}
-
-		return false;
+		return in_array( $handle, $all_exclusions, true );
 	}
-
-	/**
-	 * Checks if a CSS/JS file URL suggests it's already minified.
-	 *
-	 * @since 1.0.0
-	 * @param string $url  Path or URL to the asset file.
-	 * @param string $type 'css' or 'js'.
-	 * @return bool True if the file seems minified, false otherwise.
-	 */
-	private function is_already_minified( string $url, string $type ): bool {
-		$file_name = basename( wp_parse_url( $url, PHP_URL_PATH ) );
-
-		if ( preg_match( '/(\.min\.|\.bundle\.|\-min\.)' . $type . '$/i', $file_name ) ) {
-			return true;
-		}
-
-		if ( str_contains( $url, '/cache/wppo/min/' ) ) {
-			return true;
-		}
-
-		if ( $this->filesystem ) {
-			$local_path = Util::get_local_path( $url );
-			if ( $this->filesystem->exists( $local_path ) && $this->filesystem->is_readable( $local_path ) ) {
-				$content = $this->filesystem->get_contents( $local_path );
-				if ( $content ) {
-					$lines = preg_split( '/\r\n|\r|\n/', $content );
-					if ( count( $lines ) <= 10 ) {
-						return true;
-					}
-				}
-			}
-		}
-
-		return false;
-	}
-
 
 	/**
 	 * Adds preload, prefetch, and preconnect links to the <head>.
@@ -704,75 +634,83 @@ class Main {
 			return;
 		}
 
-		$preload_settings = $this->options['preload_settings'] ?? array();
+		$settings   = $this->options['preload_settings'] ?? array();
+		$link_types = array(
+			'preconnect'   => 'preconnectOrigins',
+			'dns-prefetch' => 'dnsPrefetchOrigins',
+			'preload-font' => 'preloadFontsUrls',
+			'preload-css'  => 'preloadCSSUrls',
+		);
 
-		if ( ! empty( $preload_settings['preconnect'] ) && ! empty( $preload_settings['preconnectOrigins'] ) ) {
-			$origins = Util::process_urls( (string) $preload_settings['preconnectOrigins'] );
-			foreach ( $origins as $origin ) {
-				if ( filter_var( $origin, FILTER_VALIDATE_URL ) ) {
-					Util::generate_preload_link( $origin, 'preconnect', '', true ); // True for crossorigin.
+		foreach ( $link_types as $rel => $setting_key ) {
+			if ( ! empty( $settings[ $setting_key ] ) ) {
+				$urls = Util::process_urls( (string) $settings[ $setting_key ] );
+				foreach ( $urls as $url ) {
+					Util::generate_resource_hint_link( $rel, $url );
 				}
-			}
-		}
-
-		if ( ! empty( $preload_settings['prefetchDNS'] ) && ! empty( $preload_settings['dnsPrefetchOrigins'] ) ) {
-			$origins = Util::process_urls( (string) $preload_settings['dnsPrefetchOrigins'] );
-			foreach ( $origins as $origin ) {
-				$host = wp_parse_url( $origin, PHP_URL_HOST );
-				if ( empty( $host ) && filter_var( 'http://' . $origin, FILTER_VALIDATE_URL ) ) {
-					$host = $origin;
-				}
-				if ( $host ) {
-					Util::generate_preload_link( '//' . $host, 'dns-prefetch' );
-				}
-			}
-		}
-
-		if ( ! empty( $preload_settings['preloadFonts'] ) && ! empty( $preload_settings['preloadFontsUrls'] ) ) {
-			$font_urls = Util::process_urls( (string) $preload_settings['preloadFontsUrls'] );
-			foreach ( $font_urls as $font_url ) {
-				$absolute_font_url = $font_url;
-				if ( ! preg_match( '/^https?:\/\//i', $font_url ) ) {
-					$absolute_font_url = content_url( ltrim( $font_url, '/' ) ); // Assume relative to content dir.
-				}
-				$font_extension = strtolower( pathinfo( wp_parse_url( $absolute_font_url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
-				$font_mime_type = '';
-				switch ( $font_extension ) {
-					case 'woff2':
-						$font_mime_type = 'font/woff2';
-						break;
-					case 'woff':
-						$font_mime_type = 'font/woff';
-						break;
-					case 'ttf':
-						$font_mime_type = 'font/ttf';
-						break;
-					case 'otf':
-						$font_mime_type = 'font/otf';
-						break;
-					case 'eot':
-						$font_mime_type = 'application/vnd.ms-fontobject';
-						break;
-				}
-				if ( ! empty( $font_mime_type ) ) {
-					Util::generate_preload_link( $absolute_font_url, 'preload', 'font', true, $font_mime_type );
-				}
-			}
-		}
-
-		if ( ! empty( $preload_settings['preloadCSS'] ) && ! empty( $preload_settings['preloadCSSUrls'] ) ) {
-			$css_urls = Util::process_urls( (string) $preload_settings['preloadCSSUrls'] );
-			foreach ( $css_urls as $css_url ) {
-				$absolute_css_url = $css_url;
-				if ( ! preg_match( '/^https?:\/\//i', $css_url ) ) {
-					$absolute_css_url = content_url( ltrim( $css_url, '/' ) );
-				}
-				Util::generate_preload_link( $absolute_css_url, 'preload', 'style' );
 			}
 		}
 
 		if ( $this->image_optimisation ) {
 			$this->image_optimisation->preload_images_on_page_load();
 		}
+	}
+
+	/**
+	 * Check if the setup wizard has been completed.
+	 *
+	 * @since 1.0.0
+	 * @return bool True if wizard is completed, false otherwise.
+	 */
+	public function is_wizard_completed(): bool {
+		return (bool) get_option( 'wppo_setup_wizard_completed', false );
+	}
+
+	/**
+	 * Get wizard completion analytics data.
+	 *
+	 * @since 1.0.0
+	 * @return array<string, mixed> Analytics data about wizard usage.
+	 */
+	public function get_wizard_analytics(): array {
+		$completion_time = get_option( 'wppo_wizard_completion_time' );
+		$selected_preset = get_option( 'wppo_wizard_selected_preset' );
+		$enabled_features = get_option( 'wppo_wizard_enabled_features', array() );
+		
+		return array(
+			'completed' => $this->is_wizard_completed(),
+			'completion_time' => $completion_time,
+			'selected_preset' => $selected_preset,
+			'enabled_features' => $enabled_features,
+			'reset_count' => get_option( 'wppo_wizard_reset_count', 0 ),
+		);
+	}
+
+	/**
+	 * Ensure wizard settings are compatible with existing plugin features.
+	 *
+	 * @since 1.0.0
+	 * @return bool True if settings are compatible, false if conflicts exist.
+	 */
+	public function validate_wizard_compatibility(): bool {
+		$current_settings = get_option( 'wppo_settings', array() );
+		
+		// Check for any critical conflicts
+		$conflicts = array();
+		
+		// Example: Check if caching is enabled but server doesn't support it
+		if ( ! empty( $current_settings['cache_settings']['enablePageCaching'] ) ) {
+			if ( ! is_writable( WP_CONTENT_DIR ) ) {
+				$conflicts[] = 'Cache directory not writable';
+			}
+		}
+		
+		// Log any conflicts found
+		if ( ! empty( $conflicts ) ) {
+			new Log( 'Wizard compatibility issues found: ' . implode( ', ', $conflicts ) );
+			return false;
+		}
+		
+		return true;
 	}
 }

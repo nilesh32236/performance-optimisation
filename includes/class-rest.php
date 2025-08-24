@@ -132,6 +132,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						),
 					),
 				),
+				'/wizard-setup'            => array(
+					'methods'             => \WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'handle_wizard_setup_request' ),
+					'permission_callback' => array( $this, 'check_admin_permissions' ),
+					'args'                => array(
+						'preset' => array(
+							'required'    => true,
+							'type'        => 'string',
+							'description' => 'The optimization preset selected by the user.',
+							'enum'        => array( 'standard', 'recommended', 'aggressive' ),
+						),
+						'preloadCache' => array(
+							'required'    => false,
+							'type'        => 'boolean',
+							'default'     => false,
+							'description' => 'Whether to enable cache preloading.',
+						),
+						'imageConversion' => array(
+							'required'    => false,
+							'type'        => 'boolean',
+							'default'     => false,
+							'description' => 'Whether to enable image conversion to WebP/AVIF.',
+						),
+					),
+				),
+				'/wizard-reset'            => array(
+					'methods'             => \WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'handle_wizard_reset_request' ),
+					'permission_callback' => array( $this, 'check_admin_permissions' ),
+				),
 			);
 		}
 
@@ -414,6 +444,143 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 		}
 
+		/**
+		 * Handles request to configure plugin settings via the setup wizard.
+		 *
+		 * @since 1.0.0
+		 * @param \WP_REST_Request $request The REST API request.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function handle_wizard_setup_request( \WP_REST_Request $request ): \WP_REST_Response {
+			$preset           = $request->get_param( 'preset' );
+			$preload_cache    = $request->get_param( 'preloadCache' );
+			$image_conversion = $request->get_param( 'imageConversion' );
+
+			// Build settings based on preset selection
+			$settings = $this->build_wizard_settings( $preset, $preload_cache, $image_conversion );
+
+			// Save settings
+			if ( update_option( 'wppo_settings', $settings ) ) {
+				// Mark wizard as completed
+				update_option( 'wppo_setup_wizard_completed', true );
+				
+				// Track wizard completion analytics
+				update_option( 'wppo_wizard_completion_time', current_time( 'mysql' ) );
+				update_option( 'wppo_wizard_selected_preset', $preset );
+				update_option( 'wppo_wizard_enabled_features', array(
+					'preload_cache' => $preload_cache,
+					'image_conversion' => $image_conversion,
+				) );
+
+				// Clear cache to apply new settings
+				Cache::clear_cache();
+
+				// Log the wizard completion with analytics
+				new Log( sprintf(
+					__( 'Setup wizard completed successfully with preset: %s, features: %s on', 'performance-optimisation' ),
+					$preset,
+					implode( ', ', array_filter( array(
+						$preload_cache ? 'Cache Preloading' : null,
+						$image_conversion ? 'Image Conversion' : null,
+					) ) )
+				) . ' ' . current_time( 'mysql' ) );
+
+				return $this->send_success_response(
+					array(
+						'message'      => __( 'Setup completed successfully! Your site is now optimized.', 'performance-optimisation' ),
+						'redirect_url' => admin_url( 'admin.php?page=performance-optimisation' ),
+						'settings'     => $settings,
+					)
+				);
+			} else {
+				return $this->send_error_response( 'setup_failed', __( 'Failed to save wizard settings.', 'performance-optimisation' ), 500 );
+			}
+		}
+
+		/**
+		 * Builds the complete settings array based on wizard selections.
+		 *
+		 * @since 1.0.0
+		 * @param string $preset           The selected optimization preset.
+		 * @param bool   $preload_cache    Whether to enable cache preloading.
+		 * @param bool   $image_conversion Whether to enable image conversion.
+		 * @return array<string, mixed> The complete settings array.
+		 */
+		private function build_wizard_settings( string $preset, bool $preload_cache, bool $image_conversion ): array {
+			$settings = array(
+				'cache_settings'      => array(),
+				'file_optimisation'   => array(),
+				'image_optimisation'  => array(),
+				'preload_settings'    => array(),
+			);
+
+			// Base settings for all presets
+			$settings['cache_settings']['enablePageCaching'] = true;
+			$settings['image_optimisation']['lazyLoadImages'] = true;
+
+			// Preset-specific settings
+			switch ( $preset ) {
+				case 'standard':
+					// Standard preset only includes base settings
+					break;
+
+				case 'recommended':
+					$settings['file_optimisation']['minifyCSS']  = true;
+					$settings['file_optimisation']['minifyHTML'] = true;
+					$settings['file_optimisation']['combineCSS'] = true;
+					break;
+
+				case 'aggressive':
+					$settings['file_optimisation']['minifyCSS']  = true;
+					$settings['file_optimisation']['minifyHTML'] = true;
+					$settings['file_optimisation']['combineCSS'] = true;
+					$settings['file_optimisation']['minifyJS']   = true;
+					$settings['file_optimisation']['deferJS']    = true;
+					$settings['file_optimisation']['delayJS']    = true;
+					break;
+			}
+
+			// Optional features
+			if ( $preload_cache ) {
+				$settings['preload_settings']['enablePreloadCache'] = true;
+				$settings['preload_settings']['enableCronJobs']     = true;
+			}
+
+			if ( $image_conversion ) {
+				$settings['image_optimisation']['convertImg'] = true;
+				$settings['image_optimisation']['format']     = 'webp';
+			}
+
+			return $settings;
+		}
+
+		/**
+		 * Handles request to reset the setup wizard.
+		 *
+		 * @since 1.0.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function handle_wizard_reset_request(): \WP_REST_Response {
+			// Clear the wizard completion flag
+			delete_option( 'wppo_setup_wizard_completed' );
+
+			// Clear the redirect transient to allow redirect
+			delete_transient( 'wppo_wizard_redirect_done' );
+			
+			// Track wizard reset count for analytics
+			$reset_count = get_option( 'wppo_wizard_reset_count', 0 );
+			update_option( 'wppo_wizard_reset_count', $reset_count + 1 );
+
+			// Log the wizard reset
+			new Log( __( 'Setup wizard reset on', 'performance-optimisation' ) . ' ' . current_time( 'mysql' ) );
+
+			return $this->send_success_response(
+				array(
+					'message'      => __( 'Setup wizard has been reset successfully.', 'performance-optimisation' ),
+					'redirect_url' => admin_url( 'admin.php?page=performance-optimisation-setup' ),
+				)
+			);
+		}
 
 		/**
 		 * Helper to send a standardized success REST API response.

@@ -248,5 +248,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$urls_array = array_unique( $urls_array );
 			return $urls_array;
 		}
+
+		/**
+		 * Checks if a file is already minified based on its URL.
+		 *
+		 * @param string $url The URL to check.
+		 * @return bool True if the file appears to be already minified, false otherwise.
+		 * @since 1.0.0
+		 */
+		public static function is_already_minified( string $url ): bool {
+			$path = wp_parse_url( $url, PHP_URL_PATH );
+			if ( ! $path ) {
+				return false;
+			}
+			
+			$filename = basename( $path );
+			
+			// Check if filename contains .min. before the extension
+			return (bool) preg_match( '/\.min\.(css|js)$/i', $filename );
+		}
+
+		/**
+		 * Generates a resource hint link tag (preconnect, dns-prefetch, etc.).
+		 *
+		 * @param string $rel The relationship attribute (e.g., 'preconnect', 'dns-prefetch').
+		 * @param string $href The resource URL.
+		 * @since 1.0.0
+		 */
+		public static function generate_resource_hint_link( string $rel, string $href ): void {
+			$attributes = array(
+				'rel'  => esc_attr( $rel ),
+				'href' => esc_url( $href ),
+			);
+
+			// Add crossorigin for preconnect links
+			if ( 'preconnect' === $rel ) {
+				$attributes['crossorigin'] = 'anonymous';
+			}
+
+			$link_tag_parts = array();
+			foreach ( $attributes as $key => $value ) {
+				$link_tag_parts[] = sprintf( '%s="%s"', $key, $value );
+			}
+
+			// Output is escaped using WordPress escaping functions.
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo '<link ' . implode( ' ', $link_tag_parts ) . '>' . PHP_EOL;
+		}
 	}
 }
