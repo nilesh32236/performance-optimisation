@@ -20,20 +20,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 class RecommendationsController extends BaseController {
 
 	/**
-	 * Metrics collector instance.
-	 *
-	 * @var \PerformanceOptimisation\Core\Analytics\MetricsCollector
-	 */
-	private \PerformanceOptimisation\Core\Analytics\MetricsCollector $metrics_collector;
-
-	/**
-	 * Performance analyzer instance.
-	 *
-	 * @var \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer
-	 */
-	private \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer $performance_analyzer;
-
-	/**
 	 * Recommendation engine instance.
 	 *
 	 * @var \PerformanceOptimisation\Core\Analytics\RecommendationEngine
@@ -48,9 +34,14 @@ class RecommendationsController extends BaseController {
 	 */
 	public function __construct( \PerformanceOptimisation\Core\Analytics\MetricsCollector $metrics_collector, \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer $performance_analyzer ) {
 		parent::__construct();
-		$this->metrics_collector     = $metrics_collector;
-		$this->performance_analyzer  = $performance_analyzer;
 		$this->recommendation_engine = new \PerformanceOptimisation\Core\Analytics\RecommendationEngine( $metrics_collector, $performance_analyzer );
+	}
+
+	/**
+	 * Register the routes for this controller.
+	 */
+	public function register_routes() {
+		// No routes to register for this controller.
 	}
 
 	/**

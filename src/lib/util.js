@@ -8,13 +8,14 @@ export const CheckboxOption = ({
 	textareaValue,
 	onTextareaChange,
 	description,
-	children
+	children,
 }) => {
 	return (
 		<div className="checkbox-option">
-			<label>
+			<label htmlFor={`checkbox-${name}`}>
 				<input
 					type="checkbox"
+					id={`checkbox-${name}`}
 					name={name}
 					checked={checked}
 					onChange={onChange}
@@ -39,10 +40,10 @@ export const CheckboxOption = ({
 	);
 };
 
-export const handleChange = (setSettings) => (e) => {
+export const handleChange = setSettings => e => {
 	const { name, type, value, checked } = e.target;
 
-	setSettings((prevState) => ({
+	setSettings(prevState => ({
 		...prevState,
 		[name]: 'checkbox' === type ? checked : value,
 	}));

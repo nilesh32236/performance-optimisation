@@ -1,5 +1,8 @@
 // src/components/FileOptimization/FileOptimization.js
 
+/**
+ * External dependencies
+ */
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faFileCode, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
@@ -28,7 +31,8 @@ const FileOptimization = ({
 				{translations.fileOptimization || 'File Optimization'}
 			</h2>
 			<p className="wppo-section-description">
-				{translations.fileOptimizationDesc || 'Configure minification and loading strategies for your CSS, JavaScript, and HTML files.'}
+				{translations.fileOptimizationDesc ||
+					'Configure minification and loading strategies for your CSS, JavaScript, and HTML files.'}
 			</p>
 
 			{/* Minify JS */}
@@ -38,22 +42,33 @@ const FileOptimization = ({
 						type="checkbox"
 						id="minifyJS"
 						checked={fileOptSettings.minifyJS || false}
-						onChange={(e) => handleChange('minifyJS', e.target.checked)}
+						onChange={e => handleChange('minifyJS', e.target.checked)}
 					/>
-					<label htmlFor="minifyJS">{translations.minifyJS || 'Minify JavaScript Files'}</label>
+					<label htmlFor="minifyJS">
+						{translations.minifyJS || 'Minify JavaScript Files'}
+					</label>
 				</div>
 				{fileOptSettings.minifyJS && (
 					<div className="wppo-sub-fields">
-						<label htmlFor="excludeJS" className="wppo-label">{translations.excludeJSFiles || 'Exclude JavaScript Files/Keywords from Minification:'}</label>
+						<label htmlFor="excludeJS" className="wppo-label">
+							{translations.excludeJSFiles ||
+								'Exclude JavaScript Files/Keywords from Minification:'}
+						</label>
 						<textarea
 							id="excludeJS"
 							className="wppo-text-area-field"
 							value={fileOptSettings.excludeJS || ''}
-							onChange={(e) => handleChange('excludeJS', e.target.value, 'textarea')}
+							onChange={e => handleChange('excludeJS', e.target.value, 'textarea')}
 							rows="3"
-							placeholder={translations.excludeJSHelpText || "e.g., jquery.js, /wp-includes/js/, specific-plugin.js"}
+							placeholder={
+								translations.excludeJSHelpText ||
+								'e.g., jquery.js, /wp-includes/js/, specific-plugin.js'
+							}
 						/>
-						<p className="wppo-option-description">{translations.excludeJSDesc || 'Enter parts of filenames, paths, or keywords (one per line). Handles listed here will also be excluded.'}</p>
+						<p className="wppo-option-description">
+							{translations.excludeJSDesc ||
+								'Enter parts of filenames, paths, or keywords (one per line). Handles listed here will also be excluded.'}
+						</p>
 					</div>
 				)}
 				<div className="wppo-field-group wppo-checkbox-option">
@@ -61,9 +76,11 @@ const FileOptimization = ({
 						type="checkbox"
 						id="minifyInlineJS"
 						checked={fileOptSettings.minifyInlineJS || false}
-						onChange={(e) => handleChange('minifyInlineJS', e.target.checked)}
+						onChange={e => handleChange('minifyInlineJS', e.target.checked)}
 					/>
-					<label htmlFor="minifyInlineJS">{translations.minifyInlineJS || 'Minify Inline JavaScript'}</label>
+					<label htmlFor="minifyInlineJS">
+						{translations.minifyInlineJS || 'Minify Inline JavaScript'}
+					</label>
 				</div>
 			</div>
 
@@ -74,22 +91,33 @@ const FileOptimization = ({
 						type="checkbox"
 						id="minifyCSS"
 						checked={fileOptSettings.minifyCSS || false}
-						onChange={(e) => handleChange('minifyCSS', e.target.checked)}
+						onChange={e => handleChange('minifyCSS', e.target.checked)}
 					/>
-					<label htmlFor="minifyCSS">{translations.minifyCSS || 'Minify CSS Files'}</label>
+					<label htmlFor="minifyCSS">
+						{translations.minifyCSS || 'Minify CSS Files'}
+					</label>
 				</div>
 				{fileOptSettings.minifyCSS && (
 					<div className="wppo-sub-fields">
-						<label htmlFor="excludeCSS" className="wppo-label">{translations.excludeCSSFiles || 'Exclude CSS Files/Keywords from Minification:'}</label>
+						<label htmlFor="excludeCSS" className="wppo-label">
+							{translations.excludeCSSFiles ||
+								'Exclude CSS Files/Keywords from Minification:'}
+						</label>
 						<textarea
 							id="excludeCSS"
 							className="wppo-text-area-field"
 							value={fileOptSettings.excludeCSS || ''}
-							onChange={(e) => handleChange('excludeCSS', e.target.value, 'textarea')}
+							onChange={e => handleChange('excludeCSS', e.target.value, 'textarea')}
 							rows="3"
-							placeholder={translations.excludeCSSHelpText || "e.g., admin-bar.css, /plugins/some-plugin/style.css"}
+							placeholder={
+								translations.excludeCSSHelpText ||
+								'e.g., admin-bar.css, /plugins/some-plugin/style.css'
+							}
 						/>
-						<p className="wppo-option-description">{translations.excludeCSSDesc || 'Enter parts of filenames, paths, or keywords (one per line). Handles listed here will also be excluded.'}</p>
+						<p className="wppo-option-description">
+							{translations.excludeCSSDesc ||
+								'Enter parts of filenames, paths, or keywords (one per line). Handles listed here will also be excluded.'}
+						</p>
 					</div>
 				)}
 				<div className="wppo-field-group wppo-checkbox-option">
@@ -97,9 +125,11 @@ const FileOptimization = ({
 						type="checkbox"
 						id="minifyInlineCSS"
 						checked={fileOptSettings.minifyInlineCSS || false}
-						onChange={(e) => handleChange('minifyInlineCSS', e.target.checked)}
+						onChange={e => handleChange('minifyInlineCSS', e.target.checked)}
 					/>
-					<label htmlFor="minifyInlineCSS">{translations.minifyInlineCSS || 'Minify Inline CSS'}</label>
+					<label htmlFor="minifyInlineCSS">
+						{translations.minifyInlineCSS || 'Minify Inline CSS'}
+					</label>
 				</div>
 			</div>
 
@@ -110,22 +140,35 @@ const FileOptimization = ({
 						type="checkbox"
 						id="combineCSS"
 						checked={fileOptSettings.combineCSS || false}
-						onChange={(e) => handleChange('combineCSS', e.target.checked)}
+						onChange={e => handleChange('combineCSS', e.target.checked)}
 					/>
-					<label htmlFor="combineCSS">{translations.combineCSS || 'Combine CSS Files'}</label>
+					<label htmlFor="combineCSS">
+						{translations.combineCSS || 'Combine CSS Files'}
+					</label>
 				</div>
 				{fileOptSettings.combineCSS && (
 					<div className="wppo-sub-fields">
-						<label htmlFor="excludeCombineCSS" className="wppo-label">{translations.excludeCombineCSS || 'Exclude CSS Files/Keywords from Combination:'}</label>
+						<label htmlFor="excludeCombineCSS" className="wppo-label">
+							{translations.excludeCombineCSS ||
+								'Exclude CSS Files/Keywords from Combination:'}
+						</label>
 						<textarea
 							id="excludeCombineCSS"
 							className="wppo-text-area-field"
 							value={fileOptSettings.excludeCombineCSS || ''}
-							onChange={(e) => handleChange('excludeCombineCSS', e.target.value, 'textarea')}
+							onChange={e =>
+								handleChange('excludeCombineCSS', e.target.value, 'textarea')
+							}
 							rows="3"
-							placeholder={translations.excludeCombineCSSHelpText || "e.g., critical.css, /themes/my-theme/specific.css"}
+							placeholder={
+								translations.excludeCombineCSSHelpText ||
+								'e.g., critical.css, /themes/my-theme/specific.css'
+							}
 						/>
-						<p className="wppo-option-description">{translations.excludeCombineCSSDesc || 'Enter parts of filenames, paths, or keywords (one per line). These files will be loaded individually.'}</p>
+						<p className="wppo-option-description">
+							{translations.excludeCombineCSSDesc ||
+								'Enter parts of filenames, paths, or keywords (one per line). These files will be loaded individually.'}
+						</p>
 					</div>
 				)}
 			</div>
@@ -137,12 +180,18 @@ const FileOptimization = ({
 						type="checkbox"
 						id="minifyHTML"
 						checked={fileOptSettings.minifyHTML || false}
-						onChange={(e) => handleChange('minifyHTML', e.target.checked)}
+						onChange={e => handleChange('minifyHTML', e.target.checked)}
 					/>
-					<label htmlFor="minifyHTML">{translations.minifyHTML || 'Minify HTML Output'}</label>
+					<label htmlFor="minifyHTML">
+						{translations.minifyHTML || 'Minify HTML Output'}
+					</label>
 				</div>
-				<p className="wppo-option-description" style={{ marginLeft: '25px', marginTop: '-10px' }}>
-					{translations.minifyHTMLDesc || 'Removes unnecessary whitespace and comments from HTML to reduce page size.'}
+				<p
+					className="wppo-option-description"
+					style={{ marginLeft: '25px', marginTop: '-10px' }}
+				>
+					{translations.minifyHTMLDesc ||
+						'Removes unnecessary whitespace and comments from HTML to reduce page size.'}
 				</p>
 			</div>
 
@@ -153,22 +202,35 @@ const FileOptimization = ({
 						type="checkbox"
 						id="deferJS"
 						checked={fileOptSettings.deferJS || false}
-						onChange={(e) => handleChange('deferJS', e.target.checked)}
+						onChange={e => handleChange('deferJS', e.target.checked)}
 					/>
-					<label htmlFor="deferJS">{translations.deferJS || 'Defer Non-Essential JavaScript'}</label>
+					<label htmlFor="deferJS">
+						{translations.deferJS || 'Defer Non-Essential JavaScript'}
+					</label>
 				</div>
 				{fileOptSettings.deferJS && (
 					<div className="wppo-sub-fields">
-						<label htmlFor="excludeDeferJS" className="wppo-label">{translations.excludeDeferJS || 'Exclude JavaScript Files/Keywords from Deferring:'}</label>
+						<label htmlFor="excludeDeferJS" className="wppo-label">
+							{translations.excludeDeferJS ||
+								'Exclude JavaScript Files/Keywords from Deferring:'}
+						</label>
 						<textarea
 							id="excludeDeferJS"
 							className="wppo-text-area-field"
 							value={fileOptSettings.excludeDeferJS || ''}
-							onChange={(e) => handleChange('excludeDeferJS', e.target.value, 'textarea')}
+							onChange={e =>
+								handleChange('excludeDeferJS', e.target.value, 'textarea')
+							}
 							rows="3"
-							placeholder={translations.excludeDeferJSHelpText || "e.g., jquery.js, analytics.js"}
+							placeholder={
+								translations.excludeDeferJSHelpText ||
+								'e.g., jquery.js, analytics.js'
+							}
 						/>
-						<p className="wppo-option-description">{translations.excludeDeferJSDesc || 'Scripts critical for initial page render should be excluded.'}</p>
+						<p className="wppo-option-description">
+							{translations.excludeDeferJSDesc ||
+								'Scripts critical for initial page render should be excluded.'}
+						</p>
 					</div>
 				)}
 			</div>
@@ -180,24 +242,38 @@ const FileOptimization = ({
 						type="checkbox"
 						id="delayJS"
 						checked={fileOptSettings.delayJS || false}
-						onChange={(e) => handleChange('delayJS', e.target.checked)}
+						onChange={e => handleChange('delayJS', e.target.checked)}
 					/>
-					<label htmlFor="delayJS">{translations.delayJS || 'Delay JavaScript Execution'}</label>
+					<label htmlFor="delayJS">
+						{translations.delayJS || 'Delay JavaScript Execution'}
+					</label>
 				</div>
 				{fileOptSettings.delayJS && (
 					<div className="wppo-sub-fields">
-						<label htmlFor="excludeDelayJS" className="wppo-label">{translations.excludeDelayJS || 'Exclude JavaScript Files/Keywords from Delaying:'}</label>
+						<label htmlFor="excludeDelayJS" className="wppo-label">
+							{translations.excludeDelayJS ||
+								'Exclude JavaScript Files/Keywords from Delaying:'}
+						</label>
 						<textarea
 							id="excludeDelayJS"
 							className="wppo-text-area-field"
 							value={fileOptSettings.excludeDelayJS || ''}
-							onChange={(e) => handleChange('excludeDelayJS', e.target.value, 'textarea')}
+							onChange={e =>
+								handleChange('excludeDelayJS', e.target.value, 'textarea')
+							}
 							rows="3"
-							placeholder={translations.excludeDelayJSHelpText || "e.g., crucial-script.js"}
+							placeholder={
+								translations.excludeDelayJSHelpText || 'e.g., crucial-script.js'
+							}
 						/>
-						<p className="wppo-option-description">{translations.excludeDelayJSDesc || 'Delays execution until user interaction. Exclude scripts needed immediately.'}</p>
+						<p className="wppo-option-description">
+							{translations.excludeDelayJSDesc ||
+								'Delays execution until user interaction. Exclude scripts needed immediately.'}
+						</p>
 						<p className="wppo-option-description wppo-warning-text">
-							<FontAwesomeIcon icon={faExclamationTriangle} /> {translations.delayJSWarning || 'Warning: Delaying JavaScript can affect site functionality if not configured carefully. Test thoroughly.'}
+							<FontAwesomeIcon icon={faExclamationTriangle} />{' '}
+							{translations.delayJSWarning ||
+								'Warning: Delaying JavaScript can affect site functionality if not configured carefully. Test thoroughly.'}
 						</p>
 					</div>
 				)}
@@ -210,37 +286,65 @@ const FileOptimization = ({
 						type="checkbox"
 						id="removeWooCSSJS"
 						checked={fileOptSettings.removeWooCSSJS || false}
-						onChange={(e) => handleChange('removeWooCSSJS', e.target.checked)}
+						onChange={e => handleChange('removeWooCSSJS', e.target.checked)}
 					/>
-					<label htmlFor="removeWooCSSJS">{translations.removeWooCSSJS || 'Remove WooCommerce Assets on Non-Woo Pages'}</label>
+					<label htmlFor="removeWooCSSJS">
+						{translations.removeWooCSSJS ||
+							'Remove WooCommerce Assets on Non-Woo Pages'}
+					</label>
 				</div>
 				{fileOptSettings.removeWooCSSJS && (
 					<div className="wppo-sub-fields">
-						<label htmlFor="excludeUrlToKeepJSCSS" className="wppo-label">{translations.excludeUrlToKeepJSCSS || 'Exclude URLs Where WooCommerce Assets Should Be Kept:'}</label>
+						<label htmlFor="excludeUrlToKeepJSCSS" className="wppo-label">
+							{translations.excludeUrlToKeepJSCSS ||
+								'Exclude URLs Where WooCommerce Assets Should Be Kept:'}
+						</label>
 						<textarea
 							id="excludeUrlToKeepJSCSS"
 							className="wppo-text-area-field"
 							value={fileOptSettings.excludeUrlToKeepJSCSS || ''}
-							onChange={(e) => handleChange('excludeUrlToKeepJSCSS', e.target.value, 'textarea')}
+							onChange={e =>
+								handleChange('excludeUrlToKeepJSCSS', e.target.value, 'textarea')
+							}
 							rows="3"
-							placeholder={translations.excludeUrlToKeepJSCSSHelpText || "e.g., /my-custom-shop-page/, /product-showcase/(.*)"}
+							placeholder={
+								translations.excludeUrlToKeepJSCSSHelpText ||
+								'e.g., /my-custom-shop-page/, /product-showcase/(.*)'
+							}
 						/>
-						<p className="wppo-option-description">{translations.excludeUrlToKeepJSCSSDesc || 'Enter URL paths (one per line). Use (.*) as a wildcard for subpaths.'}</p>
+						<p className="wppo-option-description">
+							{translations.excludeUrlToKeepJSCSSDesc ||
+								'Enter URL paths (one per line). Use (.*) as a wildcard for subpaths.'}
+						</p>
 
-						<label htmlFor="removeCssJsHandle" className="wppo-label" style={{ marginTop: '15px' }}>{translations.removeCssJsHandle || 'WooCommerce Handles to Remove (Advanced):'}</label>
+						<label
+							htmlFor="removeCssJsHandle"
+							className="wppo-label"
+							style={{ marginTop: '15px' }}
+						>
+							{translations.removeCssJsHandle ||
+								'WooCommerce Handles to Remove (Advanced):'}
+						</label>
 						<textarea
 							id="removeCssJsHandle"
 							className="wppo-text-area-field"
 							value={fileOptSettings.removeCssJsHandle || ''}
-							onChange={(e) => handleChange('removeCssJsHandle', e.target.value, 'textarea')}
+							onChange={e =>
+								handleChange('removeCssJsHandle', e.target.value, 'textarea')
+							}
 							rows="3"
-							placeholder={translations.removeCssJsHandleHelpText || "e.g., style:woocommerce-general\nscript:wc-cart-fragments\n(Defaults will be used if empty)"}
+							placeholder={
+								translations.removeCssJsHandleHelpText ||
+								'e.g., style:woocommerce-general\nscript:wc-cart-fragments\n(Defaults will be used if empty)'
+							}
 						/>
-						<p className="wppo-option-description">{translations.removeCssJsHandleDesc || 'Prefix with "style:" or "script:". If empty, default WooCommerce handles will be targeted.'}</p>
+						<p className="wppo-option-description">
+							{translations.removeCssJsHandleDesc ||
+								'Prefix with "style:" or "script:". If empty, default WooCommerce handles will be targeted.'}
+						</p>
 					</div>
 				)}
 			</div>
-
 		</div>
 	);
 };

@@ -4,10 +4,10 @@ export const apiCall = (action, body) => {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
-			'X-WP-Nonce': wppoSettings.nonce
+			'X-WP-Nonce': wppoSettings.nonce,
 		},
-		body: JSON.stringify(body)
-	}).then(async (response) => {
+		body: JSON.stringify(body),
+	}).then(async response => {
 		const data = await response.json();
 		if ('update_settings' === action && data.success) {
 			wppoSettings.settings = data.data;
@@ -21,13 +21,12 @@ export const fetchRecentActivities = () => {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
-			'X-WP-Nonce': wppoSettings.nonce
+			'X-WP-Nonce': wppoSettings.nonce,
 		},
-		body: JSON.stringify({ page: '1' })
+		body: JSON.stringify({ page: '1' }),
 	})
 		.then(response => response.json())
 		.catch(error => {
-			console.error('Error fetching recent activities:', error);
 			throw error; // Re-throw the error for further handling if needed
 		});
 };

@@ -401,8 +401,8 @@ abstract class BaseController {
 	): \WP_REST_Response {
 		$total_pages = ceil( $total_items / $per_page );
 
-		$response->header( 'X-WP-Total', $total_items );
-		$response->header( 'X-WP-TotalPages', $total_pages );
+		$response->header( 'X-WP-Total', (string) $total_items );
+		$response->header( 'X-WP-TotalPages', (string) $total_pages );
 
 		return $response;
 	}
