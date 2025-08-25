@@ -1,0 +1,49 @@
+// Dashboard page specific styles
+.wppo-page-dashboard {
+	// Dashboard specific overrides and additions
+	
+	.wppo-info-section,
+	.wppo-recent-activities {
+		@include card;
+		margin-top: $spacing-xl;
+
+		h3 {
+			color: $primary-color;
+			font-size: $font-size-large;
+			margin-top: 0;
+			margin-bottom: $spacing-md;
+		}
+
+		ul {
+			list-style-type: none;
+			margin: 0;
+			padding-left: 0;
+
+			li {
+				border-bottom: 1px solid lighten($wp-admin-border, 5%);
+				padding: $spacing-sm 0;
+				font-size: $font-size-small;
+				color: $secondary-color;
+
+				&:last-child {
+					border-bottom: none;
+				}
+
+				a {
+					color: $primary-color;
+					text-decoration: none;
+
+					&:hover {
+						text-decoration: underline;
+					}
+				}
+			}
+		}
+
+		p {
+			color: lighten($secondary-color, 10%);
+			font-size: $font-size-small;
+			margin-bottom: $spacing-sm;
+		}
+	}
+}

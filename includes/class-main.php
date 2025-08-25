@@ -112,16 +112,16 @@ final class Main {
 		}
 	}
 
-    /**
-     * Setup WordPress hooks.
-     *
-     * @since 1.0.0
-     */
-    private function setup_hooks(): void {
-        add_action( 'admin_menu', array( $this, 'init_admin_menu' ) );
-        add_action( 'admin_init', array( $this, 'maybe_redirect_to_wizard' ) );
-        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_bar_scripts' ) );
-        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_scripts' ) );
+	/**
+	 * Setup WordPress hooks.
+	 *
+	 * @since 1.0.0
+	 */
+	private function setup_hooks(): void {
+		add_action( 'admin_menu', array( $this, 'init_admin_menu' ) );
+		add_action( 'admin_init', array( $this, 'maybe_redirect_to_wizard' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_bar_scripts' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_scripts' ) );
 		add_action( 'admin_bar_menu', array( $this, 'add_settings_to_admin_bar' ), 100 );
 		add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect_links' ), 1 );
 
@@ -230,7 +230,7 @@ final class Main {
 	public function render_wizard_page(): void {
 		echo '<div class="wrap">';
 		echo '<div id="performance-optimisation-wizard-app">';
-		
+
 		// Fallback content for JavaScript-disabled environments
 		echo '<noscript>';
 		echo '<div class="wppo-wizard-fallback">';
@@ -243,13 +243,13 @@ final class Main {
 		echo '</div>';
 		echo '</div>';
 		echo '</noscript>';
-		
+
 		// Loading indicator while JavaScript loads
 		echo '<div class="wppo-wizard-loading-initial" style="text-align: center; padding: 50px;">';
 		echo '<div class="spinner is-active" style="float: none; margin: 0 auto 20px;"></div>';
 		echo '<p>' . __( 'Loading setup wizard...', 'performance-optimisation' ) . '</p>';
 		echo '</div>';
-		
+
 		echo '</div>';
 		echo '</div>';
 	}
@@ -353,7 +353,7 @@ final class Main {
 			'rerunSetupWizard'      => __( 'Re-run Setup Wizard', 'performance-optimisation' ),
 			'confirmRerunWizard'    => __( 'Are you sure you want to re-run the setup wizard? This will reset the wizard and allow you to reconfigure your settings.', 'performance-optimisation' ),
 			'errorRerunWizard'      => __( 'Error resetting setup wizard.', 'performance-optimisation' ),
-			
+
 			// Wizard completion status.
 			'wizardCompleted'       => get_option( 'wppo_setup_wizard_completed', false ),
 		);
@@ -673,16 +673,16 @@ final class Main {
 	 * @return array<string, mixed> Analytics data about wizard usage.
 	 */
 	public function get_wizard_analytics(): array {
-		$completion_time = get_option( 'wppo_wizard_completion_time' );
-		$selected_preset = get_option( 'wppo_wizard_selected_preset' );
+		$completion_time  = get_option( 'wppo_wizard_completion_time' );
+		$selected_preset  = get_option( 'wppo_wizard_selected_preset' );
 		$enabled_features = get_option( 'wppo_wizard_enabled_features', array() );
-		
+
 		return array(
-			'completed' => $this->is_wizard_completed(),
-			'completion_time' => $completion_time,
-			'selected_preset' => $selected_preset,
+			'completed'        => $this->is_wizard_completed(),
+			'completion_time'  => $completion_time,
+			'selected_preset'  => $selected_preset,
 			'enabled_features' => $enabled_features,
-			'reset_count' => get_option( 'wppo_wizard_reset_count', 0 ),
+			'reset_count'      => get_option( 'wppo_wizard_reset_count', 0 ),
 		);
 	}
 
@@ -694,23 +694,23 @@ final class Main {
 	 */
 	public function validate_wizard_compatibility(): bool {
 		$current_settings = get_option( 'wppo_settings', array() );
-		
+
 		// Check for any critical conflicts
 		$conflicts = array();
-		
+
 		// Example: Check if caching is enabled but server doesn't support it
 		if ( ! empty( $current_settings['cache_settings']['enablePageCaching'] ) ) {
 			if ( ! is_writable( WP_CONTENT_DIR ) ) {
 				$conflicts[] = 'Cache directory not writable';
 			}
 		}
-		
+
 		// Log any conflicts found
 		if ( ! empty( $conflicts ) ) {
 			new Log( 'Wizard compatibility issues found: ' . implode( ', ', $conflicts ) );
 			return false;
 		}
-		
+
 		return true;
 	}
 }

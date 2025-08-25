@@ -1,0 +1,52 @@
+{
+  "name": "performance-optimisation-admin",
+  "version": "1.1.0",
+  "description": "Admin interface for Performance Optimisation WordPress plugin",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "webpack --mode=production",
+    "dev": "webpack --mode=development --watch",
+    "start": "webpack serve --mode=development",
+    "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint src --ext .js,.jsx,.ts,.tsx --fix",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@wordpress/api-fetch": "^6.44.0",
+    "@wordpress/components": "^25.13.0",
+    "@wordpress/element": "^5.24.0",
+    "@wordpress/i18n": "^4.47.0",
+    "@wordpress/icons": "^9.38.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.8.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "@babel/preset-react": "^7.22.0",
+    "@babel/preset-typescript": "^7.23.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/wordpress__components": "^23.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "babel-loader": "^9.1.0",
+    "css-loader": "^6.8.0",
+    "eslint": "^8.50.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "mini-css-extract-plugin": "^2.7.0",
+    "sass": "^1.69.0",
+    "sass-loader": "^13.3.0",
+    "typescript": "^5.2.0",
+    "webpack": "^5.88.0",
+    "webpack-cli": "^5.1.0",
+    "webpack-dev-server": "^4.15.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
+}

@@ -1,0 +1,91 @@
+// Dashboard layout styles
+.wppo-container {
+	display: flex;
+	flex-direction: column;
+	margin: 0 auto;
+	max-width: 1200px;
+	padding: $spacing-lg;
+
+	@include respond-to(md) {
+		flex-direction: row;
+	}
+}
+
+.wppo-dashboard-container {
+	border-radius: $border-radius-lg;
+	margin: 0 auto;
+	padding: 0;
+}
+
+.wppo-dashboard-overview {
+	display: flex;
+	flex-wrap: wrap;
+	gap: $spacing-lg;
+	justify-content: space-between;
+
+	@include respond-to(md) {
+		flex-direction: column;
+		gap: $spacing-md;
+	}
+}
+
+.wppo-dashboard-card {
+	@include card;
+	display: flex;
+	flex-direction: column;
+	margin-bottom: $spacing-lg;
+	transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+	flex: 1 1 calc(33.333% - #{$spacing-lg});
+	min-width: 280px;
+
+	&:hover {
+		box-shadow: $shadow-lg;
+		transform: translateY(-3px);
+	}
+
+	.wppo-status-group {
+		display: flex;
+		flex-wrap: wrap;
+		gap: $spacing-sm;
+		justify-content: space-between;
+		margin-top: auto;
+	}
+
+	.wppo-status-item {
+		background-color: $wp-admin-light-gray;
+		border: 1px solid $wp-admin-border;
+		border-radius: $border-radius-md;
+		flex: 1;
+		min-width: 120px;
+		padding: $spacing-md;
+
+		h4 {
+			font-size: $font-size-base;
+			margin-top: 0;
+			margin-bottom: $spacing-xs;
+		}
+
+		p {
+			font-size: $font-size-small;
+			margin: $spacing-xs 0;
+		}
+	}
+
+	&--image-overview {
+		flex-basis: 100%;
+		max-width: 100%;
+	}
+}
+
+.wppo-action-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: $spacing-sm;
+	justify-content: flex-start;
+	margin-top: $spacing-md;
+
+	@include respond-to(md) {
+		flex-direction: column;
+		width: 100%;
+	}
+}

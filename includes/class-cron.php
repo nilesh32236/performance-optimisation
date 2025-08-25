@@ -257,7 +257,7 @@ class Cron {
 
 		$excluded_post_types = array( 'attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset', 'user_request' );
 		$post_types          = array_diff( $post_types, $excluded_post_types );
-		$post_types = array_unique( array_merge( array_values( $post_types ), array( 'page', 'post' ) ) );
+		$post_types          = array_unique( array_merge( array_values( $post_types ), array( 'page', 'post' ) ) );
 
 		$query_args = array(
 			'post_type'      => $post_types,

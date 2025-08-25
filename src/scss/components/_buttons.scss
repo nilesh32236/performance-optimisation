@@ -1,0 +1,59 @@
+// Button component styles
+.wppo-button {
+	@include button-primary;
+	font-size: $font-size-base;
+	line-height: $line-height-base;
+	margin-top: $spacing-sm;
+	user-select: none;
+
+	&:active {
+		transform: translateY(1px);
+	}
+
+	&--secondary {
+		@include button-secondary;
+	}
+
+	&--danger {
+		background-color: $error-color;
+		border-color: $error-color;
+
+		&:hover:not(:disabled) {
+			background-color: darken($error-color, 10%);
+			border-color: darken($error-color, 10%);
+		}
+
+		&:active {
+			background-color: darken($error-color, 15%);
+		}
+	}
+
+	&--disabled,
+	&:disabled {
+		background-color: $wp-admin-border;
+		border-color: $wp-admin-border;
+		color: $secondary-color;
+		cursor: not-allowed;
+		transform: none;
+
+		&:hover {
+			background-color: $wp-admin-border;
+			border-color: $wp-admin-border;
+		}
+	}
+
+	@include respond-to(md) {
+		font-size: $font-size-small;
+		padding: $spacing-xs $spacing-sm;
+		width: 100%;
+	}
+}
+
+// Legacy button classes for backward compatibility
+.clear-cache-btn,
+.optimize-assets-btn,
+.optimize-images-btn,
+.submit-button,
+.remove-optimized-btn {
+	@extend .wppo-button;
+}

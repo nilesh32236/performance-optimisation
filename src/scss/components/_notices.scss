@@ -1,0 +1,46 @@
+// Notice component styles
+.wppo-warning-text {
+	color: darken($warning-color, 20%);
+	background-color: lighten($warning-color, 45%);
+	border: 1px solid lighten($warning-color, 25%);
+	padding: $spacing-xs $spacing-sm;
+	border-radius: $border-radius-sm;
+	font-size: $font-size-small;
+	margin-top: $spacing-sm;
+
+	svg {
+		margin-right: $spacing-xs;
+	}
+}
+
+.wppo-notice {
+	padding: $spacing-sm $spacing-md;
+	margin-top: $spacing-md;
+	border-radius: $border-radius-sm;
+	border: 1px solid transparent;
+	font-size: $font-size-small;
+
+	&--error {
+		color: darken($error-color, 20%);
+		background-color: lighten($error-color, 45%);
+		border-color: lighten($error-color, 25%);
+	}
+
+	&--success {
+		color: darken($success-color, 20%);
+		background-color: lighten($success-color, 45%);
+		border-color: lighten($success-color, 25%);
+	}
+
+	&--warning {
+		color: darken($warning-color, 20%);
+		background-color: lighten($warning-color, 45%);
+		border-color: lighten($warning-color, 25%);
+	}
+
+	&--info {
+		color: darken($info-color, 20%);
+		background-color: lighten($info-color, 45%);
+		border-color: lighten($info-color, 25%);
+	}
+}

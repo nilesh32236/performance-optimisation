@@ -33,12 +33,34 @@
     },
     "require-dev": {
         "wp-coding-standards/wpcs": "^3.0",
-        "dealerdirect/phpcodesniffer-composer-installer": "^1.0"
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "phpstan/phpstan": "^1.10",
+        "phpunit/phpunit": "^9.6",
+        "mockery/mockery": "^1.6",
+        "brain/monkey": "^2.6",
+        "phpcompatibility/php-compatibility": "^9.3"
     },
     "scripts": {
-        "lint": "phpcs . --standard=WordPress --extensions=php --ignore=vendor/,node_modules/,build/",
-        "lint-fix": "phpcbf . --standard=WordPress --extensions=php --ignore=vendor/,node_modules/,build/",
-        "test": "phpunit"
+        "lint": "phpcs",
+        "lint-fix": "phpcbf",
+        "analyze": "phpstan analyse",
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-html coverage/",
+        "quality": [
+            "@lint",
+            "@analyze",
+            "@test"
+        ]
+    },
+    "autoload": {
+        "psr-4": {
+            "PerformanceOptimisation\\": "includes/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PerformanceOptimisation\\Tests\\": "tests/"
+        }
     },
     "config": {
         "allow-plugins": {
@@ -47,7 +69,9 @@
         },
         "platform": {
             "php": "7.4"
-        }
+        },
+        "optimize-autoloader": true,
+        "sort-packages": true
     },
     "extra": {
         "wordpress-plugin-slug": "performance-optimisation",

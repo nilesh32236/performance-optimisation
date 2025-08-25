@@ -1,0 +1,145 @@
+// Wizard page specific styles
+.wppo-wizard {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: $spacing-xl;
+
+    &__header {
+        text-align: center;
+        margin-bottom: $spacing-xxl;
+
+        h1 {
+            color: $primary-color;
+            font-size: $font-size-xxl;
+            margin-bottom: $spacing-md;
+        }
+
+        p {
+            font-size: $font-size-large;
+            color: $secondary-color;
+        }
+    }
+
+    &__progress {
+        margin-bottom: $spacing-xl;
+
+        .wppo-progress {
+            height: 12px;
+            margin-bottom: $spacing-sm;
+        }
+
+        &-text {
+            text-align: center;
+            font-size: $font-size-small;
+            color: $secondary-color;
+        }
+    }
+
+    &__step {
+        @include card;
+        margin-bottom: $spacing-xl;
+        min-height: 400px;
+
+        &-title {
+            font-size: $font-size-xl;
+            color: $primary-color;
+            margin-bottom: $spacing-lg;
+        }
+
+        &-content {
+            margin-bottom: $spacing-xl;
+        }
+    }
+
+    &__preset {
+        @include card;
+        margin-bottom: $spacing-lg;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 2px solid transparent;
+
+        &:hover {
+            border-color: $primary-light;
+            transform: translateY(-2px);
+        }
+
+        &--selected {
+            border-color: $primary-color;
+            background-color: lighten($primary-color, 50%);
+        }
+
+        &-title {
+            font-size: $font-size-large;
+            font-weight: $font-weight-semibold;
+            margin-bottom: $spacing-sm;
+            @include flex-between;
+
+            .wppo-badge {
+                background-color: $primary-color;
+                color: white;
+                padding: $spacing-xs $spacing-sm;
+                border-radius: $border-radius-sm;
+                font-size: $font-size-small;
+                font-weight: $font-weight-normal;
+            }
+        }
+
+        &-description {
+            color: $secondary-color;
+            margin-bottom: $spacing-md;
+        }
+
+        &-features {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+
+            li {
+                padding: $spacing-xs 0;
+                font-size: $font-size-small;
+                color: lighten($secondary-color, 10%);
+
+                &::before {
+                    content: '✓';
+                    color: $success-color;
+                    font-weight: $font-weight-bold;
+                    margin-right: $spacing-xs;
+                }
+            }
+        }
+    }
+
+    &__navigation {
+        @include flex-between;
+        margin-top: $spacing-xl;
+        padding-top: $spacing-lg;
+        border-top: 1px solid $wp-admin-border;
+
+        .wppo-button {
+            min-width: 120px;
+        }
+    }
+
+    &__completion {
+        text-align: center;
+        padding: $spacing-xxl;
+
+        &-icon {
+            font-size: 64px;
+            color: $success-color;
+            margin-bottom: $spacing-lg;
+        }
+
+        &-title {
+            font-size: $font-size-xxl;
+            color: $primary-color;
+            margin-bottom: $spacing-md;
+        }
+
+        &-message {
+            font-size: $font-size-large;
+            color: $secondary-color;
+            margin-bottom: $spacing-xl;
+        }
+    }
+}

@@ -1,0 +1,23 @@
+// Main entry point for Performance Optimisation plugin styles
+
+// Import foundation
+@import 'variables';
+@import 'mixins';
+@import 'base';
+@import 'components';
+
+// Import layout and page-specific styles
+@import 'layout/dashboard';
+@import 'layout/sidebar';
+@import 'layout/content';
+
+// Import component-specific styles
+@import 'components/forms';
+@import 'components/buttons';
+@import 'components/cards';
+@import 'components/notices';
+
+// Import page-specific styles
+@import 'pages/dashboard';
+@import 'pages/settings';
+@import 'pages/wizard';

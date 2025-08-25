@@ -1,0 +1,65 @@
+// Colors
+$primary-color: #0073aa;
+$primary-dark: #005a87;
+$primary-light: #00a0d2;
+$secondary-color: #646970;
+$success-color: #00a32a;
+$warning-color: #dba617;
+$error-color: #d63638;
+$info-color: #72aee6;
+
+// WordPress Admin Colors
+$wp-admin-blue: #0073aa;
+$wp-admin-gray: #646970;
+$wp-admin-light-gray: #f0f0f1;
+$wp-admin-border: #c3c4c7;
+
+// Typography
+$font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+$font-size-base: 14px;
+$font-size-small: 12px;
+$font-size-large: 16px;
+$font-size-xl: 18px;
+$font-size-xxl: 24px;
+
+$font-weight-normal: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+
+$line-height-base: 1.4;
+$line-height-tight: 1.2;
+$line-height-loose: 1.6;
+
+// Spacing
+$spacing-xs: 4px;
+$spacing-sm: 8px;
+$spacing-md: 16px;
+$spacing-lg: 24px;
+$spacing-xl: 32px;
+$spacing-xxl: 48px;
+
+// Border radius
+$border-radius-sm: 3px;
+$border-radius-md: 6px;
+$border-radius-lg: 12px;
+
+// Shadows
+$shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+$shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+$shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+
+// Breakpoints
+$breakpoint-sm: 576px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 992px;
+$breakpoint-xl: 1200px;
+
+// Z-index
+$z-index-dropdown: 1000;
+$z-index-sticky: 1020;
+$z-index-fixed: 1030;
+$z-index-modal-backdrop: 1040;
+$z-index-modal: 1050;
+$z-index-popover: 1060;
+$z-index-tooltip: 1070;

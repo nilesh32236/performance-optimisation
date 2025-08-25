@@ -1,0 +1,12 @@
+// Settings page specific styles
+.wppo-page-settings {
+	// Settings page specific styles can be added here
+	
+	// Responsive adjustments for settings
+	@include respond-to(md) {
+		.wppo-dashboard-card {
+			flex-basis: 100%;
+			max-width: 100%;
+		}
+	}
+}

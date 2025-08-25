@@ -1,0 +1,33 @@
+// Content area layout styles
+.wppo-content {
+	animation: wppoFadeIn 0.5s forwards;
+	background-color: white;
+	border: 1px solid $wp-admin-border;
+	border-radius: $border-radius-lg;
+	box-sizing: border-box;
+	padding: $spacing-lg;
+	transition: margin-left 0.3s ease;
+	width: 100%;
+
+	&--fade-in-active {
+		opacity: 0;
+	}
+
+	@include respond-to(md) {
+		margin-left: 0;
+		margin-top: $spacing-lg;
+	}
+}
+
+// Animation
+@keyframes wppoFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}

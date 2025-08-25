@@ -1,0 +1,144 @@
+// Button Component Styles
+.wppo-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.5rem;
+	padding: 0.75rem 1.5rem;
+	border: 1px solid transparent;
+	border-radius: 6px;
+	font-size: 0.875rem;
+	font-weight: 600;
+	text-decoration: none;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	position: relative;
+	overflow: hidden;
+
+	&:focus {
+		outline: 2px solid transparent;
+		box-shadow: 0 0 0 2px #0073aa40;
+	}
+
+	&:disabled,
+	&[aria-disabled="true"] {
+		opacity: 0.6;
+		cursor: not-allowed;
+		pointer-events: none;
+	}
+
+	// Variants
+	&--primary {
+		background: #0073aa;
+		color: #fff;
+		border-color: #0073aa;
+
+		&:hover:not(:disabled) {
+			background: #005a87;
+			border-color: #005a87;
+		}
+
+		&:active {
+			background: #004a6b;
+			border-color: #004a6b;
+		}
+	}
+
+	&--secondary {
+		background: #fff;
+		color: #0073aa;
+		border-color: #0073aa;
+
+		&:hover:not(:disabled) {
+			background: #f0f6fc;
+			color: #005a87;
+			border-color: #005a87;
+		}
+
+		&:active {
+			background: #e1ecf4;
+		}
+	}
+
+	&--danger {
+		background: #d63638;
+		color: #fff;
+		border-color: #d63638;
+
+		&:hover:not(:disabled) {
+			background: #b32d2e;
+			border-color: #b32d2e;
+		}
+
+		&:active {
+			background: #8a2424;
+			border-color: #8a2424;
+		}
+	}
+
+	&--ghost {
+		background: transparent;
+		color: #646970;
+		border-color: transparent;
+
+		&:hover:not(:disabled) {
+			background: #f6f7f7;
+			color: #1d2327;
+		}
+
+		&:active {
+			background: #dcdcde;
+		}
+	}
+
+	// Sizes
+	&--small {
+		padding: 0.5rem 1rem;
+		font-size: 0.75rem;
+	}
+
+	&--medium {
+		padding: 0.75rem 1.5rem;
+		font-size: 0.875rem;
+	}
+
+	&--large {
+		padding: 1rem 2rem;
+		font-size: 1rem;
+	}
+
+	// Full width
+	&--full-width {
+		width: 100%;
+	}
+
+	// Loading state
+	&--loading {
+		.wppo-button-text {
+			opacity: 0.7;
+		}
+	}
+
+	.wppo-button-spinner {
+		width: 16px;
+		height: 16px;
+		border: 2px solid transparent;
+		border-top: 2px solid currentColor;
+		border-radius: 50%;
+		animation: wppo-spin 1s linear infinite;
+	}
+
+	.wppo-button-text {
+		transition: opacity 0.2s ease;
+	}
+
+	.dashicons {
+		font-size: 16px;
+		line-height: 1;
+	}
+}
+
+@keyframes wppo-spin {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
+}

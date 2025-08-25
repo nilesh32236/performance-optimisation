@@ -261,9 +261,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( ! $path ) {
 				return false;
 			}
-			
+
 			$filename = basename( $path );
-			
+
 			// Check if filename contains .min. before the extension
 			return (bool) preg_match( '/\.min\.(css|js)$/i', $filename );
 		}
