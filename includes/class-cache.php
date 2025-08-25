@@ -572,15 +572,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$html_file_path      = $instance->get_cache_file_path_for_post_url( $normalized_url_path, 'html' );
 				$instance->delete_single_cache_file_pair( $html_file_path );
 			} else {
-				$domain_cache_dir = wp_normalize_path( trailingslashit( $instance->cache_root_dir ) . $instance->domain );
-				if ( $instance->filesystem->is_dir( $domain_cache_dir ) ) {
-					$instance->filesystem->delete( $domain_cache_dir, true ); // Recursive delete.
-				}
+				self::clear_page_cache();
+				self::clear_minified_cache();
+			}
+		}
 
-				$min_assets_dir = wp_normalize_path( trailingslashit( $instance->cache_root_dir ) . 'min' );
-				if ( $instance->filesystem->is_dir( $min_assets_dir ) ) {
-					$instance->filesystem->delete( $min_assets_dir, true ); // Recursive delete.
-				}
+		public static function clear_page_cache(): void {
+			$instance = new self();
+			if ( ! $instance->filesystem ) {
+				return;
+			}
+			$domain_cache_dir = wp_normalize_path( trailingslashit( $instance->cache_root_dir ) . $instance->domain );
+			if ( $instance->filesystem->is_dir( $domain_cache_dir ) ) {
+				$instance->filesystem->delete( $domain_cache_dir, true );
+			}
+		}
+
+		public static function clear_object_cache(): void {
+			// This plugin does not have object cache, so this is a no-op.
+		}
+
+		public static function clear_minified_cache(): void {
+			$instance = new self();
+			if ( ! $instance->filesystem ) {
+				return;
+			}
+			$min_assets_dir = wp_normalize_path( trailingslashit( $instance->cache_root_dir ) . 'min' );
+			if ( $instance->filesystem->is_dir( $min_assets_dir ) ) {
+				$instance->filesystem->delete( $min_assets_dir, true );
 			}
 		}
 

@@ -66,7 +66,6 @@ class ApiRouter {
 		$performance_analyzer = new \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer( $metrics_collector );
 
 		$this->controllers = array(
-			'base'            => new BaseController(),
 			'cache'           => new CacheController(),
 			'settings'        => new SettingsController(),
 			'optimization'    => new OptimizationController(),
@@ -118,7 +117,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this->controllers['cache'], 'clear_cache' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->controllers['cache'], 'check_admin_permissions' ),
 				'args'                => array(
 					'type' => array(
 						'required' => false,
@@ -168,7 +167,7 @@ class ApiRouter {
 				array(
 					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( $this->controllers['settings'], 'get_settings' ),
-					'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+					'permission_callback' => array( $this->controllers['cache'], 'check_admin_permissions' ),
 				),
 				array(
 					'methods'             => \WP_REST_Server::EDITABLE,
@@ -213,7 +212,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['settings'], 'export_settings' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->controllers['cache'], 'check_admin_permissions' ),
 			)
 		);
 
@@ -550,7 +549,7 @@ class ApiRouter {
 				array(
 					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( $this, 'get_presets' ),
-					'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+					'permission_callback' => array( $this->controllers['cache'], 'check_admin_permissions' ),
 				),
 				array(
 					'methods'             => \WP_REST_Server::CREATABLE,
@@ -607,7 +606,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_system_info' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->controllers['cache'], 'check_admin_permissions' ),
 			)
 		);
 
@@ -638,9 +637,9 @@ class ApiRouter {
 	 * Handle wizard setup request.
 	 *
 	 * @param \WP_REST_Request $request The REST API request.
-	 * @return \WP_REST_Response The response object.
+	 * @return \WP_REST_Response|\WP_Error The response object.
 	 */
-	public function handle_wizard_setup( \WP_REST_Request $request ): \WP_REST_Response {
+	public function handle_wizard_setup( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		$preset   = $request->get_param( 'preset' );
 		$features = $request->get_param( 'features' ) ?: array();
 
@@ -691,9 +690,9 @@ class ApiRouter {
 	 * Handle site analysis request.
 	 *
 	 * @param \WP_REST_Request $request The REST API request.
-	 * @return \WP_REST_Response The response object.
+	 * @return \WP_REST_Response|\WP_Error The response object.
 	 */
-	public function handle_site_analysis( \WP_REST_Request $request ): \WP_REST_Response {
+	public function handle_site_analysis( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		$force_refresh = $request->get_param( 'force_refresh' );
 
 		try {
@@ -729,9 +728,9 @@ class ApiRouter {
 	/**
 	 * Get presets.
 	 *
-	 * @return \WP_REST_Response The response object.
+	 * @return \WP_REST_Response|\WP_Error The response object.
 	 */
-	public function get_presets(): \WP_REST_Response {
+	public function get_presets(): \WP_REST_Response|\WP_Error {
 		try {
 			if ( ! class_exists( 'PerformanceOptimisation\Core\Presets\PresetManager' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/Core/Presets/PresetManager.php';
@@ -848,9 +847,9 @@ class ApiRouter {
 	 * Get recent activities.
 	 *
 	 * @param \WP_REST_Request $request The REST API request.
-	 * @return \WP_REST_Response The response object.
+	 * @return \WP_REST_Response|\WP_Error The response object.
 	 */
-	public function get_recent_activities( \WP_REST_Request $request ): \WP_REST_Response {
+	public function get_recent_activities( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		$page     = $request->get_param( 'page' );
 		$per_page = $request->get_param( 'per_page' );
 

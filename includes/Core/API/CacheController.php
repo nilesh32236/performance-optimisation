@@ -162,25 +162,29 @@ class CacheController extends BaseController {
 						$message       = sprintf( 'Page cache cleared for: %s', esc_url( home_url( $path ) ) );
 						$cleared_items = 1;
 					} else {
-						$cleared_items = \PerformanceOptimise\Inc\Cache::clear_page_cache();
-						$message       = sprintf( 'Page cache cleared. %d files removed.', $cleared_items );
+						\PerformanceOptimise\Inc\Cache::clear_page_cache();
+						$cleared_items = 0; // This method is void
+						$message       = 'Page cache cleared.';
 					}
 					break;
 
 				case 'object':
-					$cleared_items = \PerformanceOptimise\Inc\Cache::clear_object_cache();
+					\PerformanceOptimise\Inc\Cache::clear_object_cache();
+					$cleared_items = 0; // This method is void
 					$message       = 'Object cache cleared.';
 					break;
 
 				case 'minified':
-					$cleared_items = \PerformanceOptimise\Inc\Cache::clear_minified_cache();
-					$message       = sprintf( 'Minified files cache cleared. %d files removed.', $cleared_items );
+					\PerformanceOptimise\Inc\Cache::clear_minified_cache();
+					$cleared_items = 0; // This method is void
+					$message       = 'Minified files cache cleared.';
 					break;
 
 				case 'all':
 				default:
-					$cleared_items = \PerformanceOptimise\Inc\Cache::clear_cache();
-					$message       = sprintf( 'All cache cleared. %d files removed.', $cleared_items );
+					\PerformanceOptimise\Inc\Cache::clear_cache();
+					$cleared_items = 0; // This method is void
+					$message       = 'All cache cleared.';
 					break;
 			}
 

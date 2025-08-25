@@ -1,5 +1,11 @@
+/**
+ * External dependencies
+ */
 import React from 'react';
-import { createRoot } from 'react-dom/client'; 
+import { createRoot } from 'react-dom/client';
+/**
+ * Internal dependencies
+ */
 import App from './App';
 import './css/style.scss';
 
@@ -18,9 +24,7 @@ if (adminAppContainer) {
 				const dynamicRoot = createRoot(dynamicContainer);
 				dynamicRoot.render(<App />);
 			} else {
-				console.error(
-					'Performance Optimisation: Admin app container "#performance-optimisation-admin-app" not found.'
-				);
+				// Admin container not found.
 			}
 		}
 	);

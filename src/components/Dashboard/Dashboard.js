@@ -1,11 +1,18 @@
 // src/components/Dashboard/Dashboard.js
 
+/**
+ * External dependencies
+ */
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTachometerAlt, faBroom, faImages as faImagesSolid, faTrashAlt } from '@fortawesome/free-solid-svg-icons'; // Using a different faImages for clarity
+import {
+	faTachometerAlt,
+	faBroom,
+	faImages as faImagesSolid,
+	faTrashAlt,
+} from '@fortawesome/free-solid-svg-icons'; // Using a different faImages for clarity
 
 const Dashboard = ({
-	settings, // General settings if needed
 	imageInfo,
 	cacheSize,
 	minifiedAssets,
@@ -17,10 +24,14 @@ const Dashboard = ({
 	setCacheSize, // To update cacheSize after clearing
 	// toast, // If using react-toastify
 }) => {
-
 	const handleClearAllCache = async () => {
 		// eslint-disable-next-line no-alert
-		if (!window.confirm(translations.confirmClearAll || 'Are you sure you want to clear ALL cache? This includes HTML pages and minified assets.')) {
+		if (
+			!(
+				translations.confirmClearAll ||
+				'Are you sure you want to clear ALL cache? This includes HTML pages and minified assets.'
+			)
+		) {
 			return;
 		}
 		setIsLoading(true);
@@ -37,24 +48,21 @@ const Dashboard = ({
 			if (result.success) {
 				setCacheSize('0 B'); // Optimistic update
 				// toast?.success(translations.cacheCleared || 'All cache cleared successfully!');
-				console.log(translations.cacheCleared || 'All cache cleared successfully!');
 			} else {
 				// toast?.error(result.data?.message || translations.cacheClearError || 'Error clearing cache.');
-				console.error(result.data?.message || translations.cacheClearError || 'Error clearing cache.');
 			}
 		} catch (error) {
 			// toast?.error(translations.cacheClearError || 'Error clearing cache.');
-			console.error(translations.cacheClearError || 'Error clearing cache:', error);
 		} finally {
 			setIsLoading(false);
 		}
 	};
 
 	const handleOptimizeImages = async () => {
-		const totalPending = (imageInfo?.pending?.webp?.length || 0) + (imageInfo?.pending?.avif?.length || 0);
+		const totalPending =
+			(imageInfo?.pending?.webp?.length || 0) + (imageInfo?.pending?.avif?.length || 0);
 		if (totalPending === 0) {
 			// toast?.info(translations.noPendingImages || 'No images are currently pending optimization.');
-			console.log(translations.noPendingImages || 'No images are currently pending optimization.');
 			return;
 		}
 		setIsLoading(true);
@@ -70,14 +78,11 @@ const Dashboard = ({
 			if (result.success && result.data.imageInfo) {
 				setImageInfo(result.data.imageInfo); // Update state in App.js
 				// toast?.success(translations.imagesOptimized || 'Image optimization batch process initiated.');
-				console.log(translations.imagesOptimized || 'Image optimization batch process initiated.');
 			} else {
 				// toast?.error(result.data?.message || translations.errorOptimiseImg || 'Error initiating image optimization.');
-				console.error(result.data?.message || translations.errorOptimiseImg || 'Error initiating image optimization.');
 			}
 		} catch (error) {
 			// toast?.error(translations.errorOptimiseImg || 'Error initiating image optimization.');
-			console.error(translations.errorOptimiseImg || 'Error initiating image optimization:', error);
 		} finally {
 			setIsLoading(false);
 		}
@@ -85,7 +90,12 @@ const Dashboard = ({
 
 	const handleDeleteOptimizedImages = async () => {
 		// eslint-disable-next-line no-alert
-		if (!window.confirm(translations.confirmDeleteOptimized || 'Are you sure you want to delete all converted WebP/AVIF images? Original images will not be affected.')) {
+		if (
+			!(
+				translations.confirmDeleteOptimized ||
+				'Are you sure you want to delete all converted WebP/AVIF images? Original images will not be affected.'
+			)
+		) {
 			return;
 		}
 		setIsLoading(true);
@@ -102,14 +112,11 @@ const Dashboard = ({
 					setImageInfo(result.data.imageInfo); // Reset image info state
 				}
 				// toast?.success(translations.imagesDeleted || 'Converted images deleted successfully.');
-				console.log(translations.imagesDeleted || 'Converted images deleted successfully.');
 			} else {
 				// toast?.error(result.data?.message || translations.errorRemovingImg || 'Error deleting converted images.');
-				console.error(result.data?.message || translations.errorRemovingImg || 'Error deleting converted images.');
 			}
 		} catch (error) {
 			// toast?.error(translations.errorRemovingImg || 'Error deleting converted images.');
-			console.error(translations.errorRemovingImg || 'Error deleting converted images:', error);
 		} finally {
 			setIsLoading(false);
 		}
@@ -117,7 +124,12 @@ const Dashboard = ({
 
 	const handleRerunWizard = async () => {
 		// eslint-disable-next-line no-alert
-		if (!window.confirm(translations.confirmRerunWizard || 'Are you sure you want to re-run the setup wizard? This will reset the wizard and allow you to reconfigure your settings.')) {
+		if (
+			!(
+				translations.confirmRerunWizard ||
+				'Are you sure you want to re-run the setup wizard? This will reset the wizard and allow you to reconfigure your settings.'
+			)
+		) {
 			return;
 		}
 		setIsLoading(true);
@@ -132,28 +144,28 @@ const Dashboard = ({
 			const result = await response.json();
 			if (result.success) {
 				// toast?.success(result.data?.message || 'Setup wizard reset successfully!');
-				console.log(result.data?.message || 'Setup wizard reset successfully!');
 				// Redirect to wizard
 				if (result.data?.redirect_url) {
 					window.location.href = result.data.redirect_url;
 				}
 			} else {
 				// toast?.error(result.data?.message || translations.errorRerunWizard || 'Error resetting setup wizard.');
-				console.error(result.data?.message || translations.errorRerunWizard || 'Error resetting setup wizard.');
 			}
 		} catch (error) {
 			// toast?.error(translations.errorRerunWizard || 'Error resetting setup wizard.');
-			console.error(translations.errorRerunWizard || 'Error resetting setup wizard:', error);
 		} finally {
 			setIsLoading(false);
 		}
 	};
 
-	const totalPendingImages = (imageInfo?.pending?.webp?.length || 0) + (imageInfo?.pending?.avif?.length || 0);
-	const totalCompletedImages = (imageInfo?.completed?.webp?.length || 0) + (imageInfo?.completed?.avif?.length || 0);
-	const totalFailedImages = (imageInfo?.failed?.webp?.length || 0) + (imageInfo?.failed?.avif?.length || 0);
-	const totalSkippedImages = (imageInfo?.skipped?.webp?.length || 0) + (imageInfo?.skipped?.avif?.length || 0);
-
+	const totalPendingImages =
+		(imageInfo?.pending?.webp?.length || 0) + (imageInfo?.pending?.avif?.length || 0);
+	const totalCompletedImages =
+		(imageInfo?.completed?.webp?.length || 0) + (imageInfo?.completed?.avif?.length || 0);
+	const totalFailedImages =
+		(imageInfo?.failed?.webp?.length || 0) + (imageInfo?.failed?.avif?.length || 0);
+	const totalSkippedImages =
+		(imageInfo?.skipped?.webp?.length || 0) + (imageInfo?.skipped?.avif?.length || 0);
 
 	return (
 		<div className="wppo-dashboard-container">
@@ -162,7 +174,8 @@ const Dashboard = ({
 				{translations.dashboard || 'Dashboard'}
 			</h2>
 			<p className="wppo-section-description">
-				{translations.dashboardDesc || 'Overview of your site\'s performance optimization status and quick actions.'}
+				{translations.dashboardDesc ||
+					"Overview of your site's performance optimization status and quick actions."}
 			</p>
 
 			<div className="wppo-dashboard-overview">
@@ -233,12 +246,18 @@ const Dashboard = ({
 							disabled={totalPendingImages === 0}
 						>
 							<FontAwesomeIcon icon={faImagesSolid} style={{ marginRight: '5px' }} />
-							{translations.optimiseImagesNow || 'Optimize Pending Images'} ({totalPendingImages})
+							{translations.optimiseImagesNow || 'Optimize Pending Images'} (
+							{totalPendingImages})
 						</button>
 						<button
 							className="wppo-button wppo-button--danger" // Add a danger style for this
 							onClick={handleDeleteOptimizedImages}
-							disabled={totalCompletedImages === 0 && totalFailedImages === 0 && totalSkippedImages === 0 && totalPendingImages === 0}
+							disabled={
+								totalCompletedImages === 0 &&
+								totalFailedImages === 0 &&
+								totalSkippedImages === 0 &&
+								totalPendingImages === 0
+							}
 						>
 							<FontAwesomeIcon icon={faTrashAlt} style={{ marginRight: '5px' }} />
 							{translations.deleteOptimizedImages || 'Delete Converted Images'}
@@ -249,10 +268,14 @@ const Dashboard = ({
 				<div className="wppo-dashboard-card">
 					<h3>{translations.setupWizard || 'Setup Wizard'}</h3>
 					<p>
-						{translations.setupWizardDesc || 'Re-run the setup wizard to reconfigure your performance optimization settings.'}
+						{translations.setupWizardDesc ||
+							'Re-run the setup wizard to reconfigure your performance optimization settings.'}
 					</p>
 					<div className="wppo-action-buttons">
-						<button className="wppo-button wppo-button--secondary" onClick={handleRerunWizard}>
+						<button
+							className="wppo-button wppo-button--secondary"
+							onClick={handleRerunWizard}
+						>
 							{translations.rerunSetupWizard || 'Re-run Setup Wizard'}
 						</button>
 					</div>

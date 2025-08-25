@@ -1,12 +1,16 @@
 module.exports = {
 	extends: [
-		'@wordpress/eslint-config/recommended',
-		'@wordpress/eslint-config/recommended-with-formatting',
+		'plugin:@wordpress/eslint-plugin/recommended',
+		'prettier',
 	],
 	env: {
 		browser: true,
 		es6: true,
 		node: true,
+	},
+	globals: {
+		wppoSettings: 'writable',
+		wppoObject: 'writable',
 	},
 	parserOptions: {
 		ecmaVersion: 2020,

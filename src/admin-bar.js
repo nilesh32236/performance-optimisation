@@ -18,14 +18,13 @@ document.addEventListener('DOMContentLoaded', () => {
 	 * Handles the click event for clearing all cache.
 	 * @param {Event} event - The click event.
 	 */
-	const handleClearAllCache = async (event) => {
+	const handleClearAllCache = async event => {
 		event.preventDefault();
 
 		// eslint-disable-next-line no-alert
-		if (!window.confirm(i18n.confirmClearAll || 'Are you sure you want to clear ALL cache?')) {
-			return;
-		}
-
+		if (
+			!window.confirm(i18n.confirmClearAll || 'Are you sure you want to clear ALL cache?')
+		) {
 		// Optionally, show some loading indicator on the admin bar item
 		const originalTitle = event.target.innerHTML;
 		event.target.innerHTML = i18n.clearingCache || 'Clearing...';
@@ -45,16 +44,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 			if (result.success) {
 				// alert(result.data?.message || i18n.cacheCleared || 'All cache cleared successfully.');
-				showAdminBarNotice(result.data?.message || i18n.cacheCleared || 'All cache cleared successfully.', 'success');
+				showAdminBarNotice(
+					result.data?.message || i18n.cacheCleared || 'All cache cleared successfully.',
+					'success'
+				);
 			} else {
 				// alert(result.message || i18n.cacheClearError || 'Error clearing cache.');
-				showAdminBarNotice(result.message || i18n.cacheClearError || 'Error clearing cache.', 'error');
-				console.error('Clear All Cache Error:', result);
+				showAdminBarNotice(
+					result.message || i18n.cacheClearError || 'Error clearing cache.',
+					'error'
+				);
 			}
 		} catch (error) {
 			// alert(i18n.cacheClearError || 'An unexpected error occurred.');
 			showAdminBarNotice(i18n.cacheClearError || 'An unexpected error occurred.', 'error');
-			console.error('Clear All Cache Exception:', error);
 		} finally {
 			event.target.innerHTML = originalTitle; // Restore original text
 			event.target.style.pointerEvents = 'auto'; // Re-enable clicks
@@ -65,17 +68,17 @@ document.addEventListener('DOMContentLoaded', () => {
 	 * Handles the click event for clearing cache for the current page.
 	 * @param {Event} event - The click event.
 	 */
-	const handleClearThisPageCache = async (event) => {
+	const handleClearThisPageCache = async event => {
 		event.preventDefault();
 
-		if (!pagePath && !pageId) { // pagePath might be empty for homepage, pageId can be 0 for non-singular
+		if (!pagePath && !pageId) {
+			// pagePath might be empty for homepage, pageId can be 0 for non-singular
 			// alert(i18n.cannotClearNonSpecificPage || 'Cannot determine the current page to clear cache.');
-			showAdminBarNotice(i18n.cannotClearNonSpecificPage || 'Cannot determine the current page to clear cache.', 'warning');
-			return;
-		}
-
-		// eslint-disable-next-line no-alert
-		if (!window.confirm(i18n.confirmClearPage || 'Are you sure you want to clear the cache for this page?')) {
+			showAdminBarNotice(
+				i18n.cannotClearNonSpecificPage ||
+					'Cannot determine the current page to clear cache.',
+				'warning'
+			);
 			return;
 		}
 
@@ -101,16 +104,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
 			if (result.success) {
 				// alert(result.data?.message || i18n.cacheCleared || 'Cache for this page cleared successfully.');
-				showAdminBarNotice(result.data?.message || i18n.cacheCleared || 'Cache for this page cleared successfully.', 'success');
+				showAdminBarNotice(
+					result.data?.message ||
+						i18n.cacheCleared ||
+						'Cache for this page cleared successfully.',
+					'success'
+				);
 			} else {
 				// alert(result.message || i18n.cacheClearError || 'Error clearing cache for this page.');
-				showAdminBarNotice(result.message || i18n.cacheClearError || 'Error clearing cache for this page.', 'error');
-				console.error('Clear This Page Cache Error:', result);
+				showAdminBarNotice(
+					result.message || i18n.cacheClearError || 'Error clearing cache for this page.',
+					'error'
+				);
 			}
 		} catch (error) {
 			// alert(i18n.cacheClearError || 'An unexpected error occurred.');
 			showAdminBarNotice(i18n.cacheClearError || 'An unexpected error occurred.', 'error');
-			console.error('Clear This Page Cache Exception:', error);
 		} finally {
 			event.target.innerHTML = originalTitle;
 			event.target.style.pointerEvents = 'auto';
@@ -120,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	/**
 	 * Shows a temporary notice in the admin bar.
 	 * @param {string} message - The message to display.
-	 * @param {string} type - 'success', 'error', or 'warning'.
+	 * @param {string} type    - 'success', 'error', or 'warning'.
 	 */
 	function showAdminBarNotice(message, type = 'success') {
 		const noticeId = 'wppo-admin-bar-notice';
@@ -152,13 +161,13 @@ document.addEventListener('DOMContentLoaded', () => {
 			notice.style.backgroundColor = '#f8d7da';
 			notice.style.color = '#721c24';
 			notice.style.borderColor = '#f5c6cb';
-		} else { // warning or default
+		} else {
+			// warning or default
 			notice.style.backgroundColor = '#fff3cd';
 			notice.style.color = '#856404';
 			notice.style.borderColor = '#ffeeba';
 		}
 		notice.style.border = '1px solid';
-
 
 		// Fade in
 		setTimeout(() => {
@@ -176,16 +185,16 @@ document.addEventListener('DOMContentLoaded', () => {
 		}, 4000); // Display for 4 seconds
 	}
 
-
 	// Attach event listeners to the admin bar menu items
 	const clearAllCacheLink = document.querySelector('#wp-admin-bar-wppo_clear_all_cache .ab-item');
 	if (clearAllCacheLink) {
 		clearAllCacheLink.addEventListener('click', handleClearAllCache);
 	}
 
-	const clearThisPageCacheLink = document.querySelector('#wp-admin-bar-wppo_clear_this_page_cache .ab-item');
+	const clearThisPageCacheLink = document.querySelector(
+		'#wp-admin-bar-wppo_clear_this_page_cache .ab-item'
+	);
 	if (clearThisPageCacheLink) {
 		clearThisPageCacheLink.addEventListener('click', handleClearThisPageCache);
 	}
-
 });

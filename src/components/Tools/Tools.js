@@ -1,8 +1,17 @@
 // src/components/Tools/Tools.js
 
+/**
+ * External dependencies
+ */
 import React, { useState, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTools, faFileExport, faFileImport, faSpinner, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
+import {
+	faTools,
+	faFileExport,
+	faFileImport,
+	faSpinner,
+	faExclamationTriangle,
+} from '@fortawesome/free-solid-svg-icons';
 
 const Tools = ({
 	settings, // Current settings from App.js, used for export
@@ -33,14 +42,12 @@ const Tools = ({
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
 			// toast?.success(translations.settingsExported || 'Settings exported successfully!');
-			console.log(translations.settingsExported || 'Settings exported successfully!');
 		} catch (error) {
 			// toast?.error(translations.errorExportingSettings || 'Error exporting settings.');
-			console.error(translations.errorExportingSettings || 'Error exporting settings:', error);
 		}
 	};
 
-	const handleFileChange = (event) => {
+	const handleFileChange = event => {
 		const file = event.target.files[0];
 		if (file && file.type === 'application/json') {
 			setSelectedFile(file);
@@ -48,7 +55,9 @@ const Tools = ({
 			setImportSuccess('');
 		} else {
 			setSelectedFile(null);
-			setImportError(translations.invalidJsonFile || 'Invalid file type. Please select a JSON file.');
+			setImportError(
+				translations.invalidJsonFile || 'Invalid file type. Please select a JSON file.'
+			);
 			// toast?.error(translations.invalidJsonFile || 'Invalid file type. Please select a JSON file.');
 		}
 	};
@@ -65,7 +74,7 @@ const Tools = ({
 		setImportSuccess('');
 
 		const reader = new FileReader();
-		reader.onload = async (event) => {
+		reader.onload = async event => {
 			try {
 				const fileContent = event.target.result;
 				// Validate if it's JSON, though the REST API will do a more thorough check
@@ -83,7 +92,11 @@ const Tools = ({
 				const result = await response.json();
 
 				if (result.success) {
-					setImportSuccess(result.data.message || translations.settingsImported || 'Settings imported successfully!');
+					setImportSuccess(
+						result.data.message ||
+							translations.settingsImported ||
+							'Settings imported successfully!'
+					);
 					// toast?.success(result.data.message || translations.settingsImported || 'Settings imported successfully!');
 					if (result.data.new_settings && onSettingsImported) {
 						onSettingsImported(result.data.new_settings); // Update App.js state
@@ -93,13 +106,18 @@ const Tools = ({
 						fileInputRef.current.value = ''; // Reset file input
 					}
 				} else {
-					setImportError(result.message || translations.errorImporting || 'Error importing settings.');
+					setImportError(
+						result.message || translations.errorImporting || 'Error importing settings.'
+					);
 					// toast?.error(result.message || translations.errorImporting || 'Error importing settings.');
 				}
-			} catch (e) { // Catches JSON.parse error or other FileReader errors
-				setImportError(translations.invalidJsonFileContent || 'File content is not valid JSON or an error occurred reading the file.');
+			} catch (e) {
+				// Catches JSON.parse error or other FileReader errors
+				setImportError(
+					translations.invalidJsonFileContent ||
+						'File content is not valid JSON or an error occurred reading the file.'
+				);
 				// toast?.error(translations.invalidJsonFileContent || 'File content is not valid JSON or an error occurred reading the file.');
-				console.error("Error during file read or JSON parse for import:", e);
 			} finally {
 				setIsLoading(false);
 			}
@@ -119,7 +137,8 @@ const Tools = ({
 				{translations.tools || 'Tools'}
 			</h2>
 			<p className="wppo-section-description">
-				{translations.toolsDesc || 'Manage plugin settings through import/export and access other utility tools.'}
+				{translations.toolsDesc ||
+					'Manage plugin settings through import/export and access other utility tools.'}
 			</p>
 
 			{/* Export Settings */}
@@ -128,12 +147,11 @@ const Tools = ({
 					<FontAwesomeIcon icon={faFileExport} style={{ marginRight: '8px' }} />
 					{translations.exportSettings || 'Export Settings'}
 				</h3>
-				<p className="wppo-option-description" style={{ marginLeft: 0 }}>{translations.exportPluginSettings || 'Download all current Performance Optimisation plugin settings as a JSON file. This file can be used as a backup or to import settings into another site.'}</p>
-				<button
-					className="wppo-button"
-					onClick={handleExportSettings}
-					disabled={isLoading}
-				>
+				<p className="wppo-option-description" style={{ marginLeft: 0 }}>
+					{translations.exportPluginSettings ||
+						'Download all current Performance Optimisation plugin settings as a JSON file. This file can be used as a backup or to import settings into another site.'}
+				</p>
+				<button className="wppo-button" onClick={handleExportSettings} disabled={isLoading}>
 					<FontAwesomeIcon icon={faFileExport} style={{ marginRight: '5px' }} />
 					{translations.exportNow || 'Export Settings Now'}
 				</button>
@@ -145,9 +163,16 @@ const Tools = ({
 					<FontAwesomeIcon icon={faFileImport} style={{ marginRight: '8px' }} />
 					{translations.importSettings || 'Import Settings'}
 				</h3>
-				<p className="wppo-option-description" style={{ marginLeft: 0 }}>{translations.importPluginSettings || 'Import plugin settings from a previously exported JSON file. This will overwrite your current settings.'}</p>
+				<p className="wppo-option-description" style={{ marginLeft: 0 }}>
+					{translations.importPluginSettings ||
+						'Import plugin settings from a previously exported JSON file. This will overwrite your current settings.'}
+				</p>
 				<div className="wppo-field-group">
-					<label htmlFor="wppoImportFile" className="wppo-label" style={{ display: 'block', marginBottom: '10px' }}>
+					<label
+						htmlFor="wppoImportFile"
+						className="wppo-label"
+						style={{ display: 'block', marginBottom: '10px' }}
+					>
 						{translations.selectJsonFileToImport || 'Select JSON File:'}
 					</label>
 					<input
@@ -159,21 +184,40 @@ const Tools = ({
 						style={{ display: 'block', marginBottom: '10px' }}
 						disabled={isLoading}
 					/>
-					{selectedFile && <p style={{ fontSize: '0.9em', fontStyle: 'italic' }}>Selected: {selectedFile.name}</p>}
+					{selectedFile && (
+						<p style={{ fontSize: '0.9em', fontStyle: 'italic' }}>
+							Selected: {selectedFile.name}
+						</p>
+					)}
 					<button
 						className="wppo-button"
 						onClick={handleImportSettings}
 						disabled={!selectedFile || isLoading}
 					>
-						{isLoading && <FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: '5px' }} />}
+						{isLoading && (
+							<FontAwesomeIcon icon={faSpinner} spin style={{ marginRight: '5px' }} />
+						)}
 						<FontAwesomeIcon icon={faFileImport} style={{ marginRight: '5px' }} />
 						{translations.importNow || 'Import Settings Now'}
 					</button>
-					{importError && <p className="wppo-notice wppo-notice--error" style={{ marginTop: '10px' }}>{importError}</p>}
-					{importSuccess && <p className="wppo-notice wppo-notice--success" style={{ marginTop: '10px' }}>{importSuccess}</p>}
+					{importError && (
+						<p className="wppo-notice wppo-notice--error" style={{ marginTop: '10px' }}>
+							{importError}
+						</p>
+					)}
+					{importSuccess && (
+						<p
+							className="wppo-notice wppo-notice--success"
+							style={{ marginTop: '10px' }}
+						>
+							{importSuccess}
+						</p>
+					)}
 				</div>
 				<p className="wppo-option-description wppo-warning-text" style={{ marginLeft: 0 }}>
-					<FontAwesomeIcon icon={faExclamationTriangle} /> {translations.importWarning || 'Warning: Importing settings will overwrite all your current Performance Optimisation settings. It is recommended to export your current settings as a backup before importing.'}
+					<FontAwesomeIcon icon={faExclamationTriangle} />{' '}
+					{translations.importWarning ||
+						'Warning: Importing settings will overwrite all your current Performance Optimisation settings. It is recommended to export your current settings as a backup before importing.'}
 				</p>
 			</div>
 

@@ -159,7 +159,7 @@ class AnalyticsController {
 	 * @param \WP_REST_Request $request REST request object.
 	 * @return \WP_REST_Response REST response object.
 	 */
-	public function get_dashboard_data( \WP_REST_Request $request ): \WP_REST_Response {
+	public function get_dashboard_data( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		try {
 			$end_date   = current_time( 'Y-m-d' );
 			$start_date = date( 'Y-m-d', strtotime( '-7 days' ) );
@@ -203,7 +203,7 @@ class AnalyticsController {
 	 * @param \WP_REST_Request $request REST request object.
 	 * @return \WP_REST_Response REST response object.
 	 */
-	public function get_metrics_data( \WP_REST_Request $request ): \WP_REST_Response {
+	public function get_metrics_data( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		try {
 			$metric     = $request->get_param( 'metric' );
 			$period     = $request->get_param( 'period' );
@@ -261,7 +261,7 @@ class AnalyticsController {
 	 * @param \WP_REST_Request $request REST request object.
 	 * @return \WP_REST_Response REST response object.
 	 */
-	public function get_performance_report( \WP_REST_Request $request ): \WP_REST_Response {
+	public function get_performance_report( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		try {
 			$start_date = $request->get_param( 'start_date' ) ?: date( 'Y-m-d', strtotime( '-30 days' ) );
 			$end_date   = $request->get_param( 'end_date' ) ?: current_time( 'Y-m-d' );
@@ -290,7 +290,7 @@ class AnalyticsController {
 	 * @param \WP_REST_Request $request REST request object.
 	 * @return \WP_REST_Response REST response object.
 	 */
-	public function export_analytics_data( \WP_REST_Request $request ): \WP_REST_Response {
+	public function export_analytics_data( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		try {
 			$format     = $request->get_param( 'format' );
 			$start_date = $request->get_param( 'start_date' ) ?: date( 'Y-m-d', strtotime( '-30 days' ) );
