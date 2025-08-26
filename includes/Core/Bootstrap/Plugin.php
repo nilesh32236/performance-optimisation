@@ -104,16 +104,16 @@ class Plugin implements PluginInterface {
 			return;
 		}
 
-		// Register core services
+		// Register core services.
 		$this->registerCoreServices();
 
-		// Load plugin dependencies
+		// Load plugin dependencies.
 		$this->loadDependencies();
 
-		// Setup WordPress hooks
+		// Setup WordPress hooks.
 		$this->setupHooks();
 
-		// Initialize features
+		// Initialize features.
 		$this->initializeFeatures();
 
 		$this->_initialized = true;
@@ -128,6 +128,21 @@ class Plugin implements PluginInterface {
 		do_action( 'wppo_plugin_initialized', $this );
 	}
 
+	public static function activate_plugin(): void {
+		$instance = self::getInstance();
+		$instance->createDatabaseTables();
+		$instance->setDefaultOptions();
+		$instance->scheduleCronEvents();
+		flush_rewrite_rules();
+	}
+
+	public static function deactivate_plugin(): void {
+		$instance = self::getInstance();
+		$instance->clearCronEvents();
+		$instance->clearCache();
+		flush_rewrite_rules();
+	}
+
 	/**
 	 * Activate the plugin.
 	 *
@@ -136,16 +151,16 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	public function activate(): void {
-		// Create necessary database tables
+		// Create necessary database tables.
 		$this->createDatabaseTables();
 
-		// Set default options
+		// Set default options.
 		$this->setDefaultOptions();
 
-		// Schedule cron events
+		// Schedule cron events.
 		$this->scheduleCronEvents();
 
-		// Flush rewrite rules
+		// Flush rewrite rules.
 		flush_rewrite_rules();
 
 		/**
@@ -166,13 +181,13 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	public function deactivate(): void {
-		// Clear scheduled cron events
+		// Clear scheduled cron events.
 		$this->clearCronEvents();
 
-		// Clear cache
+		// Clear cache.
 		$this->clearCache();
 
-		// Flush rewrite rules
+		// Flush rewrite rules.
 		flush_rewrite_rules();
 
 		/**
@@ -248,20 +263,45 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function registerCoreServices(): void {
-		// Register container itself
+		// Register container itself.
 		$this->_container->singleton( ContainerInterface::class, $this->_container );
 
-		// Register plugin instance
+		// Register plugin instance.
 		$this->_container->singleton( PluginInterface::class, $this );
 		$this->_container->singleton( self::class, $this );
 
-		// Register configuration manager
+		// Register configuration manager.
 		$this->_container->singleton(
 			ConfigManager::class,
 			function ( $container ) {
 				return new ConfigManager();
 			}
 		);
+
+		// Register services.
+		$this->_container->singleton( \PerformanceOptimisation\Services\CacheService::class, \PerformanceOptimisation\Services\CacheService::class );
+		$this->_container->singleton( \PerformanceOptimisation\Optimizers\CssOptimizer::class, \PerformanceOptimisation\Optimizers\CssOptimizer::class );
+		$this->_container->singleton( \PerformanceOptimisation\Optimizers\JsOptimizer::class, \PerformanceOptimisation\Optimizers\JsOptimizer::class );
+		$this->_container->singleton( \PerformanceOptimisation\Optimizers\HtmlOptimizer::class, \PerformanceOptimisation\Optimizers\HtmlOptimizer::class );
+		$this->_container->singleton( \PerformanceOptimisation\Services\OptimizationService::class, \PerformanceOptimisation\Services\OptimizationService::class );
+		$this->_container->singleton( \PerformanceOptimisation\Optimizers\ImageProcessor::class, \PerformanceOptimisation\Optimizers\ImageProcessor::class );
+		$this->_container->singleton( \PerformanceOptimisation\Utils\ConversionQueue::class, \PerformanceOptimisation\Utils\ConversionQueue::class );
+		$this->_container->singleton(
+			\PerformanceOptimisation\Services\ImageService::class,
+			function ( $container ) {
+				$settings = get_option( 'wppo_settings', [] );
+				return new \PerformanceOptimisation\Services\ImageService(
+					$container->resolve( \PerformanceOptimisation\Optimizers\ImageProcessor::class ),
+					$container->resolve( \PerformanceOptimisation\Utils\ConversionQueue::class ),
+					$settings['image_optimisation'] ?? []
+				);
+			}
+		);
+				$this->_container->singleton( \PerformanceOptimisation\Services\SettingsService::class, \PerformanceOptimisation\Services\SettingsService::class );
+		$this->_container->singleton( \PerformanceOptimisation\Admin\Admin::class, \PerformanceOptimisation\Admin\Admin::class );
+		$this->_container->singleton( \PerformanceOptimisation\Frontend\Frontend::class, \PerformanceOptimisation\Frontend\Frontend::class );
+		$this->_container->singleton( \PerformanceOptimise\Inc\Cron::class, \PerformanceOptimise\Inc\Cron::class );
+		$this->_container->singleton( \PerformanceOptimisation\Core\API\RestController::class, \PerformanceOptimisation\Core\API\RestController::class );
 	}
 
 	/**
@@ -272,11 +312,34 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function loadDependencies(): void {
-		// Load Composer autoloader if available
+		// Load Composer autoloader if available.
 		$autoloader = $this->getPath() . 'vendor/autoload.php';
 		if ( file_exists( $autoloader ) ) {
 			require_once $autoloader;
 		}
+
+		$this->load_plugin_files();
+	}
+
+	private function load_plugin_files(): void {
+		require_once $this->getPath() . 'includes/Interfaces/OptimizerInterface.php';
+		require_once $this->getPath() . 'includes/Interfaces/SettingsServiceInterface.php';
+		require_once $this->getPath() . 'includes/Optimizers/CssOptimizer.php';
+		require_once $this->getPath() . 'includes/Optimizers/JsOptimizer.php';
+		require_once $this->getPath() . 'includes/Optimizers/HtmlOptimizer.php';
+		require_once $this->getPath() . 'includes/Optimizers/ImageProcessor.php';
+		require_once $this->getPath() . 'includes/Utils/ConversionQueue.php';
+		require_once $this->getPath() . 'includes/Utils/ValidationUtil.php';
+		require_once $this->getPath() . 'includes/Core/Cache/CacheDropin.php';
+		require_once $this->getPath() . 'includes/Services/CacheService.php';
+		require_once $this->getPath() . 'includes/Services/OptimizationService.php';
+		require_once $this->getPath() . 'includes/Services/ImageService.php';
+		require_once $this->getPath() . 'includes/Services/SettingsService.php';
+		require_once $this->getPath() . 'includes/Admin/Admin.php';
+		require_once $this->getPath() . 'includes/Admin/Metabox.php';
+		require_once $this->getPath() . 'includes/Frontend/Frontend.php';
+		require_once $this->getPath() . 'includes/class-cron.php';
+		require_once $this->getPath() . 'includes/Core/API/RestController.php';
 	}
 
 	/**
@@ -287,20 +350,23 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function setupHooks(): void {
-		// Admin hooks
+		$admin    = $this->_container->resolve( \PerformanceOptimisation\Admin\Admin::class );
+		$frontend = $this->_container->resolve( \PerformanceOptimisation\Frontend\Frontend::class );
+
 		if ( is_admin() ) {
-			add_action( 'admin_menu', array( $this, 'initAdminMenu' ) );
-			add_action( 'admin_enqueue_scripts', array( $this, 'enqueueAdminAssets' ) );
+			$admin->setup_hooks();
+		} else {
+			$frontend->setup_hooks();
 		}
 
-		// Frontend hooks
-		add_action( 'wp_enqueue_scripts', array( $this, 'enqueueFrontendAssets' ) );
-
-		// REST API hooks
+		// REST API hooks.
 		add_action( 'rest_api_init', array( $this, 'initRestApi' ) );
 
-		// Internationalization
+		// Internationalization.
 		add_action( 'init', array( $this, 'loadTextdomain' ) );
+
+		// Cron.
+		$cron = $this->_container->resolve( \PerformanceOptimise\Inc\Cron::class );
 	}
 
 	/**
@@ -311,10 +377,10 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function initializeFeatures(): void {
-		// Initialize feature modules based on configuration
+		// Initialize feature modules based on configuration.
 		$config = $this->_container->resolve( ConfigManager::class );
 
-		// This will be expanded when we create feature modules
+		// This will be expanded when we create feature modules.
 		/**
 		 * Fires when features should be initialized.
 		 *
@@ -338,7 +404,7 @@ class Plugin implements PluginInterface {
 
 		$charset_collate = $wpdb->get_charset_collate();
 
-		// Performance statistics table
+		// Performance statistics table.
 		$stats_table = $wpdb->prefix . 'wppo_performance_stats';
 		$stats_sql   = "CREATE TABLE $stats_table (
 			id bigint(20) NOT NULL AUTO_INCREMENT,
@@ -350,7 +416,7 @@ class Plugin implements PluginInterface {
 			KEY recorded_at (recorded_at)
 		) $charset_collate;";
 
-		// Cache queue table
+		// Cache queue table.
 		$queue_table = $wpdb->prefix . 'wppo_cache_queue';
 		$queue_sql   = "CREATE TABLE $queue_table (
 			id bigint(20) NOT NULL AUTO_INCREMENT,
@@ -436,7 +502,7 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function clearCache(): void {
-		// This will be implemented when we create the cache module
+		// This will be implemented when we create the cache module.
 		/**
 		 * Fires when cache should be cleared.
 		 *
@@ -453,7 +519,7 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	public function initAdminMenu(): void {
-		// This will be implemented when we create the admin module
+		// This will be implemented when we create the admin module.
 		/**
 		 * Fires when admin menu should be initialized.
 		 *
@@ -510,14 +576,8 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	public function initRestApi(): void {
-		/**
-		 * Fires when REST API should be initialized.
-		 *
-		 * @since 2.0.0
-		 *
-		 * @param Plugin $plugin Plugin instance.
-		 */
-		do_action( 'wppo_init_rest_api', $this );
+		$rest_controller = $this->_container->resolve( \PerformanceOptimisation\Core\API\RestController::class );
+		$rest_controller->register_routes();
 	}
 
 	/**

@@ -33,7 +33,7 @@ class CacheController extends BaseController {
 	 * @return void
 	 */
 	public function register_routes(): void {
-		// Clear cache endpoint
+		// Clear cache endpoint.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/clear',
@@ -58,7 +58,7 @@ class CacheController extends BaseController {
 			)
 		);
 
-		// Cache statistics endpoint
+		// Cache statistics endpoint.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/stats',
@@ -69,7 +69,7 @@ class CacheController extends BaseController {
 			)
 		);
 
-		// Cache preload endpoint
+		// Cache preload endpoint.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/preload',
@@ -95,7 +95,7 @@ class CacheController extends BaseController {
 			)
 		);
 
-		// Cache warmup endpoint
+		// Cache warmup endpoint.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/warmup',
@@ -117,7 +117,7 @@ class CacheController extends BaseController {
 		try {
 			$this->log_request( $request, 'Clear Cache' );
 
-			// Rate limiting
+			// Rate limiting.
 			$rate_limit_key = $this->get_rate_limit_key();
 			if ( ! $this->check_rate_limit( $rate_limit_key . '_clear_cache', 10, 300 ) ) {
 				return $this->send_error_response(
@@ -127,7 +127,7 @@ class CacheController extends BaseController {
 				);
 			}
 
-			// Validate request
+			// Validate request.
 			$validation = $this->validate_request(
 				$request,
 				array(
@@ -147,7 +147,7 @@ class CacheController extends BaseController {
 			$cache_type = $data['type'] ?? 'all';
 			$path       = $data['path'] ?? null;
 
-			// Load cache class
+			// Load cache class.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
 			}
@@ -163,32 +163,32 @@ class CacheController extends BaseController {
 						$cleared_items = 1;
 					} else {
 						\PerformanceOptimise\Inc\Cache::clear_page_cache();
-						$cleared_items = 0; // This method is void
+						$cleared_items = 0; // This method is void.
 						$message       = 'Page cache cleared.';
 					}
 					break;
 
 				case 'object':
 					\PerformanceOptimise\Inc\Cache::clear_object_cache();
-					$cleared_items = 0; // This method is void
+					$cleared_items = 0; // This method is void.
 					$message       = 'Object cache cleared.';
 					break;
 
 				case 'minified':
 					\PerformanceOptimise\Inc\Cache::clear_minified_cache();
-					$cleared_items = 0; // This method is void
+					$cleared_items = 0; // This method is void.
 					$message       = 'Minified files cache cleared.';
 					break;
 
 				case 'all':
 				default:
 					\PerformanceOptimise\Inc\Cache::clear_cache();
-					$cleared_items = 0; // This method is void
+					$cleared_items = 0; // This method is void.
 					$message       = 'All cache cleared.';
 					break;
 			}
 
-			// Log the action
+			// Log the action.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
 			}
@@ -218,7 +218,7 @@ class CacheController extends BaseController {
 		try {
 			$this->log_request( $request, 'Get Cache Stats' );
 
-			// Load cache class
+			// Load cache class.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
 			}
@@ -231,7 +231,7 @@ class CacheController extends BaseController {
 				'last_cleared'   => get_option( 'wppo_last_cache_clear', null ),
 			);
 
-			// Calculate total size
+			// Calculate total size.
 			$stats['total_size'] = $stats['page_cache']['size'] +
 									$stats['object_cache']['size'] +
 									$stats['minified_cache']['size'];
@@ -253,7 +253,7 @@ class CacheController extends BaseController {
 		try {
 			$this->log_request( $request, 'Preload Cache' );
 
-			// Rate limiting for preload operations
+			// Rate limiting for preload operations.
 			$rate_limit_key = $this->get_rate_limit_key();
 			if ( ! $this->check_rate_limit( $rate_limit_key . '_preload', 5, 300 ) ) {
 				return $this->send_error_response(
@@ -263,7 +263,7 @@ class CacheController extends BaseController {
 				);
 			}
 
-			// Validate request
+			// Validate request.
 			$validation = $this->validate_request(
 				$request,
 				array(
@@ -284,7 +284,7 @@ class CacheController extends BaseController {
 			$urls  = $data['urls'] ?? null;
 			$limit = $data['limit'] ?? 10;
 
-			// Load preload functionality
+			// Load preload functionality.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
 			}
@@ -292,10 +292,10 @@ class CacheController extends BaseController {
 			$cron_manager = new \PerformanceOptimise\Inc\Cron();
 
 			if ( $urls ) {
-				// Preload specific URLs
+				// Preload specific URLs.
 				$preloaded = $cron_manager->preload_urls( array_slice( $urls, 0, $limit ) );
 			} else {
-				// Preload popular pages
+				// Preload popular pages.
 				$preloaded = $cron_manager->preload_popular_pages( $limit );
 			}
 
@@ -322,7 +322,7 @@ class CacheController extends BaseController {
 		try {
 			$this->log_request( $request, 'Warmup Cache' );
 
-			// Rate limiting for warmup operations
+			// Rate limiting for warmup operations.
 			$rate_limit_key = $this->get_rate_limit_key();
 			if ( ! $this->check_rate_limit( $rate_limit_key . '_warmup', 3, 600 ) ) {
 				return $this->send_error_response(
@@ -332,7 +332,7 @@ class CacheController extends BaseController {
 				);
 			}
 
-			// Load cache warmup functionality
+			// Load cache warmup functionality.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
 			}
@@ -457,8 +457,8 @@ class CacheController extends BaseController {
 	 * @return float Cache hit ratio percentage.
 	 */
 	private function calculate_cache_hit_ratio(): float {
-		// This is a simplified calculation
-		// In a real implementation, you'd track actual cache hits/misses
+		// This is a simplified calculation.
+		// In a real implementation, you'd track actual cache hits/misses.
 		$cache_stats = get_option( 'wppo_cache_stats', array() );
 
 		$hits   = $cache_stats['hits'] ?? 0;

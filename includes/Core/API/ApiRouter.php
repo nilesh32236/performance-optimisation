@@ -50,7 +50,7 @@ class ApiRouter {
 	 * @return void
 	 */
 	private function load_controllers(): void {
-		// Load analytics dependencies
+		// Load analytics dependencies.
 		if ( ! class_exists( 'PerformanceOptimisation\Core\Analytics\MetricsCollector' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/Core/Analytics/MetricsCollector.php';
 		}
@@ -61,7 +61,7 @@ class ApiRouter {
 			require_once WPPO_PLUGIN_PATH . 'includes/Core/Analytics/RecommendationEngine.php';
 		}
 
-		// Initialize controllers
+		// Initialize controllers.
 		$metrics_collector    = new \PerformanceOptimisation\Core\Analytics\MetricsCollector();
 		$performance_analyzer = new \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer( $metrics_collector );
 
@@ -80,28 +80,28 @@ class ApiRouter {
 	 * @return void
 	 */
 	public function register_routes(): void {
-		// Cache routes
+		// Cache routes.
 		$this->register_cache_routes();
 
-		// Settings routes
+		// Settings routes.
 		$this->register_settings_routes();
 
-		// Optimization routes
+		// Optimization routes.
 		$this->register_optimization_routes();
 
-		// Analytics routes
+		// Analytics routes.
 		$this->register_analytics_routes();
 
-		// Recommendations routes
+		// Recommendations routes.
 		$this->register_recommendations_routes();
 
-		// Wizard routes
+		// Wizard routes.
 		$this->register_wizard_routes();
 
-		// Preset routes
+		// Preset routes.
 		$this->register_preset_routes();
 
-		// Utility routes
+		// Utility routes.
 		$this->register_utility_routes();
 	}
 
@@ -644,7 +644,7 @@ class ApiRouter {
 		$features = $request->get_param( 'features' ) ?: array();
 
 		try {
-			// Load wizard classes if needed
+			// Load wizard classes if needed.
 			if ( ! class_exists( 'PerformanceOptimisation\Core\Wizard\WizardManager' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/Core/Wizard/WizardManager.php';
 			}
@@ -696,7 +696,7 @@ class ApiRouter {
 		$force_refresh = $request->get_param( 'force_refresh' );
 
 		try {
-			// Load site detection classes if needed
+			// Load site detection classes if needed.
 			if ( ! class_exists( 'PerformanceOptimisation\Core\SiteDetection\SiteAnalyzer' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/Core/SiteDetection/SiteAnalyzer.php';
 			}
@@ -762,7 +762,7 @@ class ApiRouter {
 	 * @return \WP_REST_Response The response object.
 	 */
 	public function create_preset( \WP_REST_Request $request ): \WP_REST_Response {
-		// Implementation for creating presets
+		// Implementation for creating presets.
 		return rest_ensure_response(
 			array(
 				'success' => true,
@@ -778,7 +778,7 @@ class ApiRouter {
 	 * @return \WP_REST_Response The response object.
 	 */
 	public function get_preset( \WP_REST_Request $request ): \WP_REST_Response {
-		// Implementation for getting specific preset
+		// Implementation for getting specific preset.
 		return rest_ensure_response(
 			array(
 				'success' => true,
@@ -794,7 +794,7 @@ class ApiRouter {
 	 * @return \WP_REST_Response The response object.
 	 */
 	public function update_preset( \WP_REST_Request $request ): \WP_REST_Response {
-		// Implementation for updating preset
+		// Implementation for updating preset.
 		return rest_ensure_response(
 			array(
 				'success' => true,
@@ -810,7 +810,7 @@ class ApiRouter {
 	 * @return \WP_REST_Response The response object.
 	 */
 	public function delete_preset( \WP_REST_Request $request ): \WP_REST_Response {
-		// Implementation for deleting preset
+		// Implementation for deleting preset.
 		return rest_ensure_response(
 			array(
 				'success' => true,

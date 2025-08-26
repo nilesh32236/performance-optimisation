@@ -220,7 +220,7 @@ class RecommendationsController extends BaseController {
 				$applied_changes[]                                    = 'Enabled image optimization';
 				$applied_changes[]                                    = 'Set image format to WebP';
 
-				// Trigger image optimization
+				// Trigger image optimization.
 				$this->trigger_image_optimization();
 				$applied_changes[] = 'Started bulk image optimization';
 				break;
@@ -239,14 +239,14 @@ class RecommendationsController extends BaseController {
 				);
 		}
 
-		// Save updated settings
+		// Save updated settings.
 		$save_result = update_option( 'wppo_settings', $updated_settings );
 
 		if ( $save_result ) {
-			// Clear cache after applying changes
+			// Clear cache after applying changes.
 			$this->clear_all_caches();
 
-			// Log the changes
+			// Log the changes.
 			$this->log_recommendation_application( $recommendation_id, $applied_changes );
 
 			return array(
@@ -395,7 +395,7 @@ class RecommendationsController extends BaseController {
 				);
 			}
 
-			// Store dismissed recommendations
+			// Store dismissed recommendations.
 			$dismissed                       = get_option( 'wppo_dismissed_recommendations', array() );
 			$dismissed[ $recommendation_id ] = array(
 				'dismissed_at' => current_time( 'mysql' ),

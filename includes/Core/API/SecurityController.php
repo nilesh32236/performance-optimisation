@@ -49,7 +49,7 @@ class SecurityController extends BaseController {
 	 * @return void
 	 */
 	public function register_routes(): void {
-		// Security log endpoints
+		// Security log endpoints.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/log',
@@ -71,7 +71,7 @@ class SecurityController extends BaseController {
 			)
 		);
 
-		// Blocked IPs endpoints
+		// Blocked IPs endpoints.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/blocked-ips',
@@ -196,7 +196,7 @@ class SecurityController extends BaseController {
 			$ip = $request->get_param( 'ip' );
 			$this->log_request( $request, "Unblock IP: {$ip}" );
 
-			// Validate IP address
+			// Validate IP address.
 			if ( ! filter_var( $ip, FILTER_VALIDATE_IP ) ) {
 				return $this->send_error_response(
 					'invalid_ip',

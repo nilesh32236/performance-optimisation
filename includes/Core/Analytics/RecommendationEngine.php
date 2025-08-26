@@ -67,22 +67,22 @@ class RecommendationEngine {
 
 		$recommendations = array();
 
-		// Performance-based recommendations
+		// Performance-based recommendations.
 		$recommendations = array_merge( $recommendations, $this->analyze_performance_metrics( $report ) );
 
-		// Feature-based recommendations
+		// Feature-based recommendations.
 		$recommendations = array_merge( $recommendations, $this->analyze_feature_usage( $settings ) );
 
-		// Image optimization recommendations
+		// Image optimization recommendations.
 		$recommendations = array_merge( $recommendations, $this->analyze_image_optimization( $img_info ) );
 
-		// Cache performance recommendations
+		// Cache performance recommendations.
 		$recommendations = array_merge( $recommendations, $this->analyze_cache_performance( $report ) );
 
-		// Resource usage recommendations
+		// Resource usage recommendations.
 		$recommendations = array_merge( $recommendations, $this->analyze_resource_usage( $report ) );
 
-		// Sort by priority and impact
+		// Sort by priority and impact.
 		usort( $recommendations, array( $this, 'sort_recommendations_by_priority' ) );
 
 		return array(
@@ -102,7 +102,7 @@ class RecommendationEngine {
 		$recommendations = array();
 		$overview        = $report['overview'];
 
-		// Page load time recommendations
+		// Page load time recommendations.
 		if ( $overview['average_load_time'] > $this->thresholds['page_load_time']['poor'] ) {
 			$recommendations[] = array(
 				'id'                    => 'slow_page_load',
@@ -164,7 +164,7 @@ class RecommendationEngine {
 			);
 		}
 
-		// Performance score recommendations
+		// Performance score recommendations.
 		if ( $overview['performance_score'] < $this->thresholds['performance_score']['good'] ) {
 			$recommendations[] = array(
 				'id'                    => 'low_performance_score',
@@ -200,7 +200,7 @@ class RecommendationEngine {
 	private function analyze_feature_usage( array $settings ): array {
 		$recommendations = array();
 
-		// Check if page caching is disabled
+		// Check if page caching is disabled.
 		if ( empty( $settings['cache_settings']['enablePageCaching'] ) ) {
 			$recommendations[] = array(
 				'id'                    => 'enable_page_caching',
@@ -225,7 +225,7 @@ class RecommendationEngine {
 			);
 		}
 
-		// Check minification settings
+		// Check minification settings.
 		$minification_disabled = array();
 		if ( empty( $settings['file_optimisation']['minifyCSS'] ) ) {
 			$minification_disabled[] = 'CSS';
@@ -265,7 +265,7 @@ class RecommendationEngine {
 			);
 		}
 
-		// Check lazy loading
+		// Check lazy loading.
 		if ( empty( $settings['image_optimisation']['lazyLoadImages'] ) ) {
 			$recommendations[] = array(
 				'id'                    => 'enable_lazy_loading',
@@ -308,7 +308,7 @@ class RecommendationEngine {
 			$total_failed  += count( $img_info['failed'][ $format ] ?? array() );
 		}
 
-		// Recommend image optimization if many images are pending
+		// Recommend image optimization if many images are pending.
 		if ( $total_pending > 10 ) {
 			$recommendations[] = array(
 				'id'                    => 'optimize_pending_images',
@@ -338,7 +338,7 @@ class RecommendationEngine {
 			);
 		}
 
-		// Recommend fixing failed optimizations
+		// Recommend fixing failed optimizations.
 		if ( $total_failed > 5 ) {
 			$recommendations[] = array(
 				'id'            => 'fix_failed_optimizations',
@@ -422,7 +422,7 @@ class RecommendationEngine {
 		$recommendations = array();
 
 		// This would analyze memory usage, database queries, etc.
-		// For now, we'll add a placeholder for future implementation
+		// For now, we'll add a placeholder for future implementation.
 
 		return $recommendations;
 	}
@@ -437,7 +437,7 @@ class RecommendationEngine {
 		$suggestions = array();
 		$settings    = get_option( 'wppo_settings', array() );
 
-		// Quick wins - easy optimizations with high impact
+		// Quick wins - easy optimizations with high impact.
 		$quick_wins = $this->identify_quick_wins( $settings );
 		if ( ! empty( $quick_wins ) ) {
 			$suggestions[] = array(
@@ -450,7 +450,7 @@ class RecommendationEngine {
 			);
 		}
 
-		// Advanced optimizations
+		// Advanced optimizations.
 		$advanced_optimizations = $this->identify_advanced_optimizations( $settings );
 		if ( ! empty( $advanced_optimizations ) ) {
 			$suggestions[] = array(
@@ -463,7 +463,7 @@ class RecommendationEngine {
 			);
 		}
 
-		// Maintenance tasks
+		// Maintenance tasks.
 		$maintenance_tasks = $this->identify_maintenance_tasks();
 		if ( ! empty( $maintenance_tasks ) ) {
 			$suggestions[] = array(
@@ -489,9 +489,9 @@ class RecommendationEngine {
 	public function track_optimization_progress( string $start_date, string $end_date ): array {
 		$current_report = $this->performance_analyzer->generate_performance_report( $start_date, $end_date );
 
-		// Get historical data for comparison
-		$historical_start  = date( 'Y-m-d', strtotime( $start_date . ' -30 days' ) );
-		$historical_end    = date( 'Y-m-d', strtotime( $end_date . ' -30 days' ) );
+		// Get historical data for comparison.
+		$historical_start  = gmdate( 'Y-m-d', strtotime( $start_date . ' -30 days' ) );
+		$historical_end    = gmdate( 'Y-m-d', strtotime( $end_date . ' -30 days' ) );
 		$historical_report = $this->performance_analyzer->generate_performance_report( $historical_start, $historical_end );
 
 		$progress = array(
@@ -521,22 +521,22 @@ class RecommendationEngine {
 	private function get_recommendation_thresholds(): array {
 		return array(
 			'page_load_time'    => array(
-				'excellent' => 1000, // 1 second
-				'good'      => 2000,      // 2 seconds
-				'fair'      => 3000,      // 3 seconds
-				'poor'      => 4000,      // 4 seconds
+				'excellent' => 1000, // 1 second.
+				'good'      => 2000, // 2 seconds.
+				'fair'      => 3000, // 3 seconds.
+				'poor'      => 4000, // 4 seconds.
 			),
 			'cache_hit_ratio'   => array(
-				'excellent' => 90,   // 90%
-				'good'      => 70,        // 70%
-				'fair'      => 50,        // 50%
-				'poor'      => 30,        // 30%
+				'excellent' => 90, // 90%.
+				'good'      => 70, // 70%.
+				'fair'      => 50, // 50%.
+				'poor'      => 30, // 30%.
 			),
 			'performance_score' => array(
-				'excellent' => 90,   // 90/100
-				'good'      => 70,        // 70/100
-				'fair'      => 50,        // 50/100
-				'poor'      => 30,        // 30/100
+				'excellent' => 90, // 90/100.
+				'good'      => 70, // 70/100.
+				'fair'      => 50, // 50/100.
+				'poor'      => 30, // 30/100.
 			),
 		);
 	}
@@ -577,7 +577,7 @@ class RecommendationEngine {
 		$a_score = ( $priority_order[ $a['priority'] ] ?? 0 ) + ( $impact_order[ $a['impact'] ?? 'low' ] ?? 0 );
 		$b_score = ( $priority_order[ $b['priority'] ] ?? 0 ) + ( $impact_order[ $b['impact'] ?? 'low' ] ?? 0 );
 
-		return $b_score - $a_score; // Sort descending
+		return $b_score - $a_score; // Sort descending.
 	}
 
 	/**
@@ -667,7 +667,7 @@ class RecommendationEngine {
 	private function identify_maintenance_tasks(): array {
 		$tasks = array();
 
-		// Check cache size
+		// Check cache size.
 		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
 		if ( is_dir( $cache_dir ) ) {
 			$cache_size = $this->get_directory_size( $cache_dir );
@@ -716,8 +716,8 @@ class RecommendationEngine {
 	 * @return array<string, mixed> Implemented recommendations data.
 	 */
 	private function get_implemented_recommendations(): array {
-		// This would track which recommendations were implemented
-		// For now, return placeholder data
+		// This would track which recommendations were implemented.
+		// For now, return placeholder data.
 		return array(
 			'total_implemented'      => 0,
 			'recent_implementations' => array(),

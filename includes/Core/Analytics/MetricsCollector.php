@@ -55,7 +55,7 @@ class MetricsCollector {
 		add_action( 'wp_loaded', array( $this, 'collect_system_metrics' ) );
 		add_action( 'wppo_collect_metrics', array( $this, 'collect_scheduled_metrics' ) );
 
-		// Schedule metrics collection
+		// Schedule metrics collection.
 		if ( ! wp_next_scheduled( 'wppo_collect_metrics' ) ) {
 			wp_schedule_event( time(), 'hourly', 'wppo_collect_metrics' );
 		}
@@ -79,14 +79,13 @@ class MetricsCollector {
 			'recorded_at'  => current_time( 'mysql' ),
 			'user_id'      => get_current_user_id(),
 			'ip_address'   => $this->get_client_ip(),
-			'user_agent'   => $_SERVER['HTTP_USER_AGENT'] ?? '',
-			'url'          => $_SERVER['REQUEST_URI'] ?? '',
+			'user_agent'   => wp_unslash( $_SERVER['HTTP_USER_AGENT'] ?? '' ),
+			'url'          => wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ),
 		);
 
 		$result = $wpdb->insert( $this->metrics_table, $data );
 
-		if ( $result === false ) {
-			error_log( 'Failed to record metric: ' . $wpdb->last_error );
+		if ( false === $result ) {
 			return false;
 		}
 
@@ -183,8 +182,8 @@ class MetricsCollector {
 	 * @return void
 	 */
 	public function collect_system_metrics(): void {
-		// Only collect system metrics occasionally to avoid overhead
-		if ( rand( 1, 100 ) > 5 ) { // 5% chance
+		// Only collect system metrics occasionally to avoid overhead.
+		if ( rand( 1, 100 ) > 5 ) { // 5% chance.
 			return;
 		}
 
@@ -236,7 +235,7 @@ class MetricsCollector {
 	 */
 	private function collect_page_load_metrics(): void {
 		if ( defined( 'WPPO_START_TIME' ) ) {
-			$load_time = ( microtime( true ) - WPPO_START_TIME ) * 1000; // Convert to milliseconds
+			$load_time = ( microtime( true ) - WPPO_START_TIME ) * 1000; // Convert to milliseconds.
 			$this->record_timing(
 				'page_load_time',
 				$load_time,
@@ -266,19 +265,19 @@ class MetricsCollector {
 	 * @return void
 	 */
 	private function collect_cache_metrics(): void {
-		// Check if page was served from cache
+		// Check if page was served from cache.
 		$cache_status = $this->get_cache_status();
 
 		$this->record_metric(
 			'cache_hit',
-			$cache_status === 'hit' ? 1 : 0,
+			'hit' === $cache_status ? 1 : 0,
 			array(
 				'status'    => $cache_status,
 				'page_type' => $this->get_page_type(),
 			)
 		);
 
-		// Record cache generation time if available
+		// Record cache generation time if available.
 		if ( defined( 'WPPO_CACHE_GENERATION_TIME' ) ) {
 			$this->record_timing( 'cache_generation_time', WPPO_CACHE_GENERATION_TIME );
 		}
@@ -290,7 +289,7 @@ class MetricsCollector {
 	 * @return void
 	 */
 	private function collect_optimization_metrics(): void {
-		// Track minification usage
+		// Track minification usage.
 		if ( $this->is_minification_active() ) {
 			$this->increment_counter(
 				'minification_served',
@@ -300,7 +299,7 @@ class MetricsCollector {
 			);
 		}
 
-		// Track lazy loading usage
+		// Track lazy loading usage.
 		if ( $this->is_lazy_loading_active() ) {
 			$this->increment_counter(
 				'lazy_loading_served',
@@ -310,7 +309,7 @@ class MetricsCollector {
 			);
 		}
 
-		// Track image optimization
+		// Track image optimization.
 		$optimized_images = $this->count_optimized_images_on_page();
 		if ( $optimized_images > 0 ) {
 			$this->record_metric(
@@ -329,7 +328,7 @@ class MetricsCollector {
 	 * @return void
 	 */
 	private function collect_cache_statistics(): void {
-		// Page cache statistics
+		// Page cache statistics.
 		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
 		if ( is_dir( $cache_dir ) ) {
 			$cache_stats = $this->get_directory_stats( $cache_dir );
@@ -352,7 +351,7 @@ class MetricsCollector {
 			);
 		}
 
-		// Object cache statistics
+		// Object cache statistics.
 		if ( wp_using_ext_object_cache() ) {
 			global $wp_object_cache;
 			if ( isset( $wp_object_cache->cache_hits, $wp_object_cache->cache_misses ) ) {
@@ -380,7 +379,7 @@ class MetricsCollector {
 	private function collect_optimization_statistics(): void {
 		$settings = get_option( 'wppo_settings', array() );
 
-		// Count enabled optimizations
+		// Count enabled optimizations.
 		$enabled_optimizations = 0;
 		$optimization_features = array(
 			'cache_settings.enablePageCaching',
@@ -454,7 +453,7 @@ class MetricsCollector {
 			)
 		);
 
-		// Calculate optimization ratio
+		// Calculate optimization ratio.
 		$total_images = $total_optimized + $total_pending + $total_failed;
 		if ( $total_images > 0 ) {
 			$optimization_ratio = ( $total_optimized / $total_images ) * 100;
@@ -488,7 +487,7 @@ class MetricsCollector {
 		);
 		$where_values     = array( $metric_name, $start_date, $end_date );
 
-		// Add tag filters
+		// Add tag filters.
 		foreach ( $filters as $key => $value ) {
 			$where_conditions[] = 'JSON_EXTRACT(tags, %s) = %s';
 			$where_values[]     = '$.' . $key;
@@ -567,8 +566,8 @@ class MetricsCollector {
 	private function aggregate_hourly_metrics(): void {
 		global $wpdb;
 
-		$hour_ago     = date( 'Y-m-d H:00:00', strtotime( '-1 hour' ) );
-		$current_hour = date( 'Y-m-d H:00:00' );
+		$hour_ago     = gmdate( 'Y-m-d H:00:00', strtotime( '-1 hour' ) );
+		$current_hour = gmdate( 'Y-m-d H:00:00' );
 
 		$metrics_to_aggregate = array(
 			'page_load_time'   => array( 'AVG', 'MIN', 'MAX', 'COUNT' ),
@@ -590,8 +589,8 @@ class MetricsCollector {
 	 * @return void
 	 */
 	private function aggregate_daily_metrics(): void {
-		$yesterday = date( 'Y-m-d 00:00:00', strtotime( '-1 day' ) );
-		$today     = date( 'Y-m-d 00:00:00' );
+		$yesterday = gmdate( 'Y-m-d 00:00:00', strtotime( '-1 day' ) );
+		$today     = gmdate( 'Y-m-d 00:00:00' );
 
 		$metrics_to_aggregate = array(
 			'page_load_time'         => array( 'AVG', 'MIN', 'MAX', 'COUNT' ),
@@ -620,7 +619,7 @@ class MetricsCollector {
 	private function create_aggregated_metric( string $metric_name, string $aggregation_type, string $period_type, string $period_start, string $period_end ): void {
 		global $wpdb;
 
-		// Check if aggregation already exists
+		// Check if aggregation already exists.
 		$existing = $wpdb->get_var(
 			$wpdb->prepare(
 				"SELECT id FROM {$this->aggregated_table} 
@@ -636,10 +635,10 @@ class MetricsCollector {
 		);
 
 		if ( $existing ) {
-			return; // Already aggregated
+			return; // Already aggregated.
 		}
 
-		// Calculate aggregated value
+		// Calculate aggregated value.
 		$agg_function = strtoupper( $aggregation_type );
 		$value_column = is_numeric( $aggregation_type ) ? 'CAST(metric_value AS DECIMAL(10,2))' : 'metric_value';
 
@@ -681,8 +680,8 @@ class MetricsCollector {
 	private function cleanup_old_metrics(): void {
 		global $wpdb;
 
-		// Keep raw metrics for 7 days
-		$raw_cutoff = date( 'Y-m-d H:i:s', strtotime( '-7 days' ) );
+		// Keep raw metrics for 7 days.
+		$raw_cutoff = gmdate( 'Y-m-d H:i:s', strtotime( '-7 days' ) );
 		$wpdb->query(
 			$wpdb->prepare(
 				"DELETE FROM {$this->metrics_table} WHERE recorded_at < %s",
@@ -690,8 +689,8 @@ class MetricsCollector {
 			)
 		);
 
-		// Keep aggregated metrics for 90 days
-		$aggregated_cutoff = date( 'Y-m-d H:i:s', strtotime( '-90 days' ) );
+		// Keep aggregated metrics for 90 days.
+		$aggregated_cutoff = gmdate( 'Y-m-d H:i:s', strtotime( '-90 days' ) );
 		$wpdb->query(
 			$wpdb->prepare(
 				"DELETE FROM {$this->aggregated_table} WHERE created_at < %s",
@@ -731,7 +730,7 @@ class MetricsCollector {
 	 * @return string Cache status (hit, miss, bypass).
 	 */
 	private function get_cache_status(): string {
-		// Check for cache headers or constants set by caching system
+		// Check for cache headers or constants set by caching system.
 		if ( defined( 'WPPO_CACHE_HIT' ) && WPPO_CACHE_HIT ) {
 			return 'hit';
 		} elseif ( defined( 'WPPO_CACHE_MISS' ) && WPPO_CACHE_MISS ) {
@@ -740,7 +739,7 @@ class MetricsCollector {
 			return 'bypass';
 		}
 
-		// Default to miss if no cache status is set
+		// Default to miss if no cache status is set.
 		return 'miss';
 	}
 
@@ -768,8 +767,8 @@ class MetricsCollector {
 	 * @return int Number of optimized images.
 	 */
 	private function count_optimized_images_on_page(): int {
-		// This would require analyzing the page content for optimized images
-		// For now, return 0 as a placeholder
+		// This would require analyzing the page content for optimized images.
+		// For now, return 0 as a placeholder.
 		return 0;
 	}
 
@@ -820,7 +819,7 @@ class MetricsCollector {
 
 		foreach ( $ip_headers as $header ) {
 			if ( ! empty( $_SERVER[ $header ] ) ) {
-				$ip = $_SERVER[ $header ];
+				$ip = wp_unslash( $_SERVER[ $header ] );
 				if ( strpos( $ip, ',' ) !== false ) {
 					$ip = trim( explode( ',', $ip )[0] );
 				}
@@ -830,7 +829,7 @@ class MetricsCollector {
 			}
 		}
 
-		return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+		return wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0' );
 	}
 
 	/**
@@ -843,7 +842,7 @@ class MetricsCollector {
 
 		$charset_collate = $wpdb->get_charset_collate();
 
-		// Raw metrics table
+		// Raw metrics table.
 		$metrics_table_sql = "CREATE TABLE {$this->metrics_table} (
 			id bigint(20) NOT NULL AUTO_INCREMENT,
 			metric_name varchar(100) NOT NULL,
@@ -860,7 +859,7 @@ class MetricsCollector {
 			KEY user_id (user_id)
 		) $charset_collate;";
 
-		// Aggregated metrics table
+		// Aggregated metrics table.
 		$aggregated_table_sql = "CREATE TABLE {$this->aggregated_table} (
 			id bigint(20) NOT NULL AUTO_INCREMENT,
 			metric_name varchar(100) NOT NULL,

@@ -162,22 +162,22 @@ class AnalyticsController {
 	public function get_dashboard_data( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		try {
 			$end_date   = current_time( 'Y-m-d' );
-			$start_date = date( 'Y-m-d', strtotime( '-7 days' ) );
+			$start_date = gmdate( 'Y-m-d', strtotime( '-7 days' ) );
 
-			// Get performance report
+			// Get performance report.
 			$report = $this->performance_analyzer->generate_performance_report( $start_date, $end_date );
 
-			// Get current optimization status
+			// Get current optimization status.
 			$optimization_status = $this->get_optimization_status();
 
-			// Get recent metrics for charts
+			// Get recent metrics for charts.
 			$chart_data = $this->get_chart_data( $start_date, $end_date );
 
 			$dashboard_data = array(
 				'overview'            => $report['overview'],
 				'optimization_status' => $optimization_status,
 				'charts'              => $chart_data,
-				'recommendations'     => array_slice( $report['recommendations'], 0, 3 ), // Top 3 recommendations
+				'recommendations'     => array_slice( $report['recommendations'], 0, 3 ), // Top 3 recommendations.
 				'last_updated'        => current_time( 'mysql' ),
 			);
 
@@ -210,25 +210,25 @@ class AnalyticsController {
 			$start_date = $request->get_param( 'start_date' );
 			$end_date   = $request->get_param( 'end_date' );
 
-			// Set default date range if not provided
+			// Set default date range if not provided.
 			if ( ! $start_date || ! $end_date ) {
 				$end_date = current_time( 'Y-m-d' );
 				switch ( $period ) {
 					case 'hour':
-						$start_date = date( 'Y-m-d', strtotime( '-1 day' ) );
+						$start_date = gmdate( 'Y-m-d', strtotime( '-1 day' ) );
 						break;
 					case 'week':
-						$start_date = date( 'Y-m-d', strtotime( '-4 weeks' ) );
+						$start_date = gmdate( 'Y-m-d', strtotime( '-4 weeks' ) );
 						break;
 					case 'month':
-						$start_date = date( 'Y-m-d', strtotime( '-3 months' ) );
+						$start_date = gmdate( 'Y-m-d', strtotime( '-3 months' ) );
 						break;
 					default:
-						$start_date = date( 'Y-m-d', strtotime( '-7 days' ) );
+						$start_date = gmdate( 'Y-m-d', strtotime( '-7 days' ) );
 				}
 			}
 
-			// Get aggregated metrics
+			// Get aggregated metrics.
 			$metrics_data = $this->metrics_collector->get_aggregated_metrics(
 				$metric,
 				$period,
@@ -236,7 +236,7 @@ class AnalyticsController {
 				$end_date . ' 23:59:59'
 			);
 
-			// Format data for charts
+			// Format data for charts.
 			$formatted_data = $this->format_metrics_for_chart( $metrics_data, $metric );
 
 			return rest_ensure_response(
@@ -263,7 +263,7 @@ class AnalyticsController {
 	 */
 	public function get_performance_report( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		try {
-			$start_date = $request->get_param( 'start_date' ) ?: date( 'Y-m-d', strtotime( '-30 days' ) );
+			$start_date = $request->get_param( 'start_date' ) ?: gmdate( 'Y-m-d', strtotime( '-30 days' ) );
 			$end_date   = $request->get_param( 'end_date' ) ?: current_time( 'Y-m-d' );
 
 			$report = $this->performance_analyzer->generate_performance_report( $start_date, $end_date );
@@ -293,12 +293,12 @@ class AnalyticsController {
 	public function export_analytics_data( \WP_REST_Request $request ): \WP_REST_Response|\WP_Error {
 		try {
 			$format     = $request->get_param( 'format' );
-			$start_date = $request->get_param( 'start_date' ) ?: date( 'Y-m-d', strtotime( '-30 days' ) );
+			$start_date = $request->get_param( 'start_date' ) ?: gmdate( 'Y-m-d', strtotime( '-30 days' ) );
 			$end_date   = $request->get_param( 'end_date' ) ?: current_time( 'Y-m-d' );
 
 			$report = $this->performance_analyzer->generate_performance_report( $start_date, $end_date );
 
-			if ( $format === 'csv' ) {
+			if ( 'csv' === $format ) {
 				$csv_data = $this->convert_report_to_csv( $report );
 				return rest_ensure_response(
 					array(
@@ -370,7 +370,7 @@ class AnalyticsController {
 	private function get_chart_data( string $start_date, string $end_date ): array {
 		$charts = array();
 
-		// Page load time chart
+		// Page load time chart.
 		$load_time_data           = $this->metrics_collector->get_aggregated_metrics(
 			'page_load_time',
 			'day',
@@ -379,7 +379,7 @@ class AnalyticsController {
 		);
 		$charts['page_load_time'] = $this->format_metrics_for_chart( $load_time_data, 'page_load_time' );
 
-		// Cache hit ratio chart
+		// Cache hit ratio chart.
 		$cache_data                = $this->metrics_collector->get_aggregated_metrics(
 			'cache_hit',
 			'day',
@@ -388,7 +388,7 @@ class AnalyticsController {
 		);
 		$charts['cache_hit_ratio'] = $this->format_cache_metrics_for_chart( $cache_data );
 
-		// Memory usage chart
+		// Memory usage chart.
 		$memory_data            = $this->metrics_collector->get_aggregated_metrics(
 			'memory_usage',
 			'day',
@@ -413,8 +413,8 @@ class AnalyticsController {
 
 		if ( ! empty( $metrics_data['data'] ) ) {
 			foreach ( $metrics_data['data'] as $row ) {
-				if ( $row['aggregation_type'] === 'AVG' ) {
-					$date           = date( 'Y-m-d', strtotime( $row['period_start'] ) );
+				if ( 'AVG' === $row['aggregation_type'] ) {
+					$date           = gmdate( 'Y-m-d', strtotime( $row['period_start'] ) );
 					$daily_trends[] = array(
 						'date'         => $date,
 						'value'        => round( (float) $row['aggregated_value'], 2 ),
@@ -445,13 +445,13 @@ class AnalyticsController {
 		if ( ! empty( $cache_data['data'] ) ) {
 			$grouped_data = array();
 
-			// Group data by date
+			// Group data by date.
 			foreach ( $cache_data['data'] as $row ) {
-				$date = date( 'Y-m-d', strtotime( $row['period_start'] ) );
+				$date = gmdate( 'Y-m-d', strtotime( $row['period_start'] ) );
 				$grouped_data[ $date ][ $row['aggregation_type'] ] = $row;
 			}
 
-			// Calculate hit ratios for each day
+			// Calculate hit ratios for each day.
 			foreach ( $grouped_data as $date => $day_data ) {
 				$hits      = isset( $day_data['SUM'] ) ? (float) $day_data['SUM']['aggregated_value'] : 0;
 				$total     = isset( $day_data['COUNT'] ) ? (float) $day_data['COUNT']['aggregated_value'] : 0;
@@ -483,13 +483,13 @@ class AnalyticsController {
 	private function convert_report_to_csv( array $report ): string {
 		$csv_lines = array();
 
-		// Header
+		// Header.
 		$csv_lines[] = 'Performance Report';
 		$csv_lines[] = 'Generated: ' . $report['generated_at'];
 		$csv_lines[] = 'Period: ' . $report['period']['start'] . ' to ' . $report['period']['end'];
 		$csv_lines[] = '';
 
-		// Overview
+		// Overview.
 		$csv_lines[] = 'Overview';
 		$csv_lines[] = 'Performance Score,' . $report['overview']['performance_score'];
 		$csv_lines[] = 'Average Load Time (ms),' . $report['overview']['average_load_time'];
@@ -497,7 +497,7 @@ class AnalyticsController {
 		$csv_lines[] = 'Total Page Views,' . $report['overview']['total_page_views'];
 		$csv_lines[] = '';
 
-		// Daily trends
+		// Daily trends.
 		if ( ! empty( $report['page_load_performance']['daily_trends'] ) ) {
 			$csv_lines[] = 'Daily Performance Trends';
 			$csv_lines[] = 'Date,Average Load Time (ms),Sample Count';
@@ -507,7 +507,7 @@ class AnalyticsController {
 			$csv_lines[] = '';
 		}
 
-		// Recommendations
+		// Recommendations.
 		if ( ! empty( $report['recommendations'] ) ) {
 			$csv_lines[] = 'Recommendations';
 			$csv_lines[] = 'Priority,Title,Description';

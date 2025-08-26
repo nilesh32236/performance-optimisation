@@ -33,7 +33,7 @@ class OptimizationController extends BaseController {
 	 * @return void
 	 */
 	public function register_routes(): void {
-		// Image optimization endpoints
+		// Image optimization endpoints.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/images/optimize',
@@ -80,7 +80,7 @@ class OptimizationController extends BaseController {
 			)
 		);
 
-		// Minification endpoints
+		// Minification endpoints.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/minify',
@@ -106,7 +106,7 @@ class OptimizationController extends BaseController {
 			)
 		);
 
-		// Performance analysis endpoints
+		// Performance analysis endpoints.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/analyze',
@@ -130,7 +130,7 @@ class OptimizationController extends BaseController {
 			)
 		);
 
-		// Optimization recommendations
+		// Optimization recommendations.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/recommendations',
@@ -141,7 +141,7 @@ class OptimizationController extends BaseController {
 			)
 		);
 
-		// Bulk optimization
+		// Bulk optimization.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/bulk',
@@ -170,7 +170,7 @@ class OptimizationController extends BaseController {
 		try {
 			$this->log_request( $request, 'Optimize Images' );
 
-			// Rate limiting for image optimization
+			// Rate limiting for image optimization.
 			$rate_limit_key = $this->get_rate_limit_key();
 			if ( ! $this->check_rate_limit( $rate_limit_key . '_optimize_images', 5, 300 ) ) {
 				return $this->send_error_response(
@@ -180,7 +180,7 @@ class OptimizationController extends BaseController {
 				);
 			}
 
-			// Validate request
+			// Validate request.
 			$validation = $this->validate_request(
 				$request,
 				array(
@@ -201,7 +201,7 @@ class OptimizationController extends BaseController {
 			$batch_size = $data['batch_size'] ?? 10;
 			$force      = $data['force'] ?? false;
 
-			// Check if image optimization is enabled
+			// Check if image optimization is enabled.
 			$settings = get_option( 'wppo_settings', array() );
 			if ( empty( $settings['image_optimisation']['convertImg'] ) ) {
 				return $this->send_error_response(
@@ -211,7 +211,7 @@ class OptimizationController extends BaseController {
 				);
 			}
 
-			// Load image optimization classes
+			// Load image optimization classes.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 			}
@@ -272,7 +272,7 @@ class OptimizationController extends BaseController {
 				),
 			);
 
-			// Calculate totals
+			// Calculate totals.
 			foreach ( $status['formats'] as $format_stats ) {
 				$status['optimized_images'] += $format_stats['completed'];
 				$status['pending_images']   += $format_stats['pending'];
@@ -283,7 +283,7 @@ class OptimizationController extends BaseController {
 			$status['total_images'] = $status['optimized_images'] + $status['pending_images'] +
 										$status['failed_images'] + $status['skipped_images'];
 
-			// Calculate savings
+			// Calculate savings.
 			$status['savings'] = $this->calculate_image_savings( $img_info );
 
 			return $this->send_success_response( $status );
@@ -303,7 +303,7 @@ class OptimizationController extends BaseController {
 		try {
 			$this->log_request( $request, 'Reset Image Optimization' );
 
-			// Rate limiting for reset operations
+			// Rate limiting for reset operations.
 			$rate_limit_key = $this->get_rate_limit_key();
 			if ( ! $this->check_rate_limit( $rate_limit_key . '_reset_images', 2, 600 ) ) {
 				return $this->send_error_response(
@@ -313,7 +313,7 @@ class OptimizationController extends BaseController {
 				);
 			}
 
-			// Initialize filesystem
+			// Initialize filesystem.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
 			}
@@ -327,18 +327,18 @@ class OptimizationController extends BaseController {
 				);
 			}
 
-			// Delete optimized images directory
+			// Delete optimized images directory.
 			$optimized_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
 			$deleted       = false;
 
 			if ( $wp_filesystem->is_dir( $optimized_dir ) ) {
 				$deleted = $wp_filesystem->delete( $optimized_dir, true );
 			} else {
-				$deleted = true; // Directory doesn't exist, consider it "deleted"
+				$deleted = true; // Directory doesn't exist, consider it "deleted".
 			}
 
 			if ( $deleted ) {
-				// Reset image info
+				// Reset image info.
 				$img_info = array(
 					'completed' => array(
 						'webp' => array(),
@@ -360,7 +360,7 @@ class OptimizationController extends BaseController {
 
 				update_option( 'wppo_img_info', $img_info );
 
-				// Log the action
+				// Log the action.
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
 				}
@@ -394,7 +394,7 @@ class OptimizationController extends BaseController {
 		try {
 			$this->log_request( $request, 'Minify Assets' );
 
-			// Validate request
+			// Validate request.
 			$validation = $this->validate_request(
 				$request,
 				array(
@@ -416,8 +416,8 @@ class OptimizationController extends BaseController {
 
 			$results = array();
 
-			// Load minification classes
-			if ( $type === 'all' || $type === 'css' ) {
+			// Load minification classes.
+			if ( 'all' === $type || 'css' === $type ) {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 					require_once WPPO_PLUGIN_PATH . 'includes/minify/class-css.php';
 				}
@@ -425,7 +425,7 @@ class OptimizationController extends BaseController {
 				$results['css'] = $css_minifier->minify_all_css( $force );
 			}
 
-			if ( $type === 'all' || $type === 'js' ) {
+			if ( 'all' === $type || 'js' === $type ) {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 					require_once WPPO_PLUGIN_PATH . 'includes/minify/class-js.php';
 				}
@@ -433,7 +433,7 @@ class OptimizationController extends BaseController {
 				$results['js'] = $js_minifier->minify_all_js( $force );
 			}
 
-			if ( $type === 'all' || $type === 'html' ) {
+			if ( 'all' === $type || 'html' === $type ) {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					require_once WPPO_PLUGIN_PATH . 'includes/minify/class-html.php';
 				}
@@ -467,7 +467,7 @@ class OptimizationController extends BaseController {
 		try {
 			$this->log_request( $request, 'Analyze Performance' );
 
-			// Rate limiting for performance analysis
+			// Rate limiting for performance analysis.
 			$rate_limit_key = $this->get_rate_limit_key();
 			if ( ! $this->check_rate_limit( $rate_limit_key . '_analyze', 3, 300 ) ) {
 				return $this->send_error_response(
@@ -477,7 +477,7 @@ class OptimizationController extends BaseController {
 				);
 			}
 
-			// Validate request
+			// Validate request.
 			$validation = $this->validate_request(
 				$request,
 				array(
@@ -494,7 +494,7 @@ class OptimizationController extends BaseController {
 			$url    = $data['url'] ?? home_url();
 			$mobile = $data['mobile'] ?? false;
 
-			// Perform performance analysis
+			// Perform performance analysis.
 			$analysis = $this->perform_performance_analysis( $url, $mobile );
 
 			return $this->send_success_response(
@@ -521,7 +521,7 @@ class OptimizationController extends BaseController {
 		try {
 			$this->log_request( $request, 'Get Optimization Recommendations' );
 
-			// Load site detection classes
+			// Load site detection classes.
 			if ( ! class_exists( 'PerformanceOptimisation\Core\SiteDetection\SiteAnalyzer' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/Core/SiteDetection/SiteAnalyzer.php';
 			}
@@ -556,7 +556,7 @@ class OptimizationController extends BaseController {
 		try {
 			$this->log_request( $request, 'Bulk Optimize' );
 
-			// Rate limiting for bulk operations
+			// Rate limiting for bulk operations.
 			$rate_limit_key = $this->get_rate_limit_key();
 			if ( ! $this->check_rate_limit( $rate_limit_key . '_bulk_optimize', 2, 600 ) ) {
 				return $this->send_error_response(
@@ -566,7 +566,7 @@ class OptimizationController extends BaseController {
 				);
 			}
 
-			// Validate request
+			// Validate request.
 			$validation = $this->validate_request(
 				$request,
 				array(
@@ -619,7 +619,7 @@ class OptimizationController extends BaseController {
 
 					case 'minify_assets':
 						$asset_type = $operation['asset_type'] ?? 'all';
-						// Simplified minification for bulk operation
+						// Simplified minification for bulk operation.
 						$results[] = array(
 							'operation' => 'minify_assets',
 							'success'   => true,
@@ -670,8 +670,8 @@ class OptimizationController extends BaseController {
 		$total_original_size  = 0;
 		$total_optimized_size = 0;
 
-		// This is a simplified calculation
-		// In a real implementation, you'd track actual file sizes
+		// This is a simplified calculation.
+		// In a real implementation, you'd track actual file sizes.
 		foreach ( $img_info['completed'] ?? array() as $format => $images ) {
 			foreach ( $images as $image_data ) {
 				if ( isset( $image_data['original_size'], $image_data['optimized_size'] ) ) {
@@ -705,7 +705,7 @@ class OptimizationController extends BaseController {
 		// - Google PageSpeed Insights API
 		// - WebPageTest API
 		// - Lighthouse CI
-		// - Custom performance measurement tools
+		// - Custom performance measurement tools.
 
 		$analysis = array(
 			'score'         => 0,
@@ -714,10 +714,10 @@ class OptimizationController extends BaseController {
 			'diagnostics'   => array(),
 		);
 
-		// Simulate basic performance checks
+		// Simulate basic performance checks.
 		$start_time = microtime( true );
 
-		// Make HTTP request to analyze the page
+		// Make HTTP request to analyze the page.
 		$response = wp_remote_get(
 			$url,
 			array(
@@ -727,7 +727,7 @@ class OptimizationController extends BaseController {
 		);
 
 		$end_time  = microtime( true );
-		$load_time = ( $end_time - $start_time ) * 1000; // Convert to milliseconds
+		$load_time = ( $end_time - $start_time ) * 1000; // Convert to milliseconds.
 
 		if ( is_wp_error( $response ) ) {
 			$analysis['error'] = $response->get_error_message();
@@ -737,7 +737,7 @@ class OptimizationController extends BaseController {
 		$body    = wp_remote_retrieve_body( $response );
 		$headers = wp_remote_retrieve_headers( $response );
 
-		// Basic metrics
+		// Basic metrics.
 		$analysis['metrics'] = array(
 			'load_time'           => round( $load_time, 2 ),
 			'page_size'           => strlen( $body ),
@@ -746,13 +746,13 @@ class OptimizationController extends BaseController {
 			'cache_headers'       => isset( $headers['cache-control'] ) || isset( $headers['expires'] ),
 		);
 
-		// Calculate basic score
+		// Calculate basic score.
 		$score = 100;
 		if ( $load_time > 3000 ) {
-			$score -= 30; // Slow load time
+			$score -= 30; // Slow load time.
 		}
 		if ( strlen( $body ) > 1000000 ) {
-			$score -= 20; // Large page size
+			$score -= 20; // Large page size.
 		}
 		if ( ! $analysis['metrics']['compression_enabled'] ) {
 			$score -= 15;
@@ -763,7 +763,7 @@ class OptimizationController extends BaseController {
 
 		$analysis['score'] = max( 0, $score );
 
-		// Generate opportunities based on analysis
+		// Generate opportunities based on analysis.
 		if ( $load_time > 3000 ) {
 			$analysis['opportunities'][] = array(
 				'title'       => 'Reduce server response time',

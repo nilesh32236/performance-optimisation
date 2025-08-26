@@ -48,7 +48,7 @@ abstract class BaseController {
 	 * @return bool|\WP_Error True if permission granted, WP_Error otherwise.
 	 */
 	public function check_admin_permissions( \WP_REST_Request $request ) {
-		// Load security middleware if not already loaded
+		// Load security middleware if not already loaded.
 		if ( ! class_exists( 'PerformanceOptimisation\Core\Security\SecurityManager' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/Core/Security/SecurityManager.php';
 		}
@@ -59,13 +59,13 @@ abstract class BaseController {
 		$security_manager    = new \PerformanceOptimisation\Core\Security\SecurityManager();
 		$security_middleware = new \PerformanceOptimisation\Core\Security\SecurityMiddleware( $security_manager );
 
-		// Process request through security middleware
+		// Process request through security middleware.
 		$security_result = $security_middleware->process_request( $request, 'admin' );
 		if ( is_wp_error( $security_result ) ) {
 			return $security_result;
 		}
 
-		// Original capability check
+		// Original capability check.
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return new \WP_Error(
 				'rest_forbidden_context',
@@ -92,13 +92,13 @@ abstract class BaseController {
 			$value       = $request->get_param( $field );
 			$is_required = $rules['required'] ?? false;
 
-			// Check required fields
+			// Check required fields.
 			if ( $is_required && ( null === $value || '' === $value ) ) {
 				$errors[] = sprintf( 'Field "%s" is required.', $field );
 				continue;
 			}
 
-			// Skip validation if field is not provided and not required
+			// Skip validation if field is not provided and not required.
 			if ( null === $value && ! $is_required ) {
 				if ( isset( $rules['default'] ) ) {
 					$data[ $field ] = $rules['default'];
@@ -106,7 +106,7 @@ abstract class BaseController {
 				continue;
 			}
 
-			// Type validation
+			// Type validation.
 			$expected_type     = $rules['type'] ?? 'string';
 			$validation_result = $this->validate_field_type( $value, $expected_type, $field );
 
@@ -116,7 +116,7 @@ abstract class BaseController {
 				$errors[] = $validation_result['error'];
 			}
 
-			// Additional validation rules
+			// Additional validation rules.
 			if ( isset( $rules['enum'] ) && ! in_array( $value, $rules['enum'], true ) ) {
 				$errors[] = sprintf(
 					'Field "%s" must be one of: %s',
@@ -341,7 +341,7 @@ abstract class BaseController {
 	 * @return \WP_REST_Response Error response.
 	 */
 	protected function handle_exception( \Exception $exception, string $default_message = 'An error occurred' ): \WP_REST_Response {
-		// Log the exception
+		// Log the exception.
 		error_log(
 			sprintf(
 				'[Performance Optimisation API] Exception: %s in %s:%d',
@@ -351,7 +351,7 @@ abstract class BaseController {
 			)
 		);
 
-		// Don't expose internal errors in production
+		// Don't expose internal errors in production.
 		$message = ( defined( 'WP_DEBUG' ) && WP_DEBUG )
 			? $exception->getMessage()
 			: $default_message;
@@ -373,9 +373,9 @@ abstract class BaseController {
 		$page     = $request->get_param( 'page' ) ?: 1;
 		$per_page = $request->get_param( 'per_page' ) ?: 10;
 
-		// Validate and sanitize
+		// Validate and sanitize.
 		$page     = max( 1, (int) $page );
-		$per_page = max( 1, min( 100, (int) $per_page ) ); // Cap at 100 items per page
+		$per_page = max( 1, min( 100, (int) $per_page ) ); // Cap at 100 items per page.
 
 		return array(
 			'page'     => $page,
@@ -461,7 +461,7 @@ abstract class BaseController {
 			return 'user_' . $user_id;
 		}
 
-		// Fallback to IP address for non-authenticated requests
+		// Fallback to IP address for non-authenticated requests.
 		$ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 		return 'ip_' . $ip;
 	}

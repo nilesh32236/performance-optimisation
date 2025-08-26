@@ -83,11 +83,11 @@ class PerformanceAnalyzer {
 			$end_date . ' 23:59:59'
 		);
 
-		// Calculate averages
+		// Calculate averages.
 		$avg_load_time   = $this->calculate_average_from_aggregated( $page_load_data['data'], 'AVG' );
 		$cache_hit_ratio = $this->calculate_cache_hit_ratio( $cache_hit_data['data'] );
 
-		// Calculate performance score
+		// Calculate performance score.
 		$performance_score = $this->calculate_performance_score( $avg_load_time, $cache_hit_ratio );
 
 		return array(
@@ -128,7 +128,7 @@ class PerformanceAnalyzer {
 			$avg_values                    = array_column( $load_time_data['data'], 'aggregated_value' );
 			$analysis['average_load_time'] = round( array_sum( $avg_values ) / count( $avg_values ), 2 );
 
-			// Get min/max from aggregated data
+			// Get min/max from aggregated data.
 			$min_data = $this->metrics_collector->get_aggregated_metrics(
 				'page_load_time',
 				'day',
@@ -142,7 +142,7 @@ class PerformanceAnalyzer {
 				$end_date . ' 23:59:59'
 			);
 
-			// Build daily trends
+			// Build daily trends.
 			foreach ( $load_time_data['data'] as $day_data ) {
 				$analysis['daily_trends'][] = array(
 					'date'              => $day_data['period_start'],
@@ -183,13 +183,13 @@ class PerformanceAnalyzer {
 			$total_requests = 0;
 
 			foreach ( $cache_data['data'] as $day_data ) {
-				if ( $day_data['aggregation_type'] === 'SUM' ) {
+				if ( 'SUM' === $day_data['aggregation_type'] ) {
 					$total_hits += $day_data['aggregated_value'];
-				} elseif ( $day_data['aggregation_type'] === 'COUNT' ) {
+				} elseif ( 'COUNT' === $day_data['aggregation_type'] ) {
 					$total_requests += $day_data['aggregated_value'];
 				}
 
-				$daily_hit_ratio = $day_data['sample_count'] > 0
+				$daily_hit_ratio = 0 < $day_data['sample_count']
 					? ( $day_data['aggregated_value'] / $day_data['sample_count'] ) * 100
 					: 0;
 
@@ -206,7 +206,7 @@ class PerformanceAnalyzer {
 				? round( ( $total_hits / $total_requests ) * 100, 2 )
 				: 0;
 
-			// Determine cache effectiveness
+			// Determine cache effectiveness.
 			if ( $analysis['overall_hit_ratio'] >= 80 ) {
 				$analysis['cache_effectiveness'] = 'excellent';
 			} elseif ( $analysis['overall_hit_ratio'] >= 60 ) {
@@ -236,7 +236,7 @@ class PerformanceAnalyzer {
 			'before_after_comparison' => array(),
 		);
 
-		// Get current optimization status
+		// Get current optimization status.
 		$settings              = get_option( 'wppo_settings', array() );
 		$optimization_features = array(
 			'Page Caching'       => $settings['cache_settings']['enablePageCaching'] ?? false,
@@ -257,7 +257,7 @@ class PerformanceAnalyzer {
 
 		$analysis['enabled_optimizations'] = $enabled_count;
 
-		// Calculate estimated savings
+		// Calculate estimated savings.
 		$analysis['estimated_savings'] = $this->calculate_optimization_savings( $optimization_features );
 
 		return $analysis;
@@ -273,12 +273,12 @@ class PerformanceAnalyzer {
 	private function generate_recommendations( string $start_date, string $end_date ): array {
 		$recommendations = array();
 
-		// Analyze current performance
+		// Analyze current performance.
 		$overview       = $this->get_performance_overview( $start_date, $end_date );
 		$cache_analysis = $this->analyze_cache_performance( $start_date, $end_date );
 
-		// Page load time recommendations
-		if ( $overview['average_load_time'] > 3000 ) { // > 3 seconds
+		// Page load time recommendations.
+		if ( $overview['average_load_time'] > 3000 ) { // > 3 seconds.
 			$recommendations[] = array(
 				'type'        => 'performance',
 				'priority'    => 'high',
@@ -295,7 +295,7 @@ class PerformanceAnalyzer {
 			);
 		}
 
-		// Cache hit ratio recommendations
+		// Cache hit ratio recommendations.
 		if ( $cache_analysis['overall_hit_ratio'] < 60 ) {
 			$recommendations[] = array(
 				'type'        => 'caching',
@@ -313,7 +313,7 @@ class PerformanceAnalyzer {
 			);
 		}
 
-		// Optimization recommendations
+		// Optimization recommendations.
 		$settings = get_option( 'wppo_settings', array() );
 		if ( empty( $settings['image_optimisation']['convertImg'] ) ) {
 			$img_info     = get_option( 'wppo_img_info', array() );
@@ -396,17 +396,17 @@ class PerformanceAnalyzer {
 	private function calculate_performance_score( float $avg_load_time, float $cache_hit_ratio ): int {
 		$score = 100;
 
-		// Deduct points for slow load times
-		if ( $avg_load_time > 1000 ) { // > 1 second
+		// Deduct points for slow load times.
+		if ( $avg_load_time > 1000 ) { // > 1 second.
 			$score -= min( 40, ( $avg_load_time - 1000 ) / 100 );
 		}
 
-		// Deduct points for poor cache performance
+		// Deduct points for poor cache performance.
 		if ( $cache_hit_ratio < 80 ) {
 			$score -= ( 80 - $cache_hit_ratio ) / 2;
 		}
 
-		// Check optimization features
+		// Check optimization features.
 		$settings              = get_option( 'wppo_settings', array() );
 		$optimization_features = array(
 			$settings['cache_settings']['enablePageCaching'] ?? false,
@@ -419,7 +419,7 @@ class PerformanceAnalyzer {
 		$total_optimizations   = count( $optimization_features );
 		$optimization_ratio    = $total_optimizations > 0 ? $enabled_optimizations / $total_optimizations : 0;
 
-		// Bonus points for enabled optimizations
+		// Bonus points for enabled optimizations.
 		$score += $optimization_ratio * 10;
 
 		return max( 0, min( 100, round( $score ) ) );
@@ -454,14 +454,14 @@ class PerformanceAnalyzer {
 		$total_requests = 0;
 
 		foreach ( $data as $row ) {
-			if ( $row['aggregation_type'] === 'SUM' ) {
+			if ( 'SUM' === $row['aggregation_type'] ) {
 				$total_hits += $row['aggregated_value'];
-			} elseif ( $row['aggregation_type'] === 'COUNT' ) {
+			} elseif ( 'COUNT' === $row['aggregation_type'] ) {
 				$total_requests += $row['aggregated_value'];
 			}
 		}
 
-		return $total_requests > 0 ? ( $total_hits / $total_requests ) * 100 : 0;
+		return 0 < $total_requests ? ( $total_hits / $total_requests ) * 100 : 0;
 	}
 
 	/**
@@ -481,7 +481,7 @@ class PerformanceAnalyzer {
 
 		$total_views = 0;
 		foreach ( $page_view_data['data'] as $row ) {
-			if ( $row['aggregation_type'] === 'COUNT' ) {
+			if ( 'COUNT' === $row['aggregation_type'] ) {
 				$total_views += $row['sample_count'];
 			}
 		}
@@ -515,12 +515,12 @@ class PerformanceAnalyzer {
 	 */
 	private function calculate_optimization_savings( array $optimization_features ): array {
 		$savings = array(
-			'load_time_reduction'   => 0, // Percentage
-			'bandwidth_savings'     => 0,   // Percentage
-			'server_load_reduction' => 0, // Percentage
+			'load_time_reduction'   => 0, // Percentage.
+			'bandwidth_savings'     => 0,   // Percentage.
+			'server_load_reduction' => 0, // Percentage.
 		);
 
-		// Estimate savings based on enabled features
+		// Estimate savings based on enabled features.
 		if ( $optimization_features['Page Caching'] ?? false ) {
 			$savings['load_time_reduction']   += 30;
 			$savings['server_load_reduction'] += 50;
@@ -545,7 +545,7 @@ class PerformanceAnalyzer {
 			$savings['bandwidth_savings'] += 25;
 		}
 
-		// Cap savings at reasonable maximums
+		// Cap savings at reasonable maximums.
 		$savings['load_time_reduction']   = min( 70, $savings['load_time_reduction'] );
 		$savings['bandwidth_savings']     = min( 60, $savings['bandwidth_savings'] );
 		$savings['server_load_reduction'] = min( 80, $savings['server_load_reduction'] );

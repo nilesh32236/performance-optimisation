@@ -28,20 +28,11 @@
 
 	<!-- Rules: WordPress Coding Standards -->
 	<rule ref="WordPress">
-		<!-- Allow short array syntax -->
-		<exclude name="Generic.Arrays.DisallowShortArraySyntax"/>
-		
 		<!-- Allow multiple assignments on same line for array declarations -->
 		<exclude name="Squiz.PHP.DisallowMultipleAssignments"/>
 		
 		<!-- We don't need to escape translation functions in PHP -->
 		<exclude name="WordPress.Security.EscapeOutput.UnsafePrintingFunction"/>
-	</rule>
-
-	<!-- Rules: WordPress Extra -->
-	<rule ref="WordPress-Extra">
-		<!-- Allow short ternary operator -->
-		<exclude name="WordPress.PHP.DisallowShortTernary"/>
 	</rule>
 
 	<!-- Rules: WordPress Docs -->

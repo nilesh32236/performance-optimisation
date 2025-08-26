@@ -47,7 +47,7 @@ class SettingsController extends BaseController {
 	 * @return void
 	 */
 	public function register_routes(): void {
-		// Get all settings
+		// Get all settings.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base,
@@ -58,7 +58,7 @@ class SettingsController extends BaseController {
 			)
 		);
 
-		// Update settings
+		// Update settings.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base,
@@ -82,7 +82,7 @@ class SettingsController extends BaseController {
 			)
 		);
 
-		// Get specific setting group
+		// Get specific setting group.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/(?P<group>[a-zA-Z0-9_-]+)',
@@ -93,7 +93,7 @@ class SettingsController extends BaseController {
 			)
 		);
 
-		// Update specific setting group
+		// Update specific setting group.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/(?P<group>[a-zA-Z0-9_-]+)',
@@ -111,7 +111,7 @@ class SettingsController extends BaseController {
 			)
 		);
 
-		// Reset settings to defaults
+		// Reset settings to defaults.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/reset',
@@ -129,7 +129,7 @@ class SettingsController extends BaseController {
 			)
 		);
 
-		// Export settings
+		// Export settings.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/export',
@@ -149,7 +149,7 @@ class SettingsController extends BaseController {
 			)
 		);
 
-		// Import settings
+		// Import settings.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/import',
@@ -172,7 +172,7 @@ class SettingsController extends BaseController {
 			)
 		);
 
-		// Validate settings
+		// Validate settings.
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/validate',
@@ -204,7 +204,7 @@ class SettingsController extends BaseController {
 			$settings = get_option( 'wppo_settings', array() );
 			$defaults = $this->get_default_settings();
 
-			// Merge with defaults to ensure all settings are present
+			// Merge with defaults to ensure all settings are present.
 			$complete_settings = array_replace_recursive( $defaults, $settings );
 
 			return $this->send_success_response(
@@ -229,7 +229,7 @@ class SettingsController extends BaseController {
 		try {
 			$this->log_request( $request, 'Update Settings' );
 
-			// Validate request
+			// Validate request.
 			$validation = $this->validate_request(
 				$request,
 				array(
@@ -249,7 +249,7 @@ class SettingsController extends BaseController {
 			$new_settings = $data['settings'];
 			$merge        = $data['merge'] ?? true;
 
-			// Validate settings structure
+			// Validate settings structure.
 			$settings_validation = $this->validate_settings_data( $new_settings );
 			if ( ! $settings_validation['valid'] ) {
 				return $this->send_error_response(
@@ -263,17 +263,17 @@ class SettingsController extends BaseController {
 			$current_settings = get_option( 'wppo_settings', array() );
 
 			if ( $merge ) {
-				// Merge with existing settings
+				// Merge with existing settings.
 				$updated_settings = array_replace_recursive( $current_settings, $new_settings );
 			} else {
-				// Replace completely
+				// Replace completely.
 				$updated_settings = $new_settings;
 			}
 
-			// Check for critical changes that require cache clearing
+			// Check for critical changes that require cache clearing.
 			$cache_clear_needed = $this->check_cache_clear_needed( $current_settings, $updated_settings );
 
-			// Update settings
+			// Update settings.
 			$success = update_option( 'wppo_settings', $updated_settings );
 
 			if ( ! $success ) {
@@ -284,7 +284,7 @@ class SettingsController extends BaseController {
 				);
 			}
 
-			// Clear cache if needed
+			// Clear cache if needed.
 			if ( $cache_clear_needed ) {
 				if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
@@ -292,7 +292,7 @@ class SettingsController extends BaseController {
 				\PerformanceOptimise\Inc\Cache::clear_cache();
 			}
 
-			// Log the change
+			// Log the change.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
 			}
@@ -336,7 +336,7 @@ class SettingsController extends BaseController {
 			$group_settings         = $all_settings[ $group ] ?? array();
 			$default_group_settings = $defaults[ $group ];
 
-			// Merge with defaults
+			// Merge with defaults.
 			$complete_group_settings = array_replace_recursive( $default_group_settings, $group_settings );
 
 			return $this->send_success_response(
@@ -363,7 +363,7 @@ class SettingsController extends BaseController {
 			$group = $request->get_param( 'group' );
 			$this->log_request( $request, "Update Setting Group: {$group}" );
 
-			// Validate request
+			// Validate request.
 			$validation = $this->validate_request(
 				$request,
 				array(
@@ -380,7 +380,7 @@ class SettingsController extends BaseController {
 
 			$new_group_settings = $validation['data']['settings'];
 
-			// Check if group exists
+			// Check if group exists.
 			$defaults = $this->get_default_settings();
 			if ( ! isset( $defaults[ $group ] ) ) {
 				return $this->send_error_response(
@@ -390,7 +390,7 @@ class SettingsController extends BaseController {
 				);
 			}
 
-			// Validate group settings
+			// Validate group settings.
 			$group_validation = $this->validate_setting_group( $group, $new_group_settings );
 			if ( ! $group_validation['valid'] ) {
 				return $this->send_error_response(
@@ -404,7 +404,7 @@ class SettingsController extends BaseController {
 			$current_settings           = get_option( 'wppo_settings', array() );
 			$current_settings[ $group ] = $new_group_settings;
 
-			// Update settings
+			// Update settings.
 			$success = update_option( 'wppo_settings', $current_settings );
 
 			if ( ! $success ) {
@@ -415,7 +415,7 @@ class SettingsController extends BaseController {
 				);
 			}
 
-			// Log the change
+			// Log the change.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
 			}
@@ -448,7 +448,7 @@ class SettingsController extends BaseController {
 			$defaults = $this->get_default_settings();
 
 			if ( $group ) {
-				// Reset specific group
+				// Reset specific group.
 				if ( ! isset( $defaults[ $group ] ) ) {
 					return $this->send_error_response(
 						'invalid_group',
@@ -462,7 +462,7 @@ class SettingsController extends BaseController {
 				$success                    = update_option( 'wppo_settings', $current_settings );
 				$message                    = sprintf( 'Setting group "%s" reset to defaults.', $group );
 			} else {
-				// Reset all settings
+				// Reset all settings.
 				$success = update_option( 'wppo_settings', $defaults );
 				$message = 'All settings reset to defaults.';
 			}
@@ -475,13 +475,13 @@ class SettingsController extends BaseController {
 				);
 			}
 
-			// Clear cache after reset
+			// Clear cache after reset.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
 			}
 			\PerformanceOptimise\Inc\Cache::clear_cache();
 
-			// Log the change
+			// Log the change.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
 			}
@@ -523,7 +523,7 @@ class SettingsController extends BaseController {
 				),
 			);
 
-			if ( $format === 'json' ) {
+			if ( 'json' === $format ) {
 				$export_data['json'] = wp_json_encode( $export_data, JSON_PRETTY_PRINT );
 			}
 
@@ -547,7 +547,7 @@ class SettingsController extends BaseController {
 			$settings_data = $request->get_param( 'settings' );
 			$validate      = $request->get_param( 'validate' ) ?? true;
 
-			// Parse JSON if string
+			// Parse JSON if string.
 			if ( is_string( $settings_data ) ) {
 				$parsed_data = json_decode( $settings_data, true );
 				if ( json_last_error() !== JSON_ERROR_NONE ) {
@@ -560,7 +560,7 @@ class SettingsController extends BaseController {
 				$settings_data = $parsed_data;
 			}
 
-			// Extract settings from import data
+			// Extract settings from import data.
 			if ( isset( $settings_data['settings'] ) ) {
 				$import_settings = $settings_data['settings'];
 			} else {
@@ -575,7 +575,7 @@ class SettingsController extends BaseController {
 				);
 			}
 
-			// Validate settings if requested
+			// Validate settings if requested.
 			if ( $validate ) {
 				$validation = $this->validate_settings_data( $import_settings );
 				if ( ! $validation['valid'] ) {
@@ -588,7 +588,7 @@ class SettingsController extends BaseController {
 				}
 			}
 
-			// Update settings
+			// Update settings.
 			$success = update_option( 'wppo_settings', $import_settings );
 
 			if ( ! $success ) {
@@ -599,13 +599,13 @@ class SettingsController extends BaseController {
 				);
 			}
 
-			// Clear cache after import
+			// Clear cache after import.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
 			}
 			\PerformanceOptimise\Inc\Cache::clear_cache();
 
-			// Log the change
+			// Log the change.
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
 			}
@@ -823,7 +823,7 @@ class SettingsController extends BaseController {
 				continue;
 			}
 
-			// Additional validations
+			// Additional validations.
 			if ( isset( $field_schema['min'] ) && is_numeric( $value ) && $value < $field_schema['min'] ) {
 				$errors[] = sprintf( 'Setting %s.%s must be at least %s', $group, $setting, $field_schema['min'] );
 			}
@@ -857,7 +857,7 @@ class SettingsController extends BaseController {
 	 * @return bool True if cache should be cleared.
 	 */
 	private function check_cache_clear_needed( array $old_settings, array $new_settings ): bool {
-		// Settings that require cache clearing when changed
+		// Settings that require cache clearing when changed.
 		$cache_affecting_settings = array(
 			'cache_settings.enablePageCaching',
 			'file_optimisation.minifyCSS',

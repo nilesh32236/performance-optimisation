@@ -52,8 +52,8 @@ class FileCache implements CacheInterface {
 	 * Constructor
 	 *
 	 * @since 1.1.0
-	 * @param ConfigInterface $config Configuration manager
-	 * @throws CacheException If cache directory cannot be created
+	 * @param ConfigInterface $config Configuration manager.
+	 * @throws CacheException If cache directory cannot be created.
 	 */
 	public function __construct( ConfigInterface $config ) {
 		$this->config    = $config;
@@ -65,8 +65,8 @@ class FileCache implements CacheInterface {
 	 * Get a cached value
 	 *
 	 * @since 1.1.0
-	 * @param string $key     Cache key
-	 * @param mixed  $default Default value if key doesn't exist
+	 * @param string $key     Cache key.
+	 * @param mixed  $default Default value if key doesn't exist.
 	 * @return mixed Cached value or default
 	 */
 	public function get( string $key, $default = null ) {
@@ -84,7 +84,7 @@ class FileCache implements CacheInterface {
 			return $default;
 		}
 
-		// Check expiration
+		// Check expiration.
 		if ( $data['expires'] > 0 && $data['expires'] < time() ) {
 			$this->delete( $key );
 			++$this->stats['misses'];
@@ -99,9 +99,9 @@ class FileCache implements CacheInterface {
 	 * Set a cached value
 	 *
 	 * @since 1.1.0
-	 * @param string $key        Cache key
-	 * @param mixed  $value      Value to cache
-	 * @param int    $expiration Expiration time in seconds (0 = no expiration)
+	 * @param string $key        Cache key.
+	 * @param mixed  $value      Value to cache.
+	 * @param int    $expiration Expiration time in seconds (0 = no expiration).
 	 * @return bool True on success, false on failure
 	 */
 	public function set( string $key, $value, int $expiration = 0 ): bool {
@@ -128,7 +128,7 @@ class FileCache implements CacheInterface {
 	 * Delete a cached value
 	 *
 	 * @since 1.1.0
-	 * @param string $key Cache key
+	 * @param string $key Cache key.
 	 * @return bool True on success, false on failure
 	 */
 	public function delete( string $key ): bool {
@@ -167,7 +167,7 @@ class FileCache implements CacheInterface {
 			return false;
 		}
 
-		// Check expiration
+		// Check expiration.
 		if ( $data['expires'] > 0 && $data['expires'] < time() ) {
 			$this->delete( $key );
 			return false;

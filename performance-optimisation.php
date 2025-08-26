@@ -79,7 +79,8 @@ function wppo_initialize_plugin(): void {
 		$plugin->initialize();
 	} catch ( Exception $e ) {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( 'Performance Optimisation initialization error: ' . $e->getMessage() );
+			// Log error for debugging purposes.
+			error_log( 'Performance Optimisation initialization error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 		}
 
 		// Show admin notice for initialization failure.
@@ -109,30 +110,8 @@ add_action( 'plugins_loaded', 'wppo_initialize_plugin' );
  * @return void
  */
 function wppo_activate_plugin(): void {
-	try {
-		// Load autoloader if not already loaded
-		$autoloader = WPPO_PLUGIN_PATH . 'vendor/autoload.php';
-		if ( file_exists( $autoloader ) ) {
-			require_once $autoloader;
-		}
-
-		$plugin = Plugin::get_instance( WPPO_PLUGIN_FILE, WPPO_VERSION );
-		$plugin->activate();
-	} catch ( Exception $e ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( 'Performance Optimisation activation error: ' . $e->getMessage() );
-		}
-
-		// Deactivate plugin if activation fails
-		deactivate_plugins( plugin_basename( WPPO_PLUGIN_FILE ) );
-		wp_die(
-			sprintf(
-				/* translators: %s: Error message */
-				esc_html__( 'Performance Optimisation plugin activation failed: %s', 'performance-optimisation' ),
-				esc_html( $e->getMessage() )
-			)
-		);
-	}
+	require_once WPPO_PLUGIN_PATH . 'includes/Core/Bootstrap/Plugin.php';
+	Plugin::activate_plugin();
 }
 register_activation_hook( WPPO_PLUGIN_FILE, 'wppo_activate_plugin' );
 
@@ -145,20 +124,8 @@ register_activation_hook( WPPO_PLUGIN_FILE, 'wppo_activate_plugin' );
  * @return void
  */
 function wppo_deactivate_plugin(): void {
-	try {
-		// Load autoloader if not already loaded
-		$autoloader = WPPO_PLUGIN_PATH . 'vendor/autoload.php';
-		if ( file_exists( $autoloader ) ) {
-			require_once $autoloader;
-		}
-
-		$plugin = Plugin::get_instance( WPPO_PLUGIN_FILE, WPPO_VERSION );
-		$plugin->deactivate();
-	} catch ( Exception $e ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( 'Performance Optimisation deactivation error: ' . $e->getMessage() );
-		}
-	}
+	require_once WPPO_PLUGIN_PATH . 'includes/Core/Bootstrap/Plugin.php';
+	Plugin::deactivate_plugin();
 }
 register_deactivation_hook( WPPO_PLUGIN_FILE, 'wppo_deactivate_plugin' );
 

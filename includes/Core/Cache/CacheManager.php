@@ -20,7 +20,7 @@ use PerformanceOptimisation\Exceptions\CacheException;
 class CacheManager {
 
 	/**
-	 * Cache providers
+	 * Cache providers.
 	 *
 	 * @since 1.1.0
 	 * @var array
@@ -28,7 +28,7 @@ class CacheManager {
 	private array $providers = array();
 
 	/**
-	 * Default cache provider
+	 * Default cache provider.
 	 *
 	 * @since 1.1.0
 	 * @var string
@@ -36,7 +36,7 @@ class CacheManager {
 	private string $default_provider = 'file';
 
 	/**
-	 * Configuration manager
+	 * Configuration manager.
 	 *
 	 * @since 1.1.0
 	 * @var ConfigInterface
@@ -44,7 +44,7 @@ class CacheManager {
 	private ConfigInterface $config;
 
 	/**
-	 * Cache statistics
+	 * Cache statistics.
 	 *
 	 * @since 1.1.0
 	 * @var array
@@ -57,10 +57,10 @@ class CacheManager {
 	);
 
 	/**
-	 * Constructor
+	 * Constructor.
 	 *
 	 * @since 1.1.0
-	 * @param ConfigInterface $config Configuration manager
+	 * @param ConfigInterface $config Configuration manager.
 	 */
 	public function __construct( ConfigInterface $config ) {
 		$this->config = $config;
@@ -68,11 +68,11 @@ class CacheManager {
 	}
 
 	/**
-	 * Register a cache provider
+	 * Register a cache provider.
 	 *
 	 * @since 1.1.0
-	 * @param string         $name     Provider name
-	 * @param CacheInterface $provider Provider instance
+	 * @param string         $name     Provider name.
+	 * @param CacheInterface $provider Provider instance.
 	 * @return void
 	 */
 	public function register_provider( string $name, CacheInterface $provider ): void {
@@ -80,12 +80,12 @@ class CacheManager {
 	}
 
 	/**
-	 * Get a cache provider
+	 * Get a cache provider.
 	 *
 	 * @since 1.1.0
-	 * @param string|null $name Provider name (null for default)
-	 * @return CacheInterface Cache provider
-	 * @throws CacheException If provider not found
+	 * @param string|null $name Provider name (null for default).
+	 * @return CacheInterface Cache provider.
+	 * @throws CacheException If provider not found.
 	 */
 	public function get_provider( ?string $name = null ): CacheInterface {
 		$provider_name = $name ?? $this->default_provider;
@@ -98,12 +98,12 @@ class CacheManager {
 	}
 
 	/**
-	 * Set default cache provider
+	 * Set default cache provider.
 	 *
 	 * @since 1.1.0
-	 * @param string $name Provider name
+	 * @param string $name Provider name.
 	 * @return void
-	 * @throws CacheException If provider not found
+	 * @throws CacheException If provider not found.
 	 */
 	public function set_default_provider( string $name ): void {
 		if ( ! isset( $this->providers[ $name ] ) ) {
@@ -114,13 +114,13 @@ class CacheManager {
 	}
 
 	/**
-	 * Get a cached value
+	 * Get a cached value.
 	 *
 	 * @since 1.1.0
-	 * @param string      $key      Cache key
-	 * @param mixed       $default  Default value if key doesn't exist
-	 * @param string|null $provider Provider name (null for default)
-	 * @return mixed Cached value or default
+	 * @param string      $key      Cache key.
+	 * @param mixed       $default  Default value if key doesn't exist.
+	 * @param string|null $provider Provider name (null for default).
+	 * @return mixed Cached value or default.
 	 */
 	public function get( string $key, $default = null, ?string $provider = null ) {
 		try {
@@ -144,10 +144,10 @@ class CacheManager {
 	 * Set a cached value
 	 *
 	 * @since 1.1.0
-	 * @param string      $key        Cache key
-	 * @param mixed       $value      Value to cache
-	 * @param int         $expiration Expiration time in seconds (0 = no expiration)
-	 * @param string|null $provider   Provider name (null for default)
+	 * @param string      $key        Cache key.
+	 * @param mixed       $value      Value to cache.
+	 * @param int         $expiration Expiration time in seconds (0 = no expiration).
+	 * @param string|null $provider   Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
 	public function set( string $key, $value, int $expiration = 0, ?string $provider = null ): bool {
@@ -169,8 +169,8 @@ class CacheManager {
 	 * Delete a cached value
 	 *
 	 * @since 1.1.0
-	 * @param string      $key      Cache key
-	 * @param string|null $provider Provider name (null for default)
+	 * @param string      $key      Cache key.
+	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
 	public function delete( string $key, ?string $provider = null ): bool {
@@ -192,8 +192,8 @@ class CacheManager {
 	 * Check if a cache key exists
 	 *
 	 * @since 1.1.0
-	 * @param string      $key      Cache key
-	 * @param string|null $provider Provider name (null for default)
+	 * @param string      $key      Cache key.
+	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True if key exists, false otherwise
 	 */
 	public function has( string $key, ?string $provider = null ): bool {
@@ -209,7 +209,7 @@ class CacheManager {
 	 * Clear all cached values
 	 *
 	 * @since 1.1.0
-	 * @param string|null $provider Provider name (null for default)
+	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
 	public function flush( ?string $provider = null ): bool {
@@ -225,9 +225,9 @@ class CacheManager {
 	 * Warm cache with predefined data
 	 *
 	 * @since 1.1.0
-	 * @param array       $data     Array of key => value pairs
-	 * @param int         $expiration Expiration time in seconds
-	 * @param string|null $provider Provider name (null for default)
+	 * @param array       $data     Array of key => value pairs.
+	 * @param int         $expiration Expiration time in seconds.
+	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
 	public function warm( array $data, int $expiration = 0, ?string $provider = null ): bool {
@@ -243,16 +243,16 @@ class CacheManager {
 	 * Invalidate cache by pattern
 	 *
 	 * @since 1.1.0
-	 * @param string      $pattern  Cache key pattern (supports wildcards)
-	 * @param string|null $provider Provider name (null for default)
+	 * @param string      $pattern  Cache key pattern (supports wildcards).
+	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
 	public function invalidate_pattern( string $pattern, ?string $provider = null ): bool {
 		try {
 			$cache_provider = $this->get_provider( $provider );
 
-			// This is a simplified implementation
-			// In a real implementation, you'd need to scan for matching keys
+			// This is a simplified implementation.
+			// In a real implementation, you'd need to scan for matching keys.
 			if ( method_exists( $cache_provider, 'delete_pattern' ) ) {
 				return $cache_provider->delete_pattern( $pattern );
 			}
@@ -313,10 +313,10 @@ class CacheManager {
 	 * @return void
 	 */
 	private function register_default_providers(): void {
-		// Register file cache provider
+		// Register file cache provider.
 		$this->register_provider( 'file', new FileCache( $this->config ) );
 
-		// Register object cache provider if available
+		// Register object cache provider if available.
 		if ( wp_using_ext_object_cache() ) {
 			$this->register_provider( 'object', new ObjectCache( $this->config ) );
 			$this->default_provider = 'object';

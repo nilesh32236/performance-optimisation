@@ -10,14 +10,16 @@
  * @since 1.0.0
  */
 
-namespace PerformanceOptimise\Inc;
+namespace PerformanceOptimisation\Admin;
+
+use PerformanceOptimisation\Services\SettingsService;
 
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
+if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 
 	/**
 	 * Metabox Class for Preload Image URL.
@@ -52,12 +54,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		const NONCE_FIELD = 'wppo_preload_images_nonce';
 
 
+		private SettingsService $settingsService;
+
 		/**
 		 * Constructor to hook into WordPress actions for adding and saving the metabox.
 		 *
 		 * @since 1.0.0
 		 */
-		public function __construct() {
+		public function __construct( SettingsService $settingsService ) {
+			$this->settingsService = $settingsService;
 			add_action( 'add_meta_boxes', array( $this, 'add_preload_images_metabox' ) );
 			add_action( 'save_post', array( $this, 'save_preload_images_metabox_data' ) );
 		}
@@ -69,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @param string $post_type The current post type.
 		 */
 		public function add_preload_images_metabox( string $post_type ): void {
-			$applicable_post_types = apply_filters( 'wppo_preload_metabox_post_types', array( 'post', 'page' ) );
+			$applicable_post_types = $this->settingsService->get_setting( 'preload_settings', 'applicable_post_types' ) ?? [ 'post', 'page' ];
 
 			if ( in_array( $post_type, $applicable_post_types, true ) ) {
 				add_meta_box(
