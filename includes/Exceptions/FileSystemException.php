@@ -56,8 +56,8 @@ class FileSystemException extends PerformanceOptimisationException {
 		string $operation = ''
 	) {
 		parent::__construct( $message, $code, $previous );
-		
-		$this->filePath = $filePath;
+
+		$this->filePath  = $filePath;
 		$this->operation = $operation;
 		$this->setContext( 'filesystem' );
 	}
@@ -118,11 +118,11 @@ class FileSystemException extends PerformanceOptimisationException {
 	public function getDetails(): array {
 		return array_merge(
 			parent::getDetails(),
-			[
+			array(
 				'file_path' => $this->filePath,
 				'operation' => $this->operation,
 				'type'      => 'filesystem',
-			]
+			)
 		);
 	}
 
@@ -135,15 +135,15 @@ class FileSystemException extends PerformanceOptimisationException {
 	 */
 	public function __toString(): string {
 		$string = parent::__toString();
-		
+
 		if ( ! empty( $this->filePath ) ) {
 			$string .= "\nFile Path: " . $this->filePath;
 		}
-		
+
 		if ( ! empty( $this->operation ) ) {
 			$string .= "\nOperation: " . $this->operation;
 		}
-		
+
 		return $string;
 	}
 }

@@ -55,7 +55,7 @@ class CacheService implements CacheServiceInterface {
 	 */
 	public function getCacheSize( string $type = 'all' ): string {
 		try {
-			$domain = $this->get_domain();
+			$domain     = $this->get_domain();
 			$total_size = 0;
 			if ( 'all' === $type ) {
 				$total_size = FileSystemUtil::getDirectorySize( $this->cache_root_dir );
@@ -93,7 +93,7 @@ class CacheService implements CacheServiceInterface {
 	 */
 	public function warmUpCache(): void {
 		$post_ids = $this->get_all_cacheable_post_ids();
-		$urls = array_map( 'get_permalink', $post_ids );
+		$urls     = array_map( 'get_permalink', $post_ids );
 		$this->preloadCache( array_filter( $urls ) );
 	}
 
@@ -102,7 +102,7 @@ class CacheService implements CacheServiceInterface {
 	 */
 	public function invalidateCache( string $pattern ): bool {
 		$post_id = (int) $pattern;
-		$post = get_post( $post_id );
+		$post    = get_post( $post_id );
 
 		if ( ! $post ) {
 			return false;
@@ -118,7 +118,7 @@ class CacheService implements CacheServiceInterface {
 
 		// Home page and blog page
 		$urls_to_invalidate[] = home_url( '/' );
-		$posts_page_id = get_option( 'page_for_posts' );
+		$posts_page_id        = get_option( 'page_for_posts' );
 		if ( $posts_page_id ) {
 			$urls_to_invalidate[] = get_permalink( $posts_page_id );
 		}
@@ -160,7 +160,7 @@ class CacheService implements CacheServiceInterface {
 	}
 
 	private function clear_cache_for_url( string $url ): void {
-		$url_path = trim( wp_parse_url( $url, PHP_URL_PATH ), '/' );
+		$url_path  = trim( wp_parse_url( $url, PHP_URL_PATH ), '/' );
 		$file_path = $this->get_cache_file_path_for_post_url( $url_path, 'html' );
 		$this->delete_single_cache_file_pair( $file_path );
 	}
@@ -200,7 +200,7 @@ class CacheService implements CacheServiceInterface {
 	}
 
 	private function get_cache_file_path_for_post_url( string $url_path, string $type = 'html' ): string {
-		$domain = $this->get_domain();
+		$domain      = $this->get_domain();
 		$path_suffix = empty( $url_path ) ? 'index.' . $type : trailingslashit( $url_path ) . 'index.' . $type;
 		return wp_normalize_path( trailingslashit( $this->cache_root_dir ) . trailingslashit( $domain ) . $path_suffix );
 	}

@@ -1,4 +1,10 @@
+/**
+ * External dependencies
+ */
 import React from 'react';
+/**
+ * Internal dependencies
+ */
 import { Button } from '../Button';
 
 interface Recommendation {
@@ -13,9 +19,9 @@ interface RecommendationsListProps {
 	recommendations: Recommendation[];
 }
 
-const RecommendationsList: React.FC<RecommendationsListProps> = ({ recommendations }) => {
-	const getPriorityIcon = (priority: string): string => {
-		switch (priority) {
+const RecommendationsList: React.FC<RecommendationsListProps> = ( { recommendations } ) => {
+	const getPriorityIcon = ( priority: string ): string => {
+		switch ( priority ) {
 			case 'high':
 				return 'dashicons-warning';
 			case 'medium':
@@ -27,8 +33,8 @@ const RecommendationsList: React.FC<RecommendationsListProps> = ({ recommendatio
 		}
 	};
 
-	const getPriorityColor = (priority: string): string => {
-		switch (priority) {
+	const getPriorityColor = ( priority: string ): string => {
+		switch ( priority ) {
 			case 'high':
 				return 'high';
 			case 'medium':
@@ -40,7 +46,7 @@ const RecommendationsList: React.FC<RecommendationsListProps> = ({ recommendatio
 		}
 	};
 
-	if (recommendations.length === 0) {
+	if ( recommendations.length === 0 ) {
 		return (
 			<div className="wppo-recommendations-empty">
 				<div className="wppo-recommendations-empty__icon">
@@ -54,45 +60,52 @@ const RecommendationsList: React.FC<RecommendationsListProps> = ({ recommendatio
 
 	return (
 		<div className="wppo-recommendations-list">
-			{recommendations.map((recommendation, index) => (
-				<div 
-					key={index} 
-					className={`wppo-recommendation-item wppo-recommendation-item--${getPriorityColor(recommendation.priority)}`}
+			{ recommendations.map( ( recommendation, index ) => (
+				<div
+					key={ index }
+					className={ `wppo-recommendation-item wppo-recommendation-item--${ getPriorityColor( recommendation.priority ) }` }
 				>
 					<div className="wppo-recommendation-item__header">
 						<div className="wppo-recommendation-item__icon">
-							<span className={`dashicons ${getPriorityIcon(recommendation.priority)}`}></span>
+							<span
+								className={ `dashicons ${ getPriorityIcon( recommendation.priority ) }` }
+							></span>
 						</div>
 						<div className="wppo-recommendation-item__title-section">
 							<h4 className="wppo-recommendation-item__title">
-								{recommendation.title}
+								{ recommendation.title }
 							</h4>
-							<span className={`wppo-recommendation-item__priority wppo-recommendation-item__priority--${getPriorityColor(recommendation.priority)}`}>
-								{recommendation.priority.toUpperCase()} PRIORITY
+							<span
+								className={ `wppo-recommendation-item__priority wppo-recommendation-item__priority--${ getPriorityColor( recommendation.priority ) }` }
+							>
+								{ recommendation.priority.toUpperCase() } PRIORITY
 							</span>
 						</div>
 					</div>
-					
+
 					<div className="wppo-recommendation-item__content">
 						<p className="wppo-recommendation-item__description">
-							{recommendation.description}
+							{ recommendation.description }
 						</p>
-						
-						{recommendation.actions.length > 0 && (
+
+						{ recommendation.actions.length > 0 && (
 							<div className="wppo-recommendation-item__actions">
 								<h5>Recommended Actions:</h5>
 								<ul className="wppo-recommendation-actions-list">
-									{recommendation.actions.map((action, actionIndex) => (
-										<li key={actionIndex} className="wppo-recommendation-action">
+									{ recommendation.actions.map( ( action, actionIndex ) => (
+										<li
+											key={ actionIndex }
+											className="wppo-recommendation-action"
+										>
 											<span className="dashicons dashicons-arrow-right-alt2"></span>
-											{action}
+											{ action }
 										</li>
-									))}
+									) ) }
 								</ul>
 							</div>
-						)}
+						) }
 					</div>
-					
+
 					<div className="wppo-recommendation-item__footer">
 						<Button variant="primary" size="small">
 							Apply Fix
@@ -102,7 +115,7 @@ const RecommendationsList: React.FC<RecommendationsListProps> = ({ recommendatio
 						</Button>
 					</div>
 				</div>
-			))}
+			) ) }
 		</div>
 	);
 };

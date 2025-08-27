@@ -1,3 +1,6 @@
+/**
+ * External dependencies
+ */
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
@@ -15,17 +18,17 @@ class ErrorBoundary extends Component<Props, State> {
 		hasError: false,
 	};
 
-	public static getDerivedStateFromError(error: Error): State {
+	public static getDerivedStateFromError( error: Error ): State {
 		return { hasError: true, error };
 	}
 
-	public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-		console.error('Wizard Error Boundary caught an error:', error, errorInfo);
+	public componentDidCatch( error: Error, errorInfo: ErrorInfo ) {
+		console.error( 'Wizard Error Boundary caught an error:', error, errorInfo );
 	}
 
 	public render() {
-		if (this.state.hasError) {
-			if (this.props.fallback) {
+		if ( this.state.hasError ) {
+			if ( this.props.fallback ) {
 				return this.props.fallback;
 			}
 
@@ -35,12 +38,13 @@ class ErrorBoundary extends Component<Props, State> {
 						<span className="dashicons dashicons-warning" aria-hidden="true" />
 						<h3>Something went wrong</h3>
 						<p>
-							The setup wizard encountered an unexpected error. Please refresh the page and try again.
+							The setup wizard encountered an unexpected error. Please refresh the
+							page and try again.
 						</p>
-						<button 
+						<button
 							type="button"
 							className="wppo-button wppo-button--secondary"
-							onClick={() => window.location.reload()}
+							onClick={ () => window.location.reload() }
 						>
 							Refresh Page
 						</button>

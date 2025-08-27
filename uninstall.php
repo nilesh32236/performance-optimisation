@@ -40,11 +40,11 @@ if ( is_dir( $cache_dir ) ) {
 		if ( is_dir( $dir ) ) {
 			$objects = scandir( $dir );
 			foreach ( $objects as $object ) {
-				if ( $object != "." && $object != ".." ) {
-					if ( is_dir( $dir . "/" . $object ) ) {
-						wppo_recursive_rmdir( $dir . "/" . $object );
+				if ( $object != '.' && $object != '..' ) {
+					if ( is_dir( $dir . '/' . $object ) ) {
+						wppo_recursive_rmdir( $dir . '/' . $object );
 					} else {
-						unlink( $dir . "/" . $object );
+						unlink( $dir . '/' . $object );
 					}
 				}
 			}

@@ -1,3 +1,6 @@
+/**
+ * External dependencies
+ */
 import React, { ButtonHTMLAttributes } from 'react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -9,7 +12,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 	fullWidth?: boolean;
 }
 
-function Button({
+function Button( {
 	children,
 	variant = 'primary',
 	size = 'medium',
@@ -20,13 +23,13 @@ function Button({
 	className = '',
 	disabled,
 	...props
-}: ButtonProps) {
+}: ButtonProps ) {
 	const baseClasses = 'wppo-button';
-	const variantClass = `wppo-button--${variant}`;
-	const sizeClass = `wppo-button--${size}`;
+	const variantClass = `wppo-button--${ variant }`;
+	const sizeClass = `wppo-button--${ size }`;
 	const loadingClass = loading ? 'wppo-button--loading' : '';
 	const fullWidthClass = fullWidth ? 'wppo-button--full-width' : '';
-	
+
 	const buttonClasses = [
 		baseClasses,
 		variantClass,
@@ -34,49 +37,51 @@ function Button({
 		loadingClass,
 		fullWidthClass,
 		className,
-	].filter(Boolean).join(' ');
+	]
+		.filter( Boolean )
+		.join( ' ' );
 
 	const isDisabled = disabled || loading;
 
-	const renderIcon = (iconName: string) => (
-		<span className={`dashicons dashicons-${iconName}`} aria-hidden="true" />
+	const renderIcon = ( iconName: string ) => (
+		<span className={ `dashicons dashicons-${ iconName }` } aria-hidden="true" />
 	);
 
 	const renderContent = () => {
-		if (loading) {
+		if ( loading ) {
 			return (
 				<>
 					<span className="wppo-button-spinner" aria-hidden="true" />
-					<span className="wppo-button-text">{children}</span>
+					<span className="wppo-button-text">{ children }</span>
 				</>
 			);
 		}
 
-		if (icon) {
+		if ( icon ) {
 			return iconPosition === 'left' ? (
 				<>
-					{renderIcon(icon)}
-					<span className="wppo-button-text">{children}</span>
+					{ renderIcon( icon ) }
+					<span className="wppo-button-text">{ children }</span>
 				</>
 			) : (
 				<>
-					<span className="wppo-button-text">{children}</span>
-					{renderIcon(icon)}
+					<span className="wppo-button-text">{ children }</span>
+					{ renderIcon( icon ) }
 				</>
 			);
 		}
 
-		return <span className="wppo-button-text">{children}</span>;
+		return <span className="wppo-button-text">{ children }</span>;
 	};
 
 	return (
 		<button
-			{...props}
-			className={buttonClasses}
-			disabled={isDisabled}
-			aria-disabled={isDisabled}
+			{ ...props }
+			className={ buttonClasses }
+			disabled={ isDisabled }
+			aria-disabled={ isDisabled }
 		>
-			{renderContent()}
+			{ renderContent() }
 		</button>
 	);
 }

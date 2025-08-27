@@ -28,7 +28,7 @@ interface OptimizationServiceInterface {
 
 	/**
 	 * Generate dynamic static HTML.
-		 * 
+	 *
 	 * @return void
 	 */
 	public function generate_dynamic_static_html(): void;

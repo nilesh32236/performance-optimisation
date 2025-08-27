@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 		 * @param string $post_type The current post type.
 		 */
 		public function add_preload_images_metabox( string $post_type ): void {
-			$applicable_post_types = $this->settingsService->get_setting( 'preload_settings', 'applicable_post_types' ) ?? [ 'post', 'page' ];
+			$applicable_post_types = $this->settingsService->get_setting( 'preload_settings', 'applicable_post_types' ) ?? array( 'post', 'page' );
 
 			if ( in_array( $post_type, $applicable_post_types, true ) ) {
 				add_meta_box(

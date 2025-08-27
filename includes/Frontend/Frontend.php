@@ -42,21 +42,21 @@ class Frontend {
 	}
 
 	public function setup_hooks(): void {
-		add_action( 'wp_enqueue_scripts', [ $this, 'enqueue_frontend_scripts' ] );
-		add_action( 'wp_head', [ $this, 'add_preload_prefetch_preconnect_links' ], 1 );
-		add_filter( 'script_loader_tag', [ $this, 'modify_script_loader_tag' ], 20, 3 );
-		add_filter( 'style_loader_tag', [ $this, 'modify_style_loader_tag' ], 20, 3 );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_frontend_scripts' ) );
+		add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect_links' ), 1 );
+		add_filter( 'script_loader_tag', array( $this, 'modify_script_loader_tag' ), 20, 3 );
+		add_filter( 'style_loader_tag', array( $this, 'modify_style_loader_tag' ), 20, 3 );
 
 		if ( $this->settingsService->get_setting( 'file_optimisation', 'removeWooCSSJS' ) ) {
-			add_action( 'wp_enqueue_scripts', [ $this, 'conditionally_remove_woocommerce_assets' ], 999 );
+			add_action( 'wp_enqueue_scripts', array( $this, 'conditionally_remove_woocommerce_assets' ), 999 );
 		}
 
 		if ( $this->settingsService->get_setting( 'preload_settings', 'enablePreloadCache' ) ) {
-			add_action( 'template_redirect', [ $this->cacheService, 'generate_dynamic_static_html' ], 5 );
+			add_action( 'template_redirect', array( $this->cacheService, 'generate_dynamic_static_html' ), 5 );
 		}
 
 		if ( $this->settingsService->get_setting( 'file_optimisation', 'combineCSS' ) ) {
-			add_action( 'wp_print_styles', [ $this->optimizationService, 'combine_css' ], PHP_INT_MAX - 10 );
+			add_action( 'wp_print_styles', array( $this->optimizationService, 'combine_css' ), PHP_INT_MAX - 10 );
 		}
 	}
 
@@ -69,7 +69,7 @@ class Frontend {
 			wp_enqueue_script(
 				'wppo-lazyload',
 				WPPO_PLUGIN_URL . 'assets/js/lazyload.js',
-				[],
+				array(),
 				WPPO_VERSION,
 				true
 			);
@@ -82,7 +82,7 @@ class Frontend {
 		}
 
 		$settings   = $this->settingsService->get_setting( 'preload_settings', '' );
-		$link_types = [
+		$link_types = array(
 			'preconnect'
 			=> 'preconnectOrigins',
 			'dns-prefetch'
@@ -91,7 +91,7 @@ class Frontend {
 			=> 'preloadFontsUrls',
 			'preload-css'
 			=> 'preloadCSSUrls',
-		];
+		);
 
 		foreach ( $link_types as $rel => $setting_key ) {
 			if ( ! empty( $settings[ $setting_key ] ) ) {
@@ -134,8 +134,8 @@ class Frontend {
 			return;
 		}
 
-		$styles_to_remove  = [ 'woocommerce-layout', 'woocommerce-smallscreen', 'woocommerce-general' ];
-		$scripts_to_remove = [ 'wc-cart-fragments', 'woocommerce', 'wc-add-to-cart' ];
+		$styles_to_remove  = array( 'woocommerce-layout', 'woocommerce-smallscreen', 'woocommerce-general' );
+		$scripts_to_remove = array( 'wc-cart-fragments', 'woocommerce', 'wc-add-to-cart' );
 
 		foreach ( $styles_to_remove as $handle ) {
 			wp_dequeue_style( $handle );

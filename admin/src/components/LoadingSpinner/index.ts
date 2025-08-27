@@ -1,7 +1,7 @@
 /**
  * Loading Spinner Component Export
  *
- * @package PerformanceOptimisation
+ * @package
  * @since 1.1.0
  */
 

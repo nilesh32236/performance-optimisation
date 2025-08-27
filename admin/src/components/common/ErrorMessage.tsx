@@ -1,3 +1,6 @@
+/**
+ * External dependencies
+ */
 import React from 'react';
 
 interface ErrorMessageProps {
@@ -7,26 +10,26 @@ interface ErrorMessageProps {
 	className?: string;
 }
 
-function ErrorMessage({ 
-	message, 
-	onRetry, 
+function ErrorMessage( {
+	message,
+	onRetry,
 	retryLabel = 'Try Again',
-	className = '' 
-}: ErrorMessageProps) {
+	className = '',
+}: ErrorMessageProps ) {
 	return (
-		<div className={`wppo-error-message ${className}`} role="alert">
+		<div className={ `wppo-error-message ${ className }` } role="alert">
 			<div className="wppo-error-content">
 				<span className="dashicons dashicons-warning" aria-hidden="true" />
-				<span className="wppo-error-text">{message}</span>
-				{onRetry && (
-					<button 
+				<span className="wppo-error-text">{ message }</span>
+				{ onRetry && (
+					<button
 						type="button"
 						className="wppo-button wppo-button--secondary wppo-button--small"
-						onClick={onRetry}
+						onClick={ onRetry }
 					>
-						{retryLabel}
+						{ retryLabel }
 					</button>
-				)}
+				) }
 			</div>
 		</div>
 	);

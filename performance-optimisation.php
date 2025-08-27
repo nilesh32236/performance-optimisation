@@ -111,7 +111,8 @@ add_action( 'plugins_loaded', 'wppo_initialize_plugin' );
  */
 function wppo_activate_plugin(): void {
 	require_once WPPO_PLUGIN_PATH . 'includes/Core/Bootstrap/Plugin.php';
-	Plugin::activate_plugin();
+	$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
+	$plugin->activate();
 }
 register_activation_hook( WPPO_PLUGIN_FILE, 'wppo_activate_plugin' );
 
@@ -125,7 +126,8 @@ register_activation_hook( WPPO_PLUGIN_FILE, 'wppo_activate_plugin' );
  */
 function wppo_deactivate_plugin(): void {
 	require_once WPPO_PLUGIN_PATH . 'includes/Core/Bootstrap/Plugin.php';
-	Plugin::deactivate_plugin();
+	$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
+	$plugin->deactivate();
 }
 register_deactivation_hook( WPPO_PLUGIN_FILE, 'wppo_deactivate_plugin' );
 

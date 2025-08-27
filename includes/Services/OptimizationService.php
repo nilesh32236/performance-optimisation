@@ -35,15 +35,24 @@ class OptimizationService implements OptimizationServiceInterface {
 		$this->cssOptimizer  = $cssOptimizer;
 		$this->jsOptimizer   = $jsOptimizer;
 		$this->htmlOptimizer = $htmlOptimizer;
-		$this->stats         = [
-			'css'  => [ 'files' => 0, 'size_saved' => 0 ],
-			'js'   => [ 'files' => 0, 'size_saved' => 0 ],
-			'html' => [ 'files' => 0, 'size_saved' => 0 ],
-		];
+		$this->stats         = array(
+			'css'  => array(
+				'files'      => 0,
+				'size_saved' => 0,
+			),
+			'js'   => array(
+				'files'      => 0,
+				'size_saved' => 0,
+			),
+			'html' => array(
+				'files'      => 0,
+				'size_saved' => 0,
+			),
+		);
 	}
 
 	public function optimizeAssets( array $assets ): array {
-		$optimized_assets = [];
+		$optimized_assets = array();
 		foreach ( $assets as $asset ) {
 			if ( ! $this->shouldOptimize( $asset['type'], $asset['url'] ) ) {
 				$optimized_assets[] = $asset;
@@ -56,19 +65,19 @@ class OptimizationService implements OptimizationServiceInterface {
 				continue;
 			}
 
-			$original_size = strlen( $content );
-			$optimizer     = $this->getOptimizer( $asset['type'] );
-			$optimized_content = $optimizer->optimize( $content, [ 'base_path' => $asset['path'] ] );
-			$optimized_size = strlen( $optimized_content );
+			$original_size     = strlen( $content );
+			$optimizer         = $this->getOptimizer( $asset['type'] );
+			$optimized_content = $optimizer->optimize( $content, array( 'base_path' => $asset['path'] ) );
+			$optimized_size    = strlen( $optimized_content );
 
-			$this->stats[ $asset['type'] ]['files']++;
+			++$this->stats[ $asset['type'] ]['files'];
 			$this->stats[ $asset['type'] ]['size_saved'] += ( $original_size - $optimized_size );
 
-			$optimized_assets[] = [
+			$optimized_assets[] = array(
 				'type'    => $asset['type'],
 				'url'     => $this->storeOptimizedAsset( $asset['url'], $optimized_content ),
 				'content' => $optimized_content,
-			];
+			);
 		}
 		return $optimized_assets;
 	}
@@ -96,8 +105,8 @@ class OptimizationService implements OptimizationServiceInterface {
 	}
 
 	private function storeOptimizedAsset( string $original_url, string $content ): string {
-		$filename = md5( $original_url ) . '.' . pathinfo( $original_url, PATHINFO_EXTENSION );
-		$type     = pathinfo( $original_url, PATHINFO_EXTENSION );
+		$filename  = md5( $original_url ) . '.' . pathinfo( $original_url, PATHINFO_EXTENSION );
+		$type      = pathinfo( $original_url, PATHINFO_EXTENSION );
 		$file_path = $this->get_cache_file_path_for_combined( $filename, $type );
 		$this->save_cache_files( $content, $file_path );
 		return $this->get_cache_file_url_for_combined( $filename, $type );
@@ -120,7 +129,7 @@ class OptimizationService implements OptimizationServiceInterface {
 		if ( function_exists( 'gzencode' ) ) {
 			$gzip_output = gzencode( $buffer, 9 );
 			if ( false !== $gzip_output ) {
-				FileSystemUtil::writeFile( $file_path . ".gz", $gzip_output );
+				FileSystemUtil::writeFile( $file_path . '.gz', $gzip_output );
 			}
 		}
 	}

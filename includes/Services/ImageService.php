@@ -24,93 +24,93 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class ImageService implements ImageServiceInterface {
 
-	private array $options;
+private array $options;
 
-	public function __construct( ImageProcessor $imageProcessor, ConversionQueue $conversionQueue, array $settings ) {
-		$this->imageProcessor  = $imageProcessor;
-		$this->conversionQueue = $conversionQueue;
-		$this->settings        = $settings;
-	}
-
-	/**
-	 * {@inheritdoc}
-	 */
-	public function convert_image( string $source_image_path, string $target_format = 'webp' ): bool {
-		$target_image_path = $this->get_img_path( $source_image_path, $target_format );
-		$quality           = $this->settings['quality'] ?? 82;
-
-		if ( FileSystemUtil::fileExists( $target_image_path ) ) {
-			$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
-			return true;
-		}
-
-		$success = $this->imageProcessor->convert( $source_image_path, $target_image_path, $target_format, $quality );
-
-		if ( $success ) {
-			$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
-		} else {
-			$this->conversionQueue->update_status( $source_image_path, $target_format, 'failed' );
-		}
-
-		return $success;
-	}
+public function __construct( ImageProcessor $imageProcessor, ConversionQueue $conversionQueue, array $settings ) {
+	$this->imageProcessor  = $imageProcessor;
+	$this->conversionQueue = $conversionQueue;
+	$this->settings        = $settings;
+}
 
 	/**
 	 * {@inheritdoc}
 	 */
-	public function process_uploaded_image( int $attachment_id ): void {
-		$file_path = get_attached_file( $attachment_id );
-		if ( ! $file_path ) {
-			return;
-		}
+public function convert_image( string $source_image_path, string $target_format = 'webp' ): bool {
+	$target_image_path = $this->get_img_path( $source_image_path, $target_format );
+	$quality           = $this->settings['quality'] ?? 82;
 
-		$formats = $this->get_target_formats();
-		foreach ( $formats as $format ) {
-			$this->conversionQueue->add( $file_path, $format );
-		}
-
-		$this->conversionQueue->save();
+	if ( FileSystemUtil::fileExists( $target_image_path ) ) {
+		$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
+		return true;
 	}
+
+	$success = $this->imageProcessor->convert( $source_image_path, $target_image_path, $target_format, $quality );
+
+	if ( $success ) {
+		$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
+	} else {
+		$this->conversionQueue->update_status( $source_image_path, $target_format, 'failed' );
+	}
+
+	return $success;
+}
 
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get_conversion_stats(): array {
-		return $this->conversionQueue->get_stats();
+public function process_uploaded_image( int $attachment_id ): void {
+	$file_path = get_attached_file( $attachment_id );
+	if ( ! $file_path ) {
+		return;
 	}
+
+	$formats = $this->get_target_formats();
+	foreach ( $formats as $format ) {
+		$this->conversionQueue->add( $file_path, $format );
+	}
+
+	$this->conversionQueue->save();
+}
 
 	/**
 	 * {@inheritdoc}
 	 */
-	public function enable_lazy_loading( string $content ): string {
-		// A simple lazy loading implementation. More advanced features can be added later.
-		$content = preg_replace_callback(
-			'/<img([^>]+)src=["\']([^"\\]+)["\\])([^>]*)>/i',
-			function ( $matches ) {
-				if ( strpos( $matches[1] . $matches[3], 'data-src' ) !== false || strpos( $matches[1] . $matches[3], 'data-lazy-src' ) !== false ) {
-					return $matches[0];
-				}
-				$new_attributes = ' src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="' . esc_attr( $matches[2] ) . '"';
-				return '<img' . $matches[1] . $new_attributes . $matches[3] . ' class="lazyload">';
-			},
-			$content
-		);
+public function get_conversion_stats(): array {
+	return $this->conversionQueue->get_stats();
+}
 
-		return $content;
+	/**
+	 * {@inheritdoc}
+	 */
+public function enable_lazy_loading( string $content ): string {
+	// A simple lazy loading implementation. More advanced features can be added later.
+	$content = preg_replace_callback(
+		'/<img([^>]+)src=["\']([^"\\]+)["\\])([^>]*)>/i',
+		function ( $matches ) {
+			if ( strpos( $matches[1] . $matches[3], 'data-src' ) !== false || strpos( $matches[1] . $matches[3], 'data-lazy-src' ) !== false ) {
+				return $matches[0];
+			}
+			$new_attributes = ' src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="' . esc_attr( $matches[2] ) . '"';
+			return '<img' . $matches[1] . $new_attributes . $matches[3] . ' class="lazyload">';
+		},
+		$content
+	);
+
+	return $content;
+}
+
+private function get_target_formats(): array {
+	$formats = array();
+	if ( ! empty( $this->settings['webp_conversion'] ) ) {
+		$formats[] = 'webp';
 	}
-
-	private function get_target_formats(): array {
-		$formats = [];
-		if ( ! empty( $this->settings['webp_conversion'] ) ) {
-			$formats[] = 'webp';
-		}
-		if ( ! empty( $this->settings['avif_conversion'] ) ) {
-			$formats[] = 'avif';
-		}
-		return $formats;
+	if ( ! empty( $this->settings['avif_conversion'] ) ) {
+		$formats[] = 'avif';
 	}
+	return $formats;
+}
 
-	private function get_img_path( string $source_image_local_path, string $target_format = 'webp' ): string {
+private function get_img_path( string $source_image_local_path, string $target_format = 'webp' ): string {
 		$normalized_source_path = wp_normalize_path( $source_image_local_path );
 		$wp_content_dir         = wp_normalize_path( WP_CONTENT_DIR );
 
@@ -121,13 +121,13 @@ class ImageService implements ImageServiceInterface {
 			$relative_path_from_content = ltrim( str_replace( $wp_content_dir, '', $normalized_source_path ), '/\' );
 			$original_dirname_relative  = dirname( $relative_path_from_content );
 
-			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . '/wppo/' . $original_dirname_relative );
+			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . ' / wppo / ' . $original_dirname_relative );
 		} else {
 			$abspath                    = wp_normalize_path( ABSPATH );
-			$relative_path_from_abspath = ltrim( str_replace( $abspath, '', $normalized_source_path ), '/\' );
+			$relative_path_from_abspath = ltrim( str_replace( $abspath, '', $normalized_source_path ), ' / \' );
 			$original_dirname_relative  = dirname( $relative_path_from_abspath );
 
-			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . '/wppo/' . $original_dirname_relative );
+			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . ' / wppo / ' . $original_dirname_relative );
 		}
 
 		FileSystemUtil::createDirectory( $new_image_dir_absolute );
@@ -173,17 +173,17 @@ class ImageService implements ImageServiceInterface {
 
 		if ( str_starts_with( $image_url_config, 'mobile:' ) ) {
 			$actual_image_url = trim( str_replace( 'mobile:', '', $image_url_config ) );
-			$media_query      = '(max-width: 768px)';
+			$media_query      = '( max - width: 768px )';
 		} elseif ( str_starts_with( $image_url_config, 'desktop:' ) ) {
 			$actual_image_url = trim( str_replace( 'desktop:', '', $image_url_config ) );
-			$media_query      = '(min-width: 769px)';
+			$media_query      = '( min - width: 769px )';
 		}
 
-		if ( ! preg_match( '/^https?:\]\/\/i', $actual_image_url ) ) {
-			$actual_image_url = content_url( ltrim( $actual_image_url, '/' ) );
+		if ( ! preg_match( ' / ^ https ?: \]\ / \ / i', $actual_image_url ) ) {
+			$actual_image_url = content_url( ltrim( $actual_image_url, ' / ' ) );
 		}
 
-		echo '<link rel="preload" href="' . esc_url( $actual_image_url ) . '" as="image" media="' . esc_attr( $media_query ) . '">';
+		echo ' < link rel               = 'preload' href = "' . esc_url( $actual_image_url ) . '" as = 'image' media = "' . esc_attr( $media_query ) . '" > ';
 	}
 
 	private function preload_featured_image( int $thumbnail_id, array $settings ): void {
@@ -233,9 +233,9 @@ class ImageService implements ImageServiceInterface {
 
 	private function parse_srcset( string $srcset ): array {
 		$parsed_sources = [];
-		$sources        = explode( ',', $srcset );
+		$sources        = explode( ', ', $srcset );
 		foreach ( $sources as $source ) {
-			$parts = preg_split( '/\s+/', trim( $source ) );
+			$parts = preg_split( ' / \s + / ', trim( $source ) );
 			if ( count( $parts ) >= 2 && str_ends_with( $parts[1], 'w' ) ) {
 				$parsed_sources[] = [
 					'url'   => $parts[0],

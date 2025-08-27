@@ -1,4 +1,10 @@
+/**
+ * External dependencies
+ */
 import React from 'react';
+/**
+ * Internal dependencies
+ */
 import { useWizard } from '../WizardContext';
 
 interface WelcomeStepProps {
@@ -6,13 +12,13 @@ interface WelcomeStepProps {
 	wizardState: any;
 }
 
-function WelcomeStep({ stepConfig }: WelcomeStepProps) {
+function WelcomeStep( { stepConfig }: WelcomeStepProps ) {
 	const { updateData } = useWizard();
 
-	React.useEffect(() => {
+	React.useEffect( () => {
 		// Mark that user has seen the welcome step
-		updateData('welcomeViewed', true);
-	}, [updateData]);
+		updateData( 'welcomeViewed', true );
+	}, [ updateData ] );
 
 	return (
 		<div className="wppo-wizard-step wppo-welcome-step">
@@ -20,14 +26,15 @@ function WelcomeStep({ stepConfig }: WelcomeStepProps) {
 				<div className="wppo-welcome-icon">
 					<span className="dashicons dashicons-performance" aria-hidden="true" />
 				</div>
-				
+
 				<h2>Welcome to Performance Optimisation</h2>
-				
+
 				<p className="wppo-welcome-description">
-					This setup wizard will help you configure optimal performance settings for your website. 
-					The process takes just a few minutes and will significantly improve your site's speed.
+					This setup wizard will help you configure optimal performance settings for your
+					website. The process takes just a few minutes and will significantly improve
+					your site's speed.
 				</p>
-				
+
 				<div className="wppo-welcome-features">
 					<h3>What you'll get:</h3>
 					<ul>
@@ -49,14 +56,14 @@ function WelcomeStep({ stepConfig }: WelcomeStepProps) {
 						</li>
 					</ul>
 				</div>
-				
+
 				<div className="wppo-welcome-note">
 					<div className="wppo-note-icon">
 						<span className="dashicons dashicons-info" aria-hidden="true" />
 					</div>
 					<div className="wppo-note-content">
-						<strong>Don't worry!</strong> All settings can be changed later, and we'll only enable 
-						features that are safe for your website.
+						<strong>Don't worry!</strong> All settings can be changed later, and we'll
+						only enable features that are safe for your website.
 					</div>
 				</div>
 			</div>

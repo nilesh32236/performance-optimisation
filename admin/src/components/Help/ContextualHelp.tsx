@@ -1,4 +1,10 @@
+/**
+ * External dependencies
+ */
 import React, { useState, useEffect } from 'react';
+/**
+ * Internal dependencies
+ */
 import HelpTooltip from './HelpTooltip';
 import HelpPanel from './HelpPanel';
 import OnboardingTour from './OnboardingTour';
@@ -9,15 +15,15 @@ interface ContextualHelpProps {
 	onOnboardingComplete?: () => void;
 }
 
-const ContextualHelp: React.FC<ContextualHelpProps> = ({
+const ContextualHelp: React.FC<ContextualHelpProps> = ( {
 	page,
 	showOnboarding = false,
-	onOnboardingComplete
-}) => {
-	const [showTour, setShowTour] = useState(showOnboarding);
+	onOnboardingComplete,
+} ) => {
+	const [ showTour, setShowTour ] = useState( showOnboarding );
 
 	// Help content for different pages
-	const getHelpContent = (pageName: string) => {
+	const getHelpContent = ( pageName: string ) => {
 		const helpContent: Record<string, any> = {
 			dashboard: {
 				sections: [
@@ -35,8 +41,12 @@ const ContextualHelp: React.FC<ContextualHelpProps> = ({
 						`,
 						links: [
 							{ text: 'Performance Best Practices', url: '#', external: false },
-							{ text: 'Google PageSpeed Insights', url: 'https://pagespeed.web.dev/', external: true }
-						]
+							{
+								text: 'Google PageSpeed Insights',
+								url: 'https://pagespeed.web.dev/',
+								external: true,
+							},
+						],
 					},
 					{
 						id: 'optimization-status',
@@ -49,32 +59,35 @@ const ContextualHelp: React.FC<ContextualHelpProps> = ({
 								<li><strong>Red X marks:</strong> Disabled or problematic features</li>
 							</ul>
 							<p>Click on any feature to configure its settings.</p>
-						`
-					}
+						`,
+					},
 				],
 				tour: [
 					{
 						id: 'welcome',
 						target: '.wppo-analytics-dashboard__header',
 						title: 'Welcome to Performance Optimisation!',
-						content: 'This is your performance dashboard where you can monitor your site\'s speed and optimization status.',
-						position: 'bottom'
+						content:
+							"This is your performance dashboard where you can monitor your site's speed and optimization status.",
+						position: 'bottom',
 					},
 					{
 						id: 'metrics',
 						target: '.wppo-metrics-overview',
 						title: 'Performance Metrics',
-						content: 'These cards show your site\'s key performance indicators. Higher scores and lower load times are better.',
-						position: 'bottom'
+						content:
+							"These cards show your site's key performance indicators. Higher scores and lower load times are better.",
+						position: 'bottom',
 					},
 					{
 						id: 'charts',
 						target: '.wppo-analytics-dashboard__charts-grid',
 						title: 'Performance Trends',
-						content: 'These charts show how your performance changes over time. Look for improvements after enabling optimizations.',
-						position: 'top'
-					}
-				]
+						content:
+							'These charts show how your performance changes over time. Look for improvements after enabling optimizations.',
+						position: 'top',
+					},
+				],
 			},
 			settings: {
 				sections: [
@@ -89,7 +102,7 @@ const ContextualHelp: React.FC<ContextualHelpProps> = ({
 								<li><strong>Browser Caching:</strong> Tells browsers to cache static files</li>
 							</ul>
 							<p><strong>Tip:</strong> Start with page caching enabled and default settings.</p>
-						`
+						`,
 					},
 					{
 						id: 'file-optimization',
@@ -102,9 +115,9 @@ const ContextualHelp: React.FC<ContextualHelpProps> = ({
 								<li><strong>Deferring:</strong> Delays JavaScript loading (test thoroughly)</li>
 							</ul>
 							<p><strong>Warning:</strong> Test your site after enabling these features.</p>
-						`
-					}
-				]
+						`,
+					},
+				],
 			},
 			wizard: {
 				sections: [
@@ -119,86 +132,87 @@ const ContextualHelp: React.FC<ContextualHelpProps> = ({
 								<li><strong>Feature Selection:</strong> Enable additional features like image optimization</li>
 								<li><strong>Completion:</strong> Apply settings and start monitoring</li>
 							</ol>
-						`
-					}
+						`,
+					},
 				],
 				tour: [
 					{
 						id: 'wizard-start',
 						target: '.wppo-wizard-container',
 						title: 'Setup Wizard',
-						content: 'This wizard will help you configure the best settings for your site. It only takes a few minutes!',
-						position: 'bottom'
-					}
-				]
-			}
+						content:
+							'This wizard will help you configure the best settings for your site. It only takes a few minutes!',
+						position: 'bottom',
+					},
+				],
+			},
 		};
 
-		return helpContent[pageName] || { sections: [], tour: [] };
+		return helpContent[ pageName ] || { sections: [], tour: [] };
 	};
 
-	const helpContent = getHelpContent(page);
+	const helpContent = getHelpContent( page );
 
 	const handleTourComplete = () => {
-		setShowTour(false);
-		if (onOnboardingComplete) {
+		setShowTour( false );
+		if ( onOnboardingComplete ) {
 			onOnboardingComplete();
 		}
-		
+
 		// Save tour completion status
-		localStorage.setItem(`wppo_tour_completed_${page}`, 'true');
+		localStorage.setItem( `wppo_tour_completed_${ page }`, 'true' );
 	};
 
 	const handleTourSkip = () => {
-		setShowTour(false);
-		localStorage.setItem(`wppo_tour_skipped_${page}`, 'true');
+		setShowTour( false );
+		localStorage.setItem( `wppo_tour_skipped_${ page }`, 'true' );
 	};
 
 	// Check if tour was already completed
-	useEffect(() => {
-		const tourCompleted = localStorage.getItem(`wppo_tour_completed_${page}`);
-		const tourSkipped = localStorage.getItem(`wppo_tour_skipped_${page}`);
-		
-		if (tourCompleted || tourSkipped) {
-			setShowTour(false);
+	useEffect( () => {
+		const tourCompleted = localStorage.getItem( `wppo_tour_completed_${ page }` );
+		const tourSkipped = localStorage.getItem( `wppo_tour_skipped_${ page }` );
+
+		if ( tourCompleted || tourSkipped ) {
+			setShowTour( false );
 		}
-	}, [page]);
+	}, [ page ] );
 
 	return (
 		<div className="wppo-contextual-help">
-			{/* Help Panel */}
-			{helpContent.sections.length > 0 && (
+			{ /* Help Panel */ }
+			{ helpContent.sections.length > 0 && (
 				<HelpPanel
-					sections={helpContent.sections}
-					title={`${page.charAt(0).toUpperCase() + page.slice(1)} Help`}
-					collapsible={true}
-					defaultExpanded={false}
+					sections={ helpContent.sections }
+					title={ `${ page.charAt( 0 ).toUpperCase() + page.slice( 1 ) } Help` }
+					collapsible={ true }
+					defaultExpanded={ false }
 				/>
-			)}
+			) }
 
-			{/* Onboarding Tour */}
-			{helpContent.tour && helpContent.tour.length > 0 && (
+			{ /* Onboarding Tour */ }
+			{ helpContent.tour && helpContent.tour.length > 0 && (
 				<OnboardingTour
-					steps={helpContent.tour}
-					isActive={showTour}
-					onComplete={handleTourComplete}
-					onSkip={handleTourSkip}
+					steps={ helpContent.tour }
+					isActive={ showTour }
+					onComplete={ handleTourComplete }
+					onSkip={ handleTourSkip }
 				/>
-			)}
+			) }
 
-			{/* Restart Tour Button */}
-			{helpContent.tour && helpContent.tour.length > 0 && !showTour && (
+			{ /* Restart Tour Button */ }
+			{ helpContent.tour && helpContent.tour.length > 0 && ! showTour && (
 				<div className="wppo-help-actions">
 					<button
 						className="wppo-help-restart-tour"
-						onClick={() => setShowTour(true)}
+						onClick={ () => setShowTour( true ) }
 						title="Restart onboarding tour"
 					>
 						<span className="dashicons dashicons-controls-play"></span>
 						Restart Tour
 					</button>
 				</div>
-			)}
+			) }
 		</div>
 	);
 };
@@ -208,30 +222,18 @@ export const InlineHelp: React.FC<{
 	content: string;
 	title?: string;
 	position?: 'top' | 'bottom' | 'left' | 'right';
-}> = ({ content, title, position = 'top' }) => {
-	return (
-		<HelpTooltip
-			content={content}
-			title={title}
-			position={position}
-			size="medium"
-		/>
-	);
+}> = ( { content, title, position = 'top' } ) => {
+	return <HelpTooltip content={ content } title={ title } position={ position } size="medium" />;
 };
 
 // Helper component for field help
 export const FieldHelp: React.FC<{
 	content: string;
 	title?: string;
-}> = ({ content, title }) => {
+}> = ( { content, title } ) => {
 	return (
 		<div className="wppo-field-help">
-			<HelpTooltip
-				content={content}
-				title={title}
-				position="right"
-				size="small"
-			>
+			<HelpTooltip content={ content } title={ title } position="right" size="small">
 				<span className="wppo-field-help-icon">
 					<span className="dashicons dashicons-editor-help"></span>
 				</span>

@@ -1,3 +1,6 @@
+/**
+ * External dependencies
+ */
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
 
 // Types
@@ -5,7 +8,7 @@ export interface WizardStep {
 	id: string;
 	title: string;
 	component: React.ComponentType<any>;
-	isValid?: (state: WizardState) => boolean;
+	isValid?: ( state: WizardState ) => boolean;
 	isRequired?: boolean;
 }
 
@@ -22,13 +25,13 @@ export interface WizardState {
 export interface WizardContextType {
 	state: WizardState;
 	dispatch: React.Dispatch<WizardAction>;
-	goToStep: (step: number) => void;
+	goToStep: ( step: number ) => void;
 	nextStep: () => void;
 	previousStep: () => void;
-	updateData: (key: string, value: any) => void;
+	updateData: ( key: string, value: any ) => void;
 	validateCurrentStep: () => boolean;
-	setError: (error: string | null) => void;
-	setLoading: (loading: boolean) => void;
+	setError: ( error: string | null ) => void;
+	setLoading: ( loading: boolean ) => void;
 }
 
 // Actions
@@ -50,17 +53,17 @@ const initialState: WizardState = {
 	error: null,
 	data: {},
 	completedSteps: new Set(),
-	visitedSteps: new Set([1]),
+	visitedSteps: new Set( [ 1 ] ),
 };
 
 // Reducer
-function wizardReducer(state: WizardState, action: WizardAction): WizardState {
-	switch (action.type) {
+function wizardReducer( state: WizardState, action: WizardAction ): WizardState {
+	switch ( action.type ) {
 		case 'SET_CURRENT_STEP':
 			return {
 				...state,
 				currentStep: action.payload,
-				visitedSteps: new Set([...state.visitedSteps, action.payload]),
+				visitedSteps: new Set( [ ...state.visitedSteps, action.payload ] ),
 			};
 		case 'SET_TOTAL_STEPS':
 			return {
@@ -82,18 +85,18 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
 				...state,
 				data: {
 					...state.data,
-					[action.payload.key]: action.payload.value,
+					[ action.payload.key ]: action.payload.value,
 				},
 			};
 		case 'MARK_STEP_COMPLETED':
 			return {
 				...state,
-				completedSteps: new Set([...state.completedSteps, action.payload]),
+				completedSteps: new Set( [ ...state.completedSteps, action.payload ] ),
 			};
 		case 'MARK_STEP_VISITED':
 			return {
 				...state,
-				visitedSteps: new Set([...state.visitedSteps, action.payload]),
+				visitedSteps: new Set( [ ...state.visitedSteps, action.payload ] ),
 			};
 		case 'RESET_WIZARD':
 			return initialState;
@@ -103,7 +106,7 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
 }
 
 // Context
-const WizardContext = createContext<WizardContextType | undefined>(undefined);
+const WizardContext = createContext<WizardContextType | undefined>( undefined );
 
 // Provider
 interface WizardProviderProps {
@@ -111,49 +114,49 @@ interface WizardProviderProps {
 	steps: WizardStep[];
 }
 
-export function WizardProvider({ children, steps }: WizardProviderProps) {
-	const [state, dispatch] = useReducer(wizardReducer, {
+export function WizardProvider( { children, steps }: WizardProviderProps ) {
+	const [ state, dispatch ] = useReducer( wizardReducer, {
 		...initialState,
 		totalSteps: steps.length,
-	});
+	} );
 
-	const goToStep = (step: number) => {
-		if (step >= 1 && step <= state.totalSteps) {
-			dispatch({ type: 'SET_CURRENT_STEP', payload: step });
+	const goToStep = ( step: number ) => {
+		if ( step >= 1 && step <= state.totalSteps ) {
+			dispatch( { type: 'SET_CURRENT_STEP', payload: step } );
 		}
 	};
 
 	const nextStep = () => {
-		if (validateCurrentStep() && state.currentStep < state.totalSteps) {
-			dispatch({ type: 'MARK_STEP_COMPLETED', payload: state.currentStep });
-			dispatch({ type: 'SET_CURRENT_STEP', payload: state.currentStep + 1 });
+		if ( validateCurrentStep() && state.currentStep < state.totalSteps ) {
+			dispatch( { type: 'MARK_STEP_COMPLETED', payload: state.currentStep } );
+			dispatch( { type: 'SET_CURRENT_STEP', payload: state.currentStep + 1 } );
 		}
 	};
 
 	const previousStep = () => {
-		if (state.currentStep > 1) {
-			dispatch({ type: 'SET_CURRENT_STEP', payload: state.currentStep - 1 });
+		if ( state.currentStep > 1 ) {
+			dispatch( { type: 'SET_CURRENT_STEP', payload: state.currentStep - 1 } );
 		}
 	};
 
-	const updateData = (key: string, value: any) => {
-		dispatch({ type: 'UPDATE_DATA', payload: { key, value } });
+	const updateData = ( key: string, value: any ) => {
+		dispatch( { type: 'UPDATE_DATA', payload: { key, value } } );
 	};
 
 	const validateCurrentStep = (): boolean => {
-		const currentStepConfig = steps[state.currentStep - 1];
-		if (currentStepConfig?.isValid) {
-			return currentStepConfig.isValid(state);
+		const currentStepConfig = steps[ state.currentStep - 1 ];
+		if ( currentStepConfig?.isValid ) {
+			return currentStepConfig.isValid( state );
 		}
 		return true;
 	};
 
-	const setError = (error: string | null) => {
-		dispatch({ type: 'SET_ERROR', payload: error });
+	const setError = ( error: string | null ) => {
+		dispatch( { type: 'SET_ERROR', payload: error } );
 	};
 
-	const setLoading = (loading: boolean) => {
-		dispatch({ type: 'SET_LOADING', payload: loading });
+	const setLoading = ( loading: boolean ) => {
+		dispatch( { type: 'SET_LOADING', payload: loading } );
 	};
 
 	const contextValue: WizardContextType = {
@@ -168,18 +171,14 @@ export function WizardProvider({ children, steps }: WizardProviderProps) {
 		setLoading,
 	};
 
-	return (
-		<WizardContext.Provider value={contextValue}>
-			{children}
-		</WizardContext.Provider>
-	);
+	return <WizardContext.Provider value={ contextValue }>{ children }</WizardContext.Provider>;
 }
 
 // Hook
 export function useWizard(): WizardContextType {
-	const context = useContext(WizardContext);
-	if (context === undefined) {
-		throw new Error('useWizard must be used within a WizardProvider');
+	const context = useContext( WizardContext );
+	if ( context === undefined ) {
+		throw new Error( 'useWizard must be used within a WizardProvider' );
 	}
 	return context;
 }

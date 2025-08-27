@@ -63,7 +63,7 @@ class FileSystemUtil {
 		if ( ! self::fileExists( $path ) ) {
 			return 0;
 		}
-		$size = 0;
+		$size  = 0;
 		$files = new \RecursiveIteratorIterator( new \RecursiveDirectoryIterator( $path ) );
 		foreach ( $files as $file ) {
 			$size += $file->getSize();

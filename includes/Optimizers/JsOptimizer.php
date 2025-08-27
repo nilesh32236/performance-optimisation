@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class JsOptimizer implements OptimizerInterface {
 
-	public function optimize( string $content, array $options = [] ): string {
+	public function optimize( string $content, array $options = array() ): string {
 		try {
 			$minifier = new MatthiasJsMinifier( $content );
 			return $minifier->minify();

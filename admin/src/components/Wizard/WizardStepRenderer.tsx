@@ -1,4 +1,10 @@
+/**
+ * External dependencies
+ */
 import React from 'react';
+/**
+ * Internal dependencies
+ */
 import { useWizard, WizardStep } from './WizardContext';
 import ErrorMessage from '../common/ErrorMessage';
 
@@ -6,13 +12,13 @@ interface WizardStepRendererProps {
 	steps: WizardStep[];
 }
 
-function WizardStepRenderer({ steps }: WizardStepRendererProps) {
+function WizardStepRenderer( { steps }: WizardStepRendererProps ) {
 	const { state } = useWizard();
 	const { currentStep, error } = state;
 
-	const currentStepConfig = steps[currentStep - 1];
+	const currentStepConfig = steps[ currentStep - 1 ];
 
-	if (!currentStepConfig) {
+	if ( ! currentStepConfig ) {
 		return (
 			<div className="wppo-wizard-error" role="alert">
 				<span className="dashicons dashicons-warning" aria-hidden="true" />
@@ -25,16 +31,13 @@ function WizardStepRenderer({ steps }: WizardStepRendererProps) {
 
 	return (
 		<div className="wppo-wizard-step-container">
-			{error && <ErrorMessage message={error} />}
-			
-			<div 
+			{ error && <ErrorMessage message={ error } /> }
+
+			<div
 				className="wppo-wizard-step-content"
-				key={currentStep} // Force re-render when step changes
+				key={ currentStep } // Force re-render when step changes
 			>
-				<StepComponent 
-					stepConfig={currentStepConfig}
-					wizardState={state}
-				/>
+				<StepComponent stepConfig={ currentStepConfig } wizardState={ state } />
 			</div>
 		</div>
 	);

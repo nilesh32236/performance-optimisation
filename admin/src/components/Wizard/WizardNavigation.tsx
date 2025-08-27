@@ -1,21 +1,21 @@
+/**
+ * External dependencies
+ */
 import React from 'react';
+/**
+ * Internal dependencies
+ */
 import { useWizard } from './WizardContext';
 import Button from '../common/Button';
 
 interface WizardNavigationProps {
-	onComplete?: (data: Record<string, any>) => Promise<void>;
+	onComplete?: ( data: Record<string, any> ) => Promise<void>;
 }
 
-function WizardNavigation({ onComplete }: WizardNavigationProps) {
-	const { 
-		state, 
-		nextStep, 
-		previousStep, 
-		validateCurrentStep, 
-		setError, 
-		setLoading 
-	} = useWizard();
-	
+function WizardNavigation( { onComplete }: WizardNavigationProps ) {
+	const { state, nextStep, previousStep, validateCurrentStep, setError, setLoading } =
+		useWizard();
+
 	const { currentStep, totalSteps, isLoading, data } = state;
 
 	const isFirstStep = currentStep === 1;
@@ -23,21 +23,25 @@ function WizardNavigation({ onComplete }: WizardNavigationProps) {
 	const canProceed = validateCurrentStep();
 
 	const handleNext = async () => {
-		if (!canProceed) {
-			setError('Please complete all required fields before continuing.');
+		if ( ! canProceed ) {
+			setError( 'Please complete all required fields before continuing.' );
 			return;
 		}
 
-		setError(null);
+		setError( null );
 
-		if (isLastStep && onComplete) {
+		if ( isLastStep && onComplete ) {
 			try {
-				setLoading(true);
-				await onComplete(data);
-			} catch (error) {
-				setError(error instanceof Error ? error.message : 'An error occurred while completing setup.');
+				setLoading( true );
+				await onComplete( data );
+			} catch ( error ) {
+				setError(
+					error instanceof Error
+						? error.message
+						: 'An error occurred while completing setup.',
+				);
 			} finally {
-				setLoading(false);
+				setLoading( false );
 			}
 		} else {
 			nextStep();
@@ -45,43 +49,43 @@ function WizardNavigation({ onComplete }: WizardNavigationProps) {
 	};
 
 	const handlePrevious = () => {
-		setError(null);
+		setError( null );
 		previousStep();
 	};
 
 	return (
 		<div className="wppo-wizard-navigation">
 			<div className="wppo-nav-buttons">
-				{!isFirstStep && (
+				{ ! isFirstStep && (
 					<Button
 						variant="secondary"
-						onClick={handlePrevious}
-						disabled={isLoading}
+						onClick={ handlePrevious }
+						disabled={ isLoading }
 						icon="arrow-left-alt2"
 						iconPosition="left"
 					>
 						Back
 					</Button>
-				)}
-				
+				) }
+
 				<Button
 					variant="primary"
-					onClick={handleNext}
-					disabled={!canProceed || isLoading}
-					loading={isLoading}
-					icon={isLastStep ? 'yes-alt' : 'arrow-right-alt2'}
+					onClick={ handleNext }
+					disabled={ ! canProceed || isLoading }
+					loading={ isLoading }
+					icon={ isLastStep ? 'yes-alt' : 'arrow-right-alt2' }
 					iconPosition="right"
-					aria-describedby={!canProceed ? 'validation-message' : undefined}
+					aria-describedby={ ! canProceed ? 'validation-message' : undefined }
 				>
-					{isLastStep ? 'Complete Setup' : 'Next'}
+					{ isLastStep ? 'Complete Setup' : 'Next' }
 				</Button>
 			</div>
-			
-			{!canProceed && (
+
+			{ ! canProceed && (
 				<p id="validation-message" className="wppo-validation-message" role="alert">
 					Please complete all required fields before continuing.
 				</p>
-			)}
+			) }
 		</div>
 	);
 }

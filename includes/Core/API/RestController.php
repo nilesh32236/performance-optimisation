@@ -31,21 +31,21 @@ class RestController {
 		register_rest_route(
 			'wppo/v1',
 			'/settings',
-			[
+			array(
 				'methods'             => 'GET',
-				'callback'            => [ $this, 'get_settings' ],
-				'permission_callback' => [ $this, 'permissions_check' ],
-			]
+				'callback'            => array( $this, 'get_settings' ),
+				'permission_callback' => array( $this, 'permissions_check' ),
+			)
 		);
 
 		register_rest_route(
 			'wppo/v1',
 			'/settings',
-			[
+			array(
 				'methods'             => 'POST',
-				'callback'            => [ $this, 'save_settings' ],
-				'permission_callback' => [ $this, 'permissions_check' ],
-			]
+				'callback'            => array( $this, 'save_settings' ),
+				'permission_callback' => array( $this, 'permissions_check' ),
+			)
 		);
 	}
 
@@ -60,6 +60,6 @@ class RestController {
 	public function save_settings( \WP_REST_Request $request ): \WP_REST_Response {
 		$settings = $request->get_json_params();
 		$this->settingsService->update_settings( $settings );
-		return new \WP_REST_Response( [ 'success' => true ], 200 );
+		return new \WP_REST_Response( array( 'success' => true ), 200 );
 	}
 }

@@ -50,7 +50,7 @@ class SettingsService implements SettingsServiceInterface {
 	}
 
 	private function validate_settings( array $settings ): array {
-		$validated = [];
+		$validated = array();
 		foreach ( $settings as $group => $group_settings ) {
 			foreach ( $group_settings as $key => $value ) {
 				$validated[ $group ][ $key ] = ValidationUtil::sanitize_setting( $value, $this->get_setting_type( $group, $key ) );
@@ -60,8 +60,8 @@ class SettingsService implements SettingsServiceInterface {
 	}
 
 	private function get_setting_type( string $group, string $key ): string {
-		$types = [
-			'file_optimisation' => [
+		$types = array(
+			'file_optimisation'  => array(
 				'minifyCss'         => 'bool',
 				'combineCss'        => 'bool',
 				'minifyJs'          => 'bool',
@@ -69,25 +69,25 @@ class SettingsService implements SettingsServiceInterface {
 				'minifyHtml'        => 'bool',
 				'excludeCombineCSS' => 'url_list',
 				'excludeCombineJS'  => 'url_list',
-			],
-			'image_optimisation' => [
+			),
+			'image_optimisation' => array(
 				'webp_conversion' => 'bool',
 				'avif_conversion' => 'bool',
 				'quality'         => 'int',
 				'lazy_loading'    => 'bool',
-			],
-			'preload_settings' => [
+			),
+			'preload_settings'   => array(
 				'enablePreloadCache'  => 'bool',
 				'excludePreloadCache' => 'url_list',
-			],
-		];
+			),
+		);
 
 		return $types[ $group ][ $key ] ?? 'string';
 	}
 
 	private function get_default_settings(): array {
-		return [
-			'file_optimisation' => [
+		return array(
+			'file_optimisation'  => array(
 				'minifyCss'         => false,
 				'combineCss'        => false,
 				'minifyJs'          => false,
@@ -95,17 +95,17 @@ class SettingsService implements SettingsServiceInterface {
 				'minifyHtml'        => false,
 				'excludeCombineCSS' => '',
 				'excludeCombineJS'  => '',
-			],
-			'image_optimisation' => [
+			),
+			'image_optimisation' => array(
 				'webp_conversion' => false,
 				'avif_conversion' => false,
 				'quality'         => 82,
 				'lazy_loading'    => false,
-			],
-			'preload_settings' => [
+			),
+			'preload_settings'   => array(
 				'enablePreloadCache'  => false,
 				'excludePreloadCache' => '',
-			],
-		];
+			),
+		);
 	}
 }

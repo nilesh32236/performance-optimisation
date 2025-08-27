@@ -25,6 +25,7 @@
 
 	<!-- Rules: Check PHP version compatibility -->
 	<config name="testVersion" value="7.4-"/>
+	<config name="minimum_supported_wp_version" value="6.2"/>
 
 	<!-- Rules: WordPress Coding Standards -->
 	<rule ref="WordPress">
@@ -41,7 +42,9 @@
 	<!-- Verify that the text_domain is set to the desired text-domain -->
 	<rule ref="WordPress.WP.I18n">
 		<properties>
-			<property name="text_domain" type="array" value="performance-optimisation"/>
+			<property name="text_domain" type="array">
+				<element value="performance-optimisation"/>
+			</property>
 		</properties>
 	</rule>
 
@@ -49,13 +52,6 @@
 	<rule ref="WordPress.Files.FileName">
 		<properties>
 			<property name="strict_class_file_names" value="false"/>
-		</properties>
-	</rule>
-
-	<!-- Set the minimum supported WP version -->
-	<rule ref="WordPress.WP.DeprecatedFunctions">
-		<properties>
-			<property name="minimum_supported_version" value="6.2"/>
 		</properties>
 	</rule>
 

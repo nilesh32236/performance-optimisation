@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 class HtmlOptimizer implements OptimizerInterface {
 
-	public function optimize( string $content, array $options = [] ): string {
+	public function optimize( string $content, array $options = array() ): string {
 		try {
 			$htmlMin = new HtmlMin();
 			return $htmlMin->minify( $content );

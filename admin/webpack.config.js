@@ -8,7 +8,9 @@ module.exports = (env, argv) => {
     entry: {
       index: './src/index.tsx',
       dashboard: './src/pages/Dashboard/index.tsx',
-      settings: './src/pages/Settings/index.tsx'
+      settings: './src/pages/Settings/index.tsx',
+      'admin-bar': './src/admin-bar.js',
+      lazyload: './src/lazyload.js',
     },
     output: {
       path: path.resolve(__dirname, '../assets/js'),
