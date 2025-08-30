@@ -174,6 +174,10 @@ class Container implements ContainerInterface {
 			}
 
 			if ( is_string( $concrete ) ) {
+				// Prevent infinite recursion when concrete is same as abstract
+				if ( $concrete === $abstract ) {
+					return $this->buildClass( $concrete );
+				}
 				return $this->build( $concrete );
 			}
 

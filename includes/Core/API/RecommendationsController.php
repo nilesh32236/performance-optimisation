@@ -33,14 +33,13 @@ class RecommendationsController extends BaseController {
 	 * @param \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer $performance_analyzer Performance analyzer instance.
 	 */
 	public function __construct( \PerformanceOptimisation\Core\Analytics\MetricsCollector $metrics_collector, \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer $performance_analyzer ) {
-		parent::__construct();
 		$this->recommendation_engine = new \PerformanceOptimisation\Core\Analytics\RecommendationEngine( $metrics_collector, $performance_analyzer );
 	}
 
 	/**
 	 * Register the routes for this controller.
 	 */
-	public function register_routes() {
+	public function register_routes(): void {
 		// No routes to register for this controller.
 	}
 
@@ -273,11 +272,14 @@ class RecommendationsController extends BaseController {
 	 */
 	private function trigger_image_optimization(): void {
 		try {
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
-			}
-
-			$cron_manager = new \PerformanceOptimise\Inc\Cron();
+			$cache_service = new \PerformanceOptimisation\Services\CacheService();
+			$settings_service = new \PerformanceOptimisation\Services\SettingsService();
+			// Skip image service for now as it requires complex dependencies
+			$cron_manager = new \PerformanceOptimisation\Services\CronService(
+				$cache_service,
+				null, // ImageService placeholder
+				$settings_service
+			);
 			$cron_manager->run_image_conversion_tasks();
 
 		} catch ( \Exception $e ) {

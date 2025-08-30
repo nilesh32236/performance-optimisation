@@ -22,14 +22,15 @@ interface OptimizationServiceInterface {
 	/**
 	 * Combine and minify CSS files.
 	 *
-	 * @return void
+	 * @return string The URL of the combined CSS file.
 	 */
-	public function combine_css(): void;
+	public function combine_css(): string;
 
 	/**
 	 * Generate dynamic static HTML.
 	 *
-	 * @return void
+	 * @param string $url The URL to fetch and save as static HTML.
+	 * @return bool True on success, false on failure.
 	 */
-	public function generate_dynamic_static_html(): void;
+	public function generate_dynamic_static_html( string $url ): bool;
 }

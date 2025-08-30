@@ -285,11 +285,14 @@ class CacheController extends BaseController {
 			$limit = $data['limit'] ?? 10;
 
 			// Load preload functionality.
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
-			}
-
-			$cron_manager = new \PerformanceOptimise\Inc\Cron();
+			$cache_service = new \PerformanceOptimisation\Services\CacheService();
+			$settings_service = new \PerformanceOptimisation\Services\SettingsService();
+			// Skip image service for now as it requires complex dependencies
+			$cron_manager = new \PerformanceOptimisation\Services\CronService(
+				$cache_service,
+				null, // ImageService placeholder
+				$settings_service
+			);
 
 			if ( $urls ) {
 				// Preload specific URLs.
@@ -333,11 +336,14 @@ class CacheController extends BaseController {
 			}
 
 			// Load cache warmup functionality.
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
-			}
-
-			$cron_manager = new \PerformanceOptimise\Inc\Cron();
+			$cache_service = new \PerformanceOptimisation\Services\CacheService();
+			$settings_service = new \PerformanceOptimisation\Services\SettingsService();
+			// Skip image service for now as it requires complex dependencies
+			$cron_manager = new \PerformanceOptimisation\Services\CronService(
+				$cache_service,
+				null, // ImageService placeholder
+				$settings_service
+			);
 			$warmed_pages = $cron_manager->warmup_cache();
 
 			return $this->send_success_response(

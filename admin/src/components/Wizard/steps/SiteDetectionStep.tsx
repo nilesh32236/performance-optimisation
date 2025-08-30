@@ -70,7 +70,7 @@ function SiteDetectionStep( { stepConfig }: SiteDetectionStepProps ) {
 
 		try {
 			// Get site analysis
-			const analysisResponse = await fetch( `${ window.wppoWizardData.apiUrl }site-analysis`, {
+			const analysisResponse = await fetch( `${ window.wppoWizardData.apiUrl }/wizard/analysis`, {
 				headers: {
 					'X-WP-Nonce': window.wppoWizardData.nonce,
 				},

@@ -1,0 +1,39 @@
+{
+  "extends": "@wordpress/tsconfig",
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["DOM", "DOM.Iterable", "ES6"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["admin/src/*"],
+      "@components/*": ["admin/src/components/*"],
+      "@pages/*": ["admin/src/pages/*"],
+      "@utils/*": ["admin/src/utils/*"],
+      "@types/*": ["admin/src/types/*"],
+      "@styles/*": ["admin/src/styles/*"]
+    }
+  },
+  "include": [
+    "admin/src/**/*",
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "vendor",
+    "tests"
+  ]
+}

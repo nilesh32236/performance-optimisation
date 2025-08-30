@@ -22,10 +22,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Admin {
 
 	private SettingsService $settingsService;
+	private Metabox $metabox;
 
-	public function __construct( SettingsService $settingsService ) {
+	public function __construct( SettingsService $settingsService, Metabox $metabox ) {
 		$this->settingsService = $settingsService;
-		new Metabox( $settingsService );
+		$this->metabox         = $metabox;
 	}
 
 	public function setup_hooks(): void {
@@ -140,11 +141,17 @@ class Admin {
 
 	public function enqueue_admin_bar_scripts(): void {
 		if ( is_admin_bar_showing() && current_user_can( 'manage_options' ) ) {
+			$asset_file = WPPO_PLUGIN_PATH . 'build/admin-bar.asset.php';
+			$asset      = file_exists( $asset_file ) ? require $asset_file : array(
+				'dependencies' => array( 'jquery' ),
+				'version'      => WPPO_VERSION,
+			);
+
 			wp_enqueue_script(
 				'wppo-admin-bar-script',
-				WPPO_PLUGIN_URL . 'assets/js/admin-bar.js',
-				array( 'jquery' ),
-				WPPO_VERSION,
+				WPPO_PLUGIN_URL . 'build/admin-bar.js',
+				$asset['dependencies'],
+				$asset['version'],
 				true
 			);
 			wp_localize_script(

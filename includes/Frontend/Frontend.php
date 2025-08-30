@@ -56,7 +56,7 @@ class Frontend {
 		}
 
 		if ( $this->settingsService->get_setting( 'file_optimisation', 'combineCSS' ) ) {
-			add_action( 'wp_print_styles', array( $this->optimizationService, 'combine_css' ), PHP_INT_MAX - 10 );
+			add_action( 'wp_print_styles', array( $this, 'handle_css_combination' ), PHP_INT_MAX - 10 );
 		}
 	}
 
@@ -66,11 +66,17 @@ class Frontend {
 		}
 
 		if ( $this->settingsService->get_setting( 'image_optimisation', 'lazy_loading' ) ) {
+			$asset_file = WPPO_PLUGIN_PATH . 'build/lazyload.asset.php';
+			$asset      = file_exists( $asset_file ) ? require $asset_file : array(
+				'dependencies' => array(),
+				'version'      => WPPO_VERSION,
+			);
+
 			wp_enqueue_script(
 				'wppo-lazyload',
-				WPPO_PLUGIN_URL . 'assets/js/lazyload.js',
-				array(),
-				WPPO_VERSION,
+				WPPO_PLUGIN_URL . 'build/lazyload.js',
+				$asset['dependencies'],
+				$asset['version'],
 				true
 			);
 		}
@@ -127,6 +133,10 @@ class Frontend {
 		}
 
 		return $tag;
+	}
+
+	public function handle_css_combination(): void {
+		$this->optimizationService->combine_css();
 	}
 
 	public function conditionally_remove_woocommerce_assets(): void {

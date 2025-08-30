@@ -212,11 +212,17 @@ class LazyLoading implements LazyLoadingInterface {
 	 * @return void
 	 */
 	public function enqueue_scripts(): void {
+		$asset_file = WPPO_PLUGIN_PATH . 'build/lazyload.asset.php';
+		$asset      = file_exists( $asset_file ) ? require $asset_file : array(
+			'dependencies' => array(),
+			'version'      => WPPO_VERSION,
+		);
+
 		wp_enqueue_script(
 			'wppo-lazy-loading',
-			plugin_dir_url( dirname( dirname( __DIR__ ) ) ) . 'assets/js/lazy-loading.js',
-			array(),
-			'1.1.0',
+			WPPO_PLUGIN_URL . 'build/lazyload.js',
+			$asset['dependencies'],
+			$asset['version'],
 			true
 		);
 

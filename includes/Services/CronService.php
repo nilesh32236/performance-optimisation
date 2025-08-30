@@ -1,16 +1,12 @@
 <?php
 /**
- * Cron Class for scheduling and managing cron jobs in the PerformanceOptimise plugin.
+ * Cron Service for scheduling and managing cron jobs in the PerformanceOptimisation plugin.
  *
- * @package PerformanceOptimise\Inc
- * @since 1.0.0
+ * @package PerformanceOptimisation\Services
+ * @since 2.0.0
  */
 
-namespace PerformanceOptimise\Inc;
-
-use PerformanceOptimisation\Services\CacheService;
-use PerformanceOptimisation\Services\ImageService;
-use PerformanceOptimisation\Services\SettingsService;
+namespace PerformanceOptimisation\Services;
 
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -18,23 +14,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Class Cron
+ * Class CronService
  *
- * @since 1.0.0
+ * @since 2.0.0
  */
-class Cron {
+class CronService {
 
 	const PAGE_CRON_HOOK     = 'wppo_page_cron_hook';
 	const IMG_CRON_HOOK      = 'wppo_img_conversation';
 	const GENERATE_PAGE_HOOK = 'wppo_generate_static_page';
 
 	private CacheService $cacheService;
-	private ImageService $imageService;
+	private ?ImageService $imageService;
 	private SettingsService $settingsService;
 
 	public function __construct(
 		CacheService $cacheService,
-		ImageService $imageService,
+		?ImageService $imageService,
 		SettingsService $settingsService
 	) {
 		$this->cacheService    = $cacheService;
@@ -52,7 +48,7 @@ class Cron {
 		if ( ! isset( $schedules['every_5_hours'] ) ) {
 			$schedules['every_5_hours'] = array(
 				'interval' => 5 * HOUR_IN_SECONDS,
-				'display'  => esc_html__( 'Every 5 Hours (Performance Optimise)', 'performance-optimisation' ),
+				'display'  => esc_html__( 'Every 5 Hours (Performance Optimisation)', 'performance-optimisation' ),
 			);
 		}
 		return $schedules;
@@ -97,9 +93,25 @@ class Cron {
 	}
 
 	public function run_image_conversion_tasks(): void {
+		if ( null === $this->imageService ) {
+			return;
+		}
+		
 		$pending_images = $this->imageService->get_pending_images( 10 );
 		foreach ( $pending_images as $image ) {
 			$this->imageService->convert_image( $image['path'], $image['format'] );
 		}
+	}
+
+	/**
+	 * Clear all plugin cron jobs.
+	 *
+	 * @since 2.0.0
+	 * @return void
+	 */
+	public static function clear_all_plugin_cron_jobs(): void {
+		wp_clear_scheduled_hook( self::PAGE_CRON_HOOK );
+		wp_clear_scheduled_hook( self::IMG_CRON_HOOK );
+		wp_clear_scheduled_hook( self::GENERATE_PAGE_HOOK );
 	}
 }

@@ -2,14 +2,6 @@
 node_modules/
 vendor/
 
-# Build artifacts
-build/
-dist/
-assets/js/*.asset.php
-assets/js/*.js
-assets/js/*.css
-assets/css/
-
 # Development and testing
 tests/
 coverage/

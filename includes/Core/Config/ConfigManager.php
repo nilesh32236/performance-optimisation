@@ -8,7 +8,7 @@
 
 namespace PerformanceOptimisation\Core\Config;
 
-use PerformanceOptimisation\Interfaces\ConfigInterface;
+use PerformanceOptimisation\Core\Config\ConfigInterface;
 use PerformanceOptimisation\Exceptions\ConfigurationException;
 
 /**
@@ -171,6 +171,16 @@ class ConfigManager implements ConfigInterface {
 		$saved_config = get_option( $this->option_name, array() );
 		$this->config = $this->merge_with_defaults( $saved_config );
 		return true;
+	}
+
+	/**
+	 * Reload configuration from persistent storage
+	 *
+	 * @since 2.0.0
+	 * @return bool True on success, false on failure
+	 */
+	public function reload(): bool {
+		return $this->load();
 	}
 
 	/**

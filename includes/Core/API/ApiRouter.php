@@ -487,6 +487,7 @@ class ApiRouter {
 	 * @return void
 	 */
 	private function register_wizard_routes(): void {
+		error_log( 'self::NAMESPACE: ' . self::NAMESPACE );
 		register_rest_route(
 			self::NAMESPACE,
 			'/wizard/setup',
@@ -518,6 +519,7 @@ class ApiRouter {
 			)
 		);
 
+		error_log( 'Register route' );
 		register_rest_route(
 			self::NAMESPACE,
 			'/wizard/analysis',

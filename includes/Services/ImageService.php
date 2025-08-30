@@ -9,6 +9,8 @@
 namespace PerformanceOptimisation\Services;
 
 use PerformanceOptimisation\Interfaces\ImageServiceInterface;
+use PerformanceOptimisation\Optimizers\ImageProcessor;
+use PerformanceOptimisation\Utils\ConversionQueue;
 use PerformanceOptimisation\Utils\FileSystemUtil;
 use PerformanceOptimisation\Utils\LoggingUtil;
 use PerformanceOptimisation\Utils\ValidationUtil;
@@ -24,7 +26,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class ImageService implements ImageServiceInterface {
 
-private array $options;
+	private ImageProcessor $imageProcessor;
+	private ConversionQueue $conversionQueue;
+	private array $settings;
 
 public function __construct( ImageProcessor $imageProcessor, ConversionQueue $conversionQueue, array $settings ) {
 	$this->imageProcessor  = $imageProcessor;
@@ -35,25 +39,25 @@ public function __construct( ImageProcessor $imageProcessor, ConversionQueue $co
 	/**
 	 * {@inheritdoc}
 	 */
-public function convert_image( string $source_image_path, string $target_format = 'webp' ): bool {
-	$target_image_path = $this->get_img_path( $source_image_path, $target_format );
-	$quality           = $this->settings['quality'] ?? 82;
+	public function convert_image( string $source_image_path, string $target_format = 'webp' ): string {
+		$target_image_path = $this->get_img_path( $source_image_path, $target_format );
+		$quality           = $this->settings['quality'] ?? 82;
 
-	if ( FileSystemUtil::fileExists( $target_image_path ) ) {
-		$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
-		return true;
+		if ( FileSystemUtil::fileExists( $target_image_path ) ) {
+			$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
+			return $target_image_path;
+		}
+
+		$success = $this->imageProcessor->convert( $source_image_path, $target_image_path, $target_format, $quality );
+
+		if ( $success ) {
+			$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
+			return $target_image_path;
+		} else {
+			$this->conversionQueue->update_status( $source_image_path, $target_format, 'failed' );
+			return '';
+		}
 	}
-
-	$success = $this->imageProcessor->convert( $source_image_path, $target_image_path, $target_format, $quality );
-
-	if ( $success ) {
-		$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
-	} else {
-		$this->conversionQueue->update_status( $source_image_path, $target_format, 'failed' );
-	}
-
-	return $success;
-}
 
 	/**
 	 * {@inheritdoc}
@@ -118,16 +122,16 @@ private function get_img_path( string $source_image_local_path, string $target_f
 		$new_filename    = $filename_no_ext . '.' . $target_format;
 
 		if ( str_starts_with( $normalized_source_path, $wp_content_dir ) ) {
-			$relative_path_from_content = ltrim( str_replace( $wp_content_dir, '', $normalized_source_path ), '/\' );
+			$relative_path_from_content = ltrim( str_replace( $wp_content_dir, '', $normalized_source_path ), '/\\' );
 			$original_dirname_relative  = dirname( $relative_path_from_content );
 
-			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . ' / wppo / ' . $original_dirname_relative );
+			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . '/wppo/' . $original_dirname_relative );
 		} else {
 			$abspath                    = wp_normalize_path( ABSPATH );
-			$relative_path_from_abspath = ltrim( str_replace( $abspath, '', $normalized_source_path ), ' / \' );
+			$relative_path_from_abspath = ltrim( str_replace( $abspath, '', $normalized_source_path ), '/\\' );
 			$original_dirname_relative  = dirname( $relative_path_from_abspath );
 
-			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . ' / wppo / ' . $original_dirname_relative );
+			$new_image_dir_absolute = wp_normalize_path( $wp_content_dir . '/wppo/' . $original_dirname_relative );
 		}
 
 		FileSystemUtil::createDirectory( $new_image_dir_absolute );
@@ -183,7 +187,7 @@ private function get_img_path( string $source_image_local_path, string $target_f
 			$actual_image_url = content_url( ltrim( $actual_image_url, ' / ' ) );
 		}
 
-		echo ' < link rel               = 'preload' href = "' . esc_url( $actual_image_url ) . '" as = 'image' media = "' . esc_attr( $media_query ) . '" > ';
+		echo '<link rel="preload" href="' . esc_url( $actual_image_url ) . '" as="image" media="' . esc_attr( $media_query ) . '">';
 	}
 
 	private function preload_featured_image( int $thumbnail_id, array $settings ): void {

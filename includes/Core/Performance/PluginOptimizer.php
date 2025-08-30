@@ -435,7 +435,7 @@ class PluginOptimizer {
 				'css' => 'assets/css/admin/analytics.css',
 			),
 			'wizard'    => array(
-				'js'  => 'assets/js/admin/wizard.js',
+				'js'  => 'build/wizard.js',
 				'css' => 'assets/css/admin/wizard.css',
 			),
 		);

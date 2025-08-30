@@ -75,7 +75,7 @@ use PerformanceOptimisation\Core\Bootstrap\Plugin;
  */
 function wppo_initialize_plugin(): void {
 	try {
-		$plugin = Plugin::get_instance( WPPO_PLUGIN_FILE, WPPO_VERSION );
+		$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
 		$plugin->initialize();
 	} catch ( Exception $e ) {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

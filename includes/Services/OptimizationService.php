@@ -14,6 +14,7 @@ use PerformanceOptimisation\Optimizers\JsOptimizer;
 use PerformanceOptimisation\Optimizers\HtmlOptimizer;
 use PerformanceOptimisation\Utils\FileSystemUtil;
 use PerformanceOptimisation\Utils\LoggingUtil;
+use MatthiasMullie\Minify\CSS as MatthiasCssMinifier;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -88,6 +89,102 @@ class OptimizationService implements OptimizationServiceInterface {
 
 	public function shouldOptimize( string $assetType, string $url ): bool {
 		// Add logic to check against settings and exclusion lists
+		return true;
+	}
+
+	public function combine_css(): string {
+		global $wp_styles;
+		
+		if ( ! $wp_styles instanceof \WP_Styles ) {
+			return '';
+		}
+
+		$paths     = array();
+		$site_url  = site_url();
+		$site_path = wp_normalize_path( ABSPATH );
+
+		// Get all enqueued CSS files
+		foreach ( $wp_styles->queue as $handle ) {
+			if ( isset( $wp_styles->registered[ $handle ] ) ) {
+				$style = $wp_styles->registered[ $handle ];
+				if ( $style->src ) {
+					$url = $style->src;
+					// Convert relative URLs to absolute
+					if ( strpos( $url, '//' ) === false ) {
+						$url = $site_url . $url;
+					}
+					$path = str_replace( $site_url, $site_path, $url );
+					if ( file_exists( $path ) ) {
+						$paths[] = $path;
+					}
+				}
+			}
+		}
+
+		if ( empty( $paths ) ) {
+			return '';
+		}
+
+		try {
+			$minifier         = new MatthiasCssMinifier( ...$paths );
+			$combined_content = $minifier->minify();
+
+			$filename  = md5( implode( '', $paths ) ) . '.css';
+			$file_path = $this->get_cache_file_path_for_combined( $filename, 'css' );
+			$this->save_cache_files( $combined_content, $file_path );
+			return $this->get_cache_file_url_for_combined( $filename, 'css' );
+		} catch ( \Exception $e ) {
+			LoggingUtil::error( 'CSS Combination Error: ' . $e->getMessage() . ' Files: ' . implode( ', ', $paths ) );
+			return '';
+		}
+	}
+
+	public function generate_dynamic_static_html( string $url ): bool {
+		$response = wp_remote_get( $url, array( 'timeout' => 30 ) );
+
+		if ( is_wp_error( $response ) ) {
+			LoggingUtil::error( 'Failed to fetch URL for static HTML generation: ' . $response->get_error_message() . ' URL: ' . $url );
+			return false;
+		}
+
+		$response_code = wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $response_code ) {
+			LoggingUtil::warning(
+				'Received non-200 response for static HTML generation. URL: ' . $url . ' Status Code: ' . $response_code
+			);
+			return false;
+		}
+
+		$html_content = wp_remote_retrieve_body( $response );
+		if ( empty( $html_content ) ) {
+			LoggingUtil::warning( 'Empty body received for static HTML generation. URL: ' . $url );
+			return false;
+		}
+
+		$url_parts = wp_parse_url( $url );
+		$host      = $url_parts['host'] ?? '';
+		$path      = $url_parts['path'] ?? '/';
+		$path      = preg_replace( '/\.\.+/', '.', $path );
+		$path      = trim( $path, '/' );
+
+		$base_cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/html/' );
+		$file_path      = $base_cache_dir . $host . '/' . $path;
+
+		if ( '/' === substr( $file_path, -1 ) || ! pathinfo( $file_path, PATHINFO_EXTENSION ) ) {
+			$file_path = rtrim( $file_path, '/' ) . '/index.html';
+		}
+
+		try {
+			if ( ! FileSystemUtil::createDirectory( dirname( $file_path ) ) ) {
+				LoggingUtil::error( 'Could not create directory for static HTML file. Path: ' . dirname( $file_path ) );
+				return false;
+			}
+			$this->save_cache_files( $html_content, $file_path );
+		} catch ( \Exception $e ) {
+			LoggingUtil::error( 'Exception while saving static HTML file: ' . $e->getMessage() . ' Path: ' . $file_path );
+			return false;
+		}
+
 		return true;
 	}
 
