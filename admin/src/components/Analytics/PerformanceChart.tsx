@@ -100,7 +100,7 @@ function PerformanceChart( {
 	const getMetricLabel = ( metricName: string ): string => {
 		const labels: Record<string, string> = {
 			page_load_time: 'Page Load Time (ms)',
-			cache_hit: 'Cache Hit Ratio (%)',
+			cache_hit_ratio: 'Cache Hit Ratio (%)',
 			memory_usage: 'Memory Usage (MB)',
 			database_queries: 'Database Queries',
 			optimization_score: 'Optimization Score',
@@ -111,7 +111,7 @@ function PerformanceChart( {
 	const getMetricColor = ( metricName: string, alpha = 1 ): string => {
 		const colors: Record<string, string> = {
 			page_load_time: `rgba(220, 53, 69, ${ alpha })`,
-			cache_hit: `rgba(40, 167, 69, ${ alpha })`,
+			cache_hit_ratio: `rgba(40, 167, 69, ${ alpha })`,
 			memory_usage: `rgba(255, 193, 7, ${ alpha })`,
 			database_queries: `rgba(0, 123, 255, ${ alpha })`,
 			optimization_score: `rgba(108, 117, 125, ${ alpha })`,
@@ -245,7 +245,9 @@ function renderSimpleLineChart( data: ChartData, width: number, height: number )
 	// Generate path for line
 	const pathData = values
 		.map( ( value, index ) => {
-			const x = padding + ( index / ( values.length - 1 ) ) * chartWidth;
+			const x = values.length === 1 
+				? padding + chartWidth / 2 
+				: padding + ( index / ( values.length - 1 ) ) * chartWidth;
 			const y = padding + chartHeight - ( ( value - minValue ) / valueRange ) * chartHeight;
 			return `${ index === 0 ? 'M' : 'L' } ${ x } ${ y }`;
 		} )

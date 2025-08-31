@@ -2,6 +2,7 @@
  * External dependencies
  */
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { __ } from '@wordpress/i18n';
 
 interface Props {
 	children: ReactNode;
@@ -36,17 +37,16 @@ class ErrorBoundary extends Component<Props, State> {
 				<div className="wppo-error-boundary" role="alert">
 					<div className="wppo-error-content">
 						<span className="dashicons dashicons-warning" aria-hidden="true" />
-						<h3>Something went wrong</h3>
+						<h3>{__('Something went wrong', 'performance-optimisation')}</h3>
 						<p>
-							The setup wizard encountered an unexpected error. Please refresh the
-							page and try again.
+							{__('The setup wizard encountered an unexpected error. Please refresh the page and try again.', 'performance-optimisation')}
 						</p>
 						<button
 							type="button"
 							className="wppo-button wppo-button--secondary"
 							onClick={ () => window.location.reload() }
 						>
-							Refresh Page
+							{__('Refresh Page', 'performance-optimisation')}
 						</button>
 					</div>
 				</div>

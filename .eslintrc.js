@@ -1,5 +1,14 @@
 module.exports = {
-	extends: ['plugin:@wordpress/eslint-plugin/recommended'],
+	extends: [
+		'plugin:@wordpress/eslint-plugin/recommended',
+		'plugin:@typescript-eslint/recommended'
+	],
+	parser: '@typescript-eslint/parser',
+	plugins: ['@typescript-eslint'],
+	parserOptions: {
+		project: './tsconfig.json',
+		tsconfigRootDir: __dirname,
+	},
 	settings: {
 		'import/resolver': {
 			typescript: {},

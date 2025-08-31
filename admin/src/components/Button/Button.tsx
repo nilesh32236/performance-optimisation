@@ -38,14 +38,20 @@ export const Button: React.FC<ButtonProps> = ( {
 		.filter( Boolean )
 		.join( ' ' );
 
-	const handleClick = () => {
+	const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
 		if ( ! disabled && ! loading && onClick ) {
-			onClick();
+			onClick(e);
 		}
 	};
 
 	return (
-		<button className={ classes } onClick={ handleClick } disabled={ disabled || loading } { ...props }>
+		<button 
+			type="button"
+			className={ classes } 
+			onClick={ handleClick } 
+			disabled={ disabled || loading } 
+			{ ...props }
+		>
 			{ loading && (
 				<span className={ `${ baseClass }__spinner` }>
 					<LoadingSpinner size="small" />

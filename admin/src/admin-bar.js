@@ -26,9 +26,11 @@ document.addEventListener( 'DOMContentLoaded', () => {
 			return;
 		}
 		// Optionally, show some loading indicator on the admin bar item
-		const originalTitle = event.target.innerHTML;
-		event.target.innerHTML = i18n.clearingCache || 'Clearing...';
-		event.target.style.pointerEvents = 'none'; // Disable further clicks
+		const btn = event.currentTarget;
+		const originalHTML = btn.innerHTML;
+		btn.textContent = i18n.clearingCache || 'Clearing...';
+		btn.style.pointerEvents = 'none';
+		btn.setAttribute('aria-busy', 'true');
 
 		try {
 			const response = await fetch( `${ apiUrl }/clear-cache`, {
@@ -59,8 +61,9 @@ document.addEventListener( 'DOMContentLoaded', () => {
 			// alert(i18n.cacheClearError || 'An unexpected error occurred.');
 			showAdminBarNotice( i18n.cacheClearError || 'An unexpected error occurred.', 'error' );
 		} finally {
-			event.target.innerHTML = originalTitle; // Restore original text
-			event.target.style.pointerEvents = 'auto'; // Re-enable clicks
+			btn.innerHTML = originalHTML;
+			btn.style.pointerEvents = 'auto';
+			btn.removeAttribute('aria-busy');
 		}
 	};
 
@@ -82,12 +85,14 @@ document.addEventListener( 'DOMContentLoaded', () => {
 			return;
 		}
 
-		const originalTitle = event.target.innerHTML;
-		event.target.innerHTML = i18n.clearingCache || 'Clearing...';
-		event.target.style.pointerEvents = 'none';
+		const btn = event.currentTarget;
+		const originalHTML = btn.innerHTML;
+		btn.textContent = i18n.clearingCache || 'Clearing...';
+		btn.style.pointerEvents = 'none';
+		btn.setAttribute('aria-busy', 'true');
 
 		try {
-			const response = await fetch( `${ apiUrl }clear-cache`, {
+			const response = await fetch( `${ apiUrl }/clear-cache`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -121,8 +126,9 @@ document.addEventListener( 'DOMContentLoaded', () => {
 			// alert(i18n.cacheClearError || 'An unexpected error occurred.');
 			showAdminBarNotice( i18n.cacheClearError || 'An unexpected error occurred.', 'error' );
 		} finally {
-			event.target.innerHTML = originalTitle;
-			event.target.style.pointerEvents = 'auto';
+			btn.innerHTML = originalHTML;
+			btn.style.pointerEvents = 'auto';
+			btn.removeAttribute('aria-busy');
 		}
 	};
 

@@ -33,8 +33,9 @@ export const RealTimeMonitor: React.FC<RealTimeMonitorProps> = ({
 	const [metrics, setMetrics] = useState<RealTimeMetrics[]>([]);
 	const [isConnected, setIsConnected] = useState(false);
 	const [isMonitoring, setIsMonitoring] = useState(false);
-	const intervalRef = useRef<NodeJS.Timeout | null>(null);
+	const intervalRef = useRef<number | null>(null);
 	const wsRef = useRef<WebSocket | null>(null);
+	const manualStopRef = useRef<boolean>(false);
 
 	/**
 	 * Fetch current metrics from API
@@ -98,6 +99,8 @@ export const RealTimeMonitor: React.FC<RealTimeMonitorProps> = ({
 	 * Stop monitoring
 	 */
 	const stopMonitoring = () => {
+		manualStopRef.current = true;
+		
 		if (intervalRef.current) {
 			clearInterval(intervalRef.current);
 			intervalRef.current = null;
@@ -116,6 +119,8 @@ export const RealTimeMonitor: React.FC<RealTimeMonitorProps> = ({
 	 * Initialize WebSocket connection (if available)
 	 */
 	const initWebSocket = () => {
+		manualStopRef.current = false;
+		
 		// Check if WebSocket endpoint is available
 		const wsUrl = window.wppoAdmin?.wsUrl;
 		if (!wsUrl) {
@@ -149,8 +154,8 @@ export const RealTimeMonitor: React.FC<RealTimeMonitorProps> = ({
 
 			wsRef.current.onclose = () => {
 				setIsConnected(false);
-				// Fallback to polling if WebSocket fails
-				if (isMonitoring) {
+				// Fallback to polling if WebSocket fails and not manually stopped
+				if (isMonitoring && !manualStopRef.current) {
 					startPollingMonitor();
 				}
 			};
@@ -158,8 +163,10 @@ export const RealTimeMonitor: React.FC<RealTimeMonitorProps> = ({
 			wsRef.current.onerror = (error) => {
 				console.error('WebSocket error:', error);
 				setIsConnected(false);
-				// Fallback to polling
-				startPollingMonitor();
+				// Fallback to polling if not manually stopped
+				if (!manualStopRef.current) {
+					startPollingMonitor();
+				}
 			};
 		} catch (error) {
 			console.error('Failed to initialize WebSocket:', error);
