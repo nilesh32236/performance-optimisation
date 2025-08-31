@@ -512,10 +512,25 @@ class AnalyticsController {
 			$csv_lines[] = 'Recommendations';
 			$csv_lines[] = 'Priority,Title,Description';
 			foreach ( $report['recommendations'] as $rec ) {
-				$csv_lines[] = $rec['priority'] . ',"' . $rec['title'] . '","' . $rec['description'] . '"';
+				$csv_lines[] = $rec['priority'] . ',"' . $this->sanitize_csv_value( $rec['title'] ) . '","' . $this->sanitize_csv_value( $rec['description'] ) . '"';
 			}
 		}
 
 		return implode( "\n", $csv_lines );
+	}
+
+	/**
+	 * Sanitize CSV value to prevent injection.
+	 *
+	 * @param string $value Value to sanitize.
+	 * @return string Sanitized value.
+	 */
+	private function sanitize_csv_value( string $value ): string {
+		// Prefix dangerous characters
+		if ( preg_match( '/^[=+\-@]/', $value ) ) {
+			$value = "'" . $value;
+		}
+		// Escape quotes
+		return str_replace( '"', '""', $value );
 	}
 }

@@ -25,7 +25,7 @@ class ApiRouter {
 	 *
 	 * @var string
 	 */
-	const NAMESPACE = 'performance-optimisation/v1';
+	const REST_NAMESPACE = 'performance-optimisation/v1';
 
 	/**
 	 * Controller instances.
@@ -119,7 +119,7 @@ class ApiRouter {
 	 */
 	private function register_cache_routes(): void {
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/cache/clear',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -141,7 +141,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/cache/preload',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -151,7 +151,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/cache/stats',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -168,7 +168,7 @@ class ApiRouter {
 	 */
 	private function register_settings_routes(): void {
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/settings',
 			array(
 				array(
@@ -191,7 +191,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/settings/(?P<section>[a-zA-Z0-9_-]+)',
 			array(
 				array(
@@ -214,7 +214,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/settings/export',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -224,7 +224,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/settings/import',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -247,7 +247,7 @@ class ApiRouter {
 	 */
 	private function register_optimization_routes(): void {
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/optimization/images',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -257,7 +257,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/optimization/images/bulk',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -267,7 +267,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/optimization/images/status',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -277,7 +277,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/optimization/minify',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -295,7 +295,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/optimization/test',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -319,7 +319,7 @@ class ApiRouter {
 	 */
 	private function register_analytics_routes(): void {
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/analytics/dashboard',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -329,7 +329,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/analytics/metrics',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -361,7 +361,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/analytics/report',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -383,7 +383,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/analytics/export',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -418,7 +418,7 @@ class ApiRouter {
 	 */
 	private function register_recommendations_routes(): void {
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/recommendations',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -440,7 +440,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/recommendations/apply',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -456,7 +456,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/recommendations/suggestions',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -466,7 +466,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/recommendations/progress',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -505,9 +505,9 @@ class ApiRouter {
 	 * @return void
 	 */
 	private function register_wizard_routes(): void {
-		error_log( 'self::NAMESPACE: ' . self::NAMESPACE );
+		error_log( 'self::REST_NAMESPACE: ' . self::REST_NAMESPACE );
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/wizard/setup',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -528,7 +528,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/wizard/reset',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
@@ -539,7 +539,7 @@ class ApiRouter {
 
 		error_log( 'Register route' );
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/wizard/analysis',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -563,7 +563,7 @@ class ApiRouter {
 	 */
 	private function register_preset_routes(): void {
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/presets',
 			array(
 				array(
@@ -586,7 +586,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/presets/(?P<preset_id>[a-zA-Z0-9_-]+)',
 			array(
 				array(
@@ -621,7 +621,7 @@ class ApiRouter {
 	 */
 	private function register_utility_routes(): void {
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/system/info',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
@@ -631,7 +631,7 @@ class ApiRouter {
 		);
 
 		register_rest_route(
-			self::NAMESPACE,
+			self::REST_NAMESPACE,
 			'/activities',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,

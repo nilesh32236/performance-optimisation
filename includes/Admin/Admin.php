@@ -229,8 +229,12 @@ class Admin {
 		}
 
 		// Get cache statistics for display
-		$cache_stats = $this->cacheService->getCacheStats();
-		$cache_size = $cache_stats['total_size_formatted'] ?? '0 B';
+		if ($this->cacheService !== null) {
+			$cache_stats = $this->cacheService->getCacheStats();
+			$cache_size = $cache_stats['total_size_formatted'] ?? '0 B';
+		} else {
+			$cache_size = '0 B';
+		}
 
 		$wp_admin_bar->add_node(
 			array(
@@ -288,7 +292,11 @@ class Admin {
 		}
 
 		try {
-			$result = $this->cacheService->clearAllCache();
+			if ($this->cacheService !== null) {
+				$result = $this->cacheService->clearAllCache();
+			} else {
+				$result = false;
+			}
 			
 			$this->logger->info( 'All cache cleared via admin bar', array(
 				'user_id' => get_current_user_id(),
@@ -321,7 +329,11 @@ class Admin {
 		}
 
 		try {
-			$result = $this->cacheService->clearCache( 'page', $page_url );
+			if ($this->cacheService !== null) {
+				$result = $this->cacheService->clearCache( 'page', $page_url );
+			} else {
+				$result = false;
+			}
 			
 			$this->logger->info( 'Page cache cleared via admin bar', array(
 				'user_id' => get_current_user_id(),
@@ -343,6 +355,9 @@ class Admin {
 	 * @return array Status information.
 	 */
 	private function getOptimizationStatus(): array {
+		if ($this->settingsService === null) {
+			return array();
+		}
 		$settings = $this->settingsService->get_settings();
 		
 		$active_optimizations = 0;
@@ -380,13 +395,17 @@ class Admin {
 	 * @return array Admin data.
 	 */
 	private function getAdminData(): array {
-		$cache_stats = $this->cacheService->getCacheStats();
+		if ($this->cacheService !== null) {
+			$cache_stats = $this->cacheService->getCacheStats();
+		} else {
+			$cache_stats = array();
+		}
 		$optimization_status = $this->getOptimizationStatus();
 
 		return array(
 			'apiUrl' => rest_url( 'wppo/v1' ),
 			'nonce' => wp_create_nonce( 'wp_rest' ),
-			'settings' => $this->settingsService->get_settings(),
+			'settings' => $this->settingsService !== null ? $this->settingsService->get_settings() : array(),
 			'cacheStats' => $cache_stats,
 			'optimizationStatus' => $optimization_status,
 			'capabilities' => array(
@@ -491,6 +510,9 @@ class Admin {
 	 */
 	private function parseMemoryLimit( string $memory_limit ): int {
 		$memory_limit = trim( $memory_limit );
+		if ( empty( $memory_limit ) ) {
+			return 0;
+		}
 		$last_char = strtolower( $memory_limit[ strlen( $memory_limit ) - 1 ] );
 		$number = (int) $memory_limit;
 

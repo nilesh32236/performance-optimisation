@@ -402,6 +402,11 @@ class ImageOptimizationController extends BaseController {
 					)
 				);
 			}
+		} catch (\Exception $e) {
+			error_log('Batch optimization error: ' . $e->getMessage());
+			return new \WP_Error('optimization_failed', 'Batch optimization failed');
+		}
+	}
 
 	/**
 	 * Get optimization progress endpoint handler.
