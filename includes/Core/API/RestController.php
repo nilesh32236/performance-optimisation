@@ -39,13 +39,48 @@ class RestController {
 
 	public function __construct( ServiceContainerInterface $container ) {
 		$this->container = $container;
-		$this->settingsService = $container->get( 'settings_service' );
-		$this->cacheService = $container->get( 'cache_service' );
-		$this->imageService = $container->get( 'image_service' );
-		$this->optimizationService = $container->get( 'optimization_service' );
-		$this->logger = $container->get( 'logger' );
-		$this->validator = $container->get( 'validator' );
-		$this->performance = $container->get( 'performance' );
+		
+		try {
+			$this->settingsService = $container->get( 'settings_service' );
+		} catch ( \Exception $e ) {
+			$this->settingsService = null;
+		}
+		
+		try {
+			$this->cacheService = $container->get( 'cache_service' );
+		} catch ( \Exception $e ) {
+			$this->cacheService = null;
+		}
+		
+		try {
+			$this->imageService = $container->get( 'image_service' );
+		} catch ( \Exception $e ) {
+			$this->imageService = null;
+		}
+		
+		try {
+			$this->optimizationService = $container->get( 'optimization_service' );
+		} catch ( \Exception $e ) {
+			$this->optimizationService = null;
+		}
+		
+		try {
+			$this->logger = $container->get( 'logger' );
+		} catch ( \Exception $e ) {
+			$this->logger = new \PerformanceOptimisation\Utils\LoggingUtil();
+		}
+		
+		try {
+			$this->validator = $container->get( 'validator' );
+		} catch ( \Exception $e ) {
+			$this->validator = new \PerformanceOptimisation\Utils\ValidationUtil();
+		}
+		
+		try {
+			$this->performance = $container->get( 'performance' );
+		} catch ( \Exception $e ) {
+			$this->performance = new \PerformanceOptimisation\Utils\PerformanceUtil();
+		}
 	}
 
 	public function register_routes(): void {

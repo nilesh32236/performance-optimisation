@@ -630,12 +630,20 @@ class Plugin implements PluginInterface {
 	public function initRestApi(): void {
 		try {
 			$rest_controller = $this->_container->get( 'rest_controller' );
+			// If it's a Closure, call it to get the actual instance
+			if ($rest_controller instanceof \Closure) {
+				$rest_controller = $rest_controller($this->_container);
+			}
 			if (method_exists($rest_controller, 'register_routes')) {
 				$rest_controller->register_routes();
 			}
 
 			// Initialize API Router for additional endpoints
 			$api_router = $this->_container->get( 'api_router' );
+			// If it's a Closure, call it to get the actual instance
+			if ($api_router instanceof \Closure) {
+				$api_router = $api_router($this->_container);
+			}
 			if (method_exists($api_router, 'init')) {
 				$api_router->init();
 			}
