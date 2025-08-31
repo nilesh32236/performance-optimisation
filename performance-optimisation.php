@@ -63,6 +63,8 @@ if ( file_exists( $autoloader ) ) {
 	require_once $autoloader;
 }
 
+// Legacy class aliases removed - using modern architecture only
+
 use PerformanceOptimisation\Core\Bootstrap\Plugin;
 
 /**

@@ -272,7 +272,7 @@ class RecommendationsController extends BaseController {
 	 */
 	private function trigger_image_optimization(): void {
 		try {
-			$cache_service = new \PerformanceOptimisation\Services\CacheService();
+			$cache_service    = new \PerformanceOptimisation\Services\CacheService();
 			$settings_service = new \PerformanceOptimisation\Services\SettingsService();
 			// Skip image service for now as it requires complex dependencies
 			$cron_manager = new \PerformanceOptimisation\Services\CronService(

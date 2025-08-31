@@ -70,11 +70,14 @@ function SiteDetectionStep( { stepConfig }: SiteDetectionStepProps ) {
 
 		try {
 			// Get site analysis
-			const analysisResponse = await fetch( `${ window.wppoWizardData.apiUrl }/wizard/analysis`, {
-				headers: {
-					'X-WP-Nonce': window.wppoWizardData.nonce,
-				},
-			} );
+			const analysisResponse = await fetch(
+				`${ window.wppoWizardData.apiUrl }/wizard/analysis`,
+				{
+					headers: {
+						'X-WP-Nonce': window.wppoWizardData.nonce,
+					},
+				}
+			);
 
 			if ( ! analysisResponse.ok ) {
 				throw new Error( 'Failed to analyze site' );
@@ -94,7 +97,7 @@ function SiteDetectionStep( { stepConfig }: SiteDetectionStepProps ) {
 					headers: {
 						'X-WP-Nonce': window.wppoWizardData.nonce,
 					},
-				},
+				}
 			);
 
 			if ( ! recommendationsResponse.ok ) {

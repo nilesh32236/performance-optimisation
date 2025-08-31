@@ -94,7 +94,7 @@ class OptimizationService implements OptimizationServiceInterface {
 
 	public function combine_css(): string {
 		global $wp_styles;
-		
+
 		if ( ! $wp_styles instanceof \WP_Styles ) {
 			return '';
 		}

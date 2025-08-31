@@ -82,7 +82,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ( { className = ''
 					headers: {
 						'X-WP-Nonce': ( window as any ).wppoAdmin?.nonce || '',
 					},
-				},
+				}
 			);
 
 			if ( ! response.ok ) {
@@ -117,7 +117,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ( { className = ''
 					headers: {
 						'X-WP-Nonce': ( window as any ).wppoAdmin?.nonce || '',
 					},
-				},
+				}
 			);
 
 			if ( ! response.ok ) {
@@ -201,7 +201,9 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ( { className = ''
 			<div className="wppo-analytics-dashboard__header">
 				<div className="wppo-analytics-dashboard__header-content">
 					<h2>Performance Analytics</h2>
-					<p>Monitor your site&apos;s performance metrics and optimization effectiveness.</p>
+					<p>
+						Monitor your site&apos;s performance metrics and optimization effectiveness.
+					</p>
 					<div className="wppo-analytics-dashboard__last-updated">
 						Last updated: { new Date( dashboardData.last_updated ).toLocaleString() }
 					</div>

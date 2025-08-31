@@ -152,7 +152,7 @@
 
 		document
 			.querySelectorAll(
-				'img.wppo-lazy-image[data-src]:not([data-wppo-loaded="true"]), picture source[data-srcset]:not([data-wppo-loaded="true"])',
+				'img.wppo-lazy-image[data-src]:not([data-wppo-loaded="true"]), picture source[data-srcset]:not([data-wppo-loaded="true"])'
 			)
 			.forEach( ( element ) => {
 				if ( isInViewport( element ) ) {
@@ -180,7 +180,7 @@
 			} );
 
 		const scriptsToProcess = document.querySelectorAll(
-			'script[type="wppo/javascript"]:not([data-wppo-processed="true"])',
+			'script[type="wppo/javascript"]:not([data-wppo-processed="true"])'
 		);
 		if ( scriptsToProcess.length > 0 ) {
 		}
@@ -222,16 +222,16 @@
 
 	function cleanupEventListeners() {
 		const remainingLazyImages = document.querySelectorAll(
-			'img.wppo-lazy-image[data-src]:not([data-wppo-loaded="true"]), picture source[data-srcset]:not([data-wppo-loaded="true"])',
+			'img.wppo-lazy-image[data-src]:not([data-wppo-loaded="true"]), picture source[data-srcset]:not([data-wppo-loaded="true"])'
 		).length;
 		const remainingLazyIframes = document.querySelectorAll(
-			'iframe.wppo-lazy-iframe[data-src]:not([data-wppo-loaded="true"])',
+			'iframe.wppo-lazy-iframe[data-src]:not([data-wppo-loaded="true"])'
 		).length;
 		const remainingLazyVideos = document.querySelectorAll(
-			'video.wppo-lazy-video:not([data-wppo-loaded="true"])',
+			'video.wppo-lazy-video:not([data-wppo-loaded="true"])'
 		).length;
 		const remainingDelayedScripts = document.querySelectorAll(
-			'script[type="wppo/javascript"]:not([data-wppo-processed="true"])',
+			'script[type="wppo/javascript"]:not([data-wppo-processed="true"])'
 		).length;
 
 		if (
@@ -251,7 +251,7 @@
 
 	const userAgent = navigator.userAgent;
 	const isBot = /bot|google|crawl|spider|slurp|baidu|bing|msn|duckduckbot|teoma|yandex/i.test(
-		userAgent,
+		userAgent
 	);
 
 	if ( isBot || ( document.body && document.body.classList.contains( 'logged-in' ) ) ) {

@@ -65,12 +65,16 @@ class ApiRouter {
 		$metrics_collector    = new \PerformanceOptimisation\Core\Analytics\MetricsCollector();
 		$performance_analyzer = new \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer( $metrics_collector );
 
+		// Get service container
+		$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
+
 		$this->controllers = array(
 			'cache'           => new CacheController(),
 			'settings'        => new SettingsController(),
 			'optimization'    => new OptimizationController(),
 			'analytics'       => new AnalyticsController( $metrics_collector, $performance_analyzer ),
 			'recommendations' => new RecommendationsController( $metrics_collector, $performance_analyzer ),
+			'images'          => new ImageOptimizationController( $container ),
 		);
 	}
 
@@ -94,6 +98,9 @@ class ApiRouter {
 
 		// Recommendations routes.
 		$this->register_recommendations_routes();
+
+		// Image optimization routes.
+		$this->register_image_routes();
 
 		// Wizard routes.
 		$this->register_wizard_routes();
@@ -479,6 +486,17 @@ class ApiRouter {
 				),
 			)
 		);
+	}
+
+	/**
+	 * Register image optimization routes.
+	 *
+	 * @return void
+	 */
+	private function register_image_routes(): void {
+		if ( isset( $this->controllers['images'] ) ) {
+			$this->controllers['images']->register_routes();
+		}
 	}
 
 	/**

@@ -10,7 +10,11 @@ namespace PerformanceOptimisation\Core\Cache;
 
 use PerformanceOptimisation\Interfaces\CacheInterface;
 use PerformanceOptimisation\Interfaces\ConfigInterface;
+use PerformanceOptimisation\Interfaces\ServiceContainerInterface;
 use PerformanceOptimisation\Exceptions\CacheException;
+use PerformanceOptimisation\Utils\LoggingUtil;
+use PerformanceOptimisation\Utils\PerformanceUtil;
+use PerformanceOptimisation\Utils\FileSystemUtil;
 
 /**
  * Cache management class
@@ -18,6 +22,13 @@ use PerformanceOptimisation\Exceptions\CacheException;
  * @since 1.1.0
  */
 class CacheManager {
+
+	/**
+	 * Service container.
+	 *
+	 * @var ServiceContainerInterface|null
+	 */
+	private ?ServiceContainerInterface $container = null;
 
 	/**
 	 * Cache providers.
@@ -44,6 +55,27 @@ class CacheManager {
 	private ConfigInterface $config;
 
 	/**
+	 * Logger instance.
+	 *
+	 * @var LoggingUtil|null
+	 */
+	private ?LoggingUtil $logger = null;
+
+	/**
+	 * Performance utility.
+	 *
+	 * @var PerformanceUtil|null
+	 */
+	private ?PerformanceUtil $performance = null;
+
+	/**
+	 * FileSystem utility.
+	 *
+	 * @var FileSystemUtil|null
+	 */
+	private ?FileSystemUtil $filesystem = null;
+
+	/**
 	 * Cache statistics.
 	 *
 	 * @since 1.1.0
@@ -60,11 +92,33 @@ class CacheManager {
 	 * Constructor.
 	 *
 	 * @since 1.1.0
-	 * @param ConfigInterface $config Configuration manager.
+	 * @param ConfigInterface                    $config     Configuration manager.
+	 * @param ServiceContainerInterface|null     $container  Service container.
+	 * @param LoggingUtil|null                   $logger     Logger instance.
+	 * @param PerformanceUtil|null               $performance Performance utility.
+	 * @param FileSystemUtil|null                $filesystem FileSystem utility.
 	 */
-	public function __construct( ConfigInterface $config ) {
+	public function __construct( 
+		ConfigInterface $config, 
+		?ServiceContainerInterface $container = null,
+		?LoggingUtil $logger = null,
+		?PerformanceUtil $performance = null,
+		?FileSystemUtil $filesystem = null
+	) {
 		$this->config = $config;
+		$this->container = $container;
+		$this->logger = $logger;
+		$this->performance = $performance;
+		$this->filesystem = $filesystem;
+		
 		$this->register_default_providers();
+		
+		if ( $this->logger ) {
+			$this->logger->debug( 'CacheManager initialized', array(
+				'default_provider' => $this->default_provider,
+				'providers' => array_keys( $this->providers ),
+			) );
+		}
 	}
 
 	/**
@@ -123,20 +177,38 @@ class CacheManager {
 	 * @return mixed Cached value or default.
 	 */
 	public function get( string $key, $default = null, ?string $provider = null ) {
+		$timer_id = null;
+		if ( $this->performance ) {
+			$timer_id = $this->performance->startTimer( 'cache_get_' . $key );
+		}
+
 		try {
 			$cache_provider = $this->get_provider( $provider );
 			$value          = $cache_provider->get( $key, $default );
 
 			if ( $value !== $default ) {
 				++$this->stats['hits'];
+				if ( $this->logger ) {
+					$this->logger->debug( 'Cache hit', array( 'key' => $key, 'provider' => $provider ?? $this->default_provider ) );
+				}
 			} else {
 				++$this->stats['misses'];
+				if ( $this->logger ) {
+					$this->logger->debug( 'Cache miss', array( 'key' => $key, 'provider' => $provider ?? $this->default_provider ) );
+				}
 			}
 
 			return $value;
 		} catch ( CacheException $e ) {
 			++$this->stats['misses'];
+			if ( $this->logger ) {
+				$this->logger->warning( 'Cache get failed', array( 'key' => $key, 'error' => $e->getMessage() ) );
+			}
 			return $default;
+		} finally {
+			if ( $timer_id && $this->performance ) {
+				$this->performance->endTimer( $timer_id );
+			}
 		}
 	}
 
@@ -151,17 +223,41 @@ class CacheManager {
 	 * @return bool True on success, false on failure
 	 */
 	public function set( string $key, $value, int $expiration = 0, ?string $provider = null ): bool {
+		$timer_id = null;
+		if ( $this->performance ) {
+			$timer_id = $this->performance->startTimer( 'cache_set_' . $key );
+		}
+
 		try {
 			$cache_provider = $this->get_provider( $provider );
 			$result         = $cache_provider->set( $key, $value, $expiration );
 
 			if ( $result ) {
 				++$this->stats['sets'];
+				if ( $this->logger ) {
+					$this->logger->debug( 'Cache set successful', array( 
+						'key' => $key, 
+						'provider' => $provider ?? $this->default_provider,
+						'expiration' => $expiration,
+						'value_size' => is_string( $value ) ? strlen( $value ) : 'non-string',
+					) );
+				}
+			} else {
+				if ( $this->logger ) {
+					$this->logger->warning( 'Cache set failed', array( 'key' => $key, 'provider' => $provider ?? $this->default_provider ) );
+				}
 			}
 
 			return $result;
 		} catch ( CacheException $e ) {
+			if ( $this->logger ) {
+				$this->logger->error( 'Cache set exception', array( 'key' => $key, 'error' => $e->getMessage() ) );
+			}
 			return false;
+		} finally {
+			if ( $timer_id && $this->performance ) {
+				$this->performance->endTimer( $timer_id );
+			}
 		}
 	}
 

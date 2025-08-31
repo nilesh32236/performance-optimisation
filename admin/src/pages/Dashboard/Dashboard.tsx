@@ -10,13 +10,15 @@
  */
 import React, { useState, useEffect } from 'react';
 import { PerformanceMetrics, OptimizationStats } from '@types/index';
-import { Card, Button, LoadingSpinner } from '@components/index';
+import { Card, Button, LoadingSpinner, Tabs, Tab } from '@components/index';
 /**
  * Internal dependencies
  */
 import { MetricsChart } from './components/MetricsChart';
 import { StatsOverview } from './components/StatsOverview';
 import { RecentActivity } from './components/RecentActivity';
+import { RealTimeMonitor } from '@components/RealTimeMonitor';
+import { InteractiveOptimizationControls } from '@components/InteractiveOptimizationControls';
 import './Dashboard.scss';
 
 export const Dashboard: React.FC = () => {
@@ -24,6 +26,7 @@ export const Dashboard: React.FC = () => {
 	const [ stats, setStats ] = useState<OptimizationStats | null>( null );
 	const [ loading, setLoading ] = useState( true );
 	const [ refreshing, setRefreshing ] = useState( false );
+	const [ activeTab, setActiveTab ] = useState( 'overview' );
 
 	const loadDashboardData = async () => {
 		try {
@@ -76,7 +79,7 @@ export const Dashboard: React.FC = () => {
 			<div className="wppo-dashboard__header">
 				<div className="wppo-dashboard__header-content">
 					<h1>Performance Dashboard</h1>
-					<p>Monitor your site&apos;s performance metrics and optimization statistics.</p>
+					<p>Monitor your site&apos;s performance metrics and optimization statistics in real-time.</p>
 				</div>
 				<div className="wppo-dashboard__header-actions">
 					<Button variant="secondary" onClick={ handleRefresh } loading={ refreshing }>
@@ -86,83 +89,115 @@ export const Dashboard: React.FC = () => {
 			</div>
 
 			<div className="wppo-dashboard__content">
-				{ /* Performance Metrics Overview */ }
-				<div className="wppo-dashboard__section">
-					<h2>Performance Metrics</h2>
-					<div className="wppo-dashboard__metrics-grid">
-						<Card title="Page Load Time" className="wppo-metric-card">
-							<div className="wppo-metric-value">
-								{ metrics?.page_load_time
-									? `${ metrics.page_load_time.toFixed( 2 ) }s`
-									: 'N/A' }
+				<Tabs activeTab={ activeTab } onTabChange={ setActiveTab }>
+					<Tab id="overview" label="Overview">
+						{ /* Performance Metrics Overview */ }
+						<div className="wppo-dashboard__section">
+							<h2>Performance Metrics</h2>
+							<div className="wppo-dashboard__metrics-grid">
+								<Card title="Page Load Time" className="wppo-metric-card">
+									<div className="wppo-metric-value">
+										{ metrics?.page_load_time
+											? `${ metrics.page_load_time.toFixed( 2 ) }s`
+											: 'N/A' }
+									</div>
+									<div className="wppo-metric-label">Average load time</div>
+								</Card>
+
+								<Card title="First Contentful Paint" className="wppo-metric-card">
+									<div className="wppo-metric-value">
+										{ metrics?.first_contentful_paint
+											? `${ metrics.first_contentful_paint.toFixed( 2 ) }s`
+											: 'N/A' }
+									</div>
+									<div className="wppo-metric-label">Time to first content</div>
+								</Card>
+
+								<Card title="Largest Contentful Paint" className="wppo-metric-card">
+									<div className="wppo-metric-value">
+										{ metrics?.largest_contentful_paint
+											? `${ metrics.largest_contentful_paint.toFixed( 2 ) }s`
+											: 'N/A' }
+									</div>
+									<div className="wppo-metric-label">Time to largest content</div>
+								</Card>
+
+								<Card title="Cumulative Layout Shift" className="wppo-metric-card">
+									<div className="wppo-metric-value">
+										{ metrics?.cumulative_layout_shift
+											? metrics.cumulative_layout_shift.toFixed( 3 )
+											: 'N/A' }
+									</div>
+									<div className="wppo-metric-label">Layout stability score</div>
+								</Card>
 							</div>
-							<div className="wppo-metric-label">Average load time</div>
-						</Card>
-
-						<Card title="First Contentful Paint" className="wppo-metric-card">
-							<div className="wppo-metric-value">
-								{ metrics?.first_contentful_paint
-									? `${ metrics.first_contentful_paint.toFixed( 2 ) }s`
-									: 'N/A' }
-							</div>
-							<div className="wppo-metric-label">Time to first content</div>
-						</Card>
-
-						<Card title="Largest Contentful Paint" className="wppo-metric-card">
-							<div className="wppo-metric-value">
-								{ metrics?.largest_contentful_paint
-									? `${ metrics.largest_contentful_paint.toFixed( 2 ) }s`
-									: 'N/A' }
-							</div>
-							<div className="wppo-metric-label">Time to largest content</div>
-						</Card>
-
-						<Card title="Cumulative Layout Shift" className="wppo-metric-card">
-							<div className="wppo-metric-value">
-								{ metrics?.cumulative_layout_shift
-									? metrics.cumulative_layout_shift.toFixed( 3 )
-									: 'N/A' }
-							</div>
-							<div className="wppo-metric-label">Layout stability score</div>
-						</Card>
-					</div>
-				</div>
-
-				{ /* Performance Chart */ }
-				{ metrics && (
-					<div className="wppo-dashboard__section">
-						<Card title="Performance Trends">
-							<MetricsChart metrics={ metrics } />
-						</Card>
-					</div>
-				) }
-
-				{ /* Optimization Statistics */ }
-				<div className="wppo-dashboard__section">
-					<h2>Optimization Statistics</h2>
-					<div className="wppo-dashboard__stats-grid">
-						{ stats && <StatsOverview stats={ stats } /> }
-					</div>
-				</div>
-
-				{ /* Recent Activity */ }
-				<div className="wppo-dashboard__section">
-					<Card title="Recent Activity">
-						<RecentActivity />
-					</Card>
-				</div>
-
-				{ /* Quick Actions */ }
-				<div className="wppo-dashboard__section">
-					<Card title="Quick Actions">
-						<div className="wppo-dashboard__actions">
-							<Button variant="primary">Run Performance Test</Button>
-							<Button variant="secondary">Clear All Caches</Button>
-							<Button variant="secondary">Optimize Images</Button>
-							<Button variant="tertiary">View Settings</Button>
 						</div>
-					</Card>
-				</div>
+
+						{ /* Performance Chart */ }
+						{ metrics && (
+							<div className="wppo-dashboard__section">
+								<Card title="Performance Trends">
+									<MetricsChart metrics={ metrics } />
+								</Card>
+							</div>
+						) }
+
+						{ /* Optimization Statistics */ }
+						<div className="wppo-dashboard__section">
+							<h2>Optimization Statistics</h2>
+							<div className="wppo-dashboard__stats-grid">
+								{ stats && <StatsOverview stats={ stats } /> }
+							</div>
+						</div>
+
+						{ /* Quick Actions */ }
+						<div className="wppo-dashboard__section">
+							<Card title="Quick Actions">
+								<div className="wppo-dashboard__actions">
+									<Button variant="primary">Run Performance Test</Button>
+									<Button variant="secondary">Clear All Caches</Button>
+									<Button variant="secondary">Optimize Images</Button>
+									<Button variant="tertiary">View Settings</Button>
+								</div>
+							</Card>
+						</div>
+					</Tab>
+
+					<Tab id="realtime" label="Real-Time Monitoring">
+						<div className="wppo-dashboard__section">
+							<RealTimeMonitor />
+						</div>
+
+						{ /* Recent Activity */ }
+						<div className="wppo-dashboard__section">
+							<Card title="Recent Activity">
+								<RecentActivity />
+							</Card>
+						</div>
+					</Tab>
+
+					<Tab id="optimization" label="Interactive Controls">
+						<div className="wppo-dashboard__section">
+							<InteractiveOptimizationControls />
+						</div>
+					</Tab>
+
+					<Tab id="analytics" label="Advanced Analytics">
+						<div className="wppo-dashboard__section">
+							<Card title="Performance Analysis">
+								<p>Advanced performance analytics and insights coming soon...</p>
+								{ /* This could include more detailed charts, comparisons, etc. */ }
+							</Card>
+						</div>
+
+						<div className="wppo-dashboard__section">
+							<Card title="Optimization Recommendations">
+								<p>AI-powered optimization recommendations based on your site's performance data.</p>
+								{ /* This could integrate with the RecommendationsController */ }
+							</Card>
+						</div>
+					</Tab>
+				</Tabs>
 			</div>
 		</div>
 	);

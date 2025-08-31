@@ -173,7 +173,7 @@ class PluginOptimizer {
 		}
 
 		// Only load components when needed
-		$current_page = $_GET['page'] ?? '';
+		$current_page = sanitize_text_field( $_GET['page'] ?? '' );
 
 		switch ( $current_page ) {
 			case 'performance-optimisation':

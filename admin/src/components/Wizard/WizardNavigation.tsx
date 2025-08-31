@@ -38,7 +38,7 @@ function WizardNavigation( { onComplete }: WizardNavigationProps ) {
 				setError(
 					error instanceof Error
 						? error.message
-						: 'An error occurred while completing setup.',
+						: 'An error occurred while completing setup.'
 				);
 			} finally {
 				setLoading( false );

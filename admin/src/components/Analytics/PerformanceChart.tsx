@@ -77,7 +77,7 @@ function PerformanceChart( {
 					headers: {
 						'X-WP-Nonce': ( window as any ).wppoAdmin?.nonce || '',
 					},
-				},
+				}
 			);
 
 			if ( ! response.ok ) {

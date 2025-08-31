@@ -54,3 +54,48 @@ This plan outlines the necessary steps to improve the plugin's functionality, co
 -   [ ] **Review and Refactor**: Review all implemented code for clarity, performance, and adherence to WordPress best practices.
 -   [ ] **Test**: Perform a full manual test of the plugin based on the test plan.
 -   [ ] **Update Version**: Update the plugin version number in `performance-optimisation.php`, `package.json`, and `readme.txt` to reflect the new release.
+
+
+New task need to also check
+
+### 1\. **Potential SQL Injection Vulnerability**
+
+  * **File:** `includes/Core/Analytics/MetricsCollector.php`
+  * **Line Number(s):** 410-421
+  * **Description:** The `get_metrics` method in the `MetricsCollector` class is vulnerable to SQL injection. The `$key` variable in the `foreach` loop is directly used in the `JSON_EXTRACT` function without proper sanitization. An attacker could potentially manipulate the `$filters` array to inject malicious SQL code.
+  * **Recommendation:** Sanitize the `$key` variable before using it in the SQL query. Use `$wpdb->prepare` for all parts of the query to prevent SQL injection.
+
+### 2\. **Cross-Site Scripting (XSS) Vulnerability**
+
+  * **File:** `includes/Admin/Admin.php`
+  * **Line Number(s):** 89
+  * **Description:** The `render_admin_page` method directly outputs the content of the `$_GET['page']` parameter without proper sanitization. This could allow an attacker to inject malicious scripts into the page, leading to a reflected XSS vulnerability.
+  * **Recommendation:** Sanitize the `$_GET['page']` parameter using `esc_html` or a similar function before outputting it to the page.
+
+### 3\. **Insecure File Handling**
+
+  * **File:** `includes/Core/Cache/FileCache.php`
+  * **Line Number(s):** 217-226
+  * **Description:** The `write_cache_file` method writes content to a file without proper validation of the file path. An attacker could potentially manipulate the `$key` variable to write to arbitrary files on the server, leading to a file inclusion vulnerability.
+  * **Recommendation:** Sanitize the `$key` variable and ensure that the file path is within the expected cache directory. Use `wp_filesystem` for all file operations.
+
+### 4\. **Missing CSRF Protection**
+
+  * **File:** `includes/Admin/Metabox.php`
+  * **Line Number(s):** 148-164
+  * **Description:** The `save_preload_images_metabox_data` method does not have a proper CSRF check. An attacker could potentially trick an administrator into submitting a form that modifies the preload image URLs, leading to a CSRF vulnerability.
+  * **Recommendation:** Add a CSRF token to the form and verify it on the server-side using `wp_verify_nonce`.
+
+### 5\. **Performance Issue: Direct Database Queries in a Loop**
+
+  * **File:** `includes/Core/Analytics/PerformanceAnalyzer.php`
+  * **Line Number(s):** 164-180
+  * **Description:** The `analyze_page_load_performance` method executes database queries inside a `foreach` loop. This can lead to a large number of database queries, especially on sites with a lot of data, causing performance issues.
+  * **Recommendation:** Optimize the code to fetch all the required data in a single database query outside the loop.
+
+### 6\. **WordPress Coding Standards Violation: Use of `extract()`**
+
+  * **File:** `includes/Core/Bootstrap/Plugin.php`
+  * **Line Number(s):** 298
+  * **Description:** The code uses the `extract()` function, which is discouraged by WordPress coding standards because it can make the code harder to read and debug.
+  * **Recommendation:** Avoid using `extract()` and access the array variables directly.

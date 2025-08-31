@@ -10,6 +10,9 @@ namespace PerformanceOptimisation\Core\Config;
 
 use PerformanceOptimisation\Core\Config\ConfigInterface;
 use PerformanceOptimisation\Exceptions\ConfigurationException;
+use PerformanceOptimisation\Utils\LoggingUtil;
+use PerformanceOptimisation\Utils\ValidationUtil;
+use PerformanceOptimisation\Utils\FileSystemUtil;
 
 /**
  * Configuration management class
@@ -33,6 +36,27 @@ class ConfigManager implements ConfigInterface {
 	 * @var string
 	 */
 	private string $option_name = 'wppo_settings';
+
+	/**
+	 * Logger instance
+	 *
+	 * @var LoggingUtil|null
+	 */
+	private ?LoggingUtil $logger = null;
+
+	/**
+	 * Validator instance
+	 *
+	 * @var ValidationUtil|null
+	 */
+	private ?ValidationUtil $validator = null;
+
+	/**
+	 * FileSystem instance
+	 *
+	 * @var FileSystemUtil|null
+	 */
+	private ?FileSystemUtil $filesystem = null;
 
 	/**
 	 * Default configuration values
@@ -90,9 +114,23 @@ class ConfigManager implements ConfigInterface {
 	 * Constructor
 	 *
 	 * @since 1.1.0
+	 * @param LoggingUtil|null    $logger     Logger instance.
+	 * @param ValidationUtil|null $validator  Validator instance.
+	 * @param FileSystemUtil|null $filesystem FileSystem instance.
 	 */
-	public function __construct() {
+	public function __construct( ?LoggingUtil $logger = null, ?ValidationUtil $validator = null, ?FileSystemUtil $filesystem = null ) {
+		$this->logger = $logger;
+		$this->validator = $validator;
+		$this->filesystem = $filesystem;
+		
 		$this->load();
+		
+		if ( $this->logger ) {
+			$this->logger->debug( 'ConfigManager initialized', array(
+				'option_name' => $this->option_name,
+				'config_keys' => array_keys( $this->config ),
+			) );
+		}
 	}
 
 	/**
@@ -158,7 +196,38 @@ class ConfigManager implements ConfigInterface {
 	 * @return bool True on success, false on failure
 	 */
 	public function save(): bool {
-		return update_option( $this->option_name, $this->config );
+		try {
+			// Validate configuration before saving
+			if ( $this->validator ) {
+				$validated_config = $this->validator->validateSettings( $this->config );
+				if ( ! $validated_config['valid'] ) {
+					if ( $this->logger ) {
+						$this->logger->error( 'Configuration validation failed', array(
+							'errors' => $validated_config['errors'],
+						) );
+					}
+					return false;
+				}
+			}
+
+			$result = update_option( $this->option_name, $this->config );
+			
+			if ( $this->logger ) {
+				$this->logger->info( 'Configuration saved', array(
+					'option_name' => $this->option_name,
+					'success' => $result,
+					'config_size' => count( $this->config ),
+				) );
+			}
+			
+			return $result;
+			
+		} catch ( \Exception $e ) {
+			if ( $this->logger ) {
+				$this->logger->error( 'Failed to save configuration: ' . $e->getMessage() );
+			}
+			return false;
+		}
 	}
 
 	/**
@@ -168,9 +237,29 @@ class ConfigManager implements ConfigInterface {
 	 * @return bool True on success, false on failure
 	 */
 	public function load(): bool {
-		$saved_config = get_option( $this->option_name, array() );
-		$this->config = $this->merge_with_defaults( $saved_config );
-		return true;
+		try {
+			$saved_config = get_option( $this->option_name, array() );
+			$this->config = $this->merge_with_defaults( $saved_config );
+			
+			if ( $this->logger ) {
+				$this->logger->debug( 'Configuration loaded', array(
+					'option_name' => $this->option_name,
+					'saved_keys' => array_keys( $saved_config ),
+					'merged_keys' => array_keys( $this->config ),
+				) );
+			}
+			
+			return true;
+			
+		} catch ( \Exception $e ) {
+			if ( $this->logger ) {
+				$this->logger->error( 'Failed to load configuration: ' . $e->getMessage() );
+			}
+			
+			// Fallback to defaults
+			$this->config = $this->defaults;
+			return false;
+		}
 	}
 
 	/**

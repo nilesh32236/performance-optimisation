@@ -138,7 +138,7 @@ const HelpPanel: React.FC<HelpPanelProps> = ( {
 								onClick={ () =>
 									window.open(
 										'/wp-admin/admin.php?page=performance-optimisation-docs',
-										'_blank',
+										'_blank'
 									)
 								}
 							>
@@ -150,7 +150,7 @@ const HelpPanel: React.FC<HelpPanelProps> = ( {
 								onClick={ () =>
 									window.open(
 										'https://wordpress.org/support/plugin/performance-optimisation/',
-										'_blank',
+										'_blank'
 									)
 								}
 							>

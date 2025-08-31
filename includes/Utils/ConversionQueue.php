@@ -72,4 +72,46 @@ class ConversionQueue {
 	private function get_relative_path( string $path ): string {
 		return str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $path ) );
 	}
+
+	/**
+	 * Get pending items for processing.
+	 *
+	 * @param int $limit Number of items to retrieve.
+	 * @return array
+	 */
+	public function get_pending_items( int $limit = 10 ): array {
+		$items = array();
+		$count = 0;
+
+		foreach ( $this->queue['pending'] as $format => $paths ) {
+			foreach ( $paths as $path ) {
+				if ( $count >= $limit ) {
+					break 2;
+				}
+				
+				$items[] = array(
+					'source_path' => wp_normalize_path( ABSPATH . $path ),
+					'target_format' => $format,
+				);
+				$count++;
+			}
+		}
+
+		return $items;
+	}
+
+	/**
+	 * Clear all queue data.
+	 *
+	 * @return void
+	 */
+	public function clear(): void {
+		$this->queue = array(
+			'pending'   => array(),
+			'completed' => array(),
+			'failed'    => array(),
+			'skipped'   => array(),
+		);
+		$this->save();
+	}
 }

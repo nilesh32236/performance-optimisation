@@ -26,16 +26,16 @@ class CronService {
 
 	private CacheService $cacheService;
 	private ?ImageService $imageService;
-	private SettingsService $settingsService;
+	private ?SettingsService $settingsService;
 
 	public function __construct(
 		CacheService $cacheService,
-		?ImageService $imageService,
-		SettingsService $settingsService
+		$imageService = null,
+		$settingsService = null
 	) {
 		$this->cacheService    = $cacheService;
-		$this->imageService    = $imageService;
-		$this->settingsService = $settingsService;
+		$this->imageService    = ($imageService instanceof ImageService) ? $imageService : null;
+		$this->settingsService = ($settingsService instanceof SettingsService) ? $settingsService : null;
 
 		add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
 		add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
@@ -96,7 +96,7 @@ class CronService {
 		if ( null === $this->imageService ) {
 			return;
 		}
-		
+
 		$pending_images = $this->imageService->get_pending_images( 10 );
 		foreach ( $pending_images as $image ) {
 			$this->imageService->convert_image( $image['path'], $image['format'] );

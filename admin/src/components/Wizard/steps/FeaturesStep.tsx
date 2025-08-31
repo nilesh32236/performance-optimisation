@@ -180,7 +180,7 @@ function FeaturesStep( { stepConfig }: FeaturesStepProps ) {
 												className="wppo-metric-dot"
 												style={ {
 													backgroundColor: getComplexityColor(
-														feature.complexity,
+														feature.complexity
 													),
 												} }
 											/>

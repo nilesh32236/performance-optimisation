@@ -12,7 +12,10 @@
 
 namespace PerformanceOptimisation\Admin;
 
+use PerformanceOptimisation\Interfaces\ServiceContainerInterface;
 use PerformanceOptimisation\Services\SettingsService;
+use PerformanceOptimisation\Utils\LoggingUtil;
+use PerformanceOptimisation\Utils\ValidationUtil;
 
 // Exit if accessed directly.
 if ( ! defined( 'ABSPATH' ) ) {
@@ -37,7 +40,7 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 		 *
 		 * @var string
 		 */
-		const META_KEY = '_wppo_preload_image_urls'; // Changed from _wppo_preload_image_url to reflect multiple URLs.
+		const META_KEY = '_wppo_preload_image_urls';
 
 		/**
 		 * Nonce action name for saving metabox data.
@@ -53,18 +56,26 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 		 */
 		const NONCE_FIELD = 'wppo_preload_images_nonce';
 
-
+		private ServiceContainerInterface $container;
 		private SettingsService $settingsService;
+		private LoggingUtil $logger;
+		private ValidationUtil $validator;
 
 		/**
 		 * Constructor to hook into WordPress actions for adding and saving the metabox.
 		 *
 		 * @since 1.0.0
 		 */
-		public function __construct( SettingsService $settingsService ) {
-			$this->settingsService = $settingsService;
+		public function __construct( ServiceContainerInterface $container ) {
+			$this->container = $container;
+			$this->settingsService = $container->get( 'settings_service' );
+			$this->logger = $container->get( 'logger' );
+			$this->validator = $container->get( 'validator' );
+			
 			add_action( 'add_meta_boxes', array( $this, 'add_preload_images_metabox' ) );
 			add_action( 'save_post', array( $this, 'save_preload_images_metabox_data' ) );
+			
+			$this->logger->debug( 'Metabox hooks setup completed' );
 		}
 
 		/**
@@ -129,36 +140,175 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 		 * @param int $post_id The ID of the post being saved.
 		 */
 		public function save_preload_images_metabox_data( int $post_id ): void {
+			// Verify nonce
 			if ( ! isset( $_POST[ self::NONCE_FIELD ] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST[ self::NONCE_FIELD ] ) ), self::NONCE_ACTION ) ) {
+				$this->logger->warning( 'Metabox save failed: Invalid nonce', array( 'post_id' => $post_id ) );
 				return;
 			}
 
+			// Skip autosave
 			if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
 				return;
 			}
 
-			$post_type        = get_post_type( $post_id );
+			// Check permissions
+			$post_type = get_post_type( $post_id );
 			$post_type_object = get_post_type_object( $post_type );
 			if ( ! $post_type_object || ! current_user_can( $post_type_object->cap->edit_post, $post_id ) ) {
+				$this->logger->warning( 'Metabox save failed: Insufficient permissions', array( 
+					'post_id' => $post_id,
+					'user_id' => get_current_user_id(),
+					'post_type' => $post_type,
+				) );
 				return;
 			}
 
 			if ( isset( $_POST[ self::META_KEY ] ) ) {
 				$preload_urls_string = sanitize_textarea_field( wp_unslash( $_POST[ self::META_KEY ] ) );
-
-				$lines               = explode( "\n", $preload_urls_string );
-				$lines               = array_map( 'trim', $lines );
-				$lines               = array_filter( $lines ); // Remove empty lines.
-				$cleaned_urls_string = implode( "\n", $lines );
-
-				if ( ! empty( $cleaned_urls_string ) ) {
+				
+				// Process and validate URLs
+				$processed_urls = $this->processPreloadUrls( $preload_urls_string );
+				
+				if ( ! empty( $processed_urls['valid'] ) ) {
+					$cleaned_urls_string = implode( "\n", $processed_urls['valid'] );
 					update_post_meta( $post_id, self::META_KEY, $cleaned_urls_string );
+					
+					$this->logger->info( 'Preload URLs saved for post', array(
+						'post_id' => $post_id,
+						'url_count' => count( $processed_urls['valid'] ),
+						'invalid_count' => count( $processed_urls['invalid'] ),
+					) );
 				} else {
 					delete_post_meta( $post_id, self::META_KEY );
+					$this->logger->debug( 'Preload URLs cleared for post', array( 'post_id' => $post_id ) );
+				}
+
+				// Log invalid URLs for debugging
+				if ( ! empty( $processed_urls['invalid'] ) ) {
+					$this->logger->warning( 'Invalid preload URLs detected', array(
+						'post_id' => $post_id,
+						'invalid_urls' => $processed_urls['invalid'],
+					) );
 				}
 			} else {
 				delete_post_meta( $post_id, self::META_KEY );
+				$this->logger->debug( 'Preload URLs removed for post', array( 'post_id' => $post_id ) );
 			}
+		}
+
+		/**
+		 * Process and validate preload URLs.
+		 *
+		 * @param string $urls_string Raw URLs string from textarea.
+		 * @return array Processed URLs with valid and invalid arrays.
+		 */
+		private function processPreloadUrls( string $urls_string ): array {
+			$lines = explode( "\n", $urls_string );
+			$lines = array_map( 'trim', $lines );
+			$lines = array_filter( $lines ); // Remove empty lines
+
+			$valid_urls = array();
+			$invalid_urls = array();
+
+			foreach ( $lines as $line ) {
+				// Check for device-specific prefixes
+				$device_prefix = '';
+				if ( preg_match( '/^(mobile|desktop|tablet):\s*(.+)$/i', $line, $matches ) ) {
+					$device_prefix = strtolower( $matches[1] ) . ':';
+					$url = trim( $matches[2] );
+				} else {
+					$url = $line;
+				}
+
+				// Validate URL
+				if ( $this->isValidPreloadUrl( $url ) ) {
+					$valid_urls[] = $device_prefix . $url;
+				} else {
+					$invalid_urls[] = $line;
+				}
+			}
+
+			return array(
+				'valid' => $valid_urls,
+				'invalid' => $invalid_urls,
+			);
+		}
+
+		/**
+		 * Validate if URL is suitable for preloading.
+		 *
+		 * @param string $url URL to validate.
+		 * @return bool True if valid, false otherwise.
+		 */
+		private function isValidPreloadUrl( string $url ): bool {
+			// Basic URL validation
+			if ( empty( $url ) ) {
+				return false;
+			}
+
+			// Allow relative URLs
+			if ( strpos( $url, '/' ) === 0 ) {
+				return true;
+			}
+
+			// Validate absolute URLs
+			if ( filter_var( $url, FILTER_VALIDATE_URL ) ) {
+				// Check if it's an image URL
+				$image_extensions = array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg' );
+				$extension = strtolower( pathinfo( parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+				
+				return in_array( $extension, $image_extensions, true );
+			}
+
+			return false;
+		}
+
+		/**
+		 * Get preload URLs for a specific post.
+		 *
+		 * @param int $post_id Post ID.
+		 * @return array Array of preload URLs.
+		 */
+		public function getPreloadUrls( int $post_id ): array {
+			$urls_string = get_post_meta( $post_id, self::META_KEY, true );
+			
+			if ( empty( $urls_string ) ) {
+				return array();
+			}
+
+			$lines = explode( "\n", $urls_string );
+			$lines = array_map( 'trim', $lines );
+			$lines = array_filter( $lines );
+
+			return $lines;
+		}
+
+		/**
+		 * Get device-specific preload URLs.
+		 *
+		 * @param int    $post_id Post ID.
+		 * @param string $device  Device type (mobile, desktop, tablet).
+		 * @return array Array of URLs for the specified device.
+		 */
+		public function getDeviceSpecificUrls( int $post_id, string $device = '' ): array {
+			$all_urls = $this->getPreloadUrls( $post_id );
+			$device_urls = array();
+
+			foreach ( $all_urls as $url ) {
+				if ( preg_match( '/^(mobile|desktop|tablet):\s*(.+)$/i', $url, $matches ) ) {
+					$url_device = strtolower( $matches[1] );
+					$clean_url = trim( $matches[2] );
+					
+					if ( empty( $device ) || $url_device === strtolower( $device ) ) {
+						$device_urls[] = $clean_url;
+					}
+				} elseif ( empty( $device ) ) {
+					// URLs without device prefix are universal
+					$device_urls[] = $url;
+				}
+			}
+
+			return $device_urls;
 		}
 	}
 }

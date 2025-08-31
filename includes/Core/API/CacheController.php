@@ -147,10 +147,9 @@ class CacheController extends BaseController {
 			$cache_type = $data['type'] ?? 'all';
 			$path       = $data['path'] ?? null;
 
-			// Load cache class.
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
-			}
+			// Use modern services instead of legacy classes
+			$container = \PerformanceOptimisation\Core\Container\Container::getInstance();
+			$cacheService = $container->get( \PerformanceOptimisation\Services\CacheService::class );
 
 			$cleared_items = 0;
 			$message       = '';
@@ -158,41 +157,38 @@ class CacheController extends BaseController {
 			switch ( $cache_type ) {
 				case 'page':
 					if ( $path ) {
-						\PerformanceOptimise\Inc\Cache::clear_cache( $path );
-						$message       = sprintf( 'Page cache cleared for: %s', esc_url( home_url( $path ) ) );
-						$cleared_items = 1;
+						$success = $cacheService->invalidateCache( $path );
+						$message = sprintf( 'Page cache cleared for: %s', esc_url( home_url( $path ) ) );
+						$cleared_items = $success ? 1 : 0;
 					} else {
-						\PerformanceOptimise\Inc\Cache::clear_page_cache();
-						$cleared_items = 0; // This method is void.
-						$message       = 'Page cache cleared.';
+						$success = $cacheService->clearCache( 'page' );
+						$cleared_items = $success ? 1 : 0;
+						$message = 'Page cache cleared.';
 					}
 					break;
 
 				case 'object':
-					\PerformanceOptimise\Inc\Cache::clear_object_cache();
-					$cleared_items = 0; // This method is void.
-					$message       = 'Object cache cleared.';
+					wp_cache_flush();
+					$cleared_items = 1;
+					$message = 'Object cache cleared.';
 					break;
 
 				case 'minified':
-					\PerformanceOptimise\Inc\Cache::clear_minified_cache();
-					$cleared_items = 0; // This method is void.
-					$message       = 'Minified files cache cleared.';
+					$success = $cacheService->clearCache( 'minified' );
+					$cleared_items = $success ? 1 : 0;
+					$message = 'Minified files cache cleared.';
 					break;
 
 				case 'all':
 				default:
-					\PerformanceOptimise\Inc\Cache::clear_cache();
-					$cleared_items = 0; // This method is void.
-					$message       = 'All cache cleared.';
+					$success = $cacheService->clearCache( 'all' );
+					$cleared_items = $success ? 1 : 0;
+					$message = 'All cache cleared.';
 					break;
 			}
 
-			// Log the action.
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-			}
-			new \PerformanceOptimise\Inc\Log( $message . ' on ' . current_time( 'mysql' ) );
+			// Log the action using modern logging
+			\PerformanceOptimisation\Utils\LoggingUtil::info( $message . ' on ' . current_time( 'mysql' ) );
 
 			return $this->send_success_response(
 				array(
@@ -285,7 +281,7 @@ class CacheController extends BaseController {
 			$limit = $data['limit'] ?? 10;
 
 			// Load preload functionality.
-			$cache_service = new \PerformanceOptimisation\Services\CacheService();
+			$cache_service    = new \PerformanceOptimisation\Services\CacheService();
 			$settings_service = new \PerformanceOptimisation\Services\SettingsService();
 			// Skip image service for now as it requires complex dependencies
 			$cron_manager = new \PerformanceOptimisation\Services\CronService(
@@ -336,7 +332,7 @@ class CacheController extends BaseController {
 			}
 
 			// Load cache warmup functionality.
-			$cache_service = new \PerformanceOptimisation\Services\CacheService();
+			$cache_service    = new \PerformanceOptimisation\Services\CacheService();
 			$settings_service = new \PerformanceOptimisation\Services\SettingsService();
 			// Skip image service for now as it requires complex dependencies
 			$cron_manager = new \PerformanceOptimisation\Services\CronService(

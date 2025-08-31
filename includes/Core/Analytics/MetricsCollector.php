@@ -170,7 +170,7 @@ class MetricsCollector {
 			'admin_page_view',
 			1,
 			array(
-				'page' => $_GET['page'] ?? 'dashboard',
+				'page' => sanitize_text_field( $_GET['page'] ?? 'dashboard' ),
 				'type' => 'admin',
 			)
 		);

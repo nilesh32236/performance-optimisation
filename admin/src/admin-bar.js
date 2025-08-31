@@ -46,13 +46,13 @@ document.addEventListener( 'DOMContentLoaded', () => {
 				// alert(result.data?.message || i18n.cacheCleared || 'All cache cleared successfully.');
 				showAdminBarNotice(
 					result.data?.message || i18n.cacheCleared || 'All cache cleared successfully.',
-					'success',
+					'success'
 				);
 			} else {
 				// alert(result.message || i18n.cacheClearError || 'Error clearing cache.');
 				showAdminBarNotice(
 					result.message || i18n.cacheClearError || 'Error clearing cache.',
-					'error',
+					'error'
 				);
 			}
 		} catch ( error ) {
@@ -77,7 +77,7 @@ document.addEventListener( 'DOMContentLoaded', () => {
 			showAdminBarNotice(
 				i18n.cannotClearNonSpecificPage ||
 					'Cannot determine the current page to clear cache.',
-				'warning',
+				'warning'
 			);
 			return;
 		}
@@ -108,13 +108,13 @@ document.addEventListener( 'DOMContentLoaded', () => {
 					result.data?.message ||
 						i18n.cacheCleared ||
 						'Cache for this page cleared successfully.',
-					'success',
+					'success'
 				);
 			} else {
 				// alert(result.message || i18n.cacheClearError || 'Error clearing cache for this page.');
 				showAdminBarNotice(
 					result.message || i18n.cacheClearError || 'Error clearing cache for this page.',
-					'error',
+					'error'
 				);
 			}
 		} catch ( error ) {
@@ -192,7 +192,7 @@ document.addEventListener( 'DOMContentLoaded', () => {
 	}
 
 	const clearThisPageCacheLink = document.querySelector(
-		'#wp-admin-bar-wppo_clear_this_page_cache .ab-item',
+		'#wp-admin-bar-wppo_clear_this_page_cache .ab-item'
 	);
 	if ( clearThisPageCacheLink ) {
 		clearThisPageCacheLink.addEventListener( 'click', handleClearThisPageCache );

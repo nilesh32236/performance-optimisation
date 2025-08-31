@@ -160,7 +160,7 @@ function PresetStep( { stepConfig }: PresetStepProps ) {
 														? '66%'
 														: '33%',
 											backgroundColor: getPerformanceColor(
-												preset.performance,
+												preset.performance
 											),
 										} }
 									/>
@@ -181,7 +181,7 @@ function PresetStep( { stepConfig }: PresetStepProps ) {
 														? '66%'
 														: '33%',
 											backgroundColor: getCompatibilityColor(
-												preset.compatibility,
+												preset.compatibility
 											),
 										} }
 									/>
