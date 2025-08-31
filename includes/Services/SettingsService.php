@@ -136,16 +136,17 @@ class SettingsService implements SettingsServiceInterface {
 	 * @return array All settings.
 	 */
 	public function get_settings(): array {
-		$timer_id = $this->performance->startTimer( 'settings_get_all' );
+		$timer_name = 'settings_get_all';
+		$this->performance->startTimer( $timer_name );
 
 		try {
 			$settings = $this->getConfig()->all();
-			$this->performance->endTimer( $timer_id );
+			$this->performance->endTimer( $timer_name );
 
 			return $settings;
 
 		} catch ( \Exception $e ) {
-			$this->performance->endTimer( $timer_id );
+			$this->performance->endTimer( $timer_name );
 			$this->logger->error( 'Failed to get all settings: ' . $e->getMessage() );
 			return $this->get_default_settings();
 		}
@@ -158,7 +159,8 @@ class SettingsService implements SettingsServiceInterface {
 	 * @return bool True on success, false on failure.
 	 */
 	public function update_settings( array $new_settings ): bool {
-		$timer_id = $this->performance->startTimer( 'settings_update_multiple' );
+		$timer_name = 'settings_update_multiple';
+		$this->performance->startTimer( $timer_name );
 
 		try {
 			// Migrate legacy settings format if needed
@@ -184,11 +186,11 @@ class SettingsService implements SettingsServiceInterface {
 				do_action( 'wppo_settings_updated', $new_settings, $this );
 			}
 
-			$this->performance->endTimer( $timer_id );
+			$this->performance->endTimer( $timer_name );
 			return $result;
 
 		} catch ( ConfigurationException $e ) {
-			$this->performance->endTimer( $timer_id );
+			$this->performance->endTimer( $timer_name );
 			$this->logger->error( 'Settings update failed: ' . $e->getFormattedMessage() );
 			return false;
 		}
@@ -227,7 +229,8 @@ class SettingsService implements SettingsServiceInterface {
 	 * @return bool True on success, false on failure.
 	 */
 	public function update_setting( string $group, string $key, $value ): bool {
-		$timer_id = $this->performance->startTimer( 'settings_update_single' );
+		$timer_name = 'settings_update_single';
+		$this->performance->startTimer( $timer_name );
 
 		try {
 			$config_key = "{$group}.{$key}";
@@ -257,11 +260,11 @@ class SettingsService implements SettingsServiceInterface {
 				}
 			}
 
-			$this->performance->endTimer( $timer_id );
+			$this->performance->endTimer( $timer_name );
 			return $result;
 
 		} catch ( ConfigurationException $e ) {
-			$this->performance->endTimer( $timer_id );
+			$this->performance->endTimer( $timer_name );
 			$this->logger->error(
 				'Single setting update failed',
 				array(
@@ -397,7 +400,8 @@ class SettingsService implements SettingsServiceInterface {
 		}
 
 		try {
-			$timer_id = $this->performance->startTimer( 'settings_migration' );
+			$timer_name = 'settings_migration';
+			$this->performance->startTimer( $timer_name );
 
 			$current_version = get_option( 'wppo_settings_version', '1.0.0' );
 			$this->logger->info(
@@ -434,7 +438,7 @@ class SettingsService implements SettingsServiceInterface {
 			update_option( 'wppo_settings_version', self::SETTINGS_VERSION );
 
 			$this->migration_completed = true;
-			$duration                  = $this->performance->endTimer( $timer_id );
+			$duration                  = $this->performance->endTimer( $timer_name );
 
 			$this->logger->info(
 				'Settings migration completed',
