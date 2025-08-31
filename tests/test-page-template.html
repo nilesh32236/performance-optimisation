@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Performance Optimization Test Page</title>
+    <style>
+        /* Test CSS for minification */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .test-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        
+        .button {
+            background: #0073aa;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        .button:hover {
+            background: #005a87;
+        }
+        
+        .results {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Performance Optimization Test Page</h1>
+        <p>Use this page to test various optimization features.</p>
+        
+        <!-- Image Optimization Test -->
+        <div class="test-section">
+            <h2>Image Optimization Test</h2>
+            <p>Upload test images and check if they get optimized:</p>
+            
+            <!-- Add test images here -->
+            <img src="https://via.placeholder.com/800x600/0073aa/ffffff?text=Test+Image+1" 
+                 alt="Test Image 1" class="test-image" loading="lazy">
+            
+            <img src="https://via.placeholder.com/600x400/28a745/ffffff?text=Test+Image+2" 
+                 alt="Test Image 2" class="test-image" loading="lazy">
+            
+            <div class="results" id="image-results">
+                Check browser developer tools Network tab to see:
+                - WebP/AVIF versions served to supported browsers
+                - Lazy loading implementation
+                - Responsive image srcsets
+            </div>
+        </div>
+        
+        <!-- CSS Optimization Test -->
+        <div class="test-section">
+            <h2>CSS Optimization Test</h2>
+            <p>Check if CSS is minified and combined:</p>
+            <button class="button" onclick="checkCSS()">Check CSS Optimization</button>
+            <div class="results" id="css-results"></div>
+        </div>
+        
+        <!-- JavaScript Optimization Test -->
+        <div class="test-section">
+            <h2>JavaScript Optimization Test</h2>
+            <p>Test JavaScript minification and defer/async loading:</p>
+            <button class="button" onclick="checkJS()">Check JS Optimization</button>
+            <button class="button" onclick="testAsyncLoading()">Test Async Loading</button>
+            <div class="results" id="js-results"></div>
+        </div>
+        
+        <!-- Cache Test -->
+        <div class="test-section">
+            <h2>Cache Test</h2>
+            <p>Test caching functionality:</p>
+            <button class="button" onclick="testCache()">Test Page Cache</button>
+            <button class="button" onclick="clearCache()">Clear Cache</button>
+            <div class="results" id="cache-results"></div>
+        </div>
+        
+        <!-- Performance Test -->
+        <div class="test-section">
+            <h2>Performance Test</h2>
+            <p>Measure page performance:</p>
+            <button class="button" onclick="measurePerformance()">Measure Performance</button>
+            <div class="results" id="performance-results"></div>
+        </div>
+        
+        <!-- API Test -->
+        <div class="test-section">
+            <h2>API Test</h2>
+            <p>Test REST API endpoints:</p>
+            <button class="button" onclick="testAPI()">Test API Endpoints</button>
+            <div class="results" id="api-results"></div>
+        </div>
+    </div>
+
+    <script>
+        // Test JavaScript functions
+        function checkCSS() {
+            const results = document.getElementById('css-results');
+            const stylesheets = document.querySelectorAll('link[rel="stylesheet"]');
+            
+            let output = `Found ${stylesheets.length} CSS files:\n`;
+            stylesheets.forEach((link, index) => {
+                output += `${index + 1}. ${link.href}\n`;
+                output += `   - Media: ${link.media || 'all'}\n`;
+            });
+            
+            // Check if CSS is minified (no spaces after colons/semicolons)
+            fetch(stylesheets[0]?.href || '')
+                .then(response => response.text())
+                .then(css => {
+                    const isMinified = !css.includes('  ') && !css.includes('\n    ');
+                    output += `\nCSS appears to be: ${isMinified ? 'MINIFIED ✅' : 'NOT MINIFIED ❌'}`;
+                    results.textContent = output;
+                })
+                .catch(() => {
+                    results.textContent = output + '\nCould not fetch CSS for analysis';
+                });
+        }
+        
+        function checkJS() {
+            const results = document.getElementById('js-results');
+            const scripts = document.querySelectorAll('script[src]');
+            
+            let output = `Found ${scripts.length} external JS files:\n`;
+            scripts.forEach((script, index) => {
+                output += `${index + 1}. ${script.src}\n`;
+                output += `   - Async: ${script.async ? 'YES' : 'NO'}\n`;
+                output += `   - Defer: ${script.defer ? 'YES' : 'NO'}\n`;
+            });
+            
+            results.textContent = output;
+        }
+        
+        function testAsyncLoading() {
+            const results = document.getElementById('js-results');
+            const loadStart = performance.now();
+            
+            // Simulate async script loading
+            const script = document.createElement('script');
+            script.src = 'data:text/javascript,console.log("Async test loaded");';
+            script.async = true;
+            script.onload = () => {
+                const loadTime = performance.now() - loadStart;
+                results.textContent += `\nAsync script loaded in ${loadTime.toFixed(2)}ms ✅`;
+            };
+            document.head.appendChild(script);
+        }
+        
+        function testCache() {
+            const results = document.getElementById('cache-results');
+            const startTime = performance.now();
+            
+            // Test cache headers
+            fetch(window.location.href, { cache: 'reload' })
+                .then(response => {
+                    const loadTime = performance.now() - startTime;
+                    const cacheControl = response.headers.get('Cache-Control');
+                    const etag = response.headers.get('ETag');
+                    
+                    let output = `Page load time: ${loadTime.toFixed(2)}ms\n`;
+                    output += `Cache-Control: ${cacheControl || 'Not set'}\n`;
+                    output += `ETag: ${etag || 'Not set'}\n`;
+                    
+                    // Test second load (should be faster if cached)
+                    const secondStart = performance.now();
+                    return fetch(window.location.href).then(response2 => {
+                        const secondLoad = performance.now() - secondStart;
+                        output += `Second load: ${secondLoad.toFixed(2)}ms\n`;
+                        output += `Cache working: ${secondLoad < loadTime ? 'YES ✅' : 'NO ❌'}`;
+                        results.textContent = output;
+                    });
+                })
+                .catch(error => {
+                    results.textContent = `Error testing cache: ${error.message}`;
+                });
+        }
+        
+        function clearCache() {
+            const results = document.getElementById('cache-results');
+            
+            // Test cache clear API
+            fetch('/wp-json/performance-optimisation/v1/cache/clear', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-WP-Nonce': wpApiSettings?.nonce || ''
+                },
+                body: JSON.stringify({ type: 'all' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                results.textContent = `Cache clear result: ${data.success ? 'SUCCESS ✅' : 'FAILED ❌'}\n${data.message || ''}`;
+            })
+            .catch(error => {
+                results.textContent = `Cache clear failed: ${error.message}`;
+            });
+        }
+        
+        function measurePerformance() {
+            const results = document.getElementById('performance-results');
+            
+            // Get performance metrics
+            const navigation = performance.getEntriesByType('navigation')[0];
+            const paint = performance.getEntriesByType('paint');
+            
+            let output = 'Performance Metrics:\n';
+            output += `DOM Content Loaded: ${navigation.domContentLoadedEventEnd.toFixed(2)}ms\n`;
+            output += `Page Load Complete: ${navigation.loadEventEnd.toFixed(2)}ms\n`;
+            
+            paint.forEach(entry => {
+                output += `${entry.name}: ${entry.startTime.toFixed(2)}ms\n`;
+            });
+            
+            // Check Core Web Vitals if available
+            if ('web-vitals' in window) {
+                output += '\nCore Web Vitals will be measured...';
+            }
+            
+            results.textContent = output;
+        }
+        
+        function testAPI() {
+            const results = document.getElementById('api-results');
+            
+            // Test API endpoints
+            const endpoints = [
+                '/wp-json/performance-optimisation/v1/cache/stats',
+                '/wp-json/performance-optimisation/v1/images/stats'
+            ];
+            
+            let output = 'Testing API endpoints:\n';
+            results.textContent = output + 'Testing...';
+            
+            Promise.all(endpoints.map(endpoint => 
+                fetch(endpoint, {
+                    headers: {
+                        'X-WP-Nonce': wpApiSettings?.nonce || ''
+                    }
+                })
+                .then(response => ({
+                    endpoint,
+                    status: response.status,
+                    ok: response.ok
+                }))
+                .catch(error => ({
+                    endpoint,
+                    status: 'ERROR',
+                    error: error.message
+                }))
+            ))
+            .then(results_array => {
+                results_array.forEach(result => {
+                    output += `${result.endpoint}: ${result.ok ? 'OK ✅' : 'FAILED ❌'} (${result.status})\n`;
+                });
+                results.textContent = output;
+            });
+        }
+        
+        // Auto-run some tests on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Performance Optimization Test Page Loaded');
+            
+            // Log page load performance
+            window.addEventListener('load', function() {
+                const loadTime = performance.now();
+                console.log(`Page loaded in ${loadTime.toFixed(2)}ms`);
+            });
+        });
+    </script>
+</body>
+</html>

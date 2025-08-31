@@ -1,0 +1,90 @@
+{
+  "success": true,
+  "data": {
+    "recommendations": [
+      {
+        "id": "enable_page_caching",
+        "type": "caching",
+        "priority": "high",
+        "impact": "high",
+        "title": "Enable Page Caching",
+        "description": "Page caching can dramatically improve your site speed by serving static versions of your pages to visitors.",
+        "current_value": false,
+        "target_value": true,
+        "potential_improvement": "30-50% faster page load times",
+        "actions": [
+          "Enable page caching in the cache settings",
+          "Configure cache expiration times",
+          "Set up cache preloading for popular pages"
+        ],
+        "automated_fix": {
+          "action": "enable_page_caching",
+          "settings": {
+            "cache_settings.enablePageCaching": true,
+            "cache_settings.cacheExpiration": 3600
+          }
+        }
+      },
+      {
+        "id": "enable_minification",
+        "type": "optimization",
+        "priority": "medium",
+        "impact": "medium",
+        "title": "Enable File Minification",
+        "description": "Minification is disabled for: CSS, JavaScript, HTML. Minifying files reduces their size and improves load times.",
+        "potential_improvement": "10-20% reduction in file sizes",
+        "actions": [
+          "Enable minification for CSS, JavaScript, and HTML files",
+          "Test your site after enabling to ensure compatibility",
+          "Consider combining files to reduce HTTP requests"
+        ],
+        "automated_fix": {
+          "action": "enable_minification",
+          "settings": {
+            "file_optimisation.minifyCSS": true,
+            "file_optimisation.minifyJS": true,
+            "file_optimisation.minifyHTML": true
+          }
+        }
+      },
+      {
+        "id": "optimize_pending_images",
+        "type": "image_optimization",
+        "priority": "medium",
+        "impact": "medium",
+        "title": "Optimize Pending Images",
+        "description": "You have 15 images waiting to be optimized. Optimized images load faster and use less bandwidth.",
+        "current_value": 15,
+        "target_value": 0,
+        "potential_improvement": "20-40% reduction in image file sizes",
+        "actions": [
+          "Run bulk image optimization",
+          "Enable automatic optimization for new uploads",
+          "Consider using modern image formats (WebP, AVIF)"
+        ],
+        "automated_fix": {
+          "action": "optimize_images",
+          "settings": {
+            "image_optimisation.convertImg": true,
+            "image_optimisation.format": "webp"
+          }
+        }
+      }
+    ],
+    "summary": {
+      "total": 3,
+      "by_priority": {
+        "high": 1,
+        "medium": 2,
+        "low": 0
+      },
+      "by_type": {
+        "caching": 1,
+        "optimization": 1,
+        "image_optimization": 1
+      },
+      "potential_improvements": []
+    },
+    "generated_at": "2024-01-07 12:00:00"
+  }
+}

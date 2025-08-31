@@ -1,0 +1,115 @@
+{
+  "success": true,
+  "data": {
+    "overview": {
+      "performance_score": 85,
+      "average_load_time": 1500,
+      "cache_hit_ratio": 80,
+      "total_page_views": 1000,
+      "optimization_status": {
+        "page_caching": true,
+        "css_minification": true,
+        "js_minification": false,
+        "image_lazy_loading": true
+      }
+    },
+    "optimization_status": {
+      "features": {
+        "page_caching": true,
+        "css_minification": true,
+        "js_minification": false,
+        "html_minification": false,
+        "image_lazy_loading": true,
+        "image_conversion": false
+      },
+      "image_optimization": {
+        "total_optimized": 50,
+        "total_pending": 10,
+        "optimization_ratio": 83.3
+      }
+    },
+    "charts": {
+      "page_load_time": {
+        "daily_trends": [
+          { "date": "2024-01-01", "value": 1600, "sample_count": 100 },
+          { "date": "2024-01-02", "value": 1550, "sample_count": 120 },
+          { "date": "2024-01-03", "value": 1500, "sample_count": 110 },
+          { "date": "2024-01-04", "value": 1450, "sample_count": 130 },
+          { "date": "2024-01-05", "value": 1400, "sample_count": 125 },
+          { "date": "2024-01-06", "value": 1350, "sample_count": 140 },
+          { "date": "2024-01-07", "value": 1300, "sample_count": 135 }
+        ],
+        "average": 1450,
+        "metric_name": "page_load_time"
+      },
+      "cache_hit_ratio": {
+        "daily_trends": [
+          { "date": "2024-01-01", "value": 75, "hits": 75, "total": 100 },
+          { "date": "2024-01-02", "value": 78, "hits": 78, "total": 100 },
+          { "date": "2024-01-03", "value": 80, "hits": 80, "total": 100 },
+          { "date": "2024-01-04", "value": 82, "hits": 82, "total": 100 },
+          { "date": "2024-01-05", "value": 85, "hits": 85, "total": 100 },
+          { "date": "2024-01-06", "value": 83, "hits": 83, "total": 100 },
+          { "date": "2024-01-07", "value": 87, "hits": 87, "total": 100 }
+        ],
+        "average": 81.4,
+        "metric_name": "cache_hit_ratio"
+      },
+      "memory_usage": {
+        "daily_trends": [
+          { "date": "2024-01-01", "value": 128000000, "sample_count": 50 },
+          { "date": "2024-01-02", "value": 132000000, "sample_count": 55 },
+          { "date": "2024-01-03", "value": 130000000, "sample_count": 52 },
+          { "date": "2024-01-04", "value": 125000000, "sample_count": 48 },
+          { "date": "2024-01-05", "value": 127000000, "sample_count": 51 },
+          { "date": "2024-01-06", "value": 129000000, "sample_count": 53 },
+          { "date": "2024-01-07", "value": 126000000, "sample_count": 49 }
+        ],
+        "average": 128142857,
+        "metric_name": "memory_usage"
+      }
+    },
+    "recommendations": [
+      {
+        "id": "enable_js_minification",
+        "type": "optimization",
+        "priority": "medium",
+        "impact": "medium",
+        "title": "Enable JavaScript Minification",
+        "description": "JavaScript minification can reduce file sizes by 20-30% and improve load times.",
+        "actions": [
+          "Enable JS minification in file optimization settings",
+          "Test your site after enabling to ensure compatibility",
+          "Consider combining JS files to reduce HTTP requests"
+        ],
+        "automated_fix": {
+          "action": "enable_js_minification",
+          "settings": {
+            "file_optimisation.minifyJS": true
+          }
+        }
+      },
+      {
+        "id": "enable_image_conversion",
+        "type": "image_optimization",
+        "priority": "medium",
+        "impact": "high",
+        "title": "Enable Image Format Conversion",
+        "description": "Converting images to modern formats like WebP can reduce file sizes by up to 50%.",
+        "actions": [
+          "Enable WebP conversion in image optimization settings",
+          "Run bulk image optimization for existing images",
+          "Set up automatic conversion for new uploads"
+        ],
+        "automated_fix": {
+          "action": "enable_image_conversion",
+          "settings": {
+            "image_optimisation.convertImg": true,
+            "image_optimisation.format": "webp"
+          }
+        }
+      }
+    ],
+    "last_updated": "2024-01-07 12:00:00"
+  }
+}

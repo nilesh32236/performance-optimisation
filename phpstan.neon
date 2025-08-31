@@ -1,0 +1,25 @@
+parameters:
+	level: 8
+	paths:
+		- includes/
+		- src/
+	excludePaths:
+		- vendor/
+		- node_modules/
+		- build/
+		- tests/
+	bootstrapFiles:
+		- vendor/autoload.php
+	ignoreErrors:
+		# WordPress specific ignores
+		- '#Function wp_[a-zA-Z_]+ not found#'
+		- '#Constant [A-Z_]+ not found#'
+		- '#Call to function add_action\(\) with incorrect case: add_action#'
+		- '#Call to function add_filter\(\) with incorrect case: add_filter#'
+	scanDirectories:
+		- vendor/
+	scanFiles:
+		- performance-optimisation.php
+	checkMissingIterableValueType: false
+	checkGenericClassInNonGenericObjectType: false
+	reportUnmatchedIgnoredErrors: false

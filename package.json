@@ -1,19 +1,62 @@
 {
-	"name": "performance-optimisation",
-	"version": "1.0.0",
-	"description": "Performance optimisation plugin for WordPress",
-	"main": "./src/index.js",
-	"scripts": {
-		"build": "wp-scripts build",
-		"start": "wp-scripts start"
-	},
-	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
-	"license": "GPL-2.0-or-later",
-	"devDependencies": {
-		"@wordpress/scripts": "^30.7.0"
-	},
-	"dependencies": {
-		"@fortawesome/free-solid-svg-icons": "^6.7.1",
-		"@fortawesome/react-fontawesome": "^0.2.2"
-	}
+  "name": "performance-optimisation",
+  "version": "2.0.0",
+  "description": "A WordPress plugin for performance optimization, including caching, HTML/CSS/JS minification, and image optimization.",
+  "main": "build/index.js",
+  "private": true,
+  "scripts": {
+    "build": "wp-scripts build",
+    "start": "wp-scripts start",
+    "dev": "wp-scripts start",
+    "lint:js": "wp-scripts lint-js",
+    "lint:css": "wp-scripts lint-style",
+    "lint": "npm run lint:js && npm run lint:css",
+    "lint:fix": "npm run lint:js -- --fix && npm run lint:css -- --fix",
+    "format": "wp-scripts format",
+    "test": "wp-scripts test-unit-js",
+    "test:watch": "wp-scripts test-unit-js --watch",
+    "test:e2e": "wp-scripts test-e2e",
+    "env": "wp-env",
+    "env:start": "wp-env start",
+    "env:stop": "wp-env stop",
+    "packages-update": "wp-scripts packages-update",
+    "plugin-zip": "wp-scripts plugin-zip"
+  },
+  "author": {
+    "name": "Nilesh Kanzariya",
+    "email": "nilesh.kanzariya912@gmail.com",
+    "url": "https://profiles.wordpress.org/nileshkanzariya/"
+  },
+  "license": "GPL-2.0-or-later",
+  "dependencies": {
+    "@fortawesome/fontawesome-svg-core": "^6.5.2",
+    "@fortawesome/free-solid-svg-icons": "^6.5.2",
+    "@fortawesome/react-fontawesome": "^0.2.2",
+    "@wordpress/api-fetch": "^6.44.0",
+    "@wordpress/components": "^25.13.0",
+    "@wordpress/element": "^5.24.0",
+    "@wordpress/i18n": "^4.47.0",
+    "@wordpress/icons": "^9.38.0",
+    "classnames": "^2.5.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-select": "^5.8.0",
+    "react-tabs": "^6.0.2",
+    "react-toastify": "^10.0.5",
+    "recharts": "^2.8.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/wordpress__components": "^23.0.0",
+    "@wordpress/eslint-plugin": "^22.15.0",
+    "@wordpress/scripts": "^26.19.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "typescript": "^5.2.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead"
+  ]
 }

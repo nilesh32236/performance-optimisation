@@ -1,0 +1,28 @@
+{
+  "name": "performance-optimisation-tests",
+  "version": "1.0.0",
+  "description": "Test configuration for Performance Optimisation plugin",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:wizard": "jest tests/wizard",
+    "test:integration": "jest tests/integration",
+    "test:php": "phpunit tests/php"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^14.4.3",
+    "babel-jest": "^29.3.1",
+    "identity-obj-proxy": "^3.0.0",
+    "jest": "^29.3.1",
+    "jest-environment-jsdom": "^29.3.1"
+  },
+  "babel": {
+    "presets": [
+      ["@babel/preset-env", { "targets": { "node": "current" } }],
+      ["@babel/preset-react", { "runtime": "automatic" }]
+    ]
+  }
+}

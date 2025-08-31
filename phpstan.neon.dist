@@ -1,0 +1,23 @@
+parameters:
+    level: 5
+    paths:
+        - includes
+    bootstrapFiles:
+        - vendor/szepeviktor/phpstan-wordpress/bootstrap.php
+    scanFiles:
+        - includes/Core/Wizard/WizardManager.php
+        - includes/Core/SiteDetection/SiteAnalyzer.php
+        - includes/Core/Presets/PresetManager.php
+        - includes/class-log.php
+        - includes/Exceptions/PluginException.php
+        - includes/Exceptions/CacheException.php
+        - includes/Exceptions/ConfigurationException.php
+        - includes/Exceptions/ImageProcessingException.php
+        - includes/Exceptions/OptimizationException.php
+        - includes/Core/Container/Exception.php
+        - includes/Core/Performance/Exception.php
+        - includes/Interfaces/ConfigInterface.php
+        - includes/class-rest.php
+    excludePaths:
+        - includes/Admin/views
+        - includes/Libs
