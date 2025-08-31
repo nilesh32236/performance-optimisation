@@ -1,46 +1,58 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit
-	bootstrap="tests/bootstrap.php"
-	backupGlobals="false"
-	colors="true"
-	convertErrorsToExceptions="true"
-	convertNoticesToExceptions="true"
-	convertWarningsToExceptions="true"
-	processIsolation="false"
-	stopOnFailure="false"
-	testdox="true"
-	verbose="true"
+    bootstrap="tests/bootstrap.php"
+    backupGlobals="false"
+    colors="true"
+    convertErrorsToExceptions="true"
+    convertNoticesToExceptions="true"
+    convertWarningsToExceptions="true"
+    processIsolation="false"
+    stopOnFailure="false"
+    verbose="true"
+    testdox="true"
 >
-	<testsuites>
-		<testsuite name="Unit Tests">
-			<directory>tests/Unit</directory>
-		</testsuite>
-		<testsuite name="Integration Tests">
-			<directory>tests/Integration</directory>
-		</testsuite>
-	</testsuites>
-
-	<coverage processUncoveredFiles="true">
-		<include>
-			<directory suffix=".php">includes</directory>
-		</include>
-		<exclude>
-			<directory>vendor</directory>
-			<directory>tests</directory>
-			<directory>node_modules</directory>
-		</exclude>
-		<report>
-			<html outputDirectory="coverage/html"/>
-			<text outputFile="coverage/coverage.txt"/>
-			<clover outputFile="coverage/clover.xml"/>
-		</report>
-	</coverage>
-
-	<logging>
-		<junit outputFile="coverage/junit.xml"/>
-	</logging>
-
-	<php>
-		<const name="WP_TESTS_PHPUNIT_POLYFILLS_PATH" value="vendor/yoast/phpunit-polyfills"/>
-	</php>
+    <testsuites>
+        <testsuite name="Performance Optimisation Plugin Test Suite">
+            <directory>./tests/</directory>
+        </testsuite>
+        <testsuite name="Unit Tests">
+            <directory>./tests/Unit/</directory>
+        </testsuite>
+        <testsuite name="Integration Tests">
+            <directory>./tests/Integration/</directory>
+        </testsuite>
+        <testsuite name="Admin Tests">
+            <directory>./tests/Admin/</directory>
+        </testsuite>
+        <testsuite name="Service Tests">
+            <directory>./tests/Services/</directory>
+        </testsuite>
+    </testsuites>
+    
+    <filter>
+        <whitelist processUncoveredFilesFromWhitelist="true">
+            <directory suffix=".php">./includes/</directory>
+            <exclude>
+                <directory>./vendor/</directory>
+                <directory>./tests/</directory>
+                <file>./performance-optimisation.php</file>
+            </exclude>
+        </whitelist>
+    </filter>
+    
+    <logging>
+        <log type="coverage-html" target="./tests/coverage/html"/>
+        <log type="coverage-clover" target="./tests/coverage/clover.xml"/>
+        <log type="coverage-text" target="php://stdout" showUncoveredFiles="true"/>
+        <log type="junit" target="./tests/coverage/junit.xml"/>
+    </logging>
+    
+    <php>
+        <const name="WP_TESTS_DOMAIN" value="example.org"/>
+        <const name="WP_TESTS_EMAIL" value="admin@example.org"/>
+        <const name="WP_TESTS_TITLE" value="Test Blog"/>
+        <const name="WP_PHP_BINARY" value="php"/>
+        <const name="WP_TESTS_FORCE_KNOWN_BUGS" value="true"/>
+        <server name="SERVER_NAME" value="http://example.org"/>
+    </php>
 </phpunit>

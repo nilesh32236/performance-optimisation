@@ -1,58 +1,32 @@
 {
-    "name": "nilesh/performance-optimisation",
-    "description": "A WordPress plugin for performance optimization, including caching, HTML/CSS/JS minification, and image optimization.",
+    "name": "performance-optimisation/wordpress-plugin",
+    "description": "Advanced WordPress Performance Optimisation Plugin",
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "authors": [
         {
-            "name": "Nilesh Kanzariya",
-            "email": "nilesh.kanzariya912@gmail.com",
-            "homepage": "https://profiles.wordpress.org/nileshkanzariya/",
-            "role": "Developer"
+            "name": "Performance Optimisation Team",
+            "email": "dev@example.com"
         }
     ],
-    "keywords": [
-        "wordpress",
-        "plugin",
-        "performance",
-        "optimization",
-        "cache",
-        "minify",
-        "images",
-        "webp",
-        "avif"
-    ],
-    "support": {
-        "issues": "https://github.com/example-repo/performance-optimisation/issues",
-        "source": "https://github.com/example-repo/performance-optimisation"
-    },
     "require": {
         "php": ">=7.4",
-        "voku/html-min": "^4.5",
-        "matthiasmullie/minify": "^1.3"
+        "composer/installers": "^1.0 || ^2.0"
     },
     "require-dev": {
-        "brain/monkey": "^2.6",
-        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
-        "mockery/mockery": "^1.6",
+        "phpunit/phpunit": "^9.0",
+        "wp-coding-standards/wpcs": "^2.3",
+        "phpstan/phpstan": "^1.0",
+        "vimeo/psalm": "^4.0",
+        "phpmd/phpmd": "^2.10",
+        "squizlabs/php_codesniffer": "^3.6",
+        "dealerdirect/phpcodesniffer-composer-installer": "^0.7",
         "phpcompatibility/php-compatibility": "^9.3",
-        "phpstan/extension-installer": "*",
-        "phpstan/phpstan": "^1.10",
-        "phpunit/phpunit": "^9.6",
-        "szepeviktor/phpstan-wordpress": "*",
-        "wp-coding-standards/wpcs": "^3.0"
-    },
-    "scripts": {
-        "lint": "phpcs",
-        "lint-fix": "phpcbf",
-        "analyze": "phpstan analyse",
-        "test": "phpunit",
-        "test-coverage": "phpunit --coverage-html coverage/",
-        "quality": [
-            "@lint",
-            "@analyze",
-            "@test"
-        ]
+        "wp-phpunit/wp-phpunit": "^6.0",
+        "yoast/phpunit-polyfills": "^1.0",
+        "brain/monkey": "^2.6",
+        "mockery/mockery": "^1.4",
+        "roave/security-advisories": "dev-latest"
     },
     "autoload": {
         "psr-4": {
@@ -64,20 +38,43 @@
             "PerformanceOptimisation\\Tests\\": "tests/"
         }
     },
+    "scripts": {
+        "test": [
+            "@phpcs",
+            "@phpstan",
+            "@psalm",
+            "@phpunit"
+        ],
+        "phpcs": "phpcs --standard=WordPress --extensions=php --ignore=vendor/,node_modules/,tests/ .",
+        "phpcbf": "phpcbf --standard=WordPress --extensions=php --ignore=vendor/,node_modules/,tests/ .",
+        "phpstan": "phpstan analyse --level=8 includes/",
+        "psalm": "psalm --show-info=true",
+        "phpmd": "phpmd includes/ text cleancode,codesize,controversial,design,naming,unusedcode",
+        "phpunit": "phpunit --coverage-html tests/coverage/html --coverage-clover tests/coverage/clover.xml",
+        "security-check": "composer audit",
+        "performance-test": [
+            "php tests/performance/benchmark.php",
+            "php tests/performance/memory-usage.php",
+            "php tests/performance/load-time.php"
+        ],
+        "post-install-cmd": [
+            "phpcs --config-set installed_paths vendor/wp-coding-standards/wpcs,vendor/phpcompatibility/php-compatibility"
+        ],
+        "post-update-cmd": [
+            "phpcs --config-set installed_paths vendor/wp-coding-standards/wpcs,vendor/phpcompatibility/php-compatibility"
+        ]
+    },
     "config": {
         "allow-plugins": {
-            "dealerdirect/phpcodesniffer-composer-installer": true,
             "composer/installers": true,
-            "phpstan/extension-installer": true
-        },
-        "platform": {
-            "php": "7.4"
+            "dealerdirect/phpcodesniffer-composer-installer": true
         },
         "optimize-autoloader": true,
         "sort-packages": true
     },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
     "extra": {
-        "wordpress-plugin-slug": "performance-optimisation",
-        "primary-branch": "main"
+        "installer-name": "performance-optimisation"
     }
 }

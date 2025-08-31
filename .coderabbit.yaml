@@ -1,0 +1,184 @@
+language: php
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: true
+  review_status: true
+  collapse_ellipsis: false
+  auto_review:
+    enabled: true
+    drafts: false
+  path_instructions:
+    - path: "**/*.php"
+      instructions: |
+        - Focus on WordPress coding standards and best practices
+        - Check for proper sanitization and validation of user inputs
+        - Verify proper use of WordPress hooks and filters
+        - Ensure proper error handling and logging
+        - Check for security vulnerabilities (SQL injection, XSS, CSRF)
+        - Verify proper use of WordPress APIs and functions
+        - Check for performance implications
+        - Ensure proper documentation and comments
+        - Verify proper use of namespaces and autoloading
+        - Check for proper service container usage
+        - Verify cache implementation security and efficiency
+        - Check for proper file system operations and permissions
+    - path: "includes/Services/**/*.php"
+      instructions: |
+        - Verify service dependencies are properly injected
+        - Check for circular dependencies
+        - Ensure services are properly registered in container
+        - Verify service interfaces are correctly implemented
+        - Check for proper error handling in service methods
+    - path: "includes/Admin/**/*.php"
+      instructions: |
+        - Verify proper WordPress admin hooks usage
+        - Check for proper capability checks and user permissions
+        - Ensure proper nonce verification for forms
+        - Verify proper sanitization of admin inputs
+        - Check for proper admin menu registration
+    - path: "includes/Utils/**/*.php"
+      instructions: |
+        - Focus on utility function efficiency and security
+        - Verify proper input validation and sanitization
+        - Check for proper error handling and edge cases
+        - Ensure utilities are stateless where appropriate
+    - path: "includes/Core/**/*.php"
+      instructions: |
+        - Verify proper plugin initialization and lifecycle
+        - Check service container implementation for memory leaks
+        - Ensure proper dependency injection patterns
+        - Verify proper plugin activation/deactivation hooks
+    - path: "tests/**/*.php"
+      instructions: |
+        - Verify test coverage is comprehensive
+        - Check for proper test isolation and cleanup
+        - Ensure tests follow WordPress testing standards
+        - Verify mock usage is appropriate
+  early_access: false
+  tools:
+    phpstan:
+      enabled: true
+      level: 8
+    psalm:
+      enabled: true
+      level: 1
+    phpcs:
+      enabled: true
+      standard: WordPress
+    phpmd:
+      enabled: true
+      ruleset: cleancode,codesize,controversial,design,naming,unusedcode
+  ignore:
+    - "vendor/**"
+    - "node_modules/**"
+    - "*.min.js"
+    - "*.min.css"
+    - "build/**"
+    - "dist/**"
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    enabled: true
+  opt_out: false
+
+# WordPress specific rules and patterns
+wordpress:
+  version: "6.8+"
+  coding_standards: "WordPress"
+  security_checks:
+    - sql_injection
+    - xss
+    - csrf
+    - file_inclusion
+    - code_injection
+    - path_traversal
+  performance_checks:
+    - database_queries
+    - file_operations
+    - memory_usage
+    - caching_strategy
+  best_practices:
+    - proper_hooks_usage
+    - sanitization
+    - validation
+    - capability_checks
+    - nonce_verification
+    - internationalization
+
+# Plugin specific configuration
+plugin:
+  name: "Performance Optimisation"
+  type: "wordpress_plugin"
+  architecture: "service_container"
+  features:
+    - caching
+    - minification
+    - image_optimization
+    - performance_monitoring
+  critical_paths:
+    - "includes/Core/Bootstrap/Plugin.php"
+    - "includes/Core/ServiceContainer.php"
+    - "includes/Services/CacheService.php"
+    - "includes/Services/OptimizationService.php"
+    - "includes/Admin/Admin.php"
+  security_sensitive:
+    - "includes/Utils/FileSystemUtil.php"
+    - "includes/Services/CacheService.php"
+    - "includes/Admin/**/*.php"
+    - "includes/API/**/*.php"
+
+# Custom rules for this plugin
+custom_rules:
+  - name: "Service Container Usage"
+    description: "Ensure proper service container dependency injection"
+    pattern: "container->get\\("
+    severity: "warning"
+  - name: "WordPress Hooks"
+    description: "Verify proper WordPress hook usage"
+    pattern: "add_(action|filter)\\("
+    severity: "info"
+  - name: "Cache Operations"
+    description: "Review cache operations for security and performance"
+    pattern: "(set|get|delete).*[Cc]ache"
+    severity: "warning"
+  - name: "File Operations"
+    description: "Review file operations for security"
+    pattern: "(file_get_contents|file_put_contents|fopen|fwrite|unlink)"
+    severity: "error"
+  - name: "Database Operations"
+    description: "Review database operations for security"
+    pattern: "\\$wpdb->"
+    severity: "error"
+
+# Testing configuration
+testing:
+  frameworks:
+    - phpunit
+    - wp_phpunit
+  coverage:
+    minimum: 70
+    target: 85
+  critical_functions:
+    - "Plugin::initialize"
+    - "ServiceContainer::get"
+    - "CacheService::set"
+    - "CacheService::get"
+    - "OptimizationService::minify"
+    - "Admin::init_admin_menu"
+
+# Performance monitoring
+performance:
+  memory_limit: "256M"
+  execution_time: 30
+  database_queries: 10
+  file_operations: 20
+  critical_metrics:
+    - plugin_load_time
+    - service_resolution_time
+    - cache_hit_ratio
+    - admin_page_load_time
