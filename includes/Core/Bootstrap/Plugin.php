@@ -630,11 +630,15 @@ class Plugin implements PluginInterface {
 	public function initRestApi(): void {
 		try {
 			$rest_controller = $this->_container->get( 'rest_controller' );
-			$rest_controller->register_routes();
+			if (method_exists($rest_controller, 'register_routes')) {
+				$rest_controller->register_routes();
+			}
 
 			// Initialize API Router for additional endpoints
 			$api_router = $this->_container->get( 'api_router' );
-			$api_router->init();
+			if (method_exists($api_router, 'init')) {
+				$api_router->init();
+			}
 
 			LoggingUtil::debug( 'REST API initialized' );
 
