@@ -44,27 +44,43 @@ class Admin {
 		
 		// Get services if available, otherwise skip
 		try {
-			$this->settingsService = $container->get( 'settings_service' );
+			$settings_service = $container->get( 'settings_service' );
+			if ($settings_service instanceof \PerformanceOptimisation\Services\SettingsService) {
+				$this->settingsService = $settings_service;
+			}
 		} catch ( \Exception $e ) {
 			$this->logger->error( 'SettingsService not available in Admin: ' . $e->getMessage() );
 		}
 		
 		try {
-			$this->cacheService = $container->get( 'cache_service' );
+			$cache_service = $container->get( 'cache_service' );
+			if ($cache_service instanceof \PerformanceOptimisation\Services\CacheService) {
+				$this->cacheService = $cache_service;
+			}
 		} catch ( \Exception $e ) {
 			// Cache service not critical for admin
 		}
 		
 		try {
-			$this->validator = $container->get( 'validator' );
+			$validator_service = $container->get( 'validator' );
+			if ($validator_service instanceof \PerformanceOptimisation\Utils\ValidationUtil) {
+				$this->validator = $validator_service;
+			} else {
+				$this->validator = new ValidationUtil();
+			}
 		} catch ( \Exception $e ) {
 			$this->validator = new ValidationUtil();
 		}
 		
 		try {
-			$this->metabox = $container->get( 'metabox' );
+			$metabox_service = $container->get( 'metabox' );
+			if ($metabox_service instanceof \PerformanceOptimisation\Admin\Metabox) {
+				$this->metabox = $metabox_service;
+			} else {
+				$this->metabox = null;
+			}
 		} catch ( \Exception $e ) {
-			// Metabox not critical
+			$this->metabox = null;
 		}
 	}
 
