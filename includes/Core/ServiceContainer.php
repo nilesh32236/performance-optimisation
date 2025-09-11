@@ -202,7 +202,7 @@ class ServiceContainer implements ServiceContainerInterface {
 	/**
 	 * {@inheritdoc}
 	 */
-	public function get( string $id ) {
+	public function get( $id ) {
 		// Resolve alias
 		$id = $this->resolveAlias( $id );
 
@@ -237,7 +237,7 @@ class ServiceContainer implements ServiceContainerInterface {
 	/**
 	 * {@inheritdoc}
 	 */
-	public function has( string $id ): bool {
+	public function has( $id ): bool {
 		$id = $this->resolveAlias( $id );
 		return isset( $this->services[ $id ] ) || isset( $this->factories[ $id ] );
 	}
