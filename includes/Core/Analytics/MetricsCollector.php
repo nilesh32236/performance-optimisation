@@ -767,9 +767,23 @@ class MetricsCollector {
 	 * @return int Number of optimized images.
 	 */
 	private function count_optimized_images_on_page(): int {
-		// This would require analyzing the page content for optimized images.
-		// For now, return 0 as a placeholder.
-		return 0;
+		global $wpdb;
+
+		// Count WebP/AVIF images in attachment metadata
+		$optimized_count = $wpdb->get_var(
+			$wpdb->prepare(
+				"SELECT COUNT(*) FROM {$wpdb->postmeta} pm 
+			 INNER JOIN {$wpdb->posts} p ON pm.post_id = p.ID 
+			 WHERE pm.meta_key = '_wp_attachment_metadata' 
+			 AND p.post_type = 'attachment' 
+			 AND p.post_mime_type LIKE 'image/%'
+			 AND (pm.meta_value LIKE %s OR pm.meta_value LIKE %s)",
+				'%webp%',
+				'%avif%'
+			)
+		);
+
+		return (int) $optimized_count;
 	}
 
 	/**

@@ -50,8 +50,20 @@ class FileSystemUtil {
 	 * @var array
 	 */
 	private const ALLOWED_EXTENSIONS = array(
-		'css', 'js', 'html', 'htm', 'json', 'txt', 'log',
-		'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg'
+		'css',
+		'js',
+		'html',
+		'htm',
+		'json',
+		'txt',
+		'log',
+		'jpg',
+		'jpeg',
+		'png',
+		'gif',
+		'webp',
+		'avif',
+		'svg',
 	);
 
 	/**
@@ -70,15 +82,15 @@ class FileSystemUtil {
 		}
 
 		global $wp_filesystem;
-		
+
 		if ( ! $wp_filesystem ) {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
-			
+
 			$credentials = request_filesystem_credentials( '', '', false, false, array() );
 			if ( false === $credentials ) {
 				throw new FileSystemException( 'Unable to get filesystem credentials' );
 			}
-			
+
 			if ( ! WP_Filesystem( $credentials ) ) {
 				throw new FileSystemException( 'Failed to initialize WordPress filesystem' );
 			}
@@ -121,7 +133,7 @@ class FileSystemUtil {
 	 */
 	public static function readFile( string $path ): string {
 		$path = self::sanitizePath( $path );
-		
+
 		if ( ! self::fileExists( $path ) ) {
 			throw new FileSystemException( "File does not exist: {$path}" );
 		}
@@ -152,7 +164,7 @@ class FileSystemUtil {
 	 */
 	public static function writeFile( string $path, string $contents, bool $backup = false ): bool {
 		$path = self::sanitizePath( $path );
-		
+
 		// Validate file extension for security
 		if ( ! self::isAllowedExtension( $path ) ) {
 			throw new FileSystemException( "File extension not allowed: {$path}" );
@@ -171,12 +183,18 @@ class FileSystemUtil {
 		}
 
 		$result = self::getFilesystem()->put_contents( $path, $contents, FS_CHMOD_FILE );
-		
+
 		if ( ! $result ) {
 			throw new FileSystemException( "Failed to write file: {$path}" );
 		}
 
-		LoggingUtil::debug( 'File written successfully', array( 'path' => $path, 'size' => strlen( $contents ) ) );
+		LoggingUtil::debug(
+			'File written successfully',
+			array(
+				'path' => $path,
+				'size' => strlen( $contents ),
+			)
+		);
 		return true;
 	}
 
@@ -192,13 +210,13 @@ class FileSystemUtil {
 	 */
 	public static function createDirectory( string $path, int $chmod = 0755 ): bool {
 		$path = self::sanitizePath( $path );
-		
+
 		if ( self::fileExists( $path ) && self::isDirectory( $path ) ) {
 			return true; // Directory already exists
 		}
 
 		$result = wp_mkdir_p( $path );
-		
+
 		if ( ! $result ) {
 			throw new FileSystemException( "Failed to create directory: {$path}" );
 		}
@@ -224,7 +242,7 @@ class FileSystemUtil {
 	 */
 	public static function deleteFile( string $path, bool $backup = false ): bool {
 		$path = self::sanitizePath( $path );
-		
+
 		if ( ! self::fileExists( $path ) ) {
 			return true; // File doesn't exist, consider it deleted
 		}
@@ -236,7 +254,7 @@ class FileSystemUtil {
 		}
 
 		$result = self::getFilesystem()->delete( $path );
-		
+
 		if ( ! $result ) {
 			throw new FileSystemException( "Failed to delete file: {$path}" );
 		}
@@ -257,7 +275,7 @@ class FileSystemUtil {
 	 */
 	public static function deleteDirectory( string $path, bool $recursive = false ): bool {
 		$path = self::sanitizePath( $path );
-		
+
 		if ( ! self::fileExists( $path ) ) {
 			return true; // Directory doesn't exist, consider it deleted
 		}
@@ -267,12 +285,18 @@ class FileSystemUtil {
 		}
 
 		$result = self::getFilesystem()->rmdir( $path, $recursive );
-		
+
 		if ( ! $result ) {
 			throw new FileSystemException( "Failed to delete directory: {$path}" );
 		}
 
-		LoggingUtil::debug( 'Directory deleted successfully', array( 'path' => $path, 'recursive' => $recursive ) );
+		LoggingUtil::debug(
+			'Directory deleted successfully',
+			array(
+				'path'      => $path,
+				'recursive' => $recursive,
+			)
+		);
 		return true;
 	}
 
@@ -314,14 +338,14 @@ class FileSystemUtil {
 	 * @return string
 	 */
 	public static function urlToPath( string $url ): string {
-		$site_url = site_url();
+		$site_url  = site_url();
 		$site_path = wp_normalize_path( ABSPATH );
-		
+
 		// Handle relative URLs
 		if ( strpos( $url, '//' ) === false ) {
 			$url = $site_url . $url;
 		}
-		
+
 		// Convert URL to path
 		$path = str_replace( $site_url, $site_path, $url );
 		return wp_normalize_path( $path );
@@ -398,11 +422,11 @@ class FileSystemUtil {
 	 */
 	public static function formatFileSize( int $bytes ): string {
 		$units = array( 'B', 'KB', 'MB', 'GB', 'TB' );
-		
+
 		for ( $i = 0; $bytes > 1024 && $i < count( $units ) - 1; $i++ ) {
 			$bytes /= 1024;
 		}
-		
+
 		return round( $bytes, 2 ) . ' ' . $units[ $i ];
 	}
 
@@ -470,7 +494,7 @@ class FileSystemUtil {
 	 * @throws FileSystemException If file cannot be moved.
 	 */
 	public static function moveFile( string $source, string $destination ): bool {
-		$source = self::sanitizePath( $source );
+		$source      = self::sanitizePath( $source );
 		$destination = self::sanitizePath( $destination );
 
 		if ( ! self::fileExists( $source ) ) {
@@ -484,12 +508,18 @@ class FileSystemUtil {
 		}
 
 		$result = self::getFilesystem()->move( $source, $destination );
-		
+
 		if ( ! $result ) {
 			throw new FileSystemException( "Failed to move file from {$source} to {$destination}" );
 		}
 
-		LoggingUtil::debug( 'File moved successfully', array( 'source' => $source, 'destination' => $destination ) );
+		LoggingUtil::debug(
+			'File moved successfully',
+			array(
+				'source'      => $source,
+				'destination' => $destination,
+			)
+		);
 		return true;
 	}
 
@@ -504,7 +534,7 @@ class FileSystemUtil {
 	 * @return array Array of file paths.
 	 */
 	public static function getFilesInDirectory( string $path, bool $recursive = false, array $extensions = array() ): array {
-		$path = self::sanitizePath( $path );
+		$path  = self::sanitizePath( $path );
 		$files = array();
 
 		if ( ! self::fileExists( $path ) || ! self::isDirectory( $path ) ) {
@@ -523,7 +553,7 @@ class FileSystemUtil {
 			foreach ( $iterator as $file ) {
 				if ( $file->isFile() ) {
 					$file_path = $file->getPathname();
-					
+
 					// Filter by extensions if specified
 					if ( ! empty( $extensions ) ) {
 						$extension = self::getFileExtension( $file_path );
@@ -531,7 +561,7 @@ class FileSystemUtil {
 							continue;
 						}
 					}
-					
+
 					$files[] = wp_normalize_path( $file_path );
 				}
 			}
@@ -553,9 +583,9 @@ class FileSystemUtil {
 	 * @throws FileSystemException If temporary file cannot be created.
 	 */
 	public static function createTempFile( string $prefix = 'wppo_', string $suffix = '.tmp' ): string {
-		$temp_dir = get_temp_dir();
+		$temp_dir  = get_temp_dir();
 		$temp_file = $temp_dir . $prefix . uniqid() . $suffix;
-		
+
 		if ( ! self::writeFile( $temp_file, '' ) ) {
 			throw new FileSystemException( "Failed to create temporary file: {$temp_file}" );
 		}
@@ -573,14 +603,14 @@ class FileSystemUtil {
 	 */
 	public static function cleanupTempFiles( string $pattern = 'wppo_*' ): int {
 		$temp_dir = get_temp_dir();
-		$files = glob( $temp_dir . $pattern );
-		$cleaned = 0;
+		$files    = glob( $temp_dir . $pattern );
+		$cleaned  = 0;
 
 		foreach ( $files as $file ) {
 			if ( is_file( $file ) && ( time() - filemtime( $file ) ) > 3600 ) { // 1 hour old
 				try {
 					self::deleteFile( $file );
-					$cleaned++;
+					++$cleaned;
 				} catch ( FileSystemException $e ) {
 					LoggingUtil::warning( 'Failed to cleanup temp file: ' . $e->getMessage(), array( 'file' => $file ) );
 				}
@@ -598,11 +628,11 @@ class FileSystemUtil {
 	 */
 	public static function pathToUrl( string $path ): string {
 		$upload_dir = wp_upload_dir();
-		$base_path = $upload_dir['basedir'];
-		$base_url = $upload_dir['baseurl'];
+		$base_path  = $upload_dir['basedir'];
+		$base_url   = $upload_dir['baseurl'];
 
 		// Normalize paths
-		$path = wp_normalize_path( $path );
+		$path      = wp_normalize_path( $path );
 		$base_path = wp_normalize_path( $base_path );
 
 		// Check if path is within upload directory

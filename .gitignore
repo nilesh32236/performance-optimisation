@@ -8,6 +8,9 @@ coverage/
 .phpunit.result.cache
 phpunit.xml.dist
 
+# Tests and documentation (development only)
+tests-and-docs/
+
 # IDE and editor files
 .vscode/
 .idea/
@@ -48,3 +51,7 @@ wp-config.php
 
 # Plugin specific
 performance-optimisation.zip
+
+# Development documentation (contains sensitive info)
+DEVELOPMENT.md
+dev/

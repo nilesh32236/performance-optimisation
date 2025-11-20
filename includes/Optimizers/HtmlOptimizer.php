@@ -30,33 +30,42 @@ class HtmlOptimizer implements OptimizerInterface {
 	);
 
 	private array $optimization_options = array(
-		'enable_minification' => true,
-		'remove_comments' => true,
-		'remove_whitespace' => true,
-		'optimize_attributes' => true,
-		'generate_resource_hints' => true,
-		'optimize_images' => true,
-		'lazy_load_images' => true,
-		'lazy_load_iframes' => true,
+		'enable_minification'        => true,
+		'remove_comments'            => true,
+		'remove_whitespace'          => true,
+		'optimize_attributes'        => true,
+		'generate_resource_hints'    => true,
+		'optimize_images'            => true,
+		'lazy_load_images'           => true,
+		'lazy_load_iframes'          => true,
 		'preload_critical_resources' => true,
-		'optimize_forms' => true,
-		'remove_empty_elements' => true,
-		'preserve_line_breaks' => false,
+		'optimize_forms'             => true,
+		'remove_empty_elements'      => true,
+		'preserve_line_breaks'       => false,
 	);
 
 	public function optimize( string $content, array $options = array() ): string {
+		// Validate HTML content
+		if ( empty( $content ) ) {
+			return '';
+		}
+
+		if ( strlen( $content ) > 20971520 ) { // 20MB limit for HTML
+			throw new \Exception( 'HTML content exceeds maximum size limit' );
+		}
+
 		$original_size = strlen( $content );
-		
+
 		// Performance tracking
 		PerformanceUtil::startTimer( 'html_optimization' );
-		
+
 		try {
 			// Merge options with defaults
 			$options = array_merge( $this->optimization_options, $options );
-			
+
 			// Validate HTML content
 			$content = ValidationUtil::sanitizeHtml( $content );
-			
+
 			// Apply optimization techniques
 			$optimized = $this->minify_html( $content, $options );
 			$optimized = $this->optimize_images( $optimized, $options );
@@ -64,26 +73,29 @@ class HtmlOptimizer implements OptimizerInterface {
 			$optimized = $this->generate_resource_hints( $optimized, $options );
 			$optimized = $this->optimize_attributes( $optimized, $options );
 			$optimized = $this->remove_empty_elements( $optimized, $options );
-			
-			$optimized_size = strlen( $optimized );
+
+			$optimized_size    = strlen( $optimized );
 			$compression_ratio = $original_size > 0 ? ( 1 - $optimized_size / $original_size ) : 0;
-			$duration = PerformanceUtil::endTimer( 'html_optimization' );
-			
+			$duration          = PerformanceUtil::endTimer( 'html_optimization' );
+
 			// Update stats
 			++$this->stats['total_files'];
-			$this->stats['total_bytes'] += $original_size;
-			$this->stats['bytes_saved'] += ( $original_size - $optimized_size );
+			$this->stats['total_bytes']   += $original_size;
+			$this->stats['bytes_saved']   += ( $original_size - $optimized_size );
 			$this->stats['total_time_ms'] += $duration * 1000;
-			
-			LoggingUtil::info( 'HTML optimized successfully', array(
-				'original_size' => $original_size,
-				'optimized_size' => $optimized_size,
-				'compression_ratio' => round( $compression_ratio * 100, 2 ) . '%',
-				'duration' => $duration,
-			) );
-			
+
+			LoggingUtil::info(
+				'HTML optimized successfully',
+				array(
+					'original_size'     => $original_size,
+					'optimized_size'    => $optimized_size,
+					'compression_ratio' => round( $compression_ratio * 100, 2 ) . '%',
+					'duration'          => $duration,
+				)
+			);
+
 			return $optimized;
-			
+
 		} catch ( \Exception $e ) {
 			PerformanceUtil::endTimer( 'html_optimization' );
 			LoggingUtil::error( 'HTML optimization failed: ' . $e->getMessage() );
@@ -128,25 +140,25 @@ class HtmlOptimizer implements OptimizerInterface {
 			LoggingUtil::warning( 'HTML file not found for processing', array( 'path' => $file_path ) );
 			return '';
 		}
-		
+
 		// Check cache first
-		$cache_key = CacheUtil::generateCacheKey( $file_path . filemtime( $file_path ), 'html_opt' );
+		$cache_key     = CacheUtil::generateCacheKey( $file_path . filemtime( $file_path ), 'html_opt' );
 		$cached_result = wp_cache_get( $cache_key, 'wppo_html_optimization' );
-		
+
 		if ( false !== $cached_result ) {
 			LoggingUtil::debug( 'HTML optimization served from cache', array( 'path' => $file_path ) );
 			return $cached_result;
 		}
-		
+
 		try {
-			$content = FileSystemUtil::readFile( $file_path );
+			$content   = FileSystemUtil::readFile( $file_path );
 			$optimized = $this->optimize( $content, $options );
-			
+
 			// Cache the result
 			wp_cache_set( $cache_key, $optimized, 'wppo_html_optimization', CacheUtil::getCacheExpiry( 'minified' ) );
-			
+
 			return $optimized;
-			
+
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'Failed to process HTML file: ' . $e->getMessage(), array( 'path' => $file_path ) );
 			return '';
@@ -167,7 +179,7 @@ class HtmlOptimizer implements OptimizerInterface {
 
 		try {
 			$htmlMin = new HtmlMin();
-			
+
 			// Configure minifier options
 			$htmlMin->doOptimizeViaHtmlDomParser( true );
 			$htmlMin->doRemoveComments( $options['remove_comments'] );
@@ -184,7 +196,7 @@ class HtmlOptimizer implements OptimizerInterface {
 			$htmlMin->doRemoveValueFromEmptyInput( true );
 			$htmlMin->doSortCssClassNames( true );
 			$htmlMin->doSortHtmlAttributes( true );
-			
+
 			return $htmlMin->minify( $html );
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'HTML minification failed: ' . $e->getMessage() );
@@ -232,22 +244,26 @@ class HtmlOptimizer implements OptimizerInterface {
 	private function add_lazy_loading_images( string $html ): string {
 		// Skip images that already have loading attribute or are in critical areas
 		$pattern = '/<img(?![^>]*loading=)(?![^>]*class="[^"]*no-lazy)([^>]*?)src="([^"]*)"([^>]*?)>/i';
-		
-		return preg_replace_callback( $pattern, function( $matches ) {
-			$before_src = $matches[1];
-			$src = $matches[2];
-			$after_src = $matches[3];
-			
-			// Skip data URLs and very small images
-			if ( strpos( $src, 'data:' ) === 0 || $this->is_small_image( $src ) ) {
-				return $matches[0];
-			}
-			
-			// Add loading="lazy" and data-src for intersection observer
-			$optimized = '<img' . $before_src . ' loading="lazy" data-src="' . $src . '" src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 1 1\'%3E%3C/svg%3E"' . $after_src . '>';
-			
-			return $optimized;
-		}, $html );
+
+		return preg_replace_callback(
+			$pattern,
+			function ( $matches ) {
+				$before_src = $matches[1];
+				$src        = $matches[2];
+				$after_src  = $matches[3];
+
+				// Skip data URLs and very small images
+				if ( strpos( $src, 'data:' ) === 0 || $this->is_small_image( $src ) ) {
+					return $matches[0];
+				}
+
+				// Add loading="lazy" and data-src for intersection observer
+				$optimized = '<img' . $before_src . ' loading="lazy" data-src="' . $src . '" src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 1 1\'%3E%3C/svg%3E"' . $after_src . '>';
+
+				return $optimized;
+			},
+			$html
+		);
 	}
 
 	/**
@@ -258,15 +274,19 @@ class HtmlOptimizer implements OptimizerInterface {
 	 */
 	private function add_lazy_loading_iframes( string $html ): string {
 		$pattern = '/<iframe(?![^>]*loading=)([^>]*?)src="([^"]*)"([^>]*?)>/i';
-		
-		return preg_replace_callback( $pattern, function( $matches ) {
-			$before_src = $matches[1];
-			$src = $matches[2];
-			$after_src = $matches[3];
-			
-			// Add loading="lazy" and data-src
-			return '<iframe' . $before_src . ' loading="lazy" data-src="' . $src . '"' . $after_src . '>';
-		}, $html );
+
+		return preg_replace_callback(
+			$pattern,
+			function ( $matches ) {
+				$before_src = $matches[1];
+				$src        = $matches[2];
+				$after_src  = $matches[3];
+
+				// Add loading="lazy" and data-src
+				return '<iframe' . $before_src . ' loading="lazy" data-src="' . $src . '"' . $after_src . '>';
+			},
+			$html
+		);
 	}
 
 	/**
@@ -278,10 +298,10 @@ class HtmlOptimizer implements OptimizerInterface {
 	private function optimize_image_attributes( string $html ): string {
 		// Add missing alt attributes
 		$html = preg_replace( '/<img(?![^>]*alt=)([^>]*?)>/i', '<img$1 alt="">', $html );
-		
+
 		// Add decoding="async" for better performance
 		$html = preg_replace( '/<img(?![^>]*decoding=)([^>]*?)>/i', '<img$1 decoding="async">', $html );
-		
+
 		return $html;
 	}
 
@@ -294,21 +314,25 @@ class HtmlOptimizer implements OptimizerInterface {
 	private function add_responsive_images( string $html ): string {
 		// This is a simplified version - in practice, you'd generate actual srcset values
 		$pattern = '/<img(?![^>]*srcset=)([^>]*?)src="([^"]*?\.(?:jpg|jpeg|png|webp))"([^>]*?)>/i';
-		
-		return preg_replace_callback( $pattern, function( $matches ) {
-			$before_src = $matches[1];
-			$src = $matches[2];
-			$after_src = $matches[3];
-			
-			// Generate responsive image srcset (simplified)
-			$srcset = $this->generate_srcset( $src );
-			
-			if ( ! empty( $srcset ) ) {
-				return '<img' . $before_src . 'src="' . $src . '" srcset="' . $srcset . '" sizes="(max-width: 768px) 100vw, 50vw"' . $after_src . '>';
-			}
-			
-			return $matches[0];
-		}, $html );
+
+		return preg_replace_callback(
+			$pattern,
+			function ( $matches ) {
+				$before_src = $matches[1];
+				$src        = $matches[2];
+				$after_src  = $matches[3];
+
+				// Generate responsive image srcset (simplified)
+				$srcset = $this->generate_srcset( $src );
+
+				if ( ! empty( $srcset ) ) {
+					return '<img' . $before_src . 'src="' . $src . '" srcset="' . $srcset . '" sizes="(max-width: 768px) 100vw, 50vw"' . $after_src . '>';
+				}
+
+				return $matches[0];
+			},
+			$html
+		);
 	}
 
 	/**
@@ -325,10 +349,10 @@ class HtmlOptimizer implements OptimizerInterface {
 
 		// Add autocomplete attributes for better UX
 		$html = $this->add_autocomplete_attributes( $html );
-		
+
 		// Optimize input types
 		$html = $this->optimize_input_types( $html );
-		
+
 		// Add form validation attributes
 		$html = $this->add_validation_attributes( $html );
 
@@ -348,13 +372,13 @@ class HtmlOptimizer implements OptimizerInterface {
 		}
 
 		$resource_hints = $this->extract_resource_hints( $html );
-		
+
 		if ( empty( $resource_hints ) ) {
 			return $html;
 		}
 
 		$hints_html = $this->build_resource_hints_html( $resource_hints );
-		
+
 		// Insert resource hints in head
 		$html = preg_replace( '/(<head[^>]*>)/i', '$1' . "\n" . $hints_html, $html );
 
@@ -376,10 +400,10 @@ class HtmlOptimizer implements OptimizerInterface {
 		// Remove redundant attributes
 		$html = preg_replace( '/\s+type="text\/javascript"/i', '', $html );
 		$html = preg_replace( '/\s+type="text\/css"/i', '', $html );
-		
+
 		// Optimize boolean attributes
 		$html = preg_replace( '/\s+(checked|selected|disabled|readonly|multiple|autofocus|autoplay|controls|defer|hidden|loop|muted|open|required|reversed)="[^"]*"/i', ' $1', $html );
-		
+
 		// Remove empty attributes
 		$html = preg_replace( '/\s+[a-zA-Z-]+=""\s*/', ' ', $html );
 
@@ -400,10 +424,10 @@ class HtmlOptimizer implements OptimizerInterface {
 
 		// Remove empty paragraphs
 		$html = preg_replace( '/<p[^>]*>\\s*<\/p>/i', '', $html );
-		
+
 		// Remove empty divs (but preserve those with classes or IDs)
 		$html = preg_replace( '/<div>\\s*<\/div>/i', '', $html );
-		
+
 		// Remove empty spans
 		$html = preg_replace( '/<span[^>]*>\\s*<\/span>/i', '', $html );
 
@@ -443,15 +467,15 @@ class HtmlOptimizer implements OptimizerInterface {
 	private function generate_srcset( string $src ): string {
 		// This is a simplified implementation
 		// In practice, you'd check for actual responsive image files
-		$base_url = dirname( $src );
-		$filename = pathinfo( $src, PATHINFO_FILENAME );
+		$base_url  = dirname( $src );
+		$filename  = pathinfo( $src, PATHINFO_FILENAME );
 		$extension = pathinfo( $src, PATHINFO_EXTENSION );
 
 		$srcset_candidates = array();
-		$sizes = array( 320, 640, 768, 1024, 1200 );
+		$sizes             = array( 320, 640, 768, 1024, 1200 );
 
 		foreach ( $sizes as $size ) {
-			$responsive_url = $base_url . '/' . $filename . '-' . $size . 'w.' . $extension;
+			$responsive_url      = $base_url . '/' . $filename . '-' . $size . 'w.' . $extension;
 			$srcset_candidates[] = $responsive_url . ' ' . $size . 'w';
 		}
 
@@ -466,21 +490,21 @@ class HtmlOptimizer implements OptimizerInterface {
 	 */
 	private function add_autocomplete_attributes( string $html ): string {
 		$autocomplete_map = array(
-			'email' => 'email',
-			'password' => 'current-password',
-			'name' => 'name',
+			'email'     => 'email',
+			'password'  => 'current-password',
+			'name'      => 'name',
 			'firstname' => 'given-name',
-			'lastname' => 'family-name',
-			'phone' => 'tel',
-			'address' => 'street-address',
-			'city' => 'address-level2',
-			'zip' => 'postal-code',
-			'country' => 'country-name',
+			'lastname'  => 'family-name',
+			'phone'     => 'tel',
+			'address'   => 'street-address',
+			'city'      => 'address-level2',
+			'zip'       => 'postal-code',
+			'country'   => 'country-name',
 		);
 
 		foreach ( $autocomplete_map as $name_pattern => $autocomplete_value ) {
 			$pattern = '/<input(?![^>]*autocomplete=)([^>]*?)name="[^"]*' . $name_pattern . '[^"]*"([^>]*?)>/i';
-			$html = preg_replace( $pattern, '<input$1name="$2" autocomplete="' . $autocomplete_value . '"$3>', $html );
+			$html    = preg_replace( $pattern, '<input$1name="$2" autocomplete="' . $autocomplete_value . '"$3>', $html );
 		}
 
 		return $html;
@@ -494,16 +518,16 @@ class HtmlOptimizer implements OptimizerInterface {
 	 */
 	private function optimize_input_types( string $html ): string {
 		$type_map = array(
-			'email' => 'email',
-			'phone' => 'tel',
-			'url' => 'url',
+			'email'  => 'email',
+			'phone'  => 'tel',
+			'url'    => 'url',
 			'number' => 'number',
-			'date' => 'date',
+			'date'   => 'date',
 		);
 
 		foreach ( $type_map as $name_pattern => $input_type ) {
 			$pattern = '/<input(?![^>]*type="' . $input_type . '")([^>]*?)name="[^"]*' . $name_pattern . '[^"]*"([^>]*?)>/i';
-			$html = preg_replace( $pattern, '<input type="' . $input_type . '"$1name="$2"$3>', $html );
+			$html    = preg_replace( $pattern, '<input type="' . $input_type . '"$1name="$2"$3>', $html );
 		}
 
 		return $html;
@@ -518,10 +542,10 @@ class HtmlOptimizer implements OptimizerInterface {
 	private function add_validation_attributes( string $html ): string {
 		// Add required attribute to inputs that look required
 		$required_patterns = array( 'required', 'mandatory', '*' );
-		
+
 		foreach ( $required_patterns as $pattern ) {
 			$regex = '/<input(?![^>]*required)([^>]*?)(?:name|placeholder)="[^"]*' . preg_quote( $pattern, '/' ) . '[^"]*"([^>]*?)>/i';
-			$html = preg_replace( $regex, '<input$1$2 required>', $html );
+			$html  = preg_replace( $regex, '<input$1$2 required>', $html );
 		}
 
 		return $html;
@@ -535,10 +559,10 @@ class HtmlOptimizer implements OptimizerInterface {
 	 */
 	private function extract_resource_hints( string $html ): array {
 		$hints = array(
-			'preload' => array(),
-			'prefetch' => array(),
+			'preload'      => array(),
+			'prefetch'     => array(),
 			'dns-prefetch' => array(),
-			'preconnect' => array(),
+			'preconnect'   => array(),
 		);
 
 		// Extract critical CSS files for preload
@@ -547,7 +571,7 @@ class HtmlOptimizer implements OptimizerInterface {
 			if ( $this->is_critical_resource( $css_url ) ) {
 				$hints['preload'][] = array(
 					'href' => $css_url,
-					'as' => 'style',
+					'as'   => 'style',
 				);
 			}
 		}
@@ -558,7 +582,7 @@ class HtmlOptimizer implements OptimizerInterface {
 			if ( $this->is_critical_resource( $js_url ) ) {
 				$hints['preload'][] = array(
 					'href' => $js_url,
-					'as' => 'script',
+					'as'   => 'script',
 				);
 			}
 		}
@@ -632,7 +656,7 @@ class HtmlOptimizer implements OptimizerInterface {
 		if ( strpos( $url, '//' ) === 0 ) {
 			return parse_url( 'http:' . $url, PHP_URL_HOST );
 		}
-		
+
 		if ( strpos( $url, 'http' ) === 0 ) {
 			return parse_url( $url, PHP_URL_HOST );
 		}
@@ -650,7 +674,7 @@ class HtmlOptimizer implements OptimizerInterface {
 	public function extractCriticalHTML( string $html, int $fold_height = 600 ): string {
 		// This is a simplified implementation
 		// In practice, you'd use more sophisticated techniques to determine critical content
-		
+
 		$critical_selectors = array(
 			'header',
 			'nav',
@@ -662,7 +686,7 @@ class HtmlOptimizer implements OptimizerInterface {
 		);
 
 		$critical_html = '';
-		
+
 		foreach ( $critical_selectors as $selector ) {
 			$pattern = '/<' . preg_quote( $selector, '/' ) . '[^>]*>.*?<\/' . preg_quote( $selector, '/' ) . '>/s';
 			if ( preg_match( $pattern, $html, $matches ) ) {
@@ -682,22 +706,26 @@ class HtmlOptimizer implements OptimizerInterface {
 	public function optimizeStructuredData( string $html ): string {
 		// Extract and optimize JSON-LD structured data
 		$pattern = '/<script[^>]*type="application\/ld\+json"[^>]*>(.*?)<\/script>/s';
-		
-		return preg_replace_callback( $pattern, function( $matches ) {
-			$json_data = $matches[1];
-			
-			try {
-				// Decode, optimize, and re-encode JSON
-				$data = json_decode( $json_data, true );
-				if ( $data ) {
-					$optimized_json = json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
-					return str_replace( $json_data, $optimized_json, $matches[0] );
+
+		return preg_replace_callback(
+			$pattern,
+			function ( $matches ) {
+				$json_data = $matches[1];
+
+				try {
+					// Decode, optimize, and re-encode JSON
+					$data = json_decode( $json_data, true );
+					if ( $data ) {
+						$optimized_json = json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+						return str_replace( $json_data, $optimized_json, $matches[0] );
+					}
+				} catch ( \Exception $e ) {
+					LoggingUtil::error( 'Failed to optimize structured data: ' . $e->getMessage() );
 				}
-			} catch ( \Exception $e ) {
-				LoggingUtil::error( 'Failed to optimize structured data: ' . $e->getMessage() );
-			}
-			
-			return $matches[0];
-		}, $html );
+
+				return $matches[0];
+			},
+			$html
+		);
 	}
 }

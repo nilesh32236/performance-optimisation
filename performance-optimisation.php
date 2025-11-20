@@ -46,107 +46,247 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// Check PHP version compatibility.
+if ( version_compare( PHP_VERSION, '7.4.0', '<' ) ) {
+	add_action(
+		'admin_notices',
+		function () {
+			echo '<div class="notice notice-error"><p>';
+			echo '<strong>Performance Optimisation:</strong> This plugin requires PHP 7.4 or higher. ';
+			echo 'Current version: ' . esc_html( PHP_VERSION );
+			echo '</p></div>';
+		}
+	);
+	return;
+}
+
+// Check WordPress version compatibility.
+global $wp_version;
+if ( version_compare( $wp_version, '6.2', '<' ) ) {
+	add_action(
+		'admin_notices',
+		function () {
+			echo '<div class="notice notice-error"><p>';
+			echo '<strong>Performance Optimisation:</strong> This plugin requires WordPress 6.2 or higher. ';
+			echo 'Current version: ' . esc_html( $wp_version );
+			echo '</p></div>';
+		}
+	);
+	return;
+}
+
 // Define plugin constants.
 define( 'WPPO_PLUGIN_FILE', __FILE__ );
 define( 'WPPO_PLUGIN_PATH', plugin_dir_path( WPPO_PLUGIN_FILE ) );
 define( 'WPPO_PLUGIN_URL', plugin_dir_url( WPPO_PLUGIN_FILE ) );
 
-if ( ! function_exists( 'get_plugin_data' ) ) {
-	require_once ABSPATH . 'wp-admin/includes/plugin.php';
-}
-$plugin_data = get_plugin_data( WPPO_PLUGIN_FILE );
-define( 'WPPO_VERSION', $plugin_data['Version'] ?? '2.0.0' );
+// Optimized version detection.
+if ( ! defined( 'WPPO_VERSION' ) ) {
+	$version = '2.0.0'; // Fallback version.
 
-// Load Composer autoloader.
+	if ( function_exists( 'get_file_data' ) ) {
+		$headers = get_file_data( WPPO_PLUGIN_FILE, array( 'Version' => 'Version' ) );
+		$version = $headers['Version'] ? $headers['Version'] : $version;
+	} elseif ( function_exists( 'get_plugin_data' ) ) {
+		if ( ! function_exists( 'get_plugin_data' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		$plugin_data = get_plugin_data( WPPO_PLUGIN_FILE, false, false );
+		$version     = $plugin_data['Version'] ? $plugin_data['Version'] : $version;
+	}
+
+	define( 'WPPO_VERSION', $version );
+}
+
+// Load Composer autoloader with validation.
 $autoloader = WPPO_PLUGIN_PATH . 'vendor/autoload.php';
 if ( file_exists( $autoloader ) ) {
 	require_once $autoloader;
+} else {
+	add_action(
+		'admin_notices',
+		function () {
+			echo '<div class="notice notice-warning"><p>';
+			echo esc_html__( 'Performance Optimisation: Composer dependencies not found. Some features may not work properly.', 'performance-optimisation' );
+			echo '</p></div>';
+		}
+	);
 }
 
-// Legacy class aliases removed - using modern architecture only
+// Legacy class aliases removed - using modern architecture only.
 
 use PerformanceOptimisation\Core\Bootstrap\Plugin;
 
-/**
- * Initialize the plugin.
- * This function is hooked to 'plugins_loaded' to ensure all WordPress core functions are available.
- *
- * @since 2.0.0
- *
- * @return void
- */
-function wppo_initialize_plugin(): void {
-	try {
-		$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
-		$plugin->initialize();
-	} catch ( Exception $e ) {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			// Log error for debugging purposes.
-			error_log( 'Performance Optimisation initialization error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+// Prevent function redefinition.
+if ( ! function_exists( 'wppo_check_conflicts' ) ) {
+
+	/**
+	 * Check for conflicting plugins.
+	 */
+	function wppo_check_conflicts(): bool {
+		if ( ! function_exists( 'is_plugin_active' ) ) {
+			return true;
 		}
 
-		// Show admin notice for initialization failure.
-		add_action(
-			'admin_notices',
-			function () use ( $e ) {
-				printf(
-					'<div class="notice notice-error"><p>%s</p></div>',
-					sprintf(
-					/* translators: %s: Error message */
-						esc_html__( 'Performance Optimisation plugin failed to initialize: %s', 'performance-optimisation' ),
-						esc_html( $e->getMessage() )
-					)
-				);
-			}
+		$conflicting_plugins = array(
+			'wp-rocket/wp-rocket.php'             => 'WP Rocket',
+			'w3-total-cache/w3-total-cache.php'   => 'W3 Total Cache',
+			'wp-super-cache/wp-cache.php'         => 'WP Super Cache',
+			'wp-fastest-cache/wpFastestCache.php' => 'WP Fastest Cache',
 		);
+
+		foreach ( $conflicting_plugins as $plugin => $name ) {
+			if ( is_plugin_active( $plugin ) ) {
+				add_action(
+					'admin_notices',
+					function () use ( $name ) {
+						printf(
+							'<div class="notice notice-warning"><p>%s</p></div>',
+							sprintf(
+								/* translators: %s: Plugin name */
+								esc_html__(
+									'Performance Optimisation detected %s is active. This may cause conflicts. Consider deactivating one of the plugins.',
+									'performance-optimisation'
+								),
+								esc_html( $name )
+							)
+						);
+					}
+				);
+				return false;
+			}
+		}
+		return true;
 	}
-}
+
+} // End function_exists check
+
+if ( ! function_exists( 'wppo_initialize_plugin' ) ) {
+	/**
+	 * Initialize the plugin.
+	 * This function is hooked to 'plugins_loaded' to ensure all WordPress core functions are available.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @return void
+	 */
+	function wppo_initialize_plugin(): void {
+		// Check for plugin conflicts first.
+		wppo_check_conflicts();
+
+		try {
+			$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
+			$plugin->initialize();
+		} catch ( Exception $e ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				// Log error for debugging purposes.
+				error_log( 'Performance Optimisation initialization error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			}
+
+			// Show admin notice for initialization failure.
+			add_action(
+				'admin_notices',
+				function () use ( $e ) {
+					printf(
+						'<div class="notice notice-error"><p>%s</p></div>',
+						sprintf(
+						/* translators: %s: Error message */
+							esc_html__( 'Performance Optimisation plugin failed to initialize: %s', 'performance-optimisation' ),
+							esc_html( $e->getMessage() )
+						)
+					);
+				}
+			);
+		}
+	}
+} // End wppo_initialize_plugin function_exists check
+
 add_action( 'plugins_loaded', 'wppo_initialize_plugin' );
 
-/**
- * Activation hook callback function.
- * Handles tasks to be performed when the plugin is activated.
- *
- * @since 2.0.0
- *
- * @return void
- */
-function wppo_activate_plugin(): void {
-	require_once WPPO_PLUGIN_PATH . 'includes/Core/Bootstrap/Plugin.php';
-	$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
-	$plugin->activate();
-}
+if ( ! function_exists( 'wppo_activate_plugin' ) ) {
+	/**
+	 * Activation hook callback function.
+	 * Handles tasks to be performed when the plugin is activated.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @return void
+	 */
+	function wppo_activate_plugin(): void {
+		$bootstrap_file = WPPO_PLUGIN_PATH . 'includes/Core/Bootstrap/Plugin.php';
+
+		if ( ! file_exists( $bootstrap_file ) ) {
+			wp_die(
+				esc_html__( 'Plugin activation failed: Bootstrap file not found.', 'performance-optimisation' ),
+				esc_html__( 'Plugin Activation Error', 'performance-optimisation' )
+			);
+		}
+
+		try {
+			require_once $bootstrap_file;
+			$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
+			$plugin->activate();
+		} catch ( Exception $e ) {
+			wp_die(
+				sprintf(
+					/* translators: %s: Error message */
+					esc_html__( 'Plugin activation failed: %s', 'performance-optimisation' ),
+					esc_html( $e->getMessage() )
+				),
+				esc_html__( 'Plugin Activation Error', 'performance-optimisation' )
+			);
+		}
+	}
+} // End wppo_activate_plugin function_exists check
+
 register_activation_hook( WPPO_PLUGIN_FILE, 'wppo_activate_plugin' );
 
-/**
- * Deactivation hook callback function.
- * Handles tasks to be performed when the plugin is deactivated.
- *
- * @since 2.0.0
- *
- * @return void
- */
-function wppo_deactivate_plugin(): void {
-	require_once WPPO_PLUGIN_PATH . 'includes/Core/Bootstrap/Plugin.php';
-	$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
-	$plugin->deactivate();
-}
+if ( ! function_exists( 'wppo_deactivate_plugin' ) ) {
+	/**
+	 * Deactivation hook callback function.
+	 * Handles tasks to be performed when the plugin is deactivated.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @return void
+	 */
+	function wppo_deactivate_plugin(): void {
+		$bootstrap_file = WPPO_PLUGIN_PATH . 'includes/Core/Bootstrap/Plugin.php';
+
+		if ( ! file_exists( $bootstrap_file ) ) {
+			error_log( 'Performance Optimisation: Bootstrap file not found during deactivation' );
+			return;
+		}
+
+		try {
+			require_once $bootstrap_file;
+			$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
+			$plugin->deactivate();
+		} catch ( Exception $e ) {
+			error_log( 'Performance Optimisation deactivation error: ' . $e->getMessage() );
+		}
+	}
+} // End wppo_deactivate_plugin function_exists check
+
 register_deactivation_hook( WPPO_PLUGIN_FILE, 'wppo_deactivate_plugin' );
 
-/**
- * Add a settings link to the plugin entry in the plugins admin page.
- *
- * @since 1.0.0
- * @param array<string,string> $links Existing plugin action links.
- * @return array<string,string> Modified plugin action links.
- */
-function wppo_add_settings_link( array $links ): array {
-	$settings_link = sprintf(
-		'<a href="%s">%s</a>',
-		esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ),
-		esc_html__( 'Settings', 'performance-optimisation' )
-	);
-	array_unshift( $links, $settings_link );
-	return $links;
-}
+if ( ! function_exists( 'wppo_add_settings_link' ) ) {
+	/**
+	 * Add a settings link to the plugin entry in the plugins admin page.
+	 *
+	 * @since 1.0.0
+	 * @param array<string,string> $links Existing plugin action links.
+	 * @return array<string,string> Modified plugin action links.
+	 */
+	function wppo_add_settings_link( array $links ): array {
+		$settings_link = sprintf(
+			'<a href="%s">%s</a>',
+			esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ),
+			esc_html__( 'Settings', 'performance-optimisation' )
+		);
+		array_unshift( $links, $settings_link );
+		return $links;
+	}
+} // End wppo_add_settings_link function_exists check
+
 add_filter( 'plugin_action_links_' . plugin_basename( WPPO_PLUGIN_FILE ), 'wppo_add_settings_link' );

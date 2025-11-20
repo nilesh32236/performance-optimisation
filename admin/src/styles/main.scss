@@ -12,51 +12,28 @@
 @import 'utilities';
 
 // Import component styles
-@import 'components/button';
 @import 'components/wizard';
 
-// CSS Custom Properties for runtime theming
-:root {
-  --wppo-primary-color: #007cba;
-  --wppo-secondary-color: #005a87;
-  --wppo-success-color: #00a32a;
-  --wppo-warning-color: #dba617;
-  --wppo-error-color: #d63638;
-  --wppo-text-color: #1e1e1e;
-  --wppo-text-light: #666666;
-  --wppo-border-color: #e0e0e0;
-  --wppo-background: #ffffff;
-  --wppo-background-light: #f9f9f9;
-  --wppo-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --wppo-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.15);
-  --wppo-border-radius: 8px;
-  --wppo-spacing-xs: 0.25rem;
-  --wppo-spacing-sm: 0.5rem;
-  --wppo-spacing-md: 1rem;
-  --wppo-spacing-lg: 1.5rem;
-  --wppo-spacing-xl: 2rem;
-  --wppo-font-size-sm: 0.875rem;
-  --wppo-font-size-base: 1rem;
-  --wppo-font-size-lg: 1.125rem;
-  --wppo-font-size-xl: 1.25rem;
-}
+// Import enhanced admin styles
+@import 'admin-enhanced';
 
-// Dark mode variables
-@media (prefers-color-scheme: dark) {
-  :root {
-    --wppo-primary-color: #4f94cd;
-    --wppo-secondary-color: #6ba6d6;
-    --wppo-text-color: #ffffff;
-    --wppo-text-light: #cccccc;
-    --wppo-border-color: #404040;
-    --wppo-background: #2a2a2a;
-    --wppo-background-light: #1e1e1e;
-    --wppo-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --wppo-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.4);
+// WordPress admin integration
+.toplevel_page_performance-optimisation {
+  .wp-header-end {
+    display: none;
+  }
+  
+  .wrap {
+    margin: 0;
+    padding: 0;
+  }
+  
+  h1 {
+    display: none;
   }
 }
 
-// Base styles
+// Base styles (fallback for older browsers)
 .wppo-admin {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
   color: var(--wppo-text-color);
@@ -66,113 +43,32 @@
     box-sizing: border-box;
   }
 
-  &__header {
-    margin-bottom: var(--wppo-spacing-xl);
-    padding-bottom: var(--wppo-spacing-lg);
-    border-bottom: 1px solid var(--wppo-border-color);
-
-    h1 {
-      margin: 0 0 var(--wppo-spacing-sm);
-      font-size: 2rem;
-      font-weight: 600;
-      color: var(--wppo-text-color);
-    }
-
-    p {
-      margin: 0;
-      font-size: var(--wppo-font-size-lg);
-      color: var(--wppo-text-light);
-    }
-  }
-
-  &__content {
-    max-width: 1200px;
-  }
-
-  &__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: var(--wppo-spacing-lg);
-    margin-bottom: var(--wppo-spacing-xl);
-  }
-
-  &__actions {
-    display: flex;
-    gap: var(--wppo-spacing-md);
-    padding-top: var(--wppo-spacing-lg);
-    border-top: 1px solid var(--wppo-border-color);
-  }
-
-  // Loading state
-  &-loading {
+  // Setting groups (fallback)
+  .wppo-setting-group {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 200px;
     gap: var(--wppo-spacing-md);
 
-    p {
-      margin: 0;
+    label {
+      display: flex;
+      align-items: center;
+      gap: var(--wppo-spacing-sm);
+      font-size: var(--wppo-font-size-base);
+      color: var(--wppo-text-color);
+      cursor: pointer;
+
+      input[type="checkbox"] {
+        width: 1.125rem;
+        height: 1.125rem;
+        accent-color: var(--wppo-primary-color);
+      }
+    }
+
+    &__description {
+      font-size: var(--wppo-font-size-sm);
       color: var(--wppo-text-light);
+      margin-top: var(--wppo-spacing-xs);
     }
-  }
-
-  // Error state
-  &-error {
-    max-width: 600px;
-    margin: var(--wppo-spacing-xl) auto;
-  }
-
-  // Responsive
-  @media (max-width: 768px) {
-    &__grid {
-      grid-template-columns: 1fr;
-      gap: var(--wppo-spacing-md);
-    }
-
-    &__actions {
-      flex-direction: column;
-      align-items: stretch;
-    }
-
-    &__header {
-      h1 {
-        font-size: 1.75rem;
-      }
-
-      p {
-        font-size: var(--wppo-font-size-base);
-      }
-    }
-  }
-}
-
-// Setting groups
-.wppo-setting-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--wppo-spacing-md);
-
-  label {
-    display: flex;
-    align-items: center;
-    gap: var(--wppo-spacing-sm);
-    font-size: var(--wppo-font-size-base);
-    color: var(--wppo-text-color);
-    cursor: pointer;
-
-    input[type="checkbox"] {
-      width: 1.125rem;
-      height: 1.125rem;
-      accent-color: var(--wppo-primary-color);
-    }
-  }
-
-  &__description {
-    font-size: var(--wppo-font-size-sm);
-    color: var(--wppo-text-light);
-    margin-top: var(--wppo-spacing-xs);
   }
 }
 
@@ -230,5 +126,26 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+// Print styles
+@media print {
+  .wppo-admin__actions,
+  .wppo-nav-tabs,
+  .wppo-quick-actions {
+    display: none;
+  }
+  
+  .wppo-admin__header {
+    background: none !important;
+    color: black !important;
+    box-shadow: none !important;
+  }
+  
+  .wppo-metric-card,
+  .wppo-setting-group {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
   }
 }

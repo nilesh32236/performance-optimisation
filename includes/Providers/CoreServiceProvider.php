@@ -38,17 +38,38 @@ class CoreServiceProvider extends ServiceProvider {
 	public function register( ServiceContainerInterface $container ): void {
 		// Register core services as singletons
 		$container->singleton( 'PerformanceOptimisation\\Services\\OptimizationService', 'PerformanceOptimisation\\Services\\OptimizationService' );
-		$container->singleton( 'PerformanceOptimisation\\Services\\CronService', 'PerformanceOptimisation\\Services\\CronService' );
-		
+
+		// Register CronService with proper dependency injection
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\CronService',
+			function ( ServiceContainerInterface $c ) {
+				$cache_service    = $c->has( 'cache_service' ) ? $c->get( 'cache_service' ) : null;
+				$image_service    = $c->has( 'image_service' ) ? $c->get( 'image_service' ) : null;
+				$settings_service = $c->has( 'settings_service' ) ? $c->get( 'settings_service' ) : null;
+
+				return new \PerformanceOptimisation\Services\CronService(
+					$cache_service,
+					$image_service,
+					$settings_service
+				);
+			}
+		);
+
 		// Register SettingsService with container injection
-		$container->singleton( 'PerformanceOptimisation\\Services\\SettingsService', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Services\SettingsService( $c );
-		} );
-		
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\SettingsService',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Services\SettingsService( $c );
+			}
+		);
+
 		// Register ConfigurationService with container injection
-		$container->singleton( 'PerformanceOptimisation\\Services\\ConfigurationService', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Services\ConfigurationService( $c );
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\ConfigurationService',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Services\ConfigurationService( $c );
+			}
+		);
 
 		// Register convenient aliases
 		$container->alias( 'optimization_service', 'PerformanceOptimisation\\Services\\OptimizationService' );

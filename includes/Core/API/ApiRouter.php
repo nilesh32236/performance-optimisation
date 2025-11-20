@@ -11,6 +11,8 @@
 
 namespace PerformanceOptimisation\Core\API;
 
+use PerformanceOptimisation\Interfaces\ServiceContainerInterface;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -35,13 +37,45 @@ class ApiRouter {
 	private array $controllers = array();
 
 	/**
+	 * Base controller for common functionality.
+	 *
+	 * @var BaseController
+	 */
+	private BaseController $base_controller;
+
+	/**
+	 * Service container.
+	 *
+	 * @var ServiceContainerInterface
+	 */
+	private ServiceContainerInterface $container;
+
+	/**
+	 * Constructor.
+	 *
+	 * @param ServiceContainerInterface $container Service container.
+	 */
+	public function __construct( ServiceContainerInterface $container ) {
+		$this->container = $container;
+	}
+
+	/**
 	 * Initialize the API router.
 	 *
 	 * @return void
 	 */
 	public function init(): void {
+		error_log( 'WPPO: ApiRouter init() called' );
+		error_log( 'WPPO: Adding rest_api_init hook' );
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+		error_log( 'WPPO: Hook added, loading controllers' );
 		$this->load_controllers();
+
+		// Also call register_routes directly in case rest_api_init has already fired
+		error_log( 'WPPO: Calling register_routes directly' );
+		$this->register_routes();
+
+		error_log( 'WPPO: ApiRouter init() completed' );
 	}
 
 	/**
@@ -61,6 +95,13 @@ class ApiRouter {
 			require_once WPPO_PLUGIN_PATH . 'includes/Core/Analytics/RecommendationEngine.php';
 		}
 
+		// Initialize base controller for common functionality
+		$this->base_controller = new class() extends BaseController {
+			public function register_routes(): void {
+				// No routes to register for base controller
+			}
+		};
+
 		// Initialize controllers.
 		$metrics_collector    = new \PerformanceOptimisation\Core\Analytics\MetricsCollector();
 		$performance_analyzer = new \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer( $metrics_collector );
@@ -74,7 +115,8 @@ class ApiRouter {
 			'optimization'    => new OptimizationController(),
 			'analytics'       => new AnalyticsController( $metrics_collector, $performance_analyzer ),
 			'recommendations' => new RecommendationsController( $metrics_collector, $performance_analyzer ),
-			'images'          => new ImageOptimizationController( $container ),
+			// Temporarily disabled due to service container issues
+			// 'images'          => new ImageOptimizationController( $container ),
 		);
 	}
 
@@ -84,6 +126,8 @@ class ApiRouter {
 	 * @return void
 	 */
 	public function register_routes(): void {
+		error_log( 'WPPO: register_routes() called' );
+
 		// Cache routes.
 		$this->register_cache_routes();
 
@@ -110,6 +154,8 @@ class ApiRouter {
 
 		// Utility routes.
 		$this->register_utility_routes();
+
+		error_log( 'WPPO: register_routes() completed' );
 	}
 
 	/**
@@ -146,7 +192,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this->controllers['cache'], 'preload_cache' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 			)
 		);
 
@@ -156,7 +202,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['cache'], 'get_cache_stats' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 			)
 		);
 	}
@@ -179,7 +225,7 @@ class ApiRouter {
 				array(
 					'methods'             => \WP_REST_Server::EDITABLE,
 					'callback'            => array( $this->controllers['settings'], 'update_settings' ),
-					'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+					'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 					'args'                => array(
 						'settings' => array(
 							'required' => true,
@@ -197,12 +243,12 @@ class ApiRouter {
 				array(
 					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( $this->controllers['settings'], 'get_section_settings' ),
-					'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+					'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				),
 				array(
 					'methods'             => \WP_REST_Server::EDITABLE,
 					'callback'            => array( $this->controllers['settings'], 'update_section_settings' ),
-					'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+					'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 					'args'                => array(
 						'settings' => array(
 							'required' => true,
@@ -229,7 +275,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this->controllers['settings'], 'import_settings' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'settings' => array(
 						'required' => true,
@@ -252,7 +298,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this->controllers['optimization'], 'optimize_images' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 			)
 		);
 
@@ -262,7 +308,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this->controllers['optimization'], 'bulk_optimize_images' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 			)
 		);
 
@@ -272,7 +318,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['optimization'], 'get_image_optimization_status' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 			)
 		);
 
@@ -282,7 +328,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this->controllers['optimization'], 'run_minification' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'type' => array(
 						'required' => false,
@@ -300,7 +346,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this->controllers['optimization'], 'run_performance_test' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'url' => array(
 						'required' => false,
@@ -324,7 +370,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['analytics'], 'get_dashboard_data' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 			)
 		);
 
@@ -334,7 +380,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['analytics'], 'get_metrics_data' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'metric'     => array(
 						'required' => true,
@@ -366,7 +412,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['analytics'], 'get_performance_report' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'start_date' => array(
 						'required' => false,
@@ -388,7 +434,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['analytics'], 'export_analytics_data' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'format'     => array(
 						'required' => false,
@@ -423,7 +469,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['recommendations'], 'get_recommendations' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'start_date' => array(
 						'required' => false,
@@ -445,7 +491,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this->controllers['recommendations'], 'apply_recommendation' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'recommendation_id' => array(
 						'required' => true,
@@ -461,7 +507,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['recommendations'], 'get_optimization_suggestions' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 			)
 		);
 
@@ -471,7 +517,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this->controllers['recommendations'], 'get_optimization_progress' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'start_date' => array(
 						'required' => false,
@@ -494,9 +540,10 @@ class ApiRouter {
 	 * @return void
 	 */
 	private function register_image_routes(): void {
-		if ( isset( $this->controllers['images'] ) ) {
-			$this->controllers['images']->register_routes();
-		}
+		// Temporarily disabled due to service container issues
+		// if ( isset( $this->controllers['images'] ) ) {
+		// $this->controllers['images']->register_routes();
+		// }
 	}
 
 	/**
@@ -505,19 +552,18 @@ class ApiRouter {
 	 * @return void
 	 */
 	private function register_wizard_routes(): void {
-		error_log( 'self::NAMESPACE: ' . self::NAMESPACE );
 		register_rest_route(
 			self::NAMESPACE,
 			'/wizard/setup',
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'handle_wizard_setup' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'preset'   => array(
 						'required' => true,
 						'type'     => 'string',
-						'enum'     => array( 'standard', 'recommended', 'aggressive' ),
+						'enum'     => array( 'standard', 'recommended', 'aggressive', 'advanced', 'balanced', 'conservative' ),
 					),
 					'features' => array(
 						'required' => false,
@@ -533,18 +579,17 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::CREATABLE,
 				'callback'            => array( $this, 'handle_wizard_reset' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 			)
 		);
 
-		error_log( 'Register route' );
 		register_rest_route(
 			self::NAMESPACE,
 			'/wizard/analysis',
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'handle_site_analysis' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'force_refresh' => array(
 						'required' => false,
@@ -574,7 +619,7 @@ class ApiRouter {
 				array(
 					'methods'             => \WP_REST_Server::CREATABLE,
 					'callback'            => array( $this, 'create_preset' ),
-					'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+					'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 					'args'                => array(
 						'preset' => array(
 							'required' => true,
@@ -592,12 +637,12 @@ class ApiRouter {
 				array(
 					'methods'             => \WP_REST_Server::READABLE,
 					'callback'            => array( $this, 'get_preset' ),
-					'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+					'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				),
 				array(
 					'methods'             => \WP_REST_Server::EDITABLE,
 					'callback'            => array( $this, 'update_preset' ),
-					'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+					'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 					'args'                => array(
 						'preset' => array(
 							'required' => true,
@@ -608,7 +653,7 @@ class ApiRouter {
 				array(
 					'methods'             => \WP_REST_Server::DELETABLE,
 					'callback'            => array( $this, 'delete_preset' ),
-					'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+					'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				),
 			)
 		);
@@ -636,7 +681,7 @@ class ApiRouter {
 			array(
 				'methods'             => \WP_REST_Server::READABLE,
 				'callback'            => array( $this, 'get_recent_activities' ),
-				'permission_callback' => array( $this->controllers['base'], 'check_admin_permissions' ),
+				'permission_callback' => array( $this->base_controller, 'check_admin_permissions' ),
 				'args'                => array(
 					'page'     => array(
 						'required' => false,

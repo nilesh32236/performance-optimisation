@@ -90,8 +90,8 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 * @var array
 	 */
 	private array $breakpoints = array(
-		'mobile' => '(max-width: 767px)',
-		'tablet' => '(min-width: 768px) and (max-width: 1023px)',
+		'mobile'  => '(max-width: 767px)',
+		'tablet'  => '(min-width: 768px) and (max-width: 1023px)',
 		'desktop' => '(min-width: 1024px)',
 	);
 
@@ -101,13 +101,13 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 * @param ServiceContainerInterface $container Service container.
 	 */
 	public function __construct( ServiceContainerInterface $container ) {
-		$this->container = $container;
-		$this->logger = $container->get( 'logger' );
-		$this->filesystem = $container->get( 'filesystem' );
-		$this->validator = $container->get( 'validator' );
+		$this->container   = $container;
+		$this->logger      = $container->get( 'logger' );
+		$this->filesystem  = $container->get( 'filesystem' );
+		$this->validator   = $container->get( 'validator' );
 		$this->performance = $container->get( 'performance' );
-		$this->cache = $container->get( 'cache' );
-		
+		$this->cache       = $container->get( 'cache' );
+
 		$this->initializeCssPatterns();
 		$this->initializeCriticalSelectors();
 	}
@@ -120,18 +120,35 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 * @return string Optimized CSS content.
 	 */
 	public function optimize( string $css_content, array $options = array() ): string {
+		// Validate CSS content
+		if ( empty( $css_content ) ) {
+			return '';
+		}
+
+		if ( strlen( $css_content ) > 10485760 ) { // 10MB limit
+			throw new \Exception( 'CSS content exceeds maximum size limit' );
+		}
+
+		// Check for malicious content
+		if ( preg_match( '/javascript:|data:|vbscript:/i', $css_content ) ) {
+			throw new \Exception( 'Potentially malicious CSS content detected' );
+		}
+
 		$timer_id = $this->performance->startTimer( 'css_optimization' );
-		
+
 		try {
 			$original_size = strlen( $css_content );
-			$this->logger->debug( 'Starting CSS optimization', array(
-				'original_size' => $original_size,
-				'options' => $options,
-			) );
+			$this->logger->debug(
+				'Starting CSS optimization',
+				array(
+					'original_size' => $original_size,
+					'options'       => $options,
+				)
+			);
 
 			// Generate cache key
 			$cache_key = 'css_optimized_' . md5( $css_content . serialize( $options ) );
-			
+
 			// Check cache first
 			$cached_result = $this->cache->get( $cache_key );
 			if ( $cached_result !== null ) {
@@ -141,69 +158,72 @@ class ModernCssOptimizer implements OptimizerInterface {
 			}
 
 			// Perform optimization steps
-			$optimized_css = $css_content;
+			$optimized_css      = $css_content;
 			$optimization_steps = array();
 
 			// Step 1: Remove comments and normalize whitespace
 			if ( $options['remove_comments'] ?? true ) {
-				$optimized_css = $this->removeComments( $optimized_css );
+				$optimized_css        = $this->removeComments( $optimized_css );
 				$optimization_steps[] = 'comments_removed';
 			}
 
 			// Step 2: Normalize and minify
 			if ( $options['minify'] ?? true ) {
-				$optimized_css = $this->minifyCss( $optimized_css );
+				$optimized_css        = $this->minifyCss( $optimized_css );
 				$optimization_steps[] = 'minified';
 			}
 
 			// Step 3: Optimize properties and values
 			if ( $options['optimize_properties'] ?? true ) {
-				$optimized_css = $this->optimizeProperties( $optimized_css );
+				$optimized_css        = $this->optimizeProperties( $optimized_css );
 				$optimization_steps[] = 'properties_optimized';
 			}
 
 			// Step 4: Optimize media queries
 			if ( $options['optimize_media_queries'] ?? true ) {
-				$optimized_css = $this->optimizeMediaQueries( $optimized_css );
+				$optimized_css        = $this->optimizeMediaQueries( $optimized_css );
 				$optimization_steps[] = 'media_queries_optimized';
 			}
 
 			// Step 5: Remove unused CSS (if DOM provided)
 			if ( isset( $options['html_content'] ) && ( $options['remove_unused'] ?? false ) ) {
-				$optimized_css = $this->removeUnusedCss( $optimized_css, $options['html_content'] );
+				$optimized_css        = $this->removeUnusedCss( $optimized_css, $options['html_content'] );
 				$optimization_steps[] = 'unused_css_removed';
 			}
 
 			// Step 6: Extract critical CSS
 			$critical_css = '';
 			if ( isset( $options['html_content'] ) && ( $options['extract_critical'] ?? false ) ) {
-				$critical_result = $this->extractCriticalCss( $optimized_css, $options['html_content'] );
-				$critical_css = $critical_result['critical'];
-				$optimized_css = $critical_result['remaining'];
+				$critical_result      = $this->extractCriticalCss( $optimized_css, $options['html_content'] );
+				$critical_css         = $critical_result['critical'];
+				$optimized_css        = $critical_result['remaining'];
 				$optimization_steps[] = 'critical_css_extracted';
 			}
 
 			// Step 7: Optimize font declarations
 			if ( $options['optimize_fonts'] ?? true ) {
-				$optimized_css = $this->optimizeFonts( $optimized_css );
+				$optimized_css        = $this->optimizeFonts( $optimized_css );
 				$optimization_steps[] = 'fonts_optimized';
 			}
 
 			// Step 8: Optimize colors
 			if ( $options['optimize_colors'] ?? true ) {
-				$optimized_css = $this->optimizeColors( $optimized_css );
+				$optimized_css        = $this->optimizeColors( $optimized_css );
 				$optimization_steps[] = 'colors_optimized';
 			}
 
-			$optimized_size = strlen( $optimized_css );
+			$optimized_size    = strlen( $optimized_css );
 			$compression_ratio = $original_size > 0 ? ( ( $original_size - $optimized_size ) / $original_size ) * 100 : 0;
 
-			$this->logger->info( 'CSS optimization completed', array(
-				'original_size' => $original_size,
-				'optimized_size' => $optimized_size,
-				'compression_ratio' => $compression_ratio,
-				'steps' => $optimization_steps,
-			) );
+			$this->logger->info(
+				'CSS optimization completed',
+				array(
+					'original_size'     => $original_size,
+					'optimized_size'    => $optimized_size,
+					'compression_ratio' => $compression_ratio,
+					'steps'             => $optimization_steps,
+				)
+			);
 
 			$this->performance->endTimer( $timer_id );
 			return $optimized_css;
@@ -211,7 +231,7 @@ class ModernCssOptimizer implements OptimizerInterface {
 		} catch ( \Exception $e ) {
 			$this->performance->endTimer( $timer_id );
 			$this->logger->error( 'CSS optimization failed: ' . $e->getMessage() );
-			
+
 			return $css_content; // Return original content on error
 		}
 	}
@@ -230,7 +250,7 @@ class ModernCssOptimizer implements OptimizerInterface {
 			}
 
 			$css_content = $this->filesystem->readFile( $file_path );
-			$result = $this->optimize( $css_content, $options );
+			$result      = $this->optimize( $css_content, $options );
 
 			if ( $result['success'] && isset( $options['save_optimized'] ) && $options['save_optimized'] ) {
 				$optimized_path = $this->generateOptimizedPath( $file_path );
@@ -248,14 +268,17 @@ class ModernCssOptimizer implements OptimizerInterface {
 			return $result;
 
 		} catch ( \Exception $e ) {
-			$this->logger->error( 'CSS file optimization failed', array(
-				'file' => $file_path,
-				'error' => $e->getMessage(),
-			) );
-			
+			$this->logger->error(
+				'CSS file optimization failed',
+				array(
+					'file'  => $file_path,
+					'error' => $e->getMessage(),
+				)
+			);
+
 			return array(
-				'success' => false,
-				'error' => $e->getMessage(),
+				'success'   => false,
+				'error'     => $e->getMessage(),
 				'file_path' => $file_path,
 			);
 		}
@@ -270,10 +293,10 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 */
 	public function combineFiles( array $file_paths, array $options = array() ): array {
 		$timer_id = $this->performance->startTimer( 'css_combination' );
-		
+
 		try {
-			$combined_css = '';
-			$file_info = array();
+			$combined_css        = '';
+			$file_info           = array();
 			$total_original_size = 0;
 
 			foreach ( $file_paths as $file_path ) {
@@ -282,13 +305,13 @@ class ModernCssOptimizer implements OptimizerInterface {
 					continue;
 				}
 
-				$css_content = $this->filesystem->readFile( $file_path );
-				$original_size = strlen( $css_content );
+				$css_content          = $this->filesystem->readFile( $file_path );
+				$original_size        = strlen( $css_content );
 				$total_original_size += $original_size;
 
 				// Add file header comment if enabled
 				if ( $options['add_file_headers'] ?? true ) {
-					$combined_css .= "/* File: " . basename( $file_path ) . " */\n";
+					$combined_css .= '/* File: ' . basename( $file_path ) . " */\n";
 				}
 
 				// Optimize individual file if requested
@@ -300,10 +323,10 @@ class ModernCssOptimizer implements OptimizerInterface {
 				}
 
 				$combined_css .= $css_content . "\n";
-				
+
 				$file_info[] = array(
-					'path' => $file_path,
-					'original_size' => $original_size,
+					'path'           => $file_path,
+					'original_size'  => $original_size,
 					'optimized_size' => strlen( $css_content ),
 				);
 			}
@@ -316,18 +339,18 @@ class ModernCssOptimizer implements OptimizerInterface {
 				}
 			}
 
-			$combined_size = strlen( $combined_css );
+			$combined_size     = strlen( $combined_css );
 			$compression_ratio = $total_original_size > 0 ? ( ( $total_original_size - $combined_size ) / $total_original_size ) * 100 : 0;
 
 			$result = array(
-				'success' => true,
-				'combined_css' => $combined_css,
-				'file_count' => count( $file_info ),
+				'success'             => true,
+				'combined_css'        => $combined_css,
+				'file_count'          => count( $file_info ),
 				'total_original_size' => $total_original_size,
-				'combined_size' => $combined_size,
-				'compression_ratio' => round( $compression_ratio, 2 ),
-				'file_info' => $file_info,
-				'processing_time' => $this->performance->endTimer( $timer_id ),
+				'combined_size'       => $combined_size,
+				'compression_ratio'   => round( $compression_ratio, 2 ),
+				'file_info'           => $file_info,
+				'processing_time'     => $this->performance->endTimer( $timer_id ),
 			);
 
 			// Save combined file if requested
@@ -336,22 +359,25 @@ class ModernCssOptimizer implements OptimizerInterface {
 				$result['output_path'] = $options['output_path'];
 			}
 
-			$this->logger->info( 'CSS files combined successfully', array(
-				'file_count' => count( $file_info ),
-				'total_original_size' => $total_original_size,
-				'combined_size' => $combined_size,
-				'compression_ratio' => $compression_ratio,
-			) );
+			$this->logger->info(
+				'CSS files combined successfully',
+				array(
+					'file_count'          => count( $file_info ),
+					'total_original_size' => $total_original_size,
+					'combined_size'       => $combined_size,
+					'compression_ratio'   => $compression_ratio,
+				)
+			);
 
 			return $result;
 
 		} catch ( \Exception $e ) {
 			$this->performance->endTimer( $timer_id );
 			$this->logger->error( 'CSS combination failed: ' . $e->getMessage() );
-			
+
 			return array(
-				'success' => false,
-				'error' => $e->getMessage(),
+				'success'    => false,
+				'error'      => $e->getMessage(),
 				'file_paths' => $file_paths,
 			);
 		}
@@ -378,16 +404,16 @@ class ModernCssOptimizer implements OptimizerInterface {
 	private function minifyCss( string $css ): string {
 		// Remove unnecessary whitespace
 		$css = preg_replace( '/\s+/', ' ', $css );
-		
+
 		// Remove whitespace around specific characters
 		$css = preg_replace( '/\s*([{}:;,>+~])\s*/', '$1', $css );
-		
+
 		// Remove trailing semicolon before closing brace
 		$css = preg_replace( '/;+}/', '}', $css );
-		
+
 		// Remove empty rules
 		$css = preg_replace( '/[^{}]+{\s*}/', '', $css );
-		
+
 		// Trim
 		return trim( $css );
 	}
@@ -400,21 +426,21 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 */
 	private function optimizeProperties( string $css ): string {
 		// Optimize margin and padding shorthand
-		$css = preg_replace_callback( 
+		$css = preg_replace_callback(
 			'/(?:margin|padding):\s*([^;]+);/',
 			array( $this, 'optimizeShorthand' ),
 			$css
 		);
-		
+
 		// Remove unnecessary quotes from font names
 		$css = preg_replace( '/font-family:\s*["\']([^"\']+)["\']/i', 'font-family:$1', $css );
-		
+
 		// Optimize zero values
 		$css = preg_replace( '/(?:^|[^0-9])0(?:px|em|rem|%|vh|vw|pt|pc|in|cm|mm|ex|ch|vmin|vmax)/', '0', $css );
-		
+
 		// Remove leading zeros
 		$css = preg_replace( '/(?:^|[^0-9])0+\.([0-9]+)/', '.$1', $css );
-		
+
 		return $css;
 	}
 
@@ -426,36 +452,36 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 */
 	private function optimizeMediaQueries( string $css ): string {
 		// Extract and group media queries
-		$media_queries = array();
+		$media_queries     = array();
 		$css_without_media = $css;
-		
+
 		// Find all media queries
 		preg_match_all( '/@media[^{]+\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/s', $css, $matches );
-		
+
 		foreach ( $matches[0] as $media_query ) {
 			// Extract media condition
 			preg_match( '/@media\s*([^{]+)\s*\{/', $media_query, $condition_match );
 			$condition = trim( $condition_match[1] ?? '' );
-			
+
 			// Extract content
 			$content = preg_replace( '/@media[^{]+\{/', '', $media_query );
 			$content = rtrim( $content, '}' );
-			
+
 			if ( ! isset( $media_queries[ $condition ] ) ) {
 				$media_queries[ $condition ] = '';
 			}
 			$media_queries[ $condition ] .= $content;
-			
+
 			// Remove from original CSS
 			$css_without_media = str_replace( $media_query, '', $css_without_media );
 		}
-		
+
 		// Rebuild CSS with grouped media queries
 		$optimized_css = $css_without_media;
 		foreach ( $media_queries as $condition => $content ) {
 			$optimized_css .= "@media {$condition}{{$content}}";
 		}
-		
+
 		return $optimized_css;
 	}
 
@@ -470,12 +496,12 @@ class ModernCssOptimizer implements OptimizerInterface {
 		// Extract all CSS selectors
 		preg_match_all( '/([^{}]+)\{[^{}]*\}/', $css, $matches );
 		$used_css = '';
-		
+
 		foreach ( $matches[0] as $rule ) {
 			preg_match( '/([^{]+)\{/', $rule, $selector_match );
 			$selectors = explode( ',', $selector_match[1] ?? '' );
 			$rule_used = false;
-			
+
 			foreach ( $selectors as $selector ) {
 				$selector = trim( $selector );
 				if ( $this->isSelectorUsed( $selector, $html ) ) {
@@ -483,12 +509,12 @@ class ModernCssOptimizer implements OptimizerInterface {
 					break;
 				}
 			}
-			
+
 			if ( $rule_used ) {
 				$used_css .= $rule;
 			}
 		}
-		
+
 		return $used_css;
 	}
 
@@ -500,17 +526,17 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 * @return array Critical and remaining CSS.
 	 */
 	private function extractCriticalCss( string $css, string $html ): array {
-		$critical_css = '';
+		$critical_css  = '';
 		$remaining_css = '';
-		
+
 		// Extract all CSS rules
 		preg_match_all( '/([^{}]+)\{[^{}]*\}/', $css, $matches );
-		
+
 		foreach ( $matches[0] as $rule ) {
 			preg_match( '/([^{]+)\{/', $rule, $selector_match );
-			$selectors = explode( ',', $selector_match[1] ?? '' );
+			$selectors   = explode( ',', $selector_match[1] ?? '' );
 			$is_critical = false;
-			
+
 			foreach ( $selectors as $selector ) {
 				$selector = trim( $selector );
 				if ( $this->isCriticalSelector( $selector ) || $this->isSelectorAboveFold( $selector, $html ) ) {
@@ -518,16 +544,16 @@ class ModernCssOptimizer implements OptimizerInterface {
 					break;
 				}
 			}
-			
+
 			if ( $is_critical ) {
 				$critical_css .= $rule;
 			} else {
 				$remaining_css .= $rule;
 			}
 		}
-		
+
 		return array(
-			'critical' => $critical_css,
+			'critical'  => $critical_css,
 			'remaining' => $remaining_css,
 		);
 	}
@@ -540,31 +566,31 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 */
 	private function optimizeFonts( string $css ): string {
 		// Add font-display: swap to @font-face rules
-		$css = preg_replace( 
+		$css = preg_replace(
 			'/(@font-face\s*\{[^}]*)(font-display\s*:\s*[^;]+;)?([^}]*\})/',
 			'$1font-display:swap;$3',
 			$css
 		);
-		
+
 		// Optimize font-family declarations
 		$css = preg_replace_callback(
 			'/font-family\s*:\s*([^;]+);/',
-			function( $matches ) {
-				$fonts = explode( ',', $matches[1] );
+			function ( $matches ) {
+				$fonts           = explode( ',', $matches[1] );
 				$optimized_fonts = array();
-				
+
 				foreach ( $fonts as $font ) {
 					$font = trim( $font );
 					// Remove unnecessary quotes
-					$font = preg_replace( '/^["\']([^"\']+)["\']$/', '$1', $font );
+					$font              = preg_replace( '/^["\']([^"\']+)["\']$/', '$1', $font );
 					$optimized_fonts[] = $font;
 				}
-				
+
 				return 'font-family:' . implode( ',', $optimized_fonts ) . ';';
 			},
 			$css
 		);
-		
+
 		return $css;
 	}
 
@@ -577,17 +603,17 @@ class ModernCssOptimizer implements OptimizerInterface {
 	private function optimizeColors( string $css ): string {
 		// Convert long hex colors to short form
 		$css = preg_replace( '/#([0-9a-f])\1([0-9a-f])\2([0-9a-f])\3/i', '#$1$2$3', $css );
-		
+
 		// Convert rgb() to hex when shorter
 		$css = preg_replace_callback(
 			'/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/',
-			function( $matches ) {
+			function ( $matches ) {
 				$hex = sprintf( '#%02x%02x%02x', $matches[1], $matches[2], $matches[3] );
 				return strlen( $hex ) <= strlen( $matches[0] ) ? $hex : $matches[0];
 			},
 			$css
 		);
-		
+
 		return $css;
 	}
 
@@ -601,24 +627,24 @@ class ModernCssOptimizer implements OptimizerInterface {
 	private function isSelectorUsed( string $selector, string $html ): bool {
 		// Simplified selector usage detection
 		// In a real implementation, you'd use a proper CSS selector parser
-		
+
 		// Check for ID selectors
 		if ( preg_match( '/^#([a-zA-Z0-9_-]+)/', $selector, $matches ) ) {
 			return strpos( $html, 'id="' . $matches[1] . '"' ) !== false;
 		}
-		
+
 		// Check for class selectors
 		if ( preg_match( '/^\.([a-zA-Z0-9_-]+)/', $selector, $matches ) ) {
 			return strpos( $html, 'class="' . $matches[1] . '"' ) !== false ||
-			       strpos( $html, 'class="' . $matches[1] . ' ' ) !== false ||
-			       strpos( $html, ' ' . $matches[1] . '"' ) !== false;
+					strpos( $html, 'class="' . $matches[1] . ' ' ) !== false ||
+					strpos( $html, ' ' . $matches[1] . '"' ) !== false;
 		}
-		
+
 		// Check for element selectors
 		if ( preg_match( '/^([a-zA-Z0-9]+)$/', $selector, $matches ) ) {
 			return strpos( $html, '<' . $matches[1] ) !== false;
 		}
-		
+
 		// For complex selectors, assume they're used (conservative approach)
 		return true;
 	}
@@ -643,15 +669,15 @@ class ModernCssOptimizer implements OptimizerInterface {
 	private function isSelectorAboveFold( string $selector, string $html ): bool {
 		// Simplified above-the-fold detection
 		// In a real implementation, you'd analyze the DOM structure and positioning
-		
+
 		$above_fold_elements = array( 'header', 'nav', 'h1', 'h2', '.hero', '#header', '.navbar' );
-		
+
 		foreach ( $above_fold_elements as $element ) {
 			if ( strpos( $selector, $element ) !== false ) {
 				return true;
 			}
 		}
-		
+
 		return false;
 	}
 
@@ -662,9 +688,9 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 * @return string Optimized shorthand.
 	 */
 	private function optimizeShorthand( array $matches ): string {
-		$values = preg_split( '/\s+/', trim( $matches[1] ) );
+		$values   = preg_split( '/\s+/', trim( $matches[1] ) );
 		$property = strpos( $matches[0], 'margin' ) !== false ? 'margin' : 'padding';
-		
+
 		// Optimize shorthand values
 		if ( count( $values ) === 4 ) {
 			// top right bottom left
@@ -688,7 +714,7 @@ class ModernCssOptimizer implements OptimizerInterface {
 				return $property . ':' . $values[0] . ';';
 			}
 		}
-		
+
 		return $matches[0]; // Return original if no optimization possible
 	}
 
@@ -719,11 +745,11 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 */
 	private function initializeCssPatterns(): void {
 		$this->css_patterns = array(
-			'selector' => '/([^{}]+)\{([^{}]*)\}/',
-			'property' => '/([^:]+):\s*([^;]+);?/',
+			'selector'    => '/([^{}]+)\{([^{}]*)\}/',
+			'property'    => '/([^:]+):\s*([^;]+);?/',
 			'media_query' => '/@media\s*([^{]+)\s*\{((?:[^{}]*\{[^{}]*\})*[^{}]*)\}/',
-			'import' => '/@import\s+(?:url\()?["\']?([^"\'()]+)["\']?\)?[^;]*;/',
-			'font_face' => '/@font-face\s*\{([^}]+)\}/',
+			'import'      => '/@import\s+(?:url\()?["\']?([^"\'()]+)["\']?\)?[^;]*;/',
+			'font_face'   => '/@font-face\s*\{([^}]+)\}/',
 		);
 	}
 
@@ -787,8 +813,8 @@ class ModernCssOptimizer implements OptimizerInterface {
 	 */
 	public function get_stats(): array {
 		return array(
-			'files_optimized' => 0,
-			'bytes_saved' => 0,
+			'files_optimized'   => 0,
+			'bytes_saved'       => 0,
 			'compression_ratio' => 0,
 		);
 	}

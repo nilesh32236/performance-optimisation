@@ -5,39 +5,6 @@
  * @since 1.1.0
  */
 
-// Colors
-$primary-color: #007cba;
-$primary-dark: #005a87;
-$primary-darker: #004368;
-$secondary-color: #6c757d;
-$success-color: #00a32a;
-$warning-color: #dba617;
-$error-color: #d63638;
-$info-color: #72aee6;
-
-// Text Colors
-$text-color: #1e1e1e;
-$text-light: #666666;
-$text-lighter: #999999;
-$text-white: #ffffff;
-
-// Background Colors
-$background-color: #ffffff;
-$background-light: #f9f9f9;
-$background-dark: #f0f0f0;
-$background-darker: #e0e0e0;
-
-// Border Colors
-$border-color: #e0e0e0;
-$border-light: #f0f0f0;
-$border-dark: #cccccc;
-
-// Shadows
-$shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
-$shadow-md: 0 2px 8px rgba(0, 0, 0, 0.15);
-$shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
-$shadow-xl: 0 6px 20px rgba(0, 0, 0, 0.2);
-
 // Border Radius
 $border-radius-sm: 4px;
 $border-radius-md: 8px;
@@ -103,26 +70,6 @@ $container-2xl: 1320px;
 $transition-fast: 0.15s ease-in-out;
 $transition-base: 0.2s ease-in-out;
 $transition-slow: 0.3s ease-in-out;
-
-// Dark Mode Colors
-$dark-primary-color: #4f94cd;
-$dark-primary-light: #6ba6d6;
-$dark-text-color: #ffffff;
-$dark-text-light: #cccccc;
-$dark-background-color: #2a2a2a;
-$dark-background-light: #1e1e1e;
-$dark-border-color: #404040;
-
-// Component Specific Variables
-$button-padding-sm: #{$spacing-xs} #{$spacing-sm};
-$button-padding-md: #{$spacing-sm} #{$spacing-md};
-$button-padding-lg: #{$spacing-md} #{$spacing-lg};
-
-$card-padding: $spacing-lg;
-$card-border-radius: $border-radius-md;
-
-$input-padding: #{$spacing-sm} #{$spacing-md};
-$input-border-radius: $border-radius-sm;
 
 // Animation Curves
 $ease-in-quad: cubic-bezier(0.55, 0.085, 0.68, 0.53);

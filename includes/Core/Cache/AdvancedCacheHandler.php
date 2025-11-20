@@ -20,11 +20,30 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class AdvancedCacheHandler {
 
-	public static function create(): void {
-		CacheDropin::create();
+	public static function create(): bool {
+		try {
+			// Validate prerequisites
+			if ( ! is_writable( WP_CONTENT_DIR ) ) {
+				throw new \Exception( 'WP_CONTENT_DIR not writable' );
+			}
+
+			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
+				throw new \Exception( 'WP_CACHE constant is false' );
+			}
+
+			return CacheDropin::create();
+		} catch ( \Exception $e ) {
+			error_log( 'AdvancedCacheHandler::create failed: ' . $e->getMessage() );
+			return false;
+		}
 	}
 
-	public static function remove(): void {
-		CacheDropin::remove();
+	public static function remove(): bool {
+		try {
+			return CacheDropin::remove();
+		} catch ( \Exception $e ) {
+			error_log( 'AdvancedCacheHandler::remove failed: ' . $e->getMessage() );
+			return false;
+		}
 	}
 }

@@ -40,15 +40,15 @@ class Frontend {
 	private Metabox $metabox;
 
 	public function __construct( ServiceContainerInterface $container ) {
-		$this->container = $container;
-		$this->cacheService = $container->get( 'cache_service' );
-		$this->imageService = $container->get( 'image_service' );
+		$this->container           = $container;
+		$this->cacheService        = $container->get( 'cache_service' );
+		$this->imageService        = $container->get( 'image_service' );
 		$this->optimizationService = $container->get( 'optimization_service' );
-		$this->settingsService = $container->get( 'settings_service' );
-		$this->logger = $container->get( 'logger' );
-		$this->performance = $container->get( 'performance' );
-		$this->validator = $container->get( 'validator' );
-		$this->metabox = $container->get( 'metabox' );
+		$this->settingsService     = $container->get( 'settings_service' );
+		$this->logger              = $container->get( 'logger' );
+		$this->performance         = $container->get( 'performance' );
+		$this->validator           = $container->get( 'validator' );
+		$this->metabox             = $container->get( 'metabox' );
 	}
 
 	public function setup_hooks(): void {
@@ -57,15 +57,15 @@ class Frontend {
 		add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect_links' ), 1 );
 		add_action( 'wp_head', array( $this, 'add_critical_css' ), 2 );
 		add_action( 'wp_head', array( $this, 'add_performance_hints' ), 3 );
-		
+
 		// Script and style modification
 		add_filter( 'script_loader_tag', array( $this, 'modify_script_loader_tag' ), 20, 3 );
 		add_filter( 'style_loader_tag', array( $this, 'modify_style_loader_tag' ), 20, 3 );
-		
+
 		// Image optimization hooks
 		add_filter( 'wp_get_attachment_image_attributes', array( $this, 'add_lazy_loading_attributes' ), 10, 3 );
 		add_filter( 'the_content', array( $this, 'optimize_content_images' ), 999 );
-		
+
 		// Performance monitoring
 		add_action( 'wp_footer', array( $this, 'add_performance_monitoring' ), 999 );
 
@@ -125,9 +125,9 @@ class Frontend {
 	 */
 	private function enqueueLazyLoadScript(): void {
 		$asset_file_path = WPPO_PLUGIN_PATH . 'build/lazyload.asset.php';
-		$asset = file_exists( $asset_file_path ) ? require $asset_file_path : array(
+		$asset           = file_exists( $asset_file_path ) ? require $asset_file_path : array(
 			'dependencies' => array(),
-			'version' => WPPO_VERSION,
+			'version'      => WPPO_VERSION,
 		);
 
 		wp_enqueue_script(
@@ -143,10 +143,10 @@ class Frontend {
 			'wppo-lazyload',
 			'wppoLazyLoad',
 			array(
-				'threshold' => $this->settingsService->get_setting( 'image_optimisation', 'lazy_loading_threshold' ) ?? 300,
+				'threshold'               => $this->settingsService->get_setting( 'image_optimisation', 'lazy_loading_threshold' ) ?? 300,
 				'enableNativeLazyLoading' => $this->settingsService->get_setting( 'image_optimisation', 'enable_native_lazy_loading' ) ?? true,
-				'placeholderSrc' => $this->getPlaceholderImageSrc(),
-				'fadeInDuration' => $this->settingsService->get_setting( 'image_optimisation', 'fade_in_duration' ) ?? 300,
+				'placeholderSrc'          => $this->getPlaceholderImageSrc(),
+				'fadeInDuration'          => $this->settingsService->get_setting( 'image_optimisation', 'fade_in_duration' ) ?? 300,
 			)
 		);
 	}
@@ -167,9 +167,9 @@ class Frontend {
 			'wppo-performance-monitor',
 			'wppoPerformance',
 			array(
-				'apiUrl' => rest_url( 'wppo/v1/performance' ),
-				'nonce' => wp_create_nonce( 'wp_rest' ),
-				'pageId' => get_queried_object_id(),
+				'apiUrl'   => rest_url( 'wppo/v1/performance' ),
+				'nonce'    => wp_create_nonce( 'wp_rest' ),
+				'pageId'   => get_queried_object_id(),
 				'pageType' => $this->getCurrentPageType(),
 			)
 		);
@@ -188,12 +188,12 @@ class Frontend {
 		);
 
 		$critical_resources = $this->getCriticalResources();
-		
+
 		wp_localize_script(
 			'wppo-resource-preloader',
 			'wppoPreloader',
 			array(
-				'resources' => $critical_resources,
+				'resources'       => $critical_resources,
 				'preloadStrategy' => $this->settingsService->get_setting( 'preload_settings', 'preload_strategy' ) ?? 'intersection',
 			)
 		);
@@ -223,12 +223,12 @@ class Frontend {
 	 * Add global resource hints from settings.
 	 */
 	private function addGlobalResourceHints(): void {
-		$settings = $this->settingsService->get_setting( 'preload_settings', '' );
+		$settings   = $this->settingsService->get_setting( 'preload_settings', '' );
 		$link_types = array(
-			'preconnect' => 'preconnectOrigins',
+			'preconnect'   => 'preconnectOrigins',
 			'dns-prefetch' => 'dnsPrefetchOrigins',
-			'preload' => 'preloadFontsUrls',
-			'preload' => 'preloadCSSUrls',
+			'preload'      => 'preloadFontsUrls',
+			'preload'      => 'preloadCSSUrls',
 		);
 
 		foreach ( $link_types as $rel => $setting_key ) {
@@ -249,12 +249,12 @@ class Frontend {
 			return;
 		}
 
-		$post_id = get_queried_object_id();
+		$post_id     = get_queried_object_id();
 		$device_type = $this->detectDeviceType();
-		
+
 		// Get device-specific URLs
 		$preload_urls = $this->metabox->getDeviceSpecificUrls( $post_id, $device_type );
-		
+
 		foreach ( $preload_urls as $url ) {
 			$validated_url = $this->validator->sanitizeUrl( $url );
 			if ( ! empty( $validated_url ) ) {
@@ -263,11 +263,14 @@ class Frontend {
 		}
 
 		if ( ! empty( $preload_urls ) ) {
-			$this->logger->debug( 'Page-specific preload URLs added', array(
-				'post_id' => $post_id,
-				'device_type' => $device_type,
-				'url_count' => count( $preload_urls ),
-			) );
+			$this->logger->debug(
+				'Page-specific preload URLs added',
+				array(
+					'post_id'     => $post_id,
+					'device_type' => $device_type,
+					'url_count'   => count( $preload_urls ),
+				)
+			);
 		}
 	}
 
@@ -299,7 +302,7 @@ class Frontend {
 	 */
 	private function outputResourceHint( string $rel, string $href, string $as = '' ): void {
 		$attributes = array(
-			'rel' => $rel,
+			'rel'  => $rel,
 			'href' => $href,
 		);
 
@@ -354,32 +357,35 @@ class Frontend {
 			return;
 		}
 
-		$styles_to_remove = array( 'woocommerce-layout', 'woocommerce-smallscreen', 'woocommerce-general' );
+		$styles_to_remove  = array( 'woocommerce-layout', 'woocommerce-smallscreen', 'woocommerce-general' );
 		$scripts_to_remove = array( 'wc-cart-fragments', 'woocommerce', 'wc-add-to-cart' );
 
-		$removed_styles = 0;
+		$removed_styles  = 0;
 		$removed_scripts = 0;
 
 		foreach ( $styles_to_remove as $handle ) {
 			if ( wp_style_is( $handle, 'enqueued' ) ) {
 				wp_dequeue_style( $handle );
-				$removed_styles++;
+				++$removed_styles;
 			}
 		}
 
 		foreach ( $scripts_to_remove as $handle ) {
 			if ( wp_script_is( $handle, 'enqueued' ) ) {
 				wp_dequeue_script( $handle );
-				$removed_scripts++;
+				++$removed_scripts;
 			}
 		}
 
 		if ( $removed_styles > 0 || $removed_scripts > 0 ) {
-			$this->logger->debug( 'WooCommerce assets removed from non-shop pages', array(
-				'removed_styles' => $removed_styles,
-				'removed_scripts' => $removed_scripts,
-				'page_url' => $_SERVER['REQUEST_URI'] ?? '',
-			) );
+			$this->logger->debug(
+				'WooCommerce assets removed from non-shop pages',
+				array(
+					'removed_styles'  => $removed_styles,
+					'removed_scripts' => $removed_scripts,
+					'page_url'        => $_SERVER['REQUEST_URI'] ?? '',
+				)
+			);
 		}
 	}
 
@@ -419,7 +425,7 @@ class Frontend {
 	/**
 	 * Add lazy loading attributes to images.
 	 *
-	 * @param array $attr       Image attributes.
+	 * @param array  $attr       Image attributes.
 	 * @param object $attachment Attachment object.
 	 * @param string $size      Image size.
 	 * @return array Modified attributes.
@@ -435,7 +441,7 @@ class Frontend {
 		}
 
 		// Add native lazy loading
-		$attr['loading'] = 'lazy';
+		$attr['loading']  = 'lazy';
 		$attr['decoding'] = 'async';
 
 		return $attr;
@@ -469,7 +475,7 @@ class Frontend {
 	 * @return string Optimized image tag.
 	 */
 	private function optimize_image_tag( array $matches ): string {
-		$img_tag = $matches[0];
+		$img_tag    = $matches[0];
 		$attributes = $matches[1];
 
 		// Skip if already optimized
@@ -534,9 +540,9 @@ class Frontend {
 		}
 
 		$performance_data = array(
-			'pageLoadTime' => 'performance.timing.loadEventEnd - performance.timing.navigationStart',
-			'domContentLoaded' => 'performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart',
-			'firstPaint' => 'performance.getEntriesByType("paint")[0]?.startTime',
+			'pageLoadTime'         => 'performance.timing.loadEventEnd - performance.timing.navigationStart',
+			'domContentLoaded'     => 'performance.timing.domContentLoadedEventEnd - performance.timing.navigationStart',
+			'firstPaint'           => 'performance.getEntriesByType("paint")[0]?.startTime',
 			'firstContentfulPaint' => 'performance.getEntriesByType("paint")[1]?.startTime',
 		);
 
@@ -604,8 +610,8 @@ class Frontend {
 		foreach ( $critical_css_handles as $handle ) {
 			if ( wp_style_is( $handle, 'registered' ) ) {
 				$resources[] = array(
-					'url' => wp_styles()->registered[ $handle ]->src,
-					'type' => 'style',
+					'url'      => wp_styles()->registered[ $handle ]->src,
+					'type'     => 'style',
 					'priority' => 'high',
 				);
 			}
@@ -616,8 +622,8 @@ class Frontend {
 		foreach ( $critical_js_handles as $handle ) {
 			if ( wp_script_is( $handle, 'registered' ) ) {
 				$resources[] = array(
-					'url' => wp_scripts()->registered[ $handle ]->src,
-					'type' => 'script',
+					'url'      => wp_scripts()->registered[ $handle ]->src,
+					'type'     => 'script',
 					'priority' => 'medium',
 				);
 			}
@@ -655,19 +661,19 @@ class Frontend {
 		$extension = strtolower( pathinfo( parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
 
 		$type_map = array(
-			'css' => 'style',
-			'js' => 'script',
-			'woff' => 'font',
+			'css'   => 'style',
+			'js'    => 'script',
+			'woff'  => 'font',
 			'woff2' => 'font',
-			'ttf' => 'font',
-			'otf' => 'font',
-			'jpg' => 'image',
-			'jpeg' => 'image',
-			'png' => 'image',
-			'gif' => 'image',
-			'webp' => 'image',
-			'avif' => 'image',
-			'svg' => 'image',
+			'ttf'   => 'font',
+			'otf'   => 'font',
+			'jpg'   => 'image',
+			'jpeg'  => 'image',
+			'png'   => 'image',
+			'gif'   => 'image',
+			'webp'  => 'image',
+			'avif'  => 'image',
+			'svg'   => 'image',
 		);
 
 		return $type_map[ $extension ] ?? '';
@@ -679,13 +685,13 @@ class Frontend {
 	 * @return array External domains.
 	 */
 	private function getExternalDomains(): array {
-		$domains = array();
+		$domains     = array();
 		$site_domain = parse_url( home_url(), PHP_URL_HOST );
 
 		// Check enqueued styles
 		foreach ( wp_styles()->queue as $handle ) {
 			if ( isset( wp_styles()->registered[ $handle ] ) ) {
-				$src = wp_styles()->registered[ $handle ]->src;
+				$src    = wp_styles()->registered[ $handle ]->src;
 				$domain = parse_url( $src, PHP_URL_HOST );
 				if ( $domain && $domain !== $site_domain ) {
 					$domains[] = $domain;
@@ -696,7 +702,7 @@ class Frontend {
 		// Check enqueued scripts
 		foreach ( wp_scripts()->queue as $handle ) {
 			if ( isset( wp_scripts()->registered[ $handle ] ) ) {
-				$src = wp_scripts()->registered[ $handle ]->src;
+				$src    = wp_scripts()->registered[ $handle ]->src;
 				$domain = parse_url( $src, PHP_URL_HOST );
 				if ( $domain && $domain !== $site_domain ) {
 					$domains[] = $domain;
@@ -734,7 +740,7 @@ class Frontend {
 	 * @return string Critical CSS.
 	 */
 	private function getCriticalCSS(): string {
-		$page_type = $this->getCurrentPageType();
+		$page_type            = $this->getCurrentPageType();
 		$critical_css_setting = $this->settingsService->get_setting( 'critical_css', $page_type );
 
 		if ( ! empty( $critical_css_setting ) ) {
@@ -758,8 +764,16 @@ class Frontend {
 		// This is a simplified implementation
 		// In a real scenario, you'd use tools like Puppeteer or similar
 		$critical_selectors = array(
-			'body', 'html', 'header', 'nav', '.site-header',
-			'h1', 'h2', '.hero', '.banner', '.above-fold',
+			'body',
+			'html',
+			'header',
+			'nav',
+			'.site-header',
+			'h1',
+			'h2',
+			'.hero',
+			'.banner',
+			'.above-fold',
 		);
 
 		$critical_css = '';

@@ -1,138 +1,51 @@
 /**
+ * Optimization Status Component - Refactored
+ */
+
+/**
  * External dependencies
  */
 import React from 'react';
+import { Panel, PanelBody, Dashicon } from '@wordpress/components';
+
 /**
  * Internal dependencies
  */
-import { Card } from '../Card';
+import './OptimizationStatus.scss';
 
 interface OptimizationStatusProps {
-	status: {
-		features: Record<string, boolean>;
-		image_optimization: {
-			total_optimized: number;
-			total_pending: number;
-			optimization_ratio: number;
-		};
-	};
+    config: {
+        settings?: {
+            cache?: { page_cache?: boolean };
+            optimization?: { minify_css?: boolean, minify_js?: boolean };
+            images?: { lazy_loading?: boolean, convert_to_webp?: boolean };
+        };
+    };
 }
 
-const OptimizationStatus: React.FC<OptimizationStatusProps> = ( { status } ) => {
-	const featureLabels: Record<string, string> = {
-		page_caching: 'Page Caching',
-		css_minification: 'CSS Minification',
-		js_minification: 'JS Minification',
-		html_minification: 'HTML Minification',
-		image_lazy_loading: 'Image Lazy Loading',
-		image_conversion: 'Image Conversion',
-	};
+const OptimizationStatus: React.FC<OptimizationStatusProps> = ( { config } ) => {
+    const features = {
+        'Page Caching': config?.settings?.cache?.page_cache || false,
+        'CSS Minification': config?.settings?.optimization?.minify_css || false,
+        'JavaScript Minification': config?.settings?.optimization?.minify_js || false,
+        'Image Lazy Loading': config?.settings?.images?.lazy_loading || false,
+        'WebP Conversion': config?.settings?.images?.convert_to_webp || false,
+    };
 
-	const enabledFeatures = Object.entries( status.features ).filter( ( [ , enabled ] ) => enabled );
-	const totalFeatures = Object.keys( status.features ).length;
-	const enabledPercentage = ( enabledFeatures.length / totalFeatures ) * 100;
-
-	const getStatusColor = ( percentage: number ): string => {
-		if ( percentage >= 80 ) {
-			return 'excellent';
-		}
-		if ( percentage >= 60 ) {
-			return 'good';
-		}
-		if ( percentage >= 40 ) {
-			return 'fair';
-		}
-		return 'poor';
-	};
-
-	return (
-		<div className="wppo-optimization-status">
-			<h3>Optimization Status</h3>
-			<div className="wppo-optimization-status__grid">
-				<Card title="Active Features" className="wppo-optimization-card">
-					<div className="wppo-optimization-summary">
-						<div
-							className={ `wppo-optimization-score wppo-optimization-score--${ getStatusColor( enabledPercentage ) }` }
-						>
-							<div className="wppo-optimization-score__value">
-								{ enabledFeatures.length }/{ totalFeatures }
-							</div>
-							<div className="wppo-optimization-score__label">Features Enabled</div>
-						</div>
-						<div className="wppo-optimization-progress">
-							<div className="wppo-optimization-progress__bar">
-								<div
-									className={ `wppo-optimization-progress__fill wppo-optimization-progress__fill--${ getStatusColor( enabledPercentage ) }` }
-									style={ { width: `${ enabledPercentage }%` } }
-								></div>
-							</div>
-							<div className="wppo-optimization-progress__text">
-								{ enabledPercentage.toFixed( 0 ) }% optimization coverage
-							</div>
-						</div>
-					</div>
-				</Card>
-
-				<Card title="Feature Details" className="wppo-features-card">
-					<div className="wppo-features-list">
-						{ Object.entries( status.features ).map( ( [ feature, enabled ] ) => (
-							<div key={ feature } className="wppo-feature-item">
-								<div className="wppo-feature-item__content">
-									<span
-										className={ `wppo-feature-status wppo-feature-status--${ enabled ? 'enabled' : 'disabled' }` }
-									>
-										<span
-											className={ `dashicons ${ enabled ? 'dashicons-yes-alt' : 'dashicons-dismiss' }` }
-										></span>
-									</span>
-									<span className="wppo-feature-name">
-										{ featureLabels[ feature ] || feature }
-									</span>
-								</div>
-								<span
-									className={ `wppo-feature-badge wppo-feature-badge--${ enabled ? 'enabled' : 'disabled' }` }
-								>
-									{ enabled ? 'Active' : 'Inactive' }
-								</span>
-							</div>
-						) ) }
-					</div>
-				</Card>
-
-				<Card title="Image Optimization" className="wppo-image-optimization-card">
-					<div className="wppo-image-stats">
-						<div className="wppo-image-stats__summary">
-							<div className="wppo-image-stat">
-								<div className="wppo-image-stat__value">
-									{ status.image_optimization.total_optimized }
-								</div>
-								<div className="wppo-image-stat__label">Images Optimized</div>
-							</div>
-							<div className="wppo-image-stat">
-								<div className="wppo-image-stat__value">
-									{ status.image_optimization.total_pending }
-								</div>
-								<div className="wppo-image-stat__label">Pending Optimization</div>
-							</div>
-						</div>
-						<div className="wppo-image-progress">
-							<div className="wppo-image-progress__bar">
-								<div
-									className="wppo-image-progress__fill"
-									style={ {
-										width: `${ status.image_optimization.optimization_ratio }%`,
-									} }
-								></div>
-							</div>
-							<div className="wppo-image-progress__text">
-								{ status.image_optimization.optimization_ratio.toFixed( 1 ) }% optimized
-							</div>
-						</div>
-					</div>
-				</Card>
-			</div>
-		</div>
-	);
+    return (
+        <Panel header="Optimization Status">
+            <PanelBody>
+                <ul className="wppo-optimization-status-list">
+                    {Object.entries(features).map(([name, isActive]) => (
+                        <li key={name} className="wppo-optimization-status-item">
+                            <Dashicon icon={isActive ? 'yes-alt' : 'dismiss'} className={isActive ? 'is-active' : 'is-inactive'} />
+                            <span>{name}</span>
+                        </li>
+                    ))}
+                </ul>
+            </PanelBody>
+        </Panel>
+    );
 };
 
 export default OptimizationStatus;

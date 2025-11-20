@@ -27,42 +27,45 @@ class Admin {
 
 	private ServiceContainerInterface $container;
 	private ?SettingsService $settingsService = null;
-	private ?CacheService $cacheService = null;
+	private ?CacheService $cacheService       = null;
 	private LoggingUtil $logger;
 	private ValidationUtil $validator;
 	private ?Metabox $metabox = null;
 
 	public function __construct( ServiceContainerInterface $container ) {
 		$this->container = $container;
-		
+
 		// Initialize logger first
 		try {
 			$this->logger = $container->get( 'logger' );
 		} catch ( \Exception $e ) {
 			$this->logger = new LoggingUtil();
 		}
-		
+
 		// Get services if available, otherwise skip
 		try {
 			$this->settingsService = $container->get( 'settings_service' );
 		} catch ( \Exception $e ) {
 			$this->logger->error( 'SettingsService not available in Admin: ' . $e->getMessage() );
 		}
-		
+
 		try {
 			$this->cacheService = $container->get( 'cache_service' );
 		} catch ( \Exception $e ) {
 			// Cache service not critical for admin
 		}
-		
+
 		try {
 			$this->validator = $container->get( 'validator' );
 		} catch ( \Exception $e ) {
 			$this->validator = new ValidationUtil();
 		}
-		
+
 		try {
-			$this->metabox = $container->get( 'metabox' );
+			$metabox_service = $container->get( 'metabox' );
+			if ( $metabox_service instanceof Metabox ) {
+				$this->metabox = $metabox_service;
+			}
 		} catch ( \Exception $e ) {
 			// Metabox not critical
 		}
@@ -73,11 +76,11 @@ class Admin {
 		add_action( 'admin_init', array( $this, 'maybe_redirect_to_wizard' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_bar_scripts' ) );
 		add_action( 'admin_bar_menu', array( $this, 'add_settings_to_admin_bar' ), 100 );
-		
+
 		// Add AJAX handlers for admin bar actions
 		add_action( 'wp_ajax_wppo_clear_all_cache', array( $this, 'handle_clear_all_cache' ) );
 		add_action( 'wp_ajax_wppo_clear_page_cache', array( $this, 'handle_clear_page_cache' ) );
-		
+
 		$this->logger->debug( 'Admin hooks setup completed' );
 	}
 
@@ -132,15 +135,15 @@ class Admin {
 
 	public function load_plugin_admin_page_assets(): void {
 		$asset_file_path = WPPO_PLUGIN_PATH . 'build/index.asset.php';
-		$asset_file = file_exists( $asset_file_path ) ? include $asset_file_path : array(
+		$asset_file      = file_exists( $asset_file_path ) ? include $asset_file_path : array(
 			'dependencies' => array(),
-			'version' => WPPO_VERSION,
+			'version'      => WPPO_VERSION,
 		);
 
 		wp_enqueue_style(
 			'performance-optimisation-admin-style',
-			WPPO_PLUGIN_URL . 'build/style-index.css',
-			array(),
+			WPPO_PLUGIN_URL . 'build/index.css',
+			array( 'wp-components' ),
 			$asset_file['version']
 		);
 		wp_enqueue_script(
@@ -156,7 +159,7 @@ class Admin {
 
 		wp_localize_script(
 			'performance-optimisation-admin-script',
-			'wppoAdminData',
+			'wppoAdmin',
 			$admin_data
 		);
 
@@ -165,9 +168,9 @@ class Admin {
 
 	public function load_wizard_page_assets(): void {
 		$asset_file_path = WPPO_PLUGIN_PATH . 'build/wizard.asset.php';
-		$asset_file = file_exists( $asset_file_path ) ? include $asset_file_path : array(
+		$asset_file      = file_exists( $asset_file_path ) ? include $asset_file_path : array(
 			'dependencies' => array(),
-			'version' => WPPO_VERSION,
+			'version'      => WPPO_VERSION,
 		);
 
 		wp_enqueue_style(
@@ -215,7 +218,7 @@ class Admin {
 				'wppo-admin-bar-script',
 				'wppoAdminBar',
 				array(
-					'apiUrl'   => rest_url( 'wppo/v1' ),
+					'apiUrl'   => rest_url( 'performance-optimisation/v1' ),
 					'nonce'    => wp_create_nonce( 'wp_rest' ),
 					'pagePath' => is_singular() ? ltrim( wp_parse_url( get_permalink(), PHP_URL_PATH ), '/' ) : '',
 				)
@@ -229,8 +232,13 @@ class Admin {
 		}
 
 		// Get cache statistics for display
-		$cache_stats = $this->cacheService->getCacheStats();
-		$cache_size = $cache_stats['total_size_formatted'] ?? '0 B';
+		$cache_stats = $this->getCacheStats();
+		$cache_size  = $cache_stats['total_size_formatted'] ?? '0 B';
+
+		if ( isset( $cache_stats['error'] ) ) {
+			$cache_size = 'Error';
+			$this->logger->warning( 'Cache stats unavailable for admin bar' );
+		}
 
 		$wp_admin_bar->add_node(
 			array(
@@ -279,21 +287,32 @@ class Admin {
 	 * Handle AJAX request to clear all cache.
 	 */
 	public function handle_clear_all_cache(): void {
+		if ( $_SERVER['REQUEST_METHOD'] !== 'POST' ) {
+			wp_die( 'Invalid request method', 405 );
+		}
+
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( __( 'Insufficient permissions.', 'performance-optimisation' ), 403 );
 		}
 
-		if ( ! wp_verify_nonce( $_GET['_wpnonce'] ?? '', 'wppo_clear_cache' ) ) {
+		if ( ! wp_verify_nonce( $_POST['_wpnonce'] ?? '', 'wppo_clear_cache' ) ) {
 			wp_die( __( 'Invalid nonce.', 'performance-optimisation' ), 403 );
 		}
 
 		try {
+			if ( ! $this->cacheService ) {
+				throw new \Exception( 'Cache service not available' );
+			}
+
 			$result = $this->cacheService->clearAllCache();
-			
-			$this->logger->info( 'All cache cleared via admin bar', array(
-				'user_id' => get_current_user_id(),
-				'result' => $result,
-			) );
+
+			$this->logger->info(
+				'All cache cleared via admin bar',
+				array(
+					'user_id' => get_current_user_id(),
+					'result'  => $result,
+				)
+			);
 
 			wp_safe_redirect( wp_get_referer() ?: admin_url() );
 			exit;
@@ -307,27 +326,38 @@ class Admin {
 	 * Handle AJAX request to clear page cache.
 	 */
 	public function handle_clear_page_cache(): void {
+		if ( $_SERVER['REQUEST_METHOD'] !== 'POST' ) {
+			wp_die( 'Invalid request method', 405 );
+		}
+
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( __( 'Insufficient permissions.', 'performance-optimisation' ), 403 );
 		}
 
-		if ( ! wp_verify_nonce( $_GET['_wpnonce'] ?? '', 'wppo_clear_cache' ) ) {
+		if ( ! wp_verify_nonce( $_POST['_wpnonce'] ?? '', 'wppo_clear_cache' ) ) {
 			wp_die( __( 'Invalid nonce.', 'performance-optimisation' ), 403 );
 		}
 
-		$page_url = $this->validator->sanitizeUrl( $_GET['page_url'] ?? '' );
+		$page_url = $this->validator->sanitizeUrl( $_POST['page_url'] ?? '' );
 		if ( empty( $page_url ) ) {
 			wp_die( __( 'Invalid page URL.', 'performance-optimisation' ) );
 		}
 
 		try {
+			if ( ! $this->cacheService ) {
+				throw new \Exception( 'Cache service not available' );
+			}
+
 			$result = $this->cacheService->clearCache( 'page', $page_url );
-			
-			$this->logger->info( 'Page cache cleared via admin bar', array(
-				'user_id' => get_current_user_id(),
-				'page_url' => $page_url,
-				'result' => $result,
-			) );
+
+			$this->logger->info(
+				'Page cache cleared via admin bar',
+				array(
+					'user_id'  => get_current_user_id(),
+					'page_url' => $page_url,
+					'result'   => $result,
+				)
+			);
 
 			wp_safe_redirect( wp_get_referer() ?: $page_url );
 			exit;
@@ -343,34 +373,100 @@ class Admin {
 	 * @return array Status information.
 	 */
 	private function getOptimizationStatus(): array {
-		$settings = $this->settingsService->get_settings();
-		
+		$settings = $this->getSettings();
+
 		$active_optimizations = 0;
-		$total_optimizations = 0;
+		$total_optimizations  = 0;
 
 		// Check various optimization settings
 		$optimization_checks = array(
-			'minification' => $settings['minification']['enable_css_minification'] ?? false,
-			'caching' => $settings['caching']['enable_page_caching'] ?? false,
+			'minification'       => $settings['minification']['enable_css_minification'] ?? false,
+			'caching'            => $settings['caching']['enable_page_caching'] ?? false,
 			'image_optimization' => $settings['image_optimization']['enable_webp_conversion'] ?? false,
-			'lazy_loading' => $settings['lazy_loading']['enable_image_lazy_loading'] ?? false,
+			'lazy_loading'       => $settings['lazy_loading']['enable_image_lazy_loading'] ?? false,
 		);
 
 		foreach ( $optimization_checks as $check ) {
-			$total_optimizations++;
+			++$total_optimizations;
 			if ( $check ) {
-				$active_optimizations++;
+				++$active_optimizations;
 			}
 		}
 
 		$percentage = $total_optimizations > 0 ? ( $active_optimizations / $total_optimizations ) * 100 : 0;
 
 		if ( $percentage >= 75 ) {
-			return array( 'status' => 'good', 'label' => __( 'Optimized', 'performance-optimisation' ) );
+			return array(
+				'status' => 'good',
+				'label'  => __( 'Optimized', 'performance-optimisation' ),
+			);
 		} elseif ( $percentage >= 50 ) {
-			return array( 'status' => 'warning', 'label' => __( 'Partial', 'performance-optimisation' ) );
+			return array(
+				'status' => 'warning',
+				'label'  => __( 'Partial', 'performance-optimisation' ),
+			);
 		} else {
-			return array( 'status' => 'error', 'label' => __( 'Needs Setup', 'performance-optimisation' ) );
+			return array(
+				'status' => 'error',
+				'label'  => __( 'Needs Setup', 'performance-optimisation' ),
+			);
+		}
+	}
+
+	/**
+	 * Safely get settings with error handling and defaults.
+	 *
+	 * @return array Settings or default values.
+	 */
+	private function getSettings(): array {
+		if ( ! $this->settingsService ) {
+			$this->logger->error( 'Settings service not available' );
+			return $this->getDefaultSettings();
+		}
+
+		try {
+			return $this->settingsService->get_settings();
+		} catch ( \Exception $e ) {
+			$this->logger->error( 'Failed to get settings: ' . $e->getMessage() );
+			return $this->getDefaultSettings();
+		}
+	}
+
+	/**
+	 * Get default settings when service is unavailable.
+	 *
+	 * @return array Default settings.
+	 */
+	private function getDefaultSettings(): array {
+		return array(
+			'minification'       => array( 'enable_css_minification' => false ),
+			'caching'            => array( 'enable_page_caching' => false ),
+			'image_optimization' => array( 'enable_webp_conversion' => false ),
+			'lazy_loading'       => array( 'enable_image_lazy_loading' => false ),
+		);
+	}
+
+	/**
+	 * Safely get cache statistics with error handling.
+	 *
+	 * @return array Cache statistics or error information.
+	 */
+	private function getCacheStats(): array {
+		if ( ! $this->cacheService ) {
+			return array(
+				'total_size_formatted' => '0 B',
+				'error'                => 'Cache service unavailable',
+			);
+		}
+
+		try {
+			return $this->cacheService->getCacheStats();
+		} catch ( \Exception $e ) {
+			$this->logger->error( 'Failed to get cache stats: ' . $e->getMessage() );
+			return array(
+				'total_size_formatted' => '0 B',
+				'error'                => $e->getMessage(),
+			);
 		}
 	}
 
@@ -380,28 +476,28 @@ class Admin {
 	 * @return array Admin data.
 	 */
 	private function getAdminData(): array {
-		$cache_stats = $this->cacheService->getCacheStats();
+		$cache_stats         = $this->getCacheStats();
 		$optimization_status = $this->getOptimizationStatus();
 
 		return array(
-			'apiUrl' => rest_url( 'wppo/v1' ),
-			'nonce' => wp_create_nonce( 'wp_rest' ),
-			'settings' => $this->settingsService->get_settings(),
-			'cacheStats' => $cache_stats,
+			'apiUrl'             => rest_url( 'performance-optimisation/v1' ),
+			'nonce'              => wp_create_nonce( 'wp_rest' ),
+			'settings'           => $this->getSettings(),
+			'cacheStats'         => $cache_stats,
 			'optimizationStatus' => $optimization_status,
-			'capabilities' => array(
+			'capabilities'       => array(
 				'manage_options' => current_user_can( 'manage_options' ),
-				'edit_posts' => current_user_can( 'edit_posts' ),
+				'edit_posts'     => current_user_can( 'edit_posts' ),
 			),
-			'urls' => array(
-				'admin' => admin_url( 'admin.php?page=performance-optimisation' ),
-				'wizard' => admin_url( 'admin.php?page=performance-optimisation-setup' ),
+			'urls'               => array(
+				'admin'       => admin_url( 'admin.php?page=performance-optimisation' ),
+				'wizard'      => admin_url( 'admin.php?page=performance-optimisation-setup' ),
 				'clear_cache' => wp_nonce_url( admin_url( 'admin-ajax.php?action=wppo_clear_all_cache' ), 'wppo_clear_cache' ),
 			),
-			'i18n' => array(
+			'i18n'               => array(
 				'clearingCache' => __( 'Clearing cache...', 'performance-optimisation' ),
-				'cacheCleared' => __( 'Cache cleared successfully!', 'performance-optimisation' ),
-				'error' => __( 'An error occurred. Please try again.', 'performance-optimisation' ),
+				'cacheCleared'  => __( 'Cache cleared successfully!', 'performance-optimisation' ),
+				'error'         => __( 'An error occurred. Please try again.', 'performance-optimisation' ),
 			),
 		);
 	}
@@ -413,20 +509,20 @@ class Admin {
 	 */
 	private function getWizardData(): array {
 		return array(
-			'apiUrl' => rest_url( 'wppo/v1' ),
-			'nonce' => wp_create_nonce( 'wp_rest' ),
-			'currentStep' => get_option( 'wppo_wizard_current_step', 1 ),
-			'serverInfo' => $this->getServerInfo(),
+			'apiUrl'          => rest_url( 'performance-optimisation/v1' ),
+			'nonce'           => wp_create_nonce( 'wp_rest' ),
+			'currentStep'     => get_option( 'wppo_wizard_current_step', 1 ),
+			'serverInfo'      => $this->getServerInfo(),
 			'recommendations' => $this->getOptimizationRecommendations(),
-			'urls' => array(
-				'admin' => admin_url( 'admin.php?page=performance-optimisation' ),
+			'urls'            => array(
+				'admin'    => admin_url( 'admin.php?page=performance-optimisation' ),
 				'complete' => admin_url( 'admin.php?page=performance-optimisation&wizard=completed' ),
 			),
-			'i18n' => array(
-				'next' => __( 'Next', 'performance-optimisation' ),
+			'i18n'            => array(
+				'next'     => __( 'Next', 'performance-optimisation' ),
 				'previous' => __( 'Previous', 'performance-optimisation' ),
 				'complete' => __( 'Complete Setup', 'performance-optimisation' ),
-				'skip' => __( 'Skip', 'performance-optimisation' ),
+				'skip'     => __( 'Skip', 'performance-optimisation' ),
 			),
 		);
 	}
@@ -438,16 +534,16 @@ class Admin {
 	 */
 	private function getServerInfo(): array {
 		return array(
-			'php_version' => PHP_VERSION,
-			'wp_version' => get_bloginfo( 'version' ),
-			'memory_limit' => ini_get( 'memory_limit' ),
-			'max_execution_time' => ini_get( 'max_execution_time' ),
+			'php_version'         => PHP_VERSION,
+			'wp_version'          => get_bloginfo( 'version' ),
+			'memory_limit'        => ini_get( 'memory_limit' ),
+			'max_execution_time'  => ini_get( 'max_execution_time' ),
 			'upload_max_filesize' => ini_get( 'upload_max_filesize' ),
-			'extensions' => array(
-				'gd' => extension_loaded( 'gd' ),
+			'extensions'          => array(
+				'gd'      => extension_loaded( 'gd' ),
 				'imagick' => extension_loaded( 'imagick' ),
-				'curl' => extension_loaded( 'curl' ),
-				'zip' => extension_loaded( 'zip' ),
+				'curl'    => extension_loaded( 'curl' ),
+				'zip'     => extension_loaded( 'zip' ),
 			),
 		);
 	}
@@ -459,14 +555,14 @@ class Admin {
 	 */
 	private function getOptimizationRecommendations(): array {
 		$recommendations = array();
-		$server_info = $this->getServerInfo();
+		$server_info     = $this->getServerInfo();
 
 		// Memory-based recommendations
 		$memory_limit = $this->parseMemoryLimit( $server_info['memory_limit'] );
 		if ( $memory_limit < 128 * 1024 * 1024 ) { // Less than 128MB
 			$recommendations[] = array(
-				'type' => 'warning',
-				'title' => __( 'Low Memory Limit', 'performance-optimisation' ),
+				'type'    => 'warning',
+				'title'   => __( 'Low Memory Limit', 'performance-optimisation' ),
 				'message' => __( 'Your server has a low memory limit. Consider enabling conservative optimization settings.', 'performance-optimisation' ),
 			);
 		}
@@ -474,8 +570,8 @@ class Admin {
 		// Extension-based recommendations
 		if ( ! $server_info['extensions']['gd'] && ! $server_info['extensions']['imagick'] ) {
 			$recommendations[] = array(
-				'type' => 'error',
-				'title' => __( 'No Image Processing Extension', 'performance-optimisation' ),
+				'type'    => 'error',
+				'title'   => __( 'No Image Processing Extension', 'performance-optimisation' ),
 				'message' => __( 'Neither GD nor ImageMagick is available. Image optimization will be limited.', 'performance-optimisation' ),
 			);
 		}
@@ -491,8 +587,8 @@ class Admin {
 	 */
 	private function parseMemoryLimit( string $memory_limit ): int {
 		$memory_limit = trim( $memory_limit );
-		$last_char = strtolower( $memory_limit[ strlen( $memory_limit ) - 1 ] );
-		$number = (int) $memory_limit;
+		$last_char    = strtolower( $memory_limit[ strlen( $memory_limit ) - 1 ] );
+		$number       = (int) $memory_limit;
 
 		switch ( $last_char ) {
 			case 'g':

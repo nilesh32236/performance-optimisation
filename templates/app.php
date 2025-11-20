@@ -1,23 +1,25 @@
+<?php
+// Security check
+if ( ! current_user_can( 'manage_options' ) ) {
+	wp_die( __( 'You do not have sufficient permissions to access this page.' ) );
+}
+
+// Verify nonce for admin page access
+$nonce = wp_create_nonce( 'wppo_admin_page' );
+
+// Enqueue loading spinner CSS
+wp_enqueue_style( 
+	'wppo-admin-loading', 
+	plugin_dir_url( __DIR__ ) . 'assets/css/admin-loading.css', 
+	array(), 
+	'1.0.0' 
+);
+?>
 <div class="wrap">
-	<div id="performance-optimisation-admin-app">
+	<div id="performance-optimisation-admin-app" data-nonce="<?php echo esc_attr( $nonce ); ?>">
 		<div style="padding: 20px; text-align: center;">
 			<h2><?php esc_html_e( 'Loading Performance Optimisation Settings...', 'performance-optimisation' ); ?></h2>
 			<p><?php esc_html_e( 'Please wait while the application loads.', 'performance-optimisation' ); ?></p>
-			<style>
-				.wppo-loading-spinner {
-					border: 4px solid #f3f3f3;
-					border-top: 4px solid #0073aa;
-					border-radius: 50%;
-					width: 40px;
-					height: 40px;
-					animation: wppo-spin 1s linear infinite;
-					margin: 20px auto;
-				}
-				@keyframes wppo-spin {
-					0% { transform: rotate(0deg); }
-					100% { transform: rotate(360deg); }
-				}
-			</style>
 			<div class="wppo-loading-spinner"></div>
 		</div>
 	</div>

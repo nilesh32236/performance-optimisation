@@ -45,8 +45,19 @@ class ImageOptimizationController extends BaseController {
 	 * @param ServiceContainerInterface $container Service container.
 	 */
 	public function __construct( ServiceContainerInterface $container ) {
-		parent::__construct( $container );
-		$this->image_processor = $container->get( 'image_processor' );
+		try {
+			// Try to get image processor from container
+			if ( $container->has( 'image_service' ) ) {
+				$this->image_processor = $container->get( 'image_service' );
+			} else {
+				// Fallback: create basic image processor
+				$this->image_processor = new \PerformanceOptimisation\Optimizers\ModernImageProcessor( $container );
+			}
+		} catch ( Exception $e ) {
+			// Log error but don't fail completely
+			error_log( 'WPPO: ImageOptimizationController init failed: ' . $e->getMessage() );
+			$this->image_processor = null;
+		}
 	}
 
 	/**
@@ -64,7 +75,7 @@ class ImageOptimizationController extends BaseController {
 				'callback'            => array( $this, 'optimize_image' ),
 				'permission_callback' => array( $this, 'check_admin_permissions' ),
 				'args'                => array(
-					'image_id' => array(
+					'image_id'   => array(
 						'required'    => false,
 						'type'        => 'integer',
 						'description' => 'WordPress attachment ID.',
@@ -74,22 +85,22 @@ class ImageOptimizationController extends BaseController {
 						'type'        => 'string',
 						'description' => 'Direct path to image file.',
 					),
-					'options' => array(
+					'options'    => array(
 						'required'    => false,
 						'type'        => 'object',
 						'description' => 'Optimization options.',
 						'properties'  => array(
-							'quality' => array(
+							'quality'             => array(
 								'type'    => 'integer',
 								'minimum' => 1,
 								'maximum' => 100,
 								'default' => 85,
 							),
-							'progressive' => array(
+							'progressive'         => array(
 								'type'    => 'boolean',
 								'default' => true,
 							),
-							'auto_format' => array(
+							'auto_format'         => array(
 								'type'    => 'boolean',
 								'default' => true,
 							),
@@ -118,7 +129,7 @@ class ImageOptimizationController extends BaseController {
 						'items'       => array( 'type' => 'integer' ),
 						'description' => 'Array of WordPress attachment IDs.',
 					),
-					'limit' => array(
+					'limit'     => array(
 						'required'    => false,
 						'type'        => 'integer',
 						'default'     => 10,
@@ -126,7 +137,7 @@ class ImageOptimizationController extends BaseController {
 						'maximum'     => 50,
 						'description' => 'Maximum number of images to process.',
 					),
-					'options' => array(
+					'options'   => array(
 						'required'    => false,
 						'type'        => 'object',
 						'description' => 'Optimization options.',
@@ -162,7 +173,7 @@ class ImageOptimizationController extends BaseController {
 				'callback'            => array( $this, 'convert_image_format' ),
 				'permission_callback' => array( $this, 'check_admin_permissions' ),
 				'args'                => array(
-					'image_id' => array(
+					'image_id'      => array(
 						'required'    => true,
 						'type'        => 'integer',
 						'description' => 'WordPress attachment ID.',
@@ -173,7 +184,7 @@ class ImageOptimizationController extends BaseController {
 						'enum'        => array( 'webp', 'avif', 'jpeg', 'png' ),
 						'description' => 'Target image format.',
 					),
-					'quality' => array(
+					'quality'       => array(
 						'required'    => false,
 						'type'        => 'integer',
 						'minimum'     => 1,
@@ -194,7 +205,7 @@ class ImageOptimizationController extends BaseController {
 				'callback'            => array( $this, 'generate_responsive_images' ),
 				'permission_callback' => array( $this, 'check_admin_permissions' ),
 				'args'                => array(
-					'image_id' => array(
+					'image_id'    => array(
 						'required'    => true,
 						'type'        => 'integer',
 						'description' => 'WordPress attachment ID.',
@@ -280,7 +291,7 @@ class ImageOptimizationController extends BaseController {
 
 			// Optimize image
 			$options = $data['options'] ?? array();
-			$result = $this->image_processor->optimize( $image_path, $options );
+			$result  = $this->image_processor->optimize( $image_path, $options );
 
 			if ( ! $result['success'] ) {
 				return $this->send_error_response(
@@ -291,11 +302,14 @@ class ImageOptimizationController extends BaseController {
 			}
 
 			// Log successful optimization
-			LoggingUtil::info( 'Image optimized via API', array(
-				'image_path' => $image_path,
-				'compression_ratio' => $result['compression_ratio'],
-				'user_id' => get_current_user_id(),
-			) );
+			LoggingUtil::info(
+				'Image optimized via API',
+				array(
+					'image_path'        => $image_path,
+					'compression_ratio' => $result['compression_ratio'],
+					'user_id'           => get_current_user_id(),
+				)
+			);
 
 			return $this->send_success_response(
 				array(
@@ -348,10 +362,10 @@ class ImageOptimizationController extends BaseController {
 				return $this->send_validation_error_response( $validation['errors'] );
 			}
 
-			$data = $validation['data'];
+			$data      = $validation['data'];
 			$image_ids = $data['image_ids'] ?? array();
-			$limit = min( $data['limit'] ?? 10, 50 ); // Cap at 50 images
-			$options = $data['options'] ?? array();
+			$limit     = min( $data['limit'] ?? 10, 50 ); // Cap at 50 images
+			$options   = $data['options'] ?? array();
 
 			// If no specific IDs provided, get unoptimized images
 			if ( empty( $image_ids ) ) {
@@ -382,7 +396,7 @@ class ImageOptimizationController extends BaseController {
 			if ( count( $image_ids ) > 5 ) {
 				// Schedule background processing
 				wp_schedule_single_event( time(), 'wppo_process_image_batch', array( $batch_id, $image_ids, $options ) );
-				
+
 				return $this->send_success_response(
 					array(
 						'message'  => 'Batch optimization started.',
@@ -394,7 +408,7 @@ class ImageOptimizationController extends BaseController {
 			} else {
 				// Process immediately for small batches
 				$results = $this->process_image_batch( $image_ids, $options );
-				
+
 				return $this->send_success_response(
 					array(
 						'message' => 'Batch optimization completed.',
@@ -402,6 +416,14 @@ class ImageOptimizationController extends BaseController {
 					)
 				);
 			}
+		} catch ( \Exception $e ) {
+			return $this->send_error_response(
+				'batch_optimization_failed',
+				$e->getMessage(),
+				array( 'status' => 500 )
+			);
+		}
+	}
 
 	/**
 	 * Get optimization progress endpoint handler.
@@ -412,9 +434,9 @@ class ImageOptimizationController extends BaseController {
 	public function get_optimization_progress( \WP_REST_Request $request ): \WP_REST_Response {
 		try {
 			$batch_id = $request->get_param( 'batch_id' );
-			
+
 			$progress = get_transient( 'wppo_batch_progress_' . $batch_id );
-			
+
 			if ( false === $progress ) {
 				return $this->send_error_response(
 					'batch_not_found',
@@ -459,8 +481,14 @@ class ImageOptimizationController extends BaseController {
 			$validation = $this->validate_request(
 				$request,
 				array(
-					'image_id'      => array( 'type' => 'integer', 'required' => true ),
-					'target_format' => array( 'type' => 'string', 'required' => true ),
+					'image_id'      => array(
+						'type'     => 'integer',
+						'required' => true,
+					),
+					'target_format' => array(
+						'type'     => 'string',
+						'required' => true,
+					),
 					'quality'       => array( 'type' => 'integer' ),
 				)
 			);
@@ -469,10 +497,10 @@ class ImageOptimizationController extends BaseController {
 				return $this->send_validation_error_response( $validation['errors'] );
 			}
 
-			$data = $validation['data'];
-			$image_id = $data['image_id'];
+			$data          = $validation['data'];
+			$image_id      = $data['image_id'];
 			$target_format = $data['target_format'];
-			$quality = $data['quality'] ?? 85;
+			$quality       = $data['quality'] ?? 85;
 
 			// Get image path
 			$image_path = get_attached_file( $image_id );
@@ -485,7 +513,7 @@ class ImageOptimizationController extends BaseController {
 			}
 
 			// Convert image
-			$options = array( 'quality' => $quality );
+			$options        = array( 'quality' => $quality );
 			$converted_path = $this->image_processor->convertToFormat( $image_path, $target_format, $options );
 
 			if ( ! $converted_path ) {
@@ -528,7 +556,10 @@ class ImageOptimizationController extends BaseController {
 			$validation = $this->validate_request(
 				$request,
 				array(
-					'image_id'    => array( 'type' => 'integer', 'required' => true ),
+					'image_id'    => array(
+						'type'     => 'integer',
+						'required' => true,
+					),
 					'breakpoints' => array( 'type' => 'array' ),
 				)
 			);
@@ -537,8 +568,8 @@ class ImageOptimizationController extends BaseController {
 				return $this->send_validation_error_response( $validation['errors'] );
 			}
 
-			$data = $validation['data'];
-			$image_id = $data['image_id'];
+			$data        = $validation['data'];
+			$image_id    = $data['image_id'];
 			$breakpoints = $data['breakpoints'] ?? array( 320, 640, 768, 1024, 1200 );
 
 			// Get image path
@@ -552,10 +583,13 @@ class ImageOptimizationController extends BaseController {
 			}
 
 			// Generate responsive images
-			$responsive_data = $this->image_processor->processForLazyLoading( $image_path, array(
-				'generate_responsive' => true,
-				'responsive_breakpoints' => $breakpoints,
-			) );
+			$responsive_data = $this->image_processor->processForLazyLoading(
+				$image_path,
+				array(
+					'generate_responsive'    => true,
+					'responsive_breakpoints' => $breakpoints,
+				)
+			);
 
 			return $this->send_success_response(
 				array(
@@ -583,11 +617,11 @@ class ImageOptimizationController extends BaseController {
 	public function get_optimization_stats( \WP_REST_Request $request ): \WP_REST_Response {
 		try {
 			$stats = array(
-				'total_images' => $this->get_total_images_count(),
-				'optimized_images' => $this->get_optimized_images_count(),
-				'pending_images' => $this->get_pending_images_count(),
-				'total_savings' => $this->get_total_savings(),
-				'formats_supported' => $this->get_supported_formats(),
+				'total_images'       => $this->get_total_images_count(),
+				'optimized_images'   => $this->get_optimized_images_count(),
+				'pending_images'     => $this->get_pending_images_count(),
+				'total_savings'      => $this->get_total_savings(),
+				'formats_supported'  => $this->get_supported_formats(),
 				'optimization_queue' => $this->get_optimization_queue_status(),
 			);
 
@@ -611,13 +645,13 @@ class ImageOptimizationController extends BaseController {
 	 */
 	public function get_optimal_format( \WP_REST_Request $request ): \WP_REST_Response {
 		try {
-			$user_agent = $request->get_header( 'User-Agent' ) ?? '';
+			$user_agent     = $request->get_header( 'User-Agent' ) ?? '';
 			$optimal_format = $this->image_processor->getOptimalFormat( $user_agent );
 
 			return $this->send_success_response(
 				array(
 					'optimal_format' => $optimal_format,
-					'user_agent' => $user_agent,
+					'user_agent'     => $user_agent,
 				)
 			);
 
@@ -686,14 +720,14 @@ class ImageOptimizationController extends BaseController {
 	 */
 	private function init_batch_progress( string $batch_id, array $image_ids ): void {
 		$progress = array(
-			'batch_id' => $batch_id,
-			'total' => count( $image_ids ),
-			'processed' => 0,
+			'batch_id'   => $batch_id,
+			'total'      => count( $image_ids ),
+			'processed'  => 0,
 			'successful' => 0,
-			'failed' => 0,
-			'status' => 'pending',
+			'failed'     => 0,
+			'status'     => 'pending',
 			'started_at' => current_time( 'mysql' ),
-			'results' => array(),
+			'results'    => array(),
 		);
 
 		set_transient( 'wppo_batch_progress_' . $batch_id, $progress, 3600 ); // 1 hour
@@ -708,33 +742,33 @@ class ImageOptimizationController extends BaseController {
 	 */
 	private function process_image_batch( array $image_ids, array $options ): array {
 		$results = array(
-			'processed' => 0,
+			'processed'  => 0,
 			'successful' => 0,
-			'failed' => 0,
-			'results' => array(),
+			'failed'     => 0,
+			'results'    => array(),
 		);
 
 		foreach ( $image_ids as $image_id ) {
 			$image_path = get_attached_file( $image_id );
 			if ( ! $image_path || ! file_exists( $image_path ) ) {
-				$results['failed']++;
+				++$results['failed'];
 				$results['results'][ $image_id ] = array(
 					'success' => false,
-					'error' => 'Image file not found.',
+					'error'   => 'Image file not found.',
 				);
 				continue;
 			}
 
 			$result = $this->image_processor->optimize( $image_path, $options );
-			$results['processed']++;
+			++$results['processed'];
 
 			if ( $result['success'] ) {
-				$results['successful']++;
+				++$results['successful'];
 				// Mark as optimized
 				update_post_meta( $image_id, '_wppo_optimized', '1' );
 				update_post_meta( $image_id, '_wppo_optimization_data', $result );
 			} else {
-				$results['failed']++;
+				++$results['failed'];
 			}
 
 			$results['results'][ $image_id ] = $result;
@@ -750,7 +784,7 @@ class ImageOptimizationController extends BaseController {
 	 */
 	private function get_total_images_count(): int {
 		global $wpdb;
-		
+
 		$count = $wpdb->get_var(
 			"SELECT COUNT(*) FROM {$wpdb->posts} 
 			WHERE post_type = 'attachment' 
@@ -767,7 +801,7 @@ class ImageOptimizationController extends BaseController {
 	 */
 	private function get_optimized_images_count(): int {
 		global $wpdb;
-		
+
 		$count = $wpdb->get_var(
 			"SELECT COUNT(*) FROM {$wpdb->postmeta} 
 			WHERE meta_key = '_wppo_optimized' 
@@ -793,31 +827,31 @@ class ImageOptimizationController extends BaseController {
 	 */
 	private function get_total_savings(): array {
 		global $wpdb;
-		
+
 		$results = $wpdb->get_results(
 			"SELECT meta_value FROM {$wpdb->postmeta} 
 			WHERE meta_key = '_wppo_optimization_data'"
 		);
 
-		$total_original = 0;
+		$total_original  = 0;
 		$total_optimized = 0;
 
 		foreach ( $results as $result ) {
 			$data = maybe_unserialize( $result->meta_value );
 			if ( is_array( $data ) && isset( $data['original_size'], $data['optimized_size'] ) ) {
-				$total_original += $data['original_size'];
+				$total_original  += $data['original_size'];
 				$total_optimized += $data['optimized_size'];
 			}
 		}
 
-		$savings_bytes = $total_original - $total_optimized;
+		$savings_bytes      = $total_original - $total_optimized;
 		$savings_percentage = $total_original > 0 ? ( $savings_bytes / $total_original ) * 100 : 0;
 
 		return array(
-			'total_original_bytes' => $total_original,
+			'total_original_bytes'  => $total_original,
 			'total_optimized_bytes' => $total_optimized,
-			'savings_bytes' => $savings_bytes,
-			'savings_percentage' => round( $savings_percentage, 2 ),
+			'savings_bytes'         => $savings_bytes,
+			'savings_percentage'    => round( $savings_percentage, 2 ),
 		);
 	}
 
@@ -829,8 +863,8 @@ class ImageOptimizationController extends BaseController {
 	private function get_supported_formats(): array {
 		return array(
 			'jpeg' => function_exists( 'imagejpeg' ),
-			'png' => function_exists( 'imagepng' ),
-			'gif' => function_exists( 'imagegif' ),
+			'png'  => function_exists( 'imagepng' ),
+			'gif'  => function_exists( 'imagegif' ),
 			'webp' => function_exists( 'imagewebp' ),
 			'avif' => function_exists( 'imageavif' ),
 		);
@@ -845,8 +879,8 @@ class ImageOptimizationController extends BaseController {
 		// This would integrate with a background processing queue
 		return array(
 			'active_batches' => 0,
-			'queued_images' => 0,
-			'processing' => false,
+			'queued_images'  => 0,
+			'processing'     => false,
 		);
 	}
 }

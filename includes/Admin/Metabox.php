@@ -68,13 +68,22 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 		 */
 		public function __construct( ServiceContainerInterface $container ) {
 			$this->container = $container;
+
+			// Validate critical services
+			$required_services = array( 'settings_service', 'logger', 'validator' );
+			foreach ( $required_services as $service ) {
+				if ( ! $container->has( $service ) ) {
+					throw new \Exception( "Required service not available: {$service}" );
+				}
+			}
+
 			$this->settingsService = $container->get( 'settings_service' );
-			$this->logger = $container->get( 'logger' );
-			$this->validator = $container->get( 'validator' );
-			
+			$this->logger          = $container->get( 'logger' );
+			$this->validator       = $container->get( 'validator' );
+
 			add_action( 'add_meta_boxes', array( $this, 'add_preload_images_metabox' ) );
 			add_action( 'save_post', array( $this, 'save_preload_images_metabox_data' ) );
-			
+
 			$this->logger->debug( 'Metabox hooks setup completed' );
 		}
 
@@ -152,32 +161,38 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 			}
 
 			// Check permissions
-			$post_type = get_post_type( $post_id );
+			$post_type        = get_post_type( $post_id );
 			$post_type_object = get_post_type_object( $post_type );
 			if ( ! $post_type_object || ! current_user_can( $post_type_object->cap->edit_post, $post_id ) ) {
-				$this->logger->warning( 'Metabox save failed: Insufficient permissions', array( 
-					'post_id' => $post_id,
-					'user_id' => get_current_user_id(),
-					'post_type' => $post_type,
-				) );
+				$this->logger->warning(
+					'Metabox save failed: Insufficient permissions',
+					array(
+						'post_id'   => $post_id,
+						'user_id'   => get_current_user_id(),
+						'post_type' => $post_type,
+					)
+				);
 				return;
 			}
 
 			if ( isset( $_POST[ self::META_KEY ] ) ) {
 				$preload_urls_string = sanitize_textarea_field( wp_unslash( $_POST[ self::META_KEY ] ) );
-				
+
 				// Process and validate URLs
 				$processed_urls = $this->processPreloadUrls( $preload_urls_string );
-				
+
 				if ( ! empty( $processed_urls['valid'] ) ) {
 					$cleaned_urls_string = implode( "\n", $processed_urls['valid'] );
 					update_post_meta( $post_id, self::META_KEY, $cleaned_urls_string );
-					
-					$this->logger->info( 'Preload URLs saved for post', array(
-						'post_id' => $post_id,
-						'url_count' => count( $processed_urls['valid'] ),
-						'invalid_count' => count( $processed_urls['invalid'] ),
-					) );
+
+					$this->logger->info(
+						'Preload URLs saved for post',
+						array(
+							'post_id'       => $post_id,
+							'url_count'     => count( $processed_urls['valid'] ),
+							'invalid_count' => count( $processed_urls['invalid'] ),
+						)
+					);
 				} else {
 					delete_post_meta( $post_id, self::META_KEY );
 					$this->logger->debug( 'Preload URLs cleared for post', array( 'post_id' => $post_id ) );
@@ -185,10 +200,13 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 
 				// Log invalid URLs for debugging
 				if ( ! empty( $processed_urls['invalid'] ) ) {
-					$this->logger->warning( 'Invalid preload URLs detected', array(
-						'post_id' => $post_id,
-						'invalid_urls' => $processed_urls['invalid'],
-					) );
+					$this->logger->warning(
+						'Invalid preload URLs detected',
+						array(
+							'post_id'      => $post_id,
+							'invalid_urls' => $processed_urls['invalid'],
+						)
+					);
 				}
 			} else {
 				delete_post_meta( $post_id, self::META_KEY );
@@ -207,15 +225,24 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 			$lines = array_map( 'trim', $lines );
 			$lines = array_filter( $lines ); // Remove empty lines
 
-			$valid_urls = array();
+			$valid_urls   = array();
 			$invalid_urls = array();
 
 			foreach ( $lines as $line ) {
 				// Check for device-specific prefixes
 				$device_prefix = '';
 				if ( preg_match( '/^(mobile|desktop|tablet):\s*(.+)$/i', $line, $matches ) ) {
-					$device_prefix = strtolower( $matches[1] ) . ':';
-					$url = trim( $matches[2] );
+					$device = strtolower( $matches[1] );
+
+				// Validate device prefix against allowed values
+				$allowed_devices = array( 'mobile', 'desktop', 'tablet' );
+				if ( ! in_array( $device, $allowed_devices, true ) ) {
+					$invalid_urls[] = $line;
+					continue;
+				}
+
+				$device_prefix = $device . ':';
+					$url           = trim( $matches[2] );
 				} else {
 					$url = $line;
 				}
@@ -229,7 +256,7 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 			}
 
 			return array(
-				'valid' => $valid_urls,
+				'valid'   => $valid_urls,
 				'invalid' => $invalid_urls,
 			);
 		}
@@ -246,17 +273,40 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 				return false;
 			}
 
-			// Allow relative URLs
+			// Validate relative URLs more strictly
 			if ( strpos( $url, '/' ) === 0 ) {
-				return true;
+				// Prevent directory traversal
+				if ( strpos( $url, '..' ) !== false ) {
+					return false;
+				}
+
+				// Ensure it's within wp-content or uploads
+				$allowed_paths = array( '/wp-content/', '/wp-includes/' );
+				$is_allowed    = false;
+				foreach ( $allowed_paths as $path ) {
+					if ( strpos( $url, $path ) === 0 ) {
+						$is_allowed = true;
+						break;
+					}
+				}
+
+				if ( ! $is_allowed ) {
+					return false;
+				}
+
+				// Check if it's an image URL
+				$image_extensions = array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg' );
+				$extension        = strtolower( pathinfo( $url, PATHINFO_EXTENSION ) );
+
+				return in_array( $extension, $image_extensions, true );
 			}
 
 			// Validate absolute URLs
 			if ( filter_var( $url, FILTER_VALIDATE_URL ) ) {
 				// Check if it's an image URL
 				$image_extensions = array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg' );
-				$extension = strtolower( pathinfo( parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
-				
+				$extension        = strtolower( pathinfo( parse_url( $url, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+
 				return in_array( $extension, $image_extensions, true );
 			}
 
@@ -271,7 +321,7 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 		 */
 		public function getPreloadUrls( int $post_id ): array {
 			$urls_string = get_post_meta( $post_id, self::META_KEY, true );
-			
+
 			if ( empty( $urls_string ) ) {
 				return array();
 			}
@@ -291,14 +341,14 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 		 * @return array Array of URLs for the specified device.
 		 */
 		public function getDeviceSpecificUrls( int $post_id, string $device = '' ): array {
-			$all_urls = $this->getPreloadUrls( $post_id );
+			$all_urls    = $this->getPreloadUrls( $post_id );
 			$device_urls = array();
 
 			foreach ( $all_urls as $url ) {
 				if ( preg_match( '/^(mobile|desktop|tablet):\s*(.+)$/i', $url, $matches ) ) {
 					$url_device = strtolower( $matches[1] );
-					$clean_url = trim( $matches[2] );
-					
+					$clean_url  = trim( $matches[2] );
+
 					if ( empty( $device ) || $url_device === strtolower( $device ) ) {
 						$device_urls[] = $clean_url;
 					}

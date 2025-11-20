@@ -39,14 +39,17 @@ class OptimizationServiceProvider extends ServiceProvider {
 	public function register( ServiceContainerInterface $container ): void {
 		// Register services as singletons
 		$container->singleton( 'PerformanceOptimisation\\Services\\CacheService', 'PerformanceOptimisation\\Services\\CacheService' );
-		
+
 		// Register ImageService with factory to handle dependencies
-		$container->singleton( 'PerformanceOptimisation\\Services\\ImageService', function( ServiceContainerInterface $c ) {
-			$imageProcessor = new \PerformanceOptimisation\Optimizers\ModernImageProcessor( $c );
-			$conversionQueue = new \PerformanceOptimisation\Utils\ConversionQueue();
-			$settings = get_option( 'wppo_settings', array() );
-			return new \PerformanceOptimisation\Services\ImageService( $imageProcessor, $conversionQueue, $settings );
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\ImageService',
+			function ( ServiceContainerInterface $c ) {
+				$imageProcessor  = new \PerformanceOptimisation\Optimizers\ModernImageProcessor( $c );
+				$conversionQueue = new \PerformanceOptimisation\Utils\ConversionQueue();
+				$settings        = get_option( 'wppo_settings', array() );
+				return new \PerformanceOptimisation\Services\ImageService( $imageProcessor, $conversionQueue, $settings );
+			}
+		);
 
 		// Register optimizers as singletons
 		$container->singleton( 'PerformanceOptimisation\\Optimizers\\ModernCssOptimizer', 'PerformanceOptimisation\\Optimizers\\ModernCssOptimizer' );

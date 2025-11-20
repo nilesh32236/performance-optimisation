@@ -58,7 +58,7 @@ function SetupWizard( { apiUrl, nonce, translations }: SetupWizardProps ) {
 
 	const handleComplete = async ( data: Record<string, any> ) => {
 		try {
-			const response = await fetch( `${ apiUrl }wizard-setup`, {
+			const response = await fetch( `${ apiUrl }/wizard/setup`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

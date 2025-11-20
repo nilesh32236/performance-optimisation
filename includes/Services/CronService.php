@@ -34,8 +34,8 @@ class CronService {
 		$settingsService = null
 	) {
 		$this->cacheService    = $cacheService;
-		$this->imageService    = ($imageService instanceof ImageService) ? $imageService : null;
-		$this->settingsService = ($settingsService instanceof SettingsService) ? $settingsService : null;
+		$this->imageService    = ( $imageService instanceof ImageService ) ? $imageService : null;
+		$this->settingsService = ( $settingsService instanceof SettingsService ) ? $settingsService : null;
 
 		add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
 		add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
@@ -55,6 +55,11 @@ class CronService {
 	}
 
 	public function schedule_cron_jobs(): void {
+		// Skip if settings service is not available
+		if ( null === $this->settingsService ) {
+			return;
+		}
+
 		$settings = $this->settingsService->get_settings();
 
 		if ( ! empty( $settings['preload_settings']['enablePreloadCache'] ) && ! wp_next_scheduled( self::PAGE_CRON_HOOK ) ) {

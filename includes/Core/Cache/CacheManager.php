@@ -92,32 +92,35 @@ class CacheManager {
 	 * Constructor.
 	 *
 	 * @since 1.1.0
-	 * @param ConfigInterface                    $config     Configuration manager.
-	 * @param ServiceContainerInterface|null     $container  Service container.
-	 * @param LoggingUtil|null                   $logger     Logger instance.
-	 * @param PerformanceUtil|null               $performance Performance utility.
-	 * @param FileSystemUtil|null                $filesystem FileSystem utility.
+	 * @param ConfigInterface                $config     Configuration manager.
+	 * @param ServiceContainerInterface|null $container  Service container.
+	 * @param LoggingUtil|null               $logger     Logger instance.
+	 * @param PerformanceUtil|null           $performance Performance utility.
+	 * @param FileSystemUtil|null            $filesystem FileSystem utility.
 	 */
-	public function __construct( 
-		ConfigInterface $config, 
+	public function __construct(
+		ConfigInterface $config,
 		?ServiceContainerInterface $container = null,
 		?LoggingUtil $logger = null,
 		?PerformanceUtil $performance = null,
 		?FileSystemUtil $filesystem = null
 	) {
-		$this->config = $config;
-		$this->container = $container;
-		$this->logger = $logger;
+		$this->config      = $config;
+		$this->container   = $container;
+		$this->logger      = $logger;
 		$this->performance = $performance;
-		$this->filesystem = $filesystem;
-		
+		$this->filesystem  = $filesystem;
+
 		$this->register_default_providers();
-		
+
 		if ( $this->logger ) {
-			$this->logger->debug( 'CacheManager initialized', array(
-				'default_provider' => $this->default_provider,
-				'providers' => array_keys( $this->providers ),
-			) );
+			$this->logger->debug(
+				'CacheManager initialized',
+				array(
+					'default_provider' => $this->default_provider,
+					'providers'        => array_keys( $this->providers ),
+				)
+			);
 		}
 	}
 
@@ -189,12 +192,24 @@ class CacheManager {
 			if ( $value !== $default ) {
 				++$this->stats['hits'];
 				if ( $this->logger ) {
-					$this->logger->debug( 'Cache hit', array( 'key' => $key, 'provider' => $provider ?? $this->default_provider ) );
+					$this->logger->debug(
+						'Cache hit',
+						array(
+							'key'      => $key,
+							'provider' => $provider ?? $this->default_provider,
+						)
+					);
 				}
 			} else {
 				++$this->stats['misses'];
 				if ( $this->logger ) {
-					$this->logger->debug( 'Cache miss', array( 'key' => $key, 'provider' => $provider ?? $this->default_provider ) );
+					$this->logger->debug(
+						'Cache miss',
+						array(
+							'key'      => $key,
+							'provider' => $provider ?? $this->default_provider,
+						)
+					);
 				}
 			}
 
@@ -202,7 +217,13 @@ class CacheManager {
 		} catch ( CacheException $e ) {
 			++$this->stats['misses'];
 			if ( $this->logger ) {
-				$this->logger->warning( 'Cache get failed', array( 'key' => $key, 'error' => $e->getMessage() ) );
+				$this->logger->warning(
+					'Cache get failed',
+					array(
+						'key'   => $key,
+						'error' => $e->getMessage(),
+					)
+				);
 			}
 			return $default;
 		} finally {
@@ -235,23 +256,36 @@ class CacheManager {
 			if ( $result ) {
 				++$this->stats['sets'];
 				if ( $this->logger ) {
-					$this->logger->debug( 'Cache set successful', array( 
-						'key' => $key, 
-						'provider' => $provider ?? $this->default_provider,
-						'expiration' => $expiration,
-						'value_size' => is_string( $value ) ? strlen( $value ) : 'non-string',
-					) );
+					$this->logger->debug(
+						'Cache set successful',
+						array(
+							'key'        => $key,
+							'provider'   => $provider ?? $this->default_provider,
+							'expiration' => $expiration,
+							'value_size' => is_string( $value ) ? strlen( $value ) : 'non-string',
+						)
+					);
 				}
-			} else {
-				if ( $this->logger ) {
-					$this->logger->warning( 'Cache set failed', array( 'key' => $key, 'provider' => $provider ?? $this->default_provider ) );
-				}
+			} elseif ( $this->logger ) {
+					$this->logger->warning(
+						'Cache set failed',
+						array(
+							'key'      => $key,
+							'provider' => $provider ?? $this->default_provider,
+						)
+					);
 			}
 
 			return $result;
 		} catch ( CacheException $e ) {
 			if ( $this->logger ) {
-				$this->logger->error( 'Cache set exception', array( 'key' => $key, 'error' => $e->getMessage() ) );
+				$this->logger->error(
+					'Cache set exception',
+					array(
+						'key'   => $key,
+						'error' => $e->getMessage(),
+					)
+				);
 			}
 			return false;
 		} finally {

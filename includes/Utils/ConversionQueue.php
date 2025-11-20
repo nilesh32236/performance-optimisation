@@ -88,12 +88,12 @@ class ConversionQueue {
 				if ( $count >= $limit ) {
 					break 2;
 				}
-				
+
 				$items[] = array(
-					'source_path' => wp_normalize_path( ABSPATH . $path ),
+					'source_path'   => wp_normalize_path( ABSPATH . $path ),
 					'target_format' => $format,
 				);
-				$count++;
+				++$count;
 			}
 		}
 

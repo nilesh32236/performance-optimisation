@@ -30,54 +30,66 @@ class JsOptimizer implements OptimizerInterface {
 	);
 
 	private array $optimization_options = array(
-		'enable_minification' => true,
-		'enable_combination' => true,
-		'enable_tree_shaking' => false, // Advanced feature
+		'enable_minification'    => true,
+		'enable_combination'     => true,
+		'enable_tree_shaking'    => false, // Advanced feature
 		'enable_module_bundling' => false, // Advanced feature
-		'preserve_comments' => false,
-		'preserve_semicolons' => true,
-		'async_loading' => true,
-		'defer_loading' => true,
+		'preserve_comments'      => false,
+		'preserve_semicolons'    => true,
+		'async_loading'          => true,
+		'defer_loading'          => true,
 	);
 
 	public function optimize( string $content, array $options = array() ): string {
+		// Validate content size
+		if ( strlen( $content ) > 5242880 ) { // 5MB limit for JS
+			throw new \Exception( 'JavaScript content exceeds maximum size limit' );
+		}
+
+		if ( empty( $content ) ) {
+			return '';
+		}
+
 		$original_size = strlen( $content );
-		
+
 		// Performance tracking
 		PerformanceUtil::startTimer( 'js_optimization' );
-		
+
 		try {
 			// Merge options with defaults
 			$options = array_merge( $this->optimization_options, $options );
-			
+
 			// Validate JavaScript content
 			$content = ValidationUtil::sanitizeJs( $content );
-			
+
 			// Apply optimization techniques
 			$optimized = $this->minify_js( $content, $options );
 			$optimized = $this->optimize_syntax( $optimized, $options );
 			$optimized = $this->remove_dead_code( $optimized, $options );
 			$optimized = $this->optimize_variables( $optimized, $options );
-			
-			$optimized_size = strlen( $optimized );
+
+			$optimized_size    = strlen( $optimized );
 			$compression_ratio = $original_size > 0 ? ( 1 - $optimized_size / $original_size ) : 0;
-			$duration = PerformanceUtil::endTimer( 'js_optimization' );
-			
+			$duration          = PerformanceUtil::endTimer( 'js_optimization' );
+
 			// Update stats
 			++$this->stats['total_files'];
-			$this->stats['total_bytes'] += $original_size;
-			$this->stats['bytes_saved'] += ( $original_size - $optimized_size );
+			$this->stats['total_bytes']   += $original_size;
+			$this->stats['bytes_saved']   += ( $original_size - $optimized_size );
 			$this->stats['total_time_ms'] += $duration * 1000;
-			
-			LoggingUtil::info( 'JavaScript optimized successfully', array(
-				'original_size' => $original_size,
-				'optimized_size' => $optimized_size,
-				'compression_ratio' => round( $compression_ratio * 100, 2 ) . '%',
-				'duration' => $duration,
-			) );
-			
+
+			LoggingUtil::info(
+				'JavaScript optimized successfully',
+				array(
+					'original_size'     => $original_size,
+					'optimized_size'    => $optimized_size,
+					'compression_ratio' => round( $compression_ratio * 100, 2 ) . '%',
+					'duration'          => $duration,
+				)
+			);
+
 			return $optimized;
-			
+
 		} catch ( \Exception $e ) {
 			PerformanceUtil::endTimer( 'js_optimization' );
 			LoggingUtil::error( 'JavaScript optimization failed: ' . $e->getMessage() );
@@ -122,25 +134,25 @@ class JsOptimizer implements OptimizerInterface {
 			LoggingUtil::warning( 'JavaScript file not found for processing', array( 'path' => $file_path ) );
 			return '';
 		}
-		
+
 		// Check cache first
-		$cache_key = CacheUtil::generateCacheKey( $file_path . filemtime( $file_path ), 'js_opt' );
+		$cache_key     = CacheUtil::generateCacheKey( $file_path . filemtime( $file_path ), 'js_opt' );
 		$cached_result = wp_cache_get( $cache_key, 'wppo_js_optimization' );
-		
+
 		if ( false !== $cached_result ) {
 			LoggingUtil::debug( 'JavaScript optimization served from cache', array( 'path' => $file_path ) );
 			return $cached_result;
 		}
-		
+
 		try {
-			$content = FileSystemUtil::readFile( $file_path );
+			$content   = FileSystemUtil::readFile( $file_path );
 			$optimized = $this->optimize( $content, $options );
-			
+
 			// Cache the result
 			wp_cache_set( $cache_key, $optimized, 'wppo_js_optimization', CacheUtil::getCacheExpiry( 'minified' ) );
-			
+
 			return $optimized;
-			
+
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'Failed to process JavaScript file: ' . $e->getMessage(), array( 'path' => $file_path ) );
 			return '';
@@ -338,7 +350,7 @@ class JsOptimizer implements OptimizerInterface {
 	 * @return string Combined and optimized JavaScript.
 	 */
 	public function combineFiles( array $file_paths, array $options = array() ): string {
-		$combined_js = '';
+		$combined_js     = '';
 		$processed_files = 0;
 
 		PerformanceUtil::startTimer( 'js_combination' );
@@ -347,12 +359,12 @@ class JsOptimizer implements OptimizerInterface {
 			if ( FileSystemUtil::fileExists( $file_path ) ) {
 				try {
 					$js_content = FileSystemUtil::readFile( $file_path );
-					
+
 					// Add file separator comment
 					$combined_js .= "\n/* File: " . basename( $file_path ) . " */\n";
 					$combined_js .= $js_content . "\n";
-					
-					$processed_files++;
+
+					++$processed_files;
 				} catch ( \Exception $e ) {
 					LoggingUtil::error( 'Failed to read JavaScript file for combination: ' . $e->getMessage(), array( 'path' => $file_path ) );
 				}
@@ -362,12 +374,15 @@ class JsOptimizer implements OptimizerInterface {
 		}
 
 		$duration = PerformanceUtil::endTimer( 'js_combination' );
-		
-		LoggingUtil::info( 'JavaScript files combined', array(
-			'total_files' => count( $file_paths ),
-			'processed_files' => $processed_files,
-			'duration' => $duration,
-		) );
+
+		LoggingUtil::info(
+			'JavaScript files combined',
+			array(
+				'total_files'     => count( $file_paths ),
+				'processed_files' => $processed_files,
+				'duration'        => $duration,
+			)
+		);
 
 		return $this->optimize( $combined_js, $options );
 	}
@@ -402,7 +417,7 @@ class JsOptimizer implements OptimizerInterface {
 
 			case 'social':
 			case 'widgets':
-				$attributes['defer'] = true;
+				$attributes['defer']          = true;
 				$attributes['data-wppo-lazy'] = true;
 				break;
 
@@ -456,7 +471,7 @@ class JsOptimizer implements OptimizerInterface {
 	 */
 	public function analyzeDependencies( array $scripts ): array {
 		$dependency_graph = array();
-		$loading_order = array();
+		$loading_order    = array();
 
 		// Build dependency graph
 		foreach ( $scripts as $handle => $script ) {
@@ -464,7 +479,7 @@ class JsOptimizer implements OptimizerInterface {
 		}
 
 		// Topological sort to determine loading order
-		$visited = array();
+		$visited      = array();
 		$temp_visited = array();
 
 		foreach ( array_keys( $dependency_graph ) as $handle ) {
@@ -506,7 +521,7 @@ class JsOptimizer implements OptimizerInterface {
 
 		unset( $temp_visited[ $handle ] );
 		$visited[ $handle ] = true;
-		$loading_order[] = $handle;
+		$loading_order[]    = $handle;
 	}
 
 	/**
@@ -517,14 +532,14 @@ class JsOptimizer implements OptimizerInterface {
 	 */
 	public function generateModuleBundles( array $modules ): array {
 		$bundles = array(
-			'vendor' => array(), // Third-party libraries
-			'common' => array(), // Shared code
+			'vendor'   => array(), // Third-party libraries
+			'common'   => array(), // Shared code
 			'critical' => array(), // Critical path code
-			'lazy' => array(), // Lazy-loaded modules
+			'lazy'     => array(), // Lazy-loaded modules
 		);
 
 		foreach ( $modules as $module => $config ) {
-			$bundle_type = $this->determineBundleType( $module, $config );
+			$bundle_type               = $this->determineBundleType( $module, $config );
 			$bundles[ $bundle_type ][] = $module;
 		}
 

@@ -139,45 +139,117 @@ class Plugin implements PluginInterface {
 	 *
 	 * @since 2.0.0
 	 *
+	 * @throws \Exception If activation fails.
 	 * @return void
 	 */
 	public function activate(): void {
+		$activation_steps = array();
+
 		try {
+			// Check system requirements.
+			$this->checkSystemRequirements();
+			$activation_steps[] = 'system_check';
+
 			// Load dependencies first
 			$this->loadDependencies();
-			
+			$activation_steps[] = 'dependencies';
+
 			// Register services for activation
 			$this->registerCoreServices();
+			$activation_steps[] = 'services';
 
 			// Setup advanced caching
 			AdvancedCacheHandler::create();
+			$activation_steps[] = 'advanced_cache';
+
 			$this->add_wp_cache_constant();
+			$activation_steps[] = 'wp_cache_constant';
 
-			// Create database tables
+			// Create database tables.
 			$this->create_activity_log_table();
+			$activation_steps[] = 'activity_log_table';
+
 			$this->createDatabaseTables();
+			$activation_steps[] = 'database_tables';
 
-			// Set default options
+			// Set default options.
 			$this->setDefaultOptions();
+			$activation_steps[] = 'default_options';
 
-			// Schedule cron jobs using container
-			$cron_service = $this->_container->get( 'cron_service' );
-			$cron_service->schedule_cron_jobs();
+			// Schedule cron jobs
+			$this->scheduleCronEvents();
+			$activation_steps[] = 'cron_events';
 
-			// Clear cache to ensure fresh start
-			$cache_service = $this->_container->get( 'cache_service' );
-			$cache_service->clearAllCache();
+			// Create cache directories.
+			$this->createCacheDirectories();
+			$activation_steps[] = 'cache_directories';
 
 			flush_rewrite_rules();
 
-			LoggingUtil::info( __( 'Plugin activated successfully', 'performance-optimisation' ), array(
-				'version' => $this->_version,
-				'services_registered' => $this->_container->getStats()['services_registered'] ?? 0,
-			) );
+			// Set activation flag for setup wizard
+			update_option( 'wppo_show_setup_wizard', true );
+
+			LoggingUtil::info(
+				__( 'Plugin activated successfully', 'performance-optimisation' ),
+				array(
+					'version'     => $this->_version,
+					'php_version' => PHP_VERSION,
+					'wp_version'  => get_bloginfo( 'version' ),
+				)
+			);
+
+			// Fire activation complete hook for testing.
+			do_action( 'wppo_activation_complete', $this, $activation_steps );
 
 		} catch ( \Exception $e ) {
-			LoggingUtil::error( 'Plugin activation failed: ' . $e->getMessage() );
+			LoggingUtil::error(
+				'Plugin activation failed: ' . $e->getMessage(),
+				array(
+					'completed_steps' => $activation_steps,
+					'error_trace'     => $e->getTraceAsString(),
+				)
+			);
+
+			// Rollback completed steps.
+			$this->rollbackActivation( $activation_steps );
+
 			throw $e; // Re-throw to prevent activation
+		}
+	}
+
+	/**
+	 * Rollback activation steps on failure.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @param array $completed_steps Array of completed activation steps.
+	 * @return void
+	 */
+	private function rollbackActivation( array $completed_steps ): void {
+		try {
+			foreach ( array_reverse( $completed_steps ) as $step ) {
+				switch ( $step ) {
+					case 'advanced_cache':
+						AdvancedCacheHandler::remove();
+						break;
+					case 'wp_cache_constant':
+						$this->remove_wp_cache_constant();
+						break;
+					case 'cron_events':
+						wp_clear_scheduled_hook( 'wppo_cleanup_cache' );
+						wp_clear_scheduled_hook( 'wppo_optimize_images' );
+						break;
+					case 'cache_directories':
+						$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
+						if ( is_dir( $cache_dir ) ) {
+							$this->removeDirectory( $cache_dir );
+						}
+						break;
+				}
+			}
+			LoggingUtil::info( 'Activation rollback completed' );
+		} catch ( \Exception $e ) {
+			LoggingUtil::error( 'Rollback failed: ' . $e->getMessage() );
 		}
 	}
 
@@ -195,23 +267,39 @@ class Plugin implements PluginInterface {
 			wp_clear_scheduled_hook( 'wppo_generate_static_page' );
 			wp_clear_scheduled_hook( 'wppo_image_optimization_cron' );
 
-			// Remove advanced caching files directly
+			// Remove advanced caching files with validation
 			$advanced_cache_file = WP_CONTENT_DIR . '/advanced-cache.php';
 			if ( file_exists( $advanced_cache_file ) ) {
-				unlink( $advanced_cache_file );
+				// Validate it's our file before deletion
+				$file_content = file_get_contents( $advanced_cache_file );
+				if ( strpos( $file_content, 'Performance Optimisation Plugin' ) !== false ) {
+					if ( ! unlink( $advanced_cache_file ) ) {
+						LoggingUtil::warning( 'Failed to remove advanced-cache.php file' );
+					}
+				}
 			}
 
-			// Remove cache directory
+			// Remove cache directory with validation
 			$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
 			if ( is_dir( $cache_dir ) ) {
-				$this->removeDirectory( $cache_dir );
+				// Validate path is within wp-content for security
+				$real_cache_dir   = realpath( $cache_dir );
+				$real_content_dir = realpath( WP_CONTENT_DIR );
+				if ( $real_cache_dir && $real_content_dir && strpos( $real_cache_dir, $real_content_dir ) === 0 ) {
+					$this->removeDirectory( $cache_dir );
+				} else {
+					LoggingUtil::warning( 'Cache directory path validation failed' );
+				}
 			}
 
 			flush_rewrite_rules();
 
-			LoggingUtil::info( __( 'Plugin deactivated successfully', 'performance-optimisation' ), array(
-				'version' => $this->_version,
-			) );
+			LoggingUtil::info(
+				__( 'Plugin deactivated successfully', 'performance-optimisation' ),
+				array(
+					'version' => $this->_version,
+				)
+			);
 
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'Plugin deactivation failed: ' . $e->getMessage() );
@@ -279,28 +367,43 @@ class Plugin implements PluginInterface {
 	 *
 	 * @since 2.0.0
 	 *
+	 * @throws \Exception If service registration fails.
 	 * @return void
 	 */
 	private function registerCoreServices(): void {
-		// Register container itself
-		$this->_container->singleton( ServiceContainerInterface::class, $this->_container );
+		try {
+			// Register container itself.
+			$this->_container->singleton( ServiceContainerInterface::class, $this->_container );
 
-		// Register plugin instance
-		$this->_container->singleton( PluginInterface::class, $this );
-		$this->_container->singleton( self::class, $this );
+			// Register plugin instance
+			$this->_container->singleton( PluginInterface::class, $this );
+			$this->_container->singleton( self::class, $this );
 
-		// Register configuration manager
-		$this->_container->singleton( ConfigManager::class, function( ServiceContainerInterface $container ) {
-			return new ConfigManager();
-		} );
+			// Register configuration manager with error handling
+			$this->_container->singleton(
+				ConfigManager::class,
+				function ( ServiceContainerInterface $container ) {
+					try {
+						return new ConfigManager();
+					} catch ( \Exception $e ) {
+						LoggingUtil::error( 'Failed to create ConfigManager: ' . $e->getMessage() );
+						throw $e;
+					}
+				}
+			);
 
-		// Use the modern service registration system
-		$this->_container->registerCoreServices();
+			// Use the modern service registration system.
+			$this->_container->registerCoreServices();
 
-		// Register plugin-specific services
-		$this->registerPluginServices();
+			// Register plugin-specific services.
+			$this->registerPluginServices();
 
-		LoggingUtil::info( 'Core services registered', $this->_container->getStats() );
+			LoggingUtil::info( 'Core services registered', $this->_container->getStats() );
+		} catch ( \Exception $e ) {
+			LoggingUtil::error( 'Service registration failed: ' . $e->getMessage() );
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
+			throw new \Exception( 'Failed to register core services: ' . $e->getMessage() );
+		}
 	}
 
 	/**
@@ -310,13 +413,19 @@ class Plugin implements PluginInterface {
 	 */
 	private function registerPluginServices(): void {
 		// Register API controllers
-		$this->_container->singleton( 'PerformanceOptimisation\\Core\\API\\RestController', function( ServiceContainerInterface $container ) {
-			return new \PerformanceOptimisation\Core\API\RestController( $container );
-		} );
+		$this->_container->singleton(
+			'PerformanceOptimisation\\Core\\API\\RestController',
+			function ( ServiceContainerInterface $container ) {
+				return new \PerformanceOptimisation\Core\API\RestController( $container );
+			}
+		);
 
-		$this->_container->singleton( 'PerformanceOptimisation\\Core\\API\\ApiRouter', function( ServiceContainerInterface $container ) {
-			return new \PerformanceOptimisation\Core\API\ApiRouter( $container );
-		} );
+		$this->_container->singleton(
+			'PerformanceOptimisation\\Core\\API\\ApiRouter',
+			function ( ServiceContainerInterface $container ) {
+				return new \PerformanceOptimisation\Core\API\ApiRouter( $container );
+			}
+		);
 
 		// Register Core classes
 		$this->_container->singleton( 'PerformanceOptimisation\\Core\\Config\\ConfigManager', ConfigManager::class );
@@ -340,38 +449,65 @@ class Plugin implements PluginInterface {
 		$autoloader = $this->getPath() . 'vendor/autoload.php';
 		if ( file_exists( $autoloader ) ) {
 			require_once $autoloader;
+		} else {
+			LoggingUtil::warning( 'Composer autoloader not found. Some features may not work properly.' );
 		}
 
 		$this->load_plugin_files();
 	}
 
+	/**
+	 * Load required plugin files.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @throws \Exception If required files are missing.
+	 * @return void
+	 */
 	private function load_plugin_files(): void {
-		require_once $this->getPath() . 'includes/Interfaces/OptimizerInterface.php';
-		require_once $this->getPath() . 'includes/Interfaces/SettingsServiceInterface.php';
-		require_once $this->getPath() . 'includes/Interfaces/ImageServiceInterface.php';
-		require_once $this->getPath() . 'includes/Interfaces/CacheServiceInterface.php';
-		require_once $this->getPath() . 'includes/Interfaces/OptimizationServiceInterface.php';
-		require_once $this->getPath() . 'includes/Interfaces/ImageProcessorInterface.php';
-		require_once $this->getPath() . 'includes/Core/Config/ConfigInterface.php';
-		require_once $this->getPath() . 'includes/Core/Config/ConfigManager.php';
-		require_once $this->getPath() . 'includes/Optimizers/ModernCssOptimizer.php';
-		require_once $this->getPath() . 'includes/Optimizers/JsOptimizer.php';
-		require_once $this->getPath() . 'includes/Optimizers/HtmlOptimizer.php';
-		require_once $this->getPath() . 'includes/Optimizers/ModernImageProcessor.php';
-		require_once $this->getPath() . 'includes/Utils/ConversionQueue.php';
-		require_once $this->getPath() . 'includes/Utils/ValidationUtil.php';
-		require_once $this->getPath() . 'includes/Utils/FileSystemUtil.php';
-		require_once $this->getPath() . 'includes/Utils/LoggingUtil.php';
-		require_once $this->getPath() . 'includes/Core/Cache/CacheDropin.php';
-		require_once $this->getPath() . 'includes/Services/CacheService.php';
-		require_once $this->getPath() . 'includes/Services/OptimizationService.php';
-		require_once $this->getPath() . 'includes/Services/ImageService.php';
-		require_once $this->getPath() . 'includes/Services/SettingsService.php';
-		require_once $this->getPath() . 'includes/Admin/Admin.php';
-		require_once $this->getPath() . 'includes/Admin/Metabox.php';
-		require_once $this->getPath() . 'includes/Frontend/Frontend.php';
-		require_once $this->getPath() . 'includes/Core/Cache/AdvancedCacheHandler.php';
-		require_once $this->getPath() . 'includes/Core/API/RestController.php';
+		$required_files = array(
+			'includes/Utils/FileSystemUtil.php',
+			'includes/Utils/LoggingUtil.php',
+			'includes/Interfaces/OptimizerInterface.php',
+			'includes/Interfaces/SettingsServiceInterface.php',
+			'includes/Interfaces/ImageServiceInterface.php',
+			'includes/Interfaces/CacheServiceInterface.php',
+			'includes/Interfaces/OptimizationServiceInterface.php',
+			'includes/Interfaces/ImageProcessorInterface.php',
+			'includes/Core/Config/ConfigInterface.php',
+			'includes/Core/Config/ConfigManager.php',
+			'includes/Core/Cache/CacheDropin.php',
+			'includes/Services/CacheService.php',
+			'includes/Services/OptimizationService.php',
+			'includes/Services/ImageService.php',
+			'includes/Services/SettingsService.php',
+			'includes/Admin/Admin.php',
+			'includes/Admin/Metabox.php',
+			'includes/Frontend/Frontend.php',
+			'includes/Core/Cache/AdvancedCacheHandler.php',
+			'includes/Core/API/RestController.php',
+			'includes/Optimizers/ModernCssOptimizer.php',
+			'includes/Optimizers/JsOptimizer.php',
+			'includes/Optimizers/HtmlOptimizer.php',
+			'includes/Optimizers/ModernImageProcessor.php',
+			'includes/Utils/ConversionQueue.php',
+			'includes/Utils/ValidationUtil.php',
+		);
+
+		$missing_files = array();
+		foreach ( $required_files as $file ) {
+			$file_path = $this->getPath() . $file;
+			if ( file_exists( $file_path ) ) {
+				require_once $file_path;
+			} else {
+				$missing_files[] = $file;
+			}
+		}
+
+		if ( ! empty( $missing_files ) ) {
+			LoggingUtil::error( 'Missing required files: ' . implode( ', ', $missing_files ) );
+			throw new \Exception( 'Required plugin files are missing. Please reinstall the plugin.' );
+		}
 	}
 
 	/**
@@ -383,7 +519,7 @@ class Plugin implements PluginInterface {
 	 */
 	private function setupHooks(): void {
 		try {
-			// Setup admin hooks
+			// Setup admin hooks.
 			if ( is_admin() ) {
 				try {
 					// Directly instantiate Admin class to avoid service container issues
@@ -630,11 +766,28 @@ class Plugin implements PluginInterface {
 	public function initRestApi(): void {
 		try {
 			$rest_controller = $this->_container->get( 'rest_controller' );
-			$rest_controller->register_routes();
+			if ( is_object( $rest_controller ) && method_exists( $rest_controller, 'register_routes' ) ) {
+				$rest_controller->register_routes();
+			}
 
 			// Initialize API Router for additional endpoints
-			$api_router = $this->_container->get( 'api_router' );
-			$api_router->init();
+			LoggingUtil::debug( 'Attempting to get api_router from container' );
+			try {
+				// Workaround: manually instantiate ApiRouter since container is returning Closure
+				LoggingUtil::debug( 'Manually instantiating ApiRouter as workaround' );
+				$api_router = new \PerformanceOptimisation\Core\API\ApiRouter( $this->_container );
+				LoggingUtil::debug( 'Created ApiRouter instance: ' . get_class( $api_router ) );
+
+				if ( is_object( $api_router ) && method_exists( $api_router, 'init' ) ) {
+					LoggingUtil::debug( 'Calling api_router->init()' );
+					$api_router->init();
+					LoggingUtil::debug( 'api_router->init() completed' );
+				} else {
+					LoggingUtil::error( 'api_router is not an object or does not have init method' );
+				}
+			} catch ( \Exception $e ) {
+				LoggingUtil::error( 'Failed to initialize api_router: ' . $e->getMessage() );
+			}
 
 			LoggingUtil::debug( 'REST API initialized' );
 
@@ -651,8 +804,8 @@ class Plugin implements PluginInterface {
 	public function handleClearAllCache(): void {
 		try {
 			$cache_service = $this->_container->get( 'cache_service' );
-			$result = $cache_service->clearAllCache();
-			
+			$result        = $cache_service->clearCache();
+
 			LoggingUtil::info( 'All cache cleared via action hook', array( 'result' => $result ) );
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'Failed to clear all cache: ' . $e->getMessage() );
@@ -667,16 +820,19 @@ class Plugin implements PluginInterface {
 	public function handleCleanupCache(): void {
 		try {
 			$cache_service = $this->_container->get( 'cache_service' );
-			$performance = $this->_container->get( 'performance' );
-			
+			$performance   = $this->_container->get( 'performance' );
+
 			$performance->startTimer( 'cache_cleanup' );
-			$result = $cache_service->cleanupExpiredCache();
+			$result   = $cache_service->cleanupExpiredCache();
 			$duration = $performance->endTimer( 'cache_cleanup' );
-			
-			LoggingUtil::info( 'Cache cleanup completed', array(
-				'result' => $result,
-				'duration' => $duration,
-			) );
+
+			LoggingUtil::info(
+				'Cache cleanup completed',
+				array(
+					'result'   => $result,
+					'duration' => $duration,
+				)
+			);
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'Cache cleanup failed: ' . $e->getMessage() );
 		}
@@ -690,16 +846,19 @@ class Plugin implements PluginInterface {
 	public function handleOptimizeImages(): void {
 		try {
 			$image_service = $this->_container->get( 'image_service' );
-			$performance = $this->_container->get( 'performance' );
-			
+			$performance   = $this->_container->get( 'performance' );
+
 			$performance->startTimer( 'image_optimization' );
-			$result = $image_service->processBatch( array( 'batch_size' => 5 ) );
+			$result   = $image_service->processBatch( array( 'batch_size' => 5 ) );
 			$duration = $performance->endTimer( 'image_optimization' );
-			
-			LoggingUtil::info( 'Image optimization batch completed', array(
-				'result' => $result,
-				'duration' => $duration,
-			) );
+
+			LoggingUtil::info(
+				'Image optimization batch completed',
+				array(
+					'result'   => $result,
+					'duration' => $duration,
+				)
+			);
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'Image optimization failed: ' . $e->getMessage() );
 		}
@@ -716,9 +875,9 @@ class Plugin implements PluginInterface {
 		}
 
 		try {
-			$performance = $this->_container->get( 'performance' );
+			$performance   = $this->_container->get( 'performance' );
 			$tracking_data = $performance->getPagePerformanceData();
-			
+
 			if ( ! empty( $tracking_data ) ) {
 				echo '<script>';
 				echo 'window.wppoPerformanceData = ' . wp_json_encode( $tracking_data ) . ';';
@@ -752,7 +911,7 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function add_wp_cache_constant(): void {
-		// Initialize WordPress filesystem
+		// Initialize WordPress filesystem.
 		global $wp_filesystem;
 		if ( ! $wp_filesystem ) {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -793,9 +952,9 @@ class Plugin implements PluginInterface {
 		$comment             = '/** Enables WordPress Cache (Performance Optimisation Plugin) */';
 		$new_content_block   = PHP_EOL . $comment . PHP_EOL . $constant_definition . PHP_EOL;
 
-		if ( preg_match( "/^define\s*\(\s*['\\]\'WP_CACHE[\'\\]\'\s*,\s*false\s*\)\s*;$/m", $config_content ) ) {
-			$config_content = preg_replace( "/^define\s*\(\s*['\\]\'WP_CACHE[\'\\]\'\s*,\s*false\s*\)\s*;$/m", $comment . PHP_EOL . $constant_definition, $config_content );
-		} elseif ( ! preg_match( "/^define\s*\(\s*['\\]\'WP_CACHE[\'\\]\'\s*,\s*true\s*\)\s*;$/m", $config_content ) ) {
+		if ( preg_match( "/^define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*false\s*\)\s*;$/m", $config_content ) ) {
+			$config_content = preg_replace( "/^define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*false\s*\)\s*;$/m", $comment . PHP_EOL . $constant_definition, $config_content );
+		} elseif ( ! preg_match( "/^define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*true\s*\)\s*;$/m", $config_content ) ) {
 			$stop_editing_marker = "/*\n	That's all, stop editing!";
 			if ( strpos( $config_content, $stop_editing_marker ) !== false ) {
 				$config_content = str_replace( $stop_editing_marker, $new_content_block . $stop_editing_marker, $config_content );
@@ -834,8 +993,65 @@ class Plugin implements PluginInterface {
 	}
 
 	/**
-	 * Removes WP_CACHE constant from wp-config.php file if present and set by this plugin.
+	 * Check system requirements.
 	 *
+	 * @throws \Exception If requirements are not met.
+	 */
+	private function checkSystemRequirements(): void {
+		// Check PHP version.
+		if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
+			throw new \Exception( __( 'Performance Optimisation requires PHP 7.4 or higher.', 'performance-optimisation' ) );
+		}
+
+		// Check WordPress version.
+		if ( version_compare( get_bloginfo( 'version' ), '6.2', '<' ) ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
+			throw new \Exception( __( 'Performance Optimisation requires WordPress 6.2 or higher.', 'performance-optimisation' ) );
+		}
+
+		// Check memory limit.
+		$memory_limit = wp_convert_hr_to_bytes( ini_get( 'memory_limit' ) );
+		if ( $memory_limit < 134217728 ) { // 128MB
+			LoggingUtil::warning( __( 'Memory limit is below recommended 128MB. Some features may not work properly.', 'performance-optimisation' ) );
+		}
+
+		// Check write permissions.
+		if ( ! wp_is_writable( WP_CONTENT_DIR ) ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
+			throw new \Exception( __( 'wp-content directory is not writable. Please check file permissions.', 'performance-optimisation' ) );
+		}
+	}
+
+	/**
+	 * Create cache directories.
+	 */
+	private function createCacheDirectories(): void {
+		$cache_dirs = array(
+			WP_CONTENT_DIR . '/cache/wppo/',
+			WP_CONTENT_DIR . '/cache/wppo/page/',
+			WP_CONTENT_DIR . '/cache/wppo/object/',
+			WP_CONTENT_DIR . '/cache/wppo/minify/',
+			WP_CONTENT_DIR . '/cache/wppo/images/',
+		);
+
+		foreach ( $cache_dirs as $dir ) {
+			if ( ! wp_mkdir_p( $dir ) ) {
+				LoggingUtil::warning( "Failed to create cache directory: {$dir}" );
+			} else {
+				// Add .htaccess for security
+				$htaccess_content  = "# Performance Optimisation Cache Directory\n";
+				$htaccess_content .= "Options -Indexes\n";
+				$htaccess_content .= "<Files \"*.php\">\n";
+				$htaccess_content .= "    Require all denied\n";
+				$htaccess_content .= "</Files>\n";
+
+				file_put_contents( $dir . '.htaccess', $htaccess_content );
+			}
+		}
+	}
+
+	/**
 	 * Ensures that the constant enabling WordPress caching, if added by this plugin,
 	 * is removed during deactivation.
 	 *
@@ -843,7 +1059,7 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function remove_wp_cache_constant(): void {
-		// Initialize WordPress filesystem
+		// Initialize WordPress filesystem.
 		global $wp_filesystem;
 		if ( ! $wp_filesystem ) {
 			require_once ABSPATH . 'wp-admin/includes/file.php';

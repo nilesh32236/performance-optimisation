@@ -40,7 +40,7 @@ class CacheUtil {
 		'minified',
 		'image',
 		'database',
-		'all'
+		'all',
 	);
 
 	/**
@@ -103,8 +103,8 @@ class CacheUtil {
 			}
 
 			if ( $cleared ) {
-				LoggingUtil::info( "Cache cleared successfully", array( 'type' => $type ) );
-				
+				LoggingUtil::info( 'Cache cleared successfully', array( 'type' => $type ) );
+
 				// Fire action for other plugins/themes
 				do_action( 'wppo_cache_cleared', $type );
 			}
@@ -188,30 +188,30 @@ class CacheUtil {
 	 */
 	public static function getCacheStats(): array {
 		$stats = array(
-			'total_size' => 0,
-			'types' => array(),
+			'total_size'   => 0,
+			'types'        => array(),
 			'last_cleared' => get_option( 'wppo_cache_last_cleared', '' ),
-			'cache_hits' => get_option( 'wppo_cache_hits', 0 ),
+			'cache_hits'   => get_option( 'wppo_cache_hits', 0 ),
 			'cache_misses' => get_option( 'wppo_cache_misses', 0 ),
 		);
 
 		try {
 			foreach ( self::CACHE_DIRECTORIES as $type => $dir ) {
-				$size = self::calculateDirectorySize( $type );
+				$size       = self::calculateDirectorySize( $type );
 				$file_count = self::getCacheFileCount( $type );
 
 				$stats['types'][ $type ] = array(
-					'size' => $size,
+					'size'           => $size,
 					'formatted_size' => FileSystemUtil::formatFileSize( $size ),
-					'file_count' => $file_count,
-					'enabled' => self::isCacheEnabled( $type ),
+					'file_count'     => $file_count,
+					'enabled'        => self::isCacheEnabled( $type ),
 				);
 
 				$stats['total_size'] += $size;
 			}
 
 			$stats['formatted_total_size'] = FileSystemUtil::formatFileSize( $stats['total_size'] );
-			$stats['hit_ratio'] = self::calculateHitRatio( $stats['cache_hits'], $stats['cache_misses'] );
+			$stats['hit_ratio']            = self::calculateHitRatio( $stats['cache_hits'], $stats['cache_misses'] );
 
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'Failed to get cache stats: ' . $e->getMessage() );
@@ -230,7 +230,7 @@ class CacheUtil {
 	 */
 	public static function isCacheEnabled( string $type ): bool {
 		$settings = get_option( 'wppo_settings', array() );
-		
+
 		switch ( $type ) {
 			case 'page':
 				return ! empty( $settings['caching']['page_cache_enabled'] );
@@ -263,7 +263,7 @@ class CacheUtil {
 	 */
 	public static function generateCacheKey( $data, string $prefix = 'wppo' ): string {
 		$serialized = is_string( $data ) ? $data : serialize( $data );
-		$hash = md5( $serialized );
+		$hash       = md5( $serialized );
 		return $prefix . '_' . $hash;
 	}
 
@@ -277,7 +277,7 @@ class CacheUtil {
 	 * @return void
 	 */
 	public static function setCacheExpiry( string $type, int $seconds ): void {
-		$expiry_settings = get_option( 'wppo_cache_expiry', array() );
+		$expiry_settings          = get_option( 'wppo_cache_expiry', array() );
 		$expiry_settings[ $type ] = $seconds;
 		update_option( 'wppo_cache_expiry', $expiry_settings );
 
@@ -294,17 +294,17 @@ class CacheUtil {
 	 */
 	public static function getCacheExpiry( string $type ): int {
 		$expiry_settings = get_option( 'wppo_cache_expiry', array() );
-		
+
 		if ( isset( $expiry_settings[ $type ] ) ) {
 			return (int) $expiry_settings[ $type ];
 		}
 
 		// Default expiry times
 		$defaults = array(
-			'page' => 3600,      // 1 hour
-			'object' => 1800,    // 30 minutes
+			'page'     => 3600,      // 1 hour
+			'object'   => 1800,    // 30 minutes
 			'minified' => 86400, // 24 hours
-			'image' => 604800,   // 1 week
+			'image'    => 604800,   // 1 week
 			'database' => 900,   // 15 minutes
 		);
 
@@ -355,33 +355,42 @@ class CacheUtil {
 
 		foreach ( $urls as $url ) {
 			try {
-				$response = wp_remote_get( $url, array(
-					'timeout' => 30,
-					'headers' => array(
-						'User-Agent' => 'WPPO Cache Warmer',
-					),
-				) );
+				$response = wp_remote_get(
+					$url,
+					array(
+						'timeout' => 30,
+						'headers' => array(
+							'User-Agent' => 'WPPO Cache Warmer',
+						),
+					)
+				);
 
 				if ( is_wp_error( $response ) ) {
 					$results[ $url ] = array(
 						'success' => false,
-						'error' => $response->get_error_message(),
+						'error'   => $response->get_error_message(),
 					);
 				} else {
 					$results[ $url ] = array(
-						'success' => true,
+						'success'     => true,
 						'status_code' => wp_remote_retrieve_response_code( $response ),
 					);
 				}
 			} catch ( \Exception $e ) {
 				$results[ $url ] = array(
 					'success' => false,
-					'error' => $e->getMessage(),
+					'error'   => $e->getMessage(),
 				);
 			}
 		}
 
-		LoggingUtil::info( 'Cache warming completed', array( 'urls' => count( $urls ), 'results' => $results ) );
+		LoggingUtil::info(
+			'Cache warming completed',
+			array(
+				'urls'    => count( $urls ),
+				'results' => $results,
+			)
+		);
 		return $results;
 	}
 
@@ -421,7 +430,7 @@ class CacheUtil {
 	 */
 	private static function clearPageCache(): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['page'] );
-		
+
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			return true; // No cache to clear
 		}
@@ -449,7 +458,7 @@ class CacheUtil {
 	 */
 	private static function clearMinifiedCache(): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['minified'] );
-		
+
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			return true; // No cache to clear
 		}
@@ -466,7 +475,7 @@ class CacheUtil {
 	 */
 	private static function clearImageCache(): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['image'] );
-		
+
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			return true; // No cache to clear
 		}
@@ -483,7 +492,7 @@ class CacheUtil {
 	 */
 	private static function clearDatabaseCache(): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['database'] );
-		
+
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			return true; // No cache to clear
 		}
@@ -517,7 +526,7 @@ class CacheUtil {
 		}
 
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES[ $type ] );
-		
+
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			return 0;
 		}
@@ -539,7 +548,7 @@ class CacheUtil {
 		}
 
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES[ $type ] );
-		
+
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			return 0;
 		}
@@ -559,7 +568,7 @@ class CacheUtil {
 	 */
 	private static function calculateHitRatio( int $hits, int $misses ): float {
 		$total = $hits + $misses;
-		
+
 		if ( 0 === $total ) {
 			return 0.0;
 		}
@@ -576,9 +585,9 @@ class CacheUtil {
 	 * @return bool True on success, false on failure.
 	 */
 	private static function invalidatePageCache( string $path ): bool {
-		$cache_key = self::generateCacheKey( $path, 'page' );
+		$cache_key  = self::generateCacheKey( $path, 'page' );
 		$cache_file = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['page'] . '/' . $cache_key . '.html' );
-		
+
 		if ( FileSystemUtil::fileExists( $cache_file ) ) {
 			return FileSystemUtil::deleteFile( $cache_file );
 		}
@@ -597,11 +606,11 @@ class CacheUtil {
 	private static function invalidateMinifiedCache( string $path ): bool {
 		$cache_key = self::generateCacheKey( $path, 'min' );
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['minified'] );
-		
+
 		// Look for files matching the pattern
 		$pattern = $cache_dir . '/' . $cache_key . '*';
-		$files = glob( $pattern );
-		
+		$files   = glob( $pattern );
+
 		$success = true;
 		foreach ( $files as $file ) {
 			if ( ! FileSystemUtil::deleteFile( $file ) ) {
@@ -621,10 +630,10 @@ class CacheUtil {
 	 * @return bool True on success, false on failure.
 	 */
 	private static function invalidateImageCache( string $path ): bool {
-		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['image'] );
+		$cache_dir     = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['image'] );
 		$relative_path = str_replace( WP_CONTENT_DIR, '', $path );
-		$cache_path = $cache_dir . $relative_path;
-		
+		$cache_path    = $cache_dir . $relative_path;
+
 		if ( FileSystemUtil::fileExists( $cache_path ) ) {
 			return FileSystemUtil::deleteFile( $cache_path );
 		}
@@ -642,12 +651,12 @@ class CacheUtil {
 	 */
 	private static function purgePageCacheByPattern( string $pattern ): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['page'] );
-		
+
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			return true;
 		}
 
-		$files = glob( $cache_dir . '/' . $pattern );
+		$files   = glob( $cache_dir . '/' . $pattern );
 		$success = true;
 
 		foreach ( $files as $file ) {
@@ -662,16 +671,41 @@ class CacheUtil {
 	/**
 	 * Purge object cache by pattern.
 	 *
-	 * @since 2.0.0
-	 *
-	 * @param string $pattern Pattern to match.
+	 * @param string $pattern Cache key pattern to purge.
 	 * @return bool True on success, false on failure.
 	 */
-	private static function purgeObjectCacheByPattern( string $pattern ): bool {
-		// WordPress doesn't provide a native way to purge by pattern
-		// This would need to be implemented based on the object cache backend
-		LoggingUtil::warning( 'Object cache purge by pattern not implemented' );
-		return false;
+	public static function purgeObjectCacheByPattern( string $pattern ): bool {
+		global $wp_object_cache;
+
+		if ( ! $wp_object_cache || ! method_exists( $wp_object_cache, 'flush_group' ) ) {
+			// Fallback: flush entire cache if pattern purging not supported
+			return wp_cache_flush();
+		}
+
+		try {
+			// For Redis/Memcached with pattern support
+			if ( method_exists( $wp_object_cache, 'delete_by_pattern' ) ) {
+				return $wp_object_cache->delete_by_pattern( $pattern );
+			}
+
+			// Manual pattern matching for basic object cache
+			$cache_keys = wp_cache_get( '_cache_keys_registry', 'wppo' ) ?: array();
+			$purged     = 0;
+
+			foreach ( $cache_keys as $key ) {
+				if ( fnmatch( $pattern, $key ) ) {
+					wp_cache_delete( $key );
+					++$purged;
+				}
+			}
+
+			LoggingUtil::info( "Purged {$purged} cache keys matching pattern: {$pattern}" );
+			return $purged > 0;
+
+		} catch ( Exception $e ) {
+			LoggingUtil::error( 'Cache pattern purge failed: ' . $e->getMessage() );
+			return false;
+		}
 	}
 
 	/**
@@ -684,12 +718,12 @@ class CacheUtil {
 	 */
 	private static function purgeMinifiedCacheByPattern( string $pattern ): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['minified'] );
-		
+
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			return true;
 		}
 
-		$files = glob( $cache_dir . '/' . $pattern );
+		$files   = glob( $cache_dir . '/' . $pattern );
 		$success = true;
 
 		foreach ( $files as $file ) {

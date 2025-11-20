@@ -2,63 +2,74 @@
 <ruleset name="Performance Optimisation Plugin">
 	<description>WordPress Coding Standards for Performance Optimisation Plugin</description>
 
-	<!-- What to scan -->
+	<!-- Check all PHP files in the plugin -->
 	<file>.</file>
 
-	<!-- Exclude patterns -->
+	<!-- Exclude vendor and build directories -->
 	<exclude-pattern>*/vendor/*</exclude-pattern>
 	<exclude-pattern>*/node_modules/*</exclude-pattern>
 	<exclude-pattern>*/build/*</exclude-pattern>
 	<exclude-pattern>*/dist/*</exclude-pattern>
-	<exclude-pattern>*/assets/js/*</exclude-pattern>
-	<exclude-pattern>*/tests/*</exclude-pattern>
 	<exclude-pattern>*/coverage/*</exclude-pattern>
-	<exclude-pattern>*.min.js</exclude-pattern>
-	<exclude-pattern>*.min.css</exclude-pattern>
+	<exclude-pattern>*/tests/*</exclude-pattern>
+	<exclude-pattern>*/admin/src/*</exclude-pattern>
+	<exclude-pattern>composer.phar</exclude-pattern>
 
-	<!-- How to scan -->
-	<arg value="sp"/> <!-- Show sniff and progress -->
-	<arg name="basepath" value="./"/> <!-- Strip the file paths down to the relevant bit -->
-	<arg name="colors"/>
-	<arg name="extensions" value="php"/>
-	<arg name="parallel" value="8"/> <!-- Enables parallel processing when available for faster results -->
-
-	<!-- Rules: Check PHP version compatibility -->
-	<config name="testVersion" value="7.4-"/>
-	<config name="minimum_supported_wp_version" value="6.2"/>
-
-	<!-- Rules: WordPress Coding Standards -->
+	<!-- Use WordPress Coding Standards -->
 	<rule ref="WordPress">
-		<!-- Allow multiple assignments on same line for array declarations -->
+		<!-- Allow short array syntax -->
+		<exclude name="Generic.Arrays.DisallowShortArraySyntax"/>
+		
+		<!-- Allow multiple assignments in one line for constants -->
 		<exclude name="Squiz.PHP.DisallowMultipleAssignments"/>
 		
-		<!-- We don't need to escape translation functions in PHP -->
-		<exclude name="WordPress.Security.EscapeOutput.UnsafePrintingFunction"/>
+		<!-- Allow yoda conditions to be optional -->
+		<exclude name="WordPress.PHP.YodaConditions.NotYoda"/>
 	</rule>
 
-	<!-- Rules: WordPress Docs -->
+	<!-- Use WordPress-Extra rules -->
+	<rule ref="WordPress-Extra">
+		<!-- Allow short array syntax -->
+		<exclude name="Generic.Arrays.DisallowShortArraySyntax"/>
+	</rule>
+
+	<!-- Use WordPress-Docs rules -->
 	<rule ref="WordPress-Docs"/>
-
-	<!-- Verify that the text_domain is set to the desired text-domain -->
-	<rule ref="WordPress.WP.I18n">
-		<properties>
-			<property name="text_domain" type="array">
-				<element value="performance-optimisation"/>
-			</property>
-		</properties>
-	</rule>
-
-	<!-- Allow for theme specific exceptions to the file name rules based on the theme hierarchy -->
-	<rule ref="WordPress.Files.FileName">
-		<properties>
-			<property name="strict_class_file_names" value="false"/>
-		</properties>
-	</rule>
-
-	<!-- Enforce PSR-4 autoloading standard for new namespace structure -->
-	<rule ref="PSR1.Classes.ClassDeclaration"/>
-	<rule ref="PSR1.Files.SideEffects"/>
 
 	<!-- Check for PHP cross-version compatibility -->
 	<rule ref="PHPCompatibility"/>
+	
+	<!-- Set minimum PHP version -->
+	<config name="minimum_supported_wp_version" value="6.2"/>
+	<config name="testVersion" value="7.4-"/>
+
+	<!-- Show progress -->
+	<arg value="p"/>
+	
+	<!-- Show sniff codes in all reports -->
+	<arg value="s"/>
+	
+	<!-- Use colors in output -->
+	<arg name="colors"/>
+	
+	<!-- Check up to 20 files simultaneously -->
+	<arg name="parallel" value="20"/>
+	
+	<!-- Only check PHP files -->
+	<arg name="extensions" value="php"/>
+
+	<!-- Ignore warnings about missing textdomain in specific cases -->
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array" value="performance-optimisation"/>
+		</properties>
+	</rule>
+
+	<!-- Allow longer lines for readability in some cases -->
+	<rule ref="Generic.Files.LineLength">
+		<properties>
+			<property name="lineLimit" value="120"/>
+			<property name="absoluteLineLimit" value="150"/>
+		</properties>
+	</rule>
 </ruleset>

@@ -60,9 +60,23 @@ class OptimizationService implements OptimizationServiceInterface {
 				continue;
 			}
 
-			$content = FileSystemUtil::readFile( $asset['path'] );
-			if ( ! $content ) {
-				$optimized_assets[] = $asset;
+			try {
+				$content = FileSystemUtil::readFile( $asset['path'] );
+				if ( ! $content ) {
+					LoggingUtil::warning( "Failed to read asset file: {$asset['path']}" );
+					$optimized_assets[] = $asset;
+					continue;
+				}
+
+				// Validate file size
+				if ( strlen( $content ) > 10485760 ) { // 10MB limit
+					LoggingUtil::warning( "Asset file too large: {$asset['path']}" );
+					$optimized_assets[] = $asset;
+					continue;
+				}
+			} catch ( \Exception $e ) {
+				LoggingUtil::error( "Asset optimization failed: {$e->getMessage()}" );
+				$optimized_assets[] = $asset; // Return original on failure
 				continue;
 			}
 
@@ -164,11 +178,13 @@ class OptimizationService implements OptimizationServiceInterface {
 		$url_parts = wp_parse_url( $url );
 		$host      = $url_parts['host'] ?? '';
 		$path      = $url_parts['path'] ?? '/';
-		$path      = preg_replace( '/\.\.+/', '.', $path );
-		$path      = trim( $path, '/' );
+
+		// Secure path sanitization
+		$path = $this->sanitizePath( $path );
+		$host = $this->sanitizeHost( $host );
 
 		$base_cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/html/' );
-		$file_path      = $base_cache_dir . $host . '/' . $path;
+		$file_path      = $this->constructSecureFilePath( $base_cache_dir, $host, $path );
 
 		if ( '/' === substr( $file_path, -1 ) || ! pathinfo( $file_path, PATHINFO_EXTENSION ) ) {
 			$file_path = rtrim( $file_path, '/' ) . '/index.html';
@@ -229,5 +245,73 @@ class OptimizationService implements OptimizationServiceInterface {
 				FileSystemUtil::writeFile( $file_path . '.gz', $gzip_output );
 			}
 		}
+	}
+
+	/**
+	 * Sanitize path to prevent directory traversal.
+	 *
+	 * @param string $path Path to sanitize.
+	 * @return string Sanitized path.
+	 * @throws \Exception If path contains dangerous characters.
+	 */
+	private function sanitizePath( string $path ): string {
+		// Remove any directory traversal attempts
+		$path = str_replace( array( '../', '..\\', '../', '..\\'  ), '', $path );
+
+		// Normalize path separators
+		$path = str_replace( '\\', '/', $path );
+
+		// Remove multiple slashes
+		$path = preg_replace( '/\/+/', '/', $path );
+
+		// Trim and validate
+		$path = trim( $path, '/' );
+
+		// Validate path doesn't contain dangerous characters
+		if ( preg_match( '/[<>:"|?*]/', $path ) ) {
+			throw new \Exception( 'Invalid characters in path' );
+		}
+
+		return $path;
+	}
+
+	/**
+	 * Sanitize host name.
+	 *
+	 * @param string $host Host to sanitize.
+	 * @return string Sanitized host.
+	 * @throws \Exception If host is invalid.
+	 */
+	private function sanitizeHost( string $host ): string {
+		// Validate host
+		if ( ! filter_var( $host, FILTER_VALIDATE_DOMAIN ) ) {
+			throw new \Exception( 'Invalid host name' );
+		}
+
+		return $host;
+	}
+
+	/**
+	 * Construct secure file path.
+	 *
+	 * @param string $base_dir Base directory.
+	 * @param string $host Host name.
+	 * @param string $path Path.
+	 * @return string Secure file path.
+	 * @throws \Exception If path is outside allowed directory.
+	 */
+	private function constructSecureFilePath( string $base_dir, string $host, string $path ): string {
+		// Construct file path
+		$file_path = $base_dir . $host . '/' . $path;
+
+		// Ensure path is within cache directory
+		$real_base = realpath( $base_dir );
+		$real_path = realpath( dirname( $file_path ) );
+
+		if ( $real_path && strpos( $real_path, $real_base ) !== 0 ) {
+			throw new \Exception( 'Path outside allowed directory' );
+		}
+
+		return $file_path;
 	}
 }

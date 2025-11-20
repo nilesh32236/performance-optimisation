@@ -212,6 +212,7 @@ export interface ModalProps {
 export interface LoadingSpinnerProps {
 	size?: 'small' | 'medium' | 'large';
 	color?: string;
+	label?: string;
 }
 
 export interface IconProps {

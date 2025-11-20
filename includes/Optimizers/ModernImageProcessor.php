@@ -77,8 +77,8 @@ class ModernImageProcessor implements OptimizerInterface {
 	 */
 	private array $supported_formats = array(
 		'jpeg' => array( 'jpg', 'jpeg' ),
-		'png' => array( 'png' ),
-		'gif' => array( 'gif' ),
+		'png'  => array( 'png' ),
+		'gif'  => array( 'gif' ),
 		'webp' => array( 'webp' ),
 		'avif' => array( 'avif' ),
 	);
@@ -89,15 +89,15 @@ class ModernImageProcessor implements OptimizerInterface {
 	 * @var array
 	 */
 	private array $default_options = array(
-		'quality' => 85,
-		'progressive' => true,
-		'strip_metadata' => true,
-		'auto_format' => true,
-		'generate_responsive' => true,
-		'lazy_loading' => true,
-		'compression_level' => 6,
+		'quality'               => 85,
+		'progressive'           => true,
+		'strip_metadata'        => true,
+		'auto_format'           => true,
+		'generate_responsive'   => true,
+		'lazy_loading'          => true,
+		'compression_level'     => 6,
 		'preserve_transparency' => true,
-		'optimize_for_web' => true,
+		'optimize_for_web'      => true,
 	);
 
 	/**
@@ -106,7 +106,14 @@ class ModernImageProcessor implements OptimizerInterface {
 	 * @var array
 	 */
 	private array $responsive_breakpoints = array(
-		320, 480, 640, 768, 1024, 1200, 1600, 1920
+		320,
+		480,
+		640,
+		768,
+		1024,
+		1200,
+		1600,
+		1920,
 	);
 
 	/**
@@ -115,12 +122,12 @@ class ModernImageProcessor implements OptimizerInterface {
 	 * @param ServiceContainerInterface $container Service container.
 	 */
 	public function __construct( ServiceContainerInterface $container ) {
-		$this->container = $container;
-		$this->logger = $container->get( 'logger' );
-		$this->filesystem = $container->get( 'filesystem' );
-		$this->validator = $container->get( 'validator' );
+		$this->container   = $container;
+		$this->logger      = $container->get( 'logger' );
+		$this->filesystem  = $container->get( 'filesystem' );
+		$this->validator   = $container->get( 'validator' );
 		$this->performance = $container->get( 'performance' );
-		$this->cache = $container->get( 'cache' );
+		$this->cache       = $container->get( 'cache' );
 	}
 
 	/**
@@ -169,15 +176,15 @@ class ModernImageProcessor implements OptimizerInterface {
 		}
 
 		$file_size = $this->filesystem->getFileSize( $image_path );
-		$format = $this->getImageFormat( $image_info[2] );
+		$format    = $this->getImageFormat( $image_info[2] );
 
 		return array(
-			'width' => $image_info[0],
-			'height' => $image_info[1],
-			'type' => $image_info[2],
-			'format' => $format,
-			'mime' => $image_info['mime'],
-			'size' => $file_size,
+			'width'        => $image_info[0],
+			'height'       => $image_info[1],
+			'type'         => $image_info[2],
+			'format'       => $format,
+			'mime'         => $image_info['mime'],
+			'size'         => $file_size,
 			'aspect_ratio' => $image_info[0] / $image_info[1],
 		);
 	}
@@ -233,7 +240,7 @@ class ModernImageProcessor implements OptimizerInterface {
 
 			// Save optimized image
 			$success = $this->saveImage( $image_resource, $optimized_path, $image_info['format'], $options );
-			
+
 			imagedestroy( $image_resource );
 
 			return $success ? $optimized_path : false;
@@ -252,7 +259,7 @@ class ModernImageProcessor implements OptimizerInterface {
 	 * @return array Modern format results.
 	 */
 	private function generateModernFormats( string $image_path, array $options ): array {
-		$results = array();
+		$results        = array();
 		$modern_formats = array( 'webp', 'avif' );
 
 		foreach ( $modern_formats as $format ) {
@@ -265,8 +272,8 @@ class ModernImageProcessor implements OptimizerInterface {
 				$converted_path = $this->convertToFormat( $image_path, $format, $options );
 				if ( $converted_path ) {
 					$results[ $format ] = array(
-						'path' => $converted_path,
-						'size' => $this->filesystem->getFileSize( $converted_path ),
+						'path'   => $converted_path,
+						'size'   => $this->filesystem->getFileSize( $converted_path ),
 						'format' => $format,
 					);
 				}
@@ -286,15 +293,15 @@ class ModernImageProcessor implements OptimizerInterface {
 	 * @return array Responsive image results.
 	 */
 	private function generateResponsiveImages( string $image_path, array $options ): array {
-		$results = array();
+		$results    = array();
 		$image_info = $this->getImageInfo( $image_path );
-		
+
 		if ( ! $image_info ) {
 			return $results;
 		}
 
 		$original_width = $image_info['width'];
-		
+
 		foreach ( $this->responsive_breakpoints as $width ) {
 			// Skip if breakpoint is larger than original
 			if ( $width >= $original_width ) {
@@ -305,9 +312,9 @@ class ModernImageProcessor implements OptimizerInterface {
 				$resized_path = $this->resizeImage( $image_path, $width, null, $options );
 				if ( $resized_path ) {
 					$results[ $width ] = array(
-						'path' => $resized_path,
-						'size' => $this->filesystem->getFileSize( $resized_path ),
-						'width' => $width,
+						'path'   => $resized_path,
+						'size'   => $this->filesystem->getFileSize( $resized_path ),
+						'width'  => $width,
 						'format' => $image_info['format'],
 					);
 				}
@@ -344,7 +351,7 @@ class ModernImageProcessor implements OptimizerInterface {
 
 		// Save in target format
 		$success = $this->saveImage( $image_resource, $target_path, $target_format, $options );
-		
+
 		imagedestroy( $image_resource );
 
 		return $success ? $target_path : false;
@@ -378,7 +385,7 @@ class ModernImageProcessor implements OptimizerInterface {
 
 		// Create new image with target dimensions
 		$target_resource = imagecreatetruecolor( $width, $height );
-		
+
 		// Preserve transparency for PNG and GIF
 		if ( $image_info['format'] === 'png' || $image_info['format'] === 'gif' ) {
 			imagealphablending( $target_resource, false );
@@ -391,9 +398,14 @@ class ModernImageProcessor implements OptimizerInterface {
 		$success = imagecopyresampled(
 			$target_resource,
 			$source_resource,
-			0, 0, 0, 0,
-			$width, $height,
-			$image_info['width'], $image_info['height']
+			0,
+			0,
+			0,
+			0,
+			$width,
+			$height,
+			$image_info['width'],
+			$image_info['height']
 		);
 
 		if ( ! $success ) {
@@ -407,7 +419,7 @@ class ModernImageProcessor implements OptimizerInterface {
 
 		// Save resized image
 		$save_success = $this->saveImage( $target_resource, $resized_path, $image_info['format'], $options );
-		
+
 		imagedestroy( $source_resource );
 		imagedestroy( $target_resource );
 	}
@@ -456,7 +468,7 @@ class ModernImageProcessor implements OptimizerInterface {
 			$this->filesystem->createDirectory( $target_dir, true );
 		}
 
-		$quality = $options['quality'] ?? 85;
+		$quality     = $options['quality'] ?? 85;
 		$progressive = $options['progressive'] ?? true;
 
 		switch ( $format ) {
@@ -518,13 +530,13 @@ class ModernImageProcessor implements OptimizerInterface {
 	private function generateOptimizedPath( string $original_path, string $suffix ): string {
 		$path_info = pathinfo( $original_path );
 		$cache_dir = wp_upload_dir()['basedir'] . '/wppo-cache/images/';
-		
+
 		// Ensure cache directory exists
 		if ( ! $this->filesystem->directoryExists( $cache_dir ) ) {
 			$this->filesystem->createDirectory( $cache_dir, true );
 		}
 
-		$filename = $path_info['filename'] . '-' . $suffix;
+		$filename  = $path_info['filename'] . '-' . $suffix;
 		$extension = $path_info['extension'];
 
 		return $cache_dir . $filename . '.' . $extension;
@@ -580,7 +592,7 @@ class ModernImageProcessor implements OptimizerInterface {
 	private function browserSupportsWebp( string $user_agent ): bool {
 		// Chrome 23+, Firefox 65+, Safari 14+, Edge 18+
 		return preg_match( '/(Chrome|Firefox|Safari|Edge)/', $user_agent ) &&
-		       ! preg_match( '/MSIE|Trident/', $user_agent );
+				! preg_match( '/MSIE|Trident/', $user_agent );
 	}
 
 	/**
@@ -594,7 +606,7 @@ class ModernImageProcessor implements OptimizerInterface {
 
 		foreach ( $responsive_images as $width => $image_data ) {
 			if ( isset( $image_data['path'] ) ) {
-				$url = $this->filesystem->pathToUrl( $image_data['path'] );
+				$url            = $this->filesystem->pathToUrl( $image_data['path'] );
 				$srcset_parts[] = $url . ' ' . $width . 'w';
 			}
 		}
@@ -611,10 +623,10 @@ class ModernImageProcessor implements OptimizerInterface {
 	public function generateSizes( array $breakpoints = array() ): string {
 		if ( empty( $breakpoints ) ) {
 			$breakpoints = array(
-				'(max-width: 320px)' => '100vw',
-				'(max-width: 640px)' => '100vw',
+				'(max-width: 320px)'  => '100vw',
+				'(max-width: 640px)'  => '100vw',
 				'(max-width: 1024px)' => '50vw',
-				'default' => '33vw',
+				'default'             => '33vw',
 			);
 		}
 
@@ -659,11 +671,11 @@ class ModernImageProcessor implements OptimizerInterface {
 		}
 
 		return array(
-			'placeholder' => $placeholder,
-			'modern_formats' => $modern_formats,
+			'placeholder'       => $placeholder,
+			'modern_formats'    => $modern_formats,
 			'responsive_images' => $responsive_images,
-			'srcset' => $this->generateSrcset( $responsive_images ),
-			'sizes' => $this->generateSizes(),
+			'srcset'            => $this->generateSrcset( $responsive_images ),
+			'sizes'             => $this->generateSizes(),
 		);
 	}
 
@@ -675,11 +687,11 @@ class ModernImageProcessor implements OptimizerInterface {
 	 * @return string Placeholder data URL.
 	 */
 	private function generatePlaceholder( array $image_info, array $options ): string {
-		$width = $image_info['width'];
+		$width  = $image_info['width'];
 		$height = $image_info['height'];
 
 		// Generate SVG placeholder
-		$svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $width . ' ' . $height . '">';
+		$svg  = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' . $width . ' ' . $height . '">';
 		$svg .= '<rect width="100%" height="100%" fill="#f0f0f0"/>';
 		$svg .= '</svg>';
 
@@ -702,8 +714,8 @@ class ModernImageProcessor implements OptimizerInterface {
 	 */
 	public function get_stats(): array {
 		return array(
-			'images_optimized' => 0,
-			'bytes_saved' => 0,
+			'images_optimized'  => 0,
+			'bytes_saved'       => 0,
 			'compression_ratio' => 0,
 		);
 	}

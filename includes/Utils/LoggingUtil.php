@@ -21,7 +21,7 @@ class LoggingUtil {
 
 	private const LOG_LEVELS = array( 'debug', 'info', 'warning', 'error', 'critical' );
 	private const LOG_OPTION = 'wppo_activity_logs';
-	private const MAX_LOGS = 1000;
+	private const MAX_LOGS   = 1000;
 
 	/**
 	 * Log a message with context.
@@ -37,11 +37,11 @@ class LoggingUtil {
 		}
 
 		$log_entry = array(
-			'id' => wp_generate_uuid4(),
+			'id'        => wp_generate_uuid4(),
 			'timestamp' => current_time( 'mysql' ),
-			'level' => $level,
-			'message' => $message,
-			'context' => $context,
+			'level'     => $level,
+			'message'   => $message,
+			'context'   => $context,
 		);
 
 		// Store in database
@@ -112,11 +112,14 @@ class LoggingUtil {
 	 */
 	public static function getRecentLogs( int $limit = 100, int $offset = 0 ): array {
 		$logs = get_option( self::LOG_OPTION, array() );
-		
+
 		// Sort by timestamp (newest first)
-		usort( $logs, function( $a, $b ) {
-			return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
-		});
+		usort(
+			$logs,
+			function ( $a, $b ) {
+				return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
+			}
+		);
 
 		return array_slice( $logs, $offset, $limit );
 	}
@@ -192,7 +195,7 @@ class LoggingUtil {
 	public static function shouldLog( string $level ): bool {
 		$current_level = self::getLogLevel();
 		$current_index = array_search( $current_level, self::LOG_LEVELS, true );
-		$level_index = array_search( $level, self::LOG_LEVELS, true );
+		$level_index   = array_search( $level, self::LOG_LEVELS, true );
 
 		return $level_index !== false && $level_index >= $current_index;
 	}
@@ -205,19 +208,22 @@ class LoggingUtil {
 	 * @return array Log statistics.
 	 */
 	public static function getLogStats(): array {
-		$logs = get_option( self::LOG_OPTION, array() );
+		$logs  = get_option( self::LOG_OPTION, array() );
 		$stats = array(
 			'total_logs' => count( $logs ),
-			'levels' => array_fill_keys( self::LOG_LEVELS, 0 ),
+			'levels'     => array_fill_keys( self::LOG_LEVELS, 0 ),
 			'oldest_log' => null,
 			'newest_log' => null,
 		);
 
 		if ( ! empty( $logs ) ) {
 			// Sort by timestamp
-			usort( $logs, function( $a, $b ) {
-				return strtotime( $a['timestamp'] ) - strtotime( $b['timestamp'] );
-			});
+			usort(
+				$logs,
+				function ( $a, $b ) {
+					return strtotime( $a['timestamp'] ) - strtotime( $b['timestamp'] );
+				}
+			);
 
 			$stats['oldest_log'] = $logs[0]['timestamp'];
 			$stats['newest_log'] = end( $logs )['timestamp'];
@@ -225,7 +231,7 @@ class LoggingUtil {
 			// Count by level
 			foreach ( $logs as $log ) {
 				if ( isset( $stats['levels'][ $log['level'] ] ) ) {
-					$stats['levels'][ $log['level'] ]++;
+					++$stats['levels'][ $log['level'] ];
 				}
 			}
 		}
@@ -242,17 +248,20 @@ class LoggingUtil {
 	 */
 	public static function rotateLogs(): void {
 		$logs = get_option( self::LOG_OPTION, array() );
-		
+
 		if ( count( $logs ) > self::MAX_LOGS ) {
 			// Sort by timestamp (newest first)
-			usort( $logs, function( $a, $b ) {
-				return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
-			});
-			
+			usort(
+				$logs,
+				function ( $a, $b ) {
+					return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
+				}
+			);
+
 			// Keep only the most recent logs
 			$logs = array_slice( $logs, 0, self::MAX_LOGS );
 			update_option( self::LOG_OPTION, $logs );
-			
+
 			self::info( 'Log rotation completed', array( 'kept_logs' => count( $logs ) ) );
 		}
 	}
@@ -266,7 +275,7 @@ class LoggingUtil {
 	 * @return array Matching logs.
 	 */
 	public static function searchLogs( array $criteria ): array {
-		$logs = get_option( self::LOG_OPTION, array() );
+		$logs    = get_option( self::LOG_OPTION, array() );
 		$results = array();
 
 		foreach ( $logs as $log ) {
@@ -284,7 +293,7 @@ class LoggingUtil {
 
 			// Check date range
 			if ( isset( $criteria['date_from'] ) ) {
-				$log_time = strtotime( $log['timestamp'] );
+				$log_time  = strtotime( $log['timestamp'] );
 				$from_time = strtotime( $criteria['date_from'] );
 				if ( $log_time < $from_time ) {
 					$match = false;
@@ -293,7 +302,7 @@ class LoggingUtil {
 
 			if ( isset( $criteria['date_to'] ) ) {
 				$log_time = strtotime( $log['timestamp'] );
-				$to_time = strtotime( $criteria['date_to'] );
+				$to_time  = strtotime( $criteria['date_to'] );
 				if ( $log_time > $to_time ) {
 					$match = false;
 				}
@@ -329,19 +338,22 @@ class LoggingUtil {
 		}
 
 		$logs = get_option( self::LOG_OPTION, array() );
-		
+
 		// Add new log entry
 		$logs[] = $log_entry;
-		
+
 		// Keep only the most recent logs
 		if ( count( $logs ) > self::MAX_LOGS ) {
 			// Sort by timestamp and keep newest
-			usort( $logs, function( $a, $b ) {
-				return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
-			});
+			usort(
+				$logs,
+				function ( $a, $b ) {
+					return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
+				}
+			);
 			$logs = array_slice( $logs, 0, self::MAX_LOGS );
 		}
-		
+
 		update_option( self::LOG_OPTION, $logs );
 	}
 
@@ -355,10 +367,10 @@ class LoggingUtil {
 	 */
 	private static function exportToCsv( array $logs ): string {
 		$csv = "ID,Timestamp,Level,Message,Context\n";
-		
+
 		foreach ( $logs as $log ) {
 			$context = ! empty( $log['context'] ) ? wp_json_encode( $log['context'] ) : '';
-			$csv .= sprintf(
+			$csv    .= sprintf(
 				'"%s","%s","%s","%s","%s"' . "\n",
 				$log['id'] ?? '',
 				$log['timestamp'] ?? '',
@@ -367,7 +379,7 @@ class LoggingUtil {
 				str_replace( '"', '""', $context )
 			);
 		}
-		
+
 		return $csv;
 	}
 
@@ -380,10 +392,10 @@ class LoggingUtil {
 	 * @return string Text formatted logs.
 	 */
 	private static function exportToText( array $logs ): string {
-		$text = "Performance Optimisation Plugin Logs\n";
-		$text .= "Generated: " . current_time( 'mysql' ) . "\n";
+		$text  = "Performance Optimisation Plugin Logs\n";
+		$text .= 'Generated: ' . current_time( 'mysql' ) . "\n";
 		$text .= str_repeat( '=', 50 ) . "\n\n";
-		
+
 		foreach ( $logs as $log ) {
 			$text .= sprintf(
 				"[%s] %s: %s\n",
@@ -391,14 +403,14 @@ class LoggingUtil {
 				strtoupper( $log['level'] ?? '' ),
 				$log['message'] ?? ''
 			);
-			
+
 			if ( ! empty( $log['context'] ) ) {
-				$text .= "Context: " . wp_json_encode( $log['context'], JSON_PRETTY_PRINT ) . "\n";
+				$text .= 'Context: ' . wp_json_encode( $log['context'], JSON_PRETTY_PRINT ) . "\n";
 			}
-			
+
 			$text .= "\n";
 		}
-		
+
 		return $text;
 	}
 }

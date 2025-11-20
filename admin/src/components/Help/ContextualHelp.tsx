@@ -30,15 +30,15 @@ const ContextualHelp: React.FC<ContextualHelpProps> = ( {
 					{
 						id: 'performance-metrics',
 						title: 'Understanding Performance Metrics',
-						content: `
-							<p>The performance dashboard shows key metrics that indicate how well your site is performing:</p>
-							<ul>
-								<li><strong>Performance Score (0-100):</strong> Overall performance rating based on multiple factors</li>
-								<li><strong>Page Load Time:</strong> Average time for pages to fully load</li>
-								<li><strong>Cache Hit Ratio:</strong> Percentage of requests served from cache</li>
-								<li><strong>Total Page Views:</strong> Number of pages served in the selected period</li>
-							</ul>
-						`,
+						content: {
+							text: 'The performance dashboard shows key metrics that indicate how well your site is performing:',
+							items: [
+								{ label: 'Performance Score (0-100)', description: 'Overall performance rating based on multiple factors' },
+								{ label: 'Page Load Time', description: 'Average time for pages to fully load' },
+								{ label: 'Cache Hit Ratio', description: 'Percentage of requests served from cache' },
+								{ label: 'Total Page Views', description: 'Number of pages served in the selected period' }
+							]
+						},
 						links: [
 							{ text: 'Performance Best Practices', url: '#', external: false },
 							{

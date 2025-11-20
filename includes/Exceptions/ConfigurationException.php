@@ -36,22 +36,22 @@ class ConfigurationException extends \Exception {
 	/**
 	 * Constructor.
 	 *
-	 * @param string         $message           Exception message.
-	 * @param int            $code              Exception code.
+	 * @param string          $message           Exception message.
+	 * @param int             $code              Exception code.
 	 * @param \Throwable|null $previous          Previous exception.
-	 * @param array          $validation_errors Validation errors.
-	 * @param string|null    $config_key        Configuration key.
+	 * @param array           $validation_errors Validation errors.
+	 * @param string|null     $config_key        Configuration key.
 	 */
-	public function __construct( 
-		string $message = '', 
-		int $code = 0, 
+	public function __construct(
+		string $message = '',
+		int $code = 0,
 		?\Throwable $previous = null,
 		array $validation_errors = array(),
 		?string $config_key = null
 	) {
 		parent::__construct( $message, $code, $previous );
 		$this->validation_errors = $validation_errors;
-		$this->config_key = $config_key;
+		$this->config_key        = $config_key;
 	}
 
 	/**
@@ -88,15 +88,15 @@ class ConfigurationException extends \Exception {
 	 */
 	public function getFormattedMessage(): string {
 		$message = $this->getMessage();
-		
+
 		if ( $this->config_key ) {
 			$message = "Configuration key '{$this->config_key}': {$message}";
 		}
-		
+
 		if ( ! empty( $this->validation_errors ) ) {
 			$message .= "\nValidation errors:\n- " . implode( "\n- ", $this->validation_errors );
 		}
-		
+
 		return $message;
 	}
 
@@ -107,12 +107,12 @@ class ConfigurationException extends \Exception {
 	 */
 	public function toArray(): array {
 		return array(
-			'message' => $this->getMessage(),
-			'code' => $this->getCode(),
-			'config_key' => $this->config_key,
+			'message'           => $this->getMessage(),
+			'code'              => $this->getCode(),
+			'config_key'        => $this->config_key,
 			'validation_errors' => $this->validation_errors,
-			'file' => $this->getFile(),
-			'line' => $this->getLine(),
+			'file'              => $this->getFile(),
+			'line'              => $this->getLine(),
 		);
 	}
 }

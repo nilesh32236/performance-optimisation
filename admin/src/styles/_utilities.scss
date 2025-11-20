@@ -67,27 +67,6 @@
 .wppo-fs-3xl { font-size: $font-size-3xl !important; }
 .wppo-fs-4xl { font-size: $font-size-4xl !important; }
 
-// Text Color
-.wppo-text-primary { color: $primary-color !important; }
-.wppo-text-secondary { color: $secondary-color !important; }
-.wppo-text-success { color: $success-color !important; }
-.wppo-text-warning { color: $warning-color !important; }
-.wppo-text-error { color: $error-color !important; }
-.wppo-text-info { color: $info-color !important; }
-.wppo-text-light { color: $text-light !important; }
-.wppo-text-lighter { color: $text-lighter !important; }
-.wppo-text-white { color: $text-white !important; }
-
-// Background Color
-.wppo-bg-primary { background-color: $primary-color !important; }
-.wppo-bg-secondary { background-color: $secondary-color !important; }
-.wppo-bg-success { background-color: $success-color !important; }
-.wppo-bg-warning { background-color: $warning-color !important; }
-.wppo-bg-error { background-color: $error-color !important; }
-.wppo-bg-info { background-color: $info-color !important; }
-.wppo-bg-light { background-color: $background-light !important; }
-.wppo-bg-white { background-color: $background-color !important; }
-
 // Spacing Utilities (Margin)
 .wppo-m-0 { margin: 0 !important; }
 .wppo-m-1 { margin: $spacing-xs !important; }
@@ -202,14 +181,6 @@
 .wppo-py-5 { padding-top: $spacing-xl !important; padding-bottom: $spacing-xl !important; }
 .wppo-py-6 { padding-top: $spacing-2xl !important; padding-bottom: $spacing-2xl !important; }
 
-// Border Utilities
-.wppo-border { border: 1px solid $border-color !important; }
-.wppo-border-0 { border: 0 !important; }
-.wppo-border-top { border-top: 1px solid $border-color !important; }
-.wppo-border-right { border-right: 1px solid $border-color !important; }
-.wppo-border-bottom { border-bottom: 1px solid $border-color !important; }
-.wppo-border-left { border-left: 1px solid $border-color !important; }
-
 // Border Radius
 .wppo-rounded-0 { border-radius: 0 !important; }
 .wppo-rounded-sm { border-radius: $border-radius-sm !important; }
@@ -217,13 +188,6 @@
 .wppo-rounded-lg { border-radius: $border-radius-lg !important; }
 .wppo-rounded-xl { border-radius: $border-radius-xl !important; }
 .wppo-rounded-full { border-radius: 50% !important; }
-
-// Shadow Utilities
-.wppo-shadow-none { box-shadow: none !important; }
-.wppo-shadow-sm { box-shadow: $shadow-sm !important; }
-.wppo-shadow { box-shadow: $shadow-md !important; }
-.wppo-shadow-lg { box-shadow: $shadow-lg !important; }
-.wppo-shadow-xl { box-shadow: $shadow-xl !important; }
 
 // Position Utilities
 .wppo-position-static { position: static !important; }

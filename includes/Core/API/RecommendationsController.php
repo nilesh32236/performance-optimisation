@@ -56,10 +56,10 @@ class RecommendationsController extends BaseController {
 
 			$recommendations = $this->recommendation_engine->generate_recommendations( $start_date, $end_date );
 
-			return $this->success_response( $recommendations );
+			return $this->send_success_response( $recommendations );
 
 		} catch ( \Exception $e ) {
-			return $this->error_response(
+			return $this->send_error_response(
 				'recommendations_failed',
 				__( 'Failed to generate recommendations.', 'performance-optimisation' ),
 				500
@@ -78,7 +78,7 @@ class RecommendationsController extends BaseController {
 			$recommendation_id = $request->get_param( 'recommendation_id' );
 
 			if ( empty( $recommendation_id ) ) {
-				return $this->error_response(
+				return $this->send_error_response(
 					'missing_recommendation_id',
 					__( 'Recommendation ID is required.', 'performance-optimisation' ),
 					400
@@ -88,21 +88,21 @@ class RecommendationsController extends BaseController {
 			$result = $this->apply_automated_fix( $recommendation_id );
 
 			if ( $result['success'] ) {
-				return $this->success_response(
+				return $this->send_success_response(
 					array(
 						'message'          => $result['message'],
 						'applied_settings' => $result['settings'] ?? array(),
 					)
 				);
 			} else {
-				return $this->error_response(
+				return $this->send_error_response(
 					'recommendation_apply_failed',
 					$result['message'],
 					400
 				);
 			}
 		} catch ( \Exception $e ) {
-			return $this->error_response(
+			return $this->send_error_response(
 				'recommendation_apply_error',
 				__( 'Failed to apply recommendation.', 'performance-optimisation' ),
 				500
@@ -120,7 +120,7 @@ class RecommendationsController extends BaseController {
 		try {
 			$suggestions = $this->recommendation_engine->generate_optimization_suggestions();
 
-			return $this->success_response(
+			return $this->send_success_response(
 				array(
 					'suggestions'  => $suggestions,
 					'generated_at' => current_time( 'mysql' ),
@@ -128,7 +128,7 @@ class RecommendationsController extends BaseController {
 			);
 
 		} catch ( \Exception $e ) {
-			return $this->error_response(
+			return $this->send_error_response(
 				'suggestions_failed',
 				__( 'Failed to generate optimization suggestions.', 'performance-optimisation' ),
 				500
@@ -149,10 +149,10 @@ class RecommendationsController extends BaseController {
 
 			$progress = $this->recommendation_engine->track_optimization_progress( $start_date, $end_date );
 
-			return $this->success_response( $progress );
+			return $this->send_success_response( $progress );
 
 		} catch ( \Exception $e ) {
-			return $this->error_response(
+			return $this->send_error_response(
 				'progress_tracking_failed',
 				__( 'Failed to track optimization progress.', 'performance-optimisation' ),
 				500
@@ -358,7 +358,7 @@ class RecommendationsController extends BaseController {
 			$implemented_features      = count( array_filter( $implementation_status ) );
 			$implementation_percentage = $total_features > 0 ? ( $implemented_features / $total_features ) * 100 : 0;
 
-			return $this->success_response(
+			return $this->send_success_response(
 				array(
 					'status'  => $implementation_status,
 					'summary' => array(
@@ -370,7 +370,7 @@ class RecommendationsController extends BaseController {
 			);
 
 		} catch ( \Exception $e ) {
-			return $this->error_response(
+			return $this->send_error_response(
 				'status_failed',
 				__( 'Failed to get implementation status.', 'performance-optimisation' ),
 				500
@@ -390,7 +390,7 @@ class RecommendationsController extends BaseController {
 			$reason            = $request->get_param( 'reason' ) ?: 'user_dismissed';
 
 			if ( empty( $recommendation_id ) ) {
-				return $this->error_response(
+				return $this->send_error_response(
 					'missing_recommendation_id',
 					__( 'Recommendation ID is required.', 'performance-optimisation' ),
 					400
@@ -405,14 +405,14 @@ class RecommendationsController extends BaseController {
 			);
 			update_option( 'wppo_dismissed_recommendations', $dismissed );
 
-			return $this->success_response(
+			return $this->send_success_response(
 				array(
 					'message' => __( 'Recommendation dismissed successfully.', 'performance-optimisation' ),
 				)
 			);
 
 		} catch ( \Exception $e ) {
-			return $this->error_response(
+			return $this->send_error_response(
 				'dismiss_failed',
 				__( 'Failed to dismiss recommendation.', 'performance-optimisation' ),
 				500

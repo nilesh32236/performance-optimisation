@@ -114,8 +114,8 @@ class ServiceContainer implements ServiceContainerInterface {
 	 */
 	public function register( string $id, $concrete, array $options = array() ): self {
 		$defaults = array(
-			'singleton' => true,
-			'tags' => array(),
+			'singleton'    => true,
+			'tags'         => array(),
 			'dependencies' => array(),
 		);
 
@@ -123,7 +123,7 @@ class ServiceContainer implements ServiceContainerInterface {
 
 		$this->services[ $id ] = array(
 			'concrete' => $concrete,
-			'options' => $options,
+			'options'  => $options,
 		);
 
 		// Handle tags
@@ -135,9 +135,9 @@ class ServiceContainer implements ServiceContainerInterface {
 		}
 
 		// LoggingUtil::debug( 'Service registered', array(
-		// 	'id' => $id,
-		// 	'concrete' => is_string( $concrete ) ? $concrete : gettype( $concrete ),
-		// 	'options' => $options,
+		// 'id' => $id,
+		// 'concrete' => is_string( $concrete ) ? $concrete : gettype( $concrete ),
+		// 'options' => $options,
 		// ) );
 
 		return $this;
@@ -169,8 +169,8 @@ class ServiceContainer implements ServiceContainerInterface {
 		$this->aliases[ $alias ] = $service;
 
 		// LoggingUtil::debug( 'Service alias registered', array(
-		// 	'alias' => $alias,
-		// 	'service' => $service,
+		// 'alias' => $alias,
+		// 'service' => $service,
 		// ) );
 
 		return $this;
@@ -271,11 +271,11 @@ class ServiceContainer implements ServiceContainerInterface {
 	public function call( callable $callable, array $parameters = array() ) {
 		if ( is_array( $callable ) && count( $callable ) === 2 ) {
 			list( $class, $method ) = $callable;
-			
+
 			if ( is_string( $class ) ) {
 				$class = $this->get( $class );
 			}
-			
+
 			$reflection = new \ReflectionMethod( $class, $method );
 		} elseif ( $callable instanceof \Closure ) {
 			$reflection = new \ReflectionFunction( $callable );
@@ -294,12 +294,12 @@ class ServiceContainer implements ServiceContainerInterface {
 	 * @return self
 	 */
 	public function clear(): self {
-		$this->services = array();
-		$this->instances = array();
-		$this->factories = array();
-		$this->aliases = array();
-		$this->tags = array();
-		$this->providers = array();
+		$this->services         = array();
+		$this->instances        = array();
+		$this->factories        = array();
+		$this->aliases          = array();
+		$this->tags             = array();
+		$this->providers        = array();
 		$this->booted_providers = array();
 
 		LoggingUtil::info( 'Service container cleared' );
@@ -323,7 +323,7 @@ class ServiceContainer implements ServiceContainerInterface {
 		}
 
 		$provider_class = get_class( $provider );
-		
+
 		if ( ! isset( $this->providers[ $provider_class ] ) ) {
 			$this->providers[ $provider_class ] = $provider;
 			$provider->register( $this );
@@ -359,13 +359,13 @@ class ServiceContainer implements ServiceContainerInterface {
 	 */
 	public function getStats(): array {
 		return array(
-			'services_registered' => count( $this->services ),
-			'instances_created' => count( $this->instances ),
+			'services_registered'  => count( $this->services ),
+			'instances_created'    => count( $this->instances ),
 			'factories_registered' => count( $this->factories ),
-			'aliases_registered' => count( $this->aliases ),
-			'tags_registered' => count( $this->tags ),
+			'aliases_registered'   => count( $this->aliases ),
+			'tags_registered'      => count( $this->tags ),
 			'providers_registered' => count( $this->providers ),
-			'providers_booted' => count( $this->booted_providers ),
+			'providers_booted'     => count( $this->booted_providers ),
 		);
 	}
 
@@ -475,7 +475,7 @@ class ServiceContainer implements ServiceContainerInterface {
 			$type = $parameter->getType();
 			if ( $type && ! $type->isBuiltin() ) {
 				$type_name = $type->getName();
-				
+
 				if ( $this->has( $type_name ) ) {
 					$dependencies[] = $this->get( $type_name );
 					continue;
@@ -507,7 +507,7 @@ class ServiceContainer implements ServiceContainerInterface {
 	 */
 	public function registerCoreServices(): self {
 		$registry = new ServiceRegistry( $this );
-		
+
 		$registry->registerAll()
 				->registerInterfaceBindings()
 				->registerFactories()
@@ -515,7 +515,7 @@ class ServiceContainer implements ServiceContainerInterface {
 
 		// Validate services
 		$validation_results = $registry->validateServices();
-		
+
 		if ( ! empty( $validation_results['invalid'] ) || ! empty( $validation_results['missing_dependencies'] ) ) {
 			LoggingUtil::warning( 'Some services failed validation', $validation_results );
 		}

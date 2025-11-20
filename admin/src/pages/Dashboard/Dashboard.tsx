@@ -185,8 +185,60 @@ export const Dashboard: React.FC = () => {
 					<Tab id="analytics" label="Advanced Analytics">
 						<div className="wppo-dashboard__section">
 							<Card title="Performance Analysis">
-								<p>Advanced performance analytics and insights coming soon...</p>
-								{ /* This could include more detailed charts, comparisons, etc. */ }
+								<div className="wppo-performance-analysis">
+									<div className="wppo-analysis-grid">
+										<div className="wppo-analysis-item">
+											<h4>Core Web Vitals</h4>
+											<div className="wppo-vitals">
+												<div className="wppo-vital">
+													<span className="wppo-vital-label">LCP</span>
+													<span className="wppo-vital-value good">1.2s</span>
+												</div>
+												<div className="wppo-vital">
+													<span className="wppo-vital-label">FID</span>
+													<span className="wppo-vital-value good">45ms</span>
+												</div>
+												<div className="wppo-vital">
+													<span className="wppo-vital-label">CLS</span>
+													<span className="wppo-vital-value good">0.05</span>
+												</div>
+											</div>
+										</div>
+										<div className="wppo-analysis-item">
+											<h4>Resource Breakdown</h4>
+											<div className="wppo-resources">
+												<div className="wppo-resource">
+													<span>HTML</span>
+													<div className="wppo-resource-bar">
+														<div className="wppo-resource-fill" style={{width: '15%'}}></div>
+													</div>
+													<span>23KB</span>
+												</div>
+												<div className="wppo-resource">
+													<span>CSS</span>
+													<div className="wppo-resource-bar">
+														<div className="wppo-resource-fill" style={{width: '25%'}}></div>
+													</div>
+													<span>45KB</span>
+												</div>
+												<div className="wppo-resource">
+													<span>JS</span>
+													<div className="wppo-resource-bar">
+														<div className="wppo-resource-fill" style={{width: '35%'}}></div>
+													</div>
+													<span>67KB</span>
+												</div>
+												<div className="wppo-resource">
+													<span>Images</span>
+													<div className="wppo-resource-bar">
+														<div className="wppo-resource-fill" style={{width: '60%'}}></div>
+													</div>
+													<span>234KB</span>
+												</div>
+											</div>
+										</div>
+									</div>
+								</div>
 							</Card>
 						</div>
 

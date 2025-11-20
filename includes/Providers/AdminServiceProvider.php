@@ -36,17 +36,26 @@ class AdminServiceProvider extends ServiceProvider {
 	 */
 	public function register( ServiceContainerInterface $container ): void {
 		// Register admin and frontend classes as singletons with container injection
-		$container->singleton( 'PerformanceOptimisation\\Admin\\Admin', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Admin\Admin( $c );
-		} );
-		
-		$container->singleton( 'PerformanceOptimisation\\Admin\\Metabox', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Admin\Metabox( $c );
-		} );
-		
-		$container->singleton( 'PerformanceOptimisation\\Frontend\\Frontend', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Frontend\Frontend( $c );
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Admin\\Admin',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Admin\Admin( $c );
+			}
+		);
+
+		$container->singleton(
+			'PerformanceOptimisation\\Admin\\Metabox',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Admin\Metabox( $c );
+			}
+		);
+
+		$container->singleton(
+			'PerformanceOptimisation\\Frontend\\Frontend',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Frontend\Frontend( $c );
+			}
+		);
 
 		// Register convenient aliases
 		$container->alias( 'admin', 'PerformanceOptimisation\\Admin\\Admin' );

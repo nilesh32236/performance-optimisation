@@ -91,10 +91,9 @@ const HelpPanel: React.FC<HelpPanelProps> = ( {
 
 							{ activeSection === section.id && (
 								<div className="wppo-help-section__content">
-									<div
-										className="wppo-help-section__text"
-										dangerouslySetInnerHTML={ { __html: section.content } }
-									/>
+									<div className="wppo-help-section__text">
+										{section.content}
+									</div>
 
 									{ section.links && section.links.length > 0 && (
 										<div className="wppo-help-section__links">

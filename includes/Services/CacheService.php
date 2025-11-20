@@ -54,17 +54,23 @@ class CacheService implements CacheServiceInterface {
 	public function preloadCache( array $urls ): void {
 		// Use CacheUtil for cache warming with improved scheduling
 		$results = CacheUtil::warmCache( $urls );
-		
+
 		// Log results
-		$successful = array_filter( $results, function( $result ) {
-			return $result['success'];
-		} );
-		
-		LoggingUtil::info( 'Cache preload completed', array(
-			'total_urls' => count( $urls ),
-			'successful' => count( $successful ),
-			'failed' => count( $urls ) - count( $successful ),
-		) );
+		$successful = array_filter(
+			$results,
+			function ( $result ) {
+				return $result['success'];
+			}
+		);
+
+		LoggingUtil::info(
+			'Cache preload completed',
+			array(
+				'total_urls' => count( $urls ),
+				'successful' => count( $successful ),
+				'failed'     => count( $urls ) - count( $successful ),
+			)
+		);
 	}
 
 	/**
@@ -72,8 +78,8 @@ class CacheService implements CacheServiceInterface {
 	 */
 	public function warmUpCache(): void {
 		$post_ids = $this->get_all_cacheable_post_ids();
-		$urls = array_filter( array_map( 'get_permalink', $post_ids ) );
-		
+		$urls     = array_filter( array_map( 'get_permalink', $post_ids ) );
+
 		LoggingUtil::info( 'Starting cache warm-up', array( 'total_pages' => count( $urls ) ) );
 		$this->preloadCache( $urls );
 	}
@@ -86,7 +92,7 @@ class CacheService implements CacheServiceInterface {
 		if ( is_numeric( $pattern ) ) {
 			return $this->invalidatePostCache( (int) $pattern );
 		}
-		
+
 		// Handle URL pattern invalidation
 		return CacheUtil::invalidateCache( $pattern, 'page' );
 	}
@@ -106,10 +112,13 @@ class CacheService implements CacheServiceInterface {
 		$urls_to_invalidate = $this->getRelatedUrls( $post );
 		$this->invalidateUrls( array_unique( $urls_to_invalidate ) );
 
-		LoggingUtil::info( 'Post cache invalidated', array(
-			'post_id' => $post_id,
-			'urls_invalidated' => count( $urls_to_invalidate ),
-		) );
+		LoggingUtil::info(
+			'Post cache invalidated',
+			array(
+				'post_id'          => $post_id,
+				'urls_invalidated' => count( $urls_to_invalidate ),
+			)
+		);
 
 		return true;
 	}
@@ -142,7 +151,7 @@ class CacheService implements CacheServiceInterface {
 		}
 
 		// Home page and blog page
-		$urls[] = home_url( '/' );
+		$urls[]        = home_url( '/' );
 		$posts_page_id = get_option( 'page_for_posts' );
 		if ( $posts_page_id ) {
 			$posts_page_url = get_permalink( $posts_page_id );
@@ -260,14 +269,14 @@ class CacheService implements CacheServiceInterface {
 	 */
 	public function intelligentCacheWarming( array $options = array() ): array {
 		$defaults = array(
-			'priority_pages' => true,
-			'popular_content' => true,
-			'recent_content' => true,
-			'max_pages' => 50,
+			'priority_pages'      => true,
+			'popular_content'     => true,
+			'recent_content'      => true,
+			'max_pages'           => 50,
 			'concurrent_requests' => 3,
 		);
-		
-		$options = array_merge( $defaults, $options );
+
+		$options      = array_merge( $defaults, $options );
 		$urls_to_warm = array();
 
 		// Priority pages (home, about, contact, etc.)
@@ -291,32 +300,38 @@ class CacheService implements CacheServiceInterface {
 			$urls_to_warm = array_slice( $urls_to_warm, 0, $options['max_pages'] );
 		}
 
-		LoggingUtil::info( 'Starting intelligent cache warming', array(
-			'total_urls' => count( $urls_to_warm ),
-			'options' => $options,
-		) );
+		LoggingUtil::info(
+			'Starting intelligent cache warming',
+			array(
+				'total_urls' => count( $urls_to_warm ),
+				'options'    => $options,
+			)
+		);
 
 		// Warm cache with performance tracking
 		PerformanceUtil::startTimer( 'cache_warming' );
-		$results = CacheUtil::warmCache( $urls_to_warm );
+		$results  = CacheUtil::warmCache( $urls_to_warm );
 		$duration = PerformanceUtil::endTimer( 'cache_warming' );
 
-		$successful = array_filter( $results, function( $result ) {
-			return $result['success'];
-		} );
+		$successful = array_filter(
+			$results,
+			function ( $result ) {
+				return $result['success'];
+			}
+		);
 
 		$warming_stats = array(
-			'total_urls' => count( $urls_to_warm ),
-			'successful' => count( $successful ),
-			'failed' => count( $urls_to_warm ) - count( $successful ),
-			'duration' => $duration,
+			'total_urls'      => count( $urls_to_warm ),
+			'successful'      => count( $successful ),
+			'failed'          => count( $urls_to_warm ) - count( $successful ),
+			'duration'        => $duration,
 			'urls_per_second' => $duration > 0 ? count( $urls_to_warm ) / $duration : 0,
 		);
 
 		LoggingUtil::info( 'Intelligent cache warming completed', $warming_stats );
 
 		return array(
-			'stats' => $warming_stats,
+			'stats'   => $warming_stats,
 			'results' => $results,
 		);
 	}
@@ -330,22 +345,25 @@ class CacheService implements CacheServiceInterface {
 	 */
 	public function smartCacheInvalidation( int $post_id, array $options = array() ): array {
 		$defaults = array(
-			'invalidate_related' => true,
-			'invalidate_feeds' => true,
+			'invalidate_related'  => true,
+			'invalidate_feeds'    => true,
 			'invalidate_sitemaps' => true,
-			'cascade_taxonomies' => true,
+			'cascade_taxonomies'  => true,
 		);
-		
-		$options = array_merge( $defaults, $options );
+
+		$options          = array_merge( $defaults, $options );
 		$invalidated_urls = array();
 
 		$post = get_post( $post_id );
 		if ( ! $post ) {
-			return array( 'success' => false, 'error' => 'Post not found' );
+			return array(
+				'success' => false,
+				'error'   => 'Post not found',
+			);
 		}
 
 		// Basic post-related URLs
-		$basic_urls = $this->getRelatedUrls( $post );
+		$basic_urls       = $this->getRelatedUrls( $post );
 		$invalidated_urls = array_merge( $invalidated_urls, $basic_urls );
 
 		// Extended invalidation based on options
@@ -368,8 +386,8 @@ class CacheService implements CacheServiceInterface {
 		$this->invalidateUrls( $invalidated_urls );
 
 		$result = array(
-			'success' => true,
-			'post_id' => $post_id,
+			'success'          => true,
+			'post_id'          => $post_id,
 			'urls_invalidated' => count( $invalidated_urls ),
 			'invalidated_urls' => $invalidated_urls,
 		);
@@ -385,20 +403,20 @@ class CacheService implements CacheServiceInterface {
 	 * @return array Performance analysis results.
 	 */
 	public function analyzeCachePerformance(): array {
-		$stats = $this->getCacheStats();
+		$stats    = $this->getCacheStats();
 		$analysis = array(
-			'overall_score' => 0,
+			'overall_score'   => 0,
 			'recommendations' => array(),
-			'metrics' => $stats,
+			'metrics'         => $stats,
 		);
 
 		// Analyze cache hit ratio
 		if ( isset( $stats['hit_ratio'] ) ) {
 			if ( $stats['hit_ratio'] < 70 ) {
 				$analysis['recommendations'][] = array(
-					'type' => 'hit_ratio',
-					'severity' => 'high',
-					'message' => 'Cache hit ratio is below 70%',
+					'type'       => 'hit_ratio',
+					'severity'   => 'high',
+					'message'    => 'Cache hit ratio is below 70%',
 					'suggestion' => 'Review cache expiry settings and enable more cache types',
 				);
 			}
@@ -407,9 +425,9 @@ class CacheService implements CacheServiceInterface {
 		// Analyze cache size
 		if ( $stats['total_size'] > 1073741824 ) { // 1GB
 			$analysis['recommendations'][] = array(
-				'type' => 'cache_size',
-				'severity' => 'medium',
-				'message' => 'Cache size exceeds 1GB',
+				'type'       => 'cache_size',
+				'severity'   => 'medium',
+				'message'    => 'Cache size exceeds 1GB',
 				'suggestion' => 'Consider implementing cache cleanup policies',
 			);
 		}
@@ -418,17 +436,17 @@ class CacheService implements CacheServiceInterface {
 		foreach ( $stats['types'] as $type => $type_stats ) {
 			if ( ! $type_stats['enabled'] && in_array( $type, array( 'page', 'object' ), true ) ) {
 				$analysis['recommendations'][] = array(
-					'type' => 'cache_disabled',
-					'severity' => 'medium',
-					'message' => ucfirst( $type ) . ' cache is disabled',
+					'type'       => 'cache_disabled',
+					'severity'   => 'medium',
+					'message'    => ucfirst( $type ) . ' cache is disabled',
 					'suggestion' => 'Enable ' . $type . ' cache for better performance',
 				);
 			}
 		}
 
 		// Calculate overall score
-		$base_score = 100;
-		$base_score -= count( $analysis['recommendations'] ) * 10;
+		$base_score                = 100;
+		$base_score               -= count( $analysis['recommendations'] ) * 10;
 		$analysis['overall_score'] = max( 0, $base_score );
 
 		return $analysis;
@@ -442,12 +460,15 @@ class CacheService implements CacheServiceInterface {
 	public function preemptiveCacheWarming(): void {
 		// Get pages that are likely to be visited based on patterns
 		$predicted_urls = $this->predictPopularUrls();
-		
+
 		if ( ! empty( $predicted_urls ) ) {
-			LoggingUtil::info( 'Starting preemptive cache warming', array(
-				'predicted_urls' => count( $predicted_urls ),
-			) );
-			
+			LoggingUtil::info(
+				'Starting preemptive cache warming',
+				array(
+					'predicted_urls' => count( $predicted_urls ),
+				)
+			);
+
 			$this->preloadCache( $predicted_urls );
 		}
 	}
@@ -464,11 +485,13 @@ class CacheService implements CacheServiceInterface {
 		$urls[] = home_url( '/' );
 
 		// Static pages
-		$static_pages = get_pages( array(
-			'meta_key' => '_wp_page_template',
-			'meta_value' => array( 'page-about.php', 'page-contact.php', 'page-services.php' ),
-			'meta_compare' => 'IN',
-		) );
+		$static_pages = get_pages(
+			array(
+				'meta_key'     => '_wp_page_template',
+				'meta_value'   => array( 'page-about.php', 'page-contact.php', 'page-services.php' ),
+				'meta_compare' => 'IN',
+			)
+		);
 
 		foreach ( $static_pages as $page ) {
 			$urls[] = get_permalink( $page->ID );
@@ -498,21 +521,21 @@ class CacheService implements CacheServiceInterface {
 	 */
 	private function getPopularContent( int $limit = 20 ): array {
 		$args = array(
-			'post_type' => array( 'post', 'page' ),
-			'post_status' => 'publish',
+			'post_type'      => array( 'post', 'page' ),
+			'post_status'    => 'publish',
 			'posts_per_page' => $limit,
-			'meta_key' => 'post_views_count',
-			'orderby' => 'meta_value_num',
-			'order' => 'DESC',
+			'meta_key'       => 'post_views_count',
+			'orderby'        => 'meta_value_num',
+			'order'          => 'DESC',
 		);
 
 		$popular_posts = get_posts( $args );
-		
+
 		// Fallback to comment count if no view count
 		if ( empty( $popular_posts ) ) {
 			$args['meta_key'] = '';
-			$args['orderby'] = 'comment_count';
-			$popular_posts = get_posts( $args );
+			$args['orderby']  = 'comment_count';
+			$popular_posts    = get_posts( $args );
 		}
 
 		return array_map( 'get_permalink', wp_list_pluck( $popular_posts, 'ID' ) );
@@ -526,11 +549,11 @@ class CacheService implements CacheServiceInterface {
 	 */
 	private function getRecentContent( int $limit = 15 ): array {
 		$args = array(
-			'post_type' => array( 'post', 'page' ),
-			'post_status' => 'publish',
+			'post_type'      => array( 'post', 'page' ),
+			'post_status'    => 'publish',
 			'posts_per_page' => $limit,
-			'orderby' => 'date',
-			'order' => 'DESC',
+			'orderby'        => 'date',
+			'order'          => 'DESC',
 		);
 
 		$recent_posts = get_posts( $args );
@@ -558,7 +581,7 @@ class CacheService implements CacheServiceInterface {
 	 */
 	private function getSitemapUrls(): array {
 		$urls = array();
-		
+
 		// WordPress core sitemaps
 		if ( function_exists( 'wp_sitemaps_get_server' ) ) {
 			$urls[] = home_url( '/wp-sitemap.xml' );
@@ -581,7 +604,7 @@ class CacheService implements CacheServiceInterface {
 	 */
 	private function getCascadeTaxonomyUrls( \WP_Post $post ): array {
 		$urls = array();
-		
+
 		// Get parent terms and their archives
 		$taxonomies = get_object_taxonomies( $post->post_type, 'names' );
 		foreach ( $taxonomies as $taxonomy ) {
@@ -613,19 +636,19 @@ class CacheService implements CacheServiceInterface {
 	 */
 	private function predictPopularUrls(): array {
 		$urls = array();
-		
+
 		// Get trending posts (posts with recent activity)
 		$trending_args = array(
-			'post_type' => 'post',
-			'post_status' => 'publish',
+			'post_type'      => 'post',
+			'post_status'    => 'publish',
 			'posts_per_page' => 10,
-			'date_query' => array(
+			'date_query'     => array(
 				array(
 					'after' => '1 week ago',
 				),
 			),
-			'orderby' => 'comment_count',
-			'order' => 'DESC',
+			'orderby'        => 'comment_count',
+			'order'          => 'DESC',
 		);
 
 		$trending_posts = get_posts( $trending_args );
@@ -636,13 +659,13 @@ class CacheService implements CacheServiceInterface {
 		// Add seasonal/time-based content
 		$current_month = date( 'n' );
 		$seasonal_args = array(
-			'post_type' => 'post',
-			'post_status' => 'publish',
+			'post_type'      => 'post',
+			'post_status'    => 'publish',
 			'posts_per_page' => 5,
-			'meta_query' => array(
+			'meta_query'     => array(
 				array(
-					'key' => 'seasonal_month',
-					'value' => $current_month,
+					'key'     => 'seasonal_month',
+					'value'   => $current_month,
 					'compare' => '=',
 				),
 			),

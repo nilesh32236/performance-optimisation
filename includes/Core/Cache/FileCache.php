@@ -183,20 +183,33 @@ class FileCache implements CacheInterface {
 	 * @return bool True on success, false on failure
 	 */
 	public function flush(): bool {
-		$files = glob( $this->cache_dir . '*.cache' );
+		try {
+			$pattern = $this->cache_dir . '*.cache';
+			$files   = glob( $pattern );
 
-		if ( false === $files ) {
+			if ( $files === false ) {
+				throw new CacheException( "Failed to list cache files in {$this->cache_dir}" );
+			}
+
+			if ( empty( $files ) ) {
+				return true; // No files to delete
+			}
+
+			$failed_deletions = 0;
+			foreach ( $files as $file ) {
+				if ( ! unlink( $file ) ) {
+					$failed_deletions++;
+					error_log( "Failed to delete cache file: {$file}" );
+				}
+			}
+
+			// Consider it successful if most files were deleted
+			return $failed_deletions < ( count( $files ) / 2 );
+
+		} catch ( \Exception $e ) {
+			error_log( 'Cache flush failed: ' . $e->getMessage() );
 			return false;
 		}
-
-		$success = true;
-		foreach ( $files as $file ) {
-			if ( ! unlink( $file ) ) {
-				$success = false;
-			}
-		}
-
-		return $success;
 	}
 
 	/**
@@ -347,11 +360,39 @@ class FileCache implements CacheInterface {
 			throw new CacheException( "Cache directory is not writable: {$this->cache_dir}" );
 		}
 
-		// Create .htaccess file to protect cache directory
+		// Create comprehensive .htaccess file
 		$htaccess_file = $this->cache_dir . '.htaccess';
 		if ( ! file_exists( $htaccess_file ) ) {
-			$htaccess_content = "Order deny,allow\nDeny from all\n";
-			file_put_contents( $htaccess_file, $htaccess_content );
+			$htaccess_content = <<<'HTACCESS'
+# Performance Optimisation Cache Protection
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order deny,allow
+    Deny from all
+</IfModule>
+
+# Prevent script execution
+<Files "*.php">
+    Require all denied
+</Files>
+
+# Prevent access to cache files
+<Files "*.cache">
+    Require all denied
+</Files>
+HTACCESS;
+
+			if ( file_put_contents( $htaccess_file, $htaccess_content ) === false ) {
+				throw new CacheException( 'Failed to create .htaccess protection' );
+			}
+		}
+
+		// Create index.php for additional protection
+		$index_file = $this->cache_dir . 'index.php';
+		if ( ! file_exists( $index_file ) ) {
+			file_put_contents( $index_file, '<?php // Silence is golden' );
 		}
 	}
 
@@ -363,7 +404,17 @@ class FileCache implements CacheInterface {
 	 * @return string Cache file path
 	 */
 	private function get_cache_file_path( string $key ): string {
-		$hash = md5( $key );
+		// Validate key
+		if ( empty( $key ) || strlen( $key ) > 250 ) {
+			throw new CacheException( 'Invalid cache key length' );
+		}
+
+		// Prevent directory traversal
+		if ( strpos( $key, '..' ) !== false || strpos( $key, '/' ) !== false || strpos( $key, '\\' ) !== false ) {
+			throw new CacheException( 'Invalid cache key characters' );
+		}
+
+		$hash = hash( 'sha256', $key ); // More secure than md5
 		return $this->cache_dir . $hash . '.cache';
 	}
 
@@ -381,9 +432,21 @@ class FileCache implements CacheInterface {
 			return false;
 		}
 
-		$data = unserialize( $content );
+		// Validate content size before unserialization
+		if ( strlen( $content ) > 10485760 ) { // 10MB limit
+			return false;
+		}
 
-		if ( false === $data || ! is_array( $data ) ) {
+		try {
+			$data = unserialize( $content, array( 'allowed_classes' => false ) );
+		} catch ( \Exception $e ) {
+			// Log and remove corrupted file
+			error_log( 'Corrupted cache file: ' . $file_path );
+			unlink( $file_path );
+			return false;
+		}
+
+		if ( ! is_array( $data ) || ! isset( $data['key'], $data['value'], $data['expires'] ) ) {
 			return false;
 		}
 

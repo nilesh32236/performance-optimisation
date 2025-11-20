@@ -84,15 +84,20 @@ function SiteDetectionStep( { stepConfig }: SiteDetectionStepProps ) {
 			}
 
 			const analysisResult = await analysisResponse.json();
+			console.log('Raw analysis response:', analysisResult);
+			console.log('Analysis data:', analysisResult.data);
+			console.log('Analysis structure:', analysisResult.data);
+			
 			if ( ! analysisResult.success ) {
 				throw new Error( analysisResult.message || 'Analysis failed' );
 			}
 
-			setAnalysis( analysisResult.data.analysis );
+			setAnalysis( analysisResult.data );
+			console.log('Set analysis state to:', analysisResult.data);
 
 			// Get recommendations
 			const recommendationsResponse = await fetch(
-				`${ window.wppoWizardData.apiUrl }recommendations`,
+				`${ window.wppoWizardData.apiUrl }/recommendations`,
 				{
 					headers: {
 						'X-WP-Nonce': window.wppoWizardData.nonce,
@@ -105,17 +110,24 @@ function SiteDetectionStep( { stepConfig }: SiteDetectionStepProps ) {
 			}
 
 			const recommendationsResult = await recommendationsResponse.json();
+			console.log('Raw recommendations response:', recommendationsResult);
+			
 			if ( ! recommendationsResult.success ) {
 				throw new Error( recommendationsResult.message || 'Recommendations failed' );
 			}
 
-			setRecommendations( recommendationsResult.data.recommendations );
+			console.log('Recommendations data:', recommendationsResult.data);
+			console.log('Recommendations structure:', recommendationsResult.data);
+			
+			setRecommendations( recommendationsResult.data );
+			console.log('Set recommendations state to:', recommendationsResult.data);
 
 			// Auto-select recommended preset
-			const recommendedPreset = recommendationsResult.data.recommendations.preset.preset;
+			console.log('Trying to access preset:', recommendationsResult.data?.preset);
+			const recommendedPreset = recommendationsResult.data.preset.preset;
 			updateData( 'preset', recommendedPreset );
-			updateData( 'siteAnalysis', analysisResult.data.analysis );
-			updateData( 'recommendations', recommendationsResult.data.recommendations );
+			updateData( 'siteAnalysis', analysisResult.data );
+			updateData( 'recommendations', recommendationsResult.data );
 		} catch ( err ) {
 			setError( err instanceof Error ? err.message : 'An error occurred during site analysis' );
 		} finally {
@@ -211,6 +223,7 @@ function SiteDetectionStep( { stepConfig }: SiteDetectionStepProps ) {
 	}
 
 	if ( ! analysis || ! recommendations ) {
+		console.log('Component returning null - analysis:', analysis, 'recommendations:', recommendations);
 		return null;
 	}
 

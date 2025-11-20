@@ -1,142 +1,77 @@
 /**
+ * Metrics Overview Component - Refactored
+ */
+
+/**
  * External dependencies
  */
 import React from 'react';
+import { Card, CardHeader, CardBody } from '@wordpress/components';
+
 /**
  * Internal dependencies
  */
-import { Card } from '../Card';
+import './MetricsOverview.scss';
 
 interface MetricsOverviewProps {
-	overview: {
-		performance_score: number;
-		average_load_time: number;
-		cache_hit_ratio: number;
-		total_page_views: number;
-		optimization_status: Record<string, boolean>;
-	};
+    config: {
+        overview?: {
+            performance_score: number;
+            average_load_time: number;
+            cache_hit_ratio: number;
+        };
+    };
 }
 
-const MetricsOverview: React.FC<MetricsOverviewProps> = ( { overview } ) => {
-	const getScoreColor = ( score: number ): string => {
-		if ( score >= 90 ) {
-			return 'excellent';
-		}
-		if ( score >= 70 ) {
-			return 'good';
-		}
-		if ( score >= 50 ) {
-			return 'fair';
-		}
-		return 'poor';
-	};
+const MetricsOverview: React.FC<MetricsOverviewProps> = ( { config } ) => {
+    const overview = config.overview || {
+        performance_score: 0,
+        average_load_time: 0,
+        cache_hit_ratio: 0,
+    };
 
-	const getLoadTimeColor = ( time: number ): string => {
-		if ( time <= 1000 ) {
-			return 'excellent';
-		}
-		if ( time <= 2000 ) {
-			return 'good';
-		}
-		if ( time <= 3000 ) {
-			return 'fair';
-		}
-		return 'poor';
-	};
+    const getScoreColor = ( score: number ): string => {
+        if ( score >= 85 ) return 'var(--wp-admin-color-success)';
+        if ( score >= 60 ) return 'var(--wp-admin-color-warning)';
+        return 'var(--wp-admin-color-error)';
+    };
 
-	const getCacheColor = ( ratio: number ): string => {
-		if ( ratio >= 80 ) {
-			return 'excellent';
-		}
-		if ( ratio >= 60 ) {
-			return 'good';
-		}
-		if ( ratio >= 40 ) {
-			return 'fair';
-		}
-		return 'poor';
-	};
+    const getLoadTimeColor = ( time: number ): string => {
+        if ( time <= 1.5 ) return 'var(--wp-admin-color-success)';
+        if ( time <= 3.0 ) return 'var(--wp-admin-color-warning)';
+        return 'var(--wp-admin-color-error)';
+    };
 
-	return (
-		<div className="wppo-metrics-overview">
-			<h3>Performance Overview</h3>
-			<div className="wppo-metrics-overview__grid">
-				<Card className="wppo-metric-card">
-					<div className="wppo-metric-card__content">
-						<div className="wppo-metric-card__icon">
-							<span className="dashicons dashicons-performance"></span>
-						</div>
-						<div className="wppo-metric-card__details">
-							<div
-								className={ `wppo-metric-card__value wppo-metric-card__value--${ getScoreColor( overview.performance_score ) }` }
-							>
-								{ overview.performance_score }
-							</div>
-							<div className="wppo-metric-card__label">Performance Score</div>
-							<div className="wppo-metric-card__description">
-								Overall performance rating
-							</div>
-						</div>
-					</div>
-				</Card>
+    const getCacheColor = ( ratio: number ): string => {
+        if ( ratio >= 90 ) return 'var(--wp-admin-color-success)';
+        if ( ratio >= 70 ) return 'var(--wp-admin-color-warning)';
+        return 'var(--wp-admin-color-error)';
+    };
 
-				<Card className="wppo-metric-card">
-					<div className="wppo-metric-card__content">
-						<div className="wppo-metric-card__icon">
-							<span className="dashicons dashicons-clock"></span>
-						</div>
-						<div className="wppo-metric-card__details">
-							<div
-								className={ `wppo-metric-card__value wppo-metric-card__value--${ getLoadTimeColor( overview.average_load_time ) }` }
-							>
-								{ ( overview.average_load_time / 1000 ).toFixed( 2 ) }s
-							</div>
-							<div className="wppo-metric-card__label">Average Load Time</div>
-							<div className="wppo-metric-card__description">
-								Time to fully load pages
-							</div>
-						</div>
-					</div>
-				</Card>
+    return (
+        <div className="wppo-metrics-overview">
+            <Card>
+                <CardHeader>Overall Performance Score</CardHeader>
+                <CardBody style={{ color: getScoreColor(overview.performance_score) }}>
+                    {overview.performance_score}/100
+                </CardBody>
+            </Card>
 
-				<Card className="wppo-metric-card">
-					<div className="wppo-metric-card__content">
-						<div className="wppo-metric-card__icon">
-							<span className="dashicons dashicons-database-view"></span>
-						</div>
-						<div className="wppo-metric-card__details">
-							<div
-								className={ `wppo-metric-card__value wppo-metric-card__value--${ getCacheColor( overview.cache_hit_ratio ) }` }
-							>
-								{ overview.cache_hit_ratio.toFixed( 1 ) }%
-							</div>
-							<div className="wppo-metric-card__label">Cache Hit Ratio</div>
-							<div className="wppo-metric-card__description">
-								Percentage of cached requests
-							</div>
-						</div>
-					</div>
-				</Card>
+            <Card>
+                <CardHeader>Average Load Time</CardHeader>
+                <CardBody style={{ color: getLoadTimeColor(overview.average_load_time) }}>
+                    {overview.average_load_time.toFixed(2)}s
+                </CardBody>
+            </Card>
 
-				<Card className="wppo-metric-card">
-					<div className="wppo-metric-card__content">
-						<div className="wppo-metric-card__icon">
-							<span className="dashicons dashicons-visibility"></span>
-						</div>
-						<div className="wppo-metric-card__details">
-							<div className="wppo-metric-card__value">
-								{ overview.total_page_views.toLocaleString() }
-							</div>
-							<div className="wppo-metric-card__label">Total Page Views</div>
-							<div className="wppo-metric-card__description">
-								Pages served in period
-							</div>
-						</div>
-					</div>
-				</Card>
-			</div>
-		</div>
-	);
+            <Card>
+                <CardHeader>Cache Hit Ratio</CardHeader>
+                <CardBody style={{ color: getCacheColor(overview.cache_hit_ratio) }}>
+                    {overview.cache_hit_ratio.toFixed(1)}%
+                </CardBody>
+            </Card>
+        </div>
+    );
 };
 
 export default MetricsOverview;

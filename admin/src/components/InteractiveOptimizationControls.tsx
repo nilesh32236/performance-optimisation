@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, Button, ProgressBar, Toggle, Select } from '@components/index';
+import { Card, Button } from '@components/index';
 
 interface OptimizationTask {
 	id: string;
@@ -37,7 +37,12 @@ interface OptimizationSettings {
 	image_quality: number;
 }
 
-export const InteractiveOptimizationControls: React.FC = () => {
+interface InteractiveOptimizationControlsProps {
+	config?: any;
+	onUpdate?: (section: string, key: string, value: any) => void;
+}
+
+export const InteractiveOptimizationControls: React.FC<InteractiveOptimizationControlsProps> = ({ config, onUpdate }) => {
 	const [tasks, setTasks] = useState<OptimizationTask[]>([
 		{
 			id: 'clear_cache',
@@ -236,58 +241,68 @@ export const InteractiveOptimizationControls: React.FC = () => {
 				<h3>Optimization Settings</h3>
 				<div className="wppo-settings-grid">
 					<div className="wppo-setting-item">
-						<Toggle
-							label="Enable Caching"
-							checked={settings.cache_enabled}
-							onChange={(checked) => updateSetting('cache_enabled', checked)}
-						/>
+						<label>
+							<input
+								type="checkbox"
+								checked={settings.cache_enabled}
+								onChange={(e) => updateSetting('cache_enabled', e.target.checked)}
+							/>
+							Enable Caching
+						</label>
 					</div>
 					<div className="wppo-setting-item">
-						<Toggle
-							label="Enable Minification"
-							checked={settings.minification_enabled}
-							onChange={(checked) => updateSetting('minification_enabled', checked)}
-						/>
+						<label>
+							<input
+								type="checkbox"
+								checked={settings.minification_enabled}
+								onChange={(e) => updateSetting('minification_enabled', e.target.checked)}
+							/>
+							Enable Minification
+						</label>
 					</div>
 					<div className="wppo-setting-item">
-						<Toggle
-							label="Enable Image Optimization"
-							checked={settings.image_optimization_enabled}
-							onChange={(checked) => updateSetting('image_optimization_enabled', checked)}
-						/>
+						<label>
+							<input
+								type="checkbox"
+								checked={settings.image_optimization_enabled}
+								onChange={(e) => updateSetting('image_optimization_enabled', e.target.checked)}
+							/>
+							Enable Image Optimization
+						</label>
 					</div>
 					<div className="wppo-setting-item">
-						<Toggle
-							label="Enable Lazy Loading"
-							checked={settings.lazy_loading_enabled}
-							onChange={(checked) => updateSetting('lazy_loading_enabled', checked)}
-						/>
+						<label>
+							<input
+								type="checkbox"
+								checked={settings.lazy_loading_enabled}
+								onChange={(e) => updateSetting('lazy_loading_enabled', e.target.checked)}
+							/>
+							Enable Lazy Loading
+						</label>
 					</div>
 					<div className="wppo-setting-item">
 						<label>Compression Level</label>
-						<Select
+						<select
 							value={settings.compression_level}
-							onChange={(value) => updateSetting('compression_level', parseInt(value))}
-							options={[
-								{ value: 1, label: 'Low (1)' },
-								{ value: 3, label: 'Medium (3)' },
-								{ value: 6, label: 'High (6)' },
-								{ value: 9, label: 'Maximum (9)' },
-							]}
-						/>
+							onChange={(e) => updateSetting('compression_level', parseInt(e.target.value))}
+						>
+							<option value={1}>Low (1)</option>
+							<option value={3}>Medium (3)</option>
+							<option value={6}>High (6)</option>
+							<option value={9}>Maximum (9)</option>
+						</select>
 					</div>
 					<div className="wppo-setting-item">
 						<label>Image Quality</label>
-						<Select
+						<select
 							value={settings.image_quality}
-							onChange={(value) => updateSetting('image_quality', parseInt(value))}
-							options={[
-								{ value: 60, label: 'Low (60%)' },
-								{ value: 75, label: 'Medium (75%)' },
-								{ value: 85, label: 'High (85%)' },
-								{ value: 95, label: 'Maximum (95%)' },
-							]}
-						/>
+							onChange={(e) => updateSetting('image_quality', parseInt(e.target.value))}
+						>
+							<option value={60}>Low (60%)</option>
+							<option value={75}>Medium (75%)</option>
+							<option value={85}>High (85%)</option>
+							<option value={95}>Maximum (95%)</option>
+						</select>
 					</div>
 				</div>
 			</div>
@@ -301,7 +316,6 @@ export const InteractiveOptimizationControls: React.FC = () => {
 							variant="primary"
 							onClick={executeAllTasks}
 							disabled={isRunningBatch}
-							loading={isRunningBatch}
 						>
 							{isRunningBatch ? 'Running...' : 'Run All Optimizations'}
 						</Button>
@@ -317,7 +331,12 @@ export const InteractiveOptimizationControls: React.FC = () => {
 				
 				{isRunningBatch && (
 					<div className="wppo-batch-progress">
-						<ProgressBar progress={batchProgress} />
+						<div className="wppo-progress-bar">
+							<div 
+								className="wppo-progress-fill" 
+								style={{ width: `${batchProgress}%` }}
+							></div>
+						</div>
 						<span className="wppo-progress-text">
 							Overall Progress: {Math.round(batchProgress)}%
 						</span>
@@ -353,7 +372,12 @@ export const InteractiveOptimizationControls: React.FC = () => {
 								
 								{task.status === 'running' && (
 									<div className="wppo-task-progress">
-										<ProgressBar progress={task.progress} size="small" />
+										<div className="wppo-progress-bar wppo-progress-bar--small">
+											<div 
+												className="wppo-progress-fill" 
+												style={{ width: `${task.progress}%` }}
+											></div>
+										</div>
 										<span className="wppo-progress-text">{task.progress}%</span>
 									</div>
 								)}

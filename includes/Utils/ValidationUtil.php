@@ -33,7 +33,12 @@ class ValidationUtil {
 	 * @var array
 	 */
 	private const VALID_CACHE_TYPES = array(
-		'page', 'object', 'minified', 'image', 'database', 'all'
+		'page',
+		'object',
+		'minified',
+		'image',
+		'database',
+		'all',
 	);
 
 	/**
@@ -43,7 +48,13 @@ class ValidationUtil {
 	 * @var array
 	 */
 	private const VALID_IMAGE_FORMATS = array(
-		'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg'
+		'jpg',
+		'jpeg',
+		'png',
+		'gif',
+		'webp',
+		'avif',
+		'svg',
 	);
 
 	/**
@@ -55,7 +66,7 @@ class ValidationUtil {
 	 * @return array Array of validated URLs.
 	 */
 	public static function processUrls( string $input ): array {
-		$urls = array_filter( array_map( 'trim', explode( "\n", $input ) ) );
+		$urls           = array_filter( array_map( 'trim', explode( "\n", $input ) ) );
 		$validated_urls = array();
 
 		foreach ( $urls as $url ) {
@@ -80,16 +91,16 @@ class ValidationUtil {
 	public static function sanitizeFilePath( string $path ): string {
 		// Remove any directory traversal attempts
 		$path = preg_replace( '/\.\.+/', '.', $path );
-		
+
 		// Remove null bytes
 		$path = str_replace( "\0", '', $path );
-		
+
 		// Normalize path separators
 		$path = wp_normalize_path( $path );
-		
+
 		// Remove leading/trailing whitespace
 		$path = trim( $path );
-		
+
 		return $path;
 	}
 
@@ -119,7 +130,7 @@ class ValidationUtil {
 		$sanitized = array();
 
 		foreach ( $settings as $key => $value ) {
-			$field_type = $schema[ $key ]['type'] ?? 'string';
+			$field_type        = $schema[ $key ]['type'] ?? 'string';
 			$sanitized[ $key ] = self::sanitizeSetting( $value, $field_type );
 		}
 
@@ -155,7 +166,7 @@ class ValidationUtil {
 
 		// Additional security checks
 		$parsed = parse_url( $url );
-		
+
 		// Check for valid scheme
 		if ( ! isset( $parsed['scheme'] ) || ! in_array( $parsed['scheme'], array( 'http', 'https' ), true ) ) {
 			return false;
@@ -186,7 +197,10 @@ class ValidationUtil {
 				'br'     => array(),
 				'strong' => array(),
 				'em'     => array(),
-				'a'      => array( 'href' => array(), 'title' => array() ),
+				'a'      => array(
+					'href'  => array(),
+					'title' => array(),
+				),
 				'ul'     => array(),
 				'ol'     => array(),
 				'li'     => array(),
@@ -261,7 +275,7 @@ class ValidationUtil {
 		$css = preg_replace( '/javascript\s*:/i', '', $css );
 		$css = preg_replace( '/expression\s*\(/i', '', $css );
 		$css = preg_replace( '/@import/i', '', $css );
-		
+
 		return $css;
 	}
 
@@ -355,42 +369,42 @@ class ValidationUtil {
 		switch ( $type ) {
 			case 'string':
 				return sanitize_text_field( $value );
-				
+
 			case 'textarea':
 				return sanitize_textarea_field( $value );
-				
+
 			case 'int':
 			case 'integer':
 				return intval( $value );
-				
+
 			case 'float':
 				return floatval( $value );
-				
+
 			case 'bool':
 			case 'boolean':
 				return rest_sanitize_boolean( $value );
-				
+
 			case 'url':
 				return esc_url_raw( $value );
-				
+
 			case 'url_list':
 				return implode( "\n", self::processUrls( $value ) );
-				
+
 			case 'email':
 				return sanitize_email( $value );
-				
+
 			case 'array':
 				return is_array( $value ) ? array_map( 'sanitize_text_field', $value ) : array();
-				
+
 			case 'json':
 				return self::validateJson( $value ) ? $value : '{}';
-				
+
 			case 'css':
 				return self::sanitizeCss( $value );
-				
+
 			case 'html':
 				return self::sanitizeHtml( $value );
-				
+
 			default:
 				return sanitize_text_field( $value );
 		}
@@ -406,12 +420,12 @@ class ValidationUtil {
 	 * @return array Validation results with errors.
 	 */
 	public static function validateSettingsSchema( array $settings, array $schema ): array {
-		$errors = array();
+		$errors    = array();
 		$validated = array();
 
 		foreach ( $schema as $field => $rules ) {
 			$value = $settings[ $field ] ?? $rules['default'] ?? null;
-			
+
 			// Required field check
 			if ( ! empty( $rules['required'] ) && ( null === $value || '' === $value ) ) {
 				$errors[ $field ] = 'Field is required';
@@ -421,18 +435,18 @@ class ValidationUtil {
 			// Type validation
 			if ( null !== $value && isset( $rules['type'] ) ) {
 				$sanitized_value = self::sanitizeSetting( $value, $rules['type'] );
-				
+
 				// Additional validation rules
 				if ( isset( $rules['min'] ) && is_numeric( $sanitized_value ) && $sanitized_value < $rules['min'] ) {
 					$errors[ $field ] = "Value must be at least {$rules['min']}";
 					continue;
 				}
-				
+
 				if ( isset( $rules['max'] ) && is_numeric( $sanitized_value ) && $sanitized_value > $rules['max'] ) {
 					$errors[ $field ] = "Value must not exceed {$rules['max']}";
 					continue;
 				}
-				
+
 				if ( isset( $rules['options'] ) && ! in_array( $sanitized_value, $rules['options'], true ) ) {
 					$errors[ $field ] = 'Invalid option selected';
 					continue;
@@ -443,9 +457,9 @@ class ValidationUtil {
 		}
 
 		return array(
-			'valid' => empty( $errors ),
+			'valid'  => empty( $errors ),
 			'errors' => $errors,
-			'data' => $validated,
+			'data'   => $validated,
 		);
 	}
 
@@ -519,10 +533,10 @@ class ValidationUtil {
 
 		return array(
 			'valid' => true,
-			'file' => array(
-				'name' => sanitize_file_name( $file['name'] ),
-				'type' => $file_type['type'],
-				'size' => $file['size'],
+			'file'  => array(
+				'name'     => sanitize_file_name( $file['name'] ),
+				'type'     => $file_type['type'],
+				'size'     => $file['size'],
 				'tmp_name' => $file['tmp_name'],
 			),
 		);

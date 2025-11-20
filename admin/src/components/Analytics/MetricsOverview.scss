@@ -1,0 +1,25 @@
+/**
+ * Metrics Overview Component Styles
+ */
+
+.wppo-metrics-overview {
+    display: flex;
+    gap: 16px; // Corresponds to WordPress's grid-unit(4)
+    padding-bottom: 16px;
+}
+
+.wppo-metrics-overview .components-card {
+    flex: 1;
+}
+
+.wppo-metrics-overview .components-card__header {
+    // The default header is bold which is fine
+}
+
+.wppo-metrics-overview .components-card__body {
+    font-size: 2.5em; // Make the number large
+    font-weight: 200; // Use a light font weight for a modern feel
+    line-height: 1;
+    padding-top: 8px !important; // Override default for a tighter look
+    padding-bottom: 16px !important;
+}

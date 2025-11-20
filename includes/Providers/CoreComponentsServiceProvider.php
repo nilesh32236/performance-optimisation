@@ -41,43 +41,67 @@ class CoreComponentsServiceProvider extends ServiceProvider {
 	 */
 	public function register( ServiceContainerInterface $container ): void {
 		// Register Bootstrap components
-		$container->singleton( 'PerformanceOptimisation\\Core\\Bootstrap\\Plugin', function( ServiceContainerInterface $c ) {
-			// Plugin is a singleton, get existing instance
-			return \PerformanceOptimisation\Core\Bootstrap\Plugin::getInstance();
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Core\\Bootstrap\\Plugin',
+			function ( ServiceContainerInterface $c ) {
+				// Plugin is a singleton, get existing instance
+				return \PerformanceOptimisation\Core\Bootstrap\Plugin::getInstance();
+			}
+		);
 
 		// Register Configuration components
-		$container->singleton( 'PerformanceOptimisation\\Core\\Config\\ConfigManager', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Core\Config\ConfigManager();
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Core\\Config\\ConfigManager',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Core\Config\ConfigManager();
+			}
+		);
 
 		// Register API components
-		$container->singleton( 'PerformanceOptimisation\\Core\\API\\RestController', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Core\API\RestController( $c );
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Core\\API\\RestController',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Core\API\RestController( $c );
+			}
+		);
 
-		$container->singleton( 'PerformanceOptimisation\\Core\\API\\ApiRouter', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Core\API\ApiRouter( $c );
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Core\\API\\ApiRouter',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Core\API\ApiRouter( $c );
+			}
+		);
 
 		// Register Analytics components
-		$container->singleton( 'PerformanceOptimisation\\Core\\Analytics\\MetricsCollector', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Core\Analytics\MetricsCollector( $c );
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Core\\Analytics\\MetricsCollector',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Core\Analytics\MetricsCollector( $c );
+			}
+		);
 
-		$container->singleton( 'PerformanceOptimisation\\Core\\Analytics\\PerformanceAnalyzer', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer( $c );
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Core\\Analytics\\PerformanceAnalyzer',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer( $c );
+			}
+		);
 
 		// Register Cache components
-		$container->singleton( 'PerformanceOptimisation\\Core\\Cache\\CacheManager', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Core\Cache\CacheManager( $c );
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Core\\Cache\\CacheManager',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Core\Cache\CacheManager( $c );
+			}
+		);
 
 		// Register Security components
-		$container->singleton( 'PerformanceOptimisation\\Core\\Security\\SecurityManager', function( ServiceContainerInterface $c ) {
-			return new \PerformanceOptimisation\Core\Security\SecurityManager( $c );
-		} );
+		$container->singleton(
+			'PerformanceOptimisation\\Core\\Security\\SecurityManager',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Core\Security\SecurityManager( $c );
+			}
+		);
 
 		// Register convenient aliases
 		$container->alias( 'plugin', 'PerformanceOptimisation\\Core\\Bootstrap\\Plugin' );

@@ -70,19 +70,25 @@ class ServiceRegistry {
 			try {
 				$this->container->registerProvider( $provider );
 			} catch ( \Exception $e ) {
-				LoggingUtil::error( 'Failed to register service provider: ' . $e->getMessage(), array(
-					'provider' => $provider,
-				) );
+				LoggingUtil::error(
+					'Failed to register service provider: ' . $e->getMessage(),
+					array(
+						'provider' => $provider,
+					)
+				);
 			}
 		}
 
 		// Boot all providers
 		$this->container->bootProviders();
 
-		LoggingUtil::info( 'All service providers registered and booted', array(
-			'total_providers' => count( $all_providers ),
-			'container_stats' => $this->container->getStats(),
-		) );
+		LoggingUtil::info(
+			'All service providers registered and booted',
+			array(
+				'total_providers' => count( $all_providers ),
+				'container_stats' => $this->container->getStats(),
+			)
+		);
 
 		return $this;
 	}
@@ -110,7 +116,7 @@ class ServiceRegistry {
 	public function removeProvider( string $provider ): self {
 		$this->additional_providers = array_filter(
 			$this->additional_providers,
-			function( $p ) use ( $provider ) {
+			function ( $p ) use ( $provider ) {
 				return $p !== $provider;
 			}
 		);
@@ -147,9 +153,13 @@ class ServiceRegistry {
 			if ( is_array( $implementations ) ) {
 				// Multiple implementations - register each with tags
 				foreach ( $implementations as $implementation ) {
-					$this->container->bind( $interface, $implementation, array(
-						'tags' => array( 'interface_implementation' ),
-					) );
+					$this->container->bind(
+						$interface,
+						$implementation,
+						array(
+							'tags' => array( 'interface_implementation' ),
+						)
+					);
 				}
 			} else {
 				// Single implementation
@@ -170,10 +180,10 @@ class ServiceRegistry {
 	public function registerFactories(): self {
 		// Register factory services that should create new instances each time
 		$factories = array(
-			'temp_file' => function( ServiceContainerInterface $container ) {
+			'temp_file'         => function ( ServiceContainerInterface $container ) {
 				return $container->get( 'filesystem' )->createTempFile();
 			},
-			'performance_timer' => function( ServiceContainerInterface $container ) {
+			'performance_timer' => function ( ServiceContainerInterface $container ) {
 				return $container->get( 'performance' )->createTimer();
 			},
 		);
@@ -195,26 +205,37 @@ class ServiceRegistry {
 	public function registerConditionalServices(): self {
 		// Register services based on WordPress environment
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			$this->container->singleton( 'debug_service', function( ServiceContainerInterface $container ) {
-				return new class() {
-					public function log( string $message ): void {
-						error_log( '[WPPO Debug] ' . $message );
-					}
-				};
-			} );
+			$this->container->singleton(
+				'debug_service',
+				function ( ServiceContainerInterface $container ) {
+					return new class() {
+						public function log( string $message ): void {
+							error_log( '[WPPO Debug] ' . $message );
+						}
+					};
+				}
+			);
 		}
 
 		// Register services based on capabilities
 		if ( function_exists( 'imagecreatefromwebp' ) ) {
-			$this->container->register( 'webp_support', function() {
-				return true;
-			}, array( 'tags' => array( 'feature_support' ) ) );
+			$this->container->register(
+				'webp_support',
+				function () {
+					return true;
+				},
+				array( 'tags' => array( 'feature_support' ) )
+			);
 		}
 
 		if ( function_exists( 'imagecreatefromavif' ) ) {
-			$this->container->register( 'avif_support', function() {
-				return true;
-			}, array( 'tags' => array( 'feature_support' ) ) );
+			$this->container->register(
+				'avif_support',
+				function () {
+					return true;
+				},
+				array( 'tags' => array( 'feature_support' ) )
+			);
 		}
 
 		LoggingUtil::debug( 'Conditional services registered' );
@@ -229,13 +250,13 @@ class ServiceRegistry {
 	 */
 	public function validateServices(): array {
 		$results = array(
-			'valid' => array(),
-			'invalid' => array(),
+			'valid'                => array(),
+			'invalid'              => array(),
 			'missing_dependencies' => array(),
 		);
 
 		$stats = $this->container->getStats();
-		
+
 		// Check if core services are registered
 		$core_services = array(
 			'filesystem',
@@ -249,12 +270,12 @@ class ServiceRegistry {
 		foreach ( $core_services as $service ) {
 			if ( $this->container->has( $service ) ) {
 				try {
-					$instance = $this->container->get( $service );
+					$instance           = $this->container->get( $service );
 					$results['valid'][] = $service;
 				} catch ( \Exception $e ) {
 					$results['invalid'][] = array(
 						'service' => $service,
-						'error' => $e->getMessage(),
+						'error'   => $e->getMessage(),
 					);
 				}
 			} else {
@@ -262,12 +283,15 @@ class ServiceRegistry {
 			}
 		}
 
-		LoggingUtil::info( 'Service validation completed', array(
-			'valid_services' => count( $results['valid'] ),
-			'invalid_services' => count( $results['invalid'] ),
-			'missing_services' => count( $results['missing_dependencies'] ),
-			'container_stats' => $stats,
-		) );
+		LoggingUtil::info(
+			'Service validation completed',
+			array(
+				'valid_services'   => count( $results['valid'] ),
+				'invalid_services' => count( $results['invalid'] ),
+				'missing_services' => count( $results['missing_dependencies'] ),
+				'container_stats'  => $stats,
+			)
+		);
 
 		return $results;
 	}
@@ -278,15 +302,15 @@ class ServiceRegistry {
 	 * @return array
 	 */
 	public function getDependencyGraph(): array {
-		$graph = array();
-		$services = $this->container->getByTag( 'utility' ) + 
-					$this->container->getByTag( 'service' ) + 
+		$graph    = array();
+		$services = $this->container->getByTag( 'utility' ) +
+					$this->container->getByTag( 'service' ) +
 					$this->container->getByTag( 'optimizer' );
 
 		foreach ( $services as $service_id => $service ) {
-			$reflection = new \ReflectionClass( $service );
+			$reflection  = new \ReflectionClass( $service );
 			$constructor = $reflection->getConstructor();
-			
+
 			$dependencies = array();
 			if ( $constructor ) {
 				foreach ( $constructor->getParameters() as $parameter ) {
@@ -296,7 +320,7 @@ class ServiceRegistry {
 					}
 				}
 			}
-			
+
 			$graph[ $service_id ] = $dependencies;
 		}
 

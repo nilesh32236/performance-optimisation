@@ -15,10 +15,11 @@ import { createRoot } from 'react-dom/client';
  */
 import { App } from './App';
 import './styles/main.scss';
+import './styles/admin-enhanced.scss';
 
 // Initialize the admin interface when DOM is ready
 document.addEventListener( 'DOMContentLoaded', () => {
-	const container = document.getElementById( 'wppo-admin-root' );
+	const container = document.getElementById( 'performance-optimisation-admin-app' );
 
 	if ( container ) {
 		const root = createRoot( container );

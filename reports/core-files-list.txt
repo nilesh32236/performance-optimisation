@@ -1,0 +1,5 @@
+/srv/http/awm/wp-content/plugins/performance-optimisation/scripts/security-check.php
+/srv/http/awm/wp-content/plugins/performance-optimisation/scripts/compliance-validator.php
+/srv/http/awm/wp-content/plugins/performance-optimisation/uninstall.php
+/srv/http/awm/wp-content/plugins/performance-optimisation/templates/app.php
+/srv/http/awm/wp-content/plugins/performance-optimisation/performance-optimisation.php

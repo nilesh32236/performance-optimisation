@@ -85,10 +85,62 @@ class RecommendationEngine {
 		// Sort by priority and impact.
 		usort( $recommendations, array( $this, 'sort_recommendations_by_priority' ) );
 
+		// Determine recommended preset based on analysis
+		$recommended_preset = $this->determine_recommended_preset( $report );
+
 		return array(
-			'recommendations' => $recommendations,
-			'summary'         => $this->generate_recommendations_summary( $recommendations ),
-			'generated_at'    => current_time( 'mysql' ),
+			'preset'       => array(
+				'preset'     => $recommended_preset['name'],
+				'confidence' => $recommended_preset['confidence'],
+				'reasons'    => $recommended_preset['reasons'],
+			),
+			'personalized' => $recommendations,
+			'summary'      => $this->generate_recommendations_summary( $recommendations ),
+			'generated_at' => current_time( 'mysql' ),
+		);
+	}
+
+	/**
+	 * Determine the recommended preset based on performance analysis.
+	 *
+	 * @param array $report Performance report data.
+	 * @return array Recommended preset information.
+	 */
+	private function determine_recommended_preset( array $report ): array {
+		$avg_load_time    = $report['performance']['avg_page_load_time'] ?? 3.0;
+		$cache_hit_rate   = $report['performance']['cache_hit_rate'] ?? 0;
+		$total_page_views = $report['performance']['total_page_views'] ?? 0;
+
+		// Default to balanced mode
+		$preset     = 'balanced';
+		$confidence = 75;
+		$reasons    = array();
+
+		// Determine preset based on performance metrics
+		if ( $avg_load_time > 4.0 || $cache_hit_rate < 50 ) {
+			$preset     = 'aggressive';
+			$confidence = 85;
+			$reasons[]  = 'Slow page load times detected';
+			$reasons[]  = 'Low cache hit rate needs improvement';
+		} elseif ( $total_page_views > 10000 ) {
+			$preset     = 'aggressive';
+			$confidence = 90;
+			$reasons[]  = 'High traffic volume detected';
+			$reasons[]  = 'Maximum optimization recommended';
+		} elseif ( $avg_load_time < 2.0 && $cache_hit_rate > 80 ) {
+			$preset     = 'conservative';
+			$confidence = 80;
+			$reasons[]  = 'Good performance already achieved';
+			$reasons[]  = 'Conservative approach to maintain stability';
+		} else {
+			$reasons[] = 'Balanced approach for optimal performance';
+			$reasons[] = 'Good mix of optimization and compatibility';
+		}
+
+		return array(
+			'name'       => $preset,
+			'confidence' => $confidence,
+			'reasons'    => $reasons,
 		);
 	}
 
@@ -716,12 +768,45 @@ class RecommendationEngine {
 	 * @return array<string, mixed> Implemented recommendations data.
 	 */
 	private function get_implemented_recommendations(): array {
-		// This would track which recommendations were implemented.
-		// For now, return placeholder data.
+		$implemented            = get_option( 'wppo_implemented_recommendations', array() );
+		$recent_implementations = array_slice( $implemented, -5 ); // Last 5
+
+		// Count by category
+		$categories = array();
+		foreach ( $implemented as $rec ) {
+			$category                = $rec['category'] ?? 'general';
+			$categories[ $category ] = ( $categories[ $category ] ?? 0 ) + 1;
+		}
+
 		return array(
-			'total_implemented'      => 0,
-			'recent_implementations' => array(),
+			'total_implemented'      => count( $implemented ),
+			'recent_implementations' => $recent_implementations,
+			'by_category'            => $categories,
+			'last_updated'           => get_option( 'wppo_recommendations_last_update', time() ),
 		);
+	}
+
+	/**
+	 * Mark a recommendation as implemented.
+	 *
+	 * @param string $recommendation_id Recommendation identifier.
+	 * @param string $category Recommendation category.
+	 * @return bool True on success.
+	 */
+	public function mark_recommendation_implemented( string $recommendation_id, string $category = 'general' ): bool {
+		$implemented = get_option( 'wppo_implemented_recommendations', array() );
+
+		$implemented[] = array(
+			'id'          => $recommendation_id,
+			'category'    => $category,
+			'implemented' => time(),
+			'user_id'     => get_current_user_id(),
+		);
+
+		update_option( 'wppo_implemented_recommendations', $implemented );
+		update_option( 'wppo_recommendations_last_update', time() );
+
+		return true;
 	}
 
 	/**

@@ -13,6 +13,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
+// Check user capabilities
+if ( ! current_user_can( 'manage_options' ) ) {
+	wp_die( __( 'You do not have sufficient permissions to run this script.' ) );
+}
+
+// Verify this is running in WP-CLI for additional security
+if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
+	wp_die( __( 'This script can only be run via WP-CLI for security reasons.' ) );
+}
+
 /**
  * Compliance Validator Class
  */
@@ -319,7 +329,16 @@ class ComplianceValidator {
 		$main_file = $this->plugin_path . '/performance-optimisation.php';
 
 		// Basic syntax check
-		$output = shell_exec( "php -l {$main_file} 2>&1" );
+		// Security fix: Replace shell_exec with safer validation
+		if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
+			throw new Exception( 'This script can only be run via WP-CLI for security reasons.' );
+		}
+
+		// Use PHP's built-in syntax checking instead of shell_exec
+		$syntax_check = php_check_syntax( $main_file, $output );
+		if ( ! $syntax_check ) {
+			throw new Exception( "PHP syntax error in {$main_file}: {$output}" );
+		}
 		if ( strpos( $output, 'No syntax errors' ) === false ) {
 			$issues[] = 'Main plugin file has syntax errors';
 		}

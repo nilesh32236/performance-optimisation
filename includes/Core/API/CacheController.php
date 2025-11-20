@@ -148,7 +148,7 @@ class CacheController extends BaseController {
 			$path       = $data['path'] ?? null;
 
 			// Use modern services instead of legacy classes
-			$container = \PerformanceOptimisation\Core\Container\Container::getInstance();
+			$container    = \PerformanceOptimisation\Core\Container\Container::getInstance();
 			$cacheService = $container->get( \PerformanceOptimisation\Services\CacheService::class );
 
 			$cleared_items = 0;
@@ -157,33 +157,33 @@ class CacheController extends BaseController {
 			switch ( $cache_type ) {
 				case 'page':
 					if ( $path ) {
-						$success = $cacheService->invalidateCache( $path );
-						$message = sprintf( 'Page cache cleared for: %s', esc_url( home_url( $path ) ) );
+						$success       = $cacheService->invalidateCache( $path );
+						$message       = sprintf( 'Page cache cleared for: %s', esc_url( home_url( $path ) ) );
 						$cleared_items = $success ? 1 : 0;
 					} else {
-						$success = $cacheService->clearCache( 'page' );
+						$success       = $cacheService->clearCache( 'page' );
 						$cleared_items = $success ? 1 : 0;
-						$message = 'Page cache cleared.';
+						$message       = 'Page cache cleared.';
 					}
 					break;
 
 				case 'object':
 					wp_cache_flush();
 					$cleared_items = 1;
-					$message = 'Object cache cleared.';
+					$message       = 'Object cache cleared.';
 					break;
 
 				case 'minified':
-					$success = $cacheService->clearCache( 'minified' );
+					$success       = $cacheService->clearCache( 'minified' );
 					$cleared_items = $success ? 1 : 0;
-					$message = 'Minified files cache cleared.';
+					$message       = 'Minified files cache cleared.';
 					break;
 
 				case 'all':
 				default:
-					$success = $cacheService->clearCache( 'all' );
+					$success       = $cacheService->clearCache( 'all' );
 					$cleared_items = $success ? 1 : 0;
-					$message = 'All cache cleared.';
+					$message       = 'All cache cleared.';
 					break;
 			}
 

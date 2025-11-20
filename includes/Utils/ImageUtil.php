@@ -33,7 +33,13 @@ class ImageUtil {
 	 * @var array
 	 */
 	private const SUPPORTED_FORMATS = array(
-		'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg'
+		'jpg',
+		'jpeg',
+		'png',
+		'gif',
+		'webp',
+		'avif',
+		'svg',
 	);
 
 	/**
@@ -70,7 +76,7 @@ class ImageUtil {
 	 */
 	public static function getImageMimeType( string $url_or_path ): string {
 		$extension = strtolower( pathinfo( $url_or_path, PATHINFO_EXTENSION ) );
-		
+
 		return self::MIME_TYPES[ $extension ] ?? 'image/jpeg';
 	}
 
@@ -84,9 +90,9 @@ class ImageUtil {
 	 * @return bool True if supported format, false otherwise.
 	 */
 	public static function isImageFormat( string $path, array $formats = array() ): bool {
-		$extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+		$extension       = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
 		$allowed_formats = ! empty( $formats ) ? $formats : self::SUPPORTED_FORMATS;
-		
+
 		return in_array( $extension, $allowed_formats, true );
 	}
 
@@ -105,7 +111,7 @@ class ImageUtil {
 
 		try {
 			$image_info = getimagesize( $path );
-			
+
 			if ( false === $image_info ) {
 				return array();
 			}
@@ -161,7 +167,7 @@ class ImageUtil {
 
 		foreach ( $sizes as $size_name => $size_config ) {
 			$variant_path = self::generateVariantPath( $path, $size_name, $size_config );
-			
+
 			if ( self::shouldGenerateVariant( $original_dimensions, $size_config ) ) {
 				$variants[ $size_name ] = array(
 					'path'   => $variant_path,
@@ -189,9 +195,9 @@ class ImageUtil {
 			return $path;
 		}
 
-		$path_info = pathinfo( $path );
+		$path_info     = pathinfo( $path );
 		$optimized_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo/' . dirname( str_replace( WP_CONTENT_DIR, '', $path ) ) );
-		
+
 		// Ensure directory exists
 		if ( ! FileSystemUtil::fileExists( $optimized_dir ) ) {
 			FileSystemUtil::createDirectory( $optimized_dir );
@@ -210,7 +216,7 @@ class ImageUtil {
 	 */
 	public static function isImageOptimized( string $path ): bool {
 		$extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
-		
+
 		// Check if it's already in a modern format
 		if ( in_array( $extension, self::MODERN_FORMATS, true ) ) {
 			return true;
@@ -219,7 +225,7 @@ class ImageUtil {
 		// Check if optimized version exists
 		$webp_path = self::optimizeImagePath( $path, 'webp' );
 		$avif_path = self::optimizeImagePath( $path, 'avif' );
-		
+
 		return FileSystemUtil::fileExists( $webp_path ) || FileSystemUtil::fileExists( $avif_path );
 	}
 
@@ -233,7 +239,7 @@ class ImageUtil {
 	 * @return float Compression ratio (0.0 to 1.0).
 	 */
 	public static function getImageCompressionRatio( string $original_path, string $optimized_path ): float {
-		$original_size = self::calculateImageSize( $original_path );
+		$original_size  = self::calculateImageSize( $original_path );
 		$optimized_size = self::calculateImageSize( $optimized_path );
 
 		if ( 0 === $original_size || 0 === $optimized_size ) {
@@ -254,11 +260,11 @@ class ImageUtil {
 	 */
 	public static function generateResponsiveSrcset( string $path, array $sizes ): string {
 		$srcset_parts = array();
-		$variants = self::generateImageVariants( $path, $sizes );
+		$variants     = self::generateImageVariants( $path, $sizes );
 
 		foreach ( $variants as $size_name => $variant ) {
 			if ( isset( $variant['width'] ) ) {
-				$url = FileSystemUtil::pathToUrl( $variant['path'] );
+				$url            = FileSystemUtil::pathToUrl( $variant['path'] );
 				$srcset_parts[] = $url . ' ' . $variant['width'] . 'w';
 			}
 		}
@@ -276,7 +282,7 @@ class ImageUtil {
 	 */
 	public static function getImageAspectRatio( string $path ): float {
 		$dimensions = self::getImageDimensions( $path );
-		
+
 		if ( empty( $dimensions ) || 0 === $dimensions['height'] ) {
 			return 0.0;
 		}
@@ -298,14 +304,14 @@ class ImageUtil {
 			return false;
 		}
 
-		$extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
-		$file_size = self::calculateImageSize( $path );
+		$extension  = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+		$file_size  = self::calculateImageSize( $path );
 		$dimensions = self::getImageDimensions( $path );
 
 		// Default criteria
-		$max_file_size = $criteria['max_file_size'] ?? 500000; // 500KB
-		$max_width = $criteria['max_width'] ?? 1920;
-		$max_height = $criteria['max_height'] ?? 1080;
+		$max_file_size       = $criteria['max_file_size'] ?? 500000; // 500KB
+		$max_width           = $criteria['max_width'] ?? 1920;
+		$max_height          = $criteria['max_height'] ?? 1080;
 		$modern_formats_only = $criteria['modern_formats_only'] ?? false;
 
 		// Check if already in modern format
@@ -344,7 +350,7 @@ class ImageUtil {
 	 */
 	public static function getOptimalFormat( string $path, array $browser_support = array() ): string {
 		$original_extension = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
-		
+
 		// Default browser support (can be overridden)
 		$default_support = array(
 			'avif' => false,
@@ -352,7 +358,7 @@ class ImageUtil {
 			'jpeg' => true,
 			'png'  => true,
 		);
-		
+
 		$support = array_merge( $default_support, $browser_support );
 
 		// Prefer AVIF if supported
@@ -379,43 +385,43 @@ class ImageUtil {
 	 * @return array Savings information.
 	 */
 	public static function calculateOptimizationSavings( array $images, array $formats = array( 'webp' ) ): array {
-		$total_original_size = 0;
+		$total_original_size  = 0;
 		$total_optimized_size = 0;
-		$processed_count = 0;
+		$processed_count      = 0;
 
 		foreach ( $images as $image_path ) {
 			if ( ! self::isImageFormat( $image_path ) ) {
 				continue;
 			}
 
-			$original_size = self::calculateImageSize( $image_path );
+			$original_size        = self::calculateImageSize( $image_path );
 			$total_original_size += $original_size;
 
 			foreach ( $formats as $format ) {
 				$optimized_path = self::optimizeImagePath( $image_path, $format );
-				
+
 				if ( FileSystemUtil::fileExists( $optimized_path ) ) {
-					$optimized_size = self::calculateImageSize( $optimized_path );
+					$optimized_size        = self::calculateImageSize( $optimized_path );
 					$total_optimized_size += $optimized_size;
-					$processed_count++;
+					++$processed_count;
 					break; // Use first available optimized format
 				}
 			}
 		}
 
-		$savings_bytes = $total_original_size - $total_optimized_size;
+		$savings_bytes      = $total_original_size - $total_optimized_size;
 		$savings_percentage = $total_original_size > 0 ? ( $savings_bytes / $total_original_size ) * 100 : 0;
 
 		return array(
-			'total_images' => count( $images ),
-			'processed_images' => $processed_count,
-			'original_size' => $total_original_size,
-			'optimized_size' => $total_optimized_size,
-			'savings_bytes' => $savings_bytes,
-			'savings_percentage' => round( $savings_percentage, 2 ),
-			'formatted_original' => FileSystemUtil::formatFileSize( $total_original_size ),
+			'total_images'        => count( $images ),
+			'processed_images'    => $processed_count,
+			'original_size'       => $total_original_size,
+			'optimized_size'      => $total_optimized_size,
+			'savings_bytes'       => $savings_bytes,
+			'savings_percentage'  => round( $savings_percentage, 2 ),
+			'formatted_original'  => FileSystemUtil::formatFileSize( $total_original_size ),
 			'formatted_optimized' => FileSystemUtil::formatFileSize( $total_optimized_size ),
-			'formatted_savings' => FileSystemUtil::formatFileSize( $savings_bytes ),
+			'formatted_savings'   => FileSystemUtil::formatFileSize( $savings_bytes ),
 		);
 	}
 
@@ -430,13 +436,13 @@ class ImageUtil {
 	 * @return string Variant path.
 	 */
 	private static function generateVariantPath( string $original_path, string $size_name, array $size_config ): string {
-		$path_info = pathinfo( $original_path );
+		$path_info   = pathinfo( $original_path );
 		$variant_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo/variants/' . dirname( str_replace( WP_CONTENT_DIR, '', $original_path ) ) );
-		
-		$width = $size_config['width'] ?? 'auto';
+
+		$width  = $size_config['width'] ?? 'auto';
 		$height = $size_config['height'] ?? 'auto';
 		$suffix = $size_name . '-' . $width . 'x' . $height;
-		
+
 		return wp_normalize_path( $variant_dir . '/' . $path_info['filename'] . '-' . $suffix . '.' . $path_info['extension'] );
 	}
 
@@ -450,10 +456,10 @@ class ImageUtil {
 	 * @return bool True if variant should be generated, false otherwise.
 	 */
 	private static function shouldGenerateVariant( array $original_dimensions, array $size_config ): bool {
-		$original_width = $original_dimensions['width'];
+		$original_width  = $original_dimensions['width'];
 		$original_height = $original_dimensions['height'];
-		
-		$target_width = $size_config['width'] ?? null;
+
+		$target_width  = $size_config['width'] ?? null;
 		$target_height = $size_config['height'] ?? null;
 
 		// Don't generate if target is larger than original
@@ -479,7 +485,7 @@ class ImageUtil {
 	private static function pathToUrl( string $path ): string {
 		$content_dir = wp_normalize_path( WP_CONTENT_DIR );
 		$content_url = content_url();
-		
+
 		return str_replace( $content_dir, $content_url, wp_normalize_path( $path ) );
 	}
 }
