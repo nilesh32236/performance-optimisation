@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Progress, Button, Select } from '../components/UI';
+import { Button, Card, Select, Spinner, Notice } from '../components/UI';
 import { secureApiFetch } from '../utils/security';
 import { handleApiError, logError } from '../utils/errorHandler';
+import { Dashicon } from '@wordpress/components';
 
 interface PerformanceMetrics {
 	page_load_time: number;
@@ -28,33 +29,28 @@ export const DashboardAnalytics: React.FC = () => {
 		setError(null);
 		
 		try {
-			const data = await secureApiFetch(`/wp-json/performance-optimisation/v1/analytics/dashboard?range=${encodeURIComponent(timeRange)}`);
+			const data = await secureApiFetch(`analytics/dashboard?range=${encodeURIComponent(timeRange)}`);
 			
-			// Validate received data
 			if (!data || typeof data !== 'object') {
 				throw new Error('Invalid metrics data received');
 			}
 			
-			setMetrics(data);
+			const validatedData = {
+				page_load_time: data.page_load_time || 0,
+				cache_hit_rate: data.cache_hit_rate || 0,
+				optimization_score: data.optimization_score || 0,
+				images_optimized: data.images_optimized || 0,
+				size_saved: data.size_saved || '0 KB',
+				recommendations: data.recommendations || []
+			};
+			
+			setMetrics(validatedData);
 		} catch (err) {
 			logError(err, { component: 'DashboardAnalytics', action: 'fetchMetrics', timeRange });
-			setError(handleApiError(err));
-		}
-		setLoading(false);
-	};
-
-	const applyRecommendation = async (recommendationId: string) => {
-		try {
-			await secureApiFetch('/wp-json/performance-optimisation/v1/recommendations/apply', {
-				method: 'POST',
-				data: { id: recommendationId }
-			});
-			
-			// Refresh metrics after applying recommendation
-			await fetchMetrics();
-		} catch (err) {
-			logError(err, { component: 'DashboardAnalytics', action: 'applyRecommendation', recommendationId });
-			setError(handleApiError(err));
+			const errorMessage = handleApiError(err);
+			setError(errorMessage);
+		} finally {
+			setLoading(false);
 		}
 	};
 
@@ -62,200 +58,183 @@ export const DashboardAnalytics: React.FC = () => {
 		fetchMetrics();
 	}, [timeRange]);
 
-	const getScoreColor = (score: number): string => {
-		if (score >= 90) return 'success';
-		if (score >= 70) return 'warning';
-		return 'error';
-	};
-
-	const getImpactColor = (impact: string): string => {
-		switch (impact) {
-			case 'high': return 'error';
-			case 'medium': return 'warning';
-			case 'low': return 'success';
-			default: return 'info';
-		}
+	const handleRefresh = () => {
+		fetchMetrics();
 	};
 
 	if (loading) {
 		return (
-			<div className="wppo-analytics-loading" role="status" aria-label="Loading analytics">
-				<div className="wppo-skeleton-grid">
-					{[...Array(6)].map((_, i) => (
-						<div key={i} className="wppo-skeleton-card" aria-hidden="true" />
-					))}
+			<Card className="min-h-[400px] flex items-center justify-center">
+				<div className="flex flex-col items-center gap-4">
+					<Spinner size="large" />
+					<p className="text-gray-500 font-medium">Loading analytics data...</p>
 				</div>
-			</div>
+			</Card>
 		);
 	}
 
 	if (error) {
 		return (
-			<div className="wppo-analytics-error" role="alert">
-				<Card title="Analytics Error">
-					<p>{error}</p>
-					<Button variant="primary" onClick={fetchMetrics}>
-						Retry
+			<Card className="min-h-[200px] border-red-200 bg-red-50">
+				<div className="flex flex-col items-center justify-center p-8 text-center">
+					<div className="p-3 bg-red-100 rounded-full text-red-600 mb-4">
+						<Dashicon icon="warning" size={32} />
+					</div>
+					<h3 className="text-lg font-semibold text-red-900 mb-2">Error Loading Analytics</h3>
+					<p className="text-red-700 mb-6 max-w-md">{error}</p>
+					<Button 
+						variant="secondary"
+						onClick={handleRefresh}
+						className="bg-white border-red-200 text-red-700 hover:bg-red-50"
+					>
+						Try Again
 					</Button>
-				</Card>
-			</div>
-		);
-	}
-
-	if (!metrics) {
-		return (
-			<div className="wppo-analytics-empty">
-				<Card title="No Data Available">
-					<p>No analytics data is available for the selected time period.</p>
-					<Button variant="secondary" onClick={fetchMetrics}>
-						Refresh
-					</Button>
-				</Card>
-			</div>
+				</div>
+			</Card>
 		);
 	}
 
 	return (
-		<div className="wppo-dashboard-analytics">
-			{/* Header Controls */}
-			<div className="wppo-analytics-header">
-				<h2>Performance Analytics & Insights</h2>
-				<div className="wppo-controls">
+		<Card className="overflow-hidden">
+			{/* Header */}
+			<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+				<div>
+					<h3 className="text-lg font-semibold text-gray-900">Performance Analytics</h3>
+					<p className="text-sm text-gray-500">Real-time monitoring and insights</p>
+				</div>
+				<div className="flex items-center gap-3">
 					<Select 
 						value={timeRange}
-						onChange={setTimeRange}
+						onChange={(value) => setTimeRange(value)}
 						options={[
 							{ value: '24h', label: 'Last 24 Hours' },
 							{ value: '7d', label: 'Last 7 Days' },
-							{ value: '30d', label: 'Last 30 Days' },
-							{ value: '90d', label: 'Last 90 Days' }
+							{ value: '30d', label: 'Last 30 Days' }
 						]}
+						className="w-40"
 					/>
-					<Button variant="secondary" onClick={fetchMetrics}>
-						Refresh
+					<Button 
+						variant="secondary"
+						onClick={handleRefresh}
+						className="px-3"
+					>
+						<Dashicon icon="update" />
 					</Button>
 				</div>
 			</div>
 
-			{/* Key Metrics Grid */}
-			<div className="wppo-metrics-grid">
-				<Card title="Performance Score" className="wppo-score-card">
-					<div className="wppo-score-display">
-						<div className={`wppo-score-circle ${getScoreColor(metrics.optimization_score)}`}>
-							<span className="wppo-score-value">{metrics.optimization_score}</span>
-							<span className="wppo-score-label">/ 100</span>
-						</div>
-						<div className="wppo-score-details">
-							<Progress 
-								value={metrics.optimization_score} 
-								color={getScoreColor(metrics.optimization_score)}
-							/>
-							<p>Overall optimization score</p>
-						</div>
+			{/* Metrics Grid */}
+			<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+				<div className="p-4 rounded-xl bg-blue-50 border border-blue-100 flex flex-col items-center text-center transition-transform hover:scale-[1.02]">
+					<div className="p-2 bg-blue-100 text-blue-600 rounded-lg mb-3">
+						<Dashicon icon="clock" size={24} />
 					</div>
-				</Card>
+					<div className="text-2xl font-bold text-gray-900 mb-1">
+						{metrics?.page_load_time?.toFixed(2) || '0.00'}s
+					</div>
+					<div className="text-xs font-semibold text-blue-700 uppercase tracking-wider">
+						Page Load Time
+					</div>
+				</div>
 
-				<Card title="Page Load Time">
-					<div className="wppo-metric">
-						<span className="wppo-metric-value">{metrics.page_load_time.toFixed(2)}s</span>
-						<span className="wppo-metric-change">
-							{metrics.page_load_time < 3 ? '↓ Good' : metrics.page_load_time < 5 ? '→ Average' : '↑ Needs Work'}
-						</span>
-						<p>Average load time</p>
+				<div className="p-4 rounded-xl bg-green-50 border border-green-100 flex flex-col items-center text-center transition-transform hover:scale-[1.02]">
+					<div className="p-2 bg-green-100 text-green-600 rounded-lg mb-3">
+						<Dashicon icon="cloud-saved" size={24} />
 					</div>
-				</Card>
+					<div className="text-2xl font-bold text-gray-900 mb-1">
+						{metrics?.cache_hit_rate?.toFixed(1) || '0.0'}%
+					</div>
+					<div className="text-xs font-semibold text-green-700 uppercase tracking-wider">
+						Cache Hit Rate
+					</div>
+				</div>
 
-				<Card title="Cache Hit Rate">
-					<div className="wppo-metric">
-						<span className="wppo-metric-value">{metrics.cache_hit_rate}%</span>
-						<Progress value={metrics.cache_hit_rate} />
-						<p>Cache effectiveness</p>
+				<div className="p-4 rounded-xl bg-purple-50 border border-purple-100 flex flex-col items-center text-center transition-transform hover:scale-[1.02]">
+					<div className="p-2 bg-purple-100 text-purple-600 rounded-lg mb-3">
+						<Dashicon icon="performance" size={24} />
 					</div>
-				</Card>
+					<div className="text-2xl font-bold text-gray-900 mb-1">
+						{metrics?.optimization_score || 0}/100
+					</div>
+					<div className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
+						Optimization Score
+					</div>
+				</div>
 
-				<Card title="Images Optimized">
-					<div className="wppo-metric">
-						<span className="wppo-metric-value">{metrics.images_optimized}</span>
-						<span className="wppo-metric-label">images</span>
-						<p>Size saved: {metrics.size_saved}</p>
+				<div className="p-4 rounded-xl bg-orange-50 border border-orange-100 flex flex-col items-center text-center transition-transform hover:scale-[1.02]">
+					<div className="p-2 bg-orange-100 text-orange-600 rounded-lg mb-3">
+						<Dashicon icon="format-image" size={24} />
 					</div>
-				</Card>
+					<div className="text-2xl font-bold text-gray-900 mb-1">
+						{metrics?.images_optimized || 0}
+					</div>
+					<div className="text-xs font-semibold text-orange-700 uppercase tracking-wider">
+						Images Optimized
+					</div>
+				</div>
 			</div>
 
-			{/* Recommendations Section */}
-			<Card title="Performance Recommendations" className="wppo-recommendations-card">
-				{metrics.recommendations.length > 0 ? (
-					<div className="wppo-recommendations-list">
-						{metrics.recommendations.map(rec => (
-							<div key={rec.id} className="wppo-recommendation">
-								<div className="wppo-recommendation-header">
-									<h4>{rec.title}</h4>
-									<span className={`wppo-impact-badge ${getImpactColor(rec.impact)}`}>
-										{rec.impact} impact
-									</span>
+			{/* Size Saved Banner */}
+			<div className="bg-gray-50 rounded-xl p-6 mb-8 border border-gray-100 flex items-center justify-between">
+				<div className="flex items-center gap-4">
+					<div className="p-3 bg-white rounded-full shadow-sm text-green-600">
+						<Dashicon icon="chart-bar" size={24} />
+					</div>
+					<div>
+						<h4 className="font-semibold text-gray-900">Total Bandwidth Saved</h4>
+						<p className="text-sm text-gray-500">Across all optimizations since installation</p>
+					</div>
+				</div>
+				<div className="text-2xl font-bold text-green-600">
+					{metrics?.size_saved || '0 KB'}
+				</div>
+			</div>
+
+			{/* Recommendations */}
+			{metrics?.recommendations && metrics.recommendations.length > 0 && (
+				<div>
+					<h4 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+						<Dashicon icon="lightbulb" /> Recommendations
+					</h4>
+					<div className="space-y-3">
+						{metrics.recommendations.map((rec) => (
+							<div 
+								key={rec.id}
+								className={`flex items-start gap-4 p-4 rounded-lg border-l-4 transition-colors hover:bg-gray-50 ${
+									rec.impact === 'high' ? 'border-l-red-500 bg-red-50/50' :
+									rec.impact === 'medium' ? 'border-l-yellow-500 bg-yellow-50/50' :
+									'border-l-blue-500 bg-blue-50/50'
+								}`}
+							>
+								<div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${
+									rec.impact === 'high' ? 'bg-red-500' :
+									rec.impact === 'medium' ? 'bg-yellow-500' :
+									'bg-blue-500'
+								}`}>
+									{rec.impact === 'high' ? '!' : rec.impact === 'medium' ? '⚠' : 'i'}
 								</div>
-								<p>{rec.description}</p>
-								<Button variant="secondary" size="small">
-									Apply Recommendation
-								</Button>
+								<div className="flex-1">
+									<div className="flex items-center justify-between mb-1">
+										<h5 className="text-sm font-semibold text-gray-900">
+											{rec.title}
+										</h5>
+										<span className={`text-xs px-2 py-0.5 rounded-full font-medium uppercase ${
+											rec.impact === 'high' ? 'bg-red-100 text-red-700' :
+											rec.impact === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+											'bg-blue-100 text-blue-700'
+										}`}>
+											{rec.impact} Impact
+										</span>
+									</div>
+									<p className="text-sm text-gray-600 leading-relaxed">
+										{rec.description}
+									</p>
+								</div>
 							</div>
 						))}
 					</div>
-				) : (
-					<div className="wppo-no-recommendations">
-						<div className="wppo-success-icon">✓</div>
-						<h3>Great job!</h3>
-						<p>No critical performance issues found. Your site is well optimized.</p>
-					</div>
-				)}
-			</Card>
-
-			{/* Performance Trends */}
-			<div className="wppo-trends-grid">
-				<Card title="Cache Performance" className="wppo-trend-card">
-					<div className="wppo-trend-stats">
-						<div className="wppo-trend-item">
-							<span className="wppo-trend-label">Page Cache</span>
-							<span className="wppo-trend-value">94%</span>
-						</div>
-						<div className="wppo-trend-item">
-							<span className="wppo-trend-label">Object Cache</span>
-							<span className="wppo-trend-value">87%</span>
-						</div>
-						<div className="wppo-trend-item">
-							<span className="wppo-trend-label">Browser Cache</span>
-							<span className="wppo-trend-value">98%</span>
-						</div>
-					</div>
-				</Card>
-
-				<Card title="Optimization Impact" className="wppo-trend-card">
-					<div className="wppo-impact-stats">
-						<div className="wppo-impact-item">
-							<span className="wppo-impact-label">CSS Minification</span>
-							<span className="wppo-impact-value">-23% size</span>
-						</div>
-						<div className="wppo-impact-item">
-							<span className="wppo-impact-label">JS Minification</span>
-							<span className="wppo-impact-value">-31% size</span>
-						</div>
-						<div className="wppo-impact-item">
-							<span className="wppo-impact-label">Image Optimization</span>
-							<span className="wppo-impact-value">-45% size</span>
-						</div>
-					</div>
-				</Card>
-			</div>
-
-			{/* Quick Actions */}
-			<Card title="Quick Actions" className="wppo-actions-card">
-				<div className="wppo-quick-actions">
-					<Button variant="primary">Clear All Cache</Button>
-					<Button variant="secondary">Optimize Images</Button>
-					<Button variant="secondary">Run Performance Test</Button>
-					<Button variant="secondary">Generate Report</Button>
 				</div>
-			</Card>
-		</div>
+			)}
+		</Card>
 	);
 };

@@ -75,7 +75,9 @@ export const logError = (error: any, context?: Record<string, any>) => {
 	// Send to backend for logging (optional)
 	if (window.wppoAdmin?.debug) {
 		try {
-			fetch('/wp-json/performance-optimisation/v1/log-error', {
+			const apiUrl = window.wppoAdmin?.apiUrl;
+			if (apiUrl) {
+				fetch(`${apiUrl}/log-error`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -85,6 +87,7 @@ export const logError = (error: any, context?: Record<string, any>) => {
 			}).catch(() => {
 				// Silently fail if logging endpoint is not available
 			});
+			}
 		} catch (e) {
 			// Silently fail
 		}

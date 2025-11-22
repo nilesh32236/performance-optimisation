@@ -11,7 +11,7 @@ import { Panel, PanelBody } from '@wordpress/components';
 /**
  * Internal dependencies
  */
-import './AnalyticsDashboard.scss';
+
 
 const AnalyticsDashboard: React.FC = () => {
 	return (

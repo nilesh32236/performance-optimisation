@@ -1,28 +1,17 @@
 /**
- * Main App Component - Refactored
+ * Main App Component - Modern Tab Design
  */
 
-/**
- * External dependencies
- */
 import React, { useState, useEffect } from 'react';
-import { PluginConfig } from '@types/index';
-import { Button, Card, CardBody, CardHeader, Spinner, TabPanel } from '@wordpress/components';
+import { Spinner } from '@wordpress/components';
 
-/**
- * Internal dependencies
- */
-import MetricsOverview from './components/Analytics/MetricsOverview';
-import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard';
-import OptimizationStatus from './components/Analytics/OptimizationStatus';
+import { Layout } from './components/Layout';
+import { DashboardView } from './components/Dashboard/DashboardView';
 import { CachingTab } from './components/CachingTab';
 import { OptimizationTab } from './components/OptimizationTab';
 import { ImagesTab } from './components/ImagesTab';
 import { AdvancedTab } from './components/AdvancedTab';
-import { DashboardAnalytics } from './components/DashboardAnalytics';
-
-// Import simple stylesheet
-import './styles/style.scss';
+import type { PluginConfig } from './types';
 
 export const App: React.FC = () => {
 	const [ config, setConfig ] = useState<PluginConfig | null>( null );
@@ -50,75 +39,75 @@ export const App: React.FC = () => {
 
 	if ( loading ) {
 		return (
-			<div className="wppo-admin-loading">
+			<div className="flex flex-col items-center justify-center h-screen bg-gray-50">
 				<Spinner />
-				<p>Loading Performance Optimisation settings...</p>
+				<p className="mt-4 text-sm text-gray-600 font-medium">Loading Performance Optimisation...</p>
 			</div>
 		);
 	}
 
 	if ( error ) {
 		return (
-			<div className="wppo-admin-error">
-				<Card>
-					<CardHeader>Error</CardHeader>
-					<CardBody>{error}</CardBody>
-					<Button isPrimary onClick={ () => window.location.reload() }>Reload Page</Button>
-				</Card>
+			<div className="flex items-center justify-center h-screen bg-gray-50 p-6">
+				<div className="max-w-md w-full bg-white rounded-lg border border-red-200 p-6">
+					<h3 className="text-lg font-semibold text-red-800 mb-2">Configuration Error</h3>
+					<p className="text-red-700 mb-4">{error}</p>
+					<button 
+						onClick={ () => window.location.reload() }
+						className="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+					>
+						Reload Page
+					</button>
+				</div>
 			</div>
 		);
 	}
 
-	const renderDashboardTab = (safeConfig: any) => (
-		<div className="wppo-dashboard-tab">
-			<MetricsOverview config={safeConfig} />
-			<DashboardAnalytics />
-			<AnalyticsDashboard />
-			<OptimizationStatus config={safeConfig} />
-		</div>
-	);
-
-	const onSelectTab = ( tabName: string ) => {
-		setActiveTab( tabName );
-	};
-
 	const tabs = [
-		{ name: 'dashboard', title: 'Dashboard' },
-		{ name: 'caching', title: 'Caching' },
-		{ name: 'optimization', title: 'Optimization' },
-		{ name: 'images', title: 'Images' },
-		{ name: 'advanced', title: 'Advanced' },
+		{ id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+		{ id: 'caching', label: 'Caching', icon: 'database' },
+		{ id: 'optimization', label: 'Optimization', icon: 'performance' },
+		{ id: 'images', label: 'Images', icon: 'format-image' },
+		{ id: 'advanced', label: 'Advanced', icon: 'admin-tools' },
 	];
 
-	return (
-		<div className="wppo-admin">
-			<TabPanel
-				className="wppo-admin__tabs"
-				activeClass="is-active"
-				onSelect={onSelectTab}
-				tabs={tabs}
-			>
-				{(tab) => {
-					const safeConfig = {
-						...config,
-						overview: {
-							performance_score: 75,
-							average_load_time: 2.5,
-							cache_hit_ratio: config?.cacheStats?.hit_ratio || 0,
-						},
-					};
+	const renderContent = () => {
+		switch (activeTab) {
+			case 'dashboard':
+				return <DashboardView />;
+			case 'caching':
+				return <CachingTab />;
+			case 'optimization':
+				return <OptimizationTab />;
+			case 'images':
+				return <ImagesTab />;
+			case 'advanced':
+				return <AdvancedTab />;
+			default:
+				return <DashboardView />;
+		}
+	};
 
-					return (
-						<div className="wppo-admin__content">
-							{tab.name === 'dashboard' && renderDashboardTab(safeConfig)}
-							{tab.name === 'caching' && <CachingTab />}
-							{tab.name === 'optimization' && <OptimizationTab />}
-							{tab.name === 'images' && <ImagesTab />}
-							{tab.name === 'advanced' && <AdvancedTab />}
-						</div>
-					);
-				}}
-			</TabPanel>
-		</div>
+	return (
+		<Layout
+			activeTab={activeTab}
+			onSelectTab={setActiveTab}
+			tabs={tabs}
+			headerActions={
+				<a 
+					href="https://wordpress.org/plugins/performance-optimisation/"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+				>
+					<span>Documentation</span>
+					<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+					</svg>
+				</a>
+			}
+		>
+			{renderContent()}
+		</Layout>
 	);
 };

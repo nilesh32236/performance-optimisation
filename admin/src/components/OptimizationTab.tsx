@@ -1,386 +1,67 @@
-import React, { useState, useEffect } from 'react';
-import { Button, Card, Switch, Slider, Select, Notice, Progress } from '../components/UI';
-import { secureApiFetch, validateNumber } from '../utils/security';
-
-interface OptimizationSettings {
-	minify_css: boolean;
-	minify_js: boolean;
-	minify_html: boolean;
-	combine_css: boolean;
-	combine_js: boolean;
-	defer_js: boolean;
-	critical_css: boolean;
-	compression_level: number;
-	remove_unused_css: boolean;
-	optimize_fonts: boolean;
-}
-
-interface OptimizationStats {
-	css_files: number;
-	js_files: number;
-	html_pages: number;
-	size_saved: string;
-	load_time_improvement: string;
-	optimization_score: number;
-}
+import React from 'react';
+import { Dashicon } from '@wordpress/components';
 
 export const OptimizationTab: React.FC = () => {
-	const [settings, setSettings] = useState<OptimizationSettings>({
-		minify_css: true,
-		minify_js: true,
-		minify_html: false,
-		combine_css: true,
-		combine_js: false,
-		defer_js: true,
-		critical_css: false,
-		compression_level: 6,
-		remove_unused_css: false,
-		optimize_fonts: true
-	});
-	
-	const [stats, setStats] = useState<OptimizationStats>({
-		css_files: 0,
-		js_files: 0,
-		html_pages: 0,
-		size_saved: '0 KB',
-		load_time_improvement: '0%',
-		optimization_score: 0
-	});
-	
-	const [saving, setSaving] = useState(false);
-	const [optimizing, setOptimizing] = useState(false);
-	const [notification, setNotification] = useState<{type: string, message: string} | null>(null);
-
-	const fetchStats = async () => {
-		try {
-			const data = await secureApiFetch('/wp-json/performance-optimisation/v1/optimization/stats');
-			setStats(data);
-		} catch (error) {
-			console.error('Failed to fetch stats:', error);
-			setNotification({
-				type: 'error',
-				message: 'Failed to load optimization statistics'
-			});
-		}
-	};
-
-	const validateOptimizationSettings = (newSettings: OptimizationSettings) => {
-		const warnings: string[] = [];
-		
-		try {
-			validateNumber(newSettings.compression_level, 1, 9);
-		} catch (error) {
-			warnings.push('Invalid compression level');
-		}
-		
-		if (newSettings.combine_js && newSettings.defer_js) {
-			warnings.push('Combining and deferring JavaScript may cause conflicts. Test thoroughly.');
-		}
-		
-		if (newSettings.critical_css && !newSettings.minify_css) {
-			warnings.push('Critical CSS works best with CSS minification enabled');
-		}
-		
-		if (newSettings.remove_unused_css) {
-			warnings.push('Unused CSS removal is experimental and may break styling. Test on staging first.');
-		}
-		
-		return warnings;
-	};
-
-	const handleSettingChange = (key: keyof OptimizationSettings, value: any) => {
-		const newSettings = { ...settings, [key]: value };
-		const warnings = validateOptimizationSettings(newSettings);
-		
-		if (warnings.length > 0) {
-			setNotification({
-				type: 'warning',
-				message: warnings.join(' ')
-			});
-		}
-		
-		setSettings(newSettings);
-	};
-
-	const saveSettings = async () => {
-		setSaving(true);
-		try {
-			await secureApiFetch('/wp-json/performance-optimisation/v1/optimization/settings', {
-				method: 'POST',
-				data: settings
-			});
-			
-			setNotification({
-				type: 'success',
-				message: 'Optimization settings saved successfully!'
-			});
-		} catch (error) {
-			setNotification({
-				type: 'error',
-				message: 'Failed to save settings. Please try again.'
-			});
-		}
-		setSaving(false);
-		setTimeout(() => setNotification(null), 3000);
-	};
-
-	const optimizeNow = async () => {
-		setOptimizing(true);
-		try {
-			await secureApiFetch('/wp-json/performance-optimisation/v1/optimization/run', {
-				method: 'POST',
-				data: { settings }
-			});
-			
-			await fetchStats();
-			
-			setNotification({
-				type: 'success',
-				message: 'Files optimized successfully!'
-			});
-		} catch (error) {
-			setNotification({
-				type: 'error',
-				message: 'Optimization failed. Please try again.'
-			});
-		}
-		setOptimizing(false);
-		setTimeout(() => setNotification(null), 3000);
-	};
-
-	useEffect(() => {
-		fetchStats();
-	}, []);
-
-	const getCompressionLabel = (level: number) => {
-		if (level < 4) return 'Fast';
-		if (level < 7) return 'Balanced';
-		return 'Maximum';
-	};
-
-	const getScoreColor = (score: number) => {
-		if (score >= 90) return 'success';
-		if (score >= 70) return 'warning';
-		return 'error';
-	};
-
 	return (
-		<div className="wppo-optimization-tab">
-			{notification && (
-				<Notice type={notification.type as any}>
-					{notification.message}
-				</Notice>
-			)}
-
-			{/* Optimization Overview */}
-			<div className="wppo-stats-grid">
-				<div className={`wppo-stat wppo-stat--${getScoreColor(stats.optimization_score)}`}>
-					<div className="wppo-stat-icon">🎯</div>
-					<span className="wppo-stat-value">{stats.optimization_score}</span>
-					<div className="wppo-stat-label">Optimization Score</div>
-					<Progress value={stats.optimization_score} color={getScoreColor(stats.optimization_score)} />
-				</div>
-				
-				<div className="wppo-stat wppo-stat--success">
-					<div className="wppo-stat-icon">📦</div>
-					<span className="wppo-stat-value">{stats.size_saved}</span>
-					<div className="wppo-stat-label">Size Reduced</div>
-					<div className="wppo-stat-meta">{stats.load_time_improvement} faster loading</div>
-				</div>
-				
-				<div className="wppo-stat">
-					<div className="wppo-stat-icon">🎨</div>
-					<span className="wppo-stat-value">{stats.css_files}</span>
-					<div className="wppo-stat-label">CSS Files Optimized</div>
-				</div>
-				
-				<div className="wppo-stat">
-					<div className="wppo-stat-icon">⚡</div>
-					<span className="wppo-stat-value">{stats.js_files}</span>
-					<div className="wppo-stat-label">JS Files Optimized</div>
-				</div>
+		<div className="space-y-8">
+			<div>
+				<h2 className="text-3xl font-bold text-gray-900 mb-2">File Optimization</h2>
+				<p className="text-base text-gray-600">Minify and optimize CSS, JavaScript, and HTML files</p>
 			</div>
 
-			<div className="wppo-grid wppo-grid--3-col">
-				{/* CSS Optimization */}
-				<Card title="🎨 CSS Optimization" className="wppo-card--success">
-					<div className="wppo-settings-section">
-						<div className="wppo-settings-section-body">
-							<div className="wppo-setting">
-								<Switch 
-									checked={settings.minify_css}
-									onChange={(checked) => setSettings({...settings, minify_css: checked})}
-								/>
-								<div className="wppo-setting-content">
-									<h4>Minify CSS</h4>
-									<p>Remove whitespace and comments</p>
-								</div>
-							</div>
-							
-							<div className="wppo-setting">
-								<Switch 
-									checked={settings.combine_css}
-									onChange={(checked) => setSettings({...settings, combine_css: checked})}
-								/>
-								<div className="wppo-setting-content">
-									<h4>Combine CSS Files</h4>
-									<p>Merge multiple CSS files into one</p>
-								</div>
-							</div>
-							
-							<div className="wppo-setting">
-								<Switch 
-									checked={settings.critical_css}
-									onChange={(checked) => setSettings({...settings, critical_css: checked})}
-								/>
-								<div className="wppo-setting-content">
-									<h4>Critical CSS</h4>
-									<p>Inline above-the-fold CSS</p>
-								</div>
-							</div>
-							
-							<div className="wppo-setting">
-								<Switch 
-									checked={settings.remove_unused_css}
-									onChange={(checked) => setSettings({...settings, remove_unused_css: checked})}
-								/>
-								<div className="wppo-setting-content">
-									<h4>Remove Unused CSS</h4>
-									<p>Eliminate unused CSS rules</p>
-								</div>
-							</div>
+			{/* Optimization Stats */}
+			<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+				{[
+					{ title: 'CSS Files', value: '24', saved: '156 KB', icon: 'media-code', color: 'blue' },
+					{ title: 'JS Files', value: '18', saved: '342 KB', icon: 'media-code', color: 'green' },
+					{ title: 'HTML Pages', value: '156', saved: '89 KB', icon: 'media-document', color: 'purple' },
+					{ title: 'Total Saved', value: '587 KB', saved: '45% reduction', icon: 'chart-line', color: 'orange' },
+				].map((stat, index) => (
+					<div key={index} className="bg-white rounded-xl border-2 border-gray-200 p-6">
+						<div className={`w-12 h-12 bg-${stat.color}-500 rounded-lg flex items-center justify-center mb-4`}>
+							<Dashicon icon={stat.icon as any} style={{ fontSize: '24px', color: 'white' }} />
 						</div>
+						<h3 className="text-base font-semibold text-gray-600 mb-1">{stat.title}</h3>
+						<p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
+						<p className="text-sm text-gray-500">{stat.saved}</p>
 					</div>
-				</Card>
-
-				{/* JavaScript Optimization */}
-				<Card title="⚡ JavaScript Optimization" className="wppo-card--warning">
-					<div className="wppo-settings-section">
-						<div className="wppo-settings-section-body">
-							<div className="wppo-setting">
-								<Switch 
-									checked={settings.minify_js}
-									onChange={(checked) => setSettings({...settings, minify_js: checked})}
-								/>
-								<div className="wppo-setting-content">
-									<h4>Minify JavaScript</h4>
-									<p>Remove whitespace and optimize code</p>
-								</div>
-							</div>
-							
-							<div className="wppo-setting">
-								<Switch 
-									checked={settings.combine_js}
-									onChange={(checked) => setSettings({...settings, combine_js: checked})}
-								/>
-								<div className="wppo-setting-content">
-									<h4>Combine JS Files</h4>
-									<p>Merge JavaScript files (use carefully)</p>
-								</div>
-							</div>
-							
-							<div className="wppo-setting">
-								<Switch 
-									checked={settings.defer_js}
-									onChange={(checked) => setSettings({...settings, defer_js: checked})}
-								/>
-								<div className="wppo-setting-content">
-									<h4>Defer JavaScript</h4>
-									<p>Load JS after page content</p>
-								</div>
-							</div>
-						</div>
-					</div>
-				</Card>
-
-				{/* HTML & Advanced */}
-				<Card title="🔧 Advanced Optimization">
-					<div className="wppo-settings-section">
-						<div className="wppo-settings-section-body">
-							<div className="wppo-setting">
-								<Switch 
-									checked={settings.minify_html}
-									onChange={(checked) => setSettings({...settings, minify_html: checked})}
-								/>
-								<div className="wppo-setting-content">
-									<h4>Minify HTML</h4>
-									<p>Remove whitespace from HTML output</p>
-								</div>
-							</div>
-							
-							<div className="wppo-setting">
-								<Switch 
-									checked={settings.optimize_fonts}
-									onChange={(checked) => setSettings({...settings, optimize_fonts: checked})}
-								/>
-								<div className="wppo-setting-content">
-									<h4>Optimize Fonts</h4>
-									<p>Preload and optimize web fonts</p>
-								</div>
-							</div>
-							
-							<div className="wppo-form-group">
-								<label>GZIP Compression Level: {settings.compression_level} ({getCompressionLabel(settings.compression_level)})</label>
-								<Slider 
-									value={settings.compression_level}
-									onChange={(value) => setSettings({...settings, compression_level: value})}
-									min={1}
-									max={9}
-									step={1}
-								/>
-							</div>
-						</div>
-					</div>
-				</Card>
+				))}
 			</div>
 
-			{/* Optimization Actions */}
-			<Card title="🚀 Optimization Actions" className="wppo-card--highlight">
-				<div className="wppo-optimization-actions">
-					<div className="wppo-action-group">
-						<h4>Quick Actions</h4>
-						<div className="wppo-button-group">
-							<Button 
-								variant="primary" 
-								onClick={optimizeNow}
-								disabled={optimizing}
-							>
-								{optimizing ? <Spinner size="small" /> : '🚀'} Optimize All Files
-							</Button>
-							<Button variant="secondary">
-								🧹 Clear Optimized Files
-							</Button>
-							<Button variant="secondary">
-								📊 Generate Report
-							</Button>
+			{/* Optimization Options */}
+			<div className="bg-white rounded-xl border-2 border-gray-200 p-8">
+				<h2 className="text-2xl font-bold text-gray-900 mb-6">Optimization Options</h2>
+				<div className="space-y-6">
+					{[
+						{ title: 'Minify CSS Files', desc: 'Remove whitespace and comments from CSS files', enabled: true },
+						{ title: 'Minify JavaScript', desc: 'Compress JavaScript files for faster loading', enabled: true },
+						{ title: 'Minify HTML', desc: 'Remove unnecessary characters from HTML output', enabled: true },
+						{ title: 'Combine CSS Files', desc: 'Merge multiple CSS files into one', enabled: false },
+						{ title: 'Combine JavaScript Files', desc: 'Merge multiple JS files into one', enabled: false },
+						{ title: 'Defer JavaScript Loading', desc: 'Load JavaScript after page content', enabled: true },
+						{ title: 'Remove Query Strings', desc: 'Remove version parameters from static resources', enabled: true },
+						{ title: 'Disable Emojis', desc: 'Remove WordPress emoji scripts', enabled: true },
+					].map((option, index) => (
+						<div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+							<div className="flex-1">
+								<h4 className="text-base font-semibold text-gray-900 mb-1">{option.title}</h4>
+								<p className="text-sm text-gray-600">{option.desc}</p>
+							</div>
+							<label className="relative inline-flex items-center cursor-pointer ml-4">
+								<input type="checkbox" className="sr-only peer" defaultChecked={option.enabled} />
+								<div className="w-14 h-8 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-500"></div>
+							</label>
 						</div>
-					</div>
-					
-					{optimizing && (
-						<div className="wppo-optimization-progress">
-							<h4>Optimizing Files...</h4>
-							<Progress value={75} />
-							<p>Processing CSS and JavaScript files...</p>
-						</div>
-					)}
+					))}
 				</div>
-			</Card>
-
-			{/* Save Settings */}
-			<div className="wppo-save-bar">
-				<Button 
-					variant="primary" 
-					onClick={saveSettings}
-					disabled={saving}
-				>
-					{saving ? <Spinner size="small" /> : '💾'} Save Settings
-				</Button>
-				<Button variant="secondary">
-					🔄 Reset to Defaults
-				</Button>
-				<Button variant="secondary">
-					📋 Export Settings
-				</Button>
+				<div className="mt-8 flex gap-4">
+					<button className="px-6 py-3 bg-blue-500 text-white text-base font-semibold rounded-lg hover:bg-blue-600 transition-colors">
+						Save Settings
+					</button>
+					<button className="px-6 py-3 bg-gray-200 text-gray-700 text-base font-semibold rounded-lg hover:bg-gray-300 transition-colors">
+						Reset to Defaults
+					</button>
+				</div>
 			</div>
 		</div>
 	);

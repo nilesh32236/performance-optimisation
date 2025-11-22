@@ -1,265 +1,106 @@
-import React, { useState, useEffect } from 'react';
-import { Button, Card, Switch, Slider, Progress, Notice } from '../components/UI';
-import { secureApiFetch, validateNumber } from '../utils/security';
-
-interface ImageStats {
-	total_images: number;
-	optimized_images: number;
-	size_saved: string;
-	webp_images: number;
-	avif_images: number;
-}
+import React from 'react';
+import { Dashicon } from '@wordpress/components';
 
 export const ImagesTab: React.FC = () => {
-	const [settings, setSettings] = useState({
-		auto_optimize: true,
-		webp_conversion: true,
-		avif_conversion: false,
-		lazy_loading: true,
-		quality: 85,
-		max_width: 1920,
-		max_height: 1080
-	});
-	const [stats, setStats] = useState<ImageStats>({
-		total_images: 0,
-		optimized_images: 0,
-		size_saved: '0 KB',
-		webp_images: 0,
-		avif_images: 0
-	});
-	const [optimizing, setOptimizing] = useState(false);
-	const [progress, setProgress] = useState(0);
-	const [notification, setNotification] = useState<{type: string, message: string} | null>(null);
-
-	const fetchStats = async () => {
-		try {
-			const data = await secureApiFetch('/wp-json/performance-optimisation/v1/images/stats');
-			setStats(data);
-		} catch (error) {
-			console.error('Failed to fetch image stats:', error);
-			setNotification({
-				type: 'error',
-				message: 'Failed to load image statistics'
-			});
-		}
-	};
-
-	const validateImageSettings = (newSettings: typeof settings) => {
-		const errors: string[] = [];
-		
-		try {
-			validateNumber(newSettings.quality, 50, 100);
-			validateNumber(newSettings.max_width, 400, 4000);
-			validateNumber(newSettings.max_height, 300, 3000);
-		} catch (error) {
-			errors.push(error instanceof Error ? error.message : 'Invalid settings');
-		}
-		
-		if (newSettings.avif_conversion && !newSettings.webp_conversion) {
-			errors.push('AVIF conversion requires WebP conversion to be enabled as fallback');
-		}
-		
-		return errors;
-	};
-
-	const handleSettingChange = (key: keyof typeof settings, value: any) => {
-		const newSettings = { ...settings, [key]: value };
-		const errors = validateImageSettings(newSettings);
-		
-		if (errors.length > 0) {
-			setNotification({
-				type: 'warning',
-				message: errors.join('. ')
-			});
-			return;
-		}
-		
-		setSettings(newSettings);
-	};
-
-	const bulkOptimize = async () => {
-		if (stats.total_images === stats.optimized_images) {
-			setNotification({
-				type: 'info',
-				message: 'All images are already optimized'
-			});
-			return;
-		}
-
-		setOptimizing(true);
-		setProgress(0);
-		
-		try {
-			const response = await secureApiFetch('/wp-json/performance-optimisation/v1/images/bulk-optimize', {
-				method: 'POST',
-				data: settings
-			});
-			
-			// Simulate progress updates with real API polling
-			const pollProgress = async () => {
-				try {
-					const progressData = await secureApiFetch('/wp-json/performance-optimisation/v1/images/progress');
-					setProgress(progressData.percentage || 0);
-					
-					if (progressData.percentage < 100) {
-						setTimeout(pollProgress, 1000);
-					} else {
-						await fetchStats();
-						setNotification({
-							type: 'success',
-							message: `Successfully optimized ${progressData.processed || 0} images`
-						});
-					}
-				} catch (error) {
-					console.error('Progress polling failed:', error);
-				}
-			};
-			
-			pollProgress();
-		} catch (error) {
-			console.error('Bulk optimization failed:', error);
-			setNotification({
-				type: 'error',
-				message: 'Image optimization failed. Please try again.'
-			});
-		} finally {
-			setOptimizing(false);
-		}
-	};
-
-	useEffect(() => {
-		fetchStats();
-	}, []);
-
-	const optimizationPercentage = stats.total_images > 0 
-		? Math.round((stats.optimized_images / stats.total_images) * 100) 
-		: 0;
-
 	return (
-		<div className="wppo-images-tab">
-			<div className="wppo-grid">
-				{/* Image Statistics */}
-				<Card title="Image Statistics" className="wppo-col-span-2">
-					<div className="wppo-stats-grid">
-						<div className="wppo-stat">
-							<h4>Total Images</h4>
-							<p className="wppo-stat-value">{stats.total_images}</p>
-						</div>
-						<div className="wppo-stat">
-							<h4>Optimized</h4>
-							<p className="wppo-stat-value">{stats.optimized_images}</p>
-							<p className="wppo-stat-meta">{optimizationPercentage}% complete</p>
-						</div>
-						<div className="wppo-stat">
-							<h4>Size Saved</h4>
-							<p className="wppo-stat-value">{stats.size_saved}</p>
-						</div>
-						<div className="wppo-stat">
-							<h4>Modern Formats</h4>
-							<p className="wppo-stat-value">{stats.webp_images + stats.avif_images}</p>
-							<p className="wppo-stat-meta">WebP: {stats.webp_images}, AVIF: {stats.avif_images}</p>
-						</div>
-					</div>
-					
-					<div className="wppo-optimization-progress">
-						<Progress value={optimizationPercentage} />
-						<p>Optimization Progress: {optimizationPercentage}%</p>
-					</div>
-				</Card>
+		<div className="space-y-8">
+			<div>
+				<h2 className="text-3xl font-bold text-gray-900 mb-2">Image Optimization</h2>
+				<p className="text-base text-gray-600">Compress and convert images to modern formats</p>
+			</div>
 
-				{/* Bulk Optimization */}
-				<Card title="Bulk Optimization">
-					{optimizing ? (
-						<div className="wppo-optimization-status">
-							<Progress value={progress} />
-							<p>Optimizing images... {Math.round(progress)}%</p>
+			{/* Image Stats */}
+			<div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+				{[
+					{ title: 'Total Images', value: '348', icon: 'format-image', color: 'blue' },
+					{ title: 'Optimized', value: '248', icon: 'yes-alt', color: 'green' },
+					{ title: 'Pending', value: '100', icon: 'clock', color: 'orange' },
+					{ title: 'Space Saved', value: '12.4 MB', icon: 'database', color: 'purple' },
+				].map((stat, index) => (
+					<div key={index} className="bg-white rounded-xl border-2 border-gray-200 p-6">
+						<div className={`w-12 h-12 bg-${stat.color}-500 rounded-lg flex items-center justify-center mb-4`}>
+							<Dashicon icon={stat.icon as any} style={{ fontSize: '24px', color: 'white' }} />
 						</div>
-					) : (
-						<div className="wppo-bulk-controls">
-							<Button 
-								variant="primary" 
-								onClick={bulkOptimize}
-								disabled={stats.total_images === stats.optimized_images}
-							>
-								Optimize All Images
-							</Button>
-							<p>{stats.total_images - stats.optimized_images} images remaining</p>
-						</div>
-					)}
-				</Card>
+						<h3 className="text-base font-semibold text-gray-600 mb-1">{stat.title}</h3>
+						<p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+					</div>
+				))}
+			</div>
 
-				{/* Format Settings */}
-				<Card title="Image Formats">
-					<div className="wppo-settings-list">
-						<div className="wppo-setting">
-							<Switch 
-								checked={settings.webp_conversion}
-								onChange={(checked) => setSettings({...settings, webp_conversion: checked})}
-							/>
-							<div>
-								<h4>WebP Conversion</h4>
-								<p>Convert images to WebP format (widely supported)</p>
+			{/* Bulk Actions */}
+			<div className="bg-white rounded-xl border-2 border-gray-200 p-8">
+				<h2 className="text-2xl font-bold text-gray-900 mb-6">Bulk Actions</h2>
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+					<button className="p-6 border-2 border-blue-200 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors text-left">
+						<div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center mb-4">
+							<Dashicon icon="format-image" style={{ fontSize: '24px', color: 'white' }} />
+						</div>
+						<h3 className="text-lg font-bold text-gray-900 mb-2">Optimize All Images</h3>
+						<p className="text-base text-gray-600 mb-4">Compress all unoptimized images in your media library</p>
+						<span className="text-sm font-semibold text-blue-600">100 images pending</span>
+					</button>
+
+					<button className="p-6 border-2 border-gray-200 bg-white rounded-xl hover:bg-gray-50 transition-colors text-left">
+						<div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mb-4">
+							<Dashicon icon="image-rotate" style={{ fontSize: '24px', color: 'white' }} />
+						</div>
+						<h3 className="text-lg font-bold text-gray-900 mb-2">Convert to WebP</h3>
+						<p className="text-base text-gray-600 mb-4">Convert images to modern WebP format</p>
+						<span className="text-sm font-semibold text-green-600">Save up to 30% size</span>
+					</button>
+				</div>
+			</div>
+
+			{/* Image Settings */}
+			<div className="bg-white rounded-xl border-2 border-gray-200 p-8">
+				<h2 className="text-2xl font-bold text-gray-900 mb-6">Image Settings</h2>
+				<div className="space-y-6">
+					{[
+						{ title: 'Enable Lazy Loading', desc: 'Load images only when they appear in viewport', enabled: true },
+						{ title: 'Auto-Optimize on Upload', desc: 'Automatically optimize images when uploaded', enabled: true },
+						{ title: 'Convert to WebP', desc: 'Create WebP versions of images', enabled: true },
+						{ title: 'Resize Large Images', desc: 'Automatically resize images larger than max dimensions', enabled: true },
+						{ title: 'Remove EXIF Data', desc: 'Strip metadata from images to reduce size', enabled: true },
+					].map((setting, index) => (
+						<div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+							<div className="flex-1">
+								<h4 className="text-base font-semibold text-gray-900 mb-1">{setting.title}</h4>
+								<p className="text-sm text-gray-600">{setting.desc}</p>
+							</div>
+							<label className="relative inline-flex items-center cursor-pointer ml-4">
+								<input type="checkbox" className="sr-only peer" defaultChecked={setting.enabled} />
+								<div className="w-14 h-8 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-500"></div>
+							</label>
+						</div>
+					))}
+				</div>
+
+				<div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+					<h4 className="text-base font-semibold text-gray-900 mb-2">Quality Settings</h4>
+					<div className="space-y-4">
+						<div>
+							<label className="text-sm font-medium text-gray-700 mb-2 block">Compression Quality: 85%</label>
+							<input type="range" min="50" max="100" defaultValue="85" className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" />
+							<div className="flex justify-between text-xs text-gray-500 mt-1">
+								<span>Smaller size</span>
+								<span>Better quality</span>
 							</div>
 						</div>
-						<div className="wppo-setting">
-							<Switch 
-								checked={settings.avif_conversion}
-								onChange={(checked) => setSettings({...settings, avif_conversion: checked})}
-							/>
-							<div>
-								<h4>AVIF Conversion</h4>
-								<p>Convert to AVIF format (better compression, newer browsers)</p>
-							</div>
-						</div>
-						<div className="wppo-setting">
-							<Switch 
-								checked={settings.lazy_loading}
-								onChange={(checked) => setSettings({...settings, lazy_loading: checked})}
-							/>
-							<div>
-								<h4>Lazy Loading</h4>
-								<p>Load images only when they enter viewport</p>
-							</div>
+						<div>
+							<label className="text-sm font-medium text-gray-700 mb-2 block">Max Image Width: 2000px</label>
+							<input type="number" defaultValue="2000" className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg text-base" />
 						</div>
 					</div>
-				</Card>
+				</div>
 
-				{/* Quality & Size Settings */}
-				<Card title="Quality & Size Settings">
-					<div className="wppo-settings-list">
-						<div className="wppo-setting-full">
-							<h4>Image Quality: {settings.quality}%</h4>
-							<Slider 
-								value={settings.quality}
-								onChange={(value) => setSettings({...settings, quality: value})}
-								min={50}
-								max={100}
-								step={5}
-							/>
-							<p>{settings.quality < 70 ? 'High compression' : settings.quality < 85 ? 'Balanced' : 'High quality'}</p>
-						</div>
-						<div className="wppo-setting-full">
-							<h4>Max Width: {settings.max_width}px</h4>
-							<Slider 
-								value={settings.max_width}
-								onChange={(value) => setSettings({...settings, max_width: value})}
-								min={800}
-								max={3840}
-								step={80}
-							/>
-						</div>
-						<div className="wppo-setting-full">
-							<h4>Max Height: {settings.max_height}px</h4>
-							<Slider 
-								value={settings.max_height}
-								onChange={(value) => setSettings({...settings, max_height: value})}
-								min={600}
-								max={2160}
-								step={60}
-							/>
-						</div>
-					</div>
-				</Card>
+				<div className="mt-8 flex gap-4">
+					<button className="px-6 py-3 bg-blue-500 text-white text-base font-semibold rounded-lg hover:bg-blue-600 transition-colors">
+						Save Settings
+					</button>
+					<button className="px-6 py-3 bg-gray-200 text-gray-700 text-base font-semibold rounded-lg hover:bg-gray-300 transition-colors">
+						Reset to Defaults
+					</button>
+				</div>
 			</div>
 		</div>
 	);

@@ -10,12 +10,13 @@
  */
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+
+
 /**
  * Internal dependencies
  */
 import { App } from './App';
-import './styles/main.scss';
-import './styles/admin-enhanced.scss';
+import './styles/main.css';
 
 // Initialize the admin interface when DOM is ready
 document.addEventListener( 'DOMContentLoaded', () => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardBody, CardHeader, Button, Spinner, Notice } from '@wordpress/components';
 import { __ } from '@wordpress/i18n';
 import apiFetch from '@wordpress/api-fetch';
-import './Dashboard.scss';
+
 
 interface DashboardStats {
     cache_hit_rate: number;

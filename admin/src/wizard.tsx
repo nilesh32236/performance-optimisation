@@ -7,7 +7,7 @@ import { createRoot } from 'react-dom/client';
  * Internal dependencies
  */
 import SetupWizard from './components/Wizard/SetupWizard';
-import './styles/main.scss';
+import './styles/main.css';
 
 // Initialize the wizard when DOM is ready
 document.addEventListener( 'DOMContentLoaded', function() {

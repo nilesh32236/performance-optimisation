@@ -6,12 +6,8 @@
  * External dependencies
  */
 import React from 'react';
-import { Panel, PanelBody, Dashicon } from '@wordpress/components';
-
-/**
- * Internal dependencies
- */
-import './OptimizationStatus.scss';
+import { Dashicon } from '@wordpress/components';
+import { Card } from '../UI';
 
 interface OptimizationStatusProps {
     config: {
@@ -33,18 +29,26 @@ const OptimizationStatus: React.FC<OptimizationStatusProps> = ( { config } ) => 
     };
 
     return (
-        <Panel header="Optimization Status">
-            <PanelBody>
-                <ul className="wppo-optimization-status-list">
-                    {Object.entries(features).map(([name, isActive]) => (
-                        <li key={name} className="wppo-optimization-status-item">
-                            <Dashicon icon={isActive ? 'yes-alt' : 'dismiss'} className={isActive ? 'is-active' : 'is-inactive'} />
-                            <span>{name}</span>
-                        </li>
-                    ))}
-                </ul>
-            </PanelBody>
-        </Panel>
+        <Card title="Active Optimizations" className="h-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {Object.entries(features).map(([name, isActive]) => (
+                    <div 
+                        key={name} 
+                        className={`flex flex-col items-center justify-center p-4 rounded-lg border transition-colors ${
+                            isActive 
+                                ? 'bg-green-50 border-green-100 text-green-800' 
+                                : 'bg-gray-50 border-gray-100 text-gray-400'
+                        }`}
+                    >
+                        <div className={`mb-2 p-2 rounded-full ${isActive ? 'bg-green-200' : 'bg-gray-200'}`}>
+                            <Dashicon icon={isActive ? 'yes' : 'no'} />
+                        </div>
+                        <span className="text-sm font-medium text-center">{name}</span>
+                        <span className="text-xs mt-1 opacity-75">{isActive ? 'Active' : 'Inactive'}</span>
+                    </div>
+                ))}
+            </div>
+        </Card>
     );
 };
 

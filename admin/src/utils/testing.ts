@@ -13,7 +13,12 @@ export interface TestResult {
  */
 export const testApiConnection = async (): Promise<TestResult> => {
 	try {
-		const response = await fetch('/wp-json/performance-optimisation/v1/test', {
+		const apiUrl = window.wppoAdmin?.apiUrl;
+		if (!apiUrl) {
+			throw new Error('API URL not available');
+		}
+		
+		const response = await fetch(`${apiUrl}/test`, {
 			headers: {
 				'X-WP-Nonce': window.wppoAdmin?.nonce || ''
 			}

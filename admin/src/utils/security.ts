@@ -14,16 +14,20 @@ interface ApiRequestOptions {
 export const secureApiFetch = async (endpoint: string, options: ApiRequestOptions = {}) => {
 	const { method = 'GET', data, headers = {} } = options;
 	
-	// Get nonce from global object
+	// Get nonce and API URL from WordPress localized data
 	const nonce = window.wppoAdmin?.nonce;
+	const apiUrl = window.wppoAdmin?.apiUrl;
+	
 	if (!nonce) {
 		throw new Error('Security token not available');
 	}
 
-	// Validate endpoint
-	if (!endpoint.startsWith('/wp-json/performance-optimisation/')) {
-		throw new Error('Invalid API endpoint');
+	if (!apiUrl) {
+		throw new Error('API URL not available');
 	}
+
+	// Build full URL using WordPress provided API URL
+	const fullUrl = `${apiUrl}/${endpoint}`;
 
 	const requestHeaders = {
 		'Content-Type': 'application/json',
@@ -41,7 +45,7 @@ export const secureApiFetch = async (endpoint: string, options: ApiRequestOption
 		requestOptions.body = JSON.stringify(data);
 	}
 
-	const response = await fetch(endpoint, requestOptions);
+	const response = await fetch(fullUrl, requestOptions);
 	
 	if (!response.ok) {
 		throw new Error(`API request failed: ${response.status}`);

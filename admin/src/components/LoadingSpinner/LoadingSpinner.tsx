@@ -3,7 +3,7 @@
  */
 import React from 'react';
 import { LoadingSpinnerProps } from '@types/index';
-import './LoadingSpinner.scss';
+
 
 export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 	size = 'medium',

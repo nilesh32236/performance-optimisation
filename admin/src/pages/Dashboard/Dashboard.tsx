@@ -19,7 +19,7 @@ import { StatsOverview } from './components/StatsOverview';
 import { RecentActivity } from './components/RecentActivity';
 import { RealTimeMonitor } from '@components/RealTimeMonitor';
 import { InteractiveOptimizationControls } from '@components/InteractiveOptimizationControls';
-import './Dashboard.scss';
+
 
 export const Dashboard: React.FC = () => {
 	const [ metrics, setMetrics ] = useState<PerformanceMetrics | null>( null );

@@ -1,410 +1,107 @@
-import React, { useState } from 'react';
-import { Button, Card, Switch, Input, TextArea, Select, Notice } from '../components/UI';
-import { secureApiFetch, sanitizeInput, validateNumber } from '../utils/security';
-import { handleApiError, logError } from '../utils/errorHandler';
+import React from 'react';
+import { Dashicon } from '@wordpress/components';
 
 export const AdvancedTab: React.FC = () => {
-	const [settings, setSettings] = useState({
-		// WordPress Optimizations
-		disable_emojis: true,
-		disable_embeds: true,
-		disable_xmlrpc: true,
-		disable_rest_api: false,
-		remove_query_strings: true,
-		
-		// Database Optimizations
-		auto_cleanup: true,
-		cleanup_revisions: true,
-		cleanup_spam: true,
-		cleanup_transients: true,
-		
-		// Security Enhancements
-		hide_wp_version: true,
-		disable_file_editing: true,
-		
-		// Performance Tweaks
-		heartbeat_control: true,
-		heartbeat_frequency: 60,
-		memory_limit: '256M',
-		
-		// CDN Settings
-		cdn_enabled: false,
-		cdn_url: '',
-		
-		// Custom Code
-		custom_css: '',
-		custom_js: ''
-	});
-
-	const [activeSection, setActiveSection] = useState('wordpress');
-	const [notification, setNotification] = useState<{type: string, message: string} | null>(null);
-	const [saving, setSaving] = useState(false);
-
-	const validateAdvancedSettings = (newSettings: typeof settings) => {
-		const warnings: string[] = [];
-		
-		if (newSettings.disable_rest_api) {
-			warnings.push('Disabling REST API may break plugins and themes that depend on it');
-		}
-		
-		if (newSettings.disable_xmlrpc && newSettings.disable_rest_api) {
-			warnings.push('Disabling both XML-RPC and REST API may prevent remote publishing');
-		}
-		
-		if (newSettings.cdn_enabled && !newSettings.cdn_url.trim()) {
-			warnings.push('CDN URL is required when CDN is enabled');
-		}
-		
-		if (newSettings.cdn_url && !newSettings.cdn_url.match(/^https?:\/\/.+/)) {
-			warnings.push('CDN URL must be a valid HTTP/HTTPS URL');
-		}
-		
-		try {
-			validateNumber(newSettings.heartbeat_frequency, 15, 300);
-		} catch (error) {
-			warnings.push('Heartbeat frequency must be between 15 and 300 seconds');
-		}
-		
-		return warnings;
-	};
-
-	const handleSettingChange = (key: keyof typeof settings, value: any) => {
-		let sanitizedValue = value;
-		
-		// Sanitize text inputs
-		if (typeof value === 'string' && ['cdn_url', 'custom_css', 'custom_js'].includes(key)) {
-			sanitizedValue = sanitizeInput(value);
-		}
-		
-		const newSettings = { ...settings, [key]: sanitizedValue };
-		const warnings = validateAdvancedSettings(newSettings);
-		
-		if (warnings.length > 0) {
-			setNotification({
-				type: 'warning',
-				message: warnings.join('. ')
-			});
-		}
-		
-		setSettings(newSettings);
-	};
-
-	const saveSettings = async () => {
-		setSaving(true);
-		try {
-			const validationErrors = validateAdvancedSettings(settings);
-			if (validationErrors.length > 0) {
-				throw new Error(validationErrors.join('. '));
-			}
-
-			await secureApiFetch('/wp-json/performance-optimisation/v1/advanced/settings', {
-				method: 'POST',
-				data: settings
-			});
-			
-			setNotification({
-				type: 'success',
-				message: 'Advanced settings saved successfully!'
-			});
-		} catch (error) {
-			logError(error, { component: 'AdvancedTab', action: 'saveSettings' });
-			setNotification({
-				type: 'error',
-				message: handleApiError(error)
-			});
-		}
-		setSaving(false);
-		setTimeout(() => setNotification(null), 5000);
-	};
-
-	const runDatabaseCleanup = async () => {
-		try {
-			const result = await secureApiFetch('/wp-json/performance-optimisation/v1/database/cleanup', {
-				method: 'POST',
-				data: {
-					cleanup_revisions: settings.cleanup_revisions,
-					cleanup_spam: settings.cleanup_spam,
-					cleanup_transients: settings.cleanup_transients
-				}
-			});
-			
-			setNotification({
-				type: 'success',
-				message: `Database cleanup completed. ${result.items_removed || 0} items removed.`
-			});
-		} catch (error) {
-			logError(error, { component: 'AdvancedTab', action: 'runDatabaseCleanup' });
-			setNotification({
-				type: 'error',
-				message: handleApiError(error)
-			});
-		}
-	};
-
-	const sections = [
-		{ id: 'wordpress', label: 'WordPress Optimizations' },
-		{ id: 'database', label: 'Database Cleanup' },
-		{ id: 'security', label: 'Security Enhancements' },
-		{ id: 'performance', label: 'Performance Tweaks' },
-		{ id: 'cdn', label: 'CDN Integration' },
-		{ id: 'custom', label: 'Custom Code' }
-	];
-
-	const renderWordPressSection = () => (
-		<Card title="WordPress Optimizations">
-			<div className="wppo-settings-list">
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.disable_emojis}
-						onChange={(checked) => setSettings({...settings, disable_emojis: checked})}
-					/>
-					<div>
-						<h4>Disable Emojis</h4>
-						<p>Remove emoji scripts and styles</p>
-					</div>
-				</div>
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.disable_embeds}
-						onChange={(checked) => setSettings({...settings, disable_embeds: checked})}
-					/>
-					<div>
-						<h4>Disable Embeds</h4>
-						<p>Remove oEmbed functionality</p>
-					</div>
-				</div>
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.disable_xmlrpc}
-						onChange={(checked) => setSettings({...settings, disable_xmlrpc: checked})}
-					/>
-					<div>
-						<h4>Disable XML-RPC</h4>
-						<p>Disable XML-RPC for security</p>
-					</div>
-				</div>
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.remove_query_strings}
-						onChange={(checked) => setSettings({...settings, remove_query_strings: checked})}
-					/>
-					<div>
-						<h4>Remove Query Strings</h4>
-						<p>Remove version parameters from static resources</p>
-					</div>
-				</div>
-			</div>
-		</Card>
-	);
-
-	const renderDatabaseSection = () => (
-		<Card title="Database Cleanup">
-			<div className="wppo-settings-list">
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.auto_cleanup}
-						onChange={(checked) => setSettings({...settings, auto_cleanup: checked})}
-					/>
-					<div>
-						<h4>Automatic Cleanup</h4>
-						<p>Run database cleanup weekly</p>
-					</div>
-				</div>
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.cleanup_revisions}
-						onChange={(checked) => setSettings({...settings, cleanup_revisions: checked})}
-					/>
-					<div>
-						<h4>Remove Post Revisions</h4>
-						<p>Delete old post revisions</p>
-					</div>
-				</div>
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.cleanup_spam}
-						onChange={(checked) => setSettings({...settings, cleanup_spam: checked})}
-					/>
-					<div>
-						<h4>Remove Spam Comments</h4>
-						<p>Delete spam and trash comments</p>
-					</div>
-				</div>
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.cleanup_transients}
-						onChange={(checked) => setSettings({...settings, cleanup_transients: checked})}
-					/>
-					<div>
-						<h4>Clean Transients</h4>
-						<p>Remove expired transient data</p>
-					</div>
-				</div>
-			</div>
-			<Button variant="secondary">Run Cleanup Now</Button>
-		</Card>
-	);
-
-	const renderSecuritySection = () => (
-		<Card title="Security Enhancements">
-			<div className="wppo-settings-list">
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.hide_wp_version}
-						onChange={(checked) => setSettings({...settings, hide_wp_version: checked})}
-					/>
-					<div>
-						<h4>Hide WordPress Version</h4>
-						<p>Remove version info from HTML</p>
-					</div>
-				</div>
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.disable_file_editing}
-						onChange={(checked) => setSettings({...settings, disable_file_editing: checked})}
-					/>
-					<div>
-						<h4>Disable File Editing</h4>
-						<p>Prevent theme/plugin editing from admin</p>
-					</div>
-				</div>
-			</div>
-		</Card>
-	);
-
-	const renderPerformanceSection = () => (
-		<Card title="Performance Tweaks">
-			<div className="wppo-settings-list">
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.heartbeat_control}
-						onChange={(checked) => setSettings({...settings, heartbeat_control: checked})}
-					/>
-					<div>
-						<h4>Heartbeat Control</h4>
-						<p>Optimize WordPress heartbeat frequency</p>
-					</div>
-				</div>
-				<div className="wppo-setting-full">
-					<h4>Heartbeat Frequency (seconds)</h4>
-					<Select 
-						value={settings.heartbeat_frequency}
-						onChange={(value) => setSettings({...settings, heartbeat_frequency: parseInt(value)})}
-						options={[
-							{ value: 15, label: '15 seconds' },
-							{ value: 30, label: '30 seconds' },
-							{ value: 60, label: '60 seconds' },
-							{ value: 120, label: '2 minutes' }
-						]}
-					/>
-				</div>
-				<div className="wppo-setting-full">
-					<h4>Memory Limit</h4>
-					<Select 
-						value={settings.memory_limit}
-						onChange={(value) => setSettings({...settings, memory_limit: value})}
-						options={[
-							{ value: '128M', label: '128MB' },
-							{ value: '256M', label: '256MB' },
-							{ value: '512M', label: '512MB' },
-							{ value: '1G', label: '1GB' }
-						]}
-					/>
-				</div>
-			</div>
-		</Card>
-	);
-
-	const renderCDNSection = () => (
-		<Card title="CDN Integration">
-			<div className="wppo-settings-list">
-				<div className="wppo-setting">
-					<Switch 
-						checked={settings.cdn_enabled}
-						onChange={(checked) => setSettings({...settings, cdn_enabled: checked})}
-					/>
-					<div>
-						<h4>Enable CDN</h4>
-						<p>Use Content Delivery Network for static assets</p>
-					</div>
-				</div>
-				{settings.cdn_enabled && (
-					<div className="wppo-setting-full">
-						<h4>CDN URL</h4>
-						<Input 
-							value={settings.cdn_url}
-							onChange={(value) => setSettings({...settings, cdn_url: value})}
-							placeholder="https://cdn.example.com"
-						/>
-						<p>Enter your CDN domain (without trailing slash)</p>
-					</div>
-				)}
-			</div>
-		</Card>
-	);
-
-	const renderCustomSection = () => (
-		<Card title="Custom Code">
-			<div className="wppo-settings-list">
-				<div className="wppo-setting-full">
-					<h4>Custom CSS</h4>
-					<TextArea 
-						value={settings.custom_css}
-						onChange={(value) => setSettings({...settings, custom_css: value})}
-						placeholder="/* Add your custom CSS here */"
-						rows={8}
-					/>
-				</div>
-				<div className="wppo-setting-full">
-					<h4>Custom JavaScript</h4>
-					<TextArea 
-						value={settings.custom_js}
-						onChange={(value) => setSettings({...settings, custom_js: value})}
-						placeholder="// Add your custom JavaScript here"
-						rows={8}
-					/>
-				</div>
-			</div>
-		</Card>
-	);
-
-	const renderSection = () => {
-		switch (activeSection) {
-			case 'wordpress': return renderWordPressSection();
-			case 'database': return renderDatabaseSection();
-			case 'security': return renderSecuritySection();
-			case 'performance': return renderPerformanceSection();
-			case 'cdn': return renderCDNSection();
-			case 'custom': return renderCustomSection();
-			default: return renderWordPressSection();
-		}
-	};
-
 	return (
-		<div className="wppo-advanced-tab">
-			<div className="wppo-advanced-layout">
-				{/* Section Navigation */}
-				<div className="wppo-section-nav">
-					{sections.map(section => (
-						<button
-							key={section.id}
-							className={`wppo-nav-item ${activeSection === section.id ? 'active' : ''}`}
-							onClick={() => setActiveSection(section.id)}
-						>
-							{section.label}
-						</button>
+		<div className="space-y-8">
+			<div>
+				<h2 className="text-3xl font-bold text-gray-900 mb-2">Advanced Settings</h2>
+				<p className="text-base text-gray-600">Fine-tune WordPress performance and security</p>
+			</div>
+
+			{/* WordPress Optimizations */}
+			<div className="bg-white rounded-xl border-2 border-gray-200 p-8">
+				<h2 className="text-2xl font-bold text-gray-900 mb-6">WordPress Optimizations</h2>
+				<div className="space-y-6">
+					{[
+						{ title: 'Disable Emojis', desc: 'Remove WordPress emoji scripts and styles', enabled: true, impact: 'Low' },
+						{ title: 'Disable Embeds', desc: 'Remove oEmbed functionality if not needed', enabled: true, impact: 'Low' },
+						{ title: 'Disable XML-RPC', desc: 'Disable XML-RPC for better security', enabled: true, impact: 'Medium' },
+						{ title: 'Remove Query Strings', desc: 'Remove version parameters from static resources', enabled: true, impact: 'Low' },
+						{ title: 'Disable Heartbeat API', desc: 'Reduce server load by limiting heartbeat', enabled: false, impact: 'Medium' },
+						{ title: 'Limit Post Revisions', desc: 'Limit the number of post revisions stored', enabled: true, impact: 'Low' },
+					].map((option, index) => (
+						<div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+							<div className="flex-1">
+								<div className="flex items-center gap-3 mb-1">
+									<h4 className="text-base font-semibold text-gray-900">{option.title}</h4>
+									<span className={`px-2 py-1 text-xs font-semibold rounded ${
+										option.impact === 'High' ? 'bg-red-100 text-red-700' :
+										option.impact === 'Medium' ? 'bg-orange-100 text-orange-700' :
+										'bg-blue-100 text-blue-700'
+									}`}>
+										{option.impact} Impact
+									</span>
+								</div>
+								<p className="text-sm text-gray-600">{option.desc}</p>
+							</div>
+							<label className="relative inline-flex items-center cursor-pointer ml-4">
+								<input type="checkbox" className="sr-only peer" defaultChecked={option.enabled} />
+								<div className="w-14 h-8 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-500"></div>
+							</label>
+						</div>
 					))}
 				</div>
+			</div>
 
-				{/* Section Content */}
-				<div className="wppo-section-content">
-					{renderSection()}
+			{/* Database Optimization */}
+			<div className="bg-white rounded-xl border-2 border-gray-200 p-8">
+				<h2 className="text-2xl font-bold text-gray-900 mb-6">Database Optimization</h2>
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+					{[
+						{ title: 'Post Revisions', value: '1,234', action: 'Clean', color: 'blue' },
+						{ title: 'Auto Drafts', value: '89', action: 'Clean', color: 'green' },
+						{ title: 'Spam Comments', value: '456', action: 'Clean', color: 'orange' },
+						{ title: 'Trashed Items', value: '23', action: 'Clean', color: 'red' },
+					].map((item, index) => (
+						<div key={index} className="p-4 bg-gray-50 rounded-lg flex items-center justify-between">
+							<div>
+								<h4 className="text-base font-semibold text-gray-900 mb-1">{item.title}</h4>
+								<p className="text-2xl font-bold text-gray-900">{item.value} items</p>
+							</div>
+							<button className={`px-4 py-2 bg-${item.color}-500 text-white text-sm font-semibold rounded-lg hover:bg-${item.color}-600 transition-colors`}>
+								{item.action}
+							</button>
+						</div>
+					))}
+				</div>
+				<button className="w-full px-6 py-3 bg-blue-500 text-white text-base font-semibold rounded-lg hover:bg-blue-600 transition-colors">
+					Optimize Database Tables
+				</button>
+			</div>
+
+			{/* Security Settings */}
+			<div className="bg-white rounded-xl border-2 border-gray-200 p-8">
+				<h2 className="text-2xl font-bold text-gray-900 mb-6">Security Enhancements</h2>
+				<div className="space-y-6">
+					{[
+						{ title: 'Hide WordPress Version', desc: 'Remove version number from HTML and feeds', enabled: true },
+						{ title: 'Disable File Editing', desc: 'Prevent editing theme and plugin files from admin', enabled: true },
+						{ title: 'Disable Directory Browsing', desc: 'Prevent listing of directory contents', enabled: true },
+						{ title: 'Add Security Headers', desc: 'Add X-Frame-Options and other security headers', enabled: true },
+					].map((setting, index) => (
+						<div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+							<div className="flex-1">
+								<h4 className="text-base font-semibold text-gray-900 mb-1">{setting.title}</h4>
+								<p className="text-sm text-gray-600">{setting.desc}</p>
+							</div>
+							<label className="relative inline-flex items-center cursor-pointer ml-4">
+								<input type="checkbox" className="sr-only peer" defaultChecked={setting.enabled} />
+								<div className="w-14 h-8 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-500"></div>
+							</label>
+						</div>
+					))}
 				</div>
 			</div>
 
-			<div className="wppo-save-bar">
-				<Button variant="primary">Save Advanced Settings</Button>
-				<Button variant="secondary">Reset to Defaults</Button>
+			{/* Save Button */}
+			<div className="flex gap-4">
+				<button className="px-6 py-3 bg-blue-500 text-white text-base font-semibold rounded-lg hover:bg-blue-600 transition-colors">
+					Save All Settings
+				</button>
+				<button className="px-6 py-3 bg-gray-200 text-gray-700 text-base font-semibold rounded-lg hover:bg-gray-300 transition-colors">
+					Reset to Defaults
+				</button>
 			</div>
 		</div>
 	);

@@ -7,6 +7,7 @@ interface ButtonProps {
 	disabled?: boolean;
 	onClick?: () => void;
 	children: React.ReactNode;
+	className?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({ 
@@ -14,16 +15,34 @@ export const Button: React.FC<ButtonProps> = ({
 	size = 'medium', 
 	disabled = false, 
 	onClick, 
-	children 
-}) => (
-	<button 
-		className={`wppo-button wppo-button--${variant} wppo-button--${size}`}
-		disabled={disabled}
-		onClick={onClick}
-	>
-		{children}
-	</button>
-);
+	children,
+	className = ''
+}) => {
+	const baseClasses = 'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
+	
+	const variantClasses = {
+		primary: 'bg-primary-500 hover:bg-primary-600 text-white focus:ring-primary-500',
+		secondary: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 focus:ring-primary-500'
+	};
+	
+	const sizeClasses = {
+		small: 'px-3 py-1.5 text-sm',
+		medium: 'px-4 py-2 text-sm',
+		large: 'px-6 py-3 text-base'
+	};
+	
+	const disabledClasses = disabled ? 'opacity-50 cursor-not-allowed' : '';
+	
+	return (
+		<button 
+			className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${disabledClasses} ${className}`}
+			disabled={disabled}
+			onClick={onClick}
+		>
+			{children}
+		</button>
+	);
+};
 
 // Card Component
 interface CardProps {
@@ -33,9 +52,13 @@ interface CardProps {
 }
 
 export const Card: React.FC<CardProps> = ({ title, className = '', children }) => (
-	<div className={`wppo-card ${className}`}>
-		{title && <div className="wppo-card-header"><h3>{title}</h3></div>}
-		<div className="wppo-card-body">{children}</div>
+	<div className={`bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden ${className}`}>
+		{title && (
+			<div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+				<h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+			</div>
+		)}
+		<div className="p-6">{children}</div>
 	</div>
 );
 
@@ -58,20 +81,26 @@ export const Switch: React.FC<SwitchProps> = ({
 	const switchId = id || `switch-${Math.random().toString(36).substr(2, 9)}`;
 	
 	return (
-		<div className={`wppo-switch-container ${disabled ? 'disabled' : ''}`}>
-			<label className={`wppo-switch ${disabled ? 'disabled' : ''}`} htmlFor={switchId}>
-				<input 
-					id={switchId}
-					type="checkbox" 
-					checked={checked} 
-					onChange={(e) => onChange(e.target.checked)}
-					disabled={disabled}
-					aria-describedby={label ? `${switchId}-label` : undefined}
+		<div className={`flex items-center gap-3 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+			<button
+				type="button"
+				className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+					checked ? 'bg-primary-500' : 'bg-gray-200'
+				}`}
+				role="switch"
+				aria-checked={checked}
+				aria-labelledby={label ? `${switchId}-label` : undefined}
+				onClick={() => onChange(!checked)}
+				disabled={disabled}
+			>
+				<span
+					className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+						checked ? 'translate-x-5' : 'translate-x-0'
+					}`}
 				/>
-				<span className="wppo-switch-slider" aria-hidden="true"></span>
-			</label>
+			</button>
 			{label && (
-				<span id={`${switchId}-label`} className="wppo-switch-label">
+				<span id={`${switchId}-label`} className="text-sm font-medium text-gray-700 cursor-pointer" onClick={() => onChange(!checked)}>
 					{label}
 				</span>
 			)}
@@ -96,29 +125,29 @@ export const Progress: React.FC<ProgressProps> = ({
 	showPercentage = false 
 }) => {
 	const percentage = Math.round((value / max) * 100);
-	const progressId = `progress-${Math.random().toString(36).substr(2, 9)}`;
+	
+	const colorClasses = {
+		blue: 'bg-primary-500',
+		green: 'bg-success-500',
+		orange: 'bg-warning-500',
+		red: 'bg-error-500'
+	};
 	
 	return (
-		<div className="wppo-progress-container">
+		<div className="mb-4">
 			{label && (
-				<label htmlFor={progressId} className="wppo-progress-label">
-					{label}
-					{showPercentage && ` (${percentage}%)`}
-				</label>
+				<div className="flex justify-between items-center mb-2">
+					<span className="text-sm font-medium text-gray-700">{label}</span>
+					{showPercentage && (
+						<span className="text-sm text-gray-500">{percentage}%</span>
+					)}
+				</div>
 			)}
-			<div 
-				className="wppo-progress"
-				role="progressbar"
-				aria-valuenow={value}
-				aria-valuemin={0}
-				aria-valuemax={max}
-				aria-label={label || `Progress: ${percentage}%`}
-				id={progressId}
-			>
+			<div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
 				<div 
-					className={`wppo-progress-bar wppo-progress-bar--${color}`}
+					className={`h-full rounded-full transition-all duration-300 ease-out ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue}`}
 					style={{ width: `${percentage}%` }}
-				></div>
+				/>
 			</div>
 		</div>
 	);
@@ -129,9 +158,17 @@ interface SpinnerProps {
 	size?: 'small' | 'medium' | 'large';
 }
 
-export const Spinner: React.FC<SpinnerProps> = ({ size = 'medium' }) => (
-	<div className={`wppo-spinner wppo-spinner--${size}`}></div>
-);
+export const Spinner: React.FC<SpinnerProps> = ({ size = 'medium' }) => {
+	const sizeClasses = {
+		small: 'h-4 w-4',
+		medium: 'h-6 w-6',
+		large: 'h-8 w-8'
+	};
+	
+	return (
+		<div className={`animate-spin rounded-full border-2 border-gray-300 border-t-primary-500 ${sizeClasses[size]}`} />
+	);
+};
 
 // Input Component
 interface InputProps {
@@ -139,20 +176,22 @@ interface InputProps {
 	onChange: (value: string) => void;
 	placeholder?: string;
 	type?: string;
+	className?: string;
 }
 
 export const Input: React.FC<InputProps> = ({ 
 	value, 
 	onChange, 
 	placeholder = '', 
-	type = 'text' 
+	type = 'text',
+	className = ''
 }) => (
 	<input 
 		type={type}
 		value={value}
 		onChange={(e) => onChange(e.target.value)}
 		placeholder={placeholder}
-		className="wppo-input"
+		className={`block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm ${className}`}
 	/>
 );
 
@@ -162,20 +201,22 @@ interface TextAreaProps {
 	onChange: (value: string) => void;
 	placeholder?: string;
 	rows?: number;
+	className?: string;
 }
 
 export const TextArea: React.FC<TextAreaProps> = ({ 
 	value, 
 	onChange, 
 	placeholder = '', 
-	rows = 4 
+	rows = 4,
+	className = ''
 }) => (
 	<textarea 
 		value={value}
 		onChange={(e) => onChange(e.target.value)}
 		placeholder={placeholder}
 		rows={rows}
-		className="wppo-textarea"
+		className={`block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm resize-vertical ${className}`}
 	/>
 );
 
@@ -189,13 +230,14 @@ interface SelectProps {
 	value: string | number;
 	onChange: (value: string) => void;
 	options: SelectOption[];
+	className?: string;
 }
 
-export const Select: React.FC<SelectProps> = ({ value, onChange, options }) => (
+export const Select: React.FC<SelectProps> = ({ value, onChange, options, className = '' }) => (
 	<select 
 		value={value}
 		onChange={(e) => onChange(e.target.value)}
-		className="wppo-select"
+		className={`block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm ${className}`}
 	>
 		{options.map(option => (
 			<option key={option.value} value={option.value}>
@@ -212,6 +254,7 @@ interface SliderProps {
 	min?: number;
 	max?: number;
 	step?: number;
+	className?: string;
 }
 
 export const Slider: React.FC<SliderProps> = ({ 
@@ -219,7 +262,8 @@ export const Slider: React.FC<SliderProps> = ({
 	onChange, 
 	min = 0, 
 	max = 100, 
-	step = 1 
+	step = 1,
+	className = ''
 }) => (
 	<input 
 		type="range"
@@ -228,7 +272,7 @@ export const Slider: React.FC<SliderProps> = ({
 		min={min}
 		max={max}
 		step={step}
-		className="wppo-slider"
+		className={`w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider ${className}`}
 	/>
 );
 
@@ -236,10 +280,39 @@ export const Slider: React.FC<SliderProps> = ({
 interface NoticeProps {
 	type?: 'success' | 'warning' | 'error' | 'info';
 	children: React.ReactNode;
+	className?: string;
 }
 
-export const Notice: React.FC<NoticeProps> = ({ type = 'info', children }) => (
-	<div className={`wppo-notice wppo-notice--${type}`}>
-		{children}
-	</div>
-);
+export const Notice: React.FC<NoticeProps> = ({ type = 'info', children, className = '' }) => {
+	const typeClasses = {
+		success: 'bg-success-50 border-success-200 text-success-800',
+		warning: 'bg-warning-50 border-warning-200 text-warning-800',
+		error: 'bg-error-50 border-error-200 text-error-800',
+		info: 'bg-primary-50 border-primary-200 text-primary-800'
+	};
+	
+	const iconClasses = {
+		success: 'text-success-400',
+		warning: 'text-warning-400',
+		error: 'text-error-400',
+		info: 'text-primary-400'
+	};
+	
+	const icons = {
+		success: '✓',
+		warning: '⚠',
+		error: '✕',
+		info: 'i'
+	};
+	
+	return (
+		<div className={`flex items-center gap-3 p-4 rounded-md border mb-6 ${typeClasses[type]} ${className}`}>
+			<div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${iconClasses[type]}`}>
+				{icons[type]}
+			</div>
+			<div className="flex-1">
+				{children}
+			</div>
+		</div>
+	);
+};

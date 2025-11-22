@@ -1,17 +1,13 @@
 /**
- * Metrics Overview Component - Refactored
+ * Metrics Overview Component
+ *
+ * @package PerformanceOptimisation
+ * @since 2.0.0
  */
 
-/**
- * External dependencies
- */
 import React from 'react';
-import { Card, CardHeader, CardBody } from '@wordpress/components';
-
-/**
- * Internal dependencies
- */
-import './MetricsOverview.scss';
+import { Card } from '../UI';
+import { Dashicon } from '@wordpress/components';
 
 interface MetricsOverviewProps {
     config: {
@@ -23,53 +19,56 @@ interface MetricsOverviewProps {
     };
 }
 
-const MetricsOverview: React.FC<MetricsOverviewProps> = ( { config } ) => {
-    const overview = config.overview || {
-        performance_score: 0,
-        average_load_time: 0,
-        cache_hit_ratio: 0,
-    };
-
-    const getScoreColor = ( score: number ): string => {
-        if ( score >= 85 ) return 'var(--wp-admin-color-success)';
-        if ( score >= 60 ) return 'var(--wp-admin-color-warning)';
-        return 'var(--wp-admin-color-error)';
-    };
-
-    const getLoadTimeColor = ( time: number ): string => {
-        if ( time <= 1.5 ) return 'var(--wp-admin-color-success)';
-        if ( time <= 3.0 ) return 'var(--wp-admin-color-warning)';
-        return 'var(--wp-admin-color-error)';
-    };
-
-    const getCacheColor = ( ratio: number ): string => {
-        if ( ratio >= 90 ) return 'var(--wp-admin-color-success)';
-        if ( ratio >= 70 ) return 'var(--wp-admin-color-warning)';
-        return 'var(--wp-admin-color-error)';
-    };
+const MetricsOverview: React.FC<MetricsOverviewProps> = ({ config }) => {
+    const metrics = [
+        {
+            label: 'Performance Score',
+            value: config?.overview?.performance_score || 0,
+            unit: '/100',
+            icon: 'performance',
+            color: 'text-blue-600',
+            bg: 'bg-blue-50'
+        },
+        {
+            label: 'Load Time',
+            value: config?.overview?.average_load_time || 0,
+            unit: 's',
+            icon: 'clock',
+            color: 'text-green-600',
+            bg: 'bg-green-50'
+        },
+        {
+            label: 'Cache Hit Ratio',
+            value: config?.overview?.cache_hit_ratio || 0,
+            unit: '%',
+            icon: 'saved',
+            color: 'text-purple-600',
+            bg: 'bg-purple-50'
+        }
+    ];
 
     return (
-        <div className="wppo-metrics-overview">
-            <Card>
-                <CardHeader>Overall Performance Score</CardHeader>
-                <CardBody style={{ color: getScoreColor(overview.performance_score) }}>
-                    {overview.performance_score}/100
-                </CardBody>
-            </Card>
-
-            <Card>
-                <CardHeader>Average Load Time</CardHeader>
-                <CardBody style={{ color: getLoadTimeColor(overview.average_load_time) }}>
-                    {overview.average_load_time.toFixed(2)}s
-                </CardBody>
-            </Card>
-
-            <Card>
-                <CardHeader>Cache Hit Ratio</CardHeader>
-                <CardBody style={{ color: getCacheColor(overview.cache_hit_ratio) }}>
-                    {overview.cache_hit_ratio.toFixed(1)}%
-                </CardBody>
-            </Card>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {metrics.map((metric, index) => (
+                <Card key={index} className="transform transition-all hover:scale-[1.02]">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <div className="text-sm text-gray-500 font-medium uppercase tracking-wider mb-1">
+                                {metric.label}
+                            </div>
+                            <div className="flex items-baseline gap-1">
+                                <span className={`text-3xl font-bold ${metric.color}`}>
+                                    {metric.value}
+                                </span>
+                                <span className="text-gray-400 font-medium">{metric.unit}</span>
+                            </div>
+                        </div>
+                        <div className={`p-3 rounded-full ${metric.bg} ${metric.color}`}>
+                            <Dashicon icon={metric.icon as any} size={24} />
+                        </div>
+                    </div>
+                </Card>
+            ))}
         </div>
     );
 };
