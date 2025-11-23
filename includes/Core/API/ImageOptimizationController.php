@@ -12,7 +12,7 @@
 namespace PerformanceOptimisation\Core\API;
 
 use PerformanceOptimisation\Interfaces\ServiceContainerInterface;
-use PerformanceOptimisation\Optimizers\ModernImageProcessor;
+use PerformanceOptimisation\Optimizers\ImageProcessor;
 use PerformanceOptimisation\Utils\LoggingUtil;
 use PerformanceOptimisation\Utils\ValidationUtil;
 
@@ -35,9 +35,9 @@ class ImageOptimizationController extends BaseController {
 	/**
 	 * Image processor instance.
 	 *
-	 * @var ModernImageProcessor
+	 * @var ImageProcessor
 	 */
-	private ModernImageProcessor $image_processor;
+	private ImageProcessor $image_processor;
 
 	/**
 	 * Constructor.
@@ -47,13 +47,13 @@ class ImageOptimizationController extends BaseController {
 	public function __construct( ServiceContainerInterface $container ) {
 		try {
 			// Try to get image processor from container
-			if ( $container->has( 'image_service' ) ) {
-				$this->image_processor = $container->get( 'image_service' );
+			if ( $container->has( 'image_processor' ) ) {
+				$this->image_processor = $container->get( 'image_processor' );
 			} else {
 				// Fallback: create basic image processor
-				$this->image_processor = new \PerformanceOptimisation\Optimizers\ModernImageProcessor( $container );
+				$this->image_processor = new ImageProcessor( $container );
 			}
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			// Log error but don't fail completely
 			error_log( 'WPPO: ImageOptimizationController init failed: ' . $e->getMessage() );
 			$this->image_processor = null;

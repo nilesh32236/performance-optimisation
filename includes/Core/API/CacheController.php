@@ -1,472 +1,275 @@
 <?php
 /**
- * Cache Controller Class
- *
- * Handles REST API endpoints for cache management including
- * clearing cache, cache statistics, and cache configuration.
+ * Cache REST API Controller
  *
  * @package PerformanceOptimisation\Core\API
- * @since 1.1.0
+ * @since 2.0.0
  */
 
 namespace PerformanceOptimisation\Core\API;
+
+use PerformanceOptimisation\Services\PageCacheService;
+use PerformanceOptimisation\Services\BrowserCacheService;
+use PerformanceOptimisation\Utils\LoggingUtil;
+use WP_REST_Controller;
+use WP_REST_Server;
+use WP_REST_Request;
+use WP_REST_Response;
+use WP_Error;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
 /**
- * Cache Controller class for cache-related API endpoints.
+ * Cache Controller Class
  */
-class CacheController extends BaseController {
+class CacheController extends WP_REST_Controller {
 
-	/**
-	 * Controller route base.
-	 *
-	 * @var string
-	 */
-	protected string $rest_base = 'cache';
+	private ?PageCacheService $page_cache = null;
+	private ?BrowserCacheService $browser_cache = null;
+	private ?LoggingUtil $logger = null;
 
-	/**
-	 * Register routes for this controller.
-	 *
-	 * @return void
-	 */
+	public function __construct( ?PageCacheService $page_cache = null, ?BrowserCacheService $browser_cache = null, ?LoggingUtil $logger = null ) {
+		$this->namespace = 'performance-optimisation/v1';
+		$this->rest_base = 'cache';
+		$this->page_cache = $page_cache;
+		$this->browser_cache = $browser_cache;
+		$this->logger = $logger ?? new LoggingUtil();
+	}
+
 	public function register_routes(): void {
-		// Clear cache endpoint.
-		register_rest_route(
-			$this->namespace,
-			'/' . $this->rest_base . '/clear',
-			array(
-				'methods'             => \WP_REST_Server::CREATABLE,
-				'callback'            => array( $this, 'clear_cache' ),
-				'permission_callback' => array( $this, 'check_admin_permissions' ),
-				'args'                => array(
-					'type' => array(
-						'required'    => false,
-						'type'        => 'string',
-						'default'     => 'all',
-						'enum'        => array( 'all', 'page', 'object', 'minified' ),
-						'description' => 'Type of cache to clear.',
-					),
-					'path' => array(
-						'required'    => false,
-						'type'        => 'string',
-						'description' => 'Specific path to clear (for page cache).',
-					),
-				),
-			)
-		);
-
-		// Cache statistics endpoint.
+		// Get cache statistics
 		register_rest_route(
 			$this->namespace,
 			'/' . $this->rest_base . '/stats',
 			array(
-				'methods'             => \WP_REST_Server::READABLE,
-				'callback'            => array( $this, 'get_cache_stats' ),
-				'permission_callback' => array( $this, 'check_admin_permissions' ),
-			)
-		);
-
-		// Cache preload endpoint.
-		register_rest_route(
-			$this->namespace,
-			'/' . $this->rest_base . '/preload',
-			array(
-				'methods'             => \WP_REST_Server::CREATABLE,
-				'callback'            => array( $this, 'preload_cache' ),
-				'permission_callback' => array( $this, 'check_admin_permissions' ),
-				'args'                => array(
-					'urls'  => array(
-						'required'    => false,
-						'type'        => 'array',
-						'description' => 'Specific URLs to preload.',
-					),
-					'limit' => array(
-						'required'    => false,
-						'type'        => 'integer',
-						'default'     => 10,
-						'min'         => 1,
-						'max'         => 50,
-						'description' => 'Maximum number of URLs to preload.',
-					),
+				array(
+					'methods'             => WP_REST_Server::READABLE,
+					'callback'            => array( $this, 'get_cache_stats' ),
+					'permission_callback' => array( $this, 'check_permission' ),
 				),
 			)
 		);
 
-		// Cache warmup endpoint.
+		// Clear all cache
 		register_rest_route(
 			$this->namespace,
-			'/' . $this->rest_base . '/warmup',
+			'/' . $this->rest_base . '/clear',
 			array(
-				'methods'             => \WP_REST_Server::CREATABLE,
-				'callback'            => array( $this, 'warmup_cache' ),
-				'permission_callback' => array( $this, 'check_admin_permissions' ),
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'clear_cache' ),
+					'permission_callback' => array( $this, 'check_permission' ),
+					'args'                => array(
+						'type' => array(
+							'required'          => false,
+							'type'              => 'string',
+							'default'           => 'all',
+							'enum'              => array( 'all', 'page', 'url' ),
+							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'url'  => array(
+							'required'          => false,
+							'type'              => 'string',
+							'sanitize_callback' => 'esc_url_raw',
+						),
+					),
+				),
 			)
 		);
 	}
 
 	/**
-	 * Clear cache endpoint handler.
-	 *
-	 * @param \WP_REST_Request $request The REST API request.
-	 * @return \WP_REST_Response Response object.
+	 * Check if user has permission
 	 */
-	public function clear_cache( \WP_REST_Request $request ): \WP_REST_Response {
-		try {
-			$this->log_request( $request, 'Clear Cache' );
+	public function check_permission(): bool {
+		return current_user_can( 'manage_options' );
+	}
 
-			// Rate limiting.
-			$rate_limit_key = $this->get_rate_limit_key();
-			if ( ! $this->check_rate_limit( $rate_limit_key . '_clear_cache', 10, 300 ) ) {
-				return $this->send_error_response(
-					'rate_limit_exceeded',
-					'Too many cache clear requests. Please wait before trying again.',
-					429
-				);
-			}
+	/**
+	 * Alias for check_permission (for compatibility)
+	 */
+	public function check_admin_permissions(): bool {
+		return $this->check_permission();
+	}
 
-			// Validate request.
-			$validation = $this->validate_request(
-				$request,
+	/**
+	 * Preload cache (placeholder for future implementation)
+	 */
+	public function preload_cache( WP_REST_Request $request ): WP_REST_Response {
+		return new WP_REST_Response(
+			array(
+				'success' => true,
+				'message' => 'Cache preloading will be implemented in a future update',
+			),
+			200
+		);
+	}
+
+	/**
+	 * Get cache statistics
+	 */
+	public function get_cache_stats( WP_REST_Request $request ): WP_REST_Response {
+		$start_time = microtime( true );
+		$this->logger->debug( 'CacheController: get_cache_stats called' );
+		
+		if ( ! $this->page_cache ) {
+			$this->logger->debug( 'CacheController: PageCacheService not available' );
+			return new WP_REST_Response(
 				array(
-					'type' => array(
-						'type' => 'string',
-						'enum' => array( 'all', 'page', 'object', 'minified' ),
+					'success' => true,
+					'data'    => array(
+						'page_cache' => array(
+							'enabled'  => false,
+							'files'    => 0,
+							'size'     => '0 B',
+							'hit_rate' => 0,
+						),
+						'object_cache' => array(
+							'enabled'  => false,
+							'backend'  => 'None',
+							'hit_rate' => 0,
+						),
+						'browser_cache' => array(
+							'enabled' => false,
+							'rules_count' => 0,
+							'htaccess_writable' => false,
+						),
 					),
-					'path' => array( 'type' => 'string' ),
-				)
+				),
+				200
+			);
+		}
+
+		try {
+			$this->logger->debug( 'CacheController: Calling PageCacheService->get_cache_stats()' );
+			$stats = $this->page_cache->get_cache_stats();
+			
+			$elapsed = microtime( true ) - $start_time;
+			$this->logger->debug( 'CacheController: Stats retrieved', array( 
+				'elapsed_ms' => round( $elapsed * 1000, 2 ),
+				'files' => $stats['files']
+			) );
+
+			// Get browser cache stats
+			$browser_stats = $this->browser_cache ? $this->browser_cache->get_stats() : array(
+				'enabled' => false,
+				'rules_count' => 0,
+				'htaccess_writable' => false,
 			);
 
-			if ( ! $validation['valid'] ) {
-				return $this->send_validation_error_response( $validation['errors'] );
-			}
+			return new WP_REST_Response(
+				array(
+					'success' => true,
+					'data'    => array(
+						'page_cache' => array(
+							'enabled'  => $stats['enabled'],
+							'files'    => $stats['files'],
+							'size'     => $stats['size_formatted'],
+							'hit_rate' => $stats['hit_rate'],
+						),
+						'browser_cache' => array(
+							'enabled'  => $browser_stats['enabled'],
+							'rules_count' => $browser_stats['rules_count'],
+							'htaccess_writable' => $browser_stats['htaccess_writable'],
+						),
+						'object_cache' => array(
+							'enabled'  => false,
+							'backend'  => 'None',
+							'hit_rate' => 0,
+						),
+					),
+				),
+				200
+			);
 
-			$data       = $validation['data'];
-			$cache_type = $data['type'] ?? 'all';
-			$path       = $data['path'] ?? null;
+		} catch ( \Exception $e ) {
+			$this->logger->error( 'Failed to get cache stats', array( 'error' => $e->getMessage() ) );
 
-			// Use modern services instead of legacy classes
-			$container    = \PerformanceOptimisation\Core\Container\Container::getInstance();
-			$cacheService = $container->get( \PerformanceOptimisation\Services\CacheService::class );
+			return new WP_REST_Response(
+				array(
+					'success' => false,
+					'message' => 'Failed to retrieve cache statistics',
+				),
+				500
+			);
+		}
+	}
 
-			$cleared_items = 0;
-			$message       = '';
+	/**
+	 * Clear cache
+	 */
+	public function clear_cache( WP_REST_Request $request ): WP_REST_Response {
+		if ( ! $this->page_cache ) {
+			return new WP_REST_Response(
+				array(
+					'success' => false,
+					'message' => 'Page cache service not available',
+				),
+				500
+			);
+		}
 
-			switch ( $cache_type ) {
-				case 'page':
-					if ( $path ) {
-						$success       = $cacheService->invalidateCache( $path );
-						$message       = sprintf( 'Page cache cleared for: %s', esc_url( home_url( $path ) ) );
-						$cleared_items = $success ? 1 : 0;
-					} else {
-						$success       = $cacheService->clearCache( 'page' );
-						$cleared_items = $success ? 1 : 0;
-						$message       = 'Page cache cleared.';
+		$type = $request->get_param( 'type' );
+		$url  = $request->get_param( 'url' );
+		$path = $request->get_param( 'path' );
+
+		try {
+			$result = false;
+
+			switch ( $type ) {
+				case 'url':
+					$target_url = $url ?? $path;
+					if ( empty( $target_url ) ) {
+						return new WP_REST_Response(
+							array(
+								'success' => false,
+								'message' => 'URL parameter is required for URL cache clearing',
+							),
+							400
+						);
 					}
+					$result = $this->page_cache->clear_url_cache( $target_url );
+					$message = 'URL cache cleared successfully';
 					break;
 
-				case 'object':
-					wp_cache_flush();
-					$cleared_items = 1;
-					$message       = 'Object cache cleared.';
-					break;
-
-				case 'minified':
-					$success       = $cacheService->clearCache( 'minified' );
-					$cleared_items = $success ? 1 : 0;
-					$message       = 'Minified files cache cleared.';
-					break;
-
+				case 'page':
 				case 'all':
 				default:
-					$success       = $cacheService->clearCache( 'all' );
-					$cleared_items = $success ? 1 : 0;
-					$message       = 'All cache cleared.';
+					$result = $this->page_cache->clear_all_cache();
+					$message = 'All cache cleared successfully';
 					break;
 			}
 
-			// Log the action using modern logging
-			\PerformanceOptimisation\Utils\LoggingUtil::info( $message . ' on ' . current_time( 'mysql' ) );
-
-			return $this->send_success_response(
-				array(
-					'message'       => $message,
-					'type'          => $cache_type,
-					'cleared_items' => $cleared_items,
-					'timestamp'     => current_time( 'mysql' ),
-				)
-			);
-
-		} catch ( \Exception $e ) {
-			return $this->handle_exception( $e, 'Failed to clear cache' );
-		}
-	}
-
-	/**
-	 * Get cache statistics endpoint handler.
-	 *
-	 * @param \WP_REST_Request $request The REST API request.
-	 * @return \WP_REST_Response Response object.
-	 */
-	public function get_cache_stats( \WP_REST_Request $request ): \WP_REST_Response {
-		try {
-			$this->log_request( $request, 'Get Cache Stats' );
-
-			// Load cache class.
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
-			}
-
-			$stats = array(
-				'page_cache'     => $this->get_page_cache_stats(),
-				'object_cache'   => $this->get_object_cache_stats(),
-				'minified_cache' => $this->get_minified_cache_stats(),
-				'total_size'     => 0,
-				'last_cleared'   => get_option( 'wppo_last_cache_clear', null ),
-			);
-
-			// Calculate total size.
-			$stats['total_size'] = $stats['page_cache']['size'] +
-									$stats['object_cache']['size'] +
-									$stats['minified_cache']['size'];
-
-			return $this->send_success_response( $stats );
-
-		} catch ( \Exception $e ) {
-			return $this->handle_exception( $e, 'Failed to get cache statistics' );
-		}
-	}
-
-	/**
-	 * Preload cache endpoint handler.
-	 *
-	 * @param \WP_REST_Request $request The REST API request.
-	 * @return \WP_REST_Response Response object.
-	 */
-	public function preload_cache( \WP_REST_Request $request ): \WP_REST_Response {
-		try {
-			$this->log_request( $request, 'Preload Cache' );
-
-			// Rate limiting for preload operations.
-			$rate_limit_key = $this->get_rate_limit_key();
-			if ( ! $this->check_rate_limit( $rate_limit_key . '_preload', 5, 300 ) ) {
-				return $this->send_error_response(
-					'rate_limit_exceeded',
-					'Too many preload requests. Please wait before trying again.',
-					429
-				);
-			}
-
-			// Validate request.
-			$validation = $this->validate_request(
-				$request,
-				array(
-					'urls'  => array( 'type' => 'array' ),
-					'limit' => array(
-						'type' => 'integer',
-						'min'  => 1,
-						'max'  => 50,
+			if ( $result ) {
+				return new WP_REST_Response(
+					array(
+						'success' => true,
+						'message' => $message,
 					),
-				)
-			);
-
-			if ( ! $validation['valid'] ) {
-				return $this->send_validation_error_response( $validation['errors'] );
-			}
-
-			$data  = $validation['data'];
-			$urls  = $data['urls'] ?? null;
-			$limit = $data['limit'] ?? 10;
-
-			// Load preload functionality.
-			$cache_service    = new \PerformanceOptimisation\Services\CacheService();
-			$settings_service = new \PerformanceOptimisation\Services\SettingsService();
-			// Skip image service for now as it requires complex dependencies
-			$cron_manager = new \PerformanceOptimisation\Services\CronService(
-				$cache_service,
-				null, // ImageService placeholder
-				$settings_service
-			);
-
-			if ( $urls ) {
-				// Preload specific URLs.
-				$preloaded = $cron_manager->preload_urls( array_slice( $urls, 0, $limit ) );
-			} else {
-				// Preload popular pages.
-				$preloaded = $cron_manager->preload_popular_pages( $limit );
-			}
-
-			return $this->send_success_response(
-				array(
-					'message'         => sprintf( '%d pages queued for preloading', $preloaded ),
-					'preloaded_count' => $preloaded,
-					'limit'           => $limit,
-				)
-			);
-
-		} catch ( \Exception $e ) {
-			return $this->handle_exception( $e, 'Failed to preload cache' );
-		}
-	}
-
-	/**
-	 * Warmup cache endpoint handler.
-	 *
-	 * @param \WP_REST_Request $request The REST API request.
-	 * @return \WP_REST_Response Response object.
-	 */
-	public function warmup_cache( \WP_REST_Request $request ): \WP_REST_Response {
-		try {
-			$this->log_request( $request, 'Warmup Cache' );
-
-			// Rate limiting for warmup operations.
-			$rate_limit_key = $this->get_rate_limit_key();
-			if ( ! $this->check_rate_limit( $rate_limit_key . '_warmup', 3, 600 ) ) {
-				return $this->send_error_response(
-					'rate_limit_exceeded',
-					'Too many warmup requests. Please wait before trying again.',
-					429
+					200
 				);
 			}
 
-			// Load cache warmup functionality.
-			$cache_service    = new \PerformanceOptimisation\Services\CacheService();
-			$settings_service = new \PerformanceOptimisation\Services\SettingsService();
-			// Skip image service for now as it requires complex dependencies
-			$cron_manager = new \PerformanceOptimisation\Services\CronService(
-				$cache_service,
-				null, // ImageService placeholder
-				$settings_service
-			);
-			$warmed_pages = $cron_manager->warmup_cache();
-
-			return $this->send_success_response(
+			return new WP_REST_Response(
 				array(
-					'message'      => sprintf( 'Cache warmup initiated for %d pages', $warmed_pages ),
-					'warmed_pages' => $warmed_pages,
-				)
+					'success' => false,
+					'message' => 'Failed to clear cache',
+				),
+				500
 			);
 
 		} catch ( \Exception $e ) {
-			return $this->handle_exception( $e, 'Failed to warmup cache' );
-		}
-	}
+			$this->logger->error( 'Failed to clear cache', array( 'error' => $e->getMessage() ) );
 
-	/**
-	 * Get page cache statistics.
-	 *
-	 * @return array<string, mixed> Page cache stats.
-	 */
-	private function get_page_cache_stats(): array {
-		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
-
-		if ( ! is_dir( $cache_dir ) ) {
-			return array(
-				'enabled'   => false,
-				'files'     => 0,
-				'size'      => 0,
-				'hit_ratio' => 0,
+			return new WP_REST_Response(
+				array(
+					'success' => false,
+					'message' => 'An error occurred while clearing cache',
+				),
+				500
 			);
 		}
-
-		$files = 0;
-		$size  = 0;
-
-		$iterator = new \RecursiveIteratorIterator(
-			new \RecursiveDirectoryIterator( $cache_dir, \RecursiveDirectoryIterator::SKIP_DOTS )
-		);
-
-		foreach ( $iterator as $file ) {
-			if ( $file->isFile() ) {
-				++$files;
-				$size += $file->getSize();
-			}
-		}
-
-		return array(
-			'enabled'   => true,
-			'files'     => $files,
-			'size'      => $size,
-			'hit_ratio' => $this->calculate_cache_hit_ratio(),
-		);
-	}
-
-	/**
-	 * Get object cache statistics.
-	 *
-	 * @return array<string, mixed> Object cache stats.
-	 */
-	private function get_object_cache_stats(): array {
-		global $wp_object_cache;
-
-		$stats = array(
-			'enabled'   => wp_using_ext_object_cache(),
-			'files'     => 0,
-			'size'      => 0,
-			'hit_ratio' => 0,
-		);
-
-		if ( wp_using_ext_object_cache() && isset( $wp_object_cache->cache_hits, $wp_object_cache->cache_misses ) ) {
-			$total_requests     = $wp_object_cache->cache_hits + $wp_object_cache->cache_misses;
-			$stats['hit_ratio'] = $total_requests > 0 ? ( $wp_object_cache->cache_hits / $total_requests ) * 100 : 0;
-		}
-
-		return $stats;
-	}
-
-	/**
-	 * Get minified cache statistics.
-	 *
-	 * @return array<string, mixed> Minified cache stats.
-	 */
-	private function get_minified_cache_stats(): array {
-		$minified_dir = WP_CONTENT_DIR . '/cache/wppo/minified/';
-
-		if ( ! is_dir( $minified_dir ) ) {
-			return array(
-				'enabled' => false,
-				'files'   => 0,
-				'size'    => 0,
-			);
-		}
-
-		$files = 0;
-		$size  = 0;
-
-		$iterator = new \RecursiveIteratorIterator(
-			new \RecursiveDirectoryIterator( $minified_dir, \RecursiveDirectoryIterator::SKIP_DOTS )
-		);
-
-		foreach ( $iterator as $file ) {
-			if ( $file->isFile() ) {
-				++$files;
-				$size += $file->getSize();
-			}
-		}
-
-		return array(
-			'enabled' => true,
-			'files'   => $files,
-			'size'    => $size,
-		);
-	}
-
-	/**
-	 * Calculate cache hit ratio.
-	 *
-	 * @return float Cache hit ratio percentage.
-	 */
-	private function calculate_cache_hit_ratio(): float {
-		// This is a simplified calculation.
-		// In a real implementation, you'd track actual cache hits/misses.
-		$cache_stats = get_option( 'wppo_cache_stats', array() );
-
-		$hits   = $cache_stats['hits'] ?? 0;
-		$misses = $cache_stats['misses'] ?? 0;
-		$total  = $hits + $misses;
-
-		return $total > 0 ? ( $hits / $total ) * 100 : 0;
 	}
 }

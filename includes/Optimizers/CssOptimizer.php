@@ -1,9 +1,8 @@
 <?php
 /**
- * Modern CSS Optimizer
+ * CSS Optimizer
  *
- * Advanced CSS optimization with modern techniques including critical CSS extraction,
- * unused CSS removal, and intelligent minification.
+ * CSS optimization including critical CSS extraction, unused CSS removal, and minification.
  *
  * @package PerformanceOptimisation\Optimizers
  * @since 2.0.0
@@ -24,9 +23,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Modern CSS Optimizer Class
+ * CSS Optimizer Class
  */
-class ModernCssOptimizer implements OptimizerInterface {
+class CssOptimizer implements OptimizerInterface {
 
 	/**
 	 * Service container.

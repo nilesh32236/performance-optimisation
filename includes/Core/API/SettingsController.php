@@ -273,8 +273,20 @@ class SettingsController extends BaseController {
 			// Check for critical changes that require cache clearing.
 			$cache_clear_needed = $this->check_cache_clear_needed( $current_settings, $updated_settings );
 
-			// Update settings.
+			// Check if page cache was enabled/disabled
+			$page_cache_changed = $this->check_page_cache_changed( $current_settings, $updated_settings );
+
+			// Update settings - update_option returns false if value hasn't changed
 			$success = update_option( 'wppo_settings', $updated_settings );
+			
+			// If update_option returns false, check if it's because the value is the same
+			if ( ! $success ) {
+				$stored_value = get_option( 'wppo_settings' );
+				// If the stored value matches what we're trying to save, consider it a success
+				if ( $stored_value === $updated_settings ) {
+					$success = true;
+				}
+			}
 
 			if ( ! $success ) {
 				return $this->send_error_response(
@@ -282,6 +294,17 @@ class SettingsController extends BaseController {
 					'Failed to update settings in database.',
 					500
 				);
+			}
+
+			// Handle advanced-cache.php drop-in
+			if ( $page_cache_changed ) {
+				$this->manage_advanced_cache_dropin( $updated_settings );
+			}
+
+			// Handle browser cache .htaccess rules
+			$browser_cache_changed = $this->check_browser_cache_changed( $current_settings, $updated_settings );
+			if ( $browser_cache_changed ) {
+				$this->manage_browser_cache( $updated_settings );
 			}
 
 			// Clear cache if needed.
@@ -292,11 +315,8 @@ class SettingsController extends BaseController {
 				\PerformanceOptimise\Inc\Cache::clear_cache();
 			}
 
-			// Log the change.
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-			}
-			new \PerformanceOptimise\Inc\Log( 'Settings updated via API on ' . current_time( 'mysql' ) );
+			// Log the change using modern logging
+			error_log( 'WPPO: Settings updated via API on ' . current_time( 'mysql' ) );
 
 			return $this->send_success_response(
 				array(
@@ -881,5 +901,83 @@ class SettingsController extends BaseController {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Check if page cache setting changed.
+	 *
+	 * @param array<string, mixed> $old_settings Old settings.
+	 * @param array<string, mixed> $new_settings New settings.
+	 * @return bool True if page cache setting changed.
+	 */
+	private function check_page_cache_changed( array $old_settings, array $new_settings ): bool {
+		$old_enabled = $old_settings['cache_settings']['page_cache_enabled'] ?? false;
+		$new_enabled = $new_settings['cache_settings']['page_cache_enabled'] ?? false;
+		
+		return $old_enabled !== $new_enabled;
+	}
+
+	/**
+	 * Check if browser cache setting changed.
+	 *
+	 * @param array<string, mixed> $old_settings Old settings.
+	 * @param array<string, mixed> $new_settings New settings.
+	 * @return bool True if browser cache setting changed.
+	 */
+	private function check_browser_cache_changed( array $old_settings, array $new_settings ): bool {
+		$old_enabled = $old_settings['cache_settings']['browser_cache_enabled'] ?? false;
+		$new_enabled = $new_settings['cache_settings']['browser_cache_enabled'] ?? false;
+		
+		return $old_enabled !== $new_enabled;
+	}
+
+	/**
+	 * Manage browser cache .htaccess rules based on settings.
+	 *
+	 * @param array<string, mixed> $settings Current settings.
+	 * @return void
+	 */
+	private function manage_browser_cache( array $settings ): void {
+		$browser_cache_enabled = $settings['cache_settings']['browser_cache_enabled'] ?? false;
+		
+		try {
+			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
+			$browser_cache_service = $container->get( 'PerformanceOptimisation\\Services\\BrowserCacheService' );
+			
+			if ( $browser_cache_enabled ) {
+				$browser_cache_service->enable();
+				error_log( 'WPPO: Browser cache enabled, .htaccess rules added' );
+			} else {
+				$browser_cache_service->disable();
+				error_log( 'WPPO: Browser cache disabled, .htaccess rules removed' );
+			}
+		} catch ( \Exception $e ) {
+			error_log( 'WPPO: Failed to manage browser cache: ' . $e->getMessage() );
+		}
+	}
+
+	/**
+	 * Manage advanced-cache.php drop-in based on settings.
+	 *
+	 * @param array<string, mixed> $settings Current settings.
+	 * @return void
+	 */
+	private function manage_advanced_cache_dropin( array $settings ): void {
+		$page_cache_enabled = $settings['cache_settings']['page_cache_enabled'] ?? false;
+		
+		try {
+			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
+			$page_cache_service = $container->get( 'PageCacheService' );
+			
+			if ( $page_cache_enabled ) {
+				$page_cache_service->enable_cache();
+				error_log( 'WPPO: Page cache enabled, advanced-cache.php created' );
+			} else {
+				$page_cache_service->disable_cache();
+				error_log( 'WPPO: Page cache disabled, advanced-cache.php removed' );
+			}
+		} catch ( \Exception $e ) {
+			error_log( 'WPPO: Failed to manage advanced-cache.php: ' . $e->getMessage() );
+		}
 	}
 }

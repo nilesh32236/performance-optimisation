@@ -407,12 +407,12 @@ class ServiceContainer implements ServiceContainerInterface {
 
 		try {
 			// If concrete is already an instance, return it
-			if ( is_object( $concrete ) ) {
+			if ( is_object( $concrete ) && ! $concrete instanceof \Closure ) {
 				return $concrete;
 			}
 
-			// If concrete is a callable, call it
-			if ( is_callable( $concrete ) ) {
+			// If concrete is a Closure or callable, call it
+			if ( $concrete instanceof \Closure || is_callable( $concrete ) ) {
 				return $concrete( $this );
 			}
 

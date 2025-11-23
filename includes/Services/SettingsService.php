@@ -121,11 +121,16 @@ class SettingsService implements SettingsServiceInterface {
 	/**
 	 * Get configuration service (lazy-loaded).
 	 *
-	 * @return ConfigurationService
+	 * @return ConfigurationService|null
 	 */
-	private function getConfig(): ConfigurationService {
+	private function getConfig(): ?ConfigurationService {
 		if ( $this->config === null ) {
-			$this->config = $this->container->get( 'configuration_service' );
+			try {
+				$this->config = $this->container->get( 'PerformanceOptimisation\\Services\\ConfigurationService' );
+			} catch ( \Exception $e ) {
+				$this->logger->debug( 'ConfigurationService not available: ' . $e->getMessage() );
+				return null;
+			}
 		}
 		return $this->config;
 	}
@@ -140,9 +145,16 @@ class SettingsService implements SettingsServiceInterface {
 		$this->performance->startTimer( $timer_name );
 
 		try {
-			$settings = $this->getConfig()->all();
+			// Try to use ConfigurationService if available, otherwise fall back to WordPress options
+			$config = $this->getConfig();
+			if ( $config !== null ) {
+				$settings = $config->all();
+			} else {
+				// Fallback: get settings directly from WordPress options
+				$settings = get_option( self::LEGACY_OPTION_NAME, $this->get_default_settings() );
+			}
+			
 			$this->performance->endTimer( $timer_name );
-
 			return $settings;
 
 		} catch ( \Exception $e ) {
@@ -166,8 +178,14 @@ class SettingsService implements SettingsServiceInterface {
 			// Migrate legacy settings format if needed
 			$new_settings = $this->migrateLegacySettings( $new_settings );
 
-			// Update configuration
-			$result = $this->getConfig()->update( $new_settings );
+			$config = $this->getConfig();
+			if ( $config !== null ) {
+				// Use ConfigurationService if available
+				$result = $config->update( $new_settings );
+			} else {
+				// Fallback: update WordPress options directly
+				$result = update_option( self::LEGACY_OPTION_NAME, $new_settings );
+			}
 
 			if ( $result ) {
 				// Clear settings cache
@@ -212,7 +230,14 @@ class SettingsService implements SettingsServiceInterface {
 			return $this->settings_cache[ $cache_key ];
 		}
 
-		$value = $this->getConfig()->get( $cache_key, $default );
+		$config = $this->getConfig();
+		if ( $config !== null ) {
+			$value = $config->get( $cache_key, $default );
+		} else {
+			// Fallback: get from WordPress options
+			$all_settings = get_option( self::LEGACY_OPTION_NAME, array() );
+			$value = $all_settings[ $group ][ $key ] ?? $default;
+		}
 
 		// Cache the result
 		$this->settings_cache[ $cache_key ] = $value;
@@ -234,36 +259,42 @@ class SettingsService implements SettingsServiceInterface {
 
 		try {
 			$config_key = "{$group}.{$key}";
+			$config = $this->getConfig();
 
-			// Set in configuration service (includes validation)
-			$result = $this->getConfig()->set( $config_key, $value );
+			if ( $config !== null ) {
+				// Set in configuration service (includes validation)
+				$result = $config->set( $config_key, $value );
+				if ( $result ) {
+					$result = $config->save();
+				}
+			} else {
+				// Fallback: update WordPress option directly
+				$all_settings = get_option( self::LEGACY_OPTION_NAME, array() );
+				$all_settings[ $group ][ $key ] = $value;
+				$result = update_option( self::LEGACY_OPTION_NAME, $all_settings );
+			}
 
 			if ( $result ) {
-				// Save configuration
-				$result = $this->getConfig()->save();
+				// Update cache
+				$this->settings_cache[ $config_key ] = $value;
 
-				if ( $result ) {
-					// Update cache
-					$this->settings_cache[ $config_key ] = $value;
+				$this->logger->debug(
+					'Single setting updated',
+					array(
+						'group' => $group,
+						'key'   => $key,
+						'type'  => gettype( $value ),
+					)
+				);
 
-					$this->logger->debug(
-						'Single setting updated',
-						array(
-							'group' => $group,
-							'key'   => $key,
-							'type'  => gettype( $value ),
-						)
-					);
-
-					// Trigger setting updated action
-					do_action( 'wppo_setting_updated', $group, $key, $value, $this );
-				}
+				// Trigger setting updated action
+				do_action( 'wppo_setting_updated', $group, $key, $value, $this );
 			}
 
 			$this->performance->endTimer( $timer_name );
 			return $result;
 
-		} catch ( ConfigurationException $e ) {
+		} catch ( \Exception $e ) {
 			$this->performance->endTimer( $timer_name );
 			$this->logger->error(
 				'Single setting update failed',
@@ -284,15 +315,29 @@ class SettingsService implements SettingsServiceInterface {
 	 */
 	public function initialize_default_settings(): bool {
 		try {
+			$config = $this->getConfig();
+			
 			// Check if settings already exist
-			if ( $this->getConfig()->has( 'caching.page_cache_enabled' ) ) {
+			if ( $config !== null && $config->has( 'caching.page_cache_enabled' ) ) {
 				$this->logger->debug( 'Settings already initialized, skipping' );
+				return true;
+			}
+
+			// Check WordPress option as fallback
+			$existing = get_option( self::LEGACY_OPTION_NAME, array() );
+			if ( ! empty( $existing ) ) {
+				$this->logger->debug( 'Settings already exist in WordPress options, skipping' );
 				return true;
 			}
 
 			// Set default configuration
 			$defaults = $this->get_default_settings();
-			$result   = $this->getConfig()->update( $defaults );
+			
+			if ( $config !== null ) {
+				$result = $config->update( $defaults );
+			} else {
+				$result = update_option( self::LEGACY_OPTION_NAME, $defaults );
+			}
 
 			if ( $result ) {
 				// Set settings version
@@ -419,7 +464,13 @@ class SettingsService implements SettingsServiceInterface {
 				$migrated_settings = $this->migrateLegacySettings( $legacy_settings );
 
 				// Update configuration with migrated settings
-				$this->getConfig()->update( $migrated_settings );
+				$config = $this->getConfig();
+				if ( $config !== null ) {
+					$config->update( $migrated_settings );
+				} else {
+					// Fallback: update WordPress option directly
+					update_option( self::LEGACY_OPTION_NAME, $migrated_settings );
+				}
 
 				// Backup legacy settings
 				update_option( self::LEGACY_OPTION_NAME . '_backup_' . time(), $legacy_settings );
@@ -480,11 +531,9 @@ class SettingsService implements SettingsServiceInterface {
 	 * Initialize the service.
 	 */
 	private function initialize(): void {
-		// Skip initialization if configuration service is not available
+		// Defer configuration service usage - it will be loaded lazily when needed
 		try {
-			$config = $this->getConfig();
-
-			// Perform migration if needed
+			// Perform migration if needed (doesn't require config service)
 			if ( $this->needs_migration() ) {
 				$this->migrate_settings();
 			}
@@ -495,8 +544,7 @@ class SettingsService implements SettingsServiceInterface {
 			$this->logger->debug(
 				'SettingsService initialized',
 				array(
-					'version'     => get_option( 'wppo_settings_version' ),
-					'environment' => $config->getEnvironment(),
+					'version' => get_option( 'wppo_settings_version' ),
 				)
 			);
 		} catch ( \Exception $e ) {

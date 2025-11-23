@@ -9,7 +9,7 @@
 namespace PerformanceOptimisation\Services;
 
 use PerformanceOptimisation\Interfaces\ImageServiceInterface;
-use PerformanceOptimisation\Optimizers\ModernImageProcessor;
+use PerformanceOptimisation\Optimizers\ImageProcessor;
 use PerformanceOptimisation\Utils\ConversionQueue;
 use PerformanceOptimisation\Utils\FileSystemUtil;
 use PerformanceOptimisation\Utils\ImageUtil;
@@ -28,14 +28,17 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class ImageService implements ImageServiceInterface {
 
-	private ModernImageProcessor $imageProcessor;
+	private ImageProcessor $imageProcessor;
 	private ConversionQueue $conversionQueue;
 	private array $settings;
 
-	public function __construct( ModernImageProcessor $imageProcessor, ConversionQueue $conversionQueue, array $settings ) {
+	public function __construct( ImageProcessor $imageProcessor, ConversionQueue $conversionQueue, array $settings ) {
 		$this->imageProcessor  = $imageProcessor;
 		$this->conversionQueue = $conversionQueue;
 		$this->settings        = $settings;
+
+		// Hook into WordPress image upload
+		add_filter( 'wp_generate_attachment_metadata', array( $this, 'convert_on_upload' ), 10, 2 );
 	}
 
 	/**
@@ -165,6 +168,51 @@ class ImageService implements ImageServiceInterface {
 				)
 			);
 		}
+	}
+
+	/**
+	 * Convert images on upload (WordPress filter hook).
+	 *
+	 * @param array $metadata      Attachment metadata.
+	 * @param int   $attachment_id Attachment ID.
+	 * @return array Unmodified metadata.
+	 */
+	public function convert_on_upload( $metadata, $attachment_id ): array {
+		if ( empty( $this->settings['auto_convert_on_upload'] ) ) {
+			return $metadata;
+		}
+
+		$file_path = get_attached_file( $attachment_id );
+		if ( ! $file_path || ! file_exists( $file_path ) ) {
+			return $metadata;
+		}
+
+		// Convert main image
+		$formats = $this->get_target_formats();
+		foreach ( $formats as $format ) {
+			$target_path = $this->get_img_path( $file_path, $format );
+			if ( ! file_exists( $target_path ) ) {
+				$this->convert_image( $file_path, $format );
+			}
+		}
+
+		// Convert image sizes
+		if ( ! empty( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
+			$upload_dir = wp_upload_dir();
+			foreach ( $metadata['sizes'] as $size => $size_data ) {
+				$size_path = wp_normalize_path( $upload_dir['path'] . '/' . $size_data['file'] );
+				if ( file_exists( $size_path ) ) {
+					foreach ( $formats as $format ) {
+						$target_path = $this->get_img_path( $size_path, $format );
+						if ( ! file_exists( $target_path ) ) {
+							$this->convert_image( $size_path, $format );
+						}
+					}
+				}
+			}
+		}
+
+		return $metadata;
 	}
 
 	/**

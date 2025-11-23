@@ -109,14 +109,64 @@ class ApiRouter {
 		// Get service container
 		$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
 
+		// Get PageCacheService from container - use full class name
+		$page_cache_service = null;
+		$logger = null;
+		
+		try {
+			if ( $container->has( 'PerformanceOptimisation\\Services\\PageCacheService' ) ) {
+				$service = $container->get( 'PerformanceOptimisation\\Services\\PageCacheService' );
+				// If we got a Closure, call it to get the actual service
+				if ( $service instanceof \Closure ) {
+					error_log( 'WPPO: PageCacheService returned as Closure, calling it' );
+					$page_cache_service = $service( $container );
+				} else {
+					$page_cache_service = $service;
+				}
+			}
+		} catch ( \Exception $e ) {
+			error_log( 'WPPO: Failed to get PageCacheService: ' . $e->getMessage() );
+		}
+
+		try {
+			if ( $container->has( 'logger' ) ) {
+				$service = $container->get( 'logger' );
+				if ( $service instanceof \Closure ) {
+					$logger = $service( $container );
+				} else {
+					$logger = $service;
+				}
+			}
+		} catch ( \Exception $e ) {
+			error_log( 'WPPO: Failed to get logger: ' . $e->getMessage() );
+		}
+
+		// Get BrowserCacheService
+		$browser_cache_service = null;
+		try {
+			if ( $container->has( 'PerformanceOptimisation\\Services\\BrowserCacheService' ) ) {
+				$service = $container->get( 'PerformanceOptimisation\\Services\\BrowserCacheService' );
+				if ( $service instanceof \Closure ) {
+					$browser_cache_service = $service( $container );
+				} else {
+					$browser_cache_service = $service;
+				}
+			}
+		} catch ( \Exception $e ) {
+			error_log( 'WPPO: Failed to get BrowserCacheService: ' . $e->getMessage() );
+		}
+
+		if ( $logger === null ) {
+			$logger = new \PerformanceOptimisation\Utils\LoggingUtil();
+		}
+
 		$this->controllers = array(
-			'cache'           => new CacheController(),
+			'cache'           => new CacheController( $page_cache_service, $browser_cache_service, $logger ),
 			'settings'        => new SettingsController(),
 			'optimization'    => new OptimizationController(),
 			'analytics'       => new AnalyticsController( $metrics_collector, $performance_analyzer ),
 			'recommendations' => new RecommendationsController( $metrics_collector, $performance_analyzer ),
-			// Temporarily disabled due to service container issues
-			// 'images'          => new ImageOptimizationController( $container ),
+			'images'          => new ImageOptimizationController( $container ),
 		);
 	}
 
@@ -540,10 +590,9 @@ class ApiRouter {
 	 * @return void
 	 */
 	private function register_image_routes(): void {
-		// Temporarily disabled due to service container issues
-		// if ( isset( $this->controllers['images'] ) ) {
-		// $this->controllers['images']->register_routes();
-		// }
+		if ( isset( $this->controllers['images'] ) ) {
+			$this->controllers['images']->register_routes();
+		}
 	}
 
 	/**

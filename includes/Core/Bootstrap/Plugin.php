@@ -110,6 +110,8 @@ class Plugin implements PluginInterface {
 			return;
 		}
 
+		$start_time = microtime( true );
+
 		// Register core services.
 		$this->registerCoreServices();
 
@@ -123,6 +125,9 @@ class Plugin implements PluginInterface {
 		$this->initializeFeatures();
 
 		$this->_initialized = true;
+
+		$elapsed = microtime( true ) - $start_time;
+		error_log( sprintf( 'WPPO: Plugin initialized in %.2f ms', $elapsed * 1000 ) );
 
 		/**
 		 * Fires after plugin initialization.
@@ -486,10 +491,10 @@ class Plugin implements PluginInterface {
 			'includes/Frontend/Frontend.php',
 			'includes/Core/Cache/AdvancedCacheHandler.php',
 			'includes/Core/API/RestController.php',
-			'includes/Optimizers/ModernCssOptimizer.php',
+			'includes/Optimizers/CssOptimizer.php',
 			'includes/Optimizers/JsOptimizer.php',
 			'includes/Optimizers/HtmlOptimizer.php',
-			'includes/Optimizers/ModernImageProcessor.php',
+			'includes/Optimizers/ImageProcessor.php',
 			'includes/Utils/ConversionQueue.php',
 			'includes/Utils/ValidationUtil.php',
 		);
@@ -567,6 +572,17 @@ class Plugin implements PluginInterface {
 		// Initialize feature modules based on configuration.
 		// For now, skip configuration loading to avoid dependency issues
 		// $config = $this->_container->get( 'PerformanceOptimisation\\Core\\Config\\ConfigManager' );
+
+		// Initialize image optimization features
+		if ( $this->_container->has( 'lazy_load_service' ) ) {
+			$lazy_load_service = $this->_container->get( 'lazy_load_service' );
+			$lazy_load_service->init();
+		}
+
+		if ( $this->_container->has( 'next_gen_image_service' ) ) {
+			$next_gen_service = $this->_container->get( 'next_gen_image_service' );
+			$next_gen_service->init();
+		}
 
 		// This will be expanded when we create feature modules.
 		/**

@@ -36,8 +36,13 @@ class CoreServiceProvider extends ServiceProvider {
 	 * {@inheritdoc}
 	 */
 	public function register( ServiceContainerInterface $container ): void {
-		// Register core services as singletons
-		$container->singleton( 'PerformanceOptimisation\\Services\\OptimizationService', 'PerformanceOptimisation\\Services\\OptimizationService' );
+		// Register ConfigurationService FIRST (before SettingsService needs it)
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\ConfigurationService',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Services\ConfigurationService( $c );
+			}
+		);
 
 		// Register CronService with proper dependency injection
 		$container->singleton(
@@ -60,14 +65,6 @@ class CoreServiceProvider extends ServiceProvider {
 			'PerformanceOptimisation\\Services\\SettingsService',
 			function ( ServiceContainerInterface $c ) {
 				return new \PerformanceOptimisation\Services\SettingsService( $c );
-			}
-		);
-
-		// Register ConfigurationService with container injection
-		$container->singleton(
-			'PerformanceOptimisation\\Services\\ConfigurationService',
-			function ( ServiceContainerInterface $c ) {
-				return new \PerformanceOptimisation\Services\ConfigurationService( $c );
 			}
 		);
 

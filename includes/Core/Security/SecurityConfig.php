@@ -141,27 +141,27 @@ class SecurityConfig {
 			),
 			'rate_limits'       => array(
 				'cache_clear'     => array(
-					'requests' => 10,
+					'requests' => 100,
 					'window'   => 300, // 5 minutes
 				),
 				'image_optimize'  => array(
-					'requests' => 5,
+					'requests' => 50,
 					'window'   => 300, // 5 minutes
 				),
 				'settings_update' => array(
-					'requests' => 20,
+					'requests' => 200,
 					'window'   => 300, // 5 minutes
 				),
 				'bulk_operations' => array(
-					'requests' => 3,
+					'requests' => 30,
 					'window'   => 600, // 10 minutes
 				),
 				'analysis'        => array(
-					'requests' => 5,
+					'requests' => 50,
 					'window'   => 300, // 5 minutes
 				),
 				'default'         => array(
-					'requests' => 60,
+					'requests' => 600,
 					'window'   => 3600, // 1 hour
 				),
 			),

@@ -77,7 +77,14 @@ class AdminServiceProvider extends ServiceProvider {
 
 		// Initialize frontend components only on frontend
 		if ( ! is_admin() ) {
-			$container->get( 'PerformanceOptimisation\\Frontend\\Frontend' );
+			// Instantiate PageCacheService to enable page caching
+			try {
+				$settings = $container->get( 'settings_service' );
+				$logger = $container->get( 'logger' );
+				new \PerformanceOptimisation\Services\PageCacheService( $settings, $logger );
+			} catch ( \Exception $e ) {
+				error_log( 'WPPO: Failed to instantiate PageCacheService: ' . $e->getMessage() );
+			}
 		}
 	}
 }

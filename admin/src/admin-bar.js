@@ -87,7 +87,7 @@ document.addEventListener( 'DOMContentLoaded', () => {
 		event.target.style.pointerEvents = 'none';
 
 		try {
-			const response = await fetch( `${ apiUrl }clear-cache`, {
+			const response = await fetch( `${ apiUrl }/clear-cache`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',

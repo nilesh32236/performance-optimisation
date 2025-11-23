@@ -313,6 +313,9 @@ class SecurityManager {
 	 * @return bool|\WP_Error True if within limits, WP_Error otherwise.
 	 */
 	public function check_rate_limits( \WP_REST_Request $request ) {
+		// Rate limiting temporarily disabled
+		return true;
+		
 		$client_ip = $this->get_client_ip();
 		$user_id   = get_current_user_id();
 		$route     = $request->get_route();

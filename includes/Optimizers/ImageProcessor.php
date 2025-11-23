@@ -1,9 +1,9 @@
 <?php
 /**
- * Modern Image Processor
+ * Image Processor
  *
- * Advanced image processing with modern capabilities including WebP/AVIF support,
- * progressive JPEG optimization, responsive image generation, and intelligent compression.
+ * Image processing with WebP/AVIF support, progressive JPEG optimization, 
+ * responsive image generation, and intelligent compression.
  *
  * @package PerformanceOptimisation\Optimizers
  * @since 2.0.0
@@ -24,9 +24,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Modern Image Processor Class
+ * Image Processor Class
  */
-class ModernImageProcessor implements OptimizerInterface {
+class ImageProcessor implements OptimizerInterface {
 
 	/**
 	 * Service container.
@@ -327,6 +327,44 @@ class ModernImageProcessor implements OptimizerInterface {
 	}
 
 	/**
+	 * Convert image to specified format (public interface method).
+	 *
+	 * @param string $source_path   Source image path.
+	 * @param string $target_path   Target image path.
+	 * @param string $target_format Target format.
+	 * @param int    $quality       Conversion quality.
+	 * @return bool True on success, false on failure.
+	 */
+	public function convert( string $source_path, string $target_path, string $target_format, int $quality = 85 ): bool {
+		if ( ! file_exists( $source_path ) ) {
+			return false;
+		}
+
+		$image_info = getimagesize( $source_path );
+		if ( ! $image_info ) {
+			return false;
+		}
+
+		$image_resource = $this->createImageResource( $source_path, $image_info[2] );
+		if ( ! $image_resource ) {
+			return false;
+		}
+
+		// Ensure target directory exists
+		$target_dir = dirname( $target_path );
+		if ( ! is_dir( $target_dir ) ) {
+			wp_mkdir_p( $target_dir );
+		}
+
+		$options = array( 'quality' => $quality, 'progressive' => true );
+		$success = $this->saveImage( $image_resource, $target_path, $target_format, $options );
+
+		imagedestroy( $image_resource );
+
+		return $success;
+	}
+
+	/**
 	 * Convert image to specified format.
 	 *
 	 * @param string $image_path   Path to image file.
@@ -422,6 +460,8 @@ class ModernImageProcessor implements OptimizerInterface {
 
 		imagedestroy( $source_resource );
 		imagedestroy( $target_resource );
+
+		return $save_success ? $resized_path : false;
 	}
 
 	/**
@@ -464,8 +504,8 @@ class ModernImageProcessor implements OptimizerInterface {
 	private function saveImage( $image_resource, string $target_path, string $format, array $options ): bool {
 		// Ensure target directory exists
 		$target_dir = dirname( $target_path );
-		if ( ! $this->filesystem->directoryExists( $target_dir ) ) {
-			$this->filesystem->createDirectory( $target_dir, true );
+		if ( ! is_dir( $target_dir ) ) {
+			wp_mkdir_p( $target_dir );
 		}
 
 		$quality     = $options['quality'] ?? 85;
@@ -727,5 +767,109 @@ class ModernImageProcessor implements OptimizerInterface {
 	 */
 	public function reset_stats(): void {
 		// Implementation for resetting stats
+	}
+
+	/**
+	 * Process an image (interface method).
+	 *
+	 * @param string $source_path Source image path.
+	 * @param string $target_path Target image path.
+	 * @param array  $options     Processing options.
+	 * @return bool True on success, false on failure.
+	 */
+	public function process( string $source_path, string $target_path, array $options = array() ): bool {
+		$result = $this->optimizeImage( $source_path, $options );
+		return $result !== false;
+	}
+
+	/**
+	 * Check if processor can handle the image type.
+	 *
+	 * @param string $image_type Image MIME type.
+	 * @return bool True if can handle, false otherwise.
+	 */
+	public function can_process( string $image_type ): bool {
+		$supported_types = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
+		return in_array( $image_type, $supported_types, true );
+	}
+
+	/**
+	 * Compress an image.
+	 *
+	 * @param string $source_path Source image path.
+	 * @param string $target_path Target image path.
+	 * @param int    $quality     Compression quality (1-100).
+	 * @return bool True on success, false on failure.
+	 */
+	public function compress( string $source_path, string $target_path, int $quality = 85 ): bool {
+		$image_info = getimagesize( $source_path );
+		if ( ! $image_info ) {
+			return false;
+		}
+
+		$image_resource = $this->createImageResource( $source_path, $image_info[2] );
+		if ( ! $image_resource ) {
+			return false;
+		}
+
+		$format  = $this->getImageFormat( $image_info[2] );
+		$options = array( 'quality' => $quality, 'progressive' => true );
+		$success = $this->saveImage( $image_resource, $target_path, $format, $options );
+
+		imagedestroy( $image_resource );
+		return $success;
+	}
+
+	/**
+	 * Resize an image.
+	 *
+	 * @param string $source_path Source image path.
+	 * @param string $target_path Target image path.
+	 * @param int    $width       Target width.
+	 * @param int    $height      Target height.
+	 * @param bool   $crop        Whether to crop the image.
+	 * @return bool True on success, false on failure.
+	 */
+	public function resize( string $source_path, string $target_path, int $width, int $height, bool $crop = false ): bool {
+		$result = $this->resizeImage( $source_path, $width, $height, array() );
+		if ( $result && $result !== $target_path ) {
+			return rename( $result, $target_path );
+		}
+		return $result !== false;
+	}
+
+	/**
+	 * Generate responsive image sizes.
+	 *
+	 * @param string $source_path Source image path.
+	 * @param array  $sizes       Array of sizes to generate.
+	 * @param string $target_dir  Target directory.
+	 * @return array Array of generated image paths.
+	 */
+	public function generate_responsive_sizes( string $source_path, array $sizes, string $target_dir ): array {
+		$generated = array();
+		foreach ( $sizes as $size_name => $size_data ) {
+			$width  = $size_data['width'] ?? 0;
+			$height = $size_data['height'] ?? 0;
+			if ( $width > 0 ) {
+				$target_path = $target_dir . '/' . pathinfo( $source_path, PATHINFO_FILENAME ) . '-' . $size_name . '.' . pathinfo( $source_path, PATHINFO_EXTENSION );
+				$result      = $this->resizeImage( $source_path, $width, $height, array() );
+				if ( $result ) {
+					$generated[ $size_name ] = $result;
+				}
+			}
+		}
+		return $generated;
+	}
+
+	/**
+	 * Get image information.
+	 *
+	 * @param string $image_path Image path.
+	 * @return array Image information (width, height, type, size).
+	 */
+	public function get_image_info( string $image_path ): array {
+		$info = $this->getImageInfo( $image_path );
+		return $info ? $info : array();
 	}
 }
