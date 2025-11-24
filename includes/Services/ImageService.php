@@ -37,8 +37,12 @@ class ImageService implements ImageServiceInterface {
 		$this->conversionQueue = $conversionQueue;
 		$this->settings        = $settings;
 
+		// Debug: Image service instantiated successfully
+
 		// Hook into WordPress image upload
 		add_filter( 'wp_generate_attachment_metadata', array( $this, 'convert_on_upload' ), 10, 2 );
+		
+		LoggingUtil::info('ImageService: wp_generate_attachment_metadata hook registered');
 	}
 
 	/**
@@ -58,7 +62,9 @@ class ImageService implements ImageServiceInterface {
 
 		// Use ImageUtil for optimized path generation
 		$target_image_path = ImageUtil::optimizeImagePath( $source_image_path, $target_format );
-		$quality           = $this->settings['quality'] ?? 82;
+		$quality           = $this->settings['images']['compression_quality'] 
+			?? $this->settings['image_optimization']['quality'] 
+			?? 85;
 
 		// Check if already converted
 		if ( FileSystemUtil::fileExists( $target_image_path ) ) {
@@ -178,21 +184,50 @@ class ImageService implements ImageServiceInterface {
 	 * @return array Unmodified metadata.
 	 */
 	public function convert_on_upload( $metadata, $attachment_id ): array {
-		if ( empty( $this->settings['auto_convert_on_upload'] ) ) {
+		error_log('WPPO ImageService: convert_on_upload called, attachment_id=' . $attachment_id);
+
+		// Default to true if not set, check both new and old structure
+		$auto_convert = $this->settings['images']['auto_convert_on_upload'] 
+			?? $this->settings['image_optimization']['auto_convert_on_upload'] 
+			?? true;
+		
+		error_log('WPPO ImageService: auto_convert = ' . ($auto_convert ? 'true' : 'false'));
+		
+		if ( ! $auto_convert ) {
+			error_log('WPPO ImageService: Auto-convert disabled, skipping');
 			return $metadata;
 		}
 
 		$file_path = get_attached_file( $attachment_id );
+		error_log('WPPO ImageService: file_path = ' . ($file_path ? $file_path : 'NULL'));
+		error_log('WPPO ImageService: file_exists = ' . (file_exists($file_path ?? '') ? 'true' : 'false'));
+		
 		if ( ! $file_path || ! file_exists( $file_path ) ) {
+			error_log('WPPO ImageService: File path invalid or does not exist, returning');
 			return $metadata;
 		}
 
 		// Convert main image
 		$formats = $this->get_target_formats();
+		error_log('WPPO ImageService: get_target_formats() returned: ' . print_r($formats, true));
+		error_log('WPPO ImageService: Format count: ' . count($formats));
+		
+		if (empty($formats)) {
+			error_log('WPPO ImageService: NO FORMATS TO CONVERT! Checking settings...');
+			error_log('WPPO ImageService: convert_to_webp = ' . (isset($this->settings['images']['convert_to_webp']) ? ($this->settings['images']['convert_to_webp'] ? 'true' : 'false') : 'NOT SET'));
+			error_log('WPPO ImageService: convert_to_avif = ' . (isset($this->settings['images']['convert_to_avif']) ? ($this->settings['images']['convert_to_avif'] ? 'true' : 'false') : 'NOT SET'));
+		}
+		
 		foreach ( $formats as $format ) {
 			$target_path = $this->get_img_path( $file_path, $format );
+			error_log('WPPO ImageService: Converting to ' . $format . ', target: ' . $target_path);
+			
 			if ( ! file_exists( $target_path ) ) {
-				$this->convert_image( $file_path, $format );
+				error_log('WPPO ImageService: Target does not exist, starting conversion...');
+				$result = $this->convert_image( $file_path, $format );
+				error_log('WPPO ImageService: Conversion result for ' . $format . ': ' . ($result ? $result : 'FAILED'));
+			} else {
+				error_log('WPPO ImageService: Target already exists, skipping conversion');
 			}
 		}
 
@@ -243,7 +278,7 @@ class ImageService implements ImageServiceInterface {
 	public function enable_lazy_loading( string $content ): string {
 		// A simple lazy loading implementation. More advanced features can be added later.
 		$content = preg_replace_callback(
-			'/<img([^>]+)src=["\']([^"\\]+)["\\])([^>]*)>/i',
+			'/<img([^>]+)src=["\']([^"\\]+)["\'])([^>]*)>/i',
 			function ( $matches ) {
 				if ( strpos( $matches[1] . $matches[3], 'data-src' ) !== false || strpos( $matches[1] . $matches[3], 'data-lazy-src' ) !== false ) {
 					return $matches[0];
@@ -259,10 +294,19 @@ class ImageService implements ImageServiceInterface {
 
 	private function get_target_formats(): array {
 		$formats = array();
-		if ( ! empty( $this->settings['webp_conversion'] ) ) {
+		
+		// Try new structure first, fallback to old structure
+		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] ) 
+			|| ! empty( $this->settings['image_optimization']['webp_conversion'] );
+		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] ) 
+			|| ! empty( $this->settings['image_optimization']['avif_conversion'] );
+		
+		error_log('WPPO ImageService: get_target_formats() check - webp_enabled=' . ($webp_enabled ? 'true' : 'false') . ', avif_enabled=' . ($avif_enabled ? 'true' : 'false'));
+		
+		if ( $webp_enabled ) {
 			$formats[] = 'webp';
 		}
-		if ( ! empty( $this->settings['avif_conversion'] ) ) {
+		if ( $avif_enabled ) {
 			$formats[] = 'avif';
 		}
 		return $formats;
@@ -487,9 +531,9 @@ class ImageService implements ImageServiceInterface {
 	 */
 	private function getOptimizationCriteria(): array {
 		return array(
-			'max_file_size'       => $this->settings['max_file_size'] ?? 500000, // 500KB
-			'max_width'           => $this->settings['max_width'] ?? 1920,
-			'max_height'          => $this->settings['max_height'] ?? 1080,
+			'max_file_size'       => $this->settings['images']['max_file_size'] ?? 500000, // 500KB
+			'max_width'           => $this->settings['images']['max_image_width'] ?? 1920,
+			'max_height'          => $this->settings['images']['max_image_height'] ?? 1080,
 			'modern_formats_only' => false,
 		);
 	}

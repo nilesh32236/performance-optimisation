@@ -581,6 +581,10 @@ class ConfigurationService {
 					'type'    => 'boolean',
 					'default' => true,
 				),
+				'auto_convert_on_upload' => array(
+					'type'    => 'boolean',
+					'default' => true,
+				),
 				'convert_to_avif'     => array(
 					'type'    => 'boolean',
 					'default' => false,

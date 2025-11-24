@@ -138,10 +138,35 @@ class ImageProcessor implements OptimizerInterface {
 	 * @return string Optimized image path or content.
 	 */
 	public function optimize( string $content, array $options = array() ): string {
-		// For image processor, content is treated as file path
-		// Use the existing optimizeImage method which is already public
-		$result = $this->optimizeImage( $content, $options );
+		$result = $this->optimizeWithDetails( $content, $options );
 		return $result['success'] ? $result['optimized_path'] : $content;
+	}
+
+	/**
+	 * Optimize image and return detailed result.
+	 *
+	 * @param string $content Image file path.
+	 * @param array  $options Optimization options.
+	 * @return array Optimization result details.
+	 */
+	public function optimizeWithDetails( string $content, array $options = array() ): array {
+		// For image processor, content is treated as file path
+		$result = $this->optimizeImage( $content, $options );
+		
+		if ( $result === false ) {
+			return array(
+				'success' => false,
+				'error'   => 'Image optimization failed.',
+			);
+		}
+
+		return array(
+			'success'        => true,
+			'optimized_path' => $result,
+			'original_size'  => $this->filesystem->getFileSize( $content ),
+			'optimized_size' => $this->filesystem->getFileSize( $result ),
+			'compression_ratio' => 0, // Calculate if needed
+		);
 	}
 
 	/**
@@ -231,7 +256,7 @@ class ImageProcessor implements OptimizerInterface {
 			}
 
 			// Apply optimizations
-			if ( $options['strip_metadata'] ) {
+			if ( ! empty( $options['strip_metadata'] ) ) {
 				// Metadata is automatically stripped when creating new image
 			}
 
@@ -572,8 +597,18 @@ class ImageProcessor implements OptimizerInterface {
 		$cache_dir = wp_upload_dir()['basedir'] . '/wppo-cache/images/';
 
 		// Ensure cache directory exists
-		if ( ! $this->filesystem->directoryExists( $cache_dir ) ) {
+		if ( ! $this->filesystem->isDirectory( $cache_dir ) ) {
 			$this->filesystem->createDirectory( $cache_dir, true );
+		}
+
+		if ( ! $this->filesystem->isWritable( $cache_dir ) ) {
+			// Try to fix permissions
+			@chmod( $cache_dir, 0755 );
+			if ( ! $this->filesystem->isWritable( $cache_dir ) ) {
+				$this->logger->error( "Cache directory is not writable: {$cache_dir}" );
+				// Fallback to temp dir if cache dir is not writable
+				$cache_dir = get_temp_dir();
+			}
 		}
 
 		$filename  = $path_info['filename'] . '-' . $suffix;

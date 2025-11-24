@@ -291,7 +291,7 @@ class ImageOptimizationController extends BaseController {
 
 			// Optimize image
 			$options = $data['options'] ?? array();
-			$result  = $this->image_processor->optimize( $image_path, $options );
+			$result  = $this->image_processor->optimizeWithDetails( $image_path, $options );
 
 			if ( ! $result['success'] ) {
 				return $this->send_error_response(
@@ -759,7 +759,7 @@ class ImageOptimizationController extends BaseController {
 				continue;
 			}
 
-			$result = $this->image_processor->optimize( $image_path, $options );
+			$result = $this->image_processor->optimizeWithDetails( $image_path, $options );
 			++$results['processed'];
 
 			if ( $result['success'] ) {

@@ -32,7 +32,7 @@ class LazyLoadService {
 	 * Initialize lazy loading hooks.
 	 */
 	public function init(): void {
-		if ( empty( $this->settings['lazy_load_enabled'] ) ) {
+		if ( empty( $this->settings['images']['lazy_loading'] ) ) {
 			return;
 		}
 

@@ -53,5 +53,5 @@ wp-config.php
 performance-optimisation.zip
 
 # Development documentation (contains sensitive info)
-DEVELOPMENT.md
+reports/
 dev/

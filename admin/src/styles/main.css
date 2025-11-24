@@ -9,7 +9,7 @@
 .toplevel_page_performance-optimisation {
   .wp-header-end { display: none; }
   .wrap { margin: 0 !important; padding: 0 !important; }
-  h1 { display: none; }
+  .wp-heading-inline { display: none; }
 
   .wp-admin-sidebar-fix {
     left: -20px;

@@ -25,8 +25,8 @@ class NextGenImageService {
 	public function __construct( array $settings ) {
 		$this->settings = $settings;
 
-		if ( ! empty( $settings['exclude_webp_images'] ) ) {
-			$this->exclude_images = array_map( 'trim', explode( "\n", $settings['exclude_webp_images'] ) );
+		if ( ! empty( $settings['images']['exclude_webp_images'] ) ) {
+			$this->exclude_images = array_map( 'trim', explode( "\n", $settings['images']['exclude_webp_images'] ) );
 		}
 	}
 
@@ -34,7 +34,8 @@ class NextGenImageService {
 	 * Initialize next-gen image serving.
 	 */
 	public function init(): void {
-		if ( empty( $this->settings['serve_next_gen'] ) ) {
+		// Use convert_to_webp as the master switch for now, or check if both are disabled
+		if ( empty( $this->settings['images']['convert_to_webp'] ) && empty( $this->settings['images']['convert_to_avif'] ) ) {
 			return;
 		}
 
@@ -158,7 +159,7 @@ class NextGenImageService {
 		}
 
 		// Try AVIF first
-		if ( $supports_avif && ! empty( $this->settings['avif_conversion'] ) ) {
+		if ( $supports_avif && ! empty( $this->settings['images']['convert_to_avif'] ) ) {
 			$avif_url  = $this->replace_extension( $url, 'avif' );
 			$avif_path = $this->url_to_path( $avif_url );
 			if ( file_exists( $avif_path ) ) {
@@ -167,7 +168,7 @@ class NextGenImageService {
 		}
 
 		// Try WebP
-		if ( $supports_webp && ! empty( $this->settings['webp_conversion'] ) ) {
+		if ( $supports_webp && ! empty( $this->settings['images']['convert_to_webp'] ) ) {
 			$webp_url  = $this->replace_extension( $url, 'webp' );
 			$webp_path = $this->url_to_path( $webp_url );
 			if ( file_exists( $webp_path ) ) {

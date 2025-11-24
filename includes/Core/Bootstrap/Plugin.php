@@ -584,6 +584,11 @@ class Plugin implements PluginInterface {
 			$next_gen_service->init();
 		}
 
+		if ( $this->_container->has( 'image_service' ) ) {
+			// Just getting the service will instantiate it and run the constructor hooks
+			$this->_container->get( 'image_service' );
+		}
+
 		// This will be expanded when we create feature modules.
 		/**
 		 * Fires when features should be initialized.
@@ -659,9 +664,11 @@ class Plugin implements PluginInterface {
 				'minify_html' => false,
 			),
 			'images'       => array(
-				'convert_to_webp'     => true,
-				'lazy_loading'        => true,
-				'compression_quality' => 85,
+				'convert_to_webp'        => true,
+				'convert_to_avif'        => false,
+				'auto_convert_on_upload' => true,
+				'lazy_loading'           => true,
+				'compression_quality'    => 85,
 			),
 		);
 
