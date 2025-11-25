@@ -401,20 +401,24 @@ class CssOptimizer implements OptimizerInterface {
 	 * @return string Minified CSS.
 	 */
 	private function minifyCss( string $css ): string {
-		// Remove unnecessary whitespace
-		$css = preg_replace( '/\s+/', ' ', $css );
-
-		// Remove whitespace around specific characters
-		$css = preg_replace( '/\s*([{}:;,>+~])\s*/', '$1', $css );
-
-		// Remove trailing semicolon before closing brace
-		$css = preg_replace( '/;+}/', '}', $css );
-
-		// Remove empty rules
-		$css = preg_replace( '/[^{}]+{\s*}/', '', $css );
-
-		// Trim
-		return trim( $css );
+		try {
+			$minifier = new \MatthiasMullie\Minify\CSS( $css );
+			return $minifier->minify();
+		} catch ( \Exception $e ) {
+			$this->logger->warning( 'CSS minification failed, falling back to regex: ' . $e->getMessage() );
+			
+			// Fallback to regex minification
+			// Remove unnecessary whitespace
+			$css = preg_replace( '/\s+/', ' ', $css );
+			// Remove whitespace around specific characters
+			$css = preg_replace( '/\s*([{}:;,>+~])\s*/', '$1', $css );
+			// Remove trailing semicolon before closing brace
+			$css = preg_replace( '/;+}/', '}', $css );
+			// Remove empty rules
+			$css = preg_replace( '/[^{}]+{\s*}/', '', $css );
+			
+			return trim( $css );
+		}
 	}
 
 	/**

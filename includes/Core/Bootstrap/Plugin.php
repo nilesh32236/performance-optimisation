@@ -485,7 +485,9 @@ class Plugin implements PluginInterface {
 			'includes/Services/CacheService.php',
 			'includes/Services/OptimizationService.php',
 			'includes/Services/ImageService.php',
+			'includes/Services/QueueProcessorService.php',
 			'includes/Services/SettingsService.php',
+			'includes/Services/AssetOptimizationService.php',
 			'includes/Admin/Admin.php',
 			'includes/Admin/Metabox.php',
 			'includes/Frontend/Frontend.php',
@@ -587,6 +589,11 @@ class Plugin implements PluginInterface {
 		if ( $this->_container->has( 'image_service' ) ) {
 			// Just getting the service will instantiate it and run the constructor hooks
 			$this->_container->get( 'image_service' );
+		}
+
+		if ( $this->_container->has( 'PerformanceOptimisation\\Services\\QueueProcessorService' ) ) {
+			// Initialize queue processor to register cron hooks
+			$this->_container->get( 'PerformanceOptimisation\\Services\\QueueProcessorService' );
 		}
 
 		// This will be expanded when we create feature modules.

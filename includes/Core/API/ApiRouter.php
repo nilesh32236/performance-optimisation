@@ -195,6 +195,9 @@ class ApiRouter {
 
 		// Image optimization routes.
 		$this->register_image_routes();
+		
+		// Queue routes.
+		$this->register_queue_routes();
 
 		// Wizard routes.
 		$this->register_wizard_routes();
@@ -593,6 +596,16 @@ class ApiRouter {
 		if ( isset( $this->controllers['images'] ) ) {
 			$this->controllers['images']->register_routes();
 		}
+	}
+
+	/**
+	 * Register queue-related routes.
+	 *
+	 * @return void
+	 */
+	private function register_queue_routes(): void {
+		$queue_controller = new \PerformanceOptimisation\Core\API\Controllers\QueueController();
+		$queue_controller->register_routes();
 	}
 
 	/**

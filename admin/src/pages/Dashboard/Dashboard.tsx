@@ -19,53 +19,54 @@ import { StatsOverview } from './components/StatsOverview';
 import { RecentActivity } from './components/RecentActivity';
 import { RealTimeMonitor } from '@components/RealTimeMonitor';
 import { InteractiveOptimizationControls } from '@components/InteractiveOptimizationControls';
+import { QueueStats } from '@components/Queue';
 
 
 export const Dashboard: React.FC = () => {
-	const [ metrics, setMetrics ] = useState<PerformanceMetrics | null>( null );
-	const [ stats, setStats ] = useState<OptimizationStats | null>( null );
-	const [ loading, setLoading ] = useState( true );
-	const [ refreshing, setRefreshing ] = useState( false );
-	const [ activeTab, setActiveTab ] = useState( 'overview' );
+	const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
+	const [stats, setStats] = useState<OptimizationStats | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false);
+	const [activeTab, setActiveTab] = useState('overview');
 
 	const loadDashboardData = async () => {
 		try {
 			// Load data from WordPress global or API
-			if ( window.wppoAdmin?.metrics && window.wppoAdmin?.stats ) {
-				setMetrics( window.wppoAdmin.metrics );
-				setStats( window.wppoAdmin.stats );
+			if (window.wppoAdmin?.metrics && window.wppoAdmin?.stats) {
+				setMetrics(window.wppoAdmin.metrics);
+				setStats(window.wppoAdmin.stats);
 			} else {
 				// Fallback to API call
-				const response = await fetch( `${ window.wppoAdmin?.apiUrl }/dashboard`, {
+				const response = await fetch(`${window.wppoAdmin?.apiUrl}/dashboard`, {
 					headers: {
 						'X-WP-Nonce': window.wppoAdmin?.nonce || '',
 					},
-				} );
+				});
 
-				if ( response.ok ) {
+				if (response.ok) {
 					const data = await response.json();
-					setMetrics( data.metrics );
-					setStats( data.stats );
+					setMetrics(data.metrics);
+					setStats(data.stats);
 				}
 			}
-		} catch ( error ) {
-			console.error( 'Failed to load dashboard data:', error );
+		} catch (error) {
+			console.error('Failed to load dashboard data:', error);
 		} finally {
-			setLoading( false );
-			setRefreshing( false );
+			setLoading(false);
+			setRefreshing(false);
 		}
 	};
 
 	const handleRefresh = async () => {
-		setRefreshing( true );
+		setRefreshing(true);
 		await loadDashboardData();
 	};
 
-	useEffect( () => {
+	useEffect(() => {
 		loadDashboardData();
-	}, [] );
+	}, []);
 
-	if ( loading ) {
+	if (loading) {
 		return (
 			<div className="wppo-dashboard-loading">
 				<LoadingSpinner size="large" />
@@ -82,75 +83,80 @@ export const Dashboard: React.FC = () => {
 					<p>Monitor your site&apos;s performance metrics and optimization statistics in real-time.</p>
 				</div>
 				<div className="wppo-dashboard__header-actions">
-					<Button variant="secondary" onClick={ handleRefresh } loading={ refreshing }>
+					<Button variant="secondary" onClick={handleRefresh} loading={refreshing}>
 						Refresh Data
 					</Button>
 				</div>
 			</div>
 
 			<div className="wppo-dashboard__content">
-				<Tabs activeTab={ activeTab } onTabChange={ setActiveTab }>
+				<Tabs activeTab={activeTab} onTabChange={setActiveTab}>
 					<Tab id="overview" label="Overview">
-						{ /* Performance Metrics Overview */ }
+						{ /* Performance Metrics Overview */}
 						<div className="wppo-dashboard__section">
 							<h2>Performance Metrics</h2>
 							<div className="wppo-dashboard__metrics-grid">
 								<Card title="Page Load Time" className="wppo-metric-card">
 									<div className="wppo-metric-value">
-										{ metrics?.page_load_time
-											? `${ metrics.page_load_time.toFixed( 2 ) }s`
-											: 'N/A' }
+										{metrics?.page_load_time
+											? `${metrics.page_load_time.toFixed(2)}s`
+											: 'N/A'}
 									</div>
 									<div className="wppo-metric-label">Average load time</div>
 								</Card>
 
 								<Card title="First Contentful Paint" className="wppo-metric-card">
 									<div className="wppo-metric-value">
-										{ metrics?.first_contentful_paint
-											? `${ metrics.first_contentful_paint.toFixed( 2 ) }s`
-											: 'N/A' }
+										{metrics?.first_contentful_paint
+											? `${metrics.first_contentful_paint.toFixed(2)}s`
+											: 'N/A'}
 									</div>
 									<div className="wppo-metric-label">Time to first content</div>
 								</Card>
 
 								<Card title="Largest Contentful Paint" className="wppo-metric-card">
 									<div className="wppo-metric-value">
-										{ metrics?.largest_contentful_paint
-											? `${ metrics.largest_contentful_paint.toFixed( 2 ) }s`
-											: 'N/A' }
+										{metrics?.largest_contentful_paint
+											? `${metrics.largest_contentful_paint.toFixed(2)}s`
+											: 'N/A'}
 									</div>
 									<div className="wppo-metric-label">Time to largest content</div>
 								</Card>
 
 								<Card title="Cumulative Layout Shift" className="wppo-metric-card">
 									<div className="wppo-metric-value">
-										{ metrics?.cumulative_layout_shift
-											? metrics.cumulative_layout_shift.toFixed( 3 )
-											: 'N/A' }
+										{metrics?.cumulative_layout_shift
+											? metrics.cumulative_layout_shift.toFixed(3)
+											: 'N/A'}
 									</div>
 									<div className="wppo-metric-label">Layout stability score</div>
 								</Card>
 							</div>
 						</div>
 
-						{ /* Performance Chart */ }
-						{ metrics && (
+						{ /* Performance Chart */}
+						{metrics && (
 							<div className="wppo-dashboard__section">
 								<Card title="Performance Trends">
-									<MetricsChart metrics={ metrics } />
+									<MetricsChart metrics={metrics} />
 								</Card>
 							</div>
-						) }
+						)}
 
-						{ /* Optimization Statistics */ }
+						{ /* Optimization Statistics */}
 						<div className="wppo-dashboard__section">
 							<h2>Optimization Statistics</h2>
 							<div className="wppo-dashboard__stats-grid">
-								{ stats && <StatsOverview stats={ stats } /> }
+								{stats && <StatsOverview stats={stats} />}
 							</div>
 						</div>
 
-						{ /* Quick Actions */ }
+						{ /* Image Conversion Queue */}
+						<div className="wppo-dashboard__section">
+							<QueueStats />
+						</div>
+
+						{ /* Quick Actions */}
 						<div className="wppo-dashboard__section">
 							<Card title="Quick Actions">
 								<div className="wppo-dashboard__actions">
@@ -168,7 +174,7 @@ export const Dashboard: React.FC = () => {
 							<RealTimeMonitor />
 						</div>
 
-						{ /* Recent Activity */ }
+						{ /* Recent Activity */}
 						<div className="wppo-dashboard__section">
 							<Card title="Recent Activity">
 								<RecentActivity />
@@ -210,28 +216,28 @@ export const Dashboard: React.FC = () => {
 												<div className="wppo-resource">
 													<span>HTML</span>
 													<div className="wppo-resource-bar">
-														<div className="wppo-resource-fill" style={{width: '15%'}}></div>
+														<div className="wppo-resource-fill" style={{ width: '15%' }}></div>
 													</div>
 													<span>23KB</span>
 												</div>
 												<div className="wppo-resource">
 													<span>CSS</span>
 													<div className="wppo-resource-bar">
-														<div className="wppo-resource-fill" style={{width: '25%'}}></div>
+														<div className="wppo-resource-fill" style={{ width: '25%' }}></div>
 													</div>
 													<span>45KB</span>
 												</div>
 												<div className="wppo-resource">
 													<span>JS</span>
 													<div className="wppo-resource-bar">
-														<div className="wppo-resource-fill" style={{width: '35%'}}></div>
+														<div className="wppo-resource-fill" style={{ width: '35%' }}></div>
 													</div>
 													<span>67KB</span>
 												</div>
 												<div className="wppo-resource">
 													<span>Images</span>
 													<div className="wppo-resource-bar">
-														<div className="wppo-resource-fill" style={{width: '60%'}}></div>
+														<div className="wppo-resource-fill" style={{ width: '60%' }}></div>
 													</div>
 													<span>234KB</span>
 												</div>
@@ -245,7 +251,7 @@ export const Dashboard: React.FC = () => {
 						<div className="wppo-dashboard__section">
 							<Card title="Optimization Recommendations">
 								<p>AI-powered optimization recommendations based on your site's performance data.</p>
-								{ /* This could integrate with the RecommendationsController */ }
+								{ /* This could integrate with the RecommendationsController */}
 							</Card>
 						</div>
 					</Tab>

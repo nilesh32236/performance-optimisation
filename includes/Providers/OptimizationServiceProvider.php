@@ -33,6 +33,7 @@ class OptimizationServiceProvider extends ServiceProvider {
 		'PerformanceOptimisation\\Services\\LazyLoadService',
 		'PerformanceOptimisation\\Services\\NextGenImageService',
 		'PerformanceOptimisation\\Services\\OptimizationService',
+		'PerformanceOptimisation\\Services\\AssetOptimizationService',
 		'PerformanceOptimisation\\Optimizers\\CssOptimizer',
 		'PerformanceOptimisation\\Optimizers\\JsOptimizer',
 		'PerformanceOptimisation\\Optimizers\\HtmlOptimizer',
@@ -79,6 +80,18 @@ class OptimizationServiceProvider extends ServiceProvider {
 			}
 		);
 
+		// Register QueueProcessorService
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\QueueProcessorService',
+			function ( ServiceContainerInterface $c ) {
+				$conversionQueue = new \PerformanceOptimisation\Utils\ConversionQueue();
+				$imageService    = $c->get( 'PerformanceOptimisation\\Services\\ImageService' );
+				$processor       = new \PerformanceOptimisation\Services\QueueProcessorService( $conversionQueue, $imageService );
+				$processor->init(); // Initialize cron hooks
+				return $processor;
+			}
+		);
+
 		// Register ImageProcessor
 		$container->singleton(
 			'PerformanceOptimisation\\Optimizers\\ImageProcessor',
@@ -100,8 +113,9 @@ class OptimizationServiceProvider extends ServiceProvider {
 		$container->singleton(
 			'PerformanceOptimisation\\Services\\NextGenImageService',
 			function ( ServiceContainerInterface $c ) {
-				$settings = get_option( 'wppo_settings', array() );
-				return new \PerformanceOptimisation\Services\NextGenImageService( $settings );
+				$settings        = get_option( 'wppo_settings', array() );
+				$conversionQueue = new \PerformanceOptimisation\Utils\ConversionQueue();
+				return new \PerformanceOptimisation\Services\NextGenImageService( $settings, $conversionQueue );
 			}
 		);
 
@@ -122,6 +136,21 @@ class OptimizationServiceProvider extends ServiceProvider {
 			}
 		);
 
+		// Register AssetOptimizationService
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\AssetOptimizationService',
+			function ( ServiceContainerInterface $c ) {
+				$service = new \PerformanceOptimisation\Services\AssetOptimizationService(
+					$c->get( 'settings_service' ),
+					$c->get( 'PerformanceOptimisation\\Optimizers\\CssOptimizer' ),
+					$c->get( 'PerformanceOptimisation\\Optimizers\\JsOptimizer' ),
+					$c->get( 'PerformanceOptimisation\\Optimizers\\HtmlOptimizer' )
+				);
+				$service->init();
+				return $service;
+			}
+		);
+
 		// Register convenient aliases
 		$container->alias( 'cache_service', 'PerformanceOptimisation\\Services\\CacheService' );
 		$container->alias( 'page_cache_service', 'PerformanceOptimisation\\Services\\PageCacheService' );
@@ -133,6 +162,7 @@ class OptimizationServiceProvider extends ServiceProvider {
 		$container->alias( 'css_optimizer', 'PerformanceOptimisation\\Optimizers\\CssOptimizer' );
 		$container->alias( 'js_optimizer', 'PerformanceOptimisation\\Optimizers\\JsOptimizer' );
 		$container->alias( 'html_optimizer', 'PerformanceOptimisation\\Optimizers\\HtmlOptimizer' );
+		$container->alias( 'asset_optimization_service', 'PerformanceOptimisation\\Services\\AssetOptimizationService' );
 
 		// Tag services and optimizers
 		$container->register( 'PerformanceOptimisation\\Services\\CacheService', 'PerformanceOptimisation\\Services\\CacheService', array( 'tags' => array( 'service' ) ) );
@@ -149,7 +179,9 @@ class OptimizationServiceProvider extends ServiceProvider {
 	public function boot( ServiceContainerInterface $container ): void {
 		parent::boot( $container );
 
-		// Services will be lazy-loaded when needed
-		// No need to initialize them during boot to avoid dependency issues
+		// Initialize AssetOptimizationService to register hooks
+		if ( $container->has( 'PerformanceOptimisation\\Services\\AssetOptimizationService' ) ) {
+			$container->get( 'PerformanceOptimisation\\Services\\AssetOptimizationService' );
+		}
 	}
 }

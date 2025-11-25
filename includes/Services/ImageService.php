@@ -200,52 +200,44 @@ class ImageService implements ImageServiceInterface {
 
 		$file_path = get_attached_file( $attachment_id );
 		error_log('WPPO ImageService: file_path = ' . ($file_path ? $file_path : 'NULL'));
-		error_log('WPPO ImageService: file_exists = ' . (file_exists($file_path ?? '') ? 'true' : 'false'));
 		
 		if ( ! $file_path || ! file_exists( $file_path ) ) {
 			error_log('WPPO ImageService: File path invalid or does not exist, returning');
 			return $metadata;
 		}
 
-		// Convert main image
+		// Get target formats
 		$formats = $this->get_target_formats();
-		error_log('WPPO ImageService: get_target_formats() returned: ' . print_r($formats, true));
-		error_log('WPPO ImageService: Format count: ' . count($formats));
+		error_log('WPPO ImageService: Queuing for formats: ' . implode(', ', $formats));
 		
 		if (empty($formats)) {
-			error_log('WPPO ImageService: NO FORMATS TO CONVERT! Checking settings...');
-			error_log('WPPO ImageService: convert_to_webp = ' . (isset($this->settings['images']['convert_to_webp']) ? ($this->settings['images']['convert_to_webp'] ? 'true' : 'false') : 'NOT SET'));
-			error_log('WPPO ImageService: convert_to_avif = ' . (isset($this->settings['images']['convert_to_avif']) ? ($this->settings['images']['convert_to_avif'] ? 'true' : 'false') : 'NOT SET'));
+			error_log('WPPO ImageService: No formats enabled, skipping');
+			return $metadata;
 		}
 		
+		// Queue main image for conversion (async)
 		foreach ( $formats as $format ) {
-			$target_path = $this->get_img_path( $file_path, $format );
-			error_log('WPPO ImageService: Converting to ' . $format . ', target: ' . $target_path);
-			
-			if ( ! file_exists( $target_path ) ) {
-				error_log('WPPO ImageService: Target does not exist, starting conversion...');
-				$result = $this->convert_image( $file_path, $format );
-				error_log('WPPO ImageService: Conversion result for ' . $format . ': ' . ($result ? $result : 'FAILED'));
-			} else {
-				error_log('WPPO ImageService: Target already exists, skipping conversion');
-			}
+			$this->conversionQueue->add( $file_path, $format );
+			error_log('WPPO ImageService: Queued main image for ' . $format);
 		}
 
-		// Convert image sizes
+		// Queue image sizes for conversion (async)
 		if ( ! empty( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
 			$upload_dir = wp_upload_dir();
 			foreach ( $metadata['sizes'] as $size => $size_data ) {
 				$size_path = wp_normalize_path( $upload_dir['path'] . '/' . $size_data['file'] );
 				if ( file_exists( $size_path ) ) {
 					foreach ( $formats as $format ) {
-						$target_path = $this->get_img_path( $size_path, $format );
-						if ( ! file_exists( $target_path ) ) {
-							$this->convert_image( $size_path, $format );
-						}
+						$this->conversionQueue->add( $size_path, $format );
+						error_log('WPPO ImageService: Queued ' . $size . ' for ' . $format);
 					}
 				}
 			}
 		}
+
+		// Save queue to database
+		$this->conversionQueue->save();
+		error_log('WPPO ImageService: Queue saved, upload complete');
 
 		return $metadata;
 	}

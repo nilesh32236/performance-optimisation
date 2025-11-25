@@ -10,25 +10,22 @@ interface LayoutProps {
         label: string;
         icon: string;
     }>;
-    headerActions?: React.ReactNode;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ 
-    children, 
-    activeTab, 
-    onSelectTab, 
-    tabs,
-    headerActions 
+export const Layout: React.FC<LayoutProps> = ({
+    children,
+    activeTab,
+    onSelectTab,
+    tabs
 }) => {
     return (
         <div className="min-h-screen bg-gray-50 -ml-[20px] -mt-[10px]">
-            <Header 
+            <Header
                 activeTab={activeTab}
                 onSelectTab={onSelectTab}
                 tabs={tabs}
-                actions={headerActions}
             />
-            
+
             <main className="p-6 md:p-8">
                 <div className="max-w-7xl mx-auto">
                     {children}

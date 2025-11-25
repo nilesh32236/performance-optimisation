@@ -21,9 +21,11 @@ class NextGenImageService {
 
 	private array $settings;
 	private array $exclude_images = array();
+	private $conversionQueue;
 
-	public function __construct( array $settings ) {
+	public function __construct( array $settings, $conversionQueue = null ) {
 		$this->settings = $settings;
+		$this->conversionQueue = $conversionQueue;
 
 		if ( ! empty( $settings['images']['exclude_webp_images'] ) ) {
 			$this->exclude_images = array_map( 'trim', explode( "\n", $settings['images']['exclude_webp_images'] ) );
@@ -34,8 +36,13 @@ class NextGenImageService {
 	 * Initialize next-gen image serving.
 	 */
 	public function init(): void {
-		// Use convert_to_webp as the master switch for now, or check if both are disabled
-		if ( empty( $this->settings['images']['convert_to_webp'] ) && empty( $this->settings['images']['convert_to_avif'] ) ) {
+		// Check both new and old settings structures for WebP/AVIF enabled
+		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] ) 
+			|| ! empty( $this->settings['image_optimization']['webp_conversion'] );
+		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] ) 
+			|| ! empty( $this->settings['image_optimization']['avif_conversion'] );
+
+		if ( ! $webp_enabled && ! $avif_enabled ) {
 			return;
 		}
 
@@ -112,6 +119,9 @@ class NextGenImageService {
 			$content
 		);
 
+		// Process CSS background images in inline styles
+		$content = $this->process_css_backgrounds( $content, $supports_avif, $supports_webp );
+
 		return $content;
 	}
 
@@ -159,24 +169,140 @@ class NextGenImageService {
 		}
 
 		// Try AVIF first
-		if ( $supports_avif && ! empty( $this->settings['images']['convert_to_avif'] ) ) {
+		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] ) 
+			|| ! empty( $this->settings['image_optimization']['avif_conversion'] );
+		
+		if ( $supports_avif && $avif_enabled ) {
 			$avif_url  = $this->replace_extension( $url, 'avif' );
 			$avif_path = $this->url_to_path( $avif_url );
 			if ( file_exists( $avif_path ) ) {
 				return $avif_url;
+			} else {
+				// Queue for conversion if original exists
+				$this->queue_if_needed( $url, 'avif' );
 			}
 		}
 
 		// Try WebP
-		if ( $supports_webp && ! empty( $this->settings['images']['convert_to_webp'] ) ) {
+		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] ) 
+			|| ! empty( $this->settings['image_optimization']['webp_conversion'] );
+		
+		if ( $supports_webp && $webp_enabled ) {
 			$webp_url  = $this->replace_extension( $url, 'webp' );
 			$webp_path = $this->url_to_path( $webp_url );
 			if ( file_exists( $webp_path ) ) {
 				return $webp_url;
+			} else {
+				// Queue for conversion if original exists
+				$this->queue_if_needed( $url, 'webp' );
 			}
 		}
 
 		return $url;
+	}
+
+	/**
+	 * Process CSS background images in inline styles
+	 *
+	 * @param string $content HTML content.
+	 * @param bool   $supports_avif Browser supports AVIF.
+	 * @param bool   $supports_webp Browser supports WebP.
+	 * @return string Modified content.
+	 */
+	private function process_css_backgrounds( string $content, bool $supports_avif, bool $supports_webp ): string {
+		// Pattern to match style attributes containing background images
+		$pattern = '/style\s*=\s*["\']([^"\']*(?:background-image|background)\s*:[^"\']*)["\']/' . 'i';
+
+		return preg_replace_callback(
+			$pattern,
+			function ( $matches ) use ( $supports_avif, $supports_webp ) {
+				$style = $matches[1];
+				
+				// Extract URLs from background-image and background properties
+				$url_pattern = '/url\s*\(\s*["\']?([^"\')]+)["\']?\s*\)/i';
+				
+				$style = preg_replace_callback(
+					$url_pattern,
+					function ( $url_match ) use ( $supports_avif, $supports_webp ) {
+						$url = $url_match[1];
+						
+						// Skip data URIs, gradients, and external URLs
+						if ( $this->should_skip_css_url( $url ) ) {
+							return $url_match[0];
+						}
+						
+						// Get next-gen URL
+						$new_url = $this->get_next_gen_url( $url, $supports_avif, $supports_webp );
+						
+						// Return with preserved format
+						$quote = '';
+						if ( strpos( $url_match[0], '"' ) !== false ) {
+							$quote = '"';
+						} elseif ( strpos( $url_match[0], "'" ) !== false ) {
+							$quote = "'";
+						}
+						
+						return 'url(' . $quote . $new_url . $quote . ')';
+					},
+					$style
+				);
+				
+				return 'style="' . $style . '"';
+			},
+			$content
+		);
+	}
+
+	/**
+	 * Check if CSS URL should be skipped
+	 *
+	 * @param string $url URL to check.
+	 * @return bool True if should skip.
+	 */
+	private function should_skip_css_url( string $url ): bool {
+		// Skip data URIs
+		if ( strpos( $url, 'data:' ) === 0 ) {
+			return true;
+		}
+		
+		// Skip gradients
+		if ( preg_match( '/(linear|radial|repeating)-gradient/i', $url ) ) {
+			return true;
+		}
+		
+		// Skip external URLs (only process same-domain images)
+		$site_url = home_url();
+		if ( strpos( $url, 'http' ) === 0 && strpos( $url, $site_url ) !== 0 ) {
+			return true;
+		}
+		
+		return false;
+	}
+
+	/**
+	 * Queue image for conversion if needed.
+	 *
+	 * @param string $url    Original image URL.
+	 * @param string $format Target format (webp/avif).
+	 * @return void
+	 */
+	private function queue_if_needed( string $url, string $format ): void {
+		// Skip if no queue available
+		if ( ! $this->conversionQueue ) {
+			return;
+		}
+
+		// Convert URL to file path
+		$original_path = $this->url_to_path( $url );
+
+		// Only queue if original file exists
+		if ( ! file_exists( $original_path ) ) {
+			return;
+		}
+
+		// Add to queue and save
+		$this->conversionQueue->add( $original_path, $format );
+		$this->conversionQueue->save();
 	}
 
 	/**
