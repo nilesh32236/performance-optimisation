@@ -280,6 +280,24 @@ class ValidationUtil {
 	}
 
 	/**
+	 * Sanitize JavaScript content.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @param string $js JavaScript content to sanitize.
+	 * @return string Sanitized JavaScript content.
+	 */
+	public static function sanitizeJs( string $js ): string {
+		// Remove null bytes
+		$js = str_replace( "\0", '', $js );
+
+		// Trim whitespace
+		$js = trim( $js );
+
+		return $js;
+	}
+
+	/**
 	 * Validate JSON string.
 	 *
 	 * @since 2.0.0

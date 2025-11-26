@@ -118,14 +118,96 @@ class CacheUtil {
 	}
 
 	/**
-	 * Invalidate specific cache entry.
+	 * Get cached data.
 	 *
 	 * @since 2.0.0
 	 *
-	 * @param string $path Cache path or key to invalidate.
+	 * @param string $key  Cache key.
 	 * @param string $type Cache type.
+	 * @return mixed Cached data or false if not found/expired.
+	 */
+	public static function get( string $key, string $type = 'page' ) {
+		if ( ! self::isValidCacheType( $type ) ) {
+			return false;
+		}
+
+		// Handle object cache separately
+		if ( 'object' === $type ) {
+			return wp_cache_get( $key, 'wppo' );
+		}
+
+		// File-based cache
+		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES[ $type ] );
+		$file_ext  = 'minified' === $type ? ( strpos( $key, 'css' ) !== false ? '.css' : '.js' ) : '.html';
+		
+		// For minified assets, the key might already include the hash/filename
+		// If the key doesn't look like a filename, append extension
+		if ( 'minified' === $type && strpos( $key, '.' ) === false ) {
+			// If key is just a hash, we might need to know the extension.
+			// But usually minification keys are generated with extension or context.
+			// For now, let's assume the key is the filename without extension if not provided.
+		}
+
+		$cache_file = $cache_dir . '/' . $key . $file_ext;
+
+		// If minified, we might be looking for a file that was saved with a specific name
+		if ( 'minified' === $type ) {
+			$cache_file = $cache_dir . '/' . $key; // Key is expected to be relative path/filename
+		}
+
+		if ( ! FileSystemUtil::fileExists( $cache_file ) ) {
+			return false;
+		}
+
+		// Check expiry
+		if ( filemtime( $cache_file ) < ( time() - self::getCacheExpiry( $type ) ) ) {
+			FileSystemUtil::deleteFile( $cache_file );
+			return false;
+		}
+
+		return FileSystemUtil::readFile( $cache_file );
+	}
+
+	/**
+	 * Set cached data.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @param string $key    Cache key.
+	 * @param mixed  $data   Data to cache.
+	 * @param string $type   Cache type.
+	 * @param int    $expiry Expiry time in seconds (0 for default).
 	 * @return bool True on success, false on failure.
 	 */
+	public static function set( string $key, $data, string $type = 'page', int $expiry = 0 ): bool {
+		if ( ! self::isValidCacheType( $type ) ) {
+			return false;
+		}
+
+		// Handle object cache separately
+		if ( 'object' === $type ) {
+			return wp_cache_set( $key, $data, 'wppo', $expiry ?: self::getCacheExpiry( $type ) );
+		}
+
+		// File-based cache
+		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES[ $type ] );
+		
+		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
+			if ( ! wp_mkdir_p( $cache_dir ) ) {
+				return false;
+			}
+		}
+
+		$file_ext = '.html';
+		if ( 'minified' === $type ) {
+			// For minified, key is usually the filename
+			$cache_file = $cache_dir . '/' . $key;
+		} else {
+			$cache_file = $cache_dir . '/' . $key . $file_ext;
+		}
+
+		return FileSystemUtil::writeFile( $cache_file, $data );
+	}
 	public static function invalidateCache( string $path, string $type = 'page' ): bool {
 		try {
 			switch ( $type ) {

@@ -124,7 +124,7 @@ class AssetOptimizationService {
 		$result = $this->css_optimizer->optimizeFile( $local_path, array( 'save_optimized' => true ) );
 
 		if ( $result['success'] && ! empty( $result['optimized_path'] ) ) {
-			$optimized_url = FileSystemUtil::getUrlFromPath( $result['optimized_path'] );
+			$optimized_url = FileSystemUtil::pathToUrl( $result['optimized_path'] );
 			if ( $optimized_url ) {
 				$tag = str_replace( $href, $optimized_url, $tag );
 			}

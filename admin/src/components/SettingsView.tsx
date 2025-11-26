@@ -51,18 +51,18 @@ export const SettingsView: React.FC = () => {
                 if (data.success && data.data.settings) {
                     const cacheSettings = data.data.settings.cache_settings || {};
                     const imageSettings = data.data.settings.image_optimization || {};
-                    const optSettings = data.data.settings.optimization || {};
+                    const minificationSettings = data.data.settings.minification || {};
                     const advancedSettings = data.data.settings.advanced || {};
 
                     setSettings({
                         caching: cacheSettings.page_cache_enabled && cacheSettings.browser_cache_enabled,
                         images: imageSettings.auto_convert_on_upload,
-                        code: optSettings.minify_css || optSettings.minify_js || optSettings.minify_html,
+                        code: minificationSettings.minify_css || minificationSettings.minify_js || minificationSettings.minify_html,
                         storageMode: imageSettings.storage_mode || data.data.settings.images?.storage_mode || 'safe',
                         // Granular
-                        minify_css: optSettings.minify_css || false,
-                        minify_js: optSettings.minify_js || false,
-                        minify_html: optSettings.minify_html || false,
+                        minify_css: minificationSettings.minify_css || false,
+                        minify_js: minificationSettings.minify_js || false,
+                        minify_html: minificationSettings.minify_html || false,
                         defer_js: advancedSettings.defer_js || false,
                         delay_js: advancedSettings.delay_js || false,
                         lazy_load: imageSettings.lazy_load_enabled || false,
@@ -112,7 +112,7 @@ export const SettingsView: React.FC = () => {
                 lazy_load_enabled: currentSettings.lazy_load,
             };
         } else if (key === 'code') {
-            newSettings.optimization = {
+            newSettings.minification = {
                 minify_css: value,
                 minify_js: value,
                 minify_html: value,
@@ -129,7 +129,7 @@ export const SettingsView: React.FC = () => {
         } else {
             // Handle granular updates
             if (['minify_css', 'minify_js', 'minify_html'].includes(key)) {
-                newSettings.optimization = {
+                newSettings.minification = {
                     minify_css: currentSettings.minify_css,
                     minify_js: currentSettings.minify_js,
                     minify_html: currentSettings.minify_html,

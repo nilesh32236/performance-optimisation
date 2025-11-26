@@ -95,6 +95,15 @@ class CssOptimizer implements OptimizerInterface {
 	);
 
 	/**
+	 * Statistics.
+	 *
+	 * @var array
+	 */
+	private array $stats = array(
+		'total_files' => 0,
+	);
+
+	/**
 	 * Constructor.
 	 *
 	 * @param ServiceContainerInterface $container Service container.
@@ -133,7 +142,7 @@ class CssOptimizer implements OptimizerInterface {
 			throw new \Exception( 'Potentially malicious CSS content detected' );
 		}
 
-		$timer_id = $this->performance->startTimer( 'css_optimization' );
+		$this->performance->startTimer( 'css_optimization' );
 
 		try {
 			$original_size = strlen( $css_content );
@@ -149,9 +158,9 @@ class CssOptimizer implements OptimizerInterface {
 			$cache_key = 'css_optimized_' . md5( $css_content . serialize( $options ) );
 
 			// Check cache first
-			$cached_result = $this->cache->get( $cache_key );
-			if ( $cached_result !== null ) {
-				$this->performance->endTimer( $timer_id );
+			$cached_result = $this->cache->get( $cache_key, 'minified' );
+			if ( $cached_result !== false ) {
+				$this->performance->endTimer( 'css_optimization' );
 				$this->logger->debug( 'CSS optimization result from cache', array( 'cache_key' => $cache_key ) );
 				return $cached_result;
 			}
@@ -212,8 +221,11 @@ class CssOptimizer implements OptimizerInterface {
 			}
 
 			$optimized_size    = strlen( $optimized_css );
-			$compression_ratio = $original_size > 0 ? ( ( $original_size - $optimized_size ) / $original_size ) * 100 : 0;
+			$compression_ratio = $original_size > 0 ? ( 1 - $optimized_size / $original_size ) : 0;
+			$duration          = $this->performance->endTimer( 'css_optimization' );
 
+			// Update stats
+			++$this->stats['total_files'];
 			$this->logger->info(
 				'CSS optimization completed',
 				array(
@@ -224,11 +236,11 @@ class CssOptimizer implements OptimizerInterface {
 				)
 			);
 
-			$this->performance->endTimer( $timer_id );
+			$this->performance->endTimer( 'css_optimization' );
 			return $optimized_css;
 
 		} catch ( \Exception $e ) {
-			$this->performance->endTimer( $timer_id );
+			$this->performance->endTimer( 'css_optimization' );
 			$this->logger->error( 'CSS optimization failed: ' . $e->getMessage() );
 
 			return $css_content; // Return original content on error
@@ -249,19 +261,26 @@ class CssOptimizer implements OptimizerInterface {
 			}
 
 			$css_content = $this->filesystem->readFile( $file_path );
-			$result      = $this->optimize( $css_content, $options );
+			$optimized_css = $this->optimize( $css_content, $options );
 
-			if ( $result['success'] && isset( $options['save_optimized'] ) && $options['save_optimized'] ) {
+			$result = array(
+				'success'       => true,
+				'optimized_css' => $optimized_css,
+			);
+
+			if ( isset( $options['save_optimized'] ) && $options['save_optimized'] ) {
 				$optimized_path = $this->generateOptimizedPath( $file_path );
 				$this->filesystem->writeFile( $optimized_path, $result['optimized_css'] );
 				$result['optimized_path'] = $optimized_path;
 
-				// Save critical CSS if extracted
+				// Save critical CSS if extracted (not implemented in optimize return yet, but keeping placeholder)
+				/*
 				if ( ! empty( $result['critical_css'] ) ) {
 					$critical_path = $this->generateCriticalPath( $file_path );
 					$this->filesystem->writeFile( $critical_path, $result['critical_css'] );
 					$result['critical_path'] = $critical_path;
 				}
+				*/
 			}
 
 			return $result;
@@ -729,7 +748,14 @@ class CssOptimizer implements OptimizerInterface {
 	 */
 	private function generateOptimizedPath( string $original_path ): string {
 		$path_info = pathinfo( $original_path );
-		return $path_info['dirname'] . '/' . $path_info['filename'] . '.min.' . $path_info['extension'];
+		$hash      = md5( $original_path . filemtime( $original_path ) );
+		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/min/css/';
+		
+		if ( ! file_exists( $cache_dir ) ) {
+			wp_mkdir_p( $cache_dir );
+		}
+
+		return $cache_dir . $path_info['filename'] . '.' . $hash . '.min.' . $path_info['extension'];
 	}
 
 	/**
