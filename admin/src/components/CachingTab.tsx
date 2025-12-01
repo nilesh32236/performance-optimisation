@@ -21,6 +21,14 @@ interface CacheSettings {
 	cache_preload_enabled: boolean;
 	cache_compression: boolean;
 	cache_mobile_separate: boolean;
+	cache_exclusions?: {
+		urls?: string[];
+		cookies?: string[];
+		user_roles?: string[];
+		query_strings?: string[];
+		user_agents?: string[];
+		post_types?: string[];
+	};
 }
 
 export const CachingTab: React.FC = () => {
@@ -33,6 +41,14 @@ export const CachingTab: React.FC = () => {
 		cache_preload_enabled: false,
 		cache_compression: true,
 		cache_mobile_separate: false,
+		cache_exclusions: {
+			urls: [],
+			cookies: ['wordpress_logged_in_', 'wp-postpass_', 'comment_author_'],
+			user_roles: [],
+			query_strings: [],
+			user_agents: [],
+			post_types: [],
+		},
 	});
 	const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
 
@@ -300,6 +316,119 @@ export const CachingTab: React.FC = () => {
 					>
 						Refresh Data
 					</button>
+				</div>
+			</div>
+
+			<div className="bg-white rounded-xl border-2 border-gray-200 p-8">
+				<h2 className="text-2xl font-bold text-gray-900 mb-2">Cache Exclusions</h2>
+				<p className="text-base text-gray-600 mb-6">Specify URLs, cookies, user roles, and other conditions to exclude from caching</p>
+				
+				<div className="space-y-6">
+					<div>
+						<label className="block text-base font-semibold text-gray-900 mb-2">
+							Never Cache URLs (one per line)
+						</label>
+						<textarea
+							rows={4}
+							className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors font-mono text-sm"
+							placeholder="/cart/&#10;/checkout/&#10;/my-account/*&#10;/wp-admin/*"
+							value={settings.cache_exclusions?.urls?.join('\n') || ''}
+							onChange={(e) => {
+								const urls = e.target.value.split('\n').filter(u => u.trim());
+								updateSetting('cache_exclusions', { ...settings.cache_exclusions, urls });
+							}}
+						/>
+						<p className="text-sm text-gray-600 mt-2">Use * as wildcard. Example: /products/*</p>
+					</div>
+
+					<div>
+						<label className="block text-base font-semibold text-gray-900 mb-2">
+							Never Cache Cookies (one per line)
+						</label>
+						<textarea
+							rows={3}
+							className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors font-mono text-sm"
+							placeholder="wordpress_logged_in_&#10;wp-postpass_&#10;comment_author_&#10;woocommerce_cart_hash"
+							value={settings.cache_exclusions?.cookies?.join('\n') || ''}
+							onChange={(e) => {
+								const cookies = e.target.value.split('\n').filter(c => c.trim());
+								updateSetting('cache_exclusions', { ...settings.cache_exclusions, cookies });
+							}}
+						/>
+						<p className="text-sm text-gray-600 mt-2">Don't cache when these cookies are present</p>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<div>
+							<label className="block text-base font-semibold text-gray-900 mb-2">
+								Exclude User Roles (one per line)
+							</label>
+							<textarea
+								rows={3}
+								className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors font-mono text-sm"
+								placeholder="administrator&#10;editor&#10;author"
+								value={settings.cache_exclusions?.user_roles?.join('\n') || ''}
+								onChange={(e) => {
+									const roles = e.target.value.split('\n').filter(r => r.trim());
+									updateSetting('cache_exclusions', { ...settings.cache_exclusions, user_roles: roles });
+								}}
+							/>
+							<p className="text-sm text-gray-600 mt-2">Don't cache for these user roles</p>
+						</div>
+
+						<div>
+							<label className="block text-base font-semibold text-gray-900 mb-2">
+								Exclude Query Strings (one per line)
+							</label>
+							<textarea
+								rows={3}
+								className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors font-mono text-sm"
+								placeholder="utm_source&#10;utm_campaign&#10;fbclid&#10;gclid"
+								value={settings.cache_exclusions?.query_strings?.join('\n') || ''}
+								onChange={(e) => {
+									const params = e.target.value.split('\n').filter(p => p.trim());
+									updateSetting('cache_exclusions', { ...settings.cache_exclusions, query_strings: params });
+								}}
+							/>
+							<p className="text-sm text-gray-600 mt-2">Don't cache URLs with these parameters</p>
+						</div>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<div>
+							<label className="block text-base font-semibold text-gray-900 mb-2">
+								Exclude User Agents (one per line)
+							</label>
+							<textarea
+								rows={3}
+								className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors font-mono text-sm"
+								placeholder="Mobile&#10;Bot&#10;Googlebot"
+								value={settings.cache_exclusions?.user_agents?.join('\n') || ''}
+								onChange={(e) => {
+									const agents = e.target.value.split('\n').filter(a => a.trim());
+									updateSetting('cache_exclusions', { ...settings.cache_exclusions, user_agents: agents });
+								}}
+							/>
+							<p className="text-sm text-gray-600 mt-2">Don't cache for these user agents</p>
+						</div>
+
+						<div>
+							<label className="block text-base font-semibold text-gray-900 mb-2">
+								Exclude Post Types (one per line)
+							</label>
+							<textarea
+								rows={3}
+								className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors font-mono text-sm"
+								placeholder="product&#10;event&#10;download"
+								value={settings.cache_exclusions?.post_types?.join('\n') || ''}
+								onChange={(e) => {
+									const types = e.target.value.split('\n').filter(t => t.trim());
+									updateSetting('cache_exclusions', { ...settings.cache_exclusions, post_types: types });
+								}}
+							/>
+							<p className="text-sm text-gray-600 mt-2">Don't cache these post types</p>
+						</div>
+					</div>
 				</div>
 			</div>
 

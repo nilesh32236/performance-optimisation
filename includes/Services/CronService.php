@@ -27,20 +27,24 @@ class CronService {
 	private CacheService $cacheService;
 	private ?ImageService $imageService;
 	private ?SettingsService $settingsService;
+	private ?DatabaseOptimizationService $databaseService;
 
 	public function __construct(
 		CacheService $cacheService,
 		$imageService = null,
-		$settingsService = null
+		$settingsService = null,
+		$databaseService = null
 	) {
 		$this->cacheService    = $cacheService;
 		$this->imageService    = ( $imageService instanceof ImageService ) ? $imageService : null;
 		$this->settingsService = ( $settingsService instanceof SettingsService ) ? $settingsService : null;
+		$this->databaseService = ( $databaseService instanceof DatabaseOptimizationService ) ? $databaseService : null;
 
 		add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
 		add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 		add_action( self::PAGE_CRON_HOOK, array( $this, 'run_page_preloading_tasks' ) );
 		add_action( self::IMG_CRON_HOOK, array( $this, 'run_image_conversion_tasks' ) );
+		add_action( 'wppo_daily_cleanup', array( $this, 'run_database_cleanup' ) );
 		add_action( self::GENERATE_PAGE_HOOK, array( $this, 'process_single_page_for_preloading' ), 10, 1 );
 	}
 
@@ -72,6 +76,11 @@ class CronService {
 			wp_schedule_event( time(), 'hourly', self::IMG_CRON_HOOK );
 		} elseif ( empty( $settings['image_optimisation']['convertImg'] ) && wp_next_scheduled( self::IMG_CRON_HOOK ) ) {
 			wp_clear_scheduled_hook( self::IMG_CRON_HOOK );
+		}
+
+		// Database Cleanup (Daily)
+		if ( ! wp_next_scheduled( 'wppo_daily_cleanup' ) ) {
+			wp_schedule_event( time(), 'daily', 'wppo_daily_cleanup' );
 		}
 	}
 
@@ -105,6 +114,12 @@ class CronService {
 		$pending_images = $this->imageService->get_pending_images( 10 );
 		foreach ( $pending_images as $image ) {
 			$this->imageService->convert_image( $image['path'], $image['format'] );
+		}
+	}
+
+	public function run_database_cleanup(): void {
+		if ( null !== $this->databaseService ) {
+			$this->databaseService->run_cleanup();
 		}
 	}
 

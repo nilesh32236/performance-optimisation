@@ -44,16 +44,23 @@ class OptimizationServiceProvider extends ServiceProvider {
 	 * {@inheritdoc}
 	 */
 	public function register( ServiceContainerInterface $container ): void {
-		// Register services as singletons
-		$container->singleton( 'PerformanceOptimisation\\Services\\CacheService', 'PerformanceOptimisation\\Services\\CacheService' );
-
-		// Register PageCacheService with dependencies
+		// Register PageCacheService first (dependency for CacheService)
 		$container->singleton(
 			'PerformanceOptimisation\\Services\\PageCacheService',
 			function ( ServiceContainerInterface $c ) {
 				return new \PerformanceOptimisation\Services\PageCacheService(
 					$c->get( 'settings_service' ),
 					$c->get( 'logger' )
+				);
+			}
+		);
+		
+		// Register CacheService with PageCacheService dependency
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\CacheService',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Services\CacheService(
+					$c->get( 'PerformanceOptimisation\\Services\\PageCacheService' )
 				);
 			}
 		);

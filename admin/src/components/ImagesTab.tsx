@@ -16,9 +16,14 @@ interface ImageSettings {
 	webp_conversion: boolean;
 	avif_conversion: boolean;
 	quality: number;
+	preserve_exif: boolean;
+	compression_level: number;
 	lazy_load_enabled: boolean;
 	exclude_first_images: number;
 	exclude_images: string;
+	exclude_by_class: string;
+	exclude_by_id: string;
+	exclude_by_ext: string;
 	use_svg_placeholder: boolean;
 	serve_next_gen: boolean;
 	max_width: number;
@@ -28,15 +33,21 @@ export const ImagesTab: React.FC = () => {
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [optimizing, setOptimizing] = useState(false);
+	const [progress, setProgress] = useState({ current: 0, total: 0, percentage: 0 });
 	const [stats, setStats] = useState<ImageStats | null>(null);
 	const [settings, setSettings] = useState<ImageSettings>({
 		auto_convert_on_upload: true,
 		webp_conversion: true,
 		avif_conversion: false,
 		quality: 82,
+		preserve_exif: false,
+		compression_level: 6,
 		lazy_load_enabled: true,
 		exclude_first_images: 2,
 		exclude_images: '',
+		exclude_by_class: 'no-lazy, skip-lazy',
+		exclude_by_id: '',
+		exclude_by_ext: 'svg, gif',
 		use_svg_placeholder: true,
 		serve_next_gen: true,
 		max_width: 1920,
@@ -114,31 +125,48 @@ export const ImagesTab: React.FC = () => {
 		if (!confirm('Start optimizing all pending images? This may take a few minutes.')) return;
 
 		setOptimizing(true);
+		setProgress({ current: 0, total: stats?.pending_images || 0, percentage: 0 });
+
 		try {
 			const apiUrl = (window as any).wppoAdmin?.apiUrl || '/wp-json/performance-optimisation/v1';
-			const response = await fetch(`${apiUrl}/images/batch-optimize`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'X-WP-Nonce': (window as any).wppoAdmin?.nonce || '',
-				},
-				body: JSON.stringify({
-					limit: 50,
-					options: { quality: settings.quality },
-				}),
-			});
+			const batchSize = 10;
+			const total = stats?.pending_images || 0;
+			let processed = 0;
 
-			const data = await response.json();
-			if (data.success) {
-				showNotification('success', data.message || 'Optimization started successfully!');
-				setTimeout(() => fetchImageData(), 2000);
-			} else {
-				showNotification('error', data.message || 'Failed to start optimization');
+			while (processed < total) {
+				const response = await fetch(`${apiUrl}/images/batch-optimize`, {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-WP-Nonce': (window as any).wppoAdmin?.nonce || '',
+					},
+					body: JSON.stringify({
+						limit: batchSize,
+						options: { quality: settings.quality },
+					}),
+				});
+
+				const data = await response.json();
+				if (!data.success) {
+					showNotification('error', data.message || 'Optimization failed');
+					break;
+				}
+
+				processed += data.data?.processed || batchSize;
+				const percentage = Math.min(Math.round((processed / total) * 100), 100);
+				setProgress({ current: processed, total, percentage });
+
+				if (data.data?.completed) break;
+				await new Promise(resolve => setTimeout(resolve, 1000));
 			}
+
+			showNotification('success', 'All images optimized successfully!');
+			setTimeout(() => fetchImageData(), 2000);
 		} catch (error) {
 			showNotification('error', 'An error occurred while optimizing images');
 		} finally {
 			setOptimizing(false);
+			setProgress({ current: 0, total: 0, percentage: 0 });
 		}
 	};
 
@@ -221,7 +249,22 @@ export const ImagesTab: React.FC = () => {
 							{optimizing ? 'Optimizing...' : 'Optimize All Images'}
 						</h3>
 						<p className="text-base text-gray-600 mb-4">Compress all unoptimized images in your media library</p>
-						<span className="text-sm font-semibold text-blue-600">{stats?.pending_images || 0} images pending</span>
+						
+						{optimizing ? (
+							<div className="space-y-2">
+								<div className="w-full bg-gray-200 rounded-full h-2">
+									<div 
+										className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+										style={{ width: `${progress.percentage}%` }}
+									></div>
+								</div>
+								<span className="text-sm font-semibold text-blue-600">
+									{progress.current} / {progress.total} ({progress.percentage}%)
+								</span>
+							</div>
+						) : (
+							<span className="text-sm font-semibold text-blue-600">{stats?.pending_images || 0} images pending</span>
+						)}
 					</button>
 
 					<div className="p-6 border-2 border-gray-200 bg-white rounded-xl">
@@ -265,6 +308,70 @@ export const ImagesTab: React.FC = () => {
 								</label>
 							</div>
 						))}
+					</div>
+				</div>
+
+				{/* Compression Settings */}
+				<div className="mb-8">
+					<h3 className="text-lg font-semibold text-gray-900 mb-4">Compression Settings</h3>
+					<div className="space-y-4">
+						<div className="p-4 bg-gray-50 rounded-lg">
+							<div className="flex items-center justify-between mb-3">
+								<label className="text-base font-semibold text-gray-900">
+									Compression Quality: {settings.quality}%
+								</label>
+								<span className="text-sm font-medium text-blue-600">
+									{settings.quality >= 90 ? 'High Quality' : settings.quality >= 75 ? 'Balanced' : 'High Compression'}
+								</span>
+							</div>
+							<input 
+								type="range" 
+								min="50" 
+								max="100" 
+								value={settings.quality}
+								onChange={(e) => updateSetting('quality', parseInt(e.target.value))}
+								className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" 
+							/>
+							<div className="flex justify-between text-xs text-gray-500 mt-2">
+								<span>50% (Smaller files)</span>
+								<span>75% (Recommended)</span>
+								<span>100% (Best quality)</span>
+							</div>
+							<p className="text-xs text-gray-600 mt-2">
+								Lower quality = smaller files. 75-85% is recommended for web use.
+							</p>
+						</div>
+
+						<div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+							<div className="flex-1">
+								<h4 className="text-base font-semibold text-gray-900 mb-1">Preserve EXIF Data</h4>
+								<p className="text-sm text-gray-600">Keep camera and location metadata in images</p>
+							</div>
+							<label className="relative inline-flex items-center cursor-pointer ml-4">
+								<input 
+									type="checkbox" 
+									className="sr-only peer" 
+									checked={settings.preserve_exif}
+									onChange={(e) => updateSetting('preserve_exif', e.target.checked)}
+								/>
+								<div className="w-14 h-8 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-500"></div>
+							</label>
+						</div>
+
+						<div className="p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+							<div className="flex items-start gap-3">
+								<Dashicon icon="info" style={{ fontSize: '20px', color: '#3b82f6', marginTop: '2px' }} />
+								<div className="flex-1">
+									<h4 className="text-sm font-semibold text-blue-900 mb-1">Compression Tips</h4>
+									<ul className="text-sm text-blue-800 space-y-1">
+										<li>• <strong>75-85%</strong>: Best balance for most websites</li>
+										<li>• <strong>60-75%</strong>: Good for thumbnails and backgrounds</li>
+										<li>• <strong>85-100%</strong>: Use for hero images and product photos</li>
+										<li>• Disabling EXIF saves 10-30 KB per image</li>
+									</ul>
+								</div>
+							</div>
+						</div>
 					</div>
 				</div>
 
@@ -318,6 +425,42 @@ export const ImagesTab: React.FC = () => {
 								className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg text-base"
 							/>
 							<p className="text-xs text-gray-500 mt-1">Images containing these strings won't be lazy loaded</p>
+						</div>
+
+						<div className="p-4 bg-gray-50 rounded-lg">
+							<label className="text-sm font-medium text-gray-700 mb-2 block">Exclude by CSS Class (comma-separated)</label>
+							<input 
+								type="text"
+								value={settings.exclude_by_class}
+								onChange={(e) => updateSetting('exclude_by_class', e.target.value)}
+								placeholder="no-lazy, skip-lazy, hero-image"
+								className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg text-base"
+							/>
+							<p className="text-xs text-gray-500 mt-1">Images with these CSS classes won't be lazy loaded</p>
+						</div>
+
+						<div className="p-4 bg-gray-50 rounded-lg">
+							<label className="text-sm font-medium text-gray-700 mb-2 block">Exclude by Element ID (comma-separated)</label>
+							<input 
+								type="text"
+								value={settings.exclude_by_id}
+								onChange={(e) => updateSetting('exclude_by_id', e.target.value)}
+								placeholder="site-logo, main-banner, header-img"
+								className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg text-base"
+							/>
+							<p className="text-xs text-gray-500 mt-1">Images with these IDs won't be lazy loaded</p>
+						</div>
+
+						<div className="p-4 bg-gray-50 rounded-lg">
+							<label className="text-sm font-medium text-gray-700 mb-2 block">Exclude by File Extension (comma-separated)</label>
+							<input 
+								type="text"
+								value={settings.exclude_by_ext}
+								onChange={(e) => updateSetting('exclude_by_ext', e.target.value)}
+								placeholder="svg, gif, ico"
+								className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg text-base"
+							/>
+							<p className="text-xs text-gray-500 mt-1">Images with these extensions won't be lazy loaded (SVG and GIF recommended)</p>
 						</div>
 					</div>
 				</div>

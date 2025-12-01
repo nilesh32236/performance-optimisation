@@ -110,7 +110,13 @@ class AssetOptimizationService {
 
 		// Check exclusions
 		$excluded = $this->settings_service->get_setting( 'minification', 'exclude_css', array() );
-		if ( in_array( $handle, $excluded, true ) ) {
+		if ( $this->is_excluded( $handle, $excluded ) ) {
+			return $tag;
+		}
+
+		// Check file path exclusions
+		$excluded_files = $this->settings_service->get_setting( 'file_optimisation', 'exclude_css_files', array() );
+		if ( $this->is_excluded( $href, $excluded_files ) ) {
 			return $tag;
 		}
 
@@ -148,7 +154,13 @@ class AssetOptimizationService {
 
 		// Check exclusions
 		$excluded = $this->settings_service->get_setting( 'minification', 'exclude_js', array() );
-		if ( in_array( $handle, $excluded, true ) ) {
+		if ( $this->is_excluded( $handle, $excluded ) ) {
+			return $tag;
+		}
+
+		// Check file path exclusions
+		$excluded_files = $this->settings_service->get_setting( 'file_optimisation', 'exclude_js_files', array() );
+		if ( $this->is_excluded( $src, $excluded_files ) ) {
 			return $tag;
 		}
 
@@ -215,5 +227,54 @@ class AssetOptimizationService {
 	 */
 	public function minify_html_buffer( string $buffer ): string {
 		return $this->html_optimizer->optimize( $buffer );
+	}
+
+	/**
+	 * Check if item is excluded.
+	 *
+	 * @param string $item     Item to check (handle or URL).
+	 * @param array  $patterns Exclusion patterns.
+	 * @return bool True if excluded, false otherwise.
+	 */
+	private function is_excluded( string $item, array $patterns ): bool {
+		if ( empty( $patterns ) ) {
+			return false;
+		}
+
+		foreach ( $patterns as $pattern ) {
+			if ( empty( $pattern ) ) {
+				continue;
+			}
+
+			// Exact match
+			if ( $item === $pattern ) {
+				return true;
+			}
+
+			// Regex match (if pattern starts and ends with /)
+			if ( strpos( $pattern, '/' ) === 0 && strrpos( $pattern, '/' ) === strlen( $pattern ) - 1 ) {
+				// Suppress warnings for invalid regex
+				if ( @preg_match( $pattern, $item ) ) {
+					return true;
+				}
+				continue;
+			}
+
+			// Wildcard match optimization
+            // If pattern contains *, convert to regex and cache it (in a real scenario, we'd cache this)
+            // For now, use fnmatch which is generally fast enough, but let's ensure we don't do it if no * is present
+            if ( strpos( $pattern, '*' ) !== false ) {
+			    if ( fnmatch( $pattern, $item ) ) {
+				    return true;
+			    }
+            } else {
+                // Substring match (legacy support) - only if no wildcard
+                if ( strpos( $item, $pattern ) !== false ) {
+                    return true;
+                }
+            }
+		}
+
+		return false;
 	}
 }

@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Dashicon, Spinner } from '@wordpress/components';
 import { EnhancedFeatureCard } from './EnhancedFeatureCard';
+import { ExclusionSettings } from './ExclusionSettings';
+import { CacheExclusionSettings } from './CacheExclusionSettings';
+import { PreloadTab } from './PreloadTab';
+import { HeartbeatSettings } from './HeartbeatSettings';
 import { QueueStats } from './Queue/QueueStats';
 
 interface Settings {
@@ -15,6 +19,38 @@ interface Settings {
     defer_js: boolean;
     delay_js: boolean;
     lazy_load: boolean;
+    // Exclusions
+    exclude_css: string[];
+    exclude_js: string[];
+    exclude_css_files: string[];
+    exclude_js_files: string[];
+    // Cache Exclusions
+    cache_exclusions: {
+        urls: string[];
+        cookies: string[];
+        user_agents: string[];
+    };
+    // Database
+    cleanup_revisions: boolean;
+    cleanup_spam: boolean;
+    cleanup_trash: boolean;
+    optimize_tables: boolean;
+    // Fonts
+    preload_fonts: string[];
+    display_swap: boolean;
+    // Resource Hints
+    dns_prefetch: string[];
+    preconnect: string[];
+    preload_images: string[];
+    // Heartbeat
+    heartbeat_control: {
+        enabled: boolean;
+        locations: {
+            dashboard: number;
+            post_edit: number;
+            frontend: number;
+        };
+    };
 }
 
 export const SettingsView: React.FC = () => {
@@ -31,6 +67,32 @@ export const SettingsView: React.FC = () => {
         defer_js: false,
         delay_js: false,
         lazy_load: false,
+        exclude_css: [],
+        exclude_js: [],
+        exclude_css_files: [],
+        exclude_js_files: [],
+        cache_exclusions: {
+            urls: [],
+            cookies: [],
+            user_agents: [],
+        },
+        cleanup_revisions: false,
+        cleanup_spam: false,
+        cleanup_trash: false,
+        optimize_tables: false,
+        preload_fonts: [],
+        display_swap: false,
+        dns_prefetch: [],
+        preconnect: [],
+        preload_images: [],
+        heartbeat_control: {
+            enabled: false,
+            locations: {
+                dashboard: 60,
+                post_edit: 15,
+                frontend: 60,
+            },
+        },
     });
     const [diskSpaceSaved, setDiskSpaceSaved] = useState<number>(0);
     const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
@@ -53,6 +115,7 @@ export const SettingsView: React.FC = () => {
                     const imageSettings = data.data.settings.image_optimization || {};
                     const minificationSettings = data.data.settings.minification || {};
                     const advancedSettings = data.data.settings.advanced || {};
+                    const fileOptimisation = data.data.settings.file_optimisation || {};
 
                     setSettings({
                         caching: cacheSettings.page_cache_enabled && cacheSettings.browser_cache_enabled,
@@ -66,6 +129,38 @@ export const SettingsView: React.FC = () => {
                         defer_js: advancedSettings.defer_js || false,
                         delay_js: advancedSettings.delay_js || false,
                         lazy_load: imageSettings.lazy_load_enabled || false,
+                        // Exclusions
+                        exclude_css: minificationSettings.exclude_css || [],
+                        exclude_js: minificationSettings.exclude_js || [],
+                        exclude_css_files: fileOptimisation.exclude_css_files || minificationSettings.exclude_css_files || [],
+                        exclude_js_files: fileOptimisation.exclude_js_files || minificationSettings.exclude_js_files || [],
+                        // Cache Exclusions
+                        cache_exclusions: {
+                            urls: cacheSettings.cache_exclusions?.urls || [],
+                            cookies: cacheSettings.cache_exclusions?.cookies || [],
+                            user_agents: cacheSettings.cache_exclusions?.user_agents || [],
+                        },
+                        // Database
+                        cleanup_revisions: data.data.settings.database?.cleanup_revisions || false,
+                        cleanup_spam: data.data.settings.database?.cleanup_spam || false,
+                        cleanup_trash: data.data.settings.database?.cleanup_trash || false,
+                        optimize_tables: data.data.settings.database?.optimize_tables || false,
+                        // Fonts
+                        preload_fonts: data.data.settings.preloading?.preload_fonts || [],
+                        display_swap: data.data.settings.fonts?.display_swap || false,
+                        // Resource Hints
+                        dns_prefetch: data.data.settings.preloading?.dns_prefetch || [],
+                        preconnect: data.data.settings.preloading?.preconnect || [],
+                        preload_images: data.data.settings.preloading?.preload_images || [],
+                        // Heartbeat
+                        heartbeat_control: {
+                            enabled: data.data.settings.heartbeat_control?.enabled || false,
+                            locations: {
+                                dashboard: data.data.settings.heartbeat_control?.locations?.dashboard || 60,
+                                post_edit: data.data.settings.heartbeat_control?.locations?.post_edit || 15,
+                                frontend: data.data.settings.heartbeat_control?.locations?.frontend || 60,
+                            },
+                        },
                     });
                 }
             }
@@ -87,7 +182,7 @@ export const SettingsView: React.FC = () => {
         }
     };
 
-    const handleToggle = async (key: keyof Settings, value: boolean | string) => {
+    const handleToggle = async (key: keyof Settings, value: boolean | string | string[]) => {
         setSettings(prev => ({ ...prev, [key]: value }));
         setSaving(true);
 
@@ -116,6 +211,10 @@ export const SettingsView: React.FC = () => {
                 minify_css: value,
                 minify_js: value,
                 minify_html: value,
+                exclude_css: currentSettings.exclude_css,
+                exclude_js: currentSettings.exclude_js,
+                exclude_css_files: currentSettings.exclude_css_files,
+                exclude_js_files: currentSettings.exclude_js_files,
             };
             // Also update granular state to match main toggle
             setSettings(prev => ({
@@ -133,6 +232,10 @@ export const SettingsView: React.FC = () => {
                     minify_css: currentSettings.minify_css,
                     minify_js: currentSettings.minify_js,
                     minify_html: currentSettings.minify_html,
+                    exclude_css: currentSettings.exclude_css,
+                    exclude_js: currentSettings.exclude_js,
+                    exclude_css_files: currentSettings.exclude_css_files,
+                    exclude_js_files: currentSettings.exclude_js_files,
                 };
             } else if (['defer_js', 'delay_js'].includes(key)) {
                 newSettings.advanced = {
@@ -145,6 +248,53 @@ export const SettingsView: React.FC = () => {
                     auto_convert_on_upload: currentSettings.images,
                     webp_conversion: currentSettings.images,
                 };
+            } else if (['exclude_css', 'exclude_js', 'exclude_css_files', 'exclude_js_files'].includes(key)) {
+                newSettings.minification = {
+                    minify_css: currentSettings.minify_css,
+                    minify_js: currentSettings.minify_js,
+                    minify_html: currentSettings.minify_html,
+                    exclude_css: currentSettings.exclude_css,
+                    exclude_js: currentSettings.exclude_js,
+                    exclude_css_files: currentSettings.exclude_css_files,
+                    exclude_js_files: currentSettings.exclude_js_files,
+                };
+            } else if (key === 'cache_exclusions') {
+                newSettings.cache_settings = {
+                    page_cache_enabled: currentSettings.caching,
+                    browser_cache_enabled: currentSettings.caching,
+                    cache_preload_enabled: currentSettings.caching,
+                    cache_compression: currentSettings.caching,
+                    cache_exclusions: value,
+                };
+            } else if (['cleanup_revisions', 'cleanup_spam', 'cleanup_trash', 'optimize_tables'].includes(key)) {
+                newSettings.database = {
+                    cleanup_revisions: currentSettings.cleanup_revisions,
+                    cleanup_spam: currentSettings.cleanup_spam,
+                    cleanup_trash: currentSettings.cleanup_trash,
+                    optimize_tables: currentSettings.optimize_tables,
+                };
+            } else if (key === 'display_swap') {
+                newSettings.fonts = {
+                    display_swap: value,
+                };
+            } else if (key === 'preload_fonts') {
+                newSettings.preloading = {
+                    preload_fonts: value,
+                    dns_prefetch: currentSettings.dns_prefetch,
+                    preconnect: currentSettings.preconnect,
+                    preload_images: currentSettings.preload_images,
+                    preload_critical_css: false,
+                };
+            } else if (['dns_prefetch', 'preconnect', 'preload_images'].includes(key)) {
+                newSettings.preloading = {
+                    preload_fonts: currentSettings.preload_fonts,
+                    dns_prefetch: key === 'dns_prefetch' ? value : currentSettings.dns_prefetch,
+                    preconnect: key === 'preconnect' ? value : currentSettings.preconnect,
+                    preload_images: key === 'preload_images' ? value : currentSettings.preload_images,
+                    preload_critical_css: false,
+                };
+            } else if (key === 'heartbeat_control') {
+                newSettings.heartbeat_control = value;
             }
         }
 
@@ -243,6 +393,28 @@ export const SettingsView: React.FC = () => {
                         </div>
                     </div>
                 </EnhancedFeatureCard>
+
+                {/* Cache Exclusions Card */}
+                {settings.caching && (
+                    <EnhancedFeatureCard
+                        icon="hidden"
+                        title="Cache Exclusions"
+                        description="Exclude specific URLs, cookies, or user agents from being cached."
+                        enabled={true}
+                        onToggle={() => { }} // Always enabled if caching is enabled
+                        color="blue"
+                        disabled={saving}
+                    >
+                        <CacheExclusionSettings
+                            settings={settings.cache_exclusions}
+                            onChange={(key, value) => {
+                                const newExclusions = { ...settings.cache_exclusions, [key]: value };
+                                handleToggle('cache_exclusions', newExclusions as any);
+                            }}
+                            disabled={saving}
+                        />
+                    </EnhancedFeatureCard>
+                )}
 
                 {/* Images Card */}
                 <EnhancedFeatureCard
@@ -437,7 +609,149 @@ export const SettingsView: React.FC = () => {
                         </div>
                     </div>
                 </EnhancedFeatureCard>
-            </div>
+
+                {/* Database Optimization Card */}
+                <EnhancedFeatureCard
+                    icon="database-view"
+                    title="Database Optimization"
+                    description="Clean up revisions, spam, and trash to reduce database size and improve query performance."
+                    enabled={settings.cleanup_revisions || settings.cleanup_spam || settings.cleanup_trash || settings.optimize_tables}
+                    onToggle={(enabled) => {
+                        handleToggle('cleanup_revisions', enabled);
+                        handleToggle('cleanup_spam', enabled);
+                        handleToggle('cleanup_trash', enabled);
+                        handleToggle('optimize_tables', enabled);
+                    }}
+                    color="pink"
+                    disabled={saving}
+                >
+                    <div className="space-y-3 text-sm">
+                        <div className="flex items-center justify-between">
+                            <span className="text-slate-700">Cleanup Revisions</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={settings.cleanup_revisions}
+                                    onChange={(e) => handleToggle('cleanup_revisions', e.target.checked)}
+                                    disabled={saving}
+                                />
+                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                            </label>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-slate-700">Cleanup Spam Comments</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={settings.cleanup_spam}
+                                    onChange={(e) => handleToggle('cleanup_spam', e.target.checked)}
+                                    disabled={saving}
+                                />
+                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                            </label>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-slate-700">Cleanup Trash</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={settings.cleanup_trash}
+                                    onChange={(e) => handleToggle('cleanup_trash', e.target.checked)}
+                                    disabled={saving}
+                                />
+                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                            </label>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <span className="text-slate-700">Optimize Tables</span>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={settings.optimize_tables}
+                                    onChange={(e) => handleToggle('optimize_tables', e.target.checked)}
+                                    disabled={saving}
+                                />
+                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                            </label>
+                        </div>
+                    </div>
+                </EnhancedFeatureCard>
+
+                {/* Heartbeat Control Card */}
+                <div className="col-span-1 lg:col-span-2">
+                    <EnhancedFeatureCard
+                            icon="heart"
+                            title="Heartbeat Control"
+                            description="Limit or disable the WordPress Heartbeat API to reduce server load."
+                            enabled={settings.heartbeat_control.enabled}
+                            onToggle={(enabled) => handleToggle('heartbeat_control', { ...settings.heartbeat_control, enabled })}
+                            color="red"
+                            disabled={saving}
+                        >
+                            <HeartbeatSettings
+                                settings={settings.heartbeat_control}
+                                onChange={(key, value) => {
+                                    const newHeartbeat = { ...settings.heartbeat_control, [key]: value };
+                                    handleToggle('heartbeat_control', newHeartbeat);
+                                }}
+                                disabled={saving}
+                            />
+                        </EnhancedFeatureCard>
+                    </div>
+
+                    {/* Preload & Resource Hints */}
+                    <div className="col-span-1 lg:col-span-2">
+                        <EnhancedFeatureCard
+                            icon="networking"
+                            title="Preload & Resource Hints"
+                            description="Optimize resource loading with font preloading, DNS prefetch, and preconnect."
+                            enabled={settings.preload_fonts.length > 0 || settings.dns_prefetch.length > 0}
+                            onToggle={() => { }} // Always enabled container
+                            color="indigo"
+                            disabled={saving}
+                        >
+                            <PreloadTab
+                                settings={{
+                                    preload_fonts: settings.preload_fonts,
+                                    preload_images: settings.preload_images,
+                                    dns_prefetch: settings.dns_prefetch,
+                                    preconnect: settings.preconnect,
+                                    display_swap: settings.display_swap,
+                                }}
+                                onChange={(key, value) => handleToggle(key as keyof Settings, value)}
+                                disabled={saving}
+                            />
+                        </EnhancedFeatureCard>
+                    </div>
+
+                    {/* Exclusion Settings Card */}
+                    <div className="col-span-1 lg:col-span-2">
+                        <EnhancedFeatureCard
+                            icon="dismiss"
+                            title="Exclusion Rules"
+                            description="Exclude specific CSS/JS files or handles from optimization. Supports wildcards (*) and regex."
+                            enabled={true}
+                            onToggle={() => { }} // Always enabled
+                            color="red"
+                            disabled={saving}
+                        >
+                            <ExclusionSettings
+                                settings={{
+                                    exclude_css: settings.exclude_css,
+                                    exclude_js: settings.exclude_js,
+                                    exclude_css_files: settings.exclude_css_files,
+                                    exclude_js_files: settings.exclude_js_files,
+                                }}
+                                onChange={(key, value) => handleToggle(key as keyof Settings, value)}
+                                disabled={saving}
+                            />
+                        </EnhancedFeatureCard>
+                    </div>
+                </div>
 
             {/* Queue Stats Section */}
             <div className="mt-10">

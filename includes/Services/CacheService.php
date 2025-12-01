@@ -27,17 +27,28 @@ class CacheService implements CacheServiceInterface {
 	private const CACHE_DIR_RELATIVE = '/cache/wppo';
 
 	private string $cache_root_dir;
+	private ?PageCacheService $page_cache_service = null;
 
-	public function __construct() {
+	public function __construct( ?PageCacheService $page_cache_service = null ) {
 		$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR_RELATIVE );
+		$this->page_cache_service = $page_cache_service;
 	}
 
 	/**
 	 * {@inheritdoc}
 	 */
 	public function clearCache( string $type = 'all' ): bool {
-		// Use CacheUtil for unified cache management
-		return CacheUtil::clearCache( $type );
+		// Use PageCacheService for page cache if available
+		if ( ( $type === 'page' || $type === 'all' ) && $this->page_cache_service ) {
+			$this->page_cache_service->clear_all_cache();
+		}
+		
+		// Use CacheUtil for other cache types
+		if ( $type !== 'page' ) {
+			return CacheUtil::clearCache( $type );
+		}
+		
+		return true;
 	}
 
 	/**
@@ -52,10 +63,22 @@ class CacheService implements CacheServiceInterface {
 	 * {@inheritdoc}
 	 */
 	public function preloadCache( array $urls ): void {
-		// Use CacheUtil for cache warming with improved scheduling
+		// Use PageCacheService if available
+		if ( $this->page_cache_service ) {
+			$warmed = $this->page_cache_service->warm_cache( $urls );
+			LoggingUtil::info(
+				'Cache preload completed',
+				array(
+					'total_urls' => count( $urls ),
+					'successful' => $warmed,
+					'failed'     => count( $urls ) - $warmed,
+				)
+			);
+			return;
+		}
+		
+		// Fallback to CacheUtil
 		$results = CacheUtil::warmCache( $urls );
-
-		// Log results
 		$successful = array_filter(
 			$results,
 			function ( $result ) {
@@ -110,7 +133,15 @@ class CacheService implements CacheServiceInterface {
 		}
 
 		$urls_to_invalidate = $this->getRelatedUrls( $post );
-		$this->invalidateUrls( array_unique( $urls_to_invalidate ) );
+		
+		// Use PageCacheService if available
+		if ( $this->page_cache_service ) {
+			foreach ( array_unique( $urls_to_invalidate ) as $url ) {
+				$this->page_cache_service->clear_url_cache( $url );
+			}
+		} else {
+			$this->invalidateUrls( array_unique( $urls_to_invalidate ) );
+		}
 
 		LoggingUtil::info(
 			'Post cache invalidated',
@@ -217,7 +248,20 @@ class CacheService implements CacheServiceInterface {
 	 * @return array Cache statistics.
 	 */
 	public function getCacheStats(): array {
-		return CacheUtil::getCacheStats();
+		$stats = CacheUtil::getCacheStats();
+		
+		// Merge PageCacheService stats if available
+		if ( $this->page_cache_service ) {
+			$page_stats = $this->page_cache_service->get_cache_stats();
+			$stats['types']['page'] = array(
+				'enabled' => $page_stats['enabled'] ?? false,
+				'files' => $page_stats['files'] ?? 0,
+				'size' => $page_stats['size'] ?? '0 B',
+				'hit_rate' => $page_stats['hit_rate'] ?? 0,
+			);
+		}
+		
+		return $stats;
 	}
 
 	/**

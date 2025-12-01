@@ -623,6 +623,10 @@ class SettingsService implements SettingsServiceInterface {
 				'combine_css'         => false,
 				'combine_js'          => false,
 				'inline_critical_css' => false,
+				'exclude_css'         => array(),
+				'exclude_js'          => array(),
+				'exclude_css_files'   => array(),
+				'exclude_js_files'    => array(),
 			),
 			'images'       => array(
 				'convert_to_webp'     => true,
@@ -634,10 +638,19 @@ class SettingsService implements SettingsServiceInterface {
 				'max_image_height'    => 1080,
 			),
 			'preloading'   => array(
-				'dns_prefetch'         => array(),
-				'preconnect'           => array(),
 				'preload_fonts'        => array(),
 				'preload_critical_css' => false,
+				'dns_prefetch'         => array(),
+				'preconnect'           => array(),
+				'preload_images'       => array(),
+			),
+			'heartbeat_control' => array(
+				'enabled'   => false,
+				'locations' => array(
+					'dashboard' => 60, // Default 60s
+					'post_edit' => 15, // Default 15s
+					'frontend'  => 60, // Default 60s
+				),
 			),
 			'database'     => array(
 				'cleanup_revisions' => false,

@@ -19,12 +19,36 @@ class LazyLoadService {
 
 	private array $settings;
 	private array $exclude_images = array();
+	private array $exclude_classes = array();
+	private array $exclude_ids = array();
+	private array $exclude_extensions = array();
 
 	public function __construct( array $settings ) {
 		$this->settings = $settings;
 
 		if ( ! empty( $settings['exclude_images'] ) ) {
 			$this->exclude_images = array_map( 'trim', explode( "\n", $settings['exclude_images'] ) );
+		}
+
+		// Load advanced exclusions from image_optimisation settings
+		$img_settings = $settings['image_optimisation'] ?? array();
+		
+		if ( ! empty( $img_settings['exclude_by_class'] ) ) {
+			$this->exclude_classes = is_array( $img_settings['exclude_by_class'] ) 
+				? $img_settings['exclude_by_class'] 
+				: array_map( 'trim', explode( "\n", $img_settings['exclude_by_class'] ) );
+		}
+
+		if ( ! empty( $img_settings['exclude_by_id'] ) ) {
+			$this->exclude_ids = is_array( $img_settings['exclude_by_id'] ) 
+				? $img_settings['exclude_by_id'] 
+				: array_map( 'trim', explode( "\n", $img_settings['exclude_by_id'] ) );
+		}
+
+		if ( ! empty( $img_settings['exclude_by_ext'] ) ) {
+			$this->exclude_extensions = is_array( $img_settings['exclude_by_ext'] ) 
+				? $img_settings['exclude_by_ext'] 
+				: array_map( 'trim', explode( "\n", $img_settings['exclude_by_ext'] ) );
 		}
 	}
 
@@ -69,63 +93,100 @@ class LazyLoadService {
 		$exclude_count = $this->settings['exclude_first_images'] ?? 0;
 		$img_counter   = 0;
 
-		// Process images
-		$content = preg_replace_callback(
-			'/<img([^>]+)>/i',
-			function ( $matches ) use ( &$img_counter, $exclude_count ) {
-				++$img_counter;
+		// Process images - Optimization: Check if content even has images first
+        if ( strpos( $content, '<img' ) === false ) {
+            // No images, skip image processing
+        } else {
+            $content = preg_replace_callback(
+                '/<img([^>]+)>/i',
+                function ( $matches ) use ( &$img_counter, $exclude_count ) {
+                    ++$img_counter;
 
-				$img_tag = $matches[0];
+                    $img_tag = $matches[0];
 
-				// Skip if already has data-src
-				if ( strpos( $img_tag, 'data-src' ) !== false ) {
-					return $img_tag;
-				}
+                    // Skip if already has data-src
+                    if ( strpos( $img_tag, 'data-src' ) !== false ) {
+                        return $img_tag;
+                    }
 
-				// Skip first N images
-				if ( $img_counter <= $exclude_count ) {
-					return $img_tag;
-				}
+                    // Skip first N images
+                    if ( $img_counter <= $exclude_count ) {
+                        return $img_tag;
+                    }
 
-				// Check exclusions
-				foreach ( $this->exclude_images as $exclude ) {
-					if ( ! empty( $exclude ) && strpos( $img_tag, $exclude ) !== false ) {
-						return $img_tag;
-					}
-				}
+                    // Check exclusions
+                    foreach ( $this->exclude_images as $exclude ) {
+                        if ( ! empty( $exclude ) && strpos( $img_tag, $exclude ) !== false ) {
+                            return $img_tag;
+                        }
+                    }
 
-				// Extract src
-				if ( preg_match( '/src=["\']([^"\']+)["\']/i', $img_tag, $src_match ) ) {
-					$src = $src_match[1];
+                    // Check class exclusions
+                    foreach ( $this->exclude_classes as $class ) {
+                        // Optimization: Check if class exists in tag before regex
+                        if ( ! empty( $class ) && strpos( $img_tag, $class ) !== false ) {
+                             if ( preg_match( '/class=["\'][^"\']*' . preg_quote( $class, '/' ) . '[^"\']*["\']/', $img_tag ) ) {
+                                return $img_tag;
+                             }
+                        }
+                    }
 
-					// Replace src with data-src
-					$img_tag = str_replace( $src_match[0], 'data-src="' . esc_attr( $src ) . '"', $img_tag );
+                    // Check ID exclusions
+                    foreach ( $this->exclude_ids as $id ) {
+                         // Optimization: Check if ID exists in tag before regex
+                        if ( ! empty( $id ) && strpos( $img_tag, $id ) !== false ) {
+                            if ( preg_match( '/id=["\']' . preg_quote( $id, '/' ) . '["\']/', $img_tag ) ) {
+                                return $img_tag;
+                            }
+                        }
+                    }
 
-					// Add placeholder
-					if ( ! empty( $this->settings['use_svg_placeholder'] ) ) {
-						$placeholder = $this->generate_svg_placeholder( $img_tag );
-						$img_tag     = preg_replace( '/<img/', '<img src="' . $placeholder . '"', $img_tag, 1 );
-					} else {
-						$img_tag = preg_replace( '/<img/', '<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"', $img_tag, 1 );
-					}
+                    // Check extension exclusions
+                    if ( preg_match( '/src=["\']([^"\']+)["\']/i', $img_tag, $src_check ) ) {
+                        $ext = strtolower( pathinfo( $src_check[1], PATHINFO_EXTENSION ) );
+                        if ( in_array( $ext, $this->exclude_extensions, true ) ) {
+                            return $img_tag;
+                        }
+                    }
 
-					// Handle srcset
-					if ( preg_match( '/srcset=["\']([^"\']+)["\']/i', $img_tag, $srcset_match ) ) {
-						$img_tag = str_replace( $srcset_match[0], 'data-srcset="' . esc_attr( $srcset_match[1] ) . '"', $img_tag );
-					}
+                    // Extract src
+                    if ( preg_match( '/src=["\']([^"\']+)["\']/i', $img_tag, $src_match ) ) {
+                        $src = $src_match[1];
 
-					// Add loading class
-					if ( strpos( $img_tag, 'class=' ) !== false ) {
-						$img_tag = preg_replace( '/class=["\']([^"\']*)["\']/', 'class="$1 lazyload"', $img_tag );
-					} else {
-						$img_tag = str_replace( '<img', '<img class="lazyload"', $img_tag );
-					}
-				}
+                        // Add native loading="lazy" attribute for modern browsers
+                        if ( strpos( $img_tag, 'loading=' ) === false ) {
+                            $img_tag = str_replace( '<img', '<img loading="lazy"', $img_tag );
+                        }
 
-				return $img_tag;
-			},
-			$content
-		);
+                        // Replace src with data-src for JS fallback
+                        $img_tag = str_replace( $src_match[0], 'data-src="' . esc_attr( $src ) . '"', $img_tag );
+
+                        // Add placeholder
+                        if ( ! empty( $this->settings['use_svg_placeholder'] ) ) {
+                            $placeholder = $this->generate_svg_placeholder( $img_tag );
+                            $img_tag     = preg_replace( '/<img/', '<img src="' . $placeholder . '"', $img_tag, 1 );
+                        } else {
+                            $img_tag = preg_replace( '/<img/', '<img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"', $img_tag, 1 );
+                        }
+
+                        // Handle srcset
+                        if ( preg_match( '/srcset=["\']([^"\']+)["\']/i', $img_tag, $srcset_match ) ) {
+                            $img_tag = str_replace( $srcset_match[0], 'data-srcset="' . esc_attr( $srcset_match[1] ) . '"', $img_tag );
+                        }
+
+                        // Add loading class
+                        if ( strpos( $img_tag, 'class=' ) !== false ) {
+                            $img_tag = preg_replace( '/class=["\']([^"\']*)["\']/', 'class="$1 lazyload"', $img_tag );
+                        } else {
+                            $img_tag = str_replace( '<img', '<img class="lazyload"', $img_tag );
+                        }
+                    }
+
+                    return $img_tag;
+                },
+                $content
+            );
+        }
 
 		// Process iframes
 		$content = preg_replace_callback(

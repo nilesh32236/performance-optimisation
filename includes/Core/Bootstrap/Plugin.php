@@ -440,6 +440,48 @@ class Plugin implements PluginInterface {
 		$this->_container->alias( 'config', ConfigManager::class );
 		$this->_container->alias( 'rest_controller', 'PerformanceOptimisation\\Core\\API\\RestController' );
 		$this->_container->alias( 'api_router', 'PerformanceOptimisation\\Core\\API\\ApiRouter' );
+
+		// Register Database Optimization Service
+		$this->_container->singleton(
+			'PerformanceOptimisation\\Services\\DatabaseOptimizationService',
+			function ( ServiceContainerInterface $container ) {
+				return new \PerformanceOptimisation\Services\DatabaseOptimizationService(
+					$container->get( 'settings_service' ),
+					$container->get( 'logging_service' )
+				);
+			}
+		);
+
+		// Register Font Optimization Service
+		$this->_container->singleton(
+			'PerformanceOptimisation\\Services\\FontOptimizationService',
+			function ( ServiceContainerInterface $container ) {
+				return new \PerformanceOptimisation\Services\FontOptimizationService(
+					$container->get( 'settings_service' ),
+					$container->get( 'logging_service' )
+				);
+			}
+		);
+
+		// Register Resource Hints Service
+		$this->_container->singleton(
+			'PerformanceOptimisation\\Services\\ResourceHintsService',
+			function ( ServiceContainerInterface $container ) {
+				return new \PerformanceOptimisation\Services\ResourceHintsService(
+					$container->get( 'settings_service' )
+				);
+			}
+		);
+
+		// Register Heartbeat Service
+		$this->_container->singleton(
+			'PerformanceOptimisation\\Services\\HeartbeatService',
+			function ( ServiceContainerInterface $container ) {
+				return new \PerformanceOptimisation\Services\HeartbeatService(
+					$container->get( 'settings_service' )
+				);
+			}
+		);
 	}
 
 	/**
@@ -499,6 +541,10 @@ class Plugin implements PluginInterface {
 			'includes/Optimizers/ImageProcessor.php',
 			'includes/Utils/ConversionQueue.php',
 			'includes/Utils/ValidationUtil.php',
+			'includes/Services/DatabaseOptimizationService.php',
+			'includes/Services/FontOptimizationService.php',
+			'includes/Services/ResourceHintsService.php',
+			'includes/Services/HeartbeatService.php',
 		);
 
 		$missing_files = array();
@@ -594,6 +640,22 @@ class Plugin implements PluginInterface {
 		if ( $this->_container->has( 'PerformanceOptimisation\\Services\\QueueProcessorService' ) ) {
 			// Initialize queue processor to register cron hooks
 			$this->_container->get( 'PerformanceOptimisation\\Services\\QueueProcessorService' );
+		}
+
+		// Initialize Database Optimization Service
+		if ( $this->_container->has( 'PerformanceOptimisation\\Services\\DatabaseOptimizationService' ) ) {
+			$this->_container->get( 'PerformanceOptimisation\\Services\\DatabaseOptimizationService' );
+		}
+
+		// Initialize Font Optimization Service
+		if ( $this->_container->has( 'PerformanceOptimisation\\Services\\FontOptimizationService' ) ) {
+			$this->_container->get( 'PerformanceOptimisation\\Services\\FontOptimizationService' );
+		}
+
+		// Initialize Resource Hints Service
+		if ( $this->_container->has( 'PerformanceOptimisation\\Services\\ResourceHintsService' ) ) {
+			$resource_hints = $this->_container->get( 'PerformanceOptimisation\\Services\\ResourceHintsService' );
+			$resource_hints->init();
 		}
 
 		// This will be expanded when we create feature modules.

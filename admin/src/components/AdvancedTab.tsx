@@ -1,9 +1,47 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Dashicon } from '@wordpress/components';
 
 export const AdvancedTab: React.FC = () => {
+	const [isLoading, setIsLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	const handleCleanDatabase = async (type: string) => {
+		if (!confirm(`Clean ${type}? This action cannot be undone.`)) return;
+		
+		try {
+			setIsLoading(true);
+			setError(null);
+			// Clean logic here
+			await new Promise(resolve => setTimeout(resolve, 1000));
+		} catch (err) {
+			setError(err instanceof Error ? err.message : `Failed to clean ${type}`);
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
+	const handleOptimizeDatabase = async () => {
+		if (!confirm('Optimize all database tables? This may take a few minutes.')) return;
+		
+		try {
+			setIsLoading(true);
+			setError(null);
+			// Optimize logic here
+			await new Promise(resolve => setTimeout(resolve, 2000));
+		} catch (err) {
+			setError(err instanceof Error ? err.message : 'Failed to optimize database');
+		} finally {
+			setIsLoading(false);
+		}
+	};
+
 	return (
 		<div className="space-y-8">
+			{error && (
+				<div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+					<p className="text-red-800">{error}</p>
+				</div>
+			)}
 			<div>
 				<h2 className="text-3xl font-bold text-gray-900 mb-2">Advanced Settings</h2>
 				<p className="text-base text-gray-600">Fine-tune WordPress performance and security</p>
@@ -59,14 +97,22 @@ export const AdvancedTab: React.FC = () => {
 								<h4 className="text-base font-semibold text-gray-900 mb-1">{item.title}</h4>
 								<p className="text-2xl font-bold text-gray-900">{item.value} items</p>
 							</div>
-							<button className={`px-4 py-2 bg-${item.color}-500 text-white text-sm font-semibold rounded-lg hover:bg-${item.color}-600 transition-colors`}>
-								{item.action}
+							<button 
+								onClick={() => handleCleanDatabase(item.title)}
+								disabled={isLoading}
+								className={`px-4 py-2 bg-${item.color}-500 text-white text-sm font-semibold rounded-lg hover:bg-${item.color}-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+							>
+								{isLoading ? 'Cleaning...' : item.action}
 							</button>
 						</div>
 					))}
 				</div>
-				<button className="w-full px-6 py-3 bg-blue-500 text-white text-base font-semibold rounded-lg hover:bg-blue-600 transition-colors">
-					Optimize Database Tables
+				<button 
+					onClick={handleOptimizeDatabase}
+					disabled={isLoading}
+					className="w-full px-6 py-3 bg-blue-500 text-white text-base font-semibold rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+				>
+					{isLoading ? 'Optimizing...' : 'Optimize Database Tables'}
 				</button>
 			</div>
 

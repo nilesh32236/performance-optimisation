@@ -65,7 +65,7 @@ class SettingsController extends BaseController {
 			array(
 				'methods'             => \WP_REST_Server::EDITABLE,
 				'callback'            => array( $this, 'update_settings' ),
-				'permission_callback' => array( $this, 'check_admin_permissions' ),
+				'permission_callback' => array( $this, 'check_rate_limited_admin_permissions' ),
 				'args'                => array(
 					'settings' => array(
 						'required'    => true,
@@ -189,6 +189,33 @@ class SettingsController extends BaseController {
 				),
 			)
 		);
+	}
+
+	/**
+	 * Check admin permissions with rate limiting
+	 *
+	 * @return bool|\WP_Error
+	 */
+	public function check_rate_limited_admin_permissions() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return new \WP_Error(
+				'rest_forbidden',
+				__( 'You do not have permission to access this resource.', 'performance-optimisation' ),
+				array( 'status' => 403 )
+			);
+		}
+
+		// Rate limit: 10 requests per minute
+		$key = 'settings_update_' . get_current_user_id();
+		if ( \PerformanceOptimisation\Utils\RateLimiter::is_limited( $key, 10, 60 ) ) {
+			return new \WP_Error(
+				'rest_rate_limited',
+				__( 'Too many requests. Please wait a moment and try again.', 'performance-optimisation' ),
+				array( 'status' => 429 )
+			);
+		}
+
+		return true;
 	}
 
 	/**
@@ -704,52 +731,93 @@ class SettingsController extends BaseController {
 					'type'    => 'array',
 					'default' => array(),
 				),
+				'cache_exclusions'      => array(
+					'type'    => 'object',
+					'default' => array(
+						'urls'          => array(),
+						'cookies'       => array( 'wordpress_logged_in_', 'wp-postpass_', 'comment_author_' ),
+						'user_roles'    => array(),
+						'query_strings' => array(),
+						'user_agents'   => array(),
+						'post_types'    => array(),
+					),
+				),
 				'enableGzipCompression' => array(
 					'type'    => 'boolean',
 					'default' => true,
 				),
 			),
 			'image_optimisation' => array(
-				'lazyLoadImages' => array(
+				'lazyLoadImages'    => array(
 					'type'    => 'boolean',
 					'default' => true,
 				),
-				'convertImg'     => array(
+				'convertImg'        => array(
 					'type'    => 'boolean',
 					'default' => false,
 				),
-				'format'         => array(
+				'format'            => array(
 					'type'    => 'string',
 					'default' => 'webp',
 					'enum'    => array( 'webp', 'avif' ),
 				),
-				'quality'        => array(
+				'quality'           => array(
 					'type'    => 'integer',
 					'default' => 85,
 					'min'     => 1,
 					'max'     => 100,
 				),
+				'preserve_exif'     => array(
+					'type'    => 'boolean',
+					'default' => false,
+				),
+				'compression_level' => array(
+					'type'    => 'integer',
+					'default' => 6,
+					'min'     => 0,
+					'max'     => 9,
+				),
+				'exclude_by_class'  => array(
+					'type'    => 'array',
+					'default' => array( 'no-lazy', 'skip-lazy' ),
+				),
+				'exclude_by_id'     => array(
+					'type'    => 'array',
+					'default' => array(),
+				),
+				'exclude_by_ext'    => array(
+					'type'    => 'array',
+					'default' => array( 'svg', 'gif' ),
+				),
 			),
 			'file_optimisation'  => array(
-				'minifyHTML' => array(
+				'minifyHTML'        => array(
 					'type'    => 'boolean',
 					'default' => false,
 				),
-				'minifyCSS'  => array(
+				'minifyCSS'         => array(
 					'type'    => 'boolean',
 					'default' => false,
 				),
-				'minifyJS'   => array(
+				'minifyJS'          => array(
 					'type'    => 'boolean',
 					'default' => false,
 				),
-				'combineCSS' => array(
+				'combineCSS'        => array(
 					'type'    => 'boolean',
 					'default' => false,
 				),
-				'combineJS'  => array(
+				'combineJS'         => array(
 					'type'    => 'boolean',
 					'default' => false,
+				),
+				'exclude_css_files' => array(
+					'type'    => 'array',
+					'default' => array(),
+				),
+				'exclude_js_files'  => array(
+					'type'    => 'array',
+					'default' => array(),
 				),
 			),
 			'preload_settings'   => array(
@@ -766,6 +834,22 @@ class SettingsController extends BaseController {
 					'default' => 10,
 					'min'     => 1,
 					'max'     => 100,
+				),
+				'preload_fonts'      => array(
+					'type'    => 'array',
+					'default' => array(),
+				),
+				'preload_images'     => array(
+					'type'    => 'array',
+					'default' => array(),
+				),
+				'dns_prefetch'       => array(
+					'type'    => 'array',
+					'default' => array( 'fonts.googleapis.com', 'fonts.gstatic.com' ),
+				),
+				'preconnect'         => array(
+					'type'    => 'array',
+					'default' => array(),
 				),
 			),
 		);

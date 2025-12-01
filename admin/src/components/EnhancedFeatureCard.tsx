@@ -17,7 +17,7 @@ interface EnhancedFeatureCardProps {
     description: string;
     enabled: boolean;
     onToggle: (enabled: boolean) => void;
-    color: 'blue' | 'purple' | 'emerald' | 'orange' | 'indigo';
+    color: 'blue' | 'purple' | 'emerald' | 'orange' | 'indigo' | 'red' | 'pink';
     children?: React.ReactNode; // Advanced options
     disabled?: boolean;
 }
@@ -84,6 +84,26 @@ export const EnhancedFeatureCard: React.FC<EnhancedFeatureCardProps> = ({
             hoverText: 'hover:text-indigo-500',
             text: 'text-indigo-600',
             bgLight: 'bg-indigo-100',
+        },
+        red: {
+            ring: 'ring-red-500',
+            shadow: 'shadow-red-500/20',
+            bg: 'bg-red-500',
+            shadowActive: 'shadow-red-500/30',
+            hoverBg: 'hover:bg-red-50',
+            hoverText: 'hover:text-red-500',
+            text: 'text-red-600',
+            bgLight: 'bg-red-100',
+        },
+        pink: {
+            ring: 'ring-pink-500',
+            shadow: 'shadow-pink-500/20',
+            bg: 'bg-pink-500',
+            shadowActive: 'shadow-pink-500/30',
+            hoverBg: 'hover:bg-pink-50',
+            hoverText: 'hover:text-pink-500',
+            text: 'text-pink-600',
+            bgLight: 'bg-pink-100',
         },
     };
 

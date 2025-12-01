@@ -120,27 +120,71 @@ class PageCacheService {
 	 * Check if current URL is excluded from caching
 	 */
 	private function is_excluded_url(): bool {
-		$excluded_urls = $this->settings->get_setting( 'cache_settings', 'cache_exclusions', array() );
+		$exclusions = $this->settings->get_setting( 'cache_settings', 'cache_exclusions', array() );
 
-		if ( empty( $excluded_urls ) ) {
-			return false;
-		}
-
-		$current_url = $this->get_current_url();
-
-		foreach ( $excluded_urls as $excluded ) {
-			$excluded = trim( $excluded );
-			if ( empty( $excluded ) ) {
-				continue;
-			}
-
-			// Support wildcards
-			if ( strpos( $excluded, '*' ) !== false ) {
-				$pattern = str_replace( '*', '.*', preg_quote( $excluded, '/' ) );
-				if ( preg_match( '/^' . $pattern . '$/', $current_url ) ) {
+		// Check URL exclusions
+		if ( ! empty( $exclusions['urls'] ) ) {
+			$current_url = $this->get_current_url();
+			foreach ( $exclusions['urls'] as $excluded ) {
+				$excluded = trim( $excluded );
+				if ( empty( $excluded ) ) {
+					continue;
+				}
+				if ( strpos( $excluded, '*' ) !== false ) {
+					$pattern = str_replace( '\*', '.*', preg_quote( $excluded, '/' ) );
+					if ( preg_match( '/^' . $pattern . '$/', $current_url ) ) {
+						return true;
+					}
+				} elseif ( strpos( $current_url, $excluded ) !== false ) {
 					return true;
 				}
-			} elseif ( strpos( $current_url, $excluded ) !== false ) {
+			}
+		}
+
+		// Check cookie exclusions
+		if ( ! empty( $exclusions['cookies'] ) ) {
+			foreach ( $exclusions['cookies'] as $cookie_name ) {
+				foreach ( $_COOKIE as $key => $value ) {
+					if ( strpos( $key, trim( $cookie_name ) ) === 0 ) {
+						return true;
+					}
+				}
+			}
+		}
+
+		// Check user role exclusions
+		if ( ! empty( $exclusions['user_roles'] ) && is_user_logged_in() ) {
+			$user = wp_get_current_user();
+			foreach ( $exclusions['user_roles'] as $role ) {
+				if ( in_array( trim( $role ), $user->roles, true ) ) {
+					return true;
+				}
+			}
+		}
+
+		// Check query string exclusions
+		if ( ! empty( $exclusions['query_strings'] ) && ! empty( $_GET ) ) {
+			foreach ( $exclusions['query_strings'] as $param ) {
+				if ( isset( $_GET[ trim( $param ) ] ) ) {
+					return true;
+				}
+			}
+		}
+
+		// Check user agent exclusions
+		if ( ! empty( $exclusions['user_agents'] ) ) {
+			$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+			foreach ( $exclusions['user_agents'] as $agent ) {
+				if ( stripos( $user_agent, trim( $agent ) ) !== false ) {
+					return true;
+				}
+			}
+		}
+
+		// Check post type exclusions
+		if ( ! empty( $exclusions['post_types'] ) && is_singular() ) {
+			$post_type = get_post_type();
+			if ( in_array( $post_type, array_map( 'trim', $exclusions['post_types'] ), true ) ) {
 				return true;
 			}
 		}
