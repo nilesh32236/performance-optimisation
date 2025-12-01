@@ -5,8 +5,9 @@
 2. [Setup Wizard](#setup-wizard)
 3. [Admin Dashboard](#admin-dashboard)
 4. [Configuration Guide](#configuration-guide)
-5. [Best Practices](#best-practices)
-6. [Troubleshooting](#troubleshooting)
+5. [Frequently Asked Questions](#frequently-asked-questions)
+6. [Best Practices](#best-practices)
+7. [Troubleshooting](#troubleshooting)
 
 ## Getting Started
 
@@ -253,6 +254,166 @@ Advanced:
 - **Minification**: Safe for all sites
 - **Combining**: Test thoroughly, may break some themes/plugins
 - **Critical CSS**: Advanced feature, requires testing
+
+---
+
+## Frequently Asked Questions
+
+### General Questions
+
+#### What is Performance Optimisation?
+Performance Optimisation is a comprehensive WordPress plugin that improves your website's speed and performance through caching, file optimization, image compression, and advanced analytics. It includes features like lazy loading, minification, and automated performance monitoring.
+
+#### Is it free?
+Yes, Performance Optimisation is completely free and open-source under the GPL license. All features are available at no cost.
+
+#### Will it work with my theme?
+The plugin is designed to work with all properly coded WordPress themes. The setup wizard automatically tests compatibility and recommends safe settings for your specific theme.
+
+#### Can I use it with other caching plugins?
+No, you should only use one caching plugin at a time to avoid conflicts. Please deactivate other caching plugins (W3 Total Cache, WP Super Cache, WP Rocket, etc.) before activating Performance Optimisation.
+
+#### Will it slow down my admin area?
+No, the plugin automatically excludes WordPress admin pages from optimization to maintain full functionality and speed in the backend.
+
+---
+
+### Installation and Setup
+
+#### How do I install the plugin?
+1. **From WordPress Admin:** Plugins → Add New, search for "Performance Optimisation"
+2. **Manual Upload:** Download and upload via Plugins → Add New → Upload Plugin
+3. **FTP Upload:** Extract to `/wp-content/plugins/` and activate
+
+#### What happens after activation?
+You'll be redirected to the Setup Wizard, which will analyze your site, detect your hosting environment, recommend optimal settings, and configure basic optimizations.
+
+#### Can I skip the setup wizard?
+Yes, but the wizard provides optimized settings based on your specific site configuration, so it's recommended for most users.
+
+#### How do I reset to default settings?
+Go to Performance Optimisation → Settings → Advanced and click "Reset to Defaults".
+
+---
+
+### Performance and Results
+
+#### How much faster will my site be?
+Most sites see:
+- **30-70% improvement** in page load times
+- **50-80% reduction** in file sizes
+- **Improved Core Web Vitals** scores
+- **Better search engine rankings**
+
+#### Does it work with e-commerce sites?
+Yes! The plugin includes specific e-commerce optimizations:
+- Automatic exclusion of cart/checkout pages from caching
+- Product image optimization
+- WooCommerce compatibility
+
+#### What about mobile optimization?
+Includes mobile-specific features:
+- Separate mobile caching
+- Mobile image optimization
+- Responsive image generation
+
+---
+
+### Compatibility
+
+#### Which WordPress versions are supported?
+- **Minimum:** WordPress 6.2
+- **Tested up to:** WordPress 6.4+
+- **Recommended:** Latest WordPress version
+
+#### What PHP versions are supported?
+- **Minimum:** PHP 7.4
+- **Recommended:** PHP 8.0 or higher
+- **Tested up to:** PHP 8.3
+
+#### Does it work with multisite?
+Yes, the plugin supports WordPress multisite installations. Each site can have its own optimization settings.
+
+#### Which hosting providers work best?
+Works with all providers, but performs best with:
+- VPS or dedicated servers
+- Hosts with SSD storage
+- Hosts supporting object caching (Redis/Memcached)
+- Modern PHP versions
+
+---
+
+### Troubleshooting Common Questions
+
+#### My site looks broken after enabling optimization
+This usually happens due to CSS/JavaScript conflicts:
+1. Disable "Combine CSS" and "Defer JavaScript"
+2. Clear all caches
+3. Test your site
+4. Re-enable features one by one
+
+#### Images are not loading
+This is typically a lazy loading issue:
+1. Disable lazy loading temporarily
+2. If images load, adjust the loading threshold
+3. Exclude above-the-fold images
+
+#### Cache is not working
+Check:
+- File permissions on wp-content/cache directory
+- No conflicting caching plugins active
+- Server configuration supports file caching
+
+#### Performance is not improving
+Consider:
+- Hosting limitations (shared hosting restrictions)
+- Theme performance issues
+- Too many active plugins
+- External factors (third-party scripts)
+
+---
+
+### Advanced Usage
+
+#### Can I customize optimization rules?
+Yes, advanced users can customize through:
+- Settings panels
+- WordPress hooks and filters
+- Exclusion lists
+- Custom rules
+
+#### Is there an API?
+Yes, the plugin includes a REST API for performance data retrieval, configuration management, and analytics export. See [API Reference](API_REFERENCE.md).
+
+#### Can I use it with a CDN?
+Yes, includes CDN integration for CloudFlare, MaxCDN/StackPath, and custom CDNs.
+
+#### How do I optimize for Core Web Vitals?
+The plugin automatically optimizes for:
+- **LCP:** Image optimization and critical CSS
+- **FID:** JavaScript optimization and deferring
+- **CLS:** Proper image dimensions and font loading
+
+---
+
+### Support and Updates
+
+#### How often is it updated?
+- **Security updates:** As needed (immediately for critical issues)
+- **Feature updates:** Monthly or bi-monthly
+- **Compatibility updates:** With each major WordPress release
+
+#### Where can I get help?
+1. Check [User Guide](USER_GUIDE.md) and [Troubleshooting](#troubleshooting)
+2. Visit [WordPress.org Forum](https://wordpress.org/support/plugin/performance-optimisation/)
+3. Open an issue on [GitHub](https://github.com/nilesh-32236/performance-optimisation/issues)
+
+#### How do I report a bug?
+1. Check documentation to ensure it's not expected behavior
+2. Test with default theme and minimal plugins
+3. Report on WordPress.org forum or GitHub with detailed information
+
+---
 
 ## Best Practices
 

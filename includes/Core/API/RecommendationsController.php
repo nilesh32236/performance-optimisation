@@ -27,6 +27,20 @@ class RecommendationsController extends BaseController {
 	private \PerformanceOptimisation\Core\Analytics\RecommendationEngine $recommendation_engine;
 
 	/**
+	 * Cache service instance.
+	 *
+	 * @var \PerformanceOptimisation\Services\CacheService|null
+	 */
+	private ?\PerformanceOptimisation\Services\CacheService $cache_service = null;
+
+	/**
+	 * Logging utility instance.
+	 *
+	 * @var \PerformanceOptimisation\Utils\LoggingUtil|null
+	 */
+	private ?\PerformanceOptimisation\Utils\LoggingUtil $logger = null;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param \PerformanceOptimisation\Core\Analytics\MetricsCollector    $metrics_collector Metrics collector instance.
@@ -34,6 +48,23 @@ class RecommendationsController extends BaseController {
 	 */
 	public function __construct( \PerformanceOptimisation\Core\Analytics\MetricsCollector $metrics_collector, \PerformanceOptimisation\Core\Analytics\PerformanceAnalyzer $performance_analyzer ) {
 		$this->recommendation_engine = new \PerformanceOptimisation\Core\Analytics\RecommendationEngine( $metrics_collector, $performance_analyzer );
+
+		// Get services from container
+		try {
+			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
+			
+			if ( $container->has( 'cache_service' ) ) {
+				$this->cache_service = $container->get( 'cache_service' );
+			}
+			
+			if ( $container->has( 'logger' ) ) {
+				$this->logger = $container->get( 'logger' );
+			}
+		} catch ( \Exception $e ) {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'RecommendationsController: Failed to load services: ' . $e->getMessage() );
+			}
+		}
 	}
 
 	/**
@@ -272,18 +303,16 @@ class RecommendationsController extends BaseController {
 	 */
 	private function trigger_image_optimization(): void {
 		try {
-			$cache_service    = new \PerformanceOptimisation\Services\CacheService();
-			$settings_service = new \PerformanceOptimisation\Services\SettingsService();
-			// Skip image service for now as it requires complex dependencies
-			$cron_manager = new \PerformanceOptimisation\Services\CronService(
-				$cache_service,
-				null, // ImageService placeholder
-				$settings_service
-			);
-			$cron_manager->run_image_conversion_tasks();
-
+			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
+			
+			if ( $container->has( 'cron_service' ) ) {
+				$cron_service = $container->get( 'cron_service' );
+				$cron_service->run_image_conversion_tasks();
+			}
 		} catch ( \Exception $e ) {
-			error_log( 'Failed to trigger image optimization: ' . $e->getMessage() );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Failed to trigger image optimization: ' . $e->getMessage() );
+			}
 		}
 	}
 
@@ -294,14 +323,13 @@ class RecommendationsController extends BaseController {
 	 */
 	private function clear_all_caches(): void {
 		try {
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
+			if ( $this->cache_service ) {
+				$this->cache_service->clearCache( 'all' );
 			}
-
-			\PerformanceOptimise\Inc\Cache::clear_cache();
-
 		} catch ( \Exception $e ) {
-			error_log( 'Failed to clear cache after recommendation application: ' . $e->getMessage() );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Failed to clear cache after recommendation application: ' . $e->getMessage() );
+			}
 		}
 	}
 
@@ -314,20 +342,19 @@ class RecommendationsController extends BaseController {
 	 */
 	private function log_recommendation_application( string $recommendation_id, array $changes ): void {
 		try {
-			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-			}
-
 			$message = sprintf(
 				__( 'Applied automated recommendation "%1$s": %2$s', 'performance-optimisation' ),
 				$recommendation_id,
 				implode( ', ', $changes )
 			);
 
-			new \PerformanceOptimise\Inc\Log( $message );
-
+			if ( $this->logger ) {
+				$this->logger->info( $message, array( 'recommendation_id' => $recommendation_id ) );
+			}
 		} catch ( \Exception $e ) {
-			error_log( 'Failed to log recommendation application: ' . $e->getMessage() );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'Failed to log recommendation application: ' . $e->getMessage() );
+			}
 		}
 	}
 

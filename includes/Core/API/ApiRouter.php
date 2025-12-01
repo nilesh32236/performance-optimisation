@@ -65,17 +65,11 @@ class ApiRouter {
 	 * @return void
 	 */
 	public function init(): void {
-		error_log( 'WPPO: ApiRouter init() called' );
-		error_log( 'WPPO: Adding rest_api_init hook' );
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
-		error_log( 'WPPO: Hook added, loading controllers' );
 		$this->load_controllers();
 
 		// Also call register_routes directly in case rest_api_init has already fired
-		error_log( 'WPPO: Calling register_routes directly' );
 		$this->register_routes();
-
-		error_log( 'WPPO: ApiRouter init() completed' );
 	}
 
 	/**
@@ -118,14 +112,15 @@ class ApiRouter {
 				$service = $container->get( 'PerformanceOptimisation\\Services\\PageCacheService' );
 				// If we got a Closure, call it to get the actual service
 				if ( $service instanceof \Closure ) {
-					error_log( 'WPPO: PageCacheService returned as Closure, calling it' );
 					$page_cache_service = $service( $container );
 				} else {
 					$page_cache_service = $service;
 				}
 			}
 		} catch ( \Exception $e ) {
-			error_log( 'WPPO: Failed to get PageCacheService: ' . $e->getMessage() );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'WPPO: Failed to get PageCacheService: ' . $e->getMessage() );
+			}
 		}
 
 		try {
@@ -138,7 +133,9 @@ class ApiRouter {
 				}
 			}
 		} catch ( \Exception $e ) {
-			error_log( 'WPPO: Failed to get logger: ' . $e->getMessage() );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'WPPO: Failed to get logger: ' . $e->getMessage() );
+			}
 		}
 
 		// Get BrowserCacheService
@@ -153,7 +150,9 @@ class ApiRouter {
 				}
 			}
 		} catch ( \Exception $e ) {
-			error_log( 'WPPO: Failed to get BrowserCacheService: ' . $e->getMessage() );
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+				error_log( 'WPPO: Failed to get BrowserCacheService: ' . $e->getMessage() );
+			}
 		}
 
 		if ( $logger === null ) {
@@ -176,8 +175,6 @@ class ApiRouter {
 	 * @return void
 	 */
 	public function register_routes(): void {
-		error_log( 'WPPO: register_routes() called' );
-
 		// Cache routes.
 		$this->register_cache_routes();
 
@@ -207,8 +204,6 @@ class ApiRouter {
 
 		// Utility routes.
 		$this->register_utility_routes();
-
-		error_log( 'WPPO: register_routes() completed' );
 	}
 
 	/**
