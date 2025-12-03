@@ -50,7 +50,7 @@ class FontOptimizationService {
 	 * Initialize hooks.
 	 */
 	private function init_hooks(): void {
-		$settings = $this->settings->get_setting( 'preloading', 'preload_fonts', array() );
+		$settings     = $this->settings->get_setting( 'preloading', 'preload_fonts', array() );
 		$swap_enabled = $this->settings->get_setting( 'fonts', 'display_swap', false );
 
 		if ( ! empty( $settings ) ) {
@@ -76,7 +76,7 @@ class FontOptimizationService {
 		foreach ( $fonts as $font_url ) {
 			$font_url = esc_url( $font_url );
 			// Determine mime type based on extension
-			$ext = pathinfo( $font_url, PATHINFO_EXTENSION );
+			$ext  = pathinfo( $font_url, PATHINFO_EXTENSION );
 			$type = 'font/' . $ext;
 			if ( 'ttf' === $ext ) {
 				$type = 'font/ttf'; // or application/x-font-ttf
@@ -84,13 +84,13 @@ class FontOptimizationService {
 				$type = 'font/otf';
 			}
 
-			echo "<link rel='preload' href='{$font_url}' as='font' type='{$type}' crossorigin>\n";
+			echo '<link rel="preload" href="' . esc_url( $font_url ) . '" as="font" type="' . esc_attr( $type ) . '" crossorigin>' . "\n";
 		}
 	}
 
 	/**
 	 * Add font-display: swap to Google Fonts.
-	 * 
+	 *
 	 * @param string $html The link tag HTML.
 	 * @param string $handle The style handle.
 	 * @return string Modified HTML.
@@ -103,10 +103,10 @@ class FontOptimizationService {
 		}
 		return $html;
 	}
-	
+
 	/**
 	 * Add preconnect for Google Fonts.
-	 * 
+	 *
 	 * @param array  $urls   URLs to print for resource hints.
 	 * @param string $relation_type The relation type the URLs are printed for.
 	 * @return array Modified URLs.

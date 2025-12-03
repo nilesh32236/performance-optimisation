@@ -315,7 +315,7 @@ class SecurityManager {
 	public function check_rate_limits( \WP_REST_Request $request ) {
 		// Rate limiting temporarily disabled
 		return true;
-		
+
 		$client_ip = $this->get_client_ip();
 		$user_id   = get_current_user_id();
 		$route     = $request->get_route();
@@ -572,7 +572,7 @@ class SecurityManager {
 
 		// Also log to WordPress debug log if enabled
 		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-			error_log(
+			\PerformanceOptimisation\Utils\LoggingUtil::info(
 				sprintf(
 					'[Performance Optimisation Security] %s: %s',
 					$event_type,

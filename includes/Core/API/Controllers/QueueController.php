@@ -84,9 +84,9 @@ class QueueController {
 
 			// Calculate totals
 			$totals = array(
-				'total_pending'   => 0,
-				'total_completed' => 0,
-				'total_failed'    => 0,
+				'total_pending'    => 0,
+				'total_completed'  => 0,
+				'total_failed'     => 0,
 				'disk_space_saved' => 0,
 			);
 
@@ -156,12 +156,15 @@ class QueueController {
 	public function clear_completed( WP_REST_Request $request ) {
 		try {
 			// Get current queue data
-			$queue_data = get_option( 'wppo_img_info', array(
-				'pending'   => array(),
-				'completed' => array(),
-				'failed'    => array(),
-				'skipped'   => array(),
-			) );
+			$queue_data = get_option(
+				'wppo_img_info',
+				array(
+					'pending'   => array(),
+					'completed' => array(),
+					'failed'    => array(),
+					'skipped'   => array(),
+				)
+			);
 
 			// Clear completed items
 			$queue_data['completed'] = array();

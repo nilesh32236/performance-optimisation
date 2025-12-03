@@ -52,17 +52,17 @@ class RecommendationsController extends BaseController {
 		// Get services from container
 		try {
 			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
-			
+
 			if ( $container->has( 'cache_service' ) ) {
 				$this->cache_service = $container->get( 'cache_service' );
 			}
-			
+
 			if ( $container->has( 'logger' ) ) {
 				$this->logger = $container->get( 'logger' );
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'RecommendationsController: Failed to load services: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'RecommendationsController: Failed to load services: ' . $e->getMessage() );
 			}
 		}
 	}
@@ -304,14 +304,14 @@ class RecommendationsController extends BaseController {
 	private function trigger_image_optimization(): void {
 		try {
 			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
-			
+
 			if ( $container->has( 'cron_service' ) ) {
 				$cron_service = $container->get( 'cron_service' );
 				$cron_service->run_image_conversion_tasks();
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'Failed to trigger image optimization: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'Failed to trigger image optimization: ' . $e->getMessage() );
 			}
 		}
 	}
@@ -328,7 +328,7 @@ class RecommendationsController extends BaseController {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'Failed to clear cache after recommendation application: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'Failed to clear cache after recommendation application: ' . $e->getMessage() );
 			}
 		}
 	}
@@ -353,7 +353,7 @@ class RecommendationsController extends BaseController {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'Failed to log recommendation application: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'Failed to log recommendation application: ' . $e->getMessage() );
 			}
 		}
 	}

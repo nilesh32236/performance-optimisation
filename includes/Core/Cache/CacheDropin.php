@@ -56,7 +56,7 @@ class CacheDropin {
 
 			return true;
 		} catch ( \Exception $e ) {
-			error_log( 'CacheDropin::create failed: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'CacheDropin::create failed: ' . $e->getMessage() );
 			return false;
 		}
 	}
@@ -78,7 +78,7 @@ class CacheDropin {
 
 			return $wp_filesystem->delete( self::$handler_file_path );
 		} catch ( \Exception $e ) {
-			error_log( 'CacheDropin::remove failed: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'CacheDropin::remove failed: ' . $e->getMessage() );
 			return false;
 		}
 	}

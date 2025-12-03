@@ -12,6 +12,8 @@ namespace PerformanceOptimisation\Services;
 
 use PerformanceOptimisation\Interfaces\ServiceContainerInterface;
 use PerformanceOptimisation\Core\Config\ConfigManager;
+use PerformanceOptimisation\Core\Config\ConfigSchema;
+use PerformanceOptimisation\Core\Config\ConfigEnvironment;
 use PerformanceOptimisation\Utils\LoggingUtil;
 use PerformanceOptimisation\Utils\ValidationUtil;
 use PerformanceOptimisation\Utils\FileSystemUtil;
@@ -64,23 +66,16 @@ class ConfigurationService {
 	/**
 	 * Configuration schema.
 	 *
-	 * @var array
+	 * @var ConfigSchema
 	 */
-	private array $schema = array();
+	private ConfigSchema $config_schema;
 
 	/**
-	 * Environment-specific configurations.
+	 * Configuration environment.
 	 *
-	 * @var array
+	 * @var ConfigEnvironment
 	 */
-	private array $environments = array();
-
-	/**
-	 * Current environment.
-	 *
-	 * @var string
-	 */
-	private string $current_environment;
+	private ConfigEnvironment $config_environment;
 
 	/**
 	 * Configuration cache.
@@ -116,17 +111,16 @@ class ConfigurationService {
 			$this->filesystem = new FileSystemUtil();
 		}
 
-		$this->config_manager      = new ConfigManager( $this->logger, $this->validator, $this->filesystem );
-		$this->current_environment = $this->detectEnvironment();
-
-		$this->initializeSchema();
-		$this->loadEnvironmentConfigurations();
+		// Initialize config components
+		$this->config_schema      = new ConfigSchema();
+		$this->config_environment = new ConfigEnvironment();
+		$this->config_manager     = new ConfigManager( $this->logger, $this->validator, $this->filesystem );
 
 		$this->logger->debug(
 			'ConfigurationService initialized',
 			array(
-				'environment' => $this->current_environment,
-				'schema_keys' => array_keys( $this->schema ),
+				'environment' => $this->config_environment->getEnvironment(),
+				'schema_keys' => array_keys( $this->config_schema->getSchema() ),
 			)
 		);
 	}
@@ -148,9 +142,9 @@ class ConfigurationService {
 		$value = $this->config_manager->get( $key, $default );
 
 		// Apply environment-specific overrides
-		$env_value = $this->getEnvironmentValue( $key );
-		if ( $env_value !== null ) {
-			$value = $env_value;
+		$env_overrides = $this->config_environment->getEnvironmentOverrides();
+		if ( isset( $env_overrides[ $key ] ) ) {
+			$value = $env_overrides[ $key ];
 		}
 
 		// Cache the result
@@ -266,7 +260,7 @@ class ConfigurationService {
 		$config = $this->config_manager->all();
 
 		// Apply environment overrides
-		foreach ( $this->environments[ $this->current_environment ] ?? array() as $key => $value ) {
+		foreach ( $this->config_environment->getEnvironmentOverrides() as $key => $value ) {
 			$this->setNestedValue( $config, $key, $value );
 		}
 
@@ -280,7 +274,8 @@ class ConfigurationService {
 	 * @return bool True if key exists, false otherwise.
 	 */
 	public function has( string $key ): bool {
-		return $this->config_manager->has( $key ) || $this->hasEnvironmentValue( $key );
+		$env_overrides = $this->config_environment->getEnvironmentOverrides();
+		return $this->config_manager->has( $key ) || isset( $env_overrides[ $key ] );
 	}
 
 	/**
@@ -337,7 +332,7 @@ class ConfigurationService {
 	 * @return array Configuration schema.
 	 */
 	public function getSchema(): array {
-		return $this->schema;
+		return $this->config_schema->getSchema();
 	}
 
 	/**
@@ -348,9 +343,10 @@ class ConfigurationService {
 	 */
 	public function validateConfiguration( array $config ): array {
 		$errors = array();
+		$schema = $this->config_schema->getSchema();
 
 		foreach ( $config as $section => $values ) {
-			if ( ! isset( $this->schema[ $section ] ) ) {
+			if ( ! isset( $schema[ $section ] ) ) {
 				$errors[] = "Unknown configuration section: {$section}";
 				continue;
 			}
@@ -379,7 +375,7 @@ class ConfigurationService {
 	 * @return string Current environment.
 	 */
 	public function getEnvironment(): string {
-		return $this->current_environment;
+		return $this->config_environment->getEnvironment();
 	}
 
 	/**
@@ -389,16 +385,11 @@ class ConfigurationService {
 	 * @return bool True on success, false on failure.
 	 */
 	public function setEnvironment( string $environment ): bool {
-		if ( ! in_array( $environment, array( 'development', 'staging', 'production' ), true ) ) {
-			return false;
+		if ( $this->config_environment->setEnvironment( $environment ) ) {
+			$this->config_cache = array(); // Clear cache to reload with new environment
+			return true;
 		}
-
-		$this->current_environment = $environment;
-		$this->config_cache        = array(); // Clear cache to reload with new environment
-
-		$this->logger->info( 'Environment changed', array( 'environment' => $environment ) );
-
-		return true;
+		return false;
 	}
 
 	/**
@@ -522,217 +513,6 @@ class ConfigurationService {
 	}
 
 	/**
-	 * Initialize configuration schema.
-	 */
-	private function initializeSchema(): void {
-		$this->schema = array(
-			'caching'      => array(
-				'page_cache_enabled'     => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'cache_ttl'              => array(
-					'type'    => 'integer',
-					'min'     => 300,
-					'max'     => 86400,
-					'default' => 3600,
-				),
-				'cache_exclusions'       => array(
-					'type'    => 'array',
-					'default' => array(),
-				),
-				'object_cache_enabled'   => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'fragment_cache_enabled' => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-			),
-			'minification' => array(
-				'minify_css'          => array(
-					'type'    => 'boolean',
-					'default' => true,
-				),
-				'minify_js'           => array(
-					'type'    => 'boolean',
-					'default' => true,
-				),
-				'minify_html'         => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'combine_css'         => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'combine_js'          => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'inline_critical_css' => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-			),
-			'images'       => array(
-				'convert_to_webp'     => array(
-					'type'    => 'boolean',
-					'default' => true,
-				),
-				'auto_convert_on_upload' => array(
-					'type'    => 'boolean',
-					'default' => true,
-				),
-				'convert_to_avif'     => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'lazy_loading'        => array(
-					'type'    => 'boolean',
-					'default' => true,
-				),
-				'compression_quality' => array(
-					'type'    => 'integer',
-					'min'     => 1,
-					'max'     => 100,
-					'default' => 85,
-				),
-				'resize_large_images' => array(
-					'type'    => 'boolean',
-					'default' => true,
-				),
-				'max_image_width'     => array(
-					'type'    => 'integer',
-					'min'     => 100,
-					'max'     => 5000,
-					'default' => 1920,
-				),
-				'max_image_height'    => array(
-					'type'    => 'integer',
-					'min'     => 100,
-					'max'     => 5000,
-					'default' => 1080,
-				),
-			),
-			'preloading'   => array(
-				'dns_prefetch'         => array(
-					'type'    => 'array',
-					'default' => array(),
-				),
-				'preconnect'           => array(
-					'type'    => 'array',
-					'default' => array(),
-				),
-				'preload_fonts'        => array(
-					'type'    => 'array',
-					'default' => array(),
-				),
-				'preload_critical_css' => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-			),
-			'database'     => array(
-				'cleanup_revisions' => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'cleanup_spam'      => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'cleanup_trash'     => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'optimize_tables'   => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-			),
-			'advanced'     => array(
-				'disable_emojis'       => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'disable_embeds'       => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'remove_query_strings' => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'defer_js'             => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-				'async_js'             => array(
-					'type'    => 'boolean',
-					'default' => false,
-				),
-			),
-		);
-	}
-
-	/**
-	 * Load environment-specific configurations.
-	 */
-	private function loadEnvironmentConfigurations(): void {
-		$this->environments = array(
-			'development' => array(
-				'caching.page_cache_enabled' => false,
-				'minification.minify_css'    => false,
-				'minification.minify_js'     => false,
-				'minification.minify_html'   => false,
-			),
-			'staging'     => array(
-				'caching.page_cache_enabled' => true,
-				'caching.cache_ttl'          => 1800,
-				'minification.minify_css'    => true,
-				'minification.minify_js'     => true,
-			),
-			'production'  => array(
-				'caching.page_cache_enabled' => true,
-				'caching.cache_ttl'          => 3600,
-				'minification.minify_css'    => true,
-				'minification.minify_js'     => true,
-				'minification.minify_html'   => true,
-				'minification.combine_css'   => true,
-				'minification.combine_js'    => true,
-			),
-		);
-	}
-
-	/**
-	 * Detect current environment.
-	 *
-	 * @return string Environment name.
-	 */
-	private function detectEnvironment(): string {
-		// Check for explicit environment setting
-		if ( defined( 'WPPO_ENVIRONMENT' ) ) {
-			return WPPO_ENVIRONMENT;
-		}
-
-		// Check WordPress debug mode
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			return 'development';
-		}
-
-		// Check for staging indicators
-		$host = $_SERVER['HTTP_HOST'] ?? '';
-		if ( strpos( $host, 'staging' ) !== false || strpos( $host, 'dev' ) !== false ) {
-			return 'staging';
-		}
-
-		// Default to production
-		return 'production';
-	}
-
-	/**
 	 * Validate a single configuration value.
 	 *
 	 * @param string $key   Configuration key.
@@ -793,39 +573,21 @@ class ConfigurationService {
 		$section = $parts[0];
 		$field   = $parts[1];
 
-		if ( ! isset( $this->schema[ $section ][ $field ] ) ) {
+		$schema = $this->config_schema->getSchema();
+
+		if ( ! isset( $schema[ $section ][ $field ] ) ) {
 			return null;
 		}
 
 		return array(
 			'section' => $section,
 			'field'   => $field,
-			'schema'  => $this->schema[ $section ][ $field ],
+			'schema'  => $schema[ $section ][ $field ],
 		);
 	}
 
 	/**
-	 * Get environment-specific value.
-	 *
-	 * @param string $key Configuration key.
-	 * @return mixed|null Environment value or null if not found.
-	 */
-	private function getEnvironmentValue( string $key ) {
-		return $this->environments[ $this->current_environment ][ $key ] ?? null;
-	}
-
-	/**
-	 * Check if environment has value for key.
-	 *
-	 * @param string $key Configuration key.
-	 * @return bool True if environment has value, false otherwise.
-	 */
-	private function hasEnvironmentValue( string $key ): bool {
-		return isset( $this->environments[ $this->current_environment ][ $key ] );
-	}
-
-	/**
-	 * Set nested value in array.
+	 * Set nested value in array using dot notation.
 	 *
 	 * @param array  $array Array to modify.
 	 * @param string $key   Dot notation key.

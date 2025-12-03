@@ -35,7 +35,7 @@ class ResourceHintsService {
 
 	private function add_dns_prefetch(): void {
 		$domains = $this->settings->get_setting( 'preloading', 'dns_prefetch', array() );
-		
+
 		foreach ( $domains as $domain ) {
 			$domain = trim( $domain );
 			if ( empty( $domain ) ) {
@@ -47,7 +47,7 @@ class ResourceHintsService {
 
 	private function add_preconnect(): void {
 		$domains = $this->settings->get_setting( 'preloading', 'preconnect', array() );
-		
+
 		foreach ( $domains as $domain ) {
 			$domain = trim( $domain );
 			if ( empty( $domain ) ) {
@@ -63,13 +63,13 @@ class ResourceHintsService {
 
 	private function add_preload_images(): void {
 		$images = $this->settings->get_setting( 'preloading', 'preload_images', array() );
-		
+
 		foreach ( $images as $image_url ) {
 			$image_url = trim( $image_url );
 			if ( empty( $image_url ) ) {
 				continue;
 			}
-			
+
 			printf( '<link rel="preload" href="%s" as="image">' . "\n", esc_url( $image_url ) );
 		}
 	}

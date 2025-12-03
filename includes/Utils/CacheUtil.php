@@ -139,7 +139,7 @@ class CacheUtil {
 		// File-based cache
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES[ $type ] );
 		$file_ext  = 'minified' === $type ? ( strpos( $key, 'css' ) !== false ? '.css' : '.js' ) : '.html';
-		
+
 		// For minified assets, the key might already include the hash/filename
 		// If the key doesn't look like a filename, append extension
 		if ( 'minified' === $type && strpos( $key, '.' ) === false ) {
@@ -191,7 +191,7 @@ class CacheUtil {
 
 		// File-based cache
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES[ $type ] );
-		
+
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			if ( ! wp_mkdir_p( $cache_dir ) ) {
 				return false;

@@ -105,8 +105,8 @@ class ApiRouter {
 
 		// Get PageCacheService from container - use full class name
 		$page_cache_service = null;
-		$logger = null;
-		
+		$logger             = null;
+
 		try {
 			if ( $container->has( 'PerformanceOptimisation\\Services\\PageCacheService' ) ) {
 				$service = $container->get( 'PerformanceOptimisation\\Services\\PageCacheService' );
@@ -119,7 +119,7 @@ class ApiRouter {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'WPPO: Failed to get PageCacheService: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Failed to get PageCacheService: ' . $e->getMessage() );
 			}
 		}
 
@@ -134,7 +134,7 @@ class ApiRouter {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'WPPO: Failed to get logger: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Failed to get logger: ' . $e->getMessage() );
 			}
 		}
 
@@ -151,7 +151,7 @@ class ApiRouter {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'WPPO: Failed to get BrowserCacheService: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Failed to get BrowserCacheService: ' . $e->getMessage() );
 			}
 		}
 
@@ -192,7 +192,7 @@ class ApiRouter {
 
 		// Image optimization routes.
 		$this->register_image_routes();
-		
+
 		// Queue routes.
 		$this->register_queue_routes();
 

@@ -321,7 +321,7 @@ abstract class BaseController {
 	 */
 	protected function log_request( \WP_REST_Request $request, string $action ): void {
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log(
+			\PerformanceOptimisation\Utils\LoggingUtil::debug(
 				sprintf(
 					'[Performance Optimisation API] %s - %s %s - User: %d',
 					$action,
@@ -342,7 +342,7 @@ abstract class BaseController {
 	 */
 	protected function handle_exception( \Exception $exception, string $default_message = 'An error occurred' ): \WP_REST_Response {
 		// Log the exception.
-		error_log(
+		\PerformanceOptimisation\Utils\LoggingUtil::error(
 			sprintf(
 				'[Performance Optimisation API] Exception: %s in %s:%d',
 				$exception->getMessage(),

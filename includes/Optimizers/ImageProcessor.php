@@ -2,7 +2,7 @@
 /**
  * Image Processor
  *
- * Image processing with WebP/AVIF support, progressive JPEG optimization, 
+ * Image processing with WebP/AVIF support, progressive JPEG optimization,
  * responsive image generation, and intelligent compression.
  *
  * @package PerformanceOptimisation\Optimizers
@@ -152,7 +152,7 @@ class ImageProcessor implements OptimizerInterface {
 	public function optimizeWithDetails( string $content, array $options = array() ): array {
 		// For image processor, content is treated as file path
 		$result = $this->optimizeImage( $content, $options );
-		
+
 		if ( $result === false ) {
 			return array(
 				'success' => false,
@@ -161,10 +161,10 @@ class ImageProcessor implements OptimizerInterface {
 		}
 
 		return array(
-			'success'        => true,
-			'optimized_path' => $result,
-			'original_size'  => $this->filesystem->getFileSize( $content ),
-			'optimized_size' => $this->filesystem->getFileSize( $result ),
+			'success'           => true,
+			'optimized_path'    => $result,
+			'original_size'     => $this->filesystem->getFileSize( $content ),
+			'optimized_size'    => $this->filesystem->getFileSize( $result ),
 			'compression_ratio' => 0, // Calculate if needed
 		);
 	}
@@ -381,7 +381,10 @@ class ImageProcessor implements OptimizerInterface {
 			wp_mkdir_p( $target_dir );
 		}
 
-		$options = array( 'quality' => $quality, 'progressive' => true );
+		$options = array(
+			'quality'     => $quality,
+			'progressive' => true,
+		);
 		$success = $this->saveImage( $image_resource, $target_path, $target_format, $options );
 
 		imagedestroy( $image_resource );
@@ -848,7 +851,10 @@ class ImageProcessor implements OptimizerInterface {
 		}
 
 		$format  = $this->getImageFormat( $image_info[2] );
-		$options = array( 'quality' => $quality, 'progressive' => true );
+		$options = array(
+			'quality'     => $quality,
+			'progressive' => true,
+		);
 		$success = $this->saveImage( $image_resource, $target_path, $format, $options );
 
 		imagedestroy( $image_resource );

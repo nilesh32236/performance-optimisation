@@ -504,7 +504,7 @@ class ValidationUtil {
 
 		// Check nonce if required
 		if ( $check_nonce ) {
-			$nonce = $_POST['nonce'] ?? $_GET['nonce'] ?? '';
+			$nonce = sanitize_text_field( wp_unslash( $_POST['nonce'] ?? $_GET['nonce'] ?? '' ) );
 			if ( ! self::validateNonce( $nonce, $action ) ) {
 				return false;
 			}

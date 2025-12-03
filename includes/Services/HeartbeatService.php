@@ -117,7 +117,7 @@ class HeartbeatService {
 			if ( $screen && method_exists( $screen, 'is_block_editor' ) && $screen->is_block_editor() ) {
 				return 'post_edit';
 			}
-			
+
 			if ( $screen && 'post' === $screen->base ) {
 				return 'post_edit';
 			}

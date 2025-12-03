@@ -33,7 +33,7 @@ class AdvancedCacheHandler {
 
 			return CacheDropin::create();
 		} catch ( \Exception $e ) {
-			error_log( 'AdvancedCacheHandler::create failed: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'AdvancedCacheHandler::create failed: ' . $e->getMessage() );
 			return false;
 		}
 	}
@@ -42,7 +42,7 @@ class AdvancedCacheHandler {
 		try {
 			return CacheDropin::remove();
 		} catch ( \Exception $e ) {
-			error_log( 'AdvancedCacheHandler::remove failed: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'AdvancedCacheHandler::remove failed: ' . $e->getMessage() );
 			return false;
 		}
 	}

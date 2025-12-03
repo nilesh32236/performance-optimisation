@@ -153,7 +153,7 @@ class SettingsService implements SettingsServiceInterface {
 				// Fallback: get settings directly from WordPress options
 				$settings = get_option( self::LEGACY_OPTION_NAME, $this->get_default_settings() );
 			}
-			
+
 			$this->performance->endTimer( $timer_name );
 			return $settings;
 
@@ -236,7 +236,7 @@ class SettingsService implements SettingsServiceInterface {
 		} else {
 			// Fallback: get from WordPress options
 			$all_settings = get_option( self::LEGACY_OPTION_NAME, array() );
-			$value = $all_settings[ $group ][ $key ] ?? $default;
+			$value        = $all_settings[ $group ][ $key ] ?? $default;
 		}
 
 		// Cache the result
@@ -259,7 +259,7 @@ class SettingsService implements SettingsServiceInterface {
 
 		try {
 			$config_key = "{$group}.{$key}";
-			$config = $this->getConfig();
+			$config     = $this->getConfig();
 
 			if ( $config !== null ) {
 				// Set in configuration service (includes validation)
@@ -269,9 +269,9 @@ class SettingsService implements SettingsServiceInterface {
 				}
 			} else {
 				// Fallback: update WordPress option directly
-				$all_settings = get_option( self::LEGACY_OPTION_NAME, array() );
+				$all_settings                   = get_option( self::LEGACY_OPTION_NAME, array() );
 				$all_settings[ $group ][ $key ] = $value;
-				$result = update_option( self::LEGACY_OPTION_NAME, $all_settings );
+				$result                         = update_option( self::LEGACY_OPTION_NAME, $all_settings );
 			}
 
 			if ( $result ) {
@@ -316,7 +316,7 @@ class SettingsService implements SettingsServiceInterface {
 	public function initialize_default_settings(): bool {
 		try {
 			$config = $this->getConfig();
-			
+
 			// Check if settings already exist
 			if ( $config !== null && $config->has( 'caching.page_cache_enabled' ) ) {
 				$this->logger->debug( 'Settings already initialized, skipping' );
@@ -332,7 +332,7 @@ class SettingsService implements SettingsServiceInterface {
 
 			// Set default configuration
 			$defaults = $this->get_default_settings();
-			
+
 			if ( $config !== null ) {
 				$result = $config->update( $defaults );
 			} else {
@@ -609,14 +609,14 @@ class SettingsService implements SettingsServiceInterface {
 	 */
 	private function get_default_settings(): array {
 		return array(
-			'caching'      => array(
+			'caching'           => array(
 				'page_cache_enabled'     => false,
 				'cache_ttl'              => 3600,
 				'cache_exclusions'       => array(),
 				'object_cache_enabled'   => false,
 				'fragment_cache_enabled' => false,
 			),
-			'minification' => array(
+			'minification'      => array(
 				'minify_css'          => true,
 				'minify_js'           => true,
 				'minify_html'         => false,
@@ -628,7 +628,7 @@ class SettingsService implements SettingsServiceInterface {
 				'exclude_css_files'   => array(),
 				'exclude_js_files'    => array(),
 			),
-			'images'       => array(
+			'images'            => array(
 				'convert_to_webp'     => true,
 				'convert_to_avif'     => false,
 				'lazy_loading'        => true,
@@ -637,7 +637,7 @@ class SettingsService implements SettingsServiceInterface {
 				'max_image_width'     => 1920,
 				'max_image_height'    => 1080,
 			),
-			'preloading'   => array(
+			'preloading'        => array(
 				'preload_fonts'        => array(),
 				'preload_critical_css' => false,
 				'dns_prefetch'         => array(),
@@ -652,13 +652,13 @@ class SettingsService implements SettingsServiceInterface {
 					'frontend'  => 60, // Default 60s
 				),
 			),
-			'database'     => array(
+			'database'          => array(
 				'cleanup_revisions' => false,
 				'cleanup_spam'      => false,
 				'cleanup_trash'     => false,
 				'optimize_tables'   => false,
 			),
-			'advanced'     => array(
+			'advanced'          => array(
 				'disable_emojis'       => false,
 				'disable_embeds'       => false,
 				'remove_query_strings' => false,
