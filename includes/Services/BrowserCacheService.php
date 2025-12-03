@@ -24,8 +24,8 @@ class BrowserCacheService {
 	private array $cache_rules;
 
 	public function __construct( SettingsService $settings, LoggingUtil $logger ) {
-		$this->settings = $settings;
-		$this->logger = $logger;
+		$this->settings    = $settings;
+		$this->logger      = $logger;
 		$this->cache_rules = $this->get_default_cache_rules();
 		$this->setup_hooks();
 	}
@@ -54,35 +54,35 @@ class BrowserCacheService {
 	 */
 	private function get_default_cache_rules(): array {
 		return array(
-			'images' => array(
+			'images'    => array(
 				'extensions' => array( 'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'ico', 'svg' ),
-				'max_age' => YEAR_IN_SECONDS,
-				'public' => true,
+				'max_age'    => YEAR_IN_SECONDS,
+				'public'     => true,
 			),
-			'fonts' => array(
+			'fonts'     => array(
 				'extensions' => array( 'woff', 'woff2', 'ttf', 'otf', 'eot' ),
-				'max_age' => YEAR_IN_SECONDS,
-				'public' => true,
+				'max_age'    => YEAR_IN_SECONDS,
+				'public'     => true,
 			),
-			'css' => array(
+			'css'       => array(
 				'extensions' => array( 'css' ),
-				'max_age' => MONTH_IN_SECONDS,
-				'public' => true,
+				'max_age'    => MONTH_IN_SECONDS,
+				'public'     => true,
 			),
-			'js' => array(
+			'js'        => array(
 				'extensions' => array( 'js' ),
-				'max_age' => MONTH_IN_SECONDS,
-				'public' => true,
+				'max_age'    => MONTH_IN_SECONDS,
+				'public'     => true,
 			),
-			'media' => array(
+			'media'     => array(
 				'extensions' => array( 'mp4', 'webm', 'ogg', 'mp3', 'wav' ),
-				'max_age' => YEAR_IN_SECONDS,
-				'public' => true,
+				'max_age'    => YEAR_IN_SECONDS,
+				'public'     => true,
 			),
 			'documents' => array(
 				'extensions' => array( 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx' ),
-				'max_age' => WEEK_IN_SECONDS,
-				'public' => true,
+				'max_age'    => WEEK_IN_SECONDS,
+				'public'     => true,
 			),
 		);
 	}
@@ -96,24 +96,27 @@ class BrowserCacheService {
 		}
 
 		$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-		$extension = pathinfo( $request_uri, PATHINFO_EXTENSION );
+		$extension   = pathinfo( $request_uri, PATHINFO_EXTENSION );
 
 		if ( empty( $extension ) ) {
 			return;
 		}
 
 		$rule = $this->get_cache_rule_for_extension( $extension );
-		
+
 		if ( ! $rule ) {
 			return;
 		}
 
 		$this->set_cache_headers( $rule['max_age'], $rule['public'] );
-		
-		$this->logger->debug( 'Browser cache headers added', array(
-			'extension' => $extension,
-			'max_age' => $rule['max_age'],
-		) );
+
+		$this->logger->debug(
+			'Browser cache headers added',
+			array(
+				'extension' => $extension,
+				'max_age'   => $rule['max_age'],
+			)
+		);
 	}
 
 	/**
@@ -137,11 +140,11 @@ class BrowserCacheService {
 		}
 
 		$visibility = $public ? 'public' : 'private';
-		
+
 		header( "Cache-Control: {$visibility}, max-age={$max_age}, immutable" );
 		header( 'Expires: ' . gmdate( 'D, d M Y H:i:s', time() + $max_age ) . ' GMT' );
 		header( 'Pragma: public' );
-		
+
 		// Add ETag for validation
 		$etag = md5( $max_age . $visibility );
 		header( "ETag: \"{$etag}\"" );
@@ -163,17 +166,17 @@ class BrowserCacheService {
 	 * Generate .htaccess rules
 	 */
 	private function generate_htaccess_rules(): string {
-		$rules = array();
+		$rules   = array();
 		$rules[] = '# BEGIN Performance Optimisation Browser Cache';
 		$rules[] = '<IfModule mod_expires.c>';
 		$rules[] = '  ExpiresActive On';
 		$rules[] = '  ExpiresDefault "access plus 1 month"';
 		$rules[] = '';
-		
+
 		foreach ( $this->cache_rules as $type => $rule ) {
 			$extensions = implode( '|', $rule['extensions'] );
-			$max_age = $rule['max_age'];
-			
+			$max_age    = $rule['max_age'];
+
 			$rules[] = "  # {$type}";
 			$rules[] = "  <FilesMatch \"\\.({$extensions})$\">";
 			$rules[] = "    ExpiresDefault \"access plus {$max_age} seconds\"";
@@ -181,7 +184,7 @@ class BrowserCacheService {
 			$rules[] = '  </FilesMatch>';
 			$rules[] = '';
 		}
-		
+
 		$rules[] = '</IfModule>';
 		$rules[] = '';
 		$rules[] = '<IfModule mod_headers.c>';
@@ -190,7 +193,7 @@ class BrowserCacheService {
 		$rules[] = '  FileETag None';
 		$rules[] = '</IfModule>';
 		$rules[] = '# END Performance Optimisation Browser Cache';
-		
+
 		return implode( "\n", $rules );
 	}
 
@@ -199,14 +202,14 @@ class BrowserCacheService {
 	 */
 	public function write_htaccess_rules(): bool {
 		$htaccess_file = ABSPATH . '.htaccess';
-		
+
 		if ( ! file_exists( $htaccess_file ) || ! is_writable( $htaccess_file ) ) {
 			$this->logger->warning( '.htaccess file not writable', array( 'file' => $htaccess_file ) );
 			return false;
 		}
 
 		$content = file_get_contents( $htaccess_file );
-		
+
 		// Remove old rules if they exist
 		$content = preg_replace(
 			'/# BEGIN Performance Optimisation Browser Cache.*?# END Performance Optimisation Browser Cache\n?/s',
@@ -216,7 +219,7 @@ class BrowserCacheService {
 
 		// Add new rules at the top
 		$new_content = $this->generate_htaccess_rules() . "\n\n" . $content;
-		
+
 		if ( file_put_contents( $htaccess_file, $new_content ) ) {
 			$this->logger->info( 'Browser cache rules written to .htaccess' );
 			return true;
@@ -230,13 +233,13 @@ class BrowserCacheService {
 	 */
 	public function remove_htaccess_rules(): bool {
 		$htaccess_file = ABSPATH . '.htaccess';
-		
+
 		if ( ! file_exists( $htaccess_file ) || ! is_writable( $htaccess_file ) ) {
 			return false;
 		}
 
 		$content = file_get_contents( $htaccess_file );
-		
+
 		$new_content = preg_replace(
 			'/# BEGIN Performance Optimisation Browser Cache.*?# END Performance Optimisation Browser Cache\n?/s',
 			'',
@@ -257,11 +260,11 @@ class BrowserCacheService {
 	 */
 	public function enable(): bool {
 		$result = $this->write_htaccess_rules();
-		
+
 		if ( $result ) {
 			$this->logger->info( 'Browser cache enabled' );
 		}
-		
+
 		return $result;
 	}
 
@@ -270,11 +273,11 @@ class BrowserCacheService {
 	 */
 	public function disable(): bool {
 		$result = $this->remove_htaccess_rules();
-		
+
 		if ( $result ) {
 			$this->logger->info( 'Browser cache disabled' );
 		}
-		
+
 		return $result;
 	}
 
@@ -283,8 +286,8 @@ class BrowserCacheService {
 	 */
 	public function get_stats(): array {
 		return array(
-			'enabled' => $this->is_enabled(),
-			'rules_count' => count( $this->cache_rules ),
+			'enabled'           => $this->is_enabled(),
+			'rules_count'       => count( $this->cache_rules ),
 			'htaccess_writable' => is_writable( ABSPATH . '.htaccess' ),
 		);
 	}

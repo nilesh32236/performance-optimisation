@@ -30,6 +30,8 @@ class OptimizationServiceProvider extends ServiceProvider {
 		'PerformanceOptimisation\\Services\\PageCacheService',
 		'PerformanceOptimisation\\Services\\BrowserCacheService',
 		'PerformanceOptimisation\\Services\\ImageService',
+		'PerformanceOptimisation\\Services\\ImagePreloader',
+		'PerformanceOptimisation\\Services\\ImageLazyLoader',
 		'PerformanceOptimisation\\Services\\LazyLoadService',
 		'PerformanceOptimisation\\Services\\NextGenImageService',
 		'PerformanceOptimisation\\Services\\OptimizationService',
@@ -54,7 +56,7 @@ class OptimizationServiceProvider extends ServiceProvider {
 				);
 			}
 		);
-		
+
 		// Register CacheService with PageCacheService dependency
 		$container->singleton(
 			'PerformanceOptimisation\\Services\\CacheService',
@@ -76,14 +78,39 @@ class OptimizationServiceProvider extends ServiceProvider {
 			}
 		);
 
+		// Register ImagePreloader
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\ImagePreloader',
+			function ( ServiceContainerInterface $c ) {
+				$settings = get_option( 'wppo_settings', array() );
+				return new \PerformanceOptimisation\Services\ImagePreloader( $settings );
+			}
+		);
+
+		// Register ImageLazyLoader
+		$container->singleton(
+			'PerformanceOptimisation\\Services\\ImageLazyLoader',
+			function ( ServiceContainerInterface $c ) {
+				return new \PerformanceOptimisation\Services\ImageLazyLoader();
+			}
+		);
+
 		// Register ImageService with factory to handle dependencies
 		$container->singleton(
 			'PerformanceOptimisation\\Services\\ImageService',
 			function ( ServiceContainerInterface $c ) {
 				$imageProcessor  = $c->get( 'PerformanceOptimisation\\Optimizers\\ImageProcessor' );
 				$conversionQueue = new \PerformanceOptimisation\Utils\ConversionQueue();
+				$imagePreloader  = $c->get( 'PerformanceOptimisation\\Services\\ImagePreloader' );
+				$imageLazyLoader = $c->get( 'PerformanceOptimisation\\Services\\ImageLazyLoader' );
 				$settings        = get_option( 'wppo_settings', array() );
-				return new \PerformanceOptimisation\Services\ImageService( $imageProcessor, $conversionQueue, $settings );
+				return new \PerformanceOptimisation\Services\ImageService(
+					$imageProcessor,
+					$conversionQueue,
+					$imagePreloader,
+					$imageLazyLoader,
+					$settings
+				);
 			}
 		);
 
@@ -163,6 +190,8 @@ class OptimizationServiceProvider extends ServiceProvider {
 		$container->alias( 'page_cache_service', 'PerformanceOptimisation\\Services\\PageCacheService' );
 		$container->alias( 'browser_cache_service', 'PerformanceOptimisation\\Services\\BrowserCacheService' );
 		$container->alias( 'image_service', 'PerformanceOptimisation\\Services\\ImageService' );
+		$container->alias( 'image_preloader', 'PerformanceOptimisation\\Services\\ImagePreloader' );
+		$container->alias( 'image_lazy_loader', 'PerformanceOptimisation\\Services\\ImageLazyLoader' );
 		$container->alias( 'image_processor', 'PerformanceOptimisation\\Optimizers\\ImageProcessor' );
 		$container->alias( 'lazy_load_service', 'PerformanceOptimisation\\Services\\LazyLoadService' );
 		$container->alias( 'next_gen_image_service', 'PerformanceOptimisation\\Services\\NextGenImageService' );

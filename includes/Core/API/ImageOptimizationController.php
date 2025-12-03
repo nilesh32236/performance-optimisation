@@ -55,7 +55,7 @@ class ImageOptimizationController extends BaseController {
 			}
 		} catch ( \Exception $e ) {
 			// Log error but don't fail completely
-			error_log( 'WPPO: ImageOptimizationController init failed: ' . $e->getMessage() );
+			LoggingUtil::error( 'WPPO: ImageOptimizationController init failed: ' . $e->getMessage() );
 			$this->image_processor = null;
 		}
 	}

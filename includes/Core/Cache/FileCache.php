@@ -198,8 +198,8 @@ class FileCache implements CacheInterface {
 			$failed_deletions = 0;
 			foreach ( $files as $file ) {
 				if ( ! unlink( $file ) ) {
-					$failed_deletions++;
-					error_log( "Failed to delete cache file: {$file}" );
+					++$failed_deletions;
+					\PerformanceOptimisation\Utils\LoggingUtil::error( "Failed to delete cache file: {$file}" );
 				}
 			}
 
@@ -207,7 +207,7 @@ class FileCache implements CacheInterface {
 			return $failed_deletions < ( count( $files ) / 2 );
 
 		} catch ( \Exception $e ) {
-			error_log( 'Cache flush failed: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'Cache flush failed: ' . $e->getMessage() );
 			return false;
 		}
 	}
@@ -441,7 +441,7 @@ HTACCESS;
 			$data = unserialize( $content, array( 'allowed_classes' => false ) );
 		} catch ( \Exception $e ) {
 			// Log and remove corrupted file
-			error_log( 'Corrupted cache file: ' . $file_path );
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'Corrupted cache file: ' . $file_path );
 			unlink( $file_path );
 			return false;
 		}

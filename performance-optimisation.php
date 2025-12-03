@@ -180,7 +180,7 @@ if ( ! function_exists( 'wppo_initialize_plugin' ) ) {
 		} catch ( Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				// Log error for debugging purposes.
-				error_log( 'Performance Optimisation initialization error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'Performance Optimisation initialization error: ' . $e->getMessage() );
 			}
 
 			// Show admin notice for initialization failure.
@@ -254,7 +254,7 @@ if ( ! function_exists( 'wppo_deactivate_plugin' ) ) {
 		$bootstrap_file = WPPO_PLUGIN_PATH . 'includes/Core/Bootstrap/Plugin.php';
 
 		if ( ! file_exists( $bootstrap_file ) ) {
-			error_log( 'Performance Optimisation: Bootstrap file not found during deactivation' );
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'Performance Optimisation: Bootstrap file not found during deactivation' );
 			return;
 		}
 
@@ -263,7 +263,7 @@ if ( ! function_exists( 'wppo_deactivate_plugin' ) ) {
 			$plugin = Plugin::getInstance( WPPO_PLUGIN_FILE, WPPO_VERSION );
 			$plugin->deactivate();
 		} catch ( Exception $e ) {
-			error_log( 'Performance Optimisation deactivation error: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'Performance Optimisation deactivation error: ' . $e->getMessage() );
 		}
 	}
 } // End wppo_deactivate_plugin function_exists check
@@ -294,78 +294,81 @@ add_filter( 'plugin_action_links_' . plugin_basename( WPPO_PLUGIN_FILE ), 'wppo_
 
 // Temporary test page for drop-in management
 if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-	add_action( 'admin_menu', function() {
-		add_submenu_page(
-			null,
-			'Test Drop-in',
-			'Test Drop-in',
-			'manage_options',
-			'wppo-test-dropin',
-			function() {
-				if ( ! current_user_can( 'manage_options' ) ) {
-					wp_die( 'Unauthorized' );
-				}
-				
-				$dropin_path = WP_CONTENT_DIR . '/advanced-cache.php';
-				$dropin_exists = file_exists( $dropin_path );
-				
-				// Handle actions
-				if ( isset( $_GET['action'] ) && check_admin_referer( 'wppo-test-dropin' ) ) {
-					try {
-						$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
-						$service = $container->get( 'PageCacheService' );
-						
-						switch ( $_GET['action'] ) {
-							case 'create':
-								$result = $service->create_advanced_cache_dropin();
-								echo '<div class="notice notice-' . ( $result ? 'success' : 'error' ) . '"><p>' . ( $result ? 'Drop-in created!' : 'Failed to create drop-in.' ) . '</p></div>';
-								break;
-							case 'remove':
-								$result = $service->remove_advanced_cache_dropin();
-								echo '<div class="notice notice-' . ( $result ? 'success' : 'error' ) . '"><p>' . ( $result ? 'Drop-in removed!' : 'Failed to remove drop-in.' ) . '</p></div>';
-								break;
-							case 'enable':
-								$result = $service->enable_cache();
-								echo '<div class="notice notice-' . ( $result ? 'success' : 'error' ) . '"><p>' . ( $result ? 'Cache enabled!' : 'Failed to enable cache.' ) . '</p></div>';
-								break;
-							case 'disable':
-								$result = $service->disable_cache();
-								echo '<div class="notice notice-' . ( $result ? 'success' : 'error' ) . '"><p>' . ( $result ? 'Cache disabled!' : 'Failed to disable cache.' ) . '</p></div>';
-								break;
-						}
-						$dropin_exists = file_exists( $dropin_path );
-					} catch ( Exception $e ) {
-						echo '<div class="notice notice-error"><p>Error: ' . esc_html( $e->getMessage() ) . '</p></div>';
+	add_action(
+		'admin_menu',
+		function () {
+			add_submenu_page(
+				null,
+				'Test Drop-in',
+				'Test Drop-in',
+				'manage_options',
+				'wppo-test-dropin',
+				function () {
+					if ( ! current_user_can( 'manage_options' ) ) {
+						wp_die( 'Unauthorized' );
 					}
-				}
-				
-				$nonce = wp_create_nonce( 'wppo-test-dropin' );
-				?>
+
+					$dropin_path   = WP_CONTENT_DIR . '/advanced-cache.php';
+					$dropin_exists = file_exists( $dropin_path );
+
+					// Handle actions
+					if ( isset( $_GET['action'] ) && check_admin_referer( 'wppo-test-dropin' ) ) {
+						try {
+							$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
+							$service   = $container->get( 'PageCacheService' );
+
+							switch ( $_GET['action'] ) {
+								case 'create':
+									$result = $service->create_advanced_cache_dropin();
+									echo '<div class="notice notice-' . ( $result ? 'success' : 'error' ) . '"><p>' . ( $result ? 'Drop-in created!' : 'Failed to create drop-in.' ) . '</p></div>';
+									break;
+								case 'remove':
+									$result = $service->remove_advanced_cache_dropin();
+									echo '<div class="notice notice-' . ( $result ? 'success' : 'error' ) . '"><p>' . ( $result ? 'Drop-in removed!' : 'Failed to remove drop-in.' ) . '</p></div>';
+									break;
+								case 'enable':
+									$result = $service->enable_cache();
+									echo '<div class="notice notice-' . ( $result ? 'success' : 'error' ) . '"><p>' . ( $result ? 'Cache enabled!' : 'Failed to enable cache.' ) . '</p></div>';
+									break;
+								case 'disable':
+									$result = $service->disable_cache();
+									echo '<div class="notice notice-' . ( $result ? 'success' : 'error' ) . '"><p>' . ( $result ? 'Cache disabled!' : 'Failed to disable cache.' ) . '</p></div>';
+									break;
+							}
+							$dropin_exists = file_exists( $dropin_path );
+						} catch ( Exception $e ) {
+							echo '<div class="notice notice-error"><p>Error: ' . esc_html( $e->getMessage() ) . '</p></div>';
+						}
+					}
+
+					$nonce = wp_create_nonce( 'wppo-test-dropin' );
+					?>
 				<div class="wrap">
 					<h1>Advanced Cache Drop-in Test</h1>
 					<h2>Status</h2>
-					<p>Drop-in exists: <strong><?php echo $dropin_exists ? 'YES' : 'NO'; ?></strong></p>
-					<?php if ( $dropin_exists ) : ?>
-						<p>Size: <?php echo size_format( filesize( $dropin_path ) ); ?></p>
-						<p>Modified: <?php echo date( 'Y-m-d H:i:s', filemtime( $dropin_path ) ); ?></p>
-					<?php endif; ?>
-					<p>WP_CACHE: <strong><?php echo defined( 'WP_CACHE' ) && WP_CACHE ? 'ENABLED' : 'DISABLED'; ?></strong></p>
+						<p>Drop-in exists: <strong><?php echo $dropin_exists ? 'YES' : 'NO'; ?></strong></p>
+						<?php if ( $dropin_exists ) : ?>
+							<p>Size: <?php echo size_format( filesize( $dropin_path ) ); ?></p>
+							<p>Modified: <?php echo date( 'Y-m-d H:i:s', filemtime( $dropin_path ) ); ?></p>
+						<?php endif; ?>
+						<p>WP_CACHE: <strong><?php echo defined( 'WP_CACHE' ) && WP_CACHE ? 'ENABLED' : 'DISABLED'; ?></strong></p>
 					
 					<h2>Actions</h2>
 					<p>
-						<a href="?page=wppo-test-dropin&action=create&_wpnonce=<?php echo $nonce; ?>" class="button">Create Drop-in</a>
-						<a href="?page=wppo-test-dropin&action=remove&_wpnonce=<?php echo $nonce; ?>" class="button">Remove Drop-in</a>
-						<a href="?page=wppo-test-dropin&action=enable&_wpnonce=<?php echo $nonce; ?>" class="button button-primary">Enable Cache</a>
-						<a href="?page=wppo-test-dropin&action=disable&_wpnonce=<?php echo $nonce; ?>" class="button">Disable Cache</a>
+							<a href="?page=wppo-test-dropin&action=create&_wpnonce=<?php echo $nonce; ?>" class="button">Create Drop-in</a>
+							<a href="?page=wppo-test-dropin&action=remove&_wpnonce=<?php echo $nonce; ?>" class="button">Remove Drop-in</a>
+							<a href="?page=wppo-test-dropin&action=enable&_wpnonce=<?php echo $nonce; ?>" class="button button-primary">Enable Cache</a>
+							<a href="?page=wppo-test-dropin&action=disable&_wpnonce=<?php echo $nonce; ?>" class="button">Disable Cache</a>
 					</p>
 					
-					<?php if ( $dropin_exists ) : ?>
+						<?php if ( $dropin_exists ) : ?>
 						<h2>Content Preview</h2>
-						<textarea readonly style="width:100%;height:400px;font-family:monospace;font-size:12px;"><?php echo esc_textarea( file_get_contents( $dropin_path ) ); ?></textarea>
-					<?php endif; ?>
+							<textarea readonly style="width:100%;height:400px;font-family:monospace;font-size:12px;"><?php echo esc_textarea( file_get_contents( $dropin_path ) ); ?></textarea>
+						<?php endif; ?>
 				</div>
-				<?php
-			}
-		);
-	});
+					<?php
+				}
+			);
+		}
+	);
 }

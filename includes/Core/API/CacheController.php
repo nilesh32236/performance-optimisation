@@ -26,16 +26,16 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class CacheController extends WP_REST_Controller {
 
-	private ?PageCacheService $page_cache = null;
+	private ?PageCacheService $page_cache       = null;
 	private ?BrowserCacheService $browser_cache = null;
-	private ?LoggingUtil $logger = null;
+	private ?LoggingUtil $logger                = null;
 
 	public function __construct( ?PageCacheService $page_cache = null, ?BrowserCacheService $browser_cache = null, ?LoggingUtil $logger = null ) {
-		$this->namespace = 'performance-optimisation/v1';
-		$this->rest_base = 'cache';
-		$this->page_cache = $page_cache;
+		$this->namespace     = 'performance-optimisation/v1';
+		$this->rest_base     = 'cache';
+		$this->page_cache    = $page_cache;
 		$this->browser_cache = $browser_cache;
-		$this->logger = $logger ?? new LoggingUtil();
+		$this->logger        = $logger ?? new LoggingUtil();
 	}
 
 	public function register_routes(): void {
@@ -113,27 +113,27 @@ class CacheController extends WP_REST_Controller {
 	public function get_cache_stats( WP_REST_Request $request ): WP_REST_Response {
 		$start_time = microtime( true );
 		$this->logger->debug( 'CacheController: get_cache_stats called' );
-		
+
 		if ( ! $this->page_cache ) {
 			$this->logger->debug( 'CacheController: PageCacheService not available' );
 			return new WP_REST_Response(
 				array(
 					'success' => true,
 					'data'    => array(
-						'page_cache' => array(
+						'page_cache'    => array(
 							'enabled'  => false,
 							'files'    => 0,
 							'size'     => '0 B',
 							'hit_rate' => 0,
 						),
-						'object_cache' => array(
+						'object_cache'  => array(
 							'enabled'  => false,
 							'backend'  => 'None',
 							'hit_rate' => 0,
 						),
 						'browser_cache' => array(
-							'enabled' => false,
-							'rules_count' => 0,
+							'enabled'           => false,
+							'rules_count'       => 0,
 							'htaccess_writable' => false,
 						),
 					),
@@ -145,17 +145,20 @@ class CacheController extends WP_REST_Controller {
 		try {
 			$this->logger->debug( 'CacheController: Calling PageCacheService->get_cache_stats()' );
 			$stats = $this->page_cache->get_cache_stats();
-			
+
 			$elapsed = microtime( true ) - $start_time;
-			$this->logger->debug( 'CacheController: Stats retrieved', array( 
-				'elapsed_ms' => round( $elapsed * 1000, 2 ),
-				'files' => $stats['files']
-			) );
+			$this->logger->debug(
+				'CacheController: Stats retrieved',
+				array(
+					'elapsed_ms' => round( $elapsed * 1000, 2 ),
+					'files'      => $stats['files'],
+				)
+			);
 
 			// Get browser cache stats
 			$browser_stats = $this->browser_cache ? $this->browser_cache->get_stats() : array(
-				'enabled' => false,
-				'rules_count' => 0,
+				'enabled'           => false,
+				'rules_count'       => 0,
 				'htaccess_writable' => false,
 			);
 
@@ -163,18 +166,18 @@ class CacheController extends WP_REST_Controller {
 				array(
 					'success' => true,
 					'data'    => array(
-						'page_cache' => array(
+						'page_cache'    => array(
 							'enabled'  => $stats['enabled'],
 							'files'    => $stats['files'],
 							'size'     => $stats['size_formatted'],
 							'hit_rate' => $stats['hit_rate'],
 						),
 						'browser_cache' => array(
-							'enabled'  => $browser_stats['enabled'],
-							'rules_count' => $browser_stats['rules_count'],
+							'enabled'           => $browser_stats['enabled'],
+							'rules_count'       => $browser_stats['rules_count'],
 							'htaccess_writable' => $browser_stats['htaccess_writable'],
 						),
-						'object_cache' => array(
+						'object_cache'  => array(
 							'enabled'  => false,
 							'backend'  => 'None',
 							'hit_rate' => 0,
@@ -230,14 +233,14 @@ class CacheController extends WP_REST_Controller {
 							400
 						);
 					}
-					$result = $this->page_cache->clear_url_cache( $target_url );
+					$result  = $this->page_cache->clear_url_cache( $target_url );
 					$message = 'URL cache cleared successfully';
 					break;
 
 				case 'page':
 				case 'all':
 				default:
-					$result = $this->page_cache->clear_all_cache();
+					$result  = $this->page_cache->clear_all_cache();
 					$message = 'All cache cleared successfully';
 					break;
 			}

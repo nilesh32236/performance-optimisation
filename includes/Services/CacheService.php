@@ -30,7 +30,7 @@ class CacheService implements CacheServiceInterface {
 	private ?PageCacheService $page_cache_service = null;
 
 	public function __construct( ?PageCacheService $page_cache_service = null ) {
-		$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR_RELATIVE );
+		$this->cache_root_dir     = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR_RELATIVE );
 		$this->page_cache_service = $page_cache_service;
 	}
 
@@ -42,12 +42,12 @@ class CacheService implements CacheServiceInterface {
 		if ( ( $type === 'page' || $type === 'all' ) && $this->page_cache_service ) {
 			$this->page_cache_service->clear_all_cache();
 		}
-		
+
 		// Use CacheUtil for other cache types
 		if ( $type !== 'page' ) {
 			return CacheUtil::clearCache( $type );
 		}
-		
+
 		return true;
 	}
 
@@ -76,9 +76,9 @@ class CacheService implements CacheServiceInterface {
 			);
 			return;
 		}
-		
+
 		// Fallback to CacheUtil
-		$results = CacheUtil::warmCache( $urls );
+		$results    = CacheUtil::warmCache( $urls );
 		$successful = array_filter(
 			$results,
 			function ( $result ) {
@@ -133,7 +133,7 @@ class CacheService implements CacheServiceInterface {
 		}
 
 		$urls_to_invalidate = $this->getRelatedUrls( $post );
-		
+
 		// Use PageCacheService if available
 		if ( $this->page_cache_service ) {
 			foreach ( array_unique( $urls_to_invalidate ) as $url ) {
@@ -249,18 +249,18 @@ class CacheService implements CacheServiceInterface {
 	 */
 	public function getCacheStats(): array {
 		$stats = CacheUtil::getCacheStats();
-		
+
 		// Merge PageCacheService stats if available
 		if ( $this->page_cache_service ) {
-			$page_stats = $this->page_cache_service->get_cache_stats();
+			$page_stats             = $this->page_cache_service->get_cache_stats();
 			$stats['types']['page'] = array(
-				'enabled' => $page_stats['enabled'] ?? false,
-				'files' => $page_stats['files'] ?? 0,
-				'size' => $page_stats['size'] ?? '0 B',
+				'enabled'  => $page_stats['enabled'] ?? false,
+				'files'    => $page_stats['files'] ?? 0,
+				'size'     => $page_stats['size'] ?? '0 B',
 				'hit_rate' => $page_stats['hit_rate'] ?? 0,
 			);
 		}
-		
+
 		return $stats;
 	}
 

@@ -127,7 +127,7 @@ class Plugin implements PluginInterface {
 		$this->_initialized = true;
 
 		$elapsed = microtime( true ) - $start_time;
-		error_log( sprintf( 'WPPO: Plugin initialized in %.2f ms', $elapsed * 1000 ) );
+		LoggingUtil::debug( sprintf( 'WPPO: Plugin initialized in %.2f ms', $elapsed * 1000 ) );
 
 		/**
 		 * Fires after plugin initialization.
@@ -1012,8 +1012,7 @@ class Plugin implements PluginInterface {
 
 		if ( ! $wp_filesystem ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Activation: Filesystem could not be initialized for wp-config.php modification.' );
+				LoggingUtil::error( 'WPPO Activation: Filesystem could not be initialized for wp-config.php modification.' );
 			}
 			return;
 		}
@@ -1021,8 +1020,7 @@ class Plugin implements PluginInterface {
 		$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 		if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Activation: wp-config.php is not writable at ' . esc_html( $wp_config_path ) );
+				LoggingUtil::error( 'WPPO Activation: wp-config.php is not writable at ' . esc_html( $wp_config_path ) );
 			}
 			return;
 		}
@@ -1030,8 +1028,7 @@ class Plugin implements PluginInterface {
 		$config_content = $wp_filesystem->get_contents( $wp_config_path );
 		if ( false === $config_content ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Activation: Could not read wp-config.php content.' );
+				LoggingUtil::error( 'WPPO Activation: Could not read wp-config.php content.' );
 			}
 			return;
 		}
@@ -1160,8 +1157,7 @@ class Plugin implements PluginInterface {
 
 		if ( ! $wp_filesystem ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Deactivation: Filesystem could not be initialized for wp-config.php modification.' );
+				LoggingUtil::error( 'WPPO Deactivation: Filesystem could not be initialized for wp-config.php modification.' );
 			}
 			return;
 		}
@@ -1170,8 +1166,7 @@ class Plugin implements PluginInterface {
 
 		if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Deactivation: wp-config.php is not writable at ' . esc_html( $wp_config_path ) );
+				LoggingUtil::error( 'WPPO Deactivation: wp-config.php is not writable at ' . esc_html( $wp_config_path ) );
 			}
 			return;
 		}
@@ -1179,8 +1174,7 @@ class Plugin implements PluginInterface {
 		$config_content = $wp_filesystem->get_contents( $wp_config_path );
 		if ( false === $config_content ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Deactivation: Could not read wp-config.php content.' );
+				LoggingUtil::error( 'WPPO Deactivation: Could not read wp-config.php content.' );
 			}
 			return;
 		}
