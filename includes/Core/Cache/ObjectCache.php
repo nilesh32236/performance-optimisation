@@ -9,14 +9,15 @@
 namespace PerformanceOptimisation\Core\Cache;
 
 use PerformanceOptimisation\Interfaces\CacheInterface;
-use PerformanceOptimisation\Interfaces\ConfigInterface;
+use PerformanceOptimisation\Core\Config\ConfigInterface;
 
 /**
  * WordPress object cache implementation
  *
  * @since 1.1.0
  */
-class ObjectCache implements CacheInterface {
+class ObjectCache implements CacheInterface
+{
 
 	/**
 	 * Cache group
@@ -41,9 +42,9 @@ class ObjectCache implements CacheInterface {
 	 * @var array
 	 */
 	private array $stats = array(
-		'hits'    => 0,
-		'misses'  => 0,
-		'sets'    => 0,
+		'hits' => 0,
+		'misses' => 0,
+		'sets' => 0,
 		'deletes' => 0,
 	);
 
@@ -53,7 +54,8 @@ class ObjectCache implements CacheInterface {
 	 * @since 1.1.0
 	 * @param ConfigInterface $config Configuration manager
 	 */
-	public function __construct( ConfigInterface $config ) {
+	public function __construct(ConfigInterface $config)
+	{
 		$this->config = $config;
 	}
 
@@ -65,10 +67,11 @@ class ObjectCache implements CacheInterface {
 	 * @param mixed  $default Default value if key doesn't exist
 	 * @return mixed Cached value or default
 	 */
-	public function get( string $key, $default = null ) {
-		$value = wp_cache_get( $key, $this->cache_group );
+	public function get(string $key, $default = null)
+	{
+		$value = wp_cache_get($key, $this->cache_group);
 
-		if ( false === $value ) {
+		if (false === $value) {
 			++$this->stats['misses'];
 			return $default;
 		}
@@ -86,10 +89,11 @@ class ObjectCache implements CacheInterface {
 	 * @param int    $expiration Expiration time in seconds (0 = no expiration)
 	 * @return bool True on success, false on failure
 	 */
-	public function set( string $key, $value, int $expiration = 0 ): bool {
-		$result = wp_cache_set( $key, $value, $this->cache_group, $expiration );
+	public function set(string $key, $value, int $expiration = 0): bool
+	{
+		$result = wp_cache_set($key, $value, $this->cache_group, $expiration);
 
-		if ( $result ) {
+		if ($result) {
 			++$this->stats['sets'];
 		}
 
@@ -103,10 +107,11 @@ class ObjectCache implements CacheInterface {
 	 * @param string $key Cache key
 	 * @return bool True on success, false on failure
 	 */
-	public function delete( string $key ): bool {
-		$result = wp_cache_delete( $key, $this->cache_group );
+	public function delete(string $key): bool
+	{
+		$result = wp_cache_delete($key, $this->cache_group);
 
-		if ( $result ) {
+		if ($result) {
 			++$this->stats['deletes'];
 		}
 
@@ -120,8 +125,9 @@ class ObjectCache implements CacheInterface {
 	 * @param string $key Cache key
 	 * @return bool True if key exists, false otherwise
 	 */
-	public function has( string $key ): bool {
-		return false !== wp_cache_get( $key, $this->cache_group );
+	public function has(string $key): bool
+	{
+		return false !== wp_cache_get($key, $this->cache_group);
 	}
 
 	/**
@@ -130,7 +136,8 @@ class ObjectCache implements CacheInterface {
 	 * @since 1.1.0
 	 * @return bool True on success, false on failure
 	 */
-	public function flush(): bool {
+	public function flush(): bool
+	{
 		return wp_cache_flush();
 	}
 
@@ -141,11 +148,12 @@ class ObjectCache implements CacheInterface {
 	 * @param array $keys Array of cache keys
 	 * @return array Array of key => value pairs
 	 */
-	public function get_multiple( array $keys ): array {
+	public function get_multiple(array $keys): array
+	{
 		$results = array();
 
-		foreach ( $keys as $key ) {
-			$results[ $key ] = $this->get( $key );
+		foreach ($keys as $key) {
+			$results[$key] = $this->get($key);
 		}
 
 		return $results;
@@ -159,11 +167,12 @@ class ObjectCache implements CacheInterface {
 	 * @param int   $expiration Expiration time in seconds (0 = no expiration)
 	 * @return bool True on success, false on failure
 	 */
-	public function set_multiple( array $data, int $expiration = 0 ): bool {
+	public function set_multiple(array $data, int $expiration = 0): bool
+	{
 		$success = true;
 
-		foreach ( $data as $key => $value ) {
-			if ( ! $this->set( $key, $value, $expiration ) ) {
+		foreach ($data as $key => $value) {
+			if (!$this->set($key, $value, $expiration)) {
 				$success = false;
 			}
 		}
@@ -178,11 +187,12 @@ class ObjectCache implements CacheInterface {
 	 * @param array $keys Array of cache keys
 	 * @return bool True on success, false on failure
 	 */
-	public function delete_multiple( array $keys ): bool {
+	public function delete_multiple(array $keys): bool
+	{
 		$success = true;
 
-		foreach ( $keys as $key ) {
-			if ( ! $this->delete( $key ) ) {
+		foreach ($keys as $key) {
+			if (!$this->delete($key)) {
 				$success = false;
 			}
 		}
@@ -198,8 +208,9 @@ class ObjectCache implements CacheInterface {
 	 * @param int    $offset Increment offset
 	 * @return int|false New value on success, false on failure
 	 */
-	public function increment( string $key, int $offset = 1 ) {
-		return wp_cache_incr( $key, $offset, $this->cache_group );
+	public function increment(string $key, int $offset = 1)
+	{
+		return wp_cache_incr($key, $offset, $this->cache_group);
 	}
 
 	/**
@@ -210,8 +221,9 @@ class ObjectCache implements CacheInterface {
 	 * @param int    $offset Decrement offset
 	 * @return int|false New value on success, false on failure
 	 */
-	public function decrement( string $key, int $offset = 1 ) {
-		return wp_cache_decr( $key, $offset, $this->cache_group );
+	public function decrement(string $key, int $offset = 1)
+	{
+		return wp_cache_decr($key, $offset, $this->cache_group);
 	}
 
 	/**
@@ -220,12 +232,13 @@ class ObjectCache implements CacheInterface {
 	 * @since 1.1.0
 	 * @return array Cache statistics
 	 */
-	public function get_stats(): array {
+	public function get_stats(): array
+	{
 		$wp_object_cache_stats = array();
 
 		// Try to get WordPress object cache stats if available
 		global $wp_object_cache;
-		if ( isset( $wp_object_cache ) && method_exists( $wp_object_cache, 'stats' ) ) {
+		if (isset($wp_object_cache) && method_exists($wp_object_cache, 'stats')) {
 			$wp_object_cache_stats = $wp_object_cache->stats();
 		}
 
@@ -233,7 +246,7 @@ class ObjectCache implements CacheInterface {
 			$this->stats,
 			array(
 				'wp_object_cache' => $wp_object_cache_stats,
-				'cache_group'     => $this->cache_group,
+				'cache_group' => $this->cache_group,
 			)
 		);
 	}

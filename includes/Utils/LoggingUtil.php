@@ -8,7 +8,7 @@
 
 namespace PerformanceOptimisation\Utils;
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
 	exit;
 }
 
@@ -17,11 +17,12 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * @package PerformanceOptimisation\Utils
  */
-class LoggingUtil {
+class LoggingUtil
+{
 
-	private const LOG_LEVELS = array( 'debug', 'info', 'warning', 'error', 'critical' );
+	private const LOG_LEVELS = array('debug', 'info', 'warning', 'error', 'critical');
 	private const LOG_OPTION = 'wppo_activity_logs';
-	private const MAX_LOGS   = 1000;
+	private const MAX_LOGS = 1000;
 
 	/**
 	 * Log a message with context.
@@ -30,26 +31,31 @@ class LoggingUtil {
 	 * @param string $level Log level.
 	 * @param array  $context Additional context.
 	 */
-	public static function log( string $message, string $level = 'info', array $context = array() ): void {
-		$level = strtolower( $level );
-		if ( ! in_array( $level, self::LOG_LEVELS, true ) ) {
+	public static function log(string $message, string $level = 'info', array $context = array()): void
+	{
+		$level = strtolower($level);
+		if (!in_array($level, self::LOG_LEVELS, true)) {
 			$level = 'info';
 		}
 
 		$log_entry = array(
-			'id'        => wp_generate_uuid4(),
-			'timestamp' => current_time( 'mysql' ),
-			'level'     => $level,
-			'message'   => $message,
-			'context'   => $context,
+			'id' => wp_generate_uuid4(),
+			'timestamp' => current_time('mysql'),
+			'level' => $level,
+			'message' => $message,
+			'context' => $context,
 		);
 
 		// Store in database
-		self::storeLogs( $log_entry );
+		self::storeLogs($log_entry);
 
 		// Also log to error_log if debug is enabled
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( sprintf( 'WPPO [%s]: %s', strtoupper( $level ), $message ) );
+		if (defined('WP_DEBUG') && WP_DEBUG) {
+			$log_message = sprintf('WPPO [%s]: %s', strtoupper($level), $message);
+			if (!empty($context)) {
+				$log_message .= ' ' . wp_json_encode($context);
+			}
+			error_log($log_message);
 		}
 	}
 
@@ -59,8 +65,9 @@ class LoggingUtil {
 	 * @param string $message Debug message.
 	 * @param array  $context Additional context.
 	 */
-	public static function debug( string $message, array $context = array() ): void {
-		self::log( $message, 'debug', $context );
+	public static function debug(string $message, array $context = array()): void
+	{
+		self::log($message, 'debug', $context);
 	}
 
 	/**
@@ -69,8 +76,9 @@ class LoggingUtil {
 	 * @param string $message Info message.
 	 * @param array  $context Additional context.
 	 */
-	public static function info( string $message, array $context = array() ): void {
-		self::log( $message, 'info', $context );
+	public static function info(string $message, array $context = array()): void
+	{
+		self::log($message, 'info', $context);
 	}
 
 	/**
@@ -79,8 +87,9 @@ class LoggingUtil {
 	 * @param string $message Warning message.
 	 * @param array  $context Additional context.
 	 */
-	public static function warning( string $message, array $context = array() ): void {
-		self::log( $message, 'warning', $context );
+	public static function warning(string $message, array $context = array()): void
+	{
+		self::log($message, 'warning', $context);
 	}
 
 	/**
@@ -89,8 +98,9 @@ class LoggingUtil {
 	 * @param string $message Error message.
 	 * @param array  $context Additional context.
 	 */
-	public static function error( string $message, array $context = array() ): void {
-		self::log( $message, 'error', $context );
+	public static function error(string $message, array $context = array()): void
+	{
+		self::log($message, 'error', $context);
 	}
 
 	/**
@@ -99,8 +109,9 @@ class LoggingUtil {
 	 * @param string $message Critical message.
 	 * @param array  $context Additional context.
 	 */
-	public static function critical( string $message, array $context = array() ): void {
-		self::log( $message, 'critical', $context );
+	public static function critical(string $message, array $context = array()): void
+	{
+		self::log($message, 'critical', $context);
 	}
 
 	/**
@@ -110,18 +121,19 @@ class LoggingUtil {
 	 * @param int $offset Offset for pagination.
 	 * @return array
 	 */
-	public static function getRecentLogs( int $limit = 100, int $offset = 0 ): array {
-		$logs = get_option( self::LOG_OPTION, array() );
+	public static function getRecentLogs(int $limit = 100, int $offset = 0): array
+	{
+		$logs = get_option(self::LOG_OPTION, array());
 
 		// Sort by timestamp (newest first)
 		usort(
 			$logs,
-			function ( $a, $b ) {
-				return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
+			function ($a, $b) {
+				return strtotime($b['timestamp']) - strtotime($a['timestamp']);
 			}
 		);
 
-		return array_slice( $logs, $offset, $limit );
+		return array_slice($logs, $offset, $limit);
 	}
 
 	/**
@@ -129,8 +141,9 @@ class LoggingUtil {
 	 *
 	 * @return bool
 	 */
-	public static function clearLogs(): bool {
-		return delete_option( self::LOG_OPTION );
+	public static function clearLogs(): bool
+	{
+		return delete_option(self::LOG_OPTION);
 	}
 
 	/**
@@ -142,19 +155,20 @@ class LoggingUtil {
 	 * @param int    $limit  Number of logs to export.
 	 * @return string Exported logs data.
 	 */
-	public static function exportLogs( string $format = 'json', int $limit = 1000 ): string {
-		$logs = self::getRecentLogs( $limit );
+	public static function exportLogs(string $format = 'json', int $limit = 1000): string
+	{
+		$logs = self::getRecentLogs($limit);
 
-		switch ( strtolower( $format ) ) {
+		switch (strtolower($format)) {
 			case 'csv':
-				return self::exportToCsv( $logs );
+				return self::exportToCsv($logs);
 
 			case 'txt':
-				return self::exportToText( $logs );
+				return self::exportToText($logs);
 
 			case 'json':
 			default:
-				return wp_json_encode( $logs, JSON_PRETTY_PRINT );
+				return wp_json_encode($logs, JSON_PRETTY_PRINT);
 		}
 	}
 
@@ -166,10 +180,11 @@ class LoggingUtil {
 	 * @param string $level Minimum log level.
 	 * @return void
 	 */
-	public static function setLogLevel( string $level ): void {
-		$level = strtolower( $level );
-		if ( in_array( $level, self::LOG_LEVELS, true ) ) {
-			update_option( 'wppo_log_level', $level );
+	public static function setLogLevel(string $level): void
+	{
+		$level = strtolower($level);
+		if (in_array($level, self::LOG_LEVELS, true)) {
+			update_option('wppo_log_level', $level);
 		}
 	}
 
@@ -180,8 +195,9 @@ class LoggingUtil {
 	 *
 	 * @return string Current log level.
 	 */
-	public static function getLogLevel(): string {
-		return get_option( 'wppo_log_level', 'info' );
+	public static function getLogLevel(): string
+	{
+		return get_option('wppo_log_level', 'info');
 	}
 
 	/**
@@ -192,10 +208,11 @@ class LoggingUtil {
 	 * @param string $level Log level to check.
 	 * @return bool True if should be logged, false otherwise.
 	 */
-	public static function shouldLog( string $level ): bool {
+	public static function shouldLog(string $level): bool
+	{
 		$current_level = self::getLogLevel();
-		$current_index = array_search( $current_level, self::LOG_LEVELS, true );
-		$level_index   = array_search( $level, self::LOG_LEVELS, true );
+		$current_index = array_search($current_level, self::LOG_LEVELS, true);
+		$level_index = array_search($level, self::LOG_LEVELS, true);
 
 		return $level_index !== false && $level_index >= $current_index;
 	}
@@ -207,31 +224,32 @@ class LoggingUtil {
 	 *
 	 * @return array Log statistics.
 	 */
-	public static function getLogStats(): array {
-		$logs  = get_option( self::LOG_OPTION, array() );
+	public static function getLogStats(): array
+	{
+		$logs = get_option(self::LOG_OPTION, array());
 		$stats = array(
-			'total_logs' => count( $logs ),
-			'levels'     => array_fill_keys( self::LOG_LEVELS, 0 ),
+			'total_logs' => count($logs),
+			'levels' => array_fill_keys(self::LOG_LEVELS, 0),
 			'oldest_log' => null,
 			'newest_log' => null,
 		);
 
-		if ( ! empty( $logs ) ) {
+		if (!empty($logs)) {
 			// Sort by timestamp
 			usort(
 				$logs,
-				function ( $a, $b ) {
-					return strtotime( $a['timestamp'] ) - strtotime( $b['timestamp'] );
+				function ($a, $b) {
+					return strtotime($a['timestamp']) - strtotime($b['timestamp']);
 				}
 			);
 
 			$stats['oldest_log'] = $logs[0]['timestamp'];
-			$stats['newest_log'] = end( $logs )['timestamp'];
+			$stats['newest_log'] = end($logs)['timestamp'];
 
 			// Count by level
-			foreach ( $logs as $log ) {
-				if ( isset( $stats['levels'][ $log['level'] ] ) ) {
-					++$stats['levels'][ $log['level'] ];
+			foreach ($logs as $log) {
+				if (isset($stats['levels'][$log['level']])) {
+					++$stats['levels'][$log['level']];
 				}
 			}
 		}
@@ -246,23 +264,24 @@ class LoggingUtil {
 	 *
 	 * @return void
 	 */
-	public static function rotateLogs(): void {
-		$logs = get_option( self::LOG_OPTION, array() );
+	public static function rotateLogs(): void
+	{
+		$logs = get_option(self::LOG_OPTION, array());
 
-		if ( count( $logs ) > self::MAX_LOGS ) {
+		if (count($logs) > self::MAX_LOGS) {
 			// Sort by timestamp (newest first)
 			usort(
 				$logs,
-				function ( $a, $b ) {
-					return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
+				function ($a, $b) {
+					return strtotime($b['timestamp']) - strtotime($a['timestamp']);
 				}
 			);
 
 			// Keep only the most recent logs
-			$logs = array_slice( $logs, 0, self::MAX_LOGS );
-			update_option( self::LOG_OPTION, $logs );
+			$logs = array_slice($logs, 0, self::MAX_LOGS);
+			update_option(self::LOG_OPTION, $logs);
 
-			self::info( 'Log rotation completed', array( 'kept_logs' => count( $logs ) ) );
+			self::info('Log rotation completed', array('kept_logs' => count($logs)));
 		}
 	}
 
@@ -274,51 +293,52 @@ class LoggingUtil {
 	 * @param array $criteria Search criteria.
 	 * @return array Matching logs.
 	 */
-	public static function searchLogs( array $criteria ): array {
-		$logs    = get_option( self::LOG_OPTION, array() );
+	public static function searchLogs(array $criteria): array
+	{
+		$logs = get_option(self::LOG_OPTION, array());
 		$results = array();
 
-		foreach ( $logs as $log ) {
+		foreach ($logs as $log) {
 			$match = true;
 
 			// Check level filter
-			if ( isset( $criteria['level'] ) && $log['level'] !== $criteria['level'] ) {
+			if (isset($criteria['level']) && $log['level'] !== $criteria['level']) {
 				$match = false;
 			}
 
 			// Check message filter
-			if ( isset( $criteria['message'] ) && stripos( $log['message'], $criteria['message'] ) === false ) {
+			if (isset($criteria['message']) && stripos($log['message'], $criteria['message']) === false) {
 				$match = false;
 			}
 
 			// Check date range
-			if ( isset( $criteria['date_from'] ) ) {
-				$log_time  = strtotime( $log['timestamp'] );
-				$from_time = strtotime( $criteria['date_from'] );
-				if ( $log_time < $from_time ) {
+			if (isset($criteria['date_from'])) {
+				$log_time = strtotime($log['timestamp']);
+				$from_time = strtotime($criteria['date_from']);
+				if ($log_time < $from_time) {
 					$match = false;
 				}
 			}
 
-			if ( isset( $criteria['date_to'] ) ) {
-				$log_time = strtotime( $log['timestamp'] );
-				$to_time  = strtotime( $criteria['date_to'] );
-				if ( $log_time > $to_time ) {
+			if (isset($criteria['date_to'])) {
+				$log_time = strtotime($log['timestamp']);
+				$to_time = strtotime($criteria['date_to']);
+				if ($log_time > $to_time) {
 					$match = false;
 				}
 			}
 
 			// Check context filter
-			if ( isset( $criteria['context'] ) && is_array( $criteria['context'] ) ) {
-				foreach ( $criteria['context'] as $key => $value ) {
-					if ( ! isset( $log['context'][ $key ] ) || $log['context'][ $key ] !== $value ) {
+			if (isset($criteria['context']) && is_array($criteria['context'])) {
+				foreach ($criteria['context'] as $key => $value) {
+					if (!isset($log['context'][$key]) || $log['context'][$key] !== $value) {
 						$match = false;
 						break;
 					}
 				}
 			}
 
-			if ( $match ) {
+			if ($match) {
 				$results[] = $log;
 			}
 		}
@@ -331,30 +351,31 @@ class LoggingUtil {
 	 *
 	 * @param array $log_entry Log entry to store.
 	 */
-	private static function storeLogs( array $log_entry ): void {
+	private static function storeLogs(array $log_entry): void
+	{
 		// Check if we should log this level
-		if ( ! self::shouldLog( $log_entry['level'] ) ) {
+		if (!self::shouldLog($log_entry['level'])) {
 			return;
 		}
 
-		$logs = get_option( self::LOG_OPTION, array() );
+		$logs = get_option(self::LOG_OPTION, array());
 
 		// Add new log entry
 		$logs[] = $log_entry;
 
 		// Keep only the most recent logs
-		if ( count( $logs ) > self::MAX_LOGS ) {
+		if (count($logs) > self::MAX_LOGS) {
 			// Sort by timestamp and keep newest
 			usort(
 				$logs,
-				function ( $a, $b ) {
-					return strtotime( $b['timestamp'] ) - strtotime( $a['timestamp'] );
+				function ($a, $b) {
+					return strtotime($b['timestamp']) - strtotime($a['timestamp']);
 				}
 			);
-			$logs = array_slice( $logs, 0, self::MAX_LOGS );
+			$logs = array_slice($logs, 0, self::MAX_LOGS);
 		}
 
-		update_option( self::LOG_OPTION, $logs );
+		update_option(self::LOG_OPTION, $logs);
 	}
 
 	/**
@@ -365,18 +386,19 @@ class LoggingUtil {
 	 * @param array $logs Logs to export.
 	 * @return string CSV formatted logs.
 	 */
-	private static function exportToCsv( array $logs ): string {
+	private static function exportToCsv(array $logs): string
+	{
 		$csv = "ID,Timestamp,Level,Message,Context\n";
 
-		foreach ( $logs as $log ) {
-			$context = ! empty( $log['context'] ) ? wp_json_encode( $log['context'] ) : '';
-			$csv    .= sprintf(
+		foreach ($logs as $log) {
+			$context = !empty($log['context']) ? wp_json_encode($log['context']) : '';
+			$csv .= sprintf(
 				'"%s","%s","%s","%s","%s"' . "\n",
 				$log['id'] ?? '',
 				$log['timestamp'] ?? '',
 				$log['level'] ?? '',
-				str_replace( '"', '""', $log['message'] ?? '' ),
-				str_replace( '"', '""', $context )
+				str_replace('"', '""', $log['message'] ?? ''),
+				str_replace('"', '""', $context)
 			);
 		}
 
@@ -391,21 +413,22 @@ class LoggingUtil {
 	 * @param array $logs Logs to export.
 	 * @return string Text formatted logs.
 	 */
-	private static function exportToText( array $logs ): string {
-		$text  = "Performance Optimisation Plugin Logs\n";
-		$text .= 'Generated: ' . current_time( 'mysql' ) . "\n";
-		$text .= str_repeat( '=', 50 ) . "\n\n";
+	private static function exportToText(array $logs): string
+	{
+		$text = "Performance Optimisation Plugin Logs\n";
+		$text .= 'Generated: ' . current_time('mysql') . "\n";
+		$text .= str_repeat('=', 50) . "\n\n";
 
-		foreach ( $logs as $log ) {
+		foreach ($logs as $log) {
 			$text .= sprintf(
 				"[%s] %s: %s\n",
 				$log['timestamp'] ?? '',
-				strtoupper( $log['level'] ?? '' ),
+				strtoupper($log['level'] ?? ''),
 				$log['message'] ?? ''
 			);
 
-			if ( ! empty( $log['context'] ) ) {
-				$text .= 'Context: ' . wp_json_encode( $log['context'], JSON_PRETTY_PRINT ) . "\n";
+			if (!empty($log['context'])) {
+				$text .= 'Context: ' . wp_json_encode($log['context'], JSON_PRETTY_PRINT) . "\n";
 			}
 
 			$text .= "\n";

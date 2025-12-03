@@ -9,7 +9,7 @@
 namespace PerformanceOptimisation\Core\Cache;
 
 use PerformanceOptimisation\Interfaces\CacheInterface;
-use PerformanceOptimisation\Interfaces\ConfigInterface;
+use PerformanceOptimisation\Core\Config\ConfigInterface;
 use PerformanceOptimisation\Interfaces\ServiceContainerInterface;
 use PerformanceOptimisation\Exceptions\CacheException;
 use PerformanceOptimisation\Utils\LoggingUtil;
@@ -21,7 +21,8 @@ use PerformanceOptimisation\Utils\FileSystemUtil;
  *
  * @since 1.1.0
  */
-class CacheManager {
+class CacheManager
+{
 
 	/**
 	 * Service container.
@@ -82,9 +83,9 @@ class CacheManager {
 	 * @var array
 	 */
 	private array $stats = array(
-		'hits'    => 0,
-		'misses'  => 0,
-		'sets'    => 0,
+		'hits' => 0,
+		'misses' => 0,
+		'sets' => 0,
 		'deletes' => 0,
 	);
 
@@ -105,20 +106,20 @@ class CacheManager {
 		?PerformanceUtil $performance = null,
 		?FileSystemUtil $filesystem = null
 	) {
-		$this->config      = $config;
-		$this->container   = $container;
-		$this->logger      = $logger;
+		$this->config = $config;
+		$this->container = $container;
+		$this->logger = $logger;
 		$this->performance = $performance;
-		$this->filesystem  = $filesystem;
+		$this->filesystem = $filesystem;
 
 		$this->register_default_providers();
 
-		if ( $this->logger ) {
+		if ($this->logger) {
 			$this->logger->debug(
 				'CacheManager initialized',
 				array(
 					'default_provider' => $this->default_provider,
-					'providers'        => array_keys( $this->providers ),
+					'providers' => array_keys($this->providers),
 				)
 			);
 		}
@@ -132,8 +133,9 @@ class CacheManager {
 	 * @param CacheInterface $provider Provider instance.
 	 * @return void
 	 */
-	public function register_provider( string $name, CacheInterface $provider ): void {
-		$this->providers[ $name ] = $provider;
+	public function register_provider(string $name, CacheInterface $provider): void
+	{
+		$this->providers[$name] = $provider;
 	}
 
 	/**
@@ -144,14 +146,15 @@ class CacheManager {
 	 * @return CacheInterface Cache provider.
 	 * @throws CacheException If provider not found.
 	 */
-	public function get_provider( ?string $name = null ): CacheInterface {
+	public function get_provider(?string $name = null): CacheInterface
+	{
 		$provider_name = $name ?? $this->default_provider;
 
-		if ( ! isset( $this->providers[ $provider_name ] ) ) {
-			throw new CacheException( "Cache provider '{$provider_name}' not found." );
+		if (!isset($this->providers[$provider_name])) {
+			throw new CacheException("Cache provider '{$provider_name}' not found.");
 		}
 
-		return $this->providers[ $provider_name ];
+		return $this->providers[$provider_name];
 	}
 
 	/**
@@ -162,9 +165,10 @@ class CacheManager {
 	 * @return void
 	 * @throws CacheException If provider not found.
 	 */
-	public function set_default_provider( string $name ): void {
-		if ( ! isset( $this->providers[ $name ] ) ) {
-			throw new CacheException( "Cache provider '{$name}' not found." );
+	public function set_default_provider(string $name): void
+	{
+		if (!isset($this->providers[$name])) {
+			throw new CacheException("Cache provider '{$name}' not found.");
 		}
 
 		$this->default_provider = $name;
@@ -179,34 +183,35 @@ class CacheManager {
 	 * @param string|null $provider Provider name (null for default).
 	 * @return mixed Cached value or default.
 	 */
-	public function get( string $key, $default = null, ?string $provider = null ) {
+	public function get(string $key, $default = null, ?string $provider = null)
+	{
 		$timer_id = null;
-		if ( $this->performance ) {
-			$timer_id = $this->performance->startTimer( 'cache_get_' . $key );
+		if ($this->performance) {
+			$this->performance->startTimer('cache_get_' . $key);
 		}
 
 		try {
-			$cache_provider = $this->get_provider( $provider );
-			$value          = $cache_provider->get( $key, $default );
+			$cache_provider = $this->get_provider($provider);
+			$value = $cache_provider->get($key, $default);
 
-			if ( $value !== $default ) {
+			if ($value !== $default) {
 				++$this->stats['hits'];
-				if ( $this->logger ) {
+				if ($this->logger) {
 					$this->logger->debug(
 						'Cache hit',
 						array(
-							'key'      => $key,
+							'key' => $key,
 							'provider' => $provider ?? $this->default_provider,
 						)
 					);
 				}
 			} else {
 				++$this->stats['misses'];
-				if ( $this->logger ) {
+				if ($this->logger) {
 					$this->logger->debug(
 						'Cache miss',
 						array(
-							'key'      => $key,
+							'key' => $key,
 							'provider' => $provider ?? $this->default_provider,
 						)
 					);
@@ -214,21 +219,21 @@ class CacheManager {
 			}
 
 			return $value;
-		} catch ( CacheException $e ) {
+		} catch (CacheException $e) {
 			++$this->stats['misses'];
-			if ( $this->logger ) {
+			if ($this->logger) {
 				$this->logger->warning(
 					'Cache get failed',
 					array(
-						'key'   => $key,
+						'key' => $key,
 						'error' => $e->getMessage(),
 					)
 				);
 			}
 			return $default;
 		} finally {
-			if ( $timer_id && $this->performance ) {
-				$this->performance->endTimer( $timer_id );
+			if ($timer_id && $this->performance) {
+				$this->performance->endTimer($timer_id);
 			}
 		}
 	}
@@ -243,54 +248,55 @@ class CacheManager {
 	 * @param string|null $provider   Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
-	public function set( string $key, $value, int $expiration = 0, ?string $provider = null ): bool {
+	public function set(string $key, $value, int $expiration = 0, ?string $provider = null): bool
+	{
 		$timer_id = null;
-		if ( $this->performance ) {
-			$timer_id = $this->performance->startTimer( 'cache_set_' . $key );
+		if ($this->performance) {
+			$this->performance->startTimer('cache_set_' . $key);
 		}
 
 		try {
-			$cache_provider = $this->get_provider( $provider );
-			$result         = $cache_provider->set( $key, $value, $expiration );
+			$cache_provider = $this->get_provider($provider);
+			$result = $cache_provider->set($key, $value, $expiration);
 
-			if ( $result ) {
+			if ($result) {
 				++$this->stats['sets'];
-				if ( $this->logger ) {
+				if ($this->logger) {
 					$this->logger->debug(
 						'Cache set successful',
 						array(
-							'key'        => $key,
-							'provider'   => $provider ?? $this->default_provider,
+							'key' => $key,
+							'provider' => $provider ?? $this->default_provider,
 							'expiration' => $expiration,
-							'value_size' => is_string( $value ) ? strlen( $value ) : 'non-string',
+							'value_size' => is_string($value) ? strlen($value) : 'non-string',
 						)
 					);
 				}
-			} elseif ( $this->logger ) {
-					$this->logger->warning(
-						'Cache set failed',
-						array(
-							'key'      => $key,
-							'provider' => $provider ?? $this->default_provider,
-						)
-					);
+			} elseif ($this->logger) {
+				$this->logger->warning(
+					'Cache set failed',
+					array(
+						'key' => $key,
+						'provider' => $provider ?? $this->default_provider,
+					)
+				);
 			}
 
 			return $result;
-		} catch ( CacheException $e ) {
-			if ( $this->logger ) {
+		} catch (CacheException $e) {
+			if ($this->logger) {
 				$this->logger->error(
 					'Cache set exception',
 					array(
-						'key'   => $key,
+						'key' => $key,
 						'error' => $e->getMessage(),
 					)
 				);
 			}
 			return false;
 		} finally {
-			if ( $timer_id && $this->performance ) {
-				$this->performance->endTimer( $timer_id );
+			if ($timer_id && $this->performance) {
+				$this->performance->endTimer($timer_id);
 			}
 		}
 	}
@@ -303,17 +309,18 @@ class CacheManager {
 	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
-	public function delete( string $key, ?string $provider = null ): bool {
+	public function delete(string $key, ?string $provider = null): bool
+	{
 		try {
-			$cache_provider = $this->get_provider( $provider );
-			$result         = $cache_provider->delete( $key );
+			$cache_provider = $this->get_provider($provider);
+			$result = $cache_provider->delete($key);
 
-			if ( $result ) {
+			if ($result) {
 				++$this->stats['deletes'];
 			}
 
 			return $result;
-		} catch ( CacheException $e ) {
+		} catch (CacheException $e) {
 			return false;
 		}
 	}
@@ -326,11 +333,12 @@ class CacheManager {
 	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True if key exists, false otherwise
 	 */
-	public function has( string $key, ?string $provider = null ): bool {
+	public function has(string $key, ?string $provider = null): bool
+	{
 		try {
-			$cache_provider = $this->get_provider( $provider );
-			return $cache_provider->has( $key );
-		} catch ( CacheException $e ) {
+			$cache_provider = $this->get_provider($provider);
+			return $cache_provider->has($key);
+		} catch (CacheException $e) {
 			return false;
 		}
 	}
@@ -342,11 +350,12 @@ class CacheManager {
 	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
-	public function flush( ?string $provider = null ): bool {
+	public function flush(?string $provider = null): bool
+	{
 		try {
-			$cache_provider = $this->get_provider( $provider );
+			$cache_provider = $this->get_provider($provider);
 			return $cache_provider->flush();
-		} catch ( CacheException $e ) {
+		} catch (CacheException $e) {
 			return false;
 		}
 	}
@@ -360,11 +369,12 @@ class CacheManager {
 	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
-	public function warm( array $data, int $expiration = 0, ?string $provider = null ): bool {
+	public function warm(array $data, int $expiration = 0, ?string $provider = null): bool
+	{
 		try {
-			$cache_provider = $this->get_provider( $provider );
-			return $cache_provider->set_multiple( $data, $expiration );
-		} catch ( CacheException $e ) {
+			$cache_provider = $this->get_provider($provider);
+			return $cache_provider->set_multiple($data, $expiration);
+		} catch (CacheException $e) {
 			return false;
 		}
 	}
@@ -377,18 +387,19 @@ class CacheManager {
 	 * @param string|null $provider Provider name (null for default).
 	 * @return bool True on success, false on failure
 	 */
-	public function invalidate_pattern( string $pattern, ?string $provider = null ): bool {
+	public function invalidate_pattern(string $pattern, ?string $provider = null): bool
+	{
 		try {
-			$cache_provider = $this->get_provider( $provider );
+			$cache_provider = $this->get_provider($provider);
 
 			// This is a simplified implementation.
 			// In a real implementation, you'd need to scan for matching keys.
-			if ( method_exists( $cache_provider, 'delete_pattern' ) ) {
-				return $cache_provider->delete_pattern( $pattern );
+			if (method_exists($cache_provider, 'delete_pattern')) {
+				return $cache_provider->delete_pattern($pattern);
 			}
 
 			return false;
-		} catch ( CacheException $e ) {
+		} catch (CacheException $e) {
 			return false;
 		}
 	}
@@ -399,19 +410,20 @@ class CacheManager {
 	 * @since 1.1.0
 	 * @return array Cache statistics
 	 */
-	public function get_stats(): array {
+	public function get_stats(): array
+	{
 		$provider_stats = array();
 
-		foreach ( $this->providers as $name => $provider ) {
+		foreach ($this->providers as $name => $provider) {
 			try {
-				$provider_stats[ $name ] = $provider->get_stats();
-			} catch ( CacheException $e ) {
-				$provider_stats[ $name ] = array( 'error' => $e->getMessage() );
+				$provider_stats[$name] = $provider->get_stats();
+			} catch (CacheException $e) {
+				$provider_stats[$name] = array('error' => $e->getMessage());
 			}
 		}
 
 		return array(
-			'global'    => $this->stats,
+			'global' => $this->stats,
 			'providers' => $provider_stats,
 		);
 	}
@@ -422,8 +434,9 @@ class CacheManager {
 	 * @since 1.1.0
 	 * @return array Array of provider names
 	 */
-	public function get_available_providers(): array {
-		return array_keys( $this->providers );
+	public function get_available_providers(): array
+	{
+		return array_keys($this->providers);
 	}
 
 	/**
@@ -432,8 +445,9 @@ class CacheManager {
 	 * @since 1.1.0
 	 * @return bool True if caching is enabled, false otherwise
 	 */
-	public function is_enabled(): bool {
-		return $this->config->get( 'caching.page_cache_enabled', false );
+	public function is_enabled(): bool
+	{
+		return $this->config->get('caching.page_cache_enabled', false);
 	}
 
 	/**
@@ -442,13 +456,14 @@ class CacheManager {
 	 * @since 1.1.0
 	 * @return void
 	 */
-	private function register_default_providers(): void {
+	private function register_default_providers(): void
+	{
 		// Register file cache provider.
-		$this->register_provider( 'file', new FileCache( $this->config ) );
+		$this->register_provider('file', new FileCache($this->config));
 
 		// Register object cache provider if available.
-		if ( wp_using_ext_object_cache() ) {
-			$this->register_provider( 'object', new ObjectCache( $this->config ) );
+		if (wp_using_ext_object_cache()) {
+			$this->register_provider('object', new ObjectCache($this->config));
 			$this->default_provider = 'object';
 		}
 	}
