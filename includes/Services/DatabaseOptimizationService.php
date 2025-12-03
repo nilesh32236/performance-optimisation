@@ -50,7 +50,7 @@ class DatabaseOptimizationService {
 	 * @return array Results of the cleanup.
 	 */
 	public function run_cleanup(): array {
-		$results = array();
+		$results  = array();
 		$settings = $this->settings->get_setting( 'database', 'cleanup', array() );
 
 		if ( ! empty( $settings['revisions'] ) ) {
@@ -79,7 +79,7 @@ class DatabaseOptimizationService {
 	 */
 	public function cleanup_revisions(): int {
 		global $wpdb;
-		
+
 		// Keep last 5 revisions per post to be safe
 		$query = "
 			DELETE a,b,c
@@ -102,7 +102,7 @@ class DatabaseOptimizationService {
 
 		$deleted = $wpdb->query( $query );
 		$this->logger->info( "Cleaned up $deleted revisions" );
-		
+
 		return (int) $deleted;
 	}
 
@@ -120,7 +120,7 @@ class DatabaseOptimizationService {
 		";
 
 		$deleted = $wpdb->query( $query );
-		
+
 		// Also clean up comment meta
 		$wpdb->query( "DELETE FROM {$wpdb->commentmeta} WHERE comment_id NOT IN (SELECT comment_ID FROM {$wpdb->comments})" );
 
@@ -146,14 +146,14 @@ class DatabaseOptimizationService {
 			LEFT JOIN {$wpdb->postmeta} c ON (a.ID = c.post_id)
 			WHERE a.post_status = 'trash'
 		";
-		$count += (int) $wpdb->query( $query_posts );
+		$count      += (int) $wpdb->query( $query_posts );
 
 		// Trashed comments
 		$query_comments = "
 			DELETE FROM {$wpdb->comments}
 			WHERE comment_approved = 'trash'
 		";
-		$count += (int) $wpdb->query( $query_comments );
+		$count         += (int) $wpdb->query( $query_comments );
 
 		$this->logger->info( "Cleaned up $count trashed items" );
 
@@ -168,13 +168,13 @@ class DatabaseOptimizationService {
 	public function optimize_tables(): int {
 		global $wpdb;
 
-		$tables = $wpdb->get_results( "SHOW TABLES", ARRAY_N );
-		$count = 0;
+		$tables = $wpdb->get_results( 'SHOW TABLES', ARRAY_N );
+		$count  = 0;
 
 		foreach ( $tables as $table ) {
 			$table_name = $table[0];
 			$wpdb->query( "OPTIMIZE TABLE $table_name" );
-			$count++;
+			++$count;
 		}
 
 		$this->logger->info( "Optimized $count database tables" );

@@ -234,14 +234,14 @@ if ( ! class_exists( 'PerformanceOptimisation\Admin\Metabox' ) ) {
 				if ( preg_match( '/^(mobile|desktop|tablet):\s*(.+)$/i', $line, $matches ) ) {
 					$device = strtolower( $matches[1] );
 
-				// Validate device prefix against allowed values
-				$allowed_devices = array( 'mobile', 'desktop', 'tablet' );
-				if ( ! in_array( $device, $allowed_devices, true ) ) {
-					$invalid_urls[] = $line;
-					continue;
-				}
+					// Validate device prefix against allowed values
+					$allowed_devices = array( 'mobile', 'desktop', 'tablet' );
+					if ( ! in_array( $device, $allowed_devices, true ) ) {
+						$invalid_urls[] = $line;
+						continue;
+					}
 
-				$device_prefix = $device . ':';
+					$device_prefix = $device . ':';
 					$url           = trim( $matches[2] );
 				} else {
 					$url = $line;

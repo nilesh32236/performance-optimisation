@@ -18,28 +18,29 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Base Controller class for REST API endpoints.
  */
-abstract class BaseController {
+abstract class BaseController
+{
 
 	/**
 	 * REST API namespace.
 	 *
 	 * @var string
 	 */
-	protected string $namespace = 'performance-optimisation/v1';
+protected string $namespace = 'performance-optimisation/v1';
 
 	/**
 	 * Controller route base.
 	 *
 	 * @var string
 	 */
-	protected string $rest_base = '';
+protected string $rest_base = '';
 
 	/**
 	 * Register routes for this controller.
 	 *
 	 * @return void
 	 */
-	abstract public function register_routes(): void;
+abstract public function register_routes(): void;
 
 	/**
 	 * Check if current user has admin permissions.
@@ -47,35 +48,35 @@ abstract class BaseController {
 	 * @param \WP_REST_Request $request The REST API request.
 	 * @return bool|\WP_Error True if permission granted, WP_Error otherwise.
 	 */
-	public function check_admin_permissions( \WP_REST_Request $request ) {
-		// Load security middleware if not already loaded.
-		if ( ! class_exists( 'PerformanceOptimisation\Core\Security\SecurityManager' ) ) {
-			require_once WPPO_PLUGIN_PATH . 'includes/Core/Security/SecurityManager.php';
-		}
-		if ( ! class_exists( 'PerformanceOptimisation\Core\Security\SecurityMiddleware' ) ) {
-			require_once WPPO_PLUGIN_PATH . 'includes/Core/Security/SecurityMiddleware.php';
-		}
-
-		$security_manager    = new \PerformanceOptimisation\Core\Security\SecurityManager();
-		$security_middleware = new \PerformanceOptimisation\Core\Security\SecurityMiddleware( $security_manager );
-
-		// Process request through security middleware.
-		$security_result = $security_middleware->process_request( $request, 'admin' );
-		if ( is_wp_error( $security_result ) ) {
-			return $security_result;
-		}
-
-		// Original capability check.
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return new \WP_Error(
-				'rest_forbidden_context',
-				__( 'Sorry, you are not allowed to manage these options.', 'performance-optimisation' ),
-				array( 'status' => rest_authorization_required_code() )
-			);
-		}
-
-		return true;
+public function check_admin_permissions( \WP_REST_Request $request ) {
+	// Load security middleware if not already loaded.
+	if ( ! class_exists( 'PerformanceOptimisation\Core\Security\SecurityManager' ) ) {
+		require_once WPPO_PLUGIN_PATH . 'includes/Core/Security/SecurityManager.php';
 	}
+	if ( ! class_exists( 'PerformanceOptimisation\Core\Security\SecurityMiddleware' ) ) {
+		require_once WPPO_PLUGIN_PATH . 'includes/Core/Security/SecurityMiddleware.php';
+	}
+
+	$security_manager    = new \PerformanceOptimisation\Core\Security\SecurityManager();
+	$security_middleware = new \PerformanceOptimisation\Core\Security\SecurityMiddleware( $security_manager );
+
+	// Process request through security middleware.
+	$security_result = $security_middleware->process_request( $request, 'admin' );
+	if ( is_wp_error( $security_result ) ) {
+		return $security_result;
+	}
+
+	// Original capability check.
+	if ( ! current_user_can( 'manage_options' ) ) {
+		return new \WP_Error(
+			'rest_forbidden_context',
+			__( 'Sorry, you are not allowed to manage these options.', 'performance-optimisation' ),
+			array( 'status' => rest_authorization_required_code() )
+		);
+	}
+
+	return true;
+}
 
 	/**
 	 * Validate request data against schema.
@@ -84,62 +85,62 @@ abstract class BaseController {
 	 * @param array<string, mixed> $schema Validation schema.
 	 * @return array<string, mixed> Validation result.
 	 */
-	protected function validate_request( \WP_REST_Request $request, array $schema ): array {
-		$errors = array();
-		$data   = array();
+protected function validate_request( \WP_REST_Request $request, array $schema ): array {
+	$errors = array();
+	$data   = array();
 
-		foreach ( $schema as $field => $rules ) {
-			$value       = $request->get_param( $field );
-			$is_required = $rules['required'] ?? false;
+	foreach ( $schema as $field => $rules ) {
+		$value       = $request->get_param( $field );
+		$is_required = $rules['required'] ?? false;
 
-			// Check required fields.
-			if ( $is_required && ( null === $value || '' === $value ) ) {
-				$errors[] = sprintf( 'Field "%s" is required.', $field );
-				continue;
-			}
-
-			// Skip validation if field is not provided and not required.
-			if ( null === $value && ! $is_required ) {
-				if ( isset( $rules['default'] ) ) {
-					$data[ $field ] = $rules['default'];
-				}
-				continue;
-			}
-
-			// Type validation.
-			$expected_type     = $rules['type'] ?? 'string';
-			$validation_result = $this->validate_field_type( $value, $expected_type, $field );
-
-			if ( $validation_result['valid'] ) {
-				$data[ $field ] = $validation_result['value'];
-			} else {
-				$errors[] = $validation_result['error'];
-			}
-
-			// Additional validation rules.
-			if ( isset( $rules['enum'] ) && ! in_array( $value, $rules['enum'], true ) ) {
-				$errors[] = sprintf(
-					'Field "%s" must be one of: %s',
-					$field,
-					implode( ', ', $rules['enum'] )
-				);
-			}
-
-			if ( isset( $rules['min'] ) && is_numeric( $value ) && $value < $rules['min'] ) {
-				$errors[] = sprintf( 'Field "%s" must be at least %s.', $field, $rules['min'] );
-			}
-
-			if ( isset( $rules['max'] ) && is_numeric( $value ) && $value > $rules['max'] ) {
-				$errors[] = sprintf( 'Field "%s" must be at most %s.', $field, $rules['max'] );
-			}
+		// Check required fields.
+		if ( $is_required && ( null === $value || '' === $value ) ) {
+			$errors[] = sprintf( 'Field "%s" is required.', $field );
+			continue;
 		}
 
-		return array(
-			'valid'  => empty( $errors ),
-			'errors' => $errors,
-			'data'   => $data,
-		);
+		// Skip validation if field is not provided and not required.
+		if ( null === $value && ! $is_required ) {
+			if ( isset( $rules['default'] ) ) {
+				$data[ $field ] = $rules['default'];
+			}
+			continue;
+		}
+
+		// Type validation.
+		$expected_type     = $rules['type'] ?? 'string';
+		$validation_result = $this->validate_field_type( $value, $expected_type, $field );
+
+		if ( $validation_result['valid'] ) {
+			$data[ $field ] = $validation_result['value'];
+		} else {
+			$errors[] = $validation_result['error'];
+		}
+
+		// Additional validation rules.
+		if ( isset( $rules['enum'] ) && ! in_array( $value, $rules['enum'], true ) ) {
+			$errors[] = sprintf(
+				'Field "%s" must be one of: %s',
+				$field,
+				implode( ', ', $rules['enum'] )
+			);
+		}
+
+		if ( isset( $rules['min'] ) && is_numeric( $value ) && $value < $rules['min'] ) {
+			$errors[] = sprintf( 'Field "%s" must be at least %s.', $field, $rules['min'] );
+		}
+
+		if ( isset( $rules['max'] ) && is_numeric( $value ) && $value > $rules['max'] ) {
+			$errors[] = sprintf( 'Field "%s" must be at most %s.', $field, $rules['max'] );
+		}
 	}
+
+	return array(
+		'valid'  => empty( $errors ),
+		'errors' => $errors,
+		'data'   => $data,
+	);
+}
 
 	/**
 	 * Validate field type.
@@ -149,105 +150,79 @@ abstract class BaseController {
 	 * @param string $field_name Field name for error messages.
 	 * @return array<string, mixed> Validation result.
 	 */
-	private function validate_field_type( $value, string $expected_type, string $field_name ): array {
-		switch ( $expected_type ) {
-			case 'string':
-				if ( ! is_string( $value ) ) {
-					return array(
-						'valid' => false,
-						'error' => sprintf( 'Field "%s" must be a string.', $field_name ),
-					);
-				}
-				return array(
-					'valid' => true,
-					'value' => sanitize_text_field( $value ),
-				);
-
-			case 'integer':
-				if ( ! is_numeric( $value ) ) {
-					return array(
-						'valid' => false,
-						'error' => sprintf( 'Field "%s" must be an integer.', $field_name ),
-					);
-				}
-				return array(
-					'valid' => true,
-					'value' => (int) $value,
-				);
-
-			case 'number':
-				if ( ! is_numeric( $value ) ) {
-					return array(
-						'valid' => false,
-						'error' => sprintf( 'Field "%s" must be a number.', $field_name ),
-					);
-				}
-				return array(
-					'valid' => true,
-					'value' => (float) $value,
-				);
-
-			case 'boolean':
-				return array(
-					'valid' => true,
-					'value' => (bool) $value,
-				);
-
-			case 'array':
-				if ( ! is_array( $value ) ) {
-					return array(
-						'valid' => false,
-						'error' => sprintf( 'Field "%s" must be an array.', $field_name ),
-					);
-				}
-				return array(
-					'valid' => true,
-					'value' => $this->sanitize_array( $value ),
-				);
-
-			case 'object':
-				if ( ! is_array( $value ) && ! is_object( $value ) ) {
-					return array(
-						'valid' => false,
-						'error' => sprintf( 'Field "%s" must be an object.', $field_name ),
-					);
-				}
-				return array(
-					'valid' => true,
-					'value' => $this->sanitize_array( (array) $value ),
-				);
-
-			default:
-				return array(
-					'valid' => true,
-					'value' => $value,
-				);
+protected function validate_field_type( $value, string $expected_type, string $field_name ): array
+	{
+switch ( $expected_type ) {
+	case 'string':
+		if ( ! is_string( $value ) ) {
+			return array(
+				'valid' => false,
+				'error' => sprintf( 'Field "%s" must be a string.', $field_name ),
+			);
 		}
-	}
+		return array(
+			'valid' => true,
+			'value' => sanitize_text_field( $value ),
+		);
 
-	/**
-	 * Sanitize array recursively.
-	 *
-	 * @param array<mixed> $array Array to sanitize.
-	 * @return array<mixed> Sanitized array.
-	 */
-	private function sanitize_array( array $array ): array {
-		$sanitized = array();
-
-		foreach ( $array as $key => $value ) {
-			$sanitized_key = sanitize_key( $key );
-
-			if ( is_array( $value ) ) {
-				$sanitized[ $sanitized_key ] = $this->sanitize_array( $value );
-			} elseif ( is_string( $value ) ) {
-				$sanitized[ $sanitized_key ] = sanitize_text_field( $value );
-			} else {
-				$sanitized[ $sanitized_key ] = $value;
-			}
+	case 'integer':
+		if ( ! is_numeric( $value ) ) {
+			return array(
+				'valid' => false,
+				'error' => sprintf( 'Field "%s" must be an integer.', $field_name ),
+			);
 		}
+		return array(
+			'valid' => true,
+			'value' => (int) $value,
+		);
 
-		return $sanitized;
-	}
+	case 'number':
+		if ( ! is_numeric( $value ) ) {
+			return array(
+				'valid' => false,
+				'error' => sprintf( 'Field "%s" must be a number.', $field_name ),
+			);
+		}
+		return array(
+			'valid' => true,
+			'value' => (float) $value,
+		);
+
+	case 'boolean':
+		return array(
+			'valid' => true,
+			'value' => (bool) $value,
+		);
+
+	case 'array':
+		if ( ! is_array( $value ) ) {
+			return array(
+				'valid' => false,
+				'error' => sprintf( 'Field "%s" must be an array.', $field_name ),
+			);
+		}
+		return array(
+			'valid' => true,
+			'value' => $this->sanitize_array( $value ),
+		);
+
+	case 'object':
+		if ( ! is_array( $value ) && ! is_object( $value ) ) {
+			return array(
+				'valid' => false,
+				'error' => sprintf( 'Field "%s" must be an object.', $field_name ),
+			);
+		}
+		return array(
+			'valid' => true,
+			'value' => $this->sanitize_array( (array) $value ),
+		);
+
+	default:
+		return array(
+			'valid' => true,
+			'value' => $value,
 
 	/**
 	 * Send success response.

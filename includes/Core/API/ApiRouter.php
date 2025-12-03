@@ -105,8 +105,8 @@ class ApiRouter {
 
 		// Get PageCacheService from container - use full class name
 		$page_cache_service = null;
-		$logger = null;
-		
+		$logger             = null;
+
 		try {
 			if ( $container->has( 'PerformanceOptimisation\\Services\\PageCacheService' ) ) {
 				$service = $container->get( 'PerformanceOptimisation\\Services\\PageCacheService' );
@@ -192,7 +192,7 @@ class ApiRouter {
 
 		// Image optimization routes.
 		$this->register_image_routes();
-		
+
 		// Queue routes.
 		$this->register_queue_routes();
 

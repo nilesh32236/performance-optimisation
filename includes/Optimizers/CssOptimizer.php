@@ -260,7 +260,7 @@ class CssOptimizer implements OptimizerInterface {
 				throw new \Exception( "CSS file not found: {$file_path}" );
 			}
 
-			$css_content = $this->filesystem->readFile( $file_path );
+			$css_content   = $this->filesystem->readFile( $file_path );
 			$optimized_css = $this->optimize( $css_content, $options );
 
 			$result = array(
@@ -425,7 +425,7 @@ class CssOptimizer implements OptimizerInterface {
 			return $minifier->minify();
 		} catch ( \Exception $e ) {
 			$this->logger->warning( 'CSS minification failed, falling back to regex: ' . $e->getMessage() );
-			
+
 			// Fallback to regex minification
 			// Remove unnecessary whitespace
 			$css = preg_replace( '/\s+/', ' ', $css );
@@ -435,7 +435,7 @@ class CssOptimizer implements OptimizerInterface {
 			$css = preg_replace( '/;+}/', '}', $css );
 			// Remove empty rules
 			$css = preg_replace( '/[^{}]+{\s*}/', '', $css );
-			
+
 			return trim( $css );
 		}
 	}
@@ -750,7 +750,7 @@ class CssOptimizer implements OptimizerInterface {
 		$path_info = pathinfo( $original_path );
 		$hash      = md5( $original_path . filemtime( $original_path ) );
 		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/min/css/';
-		
+
 		if ( ! file_exists( $cache_dir ) ) {
 			wp_mkdir_p( $cache_dir );
 		}

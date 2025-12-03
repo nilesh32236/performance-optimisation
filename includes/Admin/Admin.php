@@ -146,12 +146,14 @@ class Admin {
 			array( 'wp-components' ),
 			$asset_file['version']
 		);
-		
+
 		// Ensure WordPress components styles are loaded
 		wp_enqueue_style( 'wp-components' );
-		
+
 		// Add inline CSS to ensure proper styling
-		wp_add_inline_style( 'performance-optimisation-admin-style', '
+		wp_add_inline_style(
+			'performance-optimisation-admin-style',
+			'
 			.wppo-admin { 
 				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
 				line-height: 1.5 !important;
@@ -162,7 +164,8 @@ class Admin {
 			.wppo-admin .components-tab-panel__tab-content { 
 				padding: 24px !important; 
 			}
-		' );
+		'
+		);
 		wp_enqueue_script(
 			'performance-optimisation-admin-script',
 			WPPO_PLUGIN_URL . 'build/index.js',

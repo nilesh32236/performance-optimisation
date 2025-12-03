@@ -198,7 +198,7 @@ class FileCache implements CacheInterface {
 			$failed_deletions = 0;
 			foreach ( $files as $file ) {
 				if ( ! unlink( $file ) ) {
-					$failed_deletions++;
+					++$failed_deletions;
 					error_log( "Failed to delete cache file: {$file}" );
 				}
 			}

@@ -256,7 +256,7 @@ class OptimizationService implements OptimizationServiceInterface {
 	 */
 	private function sanitizePath( string $path ): string {
 		// Remove any directory traversal attempts
-		$path = str_replace( array( '../', '..\\', '../', '..\\'  ), '', $path );
+		$path = str_replace( array( '../', '..\\', '../', '..\\' ), '', $path );
 
 		// Normalize path separators
 		$path = str_replace( '\\', '/', $path );

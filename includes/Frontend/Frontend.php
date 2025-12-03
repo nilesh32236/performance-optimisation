@@ -43,7 +43,7 @@ class Frontend {
 
 	public function __construct( ServiceContainerInterface $container ) {
 		error_log( 'WPPO: Frontend __construct called' );
-		
+
 		$this->container           = $container;
 		$this->cacheService        = $container->get( 'cache_service' );
 		$this->imageService        = $container->get( 'image_service' );
@@ -53,7 +53,7 @@ class Frontend {
 		$this->performance         = $container->get( 'performance' );
 		$this->validator           = $container->get( 'validator' );
 		$this->metabox             = $container->get( 'metabox' );
-		
+
 		// Initialize PageCacheService - this will set up caching hooks
 		try {
 			$service = $container->get( 'PerformanceOptimisation\\Services\\PageCacheService' );

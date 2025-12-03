@@ -27,9 +27,9 @@ class PageCacheService {
 	private SettingsService $settings;
 
 	public function __construct( SettingsService $settings, LoggingUtil $logger ) {
-		$this->settings = $settings;
-		$this->logger = $logger;
-		$this->domain = $this->get_domain();
+		$this->settings       = $settings;
+		$this->logger         = $logger;
+		$this->domain         = $this->get_domain();
 		$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR );
 		$this->init_filesystem();
 		$this->setup_hooks();
@@ -40,17 +40,17 @@ class PageCacheService {
 	 */
 	private function setup_hooks(): void {
 		error_log( 'WPPO PageCache: setup_hooks called' );
-		
+
 		// Hook into template_redirect to start caching
 		add_action( 'template_redirect', array( $this, 'start_caching' ), 1 );
-		
+
 		// Clear cache on post update
 		add_action( 'save_post', array( $this, 'clear_post_cache' ), 10, 1 );
 		add_action( 'deleted_post', array( $this, 'clear_post_cache' ), 10, 1 );
-		
+
 		// Clear cache on comment
 		add_action( 'comment_post', array( $this, 'clear_post_cache_by_comment' ), 10, 1 );
-		
+
 		error_log( 'WPPO PageCache: Hooks registered' );
 	}
 
@@ -61,7 +61,7 @@ class PageCacheService {
 		if ( ! function_exists( 'WP_Filesystem' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/file.php';
 		}
-		
+
 		WP_Filesystem();
 		global $wp_filesystem;
 		$this->filesystem = $wp_filesystem;
@@ -71,8 +71,8 @@ class PageCacheService {
 	 * Get sanitized domain
 	 */
 	private function get_domain(): string {
-		return isset( $_SERVER['HTTP_HOST'] ) 
-			? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) 
+		return isset( $_SERVER['HTTP_HOST'] )
+			? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) )
 			: parse_url( home_url(), PHP_URL_HOST );
 	}
 
@@ -196,8 +196,8 @@ class PageCacheService {
 	 * Get current URL path
 	 */
 	private function get_current_url(): string {
-		$request_uri = isset( $_SERVER['REQUEST_URI'] ) 
-			? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) 
+		$request_uri = isset( $_SERVER['REQUEST_URI'] )
+			? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) )
 			: '';
 		return trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' );
 	}
@@ -206,13 +206,13 @@ class PageCacheService {
 	 * Get cache file path for current page
 	 */
 	private function get_cache_file_path(): string {
-		$url_path = $this->get_current_url();
+		$url_path  = $this->get_current_url();
 		$cache_dir = "{$this->cache_root_dir}/{$this->domain}";
-		
+
 		if ( empty( $url_path ) || $url_path === '/' ) {
 			return "{$cache_dir}/index.html";
 		}
-		
+
 		return "{$cache_dir}/{$url_path}/index.html";
 	}
 
@@ -221,7 +221,7 @@ class PageCacheService {
 	 */
 	public function start_caching(): void {
 		error_log( 'WPPO PageCache: start_caching called' );
-		
+
 		if ( ! $this->should_cache_page() ) {
 			error_log( 'WPPO PageCache: should_cache_page returned false' );
 			return;
@@ -240,8 +240,8 @@ class PageCacheService {
 		}
 
 		// Don't cache if there are PHP errors
-		if ( strpos( $buffer, '<b>Fatal error</b>' ) !== false || 
-		     strpos( $buffer, '<b>Warning</b>' ) !== false ) {
+		if ( strpos( $buffer, '<b>Fatal error</b>' ) !== false ||
+			strpos( $buffer, '<b>Warning</b>' ) !== false ) {
 			return $buffer;
 		}
 
@@ -259,7 +259,7 @@ class PageCacheService {
 				"\n<!-- Cached by Performance Optimisation on %s -->",
 				current_time( 'mysql' )
 			);
-			$buffer .= $cache_meta;
+			$buffer    .= $cache_meta;
 
 			// Save regular file
 			$this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
@@ -289,7 +289,7 @@ class PageCacheService {
 			}
 
 			$result = $this->filesystem->delete( $cache_dir, true );
-			
+
 			if ( $result ) {
 				$this->logger->info( 'All page cache cleared' );
 				return true;
@@ -308,9 +308,9 @@ class PageCacheService {
 	 */
 	public function clear_url_cache( string $url ): bool {
 		try {
-			$path = trim( wp_parse_url( $url, PHP_URL_PATH ), '/' );
+			$path      = trim( wp_parse_url( $url, PHP_URL_PATH ), '/' );
 			$cache_dir = "{$this->cache_root_dir}/{$this->domain}";
-			
+
 			if ( empty( $path ) ) {
 				$file_path = "{$cache_dir}/index.html";
 			} else {
@@ -335,36 +335,39 @@ class PageCacheService {
 	public function get_cache_stats(): array {
 		$start_time = microtime( true );
 		$this->logger->debug( 'get_cache_stats: Starting' );
-		
+
 		$cache_dir = "{$this->cache_root_dir}/{$this->domain}";
 
 		if ( ! $this->filesystem->is_dir( $cache_dir ) ) {
 			$this->logger->debug( 'get_cache_stats: Cache directory does not exist', array( 'dir' => $cache_dir ) );
 			return array(
-				'enabled' => $this->is_cache_enabled(),
-				'files' => 0,
-				'size' => 0,
+				'enabled'        => $this->is_cache_enabled(),
+				'files'          => 0,
+				'size'           => 0,
 				'size_formatted' => '0 B',
-				'hit_rate' => 0,
+				'hit_rate'       => 0,
 			);
 		}
 
 		$this->logger->debug( 'get_cache_stats: Calculating stats', array( 'dir' => $cache_dir ) );
 		$stats = $this->calculate_cache_stats( $cache_dir );
-		
+
 		$elapsed = microtime( true ) - $start_time;
-		$this->logger->debug( 'get_cache_stats: Completed', array( 
-			'files' => $stats['files'], 
-			'size' => $stats['size'],
-			'elapsed_ms' => round( $elapsed * 1000, 2 )
-		) );
+		$this->logger->debug(
+			'get_cache_stats: Completed',
+			array(
+				'files'      => $stats['files'],
+				'size'       => $stats['size'],
+				'elapsed_ms' => round( $elapsed * 1000, 2 ),
+			)
+		);
 
 		return array(
-			'enabled' => $this->is_cache_enabled(),
-			'files' => $stats['files'],
-			'size' => $stats['size'],
+			'enabled'        => $this->is_cache_enabled(),
+			'files'          => $stats['files'],
+			'size'           => $stats['size'],
 			'size_formatted' => size_format( $stats['size'], 2 ),
-			'hit_rate' => $this->calculate_hit_rate( $stats['files'] ),
+			'hit_rate'       => $this->calculate_hit_rate( $stats['files'] ),
 		);
 	}
 
@@ -373,43 +376,52 @@ class PageCacheService {
 	 */
 	private function calculate_cache_stats( string $directory ): array {
 		$start_time = microtime( true );
-		$files = 0;
-		$size = 0;
+		$files      = 0;
+		$size       = 0;
 
 		$this->logger->debug( 'calculate_cache_stats: Reading directory', array( 'dir' => $directory ) );
 		$items = $this->filesystem->dirlist( $directory );
 
 		if ( ! $items ) {
 			$this->logger->debug( 'calculate_cache_stats: No items found' );
-			return array( 'files' => 0, 'size' => 0 );
+			return array(
+				'files' => 0,
+				'size'  => 0,
+			);
 		}
 
 		$this->logger->debug( 'calculate_cache_stats: Processing items', array( 'count' => count( $items ) ) );
-		
+
 		foreach ( $items as $item ) {
 			$item_path = trailingslashit( $directory ) . $item['name'];
 
 			if ( 'd' === $item['type'] ) {
 				$sub_stats = $this->calculate_cache_stats( $item_path );
-				$files += $sub_stats['files'];
-				$size += $sub_stats['size'];
+				$files    += $sub_stats['files'];
+				$size     += $sub_stats['size'];
 			} else {
 				// Only count .html files, not .gz
 				if ( substr( $item['name'], -5 ) === '.html' ) {
-					$files++;
+					++$files;
 					$size += $this->filesystem->size( $item_path );
 				}
 			}
 		}
 
 		$elapsed = microtime( true ) - $start_time;
-		$this->logger->debug( 'calculate_cache_stats: Completed', array( 
-			'files' => $files, 
-			'size' => $size,
-			'elapsed_ms' => round( $elapsed * 1000, 2 )
-		) );
+		$this->logger->debug(
+			'calculate_cache_stats: Completed',
+			array(
+				'files'      => $files,
+				'size'       => $size,
+				'elapsed_ms' => round( $elapsed * 1000, 2 ),
+			)
+		);
 
-		return array( 'files' => $files, 'size' => $size );
+		return array(
+			'files' => $files,
+			'size'  => $size,
+		);
 	}
 
 	/**
@@ -436,10 +448,10 @@ class PageCacheService {
 		$url = get_permalink( $post_id );
 		if ( $url ) {
 			$this->clear_url_cache( $url );
-			
+
 			// Also clear homepage
 			$this->clear_url_cache( home_url( '/' ) );
-			
+
 			// Warm cache for the updated post
 			$this->warm_url_cache( $url );
 		}
@@ -450,12 +462,15 @@ class PageCacheService {
 	 */
 	public function warm_url_cache( string $url ): void {
 		// Make non-blocking request to generate cache
-		wp_remote_get( $url, array(
-			'blocking'  => false,
-			'timeout'   => 0.01,
-			'sslverify' => false,
-		) );
-		
+		wp_remote_get(
+			$url,
+			array(
+				'blocking'  => false,
+				'timeout'   => 0.01,
+				'sslverify' => false,
+			)
+		);
+
 		$this->logger->debug( 'Cache warming initiated', array( 'url' => $url ) );
 	}
 
@@ -464,12 +479,12 @@ class PageCacheService {
 	 */
 	public function warm_cache( array $urls ): int {
 		$warmed = 0;
-		
+
 		foreach ( $urls as $url ) {
 			$this->warm_url_cache( $url );
-			$warmed++;
+			++$warmed;
 		}
-		
+
 		$this->logger->info( 'Cache warming completed', array( 'urls' => $warmed ) );
 		return $warmed;
 	}
@@ -479,16 +494,16 @@ class PageCacheService {
 	 */
 	public function create_advanced_cache_dropin(): bool {
 		$dropin_path = WP_CONTENT_DIR . '/advanced-cache.php';
-		$content = $this->get_advanced_cache_content();
+		$content     = $this->get_advanced_cache_content();
 
 		try {
 			$result = $this->filesystem->put_contents( $dropin_path, $content, FS_CHMOD_FILE );
-			
+
 			if ( $result ) {
 				$this->logger->info( 'Advanced cache drop-in created' );
 				return true;
 			}
-			
+
 			return false;
 		} catch ( \Exception $e ) {
 			$this->logger->error( 'Failed to create advanced-cache.php', array( 'error' => $e->getMessage() ) );
@@ -508,12 +523,12 @@ class PageCacheService {
 
 		try {
 			$result = $this->filesystem->delete( $dropin_path );
-			
+
 			if ( $result ) {
 				$this->logger->info( 'Advanced cache drop-in removed' );
 				return true;
 			}
-			
+
 			return false;
 		} catch ( \Exception $e ) {
 			$this->logger->error( 'Failed to remove advanced-cache.php', array( 'error' => $e->getMessage() ) );
@@ -526,7 +541,7 @@ class PageCacheService {
 	 */
 	private function get_advanced_cache_content(): string {
 		$cache_ttl = $this->settings->get_setting( 'cache_settings', 'cache_ttl', 3600 );
-		
+
 		$content = <<<'PHP'
 <?php
 /**
@@ -608,12 +623,12 @@ PHP;
 	 */
 	public function enable_cache(): bool {
 		$result = $this->create_advanced_cache_dropin();
-		
+
 		if ( $result ) {
 			// Enable WP_CACHE constant in wp-config.php
 			$this->enable_wp_cache_constant();
 		}
-		
+
 		return $result;
 	}
 
@@ -630,16 +645,16 @@ PHP;
 	 */
 	private function enable_wp_cache_constant(): void {
 		$config_path = ABSPATH . 'wp-config.php';
-		
+
 		if ( ! $this->filesystem->exists( $config_path ) ) {
 			return;
 		}
 
 		$config_content = $this->filesystem->get_contents( $config_path );
-		
+
 		// Check if WP_CACHE is already defined
-		if ( strpos( $config_content, "define( 'WP_CACHE'" ) !== false || 
-		     strpos( $config_content, "define('WP_CACHE'" ) !== false ) {
+		if ( strpos( $config_content, "define( 'WP_CACHE'" ) !== false ||
+			strpos( $config_content, "define('WP_CACHE'" ) !== false ) {
 			return;
 		}
 

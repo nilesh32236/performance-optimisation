@@ -305,7 +305,7 @@ class SettingsController extends BaseController {
 
 			// Update settings - update_option returns false if value hasn't changed
 			$success = update_option( 'wppo_settings', $updated_settings );
-			
+
 			// If update_option returns false, check if it's because the value is the same
 			if ( ! $success ) {
 				$stored_value = get_option( 'wppo_settings' );
@@ -997,7 +997,7 @@ class SettingsController extends BaseController {
 	private function check_page_cache_changed( array $old_settings, array $new_settings ): bool {
 		$old_enabled = $old_settings['cache_settings']['page_cache_enabled'] ?? false;
 		$new_enabled = $new_settings['cache_settings']['page_cache_enabled'] ?? false;
-		
+
 		return $old_enabled !== $new_enabled;
 	}
 
@@ -1011,7 +1011,7 @@ class SettingsController extends BaseController {
 	private function check_browser_cache_changed( array $old_settings, array $new_settings ): bool {
 		$old_enabled = $old_settings['cache_settings']['browser_cache_enabled'] ?? false;
 		$new_enabled = $new_settings['cache_settings']['browser_cache_enabled'] ?? false;
-		
+
 		return $old_enabled !== $new_enabled;
 	}
 
@@ -1023,11 +1023,11 @@ class SettingsController extends BaseController {
 	 */
 	private function manage_browser_cache( array $settings ): void {
 		$browser_cache_enabled = $settings['cache_settings']['browser_cache_enabled'] ?? false;
-		
+
 		try {
-			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
+			$container             = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
 			$browser_cache_service = $container->get( 'PerformanceOptimisation\\Services\\BrowserCacheService' );
-			
+
 			if ( $browser_cache_enabled ) {
 				$browser_cache_service->enable();
 				error_log( 'WPPO: Browser cache enabled, .htaccess rules added' );
@@ -1048,11 +1048,11 @@ class SettingsController extends BaseController {
 	 */
 	private function manage_advanced_cache_dropin( array $settings ): void {
 		$page_cache_enabled = $settings['cache_settings']['page_cache_enabled'] ?? false;
-		
+
 		try {
-			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
+			$container          = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
 			$page_cache_service = $container->get( 'PageCacheService' );
-			
+
 			if ( $page_cache_enabled ) {
 				$page_cache_service->enable_cache();
 				error_log( 'WPPO: Page cache enabled, advanced-cache.php created' );

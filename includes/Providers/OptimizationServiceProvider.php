@@ -54,7 +54,7 @@ class OptimizationServiceProvider extends ServiceProvider {
 				);
 			}
 		);
-		
+
 		// Register CacheService with PageCacheService dependency
 		$container->singleton(
 			'PerformanceOptimisation\\Services\\CacheService',

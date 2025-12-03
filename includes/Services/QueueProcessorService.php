@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class QueueProcessorService {
 
-	private const CRON_HOOK = 'wppo_process_conversion_queue';
+	private const CRON_HOOK  = 'wppo_process_conversion_queue';
 	private const BATCH_SIZE = 5; // Process 5 images per cron run
 
 	private ConversionQueue $queue;
@@ -87,9 +87,12 @@ class QueueProcessorService {
 			return;
 		}
 
-		LoggingUtil::info( 'Processing queue batch', array(
-			'count' => count( $items ),
-		) );
+		LoggingUtil::info(
+			'Processing queue batch',
+			array(
+				'count' => count( $items ),
+			)
+		);
 
 		foreach ( $items as $item ) {
 			$this->process_item( $item['source_path'], $item['target_format'] );
@@ -110,9 +113,12 @@ class QueueProcessorService {
 		try {
 			// Check if file still exists
 			if ( ! file_exists( $source_path ) ) {
-				LoggingUtil::warning( 'Queue item file not found, marking as skipped', array(
-					'path' => $source_path,
-				) );
+				LoggingUtil::warning(
+					'Queue item file not found, marking as skipped',
+					array(
+						'path' => $source_path,
+					)
+				);
 				$this->queue->update_status( $source_path, $target_format, 'skipped' );
 				return;
 			}
@@ -121,28 +127,37 @@ class QueueProcessorService {
 			$result = $this->imageService->convert_image( $source_path, $target_format );
 
 			if ( ! empty( $result ) ) {
-				LoggingUtil::info( 'Queue item converted successfully', array(
-					'source' => $source_path,
-					'format' => $target_format,
-					'result' => $result,
-				) );
+				LoggingUtil::info(
+					'Queue item converted successfully',
+					array(
+						'source' => $source_path,
+						'format' => $target_format,
+						'result' => $result,
+					)
+				);
 				$this->queue->update_status( $source_path, $target_format, 'completed' );
-				
+
 				// Handle deletion in Space Saver mode
 				$this->delete_original_if_needed( $source_path, $target_format );
 			} else {
-				LoggingUtil::warning( 'Queue item conversion failed', array(
-					'source' => $source_path,
-					'format' => $target_format,
-				) );
+				LoggingUtil::warning(
+					'Queue item conversion failed',
+					array(
+						'source' => $source_path,
+						'format' => $target_format,
+					)
+				);
 				$this->queue->update_status( $source_path, $target_format, 'failed' );
 			}
 		} catch ( \Exception $e ) {
-			LoggingUtil::error( 'Queue processing exception', array(
-				'source'  => $source_path,
-				'format'  => $target_format,
-				'message' => $e->getMessage(),
-			) );
+			LoggingUtil::error(
+				'Queue processing exception',
+				array(
+					'source'  => $source_path,
+					'format'  => $target_format,
+					'message' => $e->getMessage(),
+				)
+			);
 			$this->queue->update_status( $source_path, $target_format, 'failed' );
 		}
 	}
@@ -156,8 +171,8 @@ class QueueProcessorService {
 	 */
 	private function delete_original_if_needed( string $source_path, string $target_format ): void {
 		// Check if Space Saver mode is enabled
-		$storage_mode = $this->settings['images']['storage_mode'] 
-			?? $this->settings['image_optimization']['storage_mode'] 
+		$storage_mode = $this->settings['images']['storage_mode']
+			?? $this->settings['image_optimization']['storage_mode']
 			?? 'safe';
 
 		if ( $storage_mode !== 'space_saver' ) {
@@ -165,9 +180,9 @@ class QueueProcessorService {
 		}
 
 		// Get enabled formats from settings
-		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] ) 
+		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] )
 			|| ! empty( $this->settings['image_optimization']['webp_conversion'] );
-		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] ) 
+		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] )
 			|| ! empty( $this->settings['image_optimization']['avif_conversion'] );
 
 		// Determine required conversions
@@ -181,38 +196,50 @@ class QueueProcessorService {
 
 		// Verify ALL required formats have been successfully converted
 		if ( ! $this->all_formats_converted( $source_path, $required_formats ) ) {
-			LoggingUtil::info( 'Skipping deletion - not all formats converted yet', array(
-				'source'           => $source_path,
-				'just_converted'   => $target_format,
-				'required_formats' => $required_formats,
-			) );
+			LoggingUtil::info(
+				'Skipping deletion - not all formats converted yet',
+				array(
+					'source'           => $source_path,
+					'just_converted'   => $target_format,
+					'required_formats' => $required_formats,
+				)
+			);
 			return;
 		}
 
 		// Perform safety checks before deletion
 		if ( ! $this->is_safe_to_delete( $source_path, $required_formats ) ) {
-			LoggingUtil::warning( 'Safety check failed - keeping original', array(
-				'source' => $source_path,
-			) );
+			LoggingUtil::warning(
+				'Safety check failed - keeping original',
+				array(
+					'source' => $source_path,
+				)
+			);
 			return;
 		}
 
 		// Safe to delete - perform deletion
 		$original_size = file_exists( $source_path ) ? filesize( $source_path ) : 0;
 		if ( @unlink( $source_path ) ) {
-			LoggingUtil::info( 'Original file deleted (Space Saver mode)', array(
-				'source'     => $source_path,
-				'formats'    => $required_formats,
-				'deleted_at' => current_time( 'mysql' ),
-				'size'       => $original_size,
-			) );
+			LoggingUtil::info(
+				'Original file deleted (Space Saver mode)',
+				array(
+					'source'     => $source_path,
+					'formats'    => $required_formats,
+					'deleted_at' => current_time( 'mysql' ),
+					'size'       => $original_size,
+				)
+			);
 
 			// Track deletion for  potential restore/audit
 			$this->log_deletion( $source_path, $required_formats, $original_size );
 		} else {
-			LoggingUtil::error( 'Failed to delete original file', array(
-				'source' => $source_path,
-			) );
+			LoggingUtil::error(
+				'Failed to delete original file',
+				array(
+					'source' => $source_path,
+				)
+			);
 		}
 	}
 
@@ -226,7 +253,7 @@ class QueueProcessorService {
 	private function all_formats_converted( string $source_path, array $required_formats ): bool {
 		foreach ( $required_formats as $format ) {
 			$converted_path = \PerformanceOptimisation\Utils\ImageUtil::optimizeImagePath( $source_path, $format );
-			
+
 			if ( ! file_exists( $converted_path ) ) {
 				return false;
 			}
@@ -250,13 +277,16 @@ class QueueProcessorService {
 		// Check 2: All converted files must be valid (> 100 bytes)
 		foreach ( $formats as $format ) {
 			$converted_path = \PerformanceOptimisation\Utils\ImageUtil::optimizeImagePath( $source_path, $format );
-			
+
 			if ( ! file_exists( $converted_path ) || filesize( $converted_path ) < 100 ) {
-				LoggingUtil::warning( 'Converted file too small or missing', array(
-					'format' => $format,
-					'path'   => $converted_path,
-					'size'   => file_exists( $converted_path ) ? filesize( $converted_path ) : 0,
-				) );
+				LoggingUtil::warning(
+					'Converted file too small or missing',
+					array(
+						'format' => $format,
+						'path'   => $converted_path,
+						'size'   => file_exists( $converted_path ) ? filesize( $converted_path ) : 0,
+					)
+				);
 				return false;
 			}
 		}
@@ -281,7 +311,7 @@ class QueueProcessorService {
 	 */
 	private function log_deletion( string $source_path, array $formats, int $size = 0 ): void {
 		$deletions = get_option( 'wppo_deleted_originals', array() );
-		
+
 		$deletions[ $source_path ] = array(
 			'deleted_at'    => current_time( 'mysql' ),
 			'converted_to'  => $formats,

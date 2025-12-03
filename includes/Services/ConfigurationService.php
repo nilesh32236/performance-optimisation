@@ -577,7 +577,7 @@ class ConfigurationService {
 				),
 			),
 			'images'       => array(
-				'convert_to_webp'     => array(
+				'convert_to_webp'        => array(
 					'type'    => 'boolean',
 					'default' => true,
 				),
@@ -585,31 +585,31 @@ class ConfigurationService {
 					'type'    => 'boolean',
 					'default' => true,
 				),
-				'convert_to_avif'     => array(
+				'convert_to_avif'        => array(
 					'type'    => 'boolean',
 					'default' => false,
 				),
-				'lazy_loading'        => array(
+				'lazy_loading'           => array(
 					'type'    => 'boolean',
 					'default' => true,
 				),
-				'compression_quality' => array(
+				'compression_quality'    => array(
 					'type'    => 'integer',
 					'min'     => 1,
 					'max'     => 100,
 					'default' => 85,
 				),
-				'resize_large_images' => array(
+				'resize_large_images'    => array(
 					'type'    => 'boolean',
 					'default' => true,
 				),
-				'max_image_width'     => array(
+				'max_image_width'        => array(
 					'type'    => 'integer',
 					'min'     => 100,
 					'max'     => 5000,
 					'default' => 1920,
 				),
-				'max_image_height'    => array(
+				'max_image_height'       => array(
 					'type'    => 'integer',
 					'min'     => 100,
 					'max'     => 5000,

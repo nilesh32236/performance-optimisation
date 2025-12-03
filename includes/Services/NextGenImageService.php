@@ -19,12 +19,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class NextGenImageService {
 
+
 	private array $settings;
 	private array $exclude_images = array();
 	private $conversionQueue;
 
 	public function __construct( array $settings, $conversionQueue = null ) {
-		$this->settings = $settings;
+		$this->settings        = $settings;
 		$this->conversionQueue = $conversionQueue;
 
 		if ( ! empty( $settings['images']['exclude_webp_images'] ) ) {
@@ -37,9 +38,9 @@ class NextGenImageService {
 	 */
 	public function init(): void {
 		// Check both new and old settings structures for WebP/AVIF enabled
-		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] ) 
+		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] )
 			|| ! empty( $this->settings['image_optimization']['webp_conversion'] );
-		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] ) 
+		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] )
 			|| ! empty( $this->settings['image_optimization']['avif_conversion'] );
 
 		if ( ! $webp_enabled && ! $avif_enabled ) {
@@ -102,8 +103,8 @@ class NextGenImageService {
 							', ',
 							array_map(
 								function ( $srcset_item ) use ( $supports_avif, $supports_webp ) {
-									list( $url, $descriptor ) = array_pad( explode( ' ', trim( $srcset_item ), 2 ), 2, '' );
-									$new_url                  = $this->get_next_gen_url( $url, $supports_avif, $supports_webp );
+									list($url, $descriptor) = array_pad( explode( ' ', trim( $srcset_item ), 2 ), 2, '' );
+									$new_url                = $this->get_next_gen_url( $url, $supports_avif, $supports_webp );
 									return $new_url . ( $descriptor ? " $descriptor" : '' );
 								},
 								explode( ',', $srcset )
@@ -128,11 +129,12 @@ class NextGenImageService {
 	/**
 	 * Maybe serve next-gen image for attachment.
 	 *
-	 * @param array $image Image source array.
-	 * @return array Modified image source.
+	 * @param mixed $image Image source array or false.
+	 * @return mixed Modified image source or original value.
 	 */
-	public function maybe_serve_next_gen_image( $image ): array {
-		if ( empty( $image[0] ) ) {
+	public function maybe_serve_next_gen_image( $image ) {
+		// Return early if not an array (e.g., false from wp_get_attachment_image_src)
+		if ( ! is_array( $image ) || empty( $image[0] ) ) {
 			return $image;
 		}
 
@@ -169,9 +171,9 @@ class NextGenImageService {
 		}
 
 		// Try AVIF first
-		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] ) 
+		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] )
 			|| ! empty( $this->settings['image_optimization']['avif_conversion'] );
-		
+
 		if ( $supports_avif && $avif_enabled ) {
 			$avif_url  = $this->replace_extension( $url, 'avif' );
 			$avif_path = $this->url_to_path( $avif_url );
@@ -184,9 +186,9 @@ class NextGenImageService {
 		}
 
 		// Try WebP
-		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] ) 
+		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] )
 			|| ! empty( $this->settings['image_optimization']['webp_conversion'] );
-		
+
 		if ( $supports_webp && $webp_enabled ) {
 			$webp_url  = $this->replace_extension( $url, 'webp' );
 			$webp_path = $this->url_to_path( $webp_url );
@@ -217,23 +219,23 @@ class NextGenImageService {
 			$pattern,
 			function ( $matches ) use ( $supports_avif, $supports_webp ) {
 				$style = $matches[1];
-				
+
 				// Extract URLs from background-image and background properties
 				$url_pattern = '/url\s*\(\s*["\']?([^"\')]+)["\']?\s*\)/i';
-				
+
 				$style = preg_replace_callback(
 					$url_pattern,
 					function ( $url_match ) use ( $supports_avif, $supports_webp ) {
 						$url = $url_match[1];
-						
+
 						// Skip data URIs, gradients, and external URLs
 						if ( $this->should_skip_css_url( $url ) ) {
 							return $url_match[0];
 						}
-						
+
 						// Get next-gen URL
 						$new_url = $this->get_next_gen_url( $url, $supports_avif, $supports_webp );
-						
+
 						// Return with preserved format
 						$quote = '';
 						if ( strpos( $url_match[0], '"' ) !== false ) {
@@ -241,12 +243,12 @@ class NextGenImageService {
 						} elseif ( strpos( $url_match[0], "'" ) !== false ) {
 							$quote = "'";
 						}
-						
+
 						return 'url(' . $quote . $new_url . $quote . ')';
 					},
 					$style
 				);
-				
+
 				return 'style="' . $style . '"';
 			},
 			$content
@@ -264,18 +266,18 @@ class NextGenImageService {
 		if ( strpos( $url, 'data:' ) === 0 ) {
 			return true;
 		}
-		
+
 		// Skip gradients
 		if ( preg_match( '/(linear|radial|repeating)-gradient/i', $url ) ) {
 			return true;
 		}
-		
+
 		// Skip external URLs (only process same-domain images)
 		$site_url = home_url();
 		if ( strpos( $url, 'http' ) === 0 && strpos( $url, $site_url ) !== 0 ) {
 			return true;
 		}
-		
+
 		return false;
 	}
 

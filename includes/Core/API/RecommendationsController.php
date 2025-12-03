@@ -52,11 +52,11 @@ class RecommendationsController extends BaseController {
 		// Get services from container
 		try {
 			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
-			
+
 			if ( $container->has( 'cache_service' ) ) {
 				$this->cache_service = $container->get( 'cache_service' );
 			}
-			
+
 			if ( $container->has( 'logger' ) ) {
 				$this->logger = $container->get( 'logger' );
 			}
@@ -304,7 +304,7 @@ class RecommendationsController extends BaseController {
 	private function trigger_image_optimization(): void {
 		try {
 			$container = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
-			
+
 			if ( $container->has( 'cron_service' ) ) {
 				$cron_service = $container->get( 'cron_service' );
 				$cron_service->run_image_conversion_tasks();

@@ -7,36 +7,36 @@
 
 /* WordPress Admin Integration Overrides */
 .toplevel_page_performance-optimisation {
-  .wp-header-end { display: none; }
-  .wrap { margin: 0 !important; padding: 0 !important; }
-  .wp-heading-inline { display: none; }
+	.wp-header-end { display: none; }
+	.wrap { margin: 0 !important; padding: 0 !important; }
+	.wp-heading-inline { display: none; }
 
-  .wp-admin-sidebar-fix {
-    left: -20px;
-    width: calc(100% + 20px);
+	.wp-admin-sidebar-fix {
+	left: -20px;
+	width: calc(100% + 20px);
 
-    @media screen and (min-width: 782px) {
-      top: 32px;
-      height: calc(100vh - 32px);
-    }
-  }
+	@media screen and (min-width: 782px) {
+		top: 32px;
+		height: calc(100vh - 32px);
+	}
+	}
 }
 
 /* Animations */
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+	from { opacity: 0; }
+	to { opacity: 1; }
 }
 
 .animate-fade-in {
-  animation: fade-in 0.3s ease-out forwards;
+	animation: fade-in 0.3s ease-out forwards;
 }
 
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+	from { opacity: 0; transform: translateY(10px); }
+	to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.3s ease-out forwards;
+	animation: fade-in-up 0.3s ease-out forwards;
 }

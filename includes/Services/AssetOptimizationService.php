@@ -185,24 +185,24 @@ class AssetOptimizationService {
 			if ( strpos( $local_path, '.min.js' ) === false ) {
 				// Process file (this method handles caching internally)
 				$optimized_content = $this->js_optimizer->process_file( $local_path );
-				
+
 				// In a real scenario, we would save this to a file and serve that URL
 				// For now, let's assume process_file returns content, but we need a URL
 				// We need to implement file saving in JsOptimizer or here.
 				// JsOptimizer::process_file returns content.
-				
+
 				// Let's generate a cache file path
-				$filename = basename( $local_path, '.js' ) . '.min.js';
-				$cache_dir = WP_CONTENT_DIR . '/cache/wppo/min/js/';
+				$filename   = basename( $local_path, '.js' ) . '.min.js';
+				$cache_dir  = WP_CONTENT_DIR . '/cache/wppo/min/js/';
 				$cache_path = $cache_dir . $filename;
-				
+
 				if ( ! file_exists( $cache_path ) || filemtime( $local_path ) > filemtime( $cache_path ) ) {
 					FileSystemUtil::createDirectory( $cache_dir );
 					FileSystemUtil::writeFile( $cache_path, $optimized_content );
 				}
-				
+
 				$optimized_url = content_url( 'cache/wppo/min/js/' . $filename );
-				$tag = str_replace( $src, $optimized_url, $tag );
+				$tag           = str_replace( $src, $optimized_url, $tag );
 			}
 		}
 
@@ -261,18 +261,18 @@ class AssetOptimizationService {
 			}
 
 			// Wildcard match optimization
-            // If pattern contains *, convert to regex and cache it (in a real scenario, we'd cache this)
-            // For now, use fnmatch which is generally fast enough, but let's ensure we don't do it if no * is present
-            if ( strpos( $pattern, '*' ) !== false ) {
-			    if ( fnmatch( $pattern, $item ) ) {
-				    return true;
-			    }
-            } else {
-                // Substring match (legacy support) - only if no wildcard
-                if ( strpos( $item, $pattern ) !== false ) {
-                    return true;
-                }
-            }
+			// If pattern contains *, convert to regex and cache it (in a real scenario, we'd cache this)
+			// For now, use fnmatch which is generally fast enough, but let's ensure we don't do it if no * is present
+			if ( strpos( $pattern, '*' ) !== false ) {
+				if ( fnmatch( $pattern, $item ) ) {
+					return true;
+				}
+			} else {
+				// Substring match (legacy support) - only if no wildcard
+				if ( strpos( $item, $pattern ) !== false ) {
+					return true;
+				}
+			}
 		}
 
 		return false;
