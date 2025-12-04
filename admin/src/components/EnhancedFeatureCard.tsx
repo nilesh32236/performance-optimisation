@@ -16,7 +16,7 @@ interface EnhancedFeatureCardProps {
     title: string;
     description: string;
     enabled: boolean;
-    onToggle: (enabled: boolean) => void | Promise<void>;
+    onToggle: (enabled: boolean) => void;
     color: 'blue' | 'purple' | 'emerald' | 'orange' | 'indigo' | 'red' | 'pink';
     children?: React.ReactNode; // Advanced options
     disabled?: boolean;
@@ -134,24 +134,18 @@ export const EnhancedFeatureCard: React.FC<EnhancedFeatureCardProps> = ({
 
                 {/* Toggle Switch */}
                 <div className="flex items-center justify-between pt-6 border-t border-slate-100">
-                    <span className={`text-sm font-semibold transition-colors flex items-center gap-2 ${enabled ? colors.text : 'text-slate-400'}`}>
+                    <span className={`text-sm font-semibold transition-colors ${enabled ? colors.text : 'text-slate-400'}`}>
                         {enabled ? 'Active' : 'Inactive'}
                     </span>
-                    <label className={`relative inline-flex items-center ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                    <label className="relative inline-flex items-center cursor-pointer">
                         <input
                             type="checkbox"
                             className="sr-only peer"
                             checked={enabled}
-                            onChange={async (e) => {
-                                if (!disabled) {
-                                    await onToggle(e.target.checked);
-                                }
-                            }}
+                            onChange={(e) => onToggle(e.target.checked)}
                             disabled={disabled}
                         />
-                        <div className={`relative w-14 h-8 rounded-full peer transition-colors duration-200 ${enabled && !disabled ? colors.bg : disabled ? 'bg-slate-100' : 'bg-slate-200'} peer-focus:outline-none ${!disabled ? `peer-focus:ring-4 peer-focus:ring-${color}-100` : ''}`}>
-                            <div className={`absolute top-1 left-1 bg-white border border-gray-300 rounded-full h-6 w-6 transition-transform duration-200 ${enabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                        </div>
+                        <div className={`w-14 h-8 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-${color}-100 rounded-full peer peer-checked:after:translate-x-6 peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:${colors.bg}`}></div>
                     </label>
                 </div>
 

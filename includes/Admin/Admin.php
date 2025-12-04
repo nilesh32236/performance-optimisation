@@ -137,7 +137,7 @@ class Admin {
 		$asset_file_path = WPPO_PLUGIN_PATH . 'build/index.asset.php';
 		$asset_file      = file_exists( $asset_file_path ) ? include $asset_file_path : array(
 			'dependencies' => array(),
-			'version'      => file_exists( WPPO_PLUGIN_PATH . 'build/index.js' ) ? filemtime( WPPO_PLUGIN_PATH . 'build/index.js' ) : WPPO_VERSION,
+			'version'      => WPPO_VERSION,
 		);
 
 		wp_enqueue_style(
