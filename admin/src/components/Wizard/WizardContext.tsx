@@ -20,6 +20,7 @@ export interface WizardState {
 	data: Record<string, any>;
 	completedSteps: Set<number>;
 	visitedSteps: Set<number>;
+	steps: WizardStep[];
 }
 
 export interface WizardContextType {
@@ -54,6 +55,7 @@ const initialState: WizardState = {
 	data: {},
 	completedSteps: new Set(),
 	visitedSteps: new Set( [ 1 ] ),
+	steps: [],
 };
 
 // Reducer
@@ -118,6 +120,7 @@ export function WizardProvider( { children, steps }: WizardProviderProps ) {
 	const [ state, dispatch ] = useReducer( wizardReducer, {
 		...initialState,
 		totalSteps: steps.length,
+		steps: steps,
 	} );
 
 	const goToStep = ( step: number ) => {
