@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit6c7ac34844f3311ca3b02128116468d6
+class ComposerStaticInit4dfba5fc36225037ffcffc1b65c48f11
 {
     public static $files = array (
         'a4a119a56e50fbb293281d9a48007e0e' => __DIR__ . '/..' . '/symfony/polyfill-php80/bootstrap.php',
@@ -387,6 +387,7 @@ class ComposerStaticInit6c7ac34844f3311ca3b02128116468d6
         'PHPCSUtils\\Exceptions\\UnexpectedTokenType' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/UnexpectedTokenType.php',
         'PHPCSUtils\\Exceptions\\ValueError' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Exceptions/ValueError.php',
         'PHPCSUtils\\Fixers\\SpacesFixer' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Fixers/SpacesFixer.php',
+        'PHPCSUtils\\Internal\\AttributeHelper' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/AttributeHelper.php',
         'PHPCSUtils\\Internal\\Cache' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/Cache.php',
         'PHPCSUtils\\Internal\\IsShortArrayOrList' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/IsShortArrayOrList.php',
         'PHPCSUtils\\Internal\\IsShortArrayOrListWithCache' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Internal/IsShortArrayOrListWithCache.php',
@@ -398,6 +399,7 @@ class ComposerStaticInit6c7ac34844f3311ca3b02128116468d6
         'PHPCSUtils\\Tokens\\Collections' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Tokens/Collections.php',
         'PHPCSUtils\\Tokens\\TokenHelper' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Tokens/TokenHelper.php',
         'PHPCSUtils\\Utils\\Arrays' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Arrays.php',
+        'PHPCSUtils\\Utils\\AttributeBlock' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/AttributeBlock.php',
         'PHPCSUtils\\Utils\\Conditions' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Conditions.php',
         'PHPCSUtils\\Utils\\Constants' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Constants.php',
         'PHPCSUtils\\Utils\\Context' => __DIR__ . '/..' . '/phpcsstandards/phpcsutils/PHPCSUtils/Utils/Context.php',
@@ -778,6 +780,7 @@ class ComposerStaticInit6c7ac34844f3311ca3b02128116468d6
         'PerformanceOptimisation\\Core\\API\\ApiRouter' => __DIR__ . '/../..' . '/includes/Core/API/ApiRouter.php',
         'PerformanceOptimisation\\Core\\API\\BaseController' => __DIR__ . '/../..' . '/includes/Core/API/BaseController.php',
         'PerformanceOptimisation\\Core\\API\\CacheController' => __DIR__ . '/../..' . '/includes/Core/API/CacheController.php',
+        'PerformanceOptimisation\\Core\\API\\Controllers\\QueueController' => __DIR__ . '/../..' . '/includes/Core/API/Controllers/QueueController.php',
         'PerformanceOptimisation\\Core\\API\\EnhancedRestController' => __DIR__ . '/../..' . '/includes/Core/API/EnhancedRestController.php',
         'PerformanceOptimisation\\Core\\API\\ImageOptimizationController' => __DIR__ . '/../..' . '/includes/Core/API/ImageOptimizationController.php',
         'PerformanceOptimisation\\Core\\API\\OptimizationController' => __DIR__ . '/../..' . '/includes/Core/API/OptimizationController.php',
@@ -821,6 +824,7 @@ class ComposerStaticInit6c7ac34844f3311ca3b02128116468d6
         'PerformanceOptimisation\\Exceptions\\ImageProcessingException' => __DIR__ . '/../..' . '/includes/Exceptions/ImageProcessingException.php',
         'PerformanceOptimisation\\Exceptions\\OptimizationException' => __DIR__ . '/../..' . '/includes/Exceptions/OptimizationException.php',
         'PerformanceOptimisation\\Exceptions\\PerformanceOptimisationException' => __DIR__ . '/../..' . '/includes/Exceptions/PerformanceOptimisationException.php',
+        'PerformanceOptimisation\\Exceptions\\PluginException' => __DIR__ . '/../..' . '/includes/Exceptions/PluginException.php',
         'PerformanceOptimisation\\Frontend\\Frontend' => __DIR__ . '/../..' . '/includes/Frontend/Frontend.php',
         'PerformanceOptimisation\\Interfaces\\CacheInterface' => __DIR__ . '/../..' . '/includes/Interfaces/CacheInterface.php',
         'PerformanceOptimisation\\Interfaces\\CacheServiceInterface' => __DIR__ . '/../..' . '/includes/Interfaces/CacheServiceInterface.php',
@@ -832,22 +836,32 @@ class ComposerStaticInit6c7ac34844f3311ca3b02128116468d6
         'PerformanceOptimisation\\Interfaces\\ServiceContainerInterface' => __DIR__ . '/../..' . '/includes/Interfaces/ServiceContainerInterface.php',
         'PerformanceOptimisation\\Interfaces\\ServiceProviderInterface' => __DIR__ . '/../..' . '/includes/Interfaces/ServiceProviderInterface.php',
         'PerformanceOptimisation\\Interfaces\\SettingsServiceInterface' => __DIR__ . '/../..' . '/includes/Interfaces/SettingsServiceInterface.php',
+        'PerformanceOptimisation\\Optimizers\\CssOptimizer' => __DIR__ . '/../..' . '/includes/Optimizers/CssOptimizer.php',
         'PerformanceOptimisation\\Optimizers\\HtmlOptimizer' => __DIR__ . '/../..' . '/includes/Optimizers/HtmlOptimizer.php',
+        'PerformanceOptimisation\\Optimizers\\ImageProcessor' => __DIR__ . '/../..' . '/includes/Optimizers/ImageProcessor.php',
         'PerformanceOptimisation\\Optimizers\\JsOptimizer' => __DIR__ . '/../..' . '/includes/Optimizers/JsOptimizer.php',
-        'PerformanceOptimisation\\Optimizers\\ModernCssOptimizer' => __DIR__ . '/../..' . '/includes/Optimizers/ModernCssOptimizer.php',
-        'PerformanceOptimisation\\Optimizers\\ModernImageProcessor' => __DIR__ . '/../..' . '/includes/Optimizers/ModernImageProcessor.php',
         'PerformanceOptimisation\\Providers\\AdminServiceProvider' => __DIR__ . '/../..' . '/includes/Providers/AdminServiceProvider.php',
         'PerformanceOptimisation\\Providers\\CoreComponentsServiceProvider' => __DIR__ . '/../..' . '/includes/Providers/CoreComponentsServiceProvider.php',
         'PerformanceOptimisation\\Providers\\CoreServiceProvider' => __DIR__ . '/../..' . '/includes/Providers/CoreServiceProvider.php',
         'PerformanceOptimisation\\Providers\\OptimizationServiceProvider' => __DIR__ . '/../..' . '/includes/Providers/OptimizationServiceProvider.php',
         'PerformanceOptimisation\\Providers\\UtilityServiceProvider' => __DIR__ . '/../..' . '/includes/Providers/UtilityServiceProvider.php',
         'PerformanceOptimisation\\Services\\AnalyticsService' => __DIR__ . '/../..' . '/includes/Services/AnalyticsService.php',
+        'PerformanceOptimisation\\Services\\AssetOptimizationService' => __DIR__ . '/../..' . '/includes/Services/AssetOptimizationService.php',
+        'PerformanceOptimisation\\Services\\BrowserCacheService' => __DIR__ . '/../..' . '/includes/Services/BrowserCacheService.php',
         'PerformanceOptimisation\\Services\\CacheService' => __DIR__ . '/../..' . '/includes/Services/CacheService.php',
         'PerformanceOptimisation\\Services\\ConfigurationService' => __DIR__ . '/../..' . '/includes/Services/ConfigurationService.php',
         'PerformanceOptimisation\\Services\\CronService' => __DIR__ . '/../..' . '/includes/Services/CronService.php',
+        'PerformanceOptimisation\\Services\\DatabaseOptimizationService' => __DIR__ . '/../..' . '/includes/Services/DatabaseOptimizationService.php',
         'PerformanceOptimisation\\Services\\EnhancedSettingsService' => __DIR__ . '/../..' . '/includes/Services/EnhancedSettingsService.php',
+        'PerformanceOptimisation\\Services\\FontOptimizationService' => __DIR__ . '/../..' . '/includes/Services/FontOptimizationService.php',
+        'PerformanceOptimisation\\Services\\HeartbeatService' => __DIR__ . '/../..' . '/includes/Services/HeartbeatService.php',
         'PerformanceOptimisation\\Services\\ImageService' => __DIR__ . '/../..' . '/includes/Services/ImageService.php',
+        'PerformanceOptimisation\\Services\\LazyLoadService' => __DIR__ . '/../..' . '/includes/Services/LazyLoadService.php',
+        'PerformanceOptimisation\\Services\\NextGenImageService' => __DIR__ . '/../..' . '/includes/Services/NextGenImageService.php',
         'PerformanceOptimisation\\Services\\OptimizationService' => __DIR__ . '/../..' . '/includes/Services/OptimizationService.php',
+        'PerformanceOptimisation\\Services\\PageCacheService' => __DIR__ . '/../..' . '/includes/Services/PageCacheService.php',
+        'PerformanceOptimisation\\Services\\QueueProcessorService' => __DIR__ . '/../..' . '/includes/Services/QueueProcessorService.php',
+        'PerformanceOptimisation\\Services\\ResourceHintsService' => __DIR__ . '/../..' . '/includes/Services/ResourceHintsService.php',
         'PerformanceOptimisation\\Services\\SecurityService' => __DIR__ . '/../..' . '/includes/Services/SecurityService.php',
         'PerformanceOptimisation\\Services\\SettingsService' => __DIR__ . '/../..' . '/includes/Services/SettingsService.php',
         'PerformanceOptimisation\\Utils\\CacheUtil' => __DIR__ . '/../..' . '/includes/Utils/CacheUtil.php',
@@ -857,6 +871,7 @@ class ComposerStaticInit6c7ac34844f3311ca3b02128116468d6
         'PerformanceOptimisation\\Utils\\ImageUtil' => __DIR__ . '/../..' . '/includes/Utils/ImageUtil.php',
         'PerformanceOptimisation\\Utils\\LoggingUtil' => __DIR__ . '/../..' . '/includes/Utils/LoggingUtil.php',
         'PerformanceOptimisation\\Utils\\PerformanceUtil' => __DIR__ . '/../..' . '/includes/Utils/PerformanceUtil.php',
+        'PerformanceOptimisation\\Utils\\RateLimiter' => __DIR__ . '/../..' . '/includes/Utils/RateLimiter.php',
         'PerformanceOptimisation\\Utils\\ValidationUtil' => __DIR__ . '/../..' . '/includes/Utils/ValidationUtil.php',
         'PharIo\\Manifest\\Application' => __DIR__ . '/..' . '/phar-io/manifest/src/values/Application.php',
         'PharIo\\Manifest\\ApplicationName' => __DIR__ . '/..' . '/phar-io/manifest/src/values/ApplicationName.php',
@@ -1530,9 +1545,9 @@ class ComposerStaticInit6c7ac34844f3311ca3b02128116468d6
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit6c7ac34844f3311ca3b02128116468d6::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit6c7ac34844f3311ca3b02128116468d6::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit6c7ac34844f3311ca3b02128116468d6::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit4dfba5fc36225037ffcffc1b65c48f11::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit4dfba5fc36225037ffcffc1b65c48f11::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit4dfba5fc36225037ffcffc1b65c48f11::$classMap;
 
         }, null, ClassLoader::class);
     }

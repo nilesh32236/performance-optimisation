@@ -24,6 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class CacheService implements CacheServiceInterface {
 
+
 	private const CACHE_DIR_RELATIVE = '/cache/wppo';
 
 	private string $cache_root_dir;
@@ -303,6 +304,51 @@ class CacheService implements CacheServiceInterface {
 	 */
 	public function getCacheExpiry( string $type ): int {
 		return CacheUtil::getCacheExpiry( $type );
+	}
+
+	/**
+	 * Cleanup expired cache files.
+	 *
+	 * @return array Cleanup results with count of deleted files.
+	 */
+	public function cleanupExpiredCache(): array {
+		$results = array(
+			'deleted_files' => 0,
+			'freed_space'   => 0,
+			'errors'        => array(),
+		);
+
+		try {
+			// Use PageCacheService for page cache cleanup if available
+			if ( $this->page_cache_service ) {
+				$page_cleanup = $this->page_cache_service->cleanup_expired_cache();
+				if ( isset( $page_cleanup['deleted'] ) ) {
+					$results['deleted_files'] += $page_cleanup['deleted'];
+				}
+			}
+
+			// Cleanup other cache types using CacheUtil
+			$cache_cleanup = CacheUtil::cleanupExpiredCache();
+			if ( isset( $cache_cleanup['deleted_files'] ) ) {
+				$results['deleted_files'] += $cache_cleanup['deleted_files'];
+			}
+			if ( isset( $cache_cleanup['freed_space'] ) ) {
+				$results['freed_space'] += $cache_cleanup['freed_space'];
+			}
+
+			LoggingUtil::info(
+				'Expired cache cleanup completed',
+				array(
+					'deleted_files' => $results['deleted_files'],
+					'freed_space'   => size_format( $results['freed_space'], 2 ),
+				)
+			);
+		} catch ( \Exception $e ) {
+			$results['errors'][] = $e->getMessage();
+			LoggingUtil::error( 'Cache cleanup failed: ' . $e->getMessage() );
+		}
+
+		return $results;
 	}
 
 	/**

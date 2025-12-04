@@ -194,41 +194,70 @@ class ImageService implements ImageServiceInterface {
 	 * @return array Unmodified metadata.
 	 */
 	public function convert_on_upload( $metadata, $attachment_id ): array {
+<<<<<<< HEAD
 		LoggingUtil::debug( 'WPPO ImageService: convert_on_upload called', array( 'attachment_id' => $attachment_id ) );
+=======
+		error_log( 'WPPO ImageService: convert_on_upload called, attachment_id=' . $attachment_id );
+>>>>>>> fix-fatal-error
 
 		// Default to true if not set, check both new and old structure
 		$auto_convert = $this->settings['images']['auto_convert_on_upload']
 			?? $this->settings['image_optimization']['auto_convert_on_upload']
 			?? true;
 
+<<<<<<< HEAD
 		LoggingUtil::debug( 'WPPO ImageService: auto_convert check', array( 'auto_convert' => $auto_convert ) );
 
 		if ( ! $auto_convert ) {
 			LoggingUtil::info( 'WPPO ImageService: Auto-convert disabled, skipping' );
+=======
+		error_log( 'WPPO ImageService: auto_convert = ' . ( $auto_convert ? 'true' : 'false' ) );
+
+		if ( ! $auto_convert ) {
+			error_log( 'WPPO ImageService: Auto-convert disabled, skipping' );
+>>>>>>> fix-fatal-error
 			return $metadata;
 		}
 
 		$file_path = get_attached_file( $attachment_id );
+<<<<<<< HEAD
 		LoggingUtil::debug( 'WPPO ImageService: file_path check', array( 'file_path' => $file_path ) );
 
 		if ( ! $file_path || ! file_exists( $file_path ) ) {
 			LoggingUtil::warning( 'WPPO ImageService: File path invalid or does not exist', array( 'file_path' => $file_path ) );
+=======
+		error_log( 'WPPO ImageService: file_path = ' . ( $file_path ? $file_path : 'NULL' ) );
+
+		if ( ! $file_path || ! file_exists( $file_path ) ) {
+			error_log( 'WPPO ImageService: File path invalid or does not exist, returning' );
+>>>>>>> fix-fatal-error
 			return $metadata;
 		}
 
 		// Get target formats
 		$formats = $this->get_target_formats();
+<<<<<<< HEAD
 		LoggingUtil::debug( 'WPPO ImageService: Queuing for formats', array( 'formats' => $formats ) );
 
 		if ( empty( $formats ) ) {
 			LoggingUtil::info( 'WPPO ImageService: No formats enabled, skipping' );
+=======
+		error_log( 'WPPO ImageService: Queuing for formats: ' . implode( ', ', $formats ) );
+
+		if ( empty( $formats ) ) {
+			error_log( 'WPPO ImageService: No formats enabled, skipping' );
+>>>>>>> fix-fatal-error
 			return $metadata;
 		}
 
 		// Queue main image for conversion (async)
 		foreach ( $formats as $format ) {
 			$this->conversionQueue->add( $file_path, $format );
+<<<<<<< HEAD
 			LoggingUtil::debug( 'WPPO ImageService: Queued main image', array( 'format' => $format ) );
+=======
+			error_log( 'WPPO ImageService: Queued main image for ' . $format );
+>>>>>>> fix-fatal-error
 		}
 
 		// Queue image sizes for conversion (async)
@@ -239,7 +268,11 @@ class ImageService implements ImageServiceInterface {
 				if ( file_exists( $size_path ) ) {
 					foreach ( $formats as $format ) {
 						$this->conversionQueue->add( $size_path, $format );
+<<<<<<< HEAD
 						LoggingUtil::debug( 'WPPO ImageService: Queued size', array( 'size' => $size, 'format' => $format ) );
+=======
+						error_log( 'WPPO ImageService: Queued ' . $size . ' for ' . $format );
+>>>>>>> fix-fatal-error
 					}
 				}
 			}
@@ -247,7 +280,11 @@ class ImageService implements ImageServiceInterface {
 
 		// Save queue to database
 		$this->conversionQueue->save();
+<<<<<<< HEAD
 		LoggingUtil::info( 'WPPO ImageService: Queue saved, upload complete' );
+=======
+		error_log( 'WPPO ImageService: Queue saved, upload complete' );
+>>>>>>> fix-fatal-error
 
 		return $metadata;
 	}
@@ -290,6 +327,7 @@ class ImageService implements ImageServiceInterface {
 		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] )
 			|| ! empty( $this->settings['image_optimization']['avif_conversion'] );
 
+<<<<<<< HEAD
 		LoggingUtil::debug(
 			'WPPO ImageService: get_target_formats check',
 			array(
@@ -297,6 +335,9 @@ class ImageService implements ImageServiceInterface {
 				'avif_enabled' => $avif_enabled,
 			)
 		);
+=======
+		error_log( 'WPPO ImageService: get_target_formats() check - webp_enabled=' . ( $webp_enabled ? 'true' : 'false' ) . ', avif_enabled=' . ( $avif_enabled ? 'true' : 'false' ) );
+>>>>>>> fix-fatal-error
 
 		if ( $webp_enabled ) {
 			$formats[] = 'webp';

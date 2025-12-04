@@ -42,7 +42,11 @@ class Frontend {
 	private Metabox $metabox;
 
 	public function __construct( ServiceContainerInterface $container ) {
+<<<<<<< HEAD
 		$this->logger->debug( 'WPPO: Frontend __construct called' );
+=======
+		error_log( 'WPPO: Frontend __construct called' );
+>>>>>>> fix-fatal-error
 
 		$this->container           = $container;
 		$this->cacheService        = $container->get( 'cache_service' );
