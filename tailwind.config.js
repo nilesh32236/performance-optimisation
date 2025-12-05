@@ -24,18 +24,32 @@ module.exports = {
           900: '#0f172a',
           950: '#020617',
         },
+        // Brand Primary (Indigo)
         primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6', // WordPress Blue-ish
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
-          950: '#172554',
+          50: '#e0e7ff',
+          100: '#c7d2fe',
+          200: '#a5b4fc',
+          300: '#818cf8',
+          400: '#6366f1',
+          500: '#4f46e5', // Brand Primary
+          600: '#4338ca',
+          700: '#3730a3',
+          800: '#312e81',
+          900: '#1e1b4b',
+          950: '#0f0e24',
+        },
+        // Secondary Accents
+        secondary: {
+          50: '#f5f3ff',
+          100: '#ede9fe',
+          500: '#8b5cf6', // Violet
+          600: '#7c3aed',
+        },
+        teal: {
+          50: '#f0fdfa',
+          100: '#ccfbf1',
+          500: '#14b8a6',
+          600: '#0d9488',
         },
         success: {
           50: '#f0fdf4',

@@ -12,7 +12,6 @@ import SiteDetectionStep from './steps/SiteDetectionStep';
 import PresetStep from './steps/PresetStep';
 import FeaturesStep from './steps/FeaturesStep';
 import SummaryStep from './steps/SummaryStep';
-import './SetupWizard.css';
 
 interface SetupWizardProps {
 	apiUrl: string;

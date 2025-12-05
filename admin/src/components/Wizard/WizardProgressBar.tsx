@@ -28,11 +28,11 @@ function WizardProgressBar() {
 			{/* Step Indicators */}
 			<div className="flex items-center justify-between relative">
 				{/* Progress Line Background */}
-				<div className="absolute top-5 left-0 right-0 h-0.5 bg-slate-200 -z-10" />
+				<div className="absolute top-5 left-0 right-0 h-0.5 bg-white/30 -z-10" />
 				
 				{/* Progress Line Fill */}
 				<div
-					className="absolute top-5 left-0 h-0.5 bg-blue-500 -z-10 transition-all duration-500 ease-out"
+					className="absolute top-5 left-0 h-0.5 bg-teal-400 -z-10 transition-all duration-500 ease-out"
 					style={ { width: `${ ( ( currentStep - 1 ) / ( totalSteps - 1 ) ) * 100 }%` } }
 				/>
 
@@ -53,10 +53,10 @@ function WizardProgressBar() {
 									w-10 h-10 rounded-full flex items-center justify-center
 									border-2 transition-all duration-300 ease-out
 									${ status === 'completed'
-										? 'bg-green-500 border-green-500 text-white'
+										? 'bg-teal-500 border-teal-400 text-white'
 										: status === 'current'
-											? 'bg-blue-500 border-blue-500 text-white shadow-lg shadow-blue-200'
-											: 'bg-white border-slate-300 text-slate-400'
+											? 'bg-white border-white text-primary-600 shadow-lg shadow-primary-900/20'
+											: 'bg-white/20 border-white/40 text-white/70'
 									}
 								` }
 							>
@@ -74,10 +74,10 @@ function WizardProgressBar() {
 								className={ `
 									mt-2 text-xs font-medium transition-colors duration-300
 									${ status === 'current'
-										? 'text-blue-600'
+										? 'text-white'
 										: status === 'completed'
-											? 'text-green-600'
-											: 'text-slate-400'
+											? 'text-teal-300'
+											: 'text-white/60'
 									}
 								` }
 							>

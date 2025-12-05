@@ -2,587 +2,78 @@
  * Performance Optimization Plugin - Main Styles with Tailwind v4
  */
 
-/* Import Tailwind CSS */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Tailwind CSS v4 - Theme Configuration */
+@import "tailwindcss";
 
-/* Import Wizard Styles */
-@import "../components/Wizard/SetupWizard.css";
+@theme {
+  /* Primary Colors (Indigo) */
+  --color-primary-50: #e0e7ff;
+  --color-primary-100: #c7d2fe;
+  --color-primary-200: #a5b4fc;
+  --color-primary-300: #818cf8;
+  --color-primary-400: #6366f1;
+  --color-primary-500: #4f46e5;
+  --color-primary-600: #4338ca;
+  --color-primary-700: #3730a3;
+  --color-primary-800: #312e81;
+  --color-primary-900: #1e1b4b;
+
+  /* Secondary Colors (Violet) */
+  --color-secondary-50: #f5f3ff;
+  --color-secondary-100: #ede9fe;
+  --color-secondary-500: #8b5cf6;
+  --color-secondary-600: #7c3aed;
+
+  /* Teal Accent */
+  --color-teal-50: #f0fdfa;
+  --color-teal-100: #ccfbf1;
+  --color-teal-300: #5eead4;
+  --color-teal-400: #2dd4bf;
+  --color-teal-500: #14b8a6;
+  --color-teal-600: #0d9488;
+
+  /* Font Family */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
 
 /* WordPress Admin Integration Overrides */
-.toplevel_page_performance-optimisation {
-	.wp-header-end {
-		display: none;
-	}
+.toplevel_page_performance-optimisation .wp-header-end {
+	display: none;
+}
 
-	.wrap {
-		margin: 0 !important;
-		padding: 0 !important;
-	}
+.toplevel_page_performance-optimisation .wrap {
+	margin: 0 !important;
+	padding: 0 !important;
+}
 
-	.wp-heading-inline {
-		display: none;
-	}
+.toplevel_page_performance-optimisation #wpcontent {
+	padding-left: 0 !important;
+}
 
-	.wp-admin-sidebar-fix {
-		left: -20px;
-		width: calc(100% + 20px);
+/* Fix for WordPress Admin Bar overlap if needed */
+.toplevel_page_performance-optimisation .auto-fold #wpcontent {
+	padding-left: 0 !important;
+}
 
-		@media screen and (min-width: 782px) {
-			top: 32px;
-			height: calc(100vh - 32px);
-		}
-	}
+/* Ensure Tailwind preflight doesn't break WP Admin too much, but reset for our app */
+.wppo-app-root {
+	font-family: var(--font-sans);
+}
+
+/* Dashicons alignment fix */
+.toplevel_page_performance-optimisation .dashicons {
+	vertical-align: middle;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 }
 
 /* Animations */
 @keyframes fade-in {
-	from {
-		opacity: 0;
-	}
-
-	to {
-		opacity: 1;
-	}
+	from { opacity: 0; }
+	to { opacity: 1; }
 }
 
 .animate-fade-in {
 	animation: fade-in 0.3s ease-out forwards;
-}
-
-@keyframes fade-in-up {
-	from {
-		opacity: 0;
-		transform: translateY(10px);
-	}
-
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-
-.animate-fade-in-up {
-	animation: fade-in-up 0.3s ease-out forwards;
-}
-
-/* SetupWizard Component Styles */
-.wppo-setup-wizard {
-	max-width: 1200px !important;
-	margin: 0 auto;
-	padding: 20px;
-	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-.wppo-wizard-header {
-	text-align: center;
-	margin-bottom: 30px;
-	padding: 20px;
-	background: #fff;
-	border-radius: 8px;
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.wppo-wizard-header h1 {
-	margin: 0 0 20px 0;
-	color: #1e1e1e;
-	font-size: 28px;
-	font-weight: 600;
-}
-
-.wppo-step-info {
-	margin: 15px 0 0 0;
-	color: #666;
-	background-color: #22c55e !important;
-	font-size: 14px;
-}
-
-.wppo-wizard-content {
-	background: #fff;
-	border-radius: 8px;
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-	min-height: 400px;
-}
-
-/* Welcome Step */
-.wppo-welcome-step {
-	text-align: center;
-	padding: 40px 20px;
-}
-
-.wppo-welcome-icon {
-	font-size: 48px;
-	margin-bottom: 20px;
-}
-
-.wppo-welcome-step h2 {
-	margin: 0 0 20px 0;
-	color: #1e1e1e;
-	font-size: 24px;
-	font-weight: 600;
-}
-
-.wppo-welcome-step p {
-	margin: 0 0 30px 0;
-	color: #666;
-	font-size: 16px;
-	line-height: 1.6;
-	max-width: 600px;
-	margin-left: auto;
-	margin-right: auto;
-}
-
-.wppo-features-preview {
-	background: #f8f9fa;
-	border-radius: 8px;
-	padding: 30px;
-	margin: 30px 0;
-	text-align: left;
-	max-width: 500px;
-	margin-left: auto;
-	margin-right: auto;
-}
-
-.wppo-features-preview h3 {
-	margin: 0 0 20px 0;
-	color: #1e1e1e;
-	font-size: 18px;
-	font-weight: 600;
-	text-align: center;
-}
-
-.wppo-features-preview ul {
-	list-style: none;
-	padding: 0;
-	margin: 0;
-}
-
-.wppo-features-preview li {
-	padding: 8px 0;
-	color: #333;
-	font-size: 14px;
-	display: flex;
-	align-items: center;
-}
-
-.wppo-wizard-actions {
-	margin-top: 40px;
-	display: flex;
-	justify-content: center;
-	gap: 15px;
-}
-
-/* System Check Step */
-.wppo-system-check {
-	padding: 30px;
-}
-
-.wppo-system-check h2 {
-	margin: 0 0 30px 0;
-	color: #1e1e1e;
-	font-size: 22px;
-	font-weight: 600;
-	text-align: center;
-}
-
-.wppo-loading {
-	text-align: center;
-	padding: 60px 20px;
-}
-
-.wppo-loading p {
-	margin: 20px 0 0 0;
-	color: #666;
-	font-size: 16px;
-}
-
-.wppo-checks-list {
-	max-width: 600px;
-	margin: 0 auto;
-}
-
-.wppo-check-item {
-	display: flex;
-	align-items: center;
-	padding: 15px;
-	margin-bottom: 10px;
-	border-radius: 6px;
-	border: 1px solid #e0e0e0;
-}
-
-.wppo-check-item.wppo-check-pass {
-	background: #f0f9ff;
-	border-color: #22c55e;
-}
-
-.wppo-check-item.wppo-check-warning {
-	background: #fffbeb;
-	border-color: #f59e0b;
-}
-
-.wppo-check-item.wppo-check-fail {
-	background: #fef2f2;
-	border-color: #ef4444;
-}
-
-.wppo-check-icon {
-	font-size: 20px;
-	margin-right: 15px;
-	min-width: 30px;
-}
-
-.wppo-check-details {
-	flex: 1;
-}
-
-.wppo-check-details strong {
-	display: block;
-	color: #1e1e1e;
-	font-size: 14px;
-	font-weight: 600;
-	margin-bottom: 4px;
-}
-
-.wppo-check-details span {
-	color: #666;
-	font-size: 13px;
-}
-
-/* Optimization Level Step */
-.wppo-optimization-level {
-	padding: 30px;
-}
-
-.wppo-optimization-level h2 {
-	margin: 0 0 15px 0;
-	color: #1e1e1e;
-	font-size: 22px;
-	font-weight: 600;
-	text-align: center;
-}
-
-.wppo-optimization-level>p {
-	margin: 0 0 30px 0;
-	color: #666;
-	font-size: 16px;
-	text-align: center;
-	max-width: 600px;
-	margin-left: auto;
-	margin-right: auto;
-}
-
-.wppo-level-options {
-	display: grid;
-	gap: 20px;
-	max-width: 600px;
-	margin: 0 auto;
-}
-
-.wppo-level-option {
-	border: 2px solid #e0e0e0;
-	border-radius: 8px;
-	padding: 20px;
-	cursor: pointer;
-	transition: all 0.2s ease;
-}
-
-.wppo-level-option:hover {
-	border-color: #3b82f6;
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-}
-
-.wppo-level-option.selected {
-	border-color: #3b82f6;
-	background: #f0f9ff;
-}
-
-.wppo-level-title {
-	font-size: 18px;
-	font-weight: 600;
-	color: #1e1e1e;
-	margin-bottom: 8px;
-}
-
-.wppo-level-description {
-	color: #666;
-	font-size: 14px;
-	line-height: 1.5;
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-	.wppo-setup-wizard {
-		padding: 15px;
-	}
-
-	.wppo-wizard-header {
-		padding: 15px;
-	}
-
-	.wppo-wizard-header h1 {
-		font-size: 24px;
-	}
-
-	.wppo-welcome-step {
-		padding: 30px 15px;
-	}
-
-	.wppo-features-preview {
-		padding: 20px;
-	}
-
-	.wppo-features-grid {
-		grid-template-columns: 1fr;
-	}
-
-	.wppo-level-options {
-		gap: 15px;
-	}
-
-	.wppo-wizard-actions {
-		flex-direction: column;
-		align-items: center;
-	}
-
-	.wppo-wizard-actions .components-button {
-		width: 100%;
-		max-width: 200px;
-	}
-}
-
-/* Extensions Check */
-.wppo-extensions-check {
-	margin-top: 30px;
-}
-
-.wppo-extensions-check h3 {
-	margin: 0 0 15px 0;
-	color: #1e1e1e;
-	font-size: 16px;
-	font-weight: 600;
-}
-
-.wppo-extensions-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-	gap: 10px;
-	margin-bottom: 20px;
-}
-
-.wppo-extension {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 10px 15px;
-	border-radius: 6px;
-	font-size: 14px;
-}
-
-.wppo-extension.available {
-	background: #f0f9ff;
-	border: 1px solid #22c55e;
-}
-
-.wppo-extension.missing {
-	background: #fef2f2;
-	border: 1px solid #ef4444;
-}
-
-/* Optimization Level Styles */
-.wppo-levels-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-	gap: 20px;
-	margin: 30px 0;
-}
-
-.wppo-level-card {
-	border: 2px solid #e0e0e0;
-	border-radius: 12px;
-	padding: 25px;
-	cursor: pointer;
-	transition: all 0.3s ease;
-	text-align: center;
-	background: #fff;
-}
-
-.wppo-level-card:hover {
-	border-color: #3b82f6;
-	box-shadow: 0 8px 25px rgba(59, 130, 246, 0.15);
-	transform: translateY(-2px);
-}
-
-.wppo-level-card.selected {
-	border-color: #3b82f6;
-	background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-	box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
-}
-
-.wppo-level-icon {
-	font-size: 32px;
-	margin-bottom: 15px;
-}
-
-.wppo-level-card h3 {
-	margin: 0 0 10px 0;
-	color: #1e1e1e;
-	font-size: 20px;
-	font-weight: 600;
-}
-
-.wppo-level-card p {
-	margin: 0 0 20px 0;
-	color: #666;
-	font-size: 14px;
-	line-height: 1.5;
-}
-
-.wppo-level-card ul {
-	list-style: none;
-	padding: 0;
-	margin: 0;
-	text-align: left;
-}
-
-.wppo-level-card li {
-	padding: 6px 0;
-	color: #333;
-	font-size: 13px;
-	position: relative;
-	padding-left: 20px;
-}
-
-.wppo-level-card li:before {
-	content: "✓";
-	position: absolute;
-	left: 0;
-	color: #22c55e;
-	font-weight: bold;
-}
-
-/* Complete Step */
-.wppo-complete-step {
-	text-align: center;
-	padding: 40px 20px;
-}
-
-.wppo-success-icon {
-	font-size: 64px;
-	margin-bottom: 20px;
-}
-
-.wppo-complete-step h2 {
-	margin: 0 0 20px 0;
-	color: #1e1e1e;
-	font-size: 28px;
-	font-weight: 600;
-}
-
-.wppo-complete-step p {
-	margin: 0 0 30px 0;
-	color: #666;
-	font-size: 16px;
-	line-height: 1.6;
-	max-width: 500px;
-	margin-left: auto;
-	margin-right: auto;
-}
-
-.wppo-next-steps {
-	background: #f8f9fa;
-	border-radius: 12px;
-	padding: 25px;
-	margin: 30px auto;
-	max-width: 400px;
-	text-align: left;
-}
-
-.wppo-next-steps h3 {
-	margin: 0 0 15px 0;
-	color: #1e1e1e;
-	font-size: 18px;
-	font-weight: 600;
-	text-align: center;
-}
-
-.wppo-next-steps ul {
-	list-style: none;
-	padding: 0;
-	margin: 0;
-}
-
-.wppo-next-steps li {
-	padding: 8px 0;
-	color: #333;
-	font-size: 14px;
-	line-height: 1.5;
-}
-
-/* Site Analysis */
-.wppo-site-analysis {
-	padding: 30px;
-	text-align: center;
-}
-
-.wppo-site-analysis h2 {
-	margin: 0 0 20px 0;
-	color: #1e1e1e;
-	font-size: 22px;
-	font-weight: 600;
-}
-
-.wppo-site-analysis p {
-	margin: 0 0 30px 0;
-	color: #666;
-	font-size: 16px;
-}
-
-/* Features Step */
-.wppo-features-step {
-	padding: 30px;
-	text-align: center;
-}
-
-.wppo-features-step h2 {
-	margin: 0 0 20px 0;
-	color: #1e1e1e;
-	font-size: 22px;
-	font-weight: 600;
-}
-
-.wppo-features-step p {
-	margin: 0 0 30px 0;
-	color: #666;
-	font-size: 16px;
-}
-
-/* WordPress Components Integration */
-.wppo-setup-wizard .components-progress-bar {
-	margin: 20px 0;
-}
-
-.wppo-setup-wizard .components-card {
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.wppo-setup-wizard .components-notice {
-	margin: 0 0 20px 0;
-}
-
-.wppo-setup-wizard .components-button {
-	height: auto;
-	padding: 12px 24px;
-	font-size: 14px;
-	font-weight: 500;
-}
-
-.wppo-setup-wizard .components-button.is-primary {
-	background: #3b82f6;
-	border-color: #3b82f6;
-}
-
-.wppo-setup-wizard .components-button.is-primary:hover {
-	background: #2563eb;
-	border-color: #2563eb;
 }

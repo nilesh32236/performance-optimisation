@@ -67,7 +67,7 @@ function WizardNavigation( { onComplete }: WizardNavigationProps ) {
 							bg-white border border-slate-300 text-slate-700
 							font-medium rounded-xl
 							hover:bg-slate-50 hover:border-slate-400
-							focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+							focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2
 							disabled:opacity-50 disabled:cursor-not-allowed
 							transition-all duration-200
 						"
@@ -92,8 +92,8 @@ function WizardNavigation( { onComplete }: WizardNavigationProps ) {
 						transition-all duration-200 transform
 						hover:scale-[1.02] active:scale-[0.98]
 						${ isLastStep
-							? 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 shadow-lg shadow-green-200'
-							: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 shadow-lg shadow-blue-200'
+							? 'bg-teal-600 text-white hover:bg-teal-700 focus:ring-teal-500 shadow-lg shadow-teal-200'
+							: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 shadow-lg shadow-primary-200'
 						}
 					` }
 					aria-describedby={ ! canProceed ? 'validation-message' : undefined }
