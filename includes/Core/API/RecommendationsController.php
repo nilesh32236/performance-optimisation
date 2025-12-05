@@ -62,7 +62,7 @@ class RecommendationsController extends BaseController {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'RecommendationsController: Failed to load services: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'RecommendationsController: Failed to load services: ' . $e->getMessage() );
 			}
 		}
 	}
@@ -311,7 +311,7 @@ class RecommendationsController extends BaseController {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'Failed to trigger image optimization: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'Failed to trigger image optimization: ' . $e->getMessage() );
 			}
 		}
 	}
@@ -328,7 +328,7 @@ class RecommendationsController extends BaseController {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'Failed to clear cache after recommendation application: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'Failed to clear cache after recommendation application: ' . $e->getMessage() );
 			}
 		}
 	}
@@ -353,7 +353,7 @@ class RecommendationsController extends BaseController {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'Failed to log recommendation application: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'Failed to log recommendation application: ' . $e->getMessage() );
 			}
 		}
 	}

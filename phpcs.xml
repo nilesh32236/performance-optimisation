@@ -14,6 +14,9 @@
 	<exclude-pattern>*/tests/*</exclude-pattern>
 	<exclude-pattern>*/admin/src/*</exclude-pattern>
 	<exclude-pattern>composer.phar</exclude-pattern>
+	<exclude-pattern>vendor/*</exclude-pattern>
+	<exclude-pattern>node_modules/*</exclude-pattern>
+	<exclude-pattern>build/*</exclude-pattern>
 
 	<!-- Use WordPress Coding Standards -->
 	<rule ref="WordPress">
@@ -25,6 +28,9 @@
 		
 		<!-- Allow yoda conditions to be optional -->
 		<exclude name="WordPress.PHP.YodaConditions.NotYoda"/>
+
+		<!-- Allow PSR-4 filenames -->
+		<exclude name="WordPress.Files.FileName"/>
 	</rule>
 
 	<!-- Use WordPress-Extra rules -->
@@ -61,7 +67,9 @@
 	<!-- Ignore warnings about missing textdomain in specific cases -->
 	<rule ref="WordPress.WP.I18n">
 		<properties>
-			<property name="text_domain" type="array" value="performance-optimisation"/>
+			<property name="text_domain" type="array">
+				<element value="performance-optimisation"/>
+			</property>
 		</properties>
 	</rule>
 

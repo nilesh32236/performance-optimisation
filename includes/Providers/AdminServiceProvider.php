@@ -83,7 +83,7 @@ class AdminServiceProvider extends ServiceProvider {
 				$logger   = $container->get( 'logger' );
 				new \PerformanceOptimisation\Services\PageCacheService( $settings, $logger );
 			} catch ( \Exception $e ) {
-				error_log( 'WPPO: Failed to instantiate PageCacheService: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Failed to instantiate PageCacheService: ' . $e->getMessage() );
 			}
 		}
 	}

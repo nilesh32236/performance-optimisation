@@ -10,7 +10,7 @@ namespace PerformanceOptimisation\Core\Cache;
 
 use PerformanceOptimisation\Utils\FileSystemUtil;
 
-if (!defined('ABSPATH')) {
+if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
@@ -19,76 +19,72 @@ if (!defined('ABSPATH')) {
  *
  * @package PerformanceOptimisation\Core\Cache
  */
-class CacheDropin
-{
+class CacheDropin {
+
 
 	private static string $handler_file_path = '';
 
-	private static function init_paths(): void
-	{
-		if (empty(self::$handler_file_path)) {
-			self::$handler_file_path = wp_normalize_path(WP_CONTENT_DIR . '/advanced-cache.php');
+	private static function init_paths(): void {
+		if ( empty( self::$handler_file_path ) ) {
+			self::$handler_file_path = wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' );
 		}
 	}
 
-	public static function create(): bool
-	{
+	public static function create(): bool {
 		try {
 			self::init_paths();
 			$wp_filesystem = FileSystemUtil::getFilesystem();
 
-			if (!$wp_filesystem) {
-				throw new \Exception('WordPress filesystem not available');
+			if ( ! $wp_filesystem ) {
+				throw new \Exception( 'WordPress filesystem not available' );
 			}
 
 			// Check if advanced-cache.php exists and is from another plugin
-			if ($wp_filesystem->exists(self::$handler_file_path)) {
-				$existing_content = $wp_filesystem->get_contents(self::$handler_file_path);
+			if ( $wp_filesystem->exists( self::$handler_file_path ) ) {
+				$existing_content = $wp_filesystem->get_contents( self::$handler_file_path );
 
-				if ($existing_content && strpos($existing_content, 'Performance Optimisation') === false) {
-					throw new \Exception('advanced-cache.php exists from another plugin');
+				if ( $existing_content && strpos( $existing_content, 'Performance Optimisation' ) === false ) {
+					throw new \Exception( 'advanced-cache.php exists from another plugin' );
 				}
 			}
 
 			$handler_code = self::get_dropin_content();
-			$result = $wp_filesystem->put_contents(self::$handler_file_path, $handler_code, FS_CHMOD_FILE);
+			$result       = $wp_filesystem->put_contents( self::$handler_file_path, $handler_code, FS_CHMOD_FILE );
 
-			if (!$result) {
-				throw new \Exception('Failed to write advanced-cache.php');
+			if ( ! $result ) {
+				throw new \Exception( 'Failed to write advanced-cache.php' );
 			}
 
 			return true;
-		} catch (\Exception $e) {
-			error_log('CacheDropin::create failed: ' . $e->getMessage());
+		} catch ( \Exception $e ) {
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'CacheDropin::create failed: ' . $e->getMessage() );
 			return false;
 		}
 	}
 
-	public static function remove(): bool
-	{
+	public static function remove(): bool {
 		try {
 			self::init_paths();
 			$wp_filesystem = FileSystemUtil::getFilesystem();
 
-			if (!$wp_filesystem || !$wp_filesystem->exists(self::$handler_file_path)) {
+			if ( ! $wp_filesystem || ! $wp_filesystem->exists( self::$handler_file_path ) ) {
 				return true; // Already removed or doesn't exist
 			}
 
 			// Verify it's our file before deletion
-			$content = $wp_filesystem->get_contents(self::$handler_file_path);
-			if ($content && strpos($content, 'Performance Optimisation') === false) {
-				throw new \Exception('advanced-cache.php not created by this plugin');
+			$content = $wp_filesystem->get_contents( self::$handler_file_path );
+			if ( $content && strpos( $content, 'Performance Optimisation' ) === false ) {
+				throw new \Exception( 'advanced-cache.php not created by this plugin' );
 			}
 
-			return $wp_filesystem->delete(self::$handler_file_path);
-		} catch (\Exception $e) {
-			error_log('CacheDropin::remove failed: ' . $e->getMessage());
+			return $wp_filesystem->delete( self::$handler_file_path );
+		} catch ( \Exception $e ) {
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'CacheDropin::remove failed: ' . $e->getMessage() );
 			return false;
 		}
 	}
 
-	private static function get_dropin_content(): string
-	{
+	private static function get_dropin_content(): string {
 		return <<<'PHP'
 <?php
 /**

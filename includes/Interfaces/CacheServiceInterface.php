@@ -25,7 +25,7 @@ interface CacheServiceInterface {
 	 * @param string $type The type of cache to clear (e.g., 'all', 'page', 'minify').
 	 * @return bool True on success, false on failure.
 	 */
-	public function clearCache( string $type = 'all' ): bool;
+	public function clear_cache( string $type = 'all' ): bool;
 
 	/**
 	 * Get the size of the cache.
@@ -33,7 +33,7 @@ interface CacheServiceInterface {
 	 * @param string $type The type of cache to get the size of.
 	 * @return string The size of the cache in a human-readable format.
 	 */
-	public function getCacheSize( string $type = 'all' ): string;
+	public function get_cache_size( string $type = 'all' ): string;
 
 	/**
 	 * Preload the cache for a given set of URLs.
@@ -41,7 +41,7 @@ interface CacheServiceInterface {
 	 * @param array $urls The URLs to preload.
 	 * @return void
 	 */
-	public function preloadCache( array $urls ): void;
+	public function preload_cache( array $urls ): void;
 
 	/**
 	 * Invalidate cache entries based on a pattern.
@@ -49,5 +49,5 @@ interface CacheServiceInterface {
 	 * @param string $pattern The pattern to match against cache entries.
 	 * @return bool True on success, false on failure.
 	 */
-	public function invalidateCache( string $pattern ): bool;
+	public function invalidate_cache( string $pattern ): bool;
 }

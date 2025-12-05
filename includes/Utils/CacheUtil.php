@@ -28,6 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class CacheUtil {
 
+
 	/**
 	 * Cache types supported by the plugin.
 	 *
@@ -65,9 +66,9 @@ class CacheUtil {
 	 * @return bool True on success, false on failure.
 	 * @throws CacheException If cache type is invalid or clearing fails.
 	 */
-	public static function clearCache( string $type = 'all' ): bool {
-		if ( ! self::isValidCacheType( $type ) ) {
-			throw new CacheException( "Invalid cache type: {$type}" );
+	public static function clear_cache( string $type = 'all' ): bool {
+		if ( ! self::is_valid_cache_type( $type ) ) {
+			throw new CacheException( esc_html( "Invalid cache type: {$type}" ) );
 		}
 
 		$cleared = false;
@@ -75,27 +76,27 @@ class CacheUtil {
 		try {
 			switch ( $type ) {
 				case 'all':
-					$cleared = self::clearAllCaches();
+					$cleared = self::clear_all_caches();
 					break;
 
 				case 'page':
-					$cleared = self::clearPageCache();
+					$cleared = self::clear_page_cache();
 					break;
 
 				case 'object':
-					$cleared = self::clearObjectCache();
+					$cleared = self::clear_object_cache();
 					break;
 
 				case 'minified':
-					$cleared = self::clearMinifiedCache();
+					$cleared = self::clear_minified_cache();
 					break;
 
 				case 'image':
-					$cleared = self::clearImageCache();
+					$cleared = self::clear_image_cache();
 					break;
 
 				case 'database':
-					$cleared = self::clearDatabaseCache();
+					$cleared = self::clear_database_cache();
 					break;
 
 				default:
@@ -105,15 +106,19 @@ class CacheUtil {
 			if ( $cleared ) {
 				LoggingUtil::info( 'Cache cleared successfully', array( 'type' => $type ) );
 
-				// Fire action for other plugins/themes
+				// Fire action for other plugins/themes.
 				do_action( 'wppo_cache_cleared', $type );
 			}
 
 			return $cleared;
-
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( "Failed to clear {$type} cache: " . $e->getMessage() );
-			throw new CacheException( "Failed to clear {$type} cache", 0, $e );
+			// Re-throw with escaped message; original exception for debugging context.
+			throw new CacheException(
+				esc_html( "Failed to clear {$type} cache" ),
+				0,
+				$e // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
+			);
 		}
 	}
 
@@ -127,40 +132,35 @@ class CacheUtil {
 	 * @return mixed Cached data or false if not found/expired.
 	 */
 	public static function get( string $key, string $type = 'page' ) {
-		if ( ! self::isValidCacheType( $type ) ) {
+		if ( ! self::is_valid_cache_type( $type ) ) {
 			return false;
 		}
 
-		// Handle object cache separately
+		// Handle object cache separately.
 		if ( 'object' === $type ) {
 			return wp_cache_get( $key, 'wppo' );
 		}
 
-		// File-based cache
+		// File-based cache.
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES[ $type ] );
 		$file_ext  = 'minified' === $type ? ( strpos( $key, 'css' ) !== false ? '.css' : '.js' ) : '.html';
 
-		// For minified assets, the key might already include the hash/filename
-		// If the key doesn't look like a filename, append extension
-		if ( 'minified' === $type && strpos( $key, '.' ) === false ) {
-			// If key is just a hash, we might need to know the extension.
-			// But usually minification keys are generated with extension or context.
-			// For now, let's assume the key is the filename without extension if not provided.
-		}
+		// For minified assets, the key might already include the hash/filename.
+		// If the key doesn't look like a filename, key cleanup is handled by naming convention.
 
 		$cache_file = $cache_dir . '/' . $key . $file_ext;
 
-		// If minified, we might be looking for a file that was saved with a specific name
+		// If minified, we might be looking for a file that was saved with a specific name.
 		if ( 'minified' === $type ) {
-			$cache_file = $cache_dir . '/' . $key; // Key is expected to be relative path/filename
+			$cache_file = $cache_dir . '/' . $key; // Key is expected to be relative path/filename.
 		}
 
 		if ( ! FileSystemUtil::fileExists( $cache_file ) ) {
 			return false;
 		}
 
-		// Check expiry
-		if ( filemtime( $cache_file ) < ( time() - self::getCacheExpiry( $type ) ) ) {
+		// Check expiry.
+		if ( filemtime( $cache_file ) < ( time() - self::get_cache_expiry( $type ) ) ) {
 			FileSystemUtil::deleteFile( $cache_file );
 			return false;
 		}
@@ -180,16 +180,17 @@ class CacheUtil {
 	 * @return bool True on success, false on failure.
 	 */
 	public static function set( string $key, $data, string $type = 'page', int $expiry = 0 ): bool {
-		if ( ! self::isValidCacheType( $type ) ) {
+		if ( ! self::is_valid_cache_type( $type ) ) {
 			return false;
 		}
 
-		// Handle object cache separately
+		// Handle object cache separately.
 		if ( 'object' === $type ) {
-			return wp_cache_set( $key, $data, 'wppo', $expiry ?: self::getCacheExpiry( $type ) );
+			$cache_expiry = $expiry > 0 ? $expiry : self::get_cache_expiry( $type );
+			return wp_cache_set( $key, $data, 'wppo', $cache_expiry );
 		}
 
-		// File-based cache
+		// File-based cache.
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES[ $type ] );
 
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
@@ -200,7 +201,7 @@ class CacheUtil {
 
 		$file_ext = '.html';
 		if ( 'minified' === $type ) {
-			// For minified, key is usually the filename
+			// For minified, key is usually the filename.
 			$cache_file = $cache_dir . '/' . $key;
 		} else {
 			$cache_file = $cache_dir . '/' . $key . $file_ext;
@@ -208,20 +209,29 @@ class CacheUtil {
 
 		return FileSystemUtil::writeFile( $cache_file, $data );
 	}
-	public static function invalidateCache( string $path, string $type = 'page' ): bool {
+	/**
+	 * Invalidate cache for a specific path.
+	 *
+	 * @since 2.0.0
+	 *
+	 * @param string $path Path or URL to invalidate.
+	 * @param string $type Cache type.
+	 * @return bool True on success, false on failure.
+	 */
+	public static function invalidate_cache( string $path, string $type = 'page' ): bool {
 		try {
 			switch ( $type ) {
 				case 'page':
-					return self::invalidatePageCache( $path );
+					return self::invalidate_page_cache( $path );
 
 				case 'object':
 					return wp_cache_delete( $path );
 
 				case 'minified':
-					return self::invalidateMinifiedCache( $path );
+					return self::invalidate_minified_cache( $path );
 
 				case 'image':
-					return self::invalidateImageCache( $path );
+					return self::invalidate_image_cache( $path );
 
 				default:
 					LoggingUtil::warning( "Unsupported cache invalidation type: {$type}" );
@@ -241,20 +251,19 @@ class CacheUtil {
 	 * @param string $type Cache type.
 	 * @return string Formatted cache size.
 	 */
-	public static function getCacheSize( string $type = 'all' ): string {
+	public static function get_cache_size( string $type = 'all' ): string {
 		try {
 			$total_size = 0;
 
 			if ( 'all' === $type ) {
 				foreach ( self::CACHE_DIRECTORIES as $cache_type => $dir ) {
-					$total_size += self::calculateDirectorySize( $cache_type );
+					$total_size += self::calculate_directory_size( $cache_type );
 				}
 			} else {
-				$total_size = self::calculateDirectorySize( $type );
+				$total_size = self::calculate_directory_size( $type );
 			}
 
 			return FileSystemUtil::formatFileSize( $total_size );
-
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( "Failed to get cache size for {$type}: " . $e->getMessage() );
 			return '0 B';
@@ -268,7 +277,7 @@ class CacheUtil {
 	 *
 	 * @return array Cache statistics.
 	 */
-	public static function getCacheStats(): array {
+	public static function get_cache_stats(): array {
 		$stats = array(
 			'total_size'   => 0,
 			'types'        => array(),
@@ -279,22 +288,21 @@ class CacheUtil {
 
 		try {
 			foreach ( self::CACHE_DIRECTORIES as $type => $dir ) {
-				$size       = self::calculateDirectorySize( $type );
-				$file_count = self::getCacheFileCount( $type );
+				$size       = self::calculate_directory_size( $type );
+				$file_count = self::get_cache_file_count( $type );
 
 				$stats['types'][ $type ] = array(
 					'size'           => $size,
 					'formatted_size' => FileSystemUtil::formatFileSize( $size ),
 					'file_count'     => $file_count,
-					'enabled'        => self::isCacheEnabled( $type ),
+					'enabled'        => self::is_cache_enabled( $type ),
 				);
 
 				$stats['total_size'] += $size;
 			}
 
 			$stats['formatted_total_size'] = FileSystemUtil::formatFileSize( $stats['total_size'] );
-			$stats['hit_ratio']            = self::calculateHitRatio( $stats['cache_hits'], $stats['cache_misses'] );
-
+			$stats['hit_ratio']            = self::calculate_hit_ratio( $stats['cache_hits'], $stats['cache_misses'] );
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'Failed to get cache stats: ' . $e->getMessage() );
 		}
@@ -310,7 +318,7 @@ class CacheUtil {
 	 * @param string $type Cache type.
 	 * @return bool True if enabled, false otherwise.
 	 */
-	public static function isCacheEnabled( string $type ): bool {
+	public static function is_cache_enabled( string $type ): bool {
 		$settings = get_option( 'wppo_settings', array() );
 
 		switch ( $type ) {
@@ -321,7 +329,9 @@ class CacheUtil {
 				return wp_using_ext_object_cache() || ! empty( $settings['caching']['object_cache_enabled'] );
 
 			case 'minified':
-				return ! empty( $settings['minification']['minify_css'] ) || ! empty( $settings['minification']['minify_js'] );
+				$minify_css = ! empty( $settings['minification']['minify_css'] );
+				$minify_js  = ! empty( $settings['minification']['minify_js'] );
+				return $minify_css || $minify_js;
 
 			case 'image':
 				return ! empty( $settings['images']['convert_to_webp'] );
@@ -343,7 +353,8 @@ class CacheUtil {
 	 * @param string $prefix Key prefix.
 	 * @return string Generated cache key.
 	 */
-	public static function generateCacheKey( $data, string $prefix = 'wppo' ): string {
+	public static function generate_cache_key( $data, string $prefix = 'wppo' ): string {
+		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize -- Required for generating consistent hash keys.
 		$serialized = is_string( $data ) ? $data : serialize( $data );
 		$hash       = md5( $serialized );
 		return $prefix . '_' . $hash;
@@ -358,7 +369,7 @@ class CacheUtil {
 	 * @param int    $seconds Expiry time in seconds.
 	 * @return void
 	 */
-	public static function setCacheExpiry( string $type, int $seconds ): void {
+	public static function set_cache_expiry( string $type, int $seconds ): void {
 		$expiry_settings          = get_option( 'wppo_cache_expiry', array() );
 		$expiry_settings[ $type ] = $seconds;
 		update_option( 'wppo_cache_expiry', $expiry_settings );
@@ -374,14 +385,14 @@ class CacheUtil {
 	 * @param string $type Cache type.
 	 * @return int Expiry time in seconds.
 	 */
-	public static function getCacheExpiry( string $type ): int {
+	public static function get_cache_expiry( string $type ): int {
 		$expiry_settings = get_option( 'wppo_cache_expiry', array() );
 
 		if ( isset( $expiry_settings[ $type ] ) ) {
 			return (int) $expiry_settings[ $type ];
 		}
 
-		// Default expiry times
+		// Default expiry times.
 		$defaults = array(
 			'page'     => 3600,      // 1 hour
 			'object'   => 1800,    // 30 minutes
@@ -402,17 +413,17 @@ class CacheUtil {
 	 * @param string $type Cache type.
 	 * @return bool True on success, false on failure.
 	 */
-	public static function purgeCacheByPattern( string $pattern, string $type = 'page' ): bool {
+	public static function purge_cache_by_pattern( string $pattern, string $type = 'page' ): bool {
 		try {
 			switch ( $type ) {
 				case 'page':
-					return self::purgePageCacheByPattern( $pattern );
+					return self::purge_page_cache_by_pattern( $pattern );
 
 				case 'object':
-					return self::purgeObjectCacheByPattern( $pattern );
+					return self::purge_object_cache_by_pattern( $pattern );
 
 				case 'minified':
-					return self::purgeMinifiedCacheByPattern( $pattern );
+					return self::purge_minified_cache_by_pattern( $pattern );
 
 				default:
 					LoggingUtil::warning( "Unsupported cache purge type: {$type}" );
@@ -432,7 +443,7 @@ class CacheUtil {
 	 * @param array $urls URLs to warm.
 	 * @return array Results of cache warming.
 	 */
-	public static function warmCache( array $urls ): array {
+	public static function warm_cache( array $urls ): array {
 		$results = array();
 
 		foreach ( $urls as $url ) {
@@ -483,21 +494,21 @@ class CacheUtil {
 	 *
 	 * @return bool True on success, false on failure.
 	 */
-	private static function clearAllCaches(): bool {
+	private static function clear_all_caches(): bool {
 		$success = true;
 
 		foreach ( array_keys( self::CACHE_DIRECTORIES ) as $type ) {
-			if ( ! self::clearCache( $type ) ) {
+			if ( ! self::clear_cache( $type ) ) {
 				$success = false;
 			}
 		}
 
-		// Clear WordPress object cache
-		if ( ! self::clearObjectCache() ) {
+		// Clear WordPress object cache.
+		if ( ! self::clear_object_cache() ) {
 			$success = false;
 		}
 
-		// Update last cleared timestamp
+		// Update last cleared timestamp.
 		update_option( 'wppo_cache_last_cleared', current_time( 'mysql' ) );
 
 		return $success;
@@ -510,11 +521,11 @@ class CacheUtil {
 	 *
 	 * @return bool True on success, false on failure.
 	 */
-	private static function clearPageCache(): bool {
+	private static function clear_page_cache(): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['page'] );
 
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
-			return true; // No cache to clear
+			return true; // No cache to clear.
 		}
 
 		return FileSystemUtil::deleteDirectory( $cache_dir, true );
@@ -527,7 +538,7 @@ class CacheUtil {
 	 *
 	 * @return bool True on success, false on failure.
 	 */
-	private static function clearObjectCache(): bool {
+	private static function clear_object_cache(): bool {
 		return wp_cache_flush();
 	}
 
@@ -538,11 +549,11 @@ class CacheUtil {
 	 *
 	 * @return bool True on success, false on failure.
 	 */
-	private static function clearMinifiedCache(): bool {
+	private static function clear_minified_cache(): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['minified'] );
 
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
-			return true; // No cache to clear
+			return true; // No cache to clear.
 		}
 
 		return FileSystemUtil::deleteDirectory( $cache_dir, true );
@@ -555,11 +566,11 @@ class CacheUtil {
 	 *
 	 * @return bool True on success, false on failure.
 	 */
-	private static function clearImageCache(): bool {
+	private static function clear_image_cache(): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['image'] );
 
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
-			return true; // No cache to clear
+			return true; // No cache to clear.
 		}
 
 		return FileSystemUtil::deleteDirectory( $cache_dir, true );
@@ -572,11 +583,11 @@ class CacheUtil {
 	 *
 	 * @return bool True on success, false on failure.
 	 */
-	private static function clearDatabaseCache(): bool {
+	private static function clear_database_cache(): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['database'] );
 
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
-			return true; // No cache to clear
+			return true; // No cache to clear.
 		}
 
 		return FileSystemUtil::deleteDirectory( $cache_dir, true );
@@ -590,7 +601,7 @@ class CacheUtil {
 	 * @param string $type Cache type to validate.
 	 * @return bool True if valid, false otherwise.
 	 */
-	private static function isValidCacheType( string $type ): bool {
+	private static function is_valid_cache_type( string $type ): bool {
 		return in_array( $type, self::CACHE_TYPES, true );
 	}
 
@@ -602,7 +613,7 @@ class CacheUtil {
 	 * @param string $type Cache type.
 	 * @return int Directory size in bytes.
 	 */
-	private static function calculateDirectorySize( string $type ): int {
+	private static function calculate_directory_size( string $type ): int {
 		if ( ! isset( self::CACHE_DIRECTORIES[ $type ] ) ) {
 			return 0;
 		}
@@ -624,7 +635,7 @@ class CacheUtil {
 	 * @param string $type Cache type.
 	 * @return int Number of cache files.
 	 */
-	private static function getCacheFileCount( string $type ): int {
+	private static function get_cache_file_count( string $type ): int {
 		if ( ! isset( self::CACHE_DIRECTORIES[ $type ] ) ) {
 			return 0;
 		}
@@ -648,7 +659,7 @@ class CacheUtil {
 	 * @param int $misses Cache misses.
 	 * @return float Hit ratio as percentage.
 	 */
-	private static function calculateHitRatio( int $hits, int $misses ): float {
+	private static function calculate_hit_ratio( int $hits, int $misses ): float {
 		$total = $hits + $misses;
 
 		if ( 0 === $total ) {
@@ -666,15 +677,16 @@ class CacheUtil {
 	 * @param string $path Page path or URL.
 	 * @return bool True on success, false on failure.
 	 */
-	private static function invalidatePageCache( string $path ): bool {
-		$cache_key  = self::generateCacheKey( $path, 'page' );
-		$cache_file = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['page'] . '/' . $cache_key . '.html' );
+	private static function invalidate_page_cache( string $path ): bool {
+		$cache_key  = self::generate_cache_key( $path, 'page' );
+		$cache_dir  = self::CACHE_DIRECTORIES['page'];
+		$cache_file = wp_normalize_path( WP_CONTENT_DIR . '/' . $cache_dir . '/' . $cache_key . '.html' );
 
 		if ( FileSystemUtil::fileExists( $cache_file ) ) {
 			return FileSystemUtil::deleteFile( $cache_file );
 		}
 
-		return true; // File doesn't exist, consider it invalidated
+		return true; // File doesn't exist, consider it invalidated.
 	}
 
 	/**
@@ -685,11 +697,11 @@ class CacheUtil {
 	 * @param string $path Asset path.
 	 * @return bool True on success, false on failure.
 	 */
-	private static function invalidateMinifiedCache( string $path ): bool {
-		$cache_key = self::generateCacheKey( $path, 'min' );
+	private static function invalidate_minified_cache( string $path ): bool {
+		$cache_key = self::generate_cache_key( $path, 'min' );
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['minified'] );
 
-		// Look for files matching the pattern
+		// Look for files matching the pattern.
 		$pattern = $cache_dir . '/' . $cache_key . '*';
 		$files   = glob( $pattern );
 
@@ -711,7 +723,7 @@ class CacheUtil {
 	 * @param string $path Image path.
 	 * @return bool True on success, false on failure.
 	 */
-	private static function invalidateImageCache( string $path ): bool {
+	private static function invalidate_image_cache( string $path ): bool {
 		$cache_dir     = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['image'] );
 		$relative_path = str_replace( WP_CONTENT_DIR, '', $path );
 		$cache_path    = $cache_dir . $relative_path;
@@ -720,7 +732,7 @@ class CacheUtil {
 			return FileSystemUtil::deleteFile( $cache_path );
 		}
 
-		return true; // File doesn't exist, consider it invalidated
+		return true; // File doesn't exist, consider it invalidated.
 	}
 
 	/**
@@ -731,7 +743,7 @@ class CacheUtil {
 	 * @param string $pattern Pattern to match.
 	 * @return bool True on success, false on failure.
 	 */
-	private static function purgePageCacheByPattern( string $pattern ): bool {
+	private static function purge_page_cache_by_pattern( string $pattern ): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['page'] );
 
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
@@ -756,22 +768,23 @@ class CacheUtil {
 	 * @param string $pattern Cache key pattern to purge.
 	 * @return bool True on success, false on failure.
 	 */
-	public static function purgeObjectCacheByPattern( string $pattern ): bool {
+	public static function purge_object_cache_by_pattern( string $pattern ): bool {
 		global $wp_object_cache;
 
 		if ( ! $wp_object_cache || ! method_exists( $wp_object_cache, 'flush_group' ) ) {
-			// Fallback: flush entire cache if pattern purging not supported
+			// Fallback: flush entire cache if pattern purging not supported.
 			return wp_cache_flush();
 		}
 
 		try {
-			// For Redis/Memcached with pattern support
+			// For Redis/Memcached with pattern support.
 			if ( method_exists( $wp_object_cache, 'delete_by_pattern' ) ) {
 				return $wp_object_cache->delete_by_pattern( $pattern );
 			}
 
-			// Manual pattern matching for basic object cache
-			$cache_keys = wp_cache_get( '_cache_keys_registry', 'wppo' ) ?: array();
+			// Manual pattern matching for basic object cache.
+			$cache_keys = wp_cache_get( '_cache_keys_registry', 'wppo' );
+			$cache_keys = is_array( $cache_keys ) ? $cache_keys : array();
 			$purged     = 0;
 
 			foreach ( $cache_keys as $key ) {
@@ -783,7 +796,6 @@ class CacheUtil {
 
 			LoggingUtil::info( "Purged {$purged} cache keys matching pattern: {$pattern}" );
 			return $purged > 0;
-
 		} catch ( Exception $e ) {
 			LoggingUtil::error( 'Cache pattern purge failed: ' . $e->getMessage() );
 			return false;
@@ -798,7 +810,7 @@ class CacheUtil {
 	 * @param string $pattern Pattern to match.
 	 * @return bool True on success, false on failure.
 	 */
-	private static function purgeMinifiedCacheByPattern( string $pattern ): bool {
+	private static function purge_minified_cache_by_pattern( string $pattern ): bool {
 		$cache_dir = wp_normalize_path( WP_CONTENT_DIR . '/' . self::CACHE_DIRECTORIES['minified'] );
 
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {

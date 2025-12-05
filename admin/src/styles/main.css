@@ -3,7 +3,9 @@
  */
 
 /* Import Tailwind CSS */
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* Import Wizard Styles */
 @import "../components/Wizard/SetupWizard.css";

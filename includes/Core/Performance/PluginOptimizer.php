@@ -158,7 +158,7 @@ class PluginOptimizer {
 
 		} catch ( Exception $e ) {
 			$wpdb->query( 'ROLLBACK' );
-			error_log( 'WPPO: Batch database operation failed: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Batch database operation failed: ' . $e->getMessage() );
 		}
 	}
 

@@ -64,6 +64,8 @@ class FileSystemUtil {
 		'webp',
 		'avif',
 		'svg',
+		'php',
+		'htaccess',
 	);
 
 	/**

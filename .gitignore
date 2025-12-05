@@ -3,7 +3,7 @@ node_modules/
 vendor/
 
 # Development and testing
-tests/
+# tests/
 coverage/
 .phpunit.result.cache
 phpunit.xml.dist

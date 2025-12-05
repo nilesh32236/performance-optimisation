@@ -72,7 +72,7 @@ class SecurityService {
 	}
 
 	public function validateNonce( string $action, string $nonce_field = '_wpnonce' ): bool {
-		$nonce = $_REQUEST[ $nonce_field ] ?? '';
+		$nonce = sanitize_text_field( wp_unslash( $_REQUEST[ $nonce_field ] ?? '' ) );
 		return wp_verify_nonce( $nonce, $action );
 	}
 

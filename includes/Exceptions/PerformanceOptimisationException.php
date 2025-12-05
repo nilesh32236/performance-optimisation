@@ -8,7 +8,7 @@
 
 namespace PerformanceOptimisation\Exceptions;
 
-if (!defined('ABSPATH')) {
+if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
@@ -17,8 +17,8 @@ if (!defined('ABSPATH')) {
  *
  * @package PerformanceOptimisation\Exceptions
  */
-class PerformanceOptimisationException extends \Exception
-{
+class PerformanceOptimisationException extends \Exception {
+
 
 	/**
 	 * Exception context.
@@ -36,8 +36,7 @@ class PerformanceOptimisationException extends \Exception
 	 * @param string $context Context name.
 	 * @return void
 	 */
-	public function setContext(string $context): void
-	{
+	public function setContext( string $context ): void {
 		$this->context = $context;
 	}
 
@@ -48,13 +47,12 @@ class PerformanceOptimisationException extends \Exception
 	 *
 	 * @return array<string, mixed> Exception details.
 	 */
-	public function getDetails(): array
-	{
+	public function getDetails(): array {
 		return array(
 			'message' => $this->getMessage(),
-			'code' => $this->getCode(),
-			'file' => $this->getFile(),
-			'line' => $this->getLine(),
+			'code'    => $this->getCode(),
+			'file'    => $this->getFile(),
+			'line'    => $this->getLine(),
 			'context' => $this->context,
 		);
 	}

@@ -119,7 +119,7 @@ class ApiRouter {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'WPPO: Failed to get PageCacheService: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Failed to get PageCacheService: ' . $e->getMessage() );
 			}
 		}
 
@@ -134,7 +134,7 @@ class ApiRouter {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'WPPO: Failed to get logger: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Failed to get logger: ' . $e->getMessage() );
 			}
 		}
 
@@ -151,7 +151,7 @@ class ApiRouter {
 			}
 		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				error_log( 'WPPO: Failed to get BrowserCacheService: ' . $e->getMessage() );
+				\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Failed to get BrowserCacheService: ' . $e->getMessage() );
 			}
 		}
 

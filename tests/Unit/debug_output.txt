@@ -1,0 +1,2 @@
+Defined in: /srv/http/awm/wp-content/plugins/performance-optimisation/tests/stubs.php
+Methods: exists, size, get_contents, put_contents, chmod, delete, rmdir, mtime, is_dir, is_writable, copy, move, is_readable

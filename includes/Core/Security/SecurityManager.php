@@ -572,7 +572,7 @@ class SecurityManager {
 
 		// Also log to WordPress debug log if enabled
 		if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-			error_log(
+			\PerformanceOptimisation\Utils\LoggingUtil::info(
 				sprintf(
 					'[Performance Optimisation Security] %s: %s',
 					$event_type,

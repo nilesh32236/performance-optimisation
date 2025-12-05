@@ -84,7 +84,7 @@ class FontOptimizationService {
 				$type = 'font/otf';
 			}
 
-			echo "<link rel='preload' href='{$font_url}' as='font' type='{$type}' crossorigin>\n";
+			echo '<link rel="preload" href="' . esc_url( $font_url ) . '" as="font" type="' . esc_attr( $type ) . '" crossorigin>' . "\n";
 		}
 	}
 

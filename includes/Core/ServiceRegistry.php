@@ -210,7 +210,7 @@ class ServiceRegistry {
 				function ( ServiceContainerInterface $container ) {
 					return new class() {
 						public function log( string $message ): void {
-							error_log( '[WPPO Debug] ' . $message );
+							LoggingUtil::debug( '[WPPO Debug] ' . $message );
 						}
 					};
 				}

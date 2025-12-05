@@ -172,7 +172,7 @@ class DatabaseOptimizationService {
 		$count  = 0;
 
 		foreach ( $tables as $table ) {
-			$table_name = $table[0];
+			$table_name = \PerformanceOptimisation\Utils\ValidationUtil::sanitizeTableName( $table[0] );
 			$wpdb->query( "OPTIMIZE TABLE $table_name" );
 			++$count;
 		}
