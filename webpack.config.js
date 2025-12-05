@@ -1,12 +1,12 @@
 /**
  * WordPress dependencies
  */
-const defaultConfig = require( '@wordpress/scripts/config/webpack.config' );
-const MiniCssExtractPlugin = require( 'mini-css-extract-plugin' );
+const defaultConfig = require('@wordpress/scripts/config/webpack.config');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 /**
  * External dependencies
  */
-const path = require( 'path' );
+const path = require('path');
 
 /**
  * Recursively remove CSS/SCSS rules from the default config
@@ -14,7 +14,7 @@ const path = require( 'path' );
  */
 function removeCssRules(rules) {
 	if (!Array.isArray(rules)) return rules;
-	
+
 	return rules.map(rule => {
 		if (rule.oneOf) {
 			return { ...rule, oneOf: removeCssRules(rule.oneOf) };
@@ -35,26 +35,26 @@ const cleanRules = removeCssRules(defaultConfig.module.rules);
 module.exports = {
 	...defaultConfig,
 	entry: {
-		index: path.resolve( process.cwd(), 'admin/src', 'index.tsx' ),
-		wizard: path.resolve( process.cwd(), 'admin/src', 'wizard.tsx' ),
-		'admin-bar': path.resolve( process.cwd(), 'admin/src', 'admin-bar.js' ),
-		lazyload: path.resolve( process.cwd(), 'admin/src', 'lazyload.js' ),
+		index: path.resolve(process.cwd(), 'admin/src', 'index.tsx'),
+		wizard: path.resolve(process.cwd(), 'admin/src', 'wizard.tsx'),
+		'admin-bar': path.resolve(process.cwd(), 'admin/src', 'admin-bar.js'),
+		lazyload: path.resolve(process.cwd(), 'admin/src', 'lazyload.js'),
 	},
 	resolve: {
 		...defaultConfig.resolve,
 		alias: {
 			...defaultConfig.resolve.alias,
-			'@': path.resolve( __dirname, 'admin/src' ),
-			'@components': path.resolve( __dirname, 'admin/src/components' ),
-			'@pages': path.resolve( __dirname, 'admin/src/pages' ),
-			'@utils': path.resolve( __dirname, 'admin/src/utils' ),
-			'@types': path.resolve( __dirname, 'admin/src/types' ),
-			'@styles': path.resolve( __dirname, 'admin/src/styles' ),
+			'@': path.resolve(__dirname, 'admin/src'),
+			'@components': path.resolve(__dirname, 'admin/src/components'),
+			'@pages': path.resolve(__dirname, 'admin/src/pages'),
+			'@utils': path.resolve(__dirname, 'admin/src/utils'),
+			'@types': path.resolve(__dirname, 'admin/src/types'),
+			'@styles': path.resolve(__dirname, 'admin/src/styles'),
 		},
 	},
 	output: {
 		...defaultConfig.output,
-		path: path.resolve( __dirname, 'build' ),
+		path: path.resolve(__dirname, 'build'),
 	},
 	module: {
 		...defaultConfig.module,

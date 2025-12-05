@@ -20,6 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 abstract class BaseController {
 
+
 	/**
 	 * REST API namespace.
 	 *
@@ -149,7 +150,7 @@ abstract class BaseController {
 	 * @param string $field_name Field name for error messages.
 	 * @return array<string, mixed> Validation result.
 	 */
-	private function validate_field_type( $value, string $expected_type, string $field_name ): array {
+	protected function validate_field_type( $value, string $expected_type, string $field_name ): array {
 		switch ( $expected_type ) {
 			case 'string':
 				if ( ! is_string( $value ) ) {
@@ -228,24 +229,18 @@ abstract class BaseController {
 	/**
 	 * Sanitize array recursively.
 	 *
-	 * @param array<mixed> $array Array to sanitize.
-	 * @return array<mixed> Sanitized array.
+	 * @param array $array Array to sanitize.
+	 * @return array Sanitized array.
 	 */
-	private function sanitize_array( array $array ): array {
+	protected function sanitize_array( array $array ): array {
 		$sanitized = array();
-
 		foreach ( $array as $key => $value ) {
-			$sanitized_key = sanitize_key( $key );
-
 			if ( is_array( $value ) ) {
-				$sanitized[ $sanitized_key ] = $this->sanitize_array( $value );
-			} elseif ( is_string( $value ) ) {
-				$sanitized[ $sanitized_key ] = sanitize_text_field( $value );
+				$sanitized[ $key ] = $this->sanitize_array( $value );
 			} else {
-				$sanitized[ $sanitized_key ] = $value;
+				$sanitized[ $key ] = sanitize_text_field( $value );
 			}
 		}
-
 		return $sanitized;
 	}
 

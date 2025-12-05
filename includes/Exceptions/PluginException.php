@@ -1,24 +1,25 @@
 <?php
 /**
- * Optimization Exception
+ * Plugin Exception
  *
  * @package PerformanceOptimisation
- * @since 1.1.0
+ * @since 1.0.0
  */
 
 namespace PerformanceOptimisation\Exceptions;
 
 /**
- * Exception thrown when optimization operations fail
+ * Base exception for the plugin
  *
- * @since 1.1.0
+ * @since 1.0.0
  */
-class OptimizationException extends PluginException {
+class PluginException extends \Exception {
+
 
 	/**
 	 * Constructor
 	 *
-	 * @since 1.1.0
+	 * @since 1.0.0
 	 * @param string     $message  Exception message.
 	 * @param int        $code     Exception code.
 	 * @param \Throwable $previous Previous exception.

@@ -118,7 +118,7 @@ export const SettingsView: React.FC = () => {
                     const fileOptimisation = data.data.settings.file_optimisation || {};
 
                     setSettings({
-                        caching: cacheSettings.page_cache_enabled && cacheSettings.browser_cache_enabled,
+                        caching: cacheSettings.page_cache_enabled,
                         images: imageSettings.auto_convert_on_upload,
                         code: minificationSettings.minify_css || minificationSettings.minify_js || minificationSettings.minify_html,
                         storageMode: imageSettings.storage_mode || data.data.settings.images?.storage_mode || 'safe',
@@ -183,13 +183,28 @@ export const SettingsView: React.FC = () => {
     };
 
     const handleToggle = async (key: keyof Settings, value: boolean | string | string[]) => {
-        setSettings(prev => ({ ...prev, [key]: value }));
+        // Store the previous state for rollback if needed
+        const previousSettings = { ...settings };
+
         setSaving(true);
 
-        // Construct the full settings object based on current state + new value
-        // We need to be careful to send the structure the backend expects
-        const currentSettings = { ...settings, [key]: value };
+        // Update state optimistically
+        let newState = { ...settings, [key]: value };
 
+        // Handle special cases where one toggle affects multiple settings
+        if (key === 'code') {
+            newState = {
+                ...newState,
+                minify_css: value as boolean,
+                minify_js: value as boolean,
+                minify_html: value as boolean
+            };
+        }
+
+        setSettings(newState);
+
+        // Construct the full settings object based on current state + new value
+        const currentSettings = newState;
         const newSettings: any = {};
 
         // Map flat state back to nested API structure
@@ -216,31 +231,30 @@ export const SettingsView: React.FC = () => {
                 exclude_css_files: currentSettings.exclude_css_files,
                 exclude_js_files: currentSettings.exclude_js_files,
             };
-            // Also update granular state to match main toggle
-            setSettings(prev => ({
-                ...prev,
-                minify_css: value as boolean,
-                minify_js: value as boolean,
-                minify_html: value as boolean
-            }));
         } else if (key === 'storageMode') {
             newSettings.images = { storage_mode: value };
         } else {
             // Handle granular updates
             if (['minify_css', 'minify_js', 'minify_html'].includes(key)) {
                 newSettings.minification = {
-                    minify_css: currentSettings.minify_css,
-                    minify_js: currentSettings.minify_js,
-                    minify_html: currentSettings.minify_html,
+                    minify_css: key === 'minify_css' ? value : currentSettings.minify_css,
+                    minify_js: key === 'minify_js' ? value : currentSettings.minify_js,
+                    minify_html: key === 'minify_html' ? value : currentSettings.minify_html,
                     exclude_css: currentSettings.exclude_css,
                     exclude_js: currentSettings.exclude_js,
                     exclude_css_files: currentSettings.exclude_css_files,
                     exclude_js_files: currentSettings.exclude_js_files,
                 };
+                // Update the main code toggle based on granular settings
+                const anyMinificationEnabled =
+                    (key === 'minify_css' ? value : currentSettings.minify_css) ||
+                    (key === 'minify_js' ? value : currentSettings.minify_js) ||
+                    (key === 'minify_html' ? value : currentSettings.minify_html);
+                setSettings(prev => ({ ...prev, code: anyMinificationEnabled as boolean }));
             } else if (['defer_js', 'delay_js'].includes(key)) {
                 newSettings.advanced = {
-                    defer_js: currentSettings.defer_js,
-                    delay_js: currentSettings.delay_js,
+                    defer_js: key === 'defer_js' ? value : currentSettings.defer_js,
+                    delay_js: key === 'delay_js' ? value : currentSettings.delay_js,
                 };
             } else if (key === 'lazy_load') {
                 newSettings.image_optimization = {
@@ -253,10 +267,10 @@ export const SettingsView: React.FC = () => {
                     minify_css: currentSettings.minify_css,
                     minify_js: currentSettings.minify_js,
                     minify_html: currentSettings.minify_html,
-                    exclude_css: currentSettings.exclude_css,
-                    exclude_js: currentSettings.exclude_js,
-                    exclude_css_files: currentSettings.exclude_css_files,
-                    exclude_js_files: currentSettings.exclude_js_files,
+                    exclude_css: key === 'exclude_css' ? value : currentSettings.exclude_css,
+                    exclude_js: key === 'exclude_js' ? value : currentSettings.exclude_js,
+                    exclude_css_files: key === 'exclude_css_files' ? value : currentSettings.exclude_css_files,
+                    exclude_js_files: key === 'exclude_js_files' ? value : currentSettings.exclude_js_files,
                 };
             } else if (key === 'cache_exclusions') {
                 newSettings.cache_settings = {
@@ -268,10 +282,10 @@ export const SettingsView: React.FC = () => {
                 };
             } else if (['cleanup_revisions', 'cleanup_spam', 'cleanup_trash', 'optimize_tables'].includes(key)) {
                 newSettings.database = {
-                    cleanup_revisions: currentSettings.cleanup_revisions,
-                    cleanup_spam: currentSettings.cleanup_spam,
-                    cleanup_trash: currentSettings.cleanup_trash,
-                    optimize_tables: currentSettings.optimize_tables,
+                    cleanup_revisions: key === 'cleanup_revisions' ? value : currentSettings.cleanup_revisions,
+                    cleanup_spam: key === 'cleanup_spam' ? value : currentSettings.cleanup_spam,
+                    cleanup_trash: key === 'cleanup_trash' ? value : currentSettings.cleanup_trash,
+                    optimize_tables: key === 'optimize_tables' ? value : currentSettings.optimize_tables,
                 };
             } else if (key === 'display_swap') {
                 newSettings.fonts = {
@@ -298,6 +312,16 @@ export const SettingsView: React.FC = () => {
             }
         }
 
+        // Debug: Log what we're sending
+        console.log('Saving settings:', { key, value, newSettings });
+
+        // Validate that we have settings to save
+        if (Object.keys(newSettings).length === 0) {
+            console.warn(`No API settings mapping found for key: ${key}. Skipping API call.`);
+            setSaving(false);
+            return;
+        }
+
         try {
             const apiUrl = (window as any).wppoAdmin?.apiUrl || '/wp-json/performance-optimisation/v1';
             const response = await fetch(`${apiUrl}/settings`, {
@@ -310,48 +334,54 @@ export const SettingsView: React.FC = () => {
             });
 
             const data = await response.json();
+            console.log('API Response:', data);
+
             if (data.success) {
                 setNotification({ type: 'success', message: 'Settings updated!' });
                 setTimeout(() => setNotification(null), 3000);
             } else {
-                setNotification({ type: 'error', message: 'Failed to save settings' });
+                // Rollback state on failure
+                setSettings(previousSettings);
+                const errorMsg = data.message || data.data?.message || 'Failed to save settings';
+                setNotification({ type: 'error', message: errorMsg });
+                setTimeout(() => setNotification(null), 5000);
+                console.error('Settings save failed:', data);
             }
         } catch (error) {
+            // Rollback state on error
+            setSettings(previousSettings);
             setNotification({ type: 'error', message: 'Error saving settings' });
+            setTimeout(() => setNotification(null), 5000);
+            console.error('Settings save error:', error);
         } finally {
             setSaving(false);
         }
     };
 
     if (loading) {
-        return <div className="flex justify-center p-12"><Spinner /></div>;
+        return <div className="flex justify-center items-center p-12"><Spinner /></div>;
     }
 
-    return (
-        <div className="max-w-7xl mx-auto space-y-10 pb-12">
-            {/* Hero Status Section */}
-            <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20 -mr-16 -mt-16"></div>
-                <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                    <div className="text-center md:text-left">
-                        <h2 className="text-3xl font-bold mb-2">Performance Optimization</h2>
-                        <p className="text-slate-300 text-lg">
-                            Configure your optimization settings below.
-                            <br />
-                            Enable features with a simple toggle, or expand advanced options for fine-tuning.
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-8 bg-slate-800/50 p-6 rounded-xl border border-slate-700 backdrop-blur-sm">
-                        <div className="text-center">
-                            <div className="text-3xl font-bold text-emerald-400 mb-1">
-                                {Object.values(settings).filter(v => v === true).length}/3
-                            </div>
-                            <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Active</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    const activeFeatures = [
+        settings.caching,
+        settings.images,
+        settings.code,
+        settings.minify_css,
+        settings.minify_js,
+        settings.minify_html,
+        settings.defer_js,
+        settings.delay_js,
+        settings.lazy_load,
+        settings.cleanup_revisions,
+        settings.cleanup_spam,
+        settings.cleanup_trash,
+        settings.optimize_tables,
+        settings.display_swap,
+        settings.heartbeat_control.enabled
+    ].filter(Boolean).length;
 
+    return (
+        <div className="max-w-7xl mx-auto space-y-8 pb-12">
             {/* Notification */}
             {notification && (
                 <div className={`fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 animate-fade-in-up flex items-center gap-3 ${notification.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
@@ -362,8 +392,35 @@ export const SettingsView: React.FC = () => {
                 </div>
             )}
 
+            {/* Hero Status Section */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden">
+                {/* Background decorations */}
+                <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500 rounded-full mix-blend-overlay filter blur-3xl opacity-20 -mr-32 -mt-32"></div>
+                <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500 rounded-full mix-blend-overlay filter blur-3xl opacity-10 -ml-32 -mb-32"></div>
+
+                <div className="relative z-10">
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 mb-8">
+                        <div className="flex-1">
+                            <h1 className="text-4xl font-bold mb-3 text-white">Performance Optimization</h1>
+                            <p className="text-slate-300 text-lg leading-relaxed max-w-2xl">
+                                Configure your optimization settings below. Enable features with a simple toggle, or expand advanced options for fine-tuning.
+                            </p>
+                        </div>
+
+                        <div className="bg-white/10 backdrop-blur-md p-6 rounded-2xl border border-white/20 shadow-xl">
+                            <div className="text-center">
+                                <div className="text-5xl font-bold text-emerald-400 mb-2">
+                                    {activeFeatures}<span className="text-2xl text-slate-400">/11</span>
+                                </div>
+                                <div className="text-sm text-slate-300 uppercase tracking-wider font-semibold">Features Active</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Feature Cards Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Caching Card */}
                 <EnhancedFeatureCard
                     icon="database"
@@ -401,7 +458,7 @@ export const SettingsView: React.FC = () => {
                         title="Cache Exclusions"
                         description="Exclude specific URLs, cookies, or user agents from being cached."
                         enabled={true}
-                        onToggle={() => { }} // Always enabled if caching is enabled
+                        onToggle={() => { }}
                         color="blue"
                         disabled={saving}
                     >
@@ -445,12 +502,10 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('lazy_load', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-purple-300 rounded-full peer transition-colors duration-200 ${settings.lazy_load ? 'bg-purple-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.lazy_load ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-slate-700">CSS Backgrounds</span>
-                            <span className="text-purple-600 font-semibold">Enabled</span>
                         </div>
                     </div>
                 </EnhancedFeatureCard>
@@ -476,7 +531,9 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('minify_css', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer transition-colors duration-200 ${settings.minify_css ? 'bg-emerald-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.minify_css ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
                         </div>
                         <div className="flex items-center justify-between">
@@ -489,7 +546,9 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('minify_js', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer transition-colors duration-200 ${settings.minify_js ? 'bg-emerald-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.minify_js ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
                         </div>
                         <div className="flex items-center justify-between">
@@ -502,7 +561,9 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('minify_html', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-emerald-300 rounded-full peer transition-colors duration-200 ${settings.minify_html ? 'bg-emerald-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.minify_html ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
                         </div>
                     </div>
@@ -514,9 +575,11 @@ export const SettingsView: React.FC = () => {
                     title="Asset Optimization"
                     description="Optimize how scripts are loaded to improve Core Web Vitals and initial render time."
                     enabled={settings.defer_js || settings.delay_js}
-                    onToggle={(enabled) => {
-                        handleToggle('defer_js', enabled);
-                        if (!enabled) handleToggle('delay_js', false);
+                    onToggle={async (enabled) => {
+                        await handleToggle('defer_js', enabled);
+                        if (!enabled) {
+                            await handleToggle('delay_js', false);
+                        }
                     }}
                     color="indigo"
                     disabled={saving}
@@ -532,7 +595,9 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('defer_js', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer transition-colors duration-200 ${settings.defer_js ? 'bg-indigo-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.defer_js ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
                         </div>
                         <div className="flex items-center justify-between">
@@ -545,7 +610,9 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('delay_js', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer transition-colors duration-200 ${settings.delay_js ? 'bg-indigo-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.delay_js ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
                         </div>
                     </div>
@@ -616,11 +683,13 @@ export const SettingsView: React.FC = () => {
                     title="Database Optimization"
                     description="Clean up revisions, spam, and trash to reduce database size and improve query performance."
                     enabled={settings.cleanup_revisions || settings.cleanup_spam || settings.cleanup_trash || settings.optimize_tables}
-                    onToggle={(enabled) => {
-                        handleToggle('cleanup_revisions', enabled);
-                        handleToggle('cleanup_spam', enabled);
-                        handleToggle('cleanup_trash', enabled);
-                        handleToggle('optimize_tables', enabled);
+                    onToggle={async (enabled) => {
+                        await Promise.all([
+                            handleToggle('cleanup_revisions', enabled),
+                            handleToggle('cleanup_spam', enabled),
+                            handleToggle('cleanup_trash', enabled),
+                            handleToggle('optimize_tables', enabled)
+                        ]);
                     }}
                     color="pink"
                     disabled={saving}
@@ -636,7 +705,9 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('cleanup_revisions', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer transition-colors duration-200 ${settings.cleanup_revisions ? 'bg-pink-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.cleanup_revisions ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
                         </div>
                         <div className="flex items-center justify-between">
@@ -649,7 +720,9 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('cleanup_spam', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer transition-colors duration-200 ${settings.cleanup_spam ? 'bg-pink-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.cleanup_spam ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
                         </div>
                         <div className="flex items-center justify-between">
@@ -662,7 +735,9 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('cleanup_trash', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer transition-colors duration-200 ${settings.cleanup_trash ? 'bg-pink-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.cleanup_trash ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
                         </div>
                         <div className="flex items-center justify-between">
@@ -675,7 +750,9 @@ export const SettingsView: React.FC = () => {
                                     onChange={(e) => handleToggle('optimize_tables', e.target.checked)}
                                     disabled={saving}
                                 />
-                                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-600"></div>
+                                <div className={`relative w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer transition-colors duration-200 ${settings.optimize_tables ? 'bg-pink-600' : ''}`}>
+                                    <div className={`absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-4 w-4 transition-transform duration-200 ${settings.optimize_tables ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                                </div>
                             </label>
                         </div>
                     </div>
@@ -684,77 +761,77 @@ export const SettingsView: React.FC = () => {
                 {/* Heartbeat Control Card */}
                 <div className="col-span-1 lg:col-span-2">
                     <EnhancedFeatureCard
-                            icon="heart"
-                            title="Heartbeat Control"
-                            description="Limit or disable the WordPress Heartbeat API to reduce server load."
-                            enabled={settings.heartbeat_control.enabled}
-                            onToggle={(enabled) => handleToggle('heartbeat_control', { ...settings.heartbeat_control, enabled })}
-                            color="red"
+                        icon="heart"
+                        title="Heartbeat Control"
+                        description="Limit or disable the WordPress Heartbeat API to reduce server load."
+                        enabled={settings.heartbeat_control.enabled}
+                        onToggle={(enabled) => handleToggle('heartbeat_control', { ...settings.heartbeat_control, enabled })}
+                        color="red"
+                        disabled={saving}
+                    >
+                        <HeartbeatSettings
+                            settings={settings.heartbeat_control}
+                            onChange={(key, value) => {
+                                const newHeartbeat = { ...settings.heartbeat_control, [key]: value };
+                                handleToggle('heartbeat_control', newHeartbeat);
+                            }}
                             disabled={saving}
-                        >
-                            <HeartbeatSettings
-                                settings={settings.heartbeat_control}
-                                onChange={(key, value) => {
-                                    const newHeartbeat = { ...settings.heartbeat_control, [key]: value };
-                                    handleToggle('heartbeat_control', newHeartbeat);
-                                }}
-                                disabled={saving}
-                            />
-                        </EnhancedFeatureCard>
-                    </div>
-
-                    {/* Preload & Resource Hints */}
-                    <div className="col-span-1 lg:col-span-2">
-                        <EnhancedFeatureCard
-                            icon="networking"
-                            title="Preload & Resource Hints"
-                            description="Optimize resource loading with font preloading, DNS prefetch, and preconnect."
-                            enabled={settings.preload_fonts.length > 0 || settings.dns_prefetch.length > 0}
-                            onToggle={() => { }} // Always enabled container
-                            color="indigo"
-                            disabled={saving}
-                        >
-                            <PreloadTab
-                                settings={{
-                                    preload_fonts: settings.preload_fonts,
-                                    preload_images: settings.preload_images,
-                                    dns_prefetch: settings.dns_prefetch,
-                                    preconnect: settings.preconnect,
-                                    display_swap: settings.display_swap,
-                                }}
-                                onChange={(key, value) => handleToggle(key as keyof Settings, value)}
-                                disabled={saving}
-                            />
-                        </EnhancedFeatureCard>
-                    </div>
-
-                    {/* Exclusion Settings Card */}
-                    <div className="col-span-1 lg:col-span-2">
-                        <EnhancedFeatureCard
-                            icon="dismiss"
-                            title="Exclusion Rules"
-                            description="Exclude specific CSS/JS files or handles from optimization. Supports wildcards (*) and regex."
-                            enabled={true}
-                            onToggle={() => { }} // Always enabled
-                            color="red"
-                            disabled={saving}
-                        >
-                            <ExclusionSettings
-                                settings={{
-                                    exclude_css: settings.exclude_css,
-                                    exclude_js: settings.exclude_js,
-                                    exclude_css_files: settings.exclude_css_files,
-                                    exclude_js_files: settings.exclude_js_files,
-                                }}
-                                onChange={(key, value) => handleToggle(key as keyof Settings, value)}
-                                disabled={saving}
-                            />
-                        </EnhancedFeatureCard>
-                    </div>
+                        />
+                    </EnhancedFeatureCard>
                 </div>
 
+                {/* Preload & Resource Hints */}
+                <div className="col-span-1 lg:col-span-2">
+                    <EnhancedFeatureCard
+                        icon="networking"
+                        title="Preload & Resource Hints"
+                        description="Optimize resource loading with font preloading, DNS prefetch, and preconnect."
+                        enabled={settings.preload_fonts.length > 0 || settings.dns_prefetch.length > 0}
+                        onToggle={() => { }}
+                        color="indigo"
+                        disabled={saving}
+                    >
+                        <PreloadTab
+                            settings={{
+                                preload_fonts: settings.preload_fonts,
+                                preload_images: settings.preload_images,
+                                dns_prefetch: settings.dns_prefetch,
+                                preconnect: settings.preconnect,
+                                display_swap: settings.display_swap,
+                            }}
+                            onChange={(key, value) => handleToggle(key as keyof Settings, value)}
+                            disabled={saving}
+                        />
+                    </EnhancedFeatureCard>
+                </div>
+
+                {/* Exclusion Settings Card */}
+                <div className="col-span-1 lg:col-span-2">
+                    <EnhancedFeatureCard
+                        icon="dismiss"
+                        title="Exclusion Rules"
+                        description="Exclude specific CSS/JS files or handles from optimization. Supports wildcards (*) and regex."
+                        enabled={true}
+                        onToggle={() => { }}
+                        color="red"
+                        disabled={saving}
+                    >
+                        <ExclusionSettings
+                            settings={{
+                                exclude_css: settings.exclude_css,
+                                exclude_js: settings.exclude_js,
+                                exclude_css_files: settings.exclude_css_files,
+                                exclude_js_files: settings.exclude_js_files,
+                            }}
+                            onChange={(key, value) => handleToggle(key as keyof Settings, value)}
+                            disabled={saving}
+                        />
+                    </EnhancedFeatureCard>
+                </div>
+            </div>
+
             {/* Queue Stats Section */}
-            <div className="mt-10">
+            <div className="mt-8">
                 <QueueStats />
             </div>
         </div>

@@ -9,7 +9,7 @@
 namespace PerformanceOptimisation\Core\Cache;
 
 use PerformanceOptimisation\Interfaces\CacheInterface;
-use PerformanceOptimisation\Interfaces\ConfigInterface;
+use PerformanceOptimisation\Core\Config\ConfigInterface;
 use PerformanceOptimisation\Exceptions\CacheException;
 
 /**
@@ -18,6 +18,7 @@ use PerformanceOptimisation\Exceptions\CacheException;
  * @since 1.1.0
  */
 class FileCache implements CacheInterface {
+
 
 	/**
 	 * Cache directory path
@@ -67,7 +68,7 @@ class FileCache implements CacheInterface {
 	 * @since 1.1.0
 	 * @param string $key     Cache key.
 	 * @param mixed  $default Default value if key doesn't exist.
-	 * @return mixed Cached value or default
+	 * @return mixed Cached value or default.
 	 */
 	public function get( string $key, $default = null ) {
 		$file_path = $this->get_cache_file_path( $key );
@@ -102,7 +103,7 @@ class FileCache implements CacheInterface {
 	 * @param string $key        Cache key.
 	 * @param mixed  $value      Value to cache.
 	 * @param int    $expiration Expiration time in seconds (0 = no expiration).
-	 * @return bool True on success, false on failure
+	 * @return bool True on success, false on failure.
 	 */
 	public function set( string $key, $value, int $expiration = 0 ): bool {
 		$file_path = $this->get_cache_file_path( $key );
@@ -129,7 +130,7 @@ class FileCache implements CacheInterface {
 	 *
 	 * @since 1.1.0
 	 * @param string $key Cache key.
-	 * @return bool True on success, false on failure
+	 * @return bool True on success, false on failure.
 	 */
 	public function delete( string $key ): bool {
 		$file_path = $this->get_cache_file_path( $key );
@@ -138,6 +139,7 @@ class FileCache implements CacheInterface {
 			return true;
 		}
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 		$result = unlink( $file_path );
 
 		if ( $result ) {
@@ -151,8 +153,8 @@ class FileCache implements CacheInterface {
 	 * Check if a cache key exists
 	 *
 	 * @since 1.1.0
-	 * @param string $key Cache key
-	 * @return bool True if key exists, false otherwise
+	 * @param string $key Cache key.
+	 * @return bool True if key exists, false otherwise.
 	 */
 	public function has( string $key ): bool {
 		$file_path = $this->get_cache_file_path( $key );
@@ -180,7 +182,8 @@ class FileCache implements CacheInterface {
 	 * Clear all cached values
 	 *
 	 * @since 1.1.0
-	 * @return bool True on success, false on failure
+	 * @throws CacheException If cache files cannot be listed.
+	 * @return bool True on success, false on failure.
 	 */
 	public function flush(): bool {
 		try {
@@ -192,18 +195,19 @@ class FileCache implements CacheInterface {
 			}
 
 			if ( empty( $files ) ) {
-				return true; // No files to delete
+				return true; // No files to delete.
 			}
 
 			$failed_deletions = 0;
 			foreach ( $files as $file ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 				if ( ! unlink( $file ) ) {
 					++$failed_deletions;
 					\PerformanceOptimisation\Utils\LoggingUtil::error( "Failed to delete cache file: {$file}" );
 				}
 			}
 
-			// Consider it successful if most files were deleted
+			// Consider it successful if most files were deleted.
 			return $failed_deletions < ( count( $files ) / 2 );
 
 		} catch ( \Exception $e ) {
@@ -216,8 +220,8 @@ class FileCache implements CacheInterface {
 	 * Get multiple cached values
 	 *
 	 * @since 1.1.0
-	 * @param array $keys Array of cache keys
-	 * @return array Array of key => value pairs
+	 * @param array $keys Array of cache keys.
+	 * @return array Array of key => value pairs.
 	 */
 	public function get_multiple( array $keys ): array {
 		$results = array();
@@ -233,9 +237,9 @@ class FileCache implements CacheInterface {
 	 * Set multiple cached values
 	 *
 	 * @since 1.1.0
-	 * @param array $data       Array of key => value pairs
-	 * @param int   $expiration Expiration time in seconds (0 = no expiration)
-	 * @return bool True on success, false on failure
+	 * @param array $data       Array of key => value pairs.
+	 * @param int   $expiration Expiration time in seconds (0 = no expiration).
+	 * @return bool True on success, false on failure.
 	 */
 	public function set_multiple( array $data, int $expiration = 0 ): bool {
 		$success = true;
@@ -253,8 +257,8 @@ class FileCache implements CacheInterface {
 	 * Delete multiple cached values
 	 *
 	 * @since 1.1.0
-	 * @param array $keys Array of cache keys
-	 * @return bool True on success, false on failure
+	 * @param array $keys Array of cache keys.
+	 * @return bool True on success, false on failure.
 	 */
 	public function delete_multiple( array $keys ): bool {
 		$success = true;
@@ -272,9 +276,9 @@ class FileCache implements CacheInterface {
 	 * Increment a numeric cache value
 	 *
 	 * @since 1.1.0
-	 * @param string $key    Cache key
-	 * @param int    $offset Increment offset
-	 * @return int|false New value on success, false on failure
+	 * @param string $key    Cache key.
+	 * @param int    $offset Increment offset.
+	 * @return int|false New value on success, false on failure.
 	 */
 	public function increment( string $key, int $offset = 1 ) {
 		$current_value = $this->get( $key, 0 );
@@ -296,9 +300,9 @@ class FileCache implements CacheInterface {
 	 * Decrement a numeric cache value
 	 *
 	 * @since 1.1.0
-	 * @param string $key    Cache key
-	 * @param int    $offset Decrement offset
-	 * @return int|false New value on success, false on failure
+	 * @param string $key    Cache key.
+	 * @param int    $offset Decrement offset.
+	 * @return int|false New value on success, false on failure.
 	 */
 	public function decrement( string $key, int $offset = 1 ) {
 		return $this->increment( $key, -$offset );
@@ -308,7 +312,7 @@ class FileCache implements CacheInterface {
 	 * Get cache statistics
 	 *
 	 * @since 1.1.0
-	 * @return array Cache statistics
+	 * @return array Cache statistics.
 	 */
 	public function get_stats(): array {
 		$cache_files = glob( $this->cache_dir . '*.cache' );
@@ -335,11 +339,17 @@ class FileCache implements CacheInterface {
 	 * Get cache directory path
 	 *
 	 * @since 1.1.0
-	 * @return string Cache directory path
+	 * @return string Cache directory path.
 	 */
 	private function get_cache_directory(): string {
-		$upload_dir = wp_upload_dir();
-		return trailingslashit( $upload_dir['basedir'] ) . 'wppo-cache/';
+		if ( function_exists( 'wp_upload_dir' ) ) {
+			$upload_dir = wp_upload_dir();
+			$basedir    = $upload_dir['basedir'];
+		} else {
+			$basedir = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/uploads' : dirname( __DIR__, 5 ) . '/uploads';
+		}
+
+		return rtrim( $basedir, '/\\' ) . '/wppo-cache/';
 	}
 
 	/**
@@ -347,20 +357,33 @@ class FileCache implements CacheInterface {
 	 *
 	 * @since 1.1.0
 	 * @return void
-	 * @throws CacheException If directory cannot be created
+	 * @throws CacheException If directory cannot be created.
 	 */
 	private function ensure_cache_directory(): void {
 		if ( ! file_exists( $this->cache_dir ) ) {
-			if ( ! wp_mkdir_p( $this->cache_dir ) ) {
-				throw new CacheException( "Cannot create cache directory: {$this->cache_dir}" );
+			$created = false;
+			if ( function_exists( 'wp_mkdir_p' ) ) {
+				$created = wp_mkdir_p( $this->cache_dir );
+			} else {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
+				$created = mkdir( $this->cache_dir, 0755, true );
+			}
+
+			if ( ! $created && ! is_dir( $this->cache_dir ) ) {
+				throw new CacheException(
+					esc_html( "Cannot create cache directory: {$this->cache_dir}" )
+				);
 			}
 		}
 
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
 		if ( ! is_writable( $this->cache_dir ) ) {
-			throw new CacheException( "Cache directory is not writable: {$this->cache_dir}" );
+			throw new CacheException(
+				esc_html( "Cache directory is not writable: {$this->cache_dir}" )
+			);
 		}
 
-		// Create comprehensive .htaccess file
+		// Create comprehensive .htaccess file.
 		$htaccess_file = $this->cache_dir . '.htaccess';
 		if ( ! file_exists( $htaccess_file ) ) {
 			$htaccess_content = <<<'HTACCESS'
@@ -384,14 +407,16 @@ class FileCache implements CacheInterface {
 </Files>
 HTACCESS;
 
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 			if ( file_put_contents( $htaccess_file, $htaccess_content ) === false ) {
 				throw new CacheException( 'Failed to create .htaccess protection' );
 			}
 		}
 
-		// Create index.php for additional protection
+		// Create index.php for additional protection.
 		$index_file = $this->cache_dir . 'index.php';
 		if ( ! file_exists( $index_file ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 			file_put_contents( $index_file, '<?php // Silence is golden' );
 		}
 	}
@@ -400,21 +425,22 @@ HTACCESS;
 	 * Get cache file path for a key
 	 *
 	 * @since 1.1.0
-	 * @param string $key Cache key
-	 * @return string Cache file path
+	 * @param string $key Cache key.
+	 * @throws CacheException If cache key is invalid.
+	 * @return string Cache file path.
 	 */
 	private function get_cache_file_path( string $key ): string {
-		// Validate key
+		// Validate key.
 		if ( empty( $key ) || strlen( $key ) > 250 ) {
 			throw new CacheException( 'Invalid cache key length' );
 		}
 
-		// Prevent directory traversal
+		// Prevent directory traversal.
 		if ( strpos( $key, '..' ) !== false || strpos( $key, '/' ) !== false || strpos( $key, '\\' ) !== false ) {
 			throw new CacheException( 'Invalid cache key characters' );
 		}
 
-		$hash = hash( 'sha256', $key ); // More secure than md5
+		$hash = hash( 'sha256', $key ); // More secure than md5.
 		return $this->cache_dir . $hash . '.cache';
 	}
 
@@ -422,26 +448,29 @@ HTACCESS;
 	 * Read cache file
 	 *
 	 * @since 1.1.0
-	 * @param string $file_path Cache file path
-	 * @return array|false Cache data or false on failure
+	 * @param string $file_path Cache file path.
+	 * @return array|false Cache data or false on failure.
 	 */
 	private function read_cache_file( string $file_path ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 		$content = file_get_contents( $file_path );
 
 		if ( false === $content ) {
 			return false;
 		}
 
-		// Validate content size before unserialization
+		// Validate content size before unserialization.
 		if ( strlen( $content ) > 10485760 ) { // 10MB limit
 			return false;
 		}
 
 		try {
+			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize
 			$data = unserialize( $content, array( 'allowed_classes' => false ) );
 		} catch ( \Exception $e ) {
-			// Log and remove corrupted file
+			// Log and remove corrupted file.
 			\PerformanceOptimisation\Utils\LoggingUtil::error( 'Corrupted cache file: ' . $file_path );
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 			unlink( $file_path );
 			return false;
 		}
@@ -457,12 +486,14 @@ HTACCESS;
 	 * Write cache file
 	 *
 	 * @since 1.1.0
-	 * @param string $file_path Cache file path
-	 * @param array  $data      Cache data
-	 * @return bool True on success, false on failure
+	 * @param string $file_path Cache file path.
+	 * @param array  $data      Cache data.
+	 * @return bool True on success, false on failure.
 	 */
 	private function write_cache_file( string $file_path, array $data ): bool {
+		// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize
 		$content = serialize( $data );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		return false !== file_put_contents( $file_path, $content, LOCK_EX );
 	}
 }

@@ -20,6 +20,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class UtilityServiceProvider extends ServiceProvider {
 
+
+
 	/**
 	 * Services provided by this provider.
 	 *
@@ -32,6 +34,7 @@ class UtilityServiceProvider extends ServiceProvider {
 		'PerformanceOptimisation\\Utils\\ImageUtil',
 		'PerformanceOptimisation\\Utils\\ValidationUtil',
 		'PerformanceOptimisation\\Utils\\PerformanceUtil',
+		'PerformanceOptimisation\\Utils\\ConversionQueue',
 	);
 
 	/**
@@ -45,14 +48,17 @@ class UtilityServiceProvider extends ServiceProvider {
 		$container->singleton( 'PerformanceOptimisation\\Utils\\ImageUtil', 'PerformanceOptimisation\\Utils\\ImageUtil' );
 		$container->singleton( 'PerformanceOptimisation\\Utils\\ValidationUtil', 'PerformanceOptimisation\\Utils\\ValidationUtil' );
 		$container->singleton( 'PerformanceOptimisation\\Utils\\PerformanceUtil', 'PerformanceOptimisation\\Utils\\PerformanceUtil' );
+		$container->singleton( 'PerformanceOptimisation\\Utils\\ConversionQueue', 'PerformanceOptimisation\\Utils\\ConversionQueue' );
 
 		// Register convenient aliases
 		$container->alias( 'filesystem', 'PerformanceOptimisation\\Utils\\FileSystemUtil' );
 		$container->alias( 'cache', 'PerformanceOptimisation\\Utils\\CacheUtil' );
 		$container->alias( 'logger', 'PerformanceOptimisation\\Utils\\LoggingUtil' );
+		$container->alias( 'logging_service', 'PerformanceOptimisation\\Utils\\LoggingUtil' );
 		$container->alias( 'image', 'PerformanceOptimisation\\Utils\\ImageUtil' );
 		$container->alias( 'validator', 'PerformanceOptimisation\\Utils\\ValidationUtil' );
 		$container->alias( 'performance', 'PerformanceOptimisation\\Utils\\PerformanceUtil' );
+		$container->alias( 'conversion_queue', 'PerformanceOptimisation\\Utils\\ConversionQueue' );
 
 		// Tag all utilities
 		foreach ( $this->provides as $service ) {

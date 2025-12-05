@@ -26,6 +26,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class ImageUtil {
 
+
 	/**
 	 * Supported image formats.
 	 *
@@ -195,8 +196,12 @@ class ImageUtil {
 			return $path;
 		}
 
-		$path_info     = pathinfo( $path );
-		$optimized_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo/' . dirname( str_replace( WP_CONTENT_DIR, '', $path ) ) );
+		$path           = wp_normalize_path( $path );
+		$wp_content_dir = wp_normalize_path( WP_CONTENT_DIR );
+		$path_info      = pathinfo( $path );
+
+		$relative_path = dirname( str_replace( $wp_content_dir, '', $path ) );
+		$optimized_dir = wp_normalize_path( $wp_content_dir . '/wppo/' . $relative_path );
 
 		// Ensure directory exists
 		if ( ! FileSystemUtil::fileExists( $optimized_dir ) ) {

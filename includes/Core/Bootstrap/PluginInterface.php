@@ -51,7 +51,7 @@ interface PluginInterface {
 	 *
 	 * @return string Plugin version.
 	 */
-	public function getVersion(): string;
+	public function get_version(): string;
 
 	/**
 	 * Get plugin path.
@@ -60,7 +60,7 @@ interface PluginInterface {
 	 *
 	 * @return string Plugin path.
 	 */
-	public function getPath(): string;
+	public function get_path(): string;
 
 	/**
 	 * Get plugin URL.
@@ -69,7 +69,7 @@ interface PluginInterface {
 	 *
 	 * @return string Plugin URL.
 	 */
-	public function getUrl(): string;
+	public function get_url(): string;
 
 	/**
 	 * Check if plugin is initialized.
@@ -78,5 +78,5 @@ interface PluginInterface {
 	 *
 	 * @return bool True if initialized, false otherwise.
 	 */
-	public function isInitialized(): bool;
+	public function is_initialized(): bool;
 }

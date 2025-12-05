@@ -20,6 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class SettingsController extends BaseController {
 
+
 	/**
 	 * Controller route base.
 	 *
@@ -205,7 +206,7 @@ class SettingsController extends BaseController {
 			);
 		}
 
-		// Rate limit: 10 requests per minute
+		// Rate limit: 10 requests per minute.
 		$key = 'settings_update_' . get_current_user_id();
 		if ( \PerformanceOptimisation\Utils\RateLimiter::is_limited( $key, 10, 60 ) ) {
 			return new \WP_Error(
@@ -300,16 +301,16 @@ class SettingsController extends BaseController {
 			// Check for critical changes that require cache clearing.
 			$cache_clear_needed = $this->check_cache_clear_needed( $current_settings, $updated_settings );
 
-			// Check if page cache was enabled/disabled
+			// Check if page cache was enabled/disabled.
 			$page_cache_changed = $this->check_page_cache_changed( $current_settings, $updated_settings );
 
-			// Update settings - update_option returns false if value hasn't changed
+			// Update settings - update_option returns false if value hasn't changed.
 			$success = update_option( 'wppo_settings', $updated_settings );
 
-			// If update_option returns false, check if it's because the value is the same
+			// If update_option returns false, check if it's because the value is the same.
 			if ( ! $success ) {
 				$stored_value = get_option( 'wppo_settings' );
-				// If the stored value matches what we're trying to save, consider it a success
+				// If the stored value matches what we're trying to save, consider it a success.
 				if ( $stored_value === $updated_settings ) {
 					$success = true;
 				}
@@ -323,12 +324,12 @@ class SettingsController extends BaseController {
 				);
 			}
 
-			// Handle advanced-cache.php drop-in
+			// Handle advanced-cache.php drop-in.
 			if ( $page_cache_changed ) {
 				$this->manage_advanced_cache_dropin( $updated_settings );
 			}
 
-			// Handle browser cache .htaccess rules
+			// Handle browser cache .htaccess rules.
 			$browser_cache_changed = $this->check_browser_cache_changed( $current_settings, $updated_settings );
 			if ( $browser_cache_changed ) {
 				$this->manage_browser_cache( $updated_settings );
@@ -342,8 +343,11 @@ class SettingsController extends BaseController {
 				\PerformanceOptimise\Inc\Cache::clear_cache();
 			}
 
-			// Log the change using modern logging
-			\PerformanceOptimisation\Utils\LoggingUtil::info( 'WPPO: Settings updated via API', array( 'time' => current_time( 'mysql' ) ) );
+			// Log the change using modern logging.
+			\PerformanceOptimisation\Utils\LoggingUtil::info(
+				'WPPO: Settings updated via API',
+				array( 'time' => current_time( 'mysql' ) )
+			);
 
 			return $this->send_success_response(
 				array(
@@ -466,7 +470,9 @@ class SettingsController extends BaseController {
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
 			}
-			new \PerformanceOptimise\Inc\Log( "Settings group '{$group}' updated via API on " . current_time( 'mysql' ) );
+			new \PerformanceOptimise\Inc\Log(
+				"Settings group '{$group}' updated via API on " . current_time( 'mysql' )
+			);
 
 			return $this->send_success_response(
 				array(
@@ -554,7 +560,10 @@ class SettingsController extends BaseController {
 	 */
 	public function export_settings( \WP_REST_Request $request ): \WP_REST_Response {
 		try {
-			$format = $request->get_param( 'format' ) ?: 'json';
+			$format = $request->get_param( 'format' );
+			if ( ! $format ) {
+				$format = 'json';
+			}
 			$this->log_request( $request, 'Export Settings' );
 
 			$settings = get_option( 'wppo_settings', array() );
@@ -1030,13 +1039,19 @@ class SettingsController extends BaseController {
 
 			if ( $browser_cache_enabled ) {
 				$browser_cache_service->enable();
-				\PerformanceOptimisation\Utils\LoggingUtil::info( 'WPPO: Browser cache enabled, .htaccess rules added' );
+				\PerformanceOptimisation\Utils\LoggingUtil::info(
+					'WPPO: Browser cache enabled, .htaccess rules added'
+				);
 			} else {
 				$browser_cache_service->disable();
-				\PerformanceOptimisation\Utils\LoggingUtil::info( 'WPPO: Browser cache disabled, .htaccess rules removed' );
+				\PerformanceOptimisation\Utils\LoggingUtil::info(
+					'WPPO: Browser cache disabled, .htaccess rules removed'
+				);
 			}
 		} catch ( \Exception $e ) {
-			\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Failed to manage browser cache: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error(
+				'WPPO: Failed to manage browser cache: ' . $e->getMessage()
+			);
 		}
 	}
 
@@ -1051,17 +1066,23 @@ class SettingsController extends BaseController {
 
 		try {
 			$container          = \PerformanceOptimisation\Core\ServiceContainer::getInstance();
-			$page_cache_service = $container->get( 'PageCacheService' );
+			$page_cache_service = $container->get( 'PerformanceOptimisation\\Services\\PageCacheService' );
 
 			if ( $page_cache_enabled ) {
 				$page_cache_service->enable_cache();
-				\PerformanceOptimisation\Utils\LoggingUtil::info( 'WPPO: Page cache enabled, advanced-cache.php created' );
+				\PerformanceOptimisation\Utils\LoggingUtil::info(
+					'WPPO: Page cache enabled, advanced-cache.php created'
+				);
 			} else {
 				$page_cache_service->disable_cache();
-				\PerformanceOptimisation\Utils\LoggingUtil::info( 'WPPO: Page cache disabled, advanced-cache.php removed' );
+				\PerformanceOptimisation\Utils\LoggingUtil::info(
+					'WPPO: Page cache disabled, advanced-cache.php removed'
+				);
 			}
 		} catch ( \Exception $e ) {
-			\PerformanceOptimisation\Utils\LoggingUtil::error( 'WPPO: Failed to manage advanced-cache.php: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error(
+				'WPPO: Failed to manage advanced-cache.php: ' . $e->getMessage()
+			);
 		}
 	}
 }

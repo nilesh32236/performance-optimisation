@@ -27,6 +27,7 @@ use PerformanceOptimisation\Services\CacheService;
  */
 class Plugin implements PluginInterface {
 
+
 	/**
 	 * Plugin instance.
 	 *
@@ -131,9 +132,9 @@ class Plugin implements PluginInterface {
 
 		/**
 		 * Fires after plugin initialization.
-	 *
+		 *
 		 * @since 2.0.0
-	 *
+		 *
 		 * @param Plugin $plugin Plugin instance.
 		 */
 		do_action( 'wppo_plugin_initialized', $this );
@@ -155,15 +156,15 @@ class Plugin implements PluginInterface {
 			$this->checkSystemRequirements();
 			$activation_steps[] = 'system_check';
 
-			// Load dependencies first
+			// Load dependencies first.
 			$this->loadDependencies();
 			$activation_steps[] = 'dependencies';
 
-			// Register services for activation
+			// Register services for activation.
 			$this->registerCoreServices();
 			$activation_steps[] = 'services';
 
-			// Setup advanced caching
+			// Setup advanced caching.
 			AdvancedCacheHandler::create();
 			$activation_steps[] = 'advanced_cache';
 
@@ -181,7 +182,7 @@ class Plugin implements PluginInterface {
 			$this->setDefaultOptions();
 			$activation_steps[] = 'default_options';
 
-			// Schedule cron jobs
+			// Schedule cron jobs.
 			$this->scheduleCronEvents();
 			$activation_steps[] = 'cron_events';
 
@@ -191,7 +192,7 @@ class Plugin implements PluginInterface {
 
 			flush_rewrite_rules();
 
-			// Set activation flag for setup wizard
+			// Set activation flag for setup wizard.
 			update_option( 'wppo_show_setup_wizard', true );
 
 			LoggingUtil::info(
@@ -218,7 +219,7 @@ class Plugin implements PluginInterface {
 			// Rollback completed steps.
 			$this->rollbackActivation( $activation_steps );
 
-			throw $e; // Re-throw to prevent activation
+			throw $e; // Re-throw to prevent activation.
 		}
 	}
 
@@ -267,27 +268,27 @@ class Plugin implements PluginInterface {
 	 */
 	public function deactivate(): void {
 		try {
-			// Clear WordPress cron jobs directly
+			// Clear WordPress cron jobs directly.
 			wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 			wp_clear_scheduled_hook( 'wppo_generate_static_page' );
 			wp_clear_scheduled_hook( 'wppo_image_optimization_cron' );
 
-			// Remove advanced caching files with validation
+			// Remove advanced caching files with validation.
 			$advanced_cache_file = WP_CONTENT_DIR . '/advanced-cache.php';
-			if ( file_exists( $advanced_cache_file ) ) {
-				// Validate it's our file before deletion
-				$file_content = file_get_contents( $advanced_cache_file );
+			if ( FileSystemUtil::fileExists( $advanced_cache_file ) ) {
+				// Validate it's our file before deletion.
+				$file_content = FileSystemUtil::readFile( $advanced_cache_file );
 				if ( strpos( $file_content, 'Performance Optimisation Plugin' ) !== false ) {
-					if ( ! unlink( $advanced_cache_file ) ) {
+					if ( ! FileSystemUtil::deleteFile( $advanced_cache_file ) ) {
 						LoggingUtil::warning( 'Failed to remove advanced-cache.php file' );
 					}
 				}
 			}
 
-			// Remove cache directory with validation
+			// Remove cache directory with validation.
 			$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
-			if ( is_dir( $cache_dir ) ) {
-				// Validate path is within wp-content for security
+			if ( FileSystemUtil::isDirectory( $cache_dir ) ) {
+				// Validate path is within wp-content for security.
 				$real_cache_dir   = realpath( $cache_dir );
 				$real_content_dir = realpath( WP_CONTENT_DIR );
 				if ( $real_cache_dir && $real_content_dir && strpos( $real_cache_dir, $real_content_dir ) === 0 ) {
@@ -308,7 +309,7 @@ class Plugin implements PluginInterface {
 
 		} catch ( \Exception $e ) {
 			LoggingUtil::error( 'Plugin deactivation failed: ' . $e->getMessage() );
-			// Don't throw on deactivation to allow WordPress to complete the process
+			// Don't throw on deactivation to allow WordPress to complete the process.
 		}
 	}
 
@@ -319,7 +320,7 @@ class Plugin implements PluginInterface {
 	 *
 	 * @return string Plugin version.
 	 */
-	public function getVersion(): string {
+	public function get_version(): string {
 		return $this->_version;
 	}
 
@@ -330,7 +331,7 @@ class Plugin implements PluginInterface {
 	 *
 	 * @return string Plugin path.
 	 */
-	public function getPath(): string {
+	public function get_path(): string {
 		return plugin_dir_path( $this->_plugin_file );
 	}
 
@@ -341,7 +342,7 @@ class Plugin implements PluginInterface {
 	 *
 	 * @return string Plugin URL.
 	 */
-	public function getUrl(): string {
+	public function get_url(): string {
 		return plugin_dir_url( $this->_plugin_file );
 	}
 
@@ -352,7 +353,7 @@ class Plugin implements PluginInterface {
 	 *
 	 * @return bool True if initialized, false otherwise.
 	 */
-	public function isInitialized(): bool {
+	public function is_initialized(): bool {
 		return $this->_initialized;
 	}
 
@@ -380,11 +381,11 @@ class Plugin implements PluginInterface {
 			// Register container itself.
 			$this->_container->singleton( ServiceContainerInterface::class, $this->_container );
 
-			// Register plugin instance
+			// Register plugin instance.
 			$this->_container->singleton( PluginInterface::class, $this );
 			$this->_container->singleton( self::class, $this );
 
-			// Register configuration manager with error handling
+			// Register configuration manager with error handling.
 			$this->_container->singleton(
 				ConfigManager::class,
 				function ( ServiceContainerInterface $container ) {
@@ -417,7 +418,7 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function registerPluginServices(): void {
-		// Register API controllers
+		// Register API controllers.
 		$this->_container->singleton(
 			'PerformanceOptimisation\\Core\\API\\RestController',
 			function ( ServiceContainerInterface $container ) {
@@ -432,16 +433,16 @@ class Plugin implements PluginInterface {
 			}
 		);
 
-		// Register Core classes
+		// Register Core classes.
 		$this->_container->singleton( 'PerformanceOptimisation\\Core\\Config\\ConfigManager', ConfigManager::class );
 
-		// Register aliases for easy access
+		// Register aliases for easy access.
 		$this->_container->alias( 'plugin', self::class );
 		$this->_container->alias( 'config', ConfigManager::class );
 		$this->_container->alias( 'rest_controller', 'PerformanceOptimisation\\Core\\API\\RestController' );
 		$this->_container->alias( 'api_router', 'PerformanceOptimisation\\Core\\API\\ApiRouter' );
 
-		// Register Database Optimization Service
+		// Register Database Optimization Service.
 		$this->_container->singleton(
 			'PerformanceOptimisation\\Services\\DatabaseOptimizationService',
 			function ( ServiceContainerInterface $container ) {
@@ -452,7 +453,7 @@ class Plugin implements PluginInterface {
 			}
 		);
 
-		// Register Font Optimization Service
+		// Register Font Optimization Service.
 		$this->_container->singleton(
 			'PerformanceOptimisation\\Services\\FontOptimizationService',
 			function ( ServiceContainerInterface $container ) {
@@ -463,7 +464,7 @@ class Plugin implements PluginInterface {
 			}
 		);
 
-		// Register Resource Hints Service
+		// Register Resource Hints Service.
 		$this->_container->singleton(
 			'PerformanceOptimisation\\Services\\ResourceHintsService',
 			function ( ServiceContainerInterface $container ) {
@@ -473,7 +474,7 @@ class Plugin implements PluginInterface {
 			}
 		);
 
-		// Register Heartbeat Service
+		// Register Heartbeat Service.
 		$this->_container->singleton(
 			'PerformanceOptimisation\\Services\\HeartbeatService',
 			function ( ServiceContainerInterface $container ) {
@@ -493,8 +494,8 @@ class Plugin implements PluginInterface {
 	 */
 	private function loadDependencies(): void {
 		// Load Composer autoloader if available.
-		$autoloader = $this->getPath() . 'vendor/autoload.php';
-		if ( file_exists( $autoloader ) ) {
+		$autoloader = $this->get_path() . 'vendor/autoload.php';
+		if ( FileSystemUtil::fileExists( $autoloader ) ) {
 			require_once $autoloader;
 		} else {
 			LoggingUtil::warning( 'Composer autoloader not found. Some features may not work properly.' );
@@ -549,8 +550,8 @@ class Plugin implements PluginInterface {
 
 		$missing_files = array();
 		foreach ( $required_files as $file ) {
-			$file_path = $this->getPath() . $file;
-			if ( file_exists( $file_path ) ) {
+			$file_path = $this->get_path() . $file;
+			if ( FileSystemUtil::fileExists( $file_path ) ) {
 				require_once $file_path;
 			} else {
 				$missing_files[] = $file;
@@ -575,7 +576,7 @@ class Plugin implements PluginInterface {
 			// Setup admin hooks.
 			if ( is_admin() ) {
 				try {
-					// Directly instantiate Admin class to avoid service container issues
+					// Directly instantiate Admin class to avoid service container issues.
 					$admin = new \PerformanceOptimisation\Admin\Admin( $this->_container );
 					$admin->setup_hooks();
 				} catch ( \Exception $e ) {
@@ -583,21 +584,21 @@ class Plugin implements PluginInterface {
 				}
 			}
 
-			// Frontend and admin components are initialized by their respective service providers
-			// No need to manually initialize them here
+			// Frontend and admin components are initialized by their respective service providers.
+			// No need to manually initialize them here.
 
-			// REST API hooks
+			// REST API hooks.
 			add_action( 'rest_api_init', array( $this, 'initRestApi' ) );
 
-			// Internationalization
+			// Internationalization.
 			add_action( 'init', array( $this, 'loadTextdomain' ) );
 
-			// Plugin lifecycle hooks
+			// Plugin lifecycle hooks.
 			add_action( 'wppo_clear_all_cache', array( $this, 'handleClearAllCache' ) );
 			add_action( 'wppo_cleanup_cache', array( $this, 'handleCleanupCache' ) );
 			add_action( 'wppo_optimize_images', array( $this, 'handleOptimizeImages' ) );
 
-			// Performance monitoring hooks
+			// Performance monitoring hooks.
 			if ( $this->_container->get( 'settings_service' )->get_setting( 'performance', 'enable_monitoring' ) ) {
 				add_action( 'wp_footer', array( $this, 'addPerformanceTracking' ), 999 );
 			}
@@ -618,10 +619,10 @@ class Plugin implements PluginInterface {
 	 */
 	private function initializeFeatures(): void {
 		// Initialize feature modules based on configuration.
-		// For now, skip configuration loading to avoid dependency issues
-		// $config = $this->_container->get( 'PerformanceOptimisation\\Core\\Config\\ConfigManager' );
+		// For now, skip configuration loading to avoid dependency issues.
+		// $config = $this->_container->get( 'PerformanceOptimisation\\Core\\Config\\ConfigManager' );.
 
-		// Initialize image optimization features
+		// Initialize image optimization features.
 		if ( $this->_container->has( 'lazy_load_service' ) ) {
 			$lazy_load_service = $this->_container->get( 'lazy_load_service' );
 			$lazy_load_service->init();
@@ -633,26 +634,26 @@ class Plugin implements PluginInterface {
 		}
 
 		if ( $this->_container->has( 'image_service' ) ) {
-			// Just getting the service will instantiate it and run the constructor hooks
+			// Just getting the service will instantiate it and run the constructor hooks.
 			$this->_container->get( 'image_service' );
 		}
 
 		if ( $this->_container->has( 'PerformanceOptimisation\\Services\\QueueProcessorService' ) ) {
-			// Initialize queue processor to register cron hooks
+			// Initialize queue processor to register cron hooks.
 			$this->_container->get( 'PerformanceOptimisation\\Services\\QueueProcessorService' );
 		}
 
-		// Initialize Database Optimization Service
+		// Initialize Database Optimization Service.
 		if ( $this->_container->has( 'PerformanceOptimisation\\Services\\DatabaseOptimizationService' ) ) {
 			$this->_container->get( 'PerformanceOptimisation\\Services\\DatabaseOptimizationService' );
 		}
 
-		// Initialize Font Optimization Service
+		// Initialize Font Optimization Service.
 		if ( $this->_container->has( 'PerformanceOptimisation\\Services\\FontOptimizationService' ) ) {
 			$this->_container->get( 'PerformanceOptimisation\\Services\\FontOptimizationService' );
 		}
 
-		// Initialize Resource Hints Service
+		// Initialize Resource Hints Service.
 		if ( $this->_container->has( 'PerformanceOptimisation\\Services\\ResourceHintsService' ) ) {
 			$resource_hints = $this->_container->get( 'PerformanceOptimisation\\Services\\ResourceHintsService' );
 			$resource_hints->init();
@@ -661,9 +662,9 @@ class Plugin implements PluginInterface {
 		// This will be expanded when we create feature modules.
 		/**
 		 * Fires when features should be initialized.
-	 *
+		 *
 		 * @since 2.0.0
-	 *
+		 *
 		 * @param Plugin        $plugin Plugin instance.
 		 * @param ConfigManager $config Configuration manager.
 		 */
@@ -785,7 +786,7 @@ class Plugin implements PluginInterface {
 		// This will be implemented when we create the cache module.
 		/**
 		 * Fires when cache should be cleared.
-	 *
+		 *
 		 * @since 2.0.0
 		 */
 		do_action( 'wppo_clear_all_cache' );
@@ -802,9 +803,9 @@ class Plugin implements PluginInterface {
 		// This will be implemented when we create the admin module.
 		/**
 		 * Fires when admin menu should be initialized.
-	 *
+		 *
 		 * @since 2.0.0
-	 *
+		 *
 		 * @param Plugin $plugin Plugin instance.
 		 */
 		do_action( 'wppo_init_admin_menu', $this );
@@ -821,9 +822,9 @@ class Plugin implements PluginInterface {
 	public function enqueueAdminAssets( string $hook_suffix ): void {
 		/**
 		 * Fires when admin assets should be enqueued.
-	 *
+		 *
 		 * @since 2.0.0
-	 *
+		 *
 		 * @param string $hook_suffix Current admin page hook suffix.
 		 * @param Plugin $plugin      Plugin instance.
 		 */
@@ -840,9 +841,9 @@ class Plugin implements PluginInterface {
 	public function enqueueFrontendAssets(): void {
 		/**
 		 * Fires when frontend assets should be enqueued.
-	 *
+		 *
 		 * @since 2.0.0
-	 *
+		 *
 		 * @param Plugin $plugin Plugin instance.
 		 */
 		do_action( 'wppo_enqueue_frontend_assets', $this );
@@ -862,10 +863,10 @@ class Plugin implements PluginInterface {
 				$rest_controller->register_routes();
 			}
 
-			// Initialize API Router for additional endpoints
+			// Initialize API Router for additional endpoints.
 			LoggingUtil::debug( 'Attempting to get api_router from container' );
 			try {
-				// Workaround: manually instantiate ApiRouter since container is returning Closure
+				// Workaround: manually instantiate ApiRouter since container is returning Closure.
 				LoggingUtil::debug( 'Manually instantiating ApiRouter as workaround' );
 				$api_router = new \PerformanceOptimisation\Core\API\ApiRouter( $this->_container );
 				LoggingUtil::debug( 'Created ApiRouter instance: ' . get_class( $api_router ) );
@@ -941,7 +942,7 @@ class Plugin implements PluginInterface {
 			$performance   = $this->_container->get( 'performance' );
 
 			$performance->startTimer( 'image_optimization' );
-			$result   = $image_service->processBatch( array( 'batch_size' => 5 ) );
+			$result   = $image_service->processBatch( 5 );
 			$duration = $performance->endTimer( 'image_optimization' );
 
 			LoggingUtil::info(
@@ -1003,30 +1004,20 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function add_wp_cache_constant(): void {
-		// Initialize WordPress filesystem.
-		global $wp_filesystem;
-		if ( ! $wp_filesystem ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-			WP_Filesystem();
-		}
-
-		if ( ! $wp_filesystem ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				LoggingUtil::error( 'WPPO Activation: Filesystem could not be initialized for wp-config.php modification.' );
-			}
-			return;
-		}
-
 		$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
-		if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
+
+		if ( ! FileSystemUtil::isWritable( $wp_config_path ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				LoggingUtil::error( 'WPPO Activation: wp-config.php is not writable at ' . esc_html( $wp_config_path ) );
+				LoggingUtil::error(
+					'WPPO Activation: wp-config.php is not writable at ' . esc_html( $wp_config_path )
+				);
 			}
 			return;
 		}
 
-		$config_content = $wp_filesystem->get_contents( $wp_config_path );
-		if ( false === $config_content ) {
+		try {
+			$config_content = FileSystemUtil::readFile( $wp_config_path );
+		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				LoggingUtil::error( 'WPPO Activation: Could not read wp-config.php content.' );
 			}
@@ -1042,17 +1033,25 @@ class Plugin implements PluginInterface {
 		$new_content_block   = PHP_EOL . $comment . PHP_EOL . $constant_definition . PHP_EOL;
 
 		if ( preg_match( "/^define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*false\s*\)\s*;$/m", $config_content ) ) {
-			$config_content = preg_replace( "/^define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*false\s*\)\s*;$/m", $comment . PHP_EOL . $constant_definition, $config_content );
+			$config_content = preg_replace(
+				"/^define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*false\s*\)\s*;$/m",
+				$comment . PHP_EOL . $constant_definition,
+				$config_content
+			);
 		} elseif ( ! preg_match( "/^define\s*\(\s*['\"]WP_CACHE['\"]\s*,\s*true\s*\)\s*;$/m", $config_content ) ) {
 			$stop_editing_marker = "/*\n	That's all, stop editing!";
 			if ( strpos( $config_content, $stop_editing_marker ) !== false ) {
-				$config_content = str_replace( $stop_editing_marker, $new_content_block . $stop_editing_marker, $config_content );
+				$config_content = str_replace(
+					$stop_editing_marker,
+					$new_content_block . $stop_editing_marker,
+					$config_content
+				);
 			} else {
 				$config_content .= $new_content_block;
 			}
 		}
 
-		$wp_filesystem->put_contents( $wp_config_path, $config_content, FS_CHMOD_FILE );
+		FileSystemUtil::writeFile( $wp_config_path, $config_content );
 	}
 
 	/**
@@ -1090,25 +1089,36 @@ class Plugin implements PluginInterface {
 		// Check PHP version.
 		if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
-			throw new \Exception( __( 'Performance Optimisation requires PHP 7.4 or higher.', 'performance-optimisation' ) );
+			throw new \Exception(
+				__( 'Performance Optimisation requires PHP 7.4 or higher.', 'performance-optimisation' )
+			);
 		}
 
 		// Check WordPress version.
 		if ( version_compare( get_bloginfo( 'version' ), '6.2', '<' ) ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
-			throw new \Exception( __( 'Performance Optimisation requires WordPress 6.2 or higher.', 'performance-optimisation' ) );
+			throw new \Exception(
+				__( 'Performance Optimisation requires WordPress 6.2 or higher.', 'performance-optimisation' )
+			);
 		}
 
 		// Check memory limit.
 		$memory_limit = wp_convert_hr_to_bytes( ini_get( 'memory_limit' ) );
 		if ( $memory_limit < 134217728 ) { // 128MB
-			LoggingUtil::warning( __( 'Memory limit is below recommended 128MB. Some features may not work properly.', 'performance-optimisation' ) );
+			LoggingUtil::warning(
+				__(
+					'Memory limit is below recommended 128MB. Some features may not work properly.',
+					'performance-optimisation'
+				)
+			);
 		}
 
 		// Check write permissions.
 		if ( ! wp_is_writable( WP_CONTENT_DIR ) ) {
 			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
-			throw new \Exception( __( 'wp-content directory is not writable. Please check file permissions.', 'performance-optimisation' ) );
+			throw new \Exception(
+				__( 'wp-content directory is not writable. Please check file permissions.', 'performance-optimisation' )
+			);
 		}
 	}
 
@@ -1125,17 +1135,17 @@ class Plugin implements PluginInterface {
 		);
 
 		foreach ( $cache_dirs as $dir ) {
-			if ( ! wp_mkdir_p( $dir ) ) {
+			if ( ! FileSystemUtil::createDirectory( $dir ) ) {
 				LoggingUtil::warning( "Failed to create cache directory: {$dir}" );
 			} else {
-				// Add .htaccess for security
+				// Add .htaccess for security.
 				$htaccess_content  = "# Performance Optimisation Cache Directory\n";
 				$htaccess_content .= "Options -Indexes\n";
 				$htaccess_content .= "<Files \"*.php\">\n";
 				$htaccess_content .= "    Require all denied\n";
 				$htaccess_content .= "</Files>\n";
 
-				file_put_contents( $dir . '.htaccess', $htaccess_content );
+				FileSystemUtil::writeFile( $dir . '.htaccess', $htaccess_content );
 			}
 		}
 	}
@@ -1148,42 +1158,42 @@ class Plugin implements PluginInterface {
 	 * @return void
 	 */
 	private function remove_wp_cache_constant(): void {
-		// Initialize WordPress filesystem.
-		global $wp_filesystem;
-		if ( ! $wp_filesystem ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-			WP_Filesystem();
-		}
-
-		if ( ! $wp_filesystem ) {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				LoggingUtil::error( 'WPPO Deactivation: Filesystem could not be initialized for wp-config.php modification.' );
-			}
-			return;
-		}
-
 		$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 
-		if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
+		if ( ! FileSystemUtil::isWritable( $wp_config_path ) ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-				LoggingUtil::error( 'WPPO Deactivation: wp-config.php is not writable at ' . esc_html( $wp_config_path ) );
+				LoggingUtil::error(
+					'WPPO Deactivation: wp-config.php is not writable at ' . esc_html( $wp_config_path )
+				);
 			}
 			return;
 		}
 
-		$config_content = $wp_filesystem->get_contents( $wp_config_path );
-		if ( false === $config_content ) {
+		try {
+			$config_content = FileSystemUtil::readFile( $wp_config_path );
+		} catch ( \Exception $e ) {
 			if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 				LoggingUtil::error( 'WPPO Deactivation: Could not read wp-config.php content.' );
 			}
 			return;
 		}
 
-		$pattern = '/\/\*\* Enables WordPress Cache \(Performance Optimisation Plugin\) \*\*\/\s*define\s*\(\s*([\'\”])WP_CACHE\1\s*,\s*true\s*\);?\s*/s';
+		$pattern = '/\/\*\* Enables WordPress Cache \(Performance Optimisation Plugin\) \*\*\/' .
+			'\s*define\s*\(\s*([\'"])WP_CACHE\1\s*,\s*true\s*\);?\s*/s';
 
 		if ( preg_match( $pattern, $config_content ) ) {
 			$config_content = preg_replace( $pattern, '', $config_content );
-			$wp_filesystem->put_contents( $wp_config_path, $config_content, FS_CHMOD_FILE );
+			FileSystemUtil::writeFile( $wp_config_path, $config_content );
 		}
+	}
+
+	/**
+	 * Recursively remove a directory.
+	 *
+	 * @param string $dir Directory path.
+	 * @return bool True on success, false on failure.
+	 */
+	private function removeDirectory( string $dir ): bool {
+		return FileSystemUtil::deleteDirectory( $dir, true );
 	}
 }

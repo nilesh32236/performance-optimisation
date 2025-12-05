@@ -20,10 +20,18 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class AdvancedCacheHandler {
 
+	/**
+	 * Create advanced cache drop-in.
+	 *
+	 * @since 2.0.0
+	 * @throws \Exception When prerequisites are not met.
+	 * @return bool True on success, false on failure.
+	 */
 	public static function create(): bool {
 		try {
-			// Validate prerequisites
+			// Validate prerequisites.
 			if ( ! is_writable( WP_CONTENT_DIR ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
 				throw new \Exception( 'WP_CONTENT_DIR not writable' );
 			}
 
@@ -33,16 +41,27 @@ class AdvancedCacheHandler {
 
 			return CacheDropin::create();
 		} catch ( \Exception $e ) {
-			\PerformanceOptimisation\Utils\LoggingUtil::error( 'AdvancedCacheHandler::create failed: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error(
+				'AdvancedCacheHandler::create failed: ' . $e->getMessage()
+			);
 			return false;
 		}
 	}
 
+	/**
+	 * Remove advanced cache drop-in.
+	 *
+	 * @since 2.0.0
+	 * @throws \Exception When removal fails.
+	 * @return bool True on success, false on failure.
+	 */
 	public static function remove(): bool {
 		try {
 			return CacheDropin::remove();
 		} catch ( \Exception $e ) {
-			\PerformanceOptimisation\Utils\LoggingUtil::error( 'AdvancedCacheHandler::remove failed: ' . $e->getMessage() );
+			\PerformanceOptimisation\Utils\LoggingUtil::error(
+				'AdvancedCacheHandler::remove failed: ' . $e->getMessage()
+			);
 			return false;
 		}
 	}

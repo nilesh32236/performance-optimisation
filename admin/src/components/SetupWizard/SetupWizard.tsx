@@ -3,7 +3,6 @@ import { Button, Card, CardBody, Notice, Spinner, ProgressBar } from '@wordpress
 import { __ } from '@wordpress/i18n';
 import apiFetch from '@wordpress/api-fetch';
 
-
 interface WizardStep {
     id: string;
     title: string;
@@ -98,13 +97,13 @@ const SetupWizard: React.FC = () => {
                 method: 'POST',
                 data: settings,
             });
-            
+
             // Mark wizard as completed
             await apiFetch({
                 path: '/performance-optimisation/v1/wizard/complete',
                 method: 'POST',
             });
-            
+
             nextStep();
         } catch (err) {
             setError(__('Failed to save settings', 'performance-optimisation'));
@@ -156,7 +155,7 @@ const WelcomeStep: React.FC<any> = ({ onNext }) => (
         <div className="wppo-welcome-icon">🚀</div>
         <h2>{__('Welcome to Performance Optimisation', 'performance-optimisation')}</h2>
         <p>{__('This wizard will help you configure your site for optimal performance. We\'ll analyze your site and recommend the best settings for your needs.', 'performance-optimisation')}</p>
-        
+
         <div className="wppo-features-preview">
             <h3>{__('What you\'ll get:', 'performance-optimisation')}</h3>
             <ul>
@@ -218,7 +217,7 @@ const SystemCheckStep: React.FC<any> = ({ systemInfo, onNext, onPrev }) => {
     return (
         <div className="wppo-system-check">
             <h2>{__('System Requirements Check', 'performance-optimisation')}</h2>
-            
+
             <div className="wppo-checks-list">
                 {checks.map((check, index) => (
                     <div key={index} className={`wppo-check-item wppo-check-${check.status}`}>
@@ -310,7 +309,7 @@ const OptimizationLevelStep: React.FC<any> = ({ settings, onSettingsChange, onNe
 
     const handleLevelSelect = (level: string) => {
         setSelectedLevel(level);
-        
+
         const levelSettings = {
             conservative: {
                 caching: { page_cache_enabled: true, cache_ttl: 3600 },
@@ -374,7 +373,7 @@ const CompleteStep: React.FC<any> = () => (
         <div className="wppo-success-icon">🎉</div>
         <h2>{__('Setup Complete!', 'performance-optimisation')}</h2>
         <p>{__('Your site has been optimized for performance. You can now enjoy faster loading times and better user experience.', 'performance-optimisation')}</p>
-        
+
         <div className="wppo-next-steps">
             <h3>{__('What\'s Next?', 'performance-optimisation')}</h3>
             <ul>

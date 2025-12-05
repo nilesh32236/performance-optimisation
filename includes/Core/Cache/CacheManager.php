@@ -9,7 +9,7 @@
 namespace PerformanceOptimisation\Core\Cache;
 
 use PerformanceOptimisation\Interfaces\CacheInterface;
-use PerformanceOptimisation\Interfaces\ConfigInterface;
+use PerformanceOptimisation\Core\Config\ConfigInterface;
 use PerformanceOptimisation\Interfaces\ServiceContainerInterface;
 use PerformanceOptimisation\Exceptions\CacheException;
 use PerformanceOptimisation\Utils\LoggingUtil;
@@ -22,6 +22,7 @@ use PerformanceOptimisation\Utils\FileSystemUtil;
  * @since 1.1.0
  */
 class CacheManager {
+
 
 	/**
 	 * Service container.
@@ -182,7 +183,7 @@ class CacheManager {
 	public function get( string $key, $default = null, ?string $provider = null ) {
 		$timer_id = null;
 		if ( $this->performance ) {
-			$timer_id = $this->performance->startTimer( 'cache_get_' . $key );
+			$this->performance->startTimer( 'cache_get_' . $key );
 		}
 
 		try {
@@ -246,7 +247,7 @@ class CacheManager {
 	public function set( string $key, $value, int $expiration = 0, ?string $provider = null ): bool {
 		$timer_id = null;
 		if ( $this->performance ) {
-			$timer_id = $this->performance->startTimer( 'cache_set_' . $key );
+			$this->performance->startTimer( 'cache_set_' . $key );
 		}
 
 		try {
@@ -267,13 +268,13 @@ class CacheManager {
 					);
 				}
 			} elseif ( $this->logger ) {
-					$this->logger->warning(
-						'Cache set failed',
-						array(
-							'key'      => $key,
-							'provider' => $provider ?? $this->default_provider,
-						)
-					);
+				$this->logger->warning(
+					'Cache set failed',
+					array(
+						'key'      => $key,
+						'provider' => $provider ?? $this->default_provider,
+					)
+				);
 			}
 
 			return $result;

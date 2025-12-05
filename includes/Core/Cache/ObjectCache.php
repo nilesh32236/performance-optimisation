@@ -9,7 +9,7 @@
 namespace PerformanceOptimisation\Core\Cache;
 
 use PerformanceOptimisation\Interfaces\CacheInterface;
-use PerformanceOptimisation\Interfaces\ConfigInterface;
+use PerformanceOptimisation\Core\Config\ConfigInterface;
 
 /**
  * WordPress object cache implementation
@@ -17,6 +17,7 @@ use PerformanceOptimisation\Interfaces\ConfigInterface;
  * @since 1.1.0
  */
 class ObjectCache implements CacheInterface {
+
 
 	/**
 	 * Cache group

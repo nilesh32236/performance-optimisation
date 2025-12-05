@@ -19,6 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class LoggingUtil {
 
+
 	private const LOG_LEVELS = array( 'debug', 'info', 'warning', 'error', 'critical' );
 	private const LOG_OPTION = 'wppo_activity_logs';
 	private const MAX_LOGS   = 1000;
@@ -49,7 +50,11 @@ class LoggingUtil {
 
 		// Also log to error_log if debug is enabled
 		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
-			error_log( sprintf( 'WPPO [%s]: %s', strtoupper( $level ), $message ) );
+			$log_message = sprintf( 'WPPO [%s]: %s', strtoupper( $level ), $message );
+			if ( ! empty( $context ) ) {
+				$log_message .= ' ' . wp_json_encode( $context );
+			}
+			error_log( $log_message );
 		}
 	}
 

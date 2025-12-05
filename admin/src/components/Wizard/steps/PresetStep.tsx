@@ -19,6 +19,7 @@ interface Preset {
 	features: string[];
 	isRecommended?: boolean;
 	hasWarning?: boolean;
+	icon: string;
 	performance: 'low' | 'medium' | 'high';
 	compatibility: 'high' | 'medium' | 'low';
 }
@@ -31,9 +32,9 @@ function PresetStep( { stepConfig }: PresetStepProps ) {
 		{
 			id: 'safe',
 			title: 'Safe Mode',
-			description:
-				'Basic optimizations that work with all websites and hosting environments.',
+			description: 'Basic optimizations that work with all websites and hosting environments.',
 			features: [ 'Page Caching', 'Image Lazy Loading', 'Basic HTML Compression' ],
+			icon: '🛡️',
 			performance: 'low',
 			compatibility: 'high',
 		},
@@ -48,6 +49,7 @@ function PresetStep( { stepConfig }: PresetStepProps ) {
 				'Browser Caching Headers',
 			],
 			isRecommended: true,
+			icon: '⭐',
 			performance: 'medium',
 			compatibility: 'high',
 		},
@@ -62,6 +64,7 @@ function PresetStep( { stepConfig }: PresetStepProps ) {
 				'Resource Preloading',
 			],
 			hasWarning: true,
+			icon: '🚀',
 			performance: 'high',
 			compatibility: 'medium',
 		},
@@ -71,154 +74,160 @@ function PresetStep( { stepConfig }: PresetStepProps ) {
 		updateData( 'preset', presetId );
 	};
 
-	const getPerformanceColor = ( level: string ) => {
+	const getPerformanceWidth = ( level: string ) => {
 		switch ( level ) {
-			case 'high':
-				return '#00a32a';
-			case 'medium':
-				return '#dba617';
-			case 'low':
-				return '#d63638';
-			default:
-				return '#50575e';
-		}
-	};
-
-	const getCompatibilityColor = ( level: string ) => {
-		switch ( level ) {
-			case 'high':
-				return '#00a32a';
-			case 'medium':
-				return '#dba617';
-			case 'low':
-				return '#d63638';
-			default:
-				return '#50575e';
+			case 'high': return '100%';
+			case 'medium': return '66%';
+			case 'low': return '33%';
+			default: return '0%';
 		}
 	};
 
 	return (
-		<div className="wppo-wizard-step wppo-preset-step">
-			<div className="wppo-step-header">
-				<h2>Choose Your Optimization Level</h2>
-				<p className="wppo-step-description">
+		<div className="animate-fade-in">
+			<div className="text-center mb-8">
+				<h2 className="text-2xl font-bold text-slate-900 mb-2">
+					Choose Your Optimization Level
+				</h2>
+				<p className="text-slate-600">
 					Select the optimization preset that best fits your website's needs. You can
 					always adjust individual settings later.
 				</p>
 			</div>
 
-			<fieldset
-				className="wppo-presets-grid"
-				role="radiogroup"
-				aria-labelledby="preset-title"
-			>
-				<legend className="wppo-sr-only">Optimization presets</legend>
+			<fieldset className="space-y-4" role="radiogroup" aria-label="Optimization presets">
+				<legend className="sr-only">Optimization presets</legend>
 
 				{ presets.map( ( preset ) => (
 					<div
 						key={ preset.id }
-						className={ `wppo-preset-card ${ selectedPreset === preset.id ? 'selected' : '' } ${ preset.isRecommended ? 'recommended' : '' }` }
 						onClick={ () => handlePresetSelect( preset.id ) }
-						role="radio"
-						aria-checked={ selectedPreset === preset.id }
-						tabIndex={ 0 }
 						onKeyDown={ ( e ) => {
 							if ( e.key === 'Enter' || e.key === ' ' ) {
 								e.preventDefault();
 								handlePresetSelect( preset.id );
 							}
 						} }
+						role="radio"
+						aria-checked={ selectedPreset === preset.id }
+						tabIndex={ 0 }
+						className={ `
+							relative p-5 rounded-xl border-2 cursor-pointer transition-all duration-200
+							${ selectedPreset === preset.id
+								? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-100'
+								: 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+							}
+							${ preset.isRecommended ? 'ring-2 ring-blue-200 ring-offset-2' : '' }
+						` }
 					>
-						<div className="wppo-preset-header">
-							<div className="wppo-preset-title-row">
-								<h3 className="wppo-preset-title">{ preset.title }</h3>
-								{ preset.isRecommended && (
-									<span className="wppo-preset-badge wppo-preset-badge--recommended">
-										Recommended
-									</span>
-								) }
-								{ preset.hasWarning && (
-									<span className="wppo-preset-badge wppo-preset-badge--warning">
-										Advanced
-									</span>
-								) }
+						{/* Recommended Badge */}
+						{ preset.isRecommended && (
+							<div className="absolute -top-3 left-4 px-3 py-1 bg-blue-500 text-white text-xs font-semibold rounded-full">
+								Recommended
 							</div>
-							<p className="wppo-preset-description">{ preset.description }</p>
-						</div>
+						) }
+						{ preset.hasWarning && (
+							<div className="absolute -top-3 left-4 px-3 py-1 bg-amber-500 text-white text-xs font-semibold rounded-full">
+								Advanced
+							</div>
+						) }
 
-						<div className="wppo-preset-metrics">
-							<div className="wppo-preset-metric">
-								<span className="wppo-metric-label">Performance</span>
-								<div className="wppo-metric-bar">
-									<div
-										className="wppo-metric-fill"
-										style={ {
-											width:
-												preset.performance === 'high'
-													? '100%'
-													: preset.performance === 'medium'
-														? '66%'
-														: '33%',
-											backgroundColor: getPerformanceColor(
-												preset.performance
-											),
-										} }
-									/>
+						<div className="flex gap-4">
+							{/* Icon */}
+							<div className="flex-shrink-0">
+								<div className={ `
+									w-14 h-14 rounded-xl flex items-center justify-center text-2xl
+									${ selectedPreset === preset.id
+										? 'bg-blue-100'
+										: 'bg-slate-100'
+									}
+								` }>
+									{ preset.icon }
 								</div>
-								<span className="wppo-metric-value">{ preset.performance }</span>
 							</div>
 
-							<div className="wppo-preset-metric">
-								<span className="wppo-metric-label">Compatibility</span>
-								<div className="wppo-metric-bar">
-									<div
-										className="wppo-metric-fill"
-										style={ {
-											width:
-												preset.compatibility === 'high'
-													? '100%'
-													: preset.compatibility === 'medium'
-														? '66%'
-														: '33%',
-											backgroundColor: getCompatibilityColor(
-												preset.compatibility
-											),
-										} }
-									/>
+							{/* Content */}
+							<div className="flex-1 min-w-0">
+								<div className="flex items-center gap-3 mb-1">
+									<h3 className="text-lg font-semibold text-slate-900">
+										{ preset.title }
+									</h3>
 								</div>
-								<span className="wppo-metric-value">{ preset.compatibility }</span>
-							</div>
-						</div>
+								<p className="text-sm text-slate-600 mb-3">
+									{ preset.description }
+								</p>
 
-						<div className="wppo-preset-features">
-							<h4>Included Features:</h4>
-							<ul>
-								{ preset.features.map( ( feature, index ) => (
-									<li key={ index }>
+								{/* Metrics */}
+								<div className="flex gap-6 mb-3">
+									<div className="flex-1">
+										<div className="flex items-center justify-between text-xs mb-1">
+											<span className="text-slate-500">Performance</span>
+											<span className="font-medium text-slate-700 capitalize">{ preset.performance }</span>
+										</div>
+										<div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+											<div
+												className="h-full bg-green-500 transition-all duration-300"
+												style={ { width: getPerformanceWidth( preset.performance ) } }
+											/>
+										</div>
+									</div>
+									<div className="flex-1">
+										<div className="flex items-center justify-between text-xs mb-1">
+											<span className="text-slate-500">Compatibility</span>
+											<span className="font-medium text-slate-700 capitalize">{ preset.compatibility }</span>
+										</div>
+										<div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+											<div
+												className="h-full bg-blue-500 transition-all duration-300"
+												style={ { width: getPerformanceWidth( preset.compatibility ) } }
+											/>
+										</div>
+									</div>
+								</div>
+
+								{/* Features */}
+								<div className="flex flex-wrap gap-2">
+									{ preset.features.map( ( feature, index ) => (
 										<span
-											className="dashicons dashicons-yes-alt"
-											aria-hidden="true"
-										/>
-										{ feature }
-									</li>
-								) ) }
-							</ul>
+											key={ index }
+											className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-slate-100 text-slate-600 rounded-md"
+										>
+											<svg className="w-3 h-3 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={ 2 } d="M5 13l4 4L19 7" />
+											</svg>
+											{ feature }
+										</span>
+									) ) }
+								</div>
+							</div>
+
+							{/* Radio Indicator */}
+							<div className="flex-shrink-0 self-center">
+								<div className={ `
+									w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200
+									${ selectedPreset === preset.id
+										? 'border-blue-500 bg-blue-500'
+										: 'border-slate-300'
+									}
+								` }>
+									{ selectedPreset === preset.id && (
+										<svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={ 2 } d="M5 13l4 4L19 7" />
+										</svg>
+									) }
+								</div>
+							</div>
 						</div>
 
-						<div className="wppo-preset-radio">
-							<input
-								type="radio"
-								id={ `preset-${ preset.id }` }
-								name="preset"
-								value={ preset.id }
-								checked={ selectedPreset === preset.id }
-								onChange={ () => handlePresetSelect( preset.id ) }
-								aria-describedby={ `preset-${ preset.id }-description` }
-							/>
-							<label htmlFor={ `preset-${ preset.id }` } className="wppo-sr-only">
-								Select { preset.title }
-							</label>
-						</div>
+						{/* Hidden Radio Input */}
+						<input
+							type="radio"
+							name="preset"
+							value={ preset.id }
+							checked={ selectedPreset === preset.id }
+							onChange={ () => handlePresetSelect( preset.id ) }
+							className="sr-only"
+						/>
 					</div>
 				) ) }
 			</fieldset>

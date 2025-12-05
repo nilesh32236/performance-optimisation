@@ -21,6 +21,7 @@ use PerformanceOptimisation\Utils\FileSystemUtil;
  */
 class ConfigManager implements ConfigInterface {
 
+
 	/**
 	 * Configuration data
 	 *
@@ -201,22 +202,15 @@ class ConfigManager implements ConfigInterface {
 	public function save(): bool {
 		try {
 			// Validate configuration before saving
-			if ( $this->validator ) {
-				$validated_config = $this->validator->validateSettings( $this->config );
-				if ( ! $validated_config['valid'] ) {
-					if ( $this->logger ) {
-						$this->logger->error(
-							'Configuration validation failed',
-							array(
-								'errors' => $validated_config['errors'],
-							)
-						);
-					}
-					return false;
-				}
+			$this->config = $this->validate( $this->config );
+
+			$result = false;
+			if ( function_exists( 'update_option' ) ) {
+				$result = update_option( $this->option_name, $this->config );
 			}
 
-			$result = update_option( $this->option_name, $this->config );
+			// Always try to save to file for early loading
+			$this->save_to_file();
 
 			if ( $this->logger ) {
 				$this->logger->info(
@@ -247,7 +241,15 @@ class ConfigManager implements ConfigInterface {
 	 */
 	public function load(): bool {
 		try {
-			$saved_config = get_option( $this->option_name, array() );
+			$saved_config = array();
+
+			if ( function_exists( 'get_option' ) ) {
+				$saved_config = get_option( $this->option_name, array() );
+			} else {
+				// Fallback to file-based config if DB is not available (e.g. in advanced-cache.php)
+				$saved_config = $this->load_from_file();
+			}
+
 			$this->config = $this->merge_with_defaults( $saved_config );
 
 			if ( $this->logger ) {
@@ -272,6 +274,60 @@ class ConfigManager implements ConfigInterface {
 			$this->config = $this->defaults;
 			return false;
 		}
+	}
+
+	/**
+	 * Get config file path
+	 *
+	 * @return string
+	 */
+	private function get_config_file_path(): string {
+		$upload_dir = defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR . '/uploads' : '';
+		if ( function_exists( 'wp_upload_dir' ) ) {
+			$upload_info = wp_upload_dir();
+			$upload_dir  = $upload_info['basedir'];
+		}
+
+		return $upload_dir . '/wppo-config.json';
+	}
+
+	/**
+	 * Save configuration to file
+	 *
+	 * @return bool
+	 */
+	private function save_to_file(): bool {
+		$file_path = $this->get_config_file_path();
+		$dir       = dirname( $file_path );
+
+		if ( ! file_exists( $dir ) ) {
+			if ( ! mkdir( $dir, 0755, true ) && ! is_dir( $dir ) ) {
+				return false;
+			}
+		}
+
+		return false !== file_put_contents( $file_path, json_encode( $this->config ) );
+	}
+
+	/**
+	 * Load configuration from file
+	 *
+	 * @return array
+	 */
+	private function load_from_file(): array {
+		$file_path = $this->get_config_file_path();
+
+		if ( ! file_exists( $file_path ) ) {
+			return array();
+		}
+
+		$content = file_get_contents( $file_path );
+		if ( false === $content ) {
+			return array();
+		}
+
+		$data = json_decode( $content, true );
+		return is_array( $data ) ? $data : array();
 	}
 
 	/**

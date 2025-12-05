@@ -8,11 +8,11 @@ if ( ! current_user_can( 'manage_options' ) ) {
 $nonce = wp_create_nonce( 'wppo_admin_page' );
 
 // Enqueue loading spinner CSS
-wp_enqueue_style( 
-	'wppo-admin-loading', 
-	plugin_dir_url( __DIR__ ) . 'assets/css/admin-loading.css', 
-	array(), 
-	'1.0.0' 
+wp_enqueue_style(
+	'wppo-admin-loading',
+	plugin_dir_url( __DIR__ ) . 'assets/css/admin-loading.css',
+	array(),
+	'1.0.0'
 );
 ?>
 <div class="wrap">

@@ -28,28 +28,65 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class ImageService implements ImageServiceInterface {
 
-	private ImageProcessor $imageProcessor;
-	private ConversionQueue $conversionQueue;
-	private ImagePreloader $imagePreloader;
-	private ImageLazyLoader $imageLazyLoader;
+	/**
+	 * Image processor instance.
+	 *
+	 * @var ImageProcessor
+	 */
+	private ImageProcessor $image_processor;
+
+	/**
+	 * Conversion queue instance.
+	 *
+	 * @var ConversionQueue
+	 */
+	private ConversionQueue $conversion_queue;
+
+	/**
+	 * Image preloader instance.
+	 *
+	 * @var ImagePreloader
+	 */
+	private ImagePreloader $image_preloader;
+
+	/**
+	 * Image lazy loader instance.
+	 *
+	 * @var ImageLazyLoader
+	 */
+	private ImageLazyLoader $image_lazy_loader;
+	/**
+	 * Plugin settings.
+	 *
+	 * @var array
+	 */
 	private array $settings;
 
+	/**
+	 * Constructor.
+	 *
+	 * @param ImageProcessor  $image_processor   Image processor instance.
+	 * @param ConversionQueue $conversion_queue  Conversion queue instance.
+	 * @param ImagePreloader  $image_preloader   Image preloader instance.
+	 * @param ImageLazyLoader $image_lazy_loader Image lazy loader instance.
+	 * @param array           $settings          Plugin settings.
+	 */
 	public function __construct(
-		ImageProcessor $imageProcessor,
-		ConversionQueue $conversionQueue,
-		ImagePreloader $imagePreloader,
-		ImageLazyLoader $imageLazyLoader,
+		ImageProcessor $image_processor,
+		ConversionQueue $conversion_queue,
+		ImagePreloader $image_preloader,
+		ImageLazyLoader $image_lazy_loader,
 		array $settings
 	) {
-		$this->imageProcessor  = $imageProcessor;
-		$this->conversionQueue = $conversionQueue;
-		$this->imagePreloader  = $imagePreloader;
-		$this->imageLazyLoader = $imageLazyLoader;
-		$this->settings        = $settings;
+		$this->image_processor   = $image_processor;
+		$this->conversion_queue  = $conversion_queue;
+		$this->image_preloader   = $image_preloader;
+		$this->image_lazy_loader = $image_lazy_loader;
+		$this->settings          = $settings;
 
-		// Debug: Image service instantiated successfully
+		// Debug: Image service instantiated successfully.
 
-		// Hook into WordPress image upload
+		// Hook into WordPress image upload.
 		add_filter( 'wp_generate_attachment_metadata', array( $this, 'convert_on_upload' ), 10, 2 );
 
 		LoggingUtil::info( 'ImageService: wp_generate_attachment_metadata hook registered' );
@@ -57,9 +94,12 @@ class ImageService implements ImageServiceInterface {
 
 	/**
 	 * {@inheritdoc}
+	 *
+	 * @param string $source_image_path Path to source image.
+	 * @param string $target_format     Target format (webp/avif).
 	 */
 	public function convert_image( string $source_image_path, string $target_format = 'webp' ): string {
-		// Validate image format using ImageUtil
+		// Validate image format using ImageUtil.
 		if ( ! ImageUtil::isImageFormat( $source_image_path ) ) {
 			LoggingUtil::warning( 'Invalid image format for conversion', array( 'path' => $source_image_path ) );
 			return '';
@@ -70,30 +110,35 @@ class ImageService implements ImageServiceInterface {
 			return '';
 		}
 
-		// Use ImageUtil for optimized path generation
+		// Use ImageUtil for optimized path generation.
 		$target_image_path = ImageUtil::optimizeImagePath( $source_image_path, $target_format );
 		$quality           = $this->settings['images']['compression_quality']
 			?? $this->settings['image_optimization']['quality']
 			?? 85;
 
-		// Check if already converted
+		// Check if already converted.
 		if ( FileSystemUtil::fileExists( $target_image_path ) ) {
-			$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
+			$this->conversion_queue->update_status( $source_image_path, $target_format, 'completed' );
 			return $target_image_path;
 		}
 
-		// Performance tracking
+		// Performance tracking.
 		PerformanceUtil::startTimer( 'image_conversion_' . $target_format );
 
 		try {
-			$success = $this->imageProcessor->convert( $source_image_path, $target_image_path, $target_format, $quality );
+			$success = $this->image_processor->convert(
+				$source_image_path,
+				$target_image_path,
+				$target_format,
+				$quality
+			);
 
 			$duration = PerformanceUtil::endTimer( 'image_conversion_' . $target_format );
 
 			if ( $success ) {
-				$this->conversionQueue->update_status( $source_image_path, $target_format, 'completed' );
+				$this->conversion_queue->update_status( $source_image_path, $target_format, 'completed' );
 
-				// Log conversion success with compression ratio
+				// Log conversion success with compression ratio.
 				$compression_ratio = ImageUtil::getImageCompressionRatio( $source_image_path, $target_image_path );
 				LoggingUtil::info(
 					'Image conversion successful',
@@ -108,7 +153,7 @@ class ImageService implements ImageServiceInterface {
 
 				return $target_image_path;
 			} else {
-				$this->conversionQueue->update_status( $source_image_path, $target_format, 'failed' );
+				$this->conversion_queue->update_status( $source_image_path, $target_format, 'failed' );
 				LoggingUtil::error(
 					'Image conversion failed',
 					array(
@@ -121,7 +166,7 @@ class ImageService implements ImageServiceInterface {
 			}
 		} catch ( \Exception $e ) {
 			PerformanceUtil::endTimer( 'image_conversion_' . $target_format );
-			$this->conversionQueue->update_status( $source_image_path, $target_format, 'failed' );
+			$this->conversion_queue->update_status( $source_image_path, $target_format, 'failed' );
 			LoggingUtil::error(
 				'Image conversion exception: ' . $e->getMessage(),
 				array(
@@ -135,6 +180,8 @@ class ImageService implements ImageServiceInterface {
 
 	/**
 	 * {@inheritdoc}
+	 *
+	 * @param int $attachment_id Attachment ID.
 	 */
 	public function process_uploaded_image( int $attachment_id ): void {
 		$file_path = get_attached_file( $attachment_id );
@@ -143,7 +190,7 @@ class ImageService implements ImageServiceInterface {
 			return;
 		}
 
-		// Validate image format using ImageUtil
+		// Validate image format using ImageUtil.
 		if ( ! ImageUtil::isImageFormat( $file_path ) ) {
 			LoggingUtil::info(
 				'Skipping non-image attachment',
@@ -155,7 +202,7 @@ class ImageService implements ImageServiceInterface {
 			return;
 		}
 
-		// Check if image needs optimization
+		// Check if image needs optimization.
 		if ( ! ImageUtil::needsOptimization( $file_path, $this->getOptimizationCriteria() ) ) {
 			LoggingUtil::info( 'Image does not need optimization', array( 'attachment_id' => $attachment_id ) );
 			return;
@@ -165,16 +212,16 @@ class ImageService implements ImageServiceInterface {
 		$added_to_queue = 0;
 
 		foreach ( $formats as $format ) {
-			// Check if conversion already exists
+			// Check if conversion already exists.
 			$optimized_path = ImageUtil::optimizeImagePath( $file_path, $format );
 			if ( ! FileSystemUtil::fileExists( $optimized_path ) ) {
-				$this->conversionQueue->add( $file_path, $format );
+				$this->conversion_queue->add( $file_path, $format );
 				++$added_to_queue;
 			}
 		}
 
 		if ( $added_to_queue > 0 ) {
-			$this->conversionQueue->save();
+			$this->conversion_queue->save();
 			LoggingUtil::info(
 				'Image added to conversion queue',
 				array(
@@ -196,7 +243,7 @@ class ImageService implements ImageServiceInterface {
 	public function convert_on_upload( $metadata, $attachment_id ): array {
 		LoggingUtil::debug( 'WPPO ImageService: convert_on_upload called', array( 'attachment_id' => $attachment_id ) );
 
-		// Default to true if not set, check both new and old structure
+		// Default to true if not set, check both new and old structure.
 		$auto_convert = $this->settings['images']['auto_convert_on_upload']
 			?? $this->settings['image_optimization']['auto_convert_on_upload']
 			?? true;
@@ -212,11 +259,14 @@ class ImageService implements ImageServiceInterface {
 		LoggingUtil::debug( 'WPPO ImageService: file_path check', array( 'file_path' => $file_path ) );
 
 		if ( ! $file_path || ! file_exists( $file_path ) ) {
-			LoggingUtil::warning( 'WPPO ImageService: File path invalid or does not exist', array( 'file_path' => $file_path ) );
+			LoggingUtil::warning(
+				'WPPO ImageService: File path invalid or does not exist',
+				array( 'file_path' => $file_path )
+			);
 			return $metadata;
 		}
 
-		// Get target formats
+		// Get target formats.
 		$formats = $this->get_target_formats();
 		LoggingUtil::debug( 'WPPO ImageService: Queuing for formats', array( 'formats' => $formats ) );
 
@@ -225,28 +275,34 @@ class ImageService implements ImageServiceInterface {
 			return $metadata;
 		}
 
-		// Queue main image for conversion (async)
+		// Queue main image for conversion (async).
 		foreach ( $formats as $format ) {
-			$this->conversionQueue->add( $file_path, $format );
+			$this->conversion_queue->add( $file_path, $format );
 			LoggingUtil::debug( 'WPPO ImageService: Queued main image', array( 'format' => $format ) );
 		}
 
-		// Queue image sizes for conversion (async)
+		// Queue image sizes for conversion (async).
 		if ( ! empty( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
 			$upload_dir = wp_upload_dir();
 			foreach ( $metadata['sizes'] as $size => $size_data ) {
 				$size_path = wp_normalize_path( $upload_dir['path'] . '/' . $size_data['file'] );
 				if ( file_exists( $size_path ) ) {
 					foreach ( $formats as $format ) {
-						$this->conversionQueue->add( $size_path, $format );
-						LoggingUtil::debug( 'WPPO ImageService: Queued size', array( 'size' => $size, 'format' => $format ) );
+						$this->conversion_queue->add( $size_path, $format );
+						LoggingUtil::debug(
+							'WPPO ImageService: Queued size',
+							array(
+								'size'   => $size,
+								'format' => $format,
+							)
+						);
 					}
 				}
 			}
 		}
 
-		// Save queue to database
-		$this->conversionQueue->save();
+		// Save queue to database.
+		$this->conversion_queue->save();
 		LoggingUtil::info( 'WPPO ImageService: Queue saved, upload complete' );
 
 		return $metadata;
@@ -256,9 +312,9 @@ class ImageService implements ImageServiceInterface {
 	 * {@inheritdoc}
 	 */
 	public function get_conversion_stats(): array {
-		$queue_stats = $this->conversionQueue->get_stats();
+		$queue_stats = $this->conversion_queue->get_stats();
 
-		// Enhance stats with ImageUtil calculations
+		// Enhance stats with ImageUtil calculations.
 		$all_images           = $this->getAllImagePaths();
 		$optimization_savings = ImageUtil::calculateOptimizationSavings( $all_images, $this->get_target_formats() );
 
@@ -276,15 +332,22 @@ class ImageService implements ImageServiceInterface {
 
 	/**
 	 * {@inheritdoc}
+	 *
+	 * @param string $content Content to process.
 	 */
 	public function enable_lazy_loading( string $content ): string {
-		return $this->imageLazyLoader->enable_lazy_loading( $content );
+		return $this->image_lazy_loader->enable_lazy_loading( $content );
 	}
 
+	/**
+	 * Get target formats for conversion.
+	 *
+	 * @return array List of target formats.
+	 */
 	private function get_target_formats(): array {
 		$formats = array();
 
-		// Try new structure first, fallback to old structure
+		// Try new structure first, fallback to old structure.
 		$webp_enabled = ! empty( $this->settings['images']['convert_to_webp'] )
 			|| ! empty( $this->settings['image_optimization']['webp_conversion'] );
 		$avif_enabled = ! empty( $this->settings['images']['convert_to_avif'] )
@@ -307,6 +370,13 @@ class ImageService implements ImageServiceInterface {
 		return $formats;
 	}
 
+	/**
+	 * Get optimized image path.
+	 *
+	 * @param string $source_image_local_path Source image path.
+	 * @param string $target_format           Target format.
+	 * @return string Optimized image path.
+	 */
 	private function get_img_path( string $source_image_local_path, string $target_format = 'webp' ): string {
 		$normalized_source_path = wp_normalize_path( $source_image_local_path );
 		$wp_content_dir         = wp_normalize_path( WP_CONTENT_DIR );
@@ -332,8 +402,11 @@ class ImageService implements ImageServiceInterface {
 		return trailingslashit( $new_image_dir_absolute ) . $new_filename;
 	}
 
+	/**
+	 * Preload images.
+	 */
 	public function preload_images(): void {
-		$this->imagePreloader->preload_images();
+		$this->image_preloader->preload_images();
 	}
 
 	/**
@@ -345,7 +418,7 @@ class ImageService implements ImageServiceInterface {
 	 */
 	public function processBatch( int $batch_size = 10, bool $force = false ): array {
 		try {
-			$queue_items = $this->conversionQueue->get_pending_items( $batch_size );
+			$queue_items = $this->conversion_queue->get_pending_items( $batch_size );
 			$processed   = 0;
 			$total       = count( $queue_items );
 
@@ -380,9 +453,9 @@ class ImageService implements ImageServiceInterface {
 	 */
 	public function resetConversionData(): bool {
 		try {
-			$this->conversionQueue->clear();
+			$this->conversion_queue->clear();
 
-			// Also remove converted images directory
+			// Also remove converted images directory.
 			$wppo_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
 			if ( FileSystemUtil::isDirectory( $wppo_dir ) ) {
 				FileSystemUtil::deleteDirectory( $wppo_dir, true );
@@ -403,7 +476,7 @@ class ImageService implements ImageServiceInterface {
 	 * @return string
 	 */
 	public function getImageMimeType( string $url ): string {
-		// Use ImageUtil for MIME type detection
+		// Use ImageUtil for MIME type detection.
 		return ImageUtil::getImageMimeType( $url );
 	}
 
@@ -504,7 +577,7 @@ class ImageService implements ImageServiceInterface {
 				++$results['processed'];
 			}
 
-			// Small delay between batches to prevent server overload
+			// Small delay between batches to prevent server overload.
 			usleep( 100000 ); // 0.1 second
 		}
 
@@ -529,7 +602,7 @@ class ImageService implements ImageServiceInterface {
 			return array();
 		}
 
-		// Get WordPress image sizes
+		// Get WordPress image sizes.
 		$image_sizes   = wp_get_additional_image_sizes();
 		$default_sizes = array(
 			'thumbnail' => array(
@@ -551,10 +624,10 @@ class ImageService implements ImageServiceInterface {
 
 		$all_sizes = array_merge( $default_sizes, $image_sizes );
 
-		// Generate variants using ImageUtil
+		// Generate variants using ImageUtil.
 		$variants = ImageUtil::generateImageVariants( $file_path, $all_sizes );
 
-		// Generate srcset
+		// Generate srcset.
 		$srcset = ImageUtil::generateResponsiveSrcset( $file_path, $all_sizes );
 
 		return array(
@@ -583,12 +656,13 @@ class ImageService implements ImageServiceInterface {
 		$space_freed     = 0;
 
 		foreach ( $optimized_files as $optimized_file ) {
-			// Check if original file still exists
+			// Check if original file still exists.
 			$relative_path = str_replace( $wppo_dir, '', $optimized_file );
 			$original_path = wp_normalize_path( WP_CONTENT_DIR . $relative_path );
 
-			// Remove extension and add original extensions to check
-			$path_without_ext = FileSystemUtil::getDirectoryName( $original_path ) . '/' . FileSystemUtil::getFileNameWithoutExtension( $original_path );
+			// Remove extension and add original extensions to check.
+			$path_without_ext = FileSystemUtil::getDirectoryName( $original_path ) . '/' .
+				FileSystemUtil::getFileNameWithoutExtension( $original_path );
 			$original_exists  = false;
 
 			foreach ( array( 'jpg', 'jpeg', 'png', 'gif' ) as $ext ) {

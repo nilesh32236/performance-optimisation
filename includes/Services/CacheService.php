@@ -24,6 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class CacheService implements CacheServiceInterface {
 
+
 	private const CACHE_DIR_RELATIVE = '/cache/wppo';
 
 	private string $cache_root_dir;
@@ -37,15 +38,15 @@ class CacheService implements CacheServiceInterface {
 	/**
 	 * {@inheritdoc}
 	 */
-	public function clearCache( string $type = 'all' ): bool {
-		// Use PageCacheService for page cache if available
+	public function clear_cache( string $type = 'all' ): bool {
+		// Use PageCacheService for page cache if available.
 		if ( ( $type === 'page' || $type === 'all' ) && $this->page_cache_service ) {
 			$this->page_cache_service->clear_all_cache();
 		}
 
 		// Use CacheUtil for other cache types
 		if ( $type !== 'page' ) {
-			return CacheUtil::clearCache( $type );
+			return CacheUtil::clear_cache( $type );
 		}
 
 		return true;
@@ -54,16 +55,16 @@ class CacheService implements CacheServiceInterface {
 	/**
 	 * {@inheritdoc}
 	 */
-	public function getCacheSize( string $type = 'all' ): string {
-		// Use CacheUtil for unified cache size calculation
-		return CacheUtil::getCacheSize( $type );
+	public function get_cache_size( string $type = 'all' ): string {
+		// Use CacheUtil for unified cache size calculation.
+		return CacheUtil::get_cache_size( $type );
 	}
 
 	/**
 	 * {@inheritdoc}
 	 */
-	public function preloadCache( array $urls ): void {
-		// Use PageCacheService if available
+	public function preload_cache( array $urls ): void {
+		// Use PageCacheService if available.
 		if ( $this->page_cache_service ) {
 			$warmed = $this->page_cache_service->warm_cache( $urls );
 			LoggingUtil::info(
@@ -77,8 +78,8 @@ class CacheService implements CacheServiceInterface {
 			return;
 		}
 
-		// Fallback to CacheUtil
-		$results    = CacheUtil::warmCache( $urls );
+		// Fallback to CacheUtil.
+		$results    = CacheUtil::warm_cache( $urls );
 		$successful = array_filter(
 			$results,
 			function ( $result ) {
@@ -99,25 +100,25 @@ class CacheService implements CacheServiceInterface {
 	/**
 	 * Warms up the entire cache by preloading all cacheable pages.
 	 */
-	public function warmUpCache(): void {
+	public function warm_up_cache(): void {
 		$post_ids = $this->get_all_cacheable_post_ids();
 		$urls     = array_filter( array_map( 'get_permalink', $post_ids ) );
 
 		LoggingUtil::info( 'Starting cache warm-up', array( 'total_pages' => count( $urls ) ) );
-		$this->preloadCache( $urls );
+		$this->preload_cache( $urls );
 	}
 
 	/**
 	 * {@inheritdoc}
 	 */
-	public function invalidateCache( string $pattern ): bool {
-		// Handle post ID invalidation
+	public function invalidate_cache( string $pattern ): bool {
+		// Handle post ID invalidation.
 		if ( is_numeric( $pattern ) ) {
-			return $this->invalidatePostCache( (int) $pattern );
+			return $this->invalidate_post_cache( (int) $pattern );
 		}
 
-		// Handle URL pattern invalidation
-		return CacheUtil::invalidateCache( $pattern, 'page' );
+		// Handle URL pattern invalidation.
+		return CacheUtil::invalidate_cache( $pattern, 'page' );
 	}
 
 	/**
@@ -126,13 +127,13 @@ class CacheService implements CacheServiceInterface {
 	 * @param int $post_id Post ID to invalidate.
 	 * @return bool True on success, false on failure.
 	 */
-	public function invalidatePostCache( int $post_id ): bool {
+	public function invalidate_post_cache( int $post_id ): bool {
 		$post = get_post( $post_id );
 		if ( ! $post ) {
 			return false;
 		}
 
-		$urls_to_invalidate = $this->getRelatedUrls( $post );
+		$urls_to_invalidate = $this->get_related_urls( $post );
 
 		// Use PageCacheService if available
 		if ( $this->page_cache_service ) {
@@ -140,7 +141,7 @@ class CacheService implements CacheServiceInterface {
 				$this->page_cache_service->clear_url_cache( $url );
 			}
 		} else {
-			$this->invalidateUrls( array_unique( $urls_to_invalidate ) );
+			$this->invalidate_urls( array_unique( $urls_to_invalidate ) );
 		}
 
 		LoggingUtil::info(
@@ -159,10 +160,10 @@ class CacheService implements CacheServiceInterface {
 	 *
 	 * @param array $urls URLs to invalidate.
 	 */
-	public function invalidateUrls( array $urls ): void {
+	public function invalidate_urls( array $urls ): void {
 		foreach ( $urls as $url ) {
 			$url_path = trim( wp_parse_url( $url, PHP_URL_PATH ), '/' );
-			CacheUtil::invalidateCache( $url_path, 'page' );
+			CacheUtil::invalidate_cache( $url_path, 'page' );
 		}
 	}
 
@@ -172,7 +173,7 @@ class CacheService implements CacheServiceInterface {
 	 * @param \WP_Post $post Post object.
 	 * @return array Array of related URLs.
 	 */
-	private function getRelatedUrls( \WP_Post $post ): array {
+	private function get_related_urls( \WP_Post $post ): array {
 		$urls = array();
 
 		// Post permalink
@@ -247,8 +248,8 @@ class CacheService implements CacheServiceInterface {
 	 *
 	 * @return array Cache statistics.
 	 */
-	public function getCacheStats(): array {
-		$stats = CacheUtil::getCacheStats();
+	public function get_cache_stats(): array {
+		$stats = CacheUtil::get_cache_stats();
 
 		// Merge PageCacheService stats if available
 		if ( $this->page_cache_service ) {
@@ -270,8 +271,8 @@ class CacheService implements CacheServiceInterface {
 	 * @param string $type Cache type.
 	 * @return bool True if enabled, false otherwise.
 	 */
-	public function isCacheEnabled( string $type ): bool {
-		return CacheUtil::isCacheEnabled( $type );
+	public function is_cache_enabled( string $type ): bool {
+		return CacheUtil::is_cache_enabled( $type );
 	}
 
 	/**
@@ -281,8 +282,8 @@ class CacheService implements CacheServiceInterface {
 	 * @param string $type    Cache type.
 	 * @return bool True on success, false on failure.
 	 */
-	public function purgeCacheByPattern( string $pattern, string $type = 'page' ): bool {
-		return CacheUtil::purgeCacheByPattern( $pattern, $type );
+	public function purge_cache_by_pattern( string $pattern, string $type = 'page' ): bool {
+		return CacheUtil::purge_cache_by_pattern( $pattern, $type );
 	}
 
 	/**
@@ -291,8 +292,8 @@ class CacheService implements CacheServiceInterface {
 	 * @param string $type    Cache type.
 	 * @param int    $seconds Expiry time in seconds.
 	 */
-	public function setCacheExpiry( string $type, int $seconds ): void {
-		CacheUtil::setCacheExpiry( $type, $seconds );
+	public function set_cache_expiry( string $type, int $seconds ): void {
+		CacheUtil::set_cache_expiry( $type, $seconds );
 	}
 
 	/**
@@ -301,8 +302,53 @@ class CacheService implements CacheServiceInterface {
 	 * @param string $type Cache type.
 	 * @return int Expiry time in seconds.
 	 */
-	public function getCacheExpiry( string $type ): int {
-		return CacheUtil::getCacheExpiry( $type );
+	public function get_cache_expiry( string $type ): int {
+		return CacheUtil::get_cache_expiry( $type );
+	}
+
+	/**
+	 * Cleanup expired cache files.
+	 *
+	 * @return array Cleanup results with count of deleted files.
+	 */
+	public function cleanup_expired_cache(): array {
+		$results = array(
+			'deleted_files' => 0,
+			'freed_space'   => 0,
+			'errors'        => array(),
+		);
+
+		try {
+			// Use PageCacheService for page cache cleanup if available
+			if ( $this->page_cache_service ) {
+				$page_cleanup = $this->page_cache_service->cleanup_expired_cache();
+				if ( isset( $page_cleanup['deleted'] ) ) {
+					$results['deleted_files'] += $page_cleanup['deleted'];
+				}
+			}
+
+			// Cleanup other cache types using CacheUtil
+			$cache_cleanup = CacheUtil::cleanup_expired_cache();
+			if ( isset( $cache_cleanup['deleted_files'] ) ) {
+				$results['deleted_files'] += $cache_cleanup['deleted_files'];
+			}
+			if ( isset( $cache_cleanup['freed_space'] ) ) {
+				$results['freed_space'] += $cache_cleanup['freed_space'];
+			}
+
+			LoggingUtil::info(
+				'Expired cache cleanup completed',
+				array(
+					'deleted_files' => $results['deleted_files'],
+					'freed_space'   => size_format( $results['freed_space'], 2 ),
+				)
+			);
+		} catch ( \Exception $e ) {
+			$results['errors'][] = $e->getMessage();
+			LoggingUtil::error( 'Cache cleanup failed: ' . $e->getMessage() );
+		}
+
+		return $results;
 	}
 
 	/**
@@ -311,7 +357,7 @@ class CacheService implements CacheServiceInterface {
 	 * @param array $options Warming options.
 	 * @return array Warming results.
 	 */
-	public function intelligentCacheWarming( array $options = array() ): array {
+	public function intelligent_cache_warming( array $options = array() ): array {
 		$defaults = array(
 			'priority_pages'      => true,
 			'popular_content'     => true,
@@ -325,17 +371,17 @@ class CacheService implements CacheServiceInterface {
 
 		// Priority pages (home, about, contact, etc.)
 		if ( $options['priority_pages'] ) {
-			$urls_to_warm = array_merge( $urls_to_warm, $this->getPriorityPages() );
+			$urls_to_warm = array_merge( $urls_to_warm, $this->get_priority_pages() );
 		}
 
 		// Popular content based on views/comments
 		if ( $options['popular_content'] ) {
-			$urls_to_warm = array_merge( $urls_to_warm, $this->getPopularContent( 20 ) );
+			$urls_to_warm = array_merge( $urls_to_warm, $this->get_popular_content( 20 ) );
 		}
 
 		// Recent content
 		if ( $options['recent_content'] ) {
-			$urls_to_warm = array_merge( $urls_to_warm, $this->getRecentContent( 15 ) );
+			$urls_to_warm = array_merge( $urls_to_warm, $this->get_recent_content( 15 ) );
 		}
 
 		// Limit total URLs
@@ -354,7 +400,7 @@ class CacheService implements CacheServiceInterface {
 
 		// Warm cache with performance tracking
 		PerformanceUtil::startTimer( 'cache_warming' );
-		$results  = CacheUtil::warmCache( $urls_to_warm );
+		$results  = CacheUtil::warm_cache( $urls_to_warm );
 		$duration = PerformanceUtil::endTimer( 'cache_warming' );
 
 		$successful = array_filter(
@@ -387,7 +433,7 @@ class CacheService implements CacheServiceInterface {
 	 * @param array $options Invalidation options.
 	 * @return array Invalidation results.
 	 */
-	public function smartCacheInvalidation( int $post_id, array $options = array() ): array {
+	public function smart_cache_invalidation( int $post_id, array $options = array() ): array {
 		$defaults = array(
 			'invalidate_related'  => true,
 			'invalidate_feeds'    => true,
@@ -407,27 +453,27 @@ class CacheService implements CacheServiceInterface {
 		}
 
 		// Basic post-related URLs
-		$basic_urls       = $this->getRelatedUrls( $post );
+		$basic_urls       = $this->get_related_urls( $post );
 		$invalidated_urls = array_merge( $invalidated_urls, $basic_urls );
 
 		// Extended invalidation based on options
 		if ( $options['invalidate_feeds'] ) {
-			$invalidated_urls = array_merge( $invalidated_urls, $this->getFeedUrls() );
+			$invalidated_urls = array_merge( $invalidated_urls, $this->get_feed_urls() );
 		}
 
 		if ( $options['invalidate_sitemaps'] ) {
-			$invalidated_urls = array_merge( $invalidated_urls, $this->getSitemapUrls() );
+			$invalidated_urls = array_merge( $invalidated_urls, $this->get_sitemap_urls() );
 		}
 
 		if ( $options['cascade_taxonomies'] ) {
-			$invalidated_urls = array_merge( $invalidated_urls, $this->getCascadeTaxonomyUrls( $post ) );
+			$invalidated_urls = array_merge( $invalidated_urls, $this->get_cascade_taxonomy_urls( $post ) );
 		}
 
 		// Remove duplicates
 		$invalidated_urls = array_unique( $invalidated_urls );
 
 		// Perform invalidation
-		$this->invalidateUrls( $invalidated_urls );
+		$this->invalidate_urls( $invalidated_urls );
 
 		$result = array(
 			'success'          => true,
@@ -446,8 +492,8 @@ class CacheService implements CacheServiceInterface {
 	 *
 	 * @return array Performance analysis results.
 	 */
-	public function analyzeCachePerformance(): array {
-		$stats    = $this->getCacheStats();
+	public function analyze_cache_performance(): array {
+		$stats    = $this->get_cache_stats();
 		$analysis = array(
 			'overall_score'   => 0,
 			'recommendations' => array(),
@@ -501,9 +547,9 @@ class CacheService implements CacheServiceInterface {
 	 *
 	 * @return void
 	 */
-	public function preemptiveCacheWarming(): void {
-		// Get pages that are likely to be visited based on patterns
-		$predicted_urls = $this->predictPopularUrls();
+	public function preemptive_cache_warming(): void {
+		// Get pages that are likely to be visited based on patterns.
+		$predicted_urls = $this->predict_popular_urls();
 
 		if ( ! empty( $predicted_urls ) ) {
 			LoggingUtil::info(
@@ -513,7 +559,7 @@ class CacheService implements CacheServiceInterface {
 				)
 			);
 
-			$this->preloadCache( $predicted_urls );
+			$this->preload_cache( $predicted_urls );
 		}
 	}
 
@@ -522,7 +568,7 @@ class CacheService implements CacheServiceInterface {
 	 *
 	 * @return array Array of priority page URLs.
 	 */
-	private function getPriorityPages(): array {
+	private function get_priority_pages(): array {
 		$urls = array();
 
 		// Home page
@@ -563,7 +609,7 @@ class CacheService implements CacheServiceInterface {
 	 * @param int $limit Number of URLs to return.
 	 * @return array Array of popular content URLs.
 	 */
-	private function getPopularContent( int $limit = 20 ): array {
+	private function get_popular_content( int $limit = 20 ): array {
 		$args = array(
 			'post_type'      => array( 'post', 'page' ),
 			'post_status'    => 'publish',
@@ -591,7 +637,7 @@ class CacheService implements CacheServiceInterface {
 	 * @param int $limit Number of URLs to return.
 	 * @return array Array of recent content URLs.
 	 */
-	private function getRecentContent( int $limit = 15 ): array {
+	private function get_recent_content( int $limit = 15 ): array {
 		$args = array(
 			'post_type'      => array( 'post', 'page' ),
 			'post_status'    => 'publish',
@@ -609,7 +655,7 @@ class CacheService implements CacheServiceInterface {
 	 *
 	 * @return array Array of feed URLs.
 	 */
-	private function getFeedUrls(): array {
+	private function get_feed_urls(): array {
 		return array(
 			get_feed_link(),
 			get_feed_link( 'rss2' ),
@@ -623,7 +669,7 @@ class CacheService implements CacheServiceInterface {
 	 *
 	 * @return array Array of sitemap URLs.
 	 */
-	private function getSitemapUrls(): array {
+	private function get_sitemap_urls(): array {
 		$urls = array();
 
 		// WordPress core sitemaps
@@ -646,7 +692,7 @@ class CacheService implements CacheServiceInterface {
 	 * @param \WP_Post $post Post object.
 	 * @return array Array of taxonomy URLs.
 	 */
-	private function getCascadeTaxonomyUrls( \WP_Post $post ): array {
+	private function get_cascade_taxonomy_urls( \WP_Post $post ): array {
 		$urls = array();
 
 		// Get parent terms and their archives
@@ -678,7 +724,7 @@ class CacheService implements CacheServiceInterface {
 	 *
 	 * @return array Array of predicted popular URLs.
 	 */
-	private function predictPopularUrls(): array {
+	private function predict_popular_urls(): array {
 		$urls = array();
 
 		// Get trending posts (posts with recent activity)

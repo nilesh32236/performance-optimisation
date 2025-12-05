@@ -19,6 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class NextGenImageService {
 
+
 	private array $settings;
 	private array $exclude_images = array();
 	private $conversionQueue;
@@ -102,8 +103,8 @@ class NextGenImageService {
 							', ',
 							array_map(
 								function ( $srcset_item ) use ( $supports_avif, $supports_webp ) {
-									list( $url, $descriptor ) = array_pad( explode( ' ', trim( $srcset_item ), 2 ), 2, '' );
-									$new_url                  = $this->get_next_gen_url( $url, $supports_avif, $supports_webp );
+									list($url, $descriptor) = array_pad( explode( ' ', trim( $srcset_item ), 2 ), 2, '' );
+									$new_url                = $this->get_next_gen_url( $url, $supports_avif, $supports_webp );
 									return $new_url . ( $descriptor ? " $descriptor" : '' );
 								},
 								explode( ',', $srcset )
@@ -128,11 +129,12 @@ class NextGenImageService {
 	/**
 	 * Maybe serve next-gen image for attachment.
 	 *
-	 * @param array $image Image source array.
-	 * @return array Modified image source.
+	 * @param mixed $image Image source array or false.
+	 * @return mixed Modified image source or original value.
 	 */
-	public function maybe_serve_next_gen_image( $image ): array {
-		if ( empty( $image[0] ) ) {
+	public function maybe_serve_next_gen_image( $image ) {
+		// Return early if not an array (e.g., false from wp_get_attachment_image_src)
+		if ( ! is_array( $image ) || empty( $image[0] ) ) {
 			return $image;
 		}
 

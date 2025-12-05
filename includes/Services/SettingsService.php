@@ -29,6 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class SettingsService implements SettingsServiceInterface {
 
+
 	/**
 	 * Legacy option name for migration.
 	 */
@@ -445,7 +446,7 @@ class SettingsService implements SettingsServiceInterface {
 		}
 
 		try {
-			$timer_name = $this->performance->startTimer( 'settings_migration' );
+			$this->performance->startTimer( 'settings_migration' );
 
 			$current_version = get_option( 'wppo_settings_version', '1.0.0' );
 			$this->logger->info(
@@ -488,7 +489,7 @@ class SettingsService implements SettingsServiceInterface {
 			update_option( 'wppo_settings_version', self::SETTINGS_VERSION );
 
 			$this->migration_completed = true;
-			$duration                  = $this->performance->endTimer( $timer_name );
+			$duration                  = $this->performance->endTimer( 'settings_migration' );
 
 			$this->logger->info(
 				'Settings migration completed',

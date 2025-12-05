@@ -32,10 +32,13 @@ class ImageLazyLoader {
 		$content = preg_replace_callback(
 			'/<img([^>]+)src=["\']([^"\\]+)["\'])([^>]*)>/i',
 			function ( $matches ) {
-				if ( strpos( $matches[1] . $matches[3], 'data-src' ) !== false || strpos( $matches[1] . $matches[3], 'data-lazy-src' ) !== false ) {
+				$has_data_src = strpos( $matches[1] . $matches[3], 'data-src' ) !== false;
+				$has_lazy_src = strpos( $matches[1] . $matches[3], 'data-lazy-src' ) !== false;
+				if ( $has_data_src || $has_lazy_src ) {
 					return $matches[0];
 				}
-				$new_attributes = ' src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="' . esc_attr( $matches[2] ) . '"';
+				$placeholder    = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+				$new_attributes = ' src="' . $placeholder . '" data-src="' . esc_attr( $matches[2] ) . '"';
 				return '<img' . $matches[1] . $new_attributes . $matches[3] . ' class="lazyload">';
 			},
 			$content

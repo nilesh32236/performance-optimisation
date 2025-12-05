@@ -92,7 +92,7 @@ class ConfigurationService {
 	public function __construct( ServiceContainerInterface $container ) {
 		$this->container = $container;
 
-		// Get services if available, otherwise use defaults
+		// Get services if available, otherwise use defaults.
 		try {
 			$this->logger = $container->get( 'logger' );
 		} catch ( \Exception $e ) {
@@ -111,7 +111,7 @@ class ConfigurationService {
 			$this->filesystem = new FileSystemUtil();
 		}
 
-		// Initialize config components
+		// Initialize config components.
 		$this->config_schema      = new ConfigSchema();
 		$this->config_environment = new ConfigEnvironment();
 		$this->config_manager     = new ConfigManager( $this->logger, $this->validator, $this->filesystem );
@@ -133,21 +133,21 @@ class ConfigurationService {
 	 * @return mixed Configuration value.
 	 */
 	public function get( string $key, $default = null ) {
-		// Check cache first
+		// Check cache first.
 		if ( isset( $this->config_cache[ $key ] ) ) {
 			return $this->config_cache[ $key ];
 		}
 
-		// Get from config manager
+		// Get from config manager.
 		$value = $this->config_manager->get( $key, $default );
 
-		// Apply environment-specific overrides
+		// Apply environment-specific overrides.
 		$env_overrides = $this->config_environment->getEnvironmentOverrides();
 		if ( isset( $env_overrides[ $key ] ) ) {
 			$value = $env_overrides[ $key ];
 		}
 
-		// Cache the result
+		// Cache the result.
 		$this->config_cache[ $key ] = $value;
 
 		return $value;
@@ -163,13 +163,13 @@ class ConfigurationService {
 	 */
 	public function set( string $key, $value ): bool {
 		try {
-			// Validate the value against schema
-			$this->validateValue( $key, $value );
+			// Validate the value against schema.
+			$this->validate_value( $key, $value );
 
-			// Set in config manager
+			// Set in config manager.
 			$this->config_manager->set( $key, $value );
 
-			// Update cache
+			// Update cache.
 			$this->config_cache[ $key ] = $value;
 
 			$this->logger->info(
@@ -203,15 +203,15 @@ class ConfigurationService {
 	 */
 	public function update( array $config ): bool {
 		try {
-			// Validate entire configuration
-			$validation_result = $this->validateConfiguration( $config );
+			// Validate entire configuration.
+			$validation_result = $this->validate_configuration( $config );
 			if ( ! $validation_result['valid'] ) {
 				throw new ConfigurationException(
 					'Configuration validation failed: ' . implode( ', ', $validation_result['errors'] )
 				);
 			}
 
-			// Update each value
+			// Update each value.
 			foreach ( $config as $section => $values ) {
 				if ( is_array( $values ) ) {
 					foreach ( $values as $key => $value ) {
@@ -225,7 +225,7 @@ class ConfigurationService {
 				}
 			}
 
-			// Save to persistent storage
+			// Save to persistent storage.
 			$result = $this->config_manager->save();
 
 			if ( $result ) {
@@ -233,7 +233,7 @@ class ConfigurationService {
 					'Configuration updated successfully',
 					array(
 						'sections'   => array_keys( $config ),
-						'total_keys' => $this->countConfigKeys( $config ),
+						'total_keys' => $this->count_config_keys( $config ),
 					)
 				);
 			}
@@ -259,9 +259,9 @@ class ConfigurationService {
 	public function all(): array {
 		$config = $this->config_manager->all();
 
-		// Apply environment overrides
+		// Apply environment overrides.
 		foreach ( $this->config_environment->getEnvironmentOverrides() as $key => $value ) {
-			$this->setNestedValue( $config, $key, $value );
+			$this->set_nested_value( $config, $key, $value );
 		}
 
 		return $config;
@@ -331,7 +331,7 @@ class ConfigurationService {
 	 *
 	 * @return array Configuration schema.
 	 */
-	public function getSchema(): array {
+	public function get_schema(): array {
 		return $this->config_schema->getSchema();
 	}
 
@@ -341,7 +341,7 @@ class ConfigurationService {
 	 * @param array $config Configuration to validate.
 	 * @return array Validation result with 'valid' boolean and 'errors' array.
 	 */
-	public function validateConfiguration( array $config ): array {
+	public function validate_configuration( array $config ): array {
 		$errors = array();
 		$schema = $this->config_schema->getSchema();
 
@@ -355,7 +355,7 @@ class ConfigurationService {
 				foreach ( $values as $key => $value ) {
 					$full_key = $section . '.' . $key;
 					try {
-						$this->validateValue( $full_key, $value );
+						$this->validate_value( $full_key, $value );
 					} catch ( ConfigurationException $e ) {
 						$errors[] = $e->getMessage();
 					}
@@ -374,7 +374,7 @@ class ConfigurationService {
 	 *
 	 * @return string Current environment.
 	 */
-	public function getEnvironment(): string {
+	public function get_environment(): string {
 		return $this->config_environment->getEnvironment();
 	}
 
@@ -384,9 +384,9 @@ class ConfigurationService {
 	 * @param string $environment Environment name.
 	 * @return bool True on success, false on failure.
 	 */
-	public function setEnvironment( string $environment ): bool {
+	public function set_environment( string $environment ): bool {
 		if ( $this->config_environment->setEnvironment( $environment ) ) {
-			$this->config_cache = array(); // Clear cache to reload with new environment
+			$this->config_cache = array(); // Clear cache to reload with new environment.
 			return true;
 		}
 		return false;
@@ -396,8 +396,9 @@ class ConfigurationService {
 	 * Export configuration to file.
 	 *
 	 * @param string $file_path File path to export to.
-	 * @param string $format    Export format (json, php, yaml).
+	 * @param string $format    Export format (json, php).
 	 * @return bool True on success, false on failure.
+	 * @throws ConfigurationException If export format is unsupported.
 	 */
 	public function export( string $file_path, string $format = 'json' ): bool {
 		try {
@@ -408,6 +409,7 @@ class ConfigurationService {
 					$content = wp_json_encode( $config, JSON_PRETTY_PRINT );
 					break;
 				case 'php':
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
 					$content = "<?php\nreturn " . var_export( $config, true ) . ";\n";
 					break;
 				default:
@@ -446,6 +448,7 @@ class ConfigurationService {
 	 * @param string $file_path File path to import from.
 	 * @param bool   $merge     Whether to merge with existing config.
 	 * @return bool True on success, false on failure.
+	 * @throws ConfigurationException If file not found, invalid format, or validation fails.
 	 */
 	public function import( string $file_path, bool $merge = true ): bool {
 		try {
@@ -473,8 +476,8 @@ class ConfigurationService {
 					throw new ConfigurationException( "Unsupported import format: {$extension}" );
 			}
 
-			// Validate imported configuration
-			$validation_result = $this->validateConfiguration( $imported_config );
+			// Validate imported configuration.
+			$validation_result = $this->validate_configuration( $imported_config );
 			if ( ! $validation_result['valid'] ) {
 				throw new ConfigurationException(
 					'Imported configuration is invalid: ' . implode( ', ', $validation_result['errors'] )
@@ -519,39 +522,46 @@ class ConfigurationService {
 	 * @param mixed  $value Configuration value.
 	 * @throws ConfigurationException If validation fails.
 	 */
-	private function validateValue( string $key, $value ): void {
-		$schema_key = $this->getSchemaKey( $key );
+	private function validate_value( string $key, $value ): void {
+		$schema_key = $this->get_schema_key( $key );
 		if ( ! $schema_key ) {
+			// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 			throw new ConfigurationException( "Unknown configuration key: {$key}" );
 		}
 
 		$schema = $schema_key['schema'];
 
-		// Type validation
+		// Type validation.
 		switch ( $schema['type'] ) {
 			case 'boolean':
 				if ( ! is_bool( $value ) ) {
+					// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 					throw new ConfigurationException( "Configuration key '{$key}' must be a boolean" );
 				}
 				break;
 			case 'integer':
 				if ( ! is_int( $value ) ) {
+					// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 					throw new ConfigurationException( "Configuration key '{$key}' must be an integer" );
 				}
 				if ( isset( $schema['min'] ) && $value < $schema['min'] ) {
+					// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 					throw new ConfigurationException( "Configuration key '{$key}' must be at least {$schema['min']}" );
 				}
 				if ( isset( $schema['max'] ) && $value > $schema['max'] ) {
+					// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 					throw new ConfigurationException( "Configuration key '{$key}' must be at most {$schema['max']}" );
 				}
 				break;
 			case 'string':
 				if ( ! is_string( $value ) ) {
+					// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 					throw new ConfigurationException( "Configuration key '{$key}' must be a string" );
 				}
 				break;
 			case 'array':
 				if ( ! is_array( $value ) ) {
+					// phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
 					throw new ConfigurationException( "Configuration key '{$key}' must be an array" );
 				}
 				break;
@@ -564,7 +574,7 @@ class ConfigurationService {
 	 * @param string $key Configuration key.
 	 * @return array|null Schema information or null if not found.
 	 */
-	private function getSchemaKey( string $key ): ?array {
+	private function get_schema_key( string $key ): ?array {
 		$parts = explode( '.', $key );
 		if ( count( $parts ) !== 2 ) {
 			return null;
@@ -589,13 +599,13 @@ class ConfigurationService {
 	/**
 	 * Set nested value in array using dot notation.
 	 *
-	 * @param array  $array Array to modify.
+	 * @param array  $data  Array to modify.
 	 * @param string $key   Dot notation key.
 	 * @param mixed  $value Value to set.
 	 */
-	private function setNestedValue( array &$array, string $key, $value ): void {
+	private function set_nested_value( array &$data, string $key, $value ): void {
 		$keys    = explode( '.', $key );
-		$current = &$array;
+		$current = &$data;
 
 		foreach ( $keys as $k ) {
 			if ( ! isset( $current[ $k ] ) || ! is_array( $current[ $k ] ) ) {
@@ -613,11 +623,11 @@ class ConfigurationService {
 	 * @param array $config Configuration array.
 	 * @return int Number of keys.
 	 */
-	private function countConfigKeys( array $config ): int {
+	private function count_config_keys( array $config ): int {
 		$count = 0;
 		foreach ( $config as $value ) {
 			if ( is_array( $value ) ) {
-				$count += $this->countConfigKeys( $value );
+				$count += $this->count_config_keys( $value );
 			} else {
 				++$count;
 			}

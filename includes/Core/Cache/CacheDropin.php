@@ -21,6 +21,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class CacheDropin {
 
+
 	private static string $handler_file_path = '';
 
 	private static function init_paths(): void {
@@ -95,14 +96,15 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Load the autoloader
+if (file_exists(WP_CONTENT_DIR . '/plugins/performance-optimisation/vendor/autoload.php')) {
+    require_once WP_CONTENT_DIR . '/plugins/performance-optimisation/vendor/autoload.php';
+}
+
 // Load the cache manager
-if (file_exists(WP_CONTENT_DIR . '/plugins/performance-optimisation/includes/Core/Cache/CacheManager.php')) {
-    require_once WP_CONTENT_DIR . '/plugins/performance-optimisation/includes/Core/Cache/CacheManager.php';
-    
-    if (class_exists('PerformanceOptimisation\Core\Cache\CacheManager')) {
-        $cache_manager = new PerformanceOptimisation\Core\Cache\CacheManager();
-        $cache_manager->init();
-    }
+if (class_exists('PerformanceOptimisation\Core\Cache\CacheManager') && class_exists('PerformanceOptimisation\Core\Config\ConfigManager')) {
+    $config_manager = new PerformanceOptimisation\Core\Config\ConfigManager();
+    $cache_manager = new PerformanceOptimisation\Core\Cache\CacheManager($config_manager);
 }
 PHP;
 	}

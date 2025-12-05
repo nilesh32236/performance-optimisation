@@ -27,6 +27,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class CssOptimizer implements OptimizerInterface {
 
+
 	/**
 	 * Service container.
 	 *
@@ -310,7 +311,7 @@ class CssOptimizer implements OptimizerInterface {
 	 * @return array Combination result.
 	 */
 	public function combineFiles( array $file_paths, array $options = array() ): array {
-		$timer_id = $this->performance->startTimer( 'css_combination' );
+		$this->performance->startTimer( 'css_combination' );
 
 		try {
 			$combined_css        = '';
@@ -658,8 +659,8 @@ class CssOptimizer implements OptimizerInterface {
 		// Check for class selectors
 		if ( preg_match( '/^\.([a-zA-Z0-9_-]+)/', $selector, $matches ) ) {
 			return strpos( $html, 'class="' . $matches[1] . '"' ) !== false ||
-					strpos( $html, 'class="' . $matches[1] . ' ' ) !== false ||
-					strpos( $html, ' ' . $matches[1] . '"' ) !== false;
+				strpos( $html, 'class="' . $matches[1] . ' ' ) !== false ||
+				strpos( $html, ' ' . $matches[1] . '"' ) !== false;
 		}
 
 		// Check for element selectors

@@ -19,13 +19,55 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class PageCacheService {
 
+
+	/**
+	 * Cache directory constant.
+	 *
+	 * @var string
+	 */
 	private const CACHE_DIR = '/cache/wppo/pages';
+
+	/**
+	 * Cache root directory path.
+	 *
+	 * @var string
+	 */
 	private string $cache_root_dir;
+
+	/**
+	 * Current domain.
+	 *
+	 * @var string
+	 */
 	private string $domain;
+
+	/**
+	 * WordPress filesystem instance.
+	 *
+	 * @var mixed
+	 */
 	private $filesystem;
+
+	/**
+	 * Logging utility instance.
+	 *
+	 * @var LoggingUtil
+	 */
 	private LoggingUtil $logger;
+
+	/**
+	 * Settings service instance.
+	 *
+	 * @var SettingsService
+	 */
 	private SettingsService $settings;
 
+	/**
+	 * Constructor.
+	 *
+	 * @param SettingsService $settings Settings service instance.
+	 * @param LoggingUtil     $logger   Logging utility instance.
+	 */
 	public function __construct( SettingsService $settings, LoggingUtil $logger ) {
 		$this->settings       = $settings;
 		$this->logger         = $logger;
@@ -41,14 +83,14 @@ class PageCacheService {
 	private function setup_hooks(): void {
 		$this->logger->debug( 'WPPO PageCache: setup_hooks called' );
 
-		// Hook into template_redirect to start caching
+		// Hook into template_redirect to start caching.
 		add_action( 'template_redirect', array( $this, 'start_caching' ), 1 );
 
-		// Clear cache on post update
+		// Clear cache on post update.
 		add_action( 'save_post', array( $this, 'clear_post_cache' ), 10, 1 );
 		add_action( 'deleted_post', array( $this, 'clear_post_cache' ), 10, 1 );
 
-		// Clear cache on comment
+		// Clear cache on comment.
 		add_action( 'comment_post', array( $this, 'clear_post_cache_by_comment' ), 10, 1 );
 
 		$this->logger->debug( 'WPPO PageCache: Hooks registered' );
@@ -73,34 +115,34 @@ class PageCacheService {
 	private function get_domain(): string {
 		return isset( $_SERVER['HTTP_HOST'] )
 			? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) )
-			: parse_url( home_url(), PHP_URL_HOST );
+			: wp_parse_url( home_url(), PHP_URL_HOST );
 	}
 
 	/**
 	 * Check if page should be cached
 	 */
 	public function should_cache_page(): bool {
-		// Check if caching is enabled first
+		// Check if caching is enabled first.
 		if ( ! $this->is_cache_enabled() ) {
 			return false;
 		}
 
-		// Don't cache for logged-in users
+		// Don't cache for logged-in users.
 		if ( is_user_logged_in() ) {
 			return false;
 		}
 
-		// Don't cache 404 pages
+		// Don't cache 404 pages.
 		if ( is_404() ) {
 			return false;
 		}
 
-		// Don't cache POST requests
+		// Don't cache POST requests.
 		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'] ) {
 			return false;
 		}
 
-		// Don't cache if query string contains search or version params
+		// Don't cache if query string contains search or version params.
 		if ( ! empty( $_SERVER['QUERY_STRING'] ) ) {
 			$query = sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) );
 			if ( preg_match( '/(?:^|&)(s|search|ver|v|preview)(?:=|&|$)/', $query ) ) {
@@ -108,7 +150,7 @@ class PageCacheService {
 			}
 		}
 
-		// Check exclusion rules
+		// Check exclusion rules.
 		if ( $this->is_excluded_url() ) {
 			return false;
 		}
@@ -122,10 +164,13 @@ class PageCacheService {
 	private function is_excluded_url(): bool {
 		$exclusions = $this->settings->get_setting( 'cache_settings', 'cache_exclusions', array() );
 
-		// Check URL exclusions
+		// Check URL exclusions.
 		if ( ! empty( $exclusions['urls'] ) ) {
 			$current_url = $this->get_current_url();
 			foreach ( $exclusions['urls'] as $excluded ) {
+				if ( ! is_string( $excluded ) ) {
+					continue;
+				}
 				$excluded = trim( $excluded );
 				if ( empty( $excluded ) ) {
 					continue;
@@ -141,9 +186,12 @@ class PageCacheService {
 			}
 		}
 
-		// Check cookie exclusions
+		// Check cookie exclusions.
 		if ( ! empty( $exclusions['cookies'] ) ) {
 			foreach ( $exclusions['cookies'] as $cookie_name ) {
+				if ( ! is_string( $cookie_name ) ) {
+					continue;
+				}
 				foreach ( $_COOKIE as $key => $value ) {
 					if ( strpos( $key, trim( $cookie_name ) ) === 0 ) {
 						return true;
@@ -152,7 +200,7 @@ class PageCacheService {
 			}
 		}
 
-		// Check user role exclusions
+		// Check user role exclusions.
 		if ( ! empty( $exclusions['user_roles'] ) && is_user_logged_in() ) {
 			$user = wp_get_current_user();
 			foreach ( $exclusions['user_roles'] as $role ) {
@@ -162,18 +210,22 @@ class PageCacheService {
 			}
 		}
 
-		// Check query string exclusions
+		// Check query string exclusions.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		if ( ! empty( $exclusions['query_strings'] ) && ! empty( $_GET ) ) {
 			foreach ( $exclusions['query_strings'] as $param ) {
+				// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 				if ( isset( $_GET[ trim( $param ) ] ) ) {
 					return true;
 				}
 			}
 		}
 
-		// Check user agent exclusions
+		// Check user agent exclusions.
 		if ( ! empty( $exclusions['user_agents'] ) ) {
-			$user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+			$user_agent = isset( $_SERVER['HTTP_USER_AGENT'] )
+				? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) )
+				: '';
 			foreach ( $exclusions['user_agents'] as $agent ) {
 				if ( stripos( $user_agent, trim( $agent ) ) !== false ) {
 					return true;
@@ -181,7 +233,7 @@ class PageCacheService {
 			}
 		}
 
-		// Check post type exclusions
+		// Check post type exclusions.
 		if ( ! empty( $exclusions['post_types'] ) && is_singular() ) {
 			$post_type = get_post_type();
 			if ( in_array( $post_type, array_map( 'trim', $exclusions['post_types'] ), true ) ) {
@@ -232,16 +284,21 @@ class PageCacheService {
 	}
 
 	/**
-	 * Save page content to cache
+	 * Save page content to cache.
+	 *
+	 * @param string $buffer Page HTML content.
+	 * @return string Unmodified buffer.
 	 */
 	public function save_cache( string $buffer ): string {
 		if ( empty( $buffer ) || strlen( $buffer ) < 255 ) {
 			return $buffer;
 		}
 
-		// Don't cache if there are PHP errors
-		if ( strpos( $buffer, '<b>Fatal error</b>' ) !== false ||
-			strpos( $buffer, '<b>Warning</b>' ) !== false ) {
+		// Don't cache if there are PHP errors.
+		if (
+			strpos( $buffer, '<b>Fatal error</b>' ) !== false ||
+			strpos( $buffer, '<b>Warning</b>' ) !== false
+		) {
 			return $buffer;
 		}
 
@@ -249,22 +306,22 @@ class PageCacheService {
 			$file_path = $this->get_cache_file_path();
 			$cache_dir = dirname( $file_path );
 
-			// Create directory if it doesn't exist
+			// Create directory if it doesn't exist.
 			if ( ! $this->filesystem->is_dir( $cache_dir ) ) {
 				wp_mkdir_p( $cache_dir );
 			}
 
-			// Add cache meta comment
+			// Add cache meta comment.
 			$cache_meta = sprintf(
 				"\n<!-- Cached by Performance Optimisation on %s -->",
 				current_time( 'mysql' )
 			);
 			$buffer    .= $cache_meta;
 
-			// Save regular file
+			// Save regular file.
 			$this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
 
-			// Save gzipped version
+			// Save gzipped version.
 			$gzip_content = gzencode( $buffer, 9 );
 			$this->filesystem->put_contents( $file_path . '.gz', $gzip_content, FS_CHMOD_FILE );
 
@@ -304,7 +361,10 @@ class PageCacheService {
 	}
 
 	/**
-	 * Clear cache for specific URL
+	 * Clear cache for specific URL.
+	 *
+	 * @param string $url URL to clear cache for.
+	 * @return bool True on success, false on failure.
 	 */
 	public function clear_url_cache( string $url ): bool {
 		try {
@@ -372,7 +432,10 @@ class PageCacheService {
 	}
 
 	/**
-	 * Calculate cache directory statistics
+	 * Calculate cache directory statistics.
+	 *
+	 * @param string $directory Directory path to calculate stats for.
+	 * @return array Array with 'files' and 'size' keys.
 	 */
 	private function calculate_cache_stats( string $directory ): array {
 		$start_time = microtime( true );
@@ -399,12 +462,10 @@ class PageCacheService {
 				$sub_stats = $this->calculate_cache_stats( $item_path );
 				$files    += $sub_stats['files'];
 				$size     += $sub_stats['size'];
-			} else {
-				// Only count .html files, not .gz
-				if ( substr( $item['name'], -5 ) === '.html' ) {
-					++$files;
-					$size += $this->filesystem->size( $item_path );
-				}
+			} elseif ( substr( $item['name'], -5 ) === '.html' ) {
+				// Only count .html files, not .gz.
+				++$files;
+				$size += $this->filesystem->size( $item_path );
 			}
 		}
 
@@ -425,11 +486,14 @@ class PageCacheService {
 	}
 
 	/**
-	 * Calculate cache hit rate (simplified version)
+	 * Calculate cache hit rate (simplified version).
+	 *
+	 * @param int $file_count Number of cached files.
+	 * @return int Hit rate percentage.
 	 */
 	private function calculate_hit_rate( int $file_count = 0 ): int {
-		// For now, return a static value based on file count
-		// In production, this would track actual hits vs misses
+		// For now, return a static value based on file count.
+		// In production, this would track actual hits vs misses.
 		return $file_count > 0 ? 92 : 0;
 	}
 
@@ -442,26 +506,32 @@ class PageCacheService {
 	}
 
 	/**
-	 * Clear cache on post update
+	 * Clear cache on post update.
+	 *
+	 * @param int $post_id Post ID.
+	 * @return void
 	 */
 	public function clear_post_cache( int $post_id ): void {
 		$url = get_permalink( $post_id );
 		if ( $url ) {
 			$this->clear_url_cache( $url );
 
-			// Also clear homepage
+			// Also clear homepage.
 			$this->clear_url_cache( home_url( '/' ) );
 
-			// Warm cache for the updated post
+			// Warm cache for the updated post.
 			$this->warm_url_cache( $url );
 		}
 	}
 
 	/**
-	 * Warm cache for a specific URL
+	 * Warm cache for a specific URL.
+	 *
+	 * @param string $url URL to warm cache for.
+	 * @return void
 	 */
 	public function warm_url_cache( string $url ): void {
-		// Make non-blocking request to generate cache
+		// Make non-blocking request to generate cache.
 		wp_remote_get(
 			$url,
 			array(
@@ -475,7 +545,10 @@ class PageCacheService {
 	}
 
 	/**
-	 * Warm cache for multiple URLs
+	 * Warm cache for multiple URLs.
+	 *
+	 * @param array $urls Array of URLs to warm.
+	 * @return int Number of URLs warmed.
 	 */
 	public function warm_cache( array $urls ): int {
 		$warmed = 0;
@@ -625,7 +698,7 @@ PHP;
 		$result = $this->create_advanced_cache_dropin();
 
 		if ( $result ) {
-			// Enable WP_CACHE constant in wp-config.php
+			// Enable WP_CACHE constant in wp-config.php.
 			$this->enable_wp_cache_constant();
 		}
 
@@ -652,13 +725,15 @@ PHP;
 
 		$config_content = $this->filesystem->get_contents( $config_path );
 
-		// Check if WP_CACHE is already defined
-		if ( strpos( $config_content, "define( 'WP_CACHE'" ) !== false ||
-			strpos( $config_content, "define('WP_CACHE'" ) !== false ) {
+		// Check if WP_CACHE is already defined.
+		if (
+			strpos( $config_content, "define( 'WP_CACHE'" ) !== false ||
+			strpos( $config_content, "define('WP_CACHE'" ) !== false
+		) {
 			return;
 		}
 
-		// Add WP_CACHE constant after <?php
+		// Add WP_CACHE constant after <?php.
 		$new_content = preg_replace(
 			'/(<\?php)/i',
 			"$1\ndefine( 'WP_CACHE', true ); // Added by Performance Optimisation",

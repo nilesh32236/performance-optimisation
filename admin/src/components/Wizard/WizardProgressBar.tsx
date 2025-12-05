@@ -9,9 +9,7 @@ import { useWizard } from './WizardContext';
 
 function WizardProgressBar() {
 	const { state } = useWizard();
-	const { currentStep, totalSteps, completedSteps, visitedSteps } = state;
-
-	const progressPercentage = ( currentStep / totalSteps ) * 100;
+	const { currentStep, totalSteps, completedSteps } = state;
 
 	const getStepStatus = ( stepNumber: number ) => {
 		if ( completedSteps.has( stepNumber ) ) {
@@ -20,59 +18,78 @@ function WizardProgressBar() {
 		if ( stepNumber === currentStep ) {
 			return 'current';
 		}
-		if ( visitedSteps.has( stepNumber ) ) {
-			return 'visited';
-		}
 		return 'pending';
 	};
 
-	const getStepIcon = ( stepNumber: number, status: string ) => {
-		switch ( status ) {
-			case 'completed':
-				return <span className="dashicons dashicons-yes-alt" aria-hidden="true" />;
-			case 'current':
-				return <span className="wppo-step-number">{ stepNumber }</span>;
-			default:
-				return <span className="wppo-step-number">{ stepNumber }</span>;
-		}
-	};
+	const stepLabels = [ 'Welcome', 'Analysis', 'Preset', 'Features', 'Summary' ];
 
 	return (
-		<div className="wppo-wizard-progress" role="navigation" aria-label="Setup progress">
-			{ /* Progress bar */ }
-			<div
-				className="wppo-progress-bar"
-				role="progressbar"
-				aria-valuenow={ currentStep }
-				aria-valuemin={ 1 }
-				aria-valuemax={ totalSteps }
-				aria-label={ `Step ${ currentStep } of ${ totalSteps }` }
-			>
-				<div className="wppo-progress-fill" style={ { width: `${ progressPercentage }%` } } />
-			</div>
+		<div className="w-full" role="navigation" aria-label="Setup progress">
+			{/* Step Indicators */}
+			<div className="flex items-center justify-between relative">
+				{/* Progress Line Background */}
+				<div className="absolute top-5 left-0 right-0 h-0.5 bg-slate-200 -z-10" />
+				
+				{/* Progress Line Fill */}
+				<div
+					className="absolute top-5 left-0 h-0.5 bg-blue-500 -z-10 transition-all duration-500 ease-out"
+					style={ { width: `${ ( ( currentStep - 1 ) / ( totalSteps - 1 ) ) * 100 }%` } }
+				/>
 
-			{ /* Step indicators */ }
-			<div className="wppo-step-indicators" role="list">
-				{ Array.from( { length: totalSteps }, ( _, index ) => {
+				{Array.from( { length: totalSteps }, ( _, index ) => {
 					const stepNumber = index + 1;
 					const status = getStepStatus( stepNumber );
 
 					return (
 						<div
 							key={ stepNumber }
-							className={ `wppo-step-indicator wppo-step-${ status }` }
+							className="flex flex-col items-center"
 							role="listitem"
 							aria-current={ status === 'current' ? 'step' : undefined }
 						>
-							<div className="wppo-step-icon">{ getStepIcon( stepNumber, status ) }</div>
-							<span className="wppo-step-label">Step { stepNumber }</span>
+							{/* Step Circle */}
+							<div
+								className={ `
+									w-10 h-10 rounded-full flex items-center justify-center
+									border-2 transition-all duration-300 ease-out
+									${ status === 'completed'
+										? 'bg-green-500 border-green-500 text-white'
+										: status === 'current'
+											? 'bg-blue-500 border-blue-500 text-white shadow-lg shadow-blue-200'
+											: 'bg-white border-slate-300 text-slate-400'
+									}
+								` }
+							>
+								{ status === 'completed' ? (
+									<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={ 2 } d="M5 13l4 4L19 7" />
+									</svg>
+								) : (
+									<span className="text-sm font-semibold">{ stepNumber }</span>
+								) }
+							</div>
+
+							{/* Step Label */}
+							<span
+								className={ `
+									mt-2 text-xs font-medium transition-colors duration-300
+									${ status === 'current'
+										? 'text-blue-600'
+										: status === 'completed'
+											? 'text-green-600'
+											: 'text-slate-400'
+									}
+								` }
+							>
+								{ stepLabels[ index ] || `Step ${ stepNumber }` }
+							</span>
 						</div>
 					);
 				} ) }
 			</div>
 
-			{ /* Progress text */ }
-			<p className="wppo-progress-text" aria-live="polite">
+			{/* Screen Reader Text */}
+			<p className="sr-only" aria-live="polite">
 				Step { currentStep } of { totalSteps }
 			</p>
 		</div>
