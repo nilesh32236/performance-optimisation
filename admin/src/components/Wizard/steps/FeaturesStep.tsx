@@ -99,7 +99,7 @@ function FeaturesStep( { stepConfig }: FeaturesStepProps ) {
 	};
 
 	return (
-		<div className="wppo-wizard-step wppo-features-step">
+		<div className="wppo-features-step">
 			<div className="wppo-step-header">
 				<h2>Advanced Features</h2>
 				<p className="wppo-step-description">

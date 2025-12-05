@@ -98,7 +98,7 @@ function PresetStep( { stepConfig }: PresetStepProps ) {
 	};
 
 	return (
-		<div className="wppo-wizard-step wppo-preset-step">
+		<div className="wppo-preset-step">
 			<div className="wppo-step-header">
 				<h2>Choose Your Optimization Level</h2>
 				<p className="wppo-step-description">

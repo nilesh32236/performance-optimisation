@@ -12,10 +12,11 @@ function WizardProgressBar() {
 	const { currentStep, steps } = state;
 
 	const getStepStatus = ( stepIndex: number ) => {
-		if ( stepIndex < currentStep ) {
+		const stepNumber = stepIndex + 1;
+		if ( stepNumber < currentStep ) {
 			return 'completed';
 		}
-		if ( stepIndex === currentStep ) {
+		if ( stepNumber === currentStep ) {
 			return 'active';
 		}
 		return 'pending';
@@ -27,6 +28,7 @@ function WizardProgressBar() {
 				{ steps.map( ( step, index ) => {
 					const status = getStepStatus( index );
 					const stepNumber = index + 1;
+					
 
 					return (
 						<div

@@ -502,7 +502,7 @@ class SettingsService implements SettingsServiceInterface
 			update_option('wppo_settings_version', self::SETTINGS_VERSION);
 
 			$this->migration_completed = true;
-			$duration = $this->performance->endTimer($timer_name);
+			$duration = $this->performance->endTimer("settings_migration");
 
 			$this->logger->info(
 				'Settings migration completed',

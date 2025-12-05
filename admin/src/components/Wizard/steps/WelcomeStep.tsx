@@ -21,49 +21,44 @@ function WelcomeStep( { stepConfig }: WelcomeStepProps ) {
 	}, [ updateData ] );
 
 	return (
-		<div className="wppo-wizard-step wppo-welcome-step">
-			<div className="wppo-step-content">
-				<div className="wppo-welcome-icon">
-					<span className="dashicons dashicons-performance" aria-hidden="true" />
-				</div>
-
+		<div className="wppo-welcome-step">
+			<div className="wppo-step-header">
 				<h2>Welcome to Performance Optimisation</h2>
-
-				<p className="wppo-welcome-description">
-					This setup wizard will help you configure optimal performance settings for your
-					website. The process takes just a few minutes and will significantly improve
-					your site's speed.
+				<p className="wppo-step-description">
+					Boost your website's speed in just a few simple steps
 				</p>
+			</div>
 
-				<div className="wppo-welcome-features">
-					<h3>What you'll get:</h3>
-					<ul>
-						<li>
-							<span className="dashicons dashicons-yes-alt" aria-hidden="true" />
-							Faster page loading times
-						</li>
-						<li>
-							<span className="dashicons dashicons-yes-alt" aria-hidden="true" />
-							Improved search engine rankings
-						</li>
-						<li>
-							<span className="dashicons dashicons-yes-alt" aria-hidden="true" />
-							Better user experience
-						</li>
-						<li>
-							<span className="dashicons dashicons-yes-alt" aria-hidden="true" />
-							Reduced server load
-						</li>
-					</ul>
+			<div className="wppo-welcome-content">
+				<div className="wppo-welcome-benefits">
+					<h3>What you'll achieve:</h3>
+					<div className="wppo-benefits-grid">
+						<div className="wppo-benefit-item">
+							<span className="dashicons dashicons-clock" />
+							<span>Faster Loading</span>
+						</div>
+						<div className="wppo-benefit-item">
+							<span className="dashicons dashicons-chart-line" />
+							<span>Better SEO</span>
+						</div>
+						<div className="wppo-benefit-item">
+							<span className="dashicons dashicons-heart" />
+							<span>Happy Users</span>
+						</div>
+						<div className="wppo-benefit-item">
+							<span className="dashicons dashicons-admin-tools" />
+							<span>Optimized Server</span>
+						</div>
+					</div>
 				</div>
 
-				<div className="wppo-welcome-note">
-					<div className="wppo-note-icon">
-						<span className="dashicons dashicons-info" aria-hidden="true" />
-					</div>
-					<div className="wppo-note-content">
-						<strong>Don't worry!</strong> All settings can be changed later, and we'll
-						only enable features that are safe for your website.
+				<div className="wppo-welcome-info">
+					<div className="wppo-info-box">
+						<span className="dashicons dashicons-info-outline" />
+						<div>
+							<strong>Safe & Reversible</strong>
+							<p>All optimizations are safe and can be easily changed or disabled anytime.</p>
+						</div>
 					</div>
 				</div>
 			</div>

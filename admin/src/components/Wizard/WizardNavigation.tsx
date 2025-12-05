@@ -54,7 +54,11 @@ function WizardNavigation( { onComplete }: WizardNavigationProps ) {
 	};
 
 	return (
-		<div className="wppo-wizard-navigation">
+		<div 
+			className="wppo-wizard-navigation" 
+			data-step={ currentStep }
+			data-total-steps={ totalSteps }
+		>
 			<div className="wppo-nav-buttons">
 				{ ! isFirstStep && (
 					<Button
@@ -63,6 +67,7 @@ function WizardNavigation( { onComplete }: WizardNavigationProps ) {
 						disabled={ isLoading }
 						icon="arrow-left-alt2"
 						iconPosition="left"
+						data-variant="secondary"
 					>
 						Back
 					</Button>
@@ -75,6 +80,8 @@ function WizardNavigation( { onComplete }: WizardNavigationProps ) {
 					loading={ isLoading }
 					icon={ isLastStep ? 'yes-alt' : 'arrow-right-alt2' }
 					iconPosition="right"
+					data-variant="primary"
+					data-loading={ isLoading }
 					aria-describedby={ ! canProceed ? 'validation-message' : undefined }
 				>
 					{ isLastStep ? 'Complete Setup' : 'Next' }

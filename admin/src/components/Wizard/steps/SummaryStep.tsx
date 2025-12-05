@@ -68,7 +68,7 @@ function SummaryStep( { stepConfig }: SummaryStepProps ) {
 	const enabledFeatures = getEnabledFeatures();
 
 	return (
-		<div className="wppo-wizard-step wppo-summary-step">
+		<div className="wppo-summary-step">
 			<div className="wppo-step-header">
 				<h2>Setup Summary</h2>
 				<p className="wppo-step-description">
