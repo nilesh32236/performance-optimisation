@@ -8,14 +8,13 @@ import { createRoot } from 'react-dom/client';
  */
 import SetupWizard from './components/Wizard/SetupWizard';
 import './styles/main.css';
-import './components/Wizard/SetupWizard.css';
 
 // Initialize the wizard when DOM is ready
 document.addEventListener( 'DOMContentLoaded', function() {
 	const container = document.getElementById( 'performance-optimisation-wizard-app' );
 	if ( container ) {
 		// Hide the loading indicator
-		const loadingIndicator = container.querySelector( '.wppo-wizard-loading-initial' );
+		const loadingIndicator = container.querySelector( '.wppo-wizard-loading-initial' ) as HTMLElement | null;
 		if ( loadingIndicator ) {
 			loadingIndicator.style.display = 'none';
 		}
