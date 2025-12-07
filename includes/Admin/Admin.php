@@ -127,6 +127,7 @@ class Admin {
 		// Add AJAX handlers for admin bar actions.
 		add_action( 'wp_ajax_wppo_clear_all_cache', array( $this, 'handle_clear_all_cache' ) );
 		add_action( 'wp_ajax_wppo_clear_page_cache', array( $this, 'handle_clear_page_cache' ) );
+		add_action( 'wp_ajax_wppo_get_cache_stats', array( $this, 'ajax_get_cache_stats' ) );
 
 		$this->logger->debug( 'Admin hooks setup completed' );
 	}
@@ -149,7 +150,7 @@ class Admin {
 		add_action( "load-{$hook_suffix}", array( $this, 'load_plugin_admin_page_assets' ) );
 
 		$wizard_hook_suffix = add_submenu_page(
-			null,
+			'', // Empty string instead of null for hidden menu
 			__( 'Performance Optimisation Setup', 'performance-optimisation' ),
 			__( 'Setup Wizard', 'performance-optimisation' ),
 			'manage_options',
@@ -311,25 +312,27 @@ class Admin {
 	 */
 	public function enqueue_admin_bar_scripts(): void {
 		if ( is_admin_bar_showing() && current_user_can( 'manage_options' ) ) {
-			$asset_file = WPPO_PLUGIN_PATH . 'build/admin-bar.asset.php';
-			$asset      = file_exists( $asset_file ) ? require $asset_file : array(
-				'dependencies' => array( 'jquery' ),
-				'version'      => WPPO_VERSION,
+			wp_enqueue_style(
+				'wppo-admin-bar-style',
+				plugin_dir_url( dirname( __DIR__ ) ) . 'assets/css/admin-bar.css',
+				array(),
+				WPPO_VERSION
 			);
 
 			wp_enqueue_script(
 				'wppo-admin-bar-script',
-				WPPO_PLUGIN_URL . 'build/admin-bar.js',
-				$asset['dependencies'],
-				$asset['version'],
+				plugin_dir_url( dirname( __DIR__ ) ) . 'assets/js/admin-bar.js',
+				array( 'jquery' ),
+				WPPO_VERSION,
 				true
 			);
+
 			wp_localize_script(
 				'wppo-admin-bar-script',
 				'wppoAdminBar',
 				array(
-					'apiUrl'   => rest_url( 'performance-optimisation/v1' ),
-					'nonce'    => wp_create_nonce( 'wp_rest' ),
+					'ajaxurl'  => admin_url( 'admin-ajax.php' ),
+					'nonce'    => wp_create_nonce( 'wppo_clear_cache' ),
 					'pagePath' => is_singular() ? ltrim( wp_parse_url( get_permalink(), PHP_URL_PATH ), '/' ) : '',
 				)
 			);
@@ -349,7 +352,7 @@ class Admin {
 
 		// Get cache statistics for display.
 		$cache_stats = $this->get_cache_stats();
-		$cache_size  = $cache_stats['total_size_formatted'] ?? '0 B';
+		$cache_size  = $cache_stats['formatted_total_size'] ?? '0 B';
 
 		if ( isset( $cache_stats['error'] ) ) {
 			$cache_size = 'Error';
@@ -421,16 +424,26 @@ class Admin {
 	 */
 	public function handle_clear_all_cache(): void {
 		if ( ! isset( $_SERVER['REQUEST_METHOD'] ) || $_SERVER['REQUEST_METHOD'] !== 'POST' ) {
+			if ( wp_doing_ajax() ) {
+				wp_send_json_error( 'Invalid request method' );
+			}
 			wp_die( esc_html__( 'Invalid request method', 'performance-optimisation' ), 405 );
 		}
 
 		if ( ! current_user_can( 'manage_options' ) ) {
+			if ( wp_doing_ajax() ) {
+				wp_send_json_error( 'Insufficient permissions' );
+			}
 			wp_die( esc_html__( 'Insufficient permissions.', 'performance-optimisation' ), 403 );
 		}
 
-		if ( ! isset( $_POST['_wpnonce'] ) ||
+		if (
+			! isset( $_POST['_wpnonce'] ) ||
 			! wp_verify_nonce( sanitize_key( $_POST['_wpnonce'] ), 'wppo_clear_cache' )
 		) {
+			if ( wp_doing_ajax() ) {
+				wp_send_json_error( 'Invalid nonce' );
+			}
 			wp_die( esc_html__( 'Invalid nonce.', 'performance-optimisation' ), 403 );
 		}
 
@@ -449,11 +462,18 @@ class Admin {
 				)
 			);
 
+			if ( wp_doing_ajax() ) {
+				wp_send_json_success( 'Cache cleared successfully' );
+			}
+
 			$referer = wp_get_referer();
 			wp_safe_redirect( $referer ? $referer : admin_url() );
 			exit;
 		} catch ( \Exception $e ) {
 			$this->logger->error( 'Failed to clear all cache: ' . $e->getMessage() );
+			if ( wp_doing_ajax() ) {
+				wp_send_json_error( $e->getMessage() );
+			}
 			wp_die(
 				esc_html__( 'Failed to clear cache. Please try again.', 'performance-optimisation' )
 			);
@@ -467,16 +487,26 @@ class Admin {
 	 */
 	public function handle_clear_page_cache(): void {
 		if ( ! isset( $_SERVER['REQUEST_METHOD'] ) || $_SERVER['REQUEST_METHOD'] !== 'POST' ) {
+			if ( wp_doing_ajax() ) {
+				wp_send_json_error( 'Invalid request method' );
+			}
 			wp_die( esc_html__( 'Invalid request method', 'performance-optimisation' ), 405 );
 		}
 
 		if ( ! current_user_can( 'manage_options' ) ) {
+			if ( wp_doing_ajax() ) {
+				wp_send_json_error( 'Insufficient permissions' );
+			}
 			wp_die( esc_html__( 'Insufficient permissions.', 'performance-optimisation' ), 403 );
 		}
 
-		if ( ! isset( $_POST['_wpnonce'] ) ||
+		if (
+			! isset( $_POST['_wpnonce'] ) ||
 			! wp_verify_nonce( sanitize_key( $_POST['_wpnonce'] ), 'wppo_clear_cache' )
 		) {
+			if ( wp_doing_ajax() ) {
+				wp_send_json_error( 'Invalid nonce' );
+			}
 			wp_die( esc_html__( 'Invalid nonce.', 'performance-optimisation' ), 403 );
 		}
 
@@ -485,6 +515,9 @@ class Admin {
 			? $this->validator->sanitizeUrl( wp_unslash( $_POST['page_url'] ) )
 			: '';
 		if ( empty( $page_url ) ) {
+			if ( wp_doing_ajax() ) {
+				wp_send_json_error( 'Invalid page URL' );
+			}
 			wp_die( esc_html__( 'Invalid page URL.', 'performance-optimisation' ) );
 		}
 
@@ -504,11 +537,18 @@ class Admin {
 				)
 			);
 
+			if ( wp_doing_ajax() ) {
+				wp_send_json_success( 'Page cache cleared successfully' );
+			}
+
 			$referer = wp_get_referer();
 			wp_safe_redirect( $referer ? $referer : $page_url );
 			exit;
 		} catch ( \Exception $e ) {
 			$this->logger->error( 'Failed to clear page cache: ' . $e->getMessage(), array( 'page_url' => $page_url ) );
+			if ( wp_doing_ajax() ) {
+				wp_send_json_error( $e->getMessage() );
+			}
 			wp_die(
 				esc_html__( 'Failed to clear page cache. Please try again.', 'performance-optimisation' )
 			);
@@ -600,15 +640,21 @@ class Admin {
 	 * @return array Cache statistics or error information.
 	 */
 	private function get_cache_stats(): array {
-		if ( ! $this->cache_service ) {
-			return array(
-				'total_size_formatted' => '0 B',
-				'error'                => 'Cache service unavailable',
-			);
-		}
-
 		try {
-			return $this->cache_service->get_cache_stats();
+			if ( ! $this->cache_service ) {
+				throw new \Exception( 'Cache service unavailable' );
+			}
+
+			$cache_stats = $this->cache_service->get_cache_stats();
+
+			// Ensure we have a formatted size.
+			if ( isset( $cache_stats['total_size'] ) && ! isset( $cache_stats['total_size_formatted'] ) ) {
+				$cache_stats['total_size_formatted'] = size_format( $cache_stats['total_size'], 2 );
+			} elseif ( ! isset( $cache_stats['total_size_formatted'] ) ) {
+				$cache_stats['total_size_formatted'] = '0 B';
+			}
+
+			return $cache_stats;
 		} catch ( \Exception $e ) {
 			$this->logger->error( 'Failed to get cache stats: ' . $e->getMessage() );
 			return array(
@@ -616,6 +662,25 @@ class Admin {
 				'error'                => $e->getMessage(),
 			);
 		}
+	}
+
+	/**
+	 * AJAX handler to get cache stats.
+	 *
+	 * @return void
+	 */
+	public function ajax_get_cache_stats(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'Insufficient permissions', 403 );
+		}
+
+		$cache_stats = $this->get_cache_stats();
+
+		if ( isset( $cache_stats['error'] ) ) {
+			wp_send_json_error( $cache_stats['error'] );
+		}
+
+		wp_send_json_success( $cache_stats );
 	}
 
 	/**

@@ -50,7 +50,7 @@ export const CachingTab: React.FC = () => {
 			post_types: [],
 		},
 	});
-	const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+	const [notification, setNotification] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
 	useEffect(() => {
 		fetchCacheData();
@@ -62,7 +62,7 @@ export const CachingTab: React.FC = () => {
 			const statsResponse = await fetch(`${apiUrl}/cache/stats`, {
 				headers: { 'X-WP-Nonce': (window as any).wppoAdmin?.nonce || '' },
 			});
-			
+
 			if (statsResponse.ok) {
 				const statsData = await statsResponse.json();
 				setStats(statsData.data);
@@ -119,26 +119,52 @@ export const CachingTab: React.FC = () => {
 		setSaving(true);
 		try {
 			const apiUrl = (window as any).wppoAdmin?.apiUrl || '/wp-json/performance-optimisation/v1';
+
+			// First, get the current settings
+			const currentSettingsResponse = await fetch(`${apiUrl}/settings`, {
+				headers: {
+					'X-WP-Nonce': (window as any).wppoAdmin?.nonce || '',
+					'Cache-Control': 'no-cache'
+				},
+			});
+
+			let currentSettings = {};
+			if (currentSettingsResponse.ok) {
+				const data = await currentSettingsResponse.json();
+				if (data.success && data.data.settings) {
+					currentSettings = data.data.settings;
+				}
+			}
+
+			// Merge the current settings with our new cache settings
+			const updatedSettings = {
+				...currentSettings,
+				cache_settings: settings
+			};
+
+			// Send the merged settings
 			const response = await fetch(`${apiUrl}/settings`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					'X-WP-Nonce': (window as any).wppoAdmin?.nonce || '',
 				},
-				body: JSON.stringify({ 
-					settings: {
-						cache_settings: settings
-					}
+				body: JSON.stringify({
+					settings: updatedSettings,
+					merge: true  // Ensure we're merging with existing settings
 				}),
 			});
 
 			const data = await response.json();
 			if (data.success) {
 				showNotification('success', 'Settings saved successfully!');
+				// Refresh the data to ensure UI is in sync
+				await fetchCacheData();
 			} else {
 				showNotification('error', data.message || 'Failed to save settings');
 			}
 		} catch (error) {
+			console.error('Save settings error:', error);
 			showNotification('error', 'An error occurred while saving settings');
 		} finally {
 			setSaving(false);
@@ -168,11 +194,10 @@ export const CachingTab: React.FC = () => {
 	return (
 		<div className="space-y-8">
 			{notification && (
-				<div className={`p-4 rounded-lg border-2 ${
-					notification.type === 'success' 
-						? 'bg-green-50 border-green-200 text-green-800' 
+				<div className={`p-4 rounded-lg border-2 ${notification.type === 'success'
+						? 'bg-green-50 border-green-200 text-green-800'
 						: 'bg-red-50 border-red-200 text-red-800'
-				}`}>
+					}`}>
 					<p className="text-base font-semibold">{notification.message}</p>
 				</div>
 			)}
@@ -188,9 +213,8 @@ export const CachingTab: React.FC = () => {
 						<div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
 							<Dashicon icon="admin-page" style={{ fontSize: '24px', color: 'white' }} />
 						</div>
-						<span className={`px-3 py-1 text-sm font-semibold rounded-full ${
-							stats?.page_cache.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-						}`}>
+						<span className={`px-3 py-1 text-sm font-semibold rounded-full ${stats?.page_cache.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+							}`}>
 							{stats?.page_cache.enabled ? 'Active' : 'Inactive'}
 						</span>
 					</div>
@@ -242,9 +266,8 @@ export const CachingTab: React.FC = () => {
 						<div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
 							<Dashicon icon="admin-site" style={{ fontSize: '24px', color: 'white' }} />
 						</div>
-						<span className={`px-3 py-1 text-sm font-semibold rounded-full ${
-							stats?.browser_cache.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-						}`}>
+						<span className={`px-3 py-1 text-sm font-semibold rounded-full ${stats?.browser_cache.enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+							}`}>
 							{stats?.browser_cache.enabled ? 'Active' : 'Inactive'}
 						</span>
 					</div>
@@ -291,9 +314,9 @@ export const CachingTab: React.FC = () => {
 								<p className="text-sm text-gray-600">{setting.desc}</p>
 							</div>
 							<label className="relative inline-flex items-center cursor-pointer ml-4">
-								<input 
-									type="checkbox" 
-									className="sr-only peer" 
+								<input
+									type="checkbox"
+									className="sr-only peer"
 									checked={settings[setting.key as keyof CacheSettings]}
 									onChange={(e) => updateSetting(setting.key as keyof CacheSettings, e.target.checked)}
 								/>
@@ -303,14 +326,14 @@ export const CachingTab: React.FC = () => {
 					))}
 				</div>
 				<div className="mt-8 flex gap-4">
-					<button 
+					<button
 						onClick={handleSaveSettings}
 						disabled={saving}
 						className="px-6 py-3 bg-blue-500 text-white text-base font-semibold rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50"
 					>
 						{saving ? 'Saving...' : 'Save Settings'}
 					</button>
-					<button 
+					<button
 						onClick={fetchCacheData}
 						className="px-6 py-3 bg-gray-200 text-gray-700 text-base font-semibold rounded-lg hover:bg-gray-300 transition-colors"
 					>
@@ -322,7 +345,7 @@ export const CachingTab: React.FC = () => {
 			<div className="bg-white rounded-xl border-2 border-gray-200 p-8">
 				<h2 className="text-2xl font-bold text-gray-900 mb-2">Cache Exclusions</h2>
 				<p className="text-base text-gray-600 mb-6">Specify URLs, cookies, user roles, and other conditions to exclude from caching</p>
-				
+
 				<div className="space-y-6">
 					<div>
 						<label className="block text-base font-semibold text-gray-900 mb-2">

@@ -298,7 +298,7 @@ if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 		'admin_menu',
 		function () {
 			add_submenu_page(
-				null,
+				'', // Empty string instead of null for hidden menu
 				'Test Drop-in',
 				'Test Drop-in',
 				'manage_options',
