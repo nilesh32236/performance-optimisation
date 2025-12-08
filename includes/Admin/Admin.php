@@ -122,6 +122,7 @@ class Admin {
 		add_action( 'admin_menu', array( $this, 'init_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'maybe_redirect_to_wizard' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_bar_scripts' ) );
+		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_admin_bar_scripts' ) );
 		add_action( 'admin_bar_menu', array( $this, 'add_settings_to_admin_bar' ), 100 );
 
 		// Add AJAX handlers for admin bar actions.

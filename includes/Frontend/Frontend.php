@@ -106,17 +106,17 @@ class Frontend {
 	 * @param ServiceContainerInterface $container Service container instance.
 	 */
 	public function __construct( ServiceContainerInterface $container ) {
-		$this->logger->debug( 'WPPO: Frontend __construct called' );
-
 		$this->container            = $container;
+		$this->logger               = $container->get( 'logger' );
 		$this->cache_service        = $container->get( 'cache_service' );
 		$this->image_service        = $container->get( 'image_service' );
 		$this->optimization_service = $container->get( 'optimization_service' );
 		$this->settings_service     = $container->get( 'settings_service' );
-		$this->logger               = $container->get( 'logger' );
 		$this->performance          = $container->get( 'performance' );
 		$this->validator            = $container->get( 'validator' );
 		$this->metabox              = $container->get( 'metabox' );
+
+		$this->logger->debug( 'WPPO: Frontend __construct called' );
 
 		// Initialize PageCacheService - this will set up caching hooks.
 		try {
@@ -161,9 +161,10 @@ class Frontend {
 			add_action( 'wp_enqueue_scripts', array( $this, 'conditionally_remove_woocommerce_assets' ), 999 );
 		}
 
-		if ( $this->settings_service->get_setting( 'preload_settings', 'enablePreloadCache' ) ) {
-			add_action( 'template_redirect', array( $this->cache_service, 'generate_dynamic_static_html' ), 5 );
-		}
+		// Disabled: generate_dynamic_static_html method does not exist on CacheService
+		// if ( $this->settings_service->get_setting( 'preload_settings', 'enablePreloadCache' ) ) {
+		// 	add_action( 'template_redirect', array( $this->cache_service, 'generate_dynamic_static_html' ), 5 );
+		// }
 
 		if ( $this->settings_service->get_setting( 'file_optimisation', 'combineCSS' ) ) {
 			add_action( 'wp_print_styles', array( $this, 'handle_css_combination' ), PHP_INT_MAX - 10 );
@@ -178,7 +179,70 @@ class Frontend {
 			add_action( 'template_redirect', array( $this, 'start_html_optimization' ), 1 );
 		}
 
+		// Setup admin bar hooks for frontend.
+		$this->setup_admin_bar_hooks();
+
 		$this->logger->debug( 'Frontend hooks setup completed' );
+	}
+
+	/**
+	 * Setup admin bar hooks for frontend.
+	 *
+	 * Conditionally registers admin bar hooks when:
+	 * - User is logged in
+	 * - User has manage_options capability
+	 * - Admin bar is showing
+	 * - Not in admin area
+	 *
+	 * @return void
+	 */
+	public function setup_admin_bar_hooks(): void {
+		// Check if admin bar should be shown.
+		if ( ! $this->should_show_admin_bar() ) {
+			return;
+		}
+
+		// Get Admin class instance from container.
+		try {
+			$admin = $this->container->get( 'admin' );
+
+			// Register admin bar hooks using Admin class methods.
+			add_action( 'wp_enqueue_scripts', array( $admin, 'enqueue_admin_bar_scripts' ) );
+			add_action( 'admin_bar_menu', array( $admin, 'add_settings_to_admin_bar' ), 100 );
+
+			$this->logger->debug( 'Frontend admin bar hooks registered' );
+		} catch ( \Exception $e ) {
+			$this->logger->error( 'Failed to setup admin bar hooks: ' . $e->getMessage() );
+		}
+	}
+
+	/**
+	 * Check if admin bar should be shown on frontend.
+	 *
+	 * @return bool True if admin bar should display.
+	 */
+	private function should_show_admin_bar(): bool {
+		// Not in admin area.
+		if ( is_admin() ) {
+			return false;
+		}
+
+		// Admin bar must be showing.
+		if ( ! is_admin_bar_showing() ) {
+			return false;
+		}
+
+		// User must be logged in.
+		if ( ! is_user_logged_in() ) {
+			return false;
+		}
+
+		// User must have manage_options capability.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return false;
+		}
+
+		return true;
 	}
 
 	/**

@@ -70,13 +70,17 @@ class AdminServiceProvider extends ServiceProvider {
 		parent::boot( $container );
 
 		// Initialize admin components only in admin area
+		// Note: Admin::setup_hooks() is called in Plugin.php setupHooks() method
 		if ( is_admin() ) {
-			$container->get( 'PerformanceOptimisation\\Admin\\Admin' );
 			$container->get( 'PerformanceOptimisation\\Admin\\Metabox' );
 		}
 
 		// Initialize frontend components only on frontend
 		if ( ! is_admin() ) {
+			// Initialize Frontend class and setup hooks
+			$frontend = $container->get( 'PerformanceOptimisation\\Frontend\\Frontend' );
+			$frontend->setup_hooks();
+			
 			// Instantiate PageCacheService to enable page caching
 			try {
 				$settings = $container->get( 'settings_service' );
