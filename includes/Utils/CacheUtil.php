@@ -181,6 +181,7 @@ class CacheUtil {
 	 */
 	public static function set( string $key, $data, string $type = 'page', int $expiry = 0 ): bool {
 		if ( ! self::is_valid_cache_type( $type ) ) {
+			LoggingUtil::error( "Invalid cache type: {$type}" );
 			return false;
 		}
 
@@ -195,8 +196,10 @@ class CacheUtil {
 
 		if ( ! FileSystemUtil::fileExists( $cache_dir ) ) {
 			if ( ! wp_mkdir_p( $cache_dir ) ) {
+				LoggingUtil::error( "Failed to create cache directory for {$type}", array( 'dir' => $cache_dir ) );
 				return false;
 			}
+			LoggingUtil::debug( "Created cache directory for {$type}", array( 'dir' => $cache_dir ) );
 		}
 
 		$file_ext = '.html';
@@ -207,7 +210,11 @@ class CacheUtil {
 			$cache_file = $cache_dir . '/' . $key . $file_ext;
 		}
 
-		return FileSystemUtil::writeFile( $cache_file, $data );
+		$result = FileSystemUtil::writeFile( $cache_file, $data );
+		if ( ! $result ) {
+			LoggingUtil::error( "Failed to write cache file for {$type}", array( 'file' => $cache_file ) );
+		}
+		return $result;
 	}
 	/**
 	 * Invalidate cache for a specific path.
