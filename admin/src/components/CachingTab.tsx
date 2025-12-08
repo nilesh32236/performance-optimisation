@@ -177,7 +177,7 @@ export const CachingTab: React.FC = () => {
 	};
 
 	const updateSetting = (key: keyof CacheSettings, value: boolean) => {
-		setSettings(prev => ({ ...prev, [key]: value }));
+		setSettings((prev: CacheSettings) => ({ ...prev, [key]: value }));
 	};
 
 	if (loading && !stats) {
@@ -195,8 +195,8 @@ export const CachingTab: React.FC = () => {
 		<div className="space-y-8">
 			{notification && (
 				<div className={`p-4 rounded-lg border-2 ${notification.type === 'success'
-						? 'bg-green-50 border-green-200 text-green-800'
-						: 'bg-red-50 border-red-200 text-red-800'
+					? 'bg-green-50 border-green-200 text-green-800'
+					: 'bg-red-50 border-red-200 text-red-800'
 					}`}>
 					<p className="text-base font-semibold">{notification.message}</p>
 				</div>

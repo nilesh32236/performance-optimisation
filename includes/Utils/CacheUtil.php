@@ -51,9 +51,9 @@ class CacheUtil {
 	 * @var array
 	 */
 	private const CACHE_DIRECTORIES = array(
-		'page'     => 'cache/wppo/page',
+		'page'     => 'cache/wppo/pages',
 		'minified' => 'cache/wppo/min',
-		'image'    => 'wppo',
+		'image'    => 'cache/wppo',
 		'database' => 'cache/wppo/db',
 	);
 

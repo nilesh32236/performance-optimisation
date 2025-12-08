@@ -113,9 +113,12 @@ class PageCacheService {
 	 * Get sanitized domain
 	 */
 	private function get_domain(): string {
-		return isset( $_SERVER['HTTP_HOST'] )
+		$domain = isset( $_SERVER['HTTP_HOST'] )
 			? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) )
 			: wp_parse_url( home_url(), PHP_URL_HOST );
+		
+		// Replace colon with underscore for Windows compatibility.
+		return str_replace( ':', '_', $domain );
 	}
 
 	/**
@@ -124,21 +127,25 @@ class PageCacheService {
 	public function should_cache_page(): bool {
 		// Check if caching is enabled first.
 		if ( ! $this->is_cache_enabled() ) {
+			$this->logger->debug( 'Page cache disabled in settings' );
 			return false;
 		}
 
 		// Don't cache for logged-in users.
 		if ( is_user_logged_in() ) {
+			$this->logger->debug( 'Not caching: user is logged in' );
 			return false;
 		}
 
 		// Don't cache 404 pages.
 		if ( is_404() ) {
+			$this->logger->debug( 'Not caching: 404 page' );
 			return false;
 		}
 
 		// Don't cache POST requests.
 		if ( isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === $_SERVER['REQUEST_METHOD'] ) {
+			$this->logger->debug( 'Not caching: POST request' );
 			return false;
 		}
 
@@ -146,12 +153,14 @@ class PageCacheService {
 		if ( ! empty( $_SERVER['QUERY_STRING'] ) ) {
 			$query = sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) );
 			if ( preg_match( '/(?:^|&)(s|search|ver|v|preview)(?:=|&|$)/', $query ) ) {
+				$this->logger->debug( 'Not caching: excluded query string' );
 				return false;
 			}
 		}
 
 		// Check exclusion rules.
 		if ( $this->is_excluded_url() ) {
+			$this->logger->debug( 'Not caching: URL excluded' );
 			return false;
 		}
 
@@ -308,7 +317,10 @@ class PageCacheService {
 
 			// Create directory if it doesn't exist.
 			if ( ! $this->filesystem->is_dir( $cache_dir ) ) {
-				wp_mkdir_p( $cache_dir );
+				if ( ! wp_mkdir_p( $cache_dir ) ) {
+					$this->logger->error( 'Failed to create cache directory', array( 'dir' => $cache_dir ) );
+					return $buffer;
+				}
 			}
 
 			// Add cache meta comment.
@@ -319,7 +331,10 @@ class PageCacheService {
 			$buffer    .= $cache_meta;
 
 			// Save regular file.
-			$this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
+			if ( ! $this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE ) ) {
+				$this->logger->error( 'Failed to write cache file', array( 'path' => $file_path ) );
+				return $buffer;
+			}
 
 			// Save gzipped version.
 			$gzip_content = gzencode( $buffer, 9 );

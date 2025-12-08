@@ -197,6 +197,16 @@ class Frontend {
 	 * @return void
 	 */
 	public function setup_admin_bar_hooks(): void {
+		// Defer admin bar check to 'wp' hook when conditional tags are available.
+		add_action( 'wp', array( $this, 'register_admin_bar_hooks' ) );
+	}
+
+	/**
+	 * Register admin bar hooks after WordPress query is available.
+	 *
+	 * @return void
+	 */
+	public function register_admin_bar_hooks(): void {
 		// Check if admin bar should be shown.
 		if ( ! $this->should_show_admin_bar() ) {
 			return;

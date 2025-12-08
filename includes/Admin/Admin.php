@@ -648,18 +648,19 @@ class Admin {
 
 			$cache_stats = $this->cache_service->get_cache_stats();
 
+			error_log( 'cache state => ' . print_r( $cache_stats, true ) );
 			// Ensure we have a formatted size.
-			if ( isset( $cache_stats['total_size'] ) && ! isset( $cache_stats['total_size_formatted'] ) ) {
-				$cache_stats['total_size_formatted'] = size_format( $cache_stats['total_size'], 2 );
-			} elseif ( ! isset( $cache_stats['total_size_formatted'] ) ) {
-				$cache_stats['total_size_formatted'] = '0 B';
+			if ( isset( $cache_stats['total_size'] ) && ! isset( $cache_stats['formatted_total_size'] ) ) {
+				$cache_stats['formatted_total_size'] = size_format( $cache_stats['total_size'], 2 );
+			} elseif ( ! isset( $cache_stats['formatted_total_size'] ) ) {
+				$cache_stats['formatted_total_size'] = '0 B';
 			}
 
 			return $cache_stats;
 		} catch ( \Exception $e ) {
 			$this->logger->error( 'Failed to get cache stats: ' . $e->getMessage() );
 			return array(
-				'total_size_formatted' => '0 B',
+				'formatted_total_size' => '0 B',
 				'error'                => $e->getMessage(),
 			);
 		}
