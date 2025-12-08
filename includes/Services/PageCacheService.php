@@ -338,7 +338,9 @@ class PageCacheService {
 
 			// Save gzipped version.
 			$gzip_content = gzencode( $buffer, 9 );
-			$this->filesystem->put_contents( $file_path . '.gz', $gzip_content, FS_CHMOD_FILE );
+			if ( ! $this->filesystem->put_contents( $file_path . '.gz', $gzip_content, FS_CHMOD_FILE ) ) {
+			    $this->logger->error( 'Failed to write gzipped cache file', array( 'path' => $file_path . '.gz' ) );
+			}
 
 			$this->logger->debug( 'Page cached', array( 'path' => $file_path ) );
 

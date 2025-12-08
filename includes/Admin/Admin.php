@@ -122,7 +122,6 @@ class Admin {
 		add_action( 'admin_menu', array( $this, 'init_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'maybe_redirect_to_wizard' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_bar_scripts' ) );
-		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_admin_bar_scripts' ) );
 		add_action( 'admin_bar_menu', array( $this, 'add_settings_to_admin_bar' ), 100 );
 
 		// Add AJAX handlers for admin bar actions.
@@ -617,7 +616,7 @@ class Admin {
 			return $this->settings_service->get_settings();
 		} catch ( \Exception $e ) {
 			$this->logger->error( 'Failed to get settings: ' . $e->getMessage() );
-			return $this->getDefaultSettings();
+			return $this->get_default_settings();
 		}
 	}
 
@@ -648,7 +647,7 @@ class Admin {
 
 			$cache_stats = $this->cache_service->get_cache_stats();
 
-			error_log( 'cache state => ' . print_r( $cache_stats, true ) );
+			$this->logger->debug( 'Cache stats retrieved', array( 'stats' => $cache_stats ) );
 			// Ensure we have a formatted size.
 			if ( isset( $cache_stats['total_size'] ) && ! isset( $cache_stats['formatted_total_size'] ) ) {
 				$cache_stats['formatted_total_size'] = size_format( $cache_stats['total_size'], 2 );
@@ -672,6 +671,11 @@ class Admin {
 	 * @return void
 	 */
 	public function ajax_get_cache_stats(): void {
+		
+		if ( ! check_ajax_referer( 'wppo_clear_cache', 'nonce', false ) ) {
+        	wp_send_json_error( 'Invalid nonce', 403 );
+    	}
+
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_send_json_error( 'Insufficient permissions', 403 );
 		}
