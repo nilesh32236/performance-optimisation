@@ -252,8 +252,13 @@ class OptimizationServiceProvider extends ServiceProvider {
 		parent::boot( $container );
 
 		// Initialize AssetOptimizationService to register hooks.
-		if ( $container->has( 'PerformanceOptimisation\\Services\\AssetOptimizationService' ) ) {
-			$container->get( 'PerformanceOptimisation\\Services\\AssetOptimizationService' );
+		if ($container->has('PerformanceOptimisation\\Services\\AssetOptimizationService')) {
+			$container->get('PerformanceOptimisation\\Services\\AssetOptimizationService');
+		}
+
+		// Initialize PageCacheService to register hooks.
+		if ($container->has('PerformanceOptimisation\\Services\\PageCacheService')) {
+			$container->get('PerformanceOptimisation\\Services\\PageCacheService');
 		}
 	}
 }

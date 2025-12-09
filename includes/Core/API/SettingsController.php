@@ -257,6 +257,8 @@ class SettingsController extends BaseController {
 		try {
 			$this->log_request( $request, 'Update Settings' );
 
+			 error_log('WPPO [DEBUG]: Received update_settings request with data: ' . print_r($request->get_params(), true));
+
 			// Validate request.
 			$validation = $this->validate_request(
 				$request,
