@@ -425,7 +425,7 @@ class FileSystemUtil {
 	public static function formatFileSize( int $bytes ): string {
 		$units = array( 'B', 'KB', 'MB', 'GB', 'TB' );
 
-		for ( $i = 0; $bytes > 1024 && $i < count( $units ) - 1; $i++ ) {
+		for ( $i = 0; $bytes >= 1024 && $i < count( $units ) - 1; $i++ ) {
 			$bytes /= 1024;
 		}
 
