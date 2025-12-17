@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-50: #e0e7ff;
+  --color-primary-100: #c7d2fe;
+  --color-primary-200: #a5b4fc;
+  --color-primary-300: #818cf8;
+  --color-primary-400: #6366f1;
+  --color-primary-500: #4f46e5;
+  --color-primary-600: #4338ca;
+  --color-primary-700: #3730a3;
+  --color-primary-800: #312e81;
+  --color-primary-900: #1e1b4b;
+  --color-primary-950: #0f0e24;
+}
+
+@layer base {
+  /*
+   * Functional Typography:
+   * Prioritize readability and utility.
+   */
+  body {
+    @apply text-gray-800 dark:text-gray-100 bg-gray-50 dark:bg-gray-900;
+    font-family: 'Roboto', 'Open Sans', 'Lato', sans-serif;
+  }
+
+  /* 
+   * Tabular Nums for Metrics:
+   * Critical for performance dashboards.
+   */
+  .tabular-nums {
+    font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Common component abstractions can go here if reused heavily */
+  .btn-primary {
+    @apply px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-md shadow-sm transition-colors focus:ring-2 focus:ring-offset-2 focus:ring-primary-500;
+  }
+}

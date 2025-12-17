@@ -291,6 +291,8 @@ if ( ! function_exists( 'wppo_add_settings_link' ) ) {
 
 add_filter( 'plugin_action_links_' . plugin_basename( WPPO_PLUGIN_FILE ), 'wppo_add_settings_link' );
 
+// Initialize Intelligent Monitoring System
+require_once WPPO_PLUGIN_PATH . 'activate-monitoring.php';
 
 // Temporary test page for drop-in management
 if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {

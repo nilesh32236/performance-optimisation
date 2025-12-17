@@ -1,0 +1,749 @@
+/**
+ * Performance Monitor Admin Styles
+ * 
+ * @package PerformanceOptimisation
+ * @since   2.1.0
+ */
+
+/* ==========================================================================
+   Base Styles
+   ========================================================================== */
+
+.wppo-monitor-page,
+.wppo-optimizer-page {
+    background: #f1f1f1;
+    margin: 0 -20px;
+    padding: 20px;
+}
+
+.wppo-loading {
+    text-align: center;
+    padding: 60px 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.wppo-loading .spinner {
+    float: none;
+    margin: 0 auto 20px;
+}
+
+/* ==========================================================================
+   Dashboard Sections
+   ========================================================================== */
+
+.wppo-dashboard-section {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+    padding: 24px;
+}
+
+.wppo-dashboard-section h2 {
+    margin: 0 0 20px 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: #1d2327;
+    border-bottom: 2px solid #f0f0f1;
+    padding-bottom: 12px;
+}
+
+/* ==========================================================================
+   Metrics Grid
+   ========================================================================== */
+
+.wppo-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.wppo-metric-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.wppo-metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,0.1);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.wppo-metric-card:hover::before {
+    opacity: 1;
+}
+
+.wppo-metric-card h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
+}
+
+.wppo-metric-value {
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.wppo-metric-unit {
+    font-size: 12px;
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Score Card Specific Styles */
+.wppo-score-card {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.wppo-score-badge {
+    display: inline-block;
+    font-size: 48px;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 12px;
+    padding: 12px 20px;
+    border-radius: 50px;
+    background: rgba(255,255,255,0.2);
+    backdrop-filter: blur(10px);
+}
+
+.wppo-score-badge.excellent { background: rgba(76, 175, 80, 0.9); }
+.wppo-score-badge.good { background: rgba(255, 193, 7, 0.9); }
+.wppo-score-badge.fair { background: rgba(255, 152, 0, 0.9); }
+.wppo-score-badge.poor { background: rgba(244, 67, 54, 0.9); }
+
+.wppo-metric-trend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.wppo-trend-indicator {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.wppo-trend-indicator.improving { color: #4caf50; }
+.wppo-trend-indicator.declining { color: #f44336; }
+.wppo-trend-indicator.stable { color: #ff9800; }
+
+/* ==========================================================================
+   Core Web Vitals
+   ========================================================================== */
+
+.wppo-vitals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.wppo-vital-card {
+    background: #fff;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.wppo-vital-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.wppo-vital-card h4 {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wppo-vital-value {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #1d2327;
+}
+
+.wppo-vital-status {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wppo-vital-status.good {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.wppo-vital-status.needs_improvement {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.wppo-vital-status.poor {
+    background: #ffebee;
+    color: #c62828;
+}
+
+/* ==========================================================================
+   Real-time Stats
+   ========================================================================== */
+
+.wppo-realtime-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+}
+
+.wppo-stat-card {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+.wppo-stat-card h4 {
+    margin: 0 0 12px 0;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
+}
+
+.wppo-stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* ==========================================================================
+   Charts
+   ========================================================================== */
+
+.wppo-charts-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+.wppo-chart-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 20px;
+}
+
+.wppo-chart-card h4 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.wppo-chart-card canvas {
+    max-height: 300px;
+}
+
+/* ==========================================================================
+   Alerts and Bottlenecks
+   ========================================================================== */
+
+.wppo-alerts-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.wppo-alert,
+.wppo-bottleneck {
+    background: #fff;
+    border-left: 4px solid #ddd;
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.wppo-alert-critical,
+.wppo-bottleneck-high {
+    border-left-color: #dc3232;
+    background: #fef7f7;
+}
+
+.wppo-alert-warning,
+.wppo-bottleneck-warning {
+    border-left-color: #ffb900;
+    background: #fffbf0;
+}
+
+.wppo-alert-info {
+    border-left-color: #00a0d2;
+    background: #f0f8ff;
+}
+
+.wppo-alert-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.wppo-alert-content h4,
+.wppo-bottleneck-header h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.wppo-alert-content p,
+.wppo-bottleneck-description {
+    margin: 0 0 4px 0;
+    font-size: 13px;
+    color: #646970;
+}
+
+.wppo-alert-content small {
+    font-size: 11px;
+    color: #8c8f94;
+}
+
+.wppo-bottleneck-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.wppo-severity-badge {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wppo-severity-high {
+    background: #dc3232;
+    color: #fff;
+}
+
+.wppo-severity-warning {
+    background: #ffb900;
+    color: #fff;
+}
+
+.wppo-bottleneck-recommendation {
+    font-size: 12px;
+    color: #646970;
+    font-style: italic;
+}
+
+/* ==========================================================================
+   Optimizer Styles
+   ========================================================================== */
+
+.wppo-optimizer-intro {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    padding: 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.wppo-optimizer-intro p {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.wppo-analysis-summary {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.wppo-analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.wppo-analysis-card {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: #fff;
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+}
+
+.wppo-analysis-card h3 {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
+}
+
+.wppo-score-display,
+.wppo-potential-display,
+.wppo-issues-count {
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+
+.wppo-score-description {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+/* ==========================================================================
+   Recommendations
+   ========================================================================== */
+
+.wppo-recommendations-section {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.wppo-recommendations-filter {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.wppo-filter-btn {
+    padding: 8px 16px;
+    border: 2px solid #ddd;
+    background: #fff;
+    color: #646970;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.wppo-filter-btn:hover,
+.wppo-filter-btn.active {
+    border-color: #007cba;
+    background: #007cba;
+    color: #fff;
+}
+
+.wppo-recommendations-list {
+    display: grid;
+    gap: 16px;
+}
+
+.wppo-recommendation {
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.wppo-recommendation:hover {
+    border-color: #007cba;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.wppo-rec-critical {
+    border-color: #dc3232;
+    background: #fef7f7;
+}
+
+.wppo-rec-warning {
+    border-color: #ffb900;
+    background: #fffbf0;
+}
+
+.wppo-rec-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.wppo-rec-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.wppo-rec-badges {
+    display: flex;
+    gap: 8px;
+}
+
+.wppo-impact-badge,
+.wppo-effort-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.wppo-impact-high { background: #dc3232; color: #fff; }
+.wppo-impact-medium { background: #ffb900; color: #fff; }
+.wppo-impact-low { background: #46b450; color: #fff; }
+
+.wppo-effort-low { background: #46b450; color: #fff; }
+.wppo-effort-medium { background: #ffb900; color: #fff; }
+.wppo-effort-high { background: #dc3232; color: #fff; }
+
+.wppo-rec-description {
+    margin: 0 0 12px 0;
+    color: #646970;
+    line-height: 1.6;
+}
+
+.wppo-rec-improvement {
+    background: #f0f8ff;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.wppo-rec-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* ==========================================================================
+   Quick Actions
+   ========================================================================== */
+
+.wppo-quick-actions {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.wppo-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.wppo-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    background: #fff;
+    color: #1d2327;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.wppo-action-btn:hover {
+    border-color: #007cba;
+    background: #f0f8ff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.wppo-action-icon {
+    font-size: 32px;
+}
+
+.wppo-action-text {
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+}
+
+/* ==========================================================================
+   Improvements Section
+   ========================================================================== */
+
+.wppo-improvements-section {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.wppo-improvements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.wppo-improvement-card {
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.wppo-improvement-card:hover {
+    border-color: #007cba;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.wppo-improvement-card h4 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.wppo-improvement-impact {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+.wppo-improvement-card p {
+    margin: 0 0 12px 0;
+    color: #646970;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.wppo-improvement-benefit {
+    font-weight: 600;
+    color: #007cba;
+    font-size: 14px;
+}
+
+/* ==========================================================================
+   Notices
+   ========================================================================== */
+
+.wppo-notice {
+    margin: 0 0 20px 0;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    .wppo-monitor-page,
+    .wppo-optimizer-page {
+        margin: 0 -10px;
+        padding: 10px;
+    }
+    
+    .wppo-dashboard-section {
+        padding: 16px;
+    }
+    
+    .wppo-metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .wppo-alerts-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .wppo-charts-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .wppo-rec-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .wppo-rec-actions {
+        flex-direction: column;
+    }
+    
+    .wppo-actions-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ==========================================================================
+   Utility Classes
+   ========================================================================== */
+
+.wppo-text-center { text-align: center; }
+.wppo-text-left { text-align: left; }
+.wppo-text-right { text-align: right; }
+
+.wppo-mb-0 { margin-bottom: 0; }
+.wppo-mb-1 { margin-bottom: 8px; }
+.wppo-mb-2 { margin-bottom: 16px; }
+.wppo-mb-3 { margin-bottom: 24px; }
+
+.wppo-hidden { display: none; }
+.wppo-visible { display: block; }

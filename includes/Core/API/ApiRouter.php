@@ -166,6 +166,7 @@ class ApiRouter {
 			'analytics'       => new AnalyticsController( $metrics_collector, $performance_analyzer ),
 			'recommendations' => new RecommendationsController( $metrics_collector, $performance_analyzer ),
 			'images'          => new ImageOptimizationController( $container ),
+			'monitor'         => new MonitorController( $container ),
 		);
 	}
 
@@ -204,6 +205,9 @@ class ApiRouter {
 
 		// Utility routes.
 		$this->register_utility_routes();
+
+		// Monitor routes.
+		$this->register_monitor_routes();
 	}
 
 	/**
@@ -753,6 +757,17 @@ class ApiRouter {
 				),
 			)
 		);
+	}
+
+	/**
+	 * Register monitor-related routes.
+	 *
+	 * @return void
+	 */
+	private function register_monitor_routes(): void {
+		if ( isset( $this->controllers['monitor'] ) ) {
+			$this->controllers['monitor']->register_routes();
+		}
 	}
 
 	/**

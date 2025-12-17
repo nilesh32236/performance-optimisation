@@ -89,6 +89,24 @@ The admin interface is organized into five main tabs:
 - Server resource usage
 - Optimization queue status
 
+#### 📈 Monitor Tab
+**Performance Analysis**
+- Real-time PageSpeed Insights
+- Core Web Vitals assessment (LCP, FID, CLS)
+- Detailed score breakdown (Performance, Accessibility, SEO)
+- Historical performance tracking
+
+**Page-by-Page Analysis**
+- Analyze specific URLs
+- View resource breakdown by type (JS, CSS, Images)
+- Identify largest assets
+- actionable optimization suggestions
+
+**Asset Manager**
+- View all enqueued scripts and styles
+- Identify optimization candidates (large/unminified files)
+- Analyze third-party resource impact
+
 #### 💾 Caching Tab
 **Page Caching**
 - Enable/disable page caching

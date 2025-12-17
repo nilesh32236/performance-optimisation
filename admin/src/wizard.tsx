@@ -1,59 +1,20 @@
 /**
- * External dependencies
+ * WordPress dependencies
  */
-import React from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot } from '@wordpress/element';
+
 /**
  * Internal dependencies
  */
-import SetupWizard from './components/Wizard/SetupWizard';
-import './styles/main.css';
+import './styles/index.css';
 
-// Initialize the wizard when DOM is ready
-document.addEventListener( 'DOMContentLoaded', function() {
-	const container = document.getElementById( 'performance-optimisation-wizard-app' );
-	if ( container ) {
-		// Hide the loading indicator
-		const loadingIndicator = container.querySelector( '.wppo-wizard-loading-initial' ) as HTMLElement | null;
-		if ( loadingIndicator ) {
-			loadingIndicator.style.display = 'none';
-		}
+const domNode = document.getElementById('performance-optimisation-wizard');
 
-		// Check if required data is available
-		if ( ! window.wppoWizardData ) {
-			container.innerHTML = `
-                <div class="wppo-wizard-error" role="alert">
-                    <span class="dashicons dashicons-warning"></span>
-                    Setup wizard could not load properly. Please refresh the page and try again.
-                </div>
-            `;
-			return;
-		}
-
-		try {
-			const root = createRoot( container );
-			const { apiUrl, nonce, translations } = window.wppoWizardData;
-
-			root.render( <SetupWizard apiUrl={ apiUrl } nonce={ nonce } translations={ translations } /> );
-		} catch ( error ) {
-			console.error( 'Wizard initialization error:', error );
-			container.innerHTML = `
-                <div class="wppo-wizard-error" role="alert">
-                    <span class="dashicons dashicons-warning"></span>
-                    Setup wizard failed to initialize. Please refresh the page and try again.
-                </div>
-            `;
-		}
-	}
-} );
-
-// Add TypeScript declarations for global variables
-declare global {
-	interface Window {
-		wppoWizardData: {
-			apiUrl: string;
-			nonce: string;
-			translations: Record<string, string>;
-		};
-	}
+if (domNode) {
+    const root = createRoot(domNode);
+    root.render(
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+             <h1 className="text-2xl font-bold text-gray-800 dark:text-white">Setup Wizard Loading...</h1>
+        </div>
+    );
 }

@@ -340,6 +340,62 @@ GET /analytics/export?format=csv&period=30d
 - `format` (string): Export format (`csv`, `json`, `xlsx`)
 - `period` (string): Time period for export
 
+### Monitor
+
+#### Get PageSpeed Data
+```http
+GET /monitor/pagespeed?url=https://example.com&strategy=mobile
+```
+
+**Parameters:**
+- `url` (string): URL to analyze (optional, defaults to home_url)
+- `strategy` (string): 'mobile' or 'desktop' (default: 'mobile')
+
+**Response:**
+```json
+{
+    "success": true,
+    "data": {
+        "lighthouseResult": { ... },
+        "loadingExperience": { ... }
+    }
+}
+```
+
+#### Get Asset Analysis
+```http
+GET /monitor/assets?url=https://example.com
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "data": {
+        "scripts": [...],
+        "styles": [...],
+        "images": [...]
+    }
+}
+```
+
+#### Analyze URL
+```http
+POST /monitor/analyze
+```
+
+**Request Body:**
+```json
+{
+    "url": "https://example.com/page"
+}
+```
+
+#### Get History
+```http
+GET /monitor/history
+```
+
 ### Cache Management
 
 #### Clear All Cache

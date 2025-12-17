@@ -1,29 +1,17 @@
 /**
- * Admin Interface Entry Point
- *
- * @package
- * @since 1.1.0
+ * WordPress dependencies
  */
-
-/**
- * External dependencies
- */
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-
+import { createRoot } from '@wordpress/element';
 
 /**
  * Internal dependencies
  */
+import './styles/index.css';
 import { App } from './App';
-import './styles/main.css';
 
-// Initialize the admin interface when DOM is ready
-document.addEventListener( 'DOMContentLoaded', () => {
-	const container = document.getElementById( 'performance-optimisation-admin-app' );
+const domNode = document.getElementById('performance-optimisation-admin-app');
 
-	if ( container ) {
-		const root = createRoot( container );
-		root.render( <App /> );
-	}
-} );
+if (domNode) {
+    const root = createRoot(domNode);
+    root.render(<App />);
+}

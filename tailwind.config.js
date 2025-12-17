@@ -7,6 +7,7 @@ module.exports = {
       "./admin/src/**/*.css",
     ],
   },
+  darkMode: 'selector',
   theme: {
     extend: {
       colors: {

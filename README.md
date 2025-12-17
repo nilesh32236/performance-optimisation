@@ -231,6 +231,9 @@ Typical improvements after optimization:
 ### Performance Analytics
 ![Analytics](docs/screenshots/analytics.png)
 
+### Monitor Tab
+![Monitor Tab](docs/screenshots/monitor.png)
+
 ---
 
 ## 🔧 Compatibility
