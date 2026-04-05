@@ -13,18 +13,36 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.1'
+        extensions: mbstring, intl
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install Dependencies (Composer)
+      run: composer install --no-dev --optimize-autoloader
+
+    - name: Install Dependencies (NPM)
+      run: npm install
+
+    - name: Build Assets
+      run: npm run build
+
     - name: Remove .git, .gitignore, .nvmrc, .github, and node_modules files
       run: |
-        # Remove .git directory
+        # Remove development directories and configurations
         rm -rf .git
-        # Remove .gitignore file
         rm -f .gitignore
-        # Remove .nvmrc file
         rm -f .nvmrc
-        # Remove .github directory
         rm -rf .github
-        # Remove node_modules directory
         rm -rf node_modules
+        rm -rf src
 
     - name: Upload files as artifact (with zip compression)
       uses: actions/upload-artifact@v4

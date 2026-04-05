@@ -92,19 +92,12 @@ Composer configuration:
 == Changelog ==
 
 = 1.1.0 =
+* Improvement: Visually enhanced the 'File Optimization' settings for easier configuration.
+* Improvement: Hardened overall plugin security and input validation.
+* Fix: Automatically clear cache when changing permalink settings or switching themes.
+* Fix: Prevented unnecessary CSS files from generating on 404 error pages.
+* Update: Improved image lazy loading reliability for smoother page rendering.
 
- - Added: Cache auto-clear on structural changes (permalink update, theme switch).
- - Fixed: Lazy loading race condition in footer scripts.
- - Fixed: Avoid CSS combination for 404 pages.
- - Improved: Admin UI visual consistency.
-
-= 1.1.0 =
-* New: Added GitHub Actions CI/CD pipeline for automatic deployment to WordPress.org.
-* Improvement: Hardened security by adding sanitization to all REST API endpoints.
-* Improvement: Enhanced 'File Optimization' UI with better alignment and hierarchy.
-* Fix: Added cache invalidation hooks for permalink structure changes and theme swaps.
-* Fix: Prevented CSS combination on 404 pages to reduce unnecessary file generation.
-* Update: Improved lazy loading reliability by adding readyState checks and synthetic DOMContentLoaded fallback.
 
 = 1.0.0 =
 
@@ -132,7 +125,7 @@ Import/export settings tools.
 == Upgrade Notice ==
 
 = 1.1.0 =
-Stable v1.1.0 release with security hardening, UI refinements, and CI/CD automation.
+Stable v1.1.0 release with security hardening and user interface refinements.
 
 = 1.0.0 =
 Initial release with core performance features.
