@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiCall } from '../lib/apiRequest';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faSpinner, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
 
 
 const Dashboard = ({ activities }) => {
@@ -17,6 +19,10 @@ const Dashboard = ({ activities }) => {
 			remove_images: false
 		}
 	});
+
+	const [bgProcessing, setBgProcessing] = useState(false);
+	const [bgJobsQueued, setBgJobsQueued] = useState(0);
+	const pollingRef = useRef(null);
 
 	// Memoizing the image information to reduce unnecessary re-renders
 	const { imageInfo, loading, totalCacheSize, total_js, total_css } = state;
@@ -42,6 +48,54 @@ const Dashboard = ({ activities }) => {
 			total_css: 0,
 		});
 	}, [updateState]);
+
+	// Poll for background image job status
+	const pollJobStatus = useCallback(async () => {
+		try {
+			const response = await apiCall('image_job_status', {});
+			if (response.success && response.data) {
+				const { queued_jobs } = response.data;
+				setBgJobsQueued(queued_jobs);
+
+				// Update image info counts
+				updateState({
+					imageInfo: {
+						completed: {
+							webp: Array(response.data.completed?.webp || 0).fill(''),
+							avif: Array(response.data.completed?.avif || 0).fill(''),
+						},
+						pending: {
+							webp: Array(response.data.pending?.webp || 0).fill(''),
+							avif: Array(response.data.pending?.avif || 0).fill(''),
+						},
+						failed: {
+							webp: Array(response.data.failed?.webp || 0).fill(''),
+							avif: Array(response.data.failed?.avif || 0).fill(''),
+						},
+					},
+				});
+
+				if (queued_jobs === 0) {
+					setBgProcessing(false);
+					if (pollingRef.current) {
+						clearInterval(pollingRef.current);
+						pollingRef.current = null;
+					}
+				}
+			}
+		} catch (error) {
+			console.error('Error polling job status:', error);
+		}
+	}, [updateState]);
+
+	// Cleanup polling on unmount
+	useEffect(() => {
+		return () => {
+			if (pollingRef.current) {
+				clearInterval(pollingRef.current);
+			}
+		};
+	}, []);
 
 	// Clear Cache Handler
 	const onClearCache = useCallback(
@@ -72,19 +126,24 @@ const Dashboard = ({ activities }) => {
 
 		apiCall('optimise_image', { webp, avif })
 			.then((response) => {
-				console.log(translations.imgOptimiseSuccess);
-				// console.log( response );
-				wppoSettings.imageInfo = response;
+				// Check if response indicates background processing
+				if (response.data?.background) {
+					setBgProcessing(true);
+					setBgJobsQueued(response.data.jobs_queued || 0);
 
-				// updateState((prevState) => ({
-				// 	...prevState,
-				// 	imageInfo: response,
-				// }));
-				// updateCache();
+					// Start polling every 5 seconds
+					if (pollingRef.current) {
+						clearInterval(pollingRef.current);
+					}
+					pollingRef.current = setInterval(pollJobStatus, 5000);
+				} else {
+					console.log(translations.imgOptimiseSuccess);
+					wppoSettings.imageInfo = response;
+				}
 			})
 			.catch((error) => console.error(translations.errorOptimiseImg, error))
 			.finally(() => handleLoading('optimize_images', false));
-	}, [handleLoading, pending, completed, failed]);
+	}, [handleLoading, pending, completed, failed, pollJobStatus]);
 
 	// Remove Optimized Images
 	const removeImages = useCallback(() => {
@@ -100,11 +159,9 @@ const Dashboard = ({ activities }) => {
 		apiCall('delete_optimised_image', {})
 			.then((data) => {
 				if (data.success) {
-					// alert(translations.removedOptimiseImg);
 					console.log(translations.removedImg, data.deleted);
 					wppoSettings.image_info.completed = {webp: [], avif: []};
 				} else {
-					// alert(translations.someImgNotRemoved);
 					console.error(translations.failedToRemove, data.failed);
 				}
 			})
@@ -162,11 +219,31 @@ const Dashboard = ({ activities }) => {
 							</div>
 						))}
 					</div>
+
+					{/* Background Processing Status */}
+					{bgProcessing && (
+						<div className="img-job-status img-job-status--processing">
+							<FontAwesomeIcon icon={faSpinner} spin />
+							<span>
+								{translations.imgProcessing || 'Processing in background...'}
+								{' '}({translations.imgJobsQueued || 'Jobs Queued'}: {bgJobsQueued})
+							</span>
+						</div>
+					)}
+					{!bgProcessing && bgJobsQueued === 0 && state.imageInfo?.completed && (
+						(completed.webp?.length > 0 || completed.avif?.length > 0) && (
+							<div className="img-job-status img-job-status--complete">
+								<FontAwesomeIcon icon={faCheckCircle} />
+								<span>{translations.imgJobsComplete || 'All background jobs complete!'}</span>
+							</div>
+						)
+					)}
+
 					<div className="action-buttons">
 						<button
 							className="optimize-images-btn"
 							onClick={optimizeImages}
-							disabled={loading.optimize_images}
+							disabled={loading.optimize_images || bgProcessing}
 						>
 							{loading.optimize_images ? translations.optimizing : translations.optimiseNow}
 						</button>
