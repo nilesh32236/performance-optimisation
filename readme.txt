@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimization
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 6.7
-Stable tag: 1.0.1
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -91,6 +91,14 @@ Composer configuration:
 
 == Changelog ==
 
+= 1.1.0 =
+* Improvement: Visually enhanced the 'File Optimization' settings for easier configuration.
+* Improvement: Hardened overall plugin security and input validation.
+* Fix: Automatically clear cache when changing permalink settings or switching themes.
+* Fix: Prevented unnecessary CSS files from generating on 404 error pages.
+* Update: Improved image lazy loading reliability for smoother page rendering.
+
+
 = 1.0.0 =
 
 Initial release with full functionality:
@@ -116,4 +124,8 @@ Import/export settings tools.
 
 == Upgrade Notice ==
 
-= 1.0.0 = Initial release. Install to enhance your website's performance.
+= 1.1.0 =
+Stable v1.1.0 release with security hardening and user interface refinements.
+
+= 1.0.0 =
+Initial release with core performance features.

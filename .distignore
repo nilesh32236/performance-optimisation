@@ -1,0 +1,20 @@
+# Exclude from WordPress.org SVN release
+.git/
+.github/
+node_modules/
+vendor/squizlabs/
+vendor/wp-coding-standards/
+src/
+package.json
+package-lock.json
+composer.json
+composer.lock
+webpack.config.js
+.gitignore
+.editorconfig
+.nvmrc
+phpcs.xml
+psalm.xml
+tests/
+bin/
+# Keep build/ and essential PHP files

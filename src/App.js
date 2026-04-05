@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faAngleLeft, faAngleRight, faTachometerAlt, faFileAlt, faTools, faBullseye, faCog } from '@fortawesome/free-solid-svg-icons';
+import { faAngleLeft, faAngleRight, faTachometerAlt, faFileAlt, faTools, faBullseye, faCog, faDatabase } from '@fortawesome/free-solid-svg-icons';
 import FileOptimization from './components/FileOptimization';
 import PreloadSettings from './components/PreloadSettings';
 import ImageOptimization from './components/ImageOptimization';
 import PluginSettings from './components/PluginSetting';
 import Dashboard from './components/Dashboard';
+import DatabaseCleanup from './components/DatabaseCleanup';
 import { fetchRecentActivities } from './lib/apiRequest';
 
 const translations = wppoSettings.translations;
@@ -24,6 +25,7 @@ const App = () => {
 		{ name: 'fileOptimization', icon: faFileAlt, label: translations.fileOptimization },
 		{ name: 'preload', icon: faBullseye, label: translations.preload },
 		{ name: 'imageOptimization', icon: faCog, label: translations.imageOptimization },
+		{ name: 'databaseCleanup', icon: faDatabase, label: translations.databaseOptimization || ' Database Optimization' },
 		{ name: 'tools', icon: faTools, label: translations.tools }
 	], [translations]);
 
@@ -34,6 +36,7 @@ const App = () => {
 			fileOptimization: <FileOptimization options={wppoSettings.settings.file_optimisation} />,
 			preload: <PreloadSettings options={wppoSettings.settings.preload_settings} />,
 			imageOptimization: <ImageOptimization options={wppoSettings.settings.image_optimisation} />,
+			databaseCleanup: <DatabaseCleanup />,
 			tools: <PluginSettings options={wppoSettings.settings} />
 		};
 
@@ -111,3 +114,4 @@ const App = () => {
 };
 
 export default App;
+

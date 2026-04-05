@@ -28,7 +28,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 					'Content-Type': 'application/json',
 					'X-WP-Nonce': wppoObject.nonce
 				},
-				body: JSON.stringify( { action: 'clear_single_page_cahce', path } )
+				body: JSON.stringify( { action: 'clear_single_page_cache', path } )
 			} )
 				.then( response => response.json() )
 				.then( data => console.log( 'Cache cleared successfully: ', data ) )

@@ -106,6 +106,8 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-rest.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
 	}
 
 	/**
@@ -161,6 +163,51 @@ class Main {
 
 		new Metabox();
 		new Cron();
+		new Asset_Manager();
+
+		// Register Action Scheduler callback for background image processing.
+		add_action( 'wppo_convert_image_background', array( $this, 'process_background_image' ), 10, 1 );
+
+		// Clear all cache on structural changes that invalidate every cached page.
+		add_action( 'permalink_structure_changed', array( __CLASS__, 'clear_all_cache' ) );
+		add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
+		add_action( 'update_option_wppo_settings', array( __CLASS__, 'clear_all_cache' ) );
+		add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
+		add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
+	}
+
+	/**
+	 * Clear the entire plugin cache.
+	 *
+	 * Called when structural changes (permalink update, theme switch, etc.)
+	 * invalidate all cached pages.
+	 *
+	 * @since 1.1.0
+	 */
+	public static function clear_all_cache() {
+		Cache::clear_cache();
+	}
+
+	/**
+	 * Process a single image conversion in the background via Action Scheduler.
+	 *
+	 * @param array $args { source_path, format } for the image to convert.
+	 * @since 1.1.0
+	 */
+	public function process_background_image( $args ) {
+		if ( empty( $args['source_path'] ) || empty( $args['format'] ) ) {
+			return;
+		}
+
+		$options       = get_option( 'wppo_settings', array() );
+		$img_converter = new Img_Converter( $options );
+
+		$source_path = wp_normalize_path( $args['source_path'] );
+		$format      = sanitize_text_field( $args['format'] );
+
+		if ( file_exists( $source_path ) ) {
+			$img_converter->convert_image( $source_path, $format );
+		}
 	}
 
 	/**
@@ -364,6 +411,36 @@ class Main {
 					'preloadCSS'               => __( 'Preload CSS', 'performance-optimisation' ),
 					'preloadCSSUrls'           => __( "Enter CSS for preloading, one per line (e.g., https://example.com/style.css)\n/your-theme/css/style.css", 'performance-optimisation' ),
 					'preloadCSSDesc'           => __( 'Preload CSS to ensure faster rendering and style application', 'performance-optimisation' ),
+					// Database Cleanup translations.
+					'databaseOptimization'     => __( ' Database Optimization', 'performance-optimisation' ),
+					'dbRevisions'              => __( 'Post Revisions', 'performance-optimisation' ),
+					'dbRevisionsDesc'          => __( 'Old versions of your posts saved during editing.', 'performance-optimisation' ),
+					'dbAutoDrafts'             => __( 'Auto Drafts', 'performance-optimisation' ),
+					'dbAutoDraftsDesc'         => __( 'Automatically saved drafts that are no longer needed.', 'performance-optimisation' ),
+					'dbTrashedPosts'           => __( 'Trashed Posts', 'performance-optimisation' ),
+					'dbTrashedPostsDesc'       => __( 'Posts that have been moved to the trash.', 'performance-optimisation' ),
+					'dbSpamComments'           => __( 'Spam Comments', 'performance-optimisation' ),
+					'dbSpamCommentsDesc'       => __( 'Comments marked as spam.', 'performance-optimisation' ),
+					'dbTrashedComments'        => __( 'Trashed Comments', 'performance-optimisation' ),
+					'dbTrashedCommentsDesc'    => __( 'Comments that have been moved to the trash.', 'performance-optimisation' ),
+					'dbExpiredTransients'      => __( 'Expired Transients', 'performance-optimisation' ),
+					'dbExpiredTransientsDesc'  => __( 'Temporary cached data that has expired.', 'performance-optimisation' ),
+					'dbOrphanPostmeta'         => __( 'Orphaned Post Meta', 'performance-optimisation' ),
+					'dbOrphanPostmetaDesc'     => __( 'Metadata entries with no associated post.', 'performance-optimisation' ),
+					'dbCleanupSuccess'         => __( 'Cleaned', 'performance-optimisation' ),
+					'dbItemsRemoved'           => __( 'items removed', 'performance-optimisation' ),
+					'dbCleanupError'           => __( 'An error occurred during cleanup.', 'performance-optimisation' ),
+					'dbCleanAllSuccess'        => __( 'All cleanup complete', 'performance-optimisation' ),
+					'dbTotalItemsRemoved'      => __( 'total items removed', 'performance-optimisation' ),
+					'dbTotalItems'             => __( 'Total Items to Clean', 'performance-optimisation' ),
+					'dbCleaning'               => __( 'Cleaning...', 'performance-optimisation' ),
+					'dbCleanAll'               => __( 'Clean All', 'performance-optimisation' ),
+					'dbClean'                  => __( 'Clean', 'performance-optimisation' ),
+					'dbCleanupIntro'           => __( 'Remove unnecessary data from your WordPress database to improve performance and reduce bloat.', 'performance-optimisation' ),
+					// Image job status translations.
+					'imgJobsQueued'            => __( 'Jobs Queued', 'performance-optimisation' ),
+					'imgProcessing'            => __( 'Processing in background...', 'performance-optimisation' ),
+					'imgJobsComplete'          => __( 'All background jobs complete!', 'performance-optimisation' ),
 				),
 			),
 		);

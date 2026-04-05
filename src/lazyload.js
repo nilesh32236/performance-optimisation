@@ -74,6 +74,13 @@ async function loadScripts() {
 	if (typeof jQuery !== 'undefined') {
 		jQuery(document).triggerHandler("ready");
 	}
+
+	// After delayed scripts finish, re-run loadImages with a short delay
+	// to pick up any images injected by the restored scripts.
+	setTimeout(() => {
+		loadImages();
+	}, 200);
+
 	return;
 }
 
@@ -91,6 +98,10 @@ if (!scriptLoading) {
 const loadImages = () => {
 	const lazyloadImages  = document.querySelectorAll('img[data-src], img[data-srcset]');
 	const lazyloadIframes = document.querySelectorAll('iframe[data-src]');
+
+	if (lazyloadImages.length === 0 && lazyloadIframes.length === 0) {
+		return;
+	}
 
 	imgLoaded = true;
 
@@ -159,12 +170,14 @@ const loadImages = () => {
 	}
 }
 
-document.addEventListener('DOMContentLoaded', function () {
-	if (imgLoaded) {
-		setTimeout(() => {
-			loadImages();
-		}, 500);
-	} else {
+// Use readyState check to handle the case where the script loads in the footer
+// AFTER DOMContentLoaded has already fired (which is the primary bug).
+if (document.readyState === 'loading') {
+	// DOM hasn't finished loading yet — wait for it.
+	document.addEventListener('DOMContentLoaded', function () {
 		loadImages();
-	}
-});
+	});
+} else {
+	// DOM is already loaded (interactive or complete) — run immediately.
+	loadImages();
+}

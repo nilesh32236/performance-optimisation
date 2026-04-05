@@ -87,21 +87,27 @@ const FileOptimization = ({ options = {} }) => {
 
 			{/* Show these text areas only if removeWooCSSJS is checked */}
 			{settings.removeWooCSSJS && (
-				<div className='checkbox-option'>
-					<textarea
-						className="text-area-field"
-						placeholder={translations.excludeUrlToKeepJSCSS}
-						name="excludeUrlToKeepJSCSS"
-						value={settings.excludeUrlToKeepJSCSS}
-						onChange={handleChange(setSettings)}
-					/>
-					<textarea
-						className="text-area-field"
-						placeholder={translations.removeCssJsHandle}
-						name="removeCssJsHandle"
-						value={settings.removeCssJsHandle}
-						onChange={handleChange(setSettings)}
-					/>
+				<div className="nested-settings">
+					<div className="setting-group">
+						<label className="field-label">{translations.excludeUrlToKeepJSCSS}</label>
+						<textarea
+							className="text-area-field"
+							placeholder={translations.excludeUrlToKeepJSCSS}
+							name="excludeUrlToKeepJSCSS"
+							value={settings.excludeUrlToKeepJSCSS}
+							onChange={handleChange(setSettings)}
+						/>
+					</div>
+					<div className="setting-group">
+						<label className="field-label">{translations.removeCssJsHandle}</label>
+						<textarea
+							className="text-area-field"
+							placeholder={translations.removeCssJsHandle}
+							name="removeCssJsHandle"
+							value={settings.removeCssJsHandle}
+							onChange={handleChange(setSettings)}
+						/>
+					</div>
 				</div>
 			)}
 
