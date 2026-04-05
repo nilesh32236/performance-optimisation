@@ -39,7 +39,16 @@ class Log {
 		$result = $wpdb->insert(
 			$table_name,
 			array(
-				'activity' => sanitize_text_field( $activity ),
+				'activity' => wp_kses(
+					$activity,
+					array(
+						'a'      => array(
+							'href' => array(),
+						),
+						'strong' => array(),
+						'em'     => array(),
+					)
+				),
 			),
 			array(
 				'%s',

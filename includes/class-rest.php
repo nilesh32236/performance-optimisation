@@ -123,14 +123,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function clear_cache( \WP_REST_Request $request ) {
 			$params = $request->get_params();
-			if ( 'clear_single_page_cahce' === $params['action'] ) {
-				Cache::clear_cache( $params['path'] );
+			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
+			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
+
+			if ( 'clear_single_page_cache' === $action ) {
+				Cache::clear_cache( $path );
 				new Log(
 					sprintf(
 					/* translators: %s: The URL of the page */
 						__( 'Clear cache of <a href="%1$s">%2$s</a> on ', 'performance-optimisation' ),
-						home_url( $params['path'] ),
-						home_url( $params['path'] )
+						esc_url( home_url( $path ) ),
+						esc_html( home_url( $path ) )
 					)
 				);
 			} else {
@@ -149,15 +152,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function update_settings( \WP_REST_Request $request ) {
 			$params  = $request->get_params();
-			$options = get_option( 'wppo_settings', array() );
+			$tab     = isset( $params['tab'] ) ? sanitize_text_field( $params['tab'] ) : '';
+			$settings = isset( $params['settings'] ) ? (array) $params['settings'] : array();
 
-			$options[ $params['tab'] ] = $params['settings'];
+			// Sanitize settings array recursively.
+			$sanitized_settings = $this->sanitize_settings_recursively( $settings );
+
+			$options = get_option( 'wppo_settings', array() );
+			$options[ $tab ] = $sanitized_settings;
 
 			if ( update_option( 'wppo_settings', $options ) ) {
 				Cache::clear_cache();
 			}
 
 			return $this->send_response( $options );
+		}
+
+		/**
+		 * Sanitizes the settings array recursively.
+		 *
+		 * @param array $settings The settings array.
+		 * @return array The sanitized settings array.
+		 */
+		private function sanitize_settings_recursively( $settings ) {
+			$sanitized = array();
+			foreach ( $settings as $key => $value ) {
+				if ( is_array( $value ) ) {
+					$sanitized[ sanitize_key( $key ) ] = $this->sanitize_settings_recursively( $value );
+				} elseif ( is_bool( $value ) ) {
+					$sanitized[ sanitize_key( $key ) ] = (bool) $value;
+				} else {
+					$sanitized[ sanitize_key( $key ) ] = sanitize_textarea_field( $value );
+				}
+			}
+			return $sanitized;
 		}
 
 		/**
@@ -169,8 +197,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_recent_activities( \WP_REST_Request $request ) {
 			$params = $request->get_params();
+			$sanitized_params = array(
+				'page' => isset( $params['page'] ) ? absint( $params['page'] ) : 1,
+			);
 
-			$data = Log::get_recent_activities( $params );
+			$data = Log::get_recent_activities( $sanitized_params );
 
 			return new \WP_REST_Response( $data, 200 );
 		}
@@ -188,8 +219,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function optimise_image( \WP_REST_Request $request ) {
 			$params = $request->get_params();
 
-			$webp_images = $params['webp'] ?? array();
-			$avif_images = $params['avif'] ?? array();
+			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
+			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
 
 			$use_action_scheduler = function_exists( 'as_enqueue_async_action' );
 			$jobs_queued          = 0;
