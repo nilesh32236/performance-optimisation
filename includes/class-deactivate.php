@@ -70,7 +70,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			$timestamp = wp_next_scheduled( 'wppo_generate_static_page' );
 			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_img_conversation' );
+				wp_unschedule_event( $timestamp, 'wppo_generate_static_page' );
 			}
 		}
 
@@ -107,7 +107,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			$pattern = '/\/\*\*\s*Enables WordPress Cache\s*\*\/\s*\nif\s*\(\s*!\s*defined\s*\(\s*[\'"]WP_CACHE[\'"]\s*\)\s*\)\s*\{\s*define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\s*\)\s*;\s*\}\s*/';
 
 			if ( preg_match( $pattern, $wp_config_content, $matches ) ) {
-				error_log( '$matches: ' . print_r( $matches, true ) );
 				// Remove the WP_CACHE line.
 				$wp_config_content = preg_replace( $pattern, '', $wp_config_content );
 			} else {

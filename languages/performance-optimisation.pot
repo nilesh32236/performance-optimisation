@@ -1,24 +1,24 @@
-# Copyright (C) 2024 Nilesh kanzariya
+# Copyright (C) 2026 Nilesh kanzariya
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Performance Optimisation 1.0.0\n"
+"Project-Id-Version: Performance Optimisation 1.1.1\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/performance-optimisation\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2024-12-18T11:20:42+00:00\n"
+"POT-Creation-Date: 2026-04-06T07:39:06+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"X-Generator: WP-CLI 2.10.0\n"
+"X-Generator: WP-CLI 2.13.0-alpha-b1d3b60\n"
 "X-Domain: performance-optimisation\n"
 
 #. Plugin Name of the plugin
 #: performance-optimisation.php
-#: includes/class-main.php:134
-#: includes/class-main.php:135
-#: includes/class-main.php:413
+#: includes/class-main.php:259
+#: includes/class-main.php:260
+#: includes/class-main.php:580
 msgid "Performance Optimisation"
 msgstr ""
 
@@ -32,473 +32,684 @@ msgstr ""
 msgid "Nilesh kanzariya"
 msgstr ""
 
-#: includes/class-cron.php:47
+#: includes/class-cron.php:58
 msgid "Every 5 Hours"
 msgstr ""
 
-#: includes/class-main.php:215
+#: includes/class-main.php:348
 msgid "Performance Settings"
 msgstr ""
 
-#: includes/class-main.php:216
+#: includes/class-main.php:349
 msgid " Dashboard"
 msgstr ""
 
-#: includes/class-main.php:217
+#: includes/class-main.php:350
 msgid " File Optimization"
 msgstr ""
 
-#: includes/class-main.php:218
+#: includes/class-main.php:351
 msgid " Preload"
 msgstr ""
 
-#: includes/class-main.php:219
+#: includes/class-main.php:352
 msgid " Image Optimization"
 msgstr ""
 
-#: includes/class-main.php:220
+#: includes/class-main.php:353
 msgid " Tools"
 msgstr ""
 
-#: includes/class-main.php:221
+#: includes/class-main.php:354
 msgid "Failed to fetch activities:"
 msgstr ""
 
-#: includes/class-main.php:222
+#: includes/class-main.php:355
+msgid "Expand sidebar"
+msgstr ""
+
+#: includes/class-main.php:356
+msgid "Collapse sidebar"
+msgstr ""
+
+#: includes/class-main.php:357
 msgid "Cache cleared successfully: "
 msgstr ""
 
-#: includes/class-main.php:223
+#: includes/class-main.php:358
 msgid "Error clearing cache: "
 msgstr ""
 
-#: includes/class-main.php:224
+#: includes/class-main.php:359
 msgid "Completed"
 msgstr ""
 
-#: includes/class-main.php:225
+#: includes/class-main.php:360
 msgid "Pending"
 msgstr ""
 
-#: includes/class-main.php:226
+#: includes/class-main.php:361
 msgid "Failed"
 msgstr ""
 
-#: includes/class-main.php:227
+#: includes/class-main.php:362
 msgid "Optimizing..."
 msgstr ""
 
-#: includes/class-main.php:228
+#: includes/class-main.php:363
 msgid "Optimize Now"
 msgstr ""
 
-#: includes/class-main.php:229
+#: includes/class-main.php:364
 msgid "Removing..."
 msgstr ""
 
-#: includes/class-main.php:230
+#: includes/class-main.php:365
 msgid "Remove Optimized"
 msgstr ""
 
-#: includes/class-main.php:231
+#: includes/class-main.php:366
 msgid "Recent Activities"
 msgstr ""
 
-#: includes/class-main.php:232
+#: includes/class-main.php:367
 msgid "Loading recent activities..."
 msgstr ""
 
-#: includes/class-main.php:233
+#: includes/class-main.php:368
 msgid "No pending images to convert!"
 msgstr ""
 
-#: includes/class-main.php:234
+#: includes/class-main.php:369
 msgid "Images optimized successfully"
 msgstr ""
 
-#: includes/class-main.php:235
+#: includes/class-main.php:370
 msgid "Error optimizing images:"
 msgstr ""
 
-#: includes/class-main.php:236
+#: includes/class-main.php:371
 msgid "No optimized images to remove!"
 msgstr ""
 
-#: includes/class-main.php:237
+#: includes/class-main.php:372
 msgid "Optimized images removed successfully!"
 msgstr ""
 
-#: includes/class-main.php:238
+#: includes/class-main.php:373
 msgid "Removed images: "
 msgstr ""
 
-#: includes/class-main.php:239
+#: includes/class-main.php:374
 msgid "Some images could not be removed."
 msgstr ""
 
-#: includes/class-main.php:240
+#: includes/class-main.php:375
 msgid "Failed to remove:"
 msgstr ""
 
-#: includes/class-main.php:241
+#: includes/class-main.php:376
 msgid "Error removing optimized images:"
 msgstr ""
 
-#: includes/class-main.php:242
+#: includes/class-main.php:377
 msgid "An error occurred while removing optimized images."
 msgstr ""
 
-#: includes/class-main.php:243
+#: includes/class-main.php:378
 msgid "Cache Status"
 msgstr ""
 
-#: includes/class-main.php:244
+#: includes/class-main.php:379
 msgid "Current Cache Size: "
 msgstr ""
 
-#: includes/class-main.php:245
+#: includes/class-main.php:380
 msgid "Clearing..."
 msgstr ""
 
-#: includes/class-main.php:246
+#: includes/class-main.php:381
 msgid "Clear Cache Now"
 msgstr ""
 
-#: includes/class-main.php:247
+#: includes/class-main.php:382
 msgid "JavaScript & CSS Optimization"
 msgstr ""
 
-#: includes/class-main.php:248
+#: includes/class-main.php:383
 msgid "JavaScript Files Minified: "
 msgstr ""
 
-#: includes/class-main.php:249
+#: includes/class-main.php:384
 msgid "CSS Files Minified: "
 msgstr ""
 
-#: includes/class-main.php:250
+#: includes/class-main.php:385
 msgid "Please select a file."
 msgstr ""
 
-#: includes/class-main.php:251
+#: includes/class-main.php:386
 msgid "File imported successfully"
 msgstr ""
 
-#: includes/class-main.php:252
+#: includes/class-main.php:387
 msgid "Error importing settings:"
 msgstr ""
 
-#: includes/class-main.php:253
+#: includes/class-main.php:388
 msgid "An error occurred during import."
 msgstr ""
 
-#: includes/class-main.php:254
+#: includes/class-main.php:389
 msgid "Invalid JSON file:"
 msgstr ""
 
-#: includes/class-main.php:255
+#: includes/class-main.php:390
 msgid "Invalid file format. Please select a valid JSON file."
 msgstr ""
 
-#: includes/class-main.php:256
+#: includes/class-main.php:391
 msgid "Export Settings"
 msgstr ""
 
-#: includes/class-main.php:257
+#: includes/class-main.php:392
 msgid "Export performance optimization plugin settings."
 msgstr ""
 
-#: includes/class-main.php:258
+#: includes/class-main.php:393
 msgid "Import Settings"
 msgstr ""
 
-#: includes/class-main.php:259
+#: includes/class-main.php:394
 msgid "Import performance optimization plugin settings."
 msgstr ""
 
-#: includes/class-main.php:260
+#: includes/class-main.php:395
 msgid "Form Submitted:"
 msgstr ""
 
-#: includes/class-main.php:261
+#: includes/class-main.php:396
 msgid "Form submission error:"
 msgstr ""
 
-#: includes/class-main.php:262
+#: includes/class-main.php:397
 msgid "File Optimization Settings"
 msgstr ""
 
-#: includes/class-main.php:263
+#: includes/class-main.php:398
 msgid "Minify JavaScript"
 msgstr ""
 
-#: includes/class-main.php:264
-#: includes/class-main.php:274
-#: includes/class-main.php:276
+#: includes/class-main.php:399
+#: includes/class-main.php:409
+#: includes/class-main.php:411
 msgid "Exclude specific JavaScript files"
 msgstr ""
 
-#: includes/class-main.php:265
+#: includes/class-main.php:400
 msgid "Minify CSS"
 msgstr ""
 
-#: includes/class-main.php:266
+#: includes/class-main.php:401
 msgid "Exclude specific CSS files"
 msgstr ""
 
-#: includes/class-main.php:267
+#: includes/class-main.php:402
 msgid "Combine CSS"
 msgstr ""
 
-#: includes/class-main.php:268
+#: includes/class-main.php:403
 msgid "Exclude CSS files to combine"
 msgstr ""
 
-#: includes/class-main.php:269
+#: includes/class-main.php:404
 msgid "Remove woocommerce css and js from other page"
 msgstr ""
 
-#: includes/class-main.php:270
+#: includes/class-main.php:405
 msgid "Exclude Url to keep woocommerce css and js"
 msgstr ""
 
-#: includes/class-main.php:271
+#: includes/class-main.php:406
 msgid "Enter handle which script and style you want to remove"
 msgstr ""
 
-#: includes/class-main.php:272
+#: includes/class-main.php:407
 msgid "Minify HTML"
 msgstr ""
 
-#: includes/class-main.php:273
+#: includes/class-main.php:408
 msgid "Defer Loading JavaScript"
 msgstr ""
 
-#: includes/class-main.php:275
+#: includes/class-main.php:410
 msgid "Delay Loading JavaScript"
 msgstr ""
 
-#: includes/class-main.php:277
+#: includes/class-main.php:412
 msgid "Saving..."
 msgstr ""
 
-#: includes/class-main.php:278
+#: includes/class-main.php:413
 msgid "Save Settings"
 msgstr ""
 
-#: includes/class-main.php:279
+#: includes/class-main.php:414
 msgid "Image Optimization Settings"
 msgstr ""
 
-#: includes/class-main.php:280
+#: includes/class-main.php:415
 msgid "Lazy Load Images"
 msgstr ""
 
-#: includes/class-main.php:281
+#: includes/class-main.php:416
 msgid "Exclude specific image URLs"
 msgstr ""
 
-#: includes/class-main.php:282
+#: includes/class-main.php:417
 msgid "Enable lazy loading for images to improve the initial load speed by loading images only when they appear in the viewport."
 msgstr ""
 
-#: includes/class-main.php:283
+#: includes/class-main.php:418
 msgid "Enter number you want to exclude first"
 msgstr ""
 
-#: includes/class-main.php:284
+#: includes/class-main.php:419
 msgid "Replace Low-Resolution Placeholder with SVG"
 msgstr ""
 
-#: includes/class-main.php:285
+#: includes/class-main.php:420
 msgid "Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance."
 msgstr ""
 
-#: includes/class-main.php:286
+#: includes/class-main.php:421
 msgid "Enable Image Conversion"
 msgstr ""
 
-#: includes/class-main.php:287
+#: includes/class-main.php:422
 msgid "Exclude specific images from conversion"
 msgstr ""
 
-#: includes/class-main.php:288
+#: includes/class-main.php:423
 msgid "Convert images to WebP/AVIF format to reduce image size while maintaining quality."
 msgstr ""
 
-#: includes/class-main.php:289
+#: includes/class-main.php:424
 msgid "Conversion Format:"
 msgstr ""
 
-#: includes/class-main.php:290
+#: includes/class-main.php:425
 msgid "WebP"
 msgstr ""
 
-#: includes/class-main.php:291
+#: includes/class-main.php:426
 msgid "AVIF"
 msgstr ""
 
-#: includes/class-main.php:292
+#: includes/class-main.php:427
 msgid "Both"
 msgstr ""
 
-#: includes/class-main.php:293
+#: includes/class-main.php:428
 msgid "Preload Images on Front Page"
 msgstr ""
 
-#: includes/class-main.php:294
+#: includes/class-main.php:429
 msgid "Preload critical images on the front page to enhance initial load performance."
 msgstr ""
 
-#: includes/class-main.php:295
+#: includes/class-main.php:430
 msgid "Enter img url (full/partial) to preload this img in front page."
 msgstr ""
 
-#: includes/class-main.php:296
+#: includes/class-main.php:431
 msgid "Preload Feature Images for Post Types"
 msgstr ""
 
-#: includes/class-main.php:297
+#: includes/class-main.php:432
 msgid "Select post types where feature images should be preloaded for better performance."
 msgstr ""
 
-#: includes/class-main.php:298
+#: includes/class-main.php:433
 msgid "Exclude specific img to preload."
 msgstr ""
 
-#: includes/class-main.php:299
+#: includes/class-main.php:434
 msgid "Set max width so it can't load bigger img than it. 0 default."
 msgstr ""
 
-#: includes/class-main.php:300
+#: includes/class-main.php:435
 msgid "Exclude specific size to preload."
 msgstr ""
 
-#: includes/class-main.php:301
+#: includes/class-main.php:436
 msgid "Preload Settings"
 msgstr ""
 
-#: includes/class-main.php:302
+#: includes/class-main.php:437
 msgid "Enable Preloading Cache"
 msgstr ""
 
-#: includes/class-main.php:303
+#: includes/class-main.php:438
 msgid "Exclude specific resources from preloading"
 msgstr ""
 
-#: includes/class-main.php:304
+#: includes/class-main.php:439
 msgid "Preload the cache to improve page load times by caching key resources."
 msgstr ""
 
-#: includes/class-main.php:305
+#: includes/class-main.php:440
 msgid "Preconnect"
 msgstr ""
 
-#: includes/class-main.php:306
+#: includes/class-main.php:441
 msgid "Add preconnect origins, one per line (e.g., https://fonts.gstatic.com)"
 msgstr ""
 
-#: includes/class-main.php:307
+#: includes/class-main.php:442
 msgid "Add origins to preconnect, improving the speed of resource loading."
 msgstr ""
 
-#: includes/class-main.php:308
+#: includes/class-main.php:443
 msgid "Prefetch DNS"
 msgstr ""
 
-#: includes/class-main.php:309
+#: includes/class-main.php:444
 msgid "Enter domains for DNS prefetching, one per line (e.g., https://example.com)"
 msgstr ""
 
-#: includes/class-main.php:310
+#: includes/class-main.php:445
 msgid "Prefetch DNS for external domains to reduce DNS lookup times."
 msgstr ""
 
-#: includes/class-main.php:311
+#: includes/class-main.php:446
 msgid "Preload Fonts"
 msgstr ""
 
-#: includes/class-main.php:312
+#: includes/class-main.php:447
 msgid ""
 "Enter fonts for preloading, one per line (e.g., https://example.com/fonts/font.woff2)\n"
 "/your-theme/fonts/font.woff2"
 msgstr ""
 
-#: includes/class-main.php:313
+#: includes/class-main.php:448
 msgid "Preload fonts to ensure faster loading and rendering of text."
 msgstr ""
 
-#: includes/class-main.php:314
+#: includes/class-main.php:449
 msgid "Preload CSS"
 msgstr ""
 
-#: includes/class-main.php:315
+#: includes/class-main.php:450
 msgid ""
 "Enter CSS for preloading, one per line (e.g., https://example.com/style.css)\n"
 "/your-theme/css/style.css"
 msgstr ""
 
-#: includes/class-main.php:316
+#: includes/class-main.php:451
 msgid "Preload CSS to ensure faster rendering and style application"
 msgstr ""
 
-#: includes/class-main.php:417
+#: includes/class-main.php:453
+msgid " Database Optimization"
+msgstr ""
+
+#: includes/class-main.php:454
+msgid "Post Revisions"
+msgstr ""
+
+#: includes/class-main.php:455
+msgid "Old versions of your posts saved during editing."
+msgstr ""
+
+#: includes/class-main.php:456
+msgid "Auto Drafts"
+msgstr ""
+
+#: includes/class-main.php:457
+msgid "Automatically saved drafts that are no longer needed."
+msgstr ""
+
+#: includes/class-main.php:458
+msgid "Trashed Posts"
+msgstr ""
+
+#: includes/class-main.php:459
+msgid "Posts that have been moved to the trash."
+msgstr ""
+
+#: includes/class-main.php:460
+msgid "Spam Comments"
+msgstr ""
+
+#: includes/class-main.php:461
+msgid "Comments marked as spam."
+msgstr ""
+
+#: includes/class-main.php:462
+msgid "Trashed Comments"
+msgstr ""
+
+#: includes/class-main.php:463
+msgid "Comments that have been moved to the trash."
+msgstr ""
+
+#: includes/class-main.php:464
+msgid "Expired Transients"
+msgstr ""
+
+#: includes/class-main.php:465
+msgid "Temporary cached data that has expired."
+msgstr ""
+
+#: includes/class-main.php:466
+msgid "Orphaned Post Meta"
+msgstr ""
+
+#: includes/class-main.php:467
+msgid "Metadata entries with no associated post."
+msgstr ""
+
+#: includes/class-main.php:468
+msgid "Cleaned"
+msgstr ""
+
+#: includes/class-main.php:469
+msgid "items removed"
+msgstr ""
+
+#: includes/class-main.php:470
+msgid "An error occurred during cleanup."
+msgstr ""
+
+#: includes/class-main.php:471
+msgid "All cleanup complete"
+msgstr ""
+
+#: includes/class-main.php:472
+msgid "total items removed"
+msgstr ""
+
+#: includes/class-main.php:473
+msgid "Total Items to Clean"
+msgstr ""
+
+#: includes/class-main.php:474
+msgid "Cleaning..."
+msgstr ""
+
+#: includes/class-main.php:475
+msgid "Clean All"
+msgstr ""
+
+#: includes/class-main.php:476
+msgid "Clean"
+msgstr ""
+
+#: includes/class-main.php:477
+msgid "Remove unnecessary data from your WordPress database to improve performance and reduce bloat."
+msgstr ""
+
+#: includes/class-main.php:479
+msgid "Jobs Queued"
+msgstr ""
+
+#: includes/class-main.php:480
+msgid "Processing in background..."
+msgstr ""
+
+#: includes/class-main.php:481
+msgid "All background jobs complete!"
+msgstr ""
+
+#: includes/class-main.php:584
 msgid "Go to Performance Optimisation Setting"
 msgstr ""
 
-#: includes/class-main.php:427
+#: includes/class-main.php:594
 msgid "Clear All Cache"
 msgstr ""
 
-#: includes/class-main.php:439
+#: includes/class-main.php:606
 msgid "Clear This Page Cache"
 msgstr ""
 
-#: includes/class-main.php:442
+#: includes/class-main.php:609
 msgid "Clear cache for this specific page or post"
 msgstr ""
 
-#: includes/class-metabox.php:37
+#: includes/class-metabox.php:56
 msgid "Preload Image URL"
 msgstr ""
 
-#: includes/class-metabox.php:59
+#: includes/class-metabox.php:67
+msgid "Asset Manager — Disable Scripts/Styles"
+msgstr ""
+
+#: includes/class-metabox.php:90
 msgid "Preload Image URL:"
 msgstr ""
 
+#: includes/class-metabox.php:126
+msgid "No assets have been captured yet. Visit this page/post on the frontend while logged out, then come back here to manage its assets."
+msgstr ""
+
+#: includes/class-metabox.php:135
+msgid "Visit Page to Capture Assets"
+msgstr ""
+
+#. translators: %s: Human-readable time difference
+#: includes/class-metabox.php:145
+#, php-format
+msgid "Assets captured %s ago. Visit the page again to refresh."
+msgstr ""
+
+#: includes/class-metabox.php:153
+msgid "Scripts"
+msgstr ""
+
+#: includes/class-metabox.php:157
+#: includes/class-metabox.php:198
+msgid "Disable"
+msgstr ""
+
+#: includes/class-metabox.php:158
+#: includes/class-metabox.php:199
+msgid "Handle"
+msgstr ""
+
+#: includes/class-metabox.php:159
+#: includes/class-metabox.php:200
+msgid "Source"
+msgstr ""
+
+#: includes/class-metabox.php:181
+#: includes/class-metabox.php:222
+msgid "protected"
+msgstr ""
+
+#: includes/class-metabox.php:194
+msgid "Styles"
+msgstr ""
+
+#: includes/class-rest.php:133
+msgid "Invalid path provided."
+msgstr ""
+
+#: includes/class-rest.php:139
+msgid "Failed to clear cache: Invalid path."
+msgstr ""
+
 #. translators: %s: The URL of the page
-#: includes/class-rest.php:101
+#: includes/class-rest.php:144
+#, php-format
 msgid "Clear cache of <a href=\"%1$s\">%2$s</a> on "
 msgstr ""
 
-#: includes/class-rest.php:108
+#: includes/class-rest.php:151
 msgid "Clear all cache on "
 msgstr ""
 
-#: includes/class-rest.php:216
+#. translators: %d: Number of image jobs queued
+#: includes/class-rest.php:282
+#, php-format
+msgid "Scheduled %d image optimization jobs for background processing on "
+msgstr ""
+
+#. translators: %d: Number of jobs
+#: includes/class-rest.php:293
+#, php-format
+msgid "%d images queued for background optimization."
+msgstr ""
+
+#: includes/class-rest.php:357
 msgid "Optimized images folder deleted successfully."
 msgstr ""
 
-#: includes/class-rest.php:224
+#: includes/class-rest.php:365
 msgid "Failed to delete the optimized images folder."
 msgstr ""
 
-#: includes/class-rest.php:233
+#: includes/class-rest.php:374
 msgid "Optimized images folder does not exist."
 msgstr ""
 
-#: includes/class-rest.php:251
+#: includes/class-rest.php:392
 msgid "Invalid action or missing settings"
 msgstr ""
 
-#: includes/class-rest.php:259
+#: includes/class-rest.php:400
 msgid "No changes detected, settings are already up-to-date"
 msgstr ""
 
-#: includes/class-rest.php:263
+#: includes/class-rest.php:404
 msgid "Failed to update settings"
 msgstr ""
 
-#: includes/class-rest.php:266
+#: includes/class-rest.php:407
 msgid "Settings updated successfully"
+msgstr ""
+
+#: includes/class-rest.php:424
+msgid "Invalid cleanup type."
+msgstr ""
+
+#. translators: %d: Number of items cleaned
+#: includes/class-rest.php:434
+#, php-format
+msgid "Database cleanup (all): %d items removed on "
+msgstr ""
+
+#. translators: %1$s: Cleanup type, %2$d: Number of items
+#: includes/class-rest.php:463
+#, php-format
+msgid "Database cleanup (%1$s): %2$d items removed on "
+msgstr ""
+
+#: includes/class-rest.php:501
+msgid "Post ID is required."
+msgstr ""
+
+#: includes/class-rest.php:514
+msgid "No assets captured yet. Visit the page on the frontend first."
 msgstr ""

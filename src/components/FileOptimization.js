@@ -32,7 +32,6 @@ const FileOptimization = ({ options = {} }) => {
 
 		try {
 			// Submit settings (mock function for now)
-			console.log(translations.formSubmitted, settings);
 			await apiCall('update_settings', { tab: 'file_optimisation', settings });
 		} catch (error) {
 			console.error(translations.formSubmissionError, error);

@@ -183,6 +183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @param array $settings The settings array.
 		 * @return array The sanitized settings array.
+		 * @since 1.1.1
 		 */
 		private function sanitize_settings_recursively( $settings ) {
 			$sanitized = array();

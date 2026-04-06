@@ -50,7 +50,7 @@ class Main {
 	 * List of JavaScript handles/URLs to exclude from deferring.
 	 *
 	 * @var array
-	 * @since 1.1.0
+	 * @since 1.1.1
 	 */
 	private array $exclude_defer_js = array();
 
@@ -58,7 +58,7 @@ class Main {
 	 * List of JavaScript handles/URLs to exclude from delaying.
 	 *
 	 * @var array
-	 * @since 1.1.0
+	 * @since 1.1.1
 	 */
 	private array $exclude_delay_js = array();
 

@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimization
 Requires at least: 5.0
 Requires PHP: 7.4
 Tested up to: 6.7
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -91,7 +91,14 @@ Composer configuration:
 
 == Changelog ==
 
-= 1.1.0 =
+= 1.1.1 (2026-04-06) =
+* Improvement: Optimized JS Defer and Delay loading by caching exclusion lists.
+* Improvement: Enhanced backend performance by reducing redundant string parsing.
+* Security: Implemented protection against potential directory traversal vulnerabilities.
+* Fix: Standardized REST API key sanitization to prevent settings synchronization issues.
+* Localization: Added translated ARIA labels for sidebar accessibility.
+
+= 1.1.0 (2026-04-05) =
 * Improvement: Visually enhanced the 'File Optimization' settings for easier configuration.
 * Improvement: Hardened overall plugin security and input validation.
 * Fix: Automatically clear cache when changing permalink settings or switching themes.
@@ -99,7 +106,7 @@ Composer configuration:
 * Update: Improved image lazy loading reliability for smoother page rendering.
 
 
-= 1.0.0 =
+= 1.0.0 (2024-12-18) =
 
 Initial release with full functionality:
 Dashboard overview.
@@ -124,8 +131,11 @@ Import/export settings tools.
 
 == Upgrade Notice ==
 
-= 1.1.0 =
+= 1.1.1 (2026-04-06) =
+Minor release with JS performance optimizations and security hardening.
+
+= 1.1.0 (2026-04-05) =
 Stable v1.1.0 release with security hardening and user interface refinements.
 
-= 1.0.0 =
+= 1.0.0 (2024-12-18) =
 Initial release with core performance features.

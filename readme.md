@@ -23,30 +23,35 @@ Whether aiming for a perfect PageSpeed score or a seamless user experience, this
 ## Key Features
 
 ### Dashboard Analytics
-* **Cache Status:** Monitor cache size and clear cache directly from the overview.
-* **Optimization Metrics:** View exact counts of minified JavaScript and CSS files.
-* **Image Conversion Status:** Track WebP and AVIF generation status (Completed, Pending, Failed).
-* **Activity Log:** Review recent system activities, including plugin activation and cache clearing logs.
+
+- **Cache Status:** Monitor cache size and clear cache directly from the overview.
+- **Optimization Metrics:** View exact counts of minified JavaScript and CSS files.
+- **Image Conversion Status:** Track WebP and AVIF generation status (Completed, Pending, Failed).
+- **Activity Log:** Review recent system activities, including plugin activation and cache clearing logs.
 
 ### File Optimization Settings
-* **Asset Minification:** Minify JavaScript, CSS, and HTML payloads.
-* **Combine & Exclude:** Combine CSS files and define strict exclusion rules to prevent visual breakage.
-* **Render-Blocking Resolution:** Defer or delay JavaScript execution.
-* **E-Commerce Optimization:** Automatically remove unnecessary WooCommerce CSS and JS from non-relevant pages to improve load times.
+
+- **Asset Minification:** Minify JavaScript, CSS, and HTML payloads.
+- **Combine & Exclude:** Combine CSS files and define strict exclusion rules to prevent visual breakage.
+- **Render-Blocking Resolution:** Defer or delay JavaScript execution.
+- **E-Commerce Optimization:** Automatically remove unnecessary WooCommerce CSS and JS from non-relevant pages to improve load times.
 
 ### Advanced Preloading Settings
-* **Cache Generation:** Enable cache preloading to proactively generate static HTML and GZIP files.
-* **Network Routing:** Add preconnect origins and prefetch DNS domains for faster third-party resource loading.
-* **Resource Preloading:** Prioritize the loading of fonts, critical CSS, and specific images.
-* **Dynamic Feature Images:** Preload feature images for specific post types with configurable exclusions.
+
+- **Cache Generation:** Enable cache preloading to proactively generate static HTML and GZIP files.
+- **Network Routing:** Add preconnect origins and prefetch DNS domains for faster third-party resource loading.
+- **Resource Preloading:** Prioritize the loading of fonts, critical CSS, and specific images.
+- **Dynamic Feature Images:** Preload feature images for specific post types with configurable exclusions.
 
 ### Image Optimization Settings
-* **Next-Gen Formats:** Automatically convert images to highly compressed WebP or AVIF formats.
-* **Smart Lazy Loading:** Defer offscreen images utilizing lightweight SVG placeholders for smoother rendering.
-* **Exclusion Rules:** Limit preloaded image sizes and exclude specific images from lazy loading rules.
+
+- **Next-Gen Formats:** Automatically convert images to highly compressed WebP or AVIF formats.
+- **Smart Lazy Loading:** Defer offscreen images utilizing lightweight SVG placeholders for smoother rendering.
+- **Exclusion Rules:** Limit preloaded image sizes and exclude specific images from lazy loading rules.
 
 ### Administrative Tools
-* **Portability:** Import and export plugin settings with a single click for rapid deployment across multiple client sites.
+
+- **Portability:** Import and export plugin settings with a single click for rapid deployment across multiple client sites.
 
 ---
 
@@ -54,39 +59,41 @@ Whether aiming for a perfect PageSpeed score or a seamless user experience, this
 
 This plugin leverages modern development practices, utilizing Composer for PHP dependencies and NPM/Webpack for React-based admin interfaces.
 
-* **[voku/html-min](https://github.com/voku/HtmlMin):** PHP library for HTML minification.
-* **[matthiasmullie/minify](https://github.com/matthiasmullie/minify):** PHP library for JavaScript and CSS minification.
-* **[@wordpress/scripts](https://developer.wordpress.org/block-editor/reference-guides/packages/packages-scripts/):** Build tools for modern WordPress Block Editor and React development.
-* **UI Components:** Font Awesome Free Solid Icons and React FontAwesome.
+- **[voku/html-min](https://github.com/voku/HtmlMin):** PHP library for HTML minification.
+- **[matthiasmullie/minify](https://github.com/matthiasmullie/minify):** PHP library for JavaScript and CSS minification.
+- **[@wordpress/scripts](https://developer.wordpress.org/block-editor/reference-guides/packages/packages-scripts/):** Build tools for modern WordPress Block Editor and React development.
+- **UI Components:** Font Awesome Free Solid Icons and React FontAwesome.
 
 ---
 
 ## Installation & Setup
 
 ### For End Users
+
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/nilesh32236/performance-optimisation.git
-	```
+   ```
 
-2.  Navigate to the plugin directory:
-    ```bash
-    cd performance-optimisation
-    ```
-3.  Install PHP dependencies via Composer:
-    ```bash
-    composer install --no-dev
-    ```
-4.  Install Node dependencies:
-    ```bash
-    npm install
-    ```
-5.  Build the plugin frontend assets:
-    ```bash
-    npm run build
-    ```
-6.  Upload the compiled plugin folder to your WordPress site's `wp-content/plugins/` directory.
-7.  Activate the plugin from the **Plugins** menu in WordPress.
+2. Navigate to the plugin directory:
+   ```bash
+   cd performance-optimisation
+   ```
+3. Install PHP dependencies via Composer:
+   ```bash
+   composer install --no-dev
+   ```
+4. Install Node dependencies:
+   ```bash
+   npm install
+   ```
+5. Build the plugin frontend assets:
+   ```bash
+   npm run build
+   ```
+6. Upload the compiled plugin folder to your WordPress site's `wp-content/plugins/` directory.
+7. Activate the plugin from the **Plugins** menu in WordPress.
 
 ### For Developers
 
@@ -96,7 +103,7 @@ This plugin leverages modern development practices, utilizing Composer for PHP d
     npm run start
     ```
 
------
+---
 
 ## Package Configurations
 
@@ -104,25 +111,25 @@ This plugin leverages modern development practices, utilizing Composer for PHP d
 
 ```json
 {
-	"name": "nilesh/performance-optimisation",
-	"description": "A package for performance optimization, including HTML minification and code minification tools.",
-	"license": "GPL-2.0-or-later",
-	"authors": [
-		{
-			"name": "nilesh",
-			"email": "nilesh.kanzariya912@gmail.com"
-		}
-	],
-	"require": {
-		"voku/html-min": "^4.5",
-		"matthiasmullie/minify": "^1.3"
-	},
-	"extra": {
-		"cleanup": {
-			"dirs": ["bin", "tests", "docs"],
-			"exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
-		}
-	}
+  "name": "nilesh/performance-optimisation",
+  "description": "A package for performance optimization, including HTML minification and code minification tools.",
+  "license": "GPL-2.0-or-later",
+  "authors": [
+    {
+      "name": "nilesh",
+      "email": "nilesh.kanzariya912@gmail.com"
+    }
+  ],
+  "require": {
+    "voku/html-min": "^4.5",
+    "matthiasmullie/minify": "^1.3"
+  },
+  "extra": {
+    "cleanup": {
+      "dirs": ["bin", "tests", "docs"],
+      "exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
+    }
+  }
 }
 ```
 
@@ -130,54 +137,46 @@ This plugin leverages modern development practices, utilizing Composer for PHP d
 
 ```json
 {
-	"name": "performance-optimisation",
-	"version": "1.0.0",
-	"description": "Performance optimisation plugin for WordPress",
-	"main": "./src/index.js",
-	"scripts": {
-		"build": "wp-scripts build",
-		"start": "wp-scripts start"
-	},
-	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
-	"license": "GPL-2.0-or-later",
-	"devDependencies": {
-		"@wordpress/scripts": "^27.9.0"
-	},
-	"dependencies": {
-		"@fortawesome/free-solid-svg-icons": "^6.7.1",
-		"@fortawesome/react-fontawesome": "^0.2.2"
-	}
+  "name": "performance-optimisation",
+  "version": "1.0.0",
+  "description": "Performance optimisation plugin for WordPress",
+  "main": "./src/index.js",
+  "scripts": {
+    "build": "wp-scripts build",
+    "start": "wp-scripts start"
+  },
+  "author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
+  "license": "GPL-2.0-or-later",
+  "devDependencies": {
+    "@wordpress/scripts": "^27.9.0"
+  },
+  "dependencies": {
+    "@fortawesome/free-solid-svg-icons": "^6.7.1",
+    "@fortawesome/react-fontawesome": "^0.2.2"
+  }
 }
 ```
 
------
+---
 
 ## Changelog
 
-### v1.0.0
+For a full list of changes and version history, see [changelog.md](changelog.md).
 
-  * Initial release.
-  * Added Dashboard overview and activity logs.
-  * Implemented Cache management and GZIP generation.
-  * Implemented JavaScript, CSS, and HTML optimization.
-  * Added modern Image optimization (WebP/AVIF) and SVG lazy loading.
-  * Included preloading capabilities for cache, fonts, and feature images.
-  * Added import/export utility tools.
-
------
+---
 
 ## Contributing
 
 Contributions, issues, and feature requests are welcome.
 Please check the [issues page](https://github.com/nilesh32236/performance-optimisation/issues) if you would like to contribute.
 
------
+---
 
 ## License
 
 This project is licensed under the GPLv2 license. See the `LICENSE` file for more details.
 
------
+---
 
 ## Available for Freelance Work
 
