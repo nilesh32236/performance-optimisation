@@ -220,7 +220,6 @@ class Main {
 		add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 		add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 		add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
-		add_action( 'deactivated_plugin', array( 'PerformanceOptimise\Inc\Htaccess_Handler', 'update_rules' ), 10, 0 );
 	}
 
 	/**

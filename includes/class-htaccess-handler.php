@@ -52,6 +52,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 
 			$wp_filesystem = Util::init_filesystem();
 
+			if ( ! $wp_filesystem ) {
+				return false;
+			}
+
 			if ( ! $wp_filesystem->exists( $htaccess_file ) && ! $wp_filesystem->is_writable( dirname( $htaccess_file ) ) ) {
 				return false;
 			}
@@ -107,6 +111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				'    ExpiresByType text/html "access plus 0 seconds"',
 				'    # CSS and JS',
 				'    ExpiresByType text/css "access plus 1 month"',
+				'    ExpiresByType text/javascript "access plus 1 month"',
 				'    ExpiresByType application/javascript "access plus 1 month"',
 				'    ExpiresByType application/x-javascript "access plus 1 month"',
 				'    # Images and Icons',
@@ -114,14 +119,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				'    ExpiresByType image/jpeg "access plus 1 month"',
 				'    ExpiresByType image/gif "access plus 1 month"',
 				'    ExpiresByType image/png "access plus 1 month"',
+				'    ExpiresByType image/webp "access plus 1 month"',
+				'    ExpiresByType image/avif "access plus 1 month"',
 				'    ExpiresByType image/svg+xml "access plus 1 month"',
 				'    ExpiresByType image/x-icon "access plus 1 month"',
 				'    # Fonts',
 				'    ExpiresByType application/vnd.ms-fontobject "access plus 1 month"',
 				'    ExpiresByType application/x-font-ttf "access plus 1 month"',
+				'    ExpiresByType application/font-woff2 "access plus 1 month"',
 				'    ExpiresByType font/opentype "access plus 1 month"',
+				'    ExpiresByType font/truetype "access plus 1 month"',
 				'    ExpiresByType font/eot "access plus 1 month"',
 				'    ExpiresByType font/otf "access plus 1 month"',
+				'    ExpiresByType font/woff "access plus 1 month"',
+				'    ExpiresByType font/woff2 "access plus 1 month"',
 				'</IfModule>',
 			);
 		}

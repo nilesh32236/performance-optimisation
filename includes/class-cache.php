@@ -524,7 +524,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$home_path = str_replace( home_url(), '', home_url( '/' ) );
 			$this->delete_cache_files( $this->get_file_path( $home_path, 'html' ) );
 
-			if ( get_option( 'show_on_front' ) === 'page' ) {
+			if ( 'page' === get_option( 'show_on_front' ) ) {
 				$posts_page_id = get_option( 'page_for_posts' );
 				if ( $posts_page_id ) {
 					$posts_path = str_replace( home_url(), '', get_permalink( $posts_page_id ) );
