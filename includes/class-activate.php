@@ -34,8 +34,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 */
 		public static function init(): void {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
 
 			Advanced_Cache_Handler::create();
+
+			$options             = get_option( 'wppo_settings', array() );
+			$enable_server_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
+
+			if ( $enable_server_rules ) {
+				Htaccess_Handler::update_rules( true );
+			}
 
 			// Add WP_CACHE constant to wp-config.php if not already defined.
 			self::add_wp_cache_constant();

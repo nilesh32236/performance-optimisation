@@ -20,6 +20,8 @@ const FileOptimization = ({ options = {} }) => {
 		excludeDeferJS: '',
 		delayJS: false,
 		excludeDelayJS: '',
+		enableServerRules: false,
+		cdnURL: '',
 		...options,
 	}
 
@@ -138,6 +140,28 @@ const FileOptimization = ({ options = {} }) => {
 				textareaValue={settings.excludeDelayJS}
 				onTextareaChange={handleChange(setSettings)}
 			/>
+
+			<div className="setting-group">
+				<CheckboxOption
+					label={translations.enableServerRules}
+					checked={settings.enableServerRules}
+					onChange={handleChange(setSettings)}
+					name="enableServerRules"
+				/>
+				<p className="field-description">{translations.enableServerRulesDesc}</p>
+			</div>
+
+			<div className="setting-group">
+				<label className="field-label">{translations.cdnURL}</label>
+				<input
+					type="text"
+					className="input-field"
+					placeholder={translations.cdnURLPlaceholder}
+					name="cdnURL"
+					value={settings.cdnURL}
+					onChange={handleChange(setSettings)}
+				/>
+			</div>
 
 			<button type="submit" className="submit-button" disabled={isLoading}>
 				{isLoading ? translations.saving : translations.saveSettings}

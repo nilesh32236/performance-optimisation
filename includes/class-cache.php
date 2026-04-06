@@ -98,10 +98,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR );
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
 
-			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-			$url_path       = wp_normalize_path( trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' ) );
+			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			$url_path    = wp_normalize_path( trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' ) );
 
-			// Reject directory traversal
+			// Reject directory traversal.
 			if ( strpos( $url_path, '..' ) !== false ) {
 				$url_path = '';
 			}
@@ -288,7 +288,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$buffer = $this->minify_buffer( $buffer );
 			}
 
+			// Apply CDN rewriting.
+			$buffer = $this->maybe_apply_cdn( $buffer );
+
 			$this->save_cache_files( $buffer, $file_path );
+
+			return $buffer;
+		}
+
+		/**
+		 * Applies CDN rewriting to the provided HTML buffer.
+		 *
+		 * @param string $buffer The HTML content.
+		 * @return string The modified HTML content.
+		 *
+		 * @since 1.2.0
+		 */
+		public function maybe_apply_cdn( string $buffer ): string {
+			$cdn_url = $this->options['file_optimisation']['cdnURL'] ?? '';
+
+			if ( empty( $cdn_url ) ) {
+				return $buffer;
+			}
+
+			$site_url = home_url();
+			$cdn_url  = rtrim( $cdn_url, '/' );
+
+			// Escape the site URL for use in a regex.
+			$escaped_site_url = preg_quote( $site_url, '/' );
+
+			// Regex to find internal assets in wp-content or wp-includes.
+			$pattern = '/(src|href)=["\'](' . $escaped_site_url . '\/(?:wp-content|wp-includes)\/[^"\']+)["\']/';
+
+			$buffer = preg_replace_callback(
+				$pattern,
+				function ( $matches ) use ( $site_url, $cdn_url ) {
+					$original_url = $matches[2];
+					$new_url      = str_replace( $site_url, $cdn_url, $original_url );
+					return $matches[1] . '="' . $new_url . '"';
+				},
+				$buffer
+			);
 
 			return $buffer;
 		}
@@ -317,7 +357,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function is_not_cacheable(): bool {
-			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			$this->url_path = trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' );
+
+			// Initialize filesystem and options.
+			$this->filesystem = Util::init_filesystem();
+			$this->options    = get_option( 'wppo_settings', array() );
+
 			$parsed_path = wp_parse_url( $request_uri, PHP_URL_PATH );
 			$path_info   = pathinfo( trim( $parsed_path, '/' ), PATHINFO_EXTENSION );
 			return is_404() || ! empty( $path_info );
@@ -432,7 +478,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Invalidate dynamic static HTML cache for a specific page.
+		 * Invalidate dynamic static HTML cache for a specific page and global archives.
 		 *
 		 * @param int $page_id The page ID.
 		 * @return void
@@ -446,6 +492,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$css_file_path  = $this->get_file_path( $path, 'css' );
 			$this->delete_cache_files( $html_file_path );
 			$this->delete_cache_files( $css_file_path );
+
+			// Smart Purging: Always clear the home page and blog archive.
+			$home_path = str_replace( home_url(), '', home_url( '/' ) );
+			$this->delete_cache_files( $this->get_file_path( $home_path, 'html' ) );
+
+			if ( get_option( 'show_on_front' ) === 'page' ) {
+				$posts_page_id = get_option( 'page_for_posts' );
+				if ( $posts_page_id ) {
+					$posts_path = str_replace( home_url(), '', get_permalink( $posts_page_id ) );
+					$this->delete_cache_files( $this->get_file_path( $posts_path, 'html' ) );
+				}
+			}
 
 			if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
 				wp_schedule_single_event( time() + \wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $page_id ) );
@@ -461,11 +519,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.1.1
 		 */
-		private function get_file_path( string $url_path = null, string $type = 'html' ): string {
-			$url_path = wp_normalize_path( trim( $url_path, '/' ) );
+		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
+			$url_path = wp_normalize_path( trim( (string) $url_path, '/' ) );
 
 			if ( strpos( $url_path, '..' ) !== false ) {
-				return ''; // Return empty string to prevent deletion or creation outside cache root
+				return ''; // Return empty string to prevent deletion or creation outside cache root.
 			}
 
 			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? "index.{$type}" : "{$url_path}/index.{$type}" );
@@ -491,11 +549,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Clear the cache for a specific page or all pages.
 		 *
 		 * @param string|null $url_path The URL path of the page for which to clear the cache. If null, all cache will be cleared.
-		 * @return void
+		 * @return bool True on success, false on failure.
 		 *
 		 * @since 1.1.1
 		 */
-		public static function clear_cache( $url_path = null ) {
+		public static function clear_cache( $url_path = null ): bool {
 			$instance = new self();
 			if ( $url_path ) {
 				$url_path = wp_normalize_path( $url_path );
