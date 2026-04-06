@@ -1,6 +1,6 @@
 # 🛠️ Performance Optimisation: Comprehensive Technical Roadmap
 
-**Internal Reference Only** | **Current Version:** 1.1.1 | **Last Updated:** 2026-04-06
+**Internal Reference Only** | **Current Version:** 1.2.0 | **Last Updated:** 2026-04-06
 
 This document serves as the master blueprint for the Performance Optimisation plugin's evolution. It details the technical architecture, implementation logic, and milestone objectives for the upcoming versions.
 
@@ -14,7 +14,7 @@ We use **Semantic Versioning (SemVer)**:
 
 ---
 
-## 🎯 Version 1.2.0: The "Cache Core" Completion
+## ✅ Version 1.2.0: The "Cache Core" Completion (COMPLETED / TESTING)
 **Focus:** Enhancing the "Static HTML" engine and asset delivery speed.
 **Timeline:** 3–4 Weeks
 
