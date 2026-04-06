@@ -175,7 +175,6 @@ class Main {
 			add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 		}
 
-		// ⚡ BOLT OPTIMIZATION: Parse exclude lists once during setup instead of per-script.
 		if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
 			$exclude_js = array( 'wppo-lazyload' );
 			if ( isset( $this->options['file_optimisation']['excludeDeferJS'] ) && ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
@@ -629,8 +628,6 @@ class Main {
 			return $tag;
 		}
 
-		// ⚡ BOLT OPTIMIZATION: Using cached $exclude_defer_js and $exclude_delay_js properties
-		// to avoid repetitive string processing on every enqueued script tag.
 		if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
 			if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
 				$tag = str_replace( ' src', ' defer="defer" src', $tag );
