@@ -126,6 +126,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
 			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
 
+			$path = wp_normalize_path( $path );
+
+			// Reject path if it contains directory traversal sequences
+			if ( strpos( $path, '..' ) !== false ) {
+				return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+			}
+
 			if ( 'clear_single_page_cache' === $action ) {
 				Cache::clear_cache( $path );
 				new Log(
