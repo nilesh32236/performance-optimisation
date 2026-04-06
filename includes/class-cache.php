@@ -317,15 +317,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Escape the site URL for use in a regex.
 			$escaped_site_url = preg_quote( $site_url, '/' );
 
-			// Regex to find internal assets in wp-content or wp-includes.
-			$pattern = '/(src|href)=["\'](' . $escaped_site_url . '\/(?:wp-content|wp-includes)\/[^"\']+)["\']/';
+			// Regex to find internal assets in src, href or srcset attributes. Supports optional quotes.
+			$pattern = '/(src|href|srcset)=["\']?(' . $escaped_site_url . '\/[^"\'\s>]+|[^"\'\s>]+)["\']?/i';
 
 			$buffer = preg_replace_callback(
 				$pattern,
 				function ( $matches ) use ( $site_url, $cdn_url ) {
-					$original_url = $matches[2];
-					$new_url      = str_replace( $site_url, $cdn_url, $original_url );
-					return $matches[1] . '="' . $new_url . '"';
+					$attr         = $matches[1];
+					$value        = $matches[2];
+					$site_url_pat = rtrim( $site_url, '/' );
+
+					if ( 'srcset' === $attr ) {
+						$candidates = explode( ',', $value );
+						$new_srcset = array();
+
+						foreach ( $candidates as $candidate ) {
+							$candidate = trim( $candidate );
+							$parts     = preg_split( '/\s+/', $candidate, 2 );
+							$url       = $parts[0];
+							$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
+
+							if ( 0 === strpos( $url, $site_url ) ) {
+								$url = str_replace( $site_url, $cdn_url, $url );
+							}
+
+							$new_srcset[] = $url . $suffix;
+						}
+
+						return 'srcset="' . implode( ', ', $new_srcset ) . '"';
+					}
+
+					if ( 0 === strpos( $value, $site_url ) && preg_match( '/\/(?:wp-content|wp-includes)\//', $value ) ) {
+						$new_url = str_replace( $site_url, $cdn_url, $value );
+						return $attr . '="' . $new_url . '"';
+					}
+
+					return $matches[0];
 				},
 				$buffer
 			);
@@ -505,6 +532,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 			}
 
+			// Extended Smart Purging: Clear archives for public taxonomies and the current post type.
+			$post_type = get_post_type( $page_id );
+
+			if ( $post_type ) {
+				$archive_link = get_post_type_archive_link( $post_type );
+				if ( ! empty( $archive_link ) && ! is_wp_error( $archive_link ) ) {
+					$archive_path = str_replace( home_url(), '', $archive_link );
+					$this->delete_cache_files( $this->get_file_path( $archive_path, 'html' ) );
+				}
+
+				$taxonomies = get_object_taxonomies( $post_type, 'objects' );
+				foreach ( $taxonomies as $taxonomy ) {
+					if ( ! $taxonomy->public ) {
+						continue;
+					}
+
+					$terms = get_the_terms( $page_id, $taxonomy->name );
+					if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+						foreach ( $terms as $term ) {
+							$term_link = get_term_link( $term );
+							if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
+								$term_path = str_replace( home_url(), '', $term_link );
+								$this->delete_cache_files( $this->get_file_path( $term_path, 'html' ) );
+							}
+						}
+					}
+				}
+			}
+
 			if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
 				wp_schedule_single_event( time() + \wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $page_id ) );
 			}
@@ -533,16 +589,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Delete cache files for a specific file path.
 		 *
 		 * @param string $file_path The file path.
-		 * @return void
+		 * @return bool True if successful (or not exists), false otherwise.
 		 *
 		 * @since 1.1.0
 		 */
-		private function delete_cache_files( $file_path ): void {
+		private function delete_cache_files( $file_path ): bool {
 			$gzip_file_path = $file_path . '.gz';
+
 			if ( $this->filesystem ) {
-				$this->filesystem->delete( $file_path );
-				$this->filesystem->delete( $gzip_file_path );
+				$res1 = $this->filesystem->delete( $file_path );
+				$res2 = $this->filesystem->delete( $gzip_file_path );
+				return $res1 && $res2;
 			}
+
+			return false;
 		}
 
 		/**
@@ -555,6 +615,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		public static function clear_cache( $url_path = null ): bool {
 			$instance = new self();
+
+			if ( ! $instance->filesystem ) {
+				return false;
+			}
+
 			if ( $url_path ) {
 				$url_path = wp_normalize_path( $url_path );
 
@@ -569,34 +634,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					return false;
 				}
 
-				$instance->delete_cache_files( $html_file_path );
-				$instance->delete_cache_files( $css_file_path );
-			} else {
-				$instance->delete_all_cache_files();
+				$res_html = $instance->delete_cache_files( $html_file_path );
+				$res_css  = $instance->delete_cache_files( $css_file_path );
+				return $res_html && $res_css;
 			}
 
-			return true;
+			return $instance->delete_all_cache_files();
 		}
 
 		/**
 		 * Delete all cache files.
 		 *
-		 * @return void
+		 * @return bool True if successful, false otherwise.
 		 *
 		 * @since 1.0.0
 		 */
-		private function delete_all_cache_files() {
+		private function delete_all_cache_files(): bool {
 			$cache_dir = "{$this->cache_root_dir}/{$this->domain}";
+			$res1      = true;
+			$res2      = true;
 
 			if ( $this->filesystem && $this->filesystem->is_dir( $cache_dir ) ) {
-				$this->filesystem->delete( $cache_dir, true ); // 'true' ensures recursive deletion
+				$res1 = $this->filesystem->delete( $cache_dir, true ); // 'true' ensures recursive deletion.
 			}
 
 			$min_dir = "{$this->cache_root_dir}/min";
 
 			if ( $this->filesystem && $this->filesystem->is_dir( $min_dir ) ) {
-				$this->filesystem->delete( $min_dir, true ); // 'true' ensures recursive deletion
+				$res2 = $this->filesystem->delete( $min_dir, true ); // 'true' ensures recursive deletion.
 			}
+
+			return $res1 && $res2;
 		}
 
 		/**

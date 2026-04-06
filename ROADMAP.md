@@ -18,7 +18,7 @@ We use **Semantic Versioning (SemVer)**:
 **Focus:** Enhancing the "Static HTML" engine and asset delivery speed.
 
 ### 1. Server-Side Rules (.htaccess Automation)
-- **Logic**: Use `insert_with_markers()` to append rules outside the `# BEGIN WordPress` block to prevent overwrites.
+- **Logic**: Use `insert_with_markers()` to append rules after the `# END WordPress` block (outside and below the WordPress core section) to prevent accidental overwrites during permalink updates.
 - **Rules (Gzip/Deflate)**: Implement `mod_deflate` for `text/html`, `text/css`, `application/javascript`, and `image/svg+xml`.
 - **Rules (Browser Caching)**: Implement `mod_expires` with a standard `1 month` duration for images/CSS/JS and `0 seconds` for HTML.
 - **Verification**: Check `Content-Encoding: gzip` and `Cache-Control` headers in the network tab.
@@ -26,14 +26,14 @@ We use **Semantic Versioning (SemVer)**:
 ### 2. CDN URL Rewriting
 - **Trigger**: Hook into `template_redirect` after output buffering starts.
 - **Regex Logic**: Target `src` and `href` attributes containing the site's local domain and `/wp-content/` or `/wp-includes/`.
-- **Pattern**: `/(src|href)=["'](https?:\/\/[^"']+\/(wp-content|wp-includes)\/[^"']+)["']/i`.
-- **Logic**: Replace the origin domain with the user-provided CNAME (e.g., `cdn.example.com`).
+- **Pattern**: `/(src|href|srcset)=["']?(https?:\/\/[^"'\s>]+\/(?:wp-content|wp-includes)\/[^"'\s>]+)["']?/i`.
+- **Logic**: Replace the origin domain with the user-provided CNAME (e.g., `cdn.example.com`). This pattern supports quoted and unquoted attributes by terminating at whitespace or the `>` character.
 
 ### 3. Smart Cache Purging (Granular Invalidation)
 - **Problem**: Currently, `save_post` triggers a flush of the post cache. We need to extend this.
 - **Requirement**: When a post is updated:
     1. Purge the specific post's HTML cache.
-    2. Purge the Front Page (`index.html`).
+    2. Purge the Front Page (`home_url()`). Dynamically resolve the front page path using `is_front_page()` or `get_option('page_on_front')` to target the correct cache file.
     3. Purge the Blog Archive/Category archives associated with the post.
 - **Implementation**: Update `class-cache.php::invalidate_dynamic_static_html()` to resolve these additional paths.
 
@@ -62,7 +62,7 @@ We use **Semantic Versioning (SemVer)**:
 
 ### 2. Developer Tooling (WP-CLI)
 - **Command**: `wp wppo clear --all` (Clear all page/object cache).
-- **Command**: `wp wppo optimize --images` (Trigger background optimization of the media library).
+- **Command**: `wp wppo optimisation --images` (Trigger background optimisation of the media library).
 - **Structure**: Create a `class-cli.php` that registers commands using `WP_CLI::add_command`.
 
 ---
@@ -85,5 +85,5 @@ We use **Semantic Versioning (SemVer)**:
 
 ## ✅ Post-Development Checklist
 - [ ] **PHP Compatibility**: Ensure compatibility with PHP 7.4 through 8.3.
-- [ ] **Permissions Check**: Verify that the plugin warns the user if `.htaccess` or `wp-content/cache` is not writable.
+- [ ] **Permissions Check**: Verify that the plugin warns the user if `.htaccess` or `wp-content/cache` are not writable.
 - [ ] **Benchmarking**: Every minor release must show at least a **10% improvement** in Time to First Byte (TTFB) or Speed Index on a standard test site.
