@@ -316,6 +316,8 @@ class Main {
 					'imageOptimization'        => __( ' Image Optimization', 'performance-optimisation' ),
 					'tools'                    => __( ' Tools', 'performance-optimisation' ),
 					'failedFetchActivities'    => __( 'Failed to fetch activities:', 'performance-optimisation' ),
+					'sidebar.expand'           => __( 'Expand sidebar', 'performance-optimisation' ),
+					'sidebar.collapse'         => __( 'Collapse sidebar', 'performance-optimisation' ),
 					'clearCacheSuccess'        => __( 'Cache cleared successfully: ', 'performance-optimisation' ),
 					'errorClearCache'          => __( 'Error clearing cache: ', 'performance-optimisation' ),
 					'completed'                => __( 'Completed', 'performance-optimisation' ),

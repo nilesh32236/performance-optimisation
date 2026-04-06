@@ -19,6 +19,7 @@ import DatabaseCleanup from './components/DatabaseCleanup';
 import { fetchRecentActivities } from './lib/apiRequest';
 
 const translations = wppoSettings.translations;
+const t = ( key ) => ( translations && translations[ key ] ) || key;
 
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
@@ -131,7 +132,7 @@ const App = () => {
 				onClick={ toggleSidebar }
 				style={ { left: sidebarHide ? '0px' : '110px' } }
 				aria-label={
-					sidebarHide ? 'Expand sidebar' : 'Collapse sidebar'
+					sidebarHide ? t( 'sidebar.expand' ) : t( 'sidebar.collapse' )
 				}
 				aria-expanded={ ! sidebarHide }
 			>
