@@ -126,8 +126,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
 			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
 
+			$path = wp_normalize_path( $path );
+
+			// Reject path if it contains directory traversal sequences
+			if ( strpos( $path, '..' ) !== false ) {
+				return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+			}
+
 			if ( 'clear_single_page_cache' === $action ) {
-				Cache::clear_cache( $path );
+				$cleared = Cache::clear_cache( $path );
+				if ( ! $cleared ) {
+					return $this->send_response( null, false, 400, __( 'Failed to clear cache: Invalid path.', 'performance-optimisation' ) );
+				}
 				new Log(
 					sprintf(
 					/* translators: %s: The URL of the page */
@@ -177,12 +187,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		private function sanitize_settings_recursively( $settings ) {
 			$sanitized = array();
 			foreach ( $settings as $key => $value ) {
+				$safe_key = preg_replace( '/[^a-zA-Z0-9_\-]/', '', $key );
+
 				if ( is_array( $value ) ) {
-					$sanitized[ sanitize_key( $key ) ] = $this->sanitize_settings_recursively( $value );
+					$sanitized[ $safe_key ] = $this->sanitize_settings_recursively( $value );
 				} elseif ( is_bool( $value ) ) {
-					$sanitized[ sanitize_key( $key ) ] = (bool) $value;
+					$sanitized[ $safe_key ] = (bool) $value;
 				} else {
-					$sanitized[ sanitize_key( $key ) ] = sanitize_textarea_field( $value );
+					$sanitized[ $safe_key ] = sanitize_textarea_field( $value );
 				}
 			}
 			return $sanitized;
