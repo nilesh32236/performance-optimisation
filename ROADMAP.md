@@ -1,6 +1,6 @@
 # 🛠️ Performance Optimisation: Comprehensive Technical Roadmap
 
-**Internal Reference Only** | **Current Version:** 1.2.0 | **Last Updated:** 2026-04-06
+**Current Version:** 1.2.0 | **Last Updated:** 2026-04-06
 
 This document serves as the master blueprint for the Performance Optimisation plugin's evolution. It details the technical architecture, implementation logic, and milestone objectives for the upcoming versions.
 
@@ -16,7 +16,6 @@ We use **Semantic Versioning (SemVer)**:
 
 ## ✅ Version 1.2.0: The "Cache Core" Completion (COMPLETED / TESTING)
 **Focus:** Enhancing the "Static HTML" engine and asset delivery speed.
-**Timeline:** 3–4 Weeks
 
 ### 1. Server-Side Rules (.htaccess Automation)
 - **Logic**: Use `insert_with_markers()` to append rules outside the `# BEGIN WordPress` block to prevent overwrites.
@@ -42,7 +41,6 @@ We use **Semantic Versioning (SemVer)**:
 
 ## 🎯 Version 1.3.0: Object Caching (Redis/Memcached)
 **Focus:** Minimizing Database overhead for logged-in users and dynamic sites.
-**Timeline:** 3–4 Weeks
 
 ### 1. Architecture: The `object-cache.php` Drop-in
 - **Logic**: Provide a button to "Enable Object Cache" that copies a specialized drop-in file to `wp-content/object-cache.php`.
@@ -57,7 +55,6 @@ We use **Semantic Versioning (SemVer)**:
 
 ## 🎯 Version 1.4.0: Advanced Web Vitals (Technical SEO)
 **Focus:** Eliminating render-blocking resources and domain lookups.
-**Timeline:** 3–4 Weeks
 
 ### 1. Localize External Assets (Google Fonts/Analytics)
 - **Google Fonts**: Scan HTML for `fonts.googleapis.com` links. Download the CSS and the font files (`.woff2`) to `wp-content/uploads/wppo-fonts/`. Update CSS paths to local URLs.
@@ -72,7 +69,6 @@ We use **Semantic Versioning (SemVer)**:
 
 ## 🎯 Version 1.5.0: Enterprise & Ecosystem
 **Focus:** Scalability and professional environment management.
-**Timeline:** 3–4 Weeks
 
 ### 1. Cloudflare Dashboard Integration
 - **Logic**: Allow users to enter their Cloudflare API Token and Zone ID.
