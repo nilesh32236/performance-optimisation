@@ -99,7 +99,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
 
 			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-			$this->url_path = trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' );
+			$url_path       = wp_normalize_path( trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' ) );
+
+			// Reject directory traversal
+			if ( strpos( $url_path, '..' ) !== false ) {
+				$url_path = '';
+			}
+
+			$this->url_path = $url_path;
 
 			// Initialize filesystem and options.
 			$this->filesystem = Util::init_filesystem();
@@ -455,7 +462,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function get_file_path( string $url_path = null, string $type = 'html' ): string {
-			$url_path = trim( $url_path, '/' );
+			$url_path = wp_normalize_path( trim( $url_path, '/' ) );
+
+			if ( strpos( $url_path, '..' ) !== false ) {
+				return ''; // Return empty string to prevent deletion or creation outside cache root
+			}
+
 			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? "index.{$type}" : "{$url_path}/index.{$type}" );
 		}
 
@@ -486,13 +498,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public static function clear_cache( $url_path = null ) {
 			$instance = new self();
 			if ( $url_path ) {
+				$url_path = wp_normalize_path( $url_path );
+
+				if ( strpos( $url_path, '..' ) !== false ) {
+					return false;
+				}
+
 				$html_file_path = $instance->get_file_path( $url_path, 'html' );
 				$css_file_path  = $instance->get_file_path( $url_path, 'css' );
+
+				if ( empty( $html_file_path ) || empty( $css_file_path ) ) {
+					return false;
+				}
+
 				$instance->delete_cache_files( $html_file_path );
 				$instance->delete_cache_files( $css_file_path );
 			} else {
 				$instance->delete_all_cache_files();
 			}
+
+			return true;
 		}
 
 		/**
