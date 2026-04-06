@@ -12,7 +12,6 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				body: JSON.stringify( { action: 'clear_cache' } )
 			} )
 				.then( response => response.json() )
-				.then( data => console.log( 'Cache cleared successfully: ', data ) )
 				.catch( error => console.error( 'Error clearing cache: ', error ) );
 		} );
 	}
@@ -31,7 +30,6 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				body: JSON.stringify( { action: 'clear_single_page_cache', path } )
 			} )
 				.then( response => response.json() )
-				.then( data => console.log( 'Cache cleared successfully: ', data ) )
 				.catch( error => console.error( 'Error clearing cache: ', error ) );
 		} );
 	}

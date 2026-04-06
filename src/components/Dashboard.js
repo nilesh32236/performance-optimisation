@@ -104,7 +104,6 @@ const Dashboard = ({ activities }) => {
 			handleLoading('clear_cache', true);
 			apiCall('clear_cache', { action: 'clear_cache' })
 				.then((data) => {
-					console.log(translations.clearCacheSuccess, data);
 					updateCache();
 				})
 				.catch((error) => console.error(translations.errorClearCache, error))
@@ -137,7 +136,6 @@ const Dashboard = ({ activities }) => {
 					}
 					pollingRef.current = setInterval(pollJobStatus, 5000);
 				} else {
-					console.log(translations.imgOptimiseSuccess);
 					wppoSettings.imageInfo = response;
 				}
 			})
@@ -159,7 +157,6 @@ const Dashboard = ({ activities }) => {
 		apiCall('delete_optimised_image', {})
 			.then((data) => {
 				if (data.success) {
-					console.log(translations.removedImg, data.deleted);
 					wppoSettings.image_info.completed = {webp: [], avif: []};
 				} else {
 					console.error(translations.failedToRemove, data.failed);

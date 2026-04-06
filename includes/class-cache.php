@@ -459,7 +459,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string      $type The file type (default: 'html').
 		 * @return string The file path.
 		 *
-		 * @since 1.0.0
+		 * @since 1.1.1
 		 */
 		private function get_file_path( string $url_path = null, string $type = 'html' ): string {
 			$url_path = wp_normalize_path( trim( $url_path, '/' ) );
@@ -477,7 +477,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $file_path The file path.
 		 * @return void
 		 *
-		 * @since 1.0.0
+		 * @since 1.1.0
 		 */
 		private function delete_cache_files( $file_path ): void {
 			$gzip_file_path = $file_path . '.gz';
@@ -493,7 +493,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string|null $url_path The URL path of the page for which to clear the cache. If null, all cache will be cleared.
 		 * @return void
 		 *
-		 * @since 1.0.0
+		 * @since 1.1.1
 		 */
 		public static function clear_cache( $url_path = null ) {
 			$instance = new self();
