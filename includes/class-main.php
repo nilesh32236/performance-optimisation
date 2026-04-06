@@ -47,6 +47,22 @@ class Main {
 	);
 
 	/**
+	 * List of JavaScript handles/URLs to exclude from deferring.
+	 *
+	 * @var array
+	 * @since 1.1.0
+	 */
+	private array $exclude_defer_js = array();
+
+	/**
+	 * List of JavaScript handles/URLs to exclude from delaying.
+	 *
+	 * @var array
+	 * @since 1.1.0
+	 */
+	private array $exclude_delay_js = array();
+
+	/**
 	 * Filesystem instance for file operations.
 	 *
 	 * @var object
@@ -157,6 +173,26 @@ class Main {
 			}
 
 			add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
+		}
+
+		if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
+			$exclude_js = array( 'wppo-lazyload' );
+			if ( isset( $this->options['file_optimisation']['excludeDeferJS'] ) && ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
+				$exclude_defer = Util::process_urls( $this->options['file_optimisation']['excludeDeferJS'] );
+				$this->exclude_defer_js = array_merge( $exclude_js, (array) $exclude_defer );
+			} else {
+				$this->exclude_defer_js = $exclude_js;
+			}
+		}
+
+		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
+			$exclude_js = array( 'wppo-lazyload' );
+			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
+				$exclude_delay = Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] );
+				$this->exclude_delay_js = array_merge( $exclude_js, (array) $exclude_delay );
+			} else {
+				$this->exclude_delay_js = $exclude_js;
+			}
 		}
 
 		add_action( 'wp_head', array( $this, 'add_preload_prefatch_preconnect' ), 1 );
@@ -592,34 +628,14 @@ class Main {
 			return $tag;
 		}
 
-		$exclude_js = array( 'wppo-lazyload' );
-
 		if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
-
-			if ( isset( $this->options['file_optimisation']['excludeDeferJS'] ) && ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
-				$exclude_defer = Util::process_urls( $this->options['file_optimisation']['excludeDeferJS'] );
-
-				$exclude_defer = array_merge( $exclude_js, (array) $exclude_defer );
-			} else {
-				$exclude_defer = $exclude_js;
-			}
-
-			if ( ! in_array( $handle, $exclude_defer, true ) ) {
+			if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
 				$tag = str_replace( ' src', ' defer="defer" src', $tag );
 			}
 		}
 
 		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
-
-			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
-				$exclude_delay = Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] );
-
-				$exclude_delay = array_merge( $exclude_js, (array) $exclude_delay );
-			} else {
-				$exclude_delay = $exclude_js;
-			}
-
-			if ( ! in_array( $handle, $exclude_delay, true ) ) {
+			if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
 				$tag = str_replace( ' src', ' wppo-src', $tag );
 				$tag = preg_replace(
 					'/type=("|\')text\/javascript("|\')/',
