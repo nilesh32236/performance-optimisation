@@ -115,9 +115,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				$disabled_styles = array();
 			}
 
-			$assets          = Asset_Manager::get_page_assets( $post->ID );
-			$protected_js    = Asset_Manager::get_protected_scripts();
-			$protected_css   = Asset_Manager::get_protected_styles();
+			$assets        = Asset_Manager::get_page_assets( $post->ID );
+			$protected_js  = Asset_Manager::get_protected_scripts();
+			$protected_css = Asset_Manager::get_protected_styles();
 			?>
 			<div class="wppo-asset-manager">
 				<?php if ( false === $assets || ( empty( $assets['scripts'] ) && empty( $assets['styles'] ) ) ) : ?>
