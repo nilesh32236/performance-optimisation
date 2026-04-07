@@ -46,23 +46,31 @@
 
 		li:not(.hamburger-menu) {
 			border-radius: 5px;
-			color: #333;
-			cursor: pointer;
-			padding: 12px;
-			transition: background-color 0.3s ease;
 
-			.sidebar-icon {
-				font-size: 18px;
-			}
+			button {
+				background: none;
+				border: none;
+				border-radius: 5px;
+				color: #333;
+				cursor: pointer;
+				padding: 12px;
+				transition: background-color 0.3s ease;
+				width: 100%;
+				text-align: left;
 
-			&.active,
-			&:hover {
-				background-color: #0073aa;
-				color: #fff;
-			}
+				.sidebar-icon {
+					font-size: 18px;
+				}
 
-			@media (max-width: 768px) {
-				text-align: center;
+				&.active,
+				&:hover {
+					background-color: #0073aa;
+					color: #fff;
+				}
+
+				@media (max-width: 768px) {
+					text-align: center;
+				}
 			}
 		}
 	}
