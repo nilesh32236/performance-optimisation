@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Performance Optimisation
  * Description:       A Performance Optimisation plugin for WordPress.
- * Requires at least: 5.5.3
+ * Requires at least: 6.2
  * Requires PHP:      7.0
  * Version:           1.1.1
  * Author:            Nilesh kanzariya
