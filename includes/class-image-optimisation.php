@@ -35,6 +35,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private array $options;
 
 		/**
+		 * Cached instance of Img_Converter to avoid repeated parsing of settings.
+		 *
+		 * @var Img_Converter|null
+		 * @since 1.1.2
+		 */
+		private ?Img_Converter $img_converter = null;
+
+		/**
 		 * Constructor.
 		 *
 		 * @since 1.0.0
@@ -53,9 +61,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.0.0
 		 */
 		private function setup_hooks() {
-			require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
-				$img_converter = new Img_Converter( $this->options );
+				$img_converter = $this->get_img_converter();
 
 				add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
 				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ) );
@@ -153,6 +160,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Gets a cached instance of Img_Converter.
+		 *
+		 * @since 1.1.2
+		 *
+		 * @return Img_Converter The Img_Converter instance.
+		 */
+		private function get_img_converter() {
+			if ( null === $this->img_converter ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
+				$this->img_converter = new Img_Converter( $this->options );
+			}
+			return $this->img_converter;
+		}
+
+		/**
 		 * Replaces image URLs with next-generation formats.
 		 *
 		 * @since 1.0.0
@@ -180,7 +202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			$img_converter = new Img_Converter( $this->options );
+			$img_converter = $this->get_img_converter();
 
 			$avif_img_path = $img_converter->get_img_path( $img_url, 'avif' );
 			$webp_img_path = $img_converter->get_img_path( $img_url, 'webp' );
