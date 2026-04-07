@@ -30,7 +30,7 @@ jobs:
           tools: php-parallel-lint
 
       - name: PHP Syntax Check
-        run: php-parallel-lint --exclude vendor --exclude node_modules .
+        run: parallel-lint --exclude vendor --exclude node_modules .
 
   code-quality:
     runs-on: ubuntu-latest
@@ -61,8 +61,16 @@ jobs:
 
       - name: Psalm Security Scan
         id: psalm
-        uses: psalm/psalm-github-security-scan@v1
+        uses: docker://ghcr.io/psalm/psalm-security-scan
+        with:
+          report_file: reports/psalm.sarif
         continue-on-error: true
+
+      - name: Upload Security Analysis results
+        if: always() && steps.psalm.outcome != 'skipped'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/psalm.sarif
 
       # This step generates a standard report for Issue management if needed
       - name: Generate Reports
