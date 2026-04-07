@@ -52,14 +52,11 @@ jobs:
 
       - name: Run WPCS check
         id: wpcs_check
-        uses: 10up/wpcs-action@stable
-        with:
-          enable_warnings: true
-          paths: '.'
-          excludes: 'index.asset.php,vendor/*,node_modules/*'
-          standard: 'WordPress'
-          phpcs_bin_path: 'phpcs'
-          use_local_config: false
+        run: |
+          # Run phpcs and generate checkstyle report
+          vendor/bin/phpcs . --standard=WordPress --extensions=php --ignore="vendor/*,node_modules/*,index.asset.php" --report=checkstyle --report-file=reports/wpcs.xml || true
+          # Also run standard output for the logs
+          vendor/bin/phpcs . --standard=WordPress --extensions=php --ignore="vendor/*,node_modules/*,index.asset.php"
         continue-on-error: true
 
       - name: Psalm Security Scan
@@ -71,7 +68,7 @@ jobs:
 
       - name: Upload Security Analysis results
         if: always() && steps.psalm.outcome != 'skipped'
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/psalm.sarif
 
@@ -82,11 +79,56 @@ jobs:
       # This step generates a standard report for Issue management if needed
       - name: Generate Reports
         if: always()
+        shell: python
         run: |
-          mkdir -p reports
-          # We'll use the outcomes to decide if we need to post an issue
-          echo "WPCS Outcome: ${{ steps.wpcs_check.outcome }}" > reports/status.txt
-          echo "Psalm Outcome: ${{ steps.psalm.outcome }}" >> reports/status.txt
+          import xml.etree.ElementTree as ET
+          import json
+          import os
+
+          table = "| Tool | File | Line | Message |\n| --- | --- | --- | --- |\n"
+          has_errors = False
+
+          # WPCS
+          wpcs_file = 'reports/wpcs.xml'
+          if os.path.exists(wpcs_file):
+              try:
+                  root = ET.parse(wpcs_file).getroot()
+                  for file_node in root.findall('file'):
+                      filename = file_node.get('name').split('/')[-1] # Simplify name
+                      for error in file_node.findall('error'):
+                          has_errors = True
+                          msg = error.get('message').replace('|', '\\|')
+                          table += f"| WPCS | {filename} | {error.get('line')} | {msg} |\n"
+              except Exception as e:
+                  table += f"| WPCS | Error | - | Failed to parse report: {str(e)} |\n"
+
+          # Psalm
+          psalm_file = 'reports/psalm.sarif'
+          if os.path.exists(psalm_file):
+              try:
+                  with open(psalm_file) as f:
+                      data = json.load(f)
+                      for run in data.get('runs', []):
+                          for result in run.get('results', []):
+                              has_errors = True
+                              msg = result.get('message', {}).get('text', '').replace('|', '\\|')
+                              for loc in result.get('locations', []):
+                                  phys = loc.get('physicalLocation', {})
+                                  filename = phys.get('artifactLocation', {}).get('uri', '').split('/')[-1]
+                                  line = phys.get('region', {}).get('startLine', '?')
+                                  table += f"| Psalm | {filename} | {line} | {msg} |\n"
+              except Exception as e:
+                  table += f"| Psalm | Error | - | Failed to parse report: {str(e)} |\n"
+
+          if not has_errors:
+              table = "All checks passed! 🎉"
+
+          with open('reports/summary.md', 'w') as f:
+              f.write(table)
+          
+          # Write status for shell script
+          with open('reports/status.txt', 'w') as f:
+              f.write("failure" if has_errors else "success")
 
       - name: Manage GitHub Issue
         id: manage_issue
@@ -108,9 +150,10 @@ jobs:
           fi
           
           # Create or Update issue
+          SUMMARY=$(cat reports/summary.md)
           BODY="### Code Quality Issues Detected in $BRANCH
-          - WPCS: ${{ steps.wpcs_check.outcome }}
-          - Psalm: ${{ steps.psalm.outcome }}
+          
+          $SUMMARY
           
           Please check the [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
           
