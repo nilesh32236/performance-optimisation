@@ -7,8 +7,8 @@
 /vendor/wp-coding-standards/
 /vendor/dealerdirect/
 /vendor/phpcsstandards/
-/vendor/bin/phpcbf
-/vendor/bin/phpcs
+/vendor/bin/
+/vendor/matthiasmullie/minify/bin/
 /package.json
 /package-lock.json
 /composer.json

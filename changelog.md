@@ -2,6 +2,10 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.1.3] - 2026-04-07
+### Fixed
+- Anchored exclusion patterns in `.distignore` and `build-release.sh` to prevent accidental vendor file exclusion.
+
 ## [1.1.2] - 2026-04-07
 ### Added
 - No new major features; this is a maintenance and compatibility release.
