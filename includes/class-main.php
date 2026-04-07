@@ -178,7 +178,7 @@ class Main {
 		if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
 			$exclude_js = array( 'wppo-lazyload' );
 			if ( isset( $this->options['file_optimisation']['excludeDeferJS'] ) && ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
-				$exclude_defer = Util::process_urls( $this->options['file_optimisation']['excludeDeferJS'] );
+				$exclude_defer          = Util::process_urls( $this->options['file_optimisation']['excludeDeferJS'] );
 				$this->exclude_defer_js = array_merge( $exclude_js, (array) $exclude_defer );
 			} else {
 				$this->exclude_defer_js = $exclude_js;
@@ -188,7 +188,7 @@ class Main {
 		if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 			$exclude_js = array( 'wppo-lazyload' );
 			if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
-				$exclude_delay = Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] );
+				$exclude_delay          = Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] );
 				$this->exclude_delay_js = array_merge( $exclude_js, (array) $exclude_delay );
 			} else {
 				$this->exclude_delay_js = $exclude_js;

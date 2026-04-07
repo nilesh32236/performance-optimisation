@@ -1,9 +1,14 @@
 # Exclude from WordPress.org SVN release
 .git/
 .github/
+.jules/
 node_modules/
 vendor/squizlabs/
 vendor/wp-coding-standards/
+vendor/dealerdirect/
+vendor/phpcsstandards/
+vendor/bin/phpcbf
+vendor/bin/phpcs
 src/
 package.json
 package-lock.json
@@ -17,4 +22,7 @@ phpcs.xml
 psalm.xml
 tests/
 bin/
+scripts/
 # Keep build/ and essential PHP files
+.coderabbit.yaml
+.gitattributes

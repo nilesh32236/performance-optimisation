@@ -98,10 +98,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR );
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
 
-			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-			$url_path       = wp_normalize_path( trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' ) );
+			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			$url_path    = wp_normalize_path( trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' ) );
 
-			// Reject directory traversal
+			// Reject directory traversal.
 			if ( strpos( $url_path, '..' ) !== false ) {
 				$url_path = '';
 			}
@@ -461,11 +461,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.1.1
 		 */
-		private function get_file_path( string $url_path = null, string $type = 'html' ): string {
+		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
 			$url_path = wp_normalize_path( trim( $url_path, '/' ) );
 
 			if ( strpos( $url_path, '..' ) !== false ) {
-				return ''; // Return empty string to prevent deletion or creation outside cache root
+				return ''; // Return empty string to prevent deletion or creation outside cache root.
 			}
 
 			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? "index.{$type}" : "{$url_path}/index.{$type}" );
@@ -491,11 +491,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Clear the cache for a specific page or all pages.
 		 *
 		 * @param string|null $url_path The URL path of the page for which to clear the cache. If null, all cache will be cleared.
-		 * @return void
+		 * @return bool
 		 *
 		 * @since 1.1.1
 		 */
-		public static function clear_cache( $url_path = null ) {
+		public static function clear_cache( $url_path = null ): bool {
 			$instance = new self();
 			if ( $url_path ) {
 				$url_path = wp_normalize_path( $url_path );

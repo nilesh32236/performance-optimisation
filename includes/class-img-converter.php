@@ -154,10 +154,8 @@ class Img_Converter {
 								$this->update_conversion_status( $source_image, 'completed', $format );
 							} else {
 								$this->update_conversion_status( $source_image, 'failed', $format );
-								imagedestroy( $image );
 								return false;
 							}
-							imagedestroy( $image );
 						} catch ( \Exception $e ) {
 							$this->update_conversion_status( $source_image, 'failed', $format );
 							return false;
@@ -257,15 +255,10 @@ class Img_Converter {
 				}
 			}
 
-			imagedestroy( $image ); // Clean up memory.
 			return $success;
 		} catch ( \Exception $e ) {
 
 			$this->update_conversion_status( $source_image, 'failed', $format );
-			// Clean up memory if image resource was created.
-			if ( is_resource( $image ) ) {
-				imagedestroy( $image );
-			}
 
 			return false;
 		}
@@ -288,7 +281,6 @@ class Img_Converter {
 			$transparent = imagecolorallocatealpha( $truecolor, 255, 255, 255, 127 );
 			imagefill( $truecolor, 0, 0, $transparent );
 			imagecopy( $truecolor, $image, 0, 0, 0, 0, $width, $height );
-			imagedestroy( $image );
 			return $truecolor;
 		}
 		return $image;

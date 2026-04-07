@@ -1,0 +1,8 @@
+vendor/** linguist-generated=true
+node_modules/** linguist-generated=true
+package-lock.json linguist-generated=true
+composer.lock linguist-generated=true
+
+# Export-ignore
+.coderabbit.yaml export-ignore
+.gitattributes export-ignore

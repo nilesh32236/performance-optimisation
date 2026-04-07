@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimization
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.7
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -90,6 +90,12 @@ Composer configuration:
 `
 
 == Changelog ==
+
+= 1.1.2 (2026-04-07) =
+* Fix: Cache the Img_Converter instance to reduce PHP overhead during image conversion.
+* Fix: Validate and sanitize imported REST API settings before saving.
+* Fix: Improve sidebar accessibility and keyboard navigation in the admin UI.
+* Update: Use `@wordpress/element` for React rendering compatibility in WordPress.
 
 = 1.1.1 (2026-04-06) =
 * Improvement: Optimized JS Defer and Delay loading by caching exclusion lists.
