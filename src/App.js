@@ -132,7 +132,9 @@ const App = () => {
 				onClick={ toggleSidebar }
 				style={ { left: sidebarHide ? '0px' : '110px' } }
 				aria-label={
-					sidebarHide ? t( 'sidebar.expand' ) : t( 'sidebar.collapse' )
+					sidebarHide
+						? t( 'sidebar.expand' )
+						: t( 'sidebar.collapse' )
 				}
 				aria-expanded={ ! sidebarHide }
 			>
@@ -147,22 +149,36 @@ const App = () => {
 				}` }
 			>
 				<h3>{ translations.performanceSettings }</h3>
-				<ul>
-					{ sidebarItems.map( ( item ) => (
-						<li
-							key={ item.name }
-							className={
-								activeTab === item.name ? 'active' : ''
-							}
-							onClick={ () => setActiveTab( item.name ) }
-						>
-							<FontAwesomeIcon
-								className="sidebar-icon"
-								icon={ item.icon }
-							/>
-							{ ! sidebarCollapsed && item.label }
-						</li>
-					) ) }
+				<ul role="menu">
+					{ sidebarItems.map( ( item ) => {
+						return (
+							// eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
+							<li
+								key={ item.name }
+								role="menuitem"
+								tabIndex="0"
+								aria-current={
+									activeTab === item.name ? 'page' : undefined
+								}
+								className={
+									activeTab === item.name ? 'active' : ''
+								}
+								onClick={ () => setActiveTab( item.name ) }
+								onKeyDown={ ( e ) => {
+									if ( e.key === 'Enter' || e.key === ' ' ) {
+										e.preventDefault();
+										setActiveTab( item.name );
+									}
+								} }
+							>
+								<FontAwesomeIcon
+									className="sidebar-icon"
+									icon={ item.icon }
+								/>
+								{ ! sidebarCollapsed && item.label }
+							</li>
+						);
+					} ) }
 				</ul>
 			</div>
 
