@@ -388,23 +388,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function import_settings( \WP_REST_Request $request ) {
 			$data = $request->get_json_params();
 
-			if ( 'import_settings' !== $data['action'] || empty( $data['settings'] ) ) {
+			if ( 'import_settings' !== $data['action'] || empty( $data['settings'] ) || ! is_array( $data['settings'] ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid action or missing settings', 'performance-optimisation' ) );
 			}
+
+			// Sanitize settings array recursively.
+			$sanitized_settings = $this->sanitize_settings_recursively( $data['settings'] );
 
 			// Retrieve the existing settings.
 			$existing_settings = get_option( 'wppo_settings', array() );
 
 			// Check if the settings are the same.
-			if ( $existing_settings === $data['settings'] ) {
+			if ( $existing_settings === $sanitized_settings ) {
 				return $this->send_response( $existing_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
 			}
 
-			if ( ! update_option( 'wppo_settings', $data['settings'] ) ) {
+			if ( ! update_option( 'wppo_settings', $sanitized_settings ) ) {
 				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 
-			return $this->send_response( $data['settings'], true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
+			return $this->send_response( $sanitized_settings, true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
 		}
 
 		/**
