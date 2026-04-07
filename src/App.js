@@ -147,39 +147,34 @@ const App = () => {
 				className={ `sidebar ${ sidebarCollapsed ? 'collapsed' : '' } ${
 					sidebarHide ? 'hide' : ''
 				}` }
+				inert={ sidebarHide ? '' : undefined }
 			>
 				<h3>{ translations.performanceSettings }</h3>
-				<ul role="menu">
-					{ sidebarItems.map( ( item ) => {
-						return (
-							// eslint-disable-next-line jsx-a11y/no-noninteractive-element-to-interactive-role
-							<li
-								key={ item.name }
-								role="menuitem"
-								tabIndex="0"
-								aria-current={
-									activeTab === item.name ? 'page' : undefined
-								}
-								className={
-									activeTab === item.name ? 'active' : ''
-								}
-								onClick={ () => setActiveTab( item.name ) }
-								onKeyDown={ ( e ) => {
-									if ( e.key === 'Enter' || e.key === ' ' ) {
-										e.preventDefault();
-										setActiveTab( item.name );
-									}
-								} }
-							>
-								<FontAwesomeIcon
-									className="sidebar-icon"
-									icon={ item.icon }
-								/>
-								{ ! sidebarCollapsed && item.label }
-							</li>
-						);
-					} ) }
-				</ul>
+				<nav aria-label={ translations.performanceSettings }>
+					<ul>
+						{ sidebarItems.map( ( item ) => {
+							return (
+								<li key={ item.name }>
+									<button
+										aria-current={
+											activeTab === item.name ? 'page' : undefined
+										}
+										className={
+											activeTab === item.name ? 'active' : ''
+										}
+										onClick={ () => setActiveTab( item.name ) }
+									>
+										<FontAwesomeIcon
+											className="sidebar-icon"
+											icon={ item.icon }
+										/>
+										{ ! sidebarCollapsed && item.label }
+									</button>
+								</li>
+							);
+						} ) }
+					</ul>
+				</nav>
 			</div>
 
 			<div className={ `content ${ transition ? 'fadeIn' : '' }` }>
