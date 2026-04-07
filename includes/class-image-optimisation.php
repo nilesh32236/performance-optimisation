@@ -202,8 +202,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			// ⚡ Bolt: Cache Img_Converter instance to prevent redundant parsing of exclude settings
-			// on every src/srcset item replacement inside preg_replace_callback.
 			$img_converter = $this->get_img_converter();
 
 			$avif_img_path = $img_converter->get_img_path( $img_url, 'avif' );
