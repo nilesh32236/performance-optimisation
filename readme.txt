@@ -1,7 +1,7 @@
 === Performance Optimisation ===
 Contributors: nilesh912
 Tags: performance, optimization, cache, minify, image optimization
-Requires at least: 5.0
+Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.7
 Stable tag: 1.1.1
