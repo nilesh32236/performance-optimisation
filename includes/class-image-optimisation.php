@@ -35,6 +35,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private array $options;
 
 		/**
+		 * Cached instance of Img_Converter to avoid repeated parsing of settings.
+		 *
+		 * @var Img_Converter|null
+		 * @since 1.1.2
+		 */
+		private ?Img_Converter $img_converter = null;
+
+		/**
 		 * Constructor.
 		 *
 		 * @since 1.0.0
@@ -153,6 +161,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Gets a cached instance of Img_Converter.
+		 *
+		 * @since 1.1.2
+		 *
+		 * @return Img_Converter The Img_Converter instance.
+		 */
+		private function get_img_converter() {
+			if ( null === $this->img_converter ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
+				$this->img_converter = new Img_Converter( $this->options );
+			}
+			return $this->img_converter;
+		}
+
+		/**
 		 * Replaces image URLs with next-generation formats.
 		 *
 		 * @since 1.0.0
@@ -180,7 +203,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			}
 
-			$img_converter = new Img_Converter( $this->options );
+			// ⚡ Bolt: Cache Img_Converter instance to prevent redundant parsing of exclude settings
+			// on every src/srcset item replacement inside preg_replace_callback.
+			$img_converter = $this->get_img_converter();
 
 			$avif_img_path = $img_converter->get_img_path( $img_url, 'avif' );
 			$webp_img_path = $img_converter->get_img_path( $img_url, 'webp' );
