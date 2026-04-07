@@ -1,6 +1,7 @@
 # Exclude from WordPress.org SVN release
 .git/
 .github/
+.jules/
 node_modules/
 vendor/squizlabs/
 vendor/wp-coding-standards/
@@ -23,3 +24,5 @@ tests/
 bin/
 scripts/
 # Keep build/ and essential PHP files
+.coderabbit.yaml
+.gitattributes

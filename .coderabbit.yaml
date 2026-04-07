@@ -1,0 +1,7 @@
+# https://docs.coderabbit.ai/configuration-options/
+reviews:
+  path_filters:
+    - "!vendor/**"
+    - "!node_modules/**"
+    - "!package-lock.json"
+    - "!composer.lock"
