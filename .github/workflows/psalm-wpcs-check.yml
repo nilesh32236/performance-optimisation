@@ -27,7 +27,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          tools: php-parallel-lint
+          tools: parallel-lint
 
       - name: PHP Syntax Check
         run: parallel-lint --exclude vendor --exclude node_modules .
@@ -46,6 +46,9 @@ jobs:
 
       - name: Install Dependencies
         run: composer install --no-dev --optimize-autoloader
+
+      - name: Create Reports Directory
+        run: mkdir -p reports
 
       - name: Run WPCS check
         id: wpcs_check
@@ -71,6 +74,10 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: reports/psalm.sarif
+
+      - name: Fix Reports Permissions
+        if: always()
+        run: sudo chown -R runner:docker reports
 
       # This step generates a standard report for Issue management if needed
       - name: Generate Reports
