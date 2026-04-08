@@ -318,13 +318,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$escaped_site_url = preg_quote( $site_url, '/' );
 
 			// Regex to find internal assets in src, href or srcset attributes. Supports optional quotes.
-			$pattern = '/(src|href|srcset)=["\']?(' . $escaped_site_url . '\/[^"\'\s>]+|[^"\'\s>]+(?=\\s|>|\/|$))["\']?/i';
+			$pattern = '/(src|href|srcset)=(?:"([^"]+)"|' . "'" . '([^' . "'" . ']+)' . "'" . '|([^"' . "'" . '\\s>]+(?=\\s|>|\/|$)))/i';
 
 			$buffer = preg_replace_callback(
 				$pattern,
 				function ( $matches ) use ( $site_url, $cdn_url ) {
 					$attr  = $matches[1];
-					$value = $matches[2];
+					$value = isset( $matches[2] ) && '' !== $matches[2] ? $matches[2] : ( isset( $matches[3] ) && '' !== $matches[3] ? $matches[3] : ( $matches[4] ?? '' ) );
 
 					if ( 'srcset' === $attr ) {
 						$candidates = explode( ',', $value );
@@ -383,11 +383,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function is_not_cacheable(): bool {
-			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-			$this->url_path = trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' );
-
+			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$parsed_path = wp_parse_url( $request_uri, PHP_URL_PATH );
-			$path_info   = pathinfo( trim( $parsed_path, '/' ), PATHINFO_EXTENSION );
+			$url_path    = trim( (string) $parsed_path, '/' );
+
+			if ( strpos( $url_path, '..' ) === false ) {
+				$this->url_path = $url_path;
+			}
+
+			$path_info = pathinfo( $url_path, PATHINFO_EXTENSION );
 			return is_404() || ! empty( $path_info );
 		}
 
@@ -592,8 +596,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$gzip_file_path = $file_path . '.gz';
 
 			if ( $this->filesystem ) {
-				$res1 = ! file_exists( $file_path ) || $this->filesystem->delete( $file_path );
-				$res2 = ! file_exists( $gzip_file_path ) || $this->filesystem->delete( $gzip_file_path );
+				$res1 = ! $this->filesystem->exists( $file_path ) || $this->filesystem->delete( $file_path );
+				$res2 = ! $this->filesystem->exists( $gzip_file_path ) || $this->filesystem->delete( $gzip_file_path );
 				return $res1 && $res2;
 			}
 
