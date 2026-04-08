@@ -1,10 +1,10 @@
 === Performance Optimisation ===
 Contributors: nilesh912
-Tags: performance, optimization, cache, minify, image optimization
+Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.7
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,7 +16,7 @@ Performance Optimisation helps you optimize your website's speed by offering fea
 
 **Features:**
 
- - Dashboard with an overview of cache, JavaScript, CSS, and image optimization status.
+ - Dashboard with an overview of cache, JavaScript, CSS, and image optimisation status.
  - Cache management tools, including size display and a "Clear Cache" button.
  - JavaScript & CSS Optimization: Minify, combine, and exclude specific files.
  - Image optimization: Convert images to WebP and AVIF formats.
@@ -35,7 +35,7 @@ Performance Optimisation helps you optimize your website's speed by offering fea
 1. **Dashboard Overview**  
  - View cache size and clear cache.  
  - Check the number of minified JavaScript and CSS files.  
- - Monitor image optimization (WebP/AVIF status).  
+ - Monitor image optimisation (WebP/AVIF status).  
  - Review recent plugin activities.  
 
 2. **File Optimization Settings**  
@@ -48,7 +48,7 @@ Performance Optimisation helps you optimize your website's speed by offering fea
  - Preconnect to origins and prefetch DNS.  
  - Preload fonts, CSS, and images.  
 
-4. **Image Optimization Settings**  
+4. **Image Optimisation Settings**  
  - Lazy load images with SVG placeholders.  
  - Convert images to WebP/AVIF formats and exclude specific images.  
  - Preload feature images for selected post types.  
@@ -91,6 +91,12 @@ Composer configuration:
 
 == Changelog ==
 
+= 1.1.4 (2026-04-08) =
+* Security: Fixed path traversal vulnerability in the Image Optimisation REST endpoint.
+* Security: Added directory traversal protection in URL-to-path resolution.
+* Performance: Optimized image queue database writes by caching in memory and flushing once on shutdown.
+* Fix: Updated CheckboxOption component to use unique IDs for proper accessibility (label/input association, aria-describedby).
+
 = 1.1.3 (2026-04-07) =
 * Fix: Anchored build paths in .distignore to prevent accidental exclusion of vendor files.
 
@@ -121,24 +127,27 @@ Initial release with full functionality:
 Dashboard overview.
 Cache management.
 JavaScript, CSS, and HTML optimization.
-Advanced image optimization and lazy loading.
+Advanced image optimisation and lazy loading.
 Preloading settings for cache, fonts, and images.
 Import/export settings tools.
 
 == Frequently Asked Questions ==
  = How do I optimize images using this plugin? =
- Go to the Image Optimization Settings tab, enable image conversion, and choose the format (WebP, AVIF, or both). Click "Optimize Now" to start the process.
+ Go to the Image Optimisation Settings tab, enable image conversion, and choose the format (WebP, AVIF, or both). Click "Optimize Now" to start the process.
 
  = Can I exclude specific JavaScript or CSS files from minification? =
  Yes, in the File Optimization Settings tab, use the provided text areas to list files you want to exclude.
 
  = Does the plugin support lazy loading for images? =
- Yes, lazy loading can be enabled in the Image Optimization Settings tab. You can also use SVG placeholders for better performance.
+ Yes, lazy loading can be enabled in the Image Optimisation Settings tab. You can also use SVG placeholders for better performance.
 
  = How can I import/export plugin settings? =
  Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.1.4 (2026-04-08) =
+Security release with path traversal fixes, image queue performance improvements, and accessibility fixes.
 
 = 1.1.3 (2026-04-07) =
 Maintenance release to fix vendor file exclusion in build packages.

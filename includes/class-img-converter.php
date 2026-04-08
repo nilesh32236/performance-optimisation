@@ -580,7 +580,7 @@ class Img_Converter {
 	/**
 	 * Returns the in-memory image info cache, loading from the DB on first call.
 	 *
-	 * @since x.x.x
+	 * @since 1.1.4
 	 * @return array
 	 */
 	public static function get_img_info(): array {
@@ -594,7 +594,7 @@ class Img_Converter {
 	 * Replaces the in-memory image info cache and ensures the shutdown hook is registered.
 	 *
 	 * @param array $img_info The new image info array.
-	 * @since x.x.x
+	 * @since 1.1.4
 	 */
 	public static function set_img_info( array $img_info ): void {
 		self::$img_info_cache = $img_info;
