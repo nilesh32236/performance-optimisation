@@ -52,7 +52,7 @@ const Dashboard = ({ activities }) => {
 	// Poll for background image job status
 	const pollJobStatus = useCallback(async () => {
 		try {
-			const response = await apiCall('image_job_status', {});
+			const response = await apiCall('image_job_status', {}, 'GET');
 			if (response.success && response.data) {
 				const { queued_jobs } = response.data;
 				setBgJobsQueued(queued_jobs);

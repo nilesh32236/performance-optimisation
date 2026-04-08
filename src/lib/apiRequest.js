@@ -1,12 +1,13 @@
 // Utility function to handle API calls
-export const apiCall = (action, body) => {
+export const apiCall = (action, body, method = 'POST') => {
+	const isGet = method === 'GET';
 	return fetch(wppoSettings.apiUrl + action, {
-		method: 'POST',
+		method,
 		headers: {
-			'Content-Type': 'application/json',
+			...( ! isGet && { 'Content-Type': 'application/json' }),
 			'X-WP-Nonce': wppoSettings.nonce
 		},
-		body: JSON.stringify(body)
+		...( ! isGet && { body: JSON.stringify(body) })
 	}).then(async (response) => {
 		const data = await response.json();
 		if ('update_settings' === action && data.success) {
@@ -18,12 +19,10 @@ export const apiCall = (action, body) => {
 
 export const fetchRecentActivities = () => {
 	return fetch(wppoSettings.apiUrl + 'recent_activities', {
-		method: 'POST',
+		method: 'GET',
 		headers: {
-			'Content-Type': 'application/json',
 			'X-WP-Nonce': wppoSettings.nonce
 		},
-		body: JSON.stringify({ page: '1' })
 	})
 		.then(response => response.json())
 		.catch(error => {

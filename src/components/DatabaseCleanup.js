@@ -60,7 +60,7 @@ const DatabaseCleanup = () => {
 	const fetchCounts = useCallback(async () => {
 		setLoadingCounts(true);
 		try {
-			const response = await apiCall('database_cleanup_counts', {});
+			const response = await apiCall('database_cleanup_counts', {}, 'GET');
 			if (response.success && response.data) {
 				setCounts(response.data);
 			}
