@@ -1,4 +1,4 @@
-export const CheckboxOption = ({
+export const CheckboxOption = ( {
 	label,
 	checked,
 	onChange,
@@ -8,42 +8,51 @@ export const CheckboxOption = ({
 	textareaValue,
 	onTextareaChange,
 	description,
-	children
-}) => {
+	children,
+} ) => {
+	const descriptionId = description ? `desc-${ name }` : undefined;
+
 	return (
 		<div className="checkbox-option">
-			<label>
+			<label htmlFor={ name }>
 				<input
+					id={ name }
 					type="checkbox"
-					name={name}
-					checked={checked}
-					onChange={onChange}
+					name={ name }
+					checked={ checked }
+					onChange={ onChange }
+					aria-describedby={ descriptionId }
 				/>
-				{label}
+				{ label }
 			</label>
 
-			{description && <p className="option-description">{description}</p>}
+			{ description && (
+				<p id={ descriptionId } className="option-description">
+					{ description }
+				</p>
+			) }
 
-			{checked && textareaName && (
+			{ checked && textareaName && (
 				<textarea
 					className="text-area-field"
-					placeholder={textareaPlaceholder || ''}
-					name={textareaName}
-					value={textareaValue}
-					onChange={onTextareaChange}
+					placeholder={ textareaPlaceholder || '' }
+					aria-label={ textareaPlaceholder || label }
+					name={ textareaName }
+					value={ textareaValue }
+					onChange={ onTextareaChange }
 				/>
-			)}
+			) }
 
-			{checked && children}
+			{ checked && children }
 		</div>
 	);
 };
 
-export const handleChange = (setSettings) => (e) => {
+export const handleChange = ( setSettings ) => ( e ) => {
 	const { name, type, value, checked } = e.target;
 
-	setSettings((prevState) => ({
+	setSettings( ( prevState ) => ( {
 		...prevState,
-		[name]: 'checkbox' === type ? checked : value,
-	}));
+		[ name ]: 'checkbox' === type ? checked : value,
+	} ) );
 };

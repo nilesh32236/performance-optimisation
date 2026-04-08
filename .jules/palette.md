@@ -1,0 +1,3 @@
+## 2024-04-08 - Added Checkbox Descriptions and Inner Input Labels
+**Learning:** Reusable checkbox components often have descriptions separate from the main label, and optionally render inner inputs (like textareas) when checked. Screen readers will not announce the description unless linked with `aria-describedby`, and the inner inputs won't inherit the parent checkbox's context and will lack an accessible name if not given their own label or `aria-label`.
+**Action:** When building reusable form components, ensure descriptions are linked via `aria-describedby` to the main input, and any conditionally rendered inputs receive their own `aria-label` (or `<label>`) so they are announced properly.
