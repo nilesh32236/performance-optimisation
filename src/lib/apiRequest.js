@@ -17,8 +17,8 @@ export const apiCall = (action, body, method = 'POST') => {
 	});
 };
 
-export const fetchRecentActivities = () => {
-	return fetch(wppoSettings.apiUrl + 'recent_activities', {
+export const fetchRecentActivities = ( page = 1 ) => {
+	return fetch( wppoSettings.apiUrl + 'recent_activities?page=' + page, {
 		method: 'GET',
 		headers: {
 			'X-WP-Nonce': wppoSettings.nonce
