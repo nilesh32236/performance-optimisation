@@ -93,6 +93,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Get the path from the parsed URL.
 			$relative_path = wp_normalize_path( $parsed_url['path'] ) ?? '';
 
+			if ( strpos( $relative_path, '..' ) !== false ) {
+				return '';
+			}
+
 			// If home_url is present, remove it from the path.
 			$relative_path = str_replace( wp_normalize_path( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '' ), '', $relative_path );
 
