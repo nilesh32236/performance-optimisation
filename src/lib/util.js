@@ -1,8 +1,11 @@
+import { useId } from '@wordpress/element';
+
 export const CheckboxOption = ( {
 	label,
 	checked,
 	onChange,
 	name,
+	id: idProp,
 	textareaName,
 	textareaPlaceholder,
 	textareaValue,
@@ -10,13 +13,15 @@ export const CheckboxOption = ( {
 	description,
 	children,
 } ) => {
-	const descriptionId = description ? `desc-${ name }` : undefined;
+	const uid = useId();
+	const id = idProp ?? uid;
+	const descriptionId = description ? `desc-${ id }` : undefined;
 
 	return (
 		<div className="checkbox-option">
-			<label htmlFor={ name }>
+			<label htmlFor={ id }>
 				<input
-					id={ name }
+					id={ id }
 					type="checkbox"
 					name={ name }
 					checked={ checked }
