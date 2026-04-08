@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimization
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.7
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -91,6 +91,12 @@ Composer configuration:
 
 == Changelog ==
 
+= 1.1.4 (2026-04-08) =
+* Security: Fixed path traversal vulnerability in the Image Optimization REST endpoint.
+* Security: Added directory traversal protection in URL-to-path resolution.
+* Performance: Optimized image queue database writes by caching in memory and flushing once on shutdown.
+* Fix: Updated CheckboxOption component to use unique IDs for proper accessibility (label/input association, aria-describedby).
+
 = 1.1.3 (2026-04-07) =
 * Fix: Anchored build paths in .distignore to prevent accidental exclusion of vendor files.
 
@@ -139,6 +145,9 @@ Import/export settings tools.
  Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.1.4 (2026-04-08) =
+Security release with path traversal fixes, image queue performance improvements, and accessibility fixes.
 
 = 1.1.3 (2026-04-07) =
 Maintenance release to fix vendor file exclusion in build packages.

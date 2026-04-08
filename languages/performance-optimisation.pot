@@ -2,16 +2,16 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Performance Optimisation 1.1.3\n"
+"Project-Id-Version: Performance Optimisation 1.1.4\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/performance-optimisation\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-04-07T18:36:19+00:00\n"
+"POT-Creation-Date: 2026-04-08T14:04:37+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"X-Generator: WP-CLI 2.12.0\n"
+"X-Generator: WP-CLI 2.13.0-alpha-b1d3b60\n"
 "X-Domain: performance-optimisation\n"
 
 #. Plugin Name of the plugin
@@ -650,66 +650,70 @@ msgstr ""
 msgid "Clear all cache on "
 msgstr ""
 
+#: includes/class-rest.php:241
+msgid "Invalid image path provided."
+msgstr ""
+
 #. translators: %d: Number of image jobs queued
-#: includes/class-rest.php:282
+#: includes/class-rest.php:289
 #, php-format
 msgid "Scheduled %d image optimization jobs for background processing on "
 msgstr ""
 
 #. translators: %d: Number of jobs
-#: includes/class-rest.php:293
+#: includes/class-rest.php:300
 #, php-format
 msgid "%d images queued for background optimization."
 msgstr ""
 
-#: includes/class-rest.php:357
+#: includes/class-rest.php:362
 msgid "Optimized images folder deleted successfully."
 msgstr ""
 
-#: includes/class-rest.php:365
+#: includes/class-rest.php:370
 msgid "Failed to delete the optimized images folder."
 msgstr ""
 
-#: includes/class-rest.php:374
+#: includes/class-rest.php:379
 msgid "Optimized images folder does not exist."
 msgstr ""
 
-#: includes/class-rest.php:392
+#: includes/class-rest.php:397
 msgid "Invalid action or missing settings"
 msgstr ""
 
-#: includes/class-rest.php:403
+#: includes/class-rest.php:408
 msgid "No changes detected, settings are already up-to-date"
 msgstr ""
 
-#: includes/class-rest.php:407
+#: includes/class-rest.php:412
 msgid "Failed to update settings"
 msgstr ""
 
-#: includes/class-rest.php:410
+#: includes/class-rest.php:415
 msgid "Settings updated successfully"
 msgstr ""
 
-#: includes/class-rest.php:427
+#: includes/class-rest.php:432
 msgid "Invalid cleanup type."
 msgstr ""
 
 #. translators: %d: Number of items cleaned
-#: includes/class-rest.php:437
+#: includes/class-rest.php:442
 #, php-format
 msgid "Database cleanup (all): %d items removed on "
 msgstr ""
 
 #. translators: %1$s: Cleanup type, %2$d: Number of items
-#: includes/class-rest.php:466
+#: includes/class-rest.php:471
 #, php-format
 msgid "Database cleanup (%1$s): %2$d items removed on "
 msgstr ""
 
-#: includes/class-rest.php:504
+#: includes/class-rest.php:509
 msgid "Post ID is required."
 msgstr ""
 
-#: includes/class-rest.php:517
+#: includes/class-rest.php:522
 msgid "No assets captured yet. Visit the page on the frontend first."
 msgstr ""
