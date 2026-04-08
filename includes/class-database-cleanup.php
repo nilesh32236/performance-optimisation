@@ -36,12 +36,14 @@ class Database_Cleanup {
 		global $wpdb;
 
 		// First delete associated meta data for revisions.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$wpdb->query(
 			"DELETE pm FROM $wpdb->postmeta pm
 			INNER JOIN $wpdb->posts p ON p.ID = pm.post_id
 			WHERE p.post_type = 'revision'"
 		);
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$result = $wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'revision'" );
 
 		return $result;
@@ -57,12 +59,14 @@ class Database_Cleanup {
 		global $wpdb;
 
 		// Delete associated meta data.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$wpdb->query(
 			"DELETE pm FROM $wpdb->postmeta pm
 			INNER JOIN $wpdb->posts p ON p.ID = pm.post_id
 			WHERE p.post_status = 'auto-draft'"
 		);
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$result = $wpdb->query( "DELETE FROM $wpdb->posts WHERE post_status = 'auto-draft'" );
 
 		return $result;
@@ -78,12 +82,14 @@ class Database_Cleanup {
 		global $wpdb;
 
 		// Delete associated meta data.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$wpdb->query(
 			"DELETE pm FROM $wpdb->postmeta pm
 			INNER JOIN $wpdb->posts p ON p.ID = pm.post_id
 			WHERE p.post_status = 'trash'"
 		);
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$result = $wpdb->query( "DELETE FROM $wpdb->posts WHERE post_status = 'trash'" );
 
 		return $result;
@@ -99,12 +105,14 @@ class Database_Cleanup {
 		global $wpdb;
 
 		// Delete comment meta for spam comments.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$wpdb->query(
 			"DELETE cm FROM $wpdb->commentmeta cm
 			INNER JOIN $wpdb->comments c ON c.comment_ID = cm.comment_id
 			WHERE c.comment_approved = 'spam'"
 		);
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$result = $wpdb->query( "DELETE FROM $wpdb->comments WHERE comment_approved = 'spam'" );
 
 		return $result;
@@ -120,12 +128,14 @@ class Database_Cleanup {
 		global $wpdb;
 
 		// Delete comment meta for trashed comments.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$wpdb->query(
 			"DELETE cm FROM $wpdb->commentmeta cm
 			INNER JOIN $wpdb->comments c ON c.comment_ID = cm.comment_id
 			WHERE c.comment_approved = 'trash'"
 		);
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$result = $wpdb->query( "DELETE FROM $wpdb->comments WHERE comment_approved = 'trash'" );
 
 		return $result;
@@ -144,6 +154,7 @@ class Database_Cleanup {
 
 		$time = time();
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$result = $wpdb->query(
 			$wpdb->prepare(
 				"DELETE a, b FROM $wpdb->options a, $wpdb->options b
@@ -171,6 +182,7 @@ class Database_Cleanup {
 	public static function clean_orphan_postmeta() {
 		global $wpdb;
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
 		$result = $wpdb->query(
 			"DELETE pm FROM $wpdb->postmeta pm
 			LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
@@ -214,11 +226,17 @@ class Database_Cleanup {
 		$time = time();
 
 		return array(
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'revisions'          => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_type = 'revision'" ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'auto_drafts'        => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'auto-draft'" ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'trashed_posts'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'trash'" ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'spam_comments'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'spam'" ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'trashed_comments'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'trash'" ),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'expired_transients' => (int) $wpdb->get_var(
 				$wpdb->prepare(
 					"SELECT COUNT(*) FROM $wpdb->options a
@@ -231,6 +249,7 @@ class Database_Cleanup {
 					$time
 				)
 			),
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'orphan_postmeta'    => (int) $wpdb->get_var(
 				"SELECT COUNT(*) FROM $wpdb->postmeta pm
 				LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id

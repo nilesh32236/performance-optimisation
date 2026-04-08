@@ -2,6 +2,22 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.1.3] - 2026-04-07
+### Fixed
+- Anchored exclusion patterns in `.distignore` and `build-release.sh` to prevent accidental vendor file exclusion.
+
+## [1.1.2] - 2026-04-07
+### Added
+- No new major features; this is a maintenance and compatibility release.
+
+### Changed
+- Use `@wordpress/element` for React rendering compatibility in WordPress.
+
+### Fixed
+- Cache the Img_Converter instance to reduce PHP overhead during image conversion.
+- Validate and sanitize imported REST API settings before saving.
+- Improve sidebar accessibility and keyboard navigation in the admin UI.
+
 ## [1.1.1] - 2026-04-06
 ### Added
 - Specialized JS exclusion properties for finer control over defer/delay behavior.

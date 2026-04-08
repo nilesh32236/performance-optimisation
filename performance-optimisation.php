@@ -12,6 +12,9 @@
  * Domain Path:       /languages
  *
  * @package PerformanceOptimise
+ *
+ * Changelog:
+ * 1.1.3 - Updated version strings.
  */
 
 // Import required classes.

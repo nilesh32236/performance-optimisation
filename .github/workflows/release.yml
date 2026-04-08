@@ -1,0 +1,67 @@
+name: Release Plugin
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    name: Build, Package, and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring, intl
+          tools: composer:v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install PHP Dependencies
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Install NPM Dependencies
+        run: npm ci || npm install
+
+      - name: Build Webpack Assets
+        run: npm run build
+
+      - name: Create Plugin ZIP
+        id: build_zip
+        run: |
+          chmod +x ./scripts/build-release.sh
+          ./scripts/build-release.sh
+          
+          # Pass the variables to the next step
+          VERSION=$(grep "Version:" performance-optimisation.php | awk '{print $NF}' | tr -d '\r')
+          FILENAME="performance-optimisation-${VERSION}.zip"
+          echo "zip_file=${FILENAME}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.build_zip.outputs.zip_file }}
+          name: Release ${{ steps.build_zip.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to WordPress.org SVN
+        uses: 10up/action-wordpress-plugin-deploy@stable
+        env:
+          SVN_USERNAME: ${{ secrets.SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.SVN_PASSWORD }}
+          SLUG: performance-optimisation

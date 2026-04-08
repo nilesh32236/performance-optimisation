@@ -5,72 +5,41 @@ on:
     branches: [ "master" ]
     paths-ignore:
       - 'build/**'
+  pull_request:
+    branches: [ "master" ]
 
 jobs:
   build:
+    name: Build Assets
     runs-on: ubuntu-latest
-
     steps:
-    # Step 1: Checkout repository
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v6
 
-    # Step 2: Read Node.js version from .nvmrc
-    - name: Read Node.js version from .nvmrc
-      id: nvmrc
-      run: |
-        if [ -f .nvmrc ]; then
-          echo "Using Node.js version from .nvmrc"
-          echo "node-version=$(cat .nvmrc | tr -d '[:space:]')" >> $GITHUB_ENV
-        else
-          echo "Error: .nvmrc file not found."
-          exit 1
-        fi
+      - name: Read Node.js version from .nvmrc
+        id: nvmrc
+        run: |
+          if [ -f .nvmrc ]; then
+            echo "node-version=$(cat .nvmrc | tr -d '[:space:]')" >> $GITHUB_ENV
+          else
+            echo "node-version=20" >> $GITHUB_ENV
+          fi
 
-    # Step 3: Setup Node.js with the version from .nvmrc
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ env.node-version }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.node-version }}
+          cache: 'npm'
 
-    # Step 4: Cache Node.js modules
-    - name: Cache Node.js modules
-      uses: actions/cache@v3
-      with:
-        path: ~/.npm
-        key: ${{ runner.os }}-node-${{ env.node-version }}-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-${{ env.node-version }}
+      - name: Install Dependencies
+        run: npm ci || npm install
 
-    # Step 5: Install dependencies
-    - name: Install Dependencies
-      run: npm install
+      - name: Build
+        run: npm run build
 
-    # Step 6: Build the project
-    - name: Build
-      run: npm run build
-
-    # Step 7: Stash changes (if build modifies files)
-    - name: Stash unstaged changes
-      run: |
-        git stash -u
-
-    # Step 8: Pull latest changes from master
-    - name: Pull Latest Changes
-      run: |
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git pull origin master --rebase
-
-    # Step 9: Apply stashed changes
-    - name: Apply Stashed Changes
-      run: git stash pop || echo "No stashed changes"
-
-    # Step 10: Commit and Push Changes
-    - name: Commit and Push Changes
-      run: |
-        git add build/
-        git commit -m "Update build output" || echo "No changes to commit"
-        git push origin master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: webpack-build
+          path: build/
+          retention-days: 7

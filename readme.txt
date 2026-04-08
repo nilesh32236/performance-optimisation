@@ -1,10 +1,10 @@
 === Performance Optimisation ===
 Contributors: nilesh912
 Tags: performance, optimization, cache, minify, image optimization
-Requires at least: 5.0
+Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.7
-Stable tag: 1.1.1
+Stable tag: 1.1.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -91,6 +91,15 @@ Composer configuration:
 
 == Changelog ==
 
+= 1.1.3 (2026-04-07) =
+* Fix: Anchored build paths in .distignore to prevent accidental exclusion of vendor files.
+
+= 1.1.2 (2026-04-07) =
+* Fix: Cache the Img_Converter instance to reduce PHP overhead during image conversion.
+* Fix: Validate and sanitize imported REST API settings before saving.
+* Fix: Improve sidebar accessibility and keyboard navigation in the admin UI.
+* Update: Use `@wordpress/element` for React rendering compatibility in WordPress.
+
 = 1.1.1 (2026-04-06) =
 * Improvement: Optimized JS Defer and Delay loading by caching exclusion lists.
 * Improvement: Enhanced backend performance by reducing redundant string parsing.
@@ -130,6 +139,9 @@ Import/export settings tools.
  Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.1.3 (2026-04-07) =
+Maintenance release to fix vendor file exclusion in build packages.
 
 = 1.1.1 (2026-04-06) =
 Minor release with JS performance optimizations and security hardening.

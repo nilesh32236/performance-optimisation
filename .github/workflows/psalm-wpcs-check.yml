@@ -11,9 +11,28 @@ on:
 permissions:
   contents: write
   issues: write
+  security-events: write
 
 jobs:
-  php-security:
+  php-lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['7.4', '8.0', '8.1', '8.2', '8.3']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: parallel-lint
+
+      - name: PHP Syntax Check
+        run: parallel-lint --exclude vendor --exclude node_modules .
+
+  code-quality:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -21,116 +40,113 @@ jobs:
 
       - name: Run WPCS check
         id: wpcs_check
-        uses: 10up/wpcs-action@stable
-        with:
-          enable_warnings: true
-          paths: '.'
-          excludes: 'index.asset.php'
-          standard: 'WordPress'
-          phpcs_bin_path: 'phpcs'
-          use_local_config: false
-          only_changed_files: false
-          extra_args: '--report-json=./phpcs.json'
-        continue-on-error: true
-
-      - name: Generate WPCS Markdown Report
-        if: always()
         run: |
-          npm i -g github:10up/phpcs-json-to-md
-          phpcs-json-to-md --path ./phpcs.json --output ./phpcs.md
+          # Run phpcs and generate checkstyle report
+          vendor/bin/phpcs . --standard=WordPress --extensions=php --ignore="vendor/*,node_modules/*,index.asset.php" --report=checkstyle --report-file=reports/wpcs.xml || true
+          # Also run standard output for the logs
+          vendor/bin/phpcs . --standard=WordPress --extensions=php --ignore="vendor/*,node_modules/*,index.asset.php"
+        continue-on-error: true
 
       - name: Psalm Security Scan
         id: psalm
-        uses: psalm/psalm-github-security-scan@f3e6fd9432bc3e44aec078572677ce9d2ef9c287
+        uses: docker://ghcr.io/psalm/psalm-security-scan
+        with:
+          report_file: reports/psalm.sarif
         continue-on-error: true
 
-      - name: Prettify SARIF Output
+      - name: Upload Security Analysis results
+        if: always() && steps.psalm.outcome != 'skipped'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: reports/psalm.sarif
+
+      - name: Fix Reports Permissions
         if: always()
+        run: sudo chown -R runner:docker reports
+
+      # This step generates a standard report for Issue management if needed
+      - name: Generate Reports
+        if: always()
+        shell: python
         run: |
-          if [ -f results.sarif ]; then
-            jq '.' results.sarif > pretty_results.sarif
-          fi
+          import xml.etree.ElementTree as ET
+          import json
+          import os
+
+          table = "| Tool | File | Line | Message |\n| --- | --- | --- | --- |\n"
+          has_errors = False
+
+          # WPCS
+          wpcs_file = 'reports/wpcs.xml'
+          if os.path.exists(wpcs_file):
+              try:
+                  root = ET.parse(wpcs_file).getroot()
+                  for file_node in root.findall('file'):
+                      filename = file_node.get('name').split('/')[-1] # Simplify name
+                      for error in file_node.findall('error'):
+                          has_errors = True
+                          msg = error.get('message').replace('|', '\\|')
+                          table += f"| WPCS | {filename} | {error.get('line')} | {msg} |\n"
+              except Exception as e:
+                  table += f"| WPCS | Error | - | Failed to parse report: {str(e)} |\n"
+
+          # Psalm
+          psalm_file = 'reports/psalm.sarif'
+          if os.path.exists(psalm_file):
+              try:
+                  with open(psalm_file) as f:
+                      data = json.load(f)
+                      for run in data.get('runs', []):
+                          for result in run.get('results', []):
+                              has_errors = True
+                              msg = result.get('message', {}).get('text', '').replace('|', '\\|')
+                              for loc in result.get('locations', []):
+                                  phys = loc.get('physicalLocation', {})
+                                  filename = phys.get('artifactLocation', {}).get('uri', '').split('/')[-1]
+                                  line = phys.get('region', {}).get('startLine', '?')
+                                  table += f"| Psalm | {filename} | {line} | {msg} |\n"
+              except Exception as e:
+                  table += f"| Psalm | Error | - | Failed to parse report: {str(e)} |\n"
+
+          if not has_errors:
+              table = "All checks passed! 🎉"
+
+          with open('reports/summary.md', 'w') as f:
+              f.write(table)
+          
+          # Write status for shell script
+          with open('reports/status.txt', 'w') as f:
+              f.write("failure" if has_errors else "success")
 
       - name: Manage GitHub Issue
         id: manage_issue
         if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Define variables
-          branch_name="${{ github.ref_name }}"
-          event_name="${{ github.event_name }}"
-          actor="${{ github.actor }}"
-          pr_title=""
-          pr_url=""
-          pr_number=""
-          
-          if [ "$event_name" == "pull_request" ]; then
-            pr_title="${{ github.event.pull_request.title }}"
-            pr_url="${{ github.event.pull_request.html_url }}"
-            pr_number="${{ github.event.pull_request.number }}"
-          fi
+          BRANCH="${{ github.ref_name }}"
+          STATUS=$(cat reports/status.txt 2>/dev/null || echo "failure")
 
-          # Check for existing issues
-          existing_issue=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/issues" | \
-            jq -r ".[] | select(.title | contains(\"Code Quality Issues Found in $branch_name\")) | .number")
-
-          # Close existing issue if there are no errors
-          if [[ "$existing_issue" && "${{ steps.wpcs_check.outcome }}" == "success" ]]; then
-            curl -X PATCH \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d '{"state": "closed"}' \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$existing_issue"
+          if [[ "$STATUS" == "success" ]]; then
+            EXISTING_ISSUE=$(gh issue list --label "code-quality" --search "in $BRANCH" --json number --jq '.[0].number')
+            if [[ -n "$EXISTING_ISSUE" ]]; then
+              gh issue close "$EXISTING_ISSUE" --comment "Code quality issues fixed in $BRANCH."
+            fi
             exit 0
           fi
-
-          # Construct issue body
-          body="### Code Quality Issues Detected for $branch_name
-          #### WPCS Issues:
-          $(cat phpcs.md)"
-
-          if [ -f pretty_results.sarif ]; then
-            psalm_issues=$(cat pretty_results.sarif)
-            body+=$(cat <<EOF
-          #### Psalm Issues:
-          \`\`\`json
-          ${psalm_issues}
-          \`\`\`
-          EOF
-            )
-          fi
-
-          # Create or update issue
-          if [ "$existing_issue" ]; then
-            curl -X PATCH \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg body "$body" '{body: $body}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$existing_issue"
+          
+          # Create or Update issue
+          SUMMARY=$(cat reports/summary.md)
+          BODY="### Code Quality Issues Detected in $BRANCH
+          
+          $SUMMARY
+          
+          Please check the [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          
+          EXISTING_ISSUE=$(gh issue list --label "code-quality" --search "in $BRANCH" --json number --jq '.[0].number')
+          
+          if [[ -n "$EXISTING_ISSUE" ]]; then
+            gh issue edit "$EXISTING_ISSUE" --body "$BODY"
           else
-            issue_title="Code Quality Issues Found in $branch_name"
-            new_issue=$(curl -s -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg title "$issue_title" --arg body "$body" --argjson labels '["bug", "code-quality"]' '{title: $title, body: $body, labels: $labels}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues")
-            new_issue_number=$(echo "$new_issue" | jq -r '.number')
-
-            # Assign issue to the author
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg assignee "$actor" '{assignees: [$assignee]}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$new_issue_number/assignees"
-          fi
-
-          # Mention the issue in the PR
-          if [ "$pr_number" ]; then
-            comment_body="Linked Issue: $issue_url"
-            curl -X POST \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "$(jq -n --arg body "$comment_body" '{body: $body}')" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$pr_number/comments"
+            gh issue create --title "Code Quality Issues Found in $BRANCH" --body "$BODY" --label "bug,code-quality" --assignee "${{ github.actor }}"
           fi

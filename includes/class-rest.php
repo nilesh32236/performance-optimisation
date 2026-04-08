@@ -48,37 +48,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		private function get_routes() {
 			return array(
-				'clear_cache'            => array(
+				'clear_cache'             => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'clear_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'update_settings'        => array(
+				'update_settings'         => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'update_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'optimise_image'         => array(
+				'optimise_image'          => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'optimise_image' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'delete_optimised_image' => array(
+				'delete_optimised_image'  => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'delete_optimised_image' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'recent_activities'      => array(
+				'recent_activities'       => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'get_recent_activities' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'import_settings'        => array(
+				'import_settings'         => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'import_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'database_cleanup'       => array(
+				'database_cleanup'        => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'database_cleanup' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
@@ -88,12 +88,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'get_database_cleanup_counts' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'get_page_assets'        => array(
+				'get_page_assets'         => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'get_page_assets' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
-				'image_job_status'       => array(
+				'image_job_status'        => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'get_image_job_status' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
@@ -128,7 +128,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$path = wp_normalize_path( $path );
 
-			// Reject path if it contains directory traversal sequences
+			// Reject path if it contains directory traversal sequences.
 			if ( strpos( $path, '..' ) !== false ) {
 				return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
 			}
@@ -161,14 +161,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function update_settings( \WP_REST_Request $request ) {
-			$params  = $request->get_params();
-			$tab     = isset( $params['tab'] ) ? sanitize_text_field( $params['tab'] ) : '';
+			$params   = $request->get_params();
+			$tab      = isset( $params['tab'] ) ? sanitize_text_field( $params['tab'] ) : '';
 			$settings = isset( $params['settings'] ) ? (array) $params['settings'] : array();
 
 			// Sanitize settings array recursively.
 			$sanitized_settings = $this->sanitize_settings_recursively( $settings );
 
-			$options = get_option( 'wppo_settings', array() );
+			$options         = get_option( 'wppo_settings', array() );
 			$options[ $tab ] = $sanitized_settings;
 
 			if ( update_option( 'wppo_settings', $options ) ) {
@@ -209,7 +209,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_recent_activities( \WP_REST_Request $request ) {
-			$params = $request->get_params();
+			$params           = $request->get_params();
 			$sanitized_params = array(
 				'page' => isset( $params['page'] ) ? absint( $params['page'] ) : 1,
 			);
@@ -234,6 +234,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
 			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
+
+			// Reject image paths if they contain directory traversal sequences.
+			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
+				if ( strpos( $img_path, '..' ) !== false ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+			}
 
 			$use_action_scheduler = function_exists( 'as_enqueue_async_action' );
 			$jobs_queued          = 0;
@@ -319,7 +326,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			Cache::clear_cache();
 
-			$response = get_option( 'wppo_img_info', array() );
+			$response = Img_Converter::get_img_info();
 
 			return new \WP_REST_Response( $response, 200 );
 		}
@@ -339,17 +346,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$wppo_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
 
-			$img_info = get_option( 'wppo_img_info', array() );
-
-			$img_info['completed'] = array(
-				'webp' => array(),
-				'avif' => array(),
-			);
-
-			update_option( 'wppo_img_info', $img_info );
+			$img_info = Img_Converter::get_img_info();
 
 			if ( $wp_filesystem && $wp_filesystem->is_dir( $wppo_dir ) ) {
 				if ( $wp_filesystem->delete( $wppo_dir, true ) ) {
+					$img_info['completed'] = array(
+						'webp' => array(),
+						'avif' => array(),
+					);
+					Img_Converter::set_img_info( $img_info );
 					Cache::clear_cache();
 					return new \WP_REST_Response(
 						array(
@@ -388,23 +393,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function import_settings( \WP_REST_Request $request ) {
 			$data = $request->get_json_params();
 
-			if ( 'import_settings' !== $data['action'] || empty( $data['settings'] ) ) {
+			if ( ! is_array( $data ) || ! isset( $data['action'] ) || 'import_settings' !== $data['action'] || empty( $data['settings'] ) || ! is_array( $data['settings'] ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid action or missing settings', 'performance-optimisation' ) );
 			}
+
+			// Sanitize settings before saving.
+			$sanitized_settings = $this->sanitize_settings_recursively( $data['settings'] );
 
 			// Retrieve the existing settings.
 			$existing_settings = get_option( 'wppo_settings', array() );
 
 			// Check if the settings are the same.
-			if ( $existing_settings === $data['settings'] ) {
+			if ( $existing_settings === $sanitized_settings ) {
 				return $this->send_response( $existing_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
 			}
 
-			if ( ! update_option( 'wppo_settings', $data['settings'] ) ) {
+			if ( ! update_option( 'wppo_settings', $sanitized_settings ) ) {
 				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 
-			return $this->send_response( $data['settings'], true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
+			return $this->send_response( $sanitized_settings, true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -477,11 +485,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Returns counts for all database cleanup types.
 		 *
-		 * @param \WP_REST_Request $request The request object.
+		 * @param \WP_REST_Request $_request The request object.
 		 * @since 1.1.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function get_database_cleanup_counts( \WP_REST_Request $request ) {
+		public function get_database_cleanup_counts( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$counts = Database_Cleanup::get_counts();
 			return $this->send_response( $counts );
 		}
@@ -521,12 +529,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Returns the status of background image optimization jobs.
 		 *
-		 * @param \WP_REST_Request $request The request object.
+		 * @param \WP_REST_Request $_request The request object.
 		 * @since 1.1.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function get_image_job_status( \WP_REST_Request $request ) {
-			$img_info = get_option( 'wppo_img_info', array() );
+		public function get_image_job_status( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$img_info = Img_Converter::get_img_info();
 
 			$status = array(
 				'pending'   => array(
