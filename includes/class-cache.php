@@ -318,14 +318,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$escaped_site_url = preg_quote( $site_url, '/' );
 
 			// Regex to find internal assets in src, href or srcset attributes. Supports optional quotes.
-			$pattern = '/(src|href|srcset)=["\']?(' . $escaped_site_url . '\/[^"\'\s>]+|[^"\'\s>]+)["\']?/i';
+			$pattern = '/(src|href|srcset)=["\']?(' . $escaped_site_url . '\/[^"\'\s>]+|[^"\'\s>]+(?=\\s|>|\/|$))["\']?/i';
 
 			$buffer = preg_replace_callback(
 				$pattern,
 				function ( $matches ) use ( $site_url, $cdn_url ) {
-					$attr         = $matches[1];
-					$value        = $matches[2];
-					$site_url_pat = rtrim( $site_url, '/' );
+					$attr  = $matches[1];
+					$value = $matches[2];
 
 					if ( 'srcset' === $attr ) {
 						$candidates = explode( ',', $value );
@@ -386,10 +385,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function is_not_cacheable(): bool {
 			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$this->url_path = trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' );
-
-			// Initialize filesystem and options.
-			$this->filesystem = Util::init_filesystem();
-			$this->options    = get_option( 'wppo_settings', array() );
 
 			$parsed_path = wp_parse_url( $request_uri, PHP_URL_PATH );
 			$path_info   = pathinfo( trim( $parsed_path, '/' ), PATHINFO_EXTENSION );
@@ -597,8 +592,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$gzip_file_path = $file_path . '.gz';
 
 			if ( $this->filesystem ) {
-				$res1 = $this->filesystem->delete( $file_path );
-				$res2 = $this->filesystem->delete( $gzip_file_path );
+				$res1 = ! file_exists( $file_path ) || $this->filesystem->delete( $file_path );
+				$res2 = ! file_exists( $gzip_file_path ) || $this->filesystem->delete( $gzip_file_path );
 				return $res1 && $res2;
 			}
 
