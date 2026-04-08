@@ -279,7 +279,7 @@ class Cron {
 		$options       = get_option( 'wppo_settings', array() );
 		$img_converter = new Img_Converter( $options );
 
-		$img_info = get_option( 'wppo_img_info', array() );
+		$img_info = Img_Converter::get_img_info();
 
 		$conversation_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
 

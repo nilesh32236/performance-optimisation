@@ -326,7 +326,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			Cache::clear_cache();
 
-			$response = get_option( 'wppo_img_info', array() );
+			$response = Img_Converter::get_img_info();
 
 			return new \WP_REST_Response( $response, 200 );
 		}
@@ -346,17 +346,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$wppo_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
 
-			$img_info = get_option( 'wppo_img_info', array() );
-
-			$img_info['completed'] = array(
-				'webp' => array(),
-				'avif' => array(),
-			);
-
-			update_option( 'wppo_img_info', $img_info );
+			$img_info = Img_Converter::get_img_info();
 
 			if ( $wp_filesystem && $wp_filesystem->is_dir( $wppo_dir ) ) {
 				if ( $wp_filesystem->delete( $wppo_dir, true ) ) {
+					$img_info['completed'] = array(
+						'webp' => array(),
+						'avif' => array(),
+					);
+					Img_Converter::set_img_info( $img_info );
 					Cache::clear_cache();
 					return new \WP_REST_Response(
 						array(
@@ -536,7 +534,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_image_job_status( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			$img_info = get_option( 'wppo_img_info', array() );
+			$img_info = Img_Converter::get_img_info();
 
 			$status = array(
 				'pending'   => array(
