@@ -235,6 +235,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
 			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
 
+			// Reject image paths if they contain directory traversal sequences.
+			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
+				if ( strpos( $img_path, '..' ) !== false ) {
+					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
+				}
+			}
+
 			$use_action_scheduler = function_exists( 'as_enqueue_async_action' );
 			$jobs_queued          = 0;
 
