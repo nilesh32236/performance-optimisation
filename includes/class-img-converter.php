@@ -61,6 +61,7 @@ class Img_Converter {
 	 * Cached image information to prevent excessive database writes.
 	 *
 	 * @var array|null
+	 * @since 1.1.4
 	 */
 	private static $img_info_cache = null;
 
@@ -68,6 +69,7 @@ class Img_Converter {
 	 * Flag to check if the shutdown hook has been registered.
 	 *
 	 * @var bool
+	 * @since 1.1.4
 	 */
 	private static $shutdown_hook_registered = false;
 
@@ -573,6 +575,31 @@ class Img_Converter {
 		if ( ! in_array( $img_path, self::$img_info_cache['pending'][ $type ] ?? array(), true ) ) {
 			self::$img_info_cache['pending'][ $type ][] = $img_path;
 		}
+	}
+
+	/**
+	 * Returns the in-memory image info cache, loading from the DB on first call.
+	 *
+	 * @since x.x.x
+	 * @return array
+	 */
+	public static function get_img_info(): array {
+		if ( null === self::$img_info_cache ) {
+			self::$img_info_cache = get_option( 'wppo_img_info', array() );
+			self::maybe_register_shutdown_hook();
+		}
+		return self::$img_info_cache;
+	}
+
+	/**
+	 * Replaces the in-memory image info cache and ensures the shutdown hook is registered.
+	 *
+	 * @param array $img_info The new image info array.
+	 * @since x.x.x
+	 */
+	public static function set_img_info( array $img_info ): void {
+		self::$img_info_cache = $img_info;
+		self::maybe_register_shutdown_hook();
 	}
 
 	/**
