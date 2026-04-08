@@ -136,12 +136,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Simplified issue management logic
           BRANCH="${{ github.ref_name }}"
-          STATUS_FILE="reports/status.txt"
-          
-          if [[ "${{ steps.wpcs_check.outcome }}" == "success" && "${{ steps.psalm.outcome }}" == "success" ]]; then
-            # Close existing issue if everything is fixed
+          STATUS=$(cat reports/status.txt 2>/dev/null || echo "failure")
+
+          if [[ "$STATUS" == "success" ]]; then
             EXISTING_ISSUE=$(gh issue list --label "code-quality" --search "in $BRANCH" --json number --jq '.[0].number')
             if [[ -n "$EXISTING_ISSUE" ]]; then
               gh issue close "$EXISTING_ISSUE" --comment "Code quality issues fixed in $BRANCH."

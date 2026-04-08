@@ -586,7 +586,6 @@ class Img_Converter {
 	public static function get_img_info(): array {
 		if ( null === self::$img_info_cache ) {
 			self::$img_info_cache = get_option( 'wppo_img_info', array() );
-			self::maybe_register_shutdown_hook();
 		}
 		return self::$img_info_cache;
 	}
