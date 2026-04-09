@@ -795,9 +795,17 @@ class Main {
 	 * @return bool True if the file is minified, false otherwise.
 	 */
 	private function is_css_minified( $file_path ) {
+		if ( empty( $file_path ) ) {
+			return true;
+		}
+
 		$file_name = basename( $file_path );
 
 		if ( preg_match( '/(\.min\.css|\.bundle\.css|\.bundle\.min\.css)$/i', $file_name ) ) {
+			return true;
+		}
+
+		if ( ! file_exists( $file_path ) ) {
 			return true;
 		}
 
@@ -820,9 +828,17 @@ class Main {
 	 * @return bool True if the file is minified, false otherwise.
 	 */
 	private function is_js_minified( $file_path ) {
+		if ( empty( $file_path ) ) {
+			return true;
+		}
+
 		$file_name = basename( $file_path );
 
 		if ( preg_match( '/(\.min\.js|\.bundle\.js|\.bundle\.min\.js)$/i', $file_name ) ) {
+			return true;
+		}
+
+		if ( ! file_exists( $file_path ) ) {
 			return true;
 		}
 

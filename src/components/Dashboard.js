@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSpinner, faCheckCircle } from '@fortawesome/free-solid-svg-icons';
+import { faCheckCircle } from '@fortawesome/free-solid-svg-icons';
+import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 const Dashboard = ( { activities } ) => {
 	const translations = wppoSettings.translations;
@@ -34,9 +35,10 @@ const Dashboard = ( { activities } ) => {
 
 	// Handle loading state changes
 	const handleLoading = useCallback( ( key, isLoading ) => {
-		updateState( {
-			loading: { ...state.loading, [ key ]: isLoading },
-		} );
+		setState( ( prevState ) => ( {
+			...prevState,
+			loading: { ...prevState.loading, [ key ]: isLoading },
+		} ) );
 	}, [] );
 
 	// Update cache values in state
@@ -115,7 +117,11 @@ const Dashboard = ( { activities } ) => {
 			handleLoading( 'clear_cache', true );
 			apiCall( 'clear_cache', { action: 'clear_cache' } )
 				.then( ( data ) => {
-					updateCache();
+					if ( data.success ) {
+						updateCache();
+					} else {
+						console.error( translations.errorClearCache, data.message || '' );
+					}
 				} )
 				.catch( ( error ) =>
 					console.error( translations.errorClearCache, error )
@@ -204,20 +210,13 @@ const Dashboard = ( { activities } ) => {
 					<p>
 						{ translations.currentCacheSize } { totalCacheSize }
 					</p>
-					<button
+					<LoadingSubmitButton
 						className="clear-cache-btn"
 						onClick={ onClearCache }
-						disabled={ loading.clear_cache }
-					>
-						{ loading.clear_cache ? (
-							<>
-								<FontAwesomeIcon icon={ faSpinner } spin />{ ' ' }
-								{ translations.clearing }
-							</>
-						) : (
-							translations.clearCacheNow
-						) }
-					</button>
+						isLoading={ loading.clear_cache }
+						label={ translations.clearCacheNow }
+						loadingLabel={ translations.clearing }
+					/>
 				</div>
 
 				{ /* JavaScript & CSS Optimization Section */ }
@@ -281,34 +280,21 @@ const Dashboard = ( { activities } ) => {
 						) }
 
 					<div className="action-buttons">
-						<button
+						<LoadingSubmitButton
 							className="optimize-images-btn"
 							onClick={ optimizeImages }
-							disabled={ loading.optimize_images || bgProcessing }
-						>
-							{ loading.optimize_images ? (
-								<>
-									<FontAwesomeIcon icon={ faSpinner } spin />{ ' ' }
-									{ translations.optimizing }
-								</>
-							) : (
-								translations.optimiseNow
-							) }
-						</button>
-						<button
+							isLoading={ loading.optimize_images }
+							disabled={ bgProcessing }
+							label={ translations.optimiseNow }
+							loadingLabel={ translations.optimizing }
+						/>
+						<LoadingSubmitButton
 							className="remove-optimized-btn"
 							onClick={ removeImages }
-							disabled={ loading.remove_images }
-						>
-							{ loading.remove_images ? (
-								<>
-									<FontAwesomeIcon icon={ faSpinner } spin />{ ' ' }
-									{ translations.removing }
-								</>
-							) : (
-								translations.removeOptimized
-							) }
-						</button>
+							isLoading={ loading.remove_images }
+							label={ translations.removeOptimized }
+							loadingLabel={ translations.removing }
+						/>
 					</div>
 				</div>
 			</div>

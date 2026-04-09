@@ -130,7 +130,6 @@ const App = () => {
 			<button
 				className="hamburger-menu"
 				onClick={ toggleSidebar }
-				style={ { left: sidebarHide ? '0px' : '110px' } }
 				aria-label={
 					sidebarHide
 						? t( 'sidebar.expand' )
@@ -147,9 +146,10 @@ const App = () => {
 				className={ `sidebar ${ sidebarCollapsed ? 'collapsed' : '' } ${
 					sidebarHide ? 'hide' : ''
 				}` }
-				inert={ sidebarHide ? '' : undefined }
 			>
-				<h3>{ translations.performanceSettings }</h3>
+				<div className="sidebar-header">
+					<h3>{ translations.performanceSettings }</h3>
+				</div>
 				<nav aria-label={ translations.performanceSettings }>
 					<ul>
 						{ sidebarItems.map( ( item ) => {
@@ -162,13 +162,20 @@ const App = () => {
 										className={
 											activeTab === item.name ? 'active' : ''
 										}
-										onClick={ () => setActiveTab( item.name ) }
+										onClick={ () => {
+											setActiveTab( item.name );
+											if ( window.innerWidth < 992 ) {
+												setSidebarHide( true );
+											}
+										} }
 									>
 										<FontAwesomeIcon
 											className="sidebar-icon"
 											icon={ item.icon }
 										/>
-										{ ! sidebarCollapsed && item.label }
+										<span className="sidebar-label">
+											{ ! sidebarCollapsed && item.label }
+										</span>
 									</button>
 								</li>
 							);
