@@ -21,6 +21,8 @@ import { fetchRecentActivities } from './lib/apiRequest';
 const translations = wppoSettings.translations;
 const t = ( key ) => ( translations && translations[ key ] ) || key;
 
+const SIDEBAR_BREAKPOINT = 992;
+
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
@@ -94,7 +96,7 @@ const App = () => {
 	// Set sidebar collapse behavior based on screen width
 	useEffect( () => {
 		const handleResize = () => {
-			const isMobile = window.innerWidth < 768;
+			const isMobile = window.innerWidth < SIDEBAR_BREAKPOINT;
 			setSidebarCollapsed( isMobile );
 			setSidebarHide( isMobile );
 		};
@@ -159,12 +161,13 @@ const App = () => {
 										aria-current={
 											activeTab === item.name ? 'page' : undefined
 										}
+										aria-label={ sidebarCollapsed ? item.label : undefined }
 										className={
 											activeTab === item.name ? 'active' : ''
 										}
 										onClick={ () => {
 											setActiveTab( item.name );
-											if ( window.innerWidth < 992 ) {
+											if ( window.innerWidth < SIDEBAR_BREAKPOINT ) {
 												setSidebarHide( true );
 											}
 										} }

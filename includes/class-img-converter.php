@@ -520,7 +520,6 @@ class Img_Converter {
 			self::maybe_register_shutdown_hook();
 		}
 
-
 		if ( 'completed' === $status ) {
 			// Check and remove from 'pending' list.
 			if ( isset( self::$img_info_cache['pending'][ $type ] ) ) {
@@ -562,15 +561,17 @@ class Img_Converter {
 	 */
 	public static function add_img_into_queue( $img_path, $type = 'webp' ) {
 		if ( empty( $img_path ) || pathinfo( $img_path, PATHINFO_EXTENSION ) === $type ) {
-			return;
+			return false;
 		}
 
 		$normalized = wp_normalize_path( $img_path );
-		$upload_dir = wp_normalize_path( wp_upload_dir()['basedir'] );
+		// Ensure trailing slash so strpos can't match a same-prefix sibling directory.
+		$upload_dir = rtrim( wp_normalize_path( wp_upload_dir()['basedir'] ), '/' ) . '/';
 
 		// Only queue images that live inside wp-content/uploads.
 		if ( strpos( $normalized, $upload_dir ) !== 0 ) {
-			return;
+			error_log( sprintf( 'WPPO: add_img_into_queue rejected path "%s" — not inside uploads directory.', $normalized ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			return false;
 		}
 
 		$img_path = str_replace( wp_normalize_path( ABSPATH ), '', $normalized );
@@ -583,6 +584,8 @@ class Img_Converter {
 		if ( ! in_array( $img_path, self::$img_info_cache['pending'][ $type ] ?? array(), true ) ) {
 			self::$img_info_cache['pending'][ $type ][] = $img_path;
 		}
+
+		return true;
 	}
 
 	/**
@@ -616,11 +619,14 @@ class Img_Converter {
 	 */
 	private static function maybe_register_shutdown_hook() {
 		if ( ! self::$shutdown_hook_registered ) {
-			add_action( 'shutdown', function() {
-				if ( null !== self::$img_info_cache ) {
-					update_option( 'wppo_img_info', self::$img_info_cache );
+			add_action(
+				'shutdown',
+				function () {
+					if ( null !== self::$img_info_cache ) {
+						update_option( 'wppo_img_info', self::$img_info_cache );
+					}
 				}
-			} );
+			);
 			self::$shutdown_hook_registered = true;
 		}
 	}

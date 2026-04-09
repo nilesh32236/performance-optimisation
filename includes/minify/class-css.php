@@ -143,8 +143,8 @@ class CSS {
 					// Check if corresponding .avif image exists.
 					if ( file_exists( Img_Converter::get_img_path( $image_path, 'avif' ) ) ) {
 						return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';
-					} else {
-						Img_Converter::add_img_into_queue( $local_path, 'avif' );
+					} elseif ( ! Img_Converter::add_img_into_queue( $local_path, 'avif' ) ) {
+						error_log( sprintf( 'WPPO CSS: skipped avif queue for "%s" — path rejected.', $local_path ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					}
 
 					if ( 'webp' === $ext_matches[1] ) {
@@ -154,8 +154,8 @@ class CSS {
 					// Check if corresponding .webp image exists.
 					if ( file_exists( Img_Converter::get_img_path( $image_path ) ) ) {
 						return 'url("' . Img_Converter::get_img_url( $image_path ) . '")';
-					} else {
-						Img_Converter::add_img_into_queue( $local_path, 'webp' );
+					} elseif ( ! Img_Converter::add_img_into_queue( $local_path, 'webp' ) ) {
+						error_log( sprintf( 'WPPO CSS: skipped webp queue for "%s" — path rejected.', $local_path ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					}
 
 					return 'url("' . $image_path . '")';

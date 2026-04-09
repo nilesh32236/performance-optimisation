@@ -24,7 +24,7 @@ const LoadingSubmitButton = ( {
 	children,
 	...rest
 } ) => {
-	const isDisabled = disabled ?? isLoading;
+	const isDisabled = Boolean( disabled ) || Boolean( isLoading );
 
 	return (
 		<button
