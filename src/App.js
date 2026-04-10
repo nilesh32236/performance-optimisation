@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faAngleLeft,
@@ -157,12 +157,18 @@ const App = () => {
 								<li key={ item.name }>
 									<button
 										aria-current={
-											activeTab === item.name ? 'page' : undefined
+											activeTab === item.name
+												? 'page'
+												: undefined
 										}
 										className={
-											activeTab === item.name ? 'active' : ''
+											activeTab === item.name
+												? 'active'
+												: ''
 										}
-										onClick={ () => setActiveTab( item.name ) }
+										onClick={ () =>
+											setActiveTab( item.name )
+										}
 									>
 										<FontAwesomeIcon
 											className="sidebar-icon"

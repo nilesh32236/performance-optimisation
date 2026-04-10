@@ -520,7 +520,6 @@ class Img_Converter {
 			self::maybe_register_shutdown_hook();
 		}
 
-
 		if ( 'completed' === $status ) {
 			// Check and remove from 'pending' list.
 			if ( isset( self::$img_info_cache['pending'][ $type ] ) ) {
@@ -608,11 +607,14 @@ class Img_Converter {
 	 */
 	private static function maybe_register_shutdown_hook() {
 		if ( ! self::$shutdown_hook_registered ) {
-			add_action( 'shutdown', function() {
-				if ( null !== self::$img_info_cache ) {
-					update_option( 'wppo_img_info', self::$img_info_cache );
+			add_action(
+				'shutdown',
+				function () {
+					if ( null !== self::$img_info_cache ) {
+						update_option( 'wppo_img_info', self::$img_info_cache );
+					}
 				}
-			} );
+			);
 			self::$shutdown_hook_registered = true;
 		}
 	}

@@ -1,5 +1,7 @@
 document.addEventListener( 'DOMContentLoaded', function () {
-	const clearAllCacheBtn = document.querySelector( '#wp-admin-bar-wppo_clear_all .ab-item' );
+	const clearAllCacheBtn = document.querySelector(
+		'#wp-admin-bar-wppo_clear_all .ab-item'
+	);
 
 	if ( clearAllCacheBtn ) {
 		clearAllCacheBtn.addEventListener( 'click', function () {
@@ -7,16 +9,20 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-WP-Nonce': wppoObject.nonce
+					'X-WP-Nonce': wppoObject.nonce,
 				},
-				body: JSON.stringify( { action: 'clear_cache' } )
+				body: JSON.stringify( { action: 'clear_cache' } ),
 			} )
-				.then( response => response.json() )
-				.catch( error => console.error( 'Error clearing cache: ', error ) );
+				.then( ( response ) => response.json() )
+				.catch( ( error ) =>
+					console.error( 'Error clearing cache: ', error )
+				);
 		} );
 	}
 
-	const clearCacheBtn = document.querySelector( '#wp-admin-bar-wppo_clear_this_page .ab-item' );
+	const clearCacheBtn = document.querySelector(
+		'#wp-admin-bar-wppo_clear_this_page .ab-item'
+	);
 
 	if ( clearCacheBtn ) {
 		clearCacheBtn.addEventListener( 'click', function () {
@@ -25,12 +31,17 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
-					'X-WP-Nonce': wppoObject.nonce
+					'X-WP-Nonce': wppoObject.nonce,
 				},
-				body: JSON.stringify( { action: 'clear_single_page_cache', path } )
+				body: JSON.stringify( {
+					action: 'clear_single_page_cache',
+					path,
+				} ),
 			} )
-				.then( response => response.json() )
-				.catch( error => console.error( 'Error clearing cache: ', error ) );
+				.then( ( response ) => response.json() )
+				.catch( ( error ) =>
+					console.error( 'Error clearing cache: ', error )
+				);
 		} );
 	}
-} )
+} );
