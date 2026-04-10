@@ -176,9 +176,9 @@ const App = () => {
 											className="sidebar-icon"
 											icon={ item.icon }
 										/>
-										<span className="sidebar-label">
-											{ ! sidebarCollapsed && item.label }
-										</span>
+										{ ! sidebarCollapsed && item.label && (
+											<span className="sidebar-label">{ item.label }</span>
+										) }
 									</button>
 								</li>
 							);

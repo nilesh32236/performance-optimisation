@@ -381,3 +381,42 @@ textarea.text-area-field {
 .post-type-option {
 	padding: 5px 0;
 }
+
+/* Import Field */
+.import-field-wrapper {
+	margin: 15px 0;
+
+	.input-field {
+		margin: 0;
+		max-width: none;
+	}
+}
+
+/* Notification */
+.db-notification {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 16px;
+	margin-top: 20px;
+	border-radius: var(--wppo-radius-sm);
+	border: 1px solid transparent;
+	font-size: 14px;
+
+	&--success {
+		background-color: #ecfdf5;
+		border-color: #6ee7b7;
+		color: #065f46;
+	}
+
+	&--error {
+		background-color: #fef2f2;
+		border-color: #fca5a5;
+		color: #991b1b;
+	}
+
+	@media (max-width: 768px) {
+		padding: 10px 12px;
+		font-size: 13px;
+	}
+}

@@ -99,14 +99,13 @@ const PluginSetting = ({ options }) => {
 						<FontAwesomeIcon icon={faFileImport} /> {translations.importSettings}
 					</h3>
 					<p>{translations.importPluginSettings}</p>
-					<div className="import-field-wrapper" style={{ margin: '15px 0' }}>
+					<div className="import-field-wrapper">
 						<input
 							type="file"
 							accept="application/json"
 							onChange={handleFileSelection}
 							ref={fileInputRef}
 							className="input-field"
-							style={{ margin: 0, width: '100%', maxWidth: 'none' }}
 						/>
 					</div>
 					<LoadingSubmitButton
@@ -119,7 +118,7 @@ const PluginSetting = ({ options }) => {
 
 			{/* Notification Message */}
 			{notification.message && (
-				<div className={`db-notification db-notification--${notification.success ? 'success' : 'error'}`} style={{ marginTop: '20px' }}>
+				<div className={`db-notification db-notification--${notification.success ? 'success' : 'error'}`}>
 					<FontAwesomeIcon icon={notification.success ? faCheckCircle : faExclamationCircle} />
 					<span>{notification.message}</span>
 				</div>
