@@ -25,6 +25,14 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @since 1.1.0
  */
 class Asset_Manager {
+	/**
+	 * Prefix for the per-page asset transient key.
+	 *
+	 * @var   string
+	 * @since 1.1.0
+	 */
+	const TRANSIENT_PREFIX = 'wppo_page_assets_';
+
 
 
 	/**
@@ -178,7 +186,7 @@ class Asset_Manager {
 
 		if ( $has_changed ) {
 			// Store for 24 hours, keyed by post ID.
-			set_transient( 'wppo_page_assets_' . $post_id, $assets, DAY_IN_SECONDS );
+			set_transient( self::TRANSIENT_PREFIX . $post_id, $assets, DAY_IN_SECONDS );
 		}
 	}
 
@@ -190,7 +198,7 @@ class Asset_Manager {
 	 * @return array|false The captured assets array, or false if not found.
 	 */
 	public static function get_page_assets( $post_id ) {
-		return get_transient( 'wppo_page_assets_' . $post_id );
+		return get_transient( self::TRANSIENT_PREFIX . $post_id );
 	}
 
 	/**

@@ -112,19 +112,19 @@ class Main {
 	 * @since  1.0.0
 	 */
 	private function includes(): void {
-		include_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/minify/class-html.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/minify/class-css.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/minify/class-js.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/class-metabox.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/class-rest.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
-		include_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
+		require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/minify/class-html.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/minify/class-css.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/minify/class-js.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-metabox.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-rest.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
 	}
 
 	/**
@@ -276,7 +276,7 @@ class Main {
 	 * @since  1.0.0
 	 */
 	public function admin_page(): void {
-		include_once WPPO_PLUGIN_PATH . 'templates/app.html';
+		require_once WPPO_PLUGIN_PATH . 'templates/app.html';
 	}
 
 	/**
@@ -811,7 +811,11 @@ class Main {
 		}
 
 		$css_content = $this->filesystem->get_contents( $file_path );
-		$line_count  = substr_count( $css_content, "\n" );
+		if ( ! is_string( $css_content ) ) {
+			return true;
+		}
+
+		$line_count = ( '' === $css_content ) ? 0 : substr_count( $css_content, "\n" ) + 1;
 
 		if ( 10 >= $line_count ) {
 			return true;
@@ -844,7 +848,11 @@ class Main {
 		}
 
 		$js_content = $this->filesystem->get_contents( $file_path );
-		$line_count = substr_count( $js_content, "\n" );
+		if ( ! is_string( $js_content ) ) {
+			return true;
+		}
+
+		$line_count = ( '' === $js_content ) ? 0 : substr_count( $js_content, "\n" ) + 1;
 
 		if ( 10 >= $line_count ) {
 			return true;
