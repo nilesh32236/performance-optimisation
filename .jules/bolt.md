@@ -13,3 +13,6 @@
 **Action:**
 1. Always place the cheapest, most exclusionary checks (e.g., `is_user_logged_in()`, `empty( $var )`) first in `if` statements to leverage short-circuiting.
 2. Replace memory-intensive regex functions like `preg_split` with faster, native string functions like `substr_count` when simply counting occurrences (like newlines).
+## 2024-05-15 - [Transient Caching for File System Operations]
+**Learning:** Calculating file sizes or counts via recursive directory scanning (`dirlist`) on every WP-admin load creates a severe bottleneck that can crash or slow down the settings page.
+**Action:** Always use WordPress Transients to cache expensive file system results, and invalidate these transients within `clear_cache` methods.
