@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
 				'recent_activities'       => array(
-					'methods'             => 'POST',
+					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_recent_activities' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
@@ -84,17 +84,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
 				'database_cleanup_counts' => array(
-					'methods'             => 'POST',
+					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_database_cleanup_counts' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
 				'get_page_assets'         => array(
-					'methods'             => 'POST',
+					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_page_assets' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
 				'image_job_status'        => array(
-					'methods'             => 'POST',
+					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_image_job_status' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),

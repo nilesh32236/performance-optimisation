@@ -58,22 +58,6 @@ class Img_Converter {
 	private $exclude_imgs = array();
 
 	/**
-	 * Cached image information to prevent excessive database writes.
-	 *
-	 * @var array|null
-	 * @since 1.1.4
-	 */
-	private static $img_info_cache = null;
-
-	/**
-	 * Flag to check if the shutdown hook has been registered.
-	 *
-	 * @var bool
-	 * @since 1.1.4
-	 */
-	private static $shutdown_hook_registered = false;
-
-	/**
 	 * Img_Converter constructor.
 	 *
 	 * @param array $options Options for configuring image optimization.

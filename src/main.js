@@ -4,7 +4,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	 *
 	 * @param {string} endpointPath The endpoint path.
 	 * @param {Object} payload      The request payload.
-	 * @return {Promise}
+	 * @return {Promise}               The fetch promise.
 	 */
 	const postJsonRequest = ( endpointPath, payload ) => {
 		return fetch( wppoObject.apiUrl + endpointPath, {

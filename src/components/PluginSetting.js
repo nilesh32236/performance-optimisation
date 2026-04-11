@@ -2,7 +2,13 @@ import { useState, useRef } from '@wordpress/element';
 import { apiCall } from '../lib/apiRequest';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faFileExport, faFileImport, faCheckCircle, faExclamationCircle } from '@fortawesome/free-solid-svg-icons';
+import {
+	faFileExport,
+	faFileImport,
+	faCheckCircle,
+	faExclamationCircle,
+	faTools,
+} from '@fortawesome/free-solid-svg-icons';
 
 const PluginSetting = ( { options } ) => {
 	const translations = wppoSettings.translations;
@@ -14,7 +20,6 @@ const PluginSetting = ( { options } ) => {
 	} );
 	const fileInputRef = useRef( null );
 
-	// Get timestamp for the export filename
 	const getTimestamp = () => {
 		return new Date()
 			.toISOString()
@@ -60,86 +65,139 @@ const PluginSetting = ( { options } ) => {
 		reader.onload = ( e ) => {
 			try {
 				const fileData = JSON.parse( e.target.result );
-
 				apiCall( 'import_settings', {
 					action: 'import_settings',
 					settings: fileData,
 				} )
 					.then( ( data ) => {
 						if ( data.success ) {
-							wppoSettings.settings = fileData; // Update global settings
+							wppoSettings.settings = fileData;
 							resetFileInput();
 						}
-
 						setNotification( {
 							message: data.message || translations.fileImported,
 							success: data.success,
 						} );
 					} )
-					.catch( ( error ) => {
-						console.error( translations.fileImporting, error );
+					.catch( () => {
 						setNotification( {
 							message: translations.fileErrorImport,
 							success: false,
 						} );
 					} );
-			} catch ( error ) {
-				console.error( translations.invalidJSON, error );
+			} catch ( _error ) {
 				setNotification( {
 					message: translations.invalidFileFormat,
 					success: false,
 				} );
 			}
 		};
-
 		reader.readAsText( selectedFile );
 	};
 
 	return (
-		<div className="settings-form">
-			<h2>{ translations.tools }</h2>
+		<div className="settings-form fadeIn">
+			<div
+				style={ {
+					display: 'flex',
+					justifyContent: 'space-between',
+					alignItems: 'center',
+					marginBottom: '40px',
+				} }
+			>
+				<h2 style={ { margin: 0 } }>
+					<FontAwesomeIcon
+						icon={ faTools }
+						style={ {
+							color: 'var(--wppo-primary)',
+							marginRight: '12px',
+						} }
+					/>
+					{ translations.tools }
+				</h2>
+			</div>
+
+			<p
+				style={ {
+					fontSize: '16px',
+					color: 'var(--wppo-text-muted)',
+					marginBottom: '40px',
+					maxWidth: '800px',
+				} }
+			>
+				Manage your configuration by exporting your current settings or
+				importing a previously saved configuration file.
+			</p>
 
 			<div className="dashboard-overview">
-				{/* Export Settings Card */}
-				<div className="dashboard-card">
+				{ /* Export Settings Card */ }
+				<div className="wppo-card">
 					<h3>
-						<FontAwesomeIcon icon={faFileExport} /> {translations.exportSettings}
+						<FontAwesomeIcon
+							icon={ faFileExport }
+							style={ { color: 'var(--wppo-primary)' } }
+						/>{ ' ' }
+						{ translations.exportSettings }
 					</h3>
-					<p>{translations.exportPluginSettings}</p>
-					<LoadingSubmitButton 
-						onClick={exportSettings}
-						label={translations.exportSettings}
+					<p style={ { marginBottom: '32px' } }>
+						{ translations.exportPluginSettings }
+					</p>
+					<LoadingSubmitButton
+						className="submit-button"
+						style={ { width: '100%' } }
+						onClick={ exportSettings }
+						label={ translations.exportSettings }
 					/>
 				</div>
 
-				{/* Import Settings Card */}
-				<div className="dashboard-card">
+				{ /* Import Settings Card */ }
+				<div className="wppo-card">
 					<h3>
-						<FontAwesomeIcon icon={faFileImport} /> {translations.importSettings}
+						<FontAwesomeIcon
+							icon={ faFileImport }
+							style={ { color: 'var(--wppo-primary)' } }
+						/>{ ' ' }
+						{ translations.importSettings }
 					</h3>
-					<p>{translations.importPluginSettings}</p>
-					<div className="import-field-wrapper">
+					<p>{ translations.importPluginSettings }</p>
+					<div
+						className="import-field-wrapper"
+						style={ { margin: '24px 0' } }
+					>
 						<input
 							type="file"
 							accept="application/json"
-							onChange={handleFileSelection}
-							ref={fileInputRef}
+							onChange={ handleFileSelection }
+							ref={ fileInputRef }
 							className="input-field"
+							style={ { padding: '12px' } }
 						/>
 					</div>
 					<LoadingSubmitButton
-						onClick={importSettings}
-						disabled={!selectedFile}
-						label={translations.importSettings}
+						className="submit-button secondary"
+						style={ { width: '100%' } }
+						onClick={ importSettings }
+						disabled={ ! selectedFile }
+						label={ translations.importSettings }
 					/>
 				</div>
 			</div>
 
-			{/* Notification Message */}
-			{notification.message && (
-				<div className={`db-notification db-notification--${notification.success ? 'success' : 'error'}`}>
-					<FontAwesomeIcon icon={notification.success ? faCheckCircle : faExclamationCircle} />
-					<span>{notification.message}</span>
+			{ notification.message && (
+				<div
+					className={ `db-notification db-notification--${
+						notification.success ? 'success' : 'error'
+					}` }
+					style={ { marginTop: '40px' } }
+				>
+					<FontAwesomeIcon
+						icon={
+							notification.success
+								? faCheckCircle
+								: faExclamationCircle
+						}
+					/>
+					<span>{ notification.message }</span>
 				</div>
 			) }
 		</div>

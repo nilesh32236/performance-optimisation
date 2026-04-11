@@ -1,5 +1,4 @@
 let scriptLoading = false;
-let imgLoaded = false;
 let scriptLoadPromise = null;
 
 const loadScript = ( script ) => {
@@ -29,10 +28,10 @@ const loadScript = ( script ) => {
 				// script.setAttribute('type', 'text/javascript');
 			}
 
-			const wppoType = script.getAttribute( 'wppo-type' );
-			if ( wppoType ) {
+			const typeAttr = script.getAttribute( 'wppo-type' );
+			if ( typeAttr ) {
 				script.removeAttribute( 'wppo-type' );
-				script.setAttribute( 'type', wppoType );
+				script.setAttribute( 'type', typeAttr );
 			}
 
 			try {
@@ -54,7 +53,6 @@ const loadScript = ( script ) => {
 		}
 	} );
 };
-
 
 async function loadScripts() {
 	if ( scriptLoadPromise ) {
@@ -79,7 +77,7 @@ async function loadScripts() {
 			console.error( 'Error loading script:', err );
 		} finally {
 			scriptLoading = false;
-			// Keep the promise resolved so future calls don't re-run 
+			// Keep the promise resolved so future calls don't re-run
 			// if that's the intended behavior (lazy loading scripts usually run once).
 			// If re-running is needed, clear scriptLoadPromise = null here.
 		}
@@ -132,11 +130,9 @@ const loadImages = () => {
 		return;
 	}
 
-	imgLoaded = true;
-
 	if ( 'IntersectionObserver' in window ) {
 		const observer = new IntersectionObserver(
-			( entries, observer ) => {
+			( entries ) => {
 				entries.forEach( ( entry ) => {
 					if ( entry.isIntersecting ) {
 						const el = entry.target;

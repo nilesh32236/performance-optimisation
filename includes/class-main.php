@@ -95,7 +95,17 @@ class Main {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
-		$this->options = get_option( 'wppo_settings', array() );
+		$this->options = get_option(
+			'wppo_settings',
+			array(
+				'file_optimisation'  => array(
+					'enableServerRules' => false,
+					'cdnURL'            => '',
+				),
+				'preload_settings'   => array(),
+				'image_optimisation' => array(),
+			)
+		);
 
 		$this->includes();
 		$this->setup_hooks();
@@ -125,6 +135,7 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-rest.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
 	}
 
 	/**
@@ -168,8 +179,7 @@ class Main {
 
 		if ( isset( $this->options['file_optimisation']['minifyCSS'] ) && (bool) $this->options['file_optimisation']['minifyCSS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCSS'] ) ) {
-				$exclude_css = Util::process_urls( $this->options['file_optimisation']['excludeCSS'] );
-
+				$exclude_css       = Util::process_urls( $this->options['file_optimisation']['excludeCSS'] );
 				$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
 			}
 
@@ -208,9 +218,45 @@ class Main {
 		// Clear all cache on structural changes that invalidate every cached page.
 		add_action( 'permalink_structure_changed', array( __CLASS__, 'clear_all_cache' ) );
 		add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
-		add_action( 'update_option_wppo_settings', array( __CLASS__, 'clear_all_cache' ) );
+		add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 		add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 		add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
+	}
+
+	/**
+	 * Callback for when plugin settings are updated.
+	 *
+	 * @param mixed $old_value The old option value.
+	 * @param mixed $value     The new option value.
+	 * @since 1.2.0
+	 */
+	public static function on_settings_update( $old_value, $value ) {
+		self::clear_all_cache();
+
+		// Handle .htaccess rules update.
+		$old_enable = isset( $old_value['file_optimisation']['enableServerRules'] ) ? (bool) $old_value['file_optimisation']['enableServerRules'] : false;
+		$new_enable = isset( $value['file_optimisation']['enableServerRules'] ) ? (bool) $value['file_optimisation']['enableServerRules'] : false;
+
+		if ( $old_enable !== $new_enable ) {
+			$ok = Htaccess_Handler::update_rules( $new_enable );
+
+			if ( ! $ok ) {
+				// Rollback the setting if .htaccess update failed.
+				$value['file_optimisation']['enableServerRules'] = $old_enable;
+
+				// Prevent infinite loop by temporary removing the action.
+				remove_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10 );
+				update_option( 'wppo_settings', $value );
+				add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
+
+				add_action(
+					'admin_notices',
+					function () {
+						echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Performance Optimization: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
+					}
+				);
+			}
+		}
 	}
 
 	/**
@@ -480,6 +526,10 @@ class Main {
 					'imgJobsQueued'            => __( 'Jobs Queued', 'performance-optimisation' ),
 					'imgProcessing'            => __( 'Processing in background...', 'performance-optimisation' ),
 					'imgJobsComplete'          => __( 'All background jobs complete!', 'performance-optimisation' ),
+					'enableServerRules'        => __( 'Enable Server-Side Rules (Gzip & Browser Caching)', 'performance-optimisation' ),
+					'enableServerRulesDesc'    => __( 'Automatically add performance rules to your .htaccess file.', 'performance-optimisation' ),
+					'cdnURL'                   => __( 'CDN URL', 'performance-optimisation' ),
+					'cdnURLPlaceholder'        => __( 'https://cdn.example.com', 'performance-optimisation' ),
 				),
 			),
 		);

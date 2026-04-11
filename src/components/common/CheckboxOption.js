@@ -1,8 +1,21 @@
-import React from 'react';
 import { useId } from '@wordpress/element';
 
 /**
  * A reusable checkbox option component with optional description and nested settings.
+ *  * Improved for Premium Indigo Design System.
+ *
+ * @param {Object}               props                       Component props.
+ * @param {string}               props.label                 The checkbox label.
+ * @param {boolean}              props.checked               Whether the checkbox is checked.
+ * @param {Function}             props.onChange              Change handler for the checkbox.
+ * @param {string}               props.name                  Name attribute for the checkbox.
+ * @param {string}               [props.id]                  Optional ID for the checkbox.
+ * @param {string}               [props.textareaName]        Optional name for a nested textarea.
+ * @param {string}               [props.textareaPlaceholder] Optional placeholder for the textarea.
+ * @param {string}               [props.textareaValue]       Value for the nested textarea.
+ * @param {Function}             [props.onTextareaChange]    Change handler for the textarea.
+ * @param {string}               [props.description]         Optional description text.
+ * @param {import('react').Node} [props.children]            Additional child elements.
  */
 export const CheckboxOption = ( {
 	label,
@@ -22,7 +35,7 @@ export const CheckboxOption = ( {
 	const descriptionId = description ? `desc-${ id }` : undefined;
 
 	return (
-		<div className="checkbox-option">
+		<div className={ `checkbox-option ${ checked ? 'is-checked' : '' }` }>
 			<label htmlFor={ id }>
 				<input
 					id={ id }
@@ -32,7 +45,7 @@ export const CheckboxOption = ( {
 					onChange={ onChange }
 					aria-describedby={ descriptionId }
 				/>
-				{ label }
+				<span className="option-label-text">{ label }</span>
 			</label>
 
 			{ description && (
@@ -42,16 +55,21 @@ export const CheckboxOption = ( {
 			) }
 
 			{ checked && ( textareaName || children ) && (
-				<div className="nested-content">
+				<div
+					className="nested-content"
+					style={ { marginTop: '20px', paddingLeft: '36px' } }
+				>
 					{ textareaName && (
-						<textarea
-							className="text-area-field"
-							placeholder={ textareaPlaceholder || '' }
-							aria-label={ textareaPlaceholder || label }
-							name={ textareaName }
-							value={ textareaValue }
-							onChange={ onTextareaChange }
-						/>
+						<div className="field-group">
+							<textarea
+								className="text-area-field"
+								placeholder={ textareaPlaceholder || '' }
+								aria-label={ textareaPlaceholder || label }
+								name={ textareaName }
+								value={ textareaValue }
+								onChange={ onTextareaChange }
+							/>
+						</div>
 					) }
 					{ children }
 				</div>

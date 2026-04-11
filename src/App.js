@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-	faAngleLeft,
-	faAngleRight,
 	faTachometerAlt,
-	faFileAlt,
-	faTools,
+	faFileCode,
 	faBullseye,
-	faCog,
+	faImages,
 	faDatabase,
+	faTools,
+	faBars,
+	faTimes,
 } from '@fortawesome/free-solid-svg-icons';
 import FileOptimization from './components/FileOptimization';
 import PreloadSettings from './components/PreloadSettings';
@@ -19,19 +19,17 @@ import DatabaseCleanup from './components/DatabaseCleanup';
 import { fetchRecentActivities } from './lib/apiRequest';
 
 const translations = wppoSettings.translations;
-const t = ( key ) => ( translations && translations[ key ] ) || key;
 
 const SIDEBAR_BREAKPOINT = 992;
 
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
-	const [ sidebarCollapsed, setSidebarCollapsed ] = useState( false );
-	const [ sidebarHide, setSidebarHide ] = useState( false );
+	const sidebarCollapsed = false;
+	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const hasFetchedActivities = useRef( false );
 
-	// Memoize the sidebar items to avoid unnecessary re-calculation
 	const sidebarItems = useMemo(
 		() => [
 			{
@@ -41,28 +39,33 @@ const App = () => {
 			},
 			{
 				name: 'fileOptimization',
-				icon: faFileAlt,
+				icon: faFileCode,
 				label: translations.fileOptimization,
 			},
-			{ name: 'preload', icon: faBullseye, label: translations.preload },
+			{
+				name: 'preload',
+				icon: faBullseye,
+				label: translations.preload,
+			},
 			{
 				name: 'imageOptimization',
-				icon: faCog,
+				icon: faImages,
 				label: translations.imageOptimization,
 			},
 			{
 				name: 'databaseCleanup',
 				icon: faDatabase,
-				label:
-					translations.databaseOptimization ||
-					' Database Optimization',
+				label: translations.databaseOptimization || 'Database',
 			},
-			{ name: 'tools', icon: faTools, label: translations.tools },
+			{
+				name: 'tools',
+				icon: faTools,
+				label: translations.tools,
+			},
 		],
-		[ translations ]
+		[]
 	);
 
-	// Memoize the renderContent function to avoid recalculating on each render
 	const renderContent = useMemo( () => {
 		const components = {
 			dashboard: (
@@ -90,24 +93,25 @@ const App = () => {
 		return components[ activeTab ] || components.dashboard;
 	}, [ activeTab, recentActivities ] );
 
-	// Handle sidebar toggle visibility
-	const toggleSidebar = () => setSidebarHide( ( prevState ) => ! prevState );
+	const toggleMobileMenu = () =>
+		setMobileMenuOpen( ( prevState ) => ! prevState );
 
-	// Set sidebar collapse behavior based on screen width
 	useEffect( () => {
 		const handleResize = () => {
-			const isMobile = window.innerWidth < SIDEBAR_BREAKPOINT;
-			setSidebarHide( isMobile );
+			if ( window.innerWidth >= SIDEBAR_BREAKPOINT ) {
+				setMobileMenuOpen( false );
+			}
 		};
 
-		handleResize(); // Initial check
 		window.addEventListener( 'resize', handleResize );
 		return () => window.removeEventListener( 'resize', handleResize );
 	}, [] );
 
-	// Fetch recent activities when the tab changes to "dashboard"
 	useEffect( () => {
-		if ( activeTab === 'dashboard' && ! hasFetchedActivities.current ) {
+		if (
+			( activeTab === 'dashboard' || recentActivities.length === 0 ) &&
+			! hasFetchedActivities.current
+		) {
 			const fetchActivities = async () => {
 				try {
 					const data = await fetchRecentActivities();
@@ -122,70 +126,73 @@ const App = () => {
 		}
 
 		setTransition( true );
-		const timeout = setTimeout( () => setTransition( false ), 500 );
+		const timeout = setTimeout( () => setTransition( false ), 400 );
 		return () => clearTimeout( timeout );
-	}, [ activeTab, translations.failedFetchActivities ] );
+	}, [ activeTab, recentActivities.length ] );
 
 	return (
-		<div className="container">
-			<button
-				className="hamburger-menu"
-				onClick={ toggleSidebar }
-				aria-label={
-					sidebarHide
-						? t( 'sidebar.expand' )
-						: t( 'sidebar.collapse' )
-				}
-				aria-expanded={ ! sidebarHide }
-			>
-				<FontAwesomeIcon
-					icon={ sidebarHide ? faAngleRight : faAngleLeft }
+		<div className="container" style={ { margin: '20px auto' } }>
+			{ /* Mobile Top Header */ }
+			<div className="mobile-header">
+				<div className="mobile-brand">Performance Optimize</div>
+				<button
+					className="mobile-toggle"
+					onClick={ toggleMobileMenu }
+					aria-label="Toggle Menu"
+				>
+					<FontAwesomeIcon
+						icon={ mobileMenuOpen ? faTimes : faBars }
+					/>
+				</button>
+			</div>
+
+			{ /* Sidebar Overlay */ }
+			{ mobileMenuOpen && (
+				<div
+					className="sidebar-overlay"
+					onClick={ toggleMobileMenu }
+					onKeyDown={ ( e ) => {
+						if ( e.key === 'Enter' || e.key === ' ' ) {
+							toggleMobileMenu();
+						}
+					} }
+					role="button"
+					tabIndex="0"
+					aria-label={ translations.closeMenu || 'Close Menu' }
 				/>
-			</button>
+			) }
 
 			<div
 				className={ `sidebar ${ sidebarCollapsed ? 'collapsed' : '' } ${
-					sidebarHide ? 'hide' : ''
+					mobileMenuOpen ? 'mobile-open' : ''
 				}` }
 			>
 				<div className="sidebar-header">
-					<h3>{ translations.performanceSettings }</h3>
+					<h3>Performance Optimize</h3>
 				</div>
-				<nav aria-label={ translations.performanceSettings }>
+				<nav aria-label="Main Navigation">
 					<ul>
-						{ sidebarItems.map( ( item ) => {
-							return (
-								<li key={ item.name }>
-									<button
-										aria-current={
-											activeTab === item.name
-												? 'page'
-												: undefined
-										}
-										aria-label={ sidebarCollapsed ? item.label : undefined }
-										className={
-											activeTab === item.name
-												? 'active'
-												: ''
-										}
-										onClick={ () => {
-											setActiveTab( item.name );
-											if ( window.innerWidth < SIDEBAR_BREAKPOINT ) {
-												setSidebarHide( true );
-											}
-										} }
-									>
-										<FontAwesomeIcon
-											className="sidebar-icon"
-											icon={ item.icon }
-										/>
-										{ ! sidebarCollapsed && item.label && (
-											<span className="sidebar-label">{ item.label }</span>
-										) }
-									</button>
-								</li>
-							);
-						} ) }
+						{ sidebarItems.map( ( item ) => (
+							<li key={ item.name }>
+								<button
+									className={
+										activeTab === item.name ? 'active' : ''
+									}
+									onClick={ () => {
+										setActiveTab( item.name );
+										setMobileMenuOpen( false );
+									} }
+								>
+									<FontAwesomeIcon
+										className="sidebar-icon"
+										icon={ item.icon }
+									/>
+									<span className="sidebar-label">
+										{ item.label }
+									</span>
+								</button>
+							</li>
+						) ) }
 					</ul>
 				</nav>
 			</div>
