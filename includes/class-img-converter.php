@@ -600,7 +600,7 @@ class Img_Converter {
 	}
 
 	/**
-	 * Manually updates the image info cache.
+	 * Manually updates the image info database option.
 	 *
 	 * @param array $img_info The new image info array.
 	 * @since 1.1.4
@@ -618,5 +618,6 @@ class Img_Converter {
 	private static function update_img_info_atomic( callable $callback ): void {
 		$img_info = get_option( 'wppo_img_info', array() );
 		$new_info = $callback( $img_info );
+		update_option( 'wppo_img_info', $new_info );
 	}
 }
