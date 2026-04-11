@@ -119,7 +119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function combine_css() {
-			if ( is_user_logged_in() || is_404() ) {
+			if ( is_user_logged_in() || is_404() || $this->is_not_cacheable() ) {
 				return;
 			}
 
