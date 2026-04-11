@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -35,7 +35,7 @@ const FileOptimization = ( { options = {} } ) => {
 		setIsLoading( true );
 
 		try {
-			// Submit settings (mock function for now)
+			// Submit settings via apiCall
 			await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
 				settings,

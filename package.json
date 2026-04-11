@@ -6,7 +6,8 @@
 	"scripts": {
 		"build": "wp-scripts build",
 		"start": "wp-scripts start",
-		"makepot": "wp-scripts make-pot"
+		"makepot": "wp-scripts make-pot",
+		"test": "wp-scripts test-unit-js"
 	},
 	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
 	"license": "GPL-2.0-or-later",
