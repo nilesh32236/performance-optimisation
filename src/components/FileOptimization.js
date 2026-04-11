@@ -72,15 +72,33 @@ const FileOptimization = ( { options = {} } ) => {
 			</div>
 
 			<div className="wppo-sub-tabs-container">
-				<div className="wppo-sub-tabs">
+				<div className="wppo-sub-tabs" role="tablist" aria-label="File Optimization Tabs">
 					{ subTabs.map( ( tab ) => (
 						<button
 							key={ tab.id }
+							id={`tab-${tab.id}`}
 							type="button"
+							role="tab"
+							aria-selected={ activeSubTab === tab.id }
+							aria-controls={`tabpanel-${tab.id}`}
+							tabIndex={ activeSubTab === tab.id ? 0 : -1 }
 							className={ `sub-tab-item ${
 								activeSubTab === tab.id ? 'active' : ''
 							}` }
 							onClick={ () => setActiveSubTab( tab.id ) }
+							onKeyDown={ (e) => {
+								const currentIndex = subTabs.findIndex(t => t.id === activeSubTab);
+								let newIndex = currentIndex;
+								if (e.key === 'ArrowRight') {
+									newIndex = (currentIndex + 1) % subTabs.length;
+								} else if (e.key === 'ArrowLeft') {
+									newIndex = (currentIndex - 1 + subTabs.length) % subTabs.length;
+								}
+								if (newIndex !== currentIndex) {
+									setActiveSubTab(subTabs[newIndex].id);
+									document.getElementById(`tab-${subTabs[newIndex].id}`)?.focus();
+								}
+							}}
 						>
 							<FontAwesomeIcon icon={ tab.icon } />
 							<span>{ tab.label }</span>
@@ -91,7 +109,7 @@ const FileOptimization = ( { options = {} } ) => {
 
 			<div className="sub-tab-content fadeIn">
 				{ activeSubTab === 'basic' && (
-					<div className="feature-card">
+					<div className="feature-card" id="tabpanel-basic" role="tabpanel" aria-labelledby="tab-basic">
 						<h3>
 							<FontAwesomeIcon icon={ faCode } /> Basic
 							Optimization
@@ -133,7 +151,7 @@ const FileOptimization = ( { options = {} } ) => {
 				) }
 
 				{ activeSubTab === 'advanced' && (
-					<div className="feature-card">
+					<div className="feature-card" id="tabpanel-advanced" role="tabpanel" aria-labelledby="tab-advanced">
 						<h3>
 							<FontAwesomeIcon icon={ faRocket } /> Advanced
 							Delivery
@@ -181,7 +199,7 @@ const FileOptimization = ( { options = {} } ) => {
 				) }
 
 				{ activeSubTab === 'ecommerce' && (
-					<div className="feature-card">
+					<div className="feature-card" id="tabpanel-ecommerce" role="tabpanel" aria-labelledby="tab-ecommerce">
 						<h3>
 							<FontAwesomeIcon icon={ faStore } /> WooCommerce
 							Core
@@ -253,7 +271,7 @@ const FileOptimization = ( { options = {} } ) => {
 				) }
 
 				{ activeSubTab === 'network' && (
-					<div className="feature-card">
+					<div className="feature-card" id="tabpanel-network" role="tabpanel" aria-labelledby="tab-network">
 						<h3>
 							<FontAwesomeIcon icon={ faServer } /> Network &
 							Infrastructure

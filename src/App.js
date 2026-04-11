@@ -139,6 +139,7 @@ const App = () => {
 					className="mobile-toggle"
 					onClick={ toggleMobileMenu }
 					aria-label="Toggle Menu"
+					aria-expanded={ mobileMenuOpen }
 				>
 					<FontAwesomeIcon
 						icon={ mobileMenuOpen ? faTimes : faBars }
@@ -178,6 +179,7 @@ const App = () => {
 									className={
 										activeTab === item.name ? 'active' : ''
 									}
+									aria-current={ activeTab === item.name ? 'page' : undefined }
 									onClick={ () => {
 										setActiveTab( item.name );
 										setMobileMenuOpen( false );
