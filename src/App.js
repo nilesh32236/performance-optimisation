@@ -97,7 +97,6 @@ const App = () => {
 	useEffect( () => {
 		const handleResize = () => {
 			const isMobile = window.innerWidth < SIDEBAR_BREAKPOINT;
-			setSidebarCollapsed( isMobile );
 			setSidebarHide( isMobile );
 		};
 

@@ -143,7 +143,8 @@ class CSS {
 					// Check if corresponding .avif image exists.
 					if ( file_exists( Img_Converter::get_img_path( $image_path, 'avif' ) ) ) {
 						return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';
-					} elseif ( ! Img_Converter::add_img_into_queue( $local_path, 'avif' ) ) {
+					} else {
+						Img_Converter::add_img_into_queue( $local_path, 'avif' );
 					}
 
 					if ( 'webp' === $ext_matches[1] ) {
@@ -153,7 +154,8 @@ class CSS {
 					// Check if corresponding .webp image exists.
 					if ( file_exists( Img_Converter::get_img_path( $image_path ) ) ) {
 						return 'url("' . Img_Converter::get_img_url( $image_path ) . '")';
-					} elseif ( ! Img_Converter::add_img_into_queue( $local_path, 'webp' ) ) {
+					} else {
+						Img_Converter::add_img_into_queue( $local_path, 'webp' );
 					}
 
 					return 'url("' . $image_path . '")';
