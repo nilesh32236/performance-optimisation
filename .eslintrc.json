@@ -1,0 +1,17 @@
+{
+  "extends": [ "plugin:@wordpress/eslint-plugin/recommended" ],
+  "globals": {
+    "wppoSettings": "readonly",
+    "wppoObject": "readonly",
+    "FileReader": "readonly",
+    "IntersectionObserver": "readonly",
+    "jQuery": "readonly",
+    "alert": "readonly"
+  },
+  "env": {
+    "jest": true
+  },
+  "rules": {
+    "no-console": ["error", { "allow": ["error", "warn"] }]
+  }
+}

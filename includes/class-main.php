@@ -7,7 +7,7 @@
  * image optimisation, JS and CSS minification, and more.
  *
  * @package PerformanceOptimise
- * @since 1.0.0
+ * @since   1.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -28,10 +28,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Main {
 
+
 	/**
 	 * List of CSS handles to exclude from combining.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.0.0
 	 */
 	private array $exclude_css = array( 'wppo-combine-css' );
@@ -39,7 +40,7 @@ class Main {
 	/**
 	 * List of JavaScript handles to exclude from minification.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.0.0
 	 */
 	private array $exclude_js = array(
@@ -49,7 +50,7 @@ class Main {
 	/**
 	 * List of JavaScript handles/URLs to exclude from deferring.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.1.1
 	 */
 	private array $exclude_defer_js = array();
@@ -57,7 +58,7 @@ class Main {
 	/**
 	 * List of JavaScript handles/URLs to exclude from delaying.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.1.1
 	 */
 	private array $exclude_delay_js = array();
@@ -65,7 +66,7 @@ class Main {
 	/**
 	 * Filesystem instance for file operations.
 	 *
-	 * @var object
+	 * @var   object
 	 * @since 1.0.0
 	 */
 	private $filesystem;
@@ -73,7 +74,7 @@ class Main {
 	/**
 	 * Image Optimisation instance for handling image optimization.
 	 *
-	 * @var Image_Optimisation
+	 * @var   Image_Optimisation
 	 * @since 1.0.0
 	 */
 	private Image_Optimisation $image_optimisation;
@@ -81,7 +82,7 @@ class Main {
 	/**
 	 * Options for performance optimisation settings.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.0.0
 	 */
 	private $options;
@@ -118,7 +119,7 @@ class Main {
 	 * Loads the autoloader and includes other class files needed for the plugin.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	private function includes(): void {
 		require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
@@ -143,7 +144,7 @@ class Main {
 	 * Registers actions and filters used by the plugin.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	private function setup_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'init_menu' ) );
@@ -281,7 +282,7 @@ class Main {
 	 * Adds the Performance Optimisation menu to the WordPress admin dashboard.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	public function init_menu(): void {
 		add_menu_page(
@@ -301,7 +302,7 @@ class Main {
 	 * Includes the admin page template for rendering.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	public function admin_page(): void {
 		require_once WPPO_PLUGIN_PATH . 'templates/app.html';
@@ -313,7 +314,7 @@ class Main {
 	 * Filters out non-public post types and adds the available post types to options.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	private function add_available_post_types_to_options() {
 		$post_types = get_post_types( array( 'public' => true ), 'names' );
@@ -330,7 +331,7 @@ class Main {
 	 * Loads CSS and JavaScript files for the admin dashboard page.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	public function admin_enqueue_scripts(): void {
 		$screen = get_current_screen();
@@ -652,8 +653,8 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $tag    The script tag HTML.
-	 * @param string $handle The script's registered handle.
+	 * @param  string $tag    The script tag HTML.
+	 * @param  string $handle The script's registered handle.
 	 * @return string Modified script tag with defer attribute.
 	 */
 	public function add_defer_attribute( $tag, $handle ): string {
@@ -732,7 +733,7 @@ class Main {
 							$font_type = 'font/woff';
 							break;
 						case 'ttf':
-							$font_type = 'font/ttf';
+								$font_type = 'font/ttf';
 							break;
 						default:
 							$font_type = ''; // Fallback if unknown extension.
@@ -763,15 +764,15 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $tag    The link tag HTML.
-	 * @param string $handle The CSS file's handle.
-	 * @param string $href   The CSS file's source URL.
+	 * @param  string $tag    The link tag HTML.
+	 * @param  string $handle The CSS file's handle.
+	 * @param  string $href   The CSS file's source URL.
 	 * @return string Modified link tag with minified CSS.
 	 */
 	public function minify_css( $tag, $handle, $href ) {
 		$local_path = Util::get_local_path( $href );
 
-		if ( in_array( $handle, $this->exclude_css, true ) || empty( $href ) || $this->is_css_minified( $local_path ) || is_user_logged_in() ) {
+		if ( is_user_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) || $this->is_css_minified( $local_path ) ) {
 			return $tag;
 		}
 
@@ -793,15 +794,15 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $tag    The script tag HTML.
-	 * @param string $handle The script's registered handle.
-	 * @param string $src    The script's source URL.
+	 * @param  string $tag    The script tag HTML.
+	 * @param  string $handle The script's registered handle.
+	 * @param  string $src    The script's source URL.
 	 * @return string Modified script tag with minified JavaScript.
 	 */
 	public function minify_js( $tag, $handle, $src ) {
 		$local_path = Util::get_local_path( $src );
 
-		if ( in_array( $handle, $this->exclude_js, true ) || empty( $src ) || $this->is_js_minified( $local_path ) || is_user_logged_in() ) {
+		if ( is_user_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) || $this->is_js_minified( $local_path ) ) {
 			return $tag;
 		}
 
@@ -824,20 +825,32 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $file_path Path to the CSS file.
+	 * @param  string $file_path Path to the CSS file.
 	 * @return bool True if the file is minified, false otherwise.
 	 */
 	private function is_css_minified( $file_path ) {
+		if ( empty( $file_path ) ) {
+			return true;
+		}
+
 		$file_name = basename( $file_path );
 
 		if ( preg_match( '/(\.min\.css|\.bundle\.css|\.bundle\.min\.css)$/i', $file_name ) ) {
 			return true;
 		}
 
-		$css_content = $this->filesystem->get_contents( $file_path );
-		$line        = preg_split( '/\r\n|\r|\n/', $css_content );
+		if ( ! file_exists( $file_path ) ) {
+			return true;
+		}
 
-		if ( 10 >= count( $line ) ) {
+		$css_content = $this->filesystem->get_contents( $file_path );
+		if ( ! is_string( $css_content ) ) {
+			return true;
+		}
+
+		$line_count = ( '' === $css_content ) ? 0 : substr_count( $css_content, "\n" ) + 1;
+
+		if ( 10 >= $line_count ) {
 			return true;
 		}
 
@@ -849,20 +862,32 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $file_path Path to the JavaScript file.
+	 * @param  string $file_path Path to the JavaScript file.
 	 * @return bool True if the file is minified, false otherwise.
 	 */
 	private function is_js_minified( $file_path ) {
+		if ( empty( $file_path ) ) {
+			return true;
+		}
+
 		$file_name = basename( $file_path );
 
 		if ( preg_match( '/(\.min\.js|\.bundle\.js|\.bundle\.min\.js)$/i', $file_name ) ) {
 			return true;
 		}
 
-		$js_content = $this->filesystem->get_contents( $file_path );
-		$line       = preg_split( '/\r\n|\r|\n/', $js_content );
+		if ( ! file_exists( $file_path ) ) {
+			return true;
+		}
 
-		if ( 10 >= count( $line ) ) {
+		$js_content = $this->filesystem->get_contents( $file_path );
+		if ( ! is_string( $js_content ) ) {
+			return true;
+		}
+
+		$line_count = ( '' === $js_content ) ? 0 : substr_count( $js_content, "\n" ) + 1;
+
+		if ( 10 >= $line_count ) {
 			return true;
 		}
 

@@ -25,3 +25,6 @@
 # Keep build/ and essential PHP files
 /.coderabbit.yaml
 /.gitattributes
+/readme.md
+/.geminiignore
+/changelog.md

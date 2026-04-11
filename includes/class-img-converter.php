@@ -58,22 +58,6 @@ class Img_Converter {
 	private $exclude_imgs = array();
 
 	/**
-	 * Cached image information to prevent excessive database writes.
-	 *
-	 * @var array|null
-	 * @since 1.1.4
-	 */
-	private static $img_info_cache = null;
-
-	/**
-	 * Flag to check if the shutdown hook has been registered.
-	 *
-	 * @var bool
-	 * @since 1.1.4
-	 */
-	private static $shutdown_hook_registered = false;
-
-	/**
 	 * Img_Converter constructor.
 	 *
 	 * @param array $options Options for configuring image optimization.
@@ -515,41 +499,42 @@ class Img_Converter {
 	public function update_conversion_status( $img_path, $status = 'completed', $type = 'webp' ) {
 		$img_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $img_path ) );
 
-		if ( null === self::$img_info_cache ) {
-			self::$img_info_cache = get_option( 'wppo_img_info', array() );
-			self::maybe_register_shutdown_hook();
-		}
+		self::update_img_info_atomic(
+			function ( $img_info ) use ( $img_path, $status, $type ) {
+				if ( 'completed' === $status ) {
+					// Check and remove from 'pending' list.
+					if ( isset( $img_info['pending'][ $type ] ) ) {
+						$key = array_search( $img_path, $img_info['pending'][ $type ], true );
+						if ( false !== $key ) {
+							unset( $img_info['pending'][ $type ][ $key ] );
+						}
+					}
 
-		if ( 'completed' === $status ) {
-			// Check and remove from 'pending' list.
-			if ( isset( self::$img_info_cache['pending'][ $type ] ) ) {
-				$key = array_search( $img_path, self::$img_info_cache['pending'][ $type ], true );
-				if ( false !== $key ) {
-					unset( self::$img_info_cache['pending'][ $type ][ $key ] );
+					// Check and remove from 'failed' list.
+					if ( isset( $img_info['failed'][ $type ] ) ) {
+						$key = array_search( $img_path, $img_info['failed'][ $type ], true );
+						if ( false !== $key ) {
+							unset( $img_info['failed'][ $type ][ $key ] );
+						}
+					}
 				}
-			}
 
-			// Check and remove from 'failed' list.
-			if ( isset( self::$img_info_cache['failed'][ $type ] ) ) {
-				$key = array_search( $img_path, self::$img_info_cache['failed'][ $type ], true );
-				if ( false !== $key ) {
-					unset( self::$img_info_cache['failed'][ $type ][ $key ] );
+				if ( 'failed' === $status ) {
+					if ( isset( $img_info['pending'][ $type ] ) ) {
+						$key = array_search( $img_path, $img_info['pending'][ $type ], true );
+						if ( false !== $key ) {
+							unset( $img_info['pending'][ $type ][ $key ] );
+						}
+					}
 				}
-			}
-		}
 
-		if ( 'failed' === $status ) {
-			if ( isset( self::$img_info_cache['pending'][ $type ] ) ) {
-				$key = array_search( $img_path, self::$img_info_cache['pending'][ $type ], true );
-				if ( false !== $key ) {
-					unset( self::$img_info_cache['pending'][ $type ][ $key ] );
+				if ( ! in_array( $img_path, $img_info[ $status ][ $type ] ?? array(), true ) ) {
+					$img_info[ $status ][ $type ][] = $img_path;
 				}
-			}
-		}
 
-		if ( ! in_array( $img_path, self::$img_info_cache[ $status ][ $type ] ?? array(), true ) ) {
-			self::$img_info_cache[ $status ][ $type ][] = $img_path;
-		}
+				return $img_info;
+			}
+		);
 	}
 
 	/**
@@ -560,62 +545,63 @@ class Img_Converter {
 	 * @since 1.0.0
 	 */
 	public static function add_img_into_queue( $img_path, $type = 'webp' ) {
-		if ( pathinfo( $img_path, PATHINFO_EXTENSION ) === $type ) {
-			return;
+		if ( empty( $img_path ) || pathinfo( $img_path, PATHINFO_EXTENSION ) === $type ) {
+			return false;
 		}
 
-		$img_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $img_path ) );
+		$normalized = wp_normalize_path( $img_path );
+		// Ensure trailing slash so strpos can't match a same-prefix sibling directory.
+		$upload_dir = rtrim( wp_normalize_path( wp_upload_dir()['basedir'] ), '/' ) . '/';
 
-		if ( null === self::$img_info_cache ) {
-			self::$img_info_cache = get_option( 'wppo_img_info', array() );
-			self::maybe_register_shutdown_hook();
+		// Only queue images that live inside wp-content/uploads.
+		if ( strpos( $normalized, $upload_dir ) !== 0 ) {
+			error_log( sprintf( 'WPPO: add_img_into_queue rejected path "%s" — not inside uploads directory.', $normalized ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			return false;
 		}
 
-		if ( ! in_array( $img_path, self::$img_info_cache['pending'][ $type ] ?? array(), true ) ) {
-			self::$img_info_cache['pending'][ $type ][] = $img_path;
-		}
+		$img_path_rel = str_replace( wp_normalize_path( ABSPATH ), '', $normalized );
+
+		self::update_img_info_atomic(
+			function ( $img_info ) use ( $img_path_rel, $type ) {
+				if ( ! in_array( $img_path_rel, $img_info['pending'][ $type ] ?? array(), true ) ) {
+					$img_info['pending'][ $type ][] = $img_path_rel;
+				}
+				return $img_info;
+			}
+		);
+
+		return true;
 	}
 
 	/**
-	 * Returns the in-memory image info cache, loading from the DB on first call.
+	 * Returns the current image info from the database.
 	 *
-	 * @since x.x.x
+	 * @since 1.1.4
 	 * @return array
 	 */
 	public static function get_img_info(): array {
-		if ( null === self::$img_info_cache ) {
-			self::$img_info_cache = get_option( 'wppo_img_info', array() );
-		}
-		return self::$img_info_cache;
+		return get_option( 'wppo_img_info', array() );
 	}
 
 	/**
-	 * Replaces the in-memory image info cache and ensures the shutdown hook is registered.
+	 * Manually updates the image info database option.
 	 *
 	 * @param array $img_info The new image info array.
-	 * @since x.x.x
+	 * @since 1.1.4
 	 */
 	public static function set_img_info( array $img_info ): void {
-		self::$img_info_cache = $img_info;
-		self::maybe_register_shutdown_hook();
+		update_option( 'wppo_img_info', $img_info );
 	}
 
 	/**
-	 * Registers the shutdown hook to save cached image info to the database.
+	 * Performs an atomic-like merge-aware update of the image info option.
 	 *
+	 * @param callable $callback The callback that receives the current info and returns the updated info.
 	 * @since 1.1.4
 	 */
-	private static function maybe_register_shutdown_hook() {
-		if ( ! self::$shutdown_hook_registered ) {
-			add_action(
-				'shutdown',
-				function () {
-					if ( null !== self::$img_info_cache ) {
-						update_option( 'wppo_img_info', self::$img_info_cache );
-					}
-				}
-			);
-			self::$shutdown_hook_registered = true;
-		}
+	private static function update_img_info_atomic( callable $callback ): void {
+		$img_info = get_option( 'wppo_img_info', array() );
+		$new_info = $callback( $img_info );
+		update_option( 'wppo_img_info', $new_info );
 	}
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faAngleLeft,
@@ -21,10 +21,12 @@ import { fetchRecentActivities } from './lib/apiRequest';
 const translations = wppoSettings.translations;
 const t = ( key ) => ( translations && translations[ key ] ) || key;
 
+const SIDEBAR_BREAKPOINT = 992;
+
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
-	const [ sidebarCollapsed, setSidebarCollapsed ] = useState( false );
+	const [ sidebarCollapsed ] = useState( false );
 	const [ sidebarHide, setSidebarHide ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const hasFetchedActivities = useRef( false );
@@ -57,7 +59,7 @@ const App = () => {
 			},
 			{ name: 'tools', icon: faTools, label: translations.tools },
 		],
-		[ translations ]
+		[]
 	);
 
 	// Memoize the renderContent function to avoid recalculating on each render
@@ -94,8 +96,7 @@ const App = () => {
 	// Set sidebar collapse behavior based on screen width
 	useEffect( () => {
 		const handleResize = () => {
-			const isMobile = window.innerWidth < 768;
-			setSidebarCollapsed( isMobile );
+			const isMobile = window.innerWidth < SIDEBAR_BREAKPOINT;
 			setSidebarHide( isMobile );
 		};
 
@@ -123,14 +124,13 @@ const App = () => {
 		setTransition( true );
 		const timeout = setTimeout( () => setTransition( false ), 500 );
 		return () => clearTimeout( timeout );
-	}, [ activeTab, translations.failedFetchActivities ] );
+	}, [ activeTab ] );
 
 	return (
 		<div className="container">
 			<button
 				className="hamburger-menu"
 				onClick={ toggleSidebar }
-				style={ { left: sidebarHide ? '0px' : '110px' } }
 				aria-label={
 					sidebarHide
 						? t( 'sidebar.expand' )
@@ -147,9 +147,10 @@ const App = () => {
 				className={ `sidebar ${ sidebarCollapsed ? 'collapsed' : '' } ${
 					sidebarHide ? 'hide' : ''
 				}` }
-				inert={ sidebarHide ? '' : undefined }
 			>
-				<h3>{ translations.performanceSettings }</h3>
+				<div className="sidebar-header">
+					<h3>{ translations.performanceSettings }</h3>
+				</div>
 				<nav aria-label={ translations.performanceSettings }>
 					<ul>
 						{ sidebarItems.map( ( item ) => {
@@ -157,18 +158,39 @@ const App = () => {
 								<li key={ item.name }>
 									<button
 										aria-current={
-											activeTab === item.name ? 'page' : undefined
+											activeTab === item.name
+												? 'page'
+												: undefined
+										}
+										aria-label={
+											sidebarCollapsed
+												? item.label
+												: undefined
 										}
 										className={
-											activeTab === item.name ? 'active' : ''
+											activeTab === item.name
+												? 'active'
+												: ''
 										}
-										onClick={ () => setActiveTab( item.name ) }
+										onClick={ () => {
+											setActiveTab( item.name );
+											if (
+												window.innerWidth <
+												SIDEBAR_BREAKPOINT
+											) {
+												setSidebarHide( true );
+											}
+										} }
 									>
 										<FontAwesomeIcon
 											className="sidebar-icon"
 											icon={ item.icon }
 										/>
-										{ ! sidebarCollapsed && item.label }
+										{ ! sidebarCollapsed && item.label && (
+											<span className="sidebar-label">
+												{ item.label }
+											</span>
+										) }
 									</button>
 								</li>
 							);
