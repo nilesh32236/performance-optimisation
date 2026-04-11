@@ -2,6 +2,7 @@ import { useId } from '@wordpress/element';
 
 /**
  * A reusable checkbox option component with optional description and nested settings.
+ *  * Improved for Premium Indigo Design System.
  *
  * @param {Object}               props                       Component props.
  * @param {string}               props.label                 The checkbox label.
@@ -34,7 +35,7 @@ export const CheckboxOption = ( {
 	const descriptionId = description ? `desc-${ id }` : undefined;
 
 	return (
-		<div className="checkbox-option">
+		<div className={ `checkbox-option ${ checked ? 'is-checked' : '' }` }>
 			<label htmlFor={ id }>
 				<input
 					id={ id }
@@ -44,7 +45,7 @@ export const CheckboxOption = ( {
 					onChange={ onChange }
 					aria-describedby={ descriptionId }
 				/>
-				{ label }
+				<span className="option-label-text">{ label }</span>
 			</label>
 
 			{ description && (
@@ -54,16 +55,21 @@ export const CheckboxOption = ( {
 			) }
 
 			{ checked && ( textareaName || children ) && (
-				<div className="nested-content">
+				<div
+					className="nested-content"
+					style={ { marginTop: '20px', paddingLeft: '36px' } }
+				>
 					{ textareaName && (
-						<textarea
-							className="text-area-field"
-							placeholder={ textareaPlaceholder || '' }
-							aria-label={ textareaPlaceholder || label }
-							name={ textareaName }
-							value={ textareaValue }
-							onChange={ onTextareaChange }
-						/>
+						<div className="field-group">
+							<textarea
+								className="text-area-field"
+								placeholder={ textareaPlaceholder || '' }
+								aria-label={ textareaPlaceholder || label }
+								name={ textareaName }
+								value={ textareaValue }
+								onChange={ onTextareaChange }
+							/>
+						</div>
 					) }
 					{ children }
 				</div>

@@ -238,7 +238,24 @@ class Main {
 		$new_enable = isset( $value['file_optimisation']['enableServerRules'] ) ? (bool) $value['file_optimisation']['enableServerRules'] : false;
 
 		if ( $old_enable !== $new_enable ) {
-			Htaccess_Handler::update_rules( $new_enable );
+			$ok = Htaccess_Handler::update_rules( $new_enable );
+
+			if ( ! $ok ) {
+				// Rollback the setting if .htaccess update failed.
+				$value['file_optimisation']['enableServerRules'] = $old_enable;
+
+				// Prevent infinite loop by temporary removing the action.
+				remove_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10 );
+				update_option( 'wppo_settings', $value );
+				add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
+
+				add_action(
+					'admin_notices',
+					function () {
+						echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Performance Optimization: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
+					}
+				);
+			}
 		}
 	}
 

@@ -336,7 +336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							$url       = $parts[0];
 							$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
 
-							if ( 0 === strpos( $url, $site_url ) ) {
+							if ( 0 === strpos( $url, $site_url ) && preg_match( '/\/(?:wp-content|wp-includes)\//', $url ) ) {
 								$url = str_replace( $site_url, $cdn_url, $url );
 							}
 
@@ -387,9 +387,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$parsed_path = wp_parse_url( $request_uri, PHP_URL_PATH );
 			$url_path    = trim( (string) $parsed_path, '/' );
 
-			if ( strpos( $url_path, '..' ) === false ) {
-				$this->url_path = $url_path;
+			if ( strpos( $url_path, '..' ) !== false ) {
+				return true;
 			}
+
+			$this->url_path = $url_path;
 
 			$path_info = pathinfo( $url_path, PATHINFO_EXTENSION );
 			return is_404() || ! empty( $path_info );

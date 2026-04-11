@@ -54,10 +54,7 @@ jobs:
 
       - name: Run WPCS check
         id: wpcs_check
-        run: |
-          vendor/bin/phpcs --report=checkstyle --report-file=reports/wpcs.xml || true
-          vendor/bin/phpcs
-        continue-on-error: true
+        run: vendor/bin/phpcs --report=checkstyle --report-file=reports/wpcs.xml
 
       - name: Psalm Security Scan
         id: psalm

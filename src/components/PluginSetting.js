@@ -7,6 +7,7 @@ import {
 	faFileImport,
 	faCheckCircle,
 	faExclamationCircle,
+	faTools,
 } from '@fortawesome/free-solid-svg-icons';
 
 const PluginSetting = ( { options } ) => {
@@ -19,7 +20,6 @@ const PluginSetting = ( { options } ) => {
 	} );
 	const fileInputRef = useRef( null );
 
-	// Get timestamp for the export filename
 	const getTimestamp = () => {
 		return new Date()
 			.toISOString()
@@ -65,76 +65,117 @@ const PluginSetting = ( { options } ) => {
 		reader.onload = ( e ) => {
 			try {
 				const fileData = JSON.parse( e.target.result );
-
 				apiCall( 'import_settings', {
 					action: 'import_settings',
 					settings: fileData,
 				} )
 					.then( ( data ) => {
 						if ( data.success ) {
-							wppoSettings.settings = fileData; // Update global settings
+							wppoSettings.settings = fileData;
 							resetFileInput();
 						}
-
 						setNotification( {
 							message: data.message || translations.fileImported,
 							success: data.success,
 						} );
 					} )
-					.catch( ( error ) => {
-						console.error( translations.fileImporting, error );
+					.catch( () => {
 						setNotification( {
 							message: translations.fileErrorImport,
 							success: false,
 						} );
 					} );
-			} catch ( error ) {
-				console.error( translations.invalidJSON, error );
+			} catch ( _error ) {
 				setNotification( {
 					message: translations.invalidFileFormat,
 					success: false,
 				} );
 			}
 		};
-
 		reader.readAsText( selectedFile );
 	};
 
 	return (
-		<div className="settings-form">
-			<h2>{ translations.tools }</h2>
+		<div className="settings-form fadeIn">
+			<div
+				style={ {
+					display: 'flex',
+					justifyContent: 'space-between',
+					alignItems: 'center',
+					marginBottom: '40px',
+				} }
+			>
+				<h2 style={ { margin: 0 } }>
+					<FontAwesomeIcon
+						icon={ faTools }
+						style={ {
+							color: 'var(--wppo-primary)',
+							marginRight: '12px',
+						} }
+					/>
+					{ translations.tools }
+				</h2>
+			</div>
+
+			<p
+				style={ {
+					fontSize: '16px',
+					color: 'var(--wppo-text-muted)',
+					marginBottom: '40px',
+					maxWidth: '800px',
+				} }
+			>
+				Manage your configuration by exporting your current settings or
+				importing a previously saved configuration file.
+			</p>
 
 			<div className="dashboard-overview">
 				{ /* Export Settings Card */ }
-				<div className="dashboard-card">
+				<div className="wppo-card">
 					<h3>
-						<FontAwesomeIcon icon={ faFileExport } />{ ' ' }
+						<FontAwesomeIcon
+							icon={ faFileExport }
+							style={ { color: 'var(--wppo-primary)' } }
+						/>{ ' ' }
 						{ translations.exportSettings }
 					</h3>
-					<p>{ translations.exportPluginSettings }</p>
+					<p style={ { marginBottom: '32px' } }>
+						{ translations.exportPluginSettings }
+					</p>
 					<LoadingSubmitButton
+						className="submit-button"
+						style={ { width: '100%' } }
 						onClick={ exportSettings }
 						label={ translations.exportSettings }
 					/>
 				</div>
 
 				{ /* Import Settings Card */ }
-				<div className="dashboard-card">
+				<div className="wppo-card">
 					<h3>
-						<FontAwesomeIcon icon={ faFileImport } />{ ' ' }
+						<FontAwesomeIcon
+							icon={ faFileImport }
+							style={ { color: 'var(--wppo-primary)' } }
+						/>{ ' ' }
 						{ translations.importSettings }
 					</h3>
 					<p>{ translations.importPluginSettings }</p>
-					<div className="import-field-wrapper">
+					<div
+						className="import-field-wrapper"
+						style={ { margin: '24px 0' } }
+					>
 						<input
 							type="file"
 							accept="application/json"
 							onChange={ handleFileSelection }
 							ref={ fileInputRef }
 							className="input-field"
+							style={ { padding: '12px' } }
 						/>
 					</div>
 					<LoadingSubmitButton
+						className="submit-button secondary"
+						style={ { width: '100%' } }
 						onClick={ importSettings }
 						disabled={ ! selectedFile }
 						label={ translations.importSettings }
@@ -142,12 +183,12 @@ const PluginSetting = ( { options } ) => {
 				</div>
 			</div>
 
-			{ /* Notification Message */ }
 			{ notification.message && (
 				<div
 					className={ `db-notification db-notification--${
 						notification.success ? 'success' : 'error'
 					}` }
+					style={ { marginTop: '40px' } }
 				>
 					<FontAwesomeIcon
 						icon={

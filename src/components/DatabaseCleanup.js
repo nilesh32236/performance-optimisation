@@ -6,6 +6,7 @@ import {
 	faBroom,
 	faCheckCircle,
 	faExclamationTriangle,
+	faDatabase,
 } from '@fortawesome/free-solid-svg-icons';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
@@ -75,7 +76,6 @@ const DatabaseCleanup = () => {
 	const [ loadingCounts, setLoadingCounts ] = useState( true );
 	const [ notification, setNotification ] = useState( null );
 
-	// Fetch counts from the server
 	const fetchCounts = useCallback( async () => {
 		setLoadingCounts( true );
 		try {
@@ -98,7 +98,6 @@ const DatabaseCleanup = () => {
 		fetchCounts();
 	}, [ fetchCounts ] );
 
-	// Auto-dismiss notification
 	useEffect( () => {
 		if ( notification ) {
 			const timer = setTimeout( () => setNotification( null ), 5000 );
@@ -109,10 +108,8 @@ const DatabaseCleanup = () => {
 	const handleCleanup = useCallback(
 		async ( type ) => {
 			setLoading( ( prev ) => ( { ...prev, [ type ]: true } ) );
-
 			try {
 				const response = await apiCall( 'database_cleanup', { type } );
-
 				if ( response.success ) {
 					const deleted = response.data?.deleted ?? 0;
 					setNotification( {
@@ -123,7 +120,6 @@ const DatabaseCleanup = () => {
 							translations.dbItemsRemoved || 'items removed'
 						}.`,
 					} );
-					// Refresh counts after cleanup
 					fetchCounts();
 				} else {
 					setNotification( {
@@ -135,7 +131,6 @@ const DatabaseCleanup = () => {
 					} );
 				}
 			} catch ( error ) {
-				console.error( 'Database cleanup error:', error );
 				setNotification( {
 					type: 'error',
 					message:
@@ -151,12 +146,10 @@ const DatabaseCleanup = () => {
 
 	const handleCleanAll = useCallback( async () => {
 		setLoading( ( prev ) => ( { ...prev, all: true } ) );
-
 		try {
 			const response = await apiCall( 'database_cleanup', {
 				type: 'all',
 			} );
-
 			if ( response.success ) {
 				const results = response.data?.results ?? {};
 				const total = Object.values( results ).reduce(
@@ -183,7 +176,6 @@ const DatabaseCleanup = () => {
 				} );
 			}
 		} catch ( error ) {
-			console.error( 'Database cleanup error:', error );
 			setNotification( {
 				type: 'error',
 				message:
@@ -201,16 +193,41 @@ const DatabaseCleanup = () => {
 	);
 
 	return (
-		<div className="settings-form">
-			<h2>
-				{ translations.databaseOptimization || 'Database Optimization' }
-			</h2>
-			<p className="db-cleanup-intro">
+		<div className="settings-form fadeIn">
+			<div
+				style={ {
+					display: 'flex',
+					justifyContent: 'space-between',
+					alignItems: 'center',
+					marginBottom: '40px',
+				} }
+			>
+				<h2 style={ { margin: 0 } }>
+					<FontAwesomeIcon
+						icon={ faDatabase }
+						style={ {
+							color: 'var(--wppo-primary)',
+							marginRight: '12px',
+						} }
+					/>
+					{ translations.databaseOptimization ||
+						'Database Optimization' }
+				</h2>
+			</div>
+
+			<p
+				className="db-cleanup-intro"
+				style={ {
+					fontSize: '16px',
+					color: 'var(--wppo-text-muted)',
+					marginBottom: '40px',
+					maxWidth: '800px',
+				} }
+			>
 				{ translations.dbCleanupIntro ||
-					'Remove unnecessary data from your WordPress database to improve performance and reduce bloat.' }
+					'Maintain a lean and fast database by removing accumulated junk data, post revisions, and expired transients.' }
 			</p>
 
-			{ /* Notification Toast */ }
 			{ notification && (
 				<div
 					className={ `db-notification db-notification--${ notification.type }` }
@@ -226,54 +243,82 @@ const DatabaseCleanup = () => {
 				</div>
 			) }
 
-			{ /* Summary Bar */ }
 			<div className="db-summary-bar">
 				<div className="db-summary-count">
-					<span className="db-summary-number">
+					<div className="db-summary-number">
 						{ loadingCounts ? '...' : totalItems }
-					</span>
-					<span className="db-summary-label">
-						{ translations.dbTotalItems || 'Total Items to Clean' }
-					</span>
+					</div>
+					<div className="db-summary-label">
+						{ translations.dbTotalItems || 'Items to Clean' }
+					</div>
 				</div>
 				<LoadingSubmitButton
-					className="db-clean-all-btn"
+					className="submit-button"
+					style={ {
+						background: '#fff',
+						color: 'var(--wppo-primary)',
+						transform: 'none',
+					} }
 					onClick={ handleCleanAll }
 					isLoading={ loading.all }
 					disabled={ totalItems === 0 }
 					label={
 						<>
 							<FontAwesomeIcon icon={ faBroom } />{ ' ' }
-							{ translations.dbCleanAll || 'Clean All' }
+							{ translations.dbCleanAll || 'Optimise Everything' }
 						</>
 					}
 					loadingLabel={ translations.dbCleaning || 'Cleaning...' }
 				/>
 			</div>
 
-			{ /* Cleanup Cards Grid */ }
 			<div className="db-cleanup-grid">
 				{ CLEANUP_TYPES.map( ( item ) => (
-					<div key={ item.key } className="db-cleanup-card">
-						<div className="db-cleanup-card__header">
-							<h4>{ item.label }</h4>
+					<div key={ item.key } className="wppo-card">
+						<div
+							style={ {
+								display: 'flex',
+								justifyContent: 'space-between',
+								alignItems: 'flex-start',
+								marginBottom: '12px',
+							} }
+						>
+							<h4 style={ { margin: 0, fontSize: '16px' } }>
+								{ item.label }
+							</h4>
 							<span
-								className={ `db-cleanup-card__count ${
-									( counts[ item.key ] || 0 ) > 0
-										? 'has-items'
-										: ''
-								}` }
+								style={ {
+									background:
+										( counts[ item.key ] || 0 ) > 0
+											? 'var(--wppo-primary-soft)'
+											: 'var(--wppo-bg-app)',
+									color:
+										( counts[ item.key ] || 0 ) > 0
+											? 'var(--wppo-primary)'
+											: 'var(--wppo-text-light)',
+									padding: '4px 12px',
+									borderRadius: '20px',
+									fontSize: '13px',
+									fontWeight: '700',
+								} }
 							>
 								{ loadingCounts
 									? '...'
 									: counts[ item.key ] || 0 }
 							</span>
 						</div>
-						<p className="db-cleanup-card__desc">
+						<p
+							style={ {
+								fontSize: '14px',
+								marginBottom: '24px',
+								minHeight: '44px',
+							} }
+						>
 							{ item.description }
 						</p>
 						<LoadingSubmitButton
-							className="db-cleanup-card__btn"
+							className="submit-button secondary"
+							style={ { width: '100%' } }
 							onClick={ () => handleCleanup( item.key ) }
 							isLoading={ loading[ item.key ] }
 							disabled={ ( counts[ item.key ] || 0 ) === 0 }

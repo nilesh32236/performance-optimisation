@@ -1,7 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheckCircle, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import {
+	faSpinner,
+	faBolt,
+	faCode,
+	faImages,
+	faHistory,
+} from '@fortawesome/free-solid-svg-icons';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 const Dashboard = ( { activities } ) => {
@@ -24,16 +30,13 @@ const Dashboard = ( { activities } ) => {
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
 	const pollingRef = useRef( null );
 
-	// Memoizing the image information to reduce unnecessary re-renders
 	const { imageInfo, loading, totalCacheSize, totalJs, totalCss } = state;
-	const { completed = {}, pending = {}, failed = {} } = imageInfo;
+	const { completed = {}, pending = {} } = imageInfo;
 
-	// General function to update state
 	const updateState = useCallback( ( updates ) => {
 		setState( ( prevState ) => ( { ...prevState, ...updates } ) );
 	}, [] );
 
-	// Handle loading state changes
 	const handleLoading = useCallback( ( key, isLoading ) => {
 		setState( ( prevState ) => ( {
 			...prevState,
@@ -41,16 +44,14 @@ const Dashboard = ( { activities } ) => {
 		} ) );
 	}, [] );
 
-	// Update cache values in state
 	const updateCache = useCallback( () => {
 		updateState( {
-			totalCacheSize: 0,
+			totalCacheSize: '0 B',
 			totalJs: 0,
 			totalCss: 0,
 		} );
 	}, [ updateState ] );
 
-	// Poll for background image job status
 	const pollJobStatus = useCallback( async () => {
 		try {
 			const response = await apiCall( 'image_job_status', {}, 'GET' );
@@ -58,7 +59,6 @@ const Dashboard = ( { activities } ) => {
 				const { queued_jobs: queuedJobs } = response.data;
 				setBgJobsQueued( queuedJobs );
 
-				// Update image info counts
 				updateState( {
 					imageInfo: {
 						completed: {
@@ -101,7 +101,6 @@ const Dashboard = ( { activities } ) => {
 		}
 	}, [ updateState ] );
 
-	// Cleanup polling on unmount
 	useEffect( () => {
 		return () => {
 			if ( pollingRef.current ) {
@@ -110,7 +109,6 @@ const Dashboard = ( { activities } ) => {
 		};
 	}, [] );
 
-	// Clear Cache Handler
 	const onClearCache = useCallback(
 		( e ) => {
 			e.preventDefault();
@@ -119,94 +117,42 @@ const Dashboard = ( { activities } ) => {
 				.then( ( data ) => {
 					if ( data.success ) {
 						updateCache();
-					} else {
-						console.error(
-							translations.errorClearCache,
-							data.message || ''
-						);
 					}
 				} )
-				.catch( ( error ) =>
-					console.error( translations.errorClearCache, error )
-				)
 				.finally( () => handleLoading( 'clear_cache', false ) );
 		},
-		[ handleLoading, updateCache, translations ]
+		[ handleLoading, updateCache ]
 	);
 
-	// Optimize Pending Images
 	const optimizeImages = useCallback( () => {
 		handleLoading( 'optimize_images', true );
-
 		const { webp = [], avif = [] } = pending;
-		if ( ! webp.length && ! avif.length ) {
-			console.warn( translations.noPendingImage );
-			handleLoading( 'optimize_images', false );
-			return;
-		}
 
 		apiCall( 'optimise_image', { webp, avif } )
 			.then( ( response ) => {
-				// Check if response indicates background processing
 				if ( response.data?.background ) {
 					setBgProcessing( true );
 					setBgJobsQueued( response.data.jobs_queued || 0 );
-
-					// Start polling every 5 seconds
 					if ( pollingRef.current ) {
 						clearInterval( pollingRef.current );
 					}
 					pollingRef.current = setInterval( pollJobStatus, 5000 );
-				} else {
-					wppoSettings.imageInfo = response;
 				}
 			} )
-			.catch( ( error ) =>
-				console.error( translations.errorOptimiseImg, error )
-			)
 			.finally( () => handleLoading( 'optimize_images', false ) );
-	}, [
-		handleLoading,
-		pending,
-		pollJobStatus,
-		translations.noPendingImage,
-		translations.errorOptimiseImg,
-	] );
+	}, [ handleLoading, pending, pollJobStatus ] );
 
-	// Remove Optimized Images
 	const removeImages = useCallback( () => {
 		handleLoading( 'remove_images', true );
-
-		const { webp = [], avif = [] } = completed;
-		if ( ! webp.length && ! avif.length ) {
-			console.warn( translations.noImgRemove );
-			handleLoading( 'remove_images', false );
-			return;
-		}
-
 		apiCall( 'delete_optimised_image', {} )
 			.then( ( data ) => {
 				if ( data.success ) {
 					wppoSettings.image_info.completed = { webp: [], avif: [] };
-				} else {
-					console.error( translations.failedToRemove, data.failed );
 				}
 			} )
-			.catch( ( error ) => {
-				console.error( translations.errorRemovingImg, error );
-				console.error( translations.errorEccurredRemovingImg );
-			} )
 			.finally( () => handleLoading( 'remove_images', false ) );
-	}, [
-		handleLoading,
-		completed,
-		translations.noImgRemove,
-		translations.failedToRemove,
-		translations.errorRemovingImg,
-		translations.errorEccurredRemovingImg,
-	] );
+	}, [ handleLoading ] );
 
-	// Sync state with wppoSettings changes
 	useEffect( () => {
 		updateState( {
 			totalCacheSize: wppoSettings.cache_size,
@@ -217,17 +163,26 @@ const Dashboard = ( { activities } ) => {
 	}, [ updateState, state.imageInfo ] );
 
 	return (
-		<div className="settings-form">
+		<div className="settings-form fadeIn">
 			<h2>{ translations.dashboard }</h2>
+
 			<div className="dashboard-overview">
-				{ /* Cache Section */ }
+				{ /* Cache Status */ }
 				<div className="dashboard-card">
-					<h3>{ translations.cacheStatus }</h3>
-					<p>
-						{ translations.currentCacheSize } { totalCacheSize }
-					</p>
+					<div>
+						<h3>
+							<FontAwesomeIcon icon={ faBolt } />{ ' ' }
+							{ translations.cacheStatus }
+						</h3>
+						<div className="dashboard-card-label">
+							{ translations.currentCacheSize }
+						</div>
+						<div className="dashboard-card-value">
+							{ totalCacheSize }
+						</div>
+					</div>
 					<LoadingSubmitButton
-						className="clear-cache-btn"
+						className="submit-button"
 						onClick={ onClearCache }
 						isLoading={ loading.clear_cache }
 						label={ translations.clearCacheNow }
@@ -235,79 +190,103 @@ const Dashboard = ( { activities } ) => {
 					/>
 				</div>
 
-				{ /* JavaScript & CSS Optimization Section */ }
+				{ /* Assets Optimization */ }
 				<div className="dashboard-card">
-					<h3>{ translations.JSCSSOptimisation }</h3>
-					<p>
-						{ translations.JSFilesMinified } { totalJs }
-					</p>
-					<p>
-						{ translations.CSSFilesMinified } { totalCss }
-					</p>
+					<div>
+						<h3>
+							<FontAwesomeIcon icon={ faCode } />{ ' ' }
+							{ translations.JSCSSOptimisation }
+						</h3>
+						<div className="dashboard-card-label">
+							{ translations.JSFilesMinified }
+						</div>
+						<div className="dashboard-card-value">{ totalJs }</div>
+						<div className="dashboard-card-label">
+							{ translations.CSSFilesMinified }
+						</div>
+						<div className="dashboard-card-value">{ totalCss }</div>
+					</div>
 				</div>
 
-				{ /* Image Optimization Section */ }
-				<div className="dashboard-card image-overview">
-					<h3>{ translations.imageOptimization }</h3>
-					<div className="status-group">
-						{ [ 'webp', 'avif' ].map( ( format ) => (
-							<div key={ format } className="status-item">
-								<h4>{ format.toUpperCase() }</h4>
-								<p>
-									{ translations.completed }:{ ' ' }
-									{ completed[ format ]?.length || 0 }
-								</p>
-								<p>
-									{ translations.pending }:{ ' ' }
-									{ pending[ format ]?.length || 0 }
-								</p>
-								<p>
-									{ translations.failed }:{ ' ' }
-									{ failed[ format ]?.length || 0 }
-								</p>
-							</div>
-						) ) }
+				{ /* Images Performance */ }
+				<div className="dashboard-card">
+					<div>
+						<h3>
+							<FontAwesomeIcon icon={ faImages } />{ ' ' }
+							{ translations.imageOptimization }
+						</h3>
+						<div
+							style={ {
+								display: 'grid',
+								gridTemplateColumns: '1fr 1fr',
+								gap: '16px',
+								marginBottom: '24px',
+							} }
+						>
+							{ [ 'webp', 'avif' ].map( ( format ) => (
+								<div key={ format }>
+									<div
+										className="dashboard-card-label"
+										style={ {
+											color: 'var(--wppo-primary)',
+										} }
+									>
+										{ format.toUpperCase() }
+									</div>
+									<div
+										style={ {
+											fontSize: '14px',
+											marginBottom: '4px',
+										} }
+									>
+										<strong>
+											{ completed[ format ]?.length || 0 }
+										</strong>{ ' ' }
+										{ translations.completed }
+									</div>
+									<div
+										style={ {
+											fontSize: '14px',
+											color: 'var(--wppo-text-light)',
+										} }
+									>
+										<strong>
+											{ pending[ format ]?.length || 0 }
+										</strong>{ ' ' }
+										{ translations.pending }
+									</div>
+								</div>
+							) ) }
+						</div>
 					</div>
 
-					{ /* Background Processing Status */ }
-					{ bgProcessing && (
-						<div className="img-job-status img-job-status--processing">
-							<FontAwesomeIcon icon={ faSpinner } spin />
-							<span>
-								{ translations.imgProcessing ||
-									'Processing in background...' }{ ' ' }
-								({ translations.imgJobsQueued || 'Jobs Queued' }
-								: { bgJobsQueued })
-							</span>
-						</div>
-					) }
-					{ ! bgProcessing &&
-						bgJobsQueued === 0 &&
-						state.imageInfo?.completed &&
-						( completed.webp?.length > 0 ||
-							completed.avif?.length > 0 ) && (
-							<div className="img-job-status img-job-status--complete">
-								<FontAwesomeIcon icon={ faCheckCircle } />
-								<span>
-									{ translations.imgJobsComplete ||
-										'All background jobs complete!' }
-								</span>
-							</div>
-						) }
-
-					<div className="action-buttons">
+					<div
+						style={ {
+							display: 'flex',
+							flexWrap: 'wrap',
+							gap: '12px',
+						} }
+					>
 						<LoadingSubmitButton
-							className="optimize-images-btn"
+							className="submit-button"
 							onClick={ optimizeImages }
 							isLoading={ loading.optimize_images }
-							disabled={ bgProcessing }
+							disabled={
+								bgProcessing ||
+								( ! pending.webp?.length &&
+									! pending.avif?.length )
+							}
 							label={ translations.optimiseNow }
 							loadingLabel={ translations.optimizing }
 						/>
 						<LoadingSubmitButton
-							className="remove-optimized-btn"
+							className="submit-button secondary"
 							onClick={ removeImages }
 							isLoading={ loading.remove_images }
+							disabled={
+								! completed.webp?.length &&
+								! completed.avif?.length
+							}
 							label={ translations.removeOptimized }
 							loadingLabel={ translations.removing }
 						/>
@@ -315,9 +294,31 @@ const Dashboard = ( { activities } ) => {
 				</div>
 			</div>
 
-			{ /* Recent Activities */ }
+			{ /* Processing Status Bar (Absolute/Floating) */ }
+			{ ( bgProcessing || bgJobsQueued > 0 ) && (
+				<div
+					className="db-notification db-notification--success"
+					style={ { marginBottom: '48px' } }
+				>
+					<FontAwesomeIcon icon={ faSpinner } spin />
+					<span>
+						{ translations.imgProcessing ||
+							'Processing background optimization jobs...' }
+						<strong>
+							{ ' ' }
+							({ bgJobsQueued }{ ' ' }
+							{ translations.imgJobsQueued || 'queued' })
+						</strong>
+					</span>
+				</div>
+			) }
+
+			{ /* Recent Activity Timeline */ }
 			<div className="recent-activities">
-				<h3>{ translations.recentActivities }</h3>
+				<h3>
+					<FontAwesomeIcon icon={ faHistory } />{ ' ' }
+					{ translations.recentActivities }
+				</h3>
 				<ul>
 					{ activities?.length ? (
 						activities.map( ( activity, index ) => (
@@ -330,7 +331,18 @@ const Dashboard = ( { activities } ) => {
 							</li>
 						) )
 					) : (
-						<li>{ translations.loadingRecentActivities }</li>
+						<li>
+							<div
+								style={ {
+									background: 'transparent',
+									boxShadow: 'none',
+									border: 'none',
+									padding: 0,
+								} }
+							>
+								{ translations.loadingRecentActivities }
+							</div>
+						</li>
 					) }
 				</ul>
 			</div>
