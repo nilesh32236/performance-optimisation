@@ -1,6 +1,6 @@
 let scriptLoading = false;
 let imgLoaded = false;
-let scriptLoadPromise;
+let scriptLoadPromise = null;
 
 const loadScript = ( script ) => {
 	return new Promise( ( resolve, reject ) => {
@@ -55,42 +55,51 @@ const loadScript = ( script ) => {
 	} );
 };
 
+
 async function loadScripts() {
-	if ( scriptLoading ) {
+	if ( scriptLoadPromise ) {
 		return scriptLoadPromise;
 	}
-	scriptLoading = true;
 
-	const inlineScripts = Array.from(
-		document.querySelectorAll(
-			'script[type="wppo/javascript"], script[wppo-src]'
-		)
-	);
+	scriptLoadPromise = ( async () => {
+		scriptLoading = true;
 
-	try {
-		// Sequentially process all inline scripts
-		for ( const script of inlineScripts ) {
-			await loadScript( script );
+		const inlineScripts = Array.from(
+			document.querySelectorAll(
+				'script[type="wppo/javascript"], script[wppo-src]'
+			)
+		);
+
+		try {
+			// Sequentially process all inline scripts
+			for ( const script of inlineScripts ) {
+				await loadScript( script );
+			}
+		} catch ( err ) {
+			console.error( 'Error loading script:', err );
+		} finally {
+			scriptLoading = false;
+			// Keep the promise resolved so future calls don't re-run 
+			// if that's the intended behavior (lazy loading scripts usually run once).
+			// If re-running is needed, clear scriptLoadPromise = null here.
 		}
-	} catch ( err ) {
-		console.error( 'Error loading script:', err );
-	} finally {
-		scriptLoading = false;
-	}
 
-	document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
-	window.dispatchEvent( new Event( 'DOMContentLoaded' ) );
-	window.dispatchEvent( new Event( 'pageshow' ) );
+		document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
+		window.dispatchEvent( new Event( 'DOMContentLoaded' ) );
+		window.dispatchEvent( new Event( 'pageshow' ) );
 
-	if ( typeof jQuery !== 'undefined' ) {
-		jQuery( document ).triggerHandler( 'ready' );
-	}
+		if ( typeof jQuery !== 'undefined' ) {
+			jQuery( document ).triggerHandler( 'ready' );
+		}
 
-	// After delayed scripts finish, re-run loadImages with a short delay
-	// to pick up any images injected by the restored scripts.
-	setTimeout( () => {
-		loadImages();
-	}, 200 );
+		// After delayed scripts finish, re-run loadImages with a short delay
+		// to pick up any images injected by the restored scripts.
+		setTimeout( () => {
+			loadImages();
+		}, 200 );
+	} )();
+
+	return scriptLoadPromise;
 }
 
 // Attach event listeners to trigger the loading process

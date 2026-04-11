@@ -1,6 +1,8 @@
 import { useState } from '@wordpress/element';
-import { CheckboxOption, handleChange } from '../lib/util';
+import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import LoadingSubmitButton from './common/LoadingSubmitButton';
+import CheckboxOption from './common/CheckboxOption';
 
 const ImageOptimization = ( { options = {} } ) => {
 	const translations = wppoSettings.translations;
@@ -81,23 +83,13 @@ const ImageOptimization = ( { options = {} } ) => {
 						/>
 
 						{ /* Replace Low-Resolution Placeholder with SVG */ }
-						<div className="checkbox-option sub-fields">
-							<label htmlFor="replacePlaceholderWithSVG">
-								<input
-									id="replacePlaceholderWithSVG"
-									type="checkbox"
-									name="replacePlaceholderWithSVG"
-									checked={
-										settings.replacePlaceholderWithSVG
-									}
-									onChange={ handleChange( setSettings ) }
-								/>
-								{ translations.replaceImgToSVG }
-							</label>
-							<p className="option-description">
-								{ translations.replaceImgToSVGDesc }
-							</p>
-						</div>
+						<CheckboxOption
+							label={ translations.replaceImgToSVG }
+							checked={ settings.replacePlaceholderWithSVG }
+							onChange={ handleChange( setSettings ) }
+							name="replacePlaceholderWithSVG"
+							description={ translations.replaceImgToSVGDesc }
+						/>
 					</>
 				) }
 			</CheckboxOption>
@@ -116,16 +108,15 @@ const ImageOptimization = ( { options = {} } ) => {
 			>
 				{ settings.convertImg && (
 					<div>
-						<label
-							className="sub-fields"
-							htmlFor="conversionFormat"
-						>
-							{ translations.conversationFormat }
+						<div className="field-group">
+							<label className="field-label">
+								{ translations.conversationFormat }
+							</label>
 							<select
-								id="conversionFormat"
 								name="conversionFormat"
 								value={ settings.conversionFormat }
 								onChange={ handleChange( setSettings ) }
+								className="input-field"
 							>
 								<option value="webp">
 									{ translations.webp }
@@ -137,7 +128,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									{ translations.both }
 								</option>
 							</select>
-						</label>
+						</div>
 					</div>
 				) }
 			</CheckboxOption>
@@ -165,30 +156,29 @@ const ImageOptimization = ( { options = {} } ) => {
 			>
 				{ settings.preloadPostTypeImage && (
 					<div>
-						{ settings.availablePostTypes &&
-							settings.availablePostTypes.map( ( postType ) => (
-								<div
-									key={ postType }
-									className="post-type-option"
-								>
-									<label
-										htmlFor={ `post-type-${ postType }` }
+						<div className="post-types-grid">
+							{ settings.availablePostTypes &&
+								settings.availablePostTypes.map( ( postType ) => (
+									<div
+										key={ postType }
+										className="post-type-checkbox"
 									>
-										<input
-											id={ `post-type-${ postType }` }
-											type="checkbox"
-											checked={ settings.selectedPostType.includes(
-												postType
-											) }
-											onChange={ () =>
-												togglePostType( postType )
-											}
-										/>
-										{ postType.charAt( 0 ).toUpperCase() +
-											postType.slice( 1 ) }
-									</label>
-								</div>
-							) ) }
+										<label>
+											<input
+												type="checkbox"
+												checked={ settings.selectedPostType.includes(
+													postType
+												) }
+												onChange={ () =>
+													togglePostType( postType )
+												}
+											/>
+											{ postType.charAt( 0 ).toUpperCase() +
+												postType.slice( 1 ) }
+										</label>
+									</div>
+								) ) }
+						</div>
 						<textarea
 							className="text-area-field"
 							placeholder={ translations.excludePostTypeImgUrl }
@@ -196,40 +186,37 @@ const ImageOptimization = ( { options = {} } ) => {
 							value={ settings.excludePostTypeImgUrl }
 							onChange={ handleChange( setSettings ) }
 						/>
-						<span>
-							<input
-								className="input-field"
-								type="number"
-								name="maxWidthImgSize"
-								value={ settings.maxWidthImgSize }
-								onChange={ handleChange( setSettings ) }
-							/>
-							<p className="option-description">
-								{ translations.maxWidthImgSize }
-							</p>
-						</span>
-
-						<span>
-							<textarea
-								className="text-area-field"
-								placeholder={ translations.excludeSize }
-								type="number"
-								name="excludeSize"
-								value={ settings.excludeSize }
-								onChange={ handleChange( setSettings ) }
-							/>
-						</span>
+						<div className="field-row">
+							<div className="field-group flex-1">
+								<label className="field-label">{ translations.maxWidthImgSize }</label>
+								<input
+									className="input-field"
+									type="number"
+									name="maxWidthImgSize"
+									value={ settings.maxWidthImgSize }
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+							<div className="field-group flex-1">
+								<label className="field-label">{ translations.excludeSize }</label>
+								<textarea
+									className="text-area-field"
+									placeholder={ translations.excludeSize }
+									name="excludeSize"
+									value={ settings.excludeSize }
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+						</div>
 					</div>
 				) }
 			</CheckboxOption>
 
-			<button
-				type="submit"
-				className="submit-button"
-				disabled={ isLoading }
-			>
-				{ isLoading ? translations.saving : translations.saveSettings }
-			</button>
+			<LoadingSubmitButton
+				isLoading={ isLoading }
+				label={ translations.saveSettings }
+				loadingLabel={ translations.saving }
+			/>
 		</form>
 	);
 };

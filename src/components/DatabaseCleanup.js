@@ -1,13 +1,8 @@
 import { useState, useEffect, useCallback } from '@wordpress/element';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-	faTrash,
-	faBroom,
-	faSpinner,
-	faCheckCircle,
-	faExclamationTriangle,
-} from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faBroom, faCheckCircle, faExclamationTriangle, faSpinner } from '@fortawesome/free-solid-svg-icons';
+import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 const translations = wppoSettings.translations;
 
@@ -232,23 +227,19 @@ const DatabaseCleanup = () => {
 						{ translations.dbTotalItems || 'Total Items to Clean' }
 					</span>
 				</div>
-				<button
+				<LoadingSubmitButton
 					className="db-clean-all-btn"
-					onClick={ handleCleanAll }
-					disabled={ loading.all || totalItems === 0 }
-				>
-					{ loading.all ? (
-						<>
-							<FontAwesomeIcon icon={ faSpinner } spin />{ ' ' }
-							{ translations.dbCleaning || 'Cleaning...' }
-						</>
-					) : (
+					onClick={handleCleanAll}
+					isLoading={loading.all}
+					disabled={totalItems === 0}
+					label={
 						<>
 							<FontAwesomeIcon icon={ faBroom } />{ ' ' }
 							{ translations.dbCleanAll || 'Clean All' }
 						</>
-					) }
-				</button>
+					}
+					loadingLabel={translations.dbCleaning || 'Cleaning...'}
+				/>
 			</div>
 
 			{ /* Cleanup Cards Grid */ }
@@ -272,26 +263,19 @@ const DatabaseCleanup = () => {
 						<p className="db-cleanup-card__desc">
 							{ item.description }
 						</p>
-						<button
+						<LoadingSubmitButton
 							className="db-cleanup-card__btn"
-							onClick={ () => handleCleanup( item.key ) }
-							disabled={
-								loading[ item.key ] ||
-								( counts[ item.key ] || 0 ) === 0
-							}
-						>
-							{ loading[ item.key ] ? (
-								<>
-									<FontAwesomeIcon icon={ faSpinner } spin />{ ' ' }
-									{ translations.dbCleaning || 'Cleaning...' }
-								</>
-							) : (
+							onClick={() => handleCleanup(item.key)}
+							isLoading={loading[item.key]}
+							disabled={(counts[item.key] || 0) === 0}
+							label={
 								<>
 									<FontAwesomeIcon icon={ faTrash } />{ ' ' }
 									{ translations.dbClean || 'Clean' }
 								</>
-							) }
-						</button>
+							}
+							loadingLabel={translations.dbCleaning || 'Cleaning...'}
+						/>
 					</div>
 				) ) }
 			</div>

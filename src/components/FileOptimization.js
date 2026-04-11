@@ -1,6 +1,8 @@
 import { useState } from '@wordpress/element';
-import { CheckboxOption, handleChange } from '../lib/util';
+import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import LoadingSubmitButton from './common/LoadingSubmitButton';
+import CheckboxOption from './common/CheckboxOption';
 
 const FileOptimization = ( { options = {} } ) => {
 	const translations = wppoSettings.translations;
@@ -33,7 +35,7 @@ const FileOptimization = ( { options = {} } ) => {
 		setIsLoading( true );
 
 		try {
-			// Submit settings (mock function for now)
+			// Submit settings via apiCall
 			await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
 				settings,
@@ -87,45 +89,36 @@ const FileOptimization = ( { options = {} } ) => {
 				checked={ settings.removeWooCSSJS }
 				onChange={ handleChange( setSettings ) }
 				name="removeWooCSSJS"
-			/>
-
-			{ /* Show these text areas only if removeWooCSSJS is checked */ }
-			{ settings.removeWooCSSJS && (
-				<div className="nested-settings">
-					<div className="setting-group">
-						<label
-							className="field-label"
-							htmlFor="excludeUrlToKeepJSCSS"
-						>
-							{ translations.excludeUrlToKeepJSCSS }
-						</label>
-						<textarea
-							id="excludeUrlToKeepJSCSS"
-							className="text-area-field"
-							placeholder={ translations.excludeUrlToKeepJSCSS }
-							name="excludeUrlToKeepJSCSS"
-							value={ settings.excludeUrlToKeepJSCSS }
-							onChange={ handleChange( setSettings ) }
-						/>
-					</div>
-					<div className="setting-group">
-						<label
-							className="field-label"
-							htmlFor="removeCssJsHandle"
-						>
-							{ translations.removeCssJsHandle }
-						</label>
-						<textarea
-							id="removeCssJsHandle"
-							className="text-area-field"
-							placeholder={ translations.removeCssJsHandle }
-							name="removeCssJsHandle"
-							value={ settings.removeCssJsHandle }
-							onChange={ handleChange( setSettings ) }
-						/>
-					</div>
-				</div>
-			) }
+			>
+				{ settings.removeWooCSSJS && (
+					<>
+						<div className="setting-group">
+							<label className="field-label">
+								{ translations.excludeUrlToKeepJSCSS }
+							</label>
+							<textarea
+								className="text-area-field"
+								placeholder={ translations.excludeUrlToKeepJSCSS }
+								name="excludeUrlToKeepJSCSS"
+								value={ settings.excludeUrlToKeepJSCSS }
+								onChange={ handleChange( setSettings ) }
+							/>
+						</div>
+						<div className="setting-group">
+							<label className="field-label">
+								{ translations.removeCssJsHandle }
+							</label>
+							<textarea
+								className="text-area-field"
+								placeholder={ translations.removeCssJsHandle }
+								name="removeCssJsHandle"
+								value={ settings.removeCssJsHandle }
+								onChange={ handleChange( setSettings ) }
+							/>
+						</div>
+					</>
+				) }
+			</CheckboxOption>
 
 			<CheckboxOption
 				label={ translations.minifyHTML }
@@ -156,13 +149,11 @@ const FileOptimization = ( { options = {} } ) => {
 				onTextareaChange={ handleChange( setSettings ) }
 			/>
 
-			<button
-				type="submit"
-				className="submit-button"
-				disabled={ isLoading }
-			>
-				{ isLoading ? translations.saving : translations.saveSettings }
-			</button>
+			<LoadingSubmitButton
+				isLoading={ isLoading }
+				label={ translations.saveSettings }
+				loadingLabel={ translations.saving }
+			/>
 		</form>
 	);
 };

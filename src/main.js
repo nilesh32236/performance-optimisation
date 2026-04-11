@@ -13,7 +13,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				},
 				body: JSON.stringify( { action: 'clear_cache' } ),
 			} )
-				.then( ( response ) => response.json() )
+				.then( ( response ) => {
+					if ( ! response.ok ) {
+						throw new Error( 'Network response was not ok' );
+					}
+					return response.json();
+				} )
 				.catch( ( error ) =>
 					console.error( 'Error clearing cache: ', error )
 				);
@@ -38,7 +43,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 					path,
 				} ),
 			} )
-				.then( ( response ) => response.json() )
+				.then( ( response ) => {
+					if ( ! response.ok ) {
+						throw new Error( 'Network response was not ok' );
+					}
+					return response.json();
+				} )
 				.catch( ( error ) =>
 					console.error( 'Error clearing cache: ', error )
 				);

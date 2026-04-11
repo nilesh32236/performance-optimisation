@@ -1,6 +1,8 @@
 import { useState } from '@wordpress/element';
-import { CheckboxOption, handleChange } from '../lib/util';
+import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import LoadingSubmitButton from './common/LoadingSubmitButton';
+import CheckboxOption from './common/CheckboxOption';
 
 const PreloadSettings = ( { options = {} } ) => {
 	const translations = wppoSettings.translations;
@@ -105,13 +107,11 @@ const PreloadSettings = ( { options = {} } ) => {
 				description={ translations.preloadCSSDesc }
 			/>
 
-			<button
-				type="submit"
-				className="submit-button"
-				disabled={ isLoading }
-			>
-				{ isLoading ? translations.saving : translations.saveSettings }
-			</button>
+			<LoadingSubmitButton
+				isLoading={ isLoading }
+				label={ translations.saveSettings }
+				loadingLabel={ translations.saving }
+			/>
 		</form>
 	);
 };
