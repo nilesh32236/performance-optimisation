@@ -729,3 +729,19 @@ button.submit-button,
 
 	h2 { margin: 0 !important; }
 }
+/* Focus states for Accessibility */
+:focus-visible {
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
+	box-shadow: 0 0 0 4px var(--wppo-primary-soft);
+}
+
+.sub-tab-item:focus-visible {
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
+}
