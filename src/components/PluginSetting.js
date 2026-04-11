@@ -1,5 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { apiCall } from '../lib/apiRequest';
+import LoadingSubmitButton from './common/LoadingSubmitButton';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faFileExport, faFileImport, faCheckCircle, faExclamationCircle } from '@fortawesome/free-solid-svg-icons';
 
 const PluginSetting = ({ options }) => {
 	const translations = wppoSettings.translations;
@@ -77,35 +80,47 @@ const PluginSetting = ({ options }) => {
 		<div className='settings-form'>
 			<h2>{translations.tools}</h2>
 
-			{/* Export Settings */}
-			<button className="submit-button" onClick={exportSettings}>
-				{translations.exportSettings}
-			</button>
-			<p>{translations.exportPluginSettings}</p>
+			<div className="dashboard-overview">
+				{/* Export Settings Card */}
+				<div className="dashboard-card">
+					<h3>
+						<FontAwesomeIcon icon={faFileExport} /> {translations.exportSettings}
+					</h3>
+					<p>{translations.exportPluginSettings}</p>
+					<LoadingSubmitButton 
+						onClick={exportSettings}
+						label={translations.exportSettings}
+					/>
+				</div>
 
-			{/* File Input for Import */}
-			<input
-				type="file"
-				accept="application/json"
-				onChange={handleFileSelection}
-				ref={fileInputRef}
-			/>
-
-			{/* Import Settings */}
-			<button
-				onClick={importSettings}
-				className="submit-button"
-				disabled={!selectedFile}
-			>
-				{translations.importSettings}
-			</button>
-
-			<p>{translations.importPluginSettings}</p>
+				{/* Import Settings Card */}
+				<div className="dashboard-card">
+					<h3>
+						<FontAwesomeIcon icon={faFileImport} /> {translations.importSettings}
+					</h3>
+					<p>{translations.importPluginSettings}</p>
+					<div className="import-field-wrapper">
+						<input
+							type="file"
+							accept="application/json"
+							onChange={handleFileSelection}
+							ref={fileInputRef}
+							className="input-field"
+						/>
+					</div>
+					<LoadingSubmitButton
+						onClick={importSettings}
+						disabled={!selectedFile}
+						label={translations.importSettings}
+					/>
+				</div>
+			</div>
 
 			{/* Notification Message */}
 			{notification.message && (
-				<div style={{ color: notification.success ? 'green' : 'red', marginTop: '10px' }}>
-					{notification.message}
+				<div className={`db-notification db-notification--${notification.success ? 'success' : 'error'}`}>
+					<FontAwesomeIcon icon={notification.success ? faCheckCircle : faExclamationCircle} />
+					<span>{notification.message}</span>
 				</div>
 			)}
 		</div>
