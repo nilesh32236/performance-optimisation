@@ -55,8 +55,8 @@ jobs:
       - name: Run WPCS check
         id: wpcs_check
         run: |
-          vendor/bin/phpcs . --standard=WordPress --extensions=php --ignore="vendor/*" --report=checkstyle --report-file=reports/wpcs.xml || true
-          vendor/bin/phpcs . --standard=WordPress --extensions=php --ignore="vendor/*"
+          vendor/bin/phpcs --report=checkstyle --report-file=reports/wpcs.xml || true
+          vendor/bin/phpcs
         continue-on-error: true
 
       - name: Psalm Security Scan
