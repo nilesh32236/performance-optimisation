@@ -140,6 +140,7 @@ const App = () => {
 					onClick={ toggleMobileMenu }
 					aria-label="Toggle Menu"
 					aria-expanded={ mobileMenuOpen }
+					aria-controls="mobile-sidebar"
 				>
 					<FontAwesomeIcon
 						icon={ mobileMenuOpen ? faTimes : faBars }
@@ -164,6 +165,7 @@ const App = () => {
 			) }
 
 			<div
+				id="mobile-sidebar"
 				className={ `sidebar ${ sidebarCollapsed ? 'collapsed' : '' } ${
 					mobileMenuOpen ? 'mobile-open' : ''
 				}` }

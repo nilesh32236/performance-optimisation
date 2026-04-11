@@ -72,7 +72,7 @@ const FileOptimization = ( { options = {} } ) => {
 			</div>
 
 			<div className="wppo-sub-tabs-container">
-				<div className="wppo-sub-tabs" role="tablist" aria-label="File Optimization Tabs">
+				<div className="wppo-sub-tabs" role="tablist" aria-label={ translations.fileOptimizationTabs || 'File Optimization Tabs' }>
 					{ subTabs.map( ( tab ) => (
 						<button
 							key={ tab.id }
@@ -87,16 +87,19 @@ const FileOptimization = ( { options = {} } ) => {
 							}` }
 							onClick={ () => setActiveSubTab( tab.id ) }
 							onKeyDown={ (e) => {
-								const currentIndex = subTabs.findIndex(t => t.id === activeSubTab);
-								let newIndex = currentIndex;
-								if (e.key === 'ArrowRight') {
-									newIndex = (currentIndex + 1) % subTabs.length;
-								} else if (e.key === 'ArrowLeft') {
-									newIndex = (currentIndex - 1 + subTabs.length) % subTabs.length;
-								}
-								if (newIndex !== currentIndex) {
-									setActiveSubTab(subTabs[newIndex].id);
-									document.getElementById(`tab-${subTabs[newIndex].id}`)?.focus();
+								if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+									e.preventDefault();
+									const currentIndex = subTabs.findIndex(t => t.id === activeSubTab);
+									let newIndex = currentIndex;
+									if (e.key === 'ArrowRight') {
+										newIndex = (currentIndex + 1) % subTabs.length;
+									} else if (e.key === 'ArrowLeft') {
+										newIndex = (currentIndex - 1 + subTabs.length) % subTabs.length;
+									}
+									if (newIndex !== currentIndex) {
+										setActiveSubTab(subTabs[newIndex].id);
+										document.getElementById(`tab-${subTabs[newIndex].id}`)?.focus();
+									}
 								}
 							}}
 						>
