@@ -4,3 +4,7 @@
 ## 2026-04-09 - [Loading States on Action Buttons]
 **Learning:** Added visual loading spinners (`faSpinner` from `@fortawesome`) to buttons that handle async operations (like "Save Settings", "Clear Cache"). This provides immediate feedback to the user while waiting for server responses.
 **Action:** Always include a visual loading state (spinner or explicit text change) for buttons triggering API calls in React components.
+
+## 2026-04-12 - Missing Focus Indicators & Accessible Imports
+**Learning:** Found multiple focus-related a11y regressions missing `:focus-visible` states across the SCSS and file input fields lacking `aria-label`s for file selections, along with missing loading indicators. Additionally, `npm run test` tests can easily fail if there is a discrepancy between standard code updates and corresponding tests, so we need to run them and fix test files when appropriate.
+**Action:** When updating elements to visually appear accessible, verify the visual focus indicators using `outline` alongside `outline-offset`. Remember to always assign screen-reader safe labels to form inputs and provide clear visual loading states on their action triggers. Run `npm run test` to verify there are no missing code/test couplings.
