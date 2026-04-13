@@ -622,7 +622,7 @@ class Img_Converter {
 	 * @since 1.1.4
 	 */
 	private static function update_img_info_atomic( callable $callback ): void {
-		$img_info = self::get_img_info();
+		$img_info                = self::get_img_info();
 		self::$deferred_img_info = $callback( $img_info );
 
 		if ( ! self::$img_info_shutdown_registered ) {
@@ -638,6 +638,36 @@ class Img_Converter {
 	 */
 	public static function commit_img_info(): void {
 		if ( null !== self::$deferred_img_info ) {
+			$live_info = get_option( 'wppo_img_info', array() );
+
+			// Merge live and deferred info here to avoid dropping queued/completed items from concurrent runs.
+			foreach ( array( 'pending', 'completed', 'failed' ) as $status ) {
+				foreach ( array( 'webp', 'avif' ) as $type ) {
+					$live_items     = $live_info[ $status ][ $type ] ?? array();
+					$deferred_items = self::$deferred_img_info[ $status ][ $type ] ?? array();
+
+					self::$deferred_img_info[ $status ][ $type ] = array_unique( array_merge( $live_items, $deferred_items ) );
+				}
+			}
+
+			// Some states, like if an image went from pending -> completed in self::$deferred_img_info
+			// but was also concurrently added as pending in $live_info, might need special handling.
+			// However, since atomic completion removes from pending explicitly in `update_conversion_status`,
+			// doing a clean union of pending arrays is generally safe enough as jobs will process statelessly.
+			// Any job completed in our request should definitely not be in our merged 'pending'.
+			foreach ( array( 'webp', 'avif' ) as $type ) {
+				$completed = self::$deferred_img_info['completed'][ $type ] ?? array();
+				$failed    = self::$deferred_img_info['failed'][ $type ] ?? array();
+
+				if ( isset( self::$deferred_img_info['pending'][ $type ] ) && is_array( self::$deferred_img_info['pending'][ $type ] ) ) {
+					self::$deferred_img_info['pending'][ $type ] = array_diff(
+						self::$deferred_img_info['pending'][ $type ],
+						$completed,
+						$failed
+					);
+				}
+			}
+
 			update_option( 'wppo_img_info', self::$deferred_img_info );
 		}
 	}
