@@ -7,7 +7,7 @@
  * image optimisation, JS and CSS minification, and more.
  *
  * @package PerformanceOptimise
- * @since 1.0.0
+ * @since   1.0.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -28,10 +28,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Main {
 
+
 	/**
 	 * List of CSS handles to exclude from combining.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.0.0
 	 */
 	private array $exclude_css = array( 'wppo-combine-css' );
@@ -39,7 +40,7 @@ class Main {
 	/**
 	 * List of JavaScript handles to exclude from minification.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.0.0
 	 */
 	private array $exclude_js = array(
@@ -49,7 +50,7 @@ class Main {
 	/**
 	 * List of JavaScript handles/URLs to exclude from deferring.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.1.1
 	 */
 	private array $exclude_defer_js = array();
@@ -57,7 +58,7 @@ class Main {
 	/**
 	 * List of JavaScript handles/URLs to exclude from delaying.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.1.1
 	 */
 	private array $exclude_delay_js = array();
@@ -65,7 +66,7 @@ class Main {
 	/**
 	 * Filesystem instance for file operations.
 	 *
-	 * @var object
+	 * @var   object
 	 * @since 1.0.0
 	 */
 	private $filesystem;
@@ -73,7 +74,7 @@ class Main {
 	/**
 	 * Image Optimisation instance for handling image optimization.
 	 *
-	 * @var Image_Optimisation
+	 * @var   Image_Optimisation
 	 * @since 1.0.0
 	 */
 	private Image_Optimisation $image_optimisation;
@@ -81,7 +82,7 @@ class Main {
 	/**
 	 * Options for performance optimisation settings.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.0.0
 	 */
 	private $options;
@@ -94,7 +95,17 @@ class Main {
 	 * @since 1.0.0
 	 */
 	public function __construct() {
-		$this->options = get_option( 'wppo_settings', array() );
+		$this->options = get_option(
+			'wppo_settings',
+			array(
+				'file_optimisation'  => array(
+					'enableServerRules' => false,
+					'cdnURL'            => '',
+				),
+				'preload_settings'   => array(),
+				'image_optimisation' => array(),
+			)
+		);
 
 		$this->includes();
 		$this->setup_hooks();
@@ -108,7 +119,7 @@ class Main {
 	 * Loads the autoloader and includes other class files needed for the plugin.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	private function includes(): void {
 		require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
@@ -124,6 +135,7 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-rest.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
 	}
 
 	/**
@@ -132,7 +144,7 @@ class Main {
 	 * Registers actions and filters used by the plugin.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	private function setup_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'init_menu' ) );
@@ -167,8 +179,7 @@ class Main {
 
 		if ( isset( $this->options['file_optimisation']['minifyCSS'] ) && (bool) $this->options['file_optimisation']['minifyCSS'] ) {
 			if ( isset( $this->options['file_optimisation']['excludeCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCSS'] ) ) {
-				$exclude_css = Util::process_urls( $this->options['file_optimisation']['excludeCSS'] );
-
+				$exclude_css       = Util::process_urls( $this->options['file_optimisation']['excludeCSS'] );
 				$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
 			}
 
@@ -207,9 +218,45 @@ class Main {
 		// Clear all cache on structural changes that invalidate every cached page.
 		add_action( 'permalink_structure_changed', array( __CLASS__, 'clear_all_cache' ) );
 		add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
-		add_action( 'update_option_wppo_settings', array( __CLASS__, 'clear_all_cache' ) );
+		add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 		add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 		add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
+	}
+
+	/**
+	 * Callback for when plugin settings are updated.
+	 *
+	 * @param mixed $old_value The old option value.
+	 * @param mixed $value     The new option value.
+	 * @since 1.2.0
+	 */
+	public static function on_settings_update( $old_value, $value ) {
+		self::clear_all_cache();
+
+		// Handle .htaccess rules update.
+		$old_enable = isset( $old_value['file_optimisation']['enableServerRules'] ) ? (bool) $old_value['file_optimisation']['enableServerRules'] : false;
+		$new_enable = isset( $value['file_optimisation']['enableServerRules'] ) ? (bool) $value['file_optimisation']['enableServerRules'] : false;
+
+		if ( $old_enable !== $new_enable ) {
+			$ok = Htaccess_Handler::update_rules( $new_enable );
+
+			if ( ! $ok ) {
+				// Rollback the setting if .htaccess update failed.
+				$value['file_optimisation']['enableServerRules'] = $old_enable;
+
+				// Prevent infinite loop by temporary removing the action.
+				remove_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10 );
+				update_option( 'wppo_settings', $value );
+				add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
+
+				add_action(
+					'admin_notices',
+					function () {
+						echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Performance Optimization: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
+					}
+				);
+			}
+		}
 	}
 
 	/**
@@ -252,7 +299,7 @@ class Main {
 	 * Adds the Performance Optimisation menu to the WordPress admin dashboard.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	public function init_menu(): void {
 		add_menu_page(
@@ -272,7 +319,7 @@ class Main {
 	 * Includes the admin page template for rendering.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	public function admin_page(): void {
 		require_once WPPO_PLUGIN_PATH . 'templates/app.html';
@@ -284,7 +331,7 @@ class Main {
 	 * Filters out non-public post types and adds the available post types to options.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	private function add_available_post_types_to_options() {
 		$post_types = get_post_types( array( 'public' => true ), 'names' );
@@ -301,7 +348,7 @@ class Main {
 	 * Loads CSS and JavaScript files for the admin dashboard page.
 	 *
 	 * @return void
-	 * @since 1.0.0
+	 * @since  1.0.0
 	 */
 	public function admin_enqueue_scripts(): void {
 		$screen = get_current_screen();
@@ -334,6 +381,19 @@ class Main {
 		wp_enqueue_script( 'performance-optimisation-script', WPPO_PLUGIN_URL . 'build/index.js', $asset_data['dependencies'], $asset_data['version'], true );
 
 		$this->add_available_post_types_to_options();
+
+		$cache_size = get_transient( 'wppo_cache_size' );
+		if ( false === $cache_size ) {
+			$cache_size = Cache::get_cache_size();
+			set_transient( 'wppo_cache_size', $cache_size, 15 * MINUTE_IN_SECONDS );
+		}
+
+		$total_js_css = get_transient( 'wppo_total_js_css' );
+		if ( false === $total_js_css ) {
+			$total_js_css = Util::get_js_css_minified_file();
+			set_transient( 'wppo_total_js_css', $total_js_css, 15 * MINUTE_IN_SECONDS );
+		}
+
 		wp_localize_script(
 			'performance-optimisation-script',
 			'wppoSettings',
@@ -342,8 +402,8 @@ class Main {
 				'nonce'        => wp_create_nonce( 'wp_rest' ),
 				'settings'     => $this->options,
 				'image_info'   => get_option( 'wppo_img_info', array() ),
-				'cache_size'   => Cache::get_cache_size(),
-				'total_js_css' => Util::get_js_css_minified_file(),
+				'cache_size'   => $cache_size,
+				'total_js_css' => $total_js_css,
 				'translations' => array(
 					'performanceSettings'      => __( 'Performance Settings', 'performance-optimisation' ),
 					'dashboard'                => __( ' Dashboard', 'performance-optimisation' ),
@@ -479,6 +539,10 @@ class Main {
 					'imgJobsQueued'            => __( 'Jobs Queued', 'performance-optimisation' ),
 					'imgProcessing'            => __( 'Processing in background...', 'performance-optimisation' ),
 					'imgJobsComplete'          => __( 'All background jobs complete!', 'performance-optimisation' ),
+					'enableServerRules'        => __( 'Enable Server-Side Rules (Gzip & Browser Caching)', 'performance-optimisation' ),
+					'enableServerRulesDesc'    => __( 'Automatically add performance rules to your .htaccess file.', 'performance-optimisation' ),
+					'cdnURL'                   => __( 'CDN URL', 'performance-optimisation' ),
+					'cdnURLPlaceholder'        => __( 'https://cdn.example.com', 'performance-optimisation' ),
 				),
 			),
 		);
@@ -624,8 +688,8 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $tag    The script tag HTML.
-	 * @param string $handle The script's registered handle.
+	 * @param  string $tag    The script tag HTML.
+	 * @param  string $handle The script's registered handle.
 	 * @return string Modified script tag with defer attribute.
 	 */
 	public function add_defer_attribute( $tag, $handle ): string {
@@ -704,7 +768,7 @@ class Main {
 							$font_type = 'font/woff';
 							break;
 						case 'ttf':
-							$font_type = 'font/ttf';
+								$font_type = 'font/ttf';
 							break;
 						default:
 							$font_type = ''; // Fallback if unknown extension.
@@ -735,15 +799,15 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $tag    The link tag HTML.
-	 * @param string $handle The CSS file's handle.
-	 * @param string $href   The CSS file's source URL.
+	 * @param  string $tag    The link tag HTML.
+	 * @param  string $handle The CSS file's handle.
+	 * @param  string $href   The CSS file's source URL.
 	 * @return string Modified link tag with minified CSS.
 	 */
 	public function minify_css( $tag, $handle, $href ) {
 		$local_path = Util::get_local_path( $href );
 
-		if ( in_array( $handle, $this->exclude_css, true ) || empty( $href ) || $this->is_css_minified( $local_path ) || is_user_logged_in() ) {
+		if ( is_user_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) || $this->is_css_minified( $local_path ) ) {
 			return $tag;
 		}
 
@@ -765,15 +829,15 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $tag    The script tag HTML.
-	 * @param string $handle The script's registered handle.
-	 * @param string $src    The script's source URL.
+	 * @param  string $tag    The script tag HTML.
+	 * @param  string $handle The script's registered handle.
+	 * @param  string $src    The script's source URL.
 	 * @return string Modified script tag with minified JavaScript.
 	 */
 	public function minify_js( $tag, $handle, $src ) {
 		$local_path = Util::get_local_path( $src );
 
-		if ( in_array( $handle, $this->exclude_js, true ) || empty( $src ) || $this->is_js_minified( $local_path ) || is_user_logged_in() ) {
+		if ( is_user_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) || $this->is_js_minified( $local_path ) ) {
 			return $tag;
 		}
 
@@ -796,20 +860,32 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $file_path Path to the CSS file.
+	 * @param  string $file_path Path to the CSS file.
 	 * @return bool True if the file is minified, false otherwise.
 	 */
 	private function is_css_minified( $file_path ) {
+		if ( empty( $file_path ) ) {
+			return true;
+		}
+
 		$file_name = basename( $file_path );
 
 		if ( preg_match( '/(\.min\.css|\.bundle\.css|\.bundle\.min\.css)$/i', $file_name ) ) {
 			return true;
 		}
 
-		$css_content = $this->filesystem->get_contents( $file_path );
-		$line        = preg_split( '/\r\n|\r|\n/', $css_content );
+		if ( ! file_exists( $file_path ) ) {
+			return true;
+		}
 
-		if ( 10 >= count( $line ) ) {
+		$css_content = $this->filesystem->get_contents( $file_path );
+		if ( ! is_string( $css_content ) ) {
+			return true;
+		}
+
+		$line_count = ( '' === $css_content ) ? 0 : substr_count( $css_content, "\n" ) + 1;
+
+		if ( 10 >= $line_count ) {
 			return true;
 		}
 
@@ -821,20 +897,32 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 *
-	 * @param string $file_path Path to the JavaScript file.
+	 * @param  string $file_path Path to the JavaScript file.
 	 * @return bool True if the file is minified, false otherwise.
 	 */
 	private function is_js_minified( $file_path ) {
+		if ( empty( $file_path ) ) {
+			return true;
+		}
+
 		$file_name = basename( $file_path );
 
 		if ( preg_match( '/(\.min\.js|\.bundle\.js|\.bundle\.min\.js)$/i', $file_name ) ) {
 			return true;
 		}
 
-		$js_content = $this->filesystem->get_contents( $file_path );
-		$line       = preg_split( '/\r\n|\r|\n/', $js_content );
+		if ( ! file_exists( $file_path ) ) {
+			return true;
+		}
 
-		if ( 10 >= count( $line ) ) {
+		$js_content = $this->filesystem->get_contents( $file_path );
+		if ( ! is_string( $js_content ) ) {
+			return true;
+		}
+
+		$line_count = ( '' === $js_content ) ? 0 : substr_count( $js_content, "\n" ) + 1;
+
+		if ( 10 >= $line_count ) {
 			return true;
 		}
 

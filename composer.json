@@ -21,11 +21,19 @@
     },
     "require-dev": {
         "squizlabs/php_codesniffer": "^3.13",
-        "wp-coding-standards/wpcs": "^3.3"
+        "wp-coding-standards/wpcs": "^3.3",
+        "phpcsstandards/phpcsextra": "^1.5",
+        "phpcsstandards/phpcsutils": "^1.2"
     },
     "config": {
         "allow-plugins": {
             "dealerdirect/phpcodesniffer-composer-installer": true
         }
+    },
+    "scripts": {
+        "lint": "phpcs",
+        "lint:fix": "phpcbf",
+        "release": "composer install --no-dev --optimize-autoloader --ignore-platform-reqs",
+        "dev-setup": "composer install --ignore-platform-reqs"
     }
 }

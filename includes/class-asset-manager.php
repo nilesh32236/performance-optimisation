@@ -7,7 +7,7 @@
  * editor meta box.
  *
  * @package PerformanceOptimise
- * @since 1.1.0
+ * @since   1.1.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -25,11 +25,20 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @since 1.1.0
  */
 class Asset_Manager {
+	/**
+	 * Prefix for the per-page asset transient key.
+	 *
+	 * @var   string
+	 * @since 1.1.0
+	 */
+	const TRANSIENT_PREFIX = 'wppo_page_assets_';
+
+
 
 	/**
 	 * Core WordPress script handles that should never be deregistered.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.1.0
 	 */
 	private static $protected_scripts = array(
@@ -48,7 +57,7 @@ class Asset_Manager {
 	/**
 	 * Core WordPress style handles that should never be deregistered.
 	 *
-	 * @var array
+	 * @var   array
 	 * @since 1.1.0
 	 */
 	private static $protected_styles = array(
@@ -166,25 +175,36 @@ class Asset_Manager {
 			'timestamp' => time(),
 		);
 
-		// Store for 24 hours, keyed by post ID.
-		set_transient( 'wppo_page_assets_' . $post_id, $assets, DAY_IN_SECONDS );
+		$existing_assets = self::get_page_assets( $post_id );
+		$has_changed     = true;
+
+		if ( is_array( $existing_assets ) && isset( $existing_assets['scripts'], $existing_assets['styles'] ) ) {
+			if ( $existing_assets['scripts'] === $scripts && $existing_assets['styles'] === $styles ) {
+				$has_changed = false;
+			}
+		}
+
+		if ( $has_changed ) {
+			// Store for 24 hours, keyed by post ID.
+			set_transient( self::TRANSIENT_PREFIX . $post_id, $assets, DAY_IN_SECONDS );
+		}
 	}
 
 	/**
 	 * Get captured assets for a specific post.
 	 *
-	 * @param int $post_id The post ID to get assets for.
-	 * @since 1.1.0
+	 * @param  int $post_id The post ID to get assets for.
+	 * @since  1.1.0
 	 * @return array|false The captured assets array, or false if not found.
 	 */
 	public static function get_page_assets( $post_id ) {
-		return get_transient( 'wppo_page_assets_' . $post_id );
+		return get_transient( self::TRANSIENT_PREFIX . $post_id );
 	}
 
 	/**
 	 * Get the list of protected script handles.
 	 *
-	 * @since 1.1.0
+	 * @since  1.1.0
 	 * @return array List of protected script handles.
 	 */
 	public static function get_protected_scripts() {
@@ -194,7 +214,7 @@ class Asset_Manager {
 	/**
 	 * Get the list of protected style handles.
 	 *
-	 * @since 1.1.0
+	 * @since  1.1.0
 	 * @return array List of protected style handles.
 	 */
 	public static function get_protected_styles() {

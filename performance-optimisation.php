@@ -2,9 +2,9 @@
 /**
  * Plugin Name:       Performance Optimisation
  * Description:       A Performance Optimisation plugin for WordPress.
- * Requires at least: 6.2
+ * Requires at least: 5.5.3
  * Requires PHP:      7.4
- * Version:           1.1.4
+ * Version:           1.2.0
  * Author:            Nilesh kanzariya
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
@@ -33,7 +33,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 }
 
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.1.4' );
+	define( 'WPPO_VERSION', '1.2.0' );
 }
 
 // Include the main class file.

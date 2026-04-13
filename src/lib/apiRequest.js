@@ -1,33 +1,32 @@
 // Utility function to handle API calls
-export const apiCall = (action, body) => {
-	return fetch(wppoSettings.apiUrl + action, {
-		method: 'POST',
+export const apiCall = ( action, body, method = 'POST' ) => {
+	const isGet = 'GET' === method;
+	return fetch( wppoSettings.apiUrl + action, {
+		method,
 		headers: {
-			'Content-Type': 'application/json',
-			'X-WP-Nonce': wppoSettings.nonce
+			...( ! isGet && { 'Content-Type': 'application/json' } ),
+			'X-WP-Nonce': wppoSettings.nonce,
 		},
-		body: JSON.stringify(body)
-	}).then(async (response) => {
+		...( ! isGet && { body: JSON.stringify( body ) } ),
+	} ).then( async ( response ) => {
 		const data = await response.json();
-		if ('update_settings' === action && data.success) {
+		if ( 'update_settings' === action && data.success ) {
 			wppoSettings.settings = data.data;
 		}
 		return data;
-	});
+	} );
 };
 
-export const fetchRecentActivities = () => {
-	return fetch(wppoSettings.apiUrl + 'recent_activities', {
-		method: 'POST',
+export const fetchRecentActivities = ( page = 1 ) => {
+	return fetch( wppoSettings.apiUrl + 'recent_activities?page=' + page, {
+		method: 'GET',
 		headers: {
-			'Content-Type': 'application/json',
-			'X-WP-Nonce': wppoSettings.nonce
+			'X-WP-Nonce': wppoSettings.nonce,
 		},
-		body: JSON.stringify({ page: '1' })
-	})
-		.then(response => response.json())
-		.catch(error => {
-			console.error('Error fetching recent activities:', error);
+	} )
+		.then( ( response ) => response.json() )
+		.catch( ( error ) => {
+			console.error( 'Error fetching recent activities: ', error );
 			throw error; // Re-throw the error for further handling if needed
-		});
+		} );
 };

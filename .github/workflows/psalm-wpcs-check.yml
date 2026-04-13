@@ -11,6 +11,8 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: write
+  actions: read
   security-events: write
 
 jobs:
@@ -18,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        php: ['7.4', '8.0', '8.1', '8.2', '8.3']
+        php: ['8.0', '8.1', '8.2', '8.3']
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -30,7 +32,7 @@ jobs:
           tools: parallel-lint
 
       - name: PHP Syntax Check
-        run: parallel-lint --exclude vendor --exclude node_modules .
+        run: parallel-lint --exclude vendor .
 
   code-quality:
     runs-on: ubuntu-latest
@@ -42,22 +44,17 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.1'
-          tools: phpcs, composer:v2
+          tools: composer:v2
 
       - name: Install Dependencies
-        run: composer install --no-dev --optimize-autoloader
+        run: composer install --optimize-autoloader
 
       - name: Create Reports Directory
         run: mkdir -p reports
 
       - name: Run WPCS check
         id: wpcs_check
-        run: |
-          # Run phpcs and generate checkstyle report
-          vendor/bin/phpcs . --standard=WordPress --extensions=php --ignore="vendor/*,node_modules/*,index.asset.php" --report=checkstyle --report-file=reports/wpcs.xml || true
-          # Also run standard output for the logs
-          vendor/bin/phpcs . --standard=WordPress --extensions=php --ignore="vendor/*,node_modules/*,index.asset.php"
-        continue-on-error: true
+        run: vendor/bin/phpcs --report=checkstyle --report-file=reports/wpcs.xml
 
       - name: Psalm Security Scan
         id: psalm
@@ -66,8 +63,13 @@ jobs:
           report_file: reports/psalm.sarif
         continue-on-error: true
 
+      - name: Check psalm report exists
+        id: psalm_report
+        if: always()
+        run: echo "exists=$(test -f reports/psalm.sarif && echo true || echo false)" >> $GITHUB_OUTPUT
+
       - name: Upload Security Analysis results
-        if: always() && steps.psalm.outcome != 'skipped'
+        if: always() && steps.psalm.outcome != 'skipped' && steps.psalm_report.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: reports/psalm.sarif
@@ -76,7 +78,6 @@ jobs:
         if: always()
         run: sudo chown -R runner:docker reports
 
-      # This step generates a standard report for Issue management if needed
       - name: Generate Reports
         if: always()
         shell: python
@@ -94,11 +95,20 @@ jobs:
               try:
                   root = ET.parse(wpcs_file).getroot()
                   for file_node in root.findall('file'):
-                      filename = file_node.get('name').split('/')[-1] # Simplify name
+                      full_path = file_node.get('name')
+                      rel_path = os.path.relpath(full_path, start=os.getcwd()) if os.path.isabs(full_path) else full_path
+                      filename = rel_path.split('/')[-1]
                       for error in file_node.findall('error'):
                           has_errors = True
-                          msg = error.get('message').replace('|', '\\|')
-                          table += f"| WPCS | {filename} | {error.get('line')} | {msg} |\n"
+                          line = error.get('line')
+                          col = error.get('column', '1')
+                          raw_msg = error.get('message', '')
+                          msg = raw_msg.replace('|', '\\|')
+                          table += f"| WPCS | {filename} | {line} | {msg} |\n"
+                          
+                          # Add GitHub workflow annotation (Shows as PR Review Comment)
+                          clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
+                          print(f"::error file={rel_path},line={line},col={col}::WPCS: {clean_msg}")
               except Exception as e:
                   table += f"| WPCS | Error | - | Failed to parse report: {str(e)} |\n"
 
@@ -111,12 +121,21 @@ jobs:
                       for run in data.get('runs', []):
                           for result in run.get('results', []):
                               has_errors = True
-                              msg = result.get('message', {}).get('text', '').replace('|', '\\|')
+                              raw_msg = result.get('message', {}).get('text', '')
+                              msg = raw_msg.replace('|', '\\|')
                               for loc in result.get('locations', []):
                                   phys = loc.get('physicalLocation', {})
-                                  filename = phys.get('artifactLocation', {}).get('uri', '').split('/')[-1]
+                                  rel_path = phys.get('artifactLocation', {}).get('uri', '')
+                                  if rel_path.startswith('file://'):
+                                      rel_path = rel_path[7:]
+                                  rel_path = os.path.relpath(rel_path, start=os.getcwd()) if os.path.isabs(rel_path) else rel_path
+                                  filename = rel_path.split('/')[-1]
                                   line = phys.get('region', {}).get('startLine', '?')
                                   table += f"| Psalm | {filename} | {line} | {msg} |\n"
+                                  
+                                  # Add GitHub workflow annotation (Shows as PR Review Comment)
+                                  clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
+                                  print(f"::error file={rel_path},line={line}::Psalm: {clean_msg}")
               except Exception as e:
                   table += f"| Psalm | Error | - | Failed to parse report: {str(e)} |\n"
 
@@ -125,12 +144,11 @@ jobs:
 
           with open('reports/summary.md', 'w') as f:
               f.write(table)
-          
-          # Write status for shell script
+
           with open('reports/status.txt', 'w') as f:
               f.write("failure" if has_errors else "success")
 
-      - name: Manage GitHub Issue
+      - name: Manage GitHub PR Comment or Issue
         id: manage_issue
         if: always()
         env:
@@ -138,27 +156,49 @@ jobs:
         run: |
           BRANCH="${{ github.ref_name }}"
           STATUS=$(cat reports/status.txt 2>/dev/null || echo "failure")
+          EVENT_NAME="${{ github.event_name }}"
 
           if [[ "$STATUS" == "success" ]]; then
+            BODY="### Code Quality Issues Detected in $BRANCH
+            
+            ✅ All code quality checks passed! 🎉"
+          else
+            SUMMARY=$(cat reports/summary.md)
+            BODY="### Code Quality Issues Detected in $BRANCH
+
+            $SUMMARY
+
+            Please check the [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          fi
+
+          if [[ "$BRANCH" == "main" && "$EVENT_NAME" != "pull_request" ]]; then
+            if [[ "$STATUS" == "success" ]]; then
+              EXISTING_ISSUE=$(gh issue list --label "code-quality" --search "in $BRANCH" --json number --jq '.[0].number')
+              if [[ -n "$EXISTING_ISSUE" ]]; then
+                gh issue close "$EXISTING_ISSUE" --comment "Code quality issues fixed in $BRANCH."
+              fi
+              exit 0
+            fi
+
             EXISTING_ISSUE=$(gh issue list --label "code-quality" --search "in $BRANCH" --json number --jq '.[0].number')
+
             if [[ -n "$EXISTING_ISSUE" ]]; then
-              gh issue close "$EXISTING_ISSUE" --comment "Code quality issues fixed in $BRANCH."
+              gh issue edit "$EXISTING_ISSUE" --body "$BODY"
+            else
+              gh issue create --title "Code Quality Issues Found in $BRANCH" --body "$BODY" --label "bug,code-quality" --assignee "${{ github.actor }}"
             fi
             exit 0
           fi
-          
-          # Create or Update issue
-          SUMMARY=$(cat reports/summary.md)
-          BODY="### Code Quality Issues Detected in $BRANCH
-          
-          $SUMMARY
-          
-          Please check the [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
-          
-          EXISTING_ISSUE=$(gh issue list --label "code-quality" --search "in $BRANCH" --json number --jq '.[0].number')
-          
-          if [[ -n "$EXISTING_ISSUE" ]]; then
-            gh issue edit "$EXISTING_ISSUE" --body "$BODY"
-          else
-            gh issue create --title "Code Quality Issues Found in $BRANCH" --body "$BODY" --label "bug,code-quality" --assignee "${{ github.actor }}"
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            # Find existing comment from this action
+            COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" -q '.[] | select(.body | startswith("### Code Quality Issues Detected in")) | .id' | head -n 1)
+            
+            if [[ -n "$COMMENT_ID" ]]; then
+              gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" -f body="$BODY"
+            else
+              gh pr comment "$PR_NUMBER" --body "$BODY"
+            fi
+            exit 0
           fi

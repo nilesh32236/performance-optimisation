@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ruleset name="Performance Optimisation">
+	<rule ref="WordPress" />
+
+	<file>.</file>
+
+	<exclude-pattern>vendor/*</exclude-pattern>
+	<exclude-pattern>node_modules/*</exclude-pattern>
+	<exclude-pattern>build/*</exclude-pattern>
+	<exclude-pattern>build/*.asset.php</exclude-pattern>
+
+	<arg name="extensions" value="php" />
+</ruleset>
