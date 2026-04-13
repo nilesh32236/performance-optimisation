@@ -138,7 +138,8 @@ const App = () => {
 				<button
 					className="mobile-toggle"
 					onClick={ toggleMobileMenu }
-					aria-label="Toggle Menu"
+					aria-label={ mobileMenuOpen ? ( translations.closeMenu || 'Close Menu' ) : ( translations.openMenu || 'Open Menu' ) }
+					aria-expanded={ mobileMenuOpen }
 				>
 					<FontAwesomeIcon
 						icon={ mobileMenuOpen ? faTimes : faBars }

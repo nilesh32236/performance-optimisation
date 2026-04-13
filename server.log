@@ -1,0 +1,27 @@
+
+> performance-optimisation@1.2.0 start
+> wp-scripts start
+
+assets by chunk 1.36 MiB (name: index)
+  asset index.js 1.36 MiB [emitted] (name: index) 1 related asset
+  asset index.asset.php 126 bytes [emitted] (name: index)
+assets by path ./*.css 35.8 KiB
+  asset ./style-index.css 17.9 KiB [emitted] (name: ./style-index) (id hint: style) 1 related asset
+  asset ./style-index-rtl.css 17.9 KiB [emitted] (name: ./style-index) (id hint: style)
+Entrypoint index 1.39 MiB (1.38 MiB) = ./style-index.css 17.9 KiB ./style-index-rtl.css 17.9 KiB index.js 1.36 MiB index.asset.php 126 bytes 2 auxiliary assets
+runtime modules 4.28 KiB 10 modules
+orphan modules 41.3 KiB [orphan] 3 modules
+cacheable modules 1.2 MiB (javascript) 16.5 KiB (css/mini-extract)
+  javascript modules 1.2 MiB
+    modules by path ./src/ 64.2 KiB 13 modules
+    modules by path ./node_modules/ 1.13 MiB
+      modules by path ./node_modules/prop-types/ 34 KiB 7 modules
+      modules by path ./node_modules/@fortawesome/ 1.1 MiB 3 modules
+      ./node_modules/object-assign/index.js 2.06 KiB [built] [code generated]
+  css modules 16.5 KiB
+    css ./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[4].use[1]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[4].use[2]!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[4].use[3]!./src/css/style.scss 106 bytes [built] [code generated]
+    css ./node_modules/css-loader/dist/cjs.js??ruleSet[1].rules[4].use[1]!./node_modules/postcss-loader/dist/cjs.js??ruleSet[1].rules[4].use[2]!./node_modules/sass-loader/dist/cjs.js??ruleSet[1].rules[4].use[3]!./src/css/style.scss (1) 16.3 KiB [built] [code generated]
+external ["wp","element"] 42 bytes [built] [code generated]
+external "ReactJSXRuntime" 42 bytes [built] [code generated]
+external "React" 42 bytes [built] [code generated]
+webpack 5.97.1 compiled successfully in 2521 ms
