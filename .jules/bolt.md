@@ -13,3 +13,7 @@
 **Action:**
 1. Always place the cheapest, most exclusionary checks (e.g., `is_user_logged_in()`, `empty( $var )`) first in `if` statements to leverage short-circuiting.
 2. Replace memory-intensive regex functions like `preg_split` with faster, native string functions like `substr_count` when simply counting occurrences (like newlines).
+
+## 2025-01-22 - Batching Option Updates with Shutdown Hook
+**Learning:** `update_option()` operations inside high-frequency functions (e.g. queueing multiple image sizes during upload) can cause severe N+1 database bottlenecks.
+**Action:** When updating a central state array, cache the array in a static class property. Modify the static array in memory and use `add_action( 'shutdown', ... )` to write the final state back to `wp_options` just once at the end of the request.

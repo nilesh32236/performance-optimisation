@@ -22,6 +22,22 @@ namespace PerformanceOptimise\Inc;
 class Img_Converter {
 
 	/**
+	 * Deferred in-memory image info state.
+	 *
+	 * @var array|null
+	 * @since NEXT
+	 */
+	private static $deferred_img_info = null;
+
+	/**
+	 * Flag to check if shutdown hook is registered.
+	 *
+	 * @var bool
+	 * @since NEXT
+	 */
+	private static $img_info_shutdown_registered = false;
+
+	/**
 	 * Configuration options for image optimization.
 	 *
 	 * @var array
@@ -580,7 +596,12 @@ class Img_Converter {
 	 * @return array
 	 */
 	public static function get_img_info(): array {
-		return get_option( 'wppo_img_info', array() );
+		if ( null !== self::$deferred_img_info ) {
+			return self::$deferred_img_info;
+		}
+
+		self::$deferred_img_info = get_option( 'wppo_img_info', array() );
+		return self::$deferred_img_info;
 	}
 
 	/**
@@ -590,6 +611,7 @@ class Img_Converter {
 	 * @since 1.1.4
 	 */
 	public static function set_img_info( array $img_info ): void {
+		self::$deferred_img_info = $img_info;
 		update_option( 'wppo_img_info', $img_info );
 	}
 
@@ -600,8 +622,23 @@ class Img_Converter {
 	 * @since 1.1.4
 	 */
 	private static function update_img_info_atomic( callable $callback ): void {
-		$img_info = get_option( 'wppo_img_info', array() );
-		$new_info = $callback( $img_info );
-		update_option( 'wppo_img_info', $new_info );
+		$img_info = self::get_img_info();
+		self::$deferred_img_info = $callback( $img_info );
+
+		if ( ! self::$img_info_shutdown_registered ) {
+			add_action( 'shutdown', array( __CLASS__, 'commit_img_info' ) );
+			self::$img_info_shutdown_registered = true;
+		}
+	}
+
+	/**
+	 * Commits deferred image info state to the database on shutdown.
+	 *
+	 * @since NEXT
+	 */
+	public static function commit_img_info(): void {
+		if ( null !== self::$deferred_img_info ) {
+			update_option( 'wppo_img_info', self::$deferred_img_info );
+		}
 	}
 }
