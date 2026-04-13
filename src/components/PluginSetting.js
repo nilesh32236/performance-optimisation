@@ -14,6 +14,7 @@ const PluginSetting = ( { options } ) => {
 	const translations = wppoSettings.translations;
 
 	const [ selectedFile, setSelectedFile ] = useState( null );
+	const [ isImporting, setIsImporting ] = useState( false );
 	const [ notification, setNotification ] = useState( {
 		message: '',
 		success: false,
@@ -46,7 +47,6 @@ const PluginSetting = ( { options } ) => {
 
 	const resetFileInput = () => {
 		setSelectedFile( null );
-		setNotification( { message: '', success: false } );
 		if ( fileInputRef.current ) {
 			fileInputRef.current.value = '';
 		}
@@ -61,7 +61,28 @@ const PluginSetting = ( { options } ) => {
 			return;
 		}
 
+		setIsImporting( true );
+
 		const reader = new FileReader();
+
+		reader.onerror = () => {
+			setNotification( {
+				message: translations.fileErrorImport || 'Error reading file',
+				success: false,
+			} );
+			setIsImporting( false );
+			resetFileInput();
+		};
+
+		reader.onabort = () => {
+			setNotification( {
+				message: translations.fileErrorImport || 'File read aborted',
+				success: false,
+			} );
+			setIsImporting( false );
+			resetFileInput();
+		};
+
 		reader.onload = ( e ) => {
 			try {
 				const fileData = JSON.parse( e.target.result );
@@ -84,12 +105,16 @@ const PluginSetting = ( { options } ) => {
 							message: translations.fileErrorImport,
 							success: false,
 						} );
+					} )
+					.finally( () => {
+						setIsImporting( false );
 					} );
 			} catch ( _error ) {
 				setNotification( {
 					message: translations.invalidFileFormat,
 					success: false,
 				} );
+				setIsImporting( false );
 			}
 		};
 		reader.readAsText( selectedFile );
@@ -171,14 +196,17 @@ const PluginSetting = ( { options } ) => {
 							ref={ fileInputRef }
 							className="input-field"
 							style={ { padding: '12px' } }
+							aria-label={ translations.selectFiles || 'Select configuration file' }
 						/>
 					</div>
 					<LoadingSubmitButton
 						className="submit-button secondary"
 						style={ { width: '100%' } }
 						onClick={ importSettings }
-						disabled={ ! selectedFile }
+						disabled={ ! selectedFile || isImporting }
+						isLoading={ isImporting }
 						label={ translations.importSettings }
+						loadingLabel={ translations.importing || 'Importing...' }
 					/>
 				</div>
 			</div>
