@@ -13,7 +13,7 @@ runtime modules 4.28 KiB 10 modules
 orphan modules 41.8 KiB [orphan] 3 modules
 cacheable modules 1.2 MiB (javascript) 16.7 KiB (css/mini-extract)
   javascript modules 1.2 MiB
-    modules by path ./src/ 64.4 KiB 13 modules
+    modules by path ./src/ 64.8 KiB 13 modules
     modules by path ./node_modules/ 1.13 MiB
       modules by path ./node_modules/prop-types/ 34 KiB 7 modules
       modules by path ./node_modules/@fortawesome/ 1.1 MiB 3 modules
@@ -24,4 +24,4 @@ cacheable modules 1.2 MiB (javascript) 16.7 KiB (css/mini-extract)
 external ["wp","element"] 42 bytes [built] [code generated]
 external "ReactJSXRuntime" 42 bytes [built] [code generated]
 external "React" 42 bytes [built] [code generated]
-webpack 5.97.1 compiled successfully in 1709 ms
+webpack 5.97.1 compiled successfully in 2150 ms

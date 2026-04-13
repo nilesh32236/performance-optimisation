@@ -65,6 +65,25 @@ const PluginSetting = ( { options } ) => {
 		setIsImporting( true );
 
 		const reader = new FileReader();
+
+		reader.onerror = () => {
+			setNotification( {
+				message: translations.fileErrorImport || 'Error reading file',
+				success: false,
+			} );
+			setIsImporting( false );
+			resetFileInput();
+		};
+
+		reader.onabort = () => {
+			setNotification( {
+				message: translations.fileErrorImport || 'File read aborted',
+				success: false,
+			} );
+			setIsImporting( false );
+			resetFileInput();
+		};
+
 		reader.onload = ( e ) => {
 			try {
 				const fileData = JSON.parse( e.target.result );
