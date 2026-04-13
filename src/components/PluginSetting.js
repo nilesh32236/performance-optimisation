@@ -47,7 +47,6 @@ const PluginSetting = ( { options } ) => {
 
 	const resetFileInput = () => {
 		setSelectedFile( null );
-		setNotification( { message: '', success: false } );
 		if ( fileInputRef.current ) {
 			fileInputRef.current.value = '';
 		}
