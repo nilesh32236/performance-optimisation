@@ -381,6 +381,19 @@ class Main {
 		wp_enqueue_script( 'performance-optimisation-script', WPPO_PLUGIN_URL . 'build/index.js', $asset_data['dependencies'], $asset_data['version'], true );
 
 		$this->add_available_post_types_to_options();
+
+		$cache_size = get_transient( 'wppo_cache_size' );
+		if ( false === $cache_size ) {
+			$cache_size = Cache::get_cache_size();
+			set_transient( 'wppo_cache_size', $cache_size, 15 * MINUTE_IN_SECONDS );
+		}
+
+		$total_js_css = get_transient( 'wppo_total_js_css' );
+		if ( false === $total_js_css ) {
+			$total_js_css = Util::get_js_css_minified_file();
+			set_transient( 'wppo_total_js_css', $total_js_css, 15 * MINUTE_IN_SECONDS );
+		}
+
 		wp_localize_script(
 			'performance-optimisation-script',
 			'wppoSettings',
@@ -389,8 +402,8 @@ class Main {
 				'nonce'        => wp_create_nonce( 'wp_rest' ),
 				'settings'     => $this->options,
 				'image_info'   => get_option( 'wppo_img_info', array() ),
-				'cache_size'   => Cache::get_cache_size(),
-				'total_js_css' => Util::get_js_css_minified_file(),
+				'cache_size'   => $cache_size,
+				'total_js_css' => $total_js_css,
 				'translations' => array(
 					'performanceSettings'      => __( 'Performance Settings', 'performance-optimisation' ),
 					'dashboard'                => __( ' Dashboard', 'performance-optimisation' ),
