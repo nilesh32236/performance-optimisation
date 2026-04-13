@@ -22,7 +22,6 @@
 /tests/
 /bin/
 /scripts/
-/src/
 /test_*.js
 /npm_output.log
 # Keep build/ and essential PHP files
