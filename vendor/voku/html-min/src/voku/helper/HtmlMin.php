@@ -349,7 +349,7 @@ class HtmlMin implements HtmlMinInterface
      */
     public function attachObserverToTheDomLoop(HtmlMinDomObserverInterface $observer)
     {
-        $this->domLoopObservers->offsetSet($observer);
+        $this->domLoopObservers->attach($observer);
     }
 
     /**
