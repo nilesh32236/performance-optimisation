@@ -4,3 +4,6 @@
 ## 2025-01-20 - Batching Option Updates in Loops
 **Learning:** Frequent calls to `update_option()` within processing loops (such as parsing images in regex callbacks or executing cron background tasks) create massive, hidden database bottlenecks (N+1 query problem).
 **Action:** When updating a persistent state array during high-frequency operations, batch the database writes. Cache the `get_option()` result in a static class property, modify the property in memory during the loop, and use `add_action( 'shutdown', ... )` to execute a single `update_option()` at the end of the request.
+## 2025-01-20 - Optimizing Autoload Options and Script Enqueuing
+**Learning:** Large options stored in `wp_options` (like `wppo_img_info` which tracks thousands of images) can cause severe memory bloat if they are autoloaded on every request. Additionally, enqueuing frontend scripts (like `lazyload.js`) unconditionally can negatively impact page load times for users who aren't actively using the feature.
+**Action:** When saving large datasets via `update_option()`, always explicitly pass `false` as the third parameter (`$autoload`) unless the data is strictly required on every single page load.  When enqueuing scripts/styles, always wrap `wp_enqueue_script` inside conditional checks based on plugin settings.

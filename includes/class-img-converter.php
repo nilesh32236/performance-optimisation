@@ -610,7 +610,7 @@ class Img_Converter {
 		if ( ! self::$shutdown_hook_registered ) {
 			add_action( 'shutdown', function() {
 				if ( null !== self::$img_info_cache ) {
-					update_option( 'wppo_img_info', self::$img_info_cache );
+					update_option( 'wppo_img_info', self::$img_info_cache, false );
 				}
 			} );
 			self::$shutdown_hook_registered = true;
