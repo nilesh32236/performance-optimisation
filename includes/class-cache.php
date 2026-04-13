@@ -389,6 +389,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function is_not_cacheable(): bool {
+			if ( empty( $this->domain ) ) {
+				return true;
+			}
+
 			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$parsed_path = wp_parse_url( $request_uri, PHP_URL_PATH );
 			$url_path    = trim( (string) $parsed_path, '/' );
