@@ -9,6 +9,7 @@ import {
 	faExclamationCircle,
 	faTools,
 } from '@fortawesome/free-solid-svg-icons';
+import ConfirmDialog from './common/ConfirmDialog';
 
 const PluginSetting = ( { options } ) => {
 	const translations = wppoSettings.translations;
@@ -19,6 +20,7 @@ const PluginSetting = ( { options } ) => {
 		message: '',
 		success: false,
 	} );
+	const [ confirmImport, setConfirmImport ] = useState( false );
 	const fileInputRef = useRef( null );
 
 	const getTimestamp = () => {
@@ -202,7 +204,11 @@ const PluginSetting = ( { options } ) => {
 					<LoadingSubmitButton
 						className="submit-button secondary"
 						style={ { width: '100%' } }
-						onClick={ importSettings }
+						onClick={ () => {
+							if ( selectedFile ) {
+								setConfirmImport( true );
+							}
+						} }
 						disabled={ ! selectedFile || isImporting }
 						isLoading={ isImporting }
 						label={ translations.importSettings }
@@ -228,6 +234,20 @@ const PluginSetting = ( { options } ) => {
 					<span>{ notification.message }</span>
 				</div>
 			) }
+
+			{ /* Confirm dialog for importing settings */ }
+			<ConfirmDialog
+				isOpen={ confirmImport }
+				onConfirm={ () => {
+					setConfirmImport( false );
+					importSettings();
+				} }
+				onCancel={ () => setConfirmImport( false ) }
+				title={ translations.confirmImportTitle || 'Confirm Import' }
+				message={ translations.confirmImportMsg || 'Importing this file will overwrite all current plugin settings. Continue?' }
+				confirmLabel={ translations.confirm || 'Confirm' }
+				variant="warning"
+			/>
 		</div>
 	);
 };

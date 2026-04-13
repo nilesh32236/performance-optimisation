@@ -9,6 +9,7 @@ import {
 	faRocket,
 	faStore,
 	faServer,
+	faExclamationTriangle,
 } from '@fortawesome/free-solid-svg-icons';
 
 const FileOptimization = ( { options = {} } ) => {
@@ -196,6 +197,12 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaValue={ settings.excludeDeferJS }
 						onTextareaChange={ handleChange( setSettings ) }
 					/>
+					{ settings.deferJS && (
+						<div className="wppo-notice wppo-notice--warning">
+							<FontAwesomeIcon icon={ faExclamationTriangle } />
+							<span>{ translations.deferJSWarning || 'This may affect inline scripts. Test your site thoroughly after enabling. Use the exclusion list above for any scripts that break.' }</span>
+						</div>
+					) }
 
 					<CheckboxOption
 						label={ translations.delayJS }
@@ -207,6 +214,12 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaValue={ settings.excludeDelayJS }
 						onTextareaChange={ handleChange( setSettings ) }
 					/>
+					{ settings.delayJS && (
+						<div className="wppo-notice wppo-notice--warning">
+							<FontAwesomeIcon icon={ faExclamationTriangle } />
+							<span>{ translations.delayJSWarning || 'Delayed scripts will not execute until user interaction. This can break scripts that need to run immediately. Test carefully.' }</span>
+						</div>
+					) }
 				</div>
 
 				<div
@@ -308,6 +321,12 @@ const FileOptimization = ( { options = {} } ) => {
 						name="enableServerRules"
 						description={ translations.enableServerRulesDesc }
 					/>
+					{ settings.enableServerRules && (
+						<div className="wppo-notice wppo-notice--warning">
+							<FontAwesomeIcon icon={ faExclamationTriangle } />
+							<span>{ translations.serverRulesWarning || 'This modifies your .htaccess file. Ensure you have a backup. If your site becomes inaccessible, revert via FTP.' }</span>
+						</div>
+					) }
 
 					<div
 						className="setting-group"

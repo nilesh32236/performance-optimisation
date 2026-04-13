@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.1.4
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -91,6 +91,20 @@ Composer configuration:
 
 == Changelog ==
 
+= 1.2.0 (2026-04-13) =
+* New: Server-side .htaccess rules for Gzip compression and browser caching.
+* New: CDN URL rewriting with configurable CNAME support.
+* New: Smart cache purging — automatically invalidates related pages when content updates.
+* New: Confirmation dialogs before all destructive actions (delete, import, remove).
+* New: Contextual warning and info notices for advanced settings.
+* New: UI adapts to your WordPress admin color scheme automatically.
+* Improvement: Replaced external Google Fonts with system font stack for faster loading.
+* Improvement: Polished form controls, loading spinners, and keyboard accessibility.
+* Improvement: Database and filesystem performance optimizations (batched writes, transient caching).
+* Security: Multiple path traversal fixes in cache and image handling.
+* Dev: Added JS test suite, PHPCS config, and GitHub Actions CI workflow.
+* See CHANGELOG.md for the complete technical changelog.
+
 = 1.1.4 (2026-04-08) =
 * Security: Fixed path traversal vulnerability in the Image Optimisation REST endpoint.
 * Security: Added directory traversal protection in URL-to-path resolution.
@@ -145,6 +159,9 @@ Import/export settings tools.
  Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.2.0 (2026-04-13) =
+Major feature release completing the "Cache Core" milestone: .htaccess automation, CDN URL rewriting, and smart cache purging. Includes a full Design System v2.0 with WordPress admin color scheme sync, confirmation dialogs, and polished form controls. Significant security and performance improvements throughout.
 
 = 1.1.4 (2026-04-08) =
 Security release with path traversal fixes, image queue performance improvements, and accessibility fixes.

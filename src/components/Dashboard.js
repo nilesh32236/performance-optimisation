@@ -9,6 +9,7 @@ import {
 	faHistory,
 } from '@fortawesome/free-solid-svg-icons';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import ConfirmDialog from './common/ConfirmDialog';
 
 const Dashboard = ( { activities } ) => {
 	const translations = wppoSettings.translations;
@@ -29,6 +30,7 @@ const Dashboard = ( { activities } ) => {
 	const [ bgProcessing, setBgProcessing ] = useState( false );
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
 	const pollingRef = useRef( null );
+	const [ confirmRemove, setConfirmRemove ] = useState( false );
 
 	const { imageInfo, loading, totalCacheSize, totalJs, totalCss } = state;
 	const { completed = {}, pending = {} } = imageInfo;
@@ -166,6 +168,22 @@ const Dashboard = ( { activities } ) => {
 		<div className="settings-form fadeIn">
 			<h2>{ translations.dashboard }</h2>
 
+			{ /* Processing Status — shown above the grid */ }
+			{ ( bgProcessing || bgJobsQueued > 0 ) && (
+				<div className="db-notification db-notification--success">
+					<FontAwesomeIcon icon={ faSpinner } spin />
+					<span>
+						{ translations.imgProcessing ||
+							'Processing background optimization jobs...' }
+						<strong>
+							{ ' ' }
+							({ bgJobsQueued }{ ' ' }
+							{ translations.imgJobsQueued || 'queued' })
+						</strong>
+					</span>
+				</div>
+			) }
+
 			<div className="dashboard-overview">
 				{ /* Cache Status */ }
 				<div className="dashboard-card">
@@ -215,41 +233,19 @@ const Dashboard = ( { activities } ) => {
 							<FontAwesomeIcon icon={ faImages } />{ ' ' }
 							{ translations.imageOptimization }
 						</h3>
-						<div
-							style={ {
-								display: 'grid',
-								gridTemplateColumns: '1fr 1fr',
-								gap: '16px',
-								marginBottom: '24px',
-							} }
-						>
+						<div className="dashboard-img-stats">
 							{ [ 'webp', 'avif' ].map( ( format ) => (
-								<div key={ format }>
-									<div
-										className="dashboard-card-label"
-										style={ {
-											color: 'var(--wppo-primary)',
-										} }
-									>
+								<div key={ format } className="dashboard-img-format">
+									<div className="dashboard-card-label">
 										{ format.toUpperCase() }
 									</div>
-									<div
-										style={ {
-											fontSize: '14px',
-											marginBottom: '4px',
-										} }
-									>
+									<div className="img-stat-row">
 										<strong>
 											{ completed[ format ]?.length || 0 }
 										</strong>{ ' ' }
 										{ translations.completed }
 									</div>
-									<div
-										style={ {
-											fontSize: '14px',
-											color: 'var(--wppo-text-light)',
-										} }
-									>
+									<div className="img-stat-row img-stat-row--muted">
 										<strong>
 											{ pending[ format ]?.length || 0 }
 										</strong>{ ' ' }
@@ -260,13 +256,7 @@ const Dashboard = ( { activities } ) => {
 						</div>
 					</div>
 
-					<div
-						style={ {
-							display: 'flex',
-							flexWrap: 'wrap',
-							gap: '12px',
-						} }
-					>
+					<div className="dashboard-card-actions">
 						<LoadingSubmitButton
 							className="submit-button"
 							onClick={ optimizeImages }
@@ -281,7 +271,7 @@ const Dashboard = ( { activities } ) => {
 						/>
 						<LoadingSubmitButton
 							className="submit-button secondary"
-							onClick={ removeImages }
+							onClick={ () => setConfirmRemove( true ) }
 							isLoading={ loading.remove_images }
 							disabled={
 								! completed.webp?.length &&
@@ -294,24 +284,6 @@ const Dashboard = ( { activities } ) => {
 				</div>
 			</div>
 
-			{ /* Processing Status Bar (Absolute/Floating) */ }
-			{ ( bgProcessing || bgJobsQueued > 0 ) && (
-				<div
-					className="db-notification db-notification--success"
-					style={ { marginBottom: '48px' } }
-				>
-					<FontAwesomeIcon icon={ faSpinner } spin />
-					<span>
-						{ translations.imgProcessing ||
-							'Processing background optimization jobs...' }
-						<strong>
-							{ ' ' }
-							({ bgJobsQueued }{ ' ' }
-							{ translations.imgJobsQueued || 'queued' })
-						</strong>
-					</span>
-				</div>
-			) }
 
 			{ /* Recent Activity Timeline */ }
 			<div className="recent-activities">
@@ -332,20 +304,27 @@ const Dashboard = ( { activities } ) => {
 						) )
 					) : (
 						<li>
-							<div
-								style={ {
-									background: 'transparent',
-									boxShadow: 'none',
-									border: 'none',
-									padding: 0,
-								} }
-							>
+							<div className="activities-empty">
 								{ translations.loadingRecentActivities }
 							</div>
 						</li>
 					) }
 				</ul>
 			</div>
+
+			{ /* Confirm dialog for Remove Optimized Images */ }
+			<ConfirmDialog
+				isOpen={ confirmRemove }
+				onConfirm={ () => {
+					setConfirmRemove( false );
+					removeImages();
+				} }
+				onCancel={ () => setConfirmRemove( false ) }
+				title={ translations.confirmRemoveImgTitle || 'Remove Optimized Images' }
+				message={ translations.confirmRemoveImgMsg || 'This will delete all optimized WebP and AVIF copies. Original images will not be affected.' }
+				confirmLabel={ translations.deleteBtn || 'Delete' }
+				variant="danger"
+			/>
 		</div>
 	);
 };
