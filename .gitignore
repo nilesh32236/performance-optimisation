@@ -1,4 +1,4 @@
 node_modules/
-.env
-/app
-vendor/
+.DS_Store
+reports/
+app/
