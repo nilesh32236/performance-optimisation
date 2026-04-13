@@ -71,14 +71,32 @@ describe( 'API Request library', () => {
 			const result = await fetchRecentActivities();
 
 			expect( global.fetch ).toHaveBeenCalledWith(
-				'http://test.com/wp-json/wppo/v1/recent_activities',
+				'http://test.com/wp-json/wppo/v1/recent_activities?page=1',
 				{
-					method: 'POST',
+					method: 'GET',
 					headers: {
-						'Content-Type': 'application/json',
 						'X-WP-Nonce': 'testnonce',
 					},
-					body: JSON.stringify( { page: '1' } ),
+				}
+			);
+			expect( result ).toEqual( mockData );
+		} );
+
+		it( 'should call fetch with correct parameters and return json response for a non-default page', async () => {
+			const mockData = { activities: [ { id: 1 } ] };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const result = await fetchRecentActivities( 2 );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/recent_activities?page=2',
+				{
+					method: 'GET',
+					headers: {
+						'X-WP-Nonce': 'testnonce',
+					},
 				}
 			);
 			expect( result ).toEqual( mockData );
@@ -97,7 +115,7 @@ describe( 'API Request library', () => {
 				'Failed to fetch'
 			);
 			expect( consoleSpy ).toHaveBeenCalledWith(
-				'Error fetching recent activities:',
+				'Error fetching recent activities: ',
 				mockError
 			);
 
