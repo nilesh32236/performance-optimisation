@@ -101,6 +101,11 @@
 		align-items: center;
 		justify-content: center;
 		font-size: 18px;
+
+		&:focus-visible {
+			outline: 2px solid var(--wppo-primary);
+			outline-offset: 2px;
+		}
 	}
 }
 
@@ -216,6 +221,11 @@
 					}
 				}
 
+				&:focus-visible {
+					outline: 2px solid var(--wppo-primary);
+					outline-offset: -2px;
+				}
+
 				.sidebar-icon {
 					font-size: 18px;
 					width: 24px;
@@ -306,6 +316,11 @@
 		&.active {
 			background: var(--wppo-primary-soft);
 			color: var(--wppo-primary);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--wppo-primary);
+			outline-offset: -2px;
 		}
 
 		svg {
@@ -518,6 +533,11 @@
 					display: none;
 				}
 			}
+
+			&:focus-visible {
+				outline: 2px solid var(--wppo-primary);
+				outline-offset: 2px;
+			}
 		}
 
 		.option-label-text {
@@ -669,6 +689,11 @@ button.submit-button,
 		cursor: not-allowed;
 		transform: none;
 		box-shadow: none;
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--wppo-primary);
+		outline-offset: 2px;
 	}
 
 	&.secondary {
