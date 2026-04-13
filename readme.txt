@@ -92,18 +92,17 @@ Composer configuration:
 == Changelog ==
 
 = 1.2.0 (2026-04-13) =
-* New: Server-side .htaccess rules for Gzip compression and browser caching.
-* New: CDN URL rewriting with configurable CNAME support.
-* New: Smart cache purging — automatically invalidates related pages when content updates.
-* New: Confirmation dialogs before all destructive actions (delete, import, remove).
-* New: Contextual warning and info notices for advanced settings.
-* New: UI adapts to your WordPress admin color scheme automatically.
-* Improvement: Replaced external Google Fonts with system font stack for faster loading.
-* Improvement: Polished form controls, loading spinners, and keyboard accessibility.
-* Improvement: Database and filesystem performance optimizations (batched writes, transient caching).
-* Security: Multiple path traversal fixes in cache and image handling.
-* Dev: Added JS test suite, PHPCS config, and GitHub Actions CI workflow.
-* See CHANGELOG.md for the complete technical changelog.
+* New: Automatic Gzip compression and browser caching for faster page loads.
+* New: CDN support — serve static assets from your own CDN domain.
+* New: Smarter cache clearing — related pages update automatically when you edit content.
+* New: Safety prompts before deleting data, removing images, or importing settings.
+* New: Helpful warnings when enabling advanced options like Defer JS or Server Rules.
+* New: Plugin UI matches your chosen WordPress admin color scheme.
+* Improvement: Faster loading — removed external font dependency.
+* Improvement: Better form inputs, loading indicators, and keyboard navigation.
+* Improvement: Faster database operations for image processing.
+* Security: Fixed several file path security issues.
+* Compatibility: Tested up to WordPress 6.9.
 
 = 1.1.4 (2026-04-08) =
 * Security: Fixed path traversal vulnerability in the Image Optimisation REST endpoint.
