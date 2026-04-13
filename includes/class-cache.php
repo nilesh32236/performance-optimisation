@@ -615,6 +615,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.1.1
 		 */
 		public static function clear_cache( $url_path = null ): bool {
+			delete_transient( 'wppo_cache_size' );
+			delete_transient( 'wppo_total_js_css' );
+
 			$instance = new self();
 
 			if ( ! $instance->filesystem ) {
