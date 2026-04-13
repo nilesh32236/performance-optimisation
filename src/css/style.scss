@@ -512,6 +512,11 @@
 			appearance: none;
 			position: relative;
 
+			&:focus-visible {
+				outline: 2px solid var(--wppo-primary);
+				outline-offset: 2px;
+			}
+
 			&:checked {
 				background: var(--wppo-primary);
 				border-color: var(--wppo-primary);
@@ -681,6 +686,11 @@ button.submit-button,
 
 	&:active {
 		transform: translateY(0);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--wppo-primary);
+		outline-offset: 2px;
 	}
 
 	&:disabled {

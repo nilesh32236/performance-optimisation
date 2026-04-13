@@ -407,6 +407,8 @@ class Main {
 				'translations' => array(
 					'performanceSettings'      => __( 'Performance Settings', 'performance-optimisation' ),
 					'dashboard'                => __( ' Dashboard', 'performance-optimisation' ),
+					'openMenu'                 => __( 'Open Menu', 'performance-optimisation' ),
+					'closeMenu'                => __( 'Close Menu', 'performance-optimisation' ),
 					'fileOptimization'         => __( ' File Optimization', 'performance-optimisation' ),
 					'preload'                  => __( ' Preload', 'performance-optimisation' ),
 					'imageOptimization'        => __( ' Image Optimization', 'performance-optimisation' ),
