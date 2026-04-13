@@ -25,7 +25,7 @@ const SIDEBAR_BREAKPOINT = 992;
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
-	const sidebarCollapsed = false;
+	const [ sidebarCollapsed, setSidebarCollapsed ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const hasFetchedActivities = useRef( false );
@@ -107,6 +107,34 @@ const App = () => {
 		return () => window.removeEventListener( 'resize', handleResize );
 	}, [] );
 
+	// Inject frontend theme accent colors as CSS custom properties.
+	useEffect( () => {
+		const themeColors = wppoSettings?.themeColors;
+		if ( ! themeColors ) {
+			return;
+		}
+
+		const root = document.documentElement;
+		if ( themeColors.primary ) {
+			root.style.setProperty(
+				'--wppo-frontend-primary',
+				themeColors.primary
+			);
+		}
+		if ( themeColors.secondary ) {
+			root.style.setProperty(
+				'--wppo-frontend-secondary',
+				themeColors.secondary
+			);
+		}
+		if ( themeColors.text ) {
+			root.style.setProperty(
+				'--wppo-frontend-text',
+				themeColors.text
+			);
+		}
+	}, [] );
+
 	useEffect( () => {
 		if (
 			( activeTab === 'dashboard' || recentActivities.length === 0 ) &&
@@ -131,7 +159,7 @@ const App = () => {
 	}, [ activeTab, recentActivities.length ] );
 
 	return (
-		<div className="container" style={ { margin: '20px auto' } }>
+		<div className="container">
 			{ /* Mobile Top Header */ }
 			<div className="mobile-header">
 				<div className="mobile-brand">Performance Optimize</div>

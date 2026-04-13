@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.1.4
+Stable tag: 1.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -91,6 +91,19 @@ Composer configuration:
 
 == Changelog ==
 
+= 1.2.0 (2026-04-13) =
+* New: Automatic Gzip compression and browser caching for faster page loads.
+* New: CDN support — serve static assets from your own CDN domain.
+* New: Smarter cache clearing — related pages update automatically when you edit content.
+* New: Safety prompts before deleting data, removing images, or importing settings.
+* New: Helpful warnings when enabling advanced options like Defer JS or Server Rules.
+* New: Plugin UI matches your chosen WordPress admin color scheme.
+* Improvement: Faster loading — removed external font dependency.
+* Improvement: Better form inputs, loading indicators, and keyboard navigation.
+* Improvement: Faster database operations for image processing.
+* Security: Fixed several file path security issues.
+* Compatibility: Tested up to WordPress 6.9.
+
 = 1.1.4 (2026-04-08) =
 * Security: Fixed path traversal vulnerability in the Image Optimisation REST endpoint.
 * Security: Added directory traversal protection in URL-to-path resolution.
@@ -145,6 +158,9 @@ Import/export settings tools.
  Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.2.0 (2026-04-13) =
+Major feature release completing the "Cache Core" milestone: .htaccess automation, CDN URL rewriting, and smart cache purging. Includes a full Design System v2.0 with WordPress admin color scheme sync, confirmation dialogs, and polished form controls. Significant security and performance improvements throughout.
 
 = 1.1.4 (2026-04-08) =
 Security release with path traversal fixes, image queue performance improvements, and accessibility fixes.

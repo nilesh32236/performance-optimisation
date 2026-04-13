@@ -8,6 +8,7 @@ import {
 	faEye,
 	faMagic,
 	faCloudUploadAlt,
+	faInfoCircle,
 } from '@fortawesome/free-solid-svg-icons';
 
 const ImageOptimization = ( { options = {} } ) => {
@@ -92,7 +93,12 @@ const ImageOptimization = ( { options = {} } ) => {
 					description={ translations.lazyLoadImagesDesc }
 				>
 					{ settings.lazyLoadImages && (
-						<div
+						<>
+							<div className="wppo-notice wppo-notice--info">
+								<FontAwesomeIcon icon={ faInfoCircle } />
+								<span>{ translations.lazyLoadInfo || 'Images above the fold (header, hero) should be excluded to avoid layout shifts. Use the settings below to fine-tune.' }</span>
+							</div>
+							<div
 							style={ {
 								display: 'flex',
 								flexDirection: 'column',
@@ -124,6 +130,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								description={ translations.replaceImgToSVGDesc }
 							/>
 						</div>
+					</>
 					) }
 				</CheckboxOption>
 			</div>
@@ -149,7 +156,12 @@ const ImageOptimization = ( { options = {} } ) => {
 					description={ translations.convertImgDesc }
 				>
 					{ settings.convertImg && (
-						<div
+						<>
+							<div className="wppo-notice wppo-notice--info" style={ { marginBottom: '16px' } }>
+								<FontAwesomeIcon icon={ faInfoCircle } />
+								<span>{ translations.convertImgInfo || 'Converted images are served alongside originals. Browsers that don\'t support the format will fall back to the original automatically.' }</span>
+							</div>
+							<div
 							className="setting-group"
 							style={ { marginTop: '16px' } }
 						>
@@ -177,6 +189,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								</option>
 							</select>
 						</div>
+					</>
 					) }
 				</CheckboxOption>
 			</div>

@@ -9,6 +9,7 @@ import {
 	faDatabase,
 } from '@fortawesome/free-solid-svg-icons';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import ConfirmDialog from './common/ConfirmDialog';
 
 const translations = wppoSettings.translations;
 
@@ -75,6 +76,11 @@ const DatabaseCleanup = () => {
 	const [ loading, setLoading ] = useState( {} );
 	const [ loadingCounts, setLoadingCounts ] = useState( true );
 	const [ notification, setNotification ] = useState( null );
+	const [ confirmDialog, setConfirmDialog ] = useState( {
+		isOpen: false,
+		type: null,
+		label: '',
+	} );
 
 	const fetchCounts = useCallback( async () => {
 		setLoadingCounts( true );
@@ -192,38 +198,69 @@ const DatabaseCleanup = () => {
 		0
 	);
 
+	// Confirmation dialog handlers.
+	const requestCleanup = ( type, label ) => {
+		const count = counts[ type ] || 0;
+		if ( count === 0 ) {
+			return;
+		}
+		setConfirmDialog( { isOpen: true, type, label } );
+	};
+
+	const requestCleanAll = () => {
+		if ( totalItems === 0 ) {
+			return;
+		}
+		setConfirmDialog( { isOpen: true, type: 'all', label: '' } );
+	};
+
+	const confirmAction = () => {
+		const { type } = confirmDialog;
+		setConfirmDialog( { isOpen: false, type: null, label: '' } );
+		if ( type === 'all' ) {
+			handleCleanAll();
+		} else {
+			handleCleanup( type );
+		}
+	};
+
+	const cancelAction = () => {
+		setConfirmDialog( { isOpen: false, type: null, label: '' } );
+	};
+
+	const getConfirmDialogProps = () => {
+		if ( confirmDialog.type === 'all' ) {
+			return {
+				title:
+					translations.confirmDeleteTitle || 'Confirm Deletion',
+				message:
+					translations.confirmDeleteAll ||
+					'This will permanently delete all items across every category. This cannot be undone.',
+				confirmLabel:
+					translations.deleteAllBtn || 'Delete All',
+			};
+		}
+		const count = counts[ confirmDialog.type ] || 0;
+		return {
+			title: translations.confirmDeleteTitle || 'Confirm Deletion',
+			message: `${ translations.confirmDeleteMsg || 'Permanently delete' } ${ count } ${ confirmDialog.label }? ${ translations.confirmDeleteNote || 'This action cannot be undone.' }`,
+			confirmLabel: translations.deleteBtn || 'Delete',
+		};
+	};
+
 	return (
 		<div className="settings-form fadeIn">
-			<div
-				style={ {
-					display: 'flex',
-					justifyContent: 'space-between',
-					alignItems: 'center',
-					marginBottom: '40px',
-				} }
-			>
-				<h2 style={ { margin: 0 } }>
+			<div className="settings-header-flex">
+				<h2>
 					<FontAwesomeIcon
 						icon={ faDatabase }
-						style={ {
-							color: 'var(--wppo-primary)',
-							marginRight: '12px',
-						} }
+						style={ { color: 'var(--wppo-primary)', marginRight: '12px' } }
 					/>
-					{ translations.databaseOptimization ||
-						'Database Optimization' }
+					{ translations.databaseOptimization || 'Database Optimization' }
 				</h2>
 			</div>
 
-			<p
-				className="db-cleanup-intro"
-				style={ {
-					fontSize: '16px',
-					color: 'var(--wppo-text-muted)',
-					marginBottom: '40px',
-					maxWidth: '800px',
-				} }
-			>
+			<p className="db-cleanup-intro">
 				{ translations.dbCleanupIntro ||
 					'Maintain a lean and fast database by removing accumulated junk data, post revisions, and expired transients.' }
 			</p>
@@ -259,7 +296,7 @@ const DatabaseCleanup = () => {
 						color: 'var(--wppo-primary)',
 						transform: 'none',
 					} }
-					onClick={ handleCleanAll }
+					onClick={ requestCleanAll }
 					isLoading={ loading.all }
 					disabled={ totalItems === 0 }
 					label={
@@ -275,36 +312,12 @@ const DatabaseCleanup = () => {
 			<div className="db-cleanup-grid">
 				{ CLEANUP_TYPES.map( ( item ) => (
 					<div key={ item.key } className="wppo-card">
-						<div
-							style={ {
-								display: 'flex',
-								justifyContent: 'space-between',
-								alignItems: 'flex-start',
-								marginBottom: '12px',
-							} }
-						>
-							<h4 style={ { margin: 0, fontSize: '16px' } }>
-								{ item.label }
-							</h4>
+						<div className="db-card-header">
+							<h4>{ item.label }</h4>
 							<span
-								style={ {
-									background:
-										( counts[ item.key ] || 0 ) > 0
-											? 'var(--wppo-primary-soft)'
-											: 'var(--wppo-bg-app)',
-									color:
-										( counts[ item.key ] || 0 ) > 0
-											? 'var(--wppo-primary)'
-											: 'var(--wppo-text-light)',
-									padding: '4px 12px',
-									borderRadius: '20px',
-									fontSize: '13px',
-									fontWeight: '700',
-								} }
+								className={ `db-count-badge${ ( counts[ item.key ] || 0 ) > 0 ? ' db-count-badge--active' : '' }` }
 							>
-								{ loadingCounts
-									? '...'
-									: counts[ item.key ] || 0 }
+								{ loadingCounts ? '...' : counts[ item.key ] || 0 }
 							</span>
 						</div>
 						<p
@@ -319,7 +332,9 @@ const DatabaseCleanup = () => {
 						<LoadingSubmitButton
 							className="submit-button secondary"
 							style={ { width: '100%' } }
-							onClick={ () => handleCleanup( item.key ) }
+							onClick={ () =>
+								requestCleanup( item.key, item.label )
+							}
 							isLoading={ loading[ item.key ] }
 							disabled={ ( counts[ item.key ] || 0 ) === 0 }
 							label={
@@ -335,6 +350,29 @@ const DatabaseCleanup = () => {
 					</div>
 				) ) }
 			</div>
+
+			{ /* Confirmation Dialog */ }
+			<ConfirmDialog
+				isOpen={ confirmDialog.isOpen }
+				onConfirm={ confirmAction }
+				onCancel={ cancelAction }
+				variant="danger"
+				{ ...getConfirmDialogProps() }
+			>
+				{ confirmDialog.type === 'all' && totalItems > 0 && (
+					<ul className="wppo-dialog-detail-list">
+						{ CLEANUP_TYPES.map( ( item ) => {
+							const count = counts[ item.key ] || 0;
+							return count > 0 ? (
+								<li key={ item.key }>
+									<span>{ item.label }</span>
+									<span>{ count }</span>
+								</li>
+							) : null;
+						} ) }
+					</ul>
+				) }
+			</ConfirmDialog>
 		</div>
 	);
 };

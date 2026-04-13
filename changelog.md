@@ -2,6 +2,55 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.2.0] - 2026-04-13
+### Added
+- Server-side `.htaccess` automation — Gzip/Deflate compression and browser caching rules via `insert_with_markers()`.
+- New `Htaccess_Handler` class for safe rule insertion with automatic rollback.
+- CDN URL rewriting for `src`, `href`, and `srcset` attributes with configurable CNAME.
+- Smart cache purging — granular invalidation of post, front page, and archive caches on content updates.
+- WordPress Admin Color Scheme sync — UI adapts to all 9 admin color schemes via `var(--wp-admin-theme-color)` CSS variable cascade.
+- Frontend theme color extraction from `theme.json` (block themes) and Customizer (classic themes) for accent syncing.
+- Reusable `ConfirmDialog` component with focus trap, Escape key dismiss, `aria-modal`, body scroll lock, and danger/warning variants.
+- Confirmation dialogs for destructive actions: database cleanup (individual + "Clean All" with breakdown), image removal, and settings import.
+- Contextual warning notices for Defer JS, Delay JS, and Server-Side Rules settings.
+- Info notices for Lazy Load and Image Conversion settings with best-practice guidance.
+- Danger button variant and inline notice components (info, warning, success).
+- Reusable `LoadingSubmitButton` and `CheckboxOption` components.
+- Visual loading spinners on all action buttons.
+- JavaScript test suite for `apiRequest.js` API client.
+- PHPCS configuration (`phpcs.xml`) and Psalm/WPCS GitHub Actions CI workflow.
+- Browserslist configuration (`.browserslistrc`) for CSS/JS target compatibility.
+
+### Changed
+- Replaced external Google Fonts `@import` with WordPress system font stack (zero network requests).
+- All `hsla()` shadow values replaced with `rgba(var(--wppo-primary-rgb), ...)` for dynamic theme adaptation.
+- Enhanced form controls — fixed heights (44–46px), hover states, `box-sizing: border-box`, custom number inputs (hidden spinners), custom select dropdowns (SVG chevron), disabled state styling.
+- Focus-visible states and ARIA attributes across all interactive elements.
+- Dynamic ARIA labels with full i18n translation support.
+- Centralized notification and import field styles into SCSS (removed inline styles).
+- Modularized dashboard styling and sidebar state management.
+- Cached expensive filesystem operations (cache size, file counts) using transients.
+- Batched image conversion queue database writes — eliminates N+1 query overhead.
+- Atomic array merging for deferred image queue writes.
+- Restricted `lazyload.js` enqueuing and disabled autoload for image info option.
+- Replaced `include_once` with `require_once` and defined `WPPO_TRANSIENT_PREFIX` constant.
+- Refactored `schedule_page_cron_jobs` method for clarity.
+- WordPress Coding Standards applied to `class-asset-manager.php` and `class-main.php`.
+- Shared POST helper refactored for REST API calls.
+- Tested up to WordPress 6.9.
+
+### Security
+- Fixed path traversal vulnerability in cache implementation (two separate fixes with `realpath()` validation).
+- Fixed path traversal guard and filesystem abstraction in `class-cache.php`.
+- Improved htaccess safety with expanded cache expiration rules.
+- Refined CDN regex for unquoted HTML attributes to prevent injection.
+
+### Fixed
+- Frontend static analysis lint errors.
+- FileReader failure paths and import UX edge cases.
+- REST API method signatures and PHP version compatibility.
+- `fetchRecentActivities` pagination parameter.
+
 ## [1.1.4] - 2026-04-08
 ### Security
 - Fixed path traversal vulnerability in the Image Optimization REST endpoint by rejecting image paths containing `..` sequences.

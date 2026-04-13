@@ -343,6 +343,66 @@ class Main {
 	}
 
 	/**
+	 * Extract the active frontend theme's primary color.
+	 *
+	 * Checks block theme (theme.json) first, then classic theme (customizer).
+	 *
+	 * @since  2.0.0
+	 * @return array{primary?: string, secondary?: string, text?: string}
+	 */
+	private function get_frontend_theme_colors(): array {
+		$colors = array(
+			'primary'   => '',
+			'secondary' => '',
+			'text'      => '',
+		);
+
+		// Strategy 1: Block theme — read from theme.json (WP 5.8+).
+		if ( function_exists( 'wp_get_global_settings' ) ) {
+			$settings = wp_get_global_settings();
+			$palette  = $settings['color']['palette']['theme'] ?? array();
+
+			foreach ( $palette as $entry ) {
+				$slug = sanitize_title( $entry['slug'] ?? '' );
+				$hex  = sanitize_hex_color( $entry['color'] ?? '' );
+
+				if ( ! $hex ) {
+					continue;
+				}
+
+				if ( in_array( $slug, array( 'primary', 'brand', 'accent' ), true ) ) {
+					$colors['primary'] = $hex;
+				} elseif ( in_array( $slug, array( 'secondary', 'secondary-brand' ), true ) ) {
+					$colors['secondary'] = $hex;
+				} elseif ( in_array( $slug, array( 'foreground', 'contrast', 'body-text' ), true ) ) {
+					$colors['text'] = $hex;
+				}
+			}
+		}
+
+		// Strategy 2: Classic theme — check Customizer settings.
+		if ( empty( $colors['primary'] ) ) {
+			$primary = get_theme_mod( 'primary_color', '' );
+			if ( empty( $primary ) ) {
+				$primary = get_theme_mod( 'accent_color', '' );
+			}
+			if ( ! empty( $primary ) ) {
+				$colors['primary'] = sanitize_hex_color( $primary );
+			}
+		}
+
+		// Strategy 3: Extract from the theme's header_textcolor.
+		if ( empty( $colors['text'] ) ) {
+			$header_text_color = get_header_textcolor();
+			if ( 'blank' !== $header_text_color && ! empty( $header_text_color ) ) {
+				$colors['text'] = '#' . ltrim( sanitize_hex_color_no_hash( $header_text_color ), '#' );
+			}
+		}
+
+		return array_filter( $colors );
+	}
+
+	/**
 	 * Enqueue admin scripts and styles.
 	 *
 	 * Loads CSS and JavaScript files for the admin dashboard page.
@@ -545,7 +605,28 @@ class Main {
 					'enableServerRulesDesc'    => __( 'Automatically add performance rules to your .htaccess file.', 'performance-optimisation' ),
 					'cdnURL'                   => __( 'CDN URL', 'performance-optimisation' ),
 					'cdnURLPlaceholder'        => __( 'https://cdn.example.com', 'performance-optimisation' ),
+					// Confirmation dialog translations.
+					'confirmDeleteTitle'       => __( 'Confirm Deletion', 'performance-optimisation' ),
+					'confirmDeleteMsg'         => __( 'Permanently delete', 'performance-optimisation' ),
+					'confirmDeleteNote'        => __( 'This action cannot be undone.', 'performance-optimisation' ),
+					'confirmDeleteAll'         => __( 'This will permanently delete all items across every category. This cannot be undone.', 'performance-optimisation' ),
+					'confirmImportTitle'       => __( 'Confirm Import', 'performance-optimisation' ),
+					'confirmImportMsg'         => __( 'Importing this file will overwrite all current plugin settings. Continue?', 'performance-optimisation' ),
+					'confirmRemoveImgTitle'    => __( 'Remove Optimized Images', 'performance-optimisation' ),
+					'confirmRemoveImgMsg'      => __( 'This will delete all optimized WebP and AVIF copies. Original images will not be affected.', 'performance-optimisation' ),
+					'confirm'                  => __( 'Confirm', 'performance-optimisation' ),
+					'cancel'                   => __( 'Cancel', 'performance-optimisation' ),
+					'deleteBtn'                => __( 'Delete', 'performance-optimisation' ),
+					'deleteAllBtn'             => __( 'Delete All', 'performance-optimisation' ),
+					// Inline notice text.
+					'deferJSWarning'           => __( 'This may affect inline scripts. Test your site thoroughly after enabling. Use the exclusion list below for any scripts that break.', 'performance-optimisation' ),
+					'delayJSWarning'           => __( 'Delayed scripts will not execute until user interaction. This can break scripts that need to run immediately. Test carefully.', 'performance-optimisation' ),
+					'serverRulesWarning'       => __( 'This modifies your .htaccess file. Ensure you have a backup. If your site becomes inaccessible, revert via FTP.', 'performance-optimisation' ),
+					'lazyLoadInfo'             => __( 'Images above the fold (header, hero) should be excluded to avoid layout shifts. Use the settings below to fine-tune.', 'performance-optimisation' ),
+					'convertImgInfo'           => __( 'Converted images are served alongside originals. Browsers that don\'t support the format will fall back to the original automatically.', 'performance-optimisation' ),
 				),
+				// Frontend theme colors for accent syncing.
+				'themeColors'  => $this->get_frontend_theme_colors(),
 			),
 		);
 	}
