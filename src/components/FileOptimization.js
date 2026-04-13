@@ -72,15 +72,36 @@ const FileOptimization = ( { options = {} } ) => {
 			</div>
 
 			<div className="wppo-sub-tabs-container">
-				<div className="wppo-sub-tabs">
+				<div className="wppo-sub-tabs" role="tablist" aria-label={ translations.fileOptimizationTabs || 'File Optimization Tabs' }>
 					{ subTabs.map( ( tab ) => (
 						<button
 							key={ tab.id }
+							id={`tab-${tab.id}`}
 							type="button"
+							role="tab"
+							aria-selected={ activeSubTab === tab.id }
+							aria-controls={`tabpanel-${tab.id}`}
+							tabIndex={ activeSubTab === tab.id ? 0 : -1 }
 							className={ `sub-tab-item ${
 								activeSubTab === tab.id ? 'active' : ''
 							}` }
 							onClick={ () => setActiveSubTab( tab.id ) }
+							onKeyDown={ (e) => {
+								if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+									e.preventDefault();
+									const currentIndex = subTabs.findIndex(t => t.id === activeSubTab);
+									let newIndex = currentIndex;
+									if (e.key === 'ArrowRight') {
+										newIndex = (currentIndex + 1) % subTabs.length;
+									} else if (e.key === 'ArrowLeft') {
+										newIndex = (currentIndex - 1 + subTabs.length) % subTabs.length;
+									}
+									if (newIndex !== currentIndex) {
+										setActiveSubTab(subTabs[newIndex].id);
+										document.getElementById(`tab-${subTabs[newIndex].id}`)?.focus();
+									}
+								}
+							}}
 						>
 							<FontAwesomeIcon icon={ tab.icon } />
 							<span>{ tab.label }</span>
@@ -90,209 +111,225 @@ const FileOptimization = ( { options = {} } ) => {
 			</div>
 
 			<div className="sub-tab-content fadeIn">
-				{ activeSubTab === 'basic' && (
-					<div className="feature-card">
-						<h3>
-							<FontAwesomeIcon icon={ faCode } /> Basic
-							Optimization
-						</h3>
-						<p>
-							Essential minification settings to reduce asset file
-							sizes and improve page load speed.
-						</p>
+				<div
+					className="feature-card"
+					id="tabpanel-basic"
+					role="tabpanel"
+					aria-labelledby="tab-basic"
+					hidden={ activeSubTab !== 'basic' }
+				>
+					<h3>
+						<FontAwesomeIcon icon={ faCode } /> Basic
+						Optimization
+					</h3>
+					<p>
+						Essential minification settings to reduce asset file
+						sizes and improve page load speed.
+					</p>
 
-						<CheckboxOption
-							label={ translations.minifyJS }
-							checked={ settings.minifyJS }
-							onChange={ handleChange( setSettings ) }
-							name="minifyJS"
-							textareaName="excludeJS"
-							textareaPlaceholder={ translations.excludeJSFiles }
-							textareaValue={ settings.excludeJS }
-							onTextareaChange={ handleChange( setSettings ) }
-						/>
+					<CheckboxOption
+						label={ translations.minifyJS }
+						checked={ settings.minifyJS }
+						onChange={ handleChange( setSettings ) }
+						name="minifyJS"
+						textareaName="excludeJS"
+						textareaPlaceholder={ translations.excludeJSFiles }
+						textareaValue={ settings.excludeJS }
+						onTextareaChange={ handleChange( setSettings ) }
+					/>
 
-						<CheckboxOption
-							label={ translations.minifyCSS }
-							checked={ settings.minifyCSS }
-							onChange={ handleChange( setSettings ) }
-							name="minifyCSS"
-							textareaName="excludeCSS"
-							textareaPlaceholder={ translations.excludeCSSFiles }
-							textareaValue={ settings.excludeCSS }
-							onTextareaChange={ handleChange( setSettings ) }
-						/>
+					<CheckboxOption
+						label={ translations.minifyCSS }
+						checked={ settings.minifyCSS }
+						onChange={ handleChange( setSettings ) }
+						name="minifyCSS"
+						textareaName="excludeCSS"
+						textareaPlaceholder={ translations.excludeCSSFiles }
+						textareaValue={ settings.excludeCSS }
+						onTextareaChange={ handleChange( setSettings ) }
+					/>
 
-						<CheckboxOption
-							label={ translations.minifyHTML }
-							checked={ settings.minifyHTML }
-							onChange={ handleChange( setSettings ) }
-							name="minifyHTML"
-						/>
-					</div>
-				) }
+					<CheckboxOption
+						label={ translations.minifyHTML }
+						checked={ settings.minifyHTML }
+						onChange={ handleChange( setSettings ) }
+						name="minifyHTML"
+					/>
+				</div>
 
-				{ activeSubTab === 'advanced' && (
-					<div className="feature-card">
-						<h3>
-							<FontAwesomeIcon icon={ faRocket } /> Advanced
-							Delivery
-						</h3>
-						<p>
-							Advanced techniques like combining assets and
-							deferring execution for maximum performance.
-						</p>
+				<div
+					className="feature-card"
+					id="tabpanel-advanced"
+					role="tabpanel"
+					aria-labelledby="tab-advanced"
+					hidden={ activeSubTab !== 'advanced' }
+				>
+					<h3>
+						<FontAwesomeIcon icon={ faRocket } /> Advanced
+						Delivery
+					</h3>
+					<p>
+						Advanced techniques like combining assets and
+						deferring execution for maximum performance.
+					</p>
 
-						<CheckboxOption
-							label={ translations.combineCSS }
-							checked={ settings.combineCSS }
-							onChange={ handleChange( setSettings ) }
-							name="combineCSS"
-							textareaName="excludeCombineCSS"
-							textareaPlaceholder={
-								translations.excludeCombineCSS
-							}
-							textareaValue={ settings.excludeCombineCSS }
-							onTextareaChange={ handleChange( setSettings ) }
-						/>
+					<CheckboxOption
+						label={ translations.combineCSS }
+						checked={ settings.combineCSS }
+						onChange={ handleChange( setSettings ) }
+						name="combineCSS"
+						textareaName="excludeCombineCSS"
+						textareaPlaceholder={
+							translations.excludeCombineCSS
+						}
+						textareaValue={ settings.excludeCombineCSS }
+						onTextareaChange={ handleChange( setSettings ) }
+					/>
 
-						<CheckboxOption
-							label={ translations.deferJS }
-							checked={ settings.deferJS }
-							onChange={ handleChange( setSettings ) }
-							name="deferJS"
-							textareaName="excludeDeferJS"
-							textareaPlaceholder={ translations.excludeDeferJS }
-							textareaValue={ settings.excludeDeferJS }
-							onTextareaChange={ handleChange( setSettings ) }
-						/>
+					<CheckboxOption
+						label={ translations.deferJS }
+						checked={ settings.deferJS }
+						onChange={ handleChange( setSettings ) }
+						name="deferJS"
+						textareaName="excludeDeferJS"
+						textareaPlaceholder={ translations.excludeDeferJS }
+						textareaValue={ settings.excludeDeferJS }
+						onTextareaChange={ handleChange( setSettings ) }
+					/>
 
-						<CheckboxOption
-							label={ translations.delayJS }
-							checked={ settings.delayJS }
-							onChange={ handleChange( setSettings ) }
-							name="delayJS"
-							textareaName="excludeDelayJS"
-							textareaPlaceholder={ translations.excludeDelayJS }
-							textareaValue={ settings.excludeDelayJS }
-							onTextareaChange={ handleChange( setSettings ) }
-						/>
-					</div>
-				) }
+					<CheckboxOption
+						label={ translations.delayJS }
+						checked={ settings.delayJS }
+						onChange={ handleChange( setSettings ) }
+						name="delayJS"
+						textareaName="excludeDelayJS"
+						textareaPlaceholder={ translations.excludeDelayJS }
+						textareaValue={ settings.excludeDelayJS }
+						onTextareaChange={ handleChange( setSettings ) }
+					/>
+				</div>
 
-				{ activeSubTab === 'ecommerce' && (
-					<div className="feature-card">
-						<h3>
-							<FontAwesomeIcon icon={ faStore } /> WooCommerce
-							Core
-						</h3>
-						<p>
-							Optimize WooCommerce assets specifically for
-							non-e-commerce pages to prevent bloat.
-						</p>
+				<div
+					className="feature-card"
+					id="tabpanel-ecommerce"
+					role="tabpanel"
+					aria-labelledby="tab-ecommerce"
+					hidden={ activeSubTab !== 'ecommerce' }
+				>
+					<h3>
+						<FontAwesomeIcon icon={ faStore } /> WooCommerce
+						Core
+					</h3>
+					<p>
+						Optimize WooCommerce assets specifically for
+						non-e-commerce pages to prevent bloat.
+					</p>
 
-						<CheckboxOption
-							label={ translations.removeWooCSSJS }
-							checked={ settings.removeWooCSSJS }
-							onChange={ handleChange( setSettings ) }
-							name="removeWooCSSJS"
-							description="Disable WooCommerce scripts and styles on regular pages while keeping them on store pages."
-						>
-							{ settings.removeWooCSSJS && (
-								<div
-									style={ {
-										display: 'grid',
-										gridTemplateColumns: '1fr 1fr',
-										gap: '20px',
-									} }
-								>
-									<div className="setting-group">
-										<label
-											className="field-label"
-											htmlFor={ excludeUrlId }
-										>
-											{
-												translations.excludeUrlToKeepJSCSS
-											}
-										</label>
-										<textarea
-											id={ excludeUrlId }
-											className="text-area-field"
-											placeholder="URLs to keep assets (e.g. shop/.*)"
-											name="excludeUrlToKeepJSCSS"
-											value={
-												settings.excludeUrlToKeepJSCSS
-											}
-											onChange={ handleChange(
-												setSettings
-											) }
-										/>
-									</div>
-									<div className="setting-group">
-										<label
-											className="field-label"
-											htmlFor={ cssJsHandleId }
-										>
-											{ translations.removeCssJsHandle }
-										</label>
-										<textarea
-											id={ cssJsHandleId }
-											className="text-area-field"
-											placeholder="Handles to remove (one per line)"
-											name="removeCssJsHandle"
-											value={ settings.removeCssJsHandle }
-											onChange={ handleChange(
-												setSettings
-											) }
-										/>
-									</div>
+					<CheckboxOption
+						label={ translations.removeWooCSSJS }
+						checked={ settings.removeWooCSSJS }
+						onChange={ handleChange( setSettings ) }
+						name="removeWooCSSJS"
+						description="Disable WooCommerce scripts and styles on regular pages while keeping them on store pages."
+					>
+						{ settings.removeWooCSSJS && (
+							<div
+								style={ {
+									display: 'grid',
+									gridTemplateColumns: '1fr 1fr',
+									gap: '20px',
+								} }
+							>
+								<div className="setting-group">
+									<label
+										className="field-label"
+										htmlFor={ excludeUrlId }
+									>
+										{
+											translations.excludeUrlToKeepJSCSS
+										}
+									</label>
+									<textarea
+										id={ excludeUrlId }
+										className="text-area-field"
+										placeholder="URLs to keep assets (e.g. shop/.*)"
+										name="excludeUrlToKeepJSCSS"
+										value={
+											settings.excludeUrlToKeepJSCSS
+										}
+										onChange={ handleChange(
+											setSettings
+										) }
+									/>
 								</div>
-							) }
-						</CheckboxOption>
-					</div>
-				) }
+								<div className="setting-group">
+									<label
+										className="field-label"
+										htmlFor={ cssJsHandleId }
+									>
+										{ translations.removeCssJsHandle }
+									</label>
+									<textarea
+										id={ cssJsHandleId }
+										className="text-area-field"
+										placeholder="Handles to remove (one per line)"
+										name="removeCssJsHandle"
+										value={ settings.removeCssJsHandle }
+										onChange={ handleChange(
+											setSettings
+										) }
+									/>
+								</div>
+							</div>
+						) }
+					</CheckboxOption>
+				</div>
 
-				{ activeSubTab === 'network' && (
-					<div className="feature-card">
-						<h3>
-							<FontAwesomeIcon icon={ faServer } /> Network &
-							Infrastructure
-						</h3>
-						<p>
-							Configure advanced network behaviors and Content
-							Delivery Network integration.
-						</p>
+				<div
+					className="feature-card"
+					id="tabpanel-network"
+					role="tabpanel"
+					aria-labelledby="tab-network"
+					hidden={ activeSubTab !== 'network' }
+				>
+					<h3>
+						<FontAwesomeIcon icon={ faServer } /> Network &
+						Infrastructure
+					</h3>
+					<p>
+						Configure advanced network behaviors and Content
+						Delivery Network integration.
+					</p>
 
-						<CheckboxOption
-							label={ translations.enableServerRules }
-							checked={ settings.enableServerRules }
+					<CheckboxOption
+						label={ translations.enableServerRules }
+						checked={ settings.enableServerRules }
+						onChange={ handleChange( setSettings ) }
+						name="enableServerRules"
+						description={ translations.enableServerRulesDesc }
+					/>
+
+					<div
+						className="setting-group"
+						style={ { marginTop: '24px' } }
+					>
+						<label className="field-label" htmlFor={ cdnUrlId }>
+							{ translations.cdnURL }
+						</label>
+						<input
+							id={ cdnUrlId }
+							type="text"
+							className="input-field"
+							placeholder={
+								translations.cdnURLPlaceholder ||
+								'https://cdn.example.com'
+							}
+							name="cdnURL"
+							value={ settings.cdnURL }
 							onChange={ handleChange( setSettings ) }
-							name="enableServerRules"
-							description={ translations.enableServerRulesDesc }
 						/>
-
-						<div
-							className="setting-group"
-							style={ { marginTop: '24px' } }
-						>
-							<label className="field-label" htmlFor={ cdnUrlId }>
-								{ translations.cdnURL }
-							</label>
-							<input
-								id={ cdnUrlId }
-								type="text"
-								className="input-field"
-								placeholder={
-									translations.cdnURLPlaceholder ||
-									'https://cdn.example.com'
-								}
-								name="cdnURL"
-								value={ settings.cdnURL }
-								onChange={ handleChange( setSettings ) }
-							/>
-						</div>
 					</div>
-				) }
+				</div>
 			</div>
 
 			<div

@@ -139,6 +139,8 @@ const App = () => {
 					className="mobile-toggle"
 					onClick={ toggleMobileMenu }
 					aria-label="Toggle Menu"
+					aria-expanded={ mobileMenuOpen }
+					aria-controls="mobile-sidebar"
 				>
 					<FontAwesomeIcon
 						icon={ mobileMenuOpen ? faTimes : faBars }
@@ -163,6 +165,7 @@ const App = () => {
 			) }
 
 			<div
+				id="mobile-sidebar"
 				className={ `sidebar ${ sidebarCollapsed ? 'collapsed' : '' } ${
 					mobileMenuOpen ? 'mobile-open' : ''
 				}` }
@@ -178,6 +181,7 @@ const App = () => {
 									className={
 										activeTab === item.name ? 'active' : ''
 									}
+									aria-current={ activeTab === item.name ? 'page' : undefined }
 									onClick={ () => {
 										setActiveTab( item.name );
 										setMobileMenuOpen( false );
