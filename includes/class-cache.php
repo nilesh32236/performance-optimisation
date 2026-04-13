@@ -92,7 +92,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function __construct() {
-			$this->domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
+
+			if ( strpos( $domain, '..' ) !== false || strpos( $domain, '/' ) !== false || strpos( $domain, '\\' ) !== false ) {
+				$domain = '';
+			}
+
+			$this->domain = $domain;
 
 			// Define cache root directory and URL.
 			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR );
@@ -465,6 +471,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function maybe_store_cache() {
+			if ( empty( $this->domain ) || strpos( $this->url_path, '..' ) !== false ) {
+				// Prevent empty domain caching which could occur after traversal sanitation.
+				return false;
+			}
+
 			if ( ! empty( $_SERVER['QUERY_STRING'] ) &&
 				preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) ) )
 			) {

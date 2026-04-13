@@ -52,6 +52,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$site_domain    = $_SERVER[\'HTTP_HOST\'];' . PHP_EOL .
 			'$request_uri    = parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH );' . PHP_EOL .
 
+			'if ( strpos( $site_domain, \'..\' ) !== false || strpos( $site_domain, \'/\' ) !== false || strpos( $site_domain, \'\\\\\' ) !== false || strpos( $request_uri, \'..\' ) !== false ) {' . PHP_EOL .
+			'	exit;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'if ( \'/\' !== substr( $request_uri, -1 ) ) {' . PHP_EOL .
 			'	$request_uri .= \'/\';' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
