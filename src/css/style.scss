@@ -103,7 +103,7 @@
 		font-size: 18px;
 
 		&:focus-visible {
-			outline: 2px solid #fff;
+			outline: 2px solid var(--wppo-primary);
 			outline-offset: 2px;
 		}
 	}
@@ -221,6 +221,11 @@
 					}
 				}
 
+				&:focus-visible {
+					outline: 2px solid var(--wppo-primary);
+					outline-offset: -2px;
+				}
+
 				.sidebar-icon {
 					font-size: 18px;
 					width: 24px;
@@ -311,6 +316,11 @@
 		&.active {
 			background: var(--wppo-primary-soft);
 			color: var(--wppo-primary);
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--wppo-primary);
+			outline-offset: -2px;
 		}
 
 		svg {
@@ -528,6 +538,11 @@
 					display: none;
 				}
 			}
+
+			&:focus-visible {
+				outline: 2px solid var(--wppo-primary);
+				outline-offset: 2px;
+			}
 		}
 
 		.option-label-text {
@@ -686,6 +701,11 @@ button.submit-button,
 		box-shadow: none;
 	}
 
+	&:focus-visible {
+		outline: 2px solid var(--wppo-primary);
+		outline-offset: 2px;
+	}
+
 	&.secondary {
 		background: #fff;
 		color: var(--wppo-primary);
@@ -743,4 +763,20 @@ button.submit-button,
 	}
 
 	h2 { margin: 0 !important; }
+}
+/* Focus states for Accessibility */
+:focus-visible {
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
+}
+
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
+	box-shadow: 0 0 0 4px var(--wppo-primary-soft);
+}
+
+.sub-tab-item:focus-visible {
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
 }
