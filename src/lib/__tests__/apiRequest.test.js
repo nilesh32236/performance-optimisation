@@ -82,6 +82,26 @@ describe( 'API Request library', () => {
 			expect( result ).toEqual( mockData );
 		} );
 
+		it( 'should call fetch with correct parameters and return json response for a non-default page', async () => {
+			const mockData = { activities: [ { id: 1 } ] };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const result = await fetchRecentActivities( 2 );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/recent_activities?page=2',
+				{
+					method: 'GET',
+					headers: {
+						'X-WP-Nonce': 'testnonce',
+					},
+				}
+			);
+			expect( result ).toEqual( mockData );
+		} );
+
 		it( 'should throw error and log on sad path failure', async () => {
 			const mockError = new Error( 'Failed to fetch' );
 			global.fetch.mockRejectedValueOnce( mockError );
