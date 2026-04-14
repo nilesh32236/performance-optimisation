@@ -96,41 +96,48 @@ const ImageOptimization = ( { options = {} } ) => {
 						<>
 							<div className="wppo-notice wppo-notice--info">
 								<FontAwesomeIcon icon={ faInfoCircle } />
-								<span>{ translations.lazyLoadInfo || 'Images above the fold (header, hero) should be excluded to avoid layout shifts. Use the settings below to fine-tune.' }</span>
+								<span>
+									{ translations.lazyLoadInfo ||
+										'Images above the fold (header, hero) should be excluded to avoid layout shifts. Use the settings below to fine-tune.' }
+								</span>
 							</div>
 							<div
-							style={ {
-								display: 'flex',
-								flexDirection: 'column',
-								gap: '24px',
-							} }
-						>
-							<div className="setting-group">
-								<label
-									className="field-label"
-									htmlFor={ excludeFirstImagesId }
-								>
-									{ translations.excludeFistImages }
-								</label>
-								<input
-									id={ excludeFirstImagesId }
-									className="input-field"
-									type="number"
-									placeholder="e.g. 2"
-									name="excludeFistImages"
-									value={ settings.excludeFistImages }
+								style={ {
+									display: 'flex',
+									flexDirection: 'column',
+									gap: '24px',
+								} }
+							>
+								<div className="setting-group">
+									<label
+										className="field-label"
+										htmlFor={ excludeFirstImagesId }
+									>
+										{ translations.excludeFistImages }
+									</label>
+									<input
+										id={ excludeFirstImagesId }
+										className="input-field"
+										type="number"
+										placeholder="e.g. 2"
+										name="excludeFistImages"
+										value={ settings.excludeFistImages }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</div>
+								<CheckboxOption
+									label={ translations.replaceImgToSVG }
+									checked={
+										settings.replacePlaceholderWithSVG
+									}
 									onChange={ handleChange( setSettings ) }
+									name="replacePlaceholderWithSVG"
+									description={
+										translations.replaceImgToSVGDesc
+									}
 								/>
 							</div>
-							<CheckboxOption
-								label={ translations.replaceImgToSVG }
-								checked={ settings.replacePlaceholderWithSVG }
-								onChange={ handleChange( setSettings ) }
-								name="replacePlaceholderWithSVG"
-								description={ translations.replaceImgToSVGDesc }
-							/>
-						</div>
-					</>
+						</>
 					) }
 				</CheckboxOption>
 			</div>
@@ -157,39 +164,45 @@ const ImageOptimization = ( { options = {} } ) => {
 				>
 					{ settings.convertImg && (
 						<>
-							<div className="wppo-notice wppo-notice--info" style={ { marginBottom: '16px' } }>
+							<div
+								className="wppo-notice wppo-notice--info"
+								style={ { marginBottom: '16px' } }
+							>
 								<FontAwesomeIcon icon={ faInfoCircle } />
-								<span>{ translations.convertImgInfo || 'Converted images are served alongside originals. Browsers that don\'t support the format will fall back to the original automatically.' }</span>
+								<span>
+									{ translations.convertImgInfo ||
+										"Converted images are served alongside originals. Browsers that don't support the format will fall back to the original automatically." }
+								</span>
 							</div>
 							<div
-							className="setting-group"
-							style={ { marginTop: '16px' } }
-						>
-							<label
-								className="field-label"
-								htmlFor={ conversionFormatId }
+								className="setting-group"
+								style={ { marginTop: '16px' } }
 							>
-								{ translations.conversationFormat }
-							</label>
-							<select
-								id={ conversionFormatId }
-								name="conversionFormat"
-								value={ settings.conversionFormat }
-								onChange={ handleChange( setSettings ) }
-								className="input-field"
-							>
-								<option value="webp">
-									{ translations.webp }
-								</option>
-								<option value="avif">
-									{ translations.avif }
-								</option>
-								<option value="both">
-									{ translations.both }
-								</option>
-							</select>
-						</div>
-					</>
+								<label
+									className="field-label"
+									htmlFor={ conversionFormatId }
+								>
+									{ translations.conversationFormat }
+								</label>
+								<select
+									id={ conversionFormatId }
+									name="conversionFormat"
+									value={ settings.conversionFormat }
+									onChange={ handleChange( setSettings ) }
+									className="input-field"
+								>
+									<option value="webp">
+										{ translations.webp }
+									</option>
+									<option value="avif">
+										{ translations.avif }
+									</option>
+									<option value="both">
+										{ translations.both }
+									</option>
+								</select>
+							</div>
+						</>
 					) }
 				</CheckboxOption>
 			</div>

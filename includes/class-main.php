@@ -136,6 +136,11 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
+
+		if ( is_admin() ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
+			new Admin_Notices();
+		}
 	}
 
 	/**
@@ -524,6 +529,7 @@ class Main {
 					'combineCSS'               => __( 'Combine CSS', 'performance-optimisation' ),
 					'excludeCombineCSS'        => __( 'Exclude CSS files to combine', 'performance-optimisation' ),
 					'removeWooCSSJS'           => __( 'Remove woocommerce css and js from other page', 'performance-optimisation' ),
+					'removeWooCSSJSWarning'    => __( 'Removing WooCommerce assets can break cart, checkout, or product pages if URLs or handles are wrong. Test store flows after enabling.', 'performance-optimisation' ),
 					'excludeUrlToKeepJSCSS'    => __( 'Exclude Url to keep woocommerce css and js', 'performance-optimisation' ),
 					'removeCssJsHandle'        => __( 'Enter handle which script and style you want to remove', 'performance-optimisation' ),
 					'minifyHTML'               => __( 'Minify HTML', 'performance-optimisation' ),
