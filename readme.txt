@@ -30,8 +30,6 @@ Performance Optimisation helps you speed up your site with cache management, Jav
  - Advanced lazy loading options.
  - Import/export plugin settings.
 
-See **Screenshots** below for suggested `assets/` images for the plugin directory.
-
 == Installation ==
 
 1. Upload the plugin files to the `/wp-content/plugins/performance-optimisation` directory, or install the plugin through the WordPress plugins screen directly.

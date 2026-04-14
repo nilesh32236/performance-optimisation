@@ -173,6 +173,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_competing_plugins_notice(): void {
+			if ( ! Advanced_Cache_Handler::is_our_dropin() ) {
+				return;
+			}
+
 			$active = self::get_active_plugin_files();
 			$found  = array();
 
@@ -189,7 +193,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$names = implode( ', ', array_map( 'esc_html', $found ) );
 
 			echo '<div class="notice notice-info is-dismissible"><p>';
-			echo esc_html__( 'You have another page caching plugin active:', 'performance-optimisation' ) . ' ' . $names . '. ';
+			echo esc_html__( 'You have another page caching plugin active:', 'performance-optimisation' ) . ' ' . esc_html( $names ) . '. ';
 			echo esc_html__( 'Running multiple full-page cache solutions can cause conflicts. Consider using only one.', 'performance-optimisation' );
 			echo '</p></div>';
 		}

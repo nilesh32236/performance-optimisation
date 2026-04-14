@@ -42,15 +42,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				$notices[] = 'foreign_dropin';
 			} else {
 				Advanced_Cache_Handler::create();
-			}
 
-			$wp_cache_notice = self::add_wp_cache_constant();
-			if ( is_string( $wp_cache_notice ) ) {
-				$notices[] = $wp_cache_notice;
+				$wp_cache_notice = self::add_wp_cache_constant();
+				if ( is_string( $wp_cache_notice ) ) {
+					$notices[] = $wp_cache_notice;
+				}
 			}
 
 			if ( ! empty( $notices ) ) {
 				set_transient( 'wppo_activation_notices', array_unique( $notices ), WEEK_IN_SECONDS );
+			} else {
+				delete_transient( 'wppo_activation_notices' );
 			}
 
 			set_transient( 'wppo_show_welcome_notice', 1, WEEK_IN_SECONDS );
@@ -89,6 +91,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			}
 
 			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
+
+			if ( ! file_exists( $wp_config_path ) ) {
+				$wp_config_path = wp_normalize_path( dirname( ABSPATH ) . '/wp-config.php' );
+			}
 
 			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return 'wp_config_writable';
