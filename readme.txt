@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.2.2
+Stable tag: 1.2.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -106,8 +106,10 @@ Composer configuration:
 
 == Changelog ==
 
-= 1.2.2 (2026-04-14) =
-* Fix: Shortened plugin description to meet WordPress.org's 150-character limit.
+= 1.2.3 (2026-04-14) =
+* Fix: Resolved fatal error where `Advanced_Cache_Handler` was not found during activation or admin notice checks.
+* Performance: Refactored `Advanced_Cache_Handler` to use lazy loading ("require when needed") to reduce memory footprint.
+* Fix: Shortened plugin short description to meet WordPress.org's 150-character limit.
 
 = 1.2.1 (2026-04-14) =
 * Fix: Implemented handle whitelisting in Metabox to prevent unauthorized script/style handle persistence.
@@ -199,8 +201,8 @@ Use the Tools section to export your current settings or import settings from an
 
 == Upgrade Notice ==
 
-= 1.2.1 (2026-04-14) =
-Maintenance and trust: aligned WordPress version headers with readme.txt, fixed WP_CACHE setup logic, safer advanced-cache drop-in handling (no overwrite of other plugins’ files), admin notices for activation issues and competing cache plugins, onboarding notice, and WooCommerce warning in UI. See changelog for details.
+= 1.2.3 (2026-04-14) =
+Stability and performance release: Fixed a fatal error during activation/admin notices, implemented lazy loading for cache handlers to reduce overhead, and aligned documentation with official directory limits.
 
 = 1.2.0 (2026-04-13) =
 Major feature release completing the "Cache Core" milestone: .htaccess automation, CDN URL rewriting, and smart cache purging. Includes a full Design System v2.0 with WordPress admin color scheme sync, confirmation dialogs, and polished form controls. Significant security and performance improvements throughout.
