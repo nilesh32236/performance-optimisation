@@ -17,6 +17,10 @@ All notable changes to the Performance Optimisation plugin will be documented in
 
 ### Fixed
 
+- **Asset Manager:** Implemented handle whitelisting in Metabox to prevent unauthorized or stale script/style handle persistence.
+- **WP-config Path Resolution:** Enhanced path resolution to support parent directory locations (mirroring WordPress core behavior).
+- **Activation Logic:** Fixed activation logic to properly handle transient deletion when no notices are present and ensuring `WP_CACHE` constant guards only apply when necessary.
+- **Admin Notices:** Fixed alignment and escaping in `Admin_Notices` for WPCS compliance.
 - **`WP_CACHE` / `wp-config.php`:** Activation now adds the guarded `WP_CACHE` block when the constant was **undefined** (previous logic only ran in a narrow case). Clearer handling when `WP_CACHE` is false, the file is not writable, or write fails (reported via admin notices).
 
 ### Security / safety

@@ -95,9 +95,22 @@ Composer configuration:
 }
 `
 
+== Screenshots ==
+
+1. **Dashboard**: Comprehensive overview of cache status, file optimization metrics, and recent activity log.
+2. **File Optimization**: Minification settings for JavaScript, CSS, and HTML with Basic, Advanced, E-commerce, and Network tab configurations.
+3. **Preload Settings**: Granular controls for cache warm-up, connection prediction (DNS/Preconnect), and critical asset prioritization (Fonts/CSS).
+4. **Image Optimization**: Automated Next-Gen format conversion (WebP/AVIF), smart lazy loading with SVG placeholders, and intelligent LCP preloading.
+5. **Database Optimization**: Safe maintenance tools to clean post revisions, auto-drafts, spam comments, and expired transients.
+6. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
+
 == Changelog ==
 
 = 1.2.1 (2026-04-14) =
+* Fix: Implemented handle whitelisting in Metabox to prevent unauthorized script/style handle persistence.
+* Fix: Support parent directory locations for `wp-config.php` (core-mirroring behavior).
+* Fix: Properly handle transient deletion and `WP_CACHE` constant guards during activation.
+* Fix: Alignment and escaping in admin notices for WPCS compliance.
 * Fix: Add `WP_CACHE` to wp-config.php when the constant was previously undefined (correct activation logic).
 * Safety: `advanced-cache.php` includes a plugin marker; do not overwrite or delete another plugin’s drop-in.
 * UX: Admin notices for foreign drop-in, wp-config issues, competing full-page cache plugins, and a short post-activation welcome notice.
