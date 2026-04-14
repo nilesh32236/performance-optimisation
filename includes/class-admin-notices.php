@@ -173,6 +173,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_competing_plugins_notice(): void {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
+
 			if ( ! Advanced_Cache_Handler::is_our_dropin() ) {
 				return;
 			}
