@@ -47,11 +47,16 @@ const ConfirmDialog = ( {
 				const last = focusable[ focusable.length - 1 ];
 
 				if ( e.shiftKey ) {
-					if ( document.activeElement === first ) {
+					if (
+						dialogRef.current?.ownerDocument?.activeElement ===
+						first
+					) {
 						e.preventDefault();
 						last.focus();
 					}
-				} else if ( document.activeElement === last ) {
+				} else if (
+					dialogRef.current?.ownerDocument?.activeElement === last
+				) {
 					e.preventDefault();
 					first.focus();
 				}
