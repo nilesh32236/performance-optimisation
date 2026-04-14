@@ -235,7 +235,10 @@ const Dashboard = ( { activities } ) => {
 						</h3>
 						<div className="dashboard-img-stats">
 							{ [ 'webp', 'avif' ].map( ( format ) => (
-								<div key={ format } className="dashboard-img-format">
+								<div
+									key={ format }
+									className="dashboard-img-format"
+								>
 									<div className="dashboard-card-label">
 										{ format.toUpperCase() }
 									</div>
@@ -284,7 +287,6 @@ const Dashboard = ( { activities } ) => {
 				</div>
 			</div>
 
-
 			{ /* Recent Activity Timeline */ }
 			<div className="recent-activities">
 				<h3>
@@ -320,8 +322,14 @@ const Dashboard = ( { activities } ) => {
 					removeImages();
 				} }
 				onCancel={ () => setConfirmRemove( false ) }
-				title={ translations.confirmRemoveImgTitle || 'Remove Optimized Images' }
-				message={ translations.confirmRemoveImgMsg || 'This will delete all optimized WebP and AVIF copies. Original images will not be affected.' }
+				title={
+					translations.confirmRemoveImgTitle ||
+					'Remove Optimized Images'
+				}
+				message={
+					translations.confirmRemoveImgMsg ||
+					'This will delete all optimized WebP and AVIF copies. Original images will not be affected.'
+				}
 				confirmLabel={ translations.deleteBtn || 'Delete' }
 				variant="danger"
 			/>

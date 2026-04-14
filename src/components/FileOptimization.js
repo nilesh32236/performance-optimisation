@@ -73,36 +73,60 @@ const FileOptimization = ( { options = {} } ) => {
 			</div>
 
 			<div className="wppo-sub-tabs-container">
-				<div className="wppo-sub-tabs" role="tablist" aria-label={ translations.fileOptimizationTabs || 'File Optimization Tabs' }>
+				<div
+					className="wppo-sub-tabs"
+					role="tablist"
+					aria-label={
+						translations.fileOptimizationTabs ||
+						'File Optimization Tabs'
+					}
+				>
 					{ subTabs.map( ( tab ) => (
 						<button
 							key={ tab.id }
-							id={`tab-${tab.id}`}
+							id={ `tab-${ tab.id }` }
 							type="button"
 							role="tab"
 							aria-selected={ activeSubTab === tab.id }
-							aria-controls={`tabpanel-${tab.id}`}
+							aria-controls={ `tabpanel-${ tab.id }` }
 							tabIndex={ activeSubTab === tab.id ? 0 : -1 }
 							className={ `sub-tab-item ${
 								activeSubTab === tab.id ? 'active' : ''
 							}` }
 							onClick={ () => setActiveSubTab( tab.id ) }
-							onKeyDown={ (e) => {
-								if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+							onKeyDown={ ( e ) => {
+								if (
+									e.key === 'ArrowRight' ||
+									e.key === 'ArrowLeft'
+								) {
 									e.preventDefault();
-									const currentIndex = subTabs.findIndex(t => t.id === activeSubTab);
+									const currentIndex = subTabs.findIndex(
+										( t ) => t.id === activeSubTab
+									);
 									let newIndex = currentIndex;
-									if (e.key === 'ArrowRight') {
-										newIndex = (currentIndex + 1) % subTabs.length;
-									} else if (e.key === 'ArrowLeft') {
-										newIndex = (currentIndex - 1 + subTabs.length) % subTabs.length;
+									if ( e.key === 'ArrowRight' ) {
+										newIndex =
+											( currentIndex + 1 ) %
+											subTabs.length;
+									} else if ( e.key === 'ArrowLeft' ) {
+										newIndex =
+											( currentIndex -
+												1 +
+												subTabs.length ) %
+											subTabs.length;
 									}
-									if (newIndex !== currentIndex) {
-										setActiveSubTab(subTabs[newIndex].id);
-										document.getElementById(`tab-${subTabs[newIndex].id}`)?.focus();
+									if ( newIndex !== currentIndex ) {
+										setActiveSubTab(
+											subTabs[ newIndex ].id
+										);
+										document
+											.getElementById(
+												`tab-${ subTabs[ newIndex ].id }`
+											)
+											?.focus();
 									}
 								}
-							}}
+							} }
 						>
 							<FontAwesomeIcon icon={ tab.icon } />
 							<span>{ tab.label }</span>
@@ -120,8 +144,7 @@ const FileOptimization = ( { options = {} } ) => {
 					hidden={ activeSubTab !== 'basic' }
 				>
 					<h3>
-						<FontAwesomeIcon icon={ faCode } /> Basic
-						Optimization
+						<FontAwesomeIcon icon={ faCode } /> Basic Optimization
 					</h3>
 					<p>
 						Essential minification settings to reduce asset file
@@ -137,6 +160,10 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaPlaceholder={ translations.excludeJSFiles }
 						textareaValue={ settings.excludeJS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.minifyJSDesc ||
+							'Remove whitespace and comments from JavaScript files to reduce payload size.'
+						}
 					/>
 
 					<CheckboxOption
@@ -148,6 +175,10 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaPlaceholder={ translations.excludeCSSFiles }
 						textareaValue={ settings.excludeCSS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.minifyCSSDesc ||
+							'Remove whitespace and comments from CSS files to reduce payload size.'
+						}
 					/>
 
 					<CheckboxOption
@@ -155,6 +186,10 @@ const FileOptimization = ( { options = {} } ) => {
 						checked={ settings.minifyHTML }
 						onChange={ handleChange( setSettings ) }
 						name="minifyHTML"
+						description={
+							translations.minifyHTMLDesc ||
+							'Remove unnecessary whitespace and comments from HTML to reduce page size.'
+						}
 					/>
 				</div>
 
@@ -166,12 +201,11 @@ const FileOptimization = ( { options = {} } ) => {
 					hidden={ activeSubTab !== 'advanced' }
 				>
 					<h3>
-						<FontAwesomeIcon icon={ faRocket } /> Advanced
-						Delivery
+						<FontAwesomeIcon icon={ faRocket } /> Advanced Delivery
 					</h3>
 					<p>
-						Advanced techniques like combining assets and
-						deferring execution for maximum performance.
+						Advanced techniques like combining assets and deferring
+						execution for maximum performance.
 					</p>
 
 					<CheckboxOption
@@ -180,11 +214,13 @@ const FileOptimization = ( { options = {} } ) => {
 						onChange={ handleChange( setSettings ) }
 						name="combineCSS"
 						textareaName="excludeCombineCSS"
-						textareaPlaceholder={
-							translations.excludeCombineCSS
-						}
+						textareaPlaceholder={ translations.excludeCombineCSS }
 						textareaValue={ settings.excludeCombineCSS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.combineCSSDesc ||
+							'Merge multiple CSS files into a single file to reduce HTTP requests.'
+						}
 					/>
 
 					<CheckboxOption
@@ -196,11 +232,18 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaPlaceholder={ translations.excludeDeferJS }
 						textareaValue={ settings.excludeDeferJS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.deferJSDesc ||
+							'Delay the execution of JavaScript until the HTML parser has finished to improve render time.'
+						}
 					/>
 					{ settings.deferJS && (
 						<div className="wppo-notice wppo-notice--warning">
 							<FontAwesomeIcon icon={ faExclamationTriangle } />
-							<span>{ translations.deferJSWarning || 'This may affect inline scripts. Test your site thoroughly after enabling. Use the exclusion list above for any scripts that break.' }</span>
+							<span>
+								{ translations.deferJSWarning ||
+									'This may affect inline scripts. Test your site thoroughly after enabling. Use the exclusion list above for any scripts that break.' }
+							</span>
 						</div>
 					) }
 
@@ -213,11 +256,18 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaPlaceholder={ translations.excludeDelayJS }
 						textareaValue={ settings.excludeDelayJS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.delayJSDesc ||
+							'Delay JavaScript execution until user interaction (e.g., scroll, click) to boost initial page speed.'
+						}
 					/>
 					{ settings.delayJS && (
 						<div className="wppo-notice wppo-notice--warning">
 							<FontAwesomeIcon icon={ faExclamationTriangle } />
-							<span>{ translations.delayJSWarning || 'Delayed scripts will not execute until user interaction. This can break scripts that need to run immediately. Test carefully.' }</span>
+							<span>
+								{ translations.delayJSWarning ||
+									'Delayed scripts will not execute until user interaction. This can break scripts that need to run immediately. Test carefully.' }
+							</span>
 						</div>
 					) }
 				</div>
@@ -230,8 +280,7 @@ const FileOptimization = ( { options = {} } ) => {
 					hidden={ activeSubTab !== 'ecommerce' }
 				>
 					<h3>
-						<FontAwesomeIcon icon={ faStore } /> WooCommerce
-						Core
+						<FontAwesomeIcon icon={ faStore } /> WooCommerce Core
 					</h3>
 					<p>
 						Optimize WooCommerce assets specifically for
@@ -258,21 +307,15 @@ const FileOptimization = ( { options = {} } ) => {
 										className="field-label"
 										htmlFor={ excludeUrlId }
 									>
-										{
-											translations.excludeUrlToKeepJSCSS
-										}
+										{ translations.excludeUrlToKeepJSCSS }
 									</label>
 									<textarea
 										id={ excludeUrlId }
 										className="text-area-field"
 										placeholder="URLs to keep assets (e.g. shop/.*)"
 										name="excludeUrlToKeepJSCSS"
-										value={
-											settings.excludeUrlToKeepJSCSS
-										}
-										onChange={ handleChange(
-											setSettings
-										) }
+										value={ settings.excludeUrlToKeepJSCSS }
+										onChange={ handleChange( setSettings ) }
 									/>
 								</div>
 								<div className="setting-group">
@@ -288,9 +331,7 @@ const FileOptimization = ( { options = {} } ) => {
 										placeholder="Handles to remove (one per line)"
 										name="removeCssJsHandle"
 										value={ settings.removeCssJsHandle }
-										onChange={ handleChange(
-											setSettings
-										) }
+										onChange={ handleChange( setSettings ) }
 									/>
 								</div>
 							</div>
@@ -324,7 +365,10 @@ const FileOptimization = ( { options = {} } ) => {
 					{ settings.enableServerRules && (
 						<div className="wppo-notice wppo-notice--warning">
 							<FontAwesomeIcon icon={ faExclamationTriangle } />
-							<span>{ translations.serverRulesWarning || 'This modifies your .htaccess file. Ensure you have a backup. If your site becomes inaccessible, revert via FTP.' }</span>
+							<span>
+								{ translations.serverRulesWarning ||
+									'This modifies your .htaccess file. Ensure you have a backup. If your site becomes inaccessible, revert via FTP.' }
+							</span>
 						</div>
 					) }
 
