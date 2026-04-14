@@ -25,7 +25,7 @@ const SIDEBAR_BREAKPOINT = 992;
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
-	const [ sidebarCollapsed, setSidebarCollapsed ] = useState( false );
+	const [ sidebarCollapsed ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const hasFetchedActivities = useRef( false );
@@ -128,10 +128,7 @@ const App = () => {
 			);
 		}
 		if ( themeColors.text ) {
-			root.style.setProperty(
-				'--wppo-frontend-text',
-				themeColors.text
-			);
+			root.style.setProperty( '--wppo-frontend-text', themeColors.text );
 		}
 	}, [] );
 
@@ -209,7 +206,11 @@ const App = () => {
 									className={
 										activeTab === item.name ? 'active' : ''
 									}
-									aria-current={ activeTab === item.name ? 'page' : undefined }
+									aria-current={
+										activeTab === item.name
+											? 'page'
+											: undefined
+									}
 									onClick={ () => {
 										setActiveTab( item.name );
 										setMobileMenuOpen( false );

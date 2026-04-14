@@ -198,7 +198,10 @@ const PluginSetting = ( { options } ) => {
 							ref={ fileInputRef }
 							className="input-field"
 							style={ { padding: '12px' } }
-							aria-label={ translations.selectFiles || 'Select configuration file' }
+							aria-label={
+								translations.selectFiles ||
+								'Select configuration file'
+							}
 						/>
 					</div>
 					<LoadingSubmitButton
@@ -212,7 +215,9 @@ const PluginSetting = ( { options } ) => {
 						disabled={ ! selectedFile || isImporting }
 						isLoading={ isImporting }
 						label={ translations.importSettings }
-						loadingLabel={ translations.importing || 'Importing...' }
+						loadingLabel={
+							translations.importing || 'Importing...'
+						}
 					/>
 				</div>
 			</div>
@@ -244,7 +249,10 @@ const PluginSetting = ( { options } ) => {
 				} }
 				onCancel={ () => setConfirmImport( false ) }
 				title={ translations.confirmImportTitle || 'Confirm Import' }
-				message={ translations.confirmImportMsg || 'Importing this file will overwrite all current plugin settings. Continue?' }
+				message={
+					translations.confirmImportMsg ||
+					'Importing this file will overwrite all current plugin settings. Continue?'
+				}
 				confirmLabel={ translations.confirm || 'Confirm' }
 				variant="warning"
 			/>

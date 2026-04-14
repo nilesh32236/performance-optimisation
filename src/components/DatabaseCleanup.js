@@ -231,19 +231,22 @@ const DatabaseCleanup = () => {
 	const getConfirmDialogProps = () => {
 		if ( confirmDialog.type === 'all' ) {
 			return {
-				title:
-					translations.confirmDeleteTitle || 'Confirm Deletion',
+				title: translations.confirmDeleteTitle || 'Confirm Deletion',
 				message:
 					translations.confirmDeleteAll ||
 					'This will permanently delete all items across every category. This cannot be undone.',
-				confirmLabel:
-					translations.deleteAllBtn || 'Delete All',
+				confirmLabel: translations.deleteAllBtn || 'Delete All',
 			};
 		}
 		const count = counts[ confirmDialog.type ] || 0;
 		return {
 			title: translations.confirmDeleteTitle || 'Confirm Deletion',
-			message: `${ translations.confirmDeleteMsg || 'Permanently delete' } ${ count } ${ confirmDialog.label }? ${ translations.confirmDeleteNote || 'This action cannot be undone.' }`,
+			message: `${
+				translations.confirmDeleteMsg || 'Permanently delete'
+			} ${ count } ${ confirmDialog.label }? ${
+				translations.confirmDeleteNote ||
+				'This action cannot be undone.'
+			}`,
 			confirmLabel: translations.deleteBtn || 'Delete',
 		};
 	};
@@ -254,9 +257,13 @@ const DatabaseCleanup = () => {
 				<h2>
 					<FontAwesomeIcon
 						icon={ faDatabase }
-						style={ { color: 'var(--wppo-primary)', marginRight: '12px' } }
+						style={ {
+							color: 'var(--wppo-primary)',
+							marginRight: '12px',
+						} }
 					/>
-					{ translations.databaseOptimization || 'Database Optimization' }
+					{ translations.databaseOptimization ||
+						'Database Optimization' }
 				</h2>
 			</div>
 
@@ -315,9 +322,15 @@ const DatabaseCleanup = () => {
 						<div className="db-card-header">
 							<h4>{ item.label }</h4>
 							<span
-								className={ `db-count-badge${ ( counts[ item.key ] || 0 ) > 0 ? ' db-count-badge--active' : '' }` }
+								className={ `db-count-badge${
+									( counts[ item.key ] || 0 ) > 0
+										? ' db-count-badge--active'
+										: ''
+								}` }
 							>
-								{ loadingCounts ? '...' : counts[ item.key ] || 0 }
+								{ loadingCounts
+									? '...'
+									: counts[ item.key ] || 0 }
 							</span>
 						</div>
 						<p
