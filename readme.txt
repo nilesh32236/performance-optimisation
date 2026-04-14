@@ -4,11 +4,11 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Lightweight performance toolkit: cache tools, file optimisation, WebP/AVIF conversion, and Core Web Vitals–friendly options—with safe defaults and clear warnings for advanced features.
+Lightweight performance toolkit: cache, file minification, WebP/AVIF conversion, and Core Web Vitals tools with safe defaults.
 
 == Description ==
 
@@ -105,6 +105,9 @@ Composer configuration:
 6. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
 
 == Changelog ==
+
+= 1.2.2 (2026-04-14) =
+* Fix: Shortened plugin description to meet WordPress.org's 150-character limit.
 
 = 1.2.1 (2026-04-14) =
 * Fix: Implemented handle whitelisting in Metabox to prevent unauthorized script/style handle persistence.

@@ -2,6 +2,12 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.2.2] - 2026-04-14
+
+### Fixed
+
+- **Documentation:** Shortened the plugin's short description in `readme.txt` to comply with the WordPress.org 150-character limit.
+
 ## [1.2.1] - 2026-04-14
 
 ### Added
