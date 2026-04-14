@@ -6,3 +6,7 @@
 **Bug/Gap:** The Javascript test asserting API call of `fetchRecentActivities` was failing because the method implementation had been updated to execute a `GET` request and append a query parameter `?page=1` instead of using a `POST` request. In addition, there was a mismatch of expected log string output in sad-path tests ("Error fetching recent activities: " versus "Error fetching recent activities:").
 **Root Cause:** A test file (`src/lib/__tests__/apiRequest.test.js`) not updated alongside implementation (`src/lib/apiRequest.js`).
 **Test Added:** Fixed the unit test assertion matching expectations to proper implementations. Prevented future breaks.
+## $(date +%Y-%m-%d) - [JS Test Fix] Avoid using global document.activeElement in React Component
+**Bug/Gap:** The React component `src/components/common/ConfirmDialog.js` had a `@wordpress/no-global-active-element` lint error. It was using `document.activeElement`, which can incorrectly reference elements and cause bugs if the component is rendered inside an iframe or a shadow DOM context.
+**Root Cause:** Using `document.activeElement` globally rather than scoping it to the component node context.
+**Test Added:** Replaced `document.activeElement` with `dialogRef.current?.ownerDocument?.activeElement` to track active elements safely and correctly relative to the React component document node, ensuring the focus trap mechanism in the dialog works consistently across various contexts. Verified this resolution via `npm run lint:js`.
