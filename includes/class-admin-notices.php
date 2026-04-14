@@ -25,16 +25,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @var array<string, string> Plugin file => human label.
 		 */
 		private const COMPETING_CACHE_PLUGINS = array(
-			'wp-super-cache/wp-cache.php'       => 'WP Super Cache',
-			'w3-total-cache/w3-total-cache.php' => 'W3 Total Cache',
-			'wp-fastest-cache/wpFastestCache.php' => 'WP Fastest Cache',
-			'litespeed-cache/litespeed-cache.php' => 'LiteSpeed Cache',
-			'cache-enabler/cache-enabler.php'   => 'Cache Enabler',
-			'sg-cachepress/sg-cachepress.php'   => 'SG Optimizer',
-			'wp-rocket/wp-rocket.php'           => 'WP Rocket',
-			'comet-cache/comet-cache.php'       => 'Comet Cache',
+			'wp-super-cache/wp-cache.php'            => 'WP Super Cache',
+			'w3-total-cache/w3-total-cache.php'      => 'W3 Total Cache',
+			'wp-fastest-cache/wpFastestCache.php'    => 'WP Fastest Cache',
+			'litespeed-cache/litespeed-cache.php'    => 'LiteSpeed Cache',
+			'cache-enabler/cache-enabler.php'        => 'Cache Enabler',
+			'sg-cachepress/sg-cachepress.php'        => 'SG Optimizer',
+			'wp-rocket/wp-rocket.php'                => 'WP Rocket',
+			'comet-cache/comet-cache.php'            => 'Comet Cache',
 			'swift-performance-lite/performance.php' => 'Swift Performance Lite',
-			'swift-performance/performance.php' => 'Swift Performance',
+			'swift-performance/performance.php'      => 'Swift Performance',
 		);
 
 		/**
