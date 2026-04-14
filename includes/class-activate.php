@@ -36,7 +36,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
 
-			Advanced_Cache_Handler::create();
+			$notices = array();
+
+			if ( Advanced_Cache_Handler::foreign_dropin_present() ) {
+				$notices[] = 'foreign_dropin';
+			} else {
+				Advanced_Cache_Handler::create();
+			}
+
+			$wp_cache_notice = self::add_wp_cache_constant();
+			if ( is_string( $wp_cache_notice ) ) {
+				$notices[] = $wp_cache_notice;
+			}
+
+			if ( ! empty( $notices ) ) {
+				set_transient( 'wppo_activation_notices', array_unique( $notices ), WEEK_IN_SECONDS );
+			}
+
+			set_transient( 'wppo_show_welcome_notice', 1, WEEK_IN_SECONDS );
 
 			$options             = get_option( 'wppo_settings', array() );
 			$enable_server_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
@@ -45,56 +62,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				Htaccess_Handler::update_rules( true );
 			}
 
-			// Add WP_CACHE constant to wp-config.php if not already defined.
-			self::add_wp_cache_constant();
 			self::create_activity_log_table();
 		}
 
 		/**
-		 * Adds the WP_CACHE constant to wp-config.php if not already defined.
+		 * Adds the WP_CACHE guard block to wp-config.php when the constant is not enabled.
 		 *
-		 * @return void
+		 * @return string|null Notice key for the admin layer, or null if nothing to report.
 		 * @since 1.0.0
 		 */
-		private static function add_wp_cache_constant(): void {
+		private static function add_wp_cache_constant(): ?string {
 			global $wp_filesystem;
+
+			if ( defined( 'WP_CACHE' ) && WP_CACHE ) {
+				return null;
+			}
+
+			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
+				return 'wp_cache_disabled';
+			}
 
 			Util::init_filesystem();
 
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
-				return;
+				return 'wp_config_fs';
 			}
 
 			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 
 			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
-				return; // Exit if the file doesn't exist or is not writable.
-			}
-
-			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
-				return;
+				return 'wp_config_writable';
 			}
 
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
 
-			// Check if WP_CACHE is already defined.
-			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
-				// Insert WP_CACHE just before the line that says "That's all, stop editing!" or at the end.
-				$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
-
-				$constant_code = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
-
-				if ( false !== $insert_position ) {
-					// Insert WP_CACHE constant before "That's all, stop editing!".
-					$wp_config_content = substr_replace( $wp_config_content, $constant_code, $insert_position, 0 );
-				} else {
-					// If the marker isn't found, append the constant at the end of the file.
-					$wp_config_content .= $constant_code;
-				}
-
-				// Write the modified content back to wp-config.php.
-				$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+			if ( ! is_string( $wp_config_content ) ) {
+				return 'wp_config_read';
 			}
+
+			if ( false !== strpos( $wp_config_content, 'Enables WordPress Cache' ) && false !== strpos( $wp_config_content, 'WP_CACHE' ) ) {
+				return null;
+			}
+
+			$constant_code = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
+
+			$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
+
+			if ( false !== $insert_position ) {
+				$wp_config_content = substr_replace( $wp_config_content, $constant_code, $insert_position, 0 );
+			} else {
+				$wp_config_content .= $constant_code;
+			}
+
+			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
+
+			return $ok ? null : 'wp_config_write_failed';
 		}
 
 		/**

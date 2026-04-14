@@ -2,6 +2,27 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.2.1] - 2026-04-14
+
+### Added
+
+- `Admin_Notices` class: post-activation welcome notice; dismissible activation notices for `wp-config.php` / `WP_CACHE` issues; notice when another full-page cache plugin is active; transients `wppo_activation_notices` and `wppo_show_welcome_notice`.
+- Stronger WooCommerce asset-removal warning in the File Optimization UI (`removeWooCSSJSWarning`).
+
+### Changed
+
+- Plugin header `Requires at least` aligned with `readme.txt` (**WordPress 6.2**).
+- `readme.txt`: expanded short description, FAQ (WooCommerce, competing caches, Core Web Vitals), Screenshots section, changelog entry for 1.2.1.
+- `readme.md`: WordPress badge and requirements updated to 6.2+, safe-defaults note, NPM snippet trimmed to reference current `package.json`.
+
+### Fixed
+
+- **`WP_CACHE` / `wp-config.php`:** Activation now adds the guarded `WP_CACHE` block when the constant was **undefined** (previous logic only ran in a narrow case). Clearer handling when `WP_CACHE` is false, the file is not writable, or write fails (reported via admin notices).
+
+### Security / safety
+
+- **`advanced-cache.php`:** Drop-in includes a `WPPO_ADVANCED_CACHE_DROPIN` marker; the plugin does **not** overwrite or delete another plugin’s drop-in. Legacy drop-ins without the marker are still recognized. `Advanced_Cache_Handler::create()` skips installation if a foreign drop-in is present.
+
 ## [1.2.0] - 2026-04-13
 ### Added
 - Server-side `.htaccess` automation — Gzip/Deflate compression and browser caching rules via `insert_with_markers()`.

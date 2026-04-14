@@ -4,25 +4,33 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-A plugin to enhance website performance by managing cache, minifying JavaScript, CSS, and optimizing images.
+Lightweight performance toolkit: cache tools, file optimisation, WebP/AVIF conversion, and Core Web Vitals–friendly options—with safe defaults and clear warnings for advanced features.
 
 == Description ==
 
-Performance Optimisation helps you optimize your website's speed by offering features like cache management, JavaScript and CSS minification, image conversion, lazy loading, preloading, and more. With an intuitive dashboard, detailed settings, and useful tools, it simplifies performance enhancement for your website.
+Performance Optimisation helps you speed up your site with cache management, JavaScript and CSS minification, image conversion (WebP and AVIF), lazy loading, preload hints, and a modern admin UI. It is designed to stay **off by default** for aggressive options (defer/delay JS, WooCommerce asset removal, server rules) so you can enable features gradually and test as you go—similar to how you would tune Autoptimize or a caching stack, but with a focused, dashboard-first workflow.
+
+**Why use this plugin?**
+
+ - **Clear scope:** One place for cache stats, file optimisation, images, preload, and tools—without bundling unrelated features.
+ - **Safety-first UX:** Advanced toggles show warnings; WooCommerce-related options remind you to test cart and checkout.
+ - **Core Web Vitals & PageSpeed:** Lazy loading, minification, preconnect/prefetch, and image formats help real-world metrics—not just a higher score on a single lab test.
 
 **Features:**
 
  - Dashboard with an overview of cache, JavaScript, CSS, and image optimisation status.
  - Cache management tools, including size display and a "Clear Cache" button.
- - JavaScript & CSS Optimization: Minify, combine, and exclude specific files.
+ - JavaScript & CSS Optimization: Minify, combine, defer/delay (opt-in), and exclude specific files.
  - Image optimization: Convert images to WebP and AVIF formats.
  - Preload settings for cache, fonts, DNS, and images.
  - Advanced lazy loading options.
  - Import/export plugin settings.
+
+See **Screenshots** below for suggested `assets/` images for the plugin directory.
 
 == Installation ==
 
@@ -91,6 +99,14 @@ Composer configuration:
 
 == Changelog ==
 
+= 1.2.1 (2026-04-14) =
+* Fix: Add `WP_CACHE` to wp-config.php when the constant was previously undefined (correct activation logic).
+* Safety: `advanced-cache.php` includes a plugin marker; do not overwrite or delete another plugin’s drop-in.
+* UX: Admin notices for foreign drop-in, wp-config issues, competing full-page cache plugins, and a short post-activation welcome notice.
+* UI: Stronger warning when enabling WooCommerce asset removal.
+* Docs: Expanded readme description, FAQ, and screenshot placeholders.
+* Meta: Plugin header `Requires at least` now matches readme.txt (6.2).
+
 = 1.2.0 (2026-04-13) =
 * New: Automatic Gzip compression and browser caching for faster page loads.
 * New: CDN support — serve static assets from your own CDN domain.
@@ -145,19 +161,32 @@ Preloading settings for cache, fonts, and images.
 Import/export settings tools.
 
 == Frequently Asked Questions ==
- = How do I optimize images using this plugin? =
- Go to the Image Optimisation Settings tab, enable image conversion, and choose the format (WebP, AVIF, or both). Click "Optimize Now" to start the process.
 
- = Can I exclude specific JavaScript or CSS files from minification? =
- Yes, in the File Optimization Settings tab, use the provided text areas to list files you want to exclude.
+= Will this work with WooCommerce? =
+Yes. WooCommerce-specific asset removal is **optional** and off by default. If you enable it, test cart, checkout, and product pages—incorrect URL or handle exclusions can break the storefront.
 
- = Does the plugin support lazy loading for images? =
- Yes, lazy loading can be enabled in the Image Optimisation Settings tab. You can also use SVG placeholders for better performance.
+= Can I use this with another cache plugin (WP Super Cache, LiteSpeed, WP Rocket, etc.)? =
+You should run **one** full-page caching solution. This plugin can install a `advanced-cache.php` drop-in when appropriate; if another plugin or your host already manages that file, Performance Optimisation will not replace it and may show an admin notice. Minify/image features may still be usable depending on your stack—test carefully.
 
- = How can I import/export plugin settings? =
- Use the Tools section to export your current settings or import settings from another instance.
+= Does this plugin improve Core Web Vitals or PageSpeed Insights? =
+It can help when you enable features that address LCP, CLS, and JS blocking (lazy load, minify, preload, modern image formats). Results depend on your theme and other plugins; always measure before and after.
+
+= How do I optimize images using this plugin? =
+Go to the Image Optimisation Settings tab, enable image conversion, and choose the format (WebP, AVIF, or both). Click "Optimize Now" to start the process.
+
+= Can I exclude specific JavaScript or CSS files from minification? =
+Yes, in the File Optimization Settings tab, use the provided text areas to list files you want to exclude.
+
+= Does the plugin support lazy loading for images? =
+Yes, lazy loading can be enabled in the Image Optimisation Settings tab. You can also use SVG placeholders for better performance.
+
+= How can I import/export plugin settings? =
+Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.2.1 (2026-04-14) =
+Maintenance and trust: aligned WordPress version headers with readme.txt, fixed WP_CACHE setup logic, safer advanced-cache drop-in handling (no overwrite of other plugins’ files), admin notices for activation issues and competing cache plugins, onboarding notice, and WooCommerce warning in UI. See changelog for details.
 
 = 1.2.0 (2026-04-13) =
 Major feature release completing the "Cache Core" milestone: .htaccess automation, CDN URL rewriting, and smart cache purging. Includes a full Design System v2.0 with WordPress admin color scheme sync, confirmation dialogs, and polished form controls. Significant security and performance improvements throughout.

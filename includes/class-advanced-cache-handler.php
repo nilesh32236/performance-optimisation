@@ -25,6 +25,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 	class Advanced_Cache_Handler {
 
 		/**
+		 * Marker inside advanced-cache.php drop-in so we do not overwrite or delete other plugins' files.
+		 *
+		 * @var string
+		 */
+		public const DROPIN_MARKER = 'WPPO_ADVANCED_CACHE_DROPIN';
+
+		/**
+		 * Path to the advanced-cache.php drop-in.
+		 *
+		 * @return string
+		 */
+		public static function get_dropin_path(): string {
+			return wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' );
+		}
+
+		/**
+		 * Whether the existing advanced-cache.php (if any) was created by this plugin.
+		 *
+		 * @return bool
+		 */
+		public static function is_our_dropin(): bool {
+			global $wp_filesystem;
+
+			$handler_file = self::get_dropin_path();
+
+			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
+				return false;
+			}
+
+			if ( ! $wp_filesystem->exists( $handler_file ) ) {
+				return false;
+			}
+
+			$contents = $wp_filesystem->get_contents( $handler_file );
+
+			if ( ! is_string( $contents ) ) {
+				return false;
+			}
+
+			if ( false !== strpos( $contents, self::DROPIN_MARKER ) ) {
+				return true;
+			}
+
+			// Legacy drop-ins from releases before DROPIN_MARKER was added.
+			return false !== strpos( $contents, 'is_user_logged_in_without_wp' );
+		}
+
+		/**
+		 * Another plugin (or host) owns advanced-cache.php; we must not replace it.
+		 *
+		 * @return bool
+		 */
+		public static function foreign_dropin_present(): bool {
+			global $wp_filesystem;
+
+			$handler_file = self::get_dropin_path();
+
+			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
+				return false;
+			}
+
+			if ( ! $wp_filesystem->exists( $handler_file ) ) {
+				return false;
+			}
+
+			return ! self::is_our_dropin();
+		}
+
+		/**
 		 * Creates the advanced-cache.php file.
 		 *
 		 * Generates the file to serve cached content, including gzip versions, and ensures required directories exist.
@@ -36,6 +105,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 			global $wp_filesystem;
 
+			if ( self::foreign_dropin_present() ) {
+				return;
+			}
+
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
 				return;
 			}
@@ -43,6 +116,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$site_url = home_url();
 
 			$handler_code = '<?php' . PHP_EOL .
+			'// ' . self::DROPIN_MARKER . PHP_EOL .
 			'if ( ! defined( \'ABSPATH\' ) ) {' . PHP_EOL .
 			'	exit;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
@@ -127,11 +201,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		public static function remove(): void {
 			global $wp_filesystem;
 
-			$handler_file = wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' );
+			$handler_file = self::get_dropin_path();
 
-			if ( Util::init_filesystem() && $wp_filesystem->exists( $handler_file ) ) {
-				$wp_filesystem->delete( $handler_file );
+			if ( ! Util::init_filesystem() ) {
+				return;
 			}
+
+			if ( ! $wp_filesystem->exists( $handler_file ) ) {
+				return;
+			}
+
+			if ( ! self::is_our_dropin() ) {
+				return;
+			}
+
+			$wp_filesystem->delete( $handler_file );
 		}
 	}
 }
