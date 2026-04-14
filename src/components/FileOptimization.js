@@ -160,6 +160,10 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaPlaceholder={ translations.excludeJSFiles }
 						textareaValue={ settings.excludeJS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.minifyJSDesc ||
+							'Remove whitespace and comments from JavaScript files to reduce payload size.'
+						}
 					/>
 
 					<CheckboxOption
@@ -171,6 +175,10 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaPlaceholder={ translations.excludeCSSFiles }
 						textareaValue={ settings.excludeCSS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.minifyCSSDesc ||
+							'Remove whitespace and comments from CSS files to reduce payload size.'
+						}
 					/>
 
 					<CheckboxOption
@@ -178,6 +186,10 @@ const FileOptimization = ( { options = {} } ) => {
 						checked={ settings.minifyHTML }
 						onChange={ handleChange( setSettings ) }
 						name="minifyHTML"
+						description={
+							translations.minifyHTMLDesc ||
+							'Remove unnecessary whitespace and comments from HTML to reduce page size.'
+						}
 					/>
 				</div>
 
@@ -205,6 +217,10 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaPlaceholder={ translations.excludeCombineCSS }
 						textareaValue={ settings.excludeCombineCSS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.combineCSSDesc ||
+							'Merge multiple CSS files into a single file to reduce HTTP requests.'
+						}
 					/>
 
 					<CheckboxOption
@@ -216,6 +232,10 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaPlaceholder={ translations.excludeDeferJS }
 						textareaValue={ settings.excludeDeferJS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.deferJSDesc ||
+							'Delay the execution of JavaScript until the HTML parser has finished to improve render time.'
+						}
 					/>
 					{ settings.deferJS && (
 						<div className="wppo-notice wppo-notice--warning">
@@ -236,6 +256,10 @@ const FileOptimization = ( { options = {} } ) => {
 						textareaPlaceholder={ translations.excludeDelayJS }
 						textareaValue={ settings.excludeDelayJS }
 						onTextareaChange={ handleChange( setSettings ) }
+						description={
+							translations.delayJSDesc ||
+							'Delay JavaScript execution until user interaction (e.g., scroll, click) to boost initial page speed.'
+						}
 					/>
 					{ settings.delayJS && (
 						<div className="wppo-notice wppo-notice--warning">

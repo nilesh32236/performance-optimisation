@@ -22,3 +22,7 @@
 
 **Learning:** Custom interactive elements (like custom tabs or buttons) that use `border: none` and `outline: none` (or missing focus styles entirely) introduce accessibility barriers for keyboard users because there's no visible indication of which element has focus.
 **Action:** Always add explicit `:focus-visible` styling (such as `outline: 2px solid var(--wppo-primary); outline-offset: 2px;`) to interactive UI components in `src/css/style.scss` to ensure keyboard navigation is visible and clear.
+
+## 2026-04-14 - Added clear descriptions to complex toggles
+**Learning:** Many complex performance settings (like "Minify HTML" or "Delay JS") lack explanations, leaving non-technical users unsure of their impact.
+**Action:** Always add clear, non-technical `description` props to `CheckboxOption` or similar form elements when implementing feature toggles to ensure users understand the setting's purpose.
