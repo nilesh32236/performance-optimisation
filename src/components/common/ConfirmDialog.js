@@ -7,12 +7,12 @@ const translations = wppoSettings.translations;
 /**
  * A reusable confirmation dialog component for destructive actions.
  *
- * @param {Object}               props              Component props.
- * @param {boolean}              props.isOpen        Whether the dialog is visible.
- * @param {Function}             props.onConfirm     Callback fired on confirm.
- * @param {Function}             props.onCancel      Callback fired on cancel or Escape.
- * @param {string}               props.title         Dialog heading.
- * @param {string}               props.message       Dialog body text.
+ * @param {Object}               props                Component props.
+ * @param {boolean}              props.isOpen         Whether the dialog is visible.
+ * @param {Function}             props.onConfirm      Callback fired on confirm.
+ * @param {Function}             props.onCancel       Callback fired on cancel or Escape.
+ * @param {string}               props.title          Dialog heading.
+ * @param {string}               props.message        Dialog body text.
  * @param {string}               [props.confirmLabel] Label for the confirm button.
  * @param {string}               [props.cancelLabel]  Label for the cancel button.
  * @param {string}               [props.variant]      'warning' | 'danger' — controls confirm button style.
@@ -63,8 +63,9 @@ const ConfirmDialog = ( {
 	useEffect( () => {
 		if ( isOpen && confirmBtnRef.current ) {
 			// Focus the cancel button (safer default) on open.
-			const cancelBtn =
-				dialogRef.current?.querySelector( '.wppo-dialog-cancel' );
+			const cancelBtn = dialogRef.current?.querySelector(
+				'.wppo-dialog-cancel'
+			);
 			if ( cancelBtn ) {
 				cancelBtn.focus();
 			}
@@ -124,9 +125,7 @@ const ConfirmDialog = ( {
 						onClick={ onConfirm }
 						ref={ confirmBtnRef }
 					>
-						{ confirmLabel ||
-							translations.confirm ||
-							'Confirm' }
+						{ confirmLabel || translations.confirm || 'Confirm' }
 					</button>
 				</div>
 			</div>
