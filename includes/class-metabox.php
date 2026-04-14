@@ -282,6 +282,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		/**
 		 * Saves the Asset Manager metabox data (disabled scripts and styles).
 		 *
+		 * Sanitizes and then whitelists posted handles against the canonical list
+		 * of captured assets for the current context.
+		 *
 		 * @param int $post_id The ID of the post being saved.
 		 * @since 1.2.1
 		 */
@@ -294,17 +297,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				return;
 			}
 
-			// Save disabled scripts.
+			// Capture assets for whitelisting.
+			$assets        = Asset_Manager::get_page_assets( $post_id );
+			$valid_scripts = array();
+			$valid_styles  = array();
+
+			if ( is_array( $assets ) ) {
+				if ( ! empty( $assets['scripts'] ) && is_array( $assets['scripts'] ) ) {
+					$valid_scripts = array_column( $assets['scripts'], 'handle' );
+				}
+				if ( ! empty( $assets['styles'] ) && is_array( $assets['styles'] ) ) {
+					$valid_styles = array_column( $assets['styles'], 'handle' );
+				}
+			}
+
+			// Process and whitelist disabled scripts.
 			$disabled_scripts = array();
 			if ( isset( $_POST['wppo_disabled_scripts'] ) && is_array( $_POST['wppo_disabled_scripts'] ) ) {
-				$disabled_scripts = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_scripts'] ) );
+				$submitted        = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_scripts'] ) );
+				$disabled_scripts = array_intersect( $submitted, $valid_scripts );
 			}
 			update_post_meta( $post_id, '_wppo_disabled_scripts', $disabled_scripts );
 
-			// Save disabled styles.
+			// Process and whitelist disabled styles.
 			$disabled_styles = array();
 			if ( isset( $_POST['wppo_disabled_styles'] ) && is_array( $_POST['wppo_disabled_styles'] ) ) {
-				$disabled_styles = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_styles'] ) );
+				$submitted       = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_styles'] ) );
+				$disabled_styles = array_intersect( $submitted, $valid_styles );
 			}
 			update_post_meta( $post_id, '_wppo_disabled_styles', $disabled_styles );
 		}
