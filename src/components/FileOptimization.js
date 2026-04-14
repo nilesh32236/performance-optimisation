@@ -272,6 +272,20 @@ const FileOptimization = ( { options = {} } ) => {
 					>
 						{ settings.removeWooCSSJS && (
 							<div
+								className="wppo-notice wppo-notice--warning"
+								style={ { marginBottom: '0.75rem' } }
+							>
+								<FontAwesomeIcon
+									icon={ faExclamationTriangle }
+								/>
+								<span>
+									{ translations.removeWooCSSJSWarning ||
+										'Removing WooCommerce assets can break cart, checkout, or product pages if URLs or handles are wrong. Test store flows after enabling.' }
+								</span>
+							</div>
+						) }
+						{ settings.removeWooCSSJS && (
+							<div
 								style={ {
 									display: 'grid',
 									gridTemplateColumns: '1fr 1fr',

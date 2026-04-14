@@ -4,7 +4,7 @@
 
 **A comprehensive WordPress plugin designed to optimize website performance by managing cache, minifying assets, and improving delivery with advanced routing and modern image formats.**
 
-[![WordPress Version](https://img.shields.io/badge/WordPress-5.5+-blue.svg?style=flat-square&logo=wordpress)](https://wordpress.org/)
+[![WordPress Version](https://img.shields.io/badge/WordPress-6.2+-blue.svg?style=flat-square&logo=wordpress)](https://wordpress.org/)
 [![PHP Version](https://img.shields.io/badge/PHP-7.4+-777BB4.svg?style=flat-square&logo=php)](https://php.net/)
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-success.svg?style=flat-square)](https://www.gnu.org/licenses/gpl-2.0.html)
 
@@ -17,6 +17,10 @@
 Website speed is critical for SEO, user retention, and conversion rates. The Performance Optimisation plugin acts as a centralized engine to fine-tune how a WordPress site loads. Instead of relying on multiple fragmented plugins, this solution provides a singular dashboard to manage caching, minify JavaScript/CSS/HTML, convert modern image formats, and intelligently preload critical resources.
 
 Whether aiming for a perfect PageSpeed score or a seamless user experience, this plugin provides granular control over front-end delivery and backend asset management.
+
+**Requirements:** WordPress **6.2+** and PHP **7.4+** (same as the [WordPress.org](https://wordpress.org/plugins/performance-optimisation/) listing; the canonical requirements live in `readme.txt`).
+
+**Safe defaults:** Aggressive options (defer/delay JavaScript, WooCommerce asset stripping, server rules) are **off** by default, with inline warnings when you enable them.
 
 ---
 
@@ -34,7 +38,7 @@ Whether aiming for a perfect PageSpeed score or a seamless user experience, this
 - **Asset Minification:** Minify JavaScript, CSS, and HTML payloads.
 - **Combine & Exclude:** Combine CSS files and define strict exclusion rules to prevent visual breakage.
 - **Render-Blocking Resolution:** Defer or delay JavaScript execution.
-- **E-Commerce Optimization:** Automatically remove unnecessary WooCommerce CSS and JS from non-relevant pages to improve load times.
+- **E-Commerce Optimization (opt-in):** Remove WooCommerce CSS and JS on non-store pages when you enable it; the UI warns you to test cart, checkout, and product flows.
 
 ### Advanced Preloading Settings
 
@@ -135,27 +139,20 @@ This plugin leverages modern development practices, utilizing Composer for PHP d
 
 ### NPM (`package.json`)
 
+Current version and scripts are defined in the repo; for example:
+
 ```json
 {
   "name": "performance-optimisation",
-  "version": "1.0.0",
-  "description": "Performance optimisation plugin for WordPress",
-  "main": "./src/index.js",
+  "version": "1.2.1",
   "scripts": {
     "build": "wp-scripts build",
     "start": "wp-scripts start"
-  },
-  "author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
-  "license": "GPL-2.0-or-later",
-  "devDependencies": {
-    "@wordpress/scripts": "^27.9.0"
-  },
-  "dependencies": {
-    "@fortawesome/free-solid-svg-icons": "^6.7.1",
-    "@fortawesome/react-fontawesome": "^0.2.2"
   }
 }
 ```
+
+See the root `package.json` for full `devDependencies` and `dependencies`.
 
 ---
 

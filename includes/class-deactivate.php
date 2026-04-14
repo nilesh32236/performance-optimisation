@@ -94,11 +94,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 
-			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
-				return;
+			if ( ! file_exists( $wp_config_path ) ) {
+				$wp_config_path = wp_normalize_path( dirname( ABSPATH ) . '/wp-config.php' );
 			}
 
-			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
+			if ( ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return;
 			}
 
