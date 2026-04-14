@@ -25,7 +25,7 @@ const SIDEBAR_BREAKPOINT = 992;
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
-	const [ sidebarCollapsed, setSidebarCollapsed ] = useState( false );
+	const [ sidebarCollapsed ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const hasFetchedActivities = useRef( false );

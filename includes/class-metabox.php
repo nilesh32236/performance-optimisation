@@ -252,33 +252,80 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				return;
 			}
 
-			// Save preload image URLs.
-			if ( isset( $_POST['wppo_preload_image_nonce'] ) &&
-				wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wppo_preload_image_nonce'] ) ), 'save_preload_image_url' ) ) {
-				if ( isset( $_POST['wppo_preload_image_url'] ) ) {
-					$preload_urls = sanitize_textarea_field( wp_unslash( $_POST['wppo_preload_image_url'] ) );
-					update_post_meta( $post_id, '_wppo_preload_image_url', $preload_urls );
+			$this->save_preload_image_urls( $post_id );
+			$this->save_asset_manager_settings( $post_id );
+		}
+
+		/**
+		 * Saves the preload image URLs metabox data.
+		 *
+		 * @param int $post_id The ID of the post being saved.
+		 * @since 1.2.1
+		 */
+		private function save_preload_image_urls( $post_id ) {
+			if ( ! isset( $_POST['wppo_preload_image_nonce'] ) ) {
+				return;
+			}
+
+			if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wppo_preload_image_nonce'] ) ), 'save_preload_image_url' ) ) {
+				return;
+			}
+
+			if ( ! isset( $_POST['wppo_preload_image_url'] ) ) {
+				return;
+			}
+
+			$preload_urls = sanitize_textarea_field( wp_unslash( $_POST['wppo_preload_image_url'] ) );
+			update_post_meta( $post_id, '_wppo_preload_image_url', $preload_urls );
+		}
+
+		/**
+		 * Saves the Asset Manager metabox data (disabled scripts and styles).
+		 *
+		 * Sanitizes and then whitelists posted handles against the canonical list
+		 * of captured assets for the current context.
+		 *
+		 * @param int $post_id The ID of the post being saved.
+		 * @since 1.2.1
+		 */
+		private function save_asset_manager_settings( $post_id ) {
+			if ( ! isset( $_POST['wppo_asset_manager_nonce'] ) ) {
+				return;
+			}
+
+			if ( ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wppo_asset_manager_nonce'] ) ), 'wppo_save_asset_manager' ) ) {
+				return;
+			}
+
+			// Capture assets for whitelisting.
+			$assets        = Asset_Manager::get_page_assets( $post_id );
+			$valid_scripts = array();
+			$valid_styles  = array();
+
+			if ( is_array( $assets ) ) {
+				if ( ! empty( $assets['scripts'] ) && is_array( $assets['scripts'] ) ) {
+					$valid_scripts = array_column( $assets['scripts'], 'handle' );
+				}
+				if ( ! empty( $assets['styles'] ) && is_array( $assets['styles'] ) ) {
+					$valid_styles = array_column( $assets['styles'], 'handle' );
 				}
 			}
 
-			// Save Asset Manager disabled scripts/styles.
-			if ( isset( $_POST['wppo_asset_manager_nonce'] ) &&
-				wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wppo_asset_manager_nonce'] ) ), 'wppo_save_asset_manager' ) ) {
-
-				// Save disabled scripts.
-				$disabled_scripts = array();
-				if ( isset( $_POST['wppo_disabled_scripts'] ) && is_array( $_POST['wppo_disabled_scripts'] ) ) {
-					$disabled_scripts = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_scripts'] ) );
-				}
-				update_post_meta( $post_id, '_wppo_disabled_scripts', $disabled_scripts );
-
-				// Save disabled styles.
-				$disabled_styles = array();
-				if ( isset( $_POST['wppo_disabled_styles'] ) && is_array( $_POST['wppo_disabled_styles'] ) ) {
-					$disabled_styles = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_styles'] ) );
-				}
-				update_post_meta( $post_id, '_wppo_disabled_styles', $disabled_styles );
+			// Process and whitelist disabled scripts.
+			$disabled_scripts = array();
+			if ( isset( $_POST['wppo_disabled_scripts'] ) && is_array( $_POST['wppo_disabled_scripts'] ) ) {
+				$submitted        = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_scripts'] ) );
+				$disabled_scripts = array_intersect( $submitted, $valid_scripts );
 			}
+			update_post_meta( $post_id, '_wppo_disabled_scripts', $disabled_scripts );
+
+			// Process and whitelist disabled styles.
+			$disabled_styles = array();
+			if ( isset( $_POST['wppo_disabled_styles'] ) && is_array( $_POST['wppo_disabled_styles'] ) ) {
+				$submitted       = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_styles'] ) );
+				$disabled_styles = array_intersect( $submitted, $valid_styles );
+			}
+			update_post_meta( $post_id, '_wppo_disabled_styles', $disabled_styles );
 		}
 	}
 }
