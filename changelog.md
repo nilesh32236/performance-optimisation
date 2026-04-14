@@ -6,6 +6,8 @@ All notable changes to the Performance Optimisation plugin will be documented in
 
 ### Fixed
 
+- **Stability:** Fixed a fatal error where `Advanced_Cache_Handler` was not found during activation/admin notices.
+- **Performance:** Refactored `Advanced_Cache_Handler` to use lazy loading ("require when needed") to reduce memory footprint.
 - **Documentation:** Shortened the plugin's short description in `readme.txt` to comply with the WordPress.org 150-character limit.
 
 ## [1.2.1] - 2026-04-14
