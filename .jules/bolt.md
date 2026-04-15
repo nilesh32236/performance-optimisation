@@ -35,3 +35,8 @@
 
 **Learning:** Calculating file sizes or counts via recursive directory scanning (`dirlist`) on every WP-admin load creates a severe bottleneck that can crash or slow down the settings page.
 **Action:** Always use WordPress Transients to cache expensive file system results, and invalidate these transients within `clear_cache` methods.
+
+## 2026-04-15 - Optimizing Large Options Autoload
+
+**Learning:** Large options stored in `wp_options` (like `wppo_img_info` which tracks thousands of images) can cause severe memory bloat if they are autoloaded on every request.
+**Action:** When saving large datasets via `update_option()`, always explicitly pass `false` as the third parameter (`$autoload`) unless the data is strictly required on every single page load.
