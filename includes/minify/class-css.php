@@ -70,8 +70,8 @@ class CSS {
 
 		if ( ! $this->filesystem->exists( $cache_file ) ) {
 			try {
-				$css_content  = $this->filesystem->get_contents( $this->file_path );
-				$css_content  = self::update_image_paths( $css_content, $this->file_path );
+				$css_content = $this->filesystem->get_contents( $this->file_path );
+				$css_content = self::update_image_paths( $css_content, $this->file_path );
 
 				// Inject font-display: swap into @font-face declarations.
 				$css_content = preg_replace_callback(

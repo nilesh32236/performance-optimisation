@@ -124,8 +124,8 @@ class HTML {
 			$html = $this->minify_inline_css( $html );
 		}
 
-		if ( ( isset( $this->options['file_optimisation']['minifyInlineJS'] ) && (bool) $this->options['file_optimisation']['minifyInlineJS'] ) || 
-			 ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) ) {
+		if ( ( isset( $this->options['file_optimisation']['minifyInlineJS'] ) && (bool) $this->options['file_optimisation']['minifyInlineJS'] ) ||
+			( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) ) {
 			$html = $this->minify_inline_js( $html );
 		}
 

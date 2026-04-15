@@ -925,8 +925,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$buffer = preg_replace_callback(
 				'#<video\b([^>]*)>(.*?)</video>#is',
 				function ( $matches ) use ( $exclude_videos, &$video_count ) {
-					$attributes  = $matches[1];
-					$inner_html  = $matches[2];
+					$attributes = $matches[1];
+					$inner_html = $matches[2];
 					$video_count++;
 
 					// Check exclusions against src or inner <source> tags.
