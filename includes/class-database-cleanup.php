@@ -50,6 +50,92 @@ class Database_Cleanup {
 	}
 
 	/**
+	 * Delete post revisions intelligently based on limits.
+	 *
+	 * @since 1.3.0
+	 * @param int $max_age_days Maximum age of revisions to keep in days.
+	 * @param int $keep_latest Number of latest revisions to keep per post.
+	 * @return int Number of rows deleted.
+	 */
+	public static function clean_revisions_advanced( $max_age_days = 30, $keep_latest = 5 ) {
+		global $wpdb;
+		$deleted = 0;
+
+		$max_age_seconds = $max_age_days * DAY_IN_SECONDS;
+		$cutoff_date     = gmdate( 'Y-m-d H:i:s', time() - $max_age_seconds );
+
+		// Find parent posts that have more than $keep_latest revisions.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+		$parent_ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT post_parent FROM $wpdb->posts WHERE post_type = 'revision' GROUP BY post_parent HAVING COUNT(*) > %d",
+				$keep_latest
+			)
+		);
+
+		if ( empty( $parent_ids ) ) {
+			return 0;
+		}
+
+		$revisions_to_delete = array();
+
+		foreach ( $parent_ids as $parent_id ) {
+			// Get all revisions for this post, sorted by date descending.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+			$revisions = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT ID, post_date FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date DESC",
+					$parent_id
+				)
+			);
+
+			// Keep the latest X revisions.
+			$older_revisions = array_slice( $revisions, $keep_latest );
+
+			foreach ( $older_revisions as $rev ) {
+				// Delete if older than cutoff.
+				if ( $rev->post_date < $cutoff_date ) {
+					$revisions_to_delete[] = $rev->ID;
+				}
+			}
+		}
+
+		if ( ! empty( $revisions_to_delete ) ) {
+			// Chunk deletes to avoid massive IN clauses.
+			$chunks = array_chunk( $revisions_to_delete, 100 );
+			foreach ( $chunks as $chunk ) {
+				$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
+
+				// Delete meta.
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$wpdb->query(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+					$wpdb->prepare(
+						"DELETE FROM $wpdb->postmeta WHERE post_id IN (" . $placeholders . ')', // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+						...$chunk
+					)
+				);
+
+				// Delete posts.
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+				$result = $wpdb->query(
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+					$wpdb->prepare(
+						"DELETE FROM $wpdb->posts WHERE ID IN (" . $placeholders . ')', // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+						...$chunk
+					)
+				);
+
+				if ( $result ) {
+					$deleted += $result;
+				}
+			}
+		}
+
+		return $deleted;
+	}
+
+	/**
 	 * Delete all auto-draft posts.
 	 *
 	 * @since 1.1.0
@@ -210,6 +296,25 @@ class Database_Cleanup {
 		);
 
 		return $results;
+	}
+
+	/**
+	 * Run all automated cleanup operations based on settings.
+	 *
+	 * @since 1.3.0
+	 * @param array $settings Database cleanup settings array.
+	 */
+	public static function auto_clean( $settings ) {
+		$max_age = isset( $settings['dbRevMaxAge'] ) ? (int) $settings['dbRevMaxAge'] : 30;
+		$keep    = isset( $settings['dbRevKeepLatest'] ) ? (int) $settings['dbRevKeepLatest'] : 5;
+
+		self::clean_revisions_advanced( $max_age, $keep );
+		self::clean_auto_drafts();
+		self::clean_trashed_posts();
+		self::clean_spam_comments();
+		self::clean_trashed_comments();
+		self::clean_expired_transients();
+		self::clean_orphan_postmeta();
 	}
 
 	/**

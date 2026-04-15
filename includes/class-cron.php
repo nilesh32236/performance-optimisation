@@ -40,6 +40,8 @@ class Cron {
 		add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 
 		add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
+
+		add_action( 'wppo_database_cleanup_cron', array( $this, 'database_cleanup_cron' ) );
 	}
 
 	/**
@@ -74,6 +76,10 @@ class Cron {
 
 		if ( ! wp_next_scheduled( 'wppo_img_conversation' ) ) {
 			wp_schedule_event( time(), 'hourly', 'wppo_img_conversation' );
+		}
+
+		if ( ! wp_next_scheduled( 'wppo_database_cleanup_cron' ) ) {
+			wp_schedule_event( time(), 'daily', 'wppo_database_cleanup_cron' );
 		}
 	}
 
@@ -313,6 +319,41 @@ class Cron {
 					}
 				}
 			}
+		}
+	}
+
+	/**
+	 * Callback for database automatic cleanup cron.
+	 *
+	 * Checks the user settings and runs cleanup if the schedule matches.
+	 *
+	 * @since 1.3.0
+	 */
+	public function database_cleanup_cron() {
+		$options  = get_option( 'wppo_settings', array() );
+		$settings = $options['database_cleanup'] ?? array();
+
+		$schedule = $settings['dbSchedule'] ?? 'none';
+		if ( 'none' === $schedule ) {
+			return;
+		}
+
+		$last_run = (int) get_option( 'wppo_last_db_cleanup', 0 );
+		$now      = time();
+
+		$should_run = false;
+
+		if ( 'daily' === $schedule ) {
+			$should_run = true;
+		} elseif ( 'weekly' === $schedule && ( $now - $last_run > WEEK_IN_SECONDS - HOUR_IN_SECONDS ) ) {
+			$should_run = true;
+		} elseif ( 'monthly' === $schedule && ( $now - $last_run > 30 * DAY_IN_SECONDS - HOUR_IN_SECONDS ) ) {
+			$should_run = true;
+		}
+
+		if ( $should_run ) {
+			Database_Cleanup::auto_clean( $settings );
+			update_option( 'wppo_last_db_cleanup', $now );
 		}
 	}
 }

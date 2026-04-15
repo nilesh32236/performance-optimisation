@@ -5,7 +5,6 @@ const loadScript = ( script ) => {
 	return new Promise( ( resolve, reject ) => {
 		if ( 'wppo/javascript' === script.getAttribute( 'type' ) ) {
 			script.removeAttribute( 'type' );
-			// script.setAttribute('type', 'text/javascript');
 		}
 
 		const wppoType = script.getAttribute( 'wppo-type' );
@@ -25,7 +24,6 @@ const loadScript = ( script ) => {
 		} else {
 			if ( 'wppo/javascript' === script.getAttribute( 'type' ) ) {
 				script.removeAttribute( 'type' );
-				// script.setAttribute('type', 'text/javascript');
 			}
 
 			const typeAttr = script.getAttribute( 'wppo-type' );
@@ -69,7 +67,6 @@ async function loadScripts() {
 		);
 
 		try {
-			// Sequentially process all inline scripts
 			for ( const script of inlineScripts ) {
 				await loadScript( script );
 			}
@@ -77,21 +74,29 @@ async function loadScripts() {
 			console.error( 'Error loading script:', err );
 		} finally {
 			scriptLoading = false;
-			// Keep the promise resolved so future calls don't re-run
-			// if that's the intended behavior (lazy loading scripts usually run once).
-			// If re-running is needed, clear scriptLoadPromise = null here.
 		}
 
 		document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
 		window.dispatchEvent( new Event( 'DOMContentLoaded' ) );
+		window.dispatchEvent( new Event( 'load' ) );
 		window.dispatchEvent( new Event( 'pageshow' ) );
 
 		if ( typeof jQuery !== 'undefined' ) {
 			jQuery( document ).triggerHandler( 'ready' );
 		}
 
-		// After delayed scripts finish, re-run loadImages with a short delay
-		// to pick up any images injected by the restored scripts.
+		// Refresh GSAP ScrollTrigger if active
+		if ( typeof ScrollTrigger !== 'undefined' ) {
+			ScrollTrigger.refresh();
+		} else if ( window.gsap && window.gsap.utils ) {
+			const st = window.gsap.plugins
+				? window.gsap.plugins.scrollTrigger
+				: null;
+			if ( st && st.refresh ) {
+				st.refresh();
+			}
+		}
+
 		setTimeout( () => {
 			loadImages();
 		}, 200 );
@@ -100,13 +105,13 @@ async function loadScripts() {
 	return scriptLoadPromise;
 }
 
-// Attach event listeners to trigger the loading process
 if ( ! scriptLoading ) {
 	const triggerEvents = [
 		'mouseenter',
 		'mousedown',
 		'mouseover',
 		'touchstart',
+		'scroll',
 	];
 	const loadHandler = () => {
 		triggerEvents.forEach( ( event ) =>
@@ -120,69 +125,217 @@ if ( ! scriptLoading ) {
 	);
 }
 
-const loadImages = () => {
-	const lazyloadImages = document.querySelectorAll(
-		'img[data-src], img[data-srcset]'
-	);
-	const lazyloadIframes = document.querySelectorAll( 'iframe[data-src]' );
+let globalObserver = null;
+const observedElements = new WeakSet();
 
-	if ( lazyloadImages.length === 0 && lazyloadIframes.length === 0 ) {
+const observeElement = ( el ) => {
+	if ( ! globalObserver || ! el ) {
 		return;
 	}
 
+	if ( observedElements.has( el ) ) {
+		return;
+	}
+
+	if (
+		( el.tagName === 'IMG' &&
+			( el.hasAttribute( 'data-src' ) ||
+				el.hasAttribute( 'data-srcset' ) ) ) ||
+		( el.tagName === 'IFRAME' && el.hasAttribute( 'data-src' ) ) ||
+		( el.tagName === 'VIDEO' && el.classList.contains( 'wppo-lazy-video' ) )
+	) {
+		observedElements.add( el );
+		globalObserver.observe( el );
+	}
+};
+
+const loadImages = () => {
 	if ( 'IntersectionObserver' in window ) {
-		const observer = new IntersectionObserver(
-			( entries ) => {
-				entries.forEach( ( entry ) => {
-					if ( entry.isIntersecting ) {
-						const el = entry.target;
+		if ( ! globalObserver ) {
+			globalObserver = new IntersectionObserver(
+				( entries ) => {
+					entries.forEach( ( entry ) => {
+						if ( entry.isIntersecting ) {
+							const el = entry.target;
 
-						if ( el.tagName === 'IMG' ) {
-							if ( el.hasAttribute( 'data-src' ) ) {
-								el.src = el.getAttribute( 'data-src' );
-								el.removeAttribute( 'data-src' );
+							let isPicture = false;
+
+							if ( el.tagName === 'IMG' ) {
+								const parent = el.parentNode;
+								if ( parent && parent.tagName === 'PICTURE' ) {
+									isPicture = true;
+									const sources =
+										parent.querySelectorAll( 'source' );
+									sources.forEach( ( s ) => {
+										if ( s.hasAttribute( 'data-sizes' ) ) {
+											s.sizes =
+												s.getAttribute( 'data-sizes' );
+											s.removeAttribute( 'data-sizes' );
+										}
+										if ( s.hasAttribute( 'data-srcset' ) ) {
+											s.srcset =
+												s.getAttribute( 'data-srcset' );
+											s.removeAttribute( 'data-srcset' );
+										}
+									} );
+								}
+
+								if ( el.hasAttribute( 'data-sizes' ) ) {
+									el.sizes = el.getAttribute( 'data-sizes' );
+									el.removeAttribute( 'data-sizes' );
+								}
+
+								if ( el.hasAttribute( 'data-src' ) ) {
+									el.src = el.getAttribute( 'data-src' );
+									el.removeAttribute( 'data-src' );
+								}
+
+								if ( el.hasAttribute( 'data-srcset' ) ) {
+									el.srcset =
+										el.getAttribute( 'data-srcset' );
+									el.removeAttribute( 'data-srcset' );
+								}
+
+								if ( isPicture ) {
+									// More aggressive picture re-evaluation
+									const currentSrc = el.src;
+									el.removeAttribute( 'src' );
+									el.src = currentSrc;
+								}
+							} else if ( el.tagName === 'IFRAME' ) {
+								if ( el.hasAttribute( 'data-src' ) ) {
+									el.src = el.getAttribute( 'data-src' );
+									el.removeAttribute( 'data-src' );
+								}
+							} else if ( el.tagName === 'VIDEO' ) {
+								if ( el.hasAttribute( 'data-src' ) ) {
+									el.src = el.getAttribute( 'data-src' );
+									el.removeAttribute( 'data-src' );
+								}
+								el.querySelectorAll(
+									'source[data-src]'
+								).forEach( ( s ) => {
+									s.src = s.getAttribute( 'data-src' );
+									s.removeAttribute( 'data-src' );
+								} );
+								el.load();
+								if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+									el.play().catch( () => {} );
+								}
 							}
 
-							if ( el.hasAttribute( 'data-srcset' ) ) {
-								el.srcset = el.getAttribute( 'data-srcset' );
-								el.removeAttribute( 'data-srcset' );
-							}
-						} else if ( el.tagName === 'IFRAME' ) {
-							if ( el.hasAttribute( 'data-src' ) ) {
-								el.src = el.getAttribute( 'data-src' );
-								el.removeAttribute( 'data-src' );
-							}
+							globalObserver.unobserve( el );
 						}
+					} );
+				},
+				{
+					rootMargin: '600px', // More aggressive margin for marquees
+				}
+			);
 
-						observer.unobserve( el );
+			const mutationObserver = new MutationObserver( ( mutations ) => {
+				mutations.forEach( ( mutation ) => {
+					mutation.addedNodes.forEach( ( node ) => {
+						if ( node.nodeType === 1 ) {
+							if (
+								node.tagName === 'IMG' ||
+								node.tagName === 'IFRAME' ||
+								node.tagName === 'VIDEO'
+							) {
+								observeElement( node );
+							}
+							node.querySelectorAll(
+								'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+							).forEach( ( child ) => {
+								observeElement( child );
+							} );
+						}
+					} );
+				} );
+			} );
+
+			mutationObserver.observe( document.body, {
+				childList: true,
+				subtree: true,
+			} );
+
+			// Periodic Safety Scan for unobserved dynamic content
+			const intervalId = setInterval( () => {
+				const elements = document.querySelectorAll(
+					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+				);
+				let unobservedCount = 0;
+				elements.forEach( ( el ) => {
+					if ( ! observedElements.has( el ) ) {
+						observeElement( el );
+						unobservedCount++;
 					}
 				} );
-			},
-			{
-				rootMargin: '100px',
-			}
-		);
+				if ( unobservedCount === 0 ) {
+					clearInterval( intervalId );
+				}
+			}, 2000 );
+		}
 
-		lazyloadImages.forEach( ( img ) => observer.observe( img ) );
-		lazyloadIframes.forEach( ( iframe ) => observer.observe( iframe ) );
+		document
+			.querySelectorAll(
+				'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+			)
+			.forEach( ( el ) => {
+				observeElement( el );
+			} );
 	} else {
-		function lazyLoadFallback() {
-			[ ...lazyloadImages, ...lazyloadIframes ].forEach( ( el ) => {
+		const lazyLoadFallback = () => {
+			const lazyElements = document.querySelectorAll(
+				'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+			);
+			lazyElements.forEach( ( el ) => {
 				if ( isElementInViewport( el ) ) {
-					if ( el.hasAttribute( 'data-src' ) ) {
-						el.src = el.getAttribute( 'data-src' );
-						el.removeAttribute( 'data-src' );
-					}
-
-					if ( el.hasAttribute( 'data-srcset' ) ) {
-						el.srcset = el.getAttribute( 'data-srcset' );
-						el.removeAttribute( 'data-srcset' );
+					if ( el.tagName === 'VIDEO' ) {
+						if ( el.hasAttribute( 'data-poster' ) ) {
+							el.poster = el.getAttribute( 'data-poster' );
+							el.removeAttribute( 'data-poster' );
+						}
+						if ( el.hasAttribute( 'data-src' ) ) {
+							el.src = el.getAttribute( 'data-src' );
+							el.removeAttribute( 'data-src' );
+						}
+						el.querySelectorAll(
+							'source[data-src], source[data-srcset]'
+						).forEach( ( s ) => {
+							if ( s.hasAttribute( 'data-src' ) ) {
+								s.src = s.getAttribute( 'data-src' );
+								s.removeAttribute( 'data-src' );
+							}
+							if ( s.hasAttribute( 'data-srcset' ) ) {
+								s.srcset = s.getAttribute( 'data-srcset' );
+								s.removeAttribute( 'data-srcset' );
+							}
+						} );
+						el.load();
+						if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+							el.play().catch( () => {} );
+						}
+						el.classList.remove( 'wppo-lazy-video' );
+					} else {
+						if ( el.hasAttribute( 'data-sizes' ) ) {
+							el.sizes = el.getAttribute( 'data-sizes' );
+							el.removeAttribute( 'data-sizes' );
+						}
+						if ( el.hasAttribute( 'data-src' ) ) {
+							el.src = el.getAttribute( 'data-src' );
+							el.removeAttribute( 'data-src' );
+						}
+						if ( el.hasAttribute( 'data-srcset' ) ) {
+							el.srcset = el.getAttribute( 'data-srcset' );
+							el.removeAttribute( 'data-srcset' );
+						}
 					}
 				}
 			} );
-		}
+		};
 
-		function isElementInViewport( el ) {
+		const isElementInViewport = ( el ) => {
 			const rect = el.getBoundingClientRect();
 			return (
 				rect.top >= 0 &&
@@ -194,21 +347,15 @@ const loadImages = () => {
 					( window.innerWidth ||
 						document.documentElement.clientWidth )
 			);
-		}
+		};
 
 		window.addEventListener( 'scroll', lazyLoadFallback );
 		lazyLoadFallback();
 	}
 };
 
-// Use readyState check to handle the case where the script loads in the footer
-// AFTER DOMContentLoaded has already fired (which is the primary bug).
 if ( document.readyState === 'loading' ) {
-	// DOM hasn't finished loading yet — wait for it.
-	document.addEventListener( 'DOMContentLoaded', function () {
-		loadImages();
-	} );
+	document.addEventListener( 'DOMContentLoaded', loadImages );
 } else {
-	// DOM is already loaded (interactive or complete) — run immediately.
 	loadImages();
 }

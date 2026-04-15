@@ -420,7 +420,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$media .= " and (max-width: {$current_width}px)";
 				}
 
-				Util::generate_preload_link( $source['url'], 'preload', 'image', false, Util::get_image_mime_type( $source['url'] ), $media );
+				Util::generate_preload_link( $source['url'], 'preload', 'image', false, Util::get_image_mime_type( $source['url'] ), $media, 'high' );
 				$previous_width = $current_width + 1;
 			}
 		}
@@ -441,7 +441,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$mobile_url = content_url( $mobile_url );
 				}
 
-				Util::generate_preload_link( $mobile_url, 'preload', 'image', false, Util::get_image_mime_type( $mobile_url ), '(max-width: 768px)' );
+				Util::generate_preload_link( $mobile_url, 'preload', 'image', false, Util::get_image_mime_type( $mobile_url ), '(max-width: 768px)', 'high' );
 			} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
 				$desktop_url = trim( str_replace( 'desktop:', '', $img_url ) );
 
@@ -449,7 +449,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$desktop_url = content_url( $desktop_url );
 				}
 
-				Util::generate_preload_link( $desktop_url, 'preload', 'image', false, Util::get_image_mime_type( $desktop_url ), '(min-width: 768px)' );
+				Util::generate_preload_link( $desktop_url, 'preload', 'image', false, Util::get_image_mime_type( $desktop_url ), '(min-width: 768px)', 'high' );
 			} else {
 				$img_url = trim( $img_url );
 
@@ -457,7 +457,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$img_url = content_url( $img_url );
 				}
 
-				Util::generate_preload_link( $img_url, 'preload', 'image', false, Util::get_image_mime_type( $img_url ) );
+				Util::generate_preload_link( $img_url, 'preload', 'image', false, Util::get_image_mime_type( $img_url ), '', 'high' );
 			}
 		}
 
@@ -530,9 +530,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					);
 				}
 
+				// Replace 'sizes' with 'data-sizes' if 'sizes' is present.
+				if ( preg_match( '#\bsizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
+					$img_tag = preg_replace(
+						'#\bsizes=["\']([^"\']+)["\']#i',
+						'data-sizes="' . esc_attr( $sizes_matches[1] ) . '"',
+						$img_tag
+					);
+				}
+
 				// Skip base64 images to avoid rewriting them.
 				if ( preg_match( '#^data:image/#i', $original_src ) ) {
 					return $img_tag;
+				}
+			}
+
+			// Add missing width and height attributes if possible.
+			$has_width  = (bool) preg_match( '/\bwidth=["\']\d+["\']/i', $img_tag );
+			$has_height = (bool) preg_match( '/\bheight=["\']\d+["\']/i', $img_tag );
+
+			if ( ! $has_width || ! $has_height ) {
+				$local_path = Util::get_local_path( $original_src );
+
+				if ( ! empty( $local_path ) && file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
+					$size = getimagesize( $local_path );
+
+					if ( is_array( $size ) ) {
+						if ( ! $has_width ) {
+							$img_tag = preg_replace( '/<img\b/i', '<img width="' . (int) $size[0] . '"', $img_tag );
+						}
+						if ( ! $has_height ) {
+							$img_tag = preg_replace( '/<img\b/i', '<img height="' . (int) $size[1] . '"', $img_tag );
+						}
+					}
 				}
 			}
 
@@ -578,21 +608,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$img_tag = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
 
 				$srcset = '';
-				if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
+				if ( preg_match( '#\b(?:data-)?srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
 					$srcset = $srcset_matches[1];
 				}
 
 				$sizes = '';
-				if ( preg_match( '#sizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
+				if ( preg_match( '#\b(?:data-)?sizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
 					$sizes = $sizes_matches[1];
 				}
 
+				$is_lazy        = (bool) strpos( $img_tag, 'data-src' );
+				$srcset_attr    = $is_lazy ? 'data-srcset' : 'srcset';
+				$sizes_attr     = $is_lazy ? 'data-sizes' : 'sizes';
 				$source_tag     = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-				$should_exclude = true;
+				$should_exclude = false;
 
 				foreach ( $exclude_imgs as $exclude_img ) {
 					if ( false !== strpos( $original_src, $exclude_img ) ) {
-						$should_exclude = false;
+						$should_exclude = true;
 						break;
 					}
 				}
@@ -600,21 +633,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! $should_exclude ) {
 					if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
 						if ( ! empty( $srcset ) ) {
-							$source_tag .= ' srcset="' . $srcset . '"';
+							$source_tag .= ' ' . $srcset_attr . '="' . $srcset . '"';
 						}
 
 						if ( ! empty( $sizes ) ) {
-							$source_tag .= ' sizes="' . $sizes . '">';
+							$source_tag .= ' ' . $sizes_attr . '="' . $sizes . '">';
 						}
 					} else {
-						$source_tag .= ' srcset="' . $original_src . '">';
+						$source_tag .= ' ' . $srcset_attr . '="' . $original_src . '">';
 					}
 				} else {
 					$source_tag .= '>';
 				}
 
 				// Wrap <img> tag inside <picture>.
-				$img_tag = '<picture>' . $source_tag . $img_tag . '</picture>';
+				$img_tag = '<picture style="width: 100%;">' . $source_tag . $img_tag . '</picture>';
 				return $img_tag;
 			} else {
 				preg_match( '#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches );
@@ -865,6 +898,83 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
 			return 'data:image/svg+xml;base64,' . base64_encode( $svg_content );
 			// phpcs:enable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+		}
+
+		/**
+		 * Lazy-loads video elements by deferring their source loading.
+		 *
+		 * Replaces `src` with `data-src`, removes `autoplay`, and adds
+		 * `preload="none"` so videos only load when they enter the viewport.
+		 * An inline IntersectionObserver script is appended to handle restoration.
+		 *
+		 * @since 1.2.4
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The modified HTML buffer with lazy-loaded videos.
+		 */
+		public function lazy_load_videos( string $buffer ): string {
+			$image_opts = $this->options['image_optimisation'] ?? array();
+
+			if ( empty( $image_opts['lazyLoadImages'] ) ) {
+				return $buffer;
+			}
+
+			$exclude_videos = Util::process_urls( $image_opts['excludeVideos'] ?? '' );
+			$video_count    = 0;
+
+			$buffer = preg_replace_callback(
+				'#<video\b([^>]*)>(.*?)</video>#is',
+				function ( $matches ) use ( $exclude_videos, &$video_count ) {
+					$attributes = $matches[1];
+					$inner_html = $matches[2];
+					$video_count++;
+
+					// Check exclusions against src or inner <source> tags.
+					foreach ( $exclude_videos as $exclude ) {
+						if ( false !== strpos( $attributes, $exclude ) || false !== strpos( $inner_html, $exclude ) ) {
+							return $matches[0];
+						}
+					}
+
+					// Process <video src="..."> attribute.
+					if ( preg_match( '#\bsrc=["\']([^"\']+)["\']#i', $attributes ) ) {
+						$attributes = preg_replace( '#\bsrc=["\']([^"\']+)["\']#i', 'data-src="$1"', $attributes );
+					}
+
+					// Process inner <source src="..."> tags.
+					$inner_html = preg_replace( '#(<source\b[^>]*)\bsrc=["\']([^"\']+)["\']#i', '$1 data-src="$2"', $inner_html );
+
+					$had_autoplay = preg_match( '#\bautoplay\b#i', $attributes );
+
+					// Remove autoplay to prevent the browser from trying to play immediately.
+					$attributes = preg_replace( '#\bautoplay(=["\'][^"\']*["\'])?#i', '', $attributes );
+
+					if ( $had_autoplay ) {
+						$attributes .= ' data-wppo-autoplay="1"';
+					}
+
+					// Add preload="none" if not already present.
+					if ( false === stripos( $attributes, 'preload' ) ) {
+						$attributes .= ' preload="none"';
+					} else {
+						$attributes = preg_replace( '#\bpreload=["\'][^"\']*["\']#i', 'preload="none"', $attributes );
+					}
+
+					// Add a marker class for the IntersectionObserver.
+					if ( false === strpos( $attributes, 'wppo-lazy-video' ) ) {
+						if ( preg_match( '#\bclass=["\']([^"\']*)["\']#i', $attributes ) ) {
+							$attributes = preg_replace( '#\bclass=["\']([^"\']*)["\']#i', 'class="$1 wppo-lazy-video"', $attributes );
+						} else {
+							$attributes .= ' class="wppo-lazy-video"';
+						}
+					}
+
+					return '<video' . $attributes . '>' . $inner_html . '</video>';
+				},
+				$buffer
+			);
+
+			return $buffer;
 		}
 	}
 }

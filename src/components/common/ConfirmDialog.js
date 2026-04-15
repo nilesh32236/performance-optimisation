@@ -1,3 +1,4 @@
+/* eslint-disable @wordpress/no-global-active-element */
 import { useEffect, useRef, useCallback } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
