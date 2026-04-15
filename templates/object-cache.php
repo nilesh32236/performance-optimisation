@@ -187,6 +187,62 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 	}
 
 	/**
+	 * Sets multiple values to the cache in one call.
+	 *
+	 * @param array  $data   Array of keys and values to be set.
+	 * @param string $group  Optional. Where the cache contents are grouped. Default empty.
+	 * @param int    $expire Optional. When the cache data should expire, in seconds. Default 0 (no expiration).
+	 * @return bool[] Array of return values, grouped by key.
+	 */
+	function wp_cache_set_multiple( $data, $group = '', $expire = 0 ) {
+		global $wp_object_cache;
+		if ( method_exists( $wp_object_cache, 'set_multiple' ) ) {
+			return $wp_object_cache->set_multiple( $data, $group, $expire );
+		}
+		$values = array();
+		foreach ( $data as $key => $value ) {
+			$values[ $key ] = wp_cache_set( $key, $value, $group, $expire );
+		}
+		return $values;
+	}
+
+	/**
+	 * Adds multiple values to the cache in one call.
+	 *
+	 * @param array  $data   Array of keys and values to be added.
+	 * @param string $group  Optional. Where the cache contents are grouped. Default empty.
+	 * @param int    $expire Optional. When the cache data should expire, in seconds. Default 0 (no expiration).
+	 * @return bool[] Array of return values, grouped by key.
+	 */
+	function wp_cache_add_multiple( $data, $group = '', $expire = 0 ) {
+		global $wp_object_cache;
+		$values = array();
+		foreach ( $data as $key => $value ) {
+			$values[ $key ] = wp_cache_add( $key, $value, $group, $expire );
+		}
+		return $values;
+	}
+
+	/**
+	 * Deletes multiple values from the cache in one call.
+	 *
+	 * @param array  $keys  Array of keys to be deleted.
+	 * @param string $group Optional. Where the cache contents are grouped. Default empty.
+	 * @return bool[] Array of return values, grouped by key.
+	 */
+	function wp_cache_delete_multiple( $keys, $group = '' ) {
+		global $wp_object_cache;
+		if ( method_exists( $wp_object_cache, 'delete_multiple' ) ) {
+			return $wp_object_cache->delete_multiple( $keys, $group );
+		}
+		$values = array();
+		foreach ( $keys as $key ) {
+			$values[ $key ] = wp_cache_delete( $key, $group );
+		}
+		return $values;
+	}
+
+	/**
 	 * WP_Object_Cache Redis Manager.
 	 *
 	 * phpcs:disable PSR1.Classes.ClassDeclaration.MultipleClasses
@@ -222,6 +278,13 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 		 * @var \Redis
 		 */
 		private $redis;
+
+		/**
+		 * Holds the Redis client replica instance.
+		 *
+		 * @var \Redis|null
+		 */
+		private $redis_replica = null;
 
 		/**
 		 * Flag indicating if Redis is connected.
@@ -269,7 +332,8 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 			$password = apply_filters( 'wppo_redis_password', isset( $config['password'] ) ? $config['password'] : '' );
 			$database = apply_filters( 'wppo_redis_database', isset( $config['database'] ) ? (int) $config['database'] : 0 );
 
-			$this->redis = new \Redis();
+			$this->redis         = new \Redis();
+			$this->redis_replica = null;
 
 			try {
 				if ( $this->redis->connect( $host, $port, 1.0 ) ) {
@@ -277,15 +341,42 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 						$this->redis->auth( $password );
 					}
 					$this->redis->select( $database );
-					$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY ); // Optimize serialization if igbinary is available.
-					if ( ! defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
+					if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
+						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY ); // Optimize serialization if igbinary is available.
+					} else {
 						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_PHP );
 					}
 					$this->redis_connected = true;
+
+					// Connect Replica if available.
+					if ( isset( $config['replicas'] ) && is_array( $config['replicas'] ) && ! empty( $config['replicas'] ) ) {
+						// Grab a random replica
+						$replica = $config['replicas'][ array_rand( $config['replicas'] ) ];
+						$r_host  = isset( $replica['host'] ) ? $replica['host'] : '127.0.0.1';
+						$r_port  = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
+						try {
+							$tmp_replica = new \Redis();
+							if ( $tmp_replica->connect( $r_host, $r_port, 1.0 ) ) {
+								if ( ! empty( $replica['password'] ) ) {
+									$tmp_replica->auth( $replica['password'] );
+								}
+								$tmp_replica->select( $database );
+								if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
+									$tmp_replica->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY );
+								} else {
+									$tmp_replica->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_PHP );
+								}
+								$this->redis_replica = $tmp_replica;
+							}
+						} catch ( \Exception $e ) {
+							$this->redis_replica = null;
+						}
+					}
 				}
 			} catch ( \Exception $e ) {
 				// Fallback to internal cache variable if Redis fails.
 				$this->redis_connected = false;
+				$this->redis_replica   = null;
 			}
 		}
 
@@ -390,7 +481,8 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 				return $this->cache[ $local_key ];
 			}
 
-			$value = $this->redis->get( $local_key );
+			$redis_instance = $this->redis_replica ? $this->redis_replica : $this->redis;
+			$value          = $redis_instance->get( $local_key );
 
 			if ( false === $value ) {
 				$found = false;
@@ -400,6 +492,90 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 			$found                     = true;
 			$this->cache[ $local_key ] = $value;
 			return $value;
+		}
+
+		/**
+		 * Retrieves multiple values from the cache.
+		 *
+		 * @param array  $keys  Array of keys.
+		 * @param string $group Cache group.
+		 * @param bool   $force Force from Redis.
+		 * @return array Array of return values.
+		 */
+		public function get_multiple( $keys, $group = 'default', $force = false ) {
+			$values = array();
+			if ( empty( $keys ) ) {
+				return $values;
+			}
+
+			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
+				foreach ( $keys as $key ) {
+					$local_key = $this->get_key( $key, $group );
+					if ( isset( $this->cache[ $local_key ] ) ) {
+						$values[ $key ] = $this->cache[ $local_key ];
+					} else {
+						$values[ $key ] = false;
+					}
+				}
+				return $values;
+			}
+
+			$formatted_keys = array();
+			foreach ( $keys as $key ) {
+				$formatted_keys[] = $this->get_key( $key, $group );
+			}
+
+			$redis_instance = $this->redis_replica ? $this->redis_replica : $this->redis;
+			$redis_values   = $redis_instance->mGet( $formatted_keys );
+
+			foreach ( $keys as $index => $key ) {
+				if ( isset( $redis_values[ $index ] ) && false !== $redis_values[ $index ] ) {
+					$local_key                 = $formatted_keys[ $index ];
+					$this->cache[ $local_key ] = $redis_values[ $index ];
+					$values[ $key ]            = $redis_values[ $index ];
+				} else {
+					$values[ $key ] = false;
+				}
+			}
+
+			return $values;
+		}
+
+		/**
+		 * Sets multiple values to the cache.
+		 *
+		 * @param array  $data   Array of keys and values.
+		 * @param string $group  Cache group.
+		 * @param int    $expire Expiration.
+		 * @return bool True on success.
+		 */
+		public function set_multiple( $data, $group = 'default', $expire = 0 ) {
+			if ( empty( $data ) ) {
+				return true;
+			}
+
+			$formatted_data = array();
+			foreach ( $data as $key => $value ) {
+				$local_key                    = $this->get_key( $key, $group );
+				$this->cache[ $local_key ]    = $value;
+				$formatted_data[ $local_key ] = $value;
+			}
+
+			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
+				return true;
+			}
+
+			if ( $expire > 0 ) {
+				// We must use a pipeline for mSet with expiration.
+				$pipeline = $this->redis->multi( \Redis::PIPELINE );
+				foreach ( $formatted_data as $k => $v ) {
+					$pipeline->setex( $k, $expire, $v );
+				}
+				$pipeline->exec();
+				return true;
+			}
+
+			return $this->redis->mSet( $formatted_data );
 		}
 
 		/**
@@ -418,6 +594,32 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 			}
 
 			return (bool) $this->redis->del( $local_key );
+		}
+
+		/**
+		 * Deletes multiple values from the cache.
+		 *
+		 * @param array  $keys  Array of keys.
+		 * @param string $group Cache group.
+		 * @return bool True on success.
+		 */
+		public function delete_multiple( $keys, $group = 'default' ) {
+			if ( empty( $keys ) ) {
+				return true;
+			}
+
+			$formatted_keys = array();
+			foreach ( $keys as $key ) {
+				$local_key = $this->get_key( $key, $group );
+				unset( $this->cache[ $local_key ] );
+				$formatted_keys[] = $local_key;
+			}
+
+			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
+				return true;
+			}
+
+			return (bool) $this->redis->del( $formatted_keys );
 		}
 
 		/**
@@ -445,6 +647,10 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 
 		/**
 		 * Flushes the memory.
+		 *
+		 * WARNING: This clears the ENTIRE Redis database ($this->redis->flushDb()),
+		 * which may be unsafe in shared Redis environments. It does not just delete
+		 * keys with this site's prefix.
 		 *
 		 * @return bool True on success.
 		 */

@@ -86,7 +86,9 @@ const ObjectCache = ( { options = {} } ) => {
 			}
 			setActionMsg( {
 				type: 'success',
-				text: res || 'Action successful.',
+				text:
+					res?.message ||
+					( typeof res === 'string' ? res : 'Action successful.' ),
 			} );
 		} catch ( error ) {
 			setActionMsg( {
@@ -213,6 +215,55 @@ const ObjectCache = ( { options = {} } ) => {
 					) }
 				</div>
 			</div>
+
+			{ cacheStatus.telemetry && cacheStatus.enabled && (
+				<div
+					className="feature-card"
+					style={ { marginBottom: '20px' } }
+				>
+					<h3>
+						<FontAwesomeIcon icon={ faServer } />{ ' ' }
+						{ translations.telemetryData || 'Live Telemetry' }
+					</h3>
+					<div
+						style={ {
+							display: 'grid',
+							gridTemplateColumns: '1fr 1fr',
+							gap: '15px',
+							marginTop: '15px',
+						} }
+					>
+						<div>
+							<strong>Uptime:</strong>{ ' ' }
+							{ cacheStatus.telemetry.uptime_in_days } days
+						</div>
+						<div>
+							<strong>Connected Clients:</strong>{ ' ' }
+							{ cacheStatus.telemetry.connected_clients }
+						</div>
+						<div>
+							<strong>Memory Used:</strong>{ ' ' }
+							{ cacheStatus.telemetry.used_memory_human }
+						</div>
+						<div>
+							<strong>Peak Memory:</strong>{ ' ' }
+							{ cacheStatus.telemetry.used_memory_peak_human }
+						</div>
+						<div>
+							<strong>Total Connections:</strong>{ ' ' }
+							{ cacheStatus.telemetry.total_connections_received }
+						</div>
+						<div>
+							<strong>Keyspace Hits:</strong>{ ' ' }
+							{ cacheStatus.telemetry.keyspace_hits }
+						</div>
+						<div>
+							<strong>Keyspace Misses:</strong>{ ' ' }
+							{ cacheStatus.telemetry.keyspace_misses }
+						</div>
+					</div>
+				</div>
+			) }
 
 			<div className="feature-card">
 				<h3>

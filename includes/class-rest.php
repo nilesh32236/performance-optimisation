@@ -603,6 +603,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( is_wp_error( $result ) ) {
 					return $this->send_response( null, false, 400, $result->get_error_message() );
 				}
+
+				if ( true !== $result ) {
+					return $this->send_response( null, false, 400, __( 'Connection failed.', 'performance-optimisation' ) );
+				}
+
 				return $this->send_response( true, true, 200, __( 'Connection successful.', 'performance-optimisation' ) );
 			}
 
