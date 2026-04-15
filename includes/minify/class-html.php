@@ -119,10 +119,19 @@ class HTML {
 		$content_aray = $this->extract_and_preserve_scripts_template( $html );
 		$html         = $content_aray[0];
 		$scripts      = $content_aray[1];
-		$html         = $this->minify_inline_css( $html );
-		$html         = $this->minify_inline_js( $html );
 
-		$html = $this->html_min->minify( $html );
+		if ( isset( $this->options['file_optimisation']['minifyInlineCSS'] ) && (bool) $this->options['file_optimisation']['minifyInlineCSS'] ) {
+			$html = $this->minify_inline_css( $html );
+		}
+
+		if ( ( isset( $this->options['file_optimisation']['minifyInlineJS'] ) && (bool) $this->options['file_optimisation']['minifyInlineJS'] ) || 
+			 ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) ) {
+			$html = $this->minify_inline_js( $html );
+		}
+
+		if ( isset( $this->options['file_optimisation']['minifyHTML'] ) && (bool) $this->options['file_optimisation']['minifyHTML'] ) {
+			$html = $this->html_min->minify( $html );
+		}
 
 		if ( ! empty( $scripts ) ) {
 			$html = $this->restore_preserved_scripts_template( $html, $scripts );
@@ -319,14 +328,19 @@ class HTML {
 			}
 		}
 
-		try {
-			$js_minifier = new JSMinifier( $content );
-			return '<script' . $attributes . '>' . $js_minifier->minify() . '</script>';
-		} catch ( \Exception $e ) {
-			// Return original content if there's an error.
-			return '<script' . $attributes . '>' . $content . '</script>';
+		if ( isset( $this->options['file_optimisation']['minifyInlineJS'] ) && (bool) $this->options['file_optimisation']['minifyInlineJS'] ) {
+			try {
+				$js_minifier = new JSMinifier( $content );
+				return '<script' . $attributes . '>' . $js_minifier->minify() . '</script>';
+			} catch ( \Exception $e ) {
+				// Return original content if there's an error.
+				return '<script' . $attributes . '>' . $content . '</script>';
+			}
 		}
+
+		return '<script' . $attributes . '>' . $content . '</script>';
 	}
+
 
 	/**
 	 * Safely JSON encode content.
