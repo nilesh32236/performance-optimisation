@@ -299,7 +299,7 @@ const DatabaseCleanup = () => {
 				<LoadingSubmitButton
 					className="submit-button"
 					style={ {
-						background: '#fff',
+						background: 'var(--wppo-bg-card)',
 						color: 'var(--wppo-primary)',
 						transform: 'none',
 					} }
