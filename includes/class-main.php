@@ -660,7 +660,7 @@ class Main {
 			$delay_js         = isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'];
 
 			if ( $lazy_load_images || $delay_js ) {
-				wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'src/lazyload.js', array(), WPPO_VERSION, true );
+				wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, true );
 			}
 		}
 	}

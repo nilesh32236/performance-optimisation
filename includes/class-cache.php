@@ -289,8 +289,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
 			$buffer = $image_optimisation->add_delay_load_img( $buffer );
+			$buffer = $image_optimisation->lazy_load_videos( $buffer );
 
-			if ( isset( $this->options['file_optimisation']['minifyHTML'] ) && (bool) $this->options['file_optimisation']['minifyHTML'] ) {
+			$file_opts         = $this->options['file_optimisation'] ?? array();
+			$needs_minify_pass = ! empty( $file_opts['minifyHTML'] )
+				|| ! empty( $file_opts['delayJS'] )
+				|| ! empty( $file_opts['minifyInlineCSS'] )
+				|| ! empty( $file_opts['minifyInlineJS'] );
+
+			if ( $needs_minify_pass ) {
 				$buffer = $this->minify_buffer( $buffer );
 			}
 
