@@ -2,9 +2,29 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
-## [1.2.3] - 2026-04-14
+## [1.3.0] - 2026-04-15
+
+### Added
+
+- **Core Tweaks:** A new section under File Optimization to remove WordPress bloat (Emojis, Embeds, Dashicons, XML-RPC) and control Heartbeat API limits.
+- **Database Automation:** Active WP-Cron scheduling for Database cleanups (Daily, Weekly, Monthly) with granular controls for minimum post revisions and maximum revision age.
+- **Advanced Preloading:** Injected `fetchpriority` support to preload links indicating critical assets.
+- **Web Font Optimization:** Automatically injects `font-display: swap` into CSS payloads to eliminate render-blocking text.
+- **Lazy Loading Enhancements:** Implemented an active `MutationObserver` to track and lazy-load dynamically generated DOM content and added improved `<picture>` element support.
+- **Htaccess Hardening:** Extended server-level cache expiration and Deflate/Gzip compression rules for various asset MIME types.
+- **Video Lazy Loading:** Added logic to exclude specific self-hosted videos from lazy-loading routines.
+
+### Changed
+
+- **Admin UI Theme Consistency:** Substantially refined UI aesthetics. Replaced hardcoded variables with native WP CSS colors and added missing option descriptions across all toggles.
+- **Conditional Minification Processes:** Added smart logic toggles that conditionally skip the heavy HTML, CSS, and JS minification runs if those settings aren't enabled.
+- **Image Observer Stability:** Refactored intersection observer fallbacks for non-image `iframe` lazy loading blocks.
 
 ### Fixed
+
+- **WPCS Compliance:** Mitigated false-positive SQL placeholder warnings (`WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare`) in database garbage collection routines.
+
+## [1.2.3] - 2026-04-14
 
 - **Stability:** Fixed a fatal error where `Advanced_Cache_Handler` was not found during activation/admin notices.
 - **Performance:** Refactored `Advanced_Cache_Handler` to use lazy loading ("require when needed") to reduce memory footprint.

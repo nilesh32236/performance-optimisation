@@ -38,20 +38,27 @@ Whether aiming for a perfect PageSpeed score or a seamless user experience, this
 - **Asset Minification:** Minify JavaScript, CSS, and HTML payloads.
 - **Combine & Exclude:** Combine CSS files and define strict exclusion rules to prevent visual breakage.
 - **Render-Blocking Resolution:** Defer or delay JavaScript execution.
+- **Core Tweaks:** Reduce native WordPress bloat by disabling Emojis, Embeds, frontend Dashicons, XML-RPC, and adjusting Heartbeat API frequency.
 - **E-Commerce Optimization (opt-in):** Remove WooCommerce CSS and JS on non-store pages when you enable it; the UI warns you to test cart, checkout, and product flows.
 
 ### Advanced Preloading Settings
 
 - **Cache Generation:** Enable cache preloading to proactively generate static HTML and GZIP files.
 - **Network Routing:** Add preconnect origins and prefetch DNS domains for faster third-party resource loading.
-- **Resource Preloading:** Prioritize the loading of fonts, critical CSS, and specific images.
+- **Resource Preloading:** Prioritize the loading of fonts, critical CSS, and specific images (now injected with `fetchpriority` hints).
 - **Dynamic Feature Images:** Preload feature images for specific post types with configurable exclusions.
 
 ### Image Optimization Settings
 
 - **Next-Gen Formats:** Automatically convert images to highly compressed WebP or AVIF formats.
-- **Smart Lazy Loading:** Defer offscreen images utilizing lightweight SVG placeholders for smoother rendering.
-- **Exclusion Rules:** Limit preloaded image sizes and exclude specific images from lazy loading rules.
+- **Smart Lazy Loading:** Defer offscreen images and `<video>` tags utilizing lightweight SVG placeholders and an active `MutationObserver` to track dynamically injected DOM content.
+- **Exclusion Rules:** Limit preloaded image sizes and exclude specific media from lazy loading rules.
+
+### Database Optimization
+
+- **Database Cleanup:** Instantly strip out orphaned metadata, spam comments, and expired transients.
+- **Automated Scheduling:** Automatically run cleanup routines Daily, Weekly, or Monthly via WP-Cron.
+- **Advanced Revision Control:** Retain precise post revisions based on either their maximum age or minimum number to keep per-post.
 
 ### Administrative Tools
 
@@ -144,7 +151,7 @@ Current version and scripts are defined in the repo; for example:
 ```json
 {
   "name": "performance-optimisation",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "scripts": {
     "build": "wp-scripts build",
     "start": "wp-scripts start"

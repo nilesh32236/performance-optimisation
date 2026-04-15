@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.2.3
+Stable tag: 1.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -25,9 +25,11 @@ Performance Optimisation helps you speed up your site with cache management, Jav
  - Dashboard with an overview of cache, JavaScript, CSS, and image optimisation status.
  - Cache management tools, including size display and a "Clear Cache" button.
  - JavaScript & CSS Optimization: Minify, combine, defer/delay (opt-in), and exclude specific files.
+ - Core Tweaks: Safely disable Core bloat (Emojis, Embeds, Dashicons, XML-RPC, Heartbeat API).
  - Image optimization: Convert images to WebP and AVIF formats.
  - Preload settings for cache, fonts, DNS, and images.
  - Advanced lazy loading options.
+ - Database Optimization: Clean database bloat manually or schedule automated cleanups (Daily/Weekly/Monthly) with granular control over post revisions.
  - Import/export plugin settings.
 
 == Installation ==
@@ -48,6 +50,7 @@ Performance Optimisation helps you speed up your site with cache management, Jav
  - Minify JavaScript, CSS, and HTML.  
  - Combine CSS and exclude specific files.  
  - Defer and delay JavaScript loading.  
+ - **Core Tweaks:** Disable emojis, embeds, XML-RPC, and control Heartbeat limits.
 
 3. **Preload Settings**  
  - Enable cache preloading.  
@@ -59,7 +62,12 @@ Performance Optimisation helps you speed up your site with cache management, Jav
  - Convert images to WebP/AVIF formats and exclude specific images.  
  - Preload feature images for selected post types.  
 
-5. **Tools**  
+5. **Database Cleanup**  
+ - Schedule automatic cleanup for revisions, auto-drafts, and transients.
+ - Keep recent revisions based on age or maximum count.
+ - Clean all overhead in one click.
+
+6. **Tools**  
  - Import/export plugin settings for quick setup.
 
 == Composer Libraries ==
@@ -101,10 +109,23 @@ Composer configuration:
 2. **File Optimization**: Minification settings for JavaScript, CSS, and HTML with Basic, Advanced, E-commerce, and Network tab configurations.
 3. **Preload Settings**: Granular controls for cache warm-up, connection prediction (DNS/Preconnect), and critical asset prioritization (Fonts/CSS).
 4. **Image Optimization**: Automated Next-Gen format conversion (WebP/AVIF), smart lazy loading with SVG placeholders, and intelligent LCP preloading.
-5. **Database Optimization**: Safe maintenance tools to clean post revisions, auto-drafts, spam comments, and expired transients.
-6. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
+5. **Database Optimization**: Safe manual and automated maintenance tools with advanced rules to keep specific historical revisions.
+6. **Core Tweaks**: Advanced interface for controlling Heartbeat API frequency and stripping unneeded core WordPress bloat.
+7. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
 
 == Changelog ==
+
+= 1.3.0 (2026-04-15) =
+* New: Core Tweaks section to remove WordPress bloat (Emojis, Embeds, Dashicons) and control Heartbeat limits.
+* New: Active WP-Cron scheduling for Database cleanups (Daily, Weekly, Monthly) with precise age/revision limits.
+* New: Injected `fetchpriority` support to preload links for faster asset transmission.
+* New: Implemented an active MutationObserver to track and lazy-load dynamically generated DOM content.
+* New: Extended server-level cache expiration and Deflate/Gzip compression rules within `.htaccess`.
+* New: Added logic to exclude specific self-hosted videos from lazy-loading routines.
+* Improvement: Automatically inject `font-display: swap` into CSS payloads to eliminate render-blocking text.
+* Improvement: Substantially refined UI aesthetics by migrating to native WP CSS variables and expanding component descriptions.
+* Improvement: Added logic toggles to conditionally skip heavy HTML, CSS, and JS minification overhead.
+* Fix: Mitigated false-positive SQL placeholder warnings (`WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare`) in database garbage collection routines.
 
 = 1.2.3 (2026-04-14) =
 * Fix: Resolved fatal error where `Advanced_Cache_Handler` was not found during activation or admin notice checks.
@@ -200,6 +221,9 @@ Yes, lazy loading can be enabled in the Image Optimisation Settings tab. You can
 Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.3.0 (2026-04-15) =
+Feature release introducing automated database optimization scheduling, comprehensive "Core Tweaks", MutationObserver-based lazy loading, and numerous systemic UI/UX improvements utilizing native WordPress CSS schemas.
 
 = 1.2.3 (2026-04-14) =
 Stability and performance release: Fixed a fatal error during activation/admin notices, implemented lazy loading for cache handlers to reduce overhead, and aligned documentation with official directory limits.
