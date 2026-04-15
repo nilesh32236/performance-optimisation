@@ -140,6 +140,7 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
 		if ( is_admin() ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
