@@ -92,7 +92,7 @@ const ImageOptimization = ( { options = {} } ) => {
 					textareaPlaceholder={ translations.excludeImages }
 					textareaValue={ settings.excludeImages }
 					onTextareaChange={ handleChange( setSettings ) }
-					description={ translations.lazyLoadImagesDesc }
+					description={ translations.lazyLoadImagesDesc || 'Delay loading of images until they scroll into view to reduce initial page weight.' }
 				>
 					{ settings.lazyLoadImages && (
 						<>
@@ -153,7 +153,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									onChange={ handleChange( setSettings ) }
 									name="replacePlaceholderWithSVG"
 									description={
-										translations.replaceImgToSVGDesc
+										translations.replaceImgToSVGDesc || 'Show a blurry lightweight SVG placeholder while the original image loads.'
 									}
 								/>
 							</div>
@@ -180,7 +180,7 @@ const ImageOptimization = ( { options = {} } ) => {
 					textareaPlaceholder={ translations.excludeConvertImages }
 					textareaValue={ settings.excludeConvertImages }
 					onTextareaChange={ handleChange( setSettings ) }
-					description={ translations.convertImgDesc }
+					description={ translations.convertImgDesc || 'Serve next-gen image formats like WebP for supported browsers.' }
 				>
 					{ settings.convertImg && (
 						<>
@@ -246,7 +246,7 @@ const ImageOptimization = ( { options = {} } ) => {
 					textareaPlaceholder={ translations.preloadFrontPageImgUrl }
 					textareaValue={ settings.preloadFrontPageImagesUrls }
 					onTextareaChange={ handleChange( setSettings ) }
-					description={ translations.preloadFrontPageImgDesc }
+					description={ translations.preloadFrontPageImgDesc || 'Prioritize loading of critical images on the homepage.' }
 				/>
 
 				<div style={ { marginTop: '32px' } }>
@@ -255,7 +255,7 @@ const ImageOptimization = ( { options = {} } ) => {
 						checked={ settings.preloadPostTypeImage }
 						onChange={ handleChange( setSettings ) }
 						name="preloadPostTypeImage"
-						description={ translations.preloadPostTypeImgDesc }
+						description={ translations.preloadPostTypeImgDesc || 'Prioritize loading of the first featured image on single posts.' }
 					>
 						{ settings.preloadPostTypeImage && (
 							<div

@@ -296,6 +296,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			<form
 				onSubmit={ onSubmitSettings }
 				className="settings-form fadeIn"
+				style={ { marginBottom: '40px' } }
 			>
 				<div className="settings-header-flex">
 					<h2>
@@ -392,7 +393,6 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					style={ {
 						display: 'flex',
 						justifyContent: 'flex-end',
-						marginBottom: '40px',
 					} }
 				>
 					<LoadingSubmitButton
@@ -450,7 +450,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					<LoadingSubmitButton
 						className="submit-button"
 						style={ {
-							background: '#fff',
+							background: 'var(--wppo-bg-card)',
 							color: 'var(--wppo-primary)',
 							transform: 'none',
 						} }
