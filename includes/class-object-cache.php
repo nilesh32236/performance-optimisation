@@ -104,7 +104,7 @@ class Object_Cache {
 					}
 				}
 			} catch ( \Exception $e ) {
-				// Silent fail for telemetry.
+				$status['telemetry_error'] = $e->getMessage();
 			}
 		}
 

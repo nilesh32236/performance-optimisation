@@ -342,7 +342,7 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 					}
 					$this->redis->select( $database );
 					if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
-						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY ); // Optimize serialization if igbinary is available.
+						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY ); // Optimize serialization if igbinary is available..
 					} else {
 						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_PHP );
 					}
@@ -350,7 +350,7 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 
 					// Connect Replica if available.
 					if ( isset( $config['replicas'] ) && is_array( $config['replicas'] ) && ! empty( $config['replicas'] ) ) {
-						// Grab a random replica
+						// Grab a random replica.
 						$replica = $config['replicas'][ array_rand( $config['replicas'] ) ];
 						$r_host  = isset( $replica['host'] ) ? $replica['host'] : '127.0.0.1';
 						$r_port  = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
@@ -511,7 +511,7 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
 				foreach ( $keys as $key ) {
 					$local_key = $this->get_key( $key, $group );
-					if ( isset( $this->cache[ $local_key ] ) ) {
+					if ( ! $force && isset( $this->cache[ $local_key ] ) ) {
 						$values[ $key ] = $this->cache[ $local_key ];
 					} else {
 						$values[ $key ] = false;
@@ -520,15 +520,27 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 				return $values;
 			}
 
+			// Exclude keys already in local cache if not forcing.
+			$keys_to_fetch  = array();
 			$formatted_keys = array();
 			foreach ( $keys as $key ) {
-				$formatted_keys[] = $this->get_key( $key, $group );
+				$local_key = $this->get_key( $key, $group );
+				if ( ! $force && isset( $this->cache[ $local_key ] ) ) {
+					$values[ $key ] = $this->cache[ $local_key ];
+				} else {
+					$keys_to_fetch[]  = $key;
+					$formatted_keys[] = $local_key;
+				}
+			}
+
+			if ( empty( $keys_to_fetch ) ) {
+				return $values;
 			}
 
 			$redis_instance = $this->redis_replica ? $this->redis_replica : $this->redis;
 			$redis_values   = $redis_instance->mGet( $formatted_keys );
 
-			foreach ( $keys as $index => $key ) {
+			foreach ( $keys_to_fetch as $index => $key ) {
 				if ( isset( $redis_values[ $index ] ) && false !== $redis_values[ $index ] ) {
 					$local_key                 = $formatted_keys[ $index ];
 					$this->cache[ $local_key ] = $redis_values[ $index ];
