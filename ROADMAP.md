@@ -39,7 +39,7 @@ We use **Semantic Versioning (SemVer)**:
 
 ---
 
-## 🎯 Version 1.3.0: Object Caching (Redis/Memcached)
+## 🎯 Upcoming: Object Caching (Redis/Memcached)
 **Focus:** Minimizing Database overhead for logged-in users and dynamic sites.
 
 ### 1. Architecture: The `object-cache.php` Drop-in
@@ -53,7 +53,7 @@ We use **Semantic Versioning (SemVer)**:
 
 ---
 
-## 🎯 Version 1.4.0: Advanced Web Vitals (Technical SEO)
+## 🎯 Upcoming: Advanced Web Vitals (Technical SEO)
 **Focus:** Eliminating render-blocking resources and domain lookups.
 
 ### 1. Localize External Assets (Google Fonts/Analytics)
@@ -67,7 +67,7 @@ We use **Semantic Versioning (SemVer)**:
 
 ---
 
-## 🎯 Version 1.5.0: Enterprise & Ecosystem
+## 🎯 Upcoming: Enterprise & Ecosystem
 **Focus:** Scalability and professional environment management.
 
 ### 1. Cloudflare Dashboard Integration

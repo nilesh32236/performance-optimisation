@@ -542,6 +542,7 @@ class Main {
 					'imgOptimizationsettings'  => __( 'Image Optimization Settings', 'performance-optimisation' ),
 					'lazyLoadImages'           => __( 'Lazy Load Images', 'performance-optimisation' ),
 					'excludeImages'            => __( 'Exclude specific image URLs', 'performance-optimisation' ),
+					'excludeVideos'            => __( 'Exclude specific video URLs', 'performance-optimisation' ),
 					'lazyLoadImagesDesc'       => __( 'Enable lazy loading for images to improve the initial load speed by loading images only when they appear in the viewport.', 'performance-optimisation' ),
 					'excludeFistImages'        => __( 'Enter number you want to exclude first', 'performance-optimisation' ),
 					'replaceImgToSVG'          => __( 'Replace Low-Resolution Placeholder with SVG', 'performance-optimisation' ),

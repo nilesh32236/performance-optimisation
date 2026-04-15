@@ -18,6 +18,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		lazyLoadImages: false,
 		excludeFistImages: 0,
 		excludeImages: '',
+		excludeVideos: '',
 		convertImg: false,
 		conversionFormat: 'webp',
 		excludeConvertImages: '',
@@ -40,6 +41,7 @@ const ImageOptimization = ( { options = {} } ) => {
 	const excludeSizeId = useId();
 	const postTypeCheckboxPrefix = useId();
 	const excludeFirstImagesId = useId();
+	const excludeVideosId = useId();
 	const excludePostTypeUrlsId = useId();
 
 	const togglePostType = ( postType ) => {
@@ -122,6 +124,24 @@ const ImageOptimization = ( { options = {} } ) => {
 										placeholder="e.g. 2"
 										name="excludeFistImages"
 										value={ settings.excludeFistImages }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</div>
+								<div className="setting-group">
+									<label
+										className="field-label"
+										htmlFor={ excludeVideosId }
+									>
+										{ translations.excludeVideos }
+									</label>
+									<textarea
+										id={ excludeVideosId }
+										className="text-area-field"
+										placeholder={
+											translations.excludeVideos
+										}
+										name="excludeVideos"
+										value={ settings.excludeVideos }
 										onChange={ handleChange( setSettings ) }
 									/>
 								</div>

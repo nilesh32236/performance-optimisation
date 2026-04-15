@@ -207,7 +207,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$attributes['fetchpriority'] = esc_attr( $fetchpriority );
 			}
 
-			$link_tag = '<link ' . implode( ' ', array_map( fn ( $k, $v ) => esc_attr( $k ) . '="' . esc_attr( $v ) . '"', array_keys( $attributes ), $attributes ) ) . '>';
+			$link_tag = '<link ' . implode( ' ', array_map( fn ( $k, $v ) => $k . '="' . $v . '"', array_keys( $attributes ), $attributes ) ) . '>';
 
 			$allowed_html = array(
 				'link' => array(

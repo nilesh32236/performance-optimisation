@@ -552,10 +552,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( ! $has_width || ! $has_height ) {
 				$local_path = Util::get_local_path( $original_src );
 
-				if ( ! empty( $local_path ) && file_exists( $local_path ) ) {
-					$size = @getimagesize( $local_path );
+				if ( ! empty( $local_path ) && file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
+					$size = getimagesize( $local_path );
 
-					if ( $size ) {
+					if ( is_array( $size ) ) {
 						if ( ! $has_width ) {
 							$img_tag = preg_replace( '/<img\b/i', '<img width="' . (int) $size[0] . '"', $img_tag );
 						}
@@ -944,8 +944,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// Process inner <source src="..."> tags.
 					$inner_html = preg_replace( '#(<source\b[^>]*)\bsrc=["\']([^"\']+)["\']#i', '$1 data-src="$2"', $inner_html );
 
+					$had_autoplay = preg_match( '#\bautoplay\b#i', $attributes );
+
 					// Remove autoplay to prevent the browser from trying to play immediately.
-					$attributes = preg_replace( '#\bautoplay\b#i', '', $attributes );
+					$attributes = preg_replace( '#\bautoplay(=["\'][^"\']*["\'])?#i', '', $attributes );
+
+					if ( $had_autoplay ) {
+						$attributes .= ' data-wppo-autoplay="1"';
+					}
 
 					// Add preload="none" if not already present.
 					if ( false === stripos( $attributes, 'preload' ) ) {

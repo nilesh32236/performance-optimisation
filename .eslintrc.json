@@ -5,11 +5,14 @@
     "wppoObject": "readonly",
     "FileReader": "readonly",
     "IntersectionObserver": "readonly",
+    "MutationObserver": "readonly",
+    "ScrollTrigger": "readonly",
     "jQuery": "readonly",
     "alert": "readonly"
   },
   "env": {
-    "jest": true
+    "jest": true,
+    "browser": true
   },
   "rules": {
     "no-console": ["error", { "allow": ["error", "warn"] }]

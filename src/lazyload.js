@@ -89,8 +89,12 @@ async function loadScripts() {
 		if ( typeof ScrollTrigger !== 'undefined' ) {
 			ScrollTrigger.refresh();
 		} else if ( window.gsap && window.gsap.utils ) {
-			const st = window.gsap.plugins ? window.gsap.plugins.scrollTrigger : null;
-			if ( st && st.refresh ) st.refresh();
+			const st = window.gsap.plugins
+				? window.gsap.plugins.scrollTrigger
+				: null;
+			if ( st && st.refresh ) {
+				st.refresh();
+			}
 		}
 
 		setTimeout( () => {
@@ -125,16 +129,21 @@ let globalObserver = null;
 const observedElements = new WeakSet();
 
 const observeElement = ( el ) => {
-	if ( ! globalObserver || ! el ) return;
+	if ( ! globalObserver || ! el ) {
+		return;
+	}
 
-	if ( observedElements.has( el ) ) return;
+	if ( observedElements.has( el ) ) {
+		return;
+	}
 
 	if (
-		( el.tagName === 'IMG' && ( el.hasAttribute( 'data-src' ) || el.hasAttribute( 'data-srcset' ) ) ) ||
+		( el.tagName === 'IMG' &&
+			( el.hasAttribute( 'data-src' ) ||
+				el.hasAttribute( 'data-srcset' ) ) ) ||
 		( el.tagName === 'IFRAME' && el.hasAttribute( 'data-src' ) ) ||
 		( el.tagName === 'VIDEO' && el.classList.contains( 'wppo-lazy-video' ) )
 	) {
-		console.log( '[WPPO Lazyload] Observed:', el.tagName, el.dataset.src || el.src );
 		observedElements.add( el );
 		globalObserver.observe( el );
 	}
@@ -148,7 +157,6 @@ const loadImages = () => {
 					entries.forEach( ( entry ) => {
 						if ( entry.isIntersecting ) {
 							const el = entry.target;
-							console.log( '[WPPO Lazyload] Intersection Triggered for:', el.tagName, el.src || el.dataset.src );
 
 							let isPicture = false;
 
@@ -156,37 +164,35 @@ const loadImages = () => {
 								const parent = el.parentNode;
 								if ( parent && parent.tagName === 'PICTURE' ) {
 									isPicture = true;
-									console.log( '[WPPO Lazyload] Processing Picture Sources...' );
-									const sources = parent.querySelectorAll( 'source' );
+									const sources =
+										parent.querySelectorAll( 'source' );
 									sources.forEach( ( s ) => {
 										if ( s.hasAttribute( 'data-sizes' ) ) {
-											console.log( ' - Source sizes swap:', s.dataset.sizes );
-											s.sizes = s.getAttribute( 'data-sizes' );
+											s.sizes =
+												s.getAttribute( 'data-sizes' );
 											s.removeAttribute( 'data-sizes' );
 										}
 										if ( s.hasAttribute( 'data-srcset' ) ) {
-											console.log( ' - Source srcset swap:', s.dataset.srcset );
-											s.srcset = s.getAttribute( 'data-srcset' );
+											s.srcset =
+												s.getAttribute( 'data-srcset' );
 											s.removeAttribute( 'data-srcset' );
 										}
 									} );
 								}
 
 								if ( el.hasAttribute( 'data-sizes' ) ) {
-									console.log( ' - Img sizes swap:', el.dataset.sizes );
 									el.sizes = el.getAttribute( 'data-sizes' );
 									el.removeAttribute( 'data-sizes' );
 								}
 
 								if ( el.hasAttribute( 'data-src' ) ) {
-									console.log( ' - Img src swap:', el.dataset.src );
 									el.src = el.getAttribute( 'data-src' );
 									el.removeAttribute( 'data-src' );
 								}
 
 								if ( el.hasAttribute( 'data-srcset' ) ) {
-									console.log( ' - Img srcset swap:', el.dataset.srcset );
-									el.srcset = el.getAttribute( 'data-srcset' );
+									el.srcset =
+										el.getAttribute( 'data-srcset' );
 									el.removeAttribute( 'data-srcset' );
 								}
 
@@ -206,14 +212,16 @@ const loadImages = () => {
 									el.src = el.getAttribute( 'data-src' );
 									el.removeAttribute( 'data-src' );
 								}
-								el.querySelectorAll( 'source[data-src]' ).forEach(
-									( s ) => {
-										s.src = s.getAttribute( 'data-src' );
-										s.removeAttribute( 'data-src' );
-									}
-								);
+								el.querySelectorAll(
+									'source[data-src]'
+								).forEach( ( s ) => {
+									s.src = s.getAttribute( 'data-src' );
+									s.removeAttribute( 'data-src' );
+								} );
 								el.load();
-								el.play().catch( () => {} );
+								if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+									el.play().catch( () => {} );
+								}
 							}
 
 							globalObserver.unobserve( el );
@@ -229,10 +237,16 @@ const loadImages = () => {
 				mutations.forEach( ( mutation ) => {
 					mutation.addedNodes.forEach( ( node ) => {
 						if ( node.nodeType === 1 ) {
-							if ( node.tagName === 'IMG' || node.tagName === 'IFRAME' || node.tagName === 'VIDEO' ) {
+							if (
+								node.tagName === 'IMG' ||
+								node.tagName === 'IFRAME' ||
+								node.tagName === 'VIDEO'
+							) {
 								observeElement( node );
 							}
-							node.querySelectorAll( 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video' ).forEach( ( child ) => {
+							node.querySelectorAll(
+								'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+							).forEach( ( child ) => {
 								observeElement( child );
 							} );
 						}
@@ -246,33 +260,76 @@ const loadImages = () => {
 			} );
 
 			// Periodic Safety Scan for unobserved dynamic content
-			setInterval( () => {
-				document.querySelectorAll( 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video' ).forEach( ( el ) => {
-					observeElement( el );
+			const intervalId = setInterval( () => {
+				const elements = document.querySelectorAll(
+					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+				);
+				let unobservedCount = 0;
+				elements.forEach( ( el ) => {
+					if ( ! observedElements.has( el ) ) {
+						observeElement( el );
+						unobservedCount++;
+					}
 				} );
+				if ( unobservedCount === 0 ) {
+					clearInterval( intervalId );
+				}
 			}, 2000 );
 		}
 
-		document.querySelectorAll( 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video' ).forEach( ( el ) => {
-			observeElement( el );
-		} );
-
+		document
+			.querySelectorAll(
+				'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+			)
+			.forEach( ( el ) => {
+				observeElement( el );
+			} );
 	} else {
 		const lazyLoadFallback = () => {
-			const lazyElements = document.querySelectorAll( 'img[data-src], img[data-srcset], iframe[data-src]' );
+			const lazyElements = document.querySelectorAll(
+				'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+			);
 			lazyElements.forEach( ( el ) => {
 				if ( isElementInViewport( el ) ) {
-					if ( el.hasAttribute( 'data-sizes' ) ) {
-						el.sizes = el.getAttribute( 'data-sizes' );
-						el.removeAttribute( 'data-sizes' );
-					}
-					if ( el.hasAttribute( 'data-src' ) ) {
-						el.src = el.getAttribute( 'data-src' );
-						el.removeAttribute( 'data-src' );
-					}
-					if ( el.hasAttribute( 'data-srcset' ) ) {
-						el.srcset = el.getAttribute( 'data-srcset' );
-						el.removeAttribute( 'data-srcset' );
+					if ( el.tagName === 'VIDEO' ) {
+						if ( el.hasAttribute( 'data-poster' ) ) {
+							el.poster = el.getAttribute( 'data-poster' );
+							el.removeAttribute( 'data-poster' );
+						}
+						if ( el.hasAttribute( 'data-src' ) ) {
+							el.src = el.getAttribute( 'data-src' );
+							el.removeAttribute( 'data-src' );
+						}
+						el.querySelectorAll(
+							'source[data-src], source[data-srcset]'
+						).forEach( ( s ) => {
+							if ( s.hasAttribute( 'data-src' ) ) {
+								s.src = s.getAttribute( 'data-src' );
+								s.removeAttribute( 'data-src' );
+							}
+							if ( s.hasAttribute( 'data-srcset' ) ) {
+								s.srcset = s.getAttribute( 'data-srcset' );
+								s.removeAttribute( 'data-srcset' );
+							}
+						} );
+						el.load();
+						if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+							el.play().catch( () => {} );
+						}
+						el.classList.remove( 'wppo-lazy-video' );
+					} else {
+						if ( el.hasAttribute( 'data-sizes' ) ) {
+							el.sizes = el.getAttribute( 'data-sizes' );
+							el.removeAttribute( 'data-sizes' );
+						}
+						if ( el.hasAttribute( 'data-src' ) ) {
+							el.src = el.getAttribute( 'data-src' );
+							el.removeAttribute( 'data-src' );
+						}
+						if ( el.hasAttribute( 'data-srcset' ) ) {
+							el.srcset = el.getAttribute( 'data-srcset' );
+							el.removeAttribute( 'data-srcset' );
+						}
 					}
 				}
 			} );
@@ -283,8 +340,12 @@ const loadImages = () => {
 			return (
 				rect.top >= 0 &&
 				rect.left >= 0 &&
-				rect.bottom <= ( window.innerHeight || document.documentElement.clientHeight ) &&
-				rect.right <= ( window.innerWidth || document.documentElement.clientWidth )
+				rect.bottom <=
+					( window.innerHeight ||
+						document.documentElement.clientHeight ) &&
+				rect.right <=
+					( window.innerWidth ||
+						document.documentElement.clientWidth )
 			);
 		};
 
