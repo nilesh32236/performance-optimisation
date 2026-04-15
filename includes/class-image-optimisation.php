@@ -420,7 +420,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$media .= " and (max-width: {$current_width}px)";
 				}
 
-				Util::generate_preload_link( $source['url'], 'preload', 'image', false, Util::get_image_mime_type( $source['url'] ), $media );
+				Util::generate_preload_link( $source['url'], 'preload', 'image', false, Util::get_image_mime_type( $source['url'] ), $media, 'high' );
 				$previous_width = $current_width + 1;
 			}
 		}
@@ -441,7 +441,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$mobile_url = content_url( $mobile_url );
 				}
 
-				Util::generate_preload_link( $mobile_url, 'preload', 'image', false, Util::get_image_mime_type( $mobile_url ), '(max-width: 768px)' );
+				Util::generate_preload_link( $mobile_url, 'preload', 'image', false, Util::get_image_mime_type( $mobile_url ), '(max-width: 768px)', 'high' );
 			} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
 				$desktop_url = trim( str_replace( 'desktop:', '', $img_url ) );
 
@@ -449,7 +449,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$desktop_url = content_url( $desktop_url );
 				}
 
-				Util::generate_preload_link( $desktop_url, 'preload', 'image', false, Util::get_image_mime_type( $desktop_url ), '(min-width: 768px)' );
+				Util::generate_preload_link( $desktop_url, 'preload', 'image', false, Util::get_image_mime_type( $desktop_url ), '(min-width: 768px)', 'high' );
 			} else {
 				$img_url = trim( $img_url );
 
@@ -457,7 +457,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$img_url = content_url( $img_url );
 				}
 
-				Util::generate_preload_link( $img_url, 'preload', 'image', false, Util::get_image_mime_type( $img_url ) );
+				Util::generate_preload_link( $img_url, 'preload', 'image', false, Util::get_image_mime_type( $img_url ), '', 'high' );
 			}
 		}
 

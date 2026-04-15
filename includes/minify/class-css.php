@@ -72,6 +72,20 @@ class CSS {
 			try {
 				$css_content  = $this->filesystem->get_contents( $this->file_path );
 				$css_content  = self::update_image_paths( $css_content, $this->file_path );
+
+				// Inject font-display: swap into @font-face declarations.
+				$css_content = preg_replace_callback(
+					'/@font-face\s*{[^}]*}/i',
+					function ( $matches ) {
+						$font_face = $matches[0];
+						if ( stripos( $font_face, 'font-display' ) === false ) {
+							$font_face = preg_replace( '/(})$/', 'font-display: swap;$1', $font_face );
+						}
+						return $font_face;
+					},
+					$css_content
+				);
+
 				$css_minifier = new Minify\CSS( $css_content );
 				$minified_css = $css_minifier->minify();
 

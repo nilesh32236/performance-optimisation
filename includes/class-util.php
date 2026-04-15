@@ -182,9 +182,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param bool   $crossorigin If the resource should be crossorigin (optional).
 		 * @param string $type The type attribute (optional).
 		 * @param string $media The media attribute (optional).
+		 * @param string $fetchpriority The fetchpriority attribute (optional).
 		 * @since 1.0.0
 		 */
-		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '' ) {
+		public static function generate_preload_link( $href, $rel, $resource_type = '', $crossorigin = false, $type = '', $media = '', $fetchpriority = '' ) {
 			$attributes = array(
 				'rel'  => esc_attr( $rel ),
 				'href' => esc_url( $href ),
@@ -202,17 +203,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( $media ) {
 				$attributes['media'] = esc_attr( $media );
 			}
+			if ( $fetchpriority ) {
+				$attributes['fetchpriority'] = esc_attr( $fetchpriority );
+			}
 
 			$link_tag = '<link ' . implode( ' ', array_map( fn ( $k, $v ) => esc_attr( $k ) . '="' . esc_attr( $v ) . '"', array_keys( $attributes ), $attributes ) ) . '>';
 
 			$allowed_html = array(
 				'link' => array(
-					'rel'         => array(),
-					'href'        => array(),
-					'as'          => array(),
-					'crossorigin' => array(),
-					'type'        => array(),
-					'media'       => array(),
+					'rel'           => array(),
+					'href'          => array(),
+					'as'            => array(),
+					'crossorigin'   => array(),
+					'type'          => array(),
+					'media'         => array(),
+					'fetchpriority' => array(),
 				),
 			);
 
