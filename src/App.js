@@ -86,7 +86,11 @@ const App = () => {
 					options={ wppoSettings.settings.image_optimisation }
 				/>
 			),
-			databaseCleanup: <DatabaseCleanup />,
+			databaseCleanup: (
+				<DatabaseCleanup
+					options={ wppoSettings.settings.database_cleanup }
+				/>
+			),
 			tools: <PluginSettings options={ wppoSettings.settings } />,
 		};
 

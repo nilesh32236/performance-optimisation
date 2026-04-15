@@ -10,6 +10,7 @@ import {
 	faStore,
 	faServer,
 	faExclamationTriangle,
+	faShieldAlt,
 } from '@fortawesome/free-solid-svg-icons';
 
 const FileOptimization = ( { options = {} } ) => {
@@ -34,6 +35,11 @@ const FileOptimization = ( { options = {} } ) => {
 		excludeDelayJS: '',
 		enableServerRules: false,
 		cdnURL: '',
+		disableEmojis: false,
+		disableEmbeds: false,
+		disableDashicons: false,
+		disableXMLRPC: false,
+		heartbeatControl: 'default',
 		...options,
 	};
 
@@ -43,12 +49,18 @@ const FileOptimization = ( { options = {} } ) => {
 	const excludeUrlId = useId();
 	const cssJsHandleId = useId();
 	const cdnUrlId = useId();
+	const heartbeatId = useId();
 
 	const subTabs = [
 		{ id: 'basic', label: 'Basic', icon: faCode },
 		{ id: 'advanced', label: 'Advanced', icon: faRocket },
 		{ id: 'ecommerce', label: 'E-commerce', icon: faStore },
 		{ id: 'network', label: 'Network', icon: faServer },
+		{
+			id: 'core',
+			label: translations.coreTweaks || 'Core Tweaks',
+			icon: faShieldAlt,
+		},
 	];
 
 	const handleSubmit = async ( e ) => {
@@ -405,6 +417,113 @@ const FileOptimization = ( { options = {} } ) => {
 							value={ settings.cdnURL }
 							onChange={ handleChange( setSettings ) }
 						/>
+					</div>
+				</div>
+
+				<div
+					className="feature-card"
+					id="tabpanel-core"
+					role="tabpanel"
+					aria-labelledby="tab-core"
+					hidden={ activeSubTab !== 'core' }
+				>
+					<h3>
+						<FontAwesomeIcon icon={ faShieldAlt } />{ ' ' }
+						{ translations.coreTweaks || 'Core Tweaks' }
+					</h3>
+					<p>
+						{ translations.coreTweaksIntro ||
+							'Disable unnecessary WordPress core features to reduce database weight and frontend requests.' }
+					</p>
+
+					<CheckboxOption
+						label={ translations.disableEmojis || 'Disable Emojis' }
+						checked={ settings.disableEmojis }
+						onChange={ handleChange( setSettings ) }
+						name="disableEmojis"
+						description={
+							translations.disableEmojisDesc ||
+							'Removes the extra inline JS and wp-emoji-release.min.js file loaded on every page.'
+						}
+					/>
+
+					<CheckboxOption
+						label={ translations.disableEmbeds || 'Disable Embeds' }
+						checked={ settings.disableEmbeds }
+						onChange={ handleChange( setSettings ) }
+						name="disableEmbeds"
+						description={
+							translations.disableEmbedsDesc ||
+							'Removes the wp-embed.min.js script if you do not embed WordPress content from other sites.'
+						}
+					/>
+
+					<CheckboxOption
+						label={
+							translations.disableDashicons ||
+							'Disable Dashicons on Frontend'
+						}
+						checked={ settings.disableDashicons }
+						onChange={ handleChange( setSettings ) }
+						name="disableDashicons"
+						description={
+							translations.disableDashiconsDesc ||
+							'Prevents the heavy Dashicons CSS from loading for non-logged-in users.'
+						}
+					/>
+
+					<CheckboxOption
+						label={
+							translations.disableXMLRPC || 'Disable XML-RPC'
+						}
+						checked={ settings.disableXMLRPC }
+						onChange={ handleChange( setSettings ) }
+						name="disableXMLRPC"
+						description={
+							translations.disableXMLRPCDesc ||
+							'Security & performance fix that stops brute-force pingback attacks draining server CPU.'
+						}
+					/>
+
+					<div
+						className="setting-group"
+						style={ { marginTop: '24px' } }
+					>
+						<label className="field-label" htmlFor={ heartbeatId }>
+							{ translations.heartbeatControl ||
+								'Heartbeat API Control' }
+						</label>
+						<p
+							className="field-description"
+							style={ { marginBottom: '12px' } }
+						>
+							{ translations.heartbeatControlDesc ||
+								'The Heartbeat API pings admin-ajax.php frequently, causing CPU spikes. Control its behavior here.' }
+						</p>
+						<select
+							id={ heartbeatId }
+							className="input-field"
+							name="heartbeatControl"
+							value={ settings.heartbeatControl }
+							onChange={ handleChange( setSettings ) }
+						>
+							<option value="default">
+								{ translations.heartbeatOptDefault ||
+									'Default Mode' }
+							</option>
+							<option value="60s">
+								{ translations.heartbeatOpt60s ||
+									'Reduce Frequency (60 Seconds)' }
+							</option>
+							<option value="disable_ext">
+								{ translations.heartbeatOptDisableExt ||
+									'Disable on Frontend Only' }
+							</option>
+							<option value="disable_all">
+								{ translations.heartbeatOptDisableAll ||
+									'Disable Everywhere' }
+							</option>
+						</select>
 					</div>
 				</div>
 			</div>

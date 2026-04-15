@@ -111,6 +111,9 @@ class Main {
 		$this->setup_hooks();
 		$this->filesystem         = Util::init_filesystem();
 		$this->image_optimisation = new Image_Optimisation( $this->options );
+
+		$file_optimisation_opts = $this->options['file_optimisation'] ?? array();
+		new Core_Tweaks( $file_optimisation_opts );
 	}
 
 	/**
@@ -136,6 +139,7 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 
 		if ( is_admin() ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
@@ -604,6 +608,14 @@ class Main {
 					'dbCleanAll'               => __( 'Clean All', 'performance-optimisation' ),
 					'dbClean'                  => __( 'Clean', 'performance-optimisation' ),
 					'dbCleanupIntro'           => __( 'Remove unnecessary data from your WordPress database to improve performance and reduce bloat.', 'performance-optimisation' ),
+					'dbAutomatedCleanup'       => __( 'Automated Cleanup', 'performance-optimisation' ),
+					'dbSchedule'               => __( 'Schedule Frequency', 'performance-optimisation' ),
+					'dbScheduleNone'           => __( 'None (Manual Only)', 'performance-optimisation' ),
+					'dbScheduleDaily'          => __( 'Daily', 'performance-optimisation' ),
+					'dbScheduleWeekly'         => __( 'Weekly', 'performance-optimisation' ),
+					'dbScheduleMonthly'        => __( 'Monthly', 'performance-optimisation' ),
+					'dbRevKeepLatest'          => __( 'Always Keep Latest Revisions (Per Post)', 'performance-optimisation' ),
+					'dbRevMaxAge'              => __( 'Max Age of Revisions to Keep (Days)', 'performance-optimisation' ),
 					// Image job status translations.
 					'imgJobsQueued'            => __( 'Jobs Queued', 'performance-optimisation' ),
 					'imgProcessing'            => __( 'Processing in background...', 'performance-optimisation' ),
@@ -631,6 +643,23 @@ class Main {
 					'serverRulesWarning'       => __( 'This modifies your .htaccess file. Ensure you have a backup. If your site becomes inaccessible, revert via FTP.', 'performance-optimisation' ),
 					'lazyLoadInfo'             => __( 'Images above the fold (header, hero) should be excluded to avoid layout shifts. Use the settings below to fine-tune.', 'performance-optimisation' ),
 					'convertImgInfo'           => __( 'Converted images are served alongside originals. Browsers that don\'t support the format will fall back to the original automatically.', 'performance-optimisation' ),
+					// Core Tweaks translations.
+					'coreTweaks'               => __( 'Core Tweaks', 'performance-optimisation' ),
+					'coreTweaksIntro'          => __( 'Disable unnecessary WordPress core features to reduce database weight and frontend requests.', 'performance-optimisation' ),
+					'disableEmojis'            => __( 'Disable Emojis', 'performance-optimisation' ),
+					'disableEmojisDesc'        => __( 'Removes the extra inline JS and wp-emoji-release.min.js file loaded on every page.', 'performance-optimisation' ),
+					'disableEmbeds'            => __( 'Disable Embeds', 'performance-optimisation' ),
+					'disableEmbedsDesc'        => __( 'Removes the wp-embed.min.js script if you do not embed WordPress content from other sites.', 'performance-optimisation' ),
+					'disableDashicons'         => __( 'Disable Dashicons on Frontend', 'performance-optimisation' ),
+					'disableDashiconsDesc'     => __( 'Prevents the heavy Dashicons CSS from loading for non-logged-in users.', 'performance-optimisation' ),
+					'disableXMLRPC'            => __( 'Disable XML-RPC', 'performance-optimisation' ),
+					'disableXMLRPCDesc'        => __( 'Security & performance fix that stops brute-force pingback attacks draining server CPU.', 'performance-optimisation' ),
+					'heartbeatControl'         => __( 'Heartbeat API Control', 'performance-optimisation' ),
+					'heartbeatControlDesc'     => __( 'The Heartbeat API pings admin-ajax.php frequently, causing CPU spikes. Control its behavior here.', 'performance-optimisation' ),
+					'heartbeatOptDefault'      => __( 'Default Mode', 'performance-optimisation' ),
+					'heartbeatOpt60s'          => __( 'Reduce Frequency (60 Seconds)', 'performance-optimisation' ),
+					'heartbeatOptDisableExt'   => __( 'Disable on Frontend Only', 'performance-optimisation' ),
+					'heartbeatOptDisableAll'   => __( 'Disable Everywhere', 'performance-optimisation' ),
 				),
 				// Frontend theme colors for accent syncing.
 				'themeColors'  => $this->get_frontend_theme_colors(),
