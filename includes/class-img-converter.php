@@ -616,6 +616,24 @@ class Img_Converter {
 	}
 
 	/**
+	 * Atomically clears completed webp and avif entries from the image info option.
+	 *
+	 * @since NEXT
+	 */
+	public static function clear_completed_formats(): void {
+		self::update_img_info_atomic(
+			function ( array $img_info ): array {
+				$img_info['completed']['webp'] = array();
+				$img_info['completed']['avif'] = array();
+				// Write cleared completed to the DB immediately so that
+				// commit_img_info()'s live re-read cannot merge old entries back in.
+				update_option( 'wppo_img_info', $img_info );
+				return $img_info;
+			}
+		);
+	}
+
+	/**
 	 * Performs an atomic-like merge-aware update of the image info option.
 	 *
 	 * @param callable $callback The callback that receives the current info and returns the updated info.

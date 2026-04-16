@@ -346,33 +346,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$wppo_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
 
-			$img_info = Img_Converter::get_img_info();
-
-			if ( $wp_filesystem && $wp_filesystem->is_dir( $wppo_dir ) ) {
-				if ( $wp_filesystem->delete( $wppo_dir, true ) ) {
-					$img_info['completed'] = array(
-						'webp' => array(),
-						'avif' => array(),
-					);
-					Img_Converter::set_img_info( $img_info );
-					Cache::clear_cache();
-					return new \WP_REST_Response(
-						array(
-							'success' => true,
-							'message' => __( 'Optimized images folder deleted successfully.', 'performance-optimisation' ),
-						),
-						200
-					);
-				} else {
-					return new \WP_REST_Response(
-						array(
-							'success' => false,
-							'message' => __( 'Failed to delete the optimized images folder.', 'performance-optimisation' ),
-						),
-						500
-					);
-				}
-			} else {
+			if ( ! $wp_filesystem || ! $wp_filesystem->is_dir( $wppo_dir ) ) {
 				return new \WP_REST_Response(
 					array(
 						'success' => false,
@@ -381,6 +355,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					404
 				);
 			}
+
+			if ( ! $wp_filesystem->delete( $wppo_dir, true ) ) {
+				return new \WP_REST_Response(
+					array(
+						'success' => false,
+						'message' => __( 'Failed to delete the optimized images folder.', 'performance-optimisation' ),
+					),
+					500
+				);
+			}
+
+			Img_Converter::clear_completed_formats();
+			Cache::clear_cache();
+
+			return new \WP_REST_Response(
+				array(
+					'success' => true,
+					'message' => __( 'Optimized images folder deleted successfully.', 'performance-optimisation' ),
+				),
+				200
+			);
 		}
 
 		/**
