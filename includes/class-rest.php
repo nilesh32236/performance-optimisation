@@ -584,39 +584,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$manager = new Object_Cache();
 
 			if ( 'status' === $action ) {
-				return $this->send_response( $manager->get_status() );
+				$status = $manager->get_status();
+				$status['supported_compressors'] = array(
+					'lzf'  => defined( '\Redis::COMPRESSION_LZF' ),
+					'lz4'  => defined( '\Redis::COMPRESSION_LZ4' ),
+					'zstd' => defined( '\Redis::COMPRESSION_ZSTD' ),
+				);
+				return $this->send_response( $status );
 			}
 
 			if ( 'ping' === $action ) {
-				$host     = isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1';
-				$port     = isset( $params['port'] ) ? (int) $params['port'] : 6379;
-				$password = isset( $params['password'] ) ? sanitize_text_field( $params['password'] ) : '';
-				$database = isset( $params['database'] ) ? (int) $params['database'] : 0;
+				$config = array(
+					'mode'        => isset( $params['mode'] ) ? sanitize_text_field( $params['mode'] ) : 'standalone',
+					'host'        => isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1',
+					'port'        => isset( $params['port'] ) ? (int) $params['port'] : 6379,
+					'password'    => isset( $params['password'] ) ? (string) $params['password'] : '',
+					'database'    => isset( $params['database'] ) ? (int) $params['database'] : 0,
+					'nodes'       => isset( $params['nodes'] ) ? $params['nodes'] : '',
+					'master_name' => isset( $params['master_name'] ) ? sanitize_text_field( $params['master_name'] ) : 'mymaster',
+					'use_tls'     => isset( $params['use_tls'] ) ? (bool) $params['use_tls'] : false,
+					'persistent'  => isset( $params['persistent'] ) ? (bool) $params['persistent'] : false,
+					'compression' => isset( $params['compression'] ) ? sanitize_text_field( $params['compression'] ) : 'none',
+				);
 
-				$result = $manager->ping( $host, $port, $password, $database );
-
-				if ( is_wp_error( $result ) ) {
-					return $this->send_response( null, false, 400, $result->get_error_message() );
+				$ping = $manager->ping( $config );
+				if ( is_wp_error( $ping ) ) {
+					return $this->send_response( null, false, 400, $ping->get_error_message() );
 				}
 
-				if ( true !== $result ) {
-					return $this->send_response( null, false, 400, __( 'Connection failed.', 'performance-optimisation' ) );
-				}
-
-				return $this->send_response( true, true, 200, __( 'Connection successful.', 'performance-optimisation' ) );
+				return $this->send_response( array( 'success' => true ) );
 			}
 
 			if ( 'enable' === $action ) {
-				$host     = isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1';
-				$port     = isset( $params['port'] ) ? (int) $params['port'] : 6379;
-				$password = isset( $params['password'] ) ? sanitize_text_field( $params['password'] ) : '';
-				$database = isset( $params['database'] ) ? (int) $params['database'] : 0;
-
 				$config = array(
-					'host'     => $host,
-					'port'     => $port,
-					'password' => $password,
-					'database' => $database,
+					'mode'        => isset( $params['mode'] ) ? sanitize_text_field( $params['mode'] ) : 'standalone',
+					'host'        => isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1',
+					'port'        => isset( $params['port'] ) ? (int) $params['port'] : 6379,
+					'password'    => isset( $params['password'] ) ? (string) $params['password'] : '',
+					'database'    => isset( $params['database'] ) ? (int) $params['database'] : 0,
+					'nodes'       => isset( $params['nodes'] ) ? $params['nodes'] : '',
+					'master_name' => isset( $params['master_name'] ) ? sanitize_text_field( $params['master_name'] ) : 'mymaster',
+					'use_tls'     => isset( $params['use_tls'] ) ? (bool) $params['use_tls'] : false,
+					'persistent'  => isset( $params['persistent'] ) ? (bool) $params['persistent'] : false,
+					'compression' => isset( $params['compression'] ) ? sanitize_text_field( $params['compression'] ) : 'none',
 				);
 
 				$result = $manager->enable( $config );
@@ -628,6 +638,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				new Log( __( 'Object Cache enabled.', 'performance-optimisation' ) );
 				return $this->send_response( true, true, 200, __( 'Object Cache enabled successfully.', 'performance-optimisation' ) );
 			}
+
 
 			if ( 'disable' === $action ) {
 				$result = $manager->disable();

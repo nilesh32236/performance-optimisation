@@ -327,64 +327,129 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 				$config = include $config_file; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
 			}
 
-			$host     = apply_filters( 'wppo_redis_host', isset( $config['host'] ) ? $config['host'] : '127.0.0.1' );
-			$port     = apply_filters( 'wppo_redis_port', isset( $config['port'] ) ? (int) $config['port'] : 6379 );
-			$password = apply_filters( 'wppo_redis_password', isset( $config['password'] ) ? $config['password'] : '' );
-			$database = apply_filters( 'wppo_redis_database', isset( $config['database'] ) ? (int) $config['database'] : 0 );
+			$mode        = apply_filters( 'wppo_redis_mode', isset( $config['mode'] ) ? $config['mode'] : 'standalone' );
+			$use_tls     = apply_filters( 'wppo_redis_use_tls', isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false );
+			$password    = apply_filters( 'wppo_redis_password', isset( $config['password'] ) ? $config['password'] : '' );
+			$database    = apply_filters( 'wppo_redis_database', isset( $config['database'] ) ? (int) $config['database'] : 0 );
+			$timeout     = apply_filters( 'wppo_redis_timeout', 1.0 );
+			$persistent  = apply_filters( 'wppo_redis_persistent', isset( $config['persistent'] ) ? (bool) $config['persistent'] : false );
 
-			$this->redis         = new \Redis();
+			$this->redis         = null;
 			$this->redis_replica = null;
 
 			try {
-				if ( $this->redis->connect( $host, $port, 1.0 ) ) {
-					if ( ! empty( $password ) ) {
-						if ( $this->redis->auth( $password ) === false ) {
+				if ( 'cluster' === $mode && class_exists( 'RedisCluster' ) ) {
+					$nodes = isset( $config['nodes'] ) ? (array) $config['nodes'] : array();
+					if ( $use_tls ) {
+						$nodes = array_map( function( $node ) {
+							return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
+						}, $nodes );
+					}
+					$this->redis           = new \RedisCluster( null, $nodes, $timeout, $timeout, true, $password );
+					$this->redis_connected = true;
+				} elseif ( 'sentinel' === $mode && class_exists( 'RedisSentinel' ) ) {
+					$nodes       = isset( $config['nodes'] ) ? (array) $config['nodes'] : array();
+					$master_name = isset( $config['master_name'] ) ? $config['master_name'] : 'mymaster';
+
+					foreach ( $nodes as $node ) {
+						list( $s_host, $s_port ) = array_pad( explode( ':', $node ), 2, 26379 );
+						try {
+							$sentinel = new \RedisSentinel( array(
+								'host' => $s_host,
+								'port' => (int) $s_port,
+							) );
+							$address = $sentinel->getMasterAddrByName( $master_name );
+							if ( $address ) {
+								$this->redis = new \Redis();
+								$host        = $use_tls ? 'tls://' . $address[0] : $address[0];
+								if ( $this->redis->connect( $host, (int) $address[1], $timeout ) ) {
+									if ( ! empty( $password ) && $this->redis->auth( $password ) === false ) {
+										$this->redis->close();
+										continue;
+									}
+									$this->redis->select( $database );
+									$this->redis_connected = true;
+									break;
+								}
+							}
+						} catch ( \Exception $e ) {
+							continue;
+						}
+					}
+
+
+				} else {
+					// Standalone (Default).
+					$host = apply_filters( 'wppo_redis_host', isset( $config['host'] ) ? $config['host'] : '127.0.0.1' );
+					$port = apply_filters( 'wppo_redis_port', isset( $config['port'] ) ? (int) $config['port'] : 6379 );
+					if ( $use_tls && strpos( $host, 'tls://' ) !== 0 ) {
+						$host = 'tls://' . $host;
+					}
+
+					$this->redis = new \Redis();
+					$connect_func = $persistent ? 'pconnect' : 'connect';
+					if ( $this->redis->$connect_func( $host, $port, $timeout ) ) {
+						if ( ! empty( $password ) && $this->redis->auth( $password ) === false ) {
 							$this->redis->close();
 							return;
 						}
-					}
-					if ( $this->redis->select( $database ) === false ) {
-						$this->redis->close();
-						return;
-					}
-					if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
-						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY ); // Optimize serialization if igbinary is available..
-					} else {
-						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_PHP );
-					}
-					$this->redis_connected = true;
+						$this->redis->select( $database );
+						$this->redis_connected = true;
 
-					// Connect Replica if available.
-					if ( isset( $config['replicas'] ) && is_array( $config['replicas'] ) && ! empty( $config['replicas'] ) ) {
-						// Grab a random replica.
-						$replica = $config['replicas'][ array_rand( $config['replicas'] ) ];
-						$r_host  = isset( $replica['host'] ) ? $replica['host'] : '127.0.0.1';
-						$r_port  = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
-						try {
-							$tmp_replica = new \Redis();
-							if ( $tmp_replica->connect( $r_host, $r_port, 1.0 ) ) {
-								if ( ! empty( $replica['password'] ) ) {
-									$tmp_replica->auth( $replica['password'] );
+						// Standalone replica support.
+						if ( isset( $config['replicas'] ) && is_array( $config['replicas'] ) && ! empty( $config['replicas'] ) ) {
+							$replica = $config['replicas'][ array_rand( $config['replicas'] ) ];
+							$r_host  = isset( $replica['host'] ) ? $replica['host'] : '127.0.0.1';
+							$r_port  = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
+							$r_pass  = isset( $replica['password'] ) ? $replica['password'] : $password;
+							try {
+								$tmp_replica = new \Redis();
+								if ( $tmp_replica->connect( $r_host, $r_port, $timeout ) ) {
+									if ( ! empty( $r_pass ) ) {
+										$tmp_replica->auth( $r_pass );
+									}
+									$tmp_replica->select( $database );
+									$this->redis_replica = $tmp_replica;
 								}
-								$tmp_replica->select( $database );
-								if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
-									$tmp_replica->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY );
-								} else {
-									$tmp_replica->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_PHP );
-								}
-								$this->redis_replica = $tmp_replica;
+							} catch ( \Exception $e ) {
+								$this->redis_replica = null;
 							}
-						} catch ( \Exception $e ) {
-							$this->redis_replica = null;
+						}
+					}
+				}
+
+				if ( $this->redis_connected && $this->redis ) {
+					$serializer = defined( '\Redis::SERIALIZER_IGBINARY' ) ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP;
+					$this->redis->setOption( \Redis::OPT_SERIALIZER, $serializer );
+					if ( $this->redis_replica ) {
+						$this->redis_replica->setOption( \Redis::OPT_SERIALIZER, $serializer );
+					}
+
+					// Apply compression if configured.
+					if ( isset( $config['compression'] ) && 'none' !== $config['compression'] ) {
+						$compression_type = 'none';
+						if ( 'lzf' === $config['compression'] && defined( '\Redis::COMPRESSION_LZF' ) ) {
+							$compression_type = \Redis::COMPRESSION_LZF;
+						} elseif ( 'zstd' === $config['compression'] && defined( '\Redis::COMPRESSION_ZSTD' ) ) {
+							$compression_type = \Redis::COMPRESSION_ZSTD;
+						} elseif ( 'lz4' === $config['compression'] && defined( '\Redis::COMPRESSION_LZ4' ) ) {
+							$compression_type = \Redis::COMPRESSION_LZ4;
+						}
+
+						if ( 'none' !== $compression_type ) {
+							$this->redis->setOption( \Redis::OPT_COMPRESSION, $compression_type );
+							if ( $this->redis_replica ) {
+								$this->redis_replica->setOption( \Redis::OPT_COMPRESSION, $compression_type );
+							}
 						}
 					}
 				}
 			} catch ( \Exception $e ) {
-				// Fallback to internal cache variable if Redis fails.
 				$this->redis_connected = false;
 				$this->redis_replica   = null;
 			}
 		}
+
 
 		/**
 		 * Retrieves the actual key prefixed correctly.
@@ -685,13 +750,7 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 				$deleted = 0;
 
 				do {
-					$keys = $this->redis->scan(
-						$cursor,
-						array(
-							'match' => $pattern,
-							'count' => 100,
-						)
-					);
+					$keys = $this->redis->scan( $cursor, $pattern, 100 );
 					if ( ! empty( $keys ) ) {
 						$this->redis->del( $keys );
 						$deleted += count( $keys );

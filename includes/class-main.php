@@ -661,7 +661,24 @@ class Main {
 					'heartbeatOpt60s'          => __( 'Reduce Frequency (60 Seconds)', 'performance-optimisation' ),
 					'heartbeatOptDisableExt'   => __( 'Disable on Frontend Only', 'performance-optimisation' ),
 					'heartbeatOptDisableAll'   => __( 'Disable Everywhere', 'performance-optimisation' ),
+					// Redis status translations.
+					'redisUnreachable'         => __( 'Redis Server Unreachable:', 'performance-optimisation' ),
+					'redisUnreachableDesc'     => __( 'Could not connect to the Redis server. Please ensure the service is running and accessible.', 'performance-optimisation' ),
+					'connectionMode'           => __( 'Connection Mode', 'performance-optimisation' ),
+					'standalone'               => __( 'Standalone / Default', 'performance-optimisation' ),
+					'sentinel'                 => __( 'Redis Sentinel (High Availability)', 'performance-optimisation' ),
+					'cluster'                  => __( 'Redis Cluster', 'performance-optimisation' ),
+					'redisNodes'               => __( 'Redis Nodes', 'performance-optimisation' ),
+					'redisNodesDesc'           => __( 'Enter one node per line (e.g. 127.0.0.1:26379).', 'performance-optimisation' ),
+					'masterName'               => __( 'Sentinel Master Name', 'performance-optimisation' ),
+					'masterNameDesc'           => __( 'The master group name configured in your Sentinels (default: mymaster).', 'performance-optimisation' ),
+					'useTLS'                   => __( 'Enable TLS (SSL)', 'performance-optimisation' ),
+					'persistentConn'           => __( 'Persistent Connections', 'performance-optimisation' ),
+					'advancedSecurity'         => __( 'Advanced Security & Encryption', 'performance-optimisation' ),
+					'highAvailability'         => __( 'High Availability Configuration', 'performance-optimisation' ),
 				),
+
+
 				// Frontend theme colors for accent syncing.
 				'themeColors'  => $this->get_frontend_theme_colors(),
 			),
