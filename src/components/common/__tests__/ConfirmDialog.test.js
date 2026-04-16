@@ -1,10 +1,3 @@
-global.wppoSettings = {
-	translations: {
-		confirm: 'Confirm',
-		cancel: 'Cancel',
-	},
-};
-
 import { render, screen, fireEvent } from '@testing-library/react';
 import ConfirmDialog from '../ConfirmDialog';
 

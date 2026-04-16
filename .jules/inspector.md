@@ -8,5 +8,5 @@
 **Test Added:** Fixed the unit test assertion matching expectations to proper implementations. Prevented future breaks.
 ## 2026-04-16 - [JS Test Fix] Testing UI component in jsdom
 **Bug/Gap:** Tests for components missing DOM implementation and babel config.
-**Root Cause:** Jest uses node by default if testEnvironment isn't specified, and misses WP specific transpilation.
+**Root Cause:** Jest uses node by default if testEnvironment isn't specified, and misses WP-specific transpilation.
 **Test Added:** Tested the interaction behaviors, updated `package.json` with `testEnvironment: jsdom`, set `babel.config.json` to use `@wordpress/default`, and wrote `setupTests.js`.

@@ -79,13 +79,15 @@ const ConfirmDialog = ( {
 
 	useEffect( () => {
 		if ( isOpen ) {
-			document.addEventListener( 'keydown', handleKeyDown );
+			const doc = dialogRef.current?.ownerDocument || document;
+			doc.addEventListener( 'keydown', handleKeyDown );
 			// Prevent body scroll while dialog is open.
-			document.body.style.overflow = 'hidden';
+			doc.body.style.overflow = 'hidden';
 		}
 		return () => {
-			document.removeEventListener( 'keydown', handleKeyDown );
-			document.body.style.overflow = '';
+			const doc = dialogRef.current?.ownerDocument || document;
+			doc.removeEventListener( 'keydown', handleKeyDown );
+			doc.body.style.overflow = '';
 		};
 	}, [ isOpen, handleKeyDown ] );
 
