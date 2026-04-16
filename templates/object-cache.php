@@ -685,10 +685,13 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 				$deleted = 0;
 
 				do {
-					$keys = $this->redis->scan( $cursor, array(
-						'match' => $pattern,
-						'count' => 100,
-					) );
+					$keys = $this->redis->scan(
+						$cursor,
+						array(
+							'match' => $pattern,
+							'count' => 100,
+						)
+					);
 					if ( ! empty( $keys ) ) {
 						$this->redis->del( $keys );
 						$deleted += count( $keys );
