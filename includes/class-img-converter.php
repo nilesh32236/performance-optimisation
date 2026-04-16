@@ -625,6 +625,9 @@ class Img_Converter {
 			function ( array $img_info ): array {
 				$img_info['completed']['webp'] = array();
 				$img_info['completed']['avif'] = array();
+				// Write cleared completed to the DB immediately so that
+				// commit_img_info()'s live re-read cannot merge old entries back in.
+				update_option( 'wppo_img_info', $img_info );
 				return $img_info;
 			}
 		);
