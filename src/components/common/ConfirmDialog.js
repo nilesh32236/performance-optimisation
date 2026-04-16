@@ -48,11 +48,16 @@ const ConfirmDialog = ( {
 				const last = focusable[ focusable.length - 1 ];
 
 				if ( e.shiftKey ) {
-					if ( document.activeElement === first ) {
+					if (
+						dialogRef.current?.ownerDocument?.activeElement ===
+						first
+					) {
 						e.preventDefault();
 						last.focus();
 					}
-				} else if ( document.activeElement === last ) {
+				} else if (
+					dialogRef.current?.ownerDocument?.activeElement === last
+				) {
 					e.preventDefault();
 					first.focus();
 				}
@@ -75,13 +80,15 @@ const ConfirmDialog = ( {
 
 	useEffect( () => {
 		if ( isOpen ) {
-			document.addEventListener( 'keydown', handleKeyDown );
+			const doc = dialogRef.current?.ownerDocument || document;
+			doc.addEventListener( 'keydown', handleKeyDown );
 			// Prevent body scroll while dialog is open.
-			document.body.style.overflow = 'hidden';
+			doc.body.style.overflow = 'hidden';
 		}
 		return () => {
-			document.removeEventListener( 'keydown', handleKeyDown );
-			document.body.style.overflow = '';
+			const doc = dialogRef.current?.ownerDocument || document;
+			doc.removeEventListener( 'keydown', handleKeyDown );
+			doc.body.style.overflow = '';
 		};
 	}, [ isOpen, handleKeyDown ] );
 
