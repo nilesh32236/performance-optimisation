@@ -9,6 +9,7 @@ import {
 	faTools,
 	faBars,
 	faTimes,
+	faServer,
 } from '@fortawesome/free-solid-svg-icons';
 import FileOptimization from './components/FileOptimization';
 import PreloadSettings from './components/PreloadSettings';
@@ -16,6 +17,7 @@ import ImageOptimization from './components/ImageOptimization';
 import PluginSettings from './components/PluginSetting';
 import Dashboard from './components/Dashboard';
 import DatabaseCleanup from './components/DatabaseCleanup';
+import ObjectCache from './components/ObjectCache';
 import { fetchRecentActivities } from './lib/apiRequest';
 
 const translations = wppoSettings.translations;
@@ -58,6 +60,11 @@ const App = () => {
 				label: translations.databaseOptimization || 'Database',
 			},
 			{
+				name: 'objectCache',
+				icon: faServer,
+				label: translations.objectCache || 'Object Cache',
+			},
+			{
 				name: 'tools',
 				icon: faTools,
 				label: translations.tools,
@@ -90,6 +97,9 @@ const App = () => {
 				<DatabaseCleanup
 					options={ wppoSettings.settings.database_cleanup }
 				/>
+			),
+			objectCache: (
+				<ObjectCache options={ wppoSettings.settings.object_cache } />
 			),
 			tools: <PluginSettings options={ wppoSettings.settings } />,
 		};

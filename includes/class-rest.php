@@ -98,6 +98,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'get_image_job_status' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
+				'object_cache'            => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'handle_object_cache' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
 			);
 		}
 
@@ -563,6 +568,88 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			return $this->send_response( $status );
+		}
+
+		/**
+		 * Handles object cache requests (status, ping, enable, disable, flush).
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.3.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function handle_object_cache( \WP_REST_Request $request ) {
+			$params = $request->get_params();
+			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
+
+			$manager = new Object_Cache();
+
+			if ( 'status' === $action ) {
+				return $this->send_response( $manager->get_status() );
+			}
+
+			if ( 'ping' === $action ) {
+				$host     = isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1';
+				$port     = isset( $params['port'] ) ? (int) $params['port'] : 6379;
+				$password = isset( $params['password'] ) ? sanitize_text_field( $params['password'] ) : '';
+				$database = isset( $params['database'] ) ? (int) $params['database'] : 0;
+
+				$result = $manager->ping( $host, $port, $password, $database );
+
+				if ( is_wp_error( $result ) ) {
+					return $this->send_response( null, false, 400, $result->get_error_message() );
+				}
+
+				if ( true !== $result ) {
+					return $this->send_response( null, false, 400, __( 'Connection failed.', 'performance-optimisation' ) );
+				}
+
+				return $this->send_response( true, true, 200, __( 'Connection successful.', 'performance-optimisation' ) );
+			}
+
+			if ( 'enable' === $action ) {
+				$host     = isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1';
+				$port     = isset( $params['port'] ) ? (int) $params['port'] : 6379;
+				$password = isset( $params['password'] ) ? sanitize_text_field( $params['password'] ) : '';
+				$database = isset( $params['database'] ) ? (int) $params['database'] : 0;
+
+				$config = array(
+					'host'     => $host,
+					'port'     => $port,
+					'password' => $password,
+					'database' => $database,
+				);
+
+				$result = $manager->enable( $config );
+
+				if ( is_wp_error( $result ) ) {
+					return $this->send_response( null, false, 400, $result->get_error_message() );
+				}
+
+				new Log( __( 'Object Cache enabled.', 'performance-optimisation' ) );
+				return $this->send_response( true, true, 200, __( 'Object Cache enabled successfully.', 'performance-optimisation' ) );
+			}
+
+			if ( 'disable' === $action ) {
+				$result = $manager->disable();
+
+				if ( is_wp_error( $result ) ) {
+					return $this->send_response( null, false, 400, $result->get_error_message() );
+				}
+
+				new Log( __( 'Object Cache disabled.', 'performance-optimisation' ) );
+				return $this->send_response( true, true, 200, __( 'Object Cache disabled.', 'performance-optimisation' ) );
+			}
+
+			if ( 'flush' === $action ) {
+				$result = $manager->flush();
+				if ( $result ) {
+					new Log( __( 'Object Cache flushed.', 'performance-optimisation' ) );
+					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
+				}
+				return $this->send_response( null, false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );
+			}
+
+			return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
 		}
 
 		/**
