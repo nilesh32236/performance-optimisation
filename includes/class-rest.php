@@ -366,13 +366,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				);
 			}
 
-			$img_info              = Img_Converter::get_img_info();
-			$img_info['completed'] = array(
-				'webp' => array(),
-				'avif' => array(),
-			);
-
-			Img_Converter::set_img_info( $img_info );
+			Img_Converter::clear_completed_formats();
 			Cache::clear_cache();
 
 			return new \WP_REST_Response(
