@@ -33,7 +33,7 @@ const ObjectCache = ( { options = {} } ) => {
 	const fetchStatus = async () => {
 		try {
 			const res = await apiCall( 'object_cache', { action: 'status' } );
-			setCacheStatus( res );
+			setCacheStatus( res.data );
 		} catch ( error ) {
 			console.error( 'Error fetching cache status', error );
 		}
@@ -45,16 +45,26 @@ const ObjectCache = ( { options = {} } ) => {
 		setActionMsg( null );
 
 		try {
-			await apiCall( 'update_settings', {
+			const res = await apiCall( 'update_settings', {
 				tab: 'object_cache',
 				settings,
 			} );
-			setActionMsg( {
-				type: 'success',
-				text:
-					translations.formSubmitted ||
-					'Settings saved successfully.',
-			} );
+			if ( res.success ) {
+				setActionMsg( {
+					type: 'success',
+					text:
+						translations.formSubmitted ||
+						'Settings saved successfully.',
+				} );
+			} else {
+				setActionMsg( {
+					type: 'error',
+					text:
+						res.message ||
+						translations.formSubmissionError ||
+						'Error saving settings.',
+				} );
+			}
 		} catch ( error ) {
 			setActionMsg( {
 				type: 'error',
@@ -80,15 +90,21 @@ const ObjectCache = ( { options = {} } ) => {
 			};
 			const res = await apiCall( 'object_cache', payload );
 
+			if ( ! res?.success ) {
+				setActionMsg( {
+					type: 'error',
+					text: res?.message || 'Action failed.',
+				} );
+				return;
+			}
+
 			// Re-fetch status if enabling or disabling
 			if ( [ 'enable', 'disable' ].includes( action ) ) {
 				await fetchStatus();
 			}
 			setActionMsg( {
 				type: 'success',
-				text:
-					res?.message ||
-					( typeof res === 'string' ? res : 'Action successful.' ),
+				text: res.message || 'Action successful.',
 			} );
 		} catch ( error ) {
 			setActionMsg( {

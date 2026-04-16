@@ -338,9 +338,15 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 			try {
 				if ( $this->redis->connect( $host, $port, 1.0 ) ) {
 					if ( ! empty( $password ) ) {
-						$this->redis->auth( $password );
+						if ( $this->redis->auth( $password ) === false ) {
+							$this->redis->close();
+							return;
+						}
 					}
-					$this->redis->select( $database );
+					if ( $this->redis->select( $database ) === false ) {
+						$this->redis->close();
+						return;
+					}
 					if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
 						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY ); // Optimize serialization if igbinary is available..
 					} else {
@@ -658,18 +664,35 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 		}
 
 		/**
-		 * Flushes the memory.
+		 * Flushes the object cache for this site only.
 		 *
-		 * WARNING: This clears the ENTIRE Redis database ($this->redis->flushDb()),
-		 * which may be unsafe in shared Redis environments. It does not just delete
-		 * keys with this site's prefix.
+		 * Uses a SCAN loop to find and delete keys matching this site's prefix,
+		 * avoiding a global FLUSH. Operators may opt in to a full flushDb() via
+		 * the 'object_cache_allow_flush_all' filter for single-site/isolated setups.
 		 *
 		 * @return bool True on success.
 		 */
 		public function flush() {
 			$this->cache = array();
 			if ( $this->redis_connected ) {
-				return $this->redis->flushDb();
+				if ( apply_filters( 'object_cache_allow_flush_all', false ) ) {
+					return $this->redis->flushDb();
+				}
+
+				$prefix  = $this->blog_prefix;
+				$pattern = $prefix . '*';
+				$cursor  = null;
+				$deleted = 0;
+
+				do {
+					$keys = $this->redis->scan( $cursor, array( 'match' => $pattern, 'count' => 100 ) );
+					if ( ! empty( $keys ) ) {
+						$this->redis->del( $keys );
+						$deleted += count( $keys );
+					}
+				} while ( $cursor !== 0 );
+
+				return true;
 			}
 			return true;
 		}

@@ -86,7 +86,10 @@ class Object_Cache {
 
 					if ( $redis->connect( $host, $port, 1.0 ) ) {
 						if ( ! empty( $password ) ) {
-							$redis->auth( $password );
+							if ( ! $redis->auth( $password ) ) {
+								$redis->close();
+								return $status;
+							}
 						}
 						$info = $redis->info();
 						if ( $info ) {
