@@ -14,11 +14,17 @@
 	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
 	"license": "GPL-2.0-or-later",
 	"devDependencies": {
+		"@testing-library/jest-dom": "^6.9.1",
+		"@testing-library/react": "^16.3.2",
 		"@wordpress/scripts": "^30.7.0"
 	},
 	"dependencies": {
 		"@fortawesome/free-solid-svg-icons": "^6.7.1",
 		"@fortawesome/react-fontawesome": "^0.2.2",
 		"@wordpress/element": "^6.43.0"
+	},
+	"jest": {
+		"setupFilesAfterEnv": ["<rootDir>/src/setupTests.js"],
+		"testEnvironment": "jsdom"
 	}
 }

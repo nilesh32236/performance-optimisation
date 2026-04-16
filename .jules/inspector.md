@@ -6,3 +6,7 @@
 **Bug/Gap:** The Javascript test asserting API call of `fetchRecentActivities` was failing because the method implementation had been updated to execute a `GET` request and append a query parameter `?page=1` instead of using a `POST` request. In addition, there was a mismatch of expected log string output in sad-path tests ("Error fetching recent activities: " versus "Error fetching recent activities:").
 **Root Cause:** A test file (`src/lib/__tests__/apiRequest.test.js`) not updated alongside implementation (`src/lib/apiRequest.js`).
 **Test Added:** Fixed the unit test assertion matching expectations to proper implementations. Prevented future breaks.
+## 2026-04-16 - [JS Test Fix] Testing UI component in jsdom
+**Bug/Gap:** Tests for components missing DOM implementation and babel config.
+**Root Cause:** Jest uses node by default if testEnvironment isn't specified, and misses WP specific transpilation.
+**Test Added:** Tested the interaction behaviors, updated `package.json` with `testEnvironment: jsdom`, set `babel.config.json` to use `@wordpress/default`, and wrote `setupTests.js`.
