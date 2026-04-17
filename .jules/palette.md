@@ -26,3 +26,6 @@
 ## 2026-04-14 - Added clear descriptions to complex toggles
 **Learning:** Many complex performance settings (like "Minify HTML" or "Delay JS") lack explanations, leaving non-technical users unsure of their impact.
 **Action:** Always add clear, non-technical `description` props to `CheckboxOption` or similar form elements when implementing feature toggles to ensure users understand the setting's purpose.
+## 2024-04-17 - Replacing custom button classes with global CSS variable classes
+**Learning:** For optimal dynamic theme adaptation within the WP admin environment, individual components should avoid using component-specific custom class names (like `wppo-button wppo-button-primary`) for primary actions. Instead, they should utilize the globally defined classes (`submit-button`, `submit-button secondary`, `submit-button danger`) that automatically inherit the `var(--wp-admin-theme-color)` CSS variables.
+**Action:** When auditing React components, systematically replace any instance of local custom button classes with the global `submit-button` variations to ensure unified styling.
