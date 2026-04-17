@@ -57,9 +57,10 @@ class Object_Cache {
 	 */
 	public function get_status() {
 		$status = array(
-			'enabled'        => false,
-			'redis_missing'  => ! class_exists( 'Redis' ),
-			'foreign_dropin' => false,
+			'enabled'         => false,
+			'redis_missing'   => ! class_exists( 'Redis' ),
+			'redis_reachable' => false,
+			'foreign_dropin'  => false,
 		);
 
 		if ( file_exists( $this->dropin_path ) ) {
@@ -75,38 +76,44 @@ class Object_Cache {
 			}
 		}
 
-		if ( ! $status['foreign_dropin'] && $status['enabled'] && class_exists( 'Redis' ) ) {
+		if ( ! $status['redis_missing'] ) {
 			try {
-				$redis = new \Redis();
-				if ( file_exists( $this->config_path ) ) {
-					$config   = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
-					$host     = isset( $config['host'] ) ? $config['host'] : '127.0.0.1';
-					$port     = isset( $config['port'] ) ? (int) $config['port'] : 6379;
-					$password = isset( $config['password'] ) ? $config['password'] : '';
+				// Determine connection settings (Dashboard settings have priority over on-disk config).
+				$options = get_option( 'wppo_settings', array() );
+				$config  = $options['object_cache'] ?? array();
 
-					if ( $redis->connect( $host, $port, 1.0 ) ) {
-						if ( ! empty( $password ) ) {
-							if ( ! $redis->auth( $password ) ) {
-								$redis->close();
-								return $status;
-							}
-						}
+				if ( empty( $config ) && file_exists( $this->config_path ) ) {
+					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
+				}
+
+				$connection = $this->connect_internal( $config );
+
+				if ( ! is_wp_error( $connection ) ) {
+					$status['redis_reachable'] = true;
+					$redis                     = $connection;
+
+					// Collect telemetry if enabled and reachable.
+					if ( $status['enabled'] ) {
 						$info = $redis->info();
 						if ( $info ) {
 							$status['telemetry'] = array(
-								'uptime_in_days'         => isset( $info['uptime_in_days'] ) ? $info['uptime_in_days'] : 0,
-								'connected_clients'      => isset( $info['connected_clients'] ) ? $info['connected_clients'] : 0,
-								'used_memory_human'      => isset( $info['used_memory_human'] ) ? $info['used_memory_human'] : '0B',
-								'used_memory_peak_human' => isset( $info['used_memory_peak_human'] ) ? $info['used_memory_peak_human'] : '0B',
-								'total_connections_received' => isset( $info['total_connections_received'] ) ? $info['total_connections_received'] : 0,
-								'keyspace_hits'          => isset( $info['keyspace_hits'] ) ? $info['keyspace_hits'] : 0,
-								'keyspace_misses'        => isset( $info['keyspace_misses'] ) ? $info['keyspace_misses'] : 0,
+								'uptime_in_days'         => $info['uptime_in_days'] ?? 0,
+								'connected_clients'      => $info['connected_clients'] ?? 0,
+								'used_memory_human'      => $info['used_memory_human'] ?? '0B',
+								'used_memory_peak_human' => $info['used_memory_peak_human'] ?? '0B',
+								'total_connections_received' => $info['total_connections_received'] ?? 0,
+								'keyspace_hits'          => $info['keyspace_hits'] ?? 0,
+								'keyspace_misses'        => $info['keyspace_misses'] ?? 0,
+								'keys'                   => ( isset( $info['db0'] ) && preg_match( '/keys=([0-9]+)/', $info['db0'], $matches ) ) ? (int) $matches[1] : 0,
 							);
 						}
-						$redis->close();
 					}
+					$redis->close();
+				} else {
+					$status['telemetry_error'] = $connection->get_error_message();
 				}
 			} catch ( \Exception $e ) {
+				$status['redis_reachable'] = false;
 				$status['telemetry_error'] = $e->getMessage();
 			}
 		}
@@ -115,41 +122,54 @@ class Object_Cache {
 	}
 
 	/**
+	 * Internal helper to connect to Redis based on config.
+	 *
+	 * @param array $config Configuration array.
+	 * @return \Redis|\RedisCluster|\WP_Error
+	 */
+	private function connect_internal( $config ) {
+		require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+		return wppo_redis_connect( $config );
+	}
+
+	/**
 	 * Ping the Redis server to test connection.
 	 *
-	 * @param string $host Redis host.
-	 * @param int    $port Redis port.
-	 * @param string $password Redis password (optional).
-	 * @param int    $database Redis Database ID.
+	 * @param array $config Connection configuration.
 	 * @return bool|\WP_Error True if connected, WP_Error on failure.
 	 */
-	public function ping( $host = '127.0.0.1', $port = 6379, $password = '', $database = 0 ) {
+	public function ping( $config = array() ) {
 		if ( ! class_exists( 'Redis' ) ) {
-			return new \WP_Error( 'missing_extension', 'The PhpRedis extension is not installed on this server.' );
+			return new \WP_Error( 'missing_extension', 'The PhpRedis extension is not installed.' );
 		}
 
-		try {
-			$redis = new \Redis();
-			if ( $redis->connect( $host, $port, 2.0 ) ) {
-				if ( ! empty( $password ) ) {
-					if ( ! $redis->auth( $password ) ) {
-						$redis->close();
-						return new \WP_Error( 'redis_auth_failed', 'Redis authentication failed.' );
-					}
+		$connection = $this->connect_internal( $config );
+
+		if ( is_wp_error( $connection ) ) {
+			return $connection;
+		}
+
+		if ( method_exists( $connection, 'ping' ) ) {
+			try {
+				$result = $connection->ping();
+				$connection->close();
+
+				if ( true === $result || '+PONG' === $result || ( is_string( $result ) && stripos( $result, 'PONG' ) !== false ) ) {
+					return true;
 				}
-				if ( ! $redis->select( $database ) ) {
-					$redis->close();
-					return new \WP_Error( 'redis_select_failed', 'Redis select DB failed.' );
+				return new \WP_Error( 'ping_fail', 'Ping returned false' );
+			} catch ( \Exception $e ) {
+				if ( method_exists( $connection, 'close' ) ) {
+					$connection->close();
 				}
-				$redis->close();
-				return true;
+				return new \WP_Error( 'ping_exception', $e->getMessage() );
 			}
-		} catch ( \Exception $e ) {
-			return new \WP_Error( 'redis_error', $e->getMessage() );
 		}
 
-		return new \WP_Error( 'connection_failed', 'Could not connect to Redis server.' );
+		$connection->close();
+		return new \WP_Error( 'no_ping_method', 'Connection does not support ping' );
 	}
+
 
 	/**
 	 * Enable the Object Cache by writing the config and copying the drop-in.
@@ -167,19 +187,17 @@ class Object_Cache {
 			return new \WP_Error( 'foreign_dropin', 'Another Object Cache drop-in is already present. Please disable it before enabling this one.' );
 		}
 
-		// Write config file safely without var_export.
-		$host_str = addslashes( (string) $config['host'] );
-		$port_int = (int) $config['port'];
-		$pass_str = addslashes( (string) $config['password'] );
-		$db_int   = (int) $config['database'];
+		// Format nodes as array for the config file if it's a string.
+		if ( ! empty( $config['nodes'] ) && is_string( $config['nodes'] ) ) {
+			$config['nodes'] = array_filter( array_map( 'trim', explode( "\n", $config['nodes'] ) ) );
+		}
 
-		$config_content  = "<?php\n// Auto-generated by Performance Optimisation\n";
-		$config_content .= "return array(\n";
-		$config_content .= "\t'host'     => '{$host_str}',\n";
-		$config_content .= "\t'port'     => {$port_int},\n";
-		$config_content .= "\t'password' => '{$pass_str}',\n";
-		$config_content .= "\t'database' => {$db_int},\n";
-		$config_content .= ");\n";
+		$config_data = $config;
+
+		// Write config file using var_export for clean array representation.
+		$config_content = "<?php\n// Auto-generated by Performance Optimisation\n";
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+		$config_content .= 'return ' . var_export( $config_data, true ) . ";\n";
 
 		$wp_filesystem = Util::init_filesystem();
 
@@ -198,6 +216,7 @@ class Object_Cache {
 
 		return true;
 	}
+
 
 	/**
 	 * Disable the Object Cache by removing the drop-in and config.

@@ -549,7 +549,12 @@ class Main {
 					'excludeImages'            => __( 'Exclude specific image URLs', 'performance-optimisation' ),
 					'excludeVideos'            => __( 'Exclude specific video URLs', 'performance-optimisation' ),
 					'lazyLoadImagesDesc'       => __( 'Enable lazy loading for images to improve the initial load speed by loading images only when they appear in the viewport.', 'performance-optimisation' ),
-					'excludeFistImages'        => __( 'Enter number you want to exclude first', 'performance-optimisation' ),
+					'wrapInPicture'            => __( 'Wrap Image in Picture Tag', 'performance-optimisation' ),
+					/* translators: %s: The HTML tag name */
+					'wrapInPictureDesc'        => sprintf( esc_html__( 'Enable this to wrap images in a %s tag for better performance with next-gen formats.', 'performance-optimisation' ), '<code>&lt;picture&gt;</code>' ),
+					'lazyLoadVideos'           => __( 'Lazy Load Videos', 'performance-optimisation' ),
+					'lazyLoadVideosDesc'       => __( 'Enable lazy loading for videos to improve initial load speed.', 'performance-optimisation' ),
+					'excludeFirstImages'       => __( 'Enter number you want to exclude first', 'performance-optimisation' ),
 					'replaceImgToSVG'          => __( 'Replace Low-Resolution Placeholder with SVG', 'performance-optimisation' ),
 					'replaceImgToSVGDesc'      => __( 'Use SVG placeholders for images that are being lazy-loaded to improve page rendering performance.', 'performance-optimisation' ),
 					'convertImg'               => __( 'Enable Image Conversion', 'performance-optimisation' ),
@@ -661,7 +666,23 @@ class Main {
 					'heartbeatOpt60s'          => __( 'Reduce Frequency (60 Seconds)', 'performance-optimisation' ),
 					'heartbeatOptDisableExt'   => __( 'Disable on Frontend Only', 'performance-optimisation' ),
 					'heartbeatOptDisableAll'   => __( 'Disable Everywhere', 'performance-optimisation' ),
+					// Redis status translations.
+					'redisUnreachable'         => __( 'Redis Server Unreachable:', 'performance-optimisation' ),
+					'redisUnreachableDesc'     => __( 'Could not connect to the Redis server. Please ensure the service is running and accessible.', 'performance-optimisation' ),
+					'connectionMode'           => __( 'Connection Mode', 'performance-optimisation' ),
+					'standalone'               => __( 'Standalone / Default', 'performance-optimisation' ),
+					'sentinel'                 => __( 'Redis Sentinel (High Availability)', 'performance-optimisation' ),
+					'cluster'                  => __( 'Redis Cluster', 'performance-optimisation' ),
+					'redisNodes'               => __( 'Redis Nodes', 'performance-optimisation' ),
+					'redisNodesDesc'           => __( 'Enter one node per line (e.g. 127.0.0.1:26379).', 'performance-optimisation' ),
+					'masterName'               => __( 'Sentinel Master Name', 'performance-optimisation' ),
+					'masterNameDesc'           => __( 'The master group name configured in your Sentinels (default: mymaster).', 'performance-optimisation' ),
+					'enableTls'                => __( 'Enable TLS (SSL)', 'performance-optimisation' ),
+					'persistentConnection'     => __( 'Persistent Connections', 'performance-optimisation' ),
+					'advancedSecurity'         => __( 'Advanced Security & Encryption', 'performance-optimisation' ),
+					'highAvailability'         => __( 'High Availability Configuration', 'performance-optimisation' ),
 				),
+
 				// Frontend theme colors for accent syncing.
 				'themeColors'  => $this->get_frontend_theme_colors(),
 			),
@@ -688,9 +709,10 @@ class Main {
 
 		if ( ! is_user_logged_in() ) {
 			$lazy_load_images = isset( $this->options['image_optimisation']['lazyLoadImages'] ) && (bool) $this->options['image_optimisation']['lazyLoadImages'];
+			$lazy_load_videos = isset( $this->options['image_optimisation']['lazyLoadVideos'] ) && (bool) $this->options['image_optimisation']['lazyLoadVideos'];
 			$delay_js         = isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'];
 
-			if ( $lazy_load_images || $delay_js ) {
+			if ( $lazy_load_images || $lazy_load_videos || $delay_js ) {
 				wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, true );
 			}
 		}

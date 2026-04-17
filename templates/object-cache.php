@@ -1,272 +1,25 @@
 <?php //phpcs:ignore WordPress.Files.FileName.InvalidClassFileName
 /**
- * Redis Object Cache Drop-in for Performance Optimisation.
- *
- * phpcs:disable PSR1.Classes.ClassDeclaration.MultipleClasses
- * phpcs:disable Squiz.Classes.ClassFileName.NoMatch
+ * Redis Object Cache Drop-in.
  *
  * @package PerformanceOptimise
  */
 
-if ( ! defined( 'ABSPATH' ) ) {
-	exit;
-}
-
-if ( ! function_exists( 'wp_cache_add' ) ) :
-
+/**
+ * Object Cache Drop-in for WordPress.
+ */
+/**
+ * Object Cache Drop-in for WordPress.
+ */
+if ( ! class_exists( 'WP_Object_Cache' ) ) {
 	/**
-	 * Setup object cache.
-	 */
-	function wp_cache_init() {
-		global $wp_object_cache;
-		$wp_object_cache = new WP_Object_Cache(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-	}
-
-	/**
-	 * Adds data to the cache, if the cache key doesn't already exist.
+	 * WP_Object_Cache class.
 	 *
-	 * @param int|string $key    The cache key to use for retrieval later.
-	 * @param mixed      $data   The data to add to the cache.
-	 * @param string     $group  Optional. The group to add the cache to. Enables the same key to be used across groups. Default empty.
-	 * @param int        $expire Optional. When the cache data should expire, in seconds. Default 0 (no expiration).
-	 * @return bool True on success, false if cache key and group already exist.
-	 */
-	function wp_cache_add( $key, $data, $group = '', $expire = 0 ) {
-		global $wp_object_cache;
-		return $wp_object_cache->add( $key, $data, $group, (int) $expire );
-	}
-
-	/**
-	 * Sets the list of global cache groups.
-	 *
-	 * @param string|string[] $groups List of groups that should not have their key prefixed with the site ID.
-	 */
-	function wp_cache_add_global_groups( $groups ) {
-		global $wp_object_cache;
-		$wp_object_cache->add_global_groups( $groups );
-	}
-
-	/**
-	 * Sets the list of non-persistent cache groups.
-	 *
-	 * @param string|string[] $groups List of groups that should not be saved to the persistent cache.
-	 */
-	function wp_cache_add_non_persistent_groups( $groups ) {
-		global $wp_object_cache;
-		$wp_object_cache->add_non_persistent_groups( $groups );
-	}
-
-	/**
-	 * Closes the cache.
-	 *
-	 * @return true
-	 */
-	function wp_cache_close() {
-		global $wp_object_cache;
-		return $wp_object_cache->close();
-	}
-
-	/**
-	 * Decrements numeric cache item's value.
-	 *
-	 * @param int|string $key    The cache key to decrement.
-	 * @param int        $offset Optional. The amount by which to decrement the item's value. Default 1.
-	 * @param string     $group  Optional. The group the key is in. Default empty.
-	 * @return int|false The item's new value on success, false on failure.
-	 */
-	function wp_cache_decrease( $key, $offset = 1, $group = '' ) {
-		global $wp_object_cache;
-		return $wp_object_cache->decrease( $key, $offset, $group );
-	}
-
-	/**
-	 * Removes the cache contents matching key and group.
-	 *
-	 * @param int|string $key   What the contents in the cache are called.
-	 * @param string     $group Optional. Where the cache contents are grouped. Default empty.
-	 * @return bool True on successful removal, false on failure.
-	 */
-	function wp_cache_delete( $key, $group = '' ) {
-		global $wp_object_cache;
-		return $wp_object_cache->delete( $key, $group );
-	}
-
-	/**
-	 * Removes all cache items.
-	 *
-	 * @return bool True on success, false on failure.
-	 */
-	function wp_cache_flush() {
-		global $wp_object_cache;
-		return $wp_object_cache->flush();
-	}
-
-	/**
-	 * Retrieves the cache contents from the cache by key and group.
-	 *
-	 * @param int|string $key   The key under which the cache contents are stored.
-	 * @param string     $group Optional. Where the cache contents are grouped. Default empty.
-	 * @param bool       $force Optional. Whether to force an update of the local cache from the persistent cache. Default false.
-	 * @param bool       $found Optional. Whether the key was found in the cache (passed by reference). Disambiguates a return of false. Default null.
-	 * @return mixed|false The cache contents on success, false on failure to retrieve contents.
-	 */
-	function wp_cache_get( $key, $group = '', $force = false, &$found = null ) {
-		global $wp_object_cache;
-		return $wp_object_cache->get( $key, $group, $force, $found );
-	}
-
-	/**
-	 * Increments numeric cache item's value.
-	 *
-	 * @param int|string $key    The cache key to increment.
-	 * @param int        $offset Optional. The amount by which to increment the item's value. Default 1.
-	 * @param string     $group  Optional. The group the key is in. Default empty.
-	 * @return int|false The item's new value on success, false on failure.
-	 */
-	function wp_cache_increase( $key, $offset = 1, $group = '' ) {
-		global $wp_object_cache;
-		return $wp_object_cache->increase( $key, $offset, $group );
-	}
-
-	/**
-	 * Replaces the contents of the cache with new data.
-	 *
-	 * @param int|string $key    The cache key to insert data under.
-	 * @param mixed      $data   The data to insert.
-	 * @param string     $group  Optional. The group to insert data into. Default empty.
-	 * @param int        $expire Optional. When the cache data should expire, in seconds. Default 0 (no expiration).
-	 * @return bool True if contents were replaced, false if original value does not exist.
-	 */
-	function wp_cache_replace( $key, $data, $group = '', $expire = 0 ) {
-		global $wp_object_cache;
-		return $wp_object_cache->replace( $key, $data, $group, (int) $expire );
-	}
-
-	/**
-	 * Saves the data to the cache.
-	 *
-	 * @param int|string $key    The cache key to insert data under.
-	 * @param mixed      $data   The data to insert.
-	 * @param string     $group  Optional. The group to insert data into. Default empty.
-	 * @param int        $expire Optional. When the cache data should expire, in seconds. Default 0 (no expiration).
-	 * @return bool True on success, false on failure.
-	 */
-	function wp_cache_set( $key, $data, $group = '', $expire = 0 ) {
-		global $wp_object_cache;
-		return $wp_object_cache->set( $key, $data, $group, (int) $expire );
-	}
-
-	/**
-	 * Switches the internal blog ID.
-	 *
-	 * @param int $blog_id Blog ID.
-	 */
-	function wp_cache_switch_to_blog( $blog_id ) {
-		global $wp_object_cache;
-		$wp_object_cache->switch_to_blog( $blog_id );
-	}
-
-	/**
-	 * Retrieves multiple values from the cache in one call.
-	 *
-	 * @param array  $keys  Array of keys under which the cache contents are stored.
-	 * @param string $group Optional. Where the cache contents are grouped. Default empty.
-	 * @param bool   $force Optional. Whether to force an update of the local cache from the persistent cache. Default false.
-	 * @return array Array of return values, grouped by key.
-	 */
-	function wp_cache_get_multiple( $keys, $group = '', $force = false ) {
-		global $wp_object_cache;
-		if ( method_exists( $wp_object_cache, 'get_multiple' ) ) {
-			return $wp_object_cache->get_multiple( $keys, $group, $force );
-		}
-		$values = array();
-		foreach ( $keys as $key ) {
-			$values[ $key ] = wp_cache_get( $key, $group, $force );
-		}
-		return $values;
-	}
-
-	/**
-	 * Sets multiple values to the cache in one call.
-	 *
-	 * @param array  $data   Array of keys and values to be set.
-	 * @param string $group  Optional. Where the cache contents are grouped. Default empty.
-	 * @param int    $expire Optional. When the cache data should expire, in seconds. Default 0 (no expiration).
-	 * @return bool[] Array of return values, grouped by key.
-	 */
-	function wp_cache_set_multiple( $data, $group = '', $expire = 0 ) {
-		global $wp_object_cache;
-		if ( method_exists( $wp_object_cache, 'set_multiple' ) ) {
-			return $wp_object_cache->set_multiple( $data, $group, $expire );
-		}
-		$values = array();
-		foreach ( $data as $key => $value ) {
-			$values[ $key ] = wp_cache_set( $key, $value, $group, $expire );
-		}
-		return $values;
-	}
-
-	/**
-	 * Adds multiple values to the cache in one call.
-	 *
-	 * @param array  $data   Array of keys and values to be added.
-	 * @param string $group  Optional. Where the cache contents are grouped. Default empty.
-	 * @param int    $expire Optional. When the cache data should expire, in seconds. Default 0 (no expiration).
-	 * @return bool[] Array of return values, grouped by key.
-	 */
-	function wp_cache_add_multiple( $data, $group = '', $expire = 0 ) {
-		global $wp_object_cache;
-		$values = array();
-		foreach ( $data as $key => $value ) {
-			$values[ $key ] = wp_cache_add( $key, $value, $group, $expire );
-		}
-		return $values;
-	}
-
-	/**
-	 * Deletes multiple values from the cache in one call.
-	 *
-	 * @param array  $keys  Array of keys to be deleted.
-	 * @param string $group Optional. Where the cache contents are grouped. Default empty.
-	 * @return bool[] Array of return values, grouped by key.
-	 */
-	function wp_cache_delete_multiple( $keys, $group = '' ) {
-		global $wp_object_cache;
-		if ( method_exists( $wp_object_cache, 'delete_multiple' ) ) {
-			return $wp_object_cache->delete_multiple( $keys, $group );
-		}
-		$values = array();
-		foreach ( $keys as $key ) {
-			$values[ $key ] = wp_cache_delete( $key, $group );
-		}
-		return $values;
-	}
-
-	/**
-	 * WP_Object_Cache Redis Manager.
-	 *
-	 * phpcs:disable PSR1.Classes.ClassDeclaration.MultipleClasses
-	 * phpcs:disable Squiz.Classes.ClassFileName.NoMatch
 	 * phpcs:disable Universal.Files.SeparateFunctionsFromOO.Mixed
 	 */
 	class WP_Object_Cache {
-
 		/**
-		 * Holds the cache global groups.
-		 *
-		 * @var array
-		 */
-		private $global_groups = array();
-
-		/**
-		 * Holds the non-persistent cache groups.
-		 *
-		 * @var array
-		 */
-		private $no_mc_groups = array();
-
-		/**
-		 * Holds the local runtime cache.
+		 * Holds the cache data.
 		 *
 		 * @var array
 		 */
@@ -275,7 +28,7 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 		/**
 		 * Holds the Redis client instance.
 		 *
-		 * @var \Redis
+		 * @var \Redis|\RedisCluster|null
 		 */
 		private $redis;
 
@@ -313,13 +66,10 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 
 		/**
 		 * Connects to Redis server.
+		 *
+		 * @return void
 		 */
 		private function connect_redis() {
-			if ( ! class_exists( 'Redis' ) ) {
-				return;
-			}
-
-			// Read configuration.
 			$config_file = WP_CONTENT_DIR . '/wppo-redis-config.php';
 			$config      = array();
 
@@ -327,64 +77,261 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 				$config = include $config_file; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
 			}
 
-			$host     = apply_filters( 'wppo_redis_host', isset( $config['host'] ) ? $config['host'] : '127.0.0.1' );
-			$port     = apply_filters( 'wppo_redis_port', isset( $config['port'] ) ? (int) $config['port'] : 6379 );
-			$password = apply_filters( 'wppo_redis_password', isset( $config['password'] ) ? $config['password'] : '' );
-			$database = apply_filters( 'wppo_redis_database', isset( $config['database'] ) ? (int) $config['database'] : 0 );
+			if ( ! is_array( $config ) ) {
+				return;
+			}
 
-			$this->redis         = new \Redis();
-			$this->redis_replica = null;
+			$use_tls  = $config['use_tls'] ?? false;
+			$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
+			$password = $config['password'] ?? '';
+			$timeout  = 0.5;
 
 			try {
-				if ( $this->redis->connect( $host, $port, 1.0 ) ) {
-					if ( ! empty( $password ) ) {
-						if ( $this->redis->auth( $password ) === false ) {
-							$this->redis->close();
-							return;
-						}
-					}
-					if ( $this->redis->select( $database ) === false ) {
-						$this->redis->close();
-						return;
-					}
-					if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
-						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY ); // Optimize serialization if igbinary is available..
-					} else {
-						$this->redis->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_PHP );
-					}
-					$this->redis_connected = true;
+				$connection = self::wppo_redis_connect( $config );
 
-					// Connect Replica if available.
-					if ( isset( $config['replicas'] ) && is_array( $config['replicas'] ) && ! empty( $config['replicas'] ) ) {
-						// Grab a random replica.
-						$replica = $config['replicas'][ array_rand( $config['replicas'] ) ];
-						$r_host  = isset( $replica['host'] ) ? $replica['host'] : '127.0.0.1';
-						$r_port  = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
-						try {
-							$tmp_replica = new \Redis();
-							if ( $tmp_replica->connect( $r_host, $r_port, 1.0 ) ) {
-								if ( ! empty( $replica['password'] ) ) {
-									$tmp_replica->auth( $replica['password'] );
-								}
-								$tmp_replica->select( $database );
-								if ( defined( '\Redis::SERIALIZER_IGBINARY' ) ) {
-									$tmp_replica->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_IGBINARY );
-								} else {
-									$tmp_replica->setOption( \Redis::OPT_SERIALIZER, \Redis::SERIALIZER_PHP );
-								}
-								$this->redis_replica = $tmp_replica;
-							}
-						} catch ( \Exception $e ) {
-							$this->redis_replica = null;
+				if ( is_wp_error( $connection ) ) {
+					$this->redis_connected = false;
+					return;
+				}
+
+				$this->redis           = $connection;
+				$this->redis_connected = true;
+
+				// Standalone replica support.
+				if ( 'standalone' === ( $config['mode'] ?? 'standalone' ) && isset( $config['replicas'] ) && is_array( $config['replicas'] ) && ! empty( $config['replicas'] ) ) {
+					$replica = $config['replicas'][ array_rand( $config['replicas'] ) ];
+					$r_host  = $replica['host'] ?? '127.0.0.1';
+					$r_port  = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
+					$r_pass  = $replica['password'] ?? $password;
+					try {
+						$tmp_replica = new \Redis();
+						if ( $use_tls && strpos( $r_host, 'tls://' ) !== 0 ) {
+							$r_host = 'tls://' . $r_host;
 						}
+						if ( $tmp_replica->connect( $r_host, $r_port, $timeout ) ) {
+							$replica_auth_ok = true;
+							if ( ! empty( $r_pass ) ) {
+								$replica_auth_ok = $tmp_replica->auth( $r_pass );
+							}
+
+							if ( $replica_auth_ok && $tmp_replica->select( $database ) ) {
+								$this->redis_replica = $tmp_replica;
+							} else {
+								$tmp_replica->close();
+							}
+						}
+					} catch ( \Throwable $e ) {
+						$this->redis_replica = null;
 					}
 				}
-			} catch ( \Exception $e ) {
-				// Fallback to internal cache variable if Redis fails.
+
+				if ( $this->redis_connected && $this->redis ) {
+					self::wppo_apply_redis_options( $this->redis, $config );
+					if ( $this->redis_replica ) {
+						self::wppo_apply_redis_options( $this->redis_replica, $config );
+					}
+				}
+			} catch ( \Throwable $e ) {
 				$this->redis_connected = false;
 				$this->redis_replica   = null;
 			}
 		}
+
+		/**
+		 * Connect to Redis based on configuration.
+		 *
+		 * @param array $config Redis configuration.
+		 * @return \Redis|\RedisCluster|\WP_Error Connected instance or error.
+		 */
+		private static function wppo_redis_connect( $config ) {
+			$mode     = $config['mode'] ?? 'standalone';
+			$password = $config['password'] ?? '';
+			$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
+			$use_tls  = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
+			$timeout  = 0.5;
+
+			try {
+				if ( 'cluster' === $mode ) {
+					if ( ! class_exists( 'RedisCluster' ) ) {
+						return new \WP_Error( 'missing_cluster', 'RedisCluster class not found.' );
+					}
+					$nodes = $config['nodes'] ?? array();
+					if ( is_string( $nodes ) ) {
+						$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
+					}
+					if ( empty( $nodes ) ) {
+						return new \WP_Error( 'low_nodes', 'No nodes provided for Cluster.' );
+					}
+
+					if ( $use_tls ) {
+						$nodes = array_map(
+							function ( $node ) {
+								return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
+							},
+							$nodes
+						);
+					}
+
+					try {
+						$persistent = ! empty( $config['persistent'] );
+						$cluster    = new \RedisCluster( null, $nodes, $timeout, $timeout, $persistent, $password );
+
+						self::wppo_apply_redis_options( $cluster, $config );
+
+						return $cluster;
+					} catch ( \Throwable $e ) {
+						return new \WP_Error( 'cluster_fail', 'Redis Cluster connection failed: ' . $e->getMessage() );
+					}
+				}
+
+				if ( 'sentinel' === $mode ) {
+					if ( ! class_exists( 'RedisSentinel' ) ) {
+						return new \WP_Error( 'missing_sentinel', 'RedisSentinel class not found.' );
+					}
+					$nodes       = $config['nodes'] ?? array();
+					$master_name = $config['master_name'] ?? 'mymaster';
+
+					if ( is_string( $nodes ) ) {
+						$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
+					}
+
+					if ( empty( $nodes ) ) {
+						return new \WP_Error( 'low_nodes', 'Not enough Sentinel nodes configured.' );
+					}
+
+					if ( version_compare( phpversion( 'redis' ), '6.0.0', '<' ) ) {
+						return new \WP_Error( 'redis_version', 'Sentinel mode requires phpredis version 6.0.0 or higher.' );
+					}
+
+					$errors = array();
+					foreach ( $nodes as $node ) {
+						// Robust parsing of host and port (handles IPv6).
+						if ( strpos( $node, '[' ) === 0 ) {
+							$port_start = strpos( $node, ']:' );
+							if ( false !== $port_start ) {
+								$s_host = substr( $node, 1, $port_start - 1 );
+								$s_port = (int) substr( $node, $port_start + 2 );
+							} else {
+								$s_host = trim( $node, '[]' );
+								$s_port = 26379;
+							}
+						} else {
+							$last_colon = strrpos( $node, ':' );
+							if ( false !== $last_colon ) {
+								$s_host = substr( $node, 0, $last_colon );
+								$s_port = (int) substr( $node, $last_colon + 1 );
+							} else {
+								$s_host = $node;
+								$s_port = 26379;
+							}
+						}
+
+						try {
+							$sentinel = new \RedisSentinel(
+								array(
+									'host' => $s_host,
+									'port' => (int) $s_port,
+								)
+							);
+							$address  = $sentinel->getMasterAddrByName( $master_name );
+							if ( $address ) {
+								if ( ! class_exists( 'Redis' ) ) {
+									return new \WP_Error( 'missing_redis', 'The Redis class is not available.' );
+								}
+								$redis = new \Redis();
+								$host  = $use_tls ? 'tls://' . $address[0] : $address[0];
+								if ( $redis->connect( $host, (int) $address[1], $timeout ) ) {
+									if ( $password && ! $redis->auth( $password ) ) {
+										$redis->close();
+										return new \WP_Error( 'auth_fail', 'Sentinel Master Auth failed.' );
+									}
+
+									if ( ! $redis->select( $database ) ) {
+										$redis->close();
+										return new \WP_Error( 'select_fail', "Failed to select Redis database: $database" );
+									}
+
+									self::wppo_apply_redis_options( $redis, $config );
+
+									return $redis;
+								}
+							}
+						} catch ( \Throwable $e ) {
+							$errors[] = $s_host . ':' . $s_port . ' - ' . $e->getMessage();
+							continue;
+						}
+					}
+
+					$error_msg = 'Could not resolve master via Sentinels.';
+					if ( ! empty( $errors ) ) {
+						$error_msg .= ' Last error: ' . end( $errors );
+					} else {
+						$error_msg .= ' No sentinel nodes responded or master not found.';
+					}
+					return new \WP_Error( 'sentinel_fail', $error_msg );
+				}
+
+				// Standalone default connection.
+				if ( ! class_exists( 'Redis' ) ) {
+					return new \WP_Error( 'missing_redis', 'The Redis class is not available.' );
+				}
+				$host = $config['host'] ?? '127.0.0.1';
+				$port = isset( $config['port'] ) ? (int) $config['port'] : 6379;
+				if ( $use_tls && strpos( $host, 'tls://' ) !== 0 ) {
+					$host = 'tls://' . $host;
+				}
+
+				$redis = new \Redis();
+				$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				if ( @$redis->$func( $host, $port, $timeout ) ) {
+					if ( ! empty( $password ) && $redis->auth( $password ) === false ) {
+						$redis->close();
+						return new \WP_Error( 'auth_fail', 'Redis Auth failed.' );
+					}
+
+					if ( ! $redis->select( $database ) ) {
+						$redis->close();
+						return new \WP_Error( 'select_fail', "Failed to select Redis database: $database" );
+					}
+
+					self::wppo_apply_redis_options( $redis, $config );
+
+					return $redis;
+				}
+			} catch ( \Throwable $e ) {
+				return new \WP_Error( 'redis_err', $e->getMessage() );
+			}
+
+			return new \WP_Error( 'conn_fail', 'Could not connect to Redis. Please ensure the service is running.' );
+		}
+
+		/**
+		 * Apply performance and serialization options to a Redis client.
+		 *
+		 * @param \Redis|\RedisCluster $redis  Redis client instance.
+		 * @param array                $config Configuration options.
+		 */
+		private static function wppo_apply_redis_options( $redis, $config ) {
+			$serializer = defined( '\Redis::SERIALIZER_IGBINARY' ) ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP;
+			$redis->setOption( \Redis::OPT_SERIALIZER, $serializer );
+
+			if ( isset( $config['compression'] ) && 'none' !== $config['compression'] ) {
+				$compression_type = null;
+				if ( 'lzf' === $config['compression'] && defined( '\Redis::COMPRESSION_LZF' ) ) {
+					$compression_type = \Redis::COMPRESSION_LZF;
+				} elseif ( 'zstd' === $config['compression'] && defined( '\Redis::COMPRESSION_ZSTD' ) ) {
+					$compression_type = \Redis::COMPRESSION_ZSTD;
+				} elseif ( 'lz4' === $config['compression'] && defined( '\Redis::COMPRESSION_LZ4' ) ) {
+					$compression_type = \Redis::COMPRESSION_LZ4;
+				}
+
+				if ( null !== $compression_type ) {
+					$redis->setOption( \Redis::OPT_COMPRESSION, $compression_type );
+				}
+			}
+		}
+
 
 		/**
 		 * Retrieves the actual key prefixed correctly.
@@ -681,22 +628,34 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 
 				$prefix  = $this->blog_prefix;
 				$pattern = $prefix . '*';
-				$cursor  = null;
-				$deleted = 0;
 
-				do {
-					$keys = $this->redis->scan(
-						$cursor,
-						array(
-							'match' => $pattern,
-							'count' => 100,
-						)
-					);
-					if ( ! empty( $keys ) ) {
-						$this->redis->del( $keys );
-						$deleted += count( $keys );
+				if ( $this->redis instanceof \RedisCluster ) {
+					$masters = $this->redis->_masters();
+					foreach ( $masters as $node ) {
+						$cursor = null;
+						do {
+							$keys = $this->redis->scan( $cursor, $node, $pattern, 100 );
+							if ( false === $keys ) {
+								break;
+							}
+							if ( is_array( $keys ) && ! empty( $keys ) ) {
+								$this->redis->del( $keys );
+							}
+						} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
 					}
-				} while ( 0 !== $cursor );
+					return true;
+				}
+
+				$cursor = null;
+				do {
+					$keys = $this->redis->scan( $cursor, $pattern, 100 );
+					if ( false === $keys ) {
+						break;
+					}
+					if ( is_array( $keys ) && ! empty( $keys ) ) {
+						$this->redis->del( $keys );
+					}
+				} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
 
 				return true;
 			}
@@ -709,15 +668,19 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 		 * @param int|string $key    Cache key.
 		 * @param int        $offset Offset amount.
 		 * @param string     $group  Cache group.
-		 * @return bool|int New value or false.
+		 * @return int|bool The new value or false.
 		 */
-		public function increase( $key, $offset = 1, $group = 'default' ) {
+		public function incr( $key, $offset = 1, $group = 'default' ) {
 			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
-				return false; // Memcached/Redis specific feature only.
+				$local_key = $this->get_key( $key, $group );
+				if ( ! isset( $this->cache[ $local_key ] ) ) {
+					$this->cache[ $local_key ] = 0;
+				}
+				$this->cache[ $local_key ] += $offset;
+				return $this->cache[ $local_key ];
 			}
 
-			$formatted_key = $this->get_key( $key, $group );
-			return $this->redis->incrBy( $formatted_key, $offset );
+			return $this->redis->incrBy( $this->get_key( $key, $group ), $offset );
 		}
 
 		/**
@@ -726,60 +689,200 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 		 * @param int|string $key    Cache key.
 		 * @param int        $offset Offset amount.
 		 * @param string     $group  Cache group.
-		 * @return bool|int New value or false.
+		 * @return int|bool The new value or false.
 		 */
-		public function decrease( $key, $offset = 1, $group = 'default' ) {
+		public function decr( $key, $offset = 1, $group = 'default' ) {
 			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
-				return false;
+				$local_key = $this->get_key( $key, $group );
+				if ( ! isset( $this->cache[ $local_key ] ) ) {
+					$this->cache[ $local_key ] = 0;
+				}
+				$this->cache[ $local_key ] -= $offset;
+				return $this->cache[ $local_key ];
 			}
 
-			$formatted_key = $this->get_key( $key, $group );
-			return $this->redis->decrBy( $formatted_key, $offset );
+			return $this->redis->decrBy( $this->get_key( $key, $group ), $offset );
 		}
 
 		/**
-		 * Adds global groups.
+		 * Sets the list of global groups.
 		 *
 		 * @param array $groups Global groups.
+		 * @return void
 		 */
 		public function add_global_groups( $groups ) {
 			$groups              = (array) $groups;
-			$this->global_groups = array_merge( $this->global_groups, $groups );
-			$this->global_groups = array_unique( $this->global_groups );
+			$this->global_groups = array_unique( array_merge( $this->global_groups, $groups ) );
 		}
 
 		/**
-		 * Adds non persistent groups.
+		 * Sets the list of groups that should not be cached in Redis.
 		 *
-		 * @param array $groups Non persistent groups.
+		 * @param array $groups Non-persistent groups.
+		 * @return void
 		 */
 		public function add_non_persistent_groups( $groups ) {
 			$groups             = (array) $groups;
-			$this->no_mc_groups = array_merge( $this->no_mc_groups, $groups );
-			$this->no_mc_groups = array_unique( $this->no_mc_groups );
+			$this->no_mc_groups = array_unique( array_merge( $this->no_mc_groups, $groups ) );
 		}
 
 		/**
-		 * Switches to a different blog.
+		 * Magic getter for backward compatibility.
 		 *
-		 * @param int $blog_id Blog ID.
+		 * @param string $name Property name.
+		 * @return mixed
 		 */
-		public function switch_to_blog( $blog_id ) {
-			$this->blog_prefix = ( is_multisite() ? $blog_id : $GLOBALS['table_prefix'] ) . ':';
+		public function __get( $name ) {
+			return $this->$name;
 		}
 
 		/**
-		 * Closes the connection.
+		 * Non-persistent groups.
 		 *
-		 * @return bool True.
+		 * @var array
 		 */
-		public function close() {
-			if ( $this->redis_connected ) {
-				$this->redis->close();
-				$this->redis_connected = false;
-			}
-			return true;
-		}
+		private $no_mc_groups = array();
+
+		/**
+		 * Global groups.
+		 *
+		 * @var array
+		 */
+		private $global_groups = array();
 	}
+}
 
-endif;
+/**
+ * Global cache functions.
+ */
+
+/**
+ * Adds data to the cache.
+ *
+ * @param int|string $key    Cache key.
+ * @param mixed      $data   Cache data.
+ * @param string     $group  Cache group.
+ * @param int        $expire Expiration.
+ * @return bool True on success.
+ */
+function wp_cache_add( $key, $data, $group = '', $expire = 0 ) {
+	global $wp_object_cache;
+	return $wp_object_cache->add( $key, $data, $group, (int) $expire );
+}
+
+/**
+ * Sets data to the cache.
+ *
+ * @param int|string $key    Cache key.
+ * @param mixed      $data   Cache data.
+ * @param string     $group  Cache group.
+ * @param int        $expire Expiration.
+ * @return bool True on success.
+ */
+function wp_cache_set( $key, $data, $group = '', $expire = 0 ) {
+	global $wp_object_cache;
+	return $wp_object_cache->set( $key, $data, $group, (int) $expire );
+}
+
+/**
+ * Gets data from the cache.
+ *
+ * @param int|string $key   Cache key.
+ * @param string     $group Cache group.
+ * @param bool       $force Force from Redis.
+ * @param bool       $found Result flag.
+ * @return mixed False if failed.
+ */
+function wp_cache_get( $key, $group = '', $force = false, &$found = null ) {
+	global $wp_object_cache;
+	return $wp_object_cache->get( $key, $group, $force, $found );
+}
+
+/**
+ * Deletes data from the cache.
+ *
+ * @param int|string $key   Cache key.
+ * @param string     $group Cache group.
+ * @return bool True on success.
+ */
+function wp_cache_delete( $key, $group = '' ) {
+	global $wp_object_cache;
+	return $wp_object_cache->delete( $key, $group );
+}
+
+/**
+ * Flushes the object cache.
+ */
+function wp_cache_flush() {
+	global $wp_object_cache;
+	return $wp_object_cache->flush();
+}
+
+/**
+ * Initializes the object cache.
+ */
+function wp_cache_init() {
+	global $wp_object_cache;
+	// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
+	$wp_object_cache = new WP_Object_Cache();
+}
+
+/**
+ * Replaces existing data.
+ *
+ * @param int|string $key    Cache key.
+ * @param mixed      $data   Cache data.
+ * @param string     $group  Cache group.
+ * @param int        $expire Expiration.
+ * @return bool True on success.
+ */
+function wp_cache_replace( $key, $data, $group = '', $expire = 0 ) {
+	global $wp_object_cache;
+	return $wp_object_cache->replace( $key, $data, $group, (int) $expire );
+}
+
+/**
+ * Adds global groups.
+ *
+ * @param array $groups Global groups.
+ */
+function wp_cache_add_global_groups( $groups ) {
+	global $wp_object_cache;
+	$wp_object_cache->add_global_groups( $groups );
+}
+
+/**
+ * Adds non-persistent groups.
+ *
+ * @param array $groups Non-persistent groups.
+ */
+function wp_cache_add_non_persistent_groups( $groups ) {
+	global $wp_object_cache;
+	$wp_object_cache->add_non_persistent_groups( $groups );
+}
+
+/**
+ * Increases a cached value.
+ *
+ * @param int|string $key    Cache key.
+ * @param int        $offset Offset amount.
+ * @param string     $group  Cache group.
+ * @return int|bool The new value or false.
+ */
+function wp_cache_incr( $key, $offset = 1, $group = '' ) {
+	global $wp_object_cache;
+	return $wp_object_cache->incr( $key, $offset, $group );
+}
+
+/**
+ * Decreases a cached value.
+ *
+ * @param int|string $key    Cache key.
+ * @param int        $offset Offset amount.
+ * @param string     $group  Cache group.
+ * @return int|bool The new value or false.
+ */
+function wp_cache_decr( $key, $offset = 1, $group = '' ) {
+	global $wp_object_cache;
+	return $wp_object_cache->decr( $key, $offset, $group );
+}

@@ -1,5 +1,6 @@
 # https://docs.coderabbit.ai/configuration-options/
 reviews:
+  profile: assertive
   path_filters:
     - "!vendor/**"
     - "!build/**"

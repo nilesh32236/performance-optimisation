@@ -584,41 +584,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$manager = new Object_Cache();
 
 			if ( 'status' === $action ) {
-				return $this->send_response( $manager->get_status() );
+				$status                          = $manager->get_status();
+				$status['supported_compressors'] = array(
+					'lzf'  => defined( '\Redis::COMPRESSION_LZF' ),
+					'lz4'  => defined( '\Redis::COMPRESSION_LZ4' ),
+					'zstd' => defined( '\Redis::COMPRESSION_ZSTD' ),
+				);
+				return $this->send_response( $status );
 			}
 
 			if ( 'ping' === $action ) {
-				$host     = isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1';
-				$port     = isset( $params['port'] ) ? (int) $params['port'] : 6379;
-				$password = isset( $params['password'] ) ? sanitize_text_field( $params['password'] ) : '';
-				$database = isset( $params['database'] ) ? (int) $params['database'] : 0;
-
-				$result = $manager->ping( $host, $port, $password, $database );
-
-				if ( is_wp_error( $result ) ) {
-					return $this->send_response( null, false, 400, $result->get_error_message() );
+				$config = $this->build_redis_config( $params );
+				$ping   = $manager->ping( $config );
+				if ( is_wp_error( $ping ) ) {
+					return $this->send_response( null, false, 400, $ping->get_error_message() );
 				}
 
-				if ( true !== $result ) {
-					return $this->send_response( null, false, 400, __( 'Connection failed.', 'performance-optimisation' ) );
-				}
-
-				return $this->send_response( true, true, 200, __( 'Connection successful.', 'performance-optimisation' ) );
+				return $this->send_response( array( 'success' => true ) );
 			}
 
 			if ( 'enable' === $action ) {
-				$host     = isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1';
-				$port     = isset( $params['port'] ) ? (int) $params['port'] : 6379;
-				$password = isset( $params['password'] ) ? sanitize_text_field( $params['password'] ) : '';
-				$database = isset( $params['database'] ) ? (int) $params['database'] : 0;
-
-				$config = array(
-					'host'     => $host,
-					'port'     => $port,
-					'password' => $password,
-					'database' => $database,
-				);
-
+				$config = $this->build_redis_config( $params );
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
@@ -650,6 +636,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * Builds a sanitized Redis configuration array from request parameters.
+		 *
+		 * @param array $params Request parameters.
+		 * @return array Sanitized Redis config.
+		 */
+		private function build_redis_config( $params ) {
+			$allowed_keys = array( 'mode', 'host', 'port', 'password', 'database', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
+			$config       = array();
+
+			foreach ( $allowed_keys as $key ) {
+				if ( ! isset( $params[ $key ] ) ) {
+					continue;
+				}
+
+				$value = $params[ $key ];
+
+				switch ( $key ) {
+					case 'host':
+					case 'master_name':
+					case 'compression':
+					case 'mode':
+						$config[ $key ] = sanitize_text_field( (string) $value );
+						break;
+					case 'port':
+					case 'database':
+						$config[ $key ] = (int) $value;
+						break;
+					case 'password':
+						$config[ $key ] = (string) $value;
+						break;
+					case 'use_tls':
+					case 'persistent':
+						$config[ $key ] = (bool) $value;
+						break;
+					case 'nodes':
+						$config[ $key ] = $this->sanitize_nodes( $value );
+						break;
+				}
+			}
+
+			// Defaults for missing keys.
+			$config['mode'] = $config['mode'] ?? 'standalone';
+			$config['host'] = $config['host'] ?? '127.0.0.1';
+			$config['port'] = $config['port'] ?? 6379;
+
+			return $config;
+		}
+
+		/**
+		 * Sanitizes the nodes parameter.
+		 *
+		 * @param mixed $nodes The nodes to sanitize.
+		 * @return array|string Sanitized nodes.
+		 */
+		private function sanitize_nodes( $nodes ) {
+			if ( is_array( $nodes ) ) {
+				return array_values( array_filter( array_map( 'sanitize_text_field', $nodes ) ) );
+			}
+			$nodes = sanitize_text_field( (string) $nodes );
+			return $nodes ? array( $nodes ) : array();
 		}
 
 		/**
