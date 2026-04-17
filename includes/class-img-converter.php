@@ -344,29 +344,29 @@ class Img_Converter {
 	 * @since 1.0.0
 	 */
 	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
-		$info = pathinfo( $source_image );
+		// Use Util::get_local_path to get a clean local path from URL or existing path.
+		$local_path = Util::get_local_path( $source_image );
 
-		$new_file_name = $info['filename'] . '.' . $format;
-
-		$new_image_path = wp_normalize_path( $info['dirname'] . '/' . $new_file_name );
-
-		// If home_url is present, remove it from the path.
-		if ( 0 === strpos( $new_image_path, wp_normalize_path( ABSPATH ) ) ) {
-			$local_path = str_replace(
-				wp_normalize_path( WP_CONTENT_DIR ),
-				wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
-				$new_image_path
-			);
-			return $local_path;
+		if ( empty( $local_path ) ) {
+			// Fallback if URL parsing fails.
+			$info          = pathinfo( $source_image );
+			$new_file_name = $info['filename'] . '.' . $format;
+			$local_path    = wp_normalize_path( $info['dirname'] . '/' . $new_file_name );
+		} else {
+			// Replace extension.
+			$info       = pathinfo( $local_path );
+			$local_path = wp_normalize_path( $info['dirname'] . '/' . $info['filename'] . '.' . $format );
 		}
 
-		$relative_path = wp_normalize_path( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $new_image_path ) );
-
-		$local_path = str_replace(
-			wp_normalize_path( WP_CONTENT_DIR ),
-			wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
-			wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) )
-		);
+		// Adjust for the wppo directory inside wp-content.
+		$wp_content_path = wp_normalize_path( WP_CONTENT_DIR );
+		if ( strpos( $local_path, $wp_content_path ) === 0 ) {
+			$local_path = str_replace(
+				$wp_content_path,
+				wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
+				$local_path
+			);
+		}
 
 		return $local_path;
 	}

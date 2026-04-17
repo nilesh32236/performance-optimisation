@@ -4,9 +4,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	 *
 	 * @param {string} endpointPath The endpoint path.
 	 * @param {Object} payload      The request payload.
+	 * @param {boolean} isRetry     Whether this is a retry attempt.
 	 * @return {Promise}               The fetch promise.
 	 */
-	const postJsonRequest = ( endpointPath, payload ) => {
+	const postJsonRequest = ( endpointPath, payload, isRetry = false ) => {
 		return fetch( wppoObject.apiUrl + endpointPath, {
 			method: 'POST',
 			headers: {
@@ -17,6 +18,15 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		} )
 			.then( ( response ) => {
 				if ( ! response.ok ) {
+					// Handle 403 Forbidden (likely invalid nonce) by refreshing the nonce.
+					if ( 403 === response.status && ! isRetry ) {
+						return refreshNonce().then( ( success ) => {
+							if ( success ) {
+								return postJsonRequest( endpointPath, payload, true );
+							}
+							throw new Error( 'Failed to refresh nonce' );
+						} );
+					}
 					throw new Error( 'Network response was not ok' );
 				}
 				return response.json();
@@ -24,6 +34,24 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			.catch( ( error ) => {
 				console.error( `Error calling ${ endpointPath }: `, error );
 			} );
+	};
+
+	/**
+	 * Refreshes the REST API nonce.
+	 *
+	 * @return {Promise<boolean>} Whether the refresh was successful.
+	 */
+	const refreshNonce = () => {
+		return fetch( wppoObject.apiUrl + '/get_nonce' )
+			.then( ( response ) => response.json() )
+			.then( ( result ) => {
+				if ( result.success && result.data && result.data.nonce ) {
+					wppoObject.nonce = result.data.nonce;
+					return true;
+				}
+				return false;
+			} )
+			.catch( () => false );
 	};
 
 	const clearAllCacheBtn = document.querySelector(

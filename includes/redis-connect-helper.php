@@ -44,7 +44,7 @@ function wppo_redis_connect( $config ) {
 			}
 			$nodes = $config['nodes'] ?? array();
 			if ( is_string( $nodes ) ) {
-				$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
+				$nodes = array_filter( array_map( 'trim', explode( "\n", str_replace( ',', "\n", $nodes ) ) ) );
 			}
 			if ( empty( $nodes ) ) {
 				return new \WP_Error( 'low_nodes', 'No nodes provided for Cluster.' );
@@ -79,7 +79,7 @@ function wppo_redis_connect( $config ) {
 			$master_name = $config['master_name'] ?? 'mymaster';
 
 			if ( is_string( $nodes ) ) {
-				$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
+				$nodes = array_filter( array_map( 'trim', explode( "\n", str_replace( ',', "\n", $nodes ) ) ) );
 			}
 
 			if ( empty( $nodes ) ) {

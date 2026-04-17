@@ -749,7 +749,7 @@ class Main {
 					}
 				}
 
-				if ( $current_url === $exclude_url ) {
+				if ( untrailingslashit( $current_url ) === untrailingslashit( $exclude_url ) ) {
 					return;
 				}
 			}

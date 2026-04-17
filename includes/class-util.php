@@ -233,7 +233,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function process_urls( $urls ) {
-			return array_filter( array_unique( array_map( 'trim', explode( "\n", $urls ) ) ) );
+			if ( is_array( $urls ) ) {
+				return array_filter( array_unique( array_map( 'trim', $urls ) ) );
+			}
+			return array_filter( array_unique( array_map( 'trim', explode( "\n", (string) $urls ) ) ) );
 		}
 	}
 }

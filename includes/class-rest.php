@@ -103,6 +103,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'handle_object_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
+				'get_nonce'               => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_nonce' ),
+					'permission_callback' => 'is_user_logged_in',
+				),
 			);
 		}
 
@@ -699,6 +704,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$nodes = sanitize_text_field( (string) $nodes );
 			return $nodes ? array( $nodes ) : array();
+		}
+
+		/**
+		 * Returns a fresh REST API nonce for the frontend.
+		 *
+		 * @since 1.4.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_nonce() {
+			if ( ! current_user_can( 'manage_options' ) ) {
+				return $this->send_response( null, false, 403, __( 'Unauthorized.', 'performance-optimisation' ) );
+			}
+
+			return $this->send_response(
+				array(
+					'nonce' => wp_create_nonce( 'wp_rest' ),
+				)
+			);
 		}
 
 		/**
