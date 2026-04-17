@@ -26,3 +26,7 @@
 ## 2026-04-14 - Added clear descriptions to complex toggles
 **Learning:** Many complex performance settings (like "Minify HTML" or "Delay JS") lack explanations, leaving non-technical users unsure of their impact.
 **Action:** Always add clear, non-technical `description` props to `CheckboxOption` or similar form elements when implementing feature toggles to ensure users understand the setting's purpose.
+
+## 2024-04-16 - Consistent Theming with submit-button
+**Learning:** Found custom button classes (`wppo-button wppo-button-primary`, etc.) in React components that did not exist in the SCSS, causing them to lack consistent styling and WP CSS variable integration.
+**Action:** Always use the global `submit-button`, `submit-button secondary`, and `submit-button danger` classes for primary, secondary, and destructive actions to ensure dynamic WordPress theme adaptation and a unified design system.

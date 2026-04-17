@@ -104,7 +104,7 @@ class Object_Cache {
 								'total_connections_received' => $info['total_connections_received'] ?? 0,
 								'keyspace_hits'          => $info['keyspace_hits'] ?? 0,
 								'keyspace_misses'        => $info['keyspace_misses'] ?? 0,
-								'keys'                   => isset( $info['db0'] ) ? (int) preg_replace( '/.*keys=([0-9]+).*/', '$1', $info['db0'] ) : 0,
+								'keys'                   => ( isset( $info['db0'] ) && preg_match( '/keys=([0-9]+)/', $info['db0'], $matches ) ) ? (int) $matches[1] : 0,
 							);
 						}
 					}
@@ -128,121 +128,8 @@ class Object_Cache {
 	 * @return \Redis|\RedisCluster|\WP_Error
 	 */
 	private function connect_internal( $config ) {
-		$mode     = $config['mode'] ?? 'standalone';
-		$password = $config['password'] ?? '';
-		$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
-		$use_tls  = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
-		$timeout  = 0.5;
-
-		try {
-			if ( 'cluster' === $mode ) {
-				if ( ! class_exists( 'RedisCluster' ) ) {
-					return new \WP_Error( 'missing_cluster', 'RedisCluster class not found.' );
-				}
-				$nodes = $config['nodes'] ?? array();
-				if ( is_string( $nodes ) ) {
-					$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
-				}
-				if ( empty( $nodes ) ) {
-					return new \WP_Error( 'low_nodes', 'No nodes provided for Cluster.' );
-				}
-
-				if ( $use_tls ) {
-					$nodes = array_map(
-						function ( $node ) {
-							return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
-						},
-						$nodes
-					);
-				}
-
-				try {
-					return new \RedisCluster( null, $nodes, $timeout, $timeout, true, $password );
-				} catch ( \Exception $e ) {
-					return new \WP_Error( 'cluster_fail', 'Redis Cluster connection failed: ' . $e->getMessage() );
-				}
-			}
-
-			if ( 'sentinel' === $mode ) {
-				if ( ! class_exists( 'RedisSentinel' ) ) {
-					return new \WP_Error( 'missing_sentinel', 'RedisSentinel class not found.' );
-				}
-				$nodes       = $config['nodes'] ?? array();
-				$master_name = $config['master_name'] ?? 'mymaster';
-
-				if ( is_string( $nodes ) ) {
-					$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
-				}
-
-				$errors = array();
-				foreach ( $nodes as $node ) {
-					list( $s_host, $s_port ) = array_pad( explode( ':', $node ), 2, 26379 );
-					try {
-						$sentinel = new \RedisSentinel(
-							array(
-								'host' => $s_host,
-								'port' => (int) $s_port,
-							)
-						);
-						$address  = $sentinel->getMasterAddrByName( $master_name );
-						if ( $address ) {
-							$redis = new \Redis();
-							$host  = $use_tls ? 'tls://' . $address[0] : $address[0];
-							if ( $redis->connect( $host, (int) $address[1], $timeout ) ) {
-								if ( $password && ! $redis->auth( $password ) ) {
-									return new \WP_Error( 'auth_fail', 'Sentinel Master Auth failed.' );
-								}
-								$redis->select( $database );
-								return $redis;
-							}
-						}
-					} catch ( \Exception $e ) {
-						$errors[] = $s_host . ':' . $s_port . ' - ' . $e->getMessage();
-						continue;
-					}
-				}
-				return new \WP_Error( 'sentinel_fail', 'Could not resolve master via Sentinals. Last error: ' . end( $errors ) );
-			}
-
-			// Standalone default connection.
-			$host = $config['host'] ?? '127.0.0.1';
-			$port = isset( $config['port'] ) ? (int) $config['port'] : 6379;
-			if ( $use_tls && strpos( $host, 'tls://' ) !== 0 ) {
-				$host = 'tls://' . $host;
-			}
-
-			$redis = new \Redis();
-			$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-			if ( @$redis->$func( $host, $port, $timeout ) ) {
-				$redis->select( $database );
-
-				// Apply performance options.
-				$serializer = defined( '\Redis::SERIALIZER_IGBINARY' ) ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP;
-				$redis->setOption( \Redis::OPT_SERIALIZER, $serializer );
-
-				if ( isset( $config['compression'] ) && 'none' !== $config['compression'] ) {
-					$compression_type = 'none';
-					if ( 'lzf' === $config['compression'] && defined( '\Redis::COMPRESSION_LZF' ) ) {
-						$compression_type = \Redis::COMPRESSION_LZF;
-					} elseif ( 'zstd' === $config['compression'] && defined( '\Redis::COMPRESSION_ZSTD' ) ) {
-						$compression_type = \Redis::COMPRESSION_ZSTD;
-					} elseif ( 'lz4' === $config['compression'] && defined( '\Redis::COMPRESSION_LZ4' ) ) {
-						$compression_type = \Redis::COMPRESSION_LZ4;
-					}
-
-					if ( 'none' !== $compression_type ) {
-						$redis->setOption( \Redis::OPT_COMPRESSION, $compression_type );
-					}
-				}
-
-				return $redis;
-			}
-		} catch ( \Exception $e ) {
-			return new \WP_Error( 'redis_err', $e->getMessage() );
-		}
-
-		return new \WP_Error( 'conn_fail', sprintf( 'Could not connect to Redis at %s:%s. Please ensure the service is running.', $host, $port ) );
+		require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+		return wppo_redis_connect( $config );
 	}
 
 	/**
@@ -264,17 +151,23 @@ class Object_Cache {
 
 		if ( method_exists( $connection, 'ping' ) ) {
 			try {
-				if ( $connection->ping() ) {
-					$connection->close();
+				$result = $connection->ping();
+				$connection->close();
+
+				if ( true === $result || '+PONG' === $result || ( is_string( $result ) && stripos( $result, 'PONG' ) !== false ) ) {
 					return true;
 				}
+				return new \WP_Error( 'ping_fail', 'Ping returned false' );
 			} catch ( \Exception $e ) {
-				return new \WP_Error( 'ping_fail', $e->getMessage() );
+				if ( method_exists( $connection, 'close' ) ) {
+					$connection->close();
+				}
+				return new \WP_Error( 'ping_exception', $e->getMessage() );
 			}
 		}
 
 		$connection->close();
-		return true;
+		return new \WP_Error( 'no_ping_method', 'Connection does not support ping' );
 	}
 
 
@@ -294,24 +187,12 @@ class Object_Cache {
 			return new \WP_Error( 'foreign_dropin', 'Another Object Cache drop-in is already present. Please disable it before enabling this one.' );
 		}
 
-		// Prepare data for config file.
-		$config_data = array(
-			'mode'        => isset( $config['mode'] ) ? sanitize_text_field( $config['mode'] ) : 'standalone',
-			'host'        => isset( $config['host'] ) ? sanitize_text_field( $config['host'] ) : '127.0.0.1',
-			'port'        => isset( $config['port'] ) ? (int) $config['port'] : 6379,
-			'password'    => isset( $config['password'] ) ? (string) $config['password'] : '',
-			'database'    => isset( $config['database'] ) ? (int) $config['database'] : 0,
-			'nodes'       => isset( $config['nodes'] ) ? $config['nodes'] : '',
-			'master_name' => isset( $config['master_name'] ) ? sanitize_text_field( $config['master_name'] ) : 'mymaster',
-			'use_tls'     => isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false,
-			'persistent'  => isset( $config['persistent'] ) ? (bool) $config['persistent'] : false,
-			'compression' => isset( $config['compression'] ) ? sanitize_text_field( $config['compression'] ) : 'none',
-		);
-
-		// Format nodes as array for the config file.
-		if ( ! empty( $config_data['nodes'] ) && is_string( $config_data['nodes'] ) ) {
-			$config_data['nodes'] = array_filter( array_map( 'trim', explode( "\n", $config_data['nodes'] ) ) );
+		// Format nodes as array for the config file if it's a string.
+		if ( ! empty( $config['nodes'] ) && is_string( $config['nodes'] ) ) {
+			$config['nodes'] = array_filter( array_map( 'trim', explode( "\n", $config['nodes'] ) ) );
 		}
+
+		$config_data = $config;
 
 		// Write config file using var_export for clean array representation.
 		$config_content = "<?php\n// Auto-generated by Performance Optimisation\n";

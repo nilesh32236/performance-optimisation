@@ -618,7 +618,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$sizes = $sizes_matches[1];
 					}
 
-					$is_lazy        = (bool) strpos( $img_tag, 'data-src' );
+					$is_lazy        = strpos( $img_tag, 'data-src' ) !== false;
 					$srcset_attr    = $is_lazy ? 'data-srcset' : 'srcset';
 					$sizes_attr     = $is_lazy ? 'data-sizes' : 'sizes';
 					$source_tag     = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
@@ -638,8 +638,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 
 							if ( ! empty( $sizes ) ) {
-								$source_tag .= ' ' . $sizes_attr . '="' . $sizes . '">';
+								$source_tag .= ' ' . $sizes_attr . '="' . $sizes . '"';
 							}
+							$source_tag .= '>';
 						} else {
 							$source_tag .= ' ' . $srcset_attr . '="' . $original_src . '">';
 						}
@@ -676,7 +677,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		public function add_delay_load_img( $buffer ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
-			$exclude_img_count  = $image_optimisation['excludeFistImages'] ?? 0;
+			$exclude_img_count  = $image_optimisation['excludeFirstImages'] ?? 0;
 			$exclude_imgs       = array();
 
 			if ( isset( $image_optimisation['lazyLoadImages'] ) && (bool) $image_optimisation['lazyLoadImages'] ) {

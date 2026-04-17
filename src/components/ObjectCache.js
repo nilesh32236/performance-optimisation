@@ -41,6 +41,7 @@ const ObjectCache = ( { options = {} } ) => {
 		redis_missing: false,
 		foreign_dropin: false,
 		redis_reachable: false,
+		statusLoaded: false,
 	} );
 	const [ actionMsg, setActionMsg ] = useState( null );
 
@@ -51,7 +52,7 @@ const ObjectCache = ( { options = {} } ) => {
 	const fetchStatus = async () => {
 		try {
 			const res = await apiCall( 'object_cache', { action: 'status' } );
-			setCacheStatus( res.data );
+			setCacheStatus( { ...res.data, statusLoaded: true } );
 		} catch ( error ) {
 			console.error( 'Error fetching cache status', error );
 		}
@@ -99,9 +100,17 @@ const ObjectCache = ( { options = {} } ) => {
 		setIsActionLoading( true );
 		setActionMsg( null );
 		try {
+			const credentialsRequired = [
+				'enable',
+				'ping',
+				'authenticate',
+				'test-connection',
+			];
 			const payload = {
 				action,
-				...settings,
+				...( credentialsRequired.includes( action )
+					? settings
+					: { mode: settings.mode } ),
 			};
 			const res = await apiCall( 'object_cache', payload );
 
@@ -134,11 +143,30 @@ const ObjectCache = ( { options = {} } ) => {
 		if ( ! cacheStatus.telemetry ) {
 			return 0;
 		}
-		const hits = parseInt( cacheStatus.telemetry.keyspace_hits ) || 0;
-		const misses = parseInt( cacheStatus.telemetry.keyspace_misses ) || 0;
+		const hits =
+			Number.parseInt(
+				( cacheStatus.telemetry.keyspace_hits || '0' )
+					.toString()
+					.trim(),
+				10
+			) || 0;
+		const misses =
+			Number.parseInt(
+				( cacheStatus.telemetry.keyspace_misses || '0' )
+					.toString()
+					.trim(),
+				10
+			) || 0;
+
 		const total = hits + misses;
-		return total > 0 ? ( ( hits / total ) * 100 ).toFixed( 1 ) : 0;
+		if ( Number.isNaN( total ) || total <= 0 ) {
+			return 0;
+		}
+
+		return ( ( hits / total ) * 100 ).toFixed( 1 );
 	};
+
+	const hitRatio = getHitRatio();
 
 	return (
 		<div className="wppo-dashboard-view fadeIn">
@@ -179,7 +207,7 @@ const ObjectCache = ( { options = {} } ) => {
 								{ isActionLoading
 									? '...'
 									: translations.disableObjectCache ||
-									  'Disable' }
+									  'Disable Object Cache' }
 							</button>
 						</>
 					) : (
@@ -241,7 +269,8 @@ const ObjectCache = ( { options = {} } ) => {
 					</div>
 				) }
 
-				{ ! cacheStatus.redis_missing &&
+				{ cacheStatus.statusLoaded &&
+					! cacheStatus.redis_missing &&
 					! cacheStatus.redis_reachable && (
 						<div className="wppo-notice wppo-notice--error">
 							<FontAwesomeIcon icon={ faExclamationCircle } />
@@ -284,12 +313,12 @@ const ObjectCache = ( { options = {} } ) => {
 							<FontAwesomeIcon icon={ faMousePointer } />
 							Hit Ratio
 						</div>
-						<div className="stat-value">{ getHitRatio() }%</div>
+						<div className="stat-value">{ hitRatio }%</div>
 						<div className="wppo-progress-wrapper">
 							<div className="progress-bar-bg">
 								<div
 									className="progress-bar-fill"
-									style={ { width: `${ getHitRatio() }%` } }
+									style={ { width: `${ hitRatio }%` } }
 								></div>
 							</div>
 						</div>

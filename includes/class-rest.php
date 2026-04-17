@@ -594,20 +594,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( 'ping' === $action ) {
-				$config = array(
-					'mode'        => isset( $params['mode'] ) ? sanitize_text_field( $params['mode'] ) : 'standalone',
-					'host'        => isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1',
-					'port'        => isset( $params['port'] ) ? (int) $params['port'] : 6379,
-					'password'    => isset( $params['password'] ) ? (string) $params['password'] : '',
-					'database'    => isset( $params['database'] ) ? (int) $params['database'] : 0,
-					'nodes'       => isset( $params['nodes'] ) ? $params['nodes'] : '',
-					'master_name' => isset( $params['master_name'] ) ? sanitize_text_field( $params['master_name'] ) : 'mymaster',
-					'use_tls'     => isset( $params['use_tls'] ) ? (bool) $params['use_tls'] : false,
-					'persistent'  => isset( $params['persistent'] ) ? (bool) $params['persistent'] : false,
-					'compression' => isset( $params['compression'] ) ? sanitize_text_field( $params['compression'] ) : 'none',
-				);
-
-				$ping = $manager->ping( $config );
+				$config = $this->build_redis_config( $params );
+				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
 					return $this->send_response( null, false, 400, $ping->get_error_message() );
 				}
@@ -616,19 +604,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( 'enable' === $action ) {
-				$config = array(
-					'mode'        => isset( $params['mode'] ) ? sanitize_text_field( $params['mode'] ) : 'standalone',
-					'host'        => isset( $params['host'] ) ? sanitize_text_field( $params['host'] ) : '127.0.0.1',
-					'port'        => isset( $params['port'] ) ? (int) $params['port'] : 6379,
-					'password'    => isset( $params['password'] ) ? (string) $params['password'] : '',
-					'database'    => isset( $params['database'] ) ? (int) $params['database'] : 0,
-					'nodes'       => isset( $params['nodes'] ) ? $params['nodes'] : '',
-					'master_name' => isset( $params['master_name'] ) ? sanitize_text_field( $params['master_name'] ) : 'mymaster',
-					'use_tls'     => isset( $params['use_tls'] ) ? (bool) $params['use_tls'] : false,
-					'persistent'  => isset( $params['persistent'] ) ? (bool) $params['persistent'] : false,
-					'compression' => isset( $params['compression'] ) ? sanitize_text_field( $params['compression'] ) : 'none',
-				);
-
+				$config = $this->build_redis_config( $params );
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
@@ -660,6 +636,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * Builds a sanitized Redis configuration array from request parameters.
+		 *
+		 * @param array $params Request parameters.
+		 * @return array Sanitized Redis config.
+		 */
+		private function build_redis_config( $params ) {
+			$allowed_keys = array( 'mode', 'host', 'port', 'password', 'database', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
+			$config       = array();
+
+			foreach ( $allowed_keys as $key ) {
+				if ( ! isset( $params[ $key ] ) ) {
+					continue;
+				}
+
+				$value = $params[ $key ];
+
+				switch ( $key ) {
+					case 'host':
+					case 'master_name':
+					case 'compression':
+					case 'mode':
+						$config[ $key ] = sanitize_text_field( (string) $value );
+						break;
+					case 'port':
+					case 'database':
+						$config[ $key ] = (int) $value;
+						break;
+					case 'password':
+						$config[ $key ] = (string) $value;
+						break;
+					case 'use_tls':
+					case 'persistent':
+						$config[ $key ] = (bool) $value;
+						break;
+					case 'nodes':
+						$config[ $key ] = $this->sanitize_nodes( $value );
+						break;
+				}
+			}
+
+			// Defaults for missing keys.
+			$config['mode'] = $config['mode'] ?? 'standalone';
+			$config['host'] = $config['host'] ?? '127.0.0.1';
+			$config['port'] = $config['port'] ?? 6379;
+
+			return $config;
+		}
+
+		/**
+		 * Sanitizes the nodes parameter.
+		 *
+		 * @param mixed $nodes The nodes to sanitize.
+		 * @return array|string Sanitized nodes.
+		 */
+		private function sanitize_nodes( $nodes ) {
+			if ( is_array( $nodes ) ) {
+				return array_values( array_filter( array_map( 'sanitize_text_field', $nodes ) ) );
+			}
+			$nodes = sanitize_text_field( (string) $nodes );
+			return $nodes ? array( $nodes ) : array();
 		}
 
 		/**

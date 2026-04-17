@@ -777,10 +777,10 @@ select.input-field {
 }
 
 /* Premium Buttons */
-button.submit-button, 
+button.submit-button,
 .wppo-button,
-.clear-cache-btn, 
-.optimize-images-btn, 
+.clear-cache-btn,
+.optimize-images-btn,
 .db-clean-all-btn,
 .db-cleanup-card__btn {
 	background: var(--wppo-primary);
@@ -823,7 +823,8 @@ button.submit-button,
 		opacity: 0.7;
 	}
 
-	&.wppo-button-secondary, &.secondary {
+	&.wppo-button-secondary,
+	&.secondary {
 		background: var(--wppo-bg-card);
 		color: var(--wppo-primary);
 		border: 1.5px solid var(--wppo-border);
@@ -836,7 +837,8 @@ button.submit-button,
 		}
 	}
 
-	&.wppo-button-outline, &.outline {
+	&.wppo-button-outline,
+	&.outline {
 		background: transparent;
 		color: var(--wppo-primary);
 		border: 1.5px solid var(--wppo-primary);
@@ -849,7 +851,8 @@ button.submit-button,
 		}
 	}
 
-	&.wppo-button-danger, &.danger {
+	&.wppo-button-danger,
+	&.danger {
 		background: var(--wppo-error);
 		color: #fff;
 		box-shadow: 0 4px 12px hsla(0, 85%, 60%, 0.15);
@@ -859,11 +862,7 @@ button.submit-button,
 			box-shadow: 0 8px 20px hsla(0, 85%, 60%, 0.25);
 		}
 	}
-	
-	&.wppo-button-primary {
-		background: var(--wppo-primary);
-		color: #fff;
-	}
+
 
 	svg {
 		font-size: 14px;
@@ -1256,6 +1255,10 @@ button.submit-button.danger {
 				color: var(--wppo-primary);
 				box-shadow: 0 0 20px rgba(var(--wppo-primary-rgb), 0.2);
 				animation: pulse-soft 2s infinite;
+
+				@media (prefers-reduced-motion: reduce) {
+					animation: none;
+				}
 			}
 		}
 
@@ -1305,6 +1308,10 @@ button.submit-button.danger {
 		transform: translateY(-4px);
 		box-shadow: var(--wppo-shadow-md);
 		border-color: var(--wppo-primary-soft);
+
+		@media (prefers-reduced-motion: reduce) {
+			transform: none;
+		}
 	}
 
 	.stat-header {
