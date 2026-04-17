@@ -11,7 +11,7 @@ import {
 	faInfoCircle,
 } from '@fortawesome/free-solid-svg-icons';
 
-const ImageOptimization = ({ options = {} }) => {
+const ImageOptimization = ( { options = {} } ) => {
 	const translations = wppoSettings.translations;
 
 	const defaultSettings = {
@@ -36,56 +36,55 @@ const ImageOptimization = ({ options = {} }) => {
 		...options,
 	};
 
-	const [settings, setSettings] = useState(defaultSettings);
-	const [isLoading, setIsLoading] = useState(false);
+	const [ settings, setSettings ] = useState( defaultSettings );
+	const [ isLoading, setIsLoading ] = useState( false );
 	const conversionFormatId = useId();
 	const maxWidthImgSizeId = useId();
 	const excludeSizeId = useId();
-	const postTypeCheckboxPrefix = useId();
 	const excludeFirstImagesId = useId();
-	const excludePostTypeUrlsId = useId();
+	const preloadFrontPageImagesId = useId();
 
-	const togglePostType = (postType) => {
-		setSettings((prevSettings) => ({
+	const togglePostType = ( postType ) => {
+		setSettings( ( prevSettings ) => ( {
 			...prevSettings,
-			selectedPostType: prevSettings.selectedPostType.includes(postType)
+			selectedPostType: prevSettings.selectedPostType.includes( postType )
 				? prevSettings.selectedPostType.filter(
-					(type) => type !== postType
-				)
-				: [...prevSettings.selectedPostType, postType],
-		}));
+						( type ) => type !== postType
+				  )
+				: [ ...prevSettings.selectedPostType, postType ],
+		} ) );
 	};
 
-	const onSubmit = async (e) => {
+	const onSubmit = async ( e ) => {
 		e.preventDefault();
-		setIsLoading(true);
+		setIsLoading( true );
 		try {
-			await apiCall('update_settings', {
+			await apiCall( 'update_settings', {
 				tab: 'image_optimisation',
 				settings,
-			});
+			} );
 			wppoSettings.notify(
 				translations.formSubmitted || 'Settings saved successfully.',
 				'success'
 			);
-		} catch (error) {
-			console.error(translations.formSubmissionError, error);
+		} catch ( error ) {
+			console.error( translations.formSubmissionError, error );
 			wppoSettings.notify(
 				translations.formSubmissionError || 'Error saving settings.',
 				'error'
 			);
 		} finally {
-			setIsLoading(false);
+			setIsLoading( false );
 		}
 	};
 
 	return (
-		<form onSubmit={onSubmit} className="settings-form fadeIn">
-			<h2>{translations.imgOptimizationsettings}</h2>
+		<form onSubmit={ onSubmit } className="settings-form fadeIn">
+			<h2>{ translations.imgOptimizationsettings }</h2>
 
 			<div className="feature-card">
 				<h3>
-					<FontAwesomeIcon icon={faEye} /> Smart Loading
+					<FontAwesomeIcon icon={ faEye } /> Smart Loading
 				</h3>
 				<p>
 					Manage how images are loaded on your site to prioritize
@@ -93,58 +92,58 @@ const ImageOptimization = ({ options = {} }) => {
 				</p>
 
 				<CheckboxOption
-					label={translations.lazyLoadImages}
-					checked={settings.lazyLoadImages}
-					onChange={handleChange(setSettings)}
+					label={ translations.lazyLoadImages }
+					checked={ settings.lazyLoadImages }
+					onChange={ handleChange( setSettings ) }
 					name="lazyLoadImages"
 					textareaName="excludeImages"
-					textareaPlaceholder={translations.excludeImages}
-					textareaValue={settings.excludeImages}
-					onTextareaChange={handleChange(setSettings)}
+					textareaPlaceholder={ translations.excludeImages }
+					textareaValue={ settings.excludeImages }
+					onTextareaChange={ handleChange( setSettings ) }
 					description={
 						translations.lazyLoadImagesDesc ||
 						'Delay loading of images until they scroll into view to reduce initial page weight.'
 					}
 				>
-					{settings.lazyLoadImages && (
+					{ settings.lazyLoadImages && (
 						<>
 							<div className="wppo-notice wppo-notice--info">
-								<FontAwesomeIcon icon={faInfoCircle} />
+								<FontAwesomeIcon icon={ faInfoCircle } />
 								<span>
-									{translations.lazyLoadInfo ||
-										'Images above the fold (header, hero) should be excluded to avoid layout shifts. Use the settings below to fine-tune.'}
+									{ translations.lazyLoadInfo ||
+										'Images above the fold (header, hero) should be excluded to avoid layout shifts. Use the settings below to fine-tune.' }
 								</span>
 							</div>
 							<div
-								style={{
+								style={ {
 									display: 'flex',
 									flexDirection: 'column',
 									gap: '24px',
-								}}
+								} }
 							>
 								<div className="setting-group">
 									<label
 										className="field-label"
-										htmlFor={excludeFirstImagesId}
+										htmlFor={ excludeFirstImagesId }
 									>
-										{translations.excludeFirstImages}
+										{ translations.excludeFirstImages }
 									</label>
 									<input
-										id={excludeFirstImagesId}
+										id={ excludeFirstImagesId }
 										className="input-field"
 										type="number"
 										placeholder="e.g. 2"
 										name="excludeFirstImages"
-										value={settings.excludeFirstImages}
-										onChange={handleChange(setSettings)}
+										value={ settings.excludeFirstImages }
+										onChange={ handleChange( setSettings ) }
 									/>
 								</div>
 								<CheckboxOption
-									label={translations.replaceImgToSVG}
+									label={ translations.replaceImgToSVG }
 									checked={
 										settings.replacePlaceholderWithSVG
 									}
-									onChange={handleChange(setSettings)}
+									onChange={ handleChange( setSettings ) }
 									name="replacePlaceholderWithSVG"
 									description={
 										translations.replaceImgToSVGDesc ||
@@ -153,14 +152,14 @@ const ImageOptimization = ({ options = {} }) => {
 								/>
 							</div>
 						</>
-					)}
+					) }
 				</CheckboxOption>
 
-				<div style={{ marginTop: '24px' }}>
+				<div style={ { marginTop: '24px' } }>
 					<CheckboxOption
-						label={translations.wrapInPicture}
-						checked={settings.wrapInPicture}
-						onChange={handleChange(setSettings)}
+						label={ translations.wrapInPicture }
+						checked={ settings.wrapInPicture }
+						onChange={ handleChange( setSettings ) }
 						name="wrapInPicture"
 						description={
 							translations.wrapInPictureDesc ||
@@ -172,7 +171,7 @@ const ImageOptimization = ({ options = {} }) => {
 
 			<div className="feature-card">
 				<h3>
-					<FontAwesomeIcon icon={faEye} /> Video Optimization
+					<FontAwesomeIcon icon={ faEye } /> Video Optimization
 				</h3>
 				<p>
 					Manage how videos are loaded to improve performance and user
@@ -180,14 +179,14 @@ const ImageOptimization = ({ options = {} }) => {
 				</p>
 
 				<CheckboxOption
-					label={translations.lazyLoadVideos}
-					checked={settings.lazyLoadVideos}
-					onChange={handleChange(setSettings)}
+					label={ translations.lazyLoadVideos }
+					checked={ settings.lazyLoadVideos }
+					onChange={ handleChange( setSettings ) }
 					name="lazyLoadVideos"
 					textareaName="excludeVideos"
-					textareaPlaceholder={translations.excludeVideos}
-					textareaValue={settings.excludeVideos}
-					onTextareaChange={handleChange(setSettings)}
+					textareaPlaceholder={ translations.excludeVideos }
+					textareaValue={ settings.excludeVideos }
+					onTextareaChange={ handleChange( setSettings ) }
 					description={
 						translations.lazyLoadVideosDesc ||
 						'Delay loading of videos until they scroll into view.'
@@ -197,7 +196,7 @@ const ImageOptimization = ({ options = {} }) => {
 
 			<div className="feature-card">
 				<h3>
-					<FontAwesomeIcon icon={faMagic} /> Next-Gen Formats
+					<FontAwesomeIcon icon={ faMagic } /> Next-Gen Formats
 				</h3>
 				<p>
 					Automatically convert your images to modern formats like
@@ -205,52 +204,52 @@ const ImageOptimization = ({ options = {} }) => {
 				</p>
 
 				<CheckboxOption
-					label={translations.convertImg}
-					checked={settings.convertImg}
-					onChange={handleChange(setSettings)}
+					label={ translations.convertImg }
+					checked={ settings.convertImg }
+					onChange={ handleChange( setSettings ) }
 					name="convertImg"
 					textareaName="excludeConvertImages"
-					textareaPlaceholder={translations.excludeConvertImages}
-					textareaValue={settings.excludeConvertImages}
-					onTextareaChange={handleChange(setSettings)}
+					textareaPlaceholder={ translations.excludeConvertImages }
+					textareaValue={ settings.excludeConvertImages }
+					onTextareaChange={ handleChange( setSettings ) }
 					description={
 						translations.convertImgDesc ||
 						'Convert images to modern formats like WebP or AVIF.'
 					}
 				>
-					{settings.convertImg && (
+					{ settings.convertImg && (
 						<div className="setting-group">
 							<label
 								className="field-label"
-								htmlFor={conversionFormatId}
+								htmlFor={ conversionFormatId }
 							>
-								{translations.conversationFormat}
+								{ translations.conversationFormat }
 							</label>
 							<select
-								id={conversionFormatId}
+								id={ conversionFormatId }
 								className="input-field"
 								name="conversionFormat"
-								value={settings.conversionFormat}
-								onChange={handleChange(setSettings)}
+								value={ settings.conversionFormat }
+								onChange={ handleChange( setSettings ) }
 							>
 								<option value="webp">
-									{translations.webp}
+									{ translations.webp }
 								</option>
 								<option value="avif">
-									{translations.avif}
+									{ translations.avif }
 								</option>
 								<option value="both">
-									{translations.both}
+									{ translations.both }
 								</option>
 							</select>
 						</div>
-					)}
+					) }
 				</CheckboxOption>
 			</div>
 
 			<div className="feature-card">
 				<h3>
-					<FontAwesomeIcon icon={faCloudUploadAlt} /> Preloading
+					<FontAwesomeIcon icon={ faCloudUploadAlt } /> Preloading
 				</h3>
 				<p>
 					Preload critical assets to ensure they are available as soon
@@ -258,62 +257,68 @@ const ImageOptimization = ({ options = {} }) => {
 				</p>
 
 				<div className="setting-group">
-					<label className="field-label">
-						{translations.preloadFrontPageImg}
+					<label
+						className="field-label"
+						htmlFor={ preloadFrontPageImagesId }
+					>
+						{ translations.preloadFrontPageImg }
 					</label>
 					<textarea
+						id={ preloadFrontPageImagesId }
 						className="input-field"
 						name="preloadFrontPageImagesUrls"
-						placeholder={translations.preloadFrontPageImgUrl}
-						value={settings.preloadFrontPageImagesUrls}
-						onChange={handleChange(setSettings)}
+						placeholder={ translations.preloadFrontPageImgUrl }
+						value={ settings.preloadFrontPageImagesUrls }
+						onChange={ handleChange( setSettings ) }
 					/>
 					<p className="field-description">
-						{translations.preloadFrontPageImgDesc}
+						{ translations.preloadFrontPageImgDesc }
 					</p>
 				</div>
 
 				<CheckboxOption
-					label={translations.preloadPostTypeImg}
-					checked={settings.preloadPostTypeImage}
-					onChange={handleChange(setSettings)}
+					label={ translations.preloadPostTypeImg }
+					checked={ settings.preloadPostTypeImage }
+					onChange={ handleChange( setSettings ) }
 					name="preloadPostTypeImage"
 					textareaName="excludePostTypeImgUrl"
-					textareaPlaceholder={translations.excludePostTypeImgUrl}
-					textareaValue={settings.excludePostTypeImgUrl}
-					onTextareaChange={handleChange(setSettings)}
+					textareaPlaceholder={ translations.excludePostTypeImgUrl }
+					textareaValue={ settings.excludePostTypeImgUrl }
+					onTextareaChange={ handleChange( setSettings ) }
 					description={
 						translations.preloadPostTypeImgDesc ||
 						'Automatically preload featured images for selected post types.'
 					}
 				>
-					{settings.preloadPostTypeImage && (
+					{ settings.preloadPostTypeImage && (
 						<div className="post-types-grid">
-							{settings.availablePostTypes.map((type) => (
+							{ settings.availablePostTypes.map( ( type ) => (
 								<label
-									key={type}
+									key={ type }
 									className="checkbox-label"
+									htmlFor={ `wppo-pt-${ type }` }
 								>
 									<input
+										id={ `wppo-pt-${ type }` }
 										type="checkbox"
-										checked={settings.selectedPostType.includes(
+										checked={ settings.selectedPostType.includes(
 											type
-										)}
-										onChange={() =>
-											togglePostType(type)
+										) }
+										onChange={ () =>
+											togglePostType( type )
 										}
 									/>
-									{type}
+									{ type }
 								</label>
-							))}
+							) ) }
 						</div>
-					)}
+					) }
 				</CheckboxOption>
 			</div>
 
 			<div className="feature-card">
 				<h3>
-					<FontAwesomeIcon icon={faMagic} /> Responsive Images
+					<FontAwesomeIcon icon={ faMagic } /> Responsive Images
 				</h3>
 				<p>
 					Set maximum dimensions for images to ensure they are not
@@ -323,43 +328,40 @@ const ImageOptimization = ({ options = {} }) => {
 				<div className="setting-group">
 					<label
 						className="field-label"
-						htmlFor={maxWidthImgSizeId}
+						htmlFor={ maxWidthImgSizeId }
 					>
 						Max Image Width (px)
 					</label>
 					<input
-						id={maxWidthImgSizeId}
+						id={ maxWidthImgSizeId }
 						className="input-field"
 						type="number"
 						name="maxWidthImgSize"
-						value={settings.maxWidthImgSize}
-						onChange={handleChange(setSettings)}
+						value={ settings.maxWidthImgSize }
+						onChange={ handleChange( setSettings ) }
 					/>
 				</div>
 
 				<div className="setting-group">
-					<label
-						className="field-label"
-						htmlFor={excludeSizeId}
-					>
+					<label className="field-label" htmlFor={ excludeSizeId }>
 						Exclude Classes from Max Width
 					</label>
 					<input
-						id={excludeSizeId}
+						id={ excludeSizeId }
 						className="input-field"
 						type="text"
 						placeholder="e.g. .no-resize, .hero-img"
 						name="excludeSize"
-						value={settings.excludeSize}
-						onChange={handleChange(setSettings)}
+						value={ settings.excludeSize }
+						onChange={ handleChange( setSettings ) }
 					/>
 				</div>
 			</div>
 
 			<div className="form-actions">
 				<LoadingSubmitButton
-					isLoading={isLoading}
-					text={translations.saveSettings}
+					isLoading={ isLoading }
+					text={ translations.saveSettings }
 				/>
 			</div>
 		</form>

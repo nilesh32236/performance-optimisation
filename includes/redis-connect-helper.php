@@ -72,7 +72,7 @@ function wppo_redis_connect( $config ) {
 			if ( ! class_exists( 'RedisSentinel' ) ) {
 				return new \WP_Error( 'missing_sentinel', 'RedisSentinel class not found.' );
 			}
-			$nodes       = wppo_parse_nodes( $config['nodes'] ?? array() );
+			$nodes = wppo_parse_nodes( $config['nodes'] ?? array() );
 
 			if ( empty( $nodes ) ) {
 				return new \WP_Error( 'low_nodes', 'Not enough Sentinel nodes configured.' );

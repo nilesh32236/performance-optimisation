@@ -2,9 +2,9 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	/**
 	 * Shared helper for POST JSON requests.
 	 *
-	 * @param {string} endpointPath The endpoint path.
-	 * @param {Object} payload      The request payload.
-	 * @param {boolean} isRetry     Whether this is a retry attempt.
+	 * @param {string}  endpointPath The endpoint path.
+	 * @param {Object}  payload      The request payload.
+	 * @param {boolean} isRetry      Whether this is a retry attempt.
 	 * @return {Promise}               The fetch promise.
 	 */
 	const postJsonRequest = ( endpointPath, payload, isRetry = false ) => {
@@ -22,7 +22,11 @@ document.addEventListener( 'DOMContentLoaded', function () {
 					if ( 403 === response.status && ! isRetry ) {
 						return refreshNonce().then( ( success ) => {
 							if ( success ) {
-								return postJsonRequest( endpointPath, payload, true );
+								return postJsonRequest(
+									endpointPath,
+									payload,
+									true
+								);
 							}
 							throw new Error( 'Failed to refresh nonce' );
 						} );
@@ -33,6 +37,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			} )
 			.catch( ( error ) => {
 				console.error( `Error calling ${ endpointPath }: `, error );
+				throw error;
 			} );
 	};
 
@@ -42,7 +47,11 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	 * @return {Promise<boolean>} Whether the refresh was successful.
 	 */
 	const refreshNonce = () => {
-		return fetch( wppoObject.apiUrl + '/get_nonce' )
+		return fetch( wppoObject.apiUrl + '/get_nonce', {
+			headers: {
+				'X-WP-Nonce': wppoObject.nonce,
+			},
+		} )
 			.then( ( response ) => {
 				if ( ! response.ok ) {
 					return false;
@@ -50,13 +59,21 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				return response.json();
 			} )
 			.then( ( result ) => {
-				if ( result && result.success && result.data && result.data.nonce ) {
+				if (
+					result &&
+					result.success &&
+					result.data &&
+					result.data.nonce
+				) {
 					wppoObject.nonce = result.data.nonce;
 					return true;
 				}
 				return false;
 			} )
-			.catch( () => false );
+			.catch( ( error ) => {
+				console.error( 'Failed to refresh nonce:', error );
+				return false;
+			} );
 	};
 
 	const clearAllCacheBtn = document.querySelector(

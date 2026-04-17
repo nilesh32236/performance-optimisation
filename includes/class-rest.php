@@ -107,7 +107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_nonce' ),
 					'permission_callback' => function () {
-						return current_user_can( 'manage_options' );
+						return is_user_logged_in();
 					},
 				),
 			);

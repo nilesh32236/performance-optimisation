@@ -1,7 +1,6 @@
 import { useState, useEffect } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
-import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faServer,
@@ -363,11 +362,15 @@ const ObjectCache = ( { options = {} } ) => {
 								className="setting-group"
 								style={ { marginBottom: '20px' } }
 							>
-								<label className="field-label">
+								<label
+									className="field-label"
+									htmlFor="wppo-redis-mode"
+								>
 									{ translations.connectionMode ||
 										'Cluster / HA Architecture' }
 								</label>
 								<select
+									id="wppo-redis-mode"
 									className="input-field"
 									name="mode"
 									value={ settings.mode }
@@ -576,11 +579,15 @@ const ObjectCache = ( { options = {} } ) => {
 								className="setting-group"
 								style={ { marginBottom: '24px' } }
 							>
-								<label className="field-label">
+								<label
+									className="field-label"
+									htmlFor="wppo-redis-compression"
+								>
 									{ translations.compressionAlgorithm ||
 										'Memory Compression' }
 								</label>
 								<select
+									id="wppo-redis-compression"
 									className="input-field"
 									name="compression"
 									value={ settings.compression }
@@ -647,9 +654,17 @@ const ObjectCache = ( { options = {} } ) => {
 									className="checkbox-option"
 									style={ { marginBottom: '20px' } }
 								>
-									<label className="wppo-switch">
+									<label
+										className="wppo-switch"
+										htmlFor="wppo-persistent-connection"
+									>
+										<span className="screen-reader-text">
+											{ translations.persistentConnection ||
+												'Persistent Connections' }
+										</span>
 										<input
 											type="checkbox"
+											id="wppo-persistent-connection"
 											name="persistent"
 											checked={ settings.persistent }
 											onChange={ handleChange(
@@ -671,9 +686,17 @@ const ObjectCache = ( { options = {} } ) => {
 								</div>
 
 								<div className="checkbox-option">
-									<label className="wppo-switch">
+									<label
+										className="wppo-switch"
+										htmlFor="wppo-use-tls"
+									>
+										<span className="screen-reader-text">
+											{ translations.enableTls ||
+												'TLS / SSL Encryption' }
+										</span>
 										<input
 											type="checkbox"
+											id="wppo-use-tls"
 											name="use_tls"
 											checked={ settings.use_tls }
 											onChange={ handleChange(

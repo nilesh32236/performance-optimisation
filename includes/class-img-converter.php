@@ -344,27 +344,33 @@ class Img_Converter {
 	 * @since 1.0.0
 	 */
 	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
-		if ( strpos( $source_image, home_url() ) !== 0 && strpos( $source_image, '/' ) !== 0 ) {
-			return $source_image;
-		}
-
 		// Use Util::get_local_path to get a clean local path from URL or existing path.
 		$local_path = Util::get_local_path( $source_image );
 
 		if ( empty( $local_path ) ) {
 			// If Util::get_local_path failed, manually resolve if it's a URL.
-			$home_url    = home_url();
-			$content_url = content_url();
+			$home_url    = untrailingslashit( home_url() );
+			$content_url = untrailingslashit( content_url() );
 
 			if ( strpos( $source_image, $home_url ) === 0 ) {
 				$relative_path = str_replace( $home_url, '', $source_image );
-				$local_path    = wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) );
 			} elseif ( strpos( $source_image, $content_url ) === 0 ) {
 				$relative_path = str_replace( $content_url, '', $source_image );
-				$local_path    = wp_normalize_path( WP_CONTENT_DIR . '/' . ltrim( $relative_path, '/' ) );
+				$relative_path = '/wp-content' . $relative_path;
 			} else {
-				// Final fallback for absolute paths that might already be on disk but failed normalization.
-				$local_path = wp_normalize_path( $source_image );
+				$relative_path = $source_image;
+			}
+
+			// Security: Block directory traversal.
+			if ( strpos( $relative_path, '..' ) !== false ) {
+				return $source_image;
+			}
+
+			$local_path = wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) );
+
+			// Ensure it's still within the WP directory for safety.
+			if ( strpos( $local_path, wp_normalize_path( ABSPATH ) ) !== 0 ) {
+				return $source_image;
 			}
 		}
 

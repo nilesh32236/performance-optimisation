@@ -156,7 +156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					return $tags->get_updated_html();
 				} else {
-					// Regex Fallback (Original logic restored from git history)
+					// Regex Fallback (Original logic restored from git history).
 					return preg_replace_callback(
 						'#<img\b[^>]*((?:src|srcset)=["\'][^"\']+["\'])[^>]*>#i',
 						function ( $matches ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
@@ -312,20 +312,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			// Protocol-relative URLs (e.g., //example.com/image.jpg).
 			if ( strpos( $url, '//' ) === 0 ) {
-				$scheme = wp_parse_url( home_url(), PHP_URL_SCHEME ) ?: 'http';
+				$scheme = wp_parse_url( home_url(), PHP_URL_SCHEME );
+				if ( empty( $scheme ) ) {
+					$scheme = is_ssl() ? 'https' : 'http';
+				}
 				return $scheme . ':' . $url;
 			}
 
 			// Root-relative paths (e.g., /wp-content/uploads/image.jpg).
-			if ( strpos( $url, '/' ) === 0 && strpos( $url, '//' ) !== 0 ) {
+			if ( strpos( $url, '/' ) === 0 ) {
 				return home_url( $url );
 			}
 
 			// True relative paths (e.g., images/photo.jpg or ../uploads/img.jpg).
-			if ( strpos( $url, 'http' ) !== 0 && strpos( $url, '//' ) !== 0 && strpos( $url, '/' ) !== 0 ) {
-				// Get the current URL path to resolve relative paths like ../
-				$current_url_path = wp_parse_url( add_query_arg( array() ), PHP_URL_PATH ) ?: '/';
-				$absolute_path    = $this->resolve_relative_path( $current_url_path, $url );
+			if ( strpos( $url, 'http' ) !== 0 ) {
+				// Get the current URL path to resolve relative paths like ../.
+				$current_url_path = wp_parse_url( add_query_arg( array() ), PHP_URL_PATH );
+				if ( empty( $current_url_path ) ) {
+					$current_url_path = '/';
+				}
+				$absolute_path = $this->resolve_relative_path( $current_url_path, $url );
 				return home_url( $absolute_path );
 			}
 
@@ -345,11 +351,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $relative_path;
 			}
 
-			$base_parts     = array_filter( explode( '/', $base_path ) );
-			$relative_parts = explode( '/', $relative_path );
+			$has_trailing_slash = substr( $base_path, -1 ) === '/';
+			$base_parts         = array_filter( explode( '/', $base_path ), 'strlen' );
+			$relative_parts     = explode( '/', $relative_path );
 
-			// If the base path is a file, remove the filename.
-			if ( ! empty( $base_parts ) && strpos( end( $base_parts ), '.' ) !== false ) {
+			// If the base path is a file (no trailing slash), remove the filename.
+			if ( ! $has_trailing_slash && ! empty( $base_parts ) && strpos( end( $base_parts ), '.' ) !== false ) {
 				array_pop( $base_parts );
 			}
 
@@ -674,7 +681,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				return $tags->get_updated_html();
 			} else {
-				// Regex Fallback (Original logic restored from git history)
+				// Regex Fallback (Original logic restored from git history).
 				if ( ! empty( $exclude_imgs ) ) {
 					foreach ( $exclude_imgs as $exclude_img ) {
 						if ( false !== strpos( $original_src, $exclude_img ) ) {
@@ -792,7 +799,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$iframe_tag = $tags->get_updated_html();
 				}
 			} else {
-				// Regex fallback
+				// Regex fallback.
 				// Replace src with data-src using regex to handle cases where src might be the first attribute or have different spacing.
 				$iframe_tag = preg_replace( '/\bsrc=["\']([^"\']+)["\']/i', 'data-src="$1"', $iframe_tag );
 
@@ -864,20 +871,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						}
 					}
 					return $img_tag;
-				} else {
+				} elseif ( preg_match( '#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches ) ) {
 					// Existing <picture> tag: find the <img> inside and process it.
-					if ( preg_match( '#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches ) ) {
-						$img_tag       = $img_matches[0];
-						$original_src  = $img_matches[2];
-						$processed_img = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
+					$img_tag       = $img_matches[0];
+					$original_src  = $img_matches[2];
+					$processed_img = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
 
-						return str_replace( $img_tag, $processed_img, $matches[0] );
-					}
+					return str_replace( $img_tag, $processed_img, $matches[0] );
 				}
 
 				return $matches[0];
 			} else {
-				// Regex Fallback (Original logic restored from git history)
+				// Regex Fallback (Original logic restored from git history).
 				if ( ! preg_match( '#<picture\b[^>]*>.*?</picture>#is', $matches[0] ) ) {
 
 					$img_tag = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
@@ -1244,7 +1249,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$buffer
 				);
 			} else {
-				// Regex Fallback (Original logic restored from git history)
+				// Regex Fallback (Original logic restored from git history).
 				return preg_replace_callback(
 					'#<video\b([^>]*)>(.*?)</video>#is',
 					function ( $matches ) use ( $exclude_videos ) {

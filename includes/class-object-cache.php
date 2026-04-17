@@ -21,6 +21,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Object_Cache {
 
 	/**
+	 * Marker inside object-cache.php drop-in so we do not overwrite or delete other plugins' files.
+	 *
+	 * @var string
+	 */
+	public const DROPIN_MARKER = 'Redis Object Cache Drop-in for Performance Optimisation';
+
+	/**
 	 * Path to the object cache drop-in.
 	 *
 	 * @var string
@@ -68,7 +75,7 @@ class Object_Cache {
 
 			if ( $wp_filesystem ) {
 				$content = $wp_filesystem->get_contents( $this->dropin_path );
-				if ( false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
+				if ( false !== strpos( $content, self::DROPIN_MARKER ) ) {
 					$status['enabled'] = true;
 				} else {
 					$status['foreign_dropin'] = true;
@@ -188,8 +195,9 @@ class Object_Cache {
 		}
 
 		// Format nodes as array for the config file if it's a string.
-		if ( ! empty( $config['nodes'] ) && is_string( $config['nodes'] ) ) {
-			$config['nodes'] = array_filter( array_map( 'trim', explode( "\n", str_replace( ',', "\n", $config['nodes'] ) ) ) );
+		if ( ! empty( $config['nodes'] ) ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/redis-connect-helper.php';
+			$config['nodes'] = wppo_parse_nodes( $config['nodes'] );
 		}
 
 		$config_data = $config;

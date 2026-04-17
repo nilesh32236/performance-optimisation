@@ -1,13 +1,10 @@
 <?php //phpcs:ignore WordPress.Files.FileName.InvalidClassFileName
 /**
- * Redis Object Cache Drop-in.
+ * Redis Object Cache Drop-in for Performance Optimisation
  *
  * @package PerformanceOptimise
  */
 
-/**
- * Object Cache Drop-in for WordPress.
- */
 /**
  * Object Cache Drop-in for WordPress.
  */
