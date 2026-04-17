@@ -8,68 +8,23 @@ import {
 	faCheckCircle,
 	faExclamationTriangle,
 	faDatabase,
+	faCalendarAlt,
 } from '@fortawesome/free-solid-svg-icons';
+import FeatureHeader from './common/FeatureHeader';
+import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 
 const translations = wppoSettings.translations;
 
 const CLEANUP_TYPES = [
-	{
-		key: 'revisions',
-		label: translations.dbRevisions || 'Post Revisions',
-		description:
-			translations.dbRevisionsDesc ||
-			'Old versions of your posts saved during editing.',
-		icon: faTrash,
-	},
-	{
-		key: 'auto_drafts',
-		label: translations.dbAutoDrafts || 'Auto Drafts',
-		description:
-			translations.dbAutoDraftsDesc ||
-			'Automatically saved drafts that are no longer needed.',
-		icon: faTrash,
-	},
-	{
-		key: 'trashed_posts',
-		label: translations.dbTrashedPosts || 'Trashed Posts',
-		description:
-			translations.dbTrashedPostsDesc ||
-			'Posts that have been moved to the trash.',
-		icon: faTrash,
-	},
-	{
-		key: 'spam_comments',
-		label: translations.dbSpamComments || 'Spam Comments',
-		description:
-			translations.dbSpamCommentsDesc || 'Comments marked as spam.',
-		icon: faTrash,
-	},
-	{
-		key: 'trashed_comments',
-		label: translations.dbTrashedComments || 'Trashed Comments',
-		description:
-			translations.dbTrashedCommentsDesc ||
-			'Comments that have been moved to the trash.',
-		icon: faTrash,
-	},
-	{
-		key: 'expired_transients',
-		label: translations.dbExpiredTransients || 'Expired Transients',
-		description:
-			translations.dbExpiredTransientsDesc ||
-			'Temporary cached data that has expired.',
-		icon: faTrash,
-	},
-	{
-		key: 'orphan_postmeta',
-		label: translations.dbOrphanPostmeta || 'Orphaned Post Meta',
-		description:
-			translations.dbOrphanPostmetaDesc ||
-			'Metadata entries with no associated post.',
-		icon: faTrash,
-	},
+	{ key: 'revisions', label: 'Post Revisions', description: 'Old versions of your posts saved during editing.', icon: faTrash },
+	{ key: 'auto_drafts', label: 'Auto Drafts', description: 'Automatically saved drafts that are no longer needed.', icon: faTrash },
+	{ key: 'trashed_posts', label: 'Trashed Posts', description: 'Posts that have been moved to the trash.', icon: faTrash },
+	{ key: 'spam_comments', label: 'Spam Comments', description: 'Comments marked as spam.', icon: faTrash },
+	{ key: 'trashed_comments', label: 'Trashed Comments', description: 'Comments that have been moved to the trash.', icon: faTrash },
+	{ key: 'expired_transients', label: 'Expired Transients', description: 'Temporary cached data that has expired.', icon: faTrash },
+	{ key: 'orphan_postmeta', label: 'Orphaned Post Meta', description: 'Metadata entries with no associated post.', icon: faTrash },
 ];
 
 const DatabaseCleanup = ( { options = {} } ) => {
@@ -86,50 +41,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	const [ loading, setLoading ] = useState( {} );
 	const [ loadingCounts, setLoadingCounts ] = useState( true );
 	const [ notification, setNotification ] = useState( null );
-	const [ confirmDialog, setConfirmDialog ] = useState( {
-		isOpen: false,
-		type: null,
-		label: '',
-	} );
-
-	const dbScheduleId = useId();
-	const dbRevMaxAgeId = useId();
-	const dbRevKeepLatestId = useId();
-
-	const onSubmitSettings = async ( e ) => {
-		e.preventDefault();
-		setIsSaving( true );
-		try {
-			await apiCall( 'update_settings', {
-				tab: 'database_cleanup',
-				settings,
-			} );
-			setNotification( {
-				type: 'success',
-				message:
-					translations.formSubmitted ||
-					'Settings saved successfully.',
-			} );
-		} catch ( error ) {
-			console.error( translations.formSubmissionError, error );
-			setNotification( {
-				type: 'error',
-				message:
-					translations.formSubmissionError || 'Form submission error',
-			} );
-		} finally {
-			setIsSaving( false );
-		}
-	};
+	const [ confirmDialog, setConfirmDialog ] = useState( { isOpen: false, type: null, label: '' } );
 
 	const fetchCounts = useCallback( async () => {
 		setLoadingCounts( true );
 		try {
-			const response = await apiCall(
-				'database_cleanup_counts',
-				{},
-				'GET'
-			);
+			const response = await apiCall( 'database_cleanup_counts', {}, 'GET' );
 			if ( response.success && response.data ) {
 				setCounts( response.data );
 			}
@@ -144,404 +61,129 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		fetchCounts();
 	}, [ fetchCounts ] );
 
-	useEffect( () => {
-		if ( notification ) {
-			const timer = setTimeout( () => setNotification( null ), 5000 );
-			return () => clearTimeout( timer );
-		}
-	}, [ notification ] );
-
-	const handleCleanup = useCallback(
-		async ( type ) => {
-			setLoading( ( prev ) => ( { ...prev, [ type ]: true } ) );
-			try {
-				const response = await apiCall( 'database_cleanup', { type } );
-				if ( response.success ) {
-					const deleted = response.data?.deleted ?? 0;
-					setNotification( {
-						type: 'success',
-						message: `${
-							translations.dbCleanupSuccess || 'Cleaned'
-						}: ${ deleted } ${
-							translations.dbItemsRemoved || 'items removed'
-						}.`,
-					} );
-					fetchCounts();
-				} else {
-					setNotification( {
-						type: 'error',
-						message:
-							response.message ||
-							translations.dbCleanupError ||
-							'Cleanup failed.',
-					} );
-				}
-			} catch ( error ) {
-				setNotification( {
-					type: 'error',
-					message:
-						translations.dbCleanupError ||
-						'An error occurred during cleanup.',
-				} );
-			} finally {
-				setLoading( ( prev ) => ( { ...prev, [ type ]: false } ) );
-			}
-		},
-		[ fetchCounts ]
-	);
-
-	const handleCleanAll = useCallback( async () => {
-		setLoading( ( prev ) => ( { ...prev, all: true } ) );
+	const onSubmitSettings = async ( e ) => {
+		if ( e ) e.preventDefault();
+		setIsSaving( true );
 		try {
-			const response = await apiCall( 'database_cleanup', {
-				type: 'all',
-			} );
-			if ( response.success ) {
-				const results = response.data?.results ?? {};
-				const total = Object.values( results ).reduce(
-					( sum, val ) => sum + ( parseInt( val ) || 0 ),
-					0
-				);
-				setNotification( {
-					type: 'success',
-					message: `${
-						translations.dbCleanAllSuccess || 'All cleanup complete'
-					}: ${ total } ${
-						translations.dbTotalItemsRemoved ||
-						'total items removed'
-					}.`,
-				} );
-				fetchCounts();
-			} else {
-				setNotification( {
-					type: 'error',
-					message:
-						response.message ||
-						translations.dbCleanupError ||
-						'Cleanup failed.',
-				} );
-			}
+			await apiCall( 'update_settings', { tab: 'database_cleanup', settings } );
+			setNotification( { type: 'success', message: 'Settings saved successfully.' } );
 		} catch ( error ) {
-			setNotification( {
-				type: 'error',
-				message:
-					translations.dbCleanupError ||
-					'An error occurred during cleanup.',
-			} );
+			setNotification( { type: 'error', message: 'Error saving settings.' } );
 		} finally {
-			setLoading( ( prev ) => ( { ...prev, all: false } ) );
-		}
-	}, [ fetchCounts ] );
-
-	const totalItems = Object.values( counts ).reduce(
-		( sum, val ) => sum + ( parseInt( val ) || 0 ),
-		0
-	);
-
-	// Confirmation dialog handlers.
-	const requestCleanup = ( type, label ) => {
-		const count = counts[ type ] || 0;
-		if ( count === 0 ) {
-			return;
-		}
-		setConfirmDialog( { isOpen: true, type, label } );
-	};
-
-	const requestCleanAll = () => {
-		if ( totalItems === 0 ) {
-			return;
-		}
-		setConfirmDialog( { isOpen: true, type: 'all', label: '' } );
-	};
-
-	const confirmAction = () => {
-		const { type } = confirmDialog;
-		setConfirmDialog( { isOpen: false, type: null, label: '' } );
-		if ( type === 'all' ) {
-			handleCleanAll();
-		} else {
-			handleCleanup( type );
+			setIsSaving( false );
 		}
 	};
 
-	const cancelAction = () => {
-		setConfirmDialog( { isOpen: false, type: null, label: '' } );
+	const handleCleanup = async ( type ) => {
+		setLoading( ( prev ) => ( { ...prev, [ type ]: true } ) );
+		try {
+			const response = await apiCall( 'database_cleanup', { type } );
+			if ( response.success ) {
+				setNotification( { type: 'success', message: `Cleanup successful: ${ response.data?.deleted ?? 0 } items removed.` } );
+				fetchCounts();
+			}
+		} finally {
+			setLoading( ( prev ) => ( { ...prev, [ type ]: false } ) );
+		}
 	};
 
-	const getConfirmDialogProps = () => {
-		if ( confirmDialog.type === 'all' ) {
-			return {
-				title: translations.confirmDeleteTitle || 'Confirm Deletion',
-				message:
-					translations.confirmDeleteAll ||
-					'This will permanently delete all items across every category. This cannot be undone.',
-				confirmLabel: translations.deleteAllBtn || 'Delete All',
-			};
-		}
-		const count = counts[ confirmDialog.type ] || 0;
-		return {
-			title: translations.confirmDeleteTitle || 'Confirm Deletion',
-			message: `${
-				translations.confirmDeleteMsg || 'Permanently delete'
-			} ${ count } ${ confirmDialog.label }? ${
-				translations.confirmDeleteNote ||
-				'This action cannot be undone.'
-			}`,
-			confirmLabel: translations.deleteBtn || 'Delete',
-		};
-	};
+	const totalItems = Object.values( counts ).reduce( ( sum, val ) => sum + ( parseInt( val ) || 0 ), 0 );
 
 	return (
-		<>
-			<form
-				onSubmit={ onSubmitSettings }
-				className="settings-form fadeIn"
-				style={ { marginBottom: '40px' } }
-			>
-				<div className="settings-header-flex">
-					<h2>
-						<FontAwesomeIcon
-							icon={ faDatabase }
-							style={ {
-								color: 'var(--wppo-primary)',
-								marginRight: '12px',
-							} }
-						/>
-						{ translations.dbAutomatedCleanup ||
-							'Automated Cleanup' }
-					</h2>
-				</div>
-
-				<div className="feature-card">
-					<div
-						className="setting-group"
-						style={ { marginBottom: '24px' } }
-					>
-						<label className="field-label" htmlFor={ dbScheduleId }>
-							{ translations.dbSchedule || 'Schedule Frequency' }
-						</label>
-						<select
-							id={ dbScheduleId }
-							className="input-field"
-							name="dbSchedule"
-							value={ settings.dbSchedule }
-							onChange={ handleChange( setSettings ) }
-						>
-							<option value="none">
-								{ translations.dbScheduleNone ||
-									'None (Manual Only)' }
-							</option>
-							<option value="daily">
-								{ translations.dbScheduleDaily || 'Daily' }
-							</option>
-							<option value="weekly">
-								{ translations.dbScheduleWeekly || 'Weekly' }
-							</option>
-							<option value="monthly">
-								{ translations.dbScheduleMonthly || 'Monthly' }
-							</option>
-						</select>
-					</div>
-
-					<div
-						style={ {
-							display: 'grid',
-							gridTemplateColumns: '1fr 1fr',
-							gap: '20px',
-						} }
-					>
-						<div className="setting-group">
-							<label
-								className="field-label"
-								htmlFor={ dbRevMaxAgeId }
-							>
-								{ translations.dbRevMaxAge ||
-									'Max Age of Revisions to Keep (Days)' }
-							</label>
-							<input
-								id={ dbRevMaxAgeId }
-								className="input-field"
-								type="number"
-								name="dbRevMaxAge"
-								value={ settings.dbRevMaxAge }
-								onChange={ handleChange( setSettings ) }
-								min="0"
-							/>
-						</div>
-						<div className="setting-group">
-							<label
-								className="field-label"
-								htmlFor={ dbRevKeepLatestId }
-							>
-								{ translations.dbRevKeepLatest ||
-									'Always Keep Latest Revisions (Per Post)' }
-							</label>
-							<input
-								id={ dbRevKeepLatestId }
-								className="input-field"
-								type="number"
-								name="dbRevKeepLatest"
-								value={ settings.dbRevKeepLatest }
-								onChange={ handleChange( setSettings ) }
-								min="0"
-							/>
-						</div>
-					</div>
-				</div>
-
-				<div
-					style={ {
-						display: 'flex',
-						justifyContent: 'flex-end',
-					} }
-				>
+		<div className="wppo-dashboard-view">
+			<FeatureHeader
+				title="Database Cleanup"
+				description="Optimize your database by removing junk data and optimizing table overhead."
+				actions={
 					<LoadingSubmitButton
+						className="wppo-button wppo-button--primary"
 						isLoading={ isSaving }
-						label={ translations.saveSettings || 'Save Settings' }
-						loadingLabel={ translations.saving || 'Saving...' }
+						onClick={ onSubmitSettings }
+						label="Save Settings"
 					/>
+				}
+			/>
+
+			{ notification && (
+				<div className={ `wppo-notice wppo-notice--${ notification.type }` }>
+					<FontAwesomeIcon icon={ notification.type === 'success' ? faCheckCircle : faExclamationTriangle } />
+					<span>{ notification.message }</span>
 				</div>
-			</form>
+			) }
 
-			<div className="settings-form fadeIn">
-				<div className="settings-header-flex">
-					<h2>
-						<FontAwesomeIcon
-							icon={ faDatabase }
-							style={ {
-								color: 'var(--wppo-primary)',
-								marginRight: '12px',
-							} }
-						/>
-						{ translations.databaseOptimization ||
-							'Database Optimization' }
-					</h2>
-				</div>
-
-				<p className="db-cleanup-intro">
-					{ translations.dbCleanupIntro ||
-						'Maintain a lean and fast database by removing accumulated junk data, post revisions, and expired transients.' }
-				</p>
-
-				{ notification && (
-					<div
-						className={ `db-notification db-notification--${ notification.type }` }
-					>
-						<FontAwesomeIcon
-							icon={
-								notification.type === 'success'
-									? faCheckCircle
-									: faExclamationTriangle
-							}
-						/>
-						<span>{ notification.message }</span>
-					</div>
-				) }
-
-				<div className="db-summary-bar">
-					<div className="db-summary-count">
-						<div className="db-summary-number">
-							{ loadingCounts ? '...' : totalItems }
+			<div className="wppo-grid-2-col">
+				<FeatureCard title="Automated Cleanup" icon={ <FontAwesomeIcon icon={ faCalendarAlt } /> }>
+					<div style={ { display: 'grid', gap: '20px' } }>
+						<div>
+							<label className="field-label">Schedule Frequency</label>
+							<select className="wppo-select" name="dbSchedule" value={ settings.dbSchedule } onChange={ handleChange( setSettings ) }>
+								<option value="none">None (Manual Only)</option>
+								<option value="daily">Daily</option>
+								<option value="weekly">Weekly</option>
+								<option value="monthly">Monthly</option>
+							</select>
 						</div>
-						<div className="db-summary-label">
-							{ translations.dbTotalItems || 'Items to Clean' }
+						<div style={ { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' } }>
+							<div>
+								<label className="field-label">Max Age (Days)</label>
+								<input className="wppo-input" type="number" name="dbRevMaxAge" value={ settings.dbRevMaxAge } onChange={ handleChange( setSettings ) } />
+							</div>
+							<div>
+								<label className="field-label">Keep Latest</label>
+								<input className="wppo-input" type="number" name="dbRevKeepLatest" value={ settings.dbRevKeepLatest } onChange={ handleChange( setSettings ) } />
+							</div>
 						</div>
 					</div>
+				</FeatureCard>
+
+				<FeatureCard title="Database Health" icon={ <FontAwesomeIcon icon={ faDatabase } /> } actions={
 					<LoadingSubmitButton
-						className="submit-button"
-						style={ {
-							background: 'var(--wppo-bg-card)',
-							color: 'var(--wppo-primary)',
-							transform: 'none',
-						} }
-						onClick={ requestCleanAll }
+						className="wppo-button wppo-button--secondary"
+						onClick={ () => handleCleanup( 'all' ) }
 						isLoading={ loading.all }
 						disabled={ totalItems === 0 }
-						label={
-							<>
-								<FontAwesomeIcon icon={ faBroom } />{ ' ' }
-								{ translations.dbCleanAll ||
-									'Optimise Everything' }
-							</>
-						}
-						loadingLabel={
-							translations.dbCleaning || 'Cleaning...'
-						}
+						label="Optimize Everything"
 					/>
-				</div>
-
-				<div className="db-cleanup-grid">
-					{ CLEANUP_TYPES.map( ( item ) => (
-						<div key={ item.key } className="wppo-card">
-							<div className="db-card-header">
-								<h4>{ item.label }</h4>
-								<span
-									className={ `db-count-badge${
-										( counts[ item.key ] || 0 ) > 0
-											? ' db-count-badge--active'
-											: ''
-									}` }
-								>
-									{ loadingCounts
-										? '...'
-										: counts[ item.key ] || 0 }
-								</span>
-							</div>
-							<p
-								style={ {
-									fontSize: '14px',
-									marginBottom: '24px',
-									minHeight: '44px',
-								} }
-							>
-								{ item.description }
-							</p>
-							<LoadingSubmitButton
-								className="submit-button secondary"
-								style={ { width: '100%' } }
-								onClick={ () =>
-									requestCleanup( item.key, item.label )
-								}
-								isLoading={ loading[ item.key ] }
-								disabled={ ( counts[ item.key ] || 0 ) === 0 }
-								label={
-									<>
-										<FontAwesomeIcon icon={ faTrash } />{ ' ' }
-										{ translations.dbClean || 'Clean' }
-									</>
-								}
-								loadingLabel={
-									translations.dbCleaning || 'Cleaning...'
-								}
-							/>
-						</div>
-					) ) }
-				</div>
-
-				{ /* Confirmation Dialog */ }
-				<ConfirmDialog
-					isOpen={ confirmDialog.isOpen }
-					onConfirm={ confirmAction }
-					onCancel={ cancelAction }
-					variant="danger"
-					{ ...getConfirmDialogProps() }
-				>
-					{ confirmDialog.type === 'all' && totalItems > 0 && (
-						<ul className="wppo-dialog-detail-list">
-							{ CLEANUP_TYPES.map( ( item ) => {
-								const count = counts[ item.key ] || 0;
-								return count > 0 ? (
-									<li key={ item.key }>
-										<span>{ item.label }</span>
-										<span>{ count }</span>
-									</li>
-								) : null;
-							} ) }
-						</ul>
-					) }
-				</ConfirmDialog>
+				}>
+					<div style={ { textAlign: 'center', padding: '10px 0' } }>
+						<span style={ { fontSize: '48px', fontWeight: '800', display: 'block', color: 'var(--wppo-primary)' } }>
+							{ loadingCounts ? '...' : totalItems }
+						</span>
+						<span className="wppo-text-muted">Total Overhead Items</span>
+					</div>
+				</FeatureCard>
 			</div>
-		</>
+
+			<div className="wppo-stats-grid" style={ { gridTemplateColumns: 'repeat(3, 1fr)' } }>
+				{ CLEANUP_TYPES.map( ( item ) => (
+					<FeatureCard key={ item.key } title={ item.label } actions={
+						<button className="wppo-button wppo-button--secondary wppo-button--sm" 
+								onClick={ () => handleCleanup( item.key ) }
+								disabled={ ( counts[ item.key ] || 0 ) === 0 || loading[ item.key ] }>
+							{ loading[ item.key ] ? '...' : 'Clean' }
+						</button>
+					}>
+						<div style={ { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }>
+							<p className="wppo-text-muted" style={ { margin: 0, fontSize: '13px' } }>{ item.description }</p>
+							<span style={ { fontWeight: '700', fontSize: '18px' } }>{ counts[ item.key ] || 0 }</span>
+						</div>
+					</FeatureCard>
+				) ) }
+			</div>
+
+			<ConfirmDialog
+				isOpen={ confirmDialog.isOpen }
+				onConfirm={ () => {
+					setConfirmDialog( { ...confirmDialog, isOpen: false } );
+					handleCleanup( confirmDialog.type );
+				} }
+				onCancel={ () => setConfirmDialog( { ...confirmDialog, isOpen: false } ) }
+				title="Confirm Cleanup"
+				message="This action will permanently delete items from your database. Proceed?"
+				confirmLabel="Delete"
+				variant="danger"
+			/>
+		</div>
 	);
 };
 

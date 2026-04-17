@@ -82,6 +82,7 @@ function wppo_redis_connect( $config ) {
 				return new \WP_Error( 'redis_version', 'Sentinel mode requires phpredis version 6.0.0 or higher.' );
 			}
 
+			$master_name = $config['master_name'] ?? 'mymaster';
 			$errors = array();
 			foreach ( $nodes as $node ) {
 				// Robust parsing of host and port (handles IPv6).
@@ -220,7 +221,7 @@ function wppo_apply_redis_options( $redis, $config ) {
  */
 function wppo_parse_nodes( $nodes ) {
 	if ( is_string( $nodes ) ) {
-		return array_filter( array_map( 'trim', explode( "\n", str_replace( ',', "\n", $nodes ) ) ) );
+		return array_filter( array_map( 'trim', preg_split( '/[\s,;]+/', $nodes ) ) );
 	}
 	return (array) $nodes;
 }

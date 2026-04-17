@@ -83,7 +83,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	if ( clearAllCacheBtn ) {
 		clearAllCacheBtn.addEventListener( 'click', function ( event ) {
 			event.preventDefault();
-			postJsonRequest( '/clear_cache', { action: 'clear_cache' } );
+			postJsonRequest( '/clear_cache', { action: 'clear_cache' } ).catch(
+				( error ) => {
+					console.error( 'Cache clear failed: ', error );
+					alert( 'Failed to clear cache. Please try again.' );
+				}
+			);
 		} );
 	}
 
@@ -98,6 +103,9 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			postJsonRequest( '/clear_cache', {
 				action: 'clear_single_page_cache',
 				path,
+			} ).catch( ( error ) => {
+				console.error( 'Page cache clear failed: ', error );
+				alert( 'Failed to clear page cache. Please try again.' );
 			} );
 		} );
 	}

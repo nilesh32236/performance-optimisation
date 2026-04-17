@@ -2,17 +2,16 @@ import { useState } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
-import CheckboxOption from './common/CheckboxOption';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faHourglassStart,
 	faLink,
 	faFont,
 } from '@fortawesome/free-solid-svg-icons';
+import FeatureHeader from './common/FeatureHeader';
+import FeatureCard from './common/FeatureCard';
 
 const PreloadSettings = ( { options = {} } ) => {
-	const translations = wppoSettings.translations;
-
 	const defaultSettings = {
 		enablePreloadCache: false,
 		excludePreloadCache: 'my-account/(.*)\ncart/(.*)\ncheckout/(.*)',
@@ -31,134 +30,92 @@ const PreloadSettings = ( { options = {} } ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 
 	const handleSubmit = async ( e ) => {
-		e.preventDefault();
+		if ( e ) e.preventDefault();
 		setIsLoading( true );
 
 		try {
-			await apiCall( 'update_settings', {
-				tab: 'preload_settings',
-				settings,
-			} );
-		} catch ( error ) {
-			console.error( translations.formSubmissionError, error );
+			await apiCall( 'update_settings', { tab: 'preload_settings', settings } );
 		} finally {
 			setIsLoading( false );
 		}
 	};
 
 	return (
-		<form onSubmit={ handleSubmit } className="settings-form fadeIn">
-			<h2>{ translations.preloadSettings }</h2>
-
-			<div className="feature-card">
-				<h3>
-					<FontAwesomeIcon icon={ faHourglassStart } /> Smart Cache
-					Warm-up
-				</h3>
-				<p>
-					Automatically crawl your site to populate the cache before
-					users visit, ensuring instant page loads.
-				</p>
-
-				<CheckboxOption
-					label={ translations.enablePreloadCache }
-					checked={ settings.enablePreloadCache }
-					onChange={ handleChange( setSettings ) }
-					name="enablePreloadCache"
-					textareaName="excludePreloadCache"
-					textareaPlaceholder={ translations.excludePreloadCache }
-					textareaValue={ settings.excludePreloadCache }
-					onTextareaChange={ handleChange( setSettings ) }
-					description={ translations.enablePreloadCacheDesc }
-				/>
-			</div>
-
-			<div className="feature-card">
-				<h3>
-					<FontAwesomeIcon icon={ faLink } /> Connection Prediction
-				</h3>
-				<p>
-					Establish early connections to external domains (CDN, Google
-					Fonts, etc.) to reduce latency of subsequent requests.
-				</p>
-
-				<CheckboxOption
-					label={ translations.preconnect }
-					checked={ settings.preconnect }
-					onChange={ handleChange( setSettings ) }
-					name="preconnect"
-					textareaName="preconnectOrigins"
-					textareaPlaceholder={ translations.preconnectOrigins }
-					textareaValue={ settings.preconnectOrigins }
-					onTextareaChange={ handleChange( setSettings ) }
-					description={ translations.preconnectDesc }
-				/>
-
-				<div style={ { marginTop: '24px' } }>
-					<CheckboxOption
-						label={ translations.prefetchDNS }
-						checked={ settings.prefetchDNS }
-						onChange={ handleChange( setSettings ) }
-						name="prefetchDNS"
-						textareaName="dnsPrefetchOrigins"
-						textareaPlaceholder={ translations.dnsPrefetchOrigins }
-						textareaValue={ settings.dnsPrefetchOrigins }
-						onTextareaChange={ handleChange( setSettings ) }
-						description={ translations.prefetchDNSDesc }
+		<div className="wppo-dashboard-view">
+			<FeatureHeader
+				title="Preload Settings"
+				description="Improve perceived performance by pre-connecting to domains and preloading critical assets."
+				actions={
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--primary"
+						isLoading={ isLoading }
+						onClick={ handleSubmit }
+						label="Save Settings"
 					/>
+				}
+			/>
+
+			<div className="wppo-grid-2-col">
+				<FeatureCard title="Cache Warm-up" icon={ <FontAwesomeIcon icon={ faHourglassStart } /> }>
+					<div style={ { display: 'flex', flexDirection: 'column', gap: '20px' } }>
+						<div style={ { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }>
+							<div>
+								<strong>Enable Preload Cache</strong>
+								<p className="wppo-text-muted" style={ { margin: '4px 0 0 0', fontSize: '13px' } }>Crawl site to populate cache.</p>
+							</div>
+							<label className="wppo-switch">
+								<input type="checkbox" name="enablePreloadCache" checked={ settings.enablePreloadCache } onChange={ handleChange( setSettings ) } />
+								<span className="wppo-slider"></span>
+							</label>
+						</div>
+						{ settings.enablePreloadCache && (
+							<div>
+								<label className="field-label">Exclude URLs</label>
+								<textarea className="wppo-textarea" name="excludePreloadCache" rows="3" value={ settings.excludePreloadCache } onChange={ handleChange( setSettings ) } />
+							</div>
+						) }
+					</div>
+				</FeatureCard>
+
+				<FeatureCard title="Connections" icon={ <FontAwesomeIcon icon={ faLink } /> }>
+					<div style={ { display: 'flex', flexDirection: 'column', gap: '20px' } }>
+						<div style={ { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }>
+							<div>
+								<strong>Preconnect</strong>
+								<p className="wppo-text-muted" style={ { margin: '4px 0 0 0', fontSize: '13px' } }>Establish early server connections.</p>
+							</div>
+							<label className="wppo-switch">
+								<input type="checkbox" name="preconnect" checked={ settings.preconnect } onChange={ handleChange( setSettings ) } />
+								<span className="wppo-slider"></span>
+							</label>
+						</div>
+						<div style={ { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } }>
+							<div>
+								<strong>DNS Prefetch</strong>
+								<p className="wppo-text-muted" style={ { margin: '4px 0 0 0', fontSize: '13px' } }>Resolve domain names early.</p>
+							</div>
+							<label className="wppo-switch">
+								<input type="checkbox" name="prefetchDNS" checked={ settings.prefetchDNS } onChange={ handleChange( setSettings ) } />
+								<span className="wppo-slider"></span>
+							</label>
+						</div>
+					</div>
+				</FeatureCard>
+			</div>
+
+			<FeatureCard title="Critical Assets" icon={ <FontAwesomeIcon icon={ faFont } /> }>
+				<div style={ { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' } }>
+					<div>
+						<label className="field-label">Preload Fonts</label>
+						<textarea className="wppo-textarea" name="preloadFontsUrls" rows="3" placeholder="Font URLs (one per line)" value={ settings.preloadFontsUrls } onChange={ handleChange( setSettings ) } />
+					</div>
+					<div>
+						<label className="field-label">Preload Critical CSS</label>
+						<textarea className="wppo-textarea" name="preloadCSSUrls" rows="3" placeholder="CSS URLs (one per line)" value={ settings.preloadCSSUrls } onChange={ handleChange( setSettings ) } />
+					</div>
 				</div>
-			</div>
-
-			<div className="feature-card">
-				<h3>
-					<FontAwesomeIcon icon={ faFont } /> Critical Asset Priority
-				</h3>
-				<p>
-					Identify and preload essential resources like fonts and CSS
-					to prevent layout shifts and improve rendering speed.
-				</p>
-
-				<CheckboxOption
-					label={ translations.preloadFonts }
-					checked={ settings.preloadFonts }
-					onChange={ handleChange( setSettings ) }
-					name="preloadFonts"
-					textareaName="preloadFontsUrls"
-					textareaPlaceholder={ translations.preloadFontsUrls }
-					textareaValue={ settings.preloadFontsUrls }
-					onTextareaChange={ handleChange( setSettings ) }
-					description={ translations.preloadFontsDesc }
-				/>
-
-				<div style={ { marginTop: '24px' } }>
-					<CheckboxOption
-						label={ translations.preloadCSS }
-						checked={ settings.preloadCSS }
-						onChange={ handleChange( setSettings ) }
-						name="preloadCSS"
-						textareaName="preloadCSSUrls"
-						textareaPlaceholder={ translations.preloadCSSUrls }
-						textareaValue={ settings.preloadCSSUrls }
-						onTextareaChange={ handleChange( setSettings ) }
-						description={ translations.preloadCSSDesc }
-					/>
-				</div>
-			</div>
-
-			<div
-				style={ {
-					marginTop: '40px',
-					display: 'flex',
-					justifyContent: 'flex-end',
-				} }
-			>
-				<LoadingSubmitButton
-					isLoading={ isLoading }
-					label={ translations.saveSettings }
-					loadingLabel={ translations.saving }
-				/>
-			</div>
-		</form>
+			</FeatureCard>
+		</div>
 	);
 };
 

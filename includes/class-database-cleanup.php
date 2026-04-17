@@ -73,7 +73,7 @@ class Database_Cleanup {
 	 * @since 1.3.0
 	 * @param int $max_age_days Maximum age of revisions to keep in days.
 	 * @param int $keep_latest Number of latest revisions to keep per post.
-	 * @return int Number of rows deleted.
+	 * @return int|false Number of rows deleted, or false on error.
 	 */
 	public static function clean_revisions_advanced( $max_age_days = 30, $keep_latest = 5 ) {
 		global $wpdb;
@@ -83,6 +83,7 @@ class Database_Cleanup {
 		$cutoff_date     = gmdate( 'Y-m-d H:i:s', time() - $max_age_seconds );
 
 		// Find parent posts that have more than $keep_latest revisions.
+		$wpdb->last_error = '';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$parent_ids = $wpdb->get_col(
 			$wpdb->prepare(
@@ -90,6 +91,10 @@ class Database_Cleanup {
 				$keep_latest
 			)
 		);
+
+		if ( ! empty( $wpdb->last_error ) ) {
+			return false;
+		}
 
 		if ( empty( $parent_ids ) ) {
 			return 0;
@@ -99,6 +104,7 @@ class Database_Cleanup {
 
 		foreach ( $parent_ids as $parent_id ) {
 			// Get all revisions for this post, sorted by date descending.
+			$wpdb->last_error = '';
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$revisions = $wpdb->get_results(
 				$wpdb->prepare(
@@ -106,6 +112,10 @@ class Database_Cleanup {
 					$parent_id
 				)
 			);
+
+			if ( ! empty( $wpdb->last_error ) ) {
+				return false;
+			}
 
 			// Keep the latest X revisions.
 			$older_revisions = array_slice( $revisions, $keep_latest );
@@ -126,13 +136,17 @@ class Database_Cleanup {
 
 				// Delete meta.
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
-				$wpdb->query(
+				$meta_deleted = $wpdb->query(
 					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
 					$wpdb->prepare(
 						"DELETE FROM $wpdb->postmeta WHERE post_id IN (" . $placeholders . ')', // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 						...$chunk
 					)
 				);
+
+				if ( false === $meta_deleted || ! empty( $wpdb->last_error ) ) {
+					return false;
+				}
 
 				// Delete posts.
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
@@ -143,6 +157,10 @@ class Database_Cleanup {
 						...$chunk
 					)
 				);
+
+				if ( false === $result || ! empty( $wpdb->last_error ) ) {
+					return false;
+				}
 
 				if ( $result ) {
 					$deleted += $result;
@@ -268,22 +286,33 @@ class Database_Cleanup {
 		$deleted = 0;
 
 		do {
+			// Select a batch of comment IDs to delete.
+			$wpdb->last_error = '';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$comment_ids = $wpdb->get_col( "SELECT comment_ID FROM $wpdb->comments WHERE comment_approved = 'spam' LIMIT 1000" );
+
+			if ( ! empty( $wpdb->last_error ) ) {
+				return false;
+			}
+
+			if ( empty( $comment_ids ) ) {
+				break;
+			}
+
+			$placeholders = implode( ',', array_fill( 0, count( $comment_ids ), '%d' ) );
+
 			// Delete comment meta for spam comments.
 			$wpdb->last_error = '';
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-			$meta_deleted = $wpdb->query(
-				"DELETE cm FROM $wpdb->commentmeta cm
-				INNER JOIN $wpdb->comments c ON c.comment_ID = cm.comment_id
-				WHERE c.comment_approved = 'spam' LIMIT 5000"
-			);
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+			$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->commentmeta WHERE comment_id IN ($placeholders)", $comment_ids ) );
 
 			if ( false === $meta_deleted ) {
 				return false;
 			}
 
 			$wpdb->last_error = '';
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-			$comments_deleted = $wpdb->query( "DELETE FROM $wpdb->comments WHERE comment_approved = 'spam' LIMIT 1000" );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+			$comments_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->comments WHERE comment_ID IN ($placeholders)", $comment_ids ) );
 
 			if ( false === $comments_deleted ) {
 				return false;
@@ -292,7 +321,8 @@ class Database_Cleanup {
 			if ( $comments_deleted ) {
 				$deleted += $comments_deleted;
 			}
-		} while ( $comments_deleted > 0 || $meta_deleted > 0 );
+			$ids_count = count( $comment_ids );
+		} while ( $ids_count >= 1000 );
 
 		return $deleted;
 	}
@@ -308,22 +338,33 @@ class Database_Cleanup {
 		$deleted = 0;
 
 		do {
+			// Select a batch of comment IDs to delete.
+			$wpdb->last_error = '';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$comment_ids = $wpdb->get_col( "SELECT comment_ID FROM $wpdb->comments WHERE comment_approved = 'trash' LIMIT 1000" );
+
+			if ( ! empty( $wpdb->last_error ) ) {
+				return false;
+			}
+
+			if ( empty( $comment_ids ) ) {
+				break;
+			}
+
+			$placeholders = implode( ',', array_fill( 0, count( $comment_ids ), '%d' ) );
+
 			// Delete comment meta for trashed comments.
 			$wpdb->last_error = '';
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-			$meta_deleted = $wpdb->query(
-				"DELETE cm FROM $wpdb->commentmeta cm
-				INNER JOIN $wpdb->comments c ON c.comment_ID = cm.comment_id
-				WHERE c.comment_approved = 'trash' LIMIT 5000"
-			);
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+			$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->commentmeta WHERE comment_id IN ($placeholders)", $comment_ids ) );
 
 			if ( false === $meta_deleted ) {
 				return false;
 			}
 
 			$wpdb->last_error = '';
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-			$comments_deleted = $wpdb->query( "DELETE FROM $wpdb->comments WHERE comment_approved = 'trash' LIMIT 1000" );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+			$comments_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->comments WHERE comment_ID IN ($placeholders)", $comment_ids ) );
 
 			if ( false === $comments_deleted ) {
 				return false;
@@ -332,7 +373,8 @@ class Database_Cleanup {
 			if ( $comments_deleted ) {
 				$deleted += $comments_deleted;
 			}
-		} while ( $comments_deleted > 0 || $meta_deleted > 0 );
+			$ids_count = count( $comment_ids );
+		} while ( $ids_count >= 1000 );
 
 		return $deleted;
 	}
@@ -441,26 +483,26 @@ class Database_Cleanup {
 		$max_age = isset( $settings['dbRevMaxAge'] ) ? (int) $settings['dbRevMaxAge'] : 30;
 		$keep    = isset( $settings['dbRevKeepLatest'] ) ? (int) $settings['dbRevKeepLatest'] : 5;
 
-		if ( false === self::clean_revisions_advanced( $max_age, $keep ) ) {
-			Log::add( 'Auto cleanup failed: clean_revisions_advanced' );
-		}
-		if ( false === self::clean_auto_drafts() ) {
-			Log::add( 'Auto cleanup failed: clean_auto_drafts' );
-		}
-		if ( false === self::clean_trashed_posts() ) {
-			Log::add( 'Auto cleanup failed: clean_trashed_posts' );
-		}
-		if ( false === self::clean_spam_comments() ) {
-			Log::add( 'Auto cleanup failed: clean_spam_comments' );
-		}
-		if ( false === self::clean_trashed_comments() ) {
-			Log::add( 'Auto cleanup failed: clean_trashed_comments' );
-		}
-		if ( false === self::clean_expired_transients() ) {
-			Log::add( 'Auto cleanup failed: clean_expired_transients' );
-		}
-		if ( false === self::clean_orphan_postmeta() ) {
-			Log::add( 'Auto cleanup failed: clean_orphan_postmeta' );
+		$methods = array(
+			'clean_revisions_advanced',
+			'clean_auto_drafts',
+			'clean_trashed_posts',
+			'clean_spam_comments',
+			'clean_trashed_comments',
+			'clean_expired_transients',
+			'clean_orphan_postmeta',
+		);
+
+		foreach ( $methods as $method ) {
+			if ( 'clean_revisions_advanced' === $method ) {
+				$result = self::$method( $max_age, $keep );
+			} else {
+				$result = self::$method();
+			}
+
+			if ( false === $result ) {
+				new Log( "Auto cleanup failed: {$method}" );
+			}
 		}
 	}
 

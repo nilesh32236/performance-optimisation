@@ -1,0 +1,30 @@
+.container {
+	display: flex;
+	min-height: 100vh;
+	background: var(--wppo-bg-app);
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	color: var(--wppo-text-main);
+
+	@media (max-width: 992px) {
+		flex-direction: column;
+	}
+}
+
+.content {
+	flex-grow: 1;
+	overflow-y: auto;
+	height: 100vh;
+
+	@media (max-width: 992px) {
+		height: auto;
+	}
+
+	&.fadeIn {
+		animation: wppo-fade-in 0.4s ease;
+	}
+}
+
+@keyframes wppo-fade-in {
+	from { opacity: 0; transform: translateY(10px); }
+	to { opacity: 1; transform: translateY(0); }
+}

@@ -440,8 +440,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( 'all' === $type ) {
-				$results = Database_Cleanup::clean_all();
-				$total   = array_sum( array_map( 'intval', $results ) );
+				$results  = Database_Cleanup::clean_all();
+				$total    = 0;
+				$failures = array();
+
+				foreach ( $results as $key => $value ) {
+					if ( is_wp_error( $value ) ) {
+						$failures[ $key ] = $value->get_error_message();
+					} else {
+						$total += (int) $value;
+					}
+				}
+
+				if ( ! empty( $failures ) ) {
+					return new \WP_REST_Response(
+						new \WP_Error(
+							'db_cleanup_partial_failure',
+							__( 'Partial or total failure during database cleanup.', 'performance-optimisation' ),
+							array(
+								'status'   => 500,
+								'failures' => $failures,
+								'deleted'  => $total,
+							)
+						),
+						500
+					);
+				}
 
 				new Log(
 					sprintf(

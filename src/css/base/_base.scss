@@ -1,0 +1,68 @@
+.wppo-dashboard-view {
+	padding: 40px;
+	max-width: 1400px;
+	margin: 0 auto;
+	line-height: 1.5;
+
+	@media (max-width: 640px) {
+		padding: 24px;
+	}
+}
+
+h2, h3, h4 {
+	color: var(--wppo-text-main);
+	letter-spacing: -0.01em;
+}
+
+.field-label {
+	display: block;
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--wppo-text-muted);
+	margin-bottom: 8px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.wppo-activity-list {
+	li {
+		transition: var(--wppo-transition);
+		&:hover {
+			background: var(--wppo-bg-app);
+			padding-left: 8px;
+			border-radius: 4px;
+		}
+	}
+}
+
+.mobile-header {
+	display: none;
+	padding: 16px 24px;
+	background: #fff;
+	border-bottom: 1px solid var(--wppo-border);
+	justify-content: space-between;
+	align-items: center;
+
+	@media (max-width: 992px) {
+		display: flex;
+	}
+
+	.mobile-brand {
+		font-weight: 800;
+		color: var(--wppo-primary);
+		font-size: 18px;
+	}
+
+	.mobile-toggle {
+		background: var(--wppo-bg-app);
+		border: 1px solid var(--wppo-border);
+		width: 40px;
+		height: 40px;
+		border-radius: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		color: var(--wppo-text-main);
+	}
+}

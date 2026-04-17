@@ -344,33 +344,47 @@ class Img_Converter {
 	 * @since 1.0.0
 	 */
 	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
-		// Use Util::get_local_path to get a clean local path from URL or existing path.
-		$local_path = Util::get_local_path( $source_image );
+		$normalized_source = wp_normalize_path( $source_image );
+		$is_already_local = path_is_absolute( $normalized_source ) && (
+			strpos( $normalized_source, wp_normalize_path( ABSPATH ) ) === 0 ||
+			strpos( $normalized_source, wp_normalize_path( WP_CONTENT_DIR ) ) === 0 ||
+			is_file( $source_image )
+		);
 
-		if ( empty( $local_path ) ) {
-			// If Util::get_local_path failed, manually resolve if it's a URL.
-			$home_url    = untrailingslashit( home_url() );
-			$content_url = untrailingslashit( content_url() );
+		if ( $is_already_local ) {
+			$local_path = $normalized_source;
+		} else {
+			// Use Util::get_local_path to get a clean local path from URL or existing path.
+			$local_path = Util::get_local_path( $source_image );
 
-			if ( strpos( $source_image, $home_url ) === 0 ) {
-				$relative_path = str_replace( $home_url, '', $source_image );
-			} elseif ( strpos( $source_image, $content_url ) === 0 ) {
-				$relative_path = str_replace( $content_url, '', $source_image );
-				$relative_path = '/wp-content' . $relative_path;
-			} else {
-				$relative_path = $source_image;
-			}
+			if ( empty( $local_path ) ) {
+				// If Util::get_local_path failed, manually resolve if it's a URL.
+				$home_url    = untrailingslashit( home_url() );
+				$content_url = untrailingslashit( content_url() );
+				$local_base  = wp_normalize_path( ABSPATH );
 
-			// Security: Block directory traversal.
-			if ( strpos( $relative_path, '..' ) !== false ) {
-				return $source_image;
-			}
+				if ( strpos( $source_image, $home_url ) === 0 ) {
+					$relative_path = str_replace( $home_url, '', $source_image );
+				} elseif ( strpos( $source_image, $content_url ) === 0 ) {
+					$relative_path = str_replace( $content_url, '', $source_image );
+					$local_base    = wp_normalize_path( WP_CONTENT_DIR );
+				} else {
+					$relative_path = $source_image;
+				}
 
-			$local_path = wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) );
+				// Security: Block directory traversal.
+				if ( strpos( $relative_path, '..' ) !== false ) {
+					return $source_image;
+				}
 
-			// Ensure it's still within the WP directory for safety.
-			if ( strpos( $local_path, wp_normalize_path( ABSPATH ) ) !== 0 ) {
-				return $source_image;
+				$local_path = wp_normalize_path( untrailingslashit( $local_base ) . '/' . ltrim( $relative_path, '/' ) );
+
+				// Ensure it's still within the WP directory or WP_CONTENT_DIR for safety.
+				$norm_abspath = wp_normalize_path( ABSPATH );
+				$norm_content = wp_normalize_path( WP_CONTENT_DIR );
+				if ( strpos( $local_path, $norm_abspath ) !== 0 && strpos( $local_path, $norm_content ) !== 0 ) {
+					return $source_image;
+				}
 			}
 		}
 

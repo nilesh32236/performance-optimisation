@@ -132,7 +132,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$srcset_items     = explode( ',', $srcset );
 
 							foreach ( $srcset_items as $srcset_item ) {
-								$parts          = array_pad( explode( ' ', trim( $srcset_item ), 2 ), 2, '' );
+								$parts          = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
 								$original_token = $parts[0];
 								$normalized_url = $this->normalize_url( $original_token );
 								$descriptor     = $parts[1];
@@ -183,7 +183,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										', ',
 										array_map(
 											function ( $srcset_item ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
-												list( $url, $descriptor ) = array_pad( explode( ' ', trim( $srcset_item ), 2 ), 2, '' );
+												list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
 												$new_url                  = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
 												return $new_url . ( $descriptor ? " $descriptor" : '' );
 											},

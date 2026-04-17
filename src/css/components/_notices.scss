@@ -1,0 +1,36 @@
+.wppo-notice {
+	padding: 16px 20px;
+	border-radius: var(--wppo-radius-sm);
+	margin-bottom: 24px;
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	font-size: 14px;
+	line-height: 1.5;
+	border-width: 1px;
+	border-style: solid;
+
+	&--error {
+		background: #fef2f2;
+		border-color: #fecaca;
+		color: #991b1b;
+	}
+
+	&--warning {
+		background: #fffbeb;
+		border-color: #fef3c7;
+		color: #92400e;
+	}
+
+	&--success {
+		background: #ecfdf5;
+		border-color: #d1fae5;
+		color: #065f46;
+	}
+
+	&--info {
+		background: #f0f9ff;
+		border-color: #bae6fd;
+		color: #075985;
+	}
+}

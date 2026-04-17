@@ -1,0 +1,52 @@
+.wppo-field-group {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.wppo-switch-field {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 16px;
+
+	strong {
+		display: block;
+		font-size: 15px;
+		color: var(--wppo-text-main);
+		margin-bottom: 2px;
+	}
+
+	.wppo-text-muted {
+		font-size: 13px;
+		margin: 0;
+	}
+}
+
+.wppo-field-nest {
+	margin-top: -8px;
+	margin-left: 20px;
+	padding-left: 20px;
+	border-left: 2px solid var(--wppo-primary-soft);
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	animation: wppo-slide-down 0.3s ease;
+}
+
+@keyframes wppo-slide-down {
+	from { opacity: 0; transform: translateY(-10px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+.wppo-field {
+	.field-label {
+		display: block;
+		font-size: 13px;
+		font-weight: 700;
+		color: var(--wppo-text-muted);
+		margin-bottom: 8px;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+}
