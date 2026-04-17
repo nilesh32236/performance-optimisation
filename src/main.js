@@ -43,9 +43,14 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	 */
 	const refreshNonce = () => {
 		return fetch( wppoObject.apiUrl + '/get_nonce' )
-			.then( ( response ) => response.json() )
+			.then( ( response ) => {
+				if ( ! response.ok ) {
+					return false;
+				}
+				return response.json();
+			} )
 			.then( ( result ) => {
-				if ( result.success && result.data && result.data.nonce ) {
+				if ( result && result.success && result.data && result.data.nonce ) {
 					wppoObject.nonce = result.data.nonce;
 					return true;
 				}

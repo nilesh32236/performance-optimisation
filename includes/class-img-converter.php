@@ -344,19 +344,33 @@ class Img_Converter {
 	 * @since 1.0.0
 	 */
 	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
+		if ( strpos( $source_image, home_url() ) !== 0 && strpos( $source_image, '/' ) !== 0 ) {
+			return $source_image;
+		}
+
 		// Use Util::get_local_path to get a clean local path from URL or existing path.
 		$local_path = Util::get_local_path( $source_image );
 
 		if ( empty( $local_path ) ) {
-			// Fallback if URL parsing fails.
-			$info          = pathinfo( $source_image );
-			$new_file_name = $info['filename'] . '.' . $format;
-			$local_path    = wp_normalize_path( $info['dirname'] . '/' . $new_file_name );
-		} else {
-			// Replace extension.
-			$info       = pathinfo( $local_path );
-			$local_path = wp_normalize_path( $info['dirname'] . '/' . $info['filename'] . '.' . $format );
+			// If Util::get_local_path failed, manually resolve if it's a URL.
+			$home_url    = home_url();
+			$content_url = content_url();
+
+			if ( strpos( $source_image, $home_url ) === 0 ) {
+				$relative_path = str_replace( $home_url, '', $source_image );
+				$local_path    = wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) );
+			} elseif ( strpos( $source_image, $content_url ) === 0 ) {
+				$relative_path = str_replace( $content_url, '', $source_image );
+				$local_path    = wp_normalize_path( WP_CONTENT_DIR . '/' . ltrim( $relative_path, '/' ) );
+			} else {
+				// Final fallback for absolute paths that might already be on disk but failed normalization.
+				$local_path = wp_normalize_path( $source_image );
+			}
 		}
+
+		// Replace extension.
+		$info       = pathinfo( $local_path );
+		$local_path = wp_normalize_path( $info['dirname'] . '/' . $info['filename'] . '.' . $format );
 
 		// Adjust for the wppo directory inside wp-content.
 		$wp_content_path = wp_normalize_path( WP_CONTENT_DIR );

@@ -106,7 +106,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'get_nonce'               => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_nonce' ),
-					'permission_callback' => 'is_user_logged_in',
+					'permission_callback' => function () {
+						return current_user_can( 'manage_options' );
+					},
 				),
 			);
 		}
@@ -713,10 +715,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_nonce() {
-			if ( ! current_user_can( 'manage_options' ) ) {
-				return $this->send_response( null, false, 403, __( 'Unauthorized.', 'performance-optimisation' ) );
-			}
-
 			return $this->send_response(
 				array(
 					'nonce' => wp_create_nonce( 'wp_rest' ),

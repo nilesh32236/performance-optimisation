@@ -115,10 +115,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						}
 
 						$src = $tags->get_attribute( 'src' );
-						if ( $src && $this->is_valid_url( $src ) ) {
-							$new_src = $this->replace_image_with_next_gen( $src, $exclude_imgs, $supports_avif, $supports_webp );
-							if ( $new_src !== $src ) {
-								$tags->set_attribute( 'src', $new_src );
+						if ( $src ) {
+							$normalized_src = $this->normalize_url( $src );
+							if ( $this->is_valid_url( $normalized_src ) ) {
+								$new_src = $this->replace_image_with_next_gen( $normalized_src, $exclude_imgs, $supports_avif, $supports_webp );
+								// Only write back if the URL actually changed (i.e. conversion occurred).
+								if ( $new_src !== $normalized_src ) {
+									$tags->set_attribute( 'src', $new_src );
+								}
 							}
 						}
 
@@ -128,12 +132,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$srcset_items     = explode( ',', $srcset );
 
 							foreach ( $srcset_items as $srcset_item ) {
-								$parts      = array_pad( explode( ' ', trim( $srcset_item ), 2 ), 2, '' );
-								$url        = $parts[0];
-								$descriptor = $parts[1];
+								$parts          = array_pad( explode( ' ', trim( $srcset_item ), 2 ), 2, '' );
+								$original_token = $parts[0];
+								$normalized_url = $this->normalize_url( $original_token );
+								$descriptor     = $parts[1];
 
-								$new_url            = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
-								$new_srcset_parts[] = $new_url . ( $descriptor ? " $descriptor" : '' );
+								if ( $this->is_valid_url( $normalized_url ) ) {
+									$new_url = $this->replace_image_with_next_gen( $normalized_url, $exclude_imgs, $supports_avif, $supports_webp );
+									// Use the optimized URL if conversion happened, otherwise keep the original token.
+									$final_url          = ( $new_url !== $normalized_url ) ? $new_url : $original_token;
+									$new_srcset_parts[] = $final_url . ( $descriptor ? " $descriptor" : '' );
+								} else {
+									$new_srcset_parts[] = $original_token . ( $descriptor ? " $descriptor" : '' );
+								}
 							}
 
 							$new_srcset = implode( ', ', $new_srcset_parts );
@@ -285,6 +296,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function is_valid_url( $url ) {
 			return filter_var( $url, FILTER_VALIDATE_URL ) !== false;
+		}
+
+		/**
+		 * Normalizes a URL, converting relative paths to absolute URLs.
+		 *
+		 * @since 1.4.0
+		 * @param string $url The URL to normalize.
+		 * @return string The normalized absolute URL.
+		 */
+		private function normalize_url( string $url ): string {
+			if ( empty( $url ) || strpos( $url, 'data:' ) === 0 ) {
+				return $url;
+			}
+
+			// Protocol-relative URLs (e.g., //example.com/image.jpg).
+			if ( strpos( $url, '//' ) === 0 ) {
+				$scheme = wp_parse_url( home_url(), PHP_URL_SCHEME ) ?: 'http';
+				return $scheme . ':' . $url;
+			}
+
+			// Root-relative paths (e.g., /wp-content/uploads/image.jpg).
+			if ( strpos( $url, '/' ) === 0 && strpos( $url, '//' ) !== 0 ) {
+				return home_url( $url );
+			}
+
+			// True relative paths (e.g., images/photo.jpg or ../uploads/img.jpg).
+			if ( strpos( $url, 'http' ) !== 0 && strpos( $url, '//' ) !== 0 && strpos( $url, '/' ) !== 0 ) {
+				// Get the current URL path to resolve relative paths like ../
+				$current_url_path = wp_parse_url( add_query_arg( array() ), PHP_URL_PATH ) ?: '/';
+				$absolute_path    = $this->resolve_relative_path( $current_url_path, $url );
+				return home_url( $absolute_path );
+			}
+
+			return $url;
+		}
+
+		/**
+		 * Resolves a relative path based on a base path.
+		 *
+		 * @since 1.4.0
+		 * @param string $base_path The base path.
+		 * @param string $relative_path The relative path to resolve.
+		 * @return string The resolved absolute path.
+		 */
+		private function resolve_relative_path( string $base_path, string $relative_path ): string {
+			if ( strpos( $relative_path, '/' ) === 0 ) {
+				return $relative_path;
+			}
+
+			$base_parts     = array_filter( explode( '/', $base_path ) );
+			$relative_parts = explode( '/', $relative_path );
+
+			// If the base path is a file, remove the filename.
+			if ( ! empty( $base_parts ) && strpos( end( $base_parts ), '.' ) !== false ) {
+				array_pop( $base_parts );
+			}
+
+			foreach ( $relative_parts as $part ) {
+				if ( '.' === $part || '' === $part ) {
+					continue;
+				}
+				if ( '..' === $part ) {
+					array_pop( $base_parts );
+				} else {
+					$base_parts[] = $part;
+				}
+			}
+
+			return '/' . implode( '/', $base_parts );
 		}
 
 		/**
@@ -573,7 +653,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$local_path = Util::get_local_path( $original_src );
 
 					if ( ! empty( $local_path ) && file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
-						$size = getimagesize( $local_path );
+						static $img_size_cache = array();
+
+						if ( ! isset( $img_size_cache[ $local_path ] ) ) {
+							$img_size_cache[ $local_path ] = getimagesize( $local_path );
+						}
+
+						$size = $img_size_cache[ $local_path ];
 
 						if ( is_array( $size ) ) {
 							if ( ! $has_width ) {
@@ -608,6 +694,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// If the image does not have 'data-src', replace 'src' with 'data-src'.
 				if ( strpos( $img_tag, 'data-src' ) === false ) {
 					$original_src_decoded = htmlspecialchars_decode( $original_src, ENT_QUOTES );
+
+					// Skip base64 images to avoid rewriting them.
+					if ( preg_match( '#^data:image/#i', $original_src_decoded ) ) {
+						return $img_tag;
+					}
 
 					$img_tag = preg_replace_callback(
 						'#src=["\']([^"\']+)["\']#i',
@@ -647,11 +738,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							'data-sizes="' . esc_attr( $sizes_matches[1] ) . '"',
 							$img_tag
 						);
-					}
-
-					// Skip base64 images to avoid rewriting them.
-					if ( preg_match( '#^data:image/#i', $original_src_decoded ) ) {
-						return $img_tag;
 					}
 				}
 
@@ -707,11 +793,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 			} else {
 				// Regex fallback
-				$iframe_tag = str_replace( ' src=', ' data-src=', $iframe_tag );
+				// Replace src with data-src using regex to handle cases where src might be the first attribute or have different spacing.
+				$iframe_tag = preg_replace( '/\bsrc=["\']([^"\']+)["\']/i', 'data-src="$1"', $iframe_tag );
+
 				if ( preg_match( '/class=["\']([^"\']+)["\']/', $iframe_tag, $class_matches ) ) {
 					$iframe_tag = str_replace( $class_matches[0], 'class="' . $class_matches[1] . ' wppo-lazyload"', $iframe_tag );
 				} else {
-					$iframe_tag = str_replace( '<iframe ', '<iframe class="wppo-lazyload" ', $iframe_tag );
+					$iframe_tag = preg_replace( '/<iframe\b/i', '<iframe class="wppo-lazyload"', $iframe_tag );
 				}
 			}
 
@@ -825,8 +913,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								}
 
 								if ( ! empty( $sizes ) ) {
-									$source_tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '">';
+									$source_tag .= ' ' . $sizes_attr . '="' . esc_attr( $sizes ) . '"';
 								}
+								$source_tag .= '>';
 							} else {
 								$source_tag .= ' ' . $srcset_attr . '="' . esc_attr( $original_src ) . '">';
 							}

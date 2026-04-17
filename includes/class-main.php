@@ -732,19 +732,16 @@ class Main {
 			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$parsed_uri  = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $request_uri );
 			$current_url = home_url( sanitize_text_field( $parsed_uri ) );
-			$current_url = rtrim( $current_url, '/' );
 
 			foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {
 				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
 					$exclude_url = home_url( $exclude_url );
-					$exclude_url = rtrim( $exclude_url, '/' );
 				}
 
 				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
 					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-					$exclude_prefix = rtrim( $exclude_prefix, '/' );
 
-					if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
+					if ( 0 === strpos( untrailingslashit( $current_url ), untrailingslashit( $exclude_prefix ) ) ) {
 						return;
 					}
 				}

@@ -228,15 +228,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Processes and cleans up a list of URLs.
 		 *
-		 * @param string $urls The raw URLs to process.
+		 * @param string|array $urls The raw URLs to process.
 		 * @return array The cleaned-up list of unique URLs.
 		 * @since 1.0.0
 		 */
 		public static function process_urls( $urls ) {
 			if ( is_array( $urls ) ) {
-				return array_filter( array_unique( array_map( 'trim', $urls ) ) );
+				return array_values( array_filter( array_unique( array_map( 'trim', $urls ) ) ) );
 			}
-			return array_filter( array_unique( array_map( 'trim', explode( "\n", (string) $urls ) ) ) );
+			return array_values( array_filter( array_unique( array_map( 'trim', explode( "\n", (string) $urls ) ) ) ) );
 		}
 	}
 }

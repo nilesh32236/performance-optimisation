@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *     @type int    $port        Redis port.
  *     @type string $password    Redis password.
  *     @type int    $database    Redis database ID.
- *     @type array  $nodes       List of nodes for cluster/sentinel.
+ *     @type array|string $nodes       List of nodes for cluster/sentinel. String values may be comma- or newline-delimited lists of host:port entries.
  *     @type string $master_name Master name for sentinel.
  *     @type bool   $use_tls     Whether to use TLS.
  *     @type bool   $persistent  Whether to use persistent connections.
@@ -42,10 +42,7 @@ function wppo_redis_connect( $config ) {
 			if ( ! class_exists( 'RedisCluster' ) ) {
 				return new \WP_Error( 'missing_cluster', 'RedisCluster class not found.' );
 			}
-			$nodes = $config['nodes'] ?? array();
-			if ( is_string( $nodes ) ) {
-				$nodes = array_filter( array_map( 'trim', explode( "\n", str_replace( ',', "\n", $nodes ) ) ) );
-			}
+			$nodes = wppo_parse_nodes( $config['nodes'] ?? array() );
 			if ( empty( $nodes ) ) {
 				return new \WP_Error( 'low_nodes', 'No nodes provided for Cluster.' );
 			}
@@ -75,12 +72,7 @@ function wppo_redis_connect( $config ) {
 			if ( ! class_exists( 'RedisSentinel' ) ) {
 				return new \WP_Error( 'missing_sentinel', 'RedisSentinel class not found.' );
 			}
-			$nodes       = $config['nodes'] ?? array();
-			$master_name = $config['master_name'] ?? 'mymaster';
-
-			if ( is_string( $nodes ) ) {
-				$nodes = array_filter( array_map( 'trim', explode( "\n", str_replace( ',', "\n", $nodes ) ) ) );
-			}
+			$nodes       = wppo_parse_nodes( $config['nodes'] ?? array() );
 
 			if ( empty( $nodes ) ) {
 				return new \WP_Error( 'low_nodes', 'Not enough Sentinel nodes configured.' );
@@ -217,4 +209,18 @@ function wppo_apply_redis_options( $redis, $config ) {
 			$redis->setOption( \Redis::OPT_COMPRESSION, $compression_type );
 		}
 	}
+}
+
+/**
+ * Parses a string or array of nodes into a normalized array.
+ *
+ * @since 1.4.0
+ * @param array|string $nodes Raw nodes input.
+ * @return array Normalized array of nodes.
+ */
+function wppo_parse_nodes( $nodes ) {
+	if ( is_string( $nodes ) ) {
+		return array_filter( array_map( 'trim', explode( "\n", str_replace( ',', "\n", $nodes ) ) ) );
+	}
+	return (array) $nodes;
 }

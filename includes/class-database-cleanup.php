@@ -37,21 +37,32 @@ class Database_Cleanup {
 		$deleted = 0;
 
 		do {
-			// First delete associated meta data for revisions in chunks.
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-			$meta_deleted = $wpdb->query(
-				"DELETE pm FROM $wpdb->postmeta pm
-				INNER JOIN $wpdb->posts p ON p.ID = pm.post_id
-				WHERE p.post_type = 'revision' LIMIT 5000"
-			);
-
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
+			// Delete revision posts in chunks first.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$posts_deleted = $wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'revision' LIMIT 1000" );
 
-			if ( $posts_deleted ) {
-				$deleted += $posts_deleted;
+			if ( $posts_deleted === false ) {
+				return false;
 			}
-		} while ( $posts_deleted > 0 || $meta_deleted > 0 );
+
+			if ( $posts_deleted ) {
+				$deleted += (int) $posts_deleted;
+			}
+		} while ( $posts_deleted > 0 );
+
+		// Now clean up orphaned postmeta that might have been left behind.
+		do {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$meta_deleted = $wpdb->query(
+				"DELETE pm FROM $wpdb->postmeta pm
+				LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
+				WHERE p.ID IS NULL LIMIT 5000"
+			);
+
+			if ( $meta_deleted === false ) {
+				return false;
+			}
+		} while ( $meta_deleted > 0 );
 
 		return $deleted;
 	}
@@ -153,21 +164,40 @@ class Database_Cleanup {
 		$deleted = 0;
 
 		do {
-			// Delete associated meta data.
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-			$meta_deleted = $wpdb->query(
-				"DELETE pm FROM $wpdb->postmeta pm
-				INNER JOIN $wpdb->posts p ON p.ID = pm.post_id
-				WHERE p.post_status = 'auto-draft' LIMIT 5000"
-			);
+			// Select a batch of post IDs to delete.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$post_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_status = 'auto-draft' LIMIT 1000" );
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-			$posts_deleted = $wpdb->query( "DELETE FROM $wpdb->posts WHERE post_status = 'auto-draft' LIMIT 1000" );
+			if ( ! empty( $wpdb->last_error ) ) {
+				return false;
+			}
+
+			if ( empty( $post_ids ) ) {
+				break;
+			}
+
+			$ids_string = implode( ',', array_map( 'intval', $post_ids ) );
+
+			// Delete associated meta data for these specific posts.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$meta_deleted = $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE post_id IN ($ids_string)" );
+
+			if ( $meta_deleted === false ) {
+				return false;
+			}
+
+			// Delete the posts.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$posts_deleted = $wpdb->query( "DELETE FROM $wpdb->posts WHERE ID IN ($ids_string)" );
+
+			if ( $posts_deleted === false ) {
+				return false;
+			}
 
 			if ( $posts_deleted ) {
-				$deleted += $posts_deleted;
+				$deleted += (int) $posts_deleted;
 			}
-		} while ( $posts_deleted > 0 || $meta_deleted > 0 );
+		} while ( count( $post_ids ) >= 1000 );
 
 		return $deleted;
 	}
@@ -183,21 +213,40 @@ class Database_Cleanup {
 		$deleted = 0;
 
 		do {
-			// Delete associated meta data.
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-			$meta_deleted = $wpdb->query(
-				"DELETE pm FROM $wpdb->postmeta pm
-				INNER JOIN $wpdb->posts p ON p.ID = pm.post_id
-				WHERE p.post_status = 'trash' LIMIT 5000"
-			);
+			// Select a batch of post IDs to delete.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$post_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_status = 'trash' LIMIT 1000" );
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-			$posts_deleted = $wpdb->query( "DELETE FROM $wpdb->posts WHERE post_status = 'trash' LIMIT 1000" );
+			if ( ! empty( $wpdb->last_error ) ) {
+				return false;
+			}
+
+			if ( empty( $post_ids ) ) {
+				break;
+			}
+
+			$ids_string = implode( ',', array_map( 'intval', $post_ids ) );
+
+			// Delete associated meta data for these specific posts.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$meta_deleted = $wpdb->query( "DELETE FROM $wpdb->postmeta WHERE post_id IN ($ids_string)" );
+
+			if ( $meta_deleted === false ) {
+				return false;
+			}
+
+			// Delete the posts.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$posts_deleted = $wpdb->query( "DELETE FROM $wpdb->posts WHERE ID IN ($ids_string)" );
+
+			if ( $posts_deleted === false ) {
+				return false;
+			}
 
 			if ( $posts_deleted ) {
-				$deleted += $posts_deleted;
+				$deleted += (int) $posts_deleted;
 			}
-		} while ( $posts_deleted > 0 || $meta_deleted > 0 );
+		} while ( count( $post_ids ) >= 1000 );
 
 		return $deleted;
 	}
