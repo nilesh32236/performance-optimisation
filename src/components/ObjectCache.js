@@ -191,7 +191,7 @@ const ObjectCache = ( { options = {} } ) => {
 						<>
 							<button
 								type="button"
-								className="wppo-button wppo-button-danger"
+								className="submit-button danger"
 								onClick={ () => handleAction( 'disable' ) }
 								disabled={ isActionLoading }
 							>
@@ -202,7 +202,7 @@ const ObjectCache = ( { options = {} } ) => {
 							</button>
 							<button
 								type="button"
-								className="wppo-button wppo-button-secondary"
+								className="submit-button secondary"
 								onClick={ () => handleAction( 'flush' ) }
 								disabled={ isActionLoading }
 							>
@@ -215,7 +215,7 @@ const ObjectCache = ( { options = {} } ) => {
 					) : (
 						<button
 							type="button"
-							className="wppo-button wppo-button-primary"
+							className="submit-button"
 							onClick={ () => handleAction( 'enable' ) }
 							disabled={
 								isActionLoading ||
@@ -352,7 +352,7 @@ const ObjectCache = ( { options = {} } ) => {
 
 				<button
 					type="button"
-					className="wppo-button wppo-button-secondary"
+					className="submit-button secondary"
 					onClick={ () => handleAction( 'ping' ) }
 					disabled={ isActionLoading }
 				>
