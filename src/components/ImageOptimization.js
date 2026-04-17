@@ -16,8 +16,10 @@ const ImageOptimization = ( { options = {} } ) => {
 
 	const defaultSettings = {
 		lazyLoadImages: false,
+		wrapInPicture: true,
 		excludeFistImages: 0,
 		excludeImages: '',
+		lazyLoadVideos: false,
 		excludeVideos: '',
 		convertImg: false,
 		conversionFormat: 'webp',
@@ -130,24 +132,16 @@ const ImageOptimization = ( { options = {} } ) => {
 										onChange={ handleChange( setSettings ) }
 									/>
 								</div>
-								<div className="setting-group">
-									<label
-										className="field-label"
-										htmlFor={ excludeVideosId }
-									>
-										{ translations.excludeVideos }
-									</label>
-									<textarea
-										id={ excludeVideosId }
-										className="text-area-field"
-										placeholder={
-											translations.excludeVideos
-										}
-										name="excludeVideos"
-										value={ settings.excludeVideos }
-										onChange={ handleChange( setSettings ) }
-									/>
-								</div>
+								<CheckboxOption
+									label={ translations.wrapInPicture }
+									checked={ settings.wrapInPicture }
+									onChange={ handleChange( setSettings ) }
+									name="wrapInPicture"
+									description={
+										translations.wrapInPictureDesc ||
+										'Wrap images in a <picture> tag for advanced optimization.'
+									}
+								/>
 								<CheckboxOption
 									label={ translations.replaceImgToSVG }
 									checked={
@@ -164,6 +158,31 @@ const ImageOptimization = ( { options = {} } ) => {
 						</>
 					) }
 				</CheckboxOption>
+			</div>
+
+			<div className="feature-card">
+				<h3>
+					<FontAwesomeIcon icon={ faEye } /> Video Optimization
+				</h3>
+				<p>
+					Manage how videos are loaded to improve performance and user
+					experience.
+				</p>
+
+				<CheckboxOption
+					label={ translations.lazyLoadVideos }
+					checked={ settings.lazyLoadVideos }
+					onChange={ handleChange( setSettings ) }
+					name="lazyLoadVideos"
+					textareaName="excludeVideos"
+					textareaPlaceholder={ translations.excludeVideos }
+					textareaValue={ settings.excludeVideos }
+					onTextareaChange={ handleChange( setSettings ) }
+					description={
+						translations.lazyLoadVideosDesc ||
+						'Delay loading of videos until they scroll into view.'
+					}
+				/>
 			</div>
 
 			<div className="feature-card">

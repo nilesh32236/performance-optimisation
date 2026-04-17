@@ -78,13 +78,12 @@ class Object_Cache {
 
 		if ( ! $status['redis_missing'] ) {
 			try {
-				// Determine connection settings (Config file has priority over DB settings).
-				$config = array();
-				if ( file_exists( $this->config_path ) ) {
+				// Determine connection settings (Dashboard settings have priority over on-disk config).
+				$options = get_option( 'wppo_settings', array() );
+				$config  = $options['object_cache'] ?? array();
+
+				if ( empty( $config ) && file_exists( $this->config_path ) ) {
 					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
-				} else {
-					$options  = get_option( 'wppo_settings', array() );
-					$config = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
 				}
 
 				$connection = $this->connect_internal( $config );
@@ -98,14 +97,14 @@ class Object_Cache {
 						$info = $redis->info();
 						if ( $info ) {
 							$status['telemetry'] = array(
-								'uptime_in_days'             => isset( $info['uptime_in_days'] ) ? $info['uptime_in_days'] : 0,
-								'connected_clients'          => isset( $info['connected_clients'] ) ? $info['connected_clients'] : 0,
-								'used_memory_human'          => isset( $info['used_memory_human'] ) ? $info['used_memory_human'] : '0B',
-								'used_memory_peak_human'     => isset( $info['used_memory_peak_human'] ) ? $info['used_memory_peak_human'] : '0B',
-								'total_connections_received' => isset( $info['total_connections_received'] ) ? $info['total_connections_received'] : 0,
-								'keyspace_hits'              => isset( $info['keyspace_hits'] ) ? $info['keyspace_hits'] : 0,
-								'keyspace_misses'            => isset( $info['keyspace_misses'] ) ? $info['keyspace_misses'] : 0,
-								'keys'                       => isset( $info['db0'] ) ? (int) preg_replace( '/.*keys=([0-9]+).*/', '$1', $info['db0'] ) : 0,
+								'uptime_in_days'         => $info['uptime_in_days'] ?? 0,
+								'connected_clients'      => $info['connected_clients'] ?? 0,
+								'used_memory_human'      => $info['used_memory_human'] ?? '0B',
+								'used_memory_peak_human' => $info['used_memory_peak_human'] ?? '0B',
+								'total_connections_received' => $info['total_connections_received'] ?? 0,
+								'keyspace_hits'          => $info['keyspace_hits'] ?? 0,
+								'keyspace_misses'        => $info['keyspace_misses'] ?? 0,
+								'keys'                   => isset( $info['db0'] ) ? (int) preg_replace( '/.*keys=([0-9]+).*/', '$1', $info['db0'] ) : 0,
 							);
 						}
 					}
@@ -117,7 +116,6 @@ class Object_Cache {
 				$status['redis_reachable'] = false;
 				$status['telemetry_error'] = $e->getMessage();
 			}
-
 		}
 
 		return $status;
@@ -130,8 +128,8 @@ class Object_Cache {
 	 * @return \Redis|\RedisCluster|\WP_Error
 	 */
 	private function connect_internal( $config ) {
-		$mode     = isset( $config['mode'] ) ? $config['mode'] : 'standalone';
-		$password = isset( $config['password'] ) ? $config['password'] : '';
+		$mode     = $config['mode'] ?? 'standalone';
+		$password = $config['password'] ?? '';
 		$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
 		$use_tls  = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
 		$timeout  = 0.5;
@@ -141,7 +139,7 @@ class Object_Cache {
 				if ( ! class_exists( 'RedisCluster' ) ) {
 					return new \WP_Error( 'missing_cluster', 'RedisCluster class not found.' );
 				}
-				$nodes = isset( $config['nodes'] ) ? $config['nodes'] : array();
+				$nodes = $config['nodes'] ?? array();
 				if ( is_string( $nodes ) ) {
 					$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
 				}
@@ -150,9 +148,12 @@ class Object_Cache {
 				}
 
 				if ( $use_tls ) {
-					$nodes = array_map( function( $node ) {
-						return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
-					}, $nodes );
+					$nodes = array_map(
+						function ( $node ) {
+							return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
+						},
+						$nodes
+					);
 				}
 
 				try {
@@ -166,8 +167,8 @@ class Object_Cache {
 				if ( ! class_exists( 'RedisSentinel' ) ) {
 					return new \WP_Error( 'missing_sentinel', 'RedisSentinel class not found.' );
 				}
-				$nodes       = isset( $config['nodes'] ) ? $config['nodes'] : array();
-				$master_name = isset( $config['master_name'] ) ? $config['master_name'] : 'mymaster';
+				$nodes       = $config['nodes'] ?? array();
+				$master_name = $config['master_name'] ?? 'mymaster';
 
 				if ( is_string( $nodes ) ) {
 					$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
@@ -177,11 +178,13 @@ class Object_Cache {
 				foreach ( $nodes as $node ) {
 					list( $s_host, $s_port ) = array_pad( explode( ':', $node ), 2, 26379 );
 					try {
-						$sentinel = new \RedisSentinel( array(
-							'host' => $s_host,
-							'port' => (int) $s_port,
-						) );
-						$address = $sentinel->getMasterAddrByName( $master_name );
+						$sentinel = new \RedisSentinel(
+							array(
+								'host' => $s_host,
+								'port' => (int) $s_port,
+							)
+						);
+						$address  = $sentinel->getMasterAddrByName( $master_name );
 						if ( $address ) {
 							$redis = new \Redis();
 							$host  = $use_tls ? 'tls://' . $address[0] : $address[0];
@@ -201,8 +204,8 @@ class Object_Cache {
 				return new \WP_Error( 'sentinel_fail', 'Could not resolve master via Sentinals. Last error: ' . end( $errors ) );
 			}
 
-			// Standalone
-			$host = isset( $config['host'] ) ? $config['host'] : '127.0.0.1';
+			// Standalone default connection.
+			$host = $config['host'] ?? '127.0.0.1';
 			$port = isset( $config['port'] ) ? (int) $config['port'] : 6379;
 			if ( $use_tls && strpos( $host, 'tls://' ) !== 0 ) {
 				$host = 'tls://' . $host;
@@ -210,10 +213,11 @@ class Object_Cache {
 
 			$redis = new \Redis();
 			$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			if ( @$redis->$func( $host, $port, $timeout ) ) {
 				$redis->select( $database );
 
-				// Apply performance options
+				// Apply performance options.
 				$serializer = defined( '\Redis::SERIALIZER_IGBINARY' ) ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP;
 				$redis->setOption( \Redis::OPT_SERIALIZER, $serializer );
 
@@ -239,7 +243,6 @@ class Object_Cache {
 		}
 
 		return new \WP_Error( 'conn_fail', sprintf( 'Could not connect to Redis at %s:%s. Please ensure the service is running.', $host, $port ) );
-
 	}
 
 	/**
@@ -311,8 +314,9 @@ class Object_Cache {
 		}
 
 		// Write config file using var_export for clean array representation.
-		$config_content  = "<?php\n// Auto-generated by Performance Optimisation\n";
-		$config_content .= "return " . var_export( $config_data, true ) . ";\n";
+		$config_content = "<?php\n// Auto-generated by Performance Optimisation\n";
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+		$config_content .= 'return ' . var_export( $config_data, true ) . ";\n";
 
 		$wp_filesystem = Util::init_filesystem();
 

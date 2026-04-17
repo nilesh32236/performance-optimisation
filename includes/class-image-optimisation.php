@@ -607,47 +607,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				$img_tag = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
 
-				$srcset = '';
-				if ( preg_match( '#\b(?:data-)?srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
-					$srcset = $srcset_matches[1];
-				}
-
-				$sizes = '';
-				if ( preg_match( '#\b(?:data-)?sizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
-					$sizes = $sizes_matches[1];
-				}
-
-				$is_lazy        = (bool) strpos( $img_tag, 'data-src' );
-				$srcset_attr    = $is_lazy ? 'data-srcset' : 'srcset';
-				$sizes_attr     = $is_lazy ? 'data-sizes' : 'sizes';
-				$source_tag     = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-				$should_exclude = false;
-
-				foreach ( $exclude_imgs as $exclude_img ) {
-					if ( false !== strpos( $original_src, $exclude_img ) ) {
-						$should_exclude = true;
-						break;
+				if ( ! isset( $this->options['image_optimisation']['wrapInPicture'] ) || (bool) $this->options['image_optimisation']['wrapInPicture'] ) {
+					$srcset = '';
+					if ( preg_match( '#\b(?:data-)?srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
+						$srcset = $srcset_matches[1];
 					}
-				}
 
-				if ( ! $should_exclude ) {
-					if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
-						if ( ! empty( $srcset ) ) {
-							$source_tag .= ' ' . $srcset_attr . '="' . $srcset . '"';
+					$sizes = '';
+					if ( preg_match( '#\b(?:data-)?sizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
+						$sizes = $sizes_matches[1];
+					}
+
+					$is_lazy        = (bool) strpos( $img_tag, 'data-src' );
+					$srcset_attr    = $is_lazy ? 'data-srcset' : 'srcset';
+					$sizes_attr     = $is_lazy ? 'data-sizes' : 'sizes';
+					$source_tag     = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
+					$should_exclude = false;
+
+					foreach ( $exclude_imgs as $exclude_img ) {
+						if ( false !== strpos( $original_src, $exclude_img ) ) {
+							$should_exclude = true;
+							break;
 						}
+					}
 
-						if ( ! empty( $sizes ) ) {
-							$source_tag .= ' ' . $sizes_attr . '="' . $sizes . '">';
+					if ( ! $should_exclude ) {
+						if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
+							if ( ! empty( $srcset ) ) {
+								$source_tag .= ' ' . $srcset_attr . '="' . $srcset . '"';
+							}
+
+							if ( ! empty( $sizes ) ) {
+								$source_tag .= ' ' . $sizes_attr . '="' . $sizes . '">';
+							}
+						} else {
+							$source_tag .= ' ' . $srcset_attr . '="' . $original_src . '">';
 						}
 					} else {
-						$source_tag .= ' ' . $srcset_attr . '="' . $original_src . '">';
+						$source_tag .= '>';
 					}
-				} else {
-					$source_tag .= '>';
-				}
 
-				// Wrap <img> tag inside <picture>.
-				$img_tag = '<picture style="width: 100%;">' . $source_tag . $img_tag . '</picture>';
+					// Wrap <img> tag inside <picture>.
+					$img_tag = '<picture>' . $source_tag . $img_tag . '</picture>';
+				}
 				return $img_tag;
 			} else {
 				preg_match( '#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches );
@@ -915,7 +917,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public function lazy_load_videos( string $buffer ): string {
 			$image_opts = $this->options['image_optimisation'] ?? array();
 
-			if ( empty( $image_opts['lazyLoadImages'] ) ) {
+			if ( empty( $image_opts['lazyLoadVideos'] ) ) {
 				return $buffer;
 			}
 

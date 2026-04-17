@@ -113,7 +113,7 @@ const ObjectCache = ( { options = {} } ) => {
 				return;
 			}
 
-			if ( [ 'enable', 'disable' ].includes( action ) ) {
+			if ( [ 'enable', 'disable', 'ping' ].includes( action ) ) {
 				await fetchStatus();
 			}
 			setActionMsg( {
@@ -588,6 +588,20 @@ const ObjectCache = ( { options = {} } ) => {
 										! cacheStatus.supported_compressors.zstd
 											? '(Disabled)'
 											: ' (Recommended)' }
+									</option>
+									<option
+										value="lz4"
+										disabled={
+											cacheStatus.supported_compressors &&
+											! cacheStatus.supported_compressors
+												.lz4
+										}
+									>
+										LZ4{ ' ' }
+										{ cacheStatus.supported_compressors &&
+										! cacheStatus.supported_compressors.lz4
+											? '(Disabled)'
+											: '' }
 									</option>
 								</select>
 								<p

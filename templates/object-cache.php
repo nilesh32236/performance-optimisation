@@ -327,12 +327,12 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 				$config = include $config_file; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
 			}
 
-			$mode        = apply_filters( 'wppo_redis_mode', isset( $config['mode'] ) ? $config['mode'] : 'standalone' );
-			$use_tls     = apply_filters( 'wppo_redis_use_tls', isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false );
-			$password    = apply_filters( 'wppo_redis_password', isset( $config['password'] ) ? $config['password'] : '' );
-			$database    = apply_filters( 'wppo_redis_database', isset( $config['database'] ) ? (int) $config['database'] : 0 );
-			$timeout     = apply_filters( 'wppo_redis_timeout', 1.0 );
-			$persistent  = apply_filters( 'wppo_redis_persistent', isset( $config['persistent'] ) ? (bool) $config['persistent'] : false );
+			$mode       = apply_filters( 'wppo_redis_mode', isset( $config['mode'] ) ? $config['mode'] : 'standalone' );
+			$use_tls    = apply_filters( 'wppo_redis_use_tls', isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false );
+			$password   = apply_filters( 'wppo_redis_password', isset( $config['password'] ) ? $config['password'] : '' );
+			$database   = apply_filters( 'wppo_redis_database', isset( $config['database'] ) ? (int) $config['database'] : 0 );
+			$timeout    = apply_filters( 'wppo_redis_timeout', 1.0 );
+			$persistent = apply_filters( 'wppo_redis_persistent', isset( $config['persistent'] ) ? (bool) $config['persistent'] : false );
 
 			$this->redis         = null;
 			$this->redis_replica = null;
@@ -341,9 +341,12 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 				if ( 'cluster' === $mode && class_exists( 'RedisCluster' ) ) {
 					$nodes = isset( $config['nodes'] ) ? (array) $config['nodes'] : array();
 					if ( $use_tls ) {
-						$nodes = array_map( function( $node ) {
-							return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
-						}, $nodes );
+						$nodes = array_map(
+							function ( $node ) {
+								return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
+							},
+							$nodes
+						);
 					}
 					$this->redis           = new \RedisCluster( null, $nodes, $timeout, $timeout, true, $password );
 					$this->redis_connected = true;
@@ -354,11 +357,13 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 					foreach ( $nodes as $node ) {
 						list( $s_host, $s_port ) = array_pad( explode( ':', $node ), 2, 26379 );
 						try {
-							$sentinel = new \RedisSentinel( array(
-								'host' => $s_host,
-								'port' => (int) $s_port,
-							) );
-							$address = $sentinel->getMasterAddrByName( $master_name );
+							$sentinel = new \RedisSentinel(
+								array(
+									'host' => $s_host,
+									'port' => (int) $s_port,
+								)
+							);
+							$address  = $sentinel->getMasterAddrByName( $master_name );
 							if ( $address ) {
 								$this->redis = new \Redis();
 								$host        = $use_tls ? 'tls://' . $address[0] : $address[0];
@@ -376,17 +381,15 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 							continue;
 						}
 					}
-
-
 				} else {
-					// Standalone (Default).
+					// Standalone default connection.
 					$host = apply_filters( 'wppo_redis_host', isset( $config['host'] ) ? $config['host'] : '127.0.0.1' );
 					$port = apply_filters( 'wppo_redis_port', isset( $config['port'] ) ? (int) $config['port'] : 6379 );
 					if ( $use_tls && strpos( $host, 'tls://' ) !== 0 ) {
 						$host = 'tls://' . $host;
 					}
 
-					$this->redis = new \Redis();
+					$this->redis  = new \Redis();
 					$connect_func = $persistent ? 'pconnect' : 'connect';
 					if ( $this->redis->$connect_func( $host, $port, $timeout ) ) {
 						if ( ! empty( $password ) && $this->redis->auth( $password ) === false ) {
@@ -404,6 +407,9 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 							$r_pass  = isset( $replica['password'] ) ? $replica['password'] : $password;
 							try {
 								$tmp_replica = new \Redis();
+								if ( $use_tls && strpos( $r_host, 'tls://' ) !== 0 ) {
+									$r_host = 'tls://' . $r_host;
+								}
 								if ( $tmp_replica->connect( $r_host, $r_port, $timeout ) ) {
 									if ( ! empty( $r_pass ) ) {
 										$tmp_replica->auth( $r_pass );
@@ -746,14 +752,26 @@ if ( ! function_exists( 'wp_cache_add' ) ) :
 
 				$prefix  = $this->blog_prefix;
 				$pattern = $prefix . '*';
-				$cursor  = null;
-				$deleted = 0;
 
+				if ( $this->redis instanceof \RedisCluster ) {
+					$masters = $this->redis->_masters();
+					foreach ( $masters as $node ) {
+						$cursor = null;
+						do {
+							$keys = $this->redis->scan( $cursor, $node, $pattern, 100 );
+							if ( ! empty( $keys ) ) {
+								$this->redis->del( $keys );
+							}
+						} while ( 0 !== $cursor );
+					}
+					return true;
+				}
+
+				$cursor = null;
 				do {
 					$keys = $this->redis->scan( $cursor, $pattern, 100 );
 					if ( ! empty( $keys ) ) {
 						$this->redis->del( $keys );
-						$deleted += count( $keys );
 					}
 				} while ( 0 !== $cursor );
 

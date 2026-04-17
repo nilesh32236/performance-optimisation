@@ -43,17 +43,28 @@ EOF
 start_lab() {
     echo "Starting Redis Master on port $MASTER_PORT..."
     redis-server "$LAB_DIR/master.conf" --daemonize yes
+    if [ $? -ne 0 ]; then echo "Error: Failed to start Redis Master"; exit 1; fi
     
     echo "Starting Redis Replica on port $REPLICA_PORT..."
     redis-server "$LAB_DIR/replica.conf" --daemonize yes
+    if [ $? -ne 0 ]; then echo "Error: Failed to start Redis Replica"; exit 1; fi
     
     echo "Starting Redis Sentinel 1 on port $SENTINEL_1_PORT..."
     redis-sentinel "$LAB_DIR/sentinel_1.conf" --daemonize yes
+    if [ $? -ne 0 ]; then echo "Error: Failed to start Redis Sentinel 1"; exit 1; fi
 
     echo "Starting Redis Sentinel 2 on port $SENTINEL_2_PORT..."
     redis-sentinel "$LAB_DIR/sentinel_2.conf" --daemonize yes
+    if [ $? -ne 0 ]; then echo "Error: Failed to start Redis Sentinel 2"; exit 1; fi
     
-    echo "Lab started!"
+    # Verify they are actually running
+    sleep 1
+    if ! pgrep -f "$LAB_DIR/master.conf" > /dev/null; then echo "Error: Redis Master is not running"; exit 1; fi
+    if ! pgrep -f "$LAB_DIR/replica.conf" > /dev/null; then echo "Error: Redis Replica is not running"; exit 1; fi
+    if ! pgrep -f "$LAB_DIR/sentinel_1.conf" > /dev/null; then echo "Error: Redis Sentinel 1 is not running"; exit 1; fi
+    if ! pgrep -f "$LAB_DIR/sentinel_2.conf" > /dev/null; then echo "Error: Redis Sentinel 2 is not running"; exit 1; fi
+
+    echo "Lab started successfully!"
     echo "Sentinel Nodes:"
     echo "  127.0.0.1:$SENTINEL_1_PORT"
     echo "  127.0.0.1:$SENTINEL_2_PORT"

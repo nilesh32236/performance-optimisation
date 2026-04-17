@@ -836,6 +836,19 @@ button.submit-button,
 		}
 	}
 
+	&.wppo-button-outline, &.outline {
+		background: transparent;
+		color: var(--wppo-primary);
+		border: 1.5px solid var(--wppo-primary);
+		box-shadow: none;
+
+		&:hover {
+			background: var(--wppo-primary);
+			color: #fff;
+			box-shadow: 0 8px 20px rgba(var(--wppo-primary-rgb), 0.25);
+		}
+	}
+
 	&.wppo-button-danger, &.danger {
 		background: var(--wppo-error);
 		color: #fff;

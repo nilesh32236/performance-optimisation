@@ -584,7 +584,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$manager = new Object_Cache();
 
 			if ( 'status' === $action ) {
-				$status = $manager->get_status();
+				$status                          = $manager->get_status();
 				$status['supported_compressors'] = array(
 					'lzf'  => defined( '\Redis::COMPRESSION_LZF' ),
 					'lz4'  => defined( '\Redis::COMPRESSION_LZ4' ),
@@ -638,7 +638,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				new Log( __( 'Object Cache enabled.', 'performance-optimisation' ) );
 				return $this->send_response( true, true, 200, __( 'Object Cache enabled successfully.', 'performance-optimisation' ) );
 			}
-
 
 			if ( 'disable' === $action ) {
 				$result = $manager->disable();
