@@ -288,22 +288,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return $img_url;
 		}
 
-		/**
-		 * Checks if the given URL is valid.
+		/ **
+		 * Determine whether a string is a syntactically valid URL.
 		 *
 		 * @param string $url The URL to validate.
-		 * @return bool True if the URL is valid, false otherwise.
+		 * @return bool `true` if the URL is a valid URL string, `false` otherwise.
 		 */
 		private function is_valid_url( $url ) {
 			return filter_var( $url, FILTER_VALIDATE_URL ) !== false;
 		}
 
 		/**
-		 * Normalizes a URL, converting relative paths to absolute URLs.
+		 * Convert various URL forms into an absolute URL.
+		 *
+		 * Leaves empty strings and `data:` URLs unchanged. Handles protocol-relative (`//...`), root-relative (`/...`) and relative paths (e.g., `images/foo.jpg`, `../img.jpg`) by resolving them against the site's home URL and the current request path. Returns the original value unchanged when it is already an absolute `http...` URL.
 		 *
 		 * @since 1.4.0
-		 * @param string $url The URL to normalize.
-		 * @return string The normalized absolute URL.
+		 * @param string $url The input URL to normalize.
+		 * @return string The normalized absolute URL, or the original value for empty/data URLs.
 		 */
 		private function normalize_url( string $url ): string {
 			if ( empty( $url ) || strpos( $url, 'data:' ) === 0 ) {
@@ -339,12 +341,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Resolves a relative path based on a base path.
+		 * Resolve a relative path against a base path and return an absolute path starting with '/'.
+		 *
+		 * The function treats $base_path as a file (removing its final segment) when it has no
+		 * trailing slash and the last segment contains a dot. It preserves an absolute input
+		 * $relative_path (one that starts with '/') and resolves '.' and '..' segments.
 		 *
 		 * @since 1.4.0
-		 * @param string $base_path The base path.
-		 * @param string $relative_path The relative path to resolve.
-		 * @return string The resolved absolute path.
+		 * @param string $base_path Base path to resolve against; may represent a directory (trailing slash) or a file.
+		 * @param string $relative_path Relative path to resolve; if it starts with '/' it will be returned unchanged.
+		 * @return string The resolved absolute path beginning with '/'.
 		 */
 		private function resolve_relative_path( string $base_path, string $relative_path ): string {
 			if ( strpos( $relative_path, '/' ) === 0 ) {
@@ -585,13 +591,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Processes an <img> tag for optimization, including lazy loading.
+		 * Optimize an <img> tag for lazy loading, placeholders, dimensions, and performance attributes.
+		 *
+		 * If the image URL matches any exclusion substring, ensures the tag has `decoding="sync"` and
+		 * `fetchpriority="high"` (if missing) and returns the tag unchanged otherwise. For non-excluded
+		 * images, moves `src` → `data-src`, `srcset` → `data-srcset`, and `sizes` → `data-sizes`
+		 * (skipping `data:image/*` sources), optionally replaces `src` with an SVG placeholder, and
+		 * populates missing `width`/`height` attributes from the local file when available.
 		 *
 		 * @since 1.0.0
 		 *
-		 * @param string $img_tag The original <img> tag.
-		 * @param string $original_src The original src attribute of the image.
-		 * @param array  $exclude_imgs Array of images to exclude from processing.
+		 * @param string $img_tag       The original <img> tag HTML.
+		 * @param string $original_src  The original value of the image `src` attribute.
+		 * @param string[] $exclude_imgs Array of URL substrings; if any is found in `$original_src` the image is treated as excluded.
 		 * @return string The modified <img> tag.
 		 */
 		public function process_img_tag( $img_tag, $original_src, $exclude_imgs ) {
@@ -774,14 +786,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Processes an <iframe> tag for optimization, including lazy loading.
+		 * Prepare an <iframe> tag for lazy loading and exclusion-aware optimization.
+		 *
+		 * If the iframe's source matches any exclusion substring, the tag is returned unchanged.
+		 * Otherwise the function moves `src` to `data-src`, removes the `src` attribute, and ensures
+		 * the `wppo-lazyload` class is present. Uses WP_HTML_Tag_Processor when available and
+		 * falls back to regex-based attribute manipulation.
 		 *
 		 * @since 1.0.0
 		 *
-		 * @param string $iframe_tag The original <img> tag.
-		 * @param string $original_src The original src attribute of the image.
-		 * @param array  $exclude_imgs Array of images to exclude from processing.
-		 * @return string The modified <iframe> tag.
+		 * @param string $iframe_tag   The original `<iframe>` tag HTML.
+		 * @param string $original_src The original `src` attribute value (absolute or relative URL).
+		 * @param string[] $exclude_imgs List of substrings; if any appear in `$original_src` the tag is left unchanged.
+		 * @return string The modified `<iframe>` tag HTML.
 		 */
 		public function process_iframe_tag( $iframe_tag, $original_src, $exclude_imgs ) {
 			foreach ( $exclude_imgs as $exclude_img ) {
@@ -814,15 +831,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Processes a <picture> tag or wraps an <img> tag with a <picture> tag for optimization.
+		 * Wraps an image in a <picture> element or updates an existing <picture> by adding appropriate <source>
+		 * attributes for optimized delivery and lazy-loading based on current options and exclusions.
+		 *
+		 * Processes the provided image tag (or the <img> inside an existing <picture>) and returns the resulting
+		 * HTML fragment. Honors the configured wrapInPicture option and skips adding <source> descriptors when
+		 * the image URL matches any entry in the exclusion list.
 		 *
 		 * @since 1.0.0
 		 *
-		 * @param array  $matches Matches from the regex.
-		 * @param string $img_tag The original <img> tag.
-		 * @param string $original_src The original src attribute of the image.
-		 * @param array  $exclude_imgs Array of images to exclude from processing.
-		 * @return string The modified or new <picture> tag.
+		 * @param array  $matches       Regex match array containing the matched <img> or <picture> fragment.
+		 * @param string $img_tag       The original <img> tag to process.
+		 * @param string $original_src  The original src attribute value of the image.
+		 * @param array  $exclude_imgs  List of URL substrings; if any is present in the image URL, source descriptors are not added.
+		 * @return string The processed <picture> or <img> HTML fragment (or the original fragment if unchanged).
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
@@ -947,13 +969,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 		}
 
-		/**
-		 * Adds lazy loading and delay load functionality to images in the HTML buffer.
+		/ **
+		 * Transforms <picture>, <img>, and <iframe> elements in the provided HTML to enable lazy loading and delayed loading based on the image_optimisation options.
+		 *
+		 * Applies exclusions derived from the options (including preload-selected images and the first N images specified by `excludeFirstImages`) and rewrites matched tags to use data-* attributes and lazy classes when appropriate.
 		 *
 		 * @since 1.0.0
 		 *
-		 * @param string $buffer The HTML buffer.
-		 * @return string The modified HTML buffer.
+		 * @param string $buffer The HTML buffer to process.
+		 * @return string The modified HTML buffer with lazy-load and delay-load attributes applied.
 		 */
 		public function add_delay_load_img( $buffer ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
@@ -1181,16 +1205,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Lazy-loads video elements by deferring their source loading.
+		 * Rewrites <video> elements so their media sources are deferred and restored later for lazy loading.
 		 *
-		 * Replaces `src` with `data-src`, removes `autoplay`, and adds
-		 * `preload="none"` so videos only load when they enter the viewport.
-		 * An inline IntersectionObserver script is appended to handle restoration.
+		 * Skips videos whose attributes or inner markup match configured exclusion patterns. For processed videos:
+		 * - moves `src` attributes to `data-src` (on <video> and inner <source> tags),
+		 * - removes `autoplay` and sets `data-wppo-autoplay="1"` when autoplay was present,
+		 * - ensures `preload="none"` is set,
+		 * - adds the `wppo-lazy-video` class.
 		 *
 		 * @since 1.2.4
 		 *
-		 * @param string $buffer The HTML buffer.
-		 * @return string The modified HTML buffer with lazy-loaded videos.
+		 * @param string $buffer HTML markup to process.
+		 * @return string The HTML with video elements rewritten for lazy loading.
 		 */
 		public function lazy_load_videos( string $buffer ): string {
 			$image_opts = $this->options['image_optimisation'] ?? array();
