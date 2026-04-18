@@ -894,10 +894,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						}
 					}
 					return $img_tag;
-				} elseif ( preg_match( '#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches ) ) {
+				} elseif ( preg_match( '#<img\b[^>]*>#i', $matches[0], $img_matches ) ) {
 					// Existing <picture> tag: find the <img> inside and process it.
-					$img_tag       = $img_matches[0];
-					$original_src  = $img_matches[2];
+					$img_tag    = $img_matches[0];
+					$tags_check = new \WP_HTML_Tag_Processor( $img_tag );
+
+					if ( $tags_check->next_tag( array( 'tag_name' => 'img' ) ) && null !== $tags_check->get_attribute( 'data-src' ) ) {
+						// Already lazy-loaded — only inject SVG placeholder if src is missing.
+						if (
+							isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) &&
+							(bool) $this->options['image_optimisation']['replacePlaceholderWithSVG']
+						) {
+							$tags_write = new \WP_HTML_Tag_Processor( $img_tag );
+							if ( $tags_write->next_tag( array( 'tag_name' => 'img' ) ) && null === $tags_write->get_attribute( 'src' ) ) {
+								$svg_src = $this->generate_svg_base64( $img_tag );
+								if ( ! empty( $svg_src ) ) {
+									$tags_write->set_attribute( 'src', $svg_src );
+									return str_replace( $img_tag, $tags_write->get_updated_html(), $matches[0] );
+								}
+							}
+						}
+						return $matches[0];
+					}
+
+					// img still has src — extract it and run full processing.
+					$tags_src = new \WP_HTML_Tag_Processor( $img_tag );
+					if ( $tags_src->next_tag( array( 'tag_name' => 'img' ) ) ) {
+						$src_val = $tags_src->get_attribute( 'src' );
+						if ( $src_val ) {
+							$original_src = $src_val;
+						}
+					}
 					$processed_img = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
 
 					return str_replace( $img_tag, $processed_img, $matches[0] );
@@ -1192,8 +1219,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The base64-encoded SVG.
 		 */
 		private function generate_svg_base64( $img_attributes ) {
-			preg_match( '/width=["\'](\d+)["\']/', $img_attributes, $width_matches );
-			preg_match( '/height=["\'](\d+)["\']/', $img_attributes, $height_matches );
+			// Match both quoted (width="59") and unquoted (width=59) attribute formats.
+			preg_match( '/\bwidth=["\']?(\d+)["\']?/i', $img_attributes, $width_matches );
+			preg_match( '/\bheight=["\']?(\d+)["\']?/i', $img_attributes, $height_matches );
 
 			$width  = isset( $width_matches[1] ) ? $width_matches[1] : '100';
 			$height = isset( $height_matches[1] ) ? $height_matches[1] : '100';
