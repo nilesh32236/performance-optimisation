@@ -83,7 +83,7 @@ function wppo_redis_connect( $config ) {
 			}
 
 			$master_name = $config['master_name'] ?? 'mymaster';
-			$errors = array();
+			$errors      = array();
 			foreach ( $nodes as $node ) {
 				// Robust parsing of host and port (handles IPv6).
 				if ( strpos( $node, '[' ) === 0 ) {
@@ -221,7 +221,11 @@ function wppo_apply_redis_options( $redis, $config ) {
  */
 function wppo_parse_nodes( $nodes ) {
 	if ( is_string( $nodes ) ) {
-		return array_filter( array_map( 'trim', preg_split( '/[\s,;]+/', $nodes ) ) );
+		$split = preg_split( '/[\s,;]+/', $nodes );
+		if ( false === $split ) {
+			return array();
+		}
+		return array_values( array_filter( array_map( 'trim', $split ) ) );
 	}
-	return (array) $nodes;
+	return array_values( (array) $nodes );
 }

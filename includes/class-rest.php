@@ -452,21 +452,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 
-				if ( ! empty( $failures ) ) {
-					return new \WP_REST_Response(
-						new \WP_Error(
-							'db_cleanup_partial_failure',
-							__( 'Partial or total failure during database cleanup.', 'performance-optimisation' ),
-							array(
-								'status'   => 500,
-								'failures' => $failures,
-								'deleted'  => $total,
-							)
-						),
-						500
-					);
-				}
-
 				new Log(
 					sprintf(
 						/* translators: %d: Number of items cleaned */
@@ -474,6 +459,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						$total
 					)
 				);
+
+				if ( ! empty( $failures ) ) {
+					return $this->send_response(
+						array(
+							'failures' => $failures,
+							'deleted'  => $total,
+						),
+						false,
+						500,
+						__( 'Partial or total failure during database cleanup.', 'performance-optimisation' )
+					);
+				}
 
 				return $this->send_response(
 					array(

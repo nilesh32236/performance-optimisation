@@ -170,12 +170,12 @@ const App = () => {
 	}, [ activeTab, recentActivities.length ] );
 
 	return (
-		<div className="container">
+		<div className="wppo-container">
 			{ /* Mobile Top Header */ }
-			<div className="mobile-header">
-				<div className="mobile-brand">Performance Optimize</div>
+			<div className="wppo-mobile-header">
+				<div className="wppo-mobile-brand">Performance Optimize</div>
 				<button
-					className="mobile-toggle"
+					className="wppo-mobile-toggle"
 					onClick={ toggleMobileMenu }
 					aria-label="Toggle Menu"
 					aria-expanded={ mobileMenuOpen }
@@ -190,7 +190,7 @@ const App = () => {
 			{ /* Sidebar Overlay */ }
 			{ mobileMenuOpen && (
 				<div
-					className="sidebar-overlay"
+					className="wppo-sidebar-overlay"
 					onClick={ toggleMobileMenu }
 					onKeyDown={ ( e ) => {
 						if ( e.key === 'Enter' || e.key === ' ' ) {
@@ -205,11 +205,11 @@ const App = () => {
 
 			<div
 				id="mobile-sidebar"
-				className={ `sidebar ${ sidebarCollapsed ? 'collapsed' : '' } ${
-					mobileMenuOpen ? 'mobile-open' : ''
-				}` }
+				className={ `wppo-sidebar ${
+					sidebarCollapsed ? 'collapsed' : ''
+				} ${ mobileMenuOpen ? 'mobile-open' : '' }` }
 			>
-				<div className="sidebar-header">
+				<div className="wppo-sidebar-header">
 					<h3>Performance Optimize</h3>
 				</div>
 				<nav aria-label="Main Navigation">
@@ -231,7 +231,7 @@ const App = () => {
 									} }
 								>
 									<FontAwesomeIcon
-										className="sidebar-icon"
+										className="wppo-sidebar-icon"
 										icon={ item.icon }
 									/>
 									<span className="sidebar-label">
@@ -244,7 +244,7 @@ const App = () => {
 				</nav>
 			</div>
 
-			<div className={ `content ${ transition ? 'fadeIn' : '' }` }>
+			<div className={ `wppo-content ${ transition ? 'fadeIn' : '' }` }>
 				{ renderContent }
 			</div>
 		</div>

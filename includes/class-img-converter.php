@@ -345,7 +345,7 @@ class Img_Converter {
 	 */
 	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
 		$normalized_source = wp_normalize_path( $source_image );
-		$is_already_local = path_is_absolute( $normalized_source ) && (
+		$is_already_local  = path_is_absolute( $normalized_source ) && (
 			strpos( $normalized_source, wp_normalize_path( ABSPATH ) ) === 0 ||
 			strpos( $normalized_source, wp_normalize_path( WP_CONTENT_DIR ) ) === 0 ||
 			is_file( $source_image )

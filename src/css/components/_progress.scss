@@ -14,6 +14,9 @@
 }
 
 .wppo-progress-section {
+	&--spaced {
+		margin-top: 20px;
+	}
 	.wppo-progress-header {
 		display: flex;
 		justify-content: space-between;

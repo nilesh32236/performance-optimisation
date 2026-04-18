@@ -3,12 +3,31 @@
 	border-radius: var(--wppo-radius-sm);
 	margin-bottom: 24px;
 	display: flex;
-	align-items: flex-start;
+	align-items: center;
+	justify-content: space-between;
 	gap: 12px;
 	font-size: 14px;
 	line-height: 1.5;
 	border-width: 1px;
 	border-style: solid;
+
+	&__content {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+
+	&__dismiss {
+		background: transparent;
+		border: none;
+		color: inherit;
+		cursor: pointer;
+		padding: 4px;
+		opacity: 0.5;
+		transition: var(--wppo-transition);
+
+		&:hover { opacity: 1; }
+	}
 
 	&--error {
 		background: #fef2f2;

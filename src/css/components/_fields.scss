@@ -32,6 +32,10 @@
 	flex-direction: column;
 	gap: 16px;
 	animation: wppo-slide-down 0.3s ease;
+
+	@media (prefers-reduced-motion: reduce) {
+		animation: none;
+	}
 }
 
 @keyframes wppo-slide-down {
@@ -40,7 +44,11 @@
 }
 
 .wppo-field {
-	.field-label {
+	&--spaced {
+		margin-top: 16px;
+	}
+
+	.wppo-field-label {
 		display: block;
 		font-size: 13px;
 		font-weight: 700;
@@ -49,4 +57,10 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
+}
+
+.wppo-post-types-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
 }

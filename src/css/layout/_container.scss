@@ -1,21 +1,23 @@
-.container {
+.wppo-container {
 	display: flex;
 	min-height: 100vh;
+	min-height: 100dvh;
 	background: var(--wppo-bg-app);
 	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 	color: var(--wppo-text-main);
 
-	@media (max-width: 992px) {
+	@include respond-to('lg') {
 		flex-direction: column;
 	}
 }
 
-.content {
+.wppo-content {
 	flex-grow: 1;
 	overflow-y: auto;
 	height: 100vh;
+	height: 100dvh;
 
-	@media (max-width: 992px) {
+	@include respond-to('lg') {
 		height: auto;
 	}
 

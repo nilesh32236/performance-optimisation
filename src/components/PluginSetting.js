@@ -7,7 +7,6 @@ import {
 	faFileImport,
 	faCheckCircle,
 	faExclamationCircle,
-	faTools,
 } from '@fortawesome/free-solid-svg-icons';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
@@ -59,7 +58,8 @@ const PluginSetting = ( { options } ) => {
 	const importSettings = () => {
 		if ( ! selectedFile ) {
 			setNotification( {
-				message: translations.selectFiles,
+				message:
+					translations.selectFiles || 'Please select a file first.',
 				success: false,
 			} );
 			return;
@@ -100,13 +100,18 @@ const PluginSetting = ( { options } ) => {
 							resetFileInput();
 						}
 						setNotification( {
-							message: data.message || translations.fileImported,
+							message:
+								data.message ||
+								translations.fileImported ||
+								'Settings imported successfully.',
 							success: data.success,
 						} );
 					} )
 					.catch( () => {
 						setNotification( {
-							message: translations.fileErrorImport,
+							message:
+								translations.fileErrorImport ||
+								'Error importing settings.',
 							success: false,
 						} );
 					} )
@@ -115,7 +120,9 @@ const PluginSetting = ( { options } ) => {
 					} );
 			} catch ( _error ) {
 				setNotification( {
-					message: translations.invalidFileFormat,
+					message:
+						translations.invalidFileFormat ||
+						'Invalid file format.',
 					success: false,
 				} );
 				setIsImporting( false );
@@ -132,42 +139,67 @@ const PluginSetting = ( { options } ) => {
 			/>
 
 			{ notification.message && (
-				<div className={ `wppo-notice wppo-notice--${ notification.success ? 'success' : 'error' }` }>
-					<FontAwesomeIcon icon={ notification.success ? faCheckCircle : faExclamationCircle } />
+				<div
+					className={ `wppo-notice wppo-notice--${
+						notification.success ? 'success' : 'error'
+					}` }
+				>
+					<FontAwesomeIcon
+						icon={
+							notification.success
+								? faCheckCircle
+								: faExclamationCircle
+						}
+					/>
 					<span>{ notification.message }</span>
 				</div>
 			) }
 
 			<div className="wppo-grid-2-col">
-				<FeatureCard title="Export Configuration" icon={ <FontAwesomeIcon icon={ faFileExport } /> }>
-					<p className="wppo-text-muted" style={ { marginBottom: '24px' } }>
-						Download your current plugin settings as a JSON file for backup or migration.
+				<FeatureCard
+					title="Export Configuration"
+					icon={ <FontAwesomeIcon icon={ faFileExport } /> }
+				>
+					<p
+						className="wppo-text-muted"
+						style={ { marginBottom: '24px' } }
+					>
+						Download your current plugin settings as a JSON file for
+						backup or migration.
 					</p>
 					<LoadingSubmitButton
-						className="wppo-button wppo-button--primary"
-						style={ { width: '100%' } }
+						className="wppo-button wppo-button--primary wppo-button--full"
 						onClick={ exportSettings }
 						label="Export Settings"
 					/>
 				</FeatureCard>
 
-				<FeatureCard title="Import Configuration" icon={ <FontAwesomeIcon icon={ faFileImport } /> }>
+				<FeatureCard
+					title="Import Configuration"
+					icon={ <FontAwesomeIcon icon={ faFileImport } /> }
+				>
 					<p className="wppo-text-muted">
-						Upload a previously exported settings file to restore your configuration.
+						Upload a previously exported settings file to restore
+						your configuration.
 					</p>
-					<div className="wppo-field" style={ { margin: '20px 0' } }>
+					<div className="wppo-field wppo-mt-20">
+						<label
+							className="wppo-field-label"
+							htmlFor="import-config"
+						>
+							Select configuration file
+						</label>
 						<input
 							type="file"
+							id="import-config"
 							accept="application/json"
 							onChange={ handleFileSelection }
 							ref={ fileInputRef }
 							className="wppo-input"
-							aria-label="Select configuration file"
 						/>
 					</div>
 					<LoadingSubmitButton
-						className="wppo-button wppo-button--secondary"
-						style={ { width: '100%' } }
+						className="wppo-button wppo-button--secondary wppo-button--full"
 						onClick={ () => {
 							if ( selectedFile ) {
 								setConfirmImport( true );

@@ -4,6 +4,8 @@
 	margin-top: 24px;
 	padding-bottom: 2px;
 	overflow-x: auto;
+	scrollbar-width: none; // Firefox
+	-ms-overflow-style: none; // IE/Edge
 	
 	&::-webkit-scrollbar {
 		display: none;
@@ -30,7 +32,7 @@
 	}
 
 	&:hover {
-		background: rgba(255, 255, 255, 0.5);
+		background: var(--wppo-primary-soft);
 		color: var(--wppo-text-main);
 	}
 
@@ -66,7 +68,7 @@
 		color: var(--wppo-primary);
 	}
 
-	&.active {
+	&.active, &:focus-within {
 		background: var(--wppo-primary);
 		border-color: var(--wppo-primary);
 		color: #ffffff;

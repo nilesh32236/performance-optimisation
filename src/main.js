@@ -76,6 +76,31 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			} );
 	};
 
+	/**
+	 * Displays a notice using the WordPress core notice store if available,
+	 * otherwise falls back to a standard alert.
+	 *
+	 * @param {string} message The notice message.
+	 * @param {string} type    The notice type (success, error, warning, info).
+	 */
+	const showNotice = ( message, type = 'success' ) => {
+		if (
+			window.wp &&
+			window.wp.data &&
+			window.wp.data.dispatch( 'core/notices' )
+		) {
+			window.wp.data
+				.dispatch( 'core/notices' )
+				.createNotice( type, message, {
+					isDismissible: true,
+					type: 'snackbar',
+				} );
+		} else {
+			// eslint-disable-next-line no-alert
+			alert( message );
+		}
+	};
+
 	const clearAllCacheBtn = document.querySelector(
 		'#wp-admin-bar-wppo_clear_all .ab-item'
 	);
@@ -83,12 +108,24 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	if ( clearAllCacheBtn ) {
 		clearAllCacheBtn.addEventListener( 'click', function ( event ) {
 			event.preventDefault();
-			postJsonRequest( '/clear_cache', { action: 'clear_cache' } ).catch(
-				( error ) => {
+			postJsonRequest( '/clear_cache', { action: 'clear_cache' } )
+				.then( ( res ) => {
+					if ( res.success ) {
+						showNotice( 'Cache cleared successfully.' );
+					} else {
+						showNotice(
+							res.message || 'Failed to clear cache.',
+							'error'
+						);
+					}
+				} )
+				.catch( ( error ) => {
 					console.error( 'Cache clear failed: ', error );
-					alert( 'Failed to clear cache. Please try again.' );
-				}
-			);
+					showNotice(
+						'Failed to clear cache. Please try again.',
+						'error'
+					);
+				} );
 		} );
 	}
 
@@ -103,10 +140,24 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			postJsonRequest( '/clear_cache', {
 				action: 'clear_single_page_cache',
 				path,
-			} ).catch( ( error ) => {
-				console.error( 'Page cache clear failed: ', error );
-				alert( 'Failed to clear page cache. Please try again.' );
-			} );
+			} )
+				.then( ( res ) => {
+					if ( res.success ) {
+						showNotice( 'Page cache cleared successfully.' );
+					} else {
+						showNotice(
+							res.message || 'Failed to clear page cache.',
+							'error'
+						);
+					}
+				} )
+				.catch( ( error ) => {
+					console.error( 'Page cache clear failed: ', error );
+					showNotice(
+						'Failed to clear page cache. Please try again.',
+						'error'
+					);
+				} );
 		} );
 	}
 } );

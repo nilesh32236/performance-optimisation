@@ -28,23 +28,27 @@
 	transition: var(--wppo-transition);
 	border: 1px solid transparent;
 
+	&--full {
+		width: 100%;
+	}
+
 	&--primary {
 		background: var(--wppo-primary);
 		color: #fff;
-		&:hover { background: var(--wppo-primary-hover); }
+		&:hover:not(:disabled) { background: var(--wppo-primary-hover); }
 	}
 
 	&--secondary {
 		background: #fff;
 		border-color: var(--wppo-border);
 		color: var(--wppo-text-main);
-		&:hover { background: var(--wppo-bg-app); border-color: var(--wppo-border-hover); }
+		&:hover:not(:disabled) { background: var(--wppo-bg-app); border-color: var(--wppo-border-hover); }
 	}
 
 	&--danger {
 		background: var(--wppo-error);
 		color: #fff;
-		&:hover { background: #dc2626; }
+		&:hover:not(:disabled) { background: #dc2626; }
 	}
 
 	&:disabled {

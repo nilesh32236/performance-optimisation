@@ -1,12 +1,13 @@
+@use 'sass:map';
+
 @mixin respond-to($breakpoint) {
-	@if map-has-key($breakpoints, $breakpoint) {
-		@media (max-width: map-get($breakpoints, $breakpoint)) {
+	$value: map.get($breakpoints, $breakpoint);
+	@if $value {
+		@media (max-width: $value) {
 			@content;
 		}
 	} @else {
-		@media (max-width: $breakpoint) {
-			@content;
-		}
+		@warn "Unknown breakpoint: #{$breakpoint}.";
 	}
 }
 

@@ -12,6 +12,9 @@
 
 namespace PerformanceOptimise\Inc;
 
+use WP_Error;
+
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -37,9 +40,33 @@ class Database_Cleanup {
 		$deleted = 0;
 
 		do {
-			// Delete revision posts in chunks first.
+			// Select a batch of post IDs to delete.
+			$wpdb->last_error = '';
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$posts_deleted = $wpdb->query( "DELETE FROM $wpdb->posts WHERE post_type = 'revision' LIMIT 1000" );
+			$post_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_type = 'revision' LIMIT 1000" );
+
+			if ( ! empty( $wpdb->last_error ) ) {
+				return false;
+			}
+
+			if ( empty( $post_ids ) ) {
+				break;
+			}
+
+			// Delete associated meta data for these specific revisions.
+			$wpdb->last_error = '';
+			$placeholders     = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+			$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->postmeta WHERE post_id IN ($placeholders)", $post_ids ) );
+
+			if ( false === $meta_deleted ) {
+				return false;
+			}
+
+			// Delete the revision posts.
+			$wpdb->last_error = '';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+			$posts_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->posts WHERE ID IN ($placeholders)", $post_ids ) );
 
 			if ( false === $posts_deleted ) {
 				return false;
@@ -48,21 +75,8 @@ class Database_Cleanup {
 			if ( $posts_deleted ) {
 				$deleted += (int) $posts_deleted;
 			}
-		} while ( $posts_deleted > 0 );
-
-		// Now clean up orphaned postmeta that might have been left behind.
-		do {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$meta_deleted = $wpdb->query(
-				"DELETE pm FROM $wpdb->postmeta pm
-				LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
-				WHERE p.ID IS NULL LIMIT 5000"
-			);
-
-			if ( false === $meta_deleted ) {
-				return false;
-			}
-		} while ( $meta_deleted > 0 );
+			$ids_count = count( $post_ids );
+		} while ( $ids_count >= 1000 );
 
 		return $deleted;
 	}
@@ -462,12 +476,7 @@ class Database_Cleanup {
 
 		$results = array();
 		foreach ( $methods as $key => $method ) {
-			$res = self::$method();
-			if ( false === $res ) {
-				$results[ $key ] = new \WP_Error( 'db_cleanup_failed', sprintf( '%s failed', $method ) );
-			} else {
-				$results[ $key ] = $res;
-			}
+			$results[ $key ] = self::invoke_cleanup_method( $method );
 		}
 
 		return $results;
@@ -495,12 +504,12 @@ class Database_Cleanup {
 
 		foreach ( $methods as $method ) {
 			if ( 'clean_revisions_advanced' === $method ) {
-				$result = self::$method( $max_age, $keep );
+				$result = self::invoke_cleanup_method( $method, $max_age, $keep );
 			} else {
-				$result = self::$method();
+				$result = self::invoke_cleanup_method( $method );
 			}
 
-			if ( false === $result ) {
+			if ( is_wp_error( $result ) ) {
 				new Log( "Auto cleanup failed: {$method}" );
 			}
 		}
@@ -550,5 +559,21 @@ class Database_Cleanup {
 				WHERE p.ID IS NULL"
 			),
 		);
+	}
+
+	/**
+	 * Invokes a cleanup method and wraps false results into a WP_Error.
+	 *
+	 * @since 1.4.0
+	 * @param string $method Method name to call.
+	 * @param mixed  ...$args Arguments for the method.
+	 * @return mixed The method result or WP_Error on failure.
+	 */
+	private static function invoke_cleanup_method( $method, ...$args ) {
+		$res = self::$method( ...$args );
+		if ( false === $res ) {
+			return new WP_Error( 'db_cleanup_failed', sprintf( '%s failed', $method ) );
+		}
+		return $res;
 	}
 }
