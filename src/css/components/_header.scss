@@ -1,27 +1,37 @@
 .wppo-feature-header {
 	margin-bottom: 32px;
-	
+	padding-bottom: 28px;
+	border-bottom: 1px solid var(--wppo-border);
+
 	&__main {
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
-		gap: 24px;
-		margin-bottom: 16px;
+		gap: 20px;
 
 		@include respond-to('md') {
 			flex-direction: column;
+			gap: 16px;
 		}
 	}
 
 	&__title {
 		h2 {
-			font-size: 28px;
-			font-weight: 800;
-			margin: 0 0 8px 0;
-			letter-spacing: -0.025em;
+			font-size: 24px;
+			font-weight: 700;
+			margin: 0 0 6px 0;
+			letter-spacing: -0.03em;
+			color: var(--wppo-text-main);
+			line-height: 1.2;
+
+			@include respond-to('sm') {
+				font-size: 20px;
+			}
 		}
+
 		p {
-			font-size: 15px;
+			font-size: 14px;
+			line-height: 1.6;
 			color: var(--wppo-text-muted);
 			margin: 0;
 			max-width: 600px;
@@ -29,19 +39,82 @@
 	}
 
 	&__status {
-		margin-top: 12px;
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		gap: 8px;
+		gap: 6px;
+		padding: 5px 12px;
+		border-radius: 20px;
+		font-size: 12.5px;
 		font-weight: 600;
-		color: var(--wppo-success);
+		border: 1px solid transparent;
+		margin-top: 12px;
 
-		&.wppo-status--warning { color: var(--wppo-warning); }
-		&.wppo-status--error { color: var(--wppo-error); }
+		svg { font-size: 12px; }
+
+		&.wppo-status--success {
+			color: var(--wppo-success);
+			border-color: var(--wppo-success-border);
+			background: var(--wppo-success-bg);
+		}
+		&.wppo-status--warning {
+			color: var(--wppo-warning);
+			border-color: var(--wppo-warning-border);
+			background: var(--wppo-warning-bg);
+		}
+		&.wppo-status--error {
+			color: var(--wppo-error);
+			border-color: var(--wppo-error-border);
+			background: var(--wppo-error-bg);
+		}
 	}
 
 	&__actions {
 		display: flex;
-		gap: 12px;
+		gap: 10px;
+		flex-shrink: 0;
+		flex-wrap: wrap;
+
+		@include respond-to('md') {
+			width: 100%;
+
+			.wppo-button {
+				flex: 1;
+				justify-content: center;
+			}
+		}
 	}
+}
+
+/* Stat hero (used in DB cleanup) */
+.wppo-stat-hero {
+	text-align: center;
+	padding: 20px 0;
+
+	&__value {
+		display: block;
+		font-size: 56px;
+		font-weight: 800;
+		color: var(--wppo-primary);
+		line-height: 1;
+		margin-bottom: 10px;
+		letter-spacing: -0.04em;
+	}
+
+	&__label {
+		display: block;
+		font-size: 12px;
+		font-weight: 600;
+		color: var(--wppo-text-light);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+}
+
+.wppo-section-title {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--wppo-text-light);
+	margin: 0 0 16px 0;
 }

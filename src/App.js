@@ -10,6 +10,7 @@ import {
 	faBars,
 	faTimes,
 	faServer,
+	faBolt,
 } from '@fortawesome/free-solid-svg-icons';
 import FileOptimization from './components/FileOptimization';
 import PreloadSettings from './components/PreloadSettings';
@@ -76,7 +77,10 @@ const App = () => {
 	const renderContent = useMemo( () => {
 		const components = {
 			dashboard: (
-				<Dashboard activities={ recentActivities?.activities } />
+				<Dashboard
+					activities={ recentActivities?.activities }
+					onNavigate={ setActiveTab }
+				/>
 			),
 			fileOptimization: (
 				<FileOptimization
@@ -173,7 +177,12 @@ const App = () => {
 		<div className="wppo-container">
 			{ /* Mobile Top Header */ }
 			<div className="wppo-mobile-header">
-				<div className="wppo-mobile-brand">Performance Optimize</div>
+				<div className="wppo-mobile-brand">
+					<div className="wppo-mobile-logo">
+						<FontAwesomeIcon icon={ faBolt } />
+					</div>
+					Performance Optimisation
+				</div>
 				<button
 					className="wppo-mobile-toggle"
 					onClick={ toggleMobileMenu }
@@ -210,7 +219,13 @@ const App = () => {
 				} ${ mobileMenuOpen ? 'wppo-sidebar--mobile-open' : '' }` }
 			>
 				<div className="wppo-sidebar-header">
-					<h3>Performance Optimize</h3>
+					<div className="wppo-sidebar-logo">
+						<FontAwesomeIcon icon={ faBolt } />
+					</div>
+					<h3>
+						Performance
+						<span>Optimisation</span>
+					</h3>
 				</div>
 				<nav aria-label="Main Navigation">
 					<ul>
@@ -244,10 +259,17 @@ const App = () => {
 						) ) }
 					</ul>
 				</nav>
+				<div className="wppo-sidebar-footer">
+					<div className="wppo-sidebar-version">v1.4.0</div>
+				</div>
 			</div>
 
-			<div className={ `wppo-content ${ transition ? 'fadeIn' : '' }` }>
-				{ renderContent }
+			<div className="wppo-content">
+				<div className="wppo-main">
+					<div className={ transition ? 'fadeIn' : '' }>
+						{ renderContent }
+					</div>
+				</div>
 			</div>
 		</div>
 	);

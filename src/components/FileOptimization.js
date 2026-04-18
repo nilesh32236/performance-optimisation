@@ -179,7 +179,7 @@ const FileOptimization = ( { options = {} } ) => {
 				{ activeSubTab === 'assets' && (
 					<div
 						id="panel-assets"
-						className="wppo-grid-2-col"
+						className="wppo-stacked-cards"
 						role="tabpanel"
 						aria-labelledby="tab-assets"
 					>
@@ -190,14 +190,14 @@ const FileOptimization = ( { options = {} } ) => {
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Minify CSS"
-									description="Remove whitespace and comments from stylesheets."
+									description="Remove whitespace and comments from stylesheets to reduce file size."
 									name="minifyCSS"
 									checked={ settings.minifyCSS }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
 									label="Combine CSS"
-									description="Merge all CSS into a single file to reduce requests."
+									description="Merge all CSS files into a single file to reduce the number of HTTP requests."
 									name="combineCSS"
 									checked={ settings.combineCSS }
 									onChange={ handleChange( setSettings ) }
@@ -253,7 +253,7 @@ const FileOptimization = ( { options = {} } ) => {
 						>
 							<SwitchField
 								label="Minify HTML"
-								description="Compress the HTML output of your website."
+								description="Compress the HTML output of your website by removing unnecessary whitespace and comments."
 								name="minifyHTML"
 								checked={ settings.minifyHTML }
 								onChange={ handleChange( setSettings ) }
@@ -265,7 +265,7 @@ const FileOptimization = ( { options = {} } ) => {
 				{ activeSubTab === 'scripts' && (
 					<div
 						id="panel-scripts"
-						className="wppo-grid-2-col"
+						className="wppo-stacked-cards"
 						role="tabpanel"
 						aria-labelledby="tab-scripts"
 					>
@@ -276,14 +276,14 @@ const FileOptimization = ( { options = {} } ) => {
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Minify JavaScript"
-									description="Compress JS files to reduce execution time."
+									description="Compress JS files by removing whitespace and comments to reduce execution time."
 									name="minifyJS"
 									checked={ settings.minifyJS }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
 									label="Defer JavaScript"
-									description="Load scripts in the background to prevent render blocking."
+									description="Load scripts after the page renders to prevent render-blocking and improve page speed."
 									name="deferJS"
 									checked={ settings.deferJS }
 									onChange={ handleChange( setSettings ) }
@@ -311,7 +311,7 @@ const FileOptimization = ( { options = {} } ) => {
 								) }
 								<SwitchField
 									label="Delay JavaScript Execution"
-									description="Delay loading until user interaction (keyboard/mouse)."
+									description="Delay all scripts until the user interacts (keyboard/mouse). Reduces initial CPU usage but may break immediate functionality — test carefully."
 									name="delayJS"
 									checked={ settings.delayJS }
 									onChange={ handleChange( setSettings ) }
@@ -384,6 +384,7 @@ const FileOptimization = ( { options = {} } ) => {
 				{ activeSubTab === 'ecommerce' && (
 					<div
 						id="panel-ecommerce"
+						className="wppo-stacked-cards"
 						role="tabpanel"
 						aria-labelledby="tab-ecommerce"
 					>
@@ -394,7 +395,7 @@ const FileOptimization = ( { options = {} } ) => {
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Optimize WooCommerce Assets"
-									description="Disable WooCommerce scripts/styles on non-ecommerce pages."
+									description="Disable WooCommerce scripts and styles on non-ecommerce pages (e.g. blog, about). This reduces page weight but may break cart widgets on custom pages — verify your checkout flow after enabling."
 									name="removeWooCSSJS"
 									checked={ settings.removeWooCSSJS }
 									onChange={ handleChange( setSettings ) }
@@ -412,7 +413,7 @@ const FileOptimization = ( { options = {} } ) => {
 												flow.
 											</span>
 										</div>
-										<div className="wppo-grid-2-col wppo-mt-20">
+										<div className="wppo-stacked-cards wppo-mt-24">
 											<div className="wppo-field">
 												<label
 													className="wppo-field-label"
@@ -467,7 +468,7 @@ const FileOptimization = ( { options = {} } ) => {
 				{ activeSubTab === 'network' && (
 					<div
 						id="panel-network"
-						className="wppo-grid-2-col"
+						className="wppo-stacked-cards"
 						role="tabpanel"
 						aria-labelledby="tab-network"
 					>
@@ -478,7 +479,7 @@ const FileOptimization = ( { options = {} } ) => {
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Enable Server Rules (.htaccess)"
-									description="Apply performance rules directly at the server level."
+									description="Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
 									name="enableServerRules"
 									checked={ settings.enableServerRules }
 									onChange={ handleChange( setSettings ) }
@@ -518,8 +519,10 @@ const FileOptimization = ( { options = {} } ) => {
 									onChange={ handleChange( setSettings ) }
 								/>
 								<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
-									Your static assets will be rewritten to use
-									this URL.
+									Enter your CDN hostname. All static asset
+									URLs (JS, CSS, images) will be rewritten to
+									load from this domain, reducing latency for
+									global visitors.
 								</p>
 							</div>
 						</FeatureCard>
@@ -529,7 +532,7 @@ const FileOptimization = ( { options = {} } ) => {
 				{ activeSubTab === 'core' && (
 					<div
 						id="panel-core"
-						className="wppo-grid-2-col"
+						className="wppo-stacked-cards"
 						role="tabpanel"
 						aria-labelledby="tab-core"
 					>
@@ -540,24 +543,28 @@ const FileOptimization = ( { options = {} } ) => {
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Disable Emojis"
+									description="Remove the WordPress emoji script and stylesheet. Saves ~10 KB per page if you don't use emojis in your content."
 									name="disableEmojis"
 									checked={ settings.disableEmojis }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
 									label="Disable Embeds"
+									description="Remove the oEmbed script that allows embedding external content. Saves ~1 HTTP request if you don't embed tweets, YouTube videos, etc."
 									name="disableEmbeds"
 									checked={ settings.disableEmbeds }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
 									label="Disable Dashicons (Frontend)"
+									description="Prevent the WordPress admin icon font from loading on the frontend for logged-out users. Only disable if your theme doesn't use Dashicons."
 									name="disableDashicons"
 									checked={ settings.disableDashicons }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
 									label="Disable XML-RPC"
+									description="Block the XML-RPC endpoint (xmlrpc.php). Reduces attack surface and server load. Only disable if you don't use Jetpack, mobile apps, or remote publishing."
 									name="disableXMLRPC"
 									checked={ settings.disableXMLRPC }
 									onChange={ handleChange( setSettings ) }

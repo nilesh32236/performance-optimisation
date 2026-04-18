@@ -1,8 +1,13 @@
 @use 'sass:map';
-@use 'variables';
 
 @mixin respond-to($breakpoint) {
-	$value: map.get(variables.$breakpoints, $breakpoint);
+	$breakpoint-map: (
+		'sm': 640px,
+		'md': 768px,
+		'lg': 992px,
+		'xl': 1200px
+	);
+	$value: map.get($breakpoint-map, $breakpoint);
 	@if $value {
 		@media (max-width: $value) {
 			@content;
@@ -16,17 +21,6 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-}
-
-@mixin glass {
-	background: rgba(255, 255, 255, 0.7);
-	backdrop-filter: blur(10px);
-	-webkit-backdrop-filter: blur(10px);
-	border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-@mixin shadow-premium {
-	box-shadow: 0 10px 30px -10px rgba(79, 70, 229, 0.15);
 }
 
 @mixin truncate {

@@ -158,7 +158,7 @@ const PluginSetting = ( { options } ) => {
 				</div>
 			) }
 
-			<div className="wppo-grid-2-col">
+			<div className="wppo-stacked-cards">
 				<FeatureCard
 					title="Export Configuration"
 					icon={ <FontAwesomeIcon icon={ faFileExport } /> }
@@ -171,7 +171,7 @@ const PluginSetting = ( { options } ) => {
 						backup or migration.
 					</p>
 					<LoadingSubmitButton
-						className="wppo-button wppo-button--primary wppo-button--full"
+						className="wppo-button wppo-button--primary"
 						onClick={ exportSettings }
 						label="Export Settings"
 					/>
@@ -185,7 +185,7 @@ const PluginSetting = ( { options } ) => {
 						Upload a previously exported settings file to restore
 						your configuration.
 					</p>
-					<div className="wppo-field wppo-mt-20">
+					<div className="wppo-field wppo-mt-24">
 						<label
 							className="wppo-field-label"
 							htmlFor="import-config"
@@ -202,7 +202,7 @@ const PluginSetting = ( { options } ) => {
 						/>
 					</div>
 					<LoadingSubmitButton
-						className="wppo-button wppo-button--secondary wppo-button--full"
+						className="wppo-button wppo-button--secondary wppo-mt-24"
 						onClick={ () => {
 							if ( selectedFile ) {
 								setConfirmImport( true );

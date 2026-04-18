@@ -11,26 +11,47 @@ import {
 	faSpinner,
 	faImages,
 	faHistory,
-	faCheckCircle,
-	faExclamationTriangle,
-	faTimesCircle,
 } from '@fortawesome/free-solid-svg-icons';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 
-const Dashboard = ( { activities } ) => {
+/**
+ * Normalize wppoSettings.image_info which stores arrays of file paths
+ * into the {webp: count, avif: count} shape the component expects.
+ * @param {Object} raw - Raw image info object.
+ */
+const normalizeImageInfo = ( raw ) => {
+	const normalize = ( bucket ) => ( {
+		webp: Array.isArray( bucket?.webp )
+			? bucket.webp.length
+			: bucket?.webp || 0,
+		avif: Array.isArray( bucket?.avif )
+			? bucket.avif.length
+			: bucket?.avif || 0,
+	} );
+	return {
+		completed: normalize( raw?.completed ),
+		pending: normalize( raw?.pending ),
+		failed: normalize( raw?.failed ),
+	};
+};
+
+const Dashboard = ( { activities, onNavigate } ) => {
+	// Raw pending paths from the initial API response — used for optimise_image payload.
+	const rawPending = wppoSettings.image_info?.pending ?? {};
+	const [ pendingPaths, setPendingPaths ] = useState( {
+		webp: Array.isArray( rawPending.webp ) ? rawPending.webp : [],
+		avif: Array.isArray( rawPending.avif ) ? rawPending.avif : [],
+	} );
+
 	// Initialize state
 	const [ state, setState ] = useState( {
 		totalCacheSize: wppoSettings.cache_size,
 		totalJs: wppoSettings.total_js_css.js,
 		totalCss: wppoSettings.total_js_css.css,
-		imageInfo: wppoSettings.image_info || {
-			completed: {},
-			pending: {},
-			failed: {},
-		},
+		imageInfo: normalizeImageInfo( wppoSettings.image_info ),
 		dbCounts: {},
 		loading: {
 			clear_cache: false,
@@ -155,13 +176,17 @@ const Dashboard = ( { activities } ) => {
 
 	const optimizeImages = useCallback( () => {
 		handleLoading( 'optimize_images', true );
-		const { webp = [], avif = [] } = pending;
 
-		apiCall( 'optimise_image', { webp, avif } )
+		apiCall( 'optimise_image', {
+			webp: pendingPaths.webp,
+			avif: pendingPaths.avif,
+		} )
 			.then( ( response ) => {
 				if ( response.data?.background ) {
 					setBgProcessing( true );
 					setBgJobsQueued( response.data.jobs_queued || 0 );
+					// Clear raw paths — they are now queued.
+					setPendingPaths( { webp: [], avif: [] } );
 					if ( pollingRef.current ) {
 						clearInterval( pollingRef.current );
 					}
@@ -169,7 +194,7 @@ const Dashboard = ( { activities } ) => {
 				}
 			} )
 			.finally( () => handleLoading( 'optimize_images', false ) );
-	}, [ handleLoading, pending, pollJobStatus ] );
+	}, [ handleLoading, pendingPaths, pollJobStatus ] );
 
 	const removeImages = useCallback( () => {
 		handleLoading( 'remove_images', true );
@@ -201,48 +226,48 @@ const Dashboard = ( { activities } ) => {
 			  100
 			: null;
 
-	const statusInfo = useMemo( () => {
-		const hasFailures =
-			( imageInfo.failed?.webp || 0 ) > 0 ||
-			( imageInfo.failed?.avif || 0 ) > 0;
-		if ( hasFailures || dbOverheadCount > 1000 ) {
-			return {
-				icon: faTimesCircle,
-				text:
-					wppoSettings.translations[ 'Attention required' ] ||
-					'Attention required! High database overhead or image failures.',
-				variant: 'error',
-			};
-		}
-		if (
-			dbOverheadCount > 0 ||
-			( totalOptimizedPercent !== null && totalOptimizedPercent < 90 ) ||
-			bgProcessing ||
-			( pending.webp || 0 ) > 0 ||
-			( pending.avif || 0 ) > 0
-		) {
-			return {
-				icon: faExclamationTriangle,
-				text:
-					wppoSettings.translations[ 'Optimization pending' ] ||
-					'Optimization pending. Run cleanup and image processing.',
-				variant: 'warning',
-			};
-		}
-		return {
-			icon: faCheckCircle,
-			text:
-				wppoSettings.translations[ 'Looks Good' ] ||
-				'Looks Good! System is optimized.',
-			variant: 'success',
-		};
-	}, [
-		dbOverheadCount,
-		totalOptimizedPercent,
-		bgProcessing,
-		pending,
-		imageInfo.failed,
-	] );
+	// const statusInfo = useMemo( () => {
+	// 	const hasFailures =
+	// 		( imageInfo.failed?.webp || 0 ) > 0 ||
+	// 		( imageInfo.failed?.avif || 0 ) > 0;
+	// 	if ( hasFailures || dbOverheadCount > 1000 ) {
+	// 		return {
+	// 			icon: faTimesCircle,
+	// 			text:
+	// 				wppoSettings.translations[ 'Attention required' ] ||
+	// 				'Attention required! High database overhead or image failures.',
+	// 			variant: 'error',
+	// 		};
+	// 	}
+	// 	if (
+	// 		dbOverheadCount > 0 ||
+	// 		( totalOptimizedPercent !== null && totalOptimizedPercent < 90 ) ||
+	// 		bgProcessing ||
+	// 		( pending.webp || 0 ) > 0 ||
+	// 		( pending.avif || 0 ) > 0
+	// 	) {
+	// 		return {
+	// 			icon: faExclamationTriangle,
+	// 			text:
+	// 				wppoSettings.translations[ 'Optimization pending' ] ||
+	// 				'Optimization pending. Run cleanup and image processing.',
+	// 			variant: 'warning',
+	// 		};
+	// 	}
+	// 	return {
+	// 		icon: faCheckCircle,
+	// 		text:
+	// 			wppoSettings.translations[ 'Looks Good' ] ||
+	// 			'Looks Good! System is optimized.',
+	// 		variant: 'success',
+	// 	};
+	// }, [
+	// 	dbOverheadCount,
+	// 	totalOptimizedPercent,
+	// 	bgProcessing,
+	// 	pending,
+	// 	imageInfo.failed,
+	// ] );
 
 	return (
 		<div className="wppo-dashboard-view">
@@ -255,190 +280,205 @@ const Dashboard = ( { activities } ) => {
 					wppoSettings.translations[ 'System Health Description' ] ||
 					'Real-time performance overview and quick optimization actions.'
 				}
-				status={
-					<div
-						className={ `wppo-feature-header__status wppo-status--${ statusInfo.variant }` }
-					>
-						<FontAwesomeIcon icon={ statusInfo.icon } />
-						<span>{ statusInfo.text }</span>
-					</div>
-				}
+				status={ <></> }
 				actions={
-					<div className="wppo-feature-header__actions">
-						<LoadingSubmitButton
-							className="wppo-button wppo-button--primary"
-							onClick={ onClearCache }
-							isLoading={ loading.clear_cache }
-							label="Purge All Cache"
-							loadingLabel="Purging..."
-						/>
-						<LoadingSubmitButton
-							className="wppo-button wppo-button--secondary"
-							onClick={ optimizeImages }
-							isLoading={ loading.optimize_images }
-							disabled={
-								bgProcessing ||
-								( ! pending.webp && ! pending.avif )
-							}
-							label="Optimize All"
-							loadingLabel="Optimizing..."
-						/>
-					</div>
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--primary"
+						onClick={ onClearCache }
+						isLoading={ loading.clear_cache }
+						label="Purge All Cache"
+						loadingLabel="Purging..."
+					/>
 				}
 			/>
 
 			<div className="wppo-stats-grid">
 				<div className="wppo-stat-item">
-					<span className="wppo-stat-label">Cache Size</span>
+					<div className="wppo-stat-header">
+						<span className="wppo-stat-label">Cache Size</span>
+					</div>
 					<span className="wppo-stat-value">{ totalCacheSize }</span>
-					<a href="#/tools" className="wppo-stat-link">
-						View Cache
-					</a>
+					<button
+						type="button"
+						className="wppo-stat-link"
+						onClick={ () => onNavigate( 'tools' ) }
+					>
+						Manage Cache
+					</button>
 				</div>
 				<div className="wppo-stat-item">
-					<span className="wppo-stat-label">JS/CSS Optimized</span>
+					<div className="wppo-stat-header">
+						<span className="wppo-stat-label">Optimized Files</span>
+					</div>
 					<span className="wppo-stat-value">
-						{ ( totalJs || 0 ) + ( totalCss || 0 ) } Files
+						{ ( totalJs || 0 ) + ( totalCss || 0 ) }
 					</span>
-					<a href="#/fileOptimization" className="wppo-stat-link">
-						Settings
-					</a>
+					<button
+						type="button"
+						className="wppo-stat-link"
+						onClick={ () => onNavigate( 'fileOptimization' ) }
+					>
+						View Settings
+					</button>
 				</div>
 				<div className="wppo-stat-item">
-					<span className="wppo-stat-label">DB Health</span>
-					<span className="wppo-stat-value">
-						{ dbOverheadCount } Overhead
-					</span>
-					<a href="#/databaseCleanup" className="wppo-stat-link">
-						Clean Now
-					</a>
+					<div className="wppo-stat-header">
+						<span className="wppo-stat-label">DB Health</span>
+					</div>
+					<span className="wppo-stat-value">{ dbOverheadCount }</span>
+					<button
+						type="button"
+						className="wppo-stat-link"
+						onClick={ () => onNavigate( 'databaseCleanup' ) }
+					>
+						Clean Overhead
+					</button>
 				</div>
 				<div className="wppo-stat-item">
-					<span className="wppo-stat-label">Images Optimized</span>
+					<div className="wppo-stat-header">
+						<span className="wppo-stat-label">Image Status</span>
+					</div>
 					<span className="wppo-stat-value">
 						{ totalOptimizedPercent !== null
 							? `${ totalOptimizedPercent.toFixed( 0 ) }%`
 							: 'N/A' }
 					</span>
-					<a href="#/imageOptimization" className="wppo-stat-link">
-						Continue
-					</a>
+					<button
+						type="button"
+						className="wppo-stat-link"
+						onClick={ () => onNavigate( 'imageOptimization' ) }
+					>
+						View Images
+					</button>
 				</div>
 			</div>
 
-			<div className="wppo-grid-2-col">
+			<div className="wppo-stacked-cards">
 				<FeatureCard
 					title="Image Optimization"
 					icon={ <FontAwesomeIcon icon={ faImages } /> }
-					actions={
-						<LoadingSubmitButton
-							className="wppo-button wppo-button--danger"
-							onClick={ () => setConfirmRemove( true ) }
-							isLoading={ loading.remove_images }
-							disabled={ ! completed.webp && ! completed.avif }
-							label={
-								wppoSettings.translations[
-									'Remove Optimized'
-								] || 'Remove Optimized'
-							}
-							loadingLabel="Removing..."
-						/>
+					footer={
+						<>
+							<LoadingSubmitButton
+								className="wppo-button wppo-button--primary"
+								onClick={ optimizeImages }
+								isLoading={ loading.optimize_images }
+								disabled={
+									bgProcessing ||
+									( ! pendingPaths.webp.length &&
+										! pendingPaths.avif.length )
+								}
+								label="Optimize All"
+								loadingLabel="Optimizing..."
+							/>
+							<LoadingSubmitButton
+								className="wppo-button wppo-button--danger"
+								onClick={ () => setConfirmRemove( true ) }
+								isLoading={ loading.remove_images }
+								disabled={
+									! completed.webp && ! completed.avif
+								}
+								label={
+									wppoSettings.translations[
+										'Remove Optimized'
+									] || 'Remove Optimized'
+								}
+								loadingLabel="Removing..."
+							/>
+						</>
 					}
 				>
-					<div className="wppo-progress-section">
-						<div className="wppo-progress-header">
-							<span>WebP Generation</span>
-							<span>
-								{ completed.webp || 0 } / { totalWebP }
-							</span>
-						</div>
-						<div
-							className="wppo-progress-bar"
-							role="progressbar"
-							aria-valuemin="0"
-							aria-valuemax="100"
-							aria-valuenow={ Math.round( webpPercent ) }
-							aria-label="WebP conversion progress"
-						>
+					<div className="wppo-progress-grid">
+						<div className="wppo-progress-section">
+							<div className="wppo-progress-header">
+								<span>WebP Conversion Progress</span>
+								<span>
+									{ completed.webp || 0 } / { totalWebP }
+								</span>
+							</div>
 							<div
-								className="wppo-progress-bar__fill"
-								style={ { width: `${ webpPercent }%` } }
-							></div>
+								className="wppo-progress-bar"
+								role="progressbar"
+								aria-valuemin="0"
+								aria-valuemax="100"
+								aria-valuenow={ Math.round( webpPercent ) }
+							>
+								<div
+									className="wppo-progress-bar__fill"
+									style={ { width: `${ webpPercent }%` } }
+								></div>
+							</div>
 						</div>
-					</div>
 
-					<div className="wppo-progress-section wppo-progress-section--spaced">
-						<div className="wppo-progress-header">
-							<span>AVIF Generation</span>
-							<span>
-								{ completed.avif || 0 } / { totalAvif }
-							</span>
-						</div>
-						<div
-							className="wppo-progress-bar"
-							role="progressbar"
-							aria-valuemin="0"
-							aria-valuemax="100"
-							aria-valuenow={ Math.round( avifPercent ) }
-							aria-label="AVIF conversion progress"
-						>
+						<div className="wppo-progress-section">
+							<div className="wppo-progress-header">
+								<span>AVIF Conversion Progress</span>
+								<span>
+									{ completed.avif || 0 } / { totalAvif }
+								</span>
+							</div>
 							<div
-								className="wppo-progress-bar__fill"
-								style={ { width: `${ avifPercent }%` } }
-							></div>
+								className="wppo-progress-bar"
+								role="progressbar"
+								aria-valuemin="0"
+								aria-valuemax="100"
+								aria-valuenow={ Math.round( avifPercent ) }
+							>
+								<div
+									className="wppo-progress-bar__fill"
+									style={ { width: `${ avifPercent }%` } }
+								></div>
+							</div>
 						</div>
 					</div>
 
 					{ ( bgProcessing || bgJobsQueued > 0 ) && (
 						<div
 							className="wppo-notice wppo-notice--info"
-							style={ { marginTop: '24px' } }
+							style={ { marginTop: '32px' } }
 						>
 							<FontAwesomeIcon icon={ faSpinner } spin />
 							<span>
-								Processing background optimization jobs (
-								{ bgJobsQueued } queued)
+								Currently processing background optimization
+								jobs ({ bgJobsQueued } queued)
 							</span>
 						</div>
 					) }
 				</FeatureCard>
 
 				<FeatureCard
-					title="Recent Activity"
+					title="Recent Optimization Activity"
 					icon={ <FontAwesomeIcon icon={ faHistory } /> }
-					actions={
-						<a href="#/activityLog" className="wppo-stat-link">
-							View Full Log
-						</a>
+					className="wppo-mt-32"
+					footer={
+						<button
+							type="button"
+							className="wppo-stat-link"
+							onClick={ () => onNavigate( 'tools' ) }
+						>
+							View Comprehensive Log
+						</button>
 					}
 				>
-					<ul
-						className="wppo-activity-list"
-						style={ { listStyle: 'none', padding: 0, margin: 0 } }
-					>
+					<div className="wppo-activity-wrapper">
 						{ activities?.length ? (
-							activities
-								.slice( 0, 5 )
-								.map( ( activity, index ) => (
-									<li
-										key={ index }
-										style={ {
-											padding: '12px 0',
-											borderBottom:
-												'1px solid var(--wppo-border)',
-										} }
-									>
-										<div style={ { fontSize: '13px' } }>
-											{ activity.activity }
-										</div>
-									</li>
-								) )
+							<ul className="wppo-activity-list">
+								{ activities
+									.slice( 0, 5 )
+									.map( ( activity, index ) => (
+										<li key={ index }>
+											<div className="wppo-activity-text">
+												{ activity.activity }
+											</div>
+										</li>
+									) ) }
+							</ul>
 						) : (
-							<li className="wppo-text-muted">
-								No recent activity found.
-							</li>
+							<div className="wppo-empty-state">
+								No optimization activity recorded yet.
+							</div>
 						) }
-					</ul>
+					</div>
 				</FeatureCard>
 			</div>
 

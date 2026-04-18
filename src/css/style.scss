@@ -1,8 +1,8 @@
 /* 
- * Performance Optimisation Plugin - Modular Design System v4.0
+ * Performance Optimisation Plugin - Design System v5.0
  */
 
-/* Abstracts */
+/* Abstracts - imported first so mixins/variables are globally available */
 @import 'abstracts/variables';
 @import 'abstracts/mixins';
 
@@ -22,3 +22,4 @@
 @import 'components/progress';
 @import 'components/tabs';
 @import 'components/fields';
+@import 'components/dialog';

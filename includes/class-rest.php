@@ -533,8 +533,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.1.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function get_database_cleanup_counts( \WP_REST_Request $_request ) {
-			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		public function get_database_cleanup_counts( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$counts = Database_Cleanup::get_counts();
 			return $this->send_response( $counts );
 		}
@@ -578,8 +577,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.1.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function get_image_job_status( \WP_REST_Request $_request ) {
-			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		public function get_image_job_status( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$img_info = Img_Converter::get_img_info();
 
 			$status = array(

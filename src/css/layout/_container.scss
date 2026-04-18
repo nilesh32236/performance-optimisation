@@ -1,10 +1,12 @@
 .wppo-container {
 	display: flex;
-	min-height: 100vh;
-	min-height: 100dvh;
+	min-height: calc(98dvh - var(--wp-admin--admin-bar--height, 0px));
 	background: var(--wppo-bg-app);
-	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 	color: var(--wppo-text-main);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	align-items: flex-start;
 
 	@include respond-to('lg') {
 		flex-direction: column;
@@ -13,20 +15,39 @@
 
 .wppo-content {
 	flex-grow: 1;
-	overflow-y: auto;
-	height: 100vh;
-	height: 100dvh;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
 
-	@include respond-to('lg') {
-		height: auto;
+.wppo-main {
+	width: 100%;
+	max-width: var(--wppo-max-width);
+	margin: 0 auto;
+	padding: 36px 32px;
+	flex-grow: 1;
+	box-sizing: border-box;
+
+	@include respond-to('md') {
+		padding: 24px 20px;
 	}
 
-	&.fadeIn {
-		animation: wppo-fade-in 0.4s ease;
+	@include respond-to('sm') {
+		padding: 16px 14px;
 	}
 }
 
+.fadeIn {
+	animation: wppo-fade-in 0.3s ease;
+}
+
 @keyframes wppo-fade-in {
-	from { opacity: 0; transform: translateY(10px); }
-	to { opacity: 1; transform: translateY(0); }
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }

@@ -1,45 +1,81 @@
 .wppo-sidebar {
-	width: 280px;
-	background: #ffffff;
-	border-right: 1px solid var(--wppo-border);
+	width: var(--wppo-sidebar-width);
+	background: var(--wppo-bg-sidebar);
+	color: var(--wppo-text-sidebar);
 	display: flex;
 	flex-direction: column;
 	flex-shrink: 0;
 	z-index: 100;
-	transition: transform 0.3s ease;
-
-	@media (prefers-reduced-motion: reduce) {
-		transition: none;
-	}
+	transition: var(--wppo-transition);
+	/* Stick to the top as the page scrolls, accounting for WP admin bar */
+	position: sticky;
+	top: var(--wp-admin--admin-bar--height, 15px);
+	height: calc(98dvh - var(--wp-admin--admin-bar--height, 0px));
+	overflow-y: auto;
 
 	@include respond-to('lg') {
 		position: fixed;
-		left: 0;
+		left: calc(-1 * var(--wppo-sidebar-width));
 		top: 0;
 		bottom: 0;
-		transform: translateX(-100%);
+		height: 100%;
 		overflow-y: auto;
-		
+		box-shadow: none;
+
 		&.wppo-sidebar--mobile-open {
-			transform: translateX(0);
+			left: 0;
+			box-shadow: 8px 0 32px rgba(0, 0, 0, 0.25);
 		}
 	}
 
 	.wppo-sidebar-header {
-		padding: 32px 24px;
-		
+		padding: 28px 20px 20px;
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		margin-bottom: 8px;
+
+		.wppo-sidebar-logo {
+			width: 36px;
+			height: 36px;
+			background: var(--wppo-primary);
+			border-radius: 10px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			flex-shrink: 0;
+			box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+
+			svg {
+				color: #fff;
+				font-size: 16px;
+			}
+		}
+
 		h3 {
 			margin: 0;
-			font-size: 20px;
-			font-weight: 800;
-			color: var(--wppo-primary);
-			letter-spacing: -0.02em;
+			font-size: 15px;
+			font-weight: 700;
+			color: #fff;
+			letter-spacing: -0.01em;
+			white-space: nowrap;
+			line-height: 1.2;
+
+			span {
+				display: block;
+				font-size: 11px;
+				font-weight: 500;
+				color: var(--wppo-text-sidebar);
+				letter-spacing: 0.02em;
+				margin-top: 2px;
+			}
 		}
 	}
 
 	nav {
+		padding: 8px 12px;
 		flex-grow: 1;
-		padding: 0 16px;
 
 		ul {
 			list-style: none;
@@ -47,54 +83,67 @@
 			margin: 0;
 
 			li {
-				margin-bottom: 4px;
+				margin-bottom: 2px;
 
 				button {
 					width: 100%;
 					display: flex;
 					align-items: center;
-					gap: 12px;
-					padding: 12px 16px;
-					border: none;
+					gap: 10px;
+					padding: 10px 12px;
 					background: transparent;
-					color: var(--wppo-text-muted);
-					font-size: 14px;
-					font-weight: 600;
+					border: none;
 					border-radius: var(--wppo-radius-sm);
+					color: var(--wppo-text-sidebar);
+					font-size: 13.5px;
+					font-weight: 500;
 					cursor: pointer;
-					transition: var(--wppo-transition);
 					text-align: left;
-
-					.wppo-sidebar-icon {
-						font-size: 18px;
-						width: 20px;
-						text-align: center;
-						transition: var(--wppo-transition);
-					}
+					transition: var(--wppo-transition);
+					letter-spacing: 0.01em;
 
 					&:hover {
-						background: var(--wppo-bg-app);
-						color: var(--wppo-text-main);
+						background: var(--wppo-bg-sidebar-hover);
+						color: #fff;
 					}
 
 					&.wppo-is-active {
-						background: var(--wppo-primary-soft);
-						color: var(--wppo-primary);
+						background: var(--wppo-bg-sidebar-active);
+						color: #fff;
+						font-weight: 600;
 
 						.wppo-sidebar-icon {
 							color: var(--wppo-primary);
+							filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.5));
 						}
+					}
+
+					.wppo-sidebar-icon {
+						font-size: 14px;
+						width: 18px;
+						text-align: center;
+						flex-shrink: 0;
+						color: var(--wppo-text-sidebar);
+						transition: var(--wppo-transition);
+					}
+
+					.wppo-sidebar-label {
+						white-space: nowrap;
 					}
 				}
 			}
 		}
 	}
 
-	.wppo-sidebar-label {
-		transition: opacity 0.2s ease;
+	.wppo-sidebar-footer {
+		padding: 16px 12px;
+		border-top: 1px solid rgba(255, 255, 255, 0.06);
 
-		@media (prefers-reduced-motion: reduce) {
-			transition: none;
+		.wppo-sidebar-version {
+			font-size: 11px;
+			color: rgba(148, 163, 184, 0.5);
+			text-align: center;
+			letter-spacing: 0.05em;
 		}
 	}
 }
@@ -102,7 +151,66 @@
 .wppo-sidebar-overlay {
 	position: fixed;
 	inset: 0;
-	background: rgba(15, 23, 42, 0.4);
-	backdrop-filter: blur(4px);
+	background: rgba(0, 0, 0, 0.6);
+	backdrop-filter: blur(2px);
 	z-index: 90;
+}
+
+.wppo-mobile-header {
+	display: none;
+	padding: 0 20px;
+	height: 56px;
+	background: var(--wppo-bg-sidebar);
+	color: #fff;
+	align-items: center;
+	justify-content: space-between;
+	z-index: 110;
+	flex-shrink: 0;
+
+	@include respond-to('lg') {
+		display: flex;
+	}
+
+	.wppo-mobile-brand {
+		font-weight: 700;
+		font-size: 15px;
+		color: #fff;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+
+		.wppo-mobile-logo {
+			width: 28px;
+			height: 28px;
+			background: var(--wppo-primary);
+			border-radius: 7px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+
+			svg {
+				font-size: 12px;
+				color: #fff;
+			}
+		}
+	}
+
+	.wppo-mobile-toggle {
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		color: #fff;
+		width: 36px;
+		height: 36px;
+		border-radius: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		font-size: 15px;
+		transition: var(--wppo-transition);
+
+		&:hover {
+			background: rgba(255, 255, 255, 0.15);
+		}
+	}
 }
