@@ -201,7 +201,7 @@ const ImageOptimization = ( { options = {} } ) => {
 
 						<SwitchField
 							label="Wrap in Picture Tag"
-							description="Wrap &lt;img&gt; elements in a &lt;picture&gt; element to enable serving next-gen formats (WebP/AVIF) with a fallback for older browsers. Required for format conversion to work."
+							description="Wrap <img> elements in a <picture> element to enable serving next-gen formats (WebP/AVIF) with a fallback for older browsers. Required for format conversion to work."
 							name="wrapInPicture"
 							checked={ settings.wrapInPicture }
 							onChange={ handleChange( setSettings ) }
@@ -216,7 +216,7 @@ const ImageOptimization = ( { options = {} } ) => {
 					<div className="wppo-field-group">
 						<SwitchField
 							label="Video Lazy Loading"
-							description="Defer loading of &lt;iframe&gt; and &lt;video&gt; embeds until they enter the viewport. Significantly reduces initial page load time for pages with embedded YouTube, Vimeo, or other media."
+							description="Defer loading of <iframe> and <video> embeds until they enter the viewport. Significantly reduces initial page load time for pages with embedded YouTube, Vimeo, or other media."
 							name="lazyLoadVideos"
 							checked={ settings.lazyLoadVideos }
 							onChange={ handleChange( setSettings ) }

@@ -20,7 +20,7 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		background: #fafbfc;
+		background: var(--wppo-bg-card-surface, #fafbfc);
 
 		h3 {
 			margin: 0;
@@ -50,7 +50,7 @@
 
 	&__footer {
 		padding: 16px 24px;
-		background: #fafbfc;
+		background: var(--wppo-bg-card-surface, #fafbfc);
 		border-top: 1px solid var(--wppo-border);
 		display: flex;
 		justify-content: flex-end;

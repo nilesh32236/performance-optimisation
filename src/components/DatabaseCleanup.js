@@ -3,7 +3,6 @@ import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-	faTrash,
 	faCheckCircle,
 	faExclamationTriangle,
 	faDatabase,
@@ -20,43 +19,36 @@ const CLEANUP_TYPES = [
 		key: 'revisions',
 		label: 'Post Revisions',
 		description: 'Old versions of your posts saved during editing.',
-		icon: faTrash,
 	},
 	{
 		key: 'auto_drafts',
 		label: 'Auto Drafts',
 		description: 'Automatically saved drafts that are no longer needed.',
-		icon: faTrash,
 	},
 	{
 		key: 'trashed_posts',
 		label: 'Trashed Posts',
 		description: 'Posts that have been moved to the trash.',
-		icon: faTrash,
 	},
 	{
 		key: 'spam_comments',
 		label: 'Spam Comments',
 		description: 'Comments marked as spam.',
-		icon: faTrash,
 	},
 	{
 		key: 'trashed_comments',
 		label: 'Trashed Comments',
 		description: 'Comments that have been moved to the trash.',
-		icon: faTrash,
 	},
 	{
 		key: 'expired_transients',
 		label: 'Expired Transients',
 		description: 'Temporary cached data that has expired.',
-		icon: faTrash,
 	},
 	{
 		key: 'orphan_postmeta',
 		label: 'Orphaned Post Meta',
 		description: 'Metadata entries with no associated post.',
-		icon: faTrash,
 	},
 ];
 

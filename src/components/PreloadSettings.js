@@ -38,6 +38,7 @@ const PreloadSettings = ( { options = {} } ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
+		setIsLoading( true );
 		setNotification( { message: '', success: false } );
 
 		try {
@@ -210,7 +211,7 @@ const PreloadSettings = ( { options = {} } ) => {
 						<div className="wppo-field-group">
 							<SwitchField
 								label="Preload Fonts"
-								description='Inject &lt;link rel="preload"&gt; hints for critical font files so the browser fetches them at the highest priority. Eliminates the flash of invisible text (FOIT) on first load.'
+								description='Inject <link rel="preload"> hints for critical font files so the browser fetches them at the highest priority. Eliminates the flash of invisible text (FOIT) on first load.'
 								name="preloadFonts"
 								checked={ settings.preloadFonts }
 								onChange={ handleChange( setSettings ) }
@@ -242,7 +243,7 @@ const PreloadSettings = ( { options = {} } ) => {
 						<div className="wppo-field-group">
 							<SwitchField
 								label="Preload Critical CSS"
-								description='Inject &lt;link rel="preload"&gt; hints for above-the-fold stylesheets. Ensures critical styles are fetched before the browser renders the page, reducing render-blocking delays.'
+								description='Inject <link rel="preload"> hints for above-the-fold stylesheets. Ensures critical styles are fetched before the browser renders the page, reducing render-blocking delays.'
 								name="preloadCSS"
 								checked={ settings.preloadCSS }
 								onChange={ handleChange( setSettings ) }

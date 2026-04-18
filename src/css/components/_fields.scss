@@ -17,7 +17,7 @@
 
 	&:hover {
 		border-color: var(--wppo-border-hover);
-		background: #f1f5f9;
+		background: var(--wppo-switch-hover, #f1f5f9);
 	}
 
 	.wppo-switch-field__info {
@@ -37,6 +37,14 @@
 	.wppo-text-muted {
 		font-size: 12.5px;
 		margin: 0;
+		line-height: 1.4;
+		color: var(--wppo-text-muted);
+	}
+
+	/* Style the ToggleControl help text (rendered as .components-base-control__hint) */
+	.components-base-control__hint {
+		font-size: 12.5px;
+		margin: 4px 0 0;
 		line-height: 1.4;
 		color: var(--wppo-text-muted);
 	}

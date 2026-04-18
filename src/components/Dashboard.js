@@ -39,6 +39,13 @@ const normalizeImageInfo = ( raw ) => {
 };
 
 const Dashboard = ( { activities, onNavigate } ) => {
+	// Raw pending paths from the initial API response — used for optimise_image payload.
+	const rawPending = wppoSettings.image_info?.pending ?? {};
+	const [ pendingPaths, setPendingPaths ] = useState( {
+		webp: Array.isArray( rawPending.webp ) ? rawPending.webp : [],
+		avif: Array.isArray( rawPending.avif ) ? rawPending.avif : [],
+	} );
+
 	// Initialize state
 	const [ state, setState ] = useState( {
 		totalCacheSize: wppoSettings.cache_size,
@@ -169,13 +176,17 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	const optimizeImages = useCallback( () => {
 		handleLoading( 'optimize_images', true );
-		const { webp = [], avif = [] } = pending;
 
-		apiCall( 'optimise_image', { webp, avif } )
+		apiCall( 'optimise_image', {
+			webp: pendingPaths.webp,
+			avif: pendingPaths.avif,
+		} )
 			.then( ( response ) => {
 				if ( response.data?.background ) {
 					setBgProcessing( true );
 					setBgJobsQueued( response.data.jobs_queued || 0 );
+					// Clear raw paths — they are now queued.
+					setPendingPaths( { webp: [], avif: [] } );
 					if ( pollingRef.current ) {
 						clearInterval( pollingRef.current );
 					}
@@ -183,7 +194,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				}
 			} )
 			.finally( () => handleLoading( 'optimize_images', false ) );
-	}, [ handleLoading, pending, pollJobStatus ] );
+	}, [ handleLoading, pendingPaths, pollJobStatus ] );
 
 	const removeImages = useCallback( () => {
 		handleLoading( 'remove_images', true );
@@ -354,7 +365,8 @@ const Dashboard = ( { activities, onNavigate } ) => {
 								isLoading={ loading.optimize_images }
 								disabled={
 									bgProcessing ||
-									( ! pending.webp && ! pending.avif )
+									( ! pendingPaths.webp.length &&
+										! pendingPaths.avif.length )
 								}
 								label="Optimize All"
 								loadingLabel="Optimizing..."
