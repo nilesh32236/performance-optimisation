@@ -84,18 +84,23 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	 * @param {string} type    The notice type (success, error, warning, info).
 	 */
 	const showNotice = ( message, type = 'success' ) => {
-		if (
-			window.wp &&
-			window.wp.data &&
-			window.wp.data.dispatch( 'core/notices' )
-		) {
-			window.wp.data
-				.dispatch( 'core/notices' )
-				.createNotice( type, message, {
-					isDismissible: true,
-					type: 'snackbar',
-				} );
-		} else {
+		let dispatched = false;
+		if ( window.wp && window.wp.data ) {
+			try {
+				const noticeDispatch = window.wp.data.dispatch( 'core/notices' );
+				if ( noticeDispatch && noticeDispatch.createNotice ) {
+					noticeDispatch.createNotice( type, message, {
+						isDismissible: true,
+						type: 'snackbar',
+					} );
+					dispatched = true;
+				}
+			} catch ( _err ) {
+				dispatched = false;
+			}
+		}
+
+		if ( ! dispatched ) {
 			// eslint-disable-next-line no-alert
 			alert( message );
 		}

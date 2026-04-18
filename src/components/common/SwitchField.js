@@ -25,8 +25,10 @@ const SwitchField = ( { label, description, name, checked, onChange } ) => {
 				<input
 					id={ id }
 					type="checkbox"
+					role="switch"
 					name={ name }
 					checked={ checked }
+					aria-checked={ checked }
 					onChange={ onChange }
 					aria-labelledby={ `${ id }-label` }
 				/>

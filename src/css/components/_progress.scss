@@ -10,12 +10,16 @@
 		background: var(--wppo-primary);
 		border-radius: 4px;
 		transition: width 0.6s ease;
+
+		@media (prefers-reduced-motion: reduce) {
+			transition: none;
+		}
 	}
 }
 
 .wppo-progress-section {
 	&--spaced {
-		margin-top: 20px;
+		margin-top: var(--wppo-spacing-md, 20px);
 	}
 	.wppo-progress-header {
 		display: flex;

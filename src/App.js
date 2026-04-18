@@ -206,8 +206,8 @@ const App = () => {
 			<div
 				id="mobile-sidebar"
 				className={ `wppo-sidebar ${
-					sidebarCollapsed ? 'collapsed' : ''
-				} ${ mobileMenuOpen ? 'mobile-open' : '' }` }
+					sidebarCollapsed ? 'wppo-sidebar--collapsed' : ''
+				} ${ mobileMenuOpen ? 'wppo-sidebar--mobile-open' : '' }` }
 			>
 				<div className="wppo-sidebar-header">
 					<h3>Performance Optimize</h3>
@@ -218,7 +218,9 @@ const App = () => {
 							<li key={ item.name }>
 								<button
 									className={
-										activeTab === item.name ? 'active' : ''
+										activeTab === item.name
+											? 'wppo-is-active'
+											: ''
 									}
 									aria-current={
 										activeTab === item.name
@@ -234,7 +236,7 @@ const App = () => {
 										className="wppo-sidebar-icon"
 										icon={ item.icon }
 									/>
-									<span className="sidebar-label">
+									<span className="wppo-sidebar-label">
 										{ item.label }
 									</span>
 								</button>

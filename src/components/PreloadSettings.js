@@ -61,106 +61,107 @@ const PreloadSettings = ( { options = {} } ) => {
 				}
 			/>
 
-			<form onSubmit={ handleSubmit } className="wppo-grid-2-col">
-				<FeatureCard
-					title="Cache Warm-up"
-					icon={ <FontAwesomeIcon icon={ faHourglassStart } /> }
-				>
-					<div className="wppo-field-group">
-						<SwitchField
-							label="Enable Preload Cache"
-							description="Crawl site to populate cache."
-							name="enablePreloadCache"
-							checked={ settings.enablePreloadCache }
-							onChange={ handleChange( setSettings ) }
-						/>
-						{ settings.enablePreloadCache && (
-							<div>
-								<label
-									className="wppo-field-label"
-									htmlFor="excludePreloadCache"
-								>
-									Exclude URLs
-								</label>
-								<textarea
-									className="wppo-textarea"
-									id="excludePreloadCache"
-									name="excludePreloadCache"
-									rows="3"
-									value={ settings.excludePreloadCache }
-									onChange={ handleChange( setSettings ) }
-								/>
-							</div>
-						) }
-					</div>
-				</FeatureCard>
-
-				<FeatureCard
-					title="Connections"
-					icon={ <FontAwesomeIcon icon={ faLink } /> }
-				>
-					<div className="wppo-field-group">
-						<SwitchField
-							label="Preconnect"
-							description="Establish early server connections."
-							name="preconnect"
-							checked={ settings.preconnect }
-							onChange={ handleChange( setSettings ) }
-						/>
-						{ settings.preconnect && (
-							<div className="wppo-field">
-								<label
-									className="wppo-field-label"
-									htmlFor="preconnectOrigins"
-								>
-									Preconnect Origins
-								</label>
-								<textarea
-									className="wppo-textarea"
-									id="preconnectOrigins"
-									name="preconnectOrigins"
-									rows="2"
-									placeholder="https://example.com"
-									value={ settings.preconnectOrigins }
-									onChange={ handleChange( setSettings ) }
-								/>
-							</div>
-						) }
-
-						<SwitchField
-							label="DNS Prefetch"
-							description="Resolve domain names early."
-							name="prefetchDNS"
-							checked={ settings.prefetchDNS }
-							onChange={ handleChange( setSettings ) }
-						/>
-						{ settings.prefetchDNS && (
-							<div className="wppo-field">
-								<label
-									className="wppo-field-label"
-									htmlFor="dnsPrefetchOrigins"
-								>
-									DNS Prefetch Origins
-								</label>
-								<textarea
-									className="wppo-textarea"
-									id="dnsPrefetchOrigins"
-									name="dnsPrefetchOrigins"
-									rows="2"
-									placeholder="example.com"
-									value={ settings.dnsPrefetchOrigins }
-									onChange={ handleChange( setSettings ) }
-								/>
-							</div>
-						) }
-					</div>
-				</FeatureCard>
-			</form>
-
 			<form onSubmit={ handleSubmit }>
+				<div className="wppo-grid-2-col">
+					<FeatureCard
+						title="Cache Warm-up"
+						icon={ <FontAwesomeIcon icon={ faHourglassStart } /> }
+					>
+						<div className="wppo-field-group">
+							<SwitchField
+								label="Enable Preload Cache"
+								description="Crawl site to populate cache."
+								name="enablePreloadCache"
+								checked={ settings.enablePreloadCache }
+								onChange={ handleChange( setSettings ) }
+							/>
+							{ settings.enablePreloadCache && (
+								<div>
+									<label
+										className="wppo-field-label"
+										htmlFor="excludePreloadCache"
+									>
+										Exclude URLs
+									</label>
+									<textarea
+										className="wppo-textarea"
+										id="excludePreloadCache"
+										name="excludePreloadCache"
+										rows="3"
+										value={ settings.excludePreloadCache }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</div>
+							) }
+						</div>
+					</FeatureCard>
+
+					<FeatureCard
+						title="Connections"
+						icon={ <FontAwesomeIcon icon={ faLink } /> }
+					>
+						<div className="wppo-field-group">
+							<SwitchField
+								label="Preconnect"
+								description="Establish early server connections."
+								name="preconnect"
+								checked={ settings.preconnect }
+								onChange={ handleChange( setSettings ) }
+							/>
+							{ settings.preconnect && (
+								<div className="wppo-field">
+									<label
+										className="wppo-field-label"
+										htmlFor="preconnectOrigins"
+									>
+										Preconnect Origins
+									</label>
+									<textarea
+										className="wppo-textarea"
+										id="preconnectOrigins"
+										name="preconnectOrigins"
+										rows="2"
+										placeholder="https://example.com"
+										value={ settings.preconnectOrigins }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</div>
+							) }
+
+							<SwitchField
+								label="DNS Prefetch"
+								description="Resolve domain names early."
+								name="prefetchDNS"
+								checked={ settings.prefetchDNS }
+								onChange={ handleChange( setSettings ) }
+							/>
+							{ settings.prefetchDNS && (
+								<div className="wppo-field">
+									<label
+										className="wppo-field-label"
+										htmlFor="dnsPrefetchOrigins"
+									>
+										DNS Prefetch Origins
+									</label>
+									<textarea
+										className="wppo-textarea"
+										id="dnsPrefetchOrigins"
+										name="dnsPrefetchOrigins"
+										rows="2"
+										placeholder="example.com"
+										value={ settings.dnsPrefetchOrigins }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</div>
+							) }
+						</div>
+					</FeatureCard>
+				</div>
+
 				<FeatureCard
 					title="Critical Assets"
 					icon={ <FontAwesomeIcon icon={ faFont } /> }
+					className="wppo-mt-20"
 				>
 					<div className="wppo-grid-2-col">
 						<div className="wppo-field-group">

@@ -9,14 +9,15 @@ import {
 	faServer,
 	faShieldAlt,
 	faExclamationTriangle,
+	faCheckCircle,
 } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 
-const FileOptimization = ( { options = {} } ) => {
-	const [ activeSubTab, setActiveSubTab ] = useState( 'assets' );
+const FileOptimization = ({ options = {} }) => {
+	const [activeSubTab, setActiveSubTab] = useState('assets');
 
 	const defaultSettings = {
 		minifyJS: false,
@@ -41,23 +42,45 @@ const FileOptimization = ( { options = {} } ) => {
 		...options,
 	};
 
-	const [ settings, setSettings ] = useState( defaultSettings );
-	const [ isLoading, setIsLoading ] = useState( false );
+	const [settings, setSettings] = useState(defaultSettings);
+	const [isLoading, setIsLoading] = useState(false);
+	const [notification, setNotification] = useState({
+		message: '',
+		success: false,
+	});
 
-	const handleSubmit = async ( e ) => {
-		if ( e ) {
+	const handleSubmit = async (e) => {
+		if (e) {
 			e.preventDefault();
 		}
-		setIsLoading( true );
+		setIsLoading(true);
+		setNotification({ message: '', success: false });
 		try {
-			await apiCall( 'update_settings', {
+			const res = await apiCall('update_settings', {
 				tab: 'file_optimisation',
 				settings,
-			} );
-		} catch ( err ) {
-			console.error( 'Failed updating file optimisation settings', err );
+			});
+
+			if (res.success) {
+				setNotification({
+					message:
+						res.message || 'Settings updated successfully.',
+					success: true,
+				});
+			} else {
+				setNotification({
+					message: res.message || 'Failed to update settings.',
+					success: false,
+				});
+			}
+		} catch (err) {
+			console.error('Failed updating file optimisation settings', err);
+			setNotification({
+				message: 'An unexpected error occurred.',
+				success: false,
+			});
 		} finally {
-			setIsLoading( false );
+			setIsLoading(false);
 		}
 	};
 
@@ -68,6 +91,28 @@ const FileOptimization = ( { options = {} } ) => {
 		{ id: 'network', label: 'Network', icon: faServer },
 		{ id: 'core', label: 'Core', icon: faShieldAlt },
 	];
+	const handleSubTabKeyDown = ( e, index ) => {
+		let nextIndex;
+		if ( e.key === 'ArrowRight' ) {
+			nextIndex = ( index + 1 ) % subTabs.length;
+		} else if ( e.key === 'ArrowLeft' ) {
+			nextIndex = ( index - 1 + subTabs.length ) % subTabs.length;
+		} else {
+			return;
+		}
+
+		e.preventDefault();
+		const nextTab = subTabs[ nextIndex ];
+		setActiveSubTab( nextTab.id );
+
+		// Move focus to the next button.
+		setTimeout( () => {
+			const nextButton = document.getElementById( `tab-${ nextTab.id }` );
+			if ( nextButton ) {
+				nextButton.focus();
+			}
+		}, 0 );
+	};
 
 	return (
 		<div className="wppo-dashboard-view">
@@ -77,35 +122,53 @@ const FileOptimization = ( { options = {} } ) => {
 				actions={
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"
-						isLoading={ isLoading }
-						onClick={ handleSubmit }
+						isLoading={isLoading}
+						onClick={handleSubmit}
 						label="Save Settings"
 					/>
 				}
 			>
+
+				{notification.message && (
+					<div
+						className={`wppo-notice wppo-notice--${notification.success ? 'success' : 'error'
+							} wppo-mb-20`}
+					>
+						<FontAwesomeIcon
+							icon={
+								notification.success
+									? faCheckCircle
+									: faExclamationTriangle
+							}
+						/>
+						<span>{notification.message}</span>
+					</div>
+				)}
+
 				<div className="wppo-sub-tabs" role="tablist">
-					{ subTabs.map( ( tab ) => (
+					{subTabs.map((tab, index) => (
 						<button
-							key={ tab.id }
-							id={ `tab-${ tab.id }` }
-							className={ `wppo-sub-tab ${
-								activeSubTab === tab.id ? 'active' : ''
-							}` }
-							onClick={ () => setActiveSubTab( tab.id ) }
+							key={tab.id}
+							id={`tab-${tab.id}`}
+							className={`wppo-sub-tab ${activeSubTab === tab.id ? 'active' : ''
+								}`}
+							onClick={() => setActiveSubTab(tab.id)}
+							onKeyDown={(e) => handleSubTabKeyDown(e, index)}
 							type="button"
 							role="tab"
-							aria-selected={ activeSubTab === tab.id }
-							aria-controls={ `panel-${ tab.id }` }
+							tabIndex={activeSubTab === tab.id ? 0 : -1}
+							aria-selected={activeSubTab === tab.id}
+							aria-controls={`panel-${tab.id}`}
 						>
-							<FontAwesomeIcon icon={ tab.icon } />
-							{ tab.label }
+							<FontAwesomeIcon icon={tab.icon} />
+							{tab.label}
 						</button>
-					) ) }
+					))}
 				</div>
 			</FeatureHeader>
 
 			<div className="wppo-tab-content">
-				{ activeSubTab === 'assets' && (
+				{activeSubTab === 'assets' && (
 					<div
 						id="panel-assets"
 						className="wppo-grid-2-col"
@@ -114,24 +177,24 @@ const FileOptimization = ( { options = {} } ) => {
 					>
 						<FeatureCard
 							title="CSS Optimization"
-							icon={ <FontAwesomeIcon icon={ faCode } /> }
+							icon={<FontAwesomeIcon icon={faCode} />}
 						>
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Minify CSS"
 									description="Remove whitespace and comments from stylesheets."
 									name="minifyCSS"
-									checked={ settings.minifyCSS }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.minifyCSS}
+									onChange={handleChange(setSettings)}
 								/>
 								<SwitchField
 									label="Combine CSS"
 									description="Merge all CSS into a single file to reduce requests."
 									name="combineCSS"
-									checked={ settings.combineCSS }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.combineCSS}
+									onChange={handleChange(setSettings)}
 								/>
-								{ settings.minifyCSS && (
+								{settings.minifyCSS && (
 									<div className="wppo-field">
 										<label
 											className="wppo-field-label"
@@ -145,32 +208,32 @@ const FileOptimization = ( { options = {} } ) => {
 											name="excludeCSS"
 											rows="3"
 											placeholder="Handles or partial URLs (one per line)"
-											value={ settings.excludeCSS }
-											onChange={ handleChange(
+											value={settings.excludeCSS}
+											onChange={handleChange(
 												setSettings
-											) }
+											)}
 										/>
 									</div>
-								) }
+								)}
 							</div>
 						</FeatureCard>
 
 						<FeatureCard
 							title="HTML Optimization"
-							icon={ <FontAwesomeIcon icon={ faCode } /> }
+							icon={<FontAwesomeIcon icon={faCode} />}
 						>
 							<SwitchField
 								label="Minify HTML"
 								description="Compress the HTML output of your website."
 								name="minifyHTML"
-								checked={ settings.minifyHTML }
-								onChange={ handleChange( setSettings ) }
+								checked={settings.minifyHTML}
+								onChange={handleChange(setSettings)}
 							/>
 						</FeatureCard>
 					</div>
-				) }
+				)}
 
-				{ activeSubTab === 'scripts' && (
+				{activeSubTab === 'scripts' && (
 					<div
 						id="panel-scripts"
 						className="wppo-grid-2-col"
@@ -179,39 +242,39 @@ const FileOptimization = ( { options = {} } ) => {
 					>
 						<FeatureCard
 							title="JavaScript Loading"
-							icon={ <FontAwesomeIcon icon={ faRocket } /> }
+							icon={<FontAwesomeIcon icon={faRocket} />}
 						>
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Minify JavaScript"
 									description="Compress JS files to reduce execution time."
 									name="minifyJS"
-									checked={ settings.minifyJS }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.minifyJS}
+									onChange={handleChange(setSettings)}
 								/>
 								<SwitchField
 									label="Defer JavaScript"
 									description="Load scripts in the background to prevent render blocking."
 									name="deferJS"
-									checked={ settings.deferJS }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.deferJS}
+									onChange={handleChange(setSettings)}
 								/>
 								<SwitchField
 									label="Delay JavaScript Execution"
 									description="Delay loading until user interaction (keyboard/mouse)."
 									name="delayJS"
-									checked={ settings.delayJS }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.delayJS}
+									onChange={handleChange(setSettings)}
 								/>
 							</div>
 						</FeatureCard>
 
-						{ ( settings.minifyJS || settings.delayJS ) && (
+						{(settings.minifyJS || settings.delayJS) && (
 							<FeatureCard
 								title="Script Rules"
-								icon={ <FontAwesomeIcon icon={ faRocket } /> }
+								icon={<FontAwesomeIcon icon={faRocket} />}
 							>
-								{ settings.minifyJS && (
+								{settings.minifyJS && (
 									<div className="wppo-field">
 										<label
 											className="wppo-field-label"
@@ -225,14 +288,14 @@ const FileOptimization = ( { options = {} } ) => {
 											name="excludeJS"
 											rows="3"
 											placeholder="Handles or partial URLs"
-											value={ settings.excludeJS }
-											onChange={ handleChange(
+											value={settings.excludeJS}
+											onChange={handleChange(
 												setSettings
-											) }
+											)}
 										/>
 									</div>
-								) }
-								{ settings.delayJS && (
+								)}
+								{settings.delayJS && (
 									<div className="wppo-field wppo-mt-20">
 										<label
 											className="wppo-field-label"
@@ -246,14 +309,14 @@ const FileOptimization = ( { options = {} } ) => {
 											name="delayJSList"
 											rows="3"
 											placeholder="Partial URLs or keywords"
-											value={ settings.delayJSList }
-											onChange={ handleChange(
+											value={settings.delayJSList}
+											onChange={handleChange(
 												setSettings
-											) }
+											)}
 										/>
 										<div className="wppo-notice wppo-notice--warning wppo-mt-12">
 											<FontAwesomeIcon
-												icon={ faExclamationTriangle }
+												icon={faExclamationTriangle}
 											/>
 											<span>
 												Delaying scripts can break
@@ -262,13 +325,13 @@ const FileOptimization = ( { options = {} } ) => {
 											</span>
 										</div>
 									</div>
-								) }
+								)}
 							</FeatureCard>
-						) }
+						)}
 					</div>
-				) }
+				)}
 
-				{ activeSubTab === 'ecommerce' && (
+				{activeSubTab === 'ecommerce' && (
 					<div
 						id="panel-ecommerce"
 						role="tabpanel"
@@ -276,22 +339,22 @@ const FileOptimization = ( { options = {} } ) => {
 					>
 						<FeatureCard
 							title="WooCommerce Core"
-							icon={ <FontAwesomeIcon icon={ faStore } /> }
+							icon={<FontAwesomeIcon icon={faStore} />}
 						>
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Optimize WooCommerce Assets"
 									description="Disable WooCommerce scripts/styles on non-ecommerce pages."
 									name="removeWooCSSJS"
-									checked={ settings.removeWooCSSJS }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.removeWooCSSJS}
+									onChange={handleChange(setSettings)}
 								/>
 
-								{ settings.removeWooCSSJS && (
+								{settings.removeWooCSSJS && (
 									<>
 										<div className="wppo-notice wppo-notice--warning">
 											<FontAwesomeIcon
-												icon={ faExclamationTriangle }
+												icon={faExclamationTriangle}
 											/>
 											<span>
 												This may break carts on custom
@@ -316,9 +379,9 @@ const FileOptimization = ( { options = {} } ) => {
 													value={
 														settings.excludeUrlToKeepJSCSS
 													}
-													onChange={ handleChange(
+													onChange={handleChange(
 														setSettings
-													) }
+													)}
 												/>
 											</div>
 											<div className="wppo-field">
@@ -338,20 +401,20 @@ const FileOptimization = ( { options = {} } ) => {
 													value={
 														settings.removeCssJsHandle
 													}
-													onChange={ handleChange(
+													onChange={handleChange(
 														setSettings
-													) }
+													)}
 												/>
 											</div>
 										</div>
 									</>
-								) }
+								)}
 							</div>
 						</FeatureCard>
 					</div>
-				) }
+				)}
 
-				{ activeSubTab === 'network' && (
+				{activeSubTab === 'network' && (
 					<div
 						id="panel-network"
 						className="wppo-grid-2-col"
@@ -360,33 +423,33 @@ const FileOptimization = ( { options = {} } ) => {
 					>
 						<FeatureCard
 							title="Server Rules"
-							icon={ <FontAwesomeIcon icon={ faServer } /> }
+							icon={<FontAwesomeIcon icon={faServer} />}
 						>
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Enable Server Rules (.htaccess)"
 									description="Apply performance rules directly at the server level."
 									name="enableServerRules"
-									checked={ settings.enableServerRules }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.enableServerRules}
+									onChange={handleChange(setSettings)}
 								/>
-								{ settings.enableServerRules && (
+								{settings.enableServerRules && (
 									<div className="wppo-notice wppo-notice--warning">
 										<FontAwesomeIcon
-											icon={ faExclamationTriangle }
+											icon={faExclamationTriangle}
 										/>
 										<span>
 											This modifies your .htaccess. Ensure
 											you have FTP access for recovery.
 										</span>
 									</div>
-								) }
+								)}
 							</div>
 						</FeatureCard>
 
 						<FeatureCard
 							title="CDN Settings"
-							icon={ <FontAwesomeIcon icon={ faServer } /> }
+							icon={<FontAwesomeIcon icon={faServer} />}
 						>
 							<div className="wppo-field">
 								<label
@@ -401,8 +464,8 @@ const FileOptimization = ( { options = {} } ) => {
 									id="cdnURL"
 									name="cdnURL"
 									placeholder="https://cdn.example.com"
-									value={ settings.cdnURL }
-									onChange={ handleChange( setSettings ) }
+									value={settings.cdnURL}
+									onChange={handleChange(setSettings)}
 								/>
 								<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 									Your static assets will be rewritten to use
@@ -411,9 +474,9 @@ const FileOptimization = ( { options = {} } ) => {
 							</div>
 						</FeatureCard>
 					</div>
-				) }
+				)}
 
-				{ activeSubTab === 'core' && (
+				{activeSubTab === 'core' && (
 					<div
 						id="panel-core"
 						className="wppo-grid-2-col"
@@ -422,39 +485,39 @@ const FileOptimization = ( { options = {} } ) => {
 					>
 						<FeatureCard
 							title="Cleanup Core Bloat"
-							icon={ <FontAwesomeIcon icon={ faShieldAlt } /> }
+							icon={<FontAwesomeIcon icon={faShieldAlt} />}
 						>
 							<div className="wppo-field-group">
 								<SwitchField
 									label="Disable Emojis"
 									name="disableEmojis"
-									checked={ settings.disableEmojis }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.disableEmojis}
+									onChange={handleChange(setSettings)}
 								/>
 								<SwitchField
 									label="Disable Embeds"
 									name="disableEmbeds"
-									checked={ settings.disableEmbeds }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.disableEmbeds}
+									onChange={handleChange(setSettings)}
 								/>
 								<SwitchField
 									label="Disable Dashicons (Frontend)"
 									name="disableDashicons"
-									checked={ settings.disableDashicons }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.disableDashicons}
+									onChange={handleChange(setSettings)}
 								/>
 								<SwitchField
 									label="Disable XML-RPC"
 									name="disableXMLRPC"
-									checked={ settings.disableXMLRPC }
-									onChange={ handleChange( setSettings ) }
+									checked={settings.disableXMLRPC}
+									onChange={handleChange(setSettings)}
 								/>
 							</div>
 						</FeatureCard>
 
 						<FeatureCard
 							title="Heartbeat Control"
-							icon={ <FontAwesomeIcon icon={ faRocket } /> }
+							icon={<FontAwesomeIcon icon={faRocket} />}
 						>
 							<div className="wppo-field">
 								<label
@@ -467,8 +530,8 @@ const FileOptimization = ( { options = {} } ) => {
 									className="wppo-select"
 									id="heartbeatControl"
 									name="heartbeatControl"
-									value={ settings.heartbeatControl }
-									onChange={ handleChange( setSettings ) }
+									value={settings.heartbeatControl}
+									onChange={handleChange(setSettings)}
 								>
 									<option value="default">
 										Default Mode
@@ -484,11 +547,7 @@ const FileOptimization = ( { options = {} } ) => {
 									</option>
 								</select>
 								<p
-									className="wppo-text-muted"
-									style={ {
-										marginTop: '12px',
-										fontSize: '13px',
-									} }
+									className="wppo-text-muted wppo-mt-12 wppo-text-13"
 								>
 									Restricting the Heartbeat API reduces server
 									CPU usage by limiting polling.
@@ -496,7 +555,7 @@ const FileOptimization = ( { options = {} } ) => {
 							</div>
 						</FeatureCard>
 					</div>
-				) }
+				)}
 			</div>
 		</div>
 	);

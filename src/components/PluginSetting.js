@@ -102,8 +102,11 @@ const PluginSetting = ( { options } ) => {
 						setNotification( {
 							message:
 								data.message ||
-								translations.fileImported ||
-								'Settings imported successfully.',
+								( data.success
+									? translations.fileImported ||
+									  'Settings imported successfully.'
+									: translations.importFailed ||
+									  'Failed to import settings.' ),
 							success: data.success,
 						} );
 					} )

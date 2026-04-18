@@ -96,12 +96,12 @@ class Database_Cleanup {
 		$max_age_seconds = $max_age_days * DAY_IN_SECONDS;
 		$cutoff_date     = gmdate( 'Y-m-d H:i:s', time() - $max_age_seconds );
 
-		// Find parent posts that have more than $keep_latest revisions.
+		// PERFORMANCE FIX: Apply strict batching mechanism limit by adding "LIMIT 200".
 		$wpdb->last_error = '';
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 		$parent_ids = $wpdb->get_col(
 			$wpdb->prepare(
-				"SELECT post_parent FROM $wpdb->posts WHERE post_type = 'revision' GROUP BY post_parent HAVING COUNT(*) > %d",
+				"SELECT post_parent FROM $wpdb->posts WHERE post_type = 'revision' GROUP BY post_parent HAVING COUNT(*) > %d LIMIT 200",
 				$keep_latest
 			)
 		);
@@ -117,21 +117,16 @@ class Database_Cleanup {
 		$revisions_to_delete = array();
 
 		foreach ( $parent_ids as $parent_id ) {
-			// Get all revisions for this post, sorted by date descending.
-			$wpdb->last_error = '';
+			// Select exactly the cutoff entries so PHP handles almost no object data.
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 			$revisions = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT ID, post_date FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date DESC",
+					"SELECT ID, post_date FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date DESC LIMIT 500",
 					$parent_id
 				)
 			);
 
-			if ( ! empty( $wpdb->last_error ) ) {
-				return false;
-			}
-
-			// Keep the latest X revisions.
+			// Keep the latest X revisions; dump others onto our purge list.
 			$older_revisions = array_slice( $revisions, $keep_latest );
 
 			foreach ( $older_revisions as $rev ) {
@@ -143,26 +138,27 @@ class Database_Cleanup {
 		}
 
 		if ( ! empty( $revisions_to_delete ) ) {
-			// Chunk deletes to avoid massive IN clauses.
-			$chunks = array_chunk( $revisions_to_delete, 100 );
+			// Safe deletions capped exactly per max length boundaries.
+			$chunks = array_chunk( $revisions_to_delete, 50 );
+
 			foreach ( $chunks as $chunk ) {
 				$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
 
-				// Delete meta.
+				// SubQuery Meta Purge.
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$meta_deleted = $wpdb->query(
-					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
 					$wpdb->prepare(
 						"DELETE FROM $wpdb->postmeta WHERE post_id IN (" . $placeholders . ')', // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 						...$chunk
 					)
 				);
 
-				if ( false === $meta_deleted || ! empty( $wpdb->last_error ) ) {
+				if ( false === $meta_deleted ) {
+					error_log( sprintf( 'WPPO Database Cleanup: Failed to delete postmeta for posts: %s. Error: %s', implode( ',', $chunk ), $wpdb->last_error ) );
 					return false;
 				}
 
-				// Delete posts.
+				// Post Database Delete Executions.
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$result = $wpdb->query(
 					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
@@ -172,16 +168,11 @@ class Database_Cleanup {
 					)
 				);
 
-				if ( false === $result || ! empty( $wpdb->last_error ) ) {
-					return false;
-				}
-
 				if ( $result ) {
 					$deleted += $result;
 				}
 			}
 		}
-
 		return $deleted;
 	}
 
@@ -404,24 +395,61 @@ class Database_Cleanup {
 	public static function clean_expired_transients() {
 		global $wpdb;
 
-		$time = time();
+		$time    = time();
+		$deleted = 0;
+		$batch   = 1000;
 
-		$wpdb->last_error = '';
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
-		$result = $wpdb->query(
-			$wpdb->prepare(
-				"DELETE a, b FROM $wpdb->options a, $wpdb->options b
-				WHERE a.option_name LIKE %s
-				AND a.option_name NOT LIKE %s
-				AND b.option_name = CONCAT( '_transient_timeout_', SUBSTRING( a.option_name, 12 ) )
-				AND b.option_value < %d",
-				$wpdb->esc_like( '_transient_' ) . '%',
-				$wpdb->esc_like( '_transient_timeout_' ) . '%',
-				$time
-			)
-		);
+		do {
+			$wpdb->last_error = '';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup.
+			$ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT a.option_name FROM $wpdb->options a
+					INNER JOIN $wpdb->options b ON b.option_name = CONCAT( '_transient_timeout_', SUBSTRING( a.option_name, 12 ) )
+					WHERE a.option_name LIKE %s
+					AND a.option_name NOT LIKE %s
+					AND b.option_value < %d
+					LIMIT %d",
+					$wpdb->esc_like( '_transient_' ) . '%',
+					$wpdb->esc_like( '_transient_timeout_' ) . '%',
+					$time,
+					$batch
+				)
+			);
 
-		return $result;
+			if ( ! empty( $wpdb->last_error ) ) {
+				return false;
+			}
+
+			$ids_count = is_array( $ids ) ? count( $ids ) : 0;
+			if ( 0 === $ids_count ) {
+				break;
+			}
+
+			// For each transient, we need to delete both the data and the timeout.
+			$to_delete = array();
+			foreach ( $ids as $name ) {
+				$to_delete[] = $name;
+				$to_delete[] = '_transient_timeout_' . substr( $name, 11 );
+			}
+
+			$placeholders = implode( ',', array_fill( 0, count( $to_delete ), '%s' ) );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$result = $wpdb->query(
+				$wpdb->prepare(
+					"DELETE FROM $wpdb->options WHERE option_name IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					...$to_delete
+				)
+			);
+
+			if ( false === $result ) {
+				return false;
+			}
+
+			$deleted += (int) $result;
+		} while ( $ids_count === $batch );
+
+		return $deleted;
 	}
 
 	/**
@@ -435,24 +463,46 @@ class Database_Cleanup {
 	public static function clean_orphan_postmeta() {
 		global $wpdb;
 		$deleted = 0;
+		$batch   = 5000;
 
 		do {
 			$wpdb->last_error = '';
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup and caching is not required for one-off delete operations.
+			// Step 1: Collect IDs of orphaned meta.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$ids = $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT pm.meta_id FROM $wpdb->postmeta pm
+					LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
+					WHERE p.ID IS NULL LIMIT %d",
+					$batch
+				)
+			);
+
+			if ( ! empty( $wpdb->last_error ) ) {
+				return false;
+			}
+
+			$ids_count = is_array( $ids ) ? count( $ids ) : 0;
+			if ( 0 === $ids_count ) {
+				break;
+			}
+
+			// Step 2: Delete collected IDs.
+			$placeholders = implode( ',', array_fill( 0, $ids_count, '%d' ) );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$result = $wpdb->query(
-				"DELETE pm FROM $wpdb->postmeta pm
-				LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
-				WHERE p.ID IS NULL LIMIT 5000"
+				$wpdb->prepare(
+					"DELETE FROM $wpdb->postmeta WHERE meta_id IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					...$ids
+				)
 			);
 
 			if ( false === $result ) {
 				return false;
 			}
 
-			if ( $result > 0 ) {
-				$deleted += $result;
-			}
-		} while ( $result > 0 );
+			$deleted += (int) $result;
+		} while ( $ids_count === $batch );
 
 		return $deleted;
 	}

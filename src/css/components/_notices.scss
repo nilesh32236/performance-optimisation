@@ -30,26 +30,26 @@
 	}
 
 	&--error {
-		background: #fef2f2;
-		border-color: #fecaca;
+		background: var(--wppo-error-bg);
+		border-color: var(--wppo-error-border);
 		color: #991b1b;
 	}
 
 	&--warning {
-		background: #fffbeb;
-		border-color: #fef3c7;
+		background: var(--wppo-warning-bg);
+		border-color: var(--wppo-warning-border);
 		color: #92400e;
 	}
 
 	&--success {
-		background: #ecfdf5;
-		border-color: #d1fae5;
+		background: var(--wppo-success-bg);
+		border-color: var(--wppo-success-border);
 		color: #065f46;
 	}
 
 	&--info {
-		background: #f0f9ff;
-		border-color: #bae6fd;
+		background: var(--wppo-info-bg);
+		border-color: var(--wppo-info-border);
 		color: #075985;
 	}
 }

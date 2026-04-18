@@ -95,11 +95,16 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$this->redis_connected = true;
 
 				// Standalone replica support.
-				if ( 'standalone' === ( $config['mode'] ?? 'standalone' ) && isset( $config['replicas'] ) && is_array( $config['replicas'] ) && ! empty( $config['replicas'] ) ) {
-					$replica = $config['replicas'][ array_rand( $config['replicas'] ) ];
-					$r_host  = $replica['host'] ?? '127.0.0.1';
-					$r_port  = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
-					$r_pass  = $replica['password'] ?? $password;
+				if ( 'standalone' === ( $config['mode'] ?? 'standalone' )
+					&& ! empty( $config['replicas'] )
+					&& is_array( $config['replicas'] )
+				) {
+					$replica_key = array_rand( $config['replicas'] );
+					$replica     = $config['replicas'][ $replica_key ];
+
+					$r_host = $replica['host'] ?? '127.0.0.1';
+					$r_port = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
+					$r_pass = $replica['password'] ?? $password;
 					try {
 						$tmp_replica = new \Redis();
 						if ( $use_tls && strpos( $r_host, 'tls://' ) !== 0 ) {

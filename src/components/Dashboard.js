@@ -278,8 +278,7 @@ const Dashboard = ( { activities } ) => {
 							isLoading={ loading.optimize_images }
 							disabled={
 								bgProcessing ||
-								( ! pending.webp?.length &&
-									! pending.avif?.length )
+								( ! pending.webp && ! pending.avif )
 							}
 							label="Optimize All"
 							loadingLabel="Optimizing..."
@@ -350,10 +349,17 @@ const Dashboard = ( { activities } ) => {
 						<div className="wppo-progress-header">
 							<span>WebP Generation</span>
 							<span>
-								{ completed.webp?.length || 0 } / { totalWebP }
+								{ completed.webp || 0 } / { totalWebP }
 							</span>
 						</div>
-						<div className="wppo-progress-bar">
+						<div
+							className="wppo-progress-bar"
+							role="progressbar"
+							aria-valuemin="0"
+							aria-valuemax="100"
+							aria-valuenow={ Math.round( webpPercent ) }
+							aria-label="WebP conversion progress"
+						>
 							<div
 								className="wppo-progress-bar__fill"
 								style={ { width: `${ webpPercent }%` } }
@@ -365,10 +371,17 @@ const Dashboard = ( { activities } ) => {
 						<div className="wppo-progress-header">
 							<span>AVIF Generation</span>
 							<span>
-								{ completed.avif?.length || 0 } / { totalAvif }
+								{ completed.avif || 0 } / { totalAvif }
 							</span>
 						</div>
-						<div className="wppo-progress-bar">
+						<div
+							className="wppo-progress-bar"
+							role="progressbar"
+							aria-valuemin="0"
+							aria-valuemax="100"
+							aria-valuenow={ Math.round( avifPercent ) }
+							aria-label="AVIF conversion progress"
+						>
 							<div
 								className="wppo-progress-bar__fill"
 								style={ { width: `${ avifPercent }%` } }
@@ -441,7 +454,9 @@ const Dashboard = ( { activities } ) => {
 					'Remove Optimized Images'
 				}
 				message="This will delete all optimized WebP and AVIF copies. Original images will not be affected."
-				confirmLabel={ wppoSettings.translations.Delete || 'Delete' }
+				confirmLabel={
+					wppoSettings.translations[ 'Delete' ] || 'Delete'
+				}
 				variant="danger"
 			/>
 		</div>

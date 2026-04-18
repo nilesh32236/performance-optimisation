@@ -22,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *     @type int    $port        Redis port.
  *     @type string $password    Redis password.
  *     @type int    $database    Redis database ID.
- *     @type array|string $nodes       List of nodes for cluster/sentinel. String values may be comma- or newline-delimited lists of host:port entries.
+ *     @type array|string $nodes       List of nodes for cluster/sentinel. May be an array or a string using comma, semicolon, or whitespace delimiters (e.g., "host:port, host2:port2;host3:port3\nhost4:port4"). Arbitrary whitespace around entries is allowed.
  *     @type string $master_name Master name for sentinel.
  *     @type bool   $use_tls     Whether to use TLS.
  *     @type bool   $persistent  Whether to use persistent connections.
@@ -221,11 +221,15 @@ function wppo_apply_redis_options( $redis, $config ) {
  */
 function wppo_parse_nodes( $nodes ) {
 	if ( is_string( $nodes ) ) {
-		$split = preg_split( '/[\s,;]+/', $nodes );
-		if ( false === $split ) {
+		$nodes = preg_split( '/[\s,;]+/', $nodes );
+		if ( false === $nodes ) {
 			return array();
 		}
-		return array_values( array_filter( array_map( 'trim', $split ) ) );
 	}
-	return array_values( (array) $nodes );
+
+	if ( is_array( $nodes ) ) {
+		return array_values( array_filter( array_map( 'trim', $nodes ) ) );
+	}
+
+	return array();
 }

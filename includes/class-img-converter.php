@@ -110,14 +110,30 @@ class Img_Converter {
 			return false;
 		}
 
-		if ( ! file_exists( $source_image ) ) {
+		if ( ! file_exists( $source_image ) || ! is_readable( $source_image ) ) {
 			$this->update_conversion_status( $source_image, 'failed', $format );
 			return false;
 		}
 
-		$image_info = getimagesize( $source_image );
+		// Security Fix: Prevent File Size & Memory Bomb DoS.
+		// Hard reject files over 20MB directly before attempting to load them.
+		if ( filesize( $source_image ) > 20 * 1024 * 1024 ) {
+			$this->update_conversion_status( $source_image, 'failed', $format );
+			return false;
+		}
+
+		// getimagesize() parses the headers without decoding pixel data into memory.
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		$image_info = @getimagesize( $source_image );
 
 		if ( empty( $image_info ) ) {
+			$this->update_conversion_status( $source_image, 'failed', $format );
+			return false;
+		}
+
+		// Security Fix: Prevent Dimension memory crash limits (max 5000 x 5000).
+		if ( $image_info[0] > 5000 || $image_info[1] > 5000 ) {
+			error_log( 'WPPO Error: Image dimensions too large for optimization - ' . $source_image ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			$this->update_conversion_status( $source_image, 'failed', $format );
 			return false;
 		}
@@ -347,8 +363,7 @@ class Img_Converter {
 		$normalized_source = wp_normalize_path( $source_image );
 		$is_already_local  = path_is_absolute( $normalized_source ) && (
 			strpos( $normalized_source, wp_normalize_path( ABSPATH ) ) === 0 ||
-			strpos( $normalized_source, wp_normalize_path( WP_CONTENT_DIR ) ) === 0 ||
-			is_file( $source_image )
+			strpos( $normalized_source, wp_normalize_path( WP_CONTENT_DIR ) ) === 0
 		);
 
 		if ( $is_already_local ) {

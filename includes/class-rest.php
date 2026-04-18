@@ -491,21 +491,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			);
 
 			$method  = $method_map[ $type ];
-			$deleted = Database_Cleanup::$method();
+			$deleted = Database_Cleanup::invoke_cleanup_method( $method );
+
+			if ( is_wp_error( $deleted ) ) {
+				return $this->send_response( null, false, 500, $deleted->get_error_message() );
+			}
 
 			new Log(
 				sprintf(
 					/* translators: %1$s: Cleanup type, %2$d: Number of items */
 					__( 'Database cleanup (%1$s): %2$d items removed on ', 'performance-optimisation' ),
 					$type,
-					$deleted
+					(int) $deleted
 				)
 			);
 
 			return $this->send_response(
 				array(
 					'type'    => $type,
-					'deleted' => $deleted,
+					'deleted' => (int) $deleted,
 				)
 			);
 		}

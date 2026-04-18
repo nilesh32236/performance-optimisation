@@ -64,17 +64,32 @@ const ImageOptimization = ( { options = {} } ) => {
 		}
 		setIsLoading( true );
 		try {
-			await apiCall( 'update_settings', {
+			const res = await apiCall( 'update_settings', {
 				tab: 'image_optimisation',
 				settings,
 			} );
-			setNotification( {
-				type: 'success',
-				message: __(
-					'Settings saved successfully.',
-					'performance-optimisation'
-				),
-			} );
+
+			if ( res.success ) {
+				setNotification( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Settings saved successfully.',
+							'performance-optimisation'
+						),
+				} );
+			} else {
+				setNotification( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'Error saving settings.',
+							'performance-optimisation'
+						),
+				} );
+			}
 		} catch ( error ) {
 			setNotification( {
 				type: 'error',
@@ -90,14 +105,17 @@ const ImageOptimization = ( { options = {} } ) => {
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
-				title="Image Optimization"
-				description="Optimize media delivery with advanced lazy loading, next-gen formats, and preloading rules."
+				title={ __( 'Image Optimization', 'performance-optimisation' ) }
+				description={ __(
+					'Optimize media delivery with advanced lazy loading, next-gen formats, and preloading rules.',
+					'performance-optimisation'
+				) }
 				actions={
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"
 						isLoading={ isLoading }
 						onClick={ onSubmit }
-						label="Save Settings"
+						label={ __( 'Save Settings', 'performance-optimisation' ) }
 					/>
 				}
 			/>

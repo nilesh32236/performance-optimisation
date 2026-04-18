@@ -68,9 +68,14 @@
 		color: var(--wppo-primary);
 	}
 
-	&.active, &:focus-within {
+	&.active {
 		background: var(--wppo-primary);
 		border-color: var(--wppo-primary);
 		color: #ffffff;
+	}
+
+	&:focus-within {
+		outline: 2px solid var(--wppo-primary);
+		outline-offset: 2px;
 	}
 }
