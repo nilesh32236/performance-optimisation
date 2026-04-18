@@ -27,9 +27,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Cron {
 
 	/**
-	 * Constructor function.
+	 * Register WordPress actions and filters used to schedule and run the plugin's cron jobs.
 	 *
-	 * Registers WordPress actions and filters for cron jobs.
+	 * Hooks registered:
+	 * - init → schedule_cron_jobs
+	 * - wppo_page_cron_hook, wppo_page_cron_batch → wppo_page_cron_callback
+	 * - wppo_img_conversation → img_convert_cron
+	 * - cron_schedules (filter) → add_custom_cron_interval
+	 * - wppo_generate_static_page → process_page (priority 10, 1 arg)
+	 * - wppo_database_cleanup_cron → database_cleanup_cron
 	 *
 	 * @since 1.0.0
 	 */
@@ -85,8 +91,7 @@ class Cron {
 	}
 
 	/**
-	 * Callback for the main cron job.
-	 * Processes mapped events in fixed-size batches to limit memory.
+	 * Triggers scheduling of the next batch of per-page static-generation jobs.
 	 *
 	 * @since 1.0.0
 	 */
@@ -95,7 +100,13 @@ class Cron {
 	}
 
 	/**
-	 * Schedule individual cron jobs for each page in batches.
+	 * Schedules per-page static-generation cron events in paged batches.
+	 *
+	 * Reads a persisted batch offset, queries published public post types (200 IDs),
+	 * skips pages that match configured exclude patterns, and schedules a single
+	 * 'wppo_generate_static_page' event for each remaining page with a randomized
+	 * delay up to 1800 seconds. Updates the batch offset transient and enqueues a
+	 * follow-up 'wppo_page_cron_batch' single event if not already scheduled.
 	 *
 	 * @since 1.0.0
 	 */

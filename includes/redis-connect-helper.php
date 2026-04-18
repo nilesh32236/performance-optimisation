@@ -12,24 +12,23 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Connect to Redis based on configuration.
+ * Establishes a Redis connection according to the provided configuration.
  *
  * @param array $config {
  *     Redis configuration.
  *
- *     @type string $mode        Connection mode (standalone, sentinel, cluster).
- *     @type string $host        Redis host.
- *     @type int    $port        Redis port.
- *     @type string $password    Redis password.
- *     @type int    $database    Redis database ID.
- *     @type array|string $nodes       List of nodes for cluster/sentinel. May be an array or a string using comma, semicolon, or whitespace delimiters (e.g., "host:port, host2:port2;host3:port3\nhost4:port4"). Arbitrary whitespace around entries is allowed.
- *     @type string $master_name Master name for sentinel.
- *     @type bool   $use_tls     Whether to use TLS.
- *     @type bool   $persistent  Whether to use persistent connections.
- *     @type string $compression Compression algorithm (none, lzf, zstd, lz4).
+ *     @type string          $mode        Connection mode: 'standalone', 'sentinel', or 'cluster'.
+ *     @type string          $host        Redis host for standalone mode.
+ *     @type int             $port        Redis port for standalone mode.
+ *     @type string          $password    Password for AUTH, if required.
+ *     @type int             $database    Database index to select (default 0).
+ *     @type array|string    $nodes       Nodes for cluster/sentinel. May be an array or a delimiter-separated string (commas, semicolons, or whitespace). Entries may include host:port; IPv6 with brackets is supported.
+ *     @type string          $master_name Master name for sentinel mode (default 'mymaster').
+ *     @type bool            $use_tls     Whether to use TLS for connections.
+ *     @type bool            $persistent  Use persistent connections for standalone/cluster.
+ *     @type string          $compression Compression algorithm to configure (one of: 'none', 'lzf', 'zstd', 'lz4').
  * }
- * @return \Redis|\RedisCluster|\WP_Error Connected instance or error.
- */
+ * @return \Redis|\RedisCluster|\WP_Error A connected Redis client (`Redis` or `RedisCluster`) on success, or a `WP_Error` describing the failure. */
 function wppo_redis_connect( $config ) {
 	$mode     = $config['mode'] ?? 'standalone';
 	$password = $config['password'] ?? '';
@@ -187,10 +186,15 @@ function wppo_redis_connect( $config ) {
 }
 
 /**
- * Apply performance and serialization options to a Redis client.
+ * Configure serializer and optional compression on a Redis client based on provided settings.
  *
- * @param \Redis|\RedisCluster $redis  Redis client instance.
- * @param array                $config Configuration options.
+ * Selects the igbinary serializer when available, otherwise falls back to the PHP serializer.
+ * If `$config['compression']` is set to "lzf", "zstd", or "lz4" and the corresponding phpRedis
+ * compression constant is defined, applies that compression option.
+ *
+ * @param \Redis|\RedisCluster $redis  Redis client instance to configure.
+ * @param array                $config Configuration options; recognizes `compression` which may be
+ *                                      "lzf", "zstd", "lz4", or "none".
  */
 function wppo_apply_redis_options( $redis, $config ) {
 	$serializer = defined( '\Redis::SERIALIZER_IGBINARY' ) ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP;
@@ -213,11 +217,13 @@ function wppo_apply_redis_options( $redis, $config ) {
 }
 
 /**
- * Parses a string or array of nodes into a normalized array.
+ * Normalize a string or array of Redis node specifications into a trimmed list.
+ *
+ * Accepts a string containing nodes separated by whitespace, commas, or semicolons, or an array of node strings.
  *
  * @since 1.4.0
- * @param array|string $nodes Raw nodes input.
- * @return array Normalized array of nodes.
+ * @param array|string $nodes Node specifications as a delimited string or an array of strings.
+ * @return string[] Trimmed node strings with empty entries removed; returns an empty array for unsupported input.
  */
 function wppo_parse_nodes( $nodes ) {
 	if ( is_string( $nodes ) ) {

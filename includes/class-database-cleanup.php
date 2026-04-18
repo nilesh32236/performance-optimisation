@@ -30,10 +30,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Database_Cleanup {
 
 	/**
-	 * Delete all post revisions.
+	 * Delete all post revisions from the database.
 	 *
 	 * @since 1.1.0
-	 * @return int|false Number of rows deleted, or false on error.
+	 * @return int|false The number of rows deleted, or `false` on SQL error.
 	 */
 	public static function clean_revisions() {
 		global $wpdb;
@@ -82,12 +82,14 @@ class Database_Cleanup {
 	}
 
 	/**
-	 * Delete post revisions intelligently based on limits.
+	 * Remove post revision records older than a computed cutoff while keeping the latest
+	 * revisions per parent post.
 	 *
 	 * @since 1.3.0
-	 * @param int $max_age_days Maximum age of revisions to keep in days.
-	 * @param int $keep_latest Number of latest revisions to keep per post.
-	 * @return int|false Number of rows deleted, or false on error.
+	 *
+	 * @param int $max_age_days Maximum age in days; revisions older than now - $max_age_days will be eligible for deletion.
+	 * @param int $keep_latest  Number of most recent revisions to retain per parent post.
+	 * @return int|false Number of rows deleted, or `false` on database error.
 	 */
 	public static function clean_revisions_advanced( $max_age_days = 30, $keep_latest = 5 ) {
 		global $wpdb;
@@ -177,10 +179,10 @@ class Database_Cleanup {
 	}
 
 	/**
-	 * Delete all auto-draft posts.
+	 * Remove all auto-draft posts and their associated postmeta in batched operations.
 	 *
 	 * @since 1.1.0
-	 * @return int|false Number of rows deleted, or false on error.
+	 * @return int|false Total number of posts deleted, or `false` on SQL error.
 	 */
 	public static function clean_auto_drafts() {
 		global $wpdb;
@@ -229,10 +231,12 @@ class Database_Cleanup {
 	}
 
 	/**
-	 * Delete all trashed posts.
+	 * Remove all posts with status 'trash' and their associated postmeta.
+	 *
+	 * Performs deletions in batches and returns the total number of posts deleted, or `false` if a database error occurs.
 	 *
 	 * @since 1.1.0
-	 * @return int|false Number of rows deleted, or false on error.
+	 * @return int|false Total number of posts deleted, or `false` on SQL error.
 	 */
 	public static function clean_trashed_posts() {
 		global $wpdb;
@@ -333,7 +337,7 @@ class Database_Cleanup {
 	}
 
 	/**
-	 * Delete all trashed comments.
+	 * Remove trashed comments and their comment meta from the database in batches.
 	 *
 	 * @since 1.1.0
 	 * @return int|false Number of rows deleted, or false on error.
@@ -385,12 +389,14 @@ class Database_Cleanup {
 	}
 
 	/**
-	 * Delete all expired transients.
+	 * Delete expired transients and their timeout entries from the options table.
 	 *
-	 * Removes transient option pairs where the timeout has expired.
+	 * Scans for transient data options whose corresponding `_transient_timeout_*`
+	 * value is less than the current time and removes both the data and timeout
+	 * option rows.
 	 *
 	 * @since 1.1.0
-	 * @return int|false Number of rows deleted, or false on error.
+	 * @return int|false `int` number of option rows deleted, `false` on SQL error.
 	 */
 	public static function clean_expired_transients() {
 		global $wpdb;
@@ -508,10 +514,10 @@ class Database_Cleanup {
 	}
 
 	/**
-	 * Run all cleanup operations.
+	 * Execute all defined database cleanup routines and collect their results.
 	 *
 	 * @since 1.1.0
-	 * @return array Associative array of cleanup type => rows deleted.
+	 * @return array<string, int|WP_Error> Associative array keyed by cleanup type (e.g. 'revisions', 'auto_drafts') with each value set to the number of rows deleted or a `WP_Error` instance if that cleanup failed.
 	 */
 	public static function clean_all() {
 		$methods = array(
@@ -533,10 +539,17 @@ class Database_Cleanup {
 	}
 
 	/**
-	 * Run all automated cleanup operations based on settings.
+	 * Execute configured database cleanup routines according to provided settings.
+	 *
+	 * Calls a set of cleanup methods (including advanced revision cleanup, drafts, trashed posts,
+	 * spam/trashed comments, expired transients, and orphan postmeta). If a cleanup fails,
+	 * an error is logged via the Log class.
 	 *
 	 * @since 1.3.0
-	 * @param array $settings Database cleanup settings array.
+	 *
+	 * @param array $settings Cleanup settings. Recognized keys:
+	 *                        - 'dbRevMaxAge'     (int) Maximum age in days for revision pruning (default 30).
+	 *                        - 'dbRevKeepLatest' (int) Number of latest revisions to retain per parent (default 5).
 	 */
 	public static function auto_clean( $settings ) {
 		$max_age = isset( $settings['dbRevMaxAge'] ) ? (int) $settings['dbRevMaxAge'] : 30;
@@ -566,12 +579,14 @@ class Database_Cleanup {
 	}
 
 	/**
-	 * Get counts for all cleanup types.
+	 * Get current counts for each database cleanup category.
 	 *
-	 * Returns the number of items that can be cleaned for each type.
+	 * Returns an associative array keyed by cleanup type with integer counts for:
+	 * `revisions`, `auto_drafts`, `trashed_posts`, `spam_comments`, `trashed_comments`,
+	 * `expired_transients`, and `orphan_postmeta`.
 	 *
 	 * @since 1.1.0
-	 * @return array Associative array of cleanup type => count.
+	 * @return array<string,int> Associative array mapping cleanup type to its current count.
 	 */
 	public static function get_counts() {
 		global $wpdb;
@@ -612,12 +627,12 @@ class Database_Cleanup {
 	}
 
 	/**
-	 * Invokes a cleanup method and wraps false results into a WP_Error.
+	 * Call a static cleanup method by name and convert a `false` result into a `WP_Error`.
 	 *
 	 * @since 1.4.0
-	 * @param string $method Method name to call.
-	 * @param mixed  ...$args Arguments for the method.
-	 * @return mixed The method result or WP_Error on failure.
+	 * @param string $method The static method name to invoke.
+	 * @param mixed  ...$args Arguments forwarded to the method.
+	 * @return mixed The invoked method's return value, or a `WP_Error` if the method returned `false`.
 	 */
 	private static function invoke_cleanup_method( $method, ...$args ) {
 		$res = self::$method( ...$args );

@@ -90,12 +90,14 @@ class Img_Converter {
 	}
 
 	/**
-	 * Convert an image to WebP or AVIF format.
+	 * Convert a source image into WebP and/or AVIF and record conversion status.
 	 *
-	 * @param string $source_image Path to the source image.
-	 * @param string $format The desired format ('webp' or 'avif').
-	 * @param int    $quality Quality level of the converted image (0-100).
-	 * @return bool True on success, false on failure.
+	 * Attempts to create converted files for the requested format(s) and updates the plugin's conversion status store (`wppo_img_info`) to reflect `pending`, `completed`, or `failed` outcomes.
+	 *
+	 * @param string $source_image Filesystem path to the source image.
+	 * @param string $format One of 'webp', 'avif', or 'both' indicating desired target format(s).
+	 * @param int    $quality Quality for the converted image (0-100). Use -1 to let underlying library choose defaults.
+	 * @return bool `true` if the conversion(s) for the requested format(s) completed successfully, `false` otherwise.
 	 * @since 1.0.0
 	 */
 	public function convert_image( string $source_image, string $format = 'webp', int $quality = -1 ): bool {
@@ -352,11 +354,17 @@ class Img_Converter {
 
 
 	/**
-	 * Get the WebP file path.
+	 * Compute the filesystem path where a converted image (WebP or AVIF) should be stored.
 	 *
-	 * @param string $source_image The source image path.
-	 * @param string $format The desired format ('webp' or 'avif').
-	 * @return string The path where the converted image will be saved.
+	 * If the source refers to a known local file or can be resolved to one, the returned path
+	 * is the same directory and filename with the extension replaced by the requested format,
+	 * and rewritten under the plugin's `wppo` directory when the file is inside WP_CONTENT_DIR.
+	 * If the source cannot be resolved to a safe local path, the original source string is returned.
+	 *
+	 * @param string $source_image Absolute filesystem path or URL of the source image.
+	 * @param string $format Desired output format; typically 'webp' or 'avif'.
+	 * @return string Filesystem path where the converted image should be saved, or the original
+	 *                $source_image if a safe local path cannot be determined.
 	 * @since 1.0.0
 	 */
 	public static function get_img_path( string $source_image, string $format = 'webp' ): string {

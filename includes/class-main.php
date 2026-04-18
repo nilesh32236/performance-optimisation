@@ -719,7 +719,12 @@ class Main {
 	}
 
 	/**
-	 * Removes WooCommerce-related scripts and styles based on settings.
+	 * Dequeues configured WooCommerce CSS and JS handles unless the current URL is excluded.
+	 *
+	 * Reads `file_optimisation.excludeUrlToKeepJSCSS` and, if the current front-end URL matches any entry
+	 * (exact match or prefix match when an entry contains the `(.*)` suffix), preserves scripts/styles.
+	 * Otherwise reads `file_optimisation.removeCssJsHandle` and dequeues each entry prefixed with
+	 * `style:` (dequeues a style handle) or `script:` (dequeues a script handle).
 	 *
 	 * @since 1.0.0
 	 */

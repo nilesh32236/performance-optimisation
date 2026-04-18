@@ -310,10 +310,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Applies CDN rewriting to the provided HTML buffer.
+		 * Rewrite local asset URLs in HTML to use the configured CDN for wp-content and wp-includes resources.
 		 *
-		 * @param string $buffer The HTML content.
-		 * @return string The modified HTML content.
+		 * Scans img, script, link, source, and video tags and replaces attribute values that start with the site URL
+		 * and contain `/wp-content/` or `/wp-includes/`. The attributes handled are `src`, `href`, `data-src`,
+		 * `srcset`, and `data-srcset`. If no CDN is configured or `\WP_HTML_Tag_Processor` is unavailable, the
+		 * buffer is returned unchanged.
+		 *
+		 * @param string $buffer The HTML content to process.
+		 * @return string The HTML with applicable asset URLs rewritten to the CDN, or the original HTML if no changes were made.
 		 *
 		 * @since 1.2.0
 		 */

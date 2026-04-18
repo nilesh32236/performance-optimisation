@@ -46,7 +46,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.0.0
 		 * @return array Registered routes.
 		 */
-		private function get_routes() {
+		private /**
+		 * Provide the REST route definitions used when registering this class's endpoints.
+		 *
+		 * Each array entry maps a route slug to its registration configuration including
+		 * HTTP methods, the callback handler, and the permission callback.
+		 *
+		 * @return array<string, array> Associative array of route slugs to route configuration arrays.
+		 */
+		function get_routes() {
 			return array(
 				'clear_cache'             => array(
 					'methods'             => 'POST',
@@ -429,7 +437,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.1.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function database_cleanup( \WP_REST_Request $request ) {
+		public /**
+		 * Perform database cleanup for the requested cleanup type.
+		 *
+		 * Accepts a request param `type` (one of: `revisions`, `auto_drafts`, `trashed_posts`,
+		 * `spam_comments`, `trashed_comments`, `expired_transients`, `orphan_postmeta`, `all`)
+		 * and executes the corresponding cleanup operation.
+		 *
+		 * @param \WP_REST_Request $request REST request containing the `type` parameter.
+		 * @return \WP_REST_Response On success:
+		 *                           - For `all`: response with `results` (per-cleanup results) and `deleted` (total deleted).
+		 *                           - For specific types: response with `type` and `deleted` (number deleted).
+		 *                           On invalid `type`: 400 response with an error message.
+		 *                           On partial or total failure when `type` is `all`: 500 response with `failures` and `deleted`.
+		 *                           On failure of a specific cleanup method: 500 response with the error message.
+		 */
+		function database_cleanup( \WP_REST_Request $request ) {
 			$params = $request->get_params();
 			$type   = isset( $params['type'] ) ? sanitize_text_field( $params['type'] ) : '';
 
@@ -725,7 +748,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @param mixed $nodes The nodes to sanitize.
 		 * @return array|string Sanitized nodes.
 		 */
-		private function sanitize_nodes( $nodes ) {
+		private /**
+		 * Normalize and sanitize Redis node entries into an indexed array of non-empty strings.
+		 *
+		 * When given an array, each element is sanitized, empty values are removed, and the result is reindexed.
+		 * When given a scalar, it is cast to string, sanitized, and returned as a single-element array if non-empty.
+		 *
+		 * @param string|array $nodes Node or list of nodes to sanitize and normalize.
+		 * @return string[] An indexed array of sanitized, non-empty node strings. */
+		function sanitize_nodes( $nodes ) {
 			if ( is_array( $nodes ) ) {
 				return array_values( array_filter( array_map( 'sanitize_text_field', $nodes ) ) );
 			}
@@ -739,7 +770,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.4.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function get_nonce() {
+		public /**
+		 * Generate a REST API nonce for the current logged-in user.
+		 *
+		 * @return WP_REST_Response A response with `data` containing an array: `['nonce' => string]`.
+		 */
+		function get_nonce() {
 			return $this->send_response(
 				array(
 					'nonce' => wp_create_nonce( 'wp_rest' ),

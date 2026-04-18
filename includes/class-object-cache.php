@@ -58,9 +58,17 @@ class Object_Cache {
 	}
 
 	/**
-	 * Get the status of the object cache.
+	 * Retrieve current status of the object cache and Redis connectivity.
 	 *
-	 * @return array Status information.
+	 * Returns an associative array with keys:
+	 * - `enabled`: `true` if the plugin's drop-in is installed.
+	 * - `redis_missing`: `true` if the PHP `Redis` extension is not available.
+	 * - `redis_reachable`: `true` if a Redis connection can be established.
+	 * - `foreign_dropin`: `true` if an existing `object-cache.php` without the plugin marker was found.
+	 * - `telemetry` (optional): array of Redis information (redis_version, uptime_in_seconds, uptime_in_days, connected_clients, used_memory_human, used_memory_peak_human, total_connections_received, keyspace_hits, keyspace_misses, keys).
+	 * - `telemetry_error` (optional): error message when telemetry collection failed.
+	 *
+	 * @return array The status array described above.
 	 */
 	public function get_status() {
 		$status = array(
@@ -181,10 +189,13 @@ class Object_Cache {
 
 
 	/**
-	 * Enable the Object Cache by writing the config and copying the drop-in.
+	 * Install the Redis object-cache drop-in by writing the plugin config and copying the drop-in into place.
 	 *
-	 * @param array $config Connection configuration.
-	 * @return bool|\WP_Error True on success, WP_Error on failure.
+	 * May return a WP_Error for conditions such as missing PHP Redis extension, presence of a foreign drop-in,
+	 * or failures writing or copying files.
+	 *
+	 * @param array $config Connection configuration used to generate the Redis config file.
+	 * @return bool|\WP_Error `true` on success, `WP_Error` on failure (possible error codes: `missing_extension`, `foreign_dropin`, `write_error`).
 	 */
 	public function enable( $config ) {
 		if ( ! class_exists( 'Redis' ) ) {
