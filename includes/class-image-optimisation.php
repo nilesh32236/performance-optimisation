@@ -288,7 +288,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return $img_url;
 		}
 
-		/ **
+		/**
 		 * Determine whether a string is a syntactically valid URL.
 		 *
 		 * @param string $url The URL to validate.
@@ -601,8 +601,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 1.0.0
 		 *
-		 * @param string $img_tag       The original <img> tag HTML.
-		 * @param string $original_src  The original value of the image `src` attribute.
+		 * @param string   $img_tag       The original <img> tag HTML.
+		 * @param string   $original_src  The original value of the image `src` attribute.
 		 * @param string[] $exclude_imgs Array of URL substrings; if any is found in `$original_src` the image is treated as excluded.
 		 * @return string The modified <img> tag.
 		 */
@@ -795,8 +795,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 1.0.0
 		 *
-		 * @param string $iframe_tag   The original `<iframe>` tag HTML.
-		 * @param string $original_src The original `src` attribute value (absolute or relative URL).
+		 * @param string   $iframe_tag   The original `<iframe>` tag HTML.
+		 * @param string   $original_src The original `src` attribute value (absolute or relative URL).
 		 * @param string[] $exclude_imgs List of substrings; if any appear in `$original_src` the tag is left unchanged.
 		 * @return string The modified `<iframe>` tag HTML.
 		 */
@@ -969,7 +969,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 		}
 
-		/ **
+		/**
 		 * Transforms <picture>, <img>, and <iframe> elements in the provided HTML to enable lazy loading and delayed loading based on the image_optimisation options.
 		 *
 		 * Applies exclusions derived from the options (including preload-selected images and the first N images specified by `excludeFirstImages`) and rewrites matched tags to use data-* attributes and lazy classes when appropriate.

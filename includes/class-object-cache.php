@@ -25,7 +25,8 @@ class Object_Cache {
 	 *
 	 * @var string
 	 */
-	public const DROPIN_MARKER = 'Redis Object Cache Drop-in for Performance Optimisation';
+	public const DROPIN_MARKER        = 'Redis Object Cache Drop-in for Performance Optimisation';
+	public const LEGACY_DROPIN_MARKER = 'Redis Object Cache Drop-in';
 
 	/**
 	 * Path to the object cache drop-in.
@@ -83,7 +84,7 @@ class Object_Cache {
 
 			if ( $wp_filesystem ) {
 				$content = $wp_filesystem->get_contents( $this->dropin_path );
-				if ( false !== strpos( $content, self::DROPIN_MARKER ) ) {
+				if ( false !== strpos( $content, self::DROPIN_MARKER ) || false !== strpos( $content, self::LEGACY_DROPIN_MARKER ) ) {
 					$status['enabled'] = true;
 				} else {
 					$status['foreign_dropin'] = true;

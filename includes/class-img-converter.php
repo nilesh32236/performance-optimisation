@@ -118,8 +118,10 @@ class Img_Converter {
 		}
 
 		// Security Fix: Prevent File Size & Memory Bomb DoS.
-		// Hard reject files over 20MB directly before attempting to load them.
-		if ( filesize( $source_image ) > 20 * 1024 * 1024 ) {
+		$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
+		if ( filesize( $source_image ) > $max_bytes ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( sprintf( 'WPPO Error: Image filesize (%d bytes) exceeds limit (%d bytes) - %s', filesize( $source_image ), $max_bytes, $source_image ) );
 			$this->update_conversion_status( $source_image, 'failed', $format );
 			return false;
 		}
@@ -133,9 +135,17 @@ class Img_Converter {
 			return false;
 		}
 
-		// Security Fix: Prevent Dimension memory crash limits (max 5000 x 5000).
-		if ( $image_info[0] > 5000 || $image_info[1] > 5000 ) {
-			error_log( 'WPPO Error: Image dimensions too large for optimization - ' . $source_image ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		// Security Fix: Prevent Dimension memory crash limits.
+		$max_dims = apply_filters(
+			'wppo_max_dimensions',
+			array(
+				'width'  => 5000,
+				'height' => 5000,
+			)
+		);
+		if ( $image_info[0] > $max_dims['width'] || $image_info[1] > $max_dims['height'] ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( sprintf( 'WPPO Error: Image dimensions (%dx%d) exceed limits (%dx%d) - %s', $image_info[0], $image_info[1], $max_dims['width'], $max_dims['height'], $source_image ) );
 			$this->update_conversion_status( $source_image, 'failed', $format );
 			return false;
 		}
@@ -386,11 +396,11 @@ class Img_Converter {
 				$content_url = untrailingslashit( content_url() );
 				$local_base  = wp_normalize_path( ABSPATH );
 
-				if ( strpos( $source_image, $home_url ) === 0 ) {
-					$relative_path = str_replace( $home_url, '', $source_image );
-				} elseif ( strpos( $source_image, $content_url ) === 0 ) {
-					$relative_path = str_replace( $content_url, '', $source_image );
+				if ( strpos( $source_image, $content_url ) === 0 ) {
+					$relative_path = substr( $source_image, strlen( $content_url ) );
 					$local_base    = wp_normalize_path( WP_CONTENT_DIR );
+				} elseif ( strpos( $source_image, $home_url ) === 0 ) {
+					$relative_path = substr( $source_image, strlen( $home_url ) );
 				} else {
 					$relative_path = $source_image;
 				}
@@ -413,7 +423,8 @@ class Img_Converter {
 
 		// Replace extension.
 		$info       = pathinfo( $local_path );
-		$local_path = wp_normalize_path( $info['dirname'] . '/' . $info['filename'] . '.' . $format );
+		$dirname    = isset( $info['dirname'] ) ? $info['dirname'] : dirname( $local_path );
+		$local_path = wp_normalize_path( $dirname . '/' . $info['filename'] . '.' . $format );
 
 		// Adjust for the wppo directory inside wp-content.
 		$wp_content_path = wp_normalize_path( WP_CONTENT_DIR );

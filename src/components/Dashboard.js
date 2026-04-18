@@ -454,9 +454,7 @@ const Dashboard = ( { activities } ) => {
 					'Remove Optimized Images'
 				}
 				message="This will delete all optimized WebP and AVIF copies. Original images will not be affected."
-				confirmLabel={
-					wppoSettings.translations[ 'Delete' ] || 'Delete'
-				}
+				confirmLabel={ wppoSettings.translations.Delete || 'Delete' }
 				variant="danger"
 			/>
 		</div>

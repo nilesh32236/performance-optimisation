@@ -339,7 +339,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$tags = new \WP_HTML_Tag_Processor( $buffer );
 
 			while ( $tags->next_tag() ) {
-				$tag_name = $tags->get_tag_name();
+				$tag_name = strtolower( $tags->get_tag() );
 				if ( ! in_array( $tag_name, array( 'img', 'script', 'link', 'source', 'video' ), true ) ) {
 					continue;
 				}

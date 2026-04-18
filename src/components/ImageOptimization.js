@@ -28,6 +28,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		conversionFormat: 'webp',
 		excludeConvertImages: '',
 		replacePlaceholderWithSVG: false,
+		preloadFrontPageImages: false,
 		preloadFrontPageImagesUrls: '',
 		preloadPostTypeImage: false,
 		selectedPostType: [],
@@ -115,7 +116,10 @@ const ImageOptimization = ( { options = {} } ) => {
 						className="wppo-button wppo-button--primary"
 						isLoading={ isLoading }
 						onClick={ onSubmit }
-						label={ __( 'Save Settings', 'performance-optimisation' ) }
+						label={ __(
+							'Save Settings',
+							'performance-optimisation'
+						) }
 					/>
 				}
 			/>
@@ -344,21 +348,43 @@ const ImageOptimization = ( { options = {} } ) => {
 			>
 				<div className="wppo-grid-2-col">
 					<div>
-						<label
-							className="wppo-field-label"
-							htmlFor="preloadFrontPageImagesUrls"
-						>
-							Preload Frontpage URLs
-						</label>
-						<textarea
-							className="wppo-textarea"
-							id="preloadFrontPageImagesUrls"
-							name="preloadFrontPageImagesUrls"
-							rows="4"
-							placeholder="URLs (one per line)"
-							value={ settings.preloadFrontPageImagesUrls }
+						<SwitchField
+							label={ __(
+								'Preload Front Page Images',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Load critical images on your homepage early.',
+								'performance-optimisation'
+							) }
+							name="preloadFrontPageImages"
+							checked={ settings.preloadFrontPageImages }
 							onChange={ handleChange( setSettings ) }
 						/>
+						{ settings.preloadFrontPageImages && (
+							<div className="wppo-field wppo-mt-12">
+								<label
+									className="wppo-field-label"
+									htmlFor="preloadFrontPageImagesUrls"
+								>
+									{ __(
+										'Frontpage URLs to Preload',
+										'performance-optimisation'
+									) }
+								</label>
+								<textarea
+									className="wppo-textarea"
+									id="preloadFrontPageImagesUrls"
+									name="preloadFrontPageImagesUrls"
+									rows="3"
+									placeholder="URLs (one per line)"
+									value={
+										settings.preloadFrontPageImagesUrls
+									}
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+						) }
 					</div>
 					<div>
 						<SwitchField
@@ -370,7 +396,7 @@ const ImageOptimization = ( { options = {} } ) => {
 						/>
 						{ settings.preloadPostTypeImage && (
 							<>
-								<div className="wppo-post-types-grid">
+								<div className="wppo-post-types-grid--chips">
 									{ settings.availablePostTypes.map(
 										( type ) => (
 											<label

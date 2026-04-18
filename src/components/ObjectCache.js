@@ -16,7 +16,9 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 
-const translations = ( typeof wppoSettings !== 'undefined' ? wppoSettings.translations : {} ) || {};
+const translations =
+	( typeof wppoSettings !== 'undefined' ? wppoSettings.translations : {} ) ||
+	{};
 
 const ObjectCache = ( { options = {} } ) => {
 	const defaultSettings = {
@@ -260,7 +262,8 @@ const ObjectCache = ( { options = {} } ) => {
 						</span>
 						<span className="wppo-text-muted">
 							Total:{ ' ' }
-							{ cacheStatus.telemetry?.total_connections_received || 0 }
+							{ cacheStatus.telemetry
+								?.total_connections_received || 0 }
 						</span>
 					</div>
 					<div className="wppo-stat-item">

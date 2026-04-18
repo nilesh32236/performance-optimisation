@@ -128,6 +128,10 @@ class Database_Cleanup {
 				)
 			);
 
+			if ( null === $revisions || ! empty( $wpdb->last_error ) ) {
+				continue;
+			}
+
 			// Keep the latest X revisions; dump others onto our purge list.
 			$older_revisions = array_slice( $revisions, $keep_latest );
 
@@ -156,7 +160,6 @@ class Database_Cleanup {
 				);
 
 				if ( false === $meta_deleted ) {
-					error_log( sprintf( 'WPPO Database Cleanup: Failed to delete postmeta for posts: %s. Error: %s', implode( ',', $chunk ), $wpdb->last_error ) );
 					return false;
 				}
 
@@ -169,6 +172,10 @@ class Database_Cleanup {
 						...$chunk
 					)
 				);
+
+				if ( false === $result ) {
+					return false;
+				}
 
 				if ( $result ) {
 					$deleted += $result;
@@ -634,7 +641,7 @@ class Database_Cleanup {
 	 * @param mixed  ...$args Arguments forwarded to the method.
 	 * @return mixed The invoked method's return value, or a `WP_Error` if the method returned `false`.
 	 */
-	private static function invoke_cleanup_method( $method, ...$args ) {
+	public static function invoke_cleanup_method( $method, ...$args ) {
 		$res = self::$method( ...$args );
 		if ( false === $res ) {
 			return new WP_Error( 'db_cleanup_failed', sprintf( '%s failed', $method ) );

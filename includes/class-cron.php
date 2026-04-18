@@ -112,7 +112,7 @@ class Cron {
 	 */
 	private function schedule_page_cron_jobs(): void {
 		// Persist iteration offset across runs.
-		$paged_offset = (int) get_transient( 'wppo_preload_cron_offset' );
+		$paged_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
 
 		$post_types = get_post_types( array( 'public' => true ), 'names' );
 		$post_types = array_unique( array_merge( array_values( array_diff( $post_types, array( 'attachment' ) ) ), array( 'page', 'post' ) ) );
@@ -132,7 +132,7 @@ class Cron {
 
 		if ( empty( $query_batch_posts ) ) {
 			// Reset offset on completion.
-			delete_transient( 'wppo_preload_cron_offset' );
+			delete_option( 'wppo_preload_cron_offset' );
 			return;
 		}
 
@@ -175,7 +175,7 @@ class Cron {
 		}
 
 		// Update iteration offset for the next batch.
-		set_transient( 'wppo_preload_cron_offset', $paged_offset + 200, HOUR_IN_SECONDS * 6 );
+		update_option( 'wppo_preload_cron_offset', $paged_offset + 200 );
 
 		// Schedule next batch if needed.
 		if ( ! wp_next_scheduled( 'wppo_page_cron_batch' ) ) {
@@ -207,6 +207,8 @@ class Cron {
 		}
 
 		wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
+		wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
+		delete_option( 'wppo_preload_cron_offset' );
 	}
 
 	/**

@@ -32,24 +32,24 @@
 	&--error {
 		background: var(--wppo-error-bg);
 		border-color: var(--wppo-error-border);
-		color: #991b1b;
+		color: var(--wppo-error);
 	}
 
 	&--warning {
 		background: var(--wppo-warning-bg);
 		border-color: var(--wppo-warning-border);
-		color: #92400e;
+		color: var(--wppo-warning);
 	}
 
 	&--success {
 		background: var(--wppo-success-bg);
 		border-color: var(--wppo-success-border);
-		color: #065f46;
+		color: var(--wppo-success);
 	}
 
 	&--info {
 		background: var(--wppo-info-bg);
 		border-color: var(--wppo-info-border);
-		color: #075985;
+		color: var(--wppo-info);
 	}
 }

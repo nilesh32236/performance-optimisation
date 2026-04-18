@@ -41,12 +41,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Returns the routes for the REST API.
-		 *
-		 * @since 1.0.0
-		 * @return array Registered routes.
-		 */
-		private /**
 		 * Provide the REST route definitions used when registering this class's endpoints.
 		 *
 		 * Each array entry maps a route slug to its registration configuration including
@@ -54,7 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *
 		 * @return array<string, array> Associative array of route slugs to route configuration arrays.
 		 */
-		function get_routes() {
+		private function get_routes() {
 			return array(
 				'clear_cache'             => array(
 					'methods'             => 'POST',
@@ -110,13 +104,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'handle_object_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
-				),
-				'get_nonce'               => array(
-					'methods'             => 'GET',
-					'callback'            => array( $this, 'get_nonce' ),
-					'permission_callback' => function () {
-						return is_user_logged_in();
-					},
 				),
 			);
 		}
@@ -431,13 +418,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Handles database cleanup requests.
-		 *
-		 * @param \WP_REST_Request $request The request object.
-		 * @since 1.1.0
-		 * @return \WP_REST_Response The response object.
-		 */
-		public /**
 		 * Perform database cleanup for the requested cleanup type.
 		 *
 		 * Accepts a request param `type` (one of: `revisions`, `auto_drafts`, `trashed_posts`,
@@ -452,7 +432,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *                           On partial or total failure when `type` is `all`: 500 response with `failures` and `deleted`.
 		 *                           On failure of a specific cleanup method: 500 response with the error message.
 		 */
-		function database_cleanup( \WP_REST_Request $request ) {
+		public function database_cleanup( \WP_REST_Request $request ) {
 			$params = $request->get_params();
 			$type   = isset( $params['type'] ) ? sanitize_text_field( $params['type'] ) : '';
 
@@ -513,8 +493,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'orphan_postmeta'    => 'clean_orphan_postmeta',
 			);
 
-			$method  = $method_map[ $type ];
-			$deleted = Database_Cleanup::invoke_cleanup_method( $method );
+			$method  = $method_map[ $type ] ?? null;
+			$deleted = 0;
+			switch ( $method ) {
+				case 'clean_revisions':
+					$deleted = Database_Cleanup::clean_revisions();
+					break;
+				case 'clean_auto_drafts':
+					$deleted = Database_Cleanup::clean_auto_drafts();
+					break;
+				case 'clean_trashed_posts':
+					$deleted = Database_Cleanup::clean_trashed_posts();
+					break;
+				case 'clean_spam_comments':
+					$deleted = Database_Cleanup::clean_spam_comments();
+					break;
+				case 'clean_trashed_comments':
+					$deleted = Database_Cleanup::clean_trashed_comments();
+					break;
+				case 'clean_expired_transients':
+					$deleted = Database_Cleanup::clean_expired_transients();
+					break;
+				case 'clean_orphan_postmeta':
+					$deleted = Database_Cleanup::clean_orphan_postmeta();
+					break;
+				default:
+					return $this->send_response( null, false, 400, __( 'Invalid cleanup method.', 'performance-optimisation' ) );
+			}
+
+			if ( false === $deleted ) {
+				$deleted = new \WP_Error( 'db_cleanup_failed', sprintf( '%s failed', $method ) );
+			}
 
 			if ( is_wp_error( $deleted ) ) {
 				return $this->send_response( null, false, 500, $deleted->get_error_message() );
@@ -743,20 +752,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Sanitizes the nodes parameter.
-		 *
-		 * @param mixed $nodes The nodes to sanitize.
-		 * @return array|string Sanitized nodes.
-		 */
-		private /**
 		 * Normalize and sanitize Redis node entries into an indexed array of non-empty strings.
 		 *
 		 * When given an array, each element is sanitized, empty values are removed, and the result is reindexed.
 		 * When given a scalar, it is cast to string, sanitized, and returned as a single-element array if non-empty.
 		 *
 		 * @param string|array $nodes Node or list of nodes to sanitize and normalize.
-		 * @return string[] An indexed array of sanitized, non-empty node strings. */
-		function sanitize_nodes( $nodes ) {
+		 * @return string[] An indexed array of sanitized, non-empty node strings.
+		 */
+		private function sanitize_nodes( $nodes ) {
 			if ( is_array( $nodes ) ) {
 				return array_values( array_filter( array_map( 'sanitize_text_field', $nodes ) ) );
 			}
@@ -765,18 +769,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Returns a fresh REST API nonce for the frontend.
+		 * Refreshes the REST API nonce via AJAX to bypass stale X-WP-Nonce issues.
 		 *
 		 * @since 1.4.0
-		 * @return \WP_REST_Response The response object.
+		 * @return void
 		 */
-		public /**
-		 * Generate a REST API nonce for the current logged-in user.
-		 *
-		 * @return WP_REST_Response A response with `data` containing an array: `['nonce' => string]`.
-		 */
-		function get_nonce() {
-			return $this->send_response(
+		public function ajax_get_nonce() {
+			if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+				wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'performance-optimisation' ) ), 403 );
+			}
+
+			wp_send_json_success(
 				array(
 					'nonce' => wp_create_nonce( 'wp_rest' ),
 				)

@@ -47,10 +47,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	 * @return {Promise<boolean>} Whether the refresh was successful.
 	 */
 	const refreshNonce = () => {
-		return fetch( wppoObject.apiUrl + '/get_nonce', {
-			headers: {
-				'X-WP-Nonce': wppoObject.nonce,
-			},
+		const formData = new FormData();
+		formData.append( 'action', 'wppo_get_nonce' );
+
+		return fetch( wppoObject.ajaxUrl, {
+			method: 'POST',
+			body: formData,
 		} )
 			.then( ( response ) => {
 				if ( ! response.ok ) {
@@ -87,7 +89,8 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		let dispatched = false;
 		if ( window.wp && window.wp.data ) {
 			try {
-				const noticeDispatch = window.wp.data.dispatch( 'core/notices' );
+				const noticeDispatch =
+					window.wp.data.dispatch( 'core/notices' );
 				if ( noticeDispatch && noticeDispatch.createNotice ) {
 					noticeDispatch.createNotice( type, message, {
 						isDismissible: true,

@@ -231,6 +231,8 @@ class Main {
 		add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 		add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 		add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
+
+		add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
 	}
 
 	/**
@@ -429,8 +431,9 @@ class Main {
 				'wppo-admin-bar-script',
 				'wppoObject',
 				array(
-					'apiUrl' => get_rest_url( null, 'performance-optimisation/v1' ),
-					'nonce'  => wp_create_nonce( 'wp_rest' ),
+					'apiUrl'  => get_rest_url( null, 'performance-optimisation/v1' ),
+					'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+					'nonce'   => wp_create_nonce( 'wp_rest' ),
 				)
 			);
 		}

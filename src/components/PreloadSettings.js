@@ -29,17 +29,39 @@ const PreloadSettings = ( { options = {} } ) => {
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
+	const [ notification, setNotification ] = useState( {
+		message: '',
+		success: false,
+	} );
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
-		setIsLoading( true );
+		setNotification( { message: '', success: false } );
 
 		try {
-			await apiCall( 'update_settings', {
+			const res = await apiCall( 'update_settings', {
 				tab: 'preload_settings',
 				settings,
+			} );
+
+			if ( res.success ) {
+				setNotification( {
+					message: res.message || 'Settings updated successfully.',
+					success: true,
+				} );
+			} else {
+				setNotification( {
+					message: res.message || 'Failed to update settings.',
+					success: false,
+				} );
+			}
+		} catch ( err ) {
+			console.error( 'Failed updating preload settings', err );
+			setNotification( {
+				message: 'An unexpected error occurred.',
+				success: false,
 			} );
 		} finally {
 			setIsLoading( false );
@@ -59,7 +81,17 @@ const PreloadSettings = ( { options = {} } ) => {
 						label="Save Settings"
 					/>
 				}
-			/>
+			>
+				{ notification.message && (
+					<div
+						className={ `wppo-notice wppo-notice--${
+							notification.success ? 'success' : 'error'
+						} wppo-mb-20` }
+					>
+						<span>{ notification.message }</span>
+					</div>
+				) }
+			</FeatureHeader>
 
 			<form onSubmit={ handleSubmit }>
 				<div className="wppo-grid-2-col">
