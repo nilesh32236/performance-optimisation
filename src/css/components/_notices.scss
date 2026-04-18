@@ -4,7 +4,7 @@
 	margin-bottom: 20px;
 	display: flex;
 	align-items: flex-start;
-	justify-content: space-between;
+	justify-content: flex-start;
 	gap: 10px;
 	font-size: 13.5px;
 	line-height: 1.5;
@@ -33,6 +33,7 @@
 		transition: opacity 0.15s ease;
 		flex-shrink: 0;
 		line-height: 1;
+		margin-left: auto;
 
 		&:hover {
 			opacity: 1;

@@ -30,6 +30,9 @@ const SwitchField = ( { label, description, name, checked, onChange } ) => {
 		<div className="wppo-switch-field" id={ `${ id }-wrapper` }>
 			<div className="wppo-switch-field__info">
 				<strong>{ label }</strong>
+				{ description && (
+					<p className="wppo-text-muted">{ description }</p>
+				) }
 			</div>
 			<ToggleControl
 				__nextHasNoMarginBottom
@@ -37,7 +40,6 @@ const SwitchField = ( { label, description, name, checked, onChange } ) => {
 				onChange={ handleToggle }
 				label={ label }
 				hideLabelFromVision
-				help={ description }
 			/>
 		</div>
 	);

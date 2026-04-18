@@ -639,7 +639,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// Skip base64 images to avoid rewriting them.
 					if ( ! preg_match( '#^data:image/#i', $original_src_decoded ) ) {
 						$tags->set_attribute( 'data-src', $original_src_decoded );
-						$tags->remove_attribute( 'src' );
+
+						// WP_HTML_Tag_Processor blocks data: URIs in src for security.
+						// Use regex on the serialized HTML to swap src to the SVG placeholder.
+						if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
+							$new_placeholder_src = $this->generate_svg_base64( $img_tag );
+							if ( ! empty( $new_placeholder_src ) ) {
+								$img_tag = preg_replace(
+									'#(?<!data-)src=(["\'])[^"\']*\1#i',
+									'src="' . $new_placeholder_src . '"',
+									$tags->get_updated_html(),
+									1
+								);
+								$tags    = new \WP_HTML_Tag_Processor( $img_tag );
+								$tags->next_tag( array( 'tag_name' => 'img' ) );
+							} else {
+								$tags->remove_attribute( 'src' );
+							}
+						} else {
+							$tags->remove_attribute( 'src' );
+						}
 
 						// Replace 'srcset' with 'data-srcset'.
 						$srcset = $tags->get_attribute( 'srcset' );
@@ -653,14 +672,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( $sizes ) {
 							$tags->set_attribute( 'data-sizes', $sizes );
 							$tags->remove_attribute( 'sizes' );
-						}
-
-						// Replace with SVG placeholder if the option is enabled.
-						if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
-							$new_placeholder_src = $this->generate_svg_base64( $img_tag );
-							if ( ! empty( $new_placeholder_src ) ) {
-								$tags->set_attribute( 'src', $new_placeholder_src );
-							}
 						}
 					}
 				}
