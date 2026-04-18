@@ -5,6 +5,7 @@
  * Provides a shared connection logic for both the admin dashboard and the object cache drop-in.
  *
  * @package PerformanceOptimise
+ * @since 1.4.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -28,6 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *     @type bool            $persistent  Use persistent connections for standalone/cluster.
  *     @type string          $compression Compression algorithm to configure (one of: 'none', 'lzf', 'zstd', 'lz4').
  * }
+ * @since 1.4.0
  * @return \Redis|\RedisCluster|\WP_Error A connected Redis client (`Redis` or `RedisCluster`) on success, or a `WP_Error` describing the failure. */
 function wppo_redis_connect( $config ) {
 	$mode     = $config['mode'] ?? 'standalone';
@@ -195,6 +197,7 @@ function wppo_redis_connect( $config ) {
  * @param \Redis|\RedisCluster $redis  Redis client instance to configure.
  * @param array                $config Configuration options; recognizes `compression` which may be
  *                                      "lzf", "zstd", "lz4", or "none".
+ * @since 1.4.0
  */
 function wppo_apply_redis_options( $redis, $config ) {
 	$serializer = defined( '\Redis::SERIALIZER_IGBINARY' ) ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP;

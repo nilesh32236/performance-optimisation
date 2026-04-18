@@ -25,6 +25,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 	 */
 	class Rest {
 
+
+
 		const NAMESPACE = 'performance-optimisation/v1';
 
 		/**
@@ -147,7 +149,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 				new Log(
 					sprintf(
-					/* translators: %s: The URL of the page */
+						/* translators: %s: The URL of the page */
 						__( 'Clear cache of <a href="%1$s">%2$s</a> on ', 'performance-optimisation' ),
 						esc_url( home_url( $path ) ),
 						esc_html( home_url( $path ) )
@@ -431,6 +433,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 *                           On invalid `type`: 400 response with an error message.
 		 *                           On partial or total failure when `type` is `all`: 500 response with `failures` and `deleted`.
 		 *                           On failure of a specific cleanup method: 500 response with the error message.
+		 *
+		 * @since 1.4.0
 		 */
 		public function database_cleanup( \WP_REST_Request $request ) {
 			$params = $request->get_params();
@@ -493,40 +497,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'orphan_postmeta'    => 'clean_orphan_postmeta',
 			);
 
-			$method  = $method_map[ $type ] ?? null;
-			$deleted = 0;
-			switch ( $method ) {
-				case 'clean_revisions':
-					$deleted = Database_Cleanup::clean_revisions();
-					break;
-				case 'clean_auto_drafts':
-					$deleted = Database_Cleanup::clean_auto_drafts();
-					break;
-				case 'clean_trashed_posts':
-					$deleted = Database_Cleanup::clean_trashed_posts();
-					break;
-				case 'clean_spam_comments':
-					$deleted = Database_Cleanup::clean_spam_comments();
-					break;
-				case 'clean_trashed_comments':
-					$deleted = Database_Cleanup::clean_trashed_comments();
-					break;
-				case 'clean_expired_transients':
-					$deleted = Database_Cleanup::clean_expired_transients();
-					break;
-				case 'clean_orphan_postmeta':
-					$deleted = Database_Cleanup::clean_orphan_postmeta();
-					break;
-				default:
-					return $this->send_response( null, false, 400, __( 'Invalid cleanup method.', 'performance-optimisation' ) );
+			$method = $method_map[ $type ] ?? null;
+
+			if ( ! $method ) {
+				return $this->send_response( array( 'deleted' => false ), false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
 			}
 
-			if ( false === $deleted ) {
-				$deleted = new \WP_Error( 'db_cleanup_failed', sprintf( '%s failed', $method ) );
-			}
+			$result = Database_Cleanup::invoke_cleanup_method( $method );
 
-			if ( is_wp_error( $deleted ) ) {
-				return $this->send_response( null, false, 500, $deleted->get_error_message() );
+			if ( is_wp_error( $result ) ) {
+				return $this->send_response( null, false, 500, $result->get_error_message() );
 			}
 
 			new Log(
@@ -534,14 +514,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					/* translators: %1$s: Cleanup type, %2$d: Number of items */
 					__( 'Database cleanup (%1$s): %2$d items removed on ', 'performance-optimisation' ),
 					$type,
-					(int) $deleted
+					(int) $result
 				)
 			);
 
 			return $this->send_response(
 				array(
 					'type'    => $type,
-					'deleted' => (int) $deleted,
+					'deleted' => (int) $result,
 				)
 			);
 		}
@@ -553,7 +533,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.1.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function get_database_cleanup_counts( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		public function get_database_cleanup_counts( \WP_REST_Request $_request ) {
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$counts = Database_Cleanup::get_counts();
 			return $this->send_response( $counts );
 		}
@@ -597,7 +578,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.1.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function get_image_job_status( \WP_REST_Request $_request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		public function get_image_job_status( \WP_REST_Request $_request ) {
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$img_info = Img_Converter::get_img_info();
 
 			$status = array(
@@ -638,7 +620,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Handles object cache requests (status, ping, enable, disable, flush).
 		 *
 		 * @param \WP_REST_Request $request The request object.
-		 * @since 1.3.0
+		 * @since 1.4.0
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function handle_object_cache( \WP_REST_Request $request ) {
@@ -706,6 +688,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Builds a sanitized Redis configuration array from request parameters.
 		 *
 		 * @param array $params Request parameters.
+		 * @since 1.4.0
 		 * @return array Sanitized Redis config.
 		 */
 		private function build_redis_config( $params ) {
@@ -758,6 +741,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * When given a scalar, it is cast to string, sanitized, and returned as a single-element array if non-empty.
 		 *
 		 * @param string|array $nodes Node or list of nodes to sanitize and normalize.
+		 * @since 1.4.0
 		 * @return string[] An indexed array of sanitized, non-empty node strings.
 		 */
 		private function sanitize_nodes( $nodes ) {

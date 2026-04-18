@@ -29,6 +29,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Main {
 
 
+
 	/**
 	 * List of CSS handles to exclude from combining.
 	 *
@@ -915,7 +916,7 @@ class Main {
 							$font_type = 'font/woff';
 							break;
 						case 'ttf':
-								$font_type = 'font/ttf';
+							$font_type = 'font/ttf';
 							break;
 						default:
 							$font_type = ''; // Fallback if unknown extension.
@@ -942,7 +943,7 @@ class Main {
 	}
 
 	/**
-	 * Minifies CSS files and serves them from cache.
+	 * Rewrites CSS link tags to use minified versions if they exist.
 	 *
 	 * @since 1.0.0
 	 *
@@ -972,7 +973,7 @@ class Main {
 	}
 
 	/**
-	 * Minifies JavaScript files and serves them from cache.
+	 * Rewrites script tags to use minified versions if they exist.
 	 *
 	 * @since 1.0.0
 	 *

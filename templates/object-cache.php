@@ -3,6 +3,7 @@
  * Redis Object Cache Drop-in for Performance Optimisation
  *
  * @package PerformanceOptimise
+ * @since 1.4.0
  */
 
 /**
@@ -11,6 +12,8 @@
 if ( ! class_exists( 'WP_Object_Cache' ) ) {
 	/**
 	 * WP_Object_Cache class.
+	 *
+	 * @since 1.4.0
 	 *
 	 * phpcs:disable Universal.Files.SeparateFunctionsFromOO.Mixed
 	 */

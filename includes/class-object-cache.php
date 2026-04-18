@@ -5,6 +5,7 @@
  * Handles Redis drop-in installation, removal, and testing.
  *
  * @package PerformanceOptimise
+ * @since 1.4.0
  */
 
 namespace PerformanceOptimise\Inc;
@@ -16,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Class Object_Cache
  *
- * @since 1.3.0
+ * @since 1.4.0
  */
 class Object_Cache {
 
@@ -50,7 +51,9 @@ class Object_Cache {
 	private $template_path;
 
 	/**
-	 * Constructor.
+	 * Constructor function.
+	 *
+	 * @since 1.4.0
 	 */
 	public function __construct() {
 		$this->dropin_path   = apply_filters( 'wppo_object_cache_dropin_path', WP_CONTENT_DIR . '/object-cache.php' );
@@ -69,6 +72,7 @@ class Object_Cache {
 	 * - `telemetry` (optional): array of Redis information (redis_version, uptime_in_seconds, uptime_in_days, connected_clients, used_memory_human, used_memory_peak_human, total_connections_received, keyspace_hits, keyspace_misses, keys).
 	 * - `telemetry_error` (optional): error message when telemetry collection failed.
 	 *
+	 * @since 1.4.0
 	 * @return array The status array described above.
 	 */
 	public function get_status() {
@@ -142,6 +146,7 @@ class Object_Cache {
 	/**
 	 * Internal helper to connect to Redis based on config.
 	 *
+	 * @since 1.4.0
 	 * @param array $config Configuration array.
 	 * @return \Redis|\RedisCluster|\WP_Error
 	 */
@@ -153,6 +158,7 @@ class Object_Cache {
 	/**
 	 * Ping the Redis server to test connection.
 	 *
+	 * @since 1.4.0
 	 * @param array $config Connection configuration.
 	 * @return bool|\WP_Error True if connected, WP_Error on failure.
 	 */
@@ -195,6 +201,7 @@ class Object_Cache {
 	 * May return a WP_Error for conditions such as missing PHP Redis extension, presence of a foreign drop-in,
 	 * or failures writing or copying files.
 	 *
+	 * @since 1.4.0
 	 * @param array $config Connection configuration used to generate the Redis config file.
 	 * @return bool|\WP_Error `true` on success, `WP_Error` on failure (possible error codes: `missing_extension`, `foreign_dropin`, `write_error`).
 	 */
@@ -241,8 +248,9 @@ class Object_Cache {
 
 
 	/**
-	 * Disable the Object Cache by removing the drop-in and config.
+	 * Disable the object cache by deleting the drop-in file.
 	 *
+	 * @since 1.4.0
 	 * @return bool|\WP_Error True on success, WP_Error on failure.
 	 */
 	public function disable() {
@@ -269,6 +277,7 @@ class Object_Cache {
 	/**
 	 * Flush the complete object cache.
 	 *
+	 * @since 1.4.0
 	 * @return bool
 	 */
 	public function flush() {

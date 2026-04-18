@@ -26,6 +26,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 	 */
 	class Image_Optimisation {
 
+
 		/**
 		 * Configuration options for image optimization.
 		 *
@@ -183,8 +184,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 										', ',
 										array_map(
 											function ( $srcset_item ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
-												list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
-												$new_url                  = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
+												list($url, $descriptor) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
+												$new_url                = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
 												return $new_url . ( $descriptor ? " $descriptor" : '' );
 											},
 											explode( ',', $srcset )
@@ -470,7 +471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Determines whether an image should be excluded from preloading.
+		 * Check if an image should be excluded from preloading or optimization.
 		 *
 		 * @since 1.0.0
 		 *
@@ -488,7 +489,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Processes a srcset string to determine which images to preload.
+		 * Extract candidate URLs from a srcset string and schedule them for preloading.
 		 *
 		 * @since 1.0.0
 		 *
@@ -510,8 +511,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$parsed_sources = array();
 
 			foreach ( $sources as $source ) {
-				list( $url, $descriptor ) = array_map( 'trim', explode( ' ', $source ) );
-				$width                    = (int) rtrim( $descriptor, 'w' );
+				list($url, $descriptor) = array_map( 'trim', explode( ' ', $source ) );
+				$width                  = (int) rtrim( $descriptor, 'w' );
 
 				if ( in_array( $width, $exclude_sizes, true ) || $width > $max_width ) {
 					continue;
@@ -529,7 +530,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Generates media preloads for parsed image sources.
+		 * Generate preload links for a set of parsed image sources.
 		 *
 		 * @since 1.0.0
 		 *
@@ -1093,8 +1094,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 									$parsed_sources = array();
 									foreach ( $sources as $source ) {
-										list( $url, $descriptor ) = array_map( 'trim', explode( ' ', $source ) );
-										$width                    = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
+										list($url, $descriptor) = array_map( 'trim', explode( ' ', $source ) );
+										$width                  = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
 
 										if ( in_array( (int) $width, $exclude_size, true ) ) {
 											continue;

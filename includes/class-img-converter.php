@@ -21,6 +21,7 @@ namespace PerformanceOptimise\Inc;
  */
 class Img_Converter {
 
+
 	/**
 	 * Deferred in-memory image info state.
 	 *
@@ -686,7 +687,7 @@ class Img_Converter {
 	/**
 	 * Atomically clears completed webp and avif entries from the image info option.
 	 *
-	 * @since NEXT
+	 * @since 1.4.0
 	 */
 	public static function clear_completed_formats(): void {
 		self::update_img_info_atomic(
@@ -720,7 +721,7 @@ class Img_Converter {
 	/**
 	 * Commits deferred image info state to the database on shutdown.
 	 *
-	 * @since NEXT
+	 * @since 1.4.0
 	 */
 	public static function commit_img_info(): void {
 		if ( null !== self::$deferred_img_info ) {
