@@ -27,15 +27,22 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Cron {
 
 	/**
-	 * Constructor function.
+	 * Register WordPress actions and filters used to schedule and run the plugin's cron jobs.
 	 *
-	 * Registers WordPress actions and filters for cron jobs.
+	 * Hooks registered:
+	 * - init → schedule_cron_jobs
+	 * - wppo_page_cron_hook, wppo_page_cron_batch → wppo_page_cron_callback
+	 * - wppo_img_conversation → img_convert_cron
+	 * - cron_schedules (filter) → add_custom_cron_interval
+	 * - wppo_generate_static_page → process_page (priority 10, 1 arg)
+	 * - wppo_database_cleanup_cron → database_cleanup_cron
 	 *
 	 * @since 1.0.0
 	 */
 	public function __construct() {
 		add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
 		add_action( 'wppo_page_cron_hook', array( $this, 'wppo_page_cron_callback' ) );
+		add_action( 'wppo_page_cron_batch', array( $this, 'wppo_page_cron_callback' ) );
 		add_action( 'wppo_img_conversation', array( $this, 'img_convert_cron' ) );
 		add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 
@@ -84,9 +91,7 @@ class Cron {
 	}
 
 	/**
-	 * Callback for the main cron job.
-	 *
-	 * Triggers the scheduling of individual page processing jobs.
+	 * Triggers scheduling of the next batch of per-page static-generation jobs.
 	 *
 	 * @since 1.0.0
 	 */
@@ -95,24 +100,46 @@ class Cron {
 	}
 
 	/**
-	 * Schedule individual cron jobs for each page.
+	 * Schedules per-page static-generation cron events in paged batches.
 	 *
-	 * Schedules a single event for each page to generate a static version.
+	 * Reads a persisted batch offset, queries published public post types (200 IDs),
+	 * skips pages that match configured exclude patterns, and schedules a single
+	 * 'wppo_generate_static_page' event for each remaining page with a randomized
+	 * delay up to 1800 seconds. Updates the batch offset transient and enqueues a
+	 * follow-up 'wppo_page_cron_batch' single event if not already scheduled.
 	 *
 	 * @since 1.0.0
 	 */
 	private function schedule_page_cron_jobs(): void {
-		$pages = $this->get_all_pages();
+		// Persist iteration offset across runs.
+		$paged_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
 
-		if ( empty( $pages ) ) {
+		$post_types = get_post_types( array( 'public' => true ), 'names' );
+		$post_types = array_unique( array_merge( array_values( array_diff( $post_types, array( 'attachment' ) ) ), array( 'page', 'post' ) ) );
+
+		$args = array(
+			'post_type'      => $post_types,
+			'post_status'    => 'publish',
+			// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page
+			'posts_per_page' => 200, // Process pages in batches to prevent OOM.
+			'offset'         => $paged_offset,
+			'fields'         => 'ids',
+			'orderby'        => 'ID',
+			'order'          => 'ASC',
+		);
+
+		$query_batch_posts = get_posts( $args );
+
+		if ( empty( $query_batch_posts ) ) {
+			// Reset offset on completion.
+			delete_option( 'wppo_preload_cron_offset' );
 			return;
 		}
 
-		$options = get_option( 'wppo_settings', array() );
-
+		$options      = get_option( 'wppo_settings', array() );
 		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
 
-		foreach ( $pages as $page_id ) {
+		foreach ( $query_batch_posts as $page_id ) {
 			$page_url       = get_permalink( $page_id );
 			$should_exclude = false;
 
@@ -143,8 +170,16 @@ class Cron {
 			}
 
 			if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + \wp_rand( 0, 3600 ), 'wppo_generate_static_page', array( $page_id ) );
+				wp_schedule_single_event( time() + \wp_rand( 0, 1800 ), 'wppo_generate_static_page', array( $page_id ) );
 			}
+		}
+
+		// Update iteration offset for the next batch.
+		update_option( 'wppo_preload_cron_offset', $paged_offset + 200 );
+
+		// Schedule next batch if needed.
+		if ( ! wp_next_scheduled( 'wppo_page_cron_batch' ) ) {
+			wp_schedule_single_event( time() + 60, 'wppo_page_cron_batch' );
 		}
 	}
 
@@ -172,6 +207,8 @@ class Cron {
 		}
 
 		wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
+		wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
+		delete_option( 'wppo_preload_cron_offset' );
 	}
 
 	/**

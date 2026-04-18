@@ -1,29 +1,42 @@
-import { useState, useEffect, useCallback, useRef } from '@wordpress/element';
+import {
+	useState,
+	useEffect,
+	useCallback,
+	useRef,
+	useMemo,
+} from '@wordpress/element';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faSpinner,
-	faBolt,
-	faCode,
 	faImages,
 	faHistory,
+	faCheckCircle,
+	faExclamationTriangle,
+	faTimesCircle,
 } from '@fortawesome/free-solid-svg-icons';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
+import FeatureHeader from './common/FeatureHeader';
+import FeatureCard from './common/FeatureCard';
 
 const Dashboard = ( { activities } ) => {
-	const translations = wppoSettings.translations;
-
 	// Initialize state
 	const [ state, setState ] = useState( {
 		totalCacheSize: wppoSettings.cache_size,
 		totalJs: wppoSettings.total_js_css.js,
 		totalCss: wppoSettings.total_js_css.css,
-		imageInfo: wppoSettings.image_info || [],
+		imageInfo: wppoSettings.image_info || {
+			completed: {},
+			pending: {},
+			failed: {},
+		},
+		dbCounts: {},
 		loading: {
 			clear_cache: false,
 			optimize_images: false,
 			remove_images: false,
+			db_counts: true,
 		},
 	} );
 
@@ -32,7 +45,8 @@ const Dashboard = ( { activities } ) => {
 	const pollingRef = useRef( null );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 
-	const { imageInfo, loading, totalCacheSize, totalJs, totalCss } = state;
+	const { imageInfo, loading, totalCacheSize, totalJs, totalCss, dbCounts } =
+		state;
 	const { completed = {}, pending = {} } = imageInfo;
 
 	const updateState = useCallback( ( updates ) => {
@@ -46,13 +60,34 @@ const Dashboard = ( { activities } ) => {
 		} ) );
 	}, [] );
 
-	const updateCache = useCallback( () => {
-		updateState( {
-			totalCacheSize: '0 B',
-			totalJs: 0,
-			totalCss: 0,
-		} );
-	}, [ updateState ] );
+	const fetchDbCounts = useCallback( async () => {
+		handleLoading( 'db_counts', true );
+		try {
+			const response = await apiCall(
+				'database_cleanup_counts',
+				{},
+				'GET'
+			);
+			if ( response.success && response.data ) {
+				updateState( { dbCounts: response.data } );
+			}
+		} catch ( error ) {
+			console.error( 'Error fetching db counts:', error );
+		} finally {
+			handleLoading( 'db_counts', false );
+		}
+	}, [ handleLoading, updateState ] );
+
+	useEffect( () => {
+		fetchDbCounts();
+	}, [ fetchDbCounts ] );
+
+	const dbOverheadCount = useMemo( () => {
+		return Object.values( dbCounts ).reduce(
+			( sum, val ) => sum + ( parseInt( val, 10 ) || 0 ),
+			0
+		);
+	}, [ dbCounts ] );
 
 	const pollJobStatus = useCallback( async () => {
 		try {
@@ -64,28 +99,16 @@ const Dashboard = ( { activities } ) => {
 				updateState( {
 					imageInfo: {
 						completed: {
-							webp: Array(
-								response.data.completed?.webp || 0
-							).fill( '' ),
-							avif: Array(
-								response.data.completed?.avif || 0
-							).fill( '' ),
+							webp: response.data.completed?.webp || 0,
+							avif: response.data.completed?.avif || 0,
 						},
 						pending: {
-							webp: Array(
-								response.data.pending?.webp || 0
-							).fill( '' ),
-							avif: Array(
-								response.data.pending?.avif || 0
-							).fill( '' ),
+							webp: response.data.pending?.webp || 0,
+							avif: response.data.pending?.avif || 0,
 						},
 						failed: {
-							webp: Array( response.data.failed?.webp || 0 ).fill(
-								''
-							),
-							avif: Array( response.data.failed?.avif || 0 ).fill(
-								''
-							),
+							webp: response.data.failed?.webp || 0,
+							avif: response.data.failed?.avif || 0,
 						},
 					},
 				} );
@@ -118,12 +141,16 @@ const Dashboard = ( { activities } ) => {
 			apiCall( 'clear_cache', { action: 'clear_cache' } )
 				.then( ( data ) => {
 					if ( data.success ) {
-						updateCache();
+						updateState( {
+							totalCacheSize: '0 B',
+							totalJs: 0,
+							totalCss: 0,
+						} );
 					}
 				} )
 				.finally( () => handleLoading( 'clear_cache', false ) );
 		},
-		[ handleLoading, updateCache ]
+		[ handleLoading, updateState ]
 	);
 
 	const optimizeImages = useCallback( () => {
@@ -149,172 +176,272 @@ const Dashboard = ( { activities } ) => {
 		apiCall( 'delete_optimised_image', {} )
 			.then( ( data ) => {
 				if ( data.success ) {
-					wppoSettings.image_info.completed = { webp: [], avif: [] };
+					setState( ( prev ) => ( {
+						...prev,
+						imageInfo: {
+							...prev.imageInfo,
+							completed: { webp: 0, avif: 0 },
+						},
+					} ) );
 				}
 			} )
 			.finally( () => handleLoading( 'remove_images', false ) );
 	}, [ handleLoading ] );
 
-	useEffect( () => {
-		updateState( {
-			totalCacheSize: wppoSettings.cache_size,
-			totalJs: wppoSettings.total_js_css.js,
-			totalCss: wppoSettings.total_js_css.css,
-			imageInfo: wppoSettings.image_info || state.imageInfo,
-		} );
-	}, [ updateState, state.imageInfo ] );
+	const totalWebP = ( completed.webp || 0 ) + ( pending.webp || 0 );
+	const totalAvif = ( completed.avif || 0 ) + ( pending.avif || 0 );
+	const webpPercent =
+		totalWebP > 0 ? ( ( completed.webp || 0 ) / totalWebP ) * 100 : 0;
+	const avifPercent =
+		totalAvif > 0 ? ( ( completed.avif || 0 ) / totalAvif ) * 100 : 0;
+	const totalOptimizedPercent =
+		totalWebP + totalAvif > 0
+			? ( ( ( completed.webp || 0 ) + ( completed.avif || 0 ) ) /
+					( totalWebP + totalAvif ) ) *
+			  100
+			: null;
+
+	const statusInfo = useMemo( () => {
+		const hasFailures =
+			( imageInfo.failed?.webp || 0 ) > 0 ||
+			( imageInfo.failed?.avif || 0 ) > 0;
+		if ( hasFailures || dbOverheadCount > 1000 ) {
+			return {
+				icon: faTimesCircle,
+				text:
+					wppoSettings.translations[ 'Attention required' ] ||
+					'Attention required! High database overhead or image failures.',
+				variant: 'error',
+			};
+		}
+		if (
+			dbOverheadCount > 0 ||
+			( totalOptimizedPercent !== null && totalOptimizedPercent < 90 ) ||
+			bgProcessing ||
+			( pending.webp || 0 ) > 0 ||
+			( pending.avif || 0 ) > 0
+		) {
+			return {
+				icon: faExclamationTriangle,
+				text:
+					wppoSettings.translations[ 'Optimization pending' ] ||
+					'Optimization pending. Run cleanup and image processing.',
+				variant: 'warning',
+			};
+		}
+		return {
+			icon: faCheckCircle,
+			text:
+				wppoSettings.translations[ 'Looks Good' ] ||
+				'Looks Good! System is optimized.',
+			variant: 'success',
+		};
+	}, [
+		dbOverheadCount,
+		totalOptimizedPercent,
+		bgProcessing,
+		pending,
+		imageInfo.failed,
+	] );
 
 	return (
-		<div className="settings-form fadeIn">
-			<h2>{ translations.dashboard }</h2>
-
-			{ /* Processing Status — shown above the grid */ }
-			{ ( bgProcessing || bgJobsQueued > 0 ) && (
-				<div className="db-notification db-notification--success">
-					<FontAwesomeIcon icon={ faSpinner } spin />
-					<span>
-						{ translations.imgProcessing ||
-							'Processing background optimization jobs...' }
-						<strong>
-							{ ' ' }
-							({ bgJobsQueued }{ ' ' }
-							{ translations.imgJobsQueued || 'queued' })
-						</strong>
-					</span>
-				</div>
-			) }
-
-			<div className="dashboard-overview">
-				{ /* Cache Status */ }
-				<div className="dashboard-card">
-					<div>
-						<h3>
-							<FontAwesomeIcon icon={ faBolt } />{ ' ' }
-							{ translations.cacheStatus }
-						</h3>
-						<div className="dashboard-card-label">
-							{ translations.currentCacheSize }
-						</div>
-						<div className="dashboard-card-value">
-							{ totalCacheSize }
-						</div>
+		<div className="wppo-dashboard-view">
+			<FeatureHeader
+				title={
+					wppoSettings.translations[ 'System Health' ] ||
+					'System Health'
+				}
+				description={
+					wppoSettings.translations[ 'System Health Description' ] ||
+					'Real-time performance overview and quick optimization actions.'
+				}
+				status={
+					<div
+						className={ `wppo-feature-header__status wppo-status--${ statusInfo.variant }` }
+					>
+						<FontAwesomeIcon icon={ statusInfo.icon } />
+						<span>{ statusInfo.text }</span>
 					</div>
-					<LoadingSubmitButton
-						className="submit-button"
-						onClick={ onClearCache }
-						isLoading={ loading.clear_cache }
-						label={ translations.clearCacheNow }
-						loadingLabel={ translations.clearing }
-					/>
-				</div>
-
-				{ /* Assets Optimization */ }
-				<div className="dashboard-card">
-					<div>
-						<h3>
-							<FontAwesomeIcon icon={ faCode } />{ ' ' }
-							{ translations.JSCSSOptimisation }
-						</h3>
-						<div className="dashboard-card-label">
-							{ translations.JSFilesMinified }
-						</div>
-						<div className="dashboard-card-value">{ totalJs }</div>
-						<div className="dashboard-card-label">
-							{ translations.CSSFilesMinified }
-						</div>
-						<div className="dashboard-card-value">{ totalCss }</div>
-					</div>
-				</div>
-
-				{ /* Images Performance */ }
-				<div className="dashboard-card">
-					<div>
-						<h3>
-							<FontAwesomeIcon icon={ faImages } />{ ' ' }
-							{ translations.imageOptimization }
-						</h3>
-						<div className="dashboard-img-stats">
-							{ [ 'webp', 'avif' ].map( ( format ) => (
-								<div
-									key={ format }
-									className="dashboard-img-format"
-								>
-									<div className="dashboard-card-label">
-										{ format.toUpperCase() }
-									</div>
-									<div className="img-stat-row">
-										<strong>
-											{ completed[ format ]?.length || 0 }
-										</strong>{ ' ' }
-										{ translations.completed }
-									</div>
-									<div className="img-stat-row img-stat-row--muted">
-										<strong>
-											{ pending[ format ]?.length || 0 }
-										</strong>{ ' ' }
-										{ translations.pending }
-									</div>
-								</div>
-							) ) }
-						</div>
-					</div>
-
-					<div className="dashboard-card-actions">
+				}
+				actions={
+					<div className="wppo-feature-header__actions">
 						<LoadingSubmitButton
-							className="submit-button"
+							className="wppo-button wppo-button--primary"
+							onClick={ onClearCache }
+							isLoading={ loading.clear_cache }
+							label="Purge All Cache"
+							loadingLabel="Purging..."
+						/>
+						<LoadingSubmitButton
+							className="wppo-button wppo-button--secondary"
 							onClick={ optimizeImages }
 							isLoading={ loading.optimize_images }
 							disabled={
 								bgProcessing ||
-								( ! pending.webp?.length &&
-									! pending.avif?.length )
+								( ! pending.webp && ! pending.avif )
 							}
-							label={ translations.optimiseNow }
-							loadingLabel={ translations.optimizing }
-						/>
-						<LoadingSubmitButton
-							className="submit-button secondary"
-							onClick={ () => setConfirmRemove( true ) }
-							isLoading={ loading.remove_images }
-							disabled={
-								! completed.webp?.length &&
-								! completed.avif?.length
-							}
-							label={ translations.removeOptimized }
-							loadingLabel={ translations.removing }
+							label="Optimize All"
+							loadingLabel="Optimizing..."
 						/>
 					</div>
+				}
+			/>
+
+			<div className="wppo-stats-grid">
+				<div className="wppo-stat-item">
+					<span className="wppo-stat-label">Cache Size</span>
+					<span className="wppo-stat-value">{ totalCacheSize }</span>
+					<a href="#/tools" className="wppo-stat-link">
+						View Cache
+					</a>
+				</div>
+				<div className="wppo-stat-item">
+					<span className="wppo-stat-label">JS/CSS Optimized</span>
+					<span className="wppo-stat-value">
+						{ ( totalJs || 0 ) + ( totalCss || 0 ) } Files
+					</span>
+					<a href="#/fileOptimization" className="wppo-stat-link">
+						Settings
+					</a>
+				</div>
+				<div className="wppo-stat-item">
+					<span className="wppo-stat-label">DB Health</span>
+					<span className="wppo-stat-value">
+						{ dbOverheadCount } Overhead
+					</span>
+					<a href="#/databaseCleanup" className="wppo-stat-link">
+						Clean Now
+					</a>
+				</div>
+				<div className="wppo-stat-item">
+					<span className="wppo-stat-label">Images Optimized</span>
+					<span className="wppo-stat-value">
+						{ totalOptimizedPercent !== null
+							? `${ totalOptimizedPercent.toFixed( 0 ) }%`
+							: 'N/A' }
+					</span>
+					<a href="#/imageOptimization" className="wppo-stat-link">
+						Continue
+					</a>
 				</div>
 			</div>
 
-			{ /* Recent Activity Timeline */ }
-			<div className="recent-activities">
-				<h3>
-					<FontAwesomeIcon icon={ faHistory } />{ ' ' }
-					{ translations.recentActivities }
-				</h3>
-				<ul>
-					{ activities?.length ? (
-						activities.map( ( activity, index ) => (
-							<li key={ index }>
-								<div
-									dangerouslySetInnerHTML={ {
-										__html: activity.activity,
-									} }
-								/>
-							</li>
-						) )
-					) : (
-						<li>
-							<div className="activities-empty">
-								{ translations.loadingRecentActivities }
-							</div>
-						</li>
+			<div className="wppo-grid-2-col">
+				<FeatureCard
+					title="Image Optimization"
+					icon={ <FontAwesomeIcon icon={ faImages } /> }
+					actions={
+						<LoadingSubmitButton
+							className="wppo-button wppo-button--danger"
+							onClick={ () => setConfirmRemove( true ) }
+							isLoading={ loading.remove_images }
+							disabled={ ! completed.webp && ! completed.avif }
+							label={
+								wppoSettings.translations[
+									'Remove Optimized'
+								] || 'Remove Optimized'
+							}
+							loadingLabel="Removing..."
+						/>
+					}
+				>
+					<div className="wppo-progress-section">
+						<div className="wppo-progress-header">
+							<span>WebP Generation</span>
+							<span>
+								{ completed.webp || 0 } / { totalWebP }
+							</span>
+						</div>
+						<div
+							className="wppo-progress-bar"
+							role="progressbar"
+							aria-valuemin="0"
+							aria-valuemax="100"
+							aria-valuenow={ Math.round( webpPercent ) }
+							aria-label="WebP conversion progress"
+						>
+							<div
+								className="wppo-progress-bar__fill"
+								style={ { width: `${ webpPercent }%` } }
+							></div>
+						</div>
+					</div>
+
+					<div className="wppo-progress-section wppo-progress-section--spaced">
+						<div className="wppo-progress-header">
+							<span>AVIF Generation</span>
+							<span>
+								{ completed.avif || 0 } / { totalAvif }
+							</span>
+						</div>
+						<div
+							className="wppo-progress-bar"
+							role="progressbar"
+							aria-valuemin="0"
+							aria-valuemax="100"
+							aria-valuenow={ Math.round( avifPercent ) }
+							aria-label="AVIF conversion progress"
+						>
+							<div
+								className="wppo-progress-bar__fill"
+								style={ { width: `${ avifPercent }%` } }
+							></div>
+						</div>
+					</div>
+
+					{ ( bgProcessing || bgJobsQueued > 0 ) && (
+						<div
+							className="wppo-notice wppo-notice--info"
+							style={ { marginTop: '24px' } }
+						>
+							<FontAwesomeIcon icon={ faSpinner } spin />
+							<span>
+								Processing background optimization jobs (
+								{ bgJobsQueued } queued)
+							</span>
+						</div>
 					) }
-				</ul>
+				</FeatureCard>
+
+				<FeatureCard
+					title="Recent Activity"
+					icon={ <FontAwesomeIcon icon={ faHistory } /> }
+					actions={
+						<a href="#/activityLog" className="wppo-stat-link">
+							View Full Log
+						</a>
+					}
+				>
+					<ul
+						className="wppo-activity-list"
+						style={ { listStyle: 'none', padding: 0, margin: 0 } }
+					>
+						{ activities?.length ? (
+							activities
+								.slice( 0, 5 )
+								.map( ( activity, index ) => (
+									<li
+										key={ index }
+										style={ {
+											padding: '12px 0',
+											borderBottom:
+												'1px solid var(--wppo-border)',
+										} }
+									>
+										<div style={ { fontSize: '13px' } }>
+											{ activity.activity }
+										</div>
+									</li>
+								) )
+						) : (
+							<li className="wppo-text-muted">
+								No recent activity found.
+							</li>
+						) }
+					</ul>
+				</FeatureCard>
 			</div>
 
-			{ /* Confirm dialog for Remove Optimized Images */ }
 			<ConfirmDialog
 				isOpen={ confirmRemove }
 				onConfirm={ () => {
@@ -323,14 +450,11 @@ const Dashboard = ( { activities } ) => {
 				} }
 				onCancel={ () => setConfirmRemove( false ) }
 				title={
-					translations.confirmRemoveImgTitle ||
+					wppoSettings.translations[ 'Remove Optimized Images' ] ||
 					'Remove Optimized Images'
 				}
-				message={
-					translations.confirmRemoveImgMsg ||
-					'This will delete all optimized WebP and AVIF copies. Original images will not be affected.'
-				}
-				confirmLabel={ translations.deleteBtn || 'Delete' }
+				message="This will delete all optimized WebP and AVIF copies. Original images will not be affected."
+				confirmLabel={ wppoSettings.translations.Delete || 'Delete' }
 				variant="danger"
 			/>
 		</div>

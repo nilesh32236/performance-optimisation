@@ -1,13 +1,10 @@
 <?php //phpcs:ignore WordPress.Files.FileName.InvalidClassFileName
 /**
- * Redis Object Cache Drop-in.
+ * Redis Object Cache Drop-in for Performance Optimisation
  *
  * @package PerformanceOptimise
  */
 
-/**
- * Object Cache Drop-in for WordPress.
- */
 /**
  * Object Cache Drop-in for WordPress.
  */
@@ -65,9 +62,15 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		}
 
 		/**
-		 * Connects to Redis server.
+		 * Initializes and connects the object cache to Redis using the configuration file.
 		 *
-		 * @return void
+		 * Reads WP_CONTENT_DIR . '/wppo-redis-config.php' (expects an array). If a valid
+		 * config is present, attempts to connect a primary Redis client and, when
+		 * configured for standalone mode with replicas, attempts to establish a replica
+		 * connection. On success assigns the client(s) to $this->redis and
+		 * $this->redis_replica (when available) and sets $this->redis_connected to
+		 * true; on failure leaves or sets $this->redis_connected to false and clears
+		 * any replica.
 		 */
 		private function connect_redis() {
 			$config_file = WP_CONTENT_DIR . '/wppo-redis-config.php';
@@ -98,11 +101,16 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$this->redis_connected = true;
 
 				// Standalone replica support.
-				if ( 'standalone' === ( $config['mode'] ?? 'standalone' ) && isset( $config['replicas'] ) && is_array( $config['replicas'] ) && ! empty( $config['replicas'] ) ) {
-					$replica = $config['replicas'][ array_rand( $config['replicas'] ) ];
-					$r_host  = $replica['host'] ?? '127.0.0.1';
-					$r_port  = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
-					$r_pass  = $replica['password'] ?? $password;
+				if ( 'standalone' === ( $config['mode'] ?? 'standalone' )
+					&& ! empty( $config['replicas'] )
+					&& is_array( $config['replicas'] )
+				) {
+					$replica_key = array_rand( $config['replicas'] );
+					$replica     = $config['replicas'][ $replica_key ];
+
+					$r_host = $replica['host'] ?? '127.0.0.1';
+					$r_port = isset( $replica['port'] ) ? (int) $replica['port'] : 6379;
+					$r_pass = $replica['password'] ?? $password;
 					try {
 						$tmp_replica = new \Redis();
 						if ( $use_tls && strpos( $r_host, 'tls://' ) !== 0 ) {

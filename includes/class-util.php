@@ -226,14 +226,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
-		 * Processes and cleans up a list of URLs.
+		 * Normalize and deduplicate a list of URLs.
 		 *
-		 * @param string $urls The raw URLs to process.
-		 * @return array The cleaned-up list of unique URLs.
+		 * If given an array, each element is trimmed, duplicates and empty values are removed, and the result is reindexed.
+		 * If given a non-array, the value is cast to string, split on newline characters, then trimmed, deduplicated, filtered and reindexed.
+		 *
+		 * @param string|array $urls Raw URLs as a newline-delimited string or an array of strings.
+		 * @return array Cleaned list of unique, trimmed URLs with empty values removed and numeric keys reindexed.
 		 * @since 1.0.0
 		 */
 		public static function process_urls( $urls ) {
-			return array_filter( array_unique( array_map( 'trim', explode( "\n", $urls ) ) ) );
+			if ( is_array( $urls ) ) {
+				return array_values( array_filter( array_unique( array_map( 'trim', $urls ) ) ) );
+			}
+			return array_values( array_filter( array_unique( array_map( 'trim', explode( "\n", (string) $urls ) ) ) ) );
 		}
 	}
 }

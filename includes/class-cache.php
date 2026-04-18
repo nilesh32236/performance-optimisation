@@ -310,10 +310,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Applies CDN rewriting to the provided HTML buffer.
+		 * Rewrite local asset URLs in HTML to use the configured CDN for wp-content and wp-includes resources.
 		 *
-		 * @param string $buffer The HTML content.
-		 * @return string The modified HTML content.
+		 * Scans img, script, link, source, and video tags and replaces attribute values that start with the site URL
+		 * and contain `/wp-content/` or `/wp-includes/`. The attributes handled are `src`, `href`, `data-src`,
+		 * `srcset`, and `data-srcset`. If no CDN is configured or `\WP_HTML_Tag_Processor` is unavailable, the
+		 * buffer is returned unchanged.
+		 *
+		 * @param string $buffer The HTML content to process.
+		 * @return string The HTML with applicable asset URLs rewritten to the CDN, or the original HTML if no changes were made.
 		 *
 		 * @since 1.2.0
 		 */
@@ -327,20 +332,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$site_url = home_url();
 			$cdn_url  = rtrim( $cdn_url, '/' );
 
-			// Escape the site URL for use in a regex.
-			$escaped_site_url = preg_quote( $site_url, '/' );
+			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
+				return $buffer;
+			}
 
-			// Regex to find internal assets in src, href or srcset attributes. Supports optional quotes.
-			$pattern = '/(src|href|srcset)=(?:"([^"]+)"|' . "'" . '([^' . "'" . ']+)' . "'" . '|([^"' . "'" . '\\s>]+(?=\\s|>|\/|$)))/i';
+			$tags = new \WP_HTML_Tag_Processor( $buffer );
 
-			$buffer = preg_replace_callback(
-				$pattern,
-				function ( $matches ) use ( $site_url, $cdn_url ) {
-					$attr  = $matches[1];
-					$value = isset( $matches[2] ) && '' !== $matches[2] ? $matches[2] : ( isset( $matches[3] ) && '' !== $matches[3] ? $matches[3] : ( $matches[4] ?? '' ) );
+			while ( $tags->next_tag() ) {
+				$tag_name = strtolower( $tags->get_tag() );
+				if ( ! in_array( $tag_name, array( 'img', 'script', 'link', 'source', 'video' ), true ) ) {
+					continue;
+				}
 
-					if ( 'srcset' === $attr ) {
-						$candidates = explode( ',', $value );
+				$attributes = array( 'src', 'href', 'data-src' );
+
+				foreach ( $attributes as $attr ) {
+					$val = $tags->get_attribute( $attr );
+
+					if ( $val && 0 === strpos( $val, $site_url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $val ) ) {
+						$tags->set_attribute( $attr, str_replace( $site_url, $cdn_url, $val ) );
+					}
+				}
+
+				foreach ( array( 'srcset', 'data-srcset' ) as $attr ) {
+					$srcset_attr = $tags->get_attribute( $attr );
+					if ( $srcset_attr ) {
+						$candidates = explode( ',', $srcset_attr );
 						$new_srcset = array();
 
 						foreach ( $candidates as $candidate ) {
@@ -349,27 +366,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							$url       = $parts[0];
 							$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
 
-							if ( 0 === strpos( $url, $site_url ) && preg_match( '/\/(?:wp-content|wp-includes)\//', $url ) ) {
+							if ( 0 === strpos( $url, $site_url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $url ) ) {
 								$url = str_replace( $site_url, $cdn_url, $url );
 							}
-
 							$new_srcset[] = $url . $suffix;
 						}
 
-						return 'srcset="' . implode( ', ', $new_srcset ) . '"';
+						$tags->set_attribute( $attr, implode( ', ', $new_srcset ) );
 					}
+				}
+			}
 
-					if ( 0 === strpos( $value, $site_url ) && preg_match( '/\/(?:wp-content|wp-includes)\//', $value ) ) {
-						$new_url = str_replace( $site_url, $cdn_url, $value );
-						return $attr . '="' . $new_url . '"';
-					}
-
-					return $matches[0];
-				},
-				$buffer
-			);
-
-			return $buffer;
+			return $tags->get_updated_html();
 		}
 
 		/**

@@ -7,9 +7,10 @@ import {
 	faFileImport,
 	faCheckCircle,
 	faExclamationCircle,
-	faTools,
 } from '@fortawesome/free-solid-svg-icons';
 import ConfirmDialog from './common/ConfirmDialog';
+import FeatureHeader from './common/FeatureHeader';
+import FeatureCard from './common/FeatureCard';
 
 const PluginSetting = ( { options } ) => {
 	const translations = wppoSettings.translations;
@@ -57,7 +58,8 @@ const PluginSetting = ( { options } ) => {
 	const importSettings = () => {
 		if ( ! selectedFile ) {
 			setNotification( {
-				message: translations.selectFiles,
+				message:
+					translations.selectFiles || 'Please select a file first.',
 				success: false,
 			} );
 			return;
@@ -98,13 +100,21 @@ const PluginSetting = ( { options } ) => {
 							resetFileInput();
 						}
 						setNotification( {
-							message: data.message || translations.fileImported,
+							message:
+								data.message ||
+								( data.success
+									? translations.fileImported ||
+									  'Settings imported successfully.'
+									: translations.importFailed ||
+									  'Failed to import settings.' ),
 							success: data.success,
 						} );
 					} )
 					.catch( () => {
 						setNotification( {
-							message: translations.fileErrorImport,
+							message:
+								translations.fileErrorImport ||
+								'Error importing settings.',
 							success: false,
 						} );
 					} )
@@ -113,7 +123,9 @@ const PluginSetting = ( { options } ) => {
 					} );
 			} catch ( _error ) {
 				setNotification( {
-					message: translations.invalidFileFormat,
+					message:
+						translations.invalidFileFormat ||
+						'Invalid file format.',
 					success: false,
 				} );
 				setIsImporting( false );
@@ -123,111 +135,17 @@ const PluginSetting = ( { options } ) => {
 	};
 
 	return (
-		<div className="settings-form fadeIn">
-			<div
-				style={ {
-					display: 'flex',
-					justifyContent: 'space-between',
-					alignItems: 'center',
-					marginBottom: '40px',
-				} }
-			>
-				<h2 style={ { margin: 0 } }>
-					<FontAwesomeIcon
-						icon={ faTools }
-						style={ {
-							color: 'var(--wppo-primary)',
-							marginRight: '12px',
-						} }
-					/>
-					{ translations.tools }
-				</h2>
-			</div>
-
-			<p
-				style={ {
-					fontSize: '16px',
-					color: 'var(--wppo-text-muted)',
-					marginBottom: '40px',
-					maxWidth: '800px',
-				} }
-			>
-				Manage your configuration by exporting your current settings or
-				importing a previously saved configuration file.
-			</p>
-
-			<div className="dashboard-overview">
-				{ /* Export Settings Card */ }
-				<div className="wppo-card">
-					<h3>
-						<FontAwesomeIcon
-							icon={ faFileExport }
-							style={ { color: 'var(--wppo-primary)' } }
-						/>{ ' ' }
-						{ translations.exportSettings }
-					</h3>
-					<p style={ { marginBottom: '32px' } }>
-						{ translations.exportPluginSettings }
-					</p>
-					<LoadingSubmitButton
-						className="submit-button"
-						style={ { width: '100%' } }
-						onClick={ exportSettings }
-						label={ translations.exportSettings }
-					/>
-				</div>
-
-				{ /* Import Settings Card */ }
-				<div className="wppo-card">
-					<h3>
-						<FontAwesomeIcon
-							icon={ faFileImport }
-							style={ { color: 'var(--wppo-primary)' } }
-						/>{ ' ' }
-						{ translations.importSettings }
-					</h3>
-					<p>{ translations.importPluginSettings }</p>
-					<div
-						className="import-field-wrapper"
-						style={ { margin: '24px 0' } }
-					>
-						<input
-							type="file"
-							accept="application/json"
-							onChange={ handleFileSelection }
-							ref={ fileInputRef }
-							className="input-field"
-							style={ { padding: '12px' } }
-							aria-label={
-								translations.selectFiles ||
-								'Select configuration file'
-							}
-						/>
-					</div>
-					<LoadingSubmitButton
-						className="submit-button secondary"
-						style={ { width: '100%' } }
-						onClick={ () => {
-							if ( selectedFile ) {
-								setConfirmImport( true );
-							}
-						} }
-						disabled={ ! selectedFile || isImporting }
-						isLoading={ isImporting }
-						label={ translations.importSettings }
-						loadingLabel={
-							translations.importing || 'Importing...'
-						}
-					/>
-				</div>
-			</div>
+		<div className="wppo-dashboard-view">
+			<FeatureHeader
+				title="Tools"
+				description="Manage your configuration by exporting your current settings or importing a previously saved configuration file."
+			/>
 
 			{ notification.message && (
 				<div
-					className={ `db-notification db-notification--${
+					className={ `wppo-notice wppo-notice--${
 						notification.success ? 'success' : 'error'
 					}` }
-					style={ { marginTop: '40px' } }
 				>
 					<FontAwesomeIcon
 						icon={
@@ -240,7 +158,64 @@ const PluginSetting = ( { options } ) => {
 				</div>
 			) }
 
-			{ /* Confirm dialog for importing settings */ }
+			<div className="wppo-grid-2-col">
+				<FeatureCard
+					title="Export Configuration"
+					icon={ <FontAwesomeIcon icon={ faFileExport } /> }
+				>
+					<p
+						className="wppo-text-muted"
+						style={ { marginBottom: '24px' } }
+					>
+						Download your current plugin settings as a JSON file for
+						backup or migration.
+					</p>
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--primary wppo-button--full"
+						onClick={ exportSettings }
+						label="Export Settings"
+					/>
+				</FeatureCard>
+
+				<FeatureCard
+					title="Import Configuration"
+					icon={ <FontAwesomeIcon icon={ faFileImport } /> }
+				>
+					<p className="wppo-text-muted">
+						Upload a previously exported settings file to restore
+						your configuration.
+					</p>
+					<div className="wppo-field wppo-mt-20">
+						<label
+							className="wppo-field-label"
+							htmlFor="import-config"
+						>
+							Select configuration file
+						</label>
+						<input
+							type="file"
+							id="import-config"
+							accept="application/json"
+							onChange={ handleFileSelection }
+							ref={ fileInputRef }
+							className="wppo-input"
+						/>
+					</div>
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--secondary wppo-button--full"
+						onClick={ () => {
+							if ( selectedFile ) {
+								setConfirmImport( true );
+							}
+						} }
+						disabled={ ! selectedFile || isImporting }
+						isLoading={ isImporting }
+						label="Import Settings"
+						loadingLabel="Importing..."
+					/>
+				</FeatureCard>
+			</div>
+
 			<ConfirmDialog
 				isOpen={ confirmImport }
 				onConfirm={ () => {
@@ -248,12 +223,9 @@ const PluginSetting = ( { options } ) => {
 					importSettings();
 				} }
 				onCancel={ () => setConfirmImport( false ) }
-				title={ translations.confirmImportTitle || 'Confirm Import' }
-				message={
-					translations.confirmImportMsg ||
-					'Importing this file will overwrite all current plugin settings. Continue?'
-				}
-				confirmLabel={ translations.confirm || 'Confirm' }
+				title="Confirm Import"
+				message="Importing this file will overwrite all current plugin settings. Continue?"
+				confirmLabel="Confirm"
 				variant="warning"
 			/>
 		</div>

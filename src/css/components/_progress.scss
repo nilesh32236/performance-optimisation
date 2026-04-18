@@ -1,0 +1,32 @@
+.wppo-progress-bar {
+	height: 8px;
+	background: #e2e8f0;
+	border-radius: 4px;
+	overflow: hidden;
+	margin: 8px 0;
+	
+	&__fill {
+		height: 100%;
+		background: var(--wppo-primary);
+		border-radius: 4px;
+		transition: width 0.6s ease;
+
+		@media (prefers-reduced-motion: reduce) {
+			transition: none;
+		}
+	}
+}
+
+.wppo-progress-section {
+	&--spaced {
+		margin-top: var(--wppo-spacing-md, 20px);
+	}
+	.wppo-progress-header {
+		display: flex;
+		justify-content: space-between;
+		font-size: 13px;
+		font-weight: 600;
+		margin-bottom: 8px;
+		color: var(--wppo-text-muted);
+	}
+}

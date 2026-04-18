@@ -1,24 +1,26 @@
 import { useState, useEffect } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
-import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-	faServer,
 	faBroom,
 	faLink,
-	faMicrochip,
-	faMousePointer,
-	faNetworkWired,
 	faCheckCircle,
 	faExclamationCircle,
 	faShieldAlt,
 	faTimes,
+	faNetworkWired,
 } from '@fortawesome/free-solid-svg-icons';
+import FeatureHeader from './common/FeatureHeader';
+import FeatureCard from './common/FeatureCard';
+import LoadingSubmitButton from './common/LoadingSubmitButton';
+import SwitchField from './common/SwitchField';
+
+const translations =
+	( typeof wppoSettings !== 'undefined' ? wppoSettings.translations : {} ) ||
+	{};
 
 const ObjectCache = ( { options = {} } ) => {
-	const translations = wppoSettings.translations;
-
 	const defaultSettings = {
 		mode: 'standalone',
 		host: '127.0.0.1',
@@ -42,6 +44,7 @@ const ObjectCache = ( { options = {} } ) => {
 		foreign_dropin: false,
 		redis_reachable: false,
 		statusLoaded: false,
+		supported_compressors: { none: true },
 	} );
 	const [ actionMsg, setActionMsg ] = useState( null );
 
@@ -52,14 +55,18 @@ const ObjectCache = ( { options = {} } ) => {
 	const fetchStatus = async () => {
 		try {
 			const res = await apiCall( 'object_cache', { action: 'status' } );
-			setCacheStatus( { ...res.data, statusLoaded: true } );
+			if ( res.success ) {
+				setCacheStatus( { ...res.data, statusLoaded: true } );
+			}
 		} catch ( error ) {
 			console.error( 'Error fetching cache status', error );
 		}
 	};
 
 	const handleSubmit = async ( e ) => {
-		e.preventDefault();
+		if ( e ) {
+			e.preventDefault();
+		}
 		setIsLoading( true );
 		setActionMsg( null );
 
@@ -84,13 +91,6 @@ const ObjectCache = ( { options = {} } ) => {
 						'Error saving settings.',
 				} );
 			}
-		} catch ( error ) {
-			setActionMsg( {
-				type: 'error',
-				text:
-					translations.formSubmissionError ||
-					'Error saving settings.',
-			} );
 		} finally {
 			setIsLoading( false );
 		}
@@ -129,580 +129,70 @@ const ObjectCache = ( { options = {} } ) => {
 				type: 'success',
 				text: res.message || 'Action successful.',
 			} );
-		} catch ( error ) {
-			setActionMsg( {
-				type: 'error',
-				text: error.message || 'Action failed.',
-			} );
 		} finally {
 			setIsActionLoading( false );
 		}
 	};
 
-	const getHitRatio = () => {
+	const hitRatio = ( () => {
 		if ( ! cacheStatus.telemetry ) {
 			return 0;
 		}
 		const hits =
-			Number.parseInt(
-				( cacheStatus.telemetry.keyspace_hits || '0' )
-					.toString()
-					.trim(),
-				10
-			) || 0;
+			parseInt( cacheStatus.telemetry.keyspace_hits || '0', 10 ) || 0;
 		const misses =
-			Number.parseInt(
-				( cacheStatus.telemetry.keyspace_misses || '0' )
-					.toString()
-					.trim(),
-				10
-			) || 0;
-
+			parseInt( cacheStatus.telemetry.keyspace_misses || '0', 10 ) || 0;
 		const total = hits + misses;
-		if ( Number.isNaN( total ) || total <= 0 ) {
-			return 0;
-		}
-
-		return ( ( hits / total ) * 100 ).toFixed( 1 );
-	};
-
-	const hitRatio = getHitRatio();
+		return total > 0 ? ( ( hits / total ) * 100 ).toFixed( 1 ) : 0;
+	} )();
 
 	return (
-		<div className="wppo-dashboard-view fadeIn">
-			{ /* --- Header Actions --- */ }
-			<div className="wppo-feature-header">
-				<div className="wppo-feature-title">
-					<h2>
-						<FontAwesomeIcon icon={ faServer } />
-						{ translations.objectCache ||
-							'Enterprise Redis Object Cache' }
-					</h2>
-					<p>
-						{ translations.objectCacheDesc ||
-							'High-performance persistent caching with Sentinel & Cluster support.' }
-					</p>
-				</div>
-				<div className="wppo-feature-actions">
-					{ cacheStatus.enabled ? (
-						<>
-							<button
-								type="button"
-								className="wppo-button wppo-button-outline"
-								onClick={ () => handleAction( 'flush' ) }
-								disabled={ isActionLoading }
-							>
-								<FontAwesomeIcon icon={ faBroom } />
-								{ isActionLoading
-									? '...'
-									: translations.flushCache || 'Flush Cache' }
-							</button>
-							<button
-								type="button"
-								className="wppo-button wppo-button-danger"
-								onClick={ () => handleAction( 'disable' ) }
-								disabled={ isActionLoading }
-							>
-								<FontAwesomeIcon icon={ faTimes } />
-								{ isActionLoading
-									? '...'
-									: translations.disableObjectCache ||
-									  'Disable Object Cache' }
-							</button>
-						</>
-					) : (
-						<button
-							type="button"
-							className="wppo-button wppo-button-primary"
-							onClick={ () => handleAction( 'enable' ) }
-							disabled={
-								isActionLoading ||
-								cacheStatus.redis_missing ||
-								! cacheStatus.redis_reachable ||
-								cacheStatus.foreign_dropin
-							}
-						>
-							<FontAwesomeIcon icon={ faCheckCircle } />
-							{ isActionLoading
-								? '...'
-								: translations.enableObjectCache ||
-								  'Enable Object Cache' }
-						</button>
-					) }
-				</div>
-			</div>
-
-			{ /* --- Status Notices --- */ }
-			<div
-				className="wppo-notices-container"
-				style={ { marginBottom: '24px' } }
-			>
-				{ cacheStatus.redis_missing && (
-					<div className="wppo-notice wppo-notice--error">
-						<FontAwesomeIcon icon={ faExclamationCircle } />
-						<div>
-							<strong>
-								{ translations.redisMissing ||
-									'Extension Missing' }
-							</strong>
-							<p>
-								{ translations.redisMissingDesc ||
-									'The high-performance PhpRedis extension is not installed.' }
-							</p>
-						</div>
-					</div>
-				) }
-
-				{ cacheStatus.foreign_dropin && (
-					<div className="wppo-notice wppo-notice--warning">
-						<FontAwesomeIcon icon={ faExclamationCircle } />
-						<div>
-							<strong>
-								{ translations.foreignDropin ||
-									'Conflict Detected' }
-							</strong>
-							<p>
-								{ translations.foreignDropinDesc ||
-									'Another object cache drop-in is active. Please disable it first.' }
-							</p>
-						</div>
-					</div>
-				) }
-
-				{ cacheStatus.statusLoaded &&
-					! cacheStatus.redis_missing &&
-					! cacheStatus.redis_reachable && (
-						<div className="wppo-notice wppo-notice--error">
-							<FontAwesomeIcon icon={ faExclamationCircle } />
-							<div>
-								<strong>
-									{ translations.redisUnreachable ||
-										'Connection Failed' }
-								</strong>
-								<p>
-									{ cacheStatus.telemetry_error ||
-										'Could not connect to Redis with current settings.' }
-								</p>
-							</div>
-						</div>
-					) }
-			</div>
-
-			{ /* --- Live Telemetry Grid --- */ }
-			{ cacheStatus.telemetry && cacheStatus.enabled && (
-				<div
-					className="wppo-stats-grid"
-					style={ { marginBottom: '24px' } }
-				>
-					<div className="wppo-stat-card">
-						<div className="stat-header">
-							<FontAwesomeIcon icon={ faMicrochip } />
-							Memory Usage
-						</div>
-						<div className="stat-value">
-							{ cacheStatus.telemetry.used_memory_human }
-						</div>
-						<div className="stat-footer">
-							Peak:{ ' ' }
-							{ cacheStatus.telemetry.used_memory_peak_human }
-						</div>
-					</div>
-
-					<div className="wppo-stat-card">
-						<div className="stat-header">
-							<FontAwesomeIcon icon={ faMousePointer } />
-							Hit Ratio
-						</div>
-						<div className="stat-value">{ hitRatio }%</div>
-						<div className="wppo-progress-wrapper">
-							<div className="progress-bar-bg">
-								<div
-									className="progress-bar-fill"
-									style={ { width: `${ hitRatio }%` } }
-								></div>
-							</div>
-						</div>
-					</div>
-
-					<div className="wppo-stat-card">
-						<div className="stat-header">
-							<FontAwesomeIcon icon={ faNetworkWired } />
-							Connections
-						</div>
-						<div className="stat-value">
-							{ cacheStatus.telemetry.connected_clients }
-						</div>
-						<div className="stat-footer">
-							Total:{ ' ' }
-							{ cacheStatus.telemetry.total_connections_received }
-						</div>
-					</div>
-				</div>
-			) }
-
-			{ /* --- Main Configuration --- */ }
-			<div
-				className="wppo-dashboard-columns"
-				style={ {
-					display: 'grid',
-					gridTemplateColumns: '1.5fr 1fr',
-					gap: '24px',
-				} }
-			>
-				{ /* Connection Section */ }
-				<div className="wppo-dashboard-column">
-					<div className="feature-card">
-						<h3>
-							<FontAwesomeIcon icon={ faLink } />
-							{ translations.connectionSettings ||
-								'Connection Configuration' }
-						</h3>
-
-						<div style={ { marginTop: '20px' } }>
-							<div
-								className="setting-group"
-								style={ { marginBottom: '20px' } }
-							>
-								<label className="field-label">
-									{ translations.connectionMode ||
-										'Cluster / HA Architecture' }
-								</label>
-								<select
-									className="input-field"
-									name="mode"
-									value={ settings.mode }
-									onChange={ handleChange( setSettings ) }
-								>
-									<option value="standalone">
-										{ translations.standalone ||
-											'Standalone (Single Node)' }
-									</option>
-									<option value="sentinel">
-										{ translations.sentinel ||
-											'Redis Sentinel (High Availability)' }
-									</option>
-									<option value="cluster">
-										{ translations.cluster ||
-											'Redis Cluster' }
-									</option>
-								</select>
-							</div>
-
-							<div
-								className="settings-split-grid"
-								style={ {
-									display: 'grid',
-									gridTemplateColumns: '1fr 1fr',
-									gap: '20px',
-								} }
-							>
-								{ settings.mode === 'standalone' ? (
-									<>
-										<div className="setting-group">
-											<label
-												className="field-label"
-												htmlFor="host"
-											>
-												{ translations.redisHost ||
-													'Host' }
-											</label>
-											<input
-												className="input-field"
-												type="text"
-												id="host"
-												name="host"
-												value={ settings.host }
-												onChange={ handleChange(
-													setSettings
-												) }
-											/>
-										</div>
-										<div className="setting-group">
-											<label
-												className="field-label"
-												htmlFor="port"
-											>
-												{ translations.redisPort ||
-													'Port' }
-											</label>
-											<input
-												className="input-field"
-												type="number"
-												id="port"
-												name="port"
-												value={ settings.port }
-												onChange={ handleChange(
-													setSettings
-												) }
-											/>
-										</div>
-									</>
-								) : (
-									<div
-										className="setting-group"
-										style={ { gridColumn: 'span 2' } }
-									>
-										<label
-											className="field-label"
-											htmlFor="nodes"
-										>
-											{ translations.redisNodes ||
-												'Server Nodes' }
-										</label>
-										<textarea
-											className="input-field"
-											id="nodes"
-											name="nodes"
-											rows="3"
-											placeholder="host:port (one per line)"
-											value={ settings.nodes }
-											onChange={ handleChange(
-												setSettings
-											) }
-										></textarea>
-									</div>
-								) }
-
-								{ settings.mode === 'sentinel' && (
-									<div
-										className="setting-group"
-										style={ { gridColumn: 'span 2' } }
-									>
-										<label
-											className="field-label"
-											htmlFor="master_name"
-										>
-											{ translations.masterName ||
-												'Sentinel Master Name' }
-										</label>
-										<input
-											className="input-field"
-											type="text"
-											id="master_name"
-											name="master_name"
-											value={ settings.master_name }
-											onChange={ handleChange(
-												setSettings
-											) }
-										/>
-									</div>
-								) }
-
-								<div className="setting-group">
-									<label
-										className="field-label"
-										htmlFor="password"
-									>
-										{ translations.redisPassword ||
-											'Auth Password' }
-									</label>
-									<input
-										className="input-field"
-										type="password"
-										id="password"
-										name="password"
-										placeholder="Leave empty if none"
-										value={ settings.password }
-										onChange={ handleChange( setSettings ) }
-									/>
-								</div>
-
-								<div className="setting-group">
-									<label
-										className="field-label"
-										htmlFor="database"
-									>
-										{ translations.redisDatabase ||
-											'Database ID' }
-									</label>
-									<input
-										className="input-field"
-										type="number"
-										id="database"
-										name="database"
-										value={ settings.database }
-										onChange={ handleChange( setSettings ) }
-									/>
-								</div>
-							</div>
-
-							<div
-								style={ {
-									marginTop: '24px',
-									display: 'flex',
-									gap: '12px',
-								} }
-							>
+		<div className="wppo-dashboard-view">
+			<FeatureHeader
+				title="Object Cache"
+				description="Enterprise-grade Redis object caching with Sentinel and Cluster support."
+				actions={
+					<div className="wppo-feature-header__actions">
+						{ cacheStatus.enabled ? (
+							<>
 								<button
-									type="button"
-									className="wppo-button wppo-button-secondary"
-									onClick={ () => handleAction( 'ping' ) }
+									className="wppo-button wppo-button--secondary"
+									onClick={ () => handleAction( 'flush' ) }
 									disabled={ isActionLoading }
 								>
-									<FontAwesomeIcon icon={ faNetworkWired } />
-									{ isActionLoading
-										? '...'
-										: translations.testConnection ||
-										  'Test Connectivity' }
+									<FontAwesomeIcon icon={ faBroom } /> Flush
+									Cache
 								</button>
 								<button
-									type="button"
-									className="wppo-button wppo-button-primary"
-									onClick={ handleSubmit }
-									disabled={ isLoading }
+									className="wppo-button wppo-button--danger"
+									onClick={ () => handleAction( 'disable' ) }
+									disabled={ isActionLoading }
 								>
-									<FontAwesomeIcon icon={ faCheckCircle } />
-									{ isLoading
-										? '...'
-										: translations.saveSettings ||
-										  'Save Changes' }
+									<FontAwesomeIcon icon={ faTimes } /> Disable
 								</button>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				{ /* Performance Section */ }
-				<div className="wppo-dashboard-column">
-					<div className="feature-card" style={ { height: '100%' } }>
-						<h3>
-							<FontAwesomeIcon icon={ faShieldAlt } />
-							{ translations.enterpriseOptions ||
-								'Enterprise Performance' }
-						</h3>
-
-						<div style={ { marginTop: '20px' } }>
-							<div
-								className="setting-group"
-								style={ { marginBottom: '24px' } }
+							</>
+						) : (
+							<button
+								className="wppo-button wppo-button--primary"
+								onClick={ () => handleAction( 'enable' ) }
+								disabled={
+									isActionLoading ||
+									cacheStatus.redis_missing ||
+									! cacheStatus.redis_reachable ||
+									cacheStatus.foreign_dropin
+								}
 							>
-								<label className="field-label">
-									{ translations.compressionAlgorithm ||
-										'Memory Compression' }
-								</label>
-								<select
-									className="input-field"
-									name="compression"
-									value={ settings.compression }
-									onChange={ handleChange( setSettings ) }
-								>
-									<option value="none">
-										{ translations.none ||
-											'None (Fastest)' }
-									</option>
-									<option
-										value="lzf"
-										disabled={
-											cacheStatus.supported_compressors &&
-											! cacheStatus.supported_compressors
-												.lzf
-										}
-									>
-										LZF{ ' ' }
-										{ cacheStatus.supported_compressors &&
-										! cacheStatus.supported_compressors.lzf
-											? '(Disabled)'
-											: '' }
-									</option>
-									<option
-										value="zstd"
-										disabled={
-											cacheStatus.supported_compressors &&
-											! cacheStatus.supported_compressors
-												.zstd
-										}
-									>
-										ZSTD{ ' ' }
-										{ cacheStatus.supported_compressors &&
-										! cacheStatus.supported_compressors.zstd
-											? '(Disabled)'
-											: ' (Recommended)' }
-									</option>
-									<option
-										value="lz4"
-										disabled={
-											cacheStatus.supported_compressors &&
-											! cacheStatus.supported_compressors
-												.lz4
-										}
-									>
-										LZ4{ ' ' }
-										{ cacheStatus.supported_compressors &&
-										! cacheStatus.supported_compressors.lz4
-											? '(Disabled)'
-											: '' }
-									</option>
-								</select>
-								<p
-									className="field-desc"
-									style={ { marginTop: '8px' } }
-								>
-									{ translations.compressionDesc ||
-										'Significantly reduces memory footprint for enterprise-size caches.' }
-								</p>
-							</div>
-
-							<div className="checkbox-options-list">
-								<div
-									className="checkbox-option"
-									style={ { marginBottom: '20px' } }
-								>
-									<label className="wppo-switch">
-										<input
-											type="checkbox"
-											name="persistent"
-											checked={ settings.persistent }
-											onChange={ handleChange(
-												setSettings
-											) }
-										/>
-										<span className="wppo-slider"></span>
-									</label>
-									<div className="checkbox-info">
-										<strong>
-											{ translations.persistentConnection ||
-												'Persistent Connections' }
-										</strong>
-										<p className="field-desc">
-											Keep connections alive between PHP
-											requests for lower latency.
-										</p>
-									</div>
-								</div>
-
-								<div className="checkbox-option">
-									<label className="wppo-switch">
-										<input
-											type="checkbox"
-											name="use_tls"
-											checked={ settings.use_tls }
-											onChange={ handleChange(
-												setSettings
-											) }
-										/>
-										<span className="wppo-slider"></span>
-									</label>
-									<div className="checkbox-info">
-										<strong>
-											{ translations.enableTls ||
-												'TLS / SSL Encryption' }
-										</strong>
-										<p className="field-desc">
-											Encrypt all traffic between
-											WordPress and Redis nodes.
-										</p>
-									</div>
-								</div>
-							</div>
-						</div>
+								<FontAwesomeIcon icon={ faCheckCircle } />{ ' ' }
+								Enable Object Cache
+							</button>
+						) }
 					</div>
-				</div>
-			</div>
+				}
+			/>
 
 			{ actionMsg && (
 				<div
-					className={ `wppo-footer-notice wppo-footer-notice--${ actionMsg.type }` }
-					style={ { marginTop: '24px' } }
+					className={ `wppo-notice wppo-notice--${ actionMsg.type }` }
 				>
 					<FontAwesomeIcon
 						icon={
@@ -711,9 +201,333 @@ const ObjectCache = ( { options = {} } ) => {
 								: faExclamationCircle
 						}
 					/>
-					{ actionMsg.text }
+					<span>{ actionMsg.text }</span>
 				</div>
 			) }
+
+			<div className="wppo-notices-container">
+				{ cacheStatus.redis_missing && (
+					<div className="wppo-notice wppo-notice--error">
+						<FontAwesomeIcon icon={ faExclamationCircle } />
+						<div>
+							<strong>Extension Missing</strong>
+							<p>
+								The PhpRedis extension is not installed. Native
+								performance will be limited.
+							</p>
+						</div>
+					</div>
+				) }
+				{ cacheStatus.foreign_dropin && (
+					<div className="wppo-notice wppo-notice--warning">
+						<FontAwesomeIcon icon={ faExclamationCircle } />
+						<div>
+							<strong>Conflict Detected</strong>
+							<p>
+								Another object cache plugin is currently active.
+								Please disable it to avoid site crashes.
+							</p>
+						</div>
+					</div>
+				) }
+			</div>
+
+			{ cacheStatus.telemetry && cacheStatus.enabled && (
+				<div className="wppo-stats-grid">
+					<div className="wppo-stat-item">
+						<span className="wppo-stat-label">Memory Usage</span>
+						<span className="wppo-stat-value">
+							{ cacheStatus.telemetry?.used_memory_human || '0B' }
+						</span>
+						<span className="wppo-text-muted">
+							Peak:{ ' ' }
+							{ cacheStatus.telemetry?.used_memory_peak_human ||
+								'0B' }
+						</span>
+					</div>
+					<div className="wppo-stat-item">
+						<span className="wppo-stat-label">Hit Ratio</span>
+						<span className="wppo-stat-value">{ hitRatio }%</span>
+						<div className="wppo-progress-bar">
+							<div
+								className="wppo-progress-bar__fill"
+								style={ { width: `${ hitRatio }%` } }
+							></div>
+						</div>
+					</div>
+					<div className="wppo-stat-item">
+						<span className="wppo-stat-label">Active Clients</span>
+						<span className="wppo-stat-value">
+							{ cacheStatus.telemetry?.connected_clients || 0 }
+						</span>
+						<span className="wppo-text-muted">
+							Total:{ ' ' }
+							{ cacheStatus.telemetry
+								?.total_connections_received || 0 }
+						</span>
+					</div>
+					<div className="wppo-stat-item">
+						<span className="wppo-stat-label">Redis Version</span>
+						<span className="wppo-stat-value">
+							{ cacheStatus.telemetry?.redis_version || 'N/A' }
+						</span>
+						<span className="wppo-text-muted">
+							Uptime:{ ' ' }
+							{ cacheStatus.telemetry?.uptime_in_seconds
+								? (
+										cacheStatus.telemetry
+											.uptime_in_seconds / 3600
+								  ).toFixed( 1 )
+								: '0' }
+							h
+						</span>
+					</div>
+				</div>
+			) }
+
+			<form className="wppo-grid-2-col" onSubmit={ handleSubmit }>
+				<FeatureCard
+					title="Connection Settings"
+					icon={ <FontAwesomeIcon icon={ faLink } /> }
+				>
+					<div className="wppo-field-group">
+						<div className="wppo-field">
+							<label className="wppo-field-label" htmlFor="mode">
+								Deployment Mode
+							</label>
+							<select
+								className="wppo-select"
+								id="mode"
+								name="mode"
+								value={ settings.mode }
+								onChange={ handleChange( setSettings ) }
+							>
+								<option value="standalone">
+									Standalone (Single Node)
+								</option>
+								<option value="sentinel">
+									Redis Sentinel (HA)
+								</option>
+								<option value="cluster">Redis Cluster</option>
+							</select>
+						</div>
+
+						{ settings.mode === 'standalone' ? (
+							<div className="wppo-grid-2-col wppo-mt-20">
+								<div>
+									<label
+										className="wppo-field-label"
+										htmlFor="host"
+									>
+										Host
+									</label>
+									<input
+										className="wppo-input"
+										id="host"
+										type="text"
+										name="host"
+										value={ settings.host }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</div>
+								<div>
+									<label
+										className="wppo-field-label"
+										htmlFor="port"
+									>
+										Port
+									</label>
+									<input
+										className="wppo-input"
+										id="port"
+										type="number"
+										name="port"
+										value={ settings.port }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</div>
+							</div>
+						) : (
+							<div className="wppo-field">
+								<label
+									className="wppo-field-label"
+									htmlFor="nodes"
+								>
+									Server Nodes
+								</label>
+								<textarea
+									className="wppo-textarea"
+									id="nodes"
+									name="nodes"
+									rows="3"
+									placeholder="host:port (one per line)"
+									value={ settings.nodes }
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+						) }
+
+						{ settings.mode === 'sentinel' && (
+							<div className="wppo-field">
+								<label
+									className="wppo-field-label"
+									htmlFor="master_name"
+								>
+									Sentinel Master Name
+								</label>
+								<input
+									className="wppo-input"
+									id="master_name"
+									type="text"
+									name="master_name"
+									value={ settings.master_name }
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+						) }
+
+						<div className="wppo-grid-2-col wppo-mt-20">
+							<div>
+								<label
+									className="wppo-field-label"
+									htmlFor="password"
+								>
+									Auth Password
+								</label>
+								<input
+									className="wppo-input"
+									id="password"
+									type="password"
+									name="password"
+									placeholder="Optional"
+									value={ settings.password }
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+							<div>
+								<label
+									className="wppo-field-label"
+									htmlFor="database"
+								>
+									Database ID
+								</label>
+								<input
+									className="wppo-input"
+									id="database"
+									type="number"
+									name="database"
+									value={ settings.database }
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+						</div>
+
+						<div className="wppo-mt-12 wppo-flex-gap-12">
+							<button
+								type="button"
+								className="wppo-button wppo-button--secondary"
+								onClick={ () => handleAction( 'ping' ) }
+								disabled={ isActionLoading }
+							>
+								<FontAwesomeIcon icon={ faNetworkWired } />{ ' ' }
+								{ isActionLoading ? '...' : 'Test Connection' }
+							</button>
+							<LoadingSubmitButton
+								className="wppo-button wppo-button--primary"
+								onClick={ handleSubmit }
+								isLoading={ isLoading }
+								label="Save Changes"
+							/>
+						</div>
+					</div>
+				</FeatureCard>
+
+				<FeatureCard
+					title="Enterprise Performance"
+					icon={ <FontAwesomeIcon icon={ faShieldAlt } /> }
+				>
+					<div className="wppo-field-group">
+						<div>
+							<label
+								className="wppo-field-label"
+								htmlFor="compression"
+							>
+								Memory Compression
+							</label>
+							<select
+								className="wppo-select"
+								id="compression"
+								name="compression"
+								value={ settings.compression }
+								onChange={ handleChange( setSettings ) }
+							>
+								<option value="none">None (Fastest)</option>
+								<option
+									value="lzf"
+									disabled={
+										cacheStatus.supported_compressors &&
+										! cacheStatus.supported_compressors.lzf
+									}
+								>
+									LZF{ ' ' }
+									{ cacheStatus.supported_compressors &&
+									! cacheStatus.supported_compressors.lzf
+										? '(Disabled)'
+										: '' }
+								</option>
+								<option
+									value="zstd"
+									disabled={
+										cacheStatus.supported_compressors &&
+										! cacheStatus.supported_compressors.zstd
+									}
+								>
+									ZSTD{ ' ' }
+									{ cacheStatus.supported_compressors &&
+									! cacheStatus.supported_compressors.zstd
+										? '(Disabled)'
+										: '(Recommended)' }
+								</option>
+								<option
+									value="lz4"
+									disabled={
+										cacheStatus.supported_compressors &&
+										! cacheStatus.supported_compressors.lz4
+									}
+								>
+									LZ4{ ' ' }
+									{ cacheStatus.supported_compressors &&
+									! cacheStatus.supported_compressors.lz4
+										? '(Disabled)'
+										: '' }
+								</option>
+							</select>
+							<p
+								className="wppo-text-muted"
+								style={ { marginTop: '8px', fontSize: '13px' } }
+							>
+								Reduces memory footprint for enterprise caches.
+							</p>
+						</div>
+
+						<SwitchField
+							label="Persistent Connections"
+							description="Keep connections alive between PHP requests."
+							name="persistent"
+							checked={ settings.persistent }
+							onChange={ handleChange( setSettings ) }
+						/>
+
+						<SwitchField
+							label="TLS / SSL Encryption"
+							description="Encrypt traffic between WordPress and Redis."
+							name="use_tls"
+							checked={ settings.use_tls }
+							onChange={ handleChange( setSettings ) }
+						/>
+					</div>
+				</FeatureCard>
+			</form>
 		</div>
 	);
 };

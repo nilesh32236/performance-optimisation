@@ -1,19 +1,22 @@
-import { useState, useId } from '@wordpress/element';
+import { useState, useEffect } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
-import CheckboxOption from './common/CheckboxOption';
+import SwitchField from './common/SwitchField';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faEye,
 	faMagic,
 	faCloudUploadAlt,
-	faInfoCircle,
+	faCheckCircle,
+	faExclamationTriangle,
+	faTimes,
 } from '@fortawesome/free-solid-svg-icons';
+import FeatureHeader from './common/FeatureHeader';
+import FeatureCard from './common/FeatureCard';
 
-const ImageOptimization = ({ options = {} }) => {
-	const translations = wppoSettings.translations;
-
+const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
 		wrapInPicture: true,
@@ -25,7 +28,7 @@ const ImageOptimization = ({ options = {} }) => {
 		conversionFormat: 'webp',
 		excludeConvertImages: '',
 		replacePlaceholderWithSVG: false,
-		preloadFrontPageImages: '',
+		preloadFrontPageImages: false,
 		preloadFrontPageImagesUrls: '',
 		preloadPostTypeImage: false,
 		selectedPostType: [],
@@ -36,333 +39,416 @@ const ImageOptimization = ({ options = {} }) => {
 		...options,
 	};
 
-	const [settings, setSettings] = useState(defaultSettings);
-	const [isLoading, setIsLoading] = useState(false);
-	const conversionFormatId = useId();
-	const maxWidthImgSizeId = useId();
-	const excludeSizeId = useId();
-	const postTypeCheckboxPrefix = useId();
-	const excludeFirstImagesId = useId();
-	const excludePostTypeUrlsId = useId();
+	const [ settings, setSettings ] = useState( defaultSettings );
+	const [ isLoading, setIsLoading ] = useState( false );
+	const [ notification, setNotification ] = useState( null );
 
-	const togglePostType = (postType) => {
-		setSettings((prevSettings) => ({
-			...prevSettings,
-			selectedPostType: prevSettings.selectedPostType.includes(postType)
-				? prevSettings.selectedPostType.filter(
-					(type) => type !== postType
-				)
-				: [...prevSettings.selectedPostType, postType],
-		}));
+	useEffect( () => {
+		if ( notification ) {
+			const timer = setTimeout( () => setNotification( null ), 5000 );
+			return () => clearTimeout( timer );
+		}
+	}, [ notification ] );
+
+	const togglePostType = ( type ) => {
+		setSettings( ( prev ) => {
+			const newSelected = prev.selectedPostType.includes( type )
+				? prev.selectedPostType.filter( ( t ) => t !== type )
+				: [ ...prev.selectedPostType, type ];
+			return { ...prev, selectedPostType: newSelected };
+		} );
 	};
 
-	const onSubmit = async (e) => {
-		e.preventDefault();
-		setIsLoading(true);
+	const onSubmit = async ( e ) => {
+		if ( e ) {
+			e.preventDefault();
+		}
+		setIsLoading( true );
 		try {
-			await apiCall('update_settings', {
+			const res = await apiCall( 'update_settings', {
 				tab: 'image_optimisation',
 				settings,
-			});
-			wppoSettings.notify(
-				translations.formSubmitted || 'Settings saved successfully.',
-				'success'
-			);
-		} catch (error) {
-			console.error(translations.formSubmissionError, error);
-			wppoSettings.notify(
-				translations.formSubmissionError || 'Error saving settings.',
-				'error'
-			);
+			} );
+
+			if ( res.success ) {
+				setNotification( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Settings saved successfully.',
+							'performance-optimisation'
+						),
+				} );
+			} else {
+				setNotification( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'Error saving settings.',
+							'performance-optimisation'
+						),
+				} );
+			}
+		} catch ( error ) {
+			setNotification( {
+				type: 'error',
+				message:
+					error.message ||
+					__( 'Error saving settings.', 'performance-optimisation' ),
+			} );
 		} finally {
-			setIsLoading(false);
+			setIsLoading( false );
 		}
 	};
 
 	return (
-		<form onSubmit={onSubmit} className="settings-form fadeIn">
-			<h2>{translations.imgOptimizationsettings}</h2>
+		<div className="wppo-dashboard-view">
+			<FeatureHeader
+				title={ __( 'Image Optimization', 'performance-optimisation' ) }
+				description={ __(
+					'Optimize media delivery with advanced lazy loading, next-gen formats, and preloading rules.',
+					'performance-optimisation'
+				) }
+				actions={
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--primary"
+						isLoading={ isLoading }
+						onClick={ onSubmit }
+						label={ __(
+							'Save Settings',
+							'performance-optimisation'
+						) }
+					/>
+				}
+			/>
 
-			<div className="feature-card">
-				<h3>
-					<FontAwesomeIcon icon={faEye} /> Smart Loading
-				</h3>
-				<p>
-					Manage how images are loaded on your site to prioritize
-					critical content and reduce initial payload.
-				</p>
-
-				<CheckboxOption
-					label={translations.lazyLoadImages}
-					checked={settings.lazyLoadImages}
-					onChange={handleChange(setSettings)}
-					name="lazyLoadImages"
-					textareaName="excludeImages"
-					textareaPlaceholder={translations.excludeImages}
-					textareaValue={settings.excludeImages}
-					onTextareaChange={handleChange(setSettings)}
-					description={
-						translations.lazyLoadImagesDesc ||
-						'Delay loading of images until they scroll into view to reduce initial page weight.'
-					}
+			{ notification && (
+				<div
+					className={ `wppo-notice wppo-notice--${ notification.type }` }
 				>
-					{settings.lazyLoadImages && (
-						<>
-							<div className="wppo-notice wppo-notice--info">
-								<FontAwesomeIcon icon={faInfoCircle} />
-								<span>
-									{translations.lazyLoadInfo ||
-										'Images above the fold (header, hero) should be excluded to avoid layout shifts. Use the settings below to fine-tune.'}
-								</span>
-							</div>
-							<div
-								style={{
-									display: 'flex',
-									flexDirection: 'column',
-									gap: '24px',
-								}}
-							>
-								<div className="setting-group">
+					<div className="wppo-notice__content">
+						<FontAwesomeIcon
+							icon={
+								notification.type === 'success'
+									? faCheckCircle
+									: faExclamationTriangle
+							}
+						/>
+						<span>{ notification.message }</span>
+					</div>
+					<button
+						className="wppo-notice__dismiss"
+						type="button"
+						onClick={ () => setNotification( null ) }
+						aria-label="Dismiss"
+					>
+						<FontAwesomeIcon icon={ faTimes } />
+					</button>
+				</div>
+			) }
+
+			<div className="wppo-grid-2-col">
+				<FeatureCard
+					title="Lazy Loading"
+					icon={ <FontAwesomeIcon icon={ faEye } /> }
+				>
+					<div className="wppo-field-group">
+						<SwitchField
+							label="Enable Lazy Load"
+							description="Delay loading of images until scroll."
+							name="lazyLoadImages"
+							checked={ settings.lazyLoadImages }
+							onChange={ handleChange( setSettings ) }
+						/>
+
+						{ settings.lazyLoadImages && (
+							<div className="wppo-field-nest">
+								<div className="wppo-field">
 									<label
-										className="field-label"
-										htmlFor={excludeFirstImagesId}
+										className="wppo-field-label"
+										htmlFor="excludeFirstImages"
 									>
-										{translations.excludeFirstImages}
+										Exclude First X Images
 									</label>
 									<input
-										id={excludeFirstImagesId}
-										className="input-field"
+										className="wppo-input"
+										id="excludeFirstImages"
 										type="number"
-										placeholder="e.g. 2"
 										name="excludeFirstImages"
-										value={settings.excludeFirstImages}
-										onChange={handleChange(setSettings)}
+										value={ settings.excludeFirstImages }
+										onChange={ handleChange( setSettings ) }
 									/>
 								</div>
-								<CheckboxOption
-									label={translations.replaceImgToSVG}
+								<SwitchField
+									label="SVG Placeholders"
+									description="Lightweight blurred placeholders."
+									name="replacePlaceholderWithSVG"
 									checked={
 										settings.replacePlaceholderWithSVG
 									}
-									onChange={handleChange(setSettings)}
-									name="replacePlaceholderWithSVG"
-									description={
-										translations.replaceImgToSVGDesc ||
-										'Show a blurry lightweight SVG placeholder while the original image loads.'
-									}
+									onChange={ handleChange( setSettings ) }
 								/>
 							</div>
-						</>
-					)}
-				</CheckboxOption>
+						) }
 
-				<div style={{ marginTop: '24px' }}>
-					<CheckboxOption
-						label={translations.wrapInPicture}
-						checked={settings.wrapInPicture}
-						onChange={handleChange(setSettings)}
-						name="wrapInPicture"
-						description={
-							translations.wrapInPictureDesc ||
-							'Wrap images in a <picture> tag for advanced optimization.'
-						}
-					/>
-				</div>
-			</div>
+						<SwitchField
+							label="Wrap in Picture Tag"
+							description="Use modern picture elements."
+							name="wrapInPicture"
+							checked={ settings.wrapInPicture }
+							onChange={ handleChange( setSettings ) }
+						/>
+					</div>
+				</FeatureCard>
 
-			<div className="feature-card">
-				<h3>
-					<FontAwesomeIcon icon={faEye} /> Video Optimization
-				</h3>
-				<p>
-					Manage how videos are loaded to improve performance and user
-					experience.
-				</p>
-
-				<CheckboxOption
-					label={translations.lazyLoadVideos}
-					checked={settings.lazyLoadVideos}
-					onChange={handleChange(setSettings)}
-					name="lazyLoadVideos"
-					textareaName="excludeVideos"
-					textareaPlaceholder={translations.excludeVideos}
-					textareaValue={settings.excludeVideos}
-					onTextareaChange={handleChange(setSettings)}
-					description={
-						translations.lazyLoadVideosDesc ||
-						'Delay loading of videos until they scroll into view.'
-					}
-				/>
-			</div>
-
-			<div className="feature-card">
-				<h3>
-					<FontAwesomeIcon icon={faMagic} /> Next-Gen Formats
-				</h3>
-				<p>
-					Automatically convert your images to modern formats like
-					WebP or AVIF for significantly smaller file sizes.
-				</p>
-
-				<CheckboxOption
-					label={translations.convertImg}
-					checked={settings.convertImg}
-					onChange={handleChange(setSettings)}
-					name="convertImg"
-					textareaName="excludeConvertImages"
-					textareaPlaceholder={translations.excludeConvertImages}
-					textareaValue={settings.excludeConvertImages}
-					onTextareaChange={handleChange(setSettings)}
-					description={
-						translations.convertImgDesc ||
-						'Convert images to modern formats like WebP or AVIF.'
-					}
+				<FeatureCard
+					title="Video & Media"
+					icon={ <FontAwesomeIcon icon={ faMagic } /> }
 				>
-					{settings.convertImg && (
-						<div className="setting-group">
+					<div className="wppo-field-group">
+						<SwitchField
+							label="Video Lazy Loading"
+							description="Delay iFrame and video tags."
+							name="lazyLoadVideos"
+							checked={ settings.lazyLoadVideos }
+							onChange={ handleChange( setSettings ) }
+						/>
+
+						<div className="wppo-field">
 							<label
-								className="field-label"
-								htmlFor={conversionFormatId}
+								className="wppo-field-label"
+								htmlFor="excludeVideos"
 							>
-								{translations.conversationFormat}
+								Exclude from Lazy Load
 							</label>
-							<select
-								id={conversionFormatId}
-								className="input-field"
-								name="conversionFormat"
-								value={settings.conversionFormat}
-								onChange={handleChange(setSettings)}
-							>
-								<option value="webp">
-									{translations.webp}
-								</option>
-								<option value="avif">
-									{translations.avif}
-								</option>
-								<option value="both">
-									{translations.both}
-								</option>
-							</select>
+							<textarea
+								className="wppo-textarea"
+								id="excludeVideos"
+								name="excludeVideos"
+								rows="3"
+								placeholder="Class names or partial URLs"
+								value={ settings.excludeVideos }
+								onChange={ handleChange( setSettings ) }
+							/>
 						</div>
-					)}
-				</CheckboxOption>
+					</div>
+				</FeatureCard>
 			</div>
 
-			<div className="feature-card">
-				<h3>
-					<FontAwesomeIcon icon={faCloudUploadAlt} /> Preloading
-				</h3>
-				<p>
-					Preload critical assets to ensure they are available as soon
-					as the browser needs them.
-				</p>
-
-				<div className="setting-group">
-					<label className="field-label">
-						{translations.preloadFrontPageImg}
-					</label>
-					<textarea
-						className="input-field"
-						name="preloadFrontPageImagesUrls"
-						placeholder={translations.preloadFrontPageImgUrl}
-						value={settings.preloadFrontPageImagesUrls}
-						onChange={handleChange(setSettings)}
-					/>
-					<p className="field-description">
-						{translations.preloadFrontPageImgDesc}
-					</p>
-				</div>
-
-				<CheckboxOption
-					label={translations.preloadPostTypeImg}
-					checked={settings.preloadPostTypeImage}
-					onChange={handleChange(setSettings)}
-					name="preloadPostTypeImage"
-					textareaName="excludePostTypeImgUrl"
-					textareaPlaceholder={translations.excludePostTypeImgUrl}
-					textareaValue={settings.excludePostTypeImgUrl}
-					onTextareaChange={handleChange(setSettings)}
-					description={
-						translations.preloadPostTypeImgDesc ||
-						'Automatically preload featured images for selected post types.'
-					}
+			<div className="wppo-grid-2-col">
+				<FeatureCard
+					title="Next-Gen Conversion"
+					icon={ <FontAwesomeIcon icon={ faMagic } /> }
 				>
-					{settings.preloadPostTypeImage && (
-						<div className="post-types-grid">
-							{settings.availablePostTypes.map((type) => (
-								<label
-									key={type}
-									className="checkbox-label"
-								>
-									<input
-										type="checkbox"
-										checked={settings.selectedPostType.includes(
-											type
-										)}
-										onChange={() =>
-											togglePostType(type)
-										}
+					<div className="wppo-field-group">
+						<SwitchField
+							label="Auto Convert Formats"
+							description="Serve modern formats automatically."
+							name="convertImg"
+							checked={ settings.convertImg }
+							onChange={ handleChange( setSettings ) }
+						/>
+
+						{ settings.convertImg && (
+							<div className="wppo-field-nest">
+								<div className="wppo-field">
+									<label
+										className="wppo-field-label"
+										htmlFor="conversionFormat"
+									>
+										Target Format
+									</label>
+									<select
+										className="wppo-select"
+										id="conversionFormat"
+										name="conversionFormat"
+										value={ settings.conversionFormat }
+										onChange={ handleChange( setSettings ) }
+									>
+										<option value="webp">
+											WebP (Standard)
+										</option>
+										<option value="avif">
+											AVIF (Maximum Compression)
+										</option>
+										<option value="both">
+											Both (Best Compatibility)
+										</option>
+									</select>
+								</div>
+								<div className="wppo-field wppo-field--spaced">
+									<label
+										className="wppo-field-label"
+										htmlFor="excludeConvertImages"
+									>
+										Exclude from Conversion
+									</label>
+									<textarea
+										className="wppo-textarea"
+										id="excludeConvertImages"
+										name="excludeConvertImages"
+										rows="2"
+										placeholder="Partial URLs"
+										value={ settings.excludeConvertImages }
+										onChange={ handleChange( setSettings ) }
 									/>
-									{type}
-								</label>
-							))}
+								</div>
+							</div>
+						) }
+					</div>
+				</FeatureCard>
+
+				<FeatureCard
+					title="Responsive Limits"
+					icon={ <FontAwesomeIcon icon={ faMagic } /> }
+				>
+					<div className="wppo-field-group">
+						<div className="wppo-field">
+							<label
+								className="wppo-field-label"
+								htmlFor="maxWidthImgSize"
+							>
+								Max Image Width (px)
+							</label>
+							<input
+								className="wppo-input"
+								id="maxWidthImgSize"
+								type="number"
+								name="maxWidthImgSize"
+								value={ settings.maxWidthImgSize }
+								onChange={ handleChange( setSettings ) }
+							/>
 						</div>
-					)}
-				</CheckboxOption>
+						<div className="wppo-field">
+							<label
+								className="wppo-field-label"
+								htmlFor="excludeSize"
+							>
+								Exclude Classes from Max Width
+							</label>
+							<input
+								className="wppo-input"
+								id="excludeSize"
+								type="text"
+								name="excludeSize"
+								placeholder="e.g. .no-resize, .hero"
+								value={ settings.excludeSize }
+								onChange={ handleChange( setSettings ) }
+							/>
+						</div>
+					</div>
+				</FeatureCard>
 			</div>
 
-			<div className="feature-card">
-				<h3>
-					<FontAwesomeIcon icon={faMagic} /> Responsive Images
-				</h3>
-				<p>
-					Set maximum dimensions for images to ensure they are not
-					larger than necessary.
-				</p>
-
-				<div className="setting-group">
-					<label
-						className="field-label"
-						htmlFor={maxWidthImgSizeId}
-					>
-						Max Image Width (px)
-					</label>
-					<input
-						id={maxWidthImgSizeId}
-						className="input-field"
-						type="number"
-						name="maxWidthImgSize"
-						value={settings.maxWidthImgSize}
-						onChange={handleChange(setSettings)}
-					/>
+			<FeatureCard
+				title="Advanced Preloading"
+				icon={ <FontAwesomeIcon icon={ faCloudUploadAlt } /> }
+			>
+				<div className="wppo-grid-2-col">
+					<div>
+						<SwitchField
+							label={ __(
+								'Preload Front Page Images',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Load critical images on your homepage early.',
+								'performance-optimisation'
+							) }
+							name="preloadFrontPageImages"
+							checked={ settings.preloadFrontPageImages }
+							onChange={ handleChange( setSettings ) }
+						/>
+						{ settings.preloadFrontPageImages && (
+							<div className="wppo-field wppo-mt-12">
+								<label
+									className="wppo-field-label"
+									htmlFor="preloadFrontPageImagesUrls"
+								>
+									{ __(
+										'Frontpage URLs to Preload',
+										'performance-optimisation'
+									) }
+								</label>
+								<textarea
+									className="wppo-textarea"
+									id="preloadFrontPageImagesUrls"
+									name="preloadFrontPageImagesUrls"
+									rows="3"
+									placeholder="URLs (one per line)"
+									value={
+										settings.preloadFrontPageImagesUrls
+									}
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+						) }
+					</div>
+					<div>
+						<SwitchField
+							label="Preload Featured Images"
+							description="Automatic preload for selected types."
+							name="preloadPostTypeImage"
+							checked={ settings.preloadPostTypeImage }
+							onChange={ handleChange( setSettings ) }
+						/>
+						{ settings.preloadPostTypeImage && (
+							<>
+								<div className="wppo-post-types-grid--chips">
+									{ settings.availablePostTypes.map(
+										( type ) => (
+											<label
+												key={ type }
+												htmlFor={ `type-${ type }` }
+												className={ `wppo-post-type-chip ${
+													settings.selectedPostType.includes(
+														type
+													)
+														? 'active'
+														: ''
+												}` }
+											>
+												<input
+													type="checkbox"
+													id={ `type-${ type }` }
+													className="screen-reader-text"
+													checked={ settings.selectedPostType.includes(
+														type
+													) }
+													onChange={ () =>
+														togglePostType( type )
+													}
+												/>
+												{ type }
+											</label>
+										)
+									) }
+								</div>
+								<div className="wppo-field wppo-field--spaced">
+									<label
+										className="wppo-field-label"
+										htmlFor="excludePostTypeImgUrl"
+									>
+										Exclude URLs from Preload
+									</label>
+									<textarea
+										className="wppo-textarea"
+										id="excludePostTypeImgUrl"
+										name="excludePostTypeImgUrl"
+										rows="2"
+										placeholder="Partial URLs (one per line)"
+										value={ settings.excludePostTypeImgUrl }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</div>
+							</>
+						) }
+					</div>
 				</div>
-
-				<div className="setting-group">
-					<label
-						className="field-label"
-						htmlFor={excludeSizeId}
-					>
-						Exclude Classes from Max Width
-					</label>
-					<input
-						id={excludeSizeId}
-						className="input-field"
-						type="text"
-						placeholder="e.g. .no-resize, .hero-img"
-						name="excludeSize"
-						value={settings.excludeSize}
-						onChange={handleChange(setSettings)}
-					/>
-				</div>
-			</div>
-
-			<div className="form-actions">
-				<LoadingSubmitButton
-					isLoading={isLoading}
-					text={translations.saveSettings}
-				/>
-			</div>
-		</form>
+			</FeatureCard>
+		</div>
 	);
 };
 

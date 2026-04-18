@@ -36,6 +36,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		public static function init(): void {
 
 			self::unschedule_crons();
+			delete_option( 'wppo_preload_cron_offset' );
 
 			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 
@@ -60,6 +61,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			$timestamp = wp_next_scheduled( 'wppo_page_cron_hook' );
 			if ( $timestamp ) {
 				wp_unschedule_event( $timestamp, 'wppo_page_cron_hook' );
+			}
+
+			$timestamp = wp_next_scheduled( 'wppo_page_cron_batch' );
+			if ( $timestamp ) {
+				wp_unschedule_event( $timestamp, 'wppo_page_cron_batch' );
 			}
 
 			// Unschedule the 'wppo_img_conversation' event if it is scheduled.

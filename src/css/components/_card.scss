@@ -1,0 +1,59 @@
+.wppo-feature-card {
+	background: var(--wppo-bg-card);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius);
+	box-shadow: var(--wppo-shadow-sm);
+	transition: var(--wppo-transition);
+	overflow: hidden;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+
+	@media (hover: hover) {
+		&:hover {
+			transform: translateY(-4px);
+			box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+			border-color: var(--wppo-primary-soft);
+
+			@media (prefers-reduced-motion: reduce) {
+				transform: none;
+			}
+		}
+	}
+
+	&__header {
+		padding: 20px 24px;
+		border-bottom: 1px solid var(--wppo-border);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+
+		h3 {
+			margin: 0;
+			font-size: 16px;
+			font-weight: 700;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			
+			svg {
+				color: var(--wppo-primary);
+				font-size: 18px;
+			}
+		}
+	}
+
+	&__body {
+		padding: 24px;
+		flex-grow: 1;
+	}
+
+	&__actions {
+		padding: 16px 24px;
+		background: #f8fafc;
+		border-top: 1px solid var(--wppo-border);
+		display: flex;
+		justify-content: flex-end;
+		gap: 12px;
+	}
+}

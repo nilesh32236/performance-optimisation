@@ -1,0 +1,55 @@
+.wppo-notice {
+	padding: 16px 20px;
+	border-radius: var(--wppo-radius-sm);
+	margin-bottom: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: 14px;
+	line-height: 1.5;
+	border-width: 1px;
+	border-style: solid;
+
+	&__content {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+
+	&__dismiss {
+		background: transparent;
+		border: none;
+		color: inherit;
+		cursor: pointer;
+		padding: 4px;
+		opacity: 0.5;
+		transition: var(--wppo-transition);
+
+		&:hover { opacity: 1; }
+	}
+
+	&--error {
+		background: var(--wppo-error-bg);
+		border-color: var(--wppo-error-border);
+		color: var(--wppo-error);
+	}
+
+	&--warning {
+		background: var(--wppo-warning-bg);
+		border-color: var(--wppo-warning-border);
+		color: var(--wppo-warning);
+	}
+
+	&--success {
+		background: var(--wppo-success-bg);
+		border-color: var(--wppo-success-border);
+		color: var(--wppo-success);
+	}
+
+	&--info {
+		background: var(--wppo-info-bg);
+		border-color: var(--wppo-info-border);
+		color: var(--wppo-info);
+	}
+}

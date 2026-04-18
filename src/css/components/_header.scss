@@ -1,0 +1,47 @@
+.wppo-feature-header {
+	margin-bottom: 32px;
+	
+	&__main {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 24px;
+		margin-bottom: 16px;
+
+		@include respond-to('md') {
+			flex-direction: column;
+		}
+	}
+
+	&__title {
+		h2 {
+			font-size: 28px;
+			font-weight: 800;
+			margin: 0 0 8px 0;
+			letter-spacing: -0.025em;
+		}
+		p {
+			font-size: 15px;
+			color: var(--wppo-text-muted);
+			margin: 0;
+			max-width: 600px;
+		}
+	}
+
+	&__status {
+		margin-top: 12px;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-weight: 600;
+		color: var(--wppo-success);
+
+		&.wppo-status--warning { color: var(--wppo-warning); }
+		&.wppo-status--error { color: var(--wppo-error); }
+	}
+
+	&__actions {
+		display: flex;
+		gap: 12px;
+	}
+}

@@ -231,6 +231,8 @@ class Main {
 		add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 		add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 		add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
+
+		add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
 	}
 
 	/**
@@ -429,8 +431,9 @@ class Main {
 				'wppo-admin-bar-script',
 				'wppoObject',
 				array(
-					'apiUrl' => get_rest_url( null, 'performance-optimisation/v1' ),
-					'nonce'  => wp_create_nonce( 'wp_rest' ),
+					'apiUrl'  => get_rest_url( null, 'performance-optimisation/v1' ),
+					'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+					'nonce'   => wp_create_nonce( 'wp_rest' ),
 				)
 			);
 		}
@@ -719,7 +722,12 @@ class Main {
 	}
 
 	/**
-	 * Removes WooCommerce-related scripts and styles based on settings.
+	 * Dequeues configured WooCommerce CSS and JS handles unless the current URL is excluded.
+	 *
+	 * Reads `file_optimisation.excludeUrlToKeepJSCSS` and, if the current front-end URL matches any entry
+	 * (exact match or prefix match when an entry contains the `(.*)` suffix), preserves scripts/styles.
+	 * Otherwise reads `file_optimisation.removeCssJsHandle` and dequeues each entry prefixed with
+	 * `style:` (dequeues a style handle) or `script:` (dequeues a script handle).
 	 *
 	 * @since 1.0.0
 	 */
@@ -732,24 +740,21 @@ class Main {
 			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$parsed_uri  = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $request_uri );
 			$current_url = home_url( sanitize_text_field( $parsed_uri ) );
-			$current_url = rtrim( $current_url, '/' );
 
 			foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {
 				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
 					$exclude_url = home_url( $exclude_url );
-					$exclude_url = rtrim( $exclude_url, '/' );
 				}
 
 				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
 					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-					$exclude_prefix = rtrim( $exclude_prefix, '/' );
 
-					if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
+					if ( 0 === strpos( untrailingslashit( $current_url ), untrailingslashit( $exclude_prefix ) ) ) {
 						return;
 					}
 				}
 
-				if ( $current_url === $exclude_url ) {
+				if ( untrailingslashit( $current_url ) === untrailingslashit( $exclude_url ) ) {
 					return;
 				}
 			}

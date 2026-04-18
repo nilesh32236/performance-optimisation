@@ -90,12 +90,14 @@ class Img_Converter {
 	}
 
 	/**
-	 * Convert an image to WebP or AVIF format.
+	 * Convert a source image into WebP and/or AVIF and record conversion status.
 	 *
-	 * @param string $source_image Path to the source image.
-	 * @param string $format The desired format ('webp' or 'avif').
-	 * @param int    $quality Quality level of the converted image (0-100).
-	 * @return bool True on success, false on failure.
+	 * Attempts to create converted files for the requested format(s) and updates the plugin's conversion status store (`wppo_img_info`) to reflect `pending`, `completed`, or `failed` outcomes.
+	 *
+	 * @param string $source_image Filesystem path to the source image.
+	 * @param string $format One of 'webp', 'avif', or 'both' indicating desired target format(s).
+	 * @param int    $quality Quality for the converted image (0-100). Use -1 to let underlying library choose defaults.
+	 * @return bool `true` if the conversion(s) for the requested format(s) completed successfully, `false` otherwise.
 	 * @since 1.0.0
 	 */
 	public function convert_image( string $source_image, string $format = 'webp', int $quality = -1 ): bool {
@@ -110,14 +112,40 @@ class Img_Converter {
 			return false;
 		}
 
-		if ( ! file_exists( $source_image ) ) {
+		if ( ! file_exists( $source_image ) || ! is_readable( $source_image ) ) {
 			$this->update_conversion_status( $source_image, 'failed', $format );
 			return false;
 		}
 
-		$image_info = getimagesize( $source_image );
+		// Security Fix: Prevent File Size & Memory Bomb DoS.
+		$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
+		if ( filesize( $source_image ) > $max_bytes ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( sprintf( 'WPPO Error: Image filesize (%d bytes) exceeds limit (%d bytes) - %s', filesize( $source_image ), $max_bytes, $source_image ) );
+			$this->update_conversion_status( $source_image, 'failed', $format );
+			return false;
+		}
+
+		// getimagesize() parses the headers without decoding pixel data into memory.
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		$image_info = @getimagesize( $source_image );
 
 		if ( empty( $image_info ) ) {
+			$this->update_conversion_status( $source_image, 'failed', $format );
+			return false;
+		}
+
+		// Security Fix: Prevent Dimension memory crash limits.
+		$max_dims = apply_filters(
+			'wppo_max_dimensions',
+			array(
+				'width'  => 5000,
+				'height' => 5000,
+			)
+		);
+		if ( $image_info[0] > $max_dims['width'] || $image_info[1] > $max_dims['height'] ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( sprintf( 'WPPO Error: Image dimensions (%dx%d) exceed limits (%dx%d) - %s', $image_info[0], $image_info[1], $max_dims['width'], $max_dims['height'], $source_image ) );
 			$this->update_conversion_status( $source_image, 'failed', $format );
 			return false;
 		}
@@ -336,37 +364,77 @@ class Img_Converter {
 
 
 	/**
-	 * Get the WebP file path.
+	 * Compute the filesystem path where a converted image (WebP or AVIF) should be stored.
 	 *
-	 * @param string $source_image The source image path.
-	 * @param string $format The desired format ('webp' or 'avif').
-	 * @return string The path where the converted image will be saved.
+	 * If the source refers to a known local file or can be resolved to one, the returned path
+	 * is the same directory and filename with the extension replaced by the requested format,
+	 * and rewritten under the plugin's `wppo` directory when the file is inside WP_CONTENT_DIR.
+	 * If the source cannot be resolved to a safe local path, the original source string is returned.
+	 *
+	 * @param string $source_image Absolute filesystem path or URL of the source image.
+	 * @param string $format Desired output format; typically 'webp' or 'avif'.
+	 * @return string Filesystem path where the converted image should be saved, or the original
+	 *                $source_image if a safe local path cannot be determined.
 	 * @since 1.0.0
 	 */
 	public static function get_img_path( string $source_image, string $format = 'webp' ): string {
-		$info = pathinfo( $source_image );
+		$normalized_source = wp_normalize_path( $source_image );
+		$is_already_local  = path_is_absolute( $normalized_source ) && (
+			strpos( $normalized_source, wp_normalize_path( ABSPATH ) ) === 0 ||
+			strpos( $normalized_source, wp_normalize_path( WP_CONTENT_DIR ) ) === 0
+		);
 
-		$new_file_name = $info['filename'] . '.' . $format;
+		if ( $is_already_local ) {
+			$local_path = $normalized_source;
+		} else {
+			// Use Util::get_local_path to get a clean local path from URL or existing path.
+			$local_path = Util::get_local_path( $source_image );
 
-		$new_image_path = wp_normalize_path( $info['dirname'] . '/' . $new_file_name );
+			if ( empty( $local_path ) ) {
+				// If Util::get_local_path failed, manually resolve if it's a URL.
+				$home_url    = untrailingslashit( home_url() );
+				$content_url = untrailingslashit( content_url() );
+				$local_base  = wp_normalize_path( ABSPATH );
 
-		// If home_url is present, remove it from the path.
-		if ( 0 === strpos( $new_image_path, wp_normalize_path( ABSPATH ) ) ) {
-			$local_path = str_replace(
-				wp_normalize_path( WP_CONTENT_DIR ),
-				wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
-				$new_image_path
-			);
-			return $local_path;
+				if ( strpos( $source_image, $content_url ) === 0 ) {
+					$relative_path = substr( $source_image, strlen( $content_url ) );
+					$local_base    = wp_normalize_path( WP_CONTENT_DIR );
+				} elseif ( strpos( $source_image, $home_url ) === 0 ) {
+					$relative_path = substr( $source_image, strlen( $home_url ) );
+				} else {
+					$relative_path = $source_image;
+				}
+
+				// Security: Block directory traversal.
+				if ( strpos( $relative_path, '..' ) !== false ) {
+					return $source_image;
+				}
+
+				$local_path = wp_normalize_path( untrailingslashit( $local_base ) . '/' . ltrim( $relative_path, '/' ) );
+
+				// Ensure it's still within the WP directory or WP_CONTENT_DIR for safety.
+				$norm_abspath = wp_normalize_path( ABSPATH );
+				$norm_content = wp_normalize_path( WP_CONTENT_DIR );
+				if ( strpos( $local_path, $norm_abspath ) !== 0 && strpos( $local_path, $norm_content ) !== 0 ) {
+					return $source_image;
+				}
+			}
 		}
 
-		$relative_path = wp_normalize_path( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $new_image_path ) );
+		// Replace extension.
+		$info       = pathinfo( $local_path );
+		$dirname    = isset( $info['dirname'] ) ? $info['dirname'] : dirname( $local_path );
+		$local_path = wp_normalize_path( $dirname . '/' . $info['filename'] . '.' . $format );
 
-		$local_path = str_replace(
-			wp_normalize_path( WP_CONTENT_DIR ),
-			wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
-			wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) )
-		);
+		// Adjust for the wppo directory inside wp-content.
+		$wp_content_path = wp_normalize_path( WP_CONTENT_DIR );
+		if ( strpos( $local_path, $wp_content_path ) === 0 ) {
+			$local_path = str_replace(
+				$wp_content_path,
+				wp_normalize_path( WP_CONTENT_DIR . '/wppo' ),
+				$local_path
+			);
+		}
 
 		return $local_path;
 	}

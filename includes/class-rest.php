@@ -41,10 +41,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Returns the routes for the REST API.
+		 * Provide the REST route definitions used when registering this class's endpoints.
 		 *
-		 * @since 1.0.0
-		 * @return array Registered routes.
+		 * Each array entry maps a route slug to its registration configuration including
+		 * HTTP methods, the callback handler, and the permission callback.
+		 *
+		 * @return array<string, array> Associative array of route slugs to route configuration arrays.
 		 */
 		private function get_routes() {
 			return array(
@@ -416,11 +418,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Handles database cleanup requests.
+		 * Perform database cleanup for the requested cleanup type.
 		 *
-		 * @param \WP_REST_Request $request The request object.
-		 * @since 1.1.0
-		 * @return \WP_REST_Response The response object.
+		 * Accepts a request param `type` (one of: `revisions`, `auto_drafts`, `trashed_posts`,
+		 * `spam_comments`, `trashed_comments`, `expired_transients`, `orphan_postmeta`, `all`)
+		 * and executes the corresponding cleanup operation.
+		 *
+		 * @param \WP_REST_Request $request REST request containing the `type` parameter.
+		 * @return \WP_REST_Response On success:
+		 *                           - For `all`: response with `results` (per-cleanup results) and `deleted` (total deleted).
+		 *                           - For specific types: response with `type` and `deleted` (number deleted).
+		 *                           On invalid `type`: 400 response with an error message.
+		 *                           On partial or total failure when `type` is `all`: 500 response with `failures` and `deleted`.
+		 *                           On failure of a specific cleanup method: 500 response with the error message.
 		 */
 		public function database_cleanup( \WP_REST_Request $request ) {
 			$params = $request->get_params();
@@ -433,8 +443,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( 'all' === $type ) {
-				$results = Database_Cleanup::clean_all();
-				$total   = array_sum( array_map( 'intval', $results ) );
+				$results  = Database_Cleanup::clean_all();
+				$total    = 0;
+				$failures = array();
+
+				foreach ( $results as $key => $value ) {
+					if ( is_wp_error( $value ) ) {
+						$failures[ $key ] = $value->get_error_message();
+					} else {
+						$total += (int) $value;
+					}
+				}
 
 				new Log(
 					sprintf(
@@ -443,6 +462,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						$total
 					)
 				);
+
+				if ( ! empty( $failures ) ) {
+					return $this->send_response(
+						array(
+							'failures' => $failures,
+							'deleted'  => $total,
+						),
+						false,
+						500,
+						__( 'Partial or total failure during database cleanup.', 'performance-optimisation' )
+					);
+				}
 
 				return $this->send_response(
 					array(
@@ -462,22 +493,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'orphan_postmeta'    => 'clean_orphan_postmeta',
 			);
 
-			$method  = $method_map[ $type ];
-			$deleted = Database_Cleanup::$method();
+			$method  = $method_map[ $type ] ?? null;
+			$deleted = 0;
+			switch ( $method ) {
+				case 'clean_revisions':
+					$deleted = Database_Cleanup::clean_revisions();
+					break;
+				case 'clean_auto_drafts':
+					$deleted = Database_Cleanup::clean_auto_drafts();
+					break;
+				case 'clean_trashed_posts':
+					$deleted = Database_Cleanup::clean_trashed_posts();
+					break;
+				case 'clean_spam_comments':
+					$deleted = Database_Cleanup::clean_spam_comments();
+					break;
+				case 'clean_trashed_comments':
+					$deleted = Database_Cleanup::clean_trashed_comments();
+					break;
+				case 'clean_expired_transients':
+					$deleted = Database_Cleanup::clean_expired_transients();
+					break;
+				case 'clean_orphan_postmeta':
+					$deleted = Database_Cleanup::clean_orphan_postmeta();
+					break;
+				default:
+					return $this->send_response( null, false, 400, __( 'Invalid cleanup method.', 'performance-optimisation' ) );
+			}
+
+			if ( false === $deleted ) {
+				$deleted = new \WP_Error( 'db_cleanup_failed', sprintf( '%s failed', $method ) );
+			}
+
+			if ( is_wp_error( $deleted ) ) {
+				return $this->send_response( null, false, 500, $deleted->get_error_message() );
+			}
 
 			new Log(
 				sprintf(
 					/* translators: %1$s: Cleanup type, %2$d: Number of items */
 					__( 'Database cleanup (%1$s): %2$d items removed on ', 'performance-optimisation' ),
 					$type,
-					$deleted
+					(int) $deleted
 				)
 			);
 
 			return $this->send_response(
 				array(
 					'type'    => $type,
-					'deleted' => $deleted,
+					'deleted' => (int) $deleted,
 				)
 			);
 		}
@@ -688,10 +752,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		}
 
 		/**
-		 * Sanitizes the nodes parameter.
+		 * Normalize and sanitize Redis node entries into an indexed array of non-empty strings.
 		 *
-		 * @param mixed $nodes The nodes to sanitize.
-		 * @return array|string Sanitized nodes.
+		 * When given an array, each element is sanitized, empty values are removed, and the result is reindexed.
+		 * When given a scalar, it is cast to string, sanitized, and returned as a single-element array if non-empty.
+		 *
+		 * @param string|array $nodes Node or list of nodes to sanitize and normalize.
+		 * @return string[] An indexed array of sanitized, non-empty node strings.
 		 */
 		private function sanitize_nodes( $nodes ) {
 			if ( is_array( $nodes ) ) {
@@ -699,6 +766,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 			$nodes = sanitize_text_field( (string) $nodes );
 			return $nodes ? array( $nodes ) : array();
+		}
+
+		/**
+		 * Refreshes the REST API nonce via AJAX to bypass stale X-WP-Nonce issues.
+		 *
+		 * @since 1.4.0
+		 * @return void
+		 */
+		public function ajax_get_nonce() {
+			if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+				wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'performance-optimisation' ) ), 403 );
+			}
+
+			wp_send_json_success(
+				array(
+					'nonce' => wp_create_nonce( 'wp_rest' ),
+				)
+			);
 		}
 
 		/**

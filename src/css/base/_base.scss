@@ -1,0 +1,76 @@
+.wppo-dashboard-view {
+	padding: 40px;
+	max-width: 1400px;
+	margin: 0 auto;
+	line-height: 1.5;
+
+	h2, h3, h4 {
+		color: var(--wppo-text-main);
+		letter-spacing: -0.01em;
+	}
+
+	@include respond-to('sm') {
+		padding: 24px;
+	}
+}
+
+/* Utilities */
+.wppo-mt-10 { margin-top: 10px; }
+.wppo-mt-12 { margin-top: 12px; }
+.wppo-mt-20 { margin-top: 20px; }
+.wppo-mt-24 { margin-top: 24px; }
+.wppo-text-small { font-size: 13px; }
+.wppo-flex-gap-12 { display: flex; gap: 12px; }
+
+.wppo-field-label {
+	display: block;
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--wppo-text-muted);
+	margin-bottom: 8px;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.wppo-activity-list {
+	li {
+		transition: var(--wppo-transition);
+		&:hover {
+			background: var(--wppo-bg-app);
+			padding-left: 8px;
+			border-radius: 4px;
+		}
+	}
+}
+
+.wppo-mobile-header {
+	display: none;
+	padding: 16px 24px;
+	background: #fff;
+	border-bottom: 1px solid var(--wppo-border);
+	justify-content: space-between;
+	align-items: center;
+
+	@include respond-to('lg') {
+		display: flex;
+	}
+
+	.wppo-mobile-brand {
+		font-weight: 800;
+		color: var(--wppo-primary);
+		font-size: 18px;
+	}
+
+	.wppo-mobile-toggle {
+		background: var(--wppo-bg-app);
+		border: 1px solid var(--wppo-border);
+		width: 40px;
+		height: 40px;
+		border-radius: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		color: var(--wppo-text-main);
+	}
+}
