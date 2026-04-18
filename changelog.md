@@ -2,6 +2,27 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.4.0] - 2026-04-18
+
+### Added
+
+- **Enterprise Redis Support:** Implemented high-availability Redis Object Cache with support for Sentinel and Cluster modes, including TLS/SSL encryption.
+- **Batched Processing:** Migrated database cleanup and cron tasks to atomic, batched processing to prevent memory exhaustion and timeout issues on large sites.
+- **Design System v2.1:** Introduced new modular UI components (`FeatureCard`, `FeatureHeader`, `SwitchField`) and a refactored Sass-based styling architecture for better performance and maintainability.
+- **Status Reporting:** Added real-time status reporting to the dashboard for clearer visibility into background optimization tasks.
+
+### Changed
+
+- **Hardening & Stabilization:** Significant refactoring of HTML processing and image optimization logic to improve reliability and security.
+- **AJAX Nonce Resilience:** Migrated security token management to an AJAX-based system, resolving issues with stale or expired nonces in long-running admin sessions.
+- **REST API Security:** Hardened REST API permission callbacks and input sanitization across all endpoints.
+
+### Fixed
+
+- **Decompression Bomb Protection:** Implemented image dimension and file size validation in image conversion routines to prevent resource exhaustion attacks.
+- **UI Consistency:** Resolved several CSS layout conflicts and improved theme adaptation for dashboard components.
+- **Database Reliability:** Fixed issues with uninitialized variables in REST cleanup controllers and improved error handling in revisions management.
+
 ## [1.3.0] - 2026-04-15
 
 ### Added

@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -30,7 +30,8 @@ Performance Optimisation helps you speed up your site with cache management, Jav
  - Preload settings for cache, fonts, DNS, and images.
  - Advanced lazy loading options.
  - Database Optimization: Clean database bloat manually or schedule automated cleanups (Daily/Weekly/Monthly) with granular control over post revisions.
- - Import/export plugin settings.
+ - **Enterprise Redis Support:** High-availability Object Cache with Sentinel, Cluster, and TLS/SSL support.
+ - **Import/export** plugin settings.
 
 == Installation ==
 
@@ -114,6 +115,15 @@ Composer configuration:
 7. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
 
 == Changelog ==
+
+= 1.4.0 (2026-04-18) =
+* New: Enterprise Redis Object Cache support including Sentinel, Cluster, and TLS/SSL encryption modes.
+* New: Atomic, batched processing for database cleanup and cron tasks to ensure stability on large-scale sites.
+* New: Upgraded Design System v2.1 with modular components (FeatureCard, FeatureHeader, SwitchField) and optimized Sass architecture.
+* New: Real-time status reporting on the dashboard for background optimization visibility.
+* Improvement: Hardened security architecture with AJAX-based nonce resilience and DoS protection for image conversion.
+* Improvement: Standardized REST API permission callbacks and input sanitization for enterprise compliance.
+* Fix: Resolved structural regressions in REST cleanup controllers and improved reliability of revision management.
 
 = 1.3.0 (2026-04-15) =
 * New: Core Tweaks section to remove WordPress bloat (Emojis, Embeds, Dashicons) and control Heartbeat limits.
@@ -221,6 +231,9 @@ Yes, lazy loading can be enabled in the Image Optimisation Settings tab. You can
 Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.4.0 (2026-04-18) =
+Major stability and feature release introducing Enterprise Redis Support, batched processing architecture for long-running tasks, and a refined Design System v2.1. Includes critical security hardening and AJAX-based session resilience.
 
 = 1.3.0 (2026-04-15) =
 Feature release introducing automated database optimization scheduling, comprehensive "Core Tweaks", MutationObserver-based lazy loading, and numerous systemic UI/UX improvements utilizing native WordPress CSS schemas.
