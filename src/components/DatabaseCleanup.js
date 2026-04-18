@@ -213,13 +213,13 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				</div>
 			) }
 
-			<div className="wppo-grid-2-col">
+			<div className="wppo-stacked-cards">
 				<FeatureCard
-					title="Automated Cleanup"
+					title="Automated Database Cleanup"
 					icon={ <FontAwesomeIcon icon={ faCalendarAlt } /> }
 				>
-					<div style={ { display: 'grid', gap: '20px' } }>
-						<div>
+					<div className="wppo-field-group">
+						<div className="wppo-field">
 							<label
 								className="wppo-field-label"
 								htmlFor="dbSchedule"
@@ -239,13 +239,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								<option value="monthly">Monthly</option>
 							</select>
 						</div>
-						<div
-							style={ {
-								display: 'grid',
-								gridTemplateColumns: '1fr 1fr',
-								gap: '16px',
-							} }
-						>
+						<div className="wppo-grid-2-col wppo-mt-24">
 							<div>
 								<label
 									className="wppo-field-label"
@@ -285,9 +279,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				</FeatureCard>
 
 				<FeatureCard
-					title="Database Health"
+					title="Total Database Overhead"
 					icon={ <FontAwesomeIcon icon={ faDatabase } /> }
-					actions={
+					footer={
 						<LoadingSubmitButton
 							className="wppo-button wppo-button--secondary"
 							onClick={ () =>
@@ -299,79 +293,72 @@ const DatabaseCleanup = ( { options = {} } ) => {
 							}
 							isLoading={ loading.all }
 							disabled={ totalItems === 0 }
-							label="Optimize Everything"
+							label="Optimize Everything Now"
 						/>
 					}
 				>
-					<div style={ { textAlign: 'center', padding: '10px 0' } }>
-						<span
-							style={ {
-								fontSize: '48px',
-								fontWeight: '800',
-								display: 'block',
-								color: 'var(--wppo-primary)',
-							} }
-						>
+					<div className="wppo-stat-hero">
+						<span className="wppo-stat-hero__value">
 							{ loadingCounts ? '...' : totalItems }
 						</span>
-						<span className="wppo-text-muted">
-							Total Overhead Items
+						<span className="wppo-stat-hero__label">
+							Total Optimization Opportunities
 						</span>
 					</div>
 				</FeatureCard>
 			</div>
 
-			<div
-				className="wppo-stats-grid"
-				style={ { gridTemplateColumns: 'repeat(3, 1fr)' } }
-			>
-				{ CLEANUP_TYPES.map( ( item ) => (
-					<FeatureCard
-						key={ item.key }
-						title={ item.label }
-						actions={
-							<button
-								className="wppo-button wppo-button--secondary wppo-button--sm"
-								onClick={ () =>
-									setConfirmDialog( {
-										isOpen: true,
-										type: item.key,
-										label: item.label,
-									} )
-								}
-								disabled={
-									( counts[ item.key ] || 0 ) === 0 ||
-									loading[ item.key ]
-								}
-							>
-								{ loading[ item.key ] ? '...' : 'Clean' }
-							</button>
-						}
-					>
-						<div
-							style={ {
-								display: 'flex',
-								justifyContent: 'space-between',
-								alignItems: 'center',
-							} }
+			<div className="wppo-mt-40">
+				<h4 className="wppo-section-title">Granular Cleanup Options</h4>
+				<div className="wppo-grid-2-col wppo-mt-20">
+					{ CLEANUP_TYPES.map( ( item ) => (
+						<FeatureCard
+							key={ item.key }
+							title={ item.label }
+							actions={
+								<button
+									className="wppo-button wppo-button--secondary wppo-button--sm"
+									onClick={ () =>
+										setConfirmDialog( {
+											isOpen: true,
+											type: item.key,
+											label: item.label,
+										} )
+									}
+									disabled={
+										( counts[ item.key ] || 0 ) === 0 ||
+										loading[ item.key ]
+									}
+								>
+									{ loading[ item.key ] ? '...' : 'Clean' }
+								</button>
+							}
 						>
-							<p
-								className="wppo-text-muted"
-								style={ { margin: 0, fontSize: '13px' } }
-							>
-								{ item.description }
-							</p>
-							<span
+							<div
 								style={ {
-									fontWeight: '700',
-									fontSize: '18px',
+									display: 'flex',
+									justifyContent: 'space-between',
+									alignItems: 'center',
 								} }
 							>
-								{ counts[ item.key ] || 0 }
-							</span>
-						</div>
-					</FeatureCard>
-				) ) }
+								<p
+									className="wppo-text-muted"
+									style={ { margin: 0, fontSize: '13px' } }
+								>
+									{ item.description }
+								</p>
+								<span
+									style={ {
+										fontWeight: '700',
+										fontSize: '18px',
+									} }
+								>
+									{ counts[ item.key ] || 0 }
+								</span>
+							</div>
+						</FeatureCard>
+					) ) }
+				</div>
 			</div>
 
 			<ConfirmDialog

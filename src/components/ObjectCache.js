@@ -285,7 +285,7 @@ const ObjectCache = ( { options = {} } ) => {
 				</div>
 			) }
 
-			<form className="wppo-grid-2-col" onSubmit={ handleSubmit }>
+			<form className="wppo-stacked-cards" onSubmit={ handleSubmit }>
 				<FeatureCard
 					title="Connection Settings"
 					icon={ <FontAwesomeIcon icon={ faLink } /> }
@@ -313,7 +313,7 @@ const ObjectCache = ( { options = {} } ) => {
 						</div>
 
 						{ settings.mode === 'standalone' ? (
-							<div className="wppo-grid-2-col wppo-mt-20">
+							<div className="wppo-grid-2-col wppo-mt-24">
 								<div>
 									<label
 										className="wppo-field-label"
@@ -386,7 +386,7 @@ const ObjectCache = ( { options = {} } ) => {
 							</div>
 						) }
 
-						<div className="wppo-grid-2-col wppo-mt-20">
+						<div className="wppo-grid-2-col wppo-mt-24">
 							<div>
 								<label
 									className="wppo-field-label"
@@ -422,7 +422,7 @@ const ObjectCache = ( { options = {} } ) => {
 							</div>
 						</div>
 
-						<div className="wppo-mt-12 wppo-flex-gap-12">
+						<div className="wppo-mt-24 wppo-flex-gap-12">
 							<button
 								type="button"
 								className="wppo-button wppo-button--secondary"
@@ -504,7 +504,10 @@ const ObjectCache = ( { options = {} } ) => {
 							</select>
 							<p
 								className="wppo-text-muted"
-								style={ { marginTop: '8px', fontSize: '13px' } }
+								style={ {
+									marginTop: '12px',
+									fontSize: '13px',
+								} }
 							>
 								Reduces memory footprint for enterprise caches.
 							</p>

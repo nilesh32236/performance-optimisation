@@ -149,7 +149,7 @@ const ImageOptimization = ( { options = {} } ) => {
 				</div>
 			) }
 
-			<div className="wppo-grid-2-col">
+			<div className="wppo-stacked-cards">
 				<FeatureCard
 					title="Lazy Loading"
 					icon={ <FontAwesomeIcon icon={ faEye } /> }
@@ -157,7 +157,7 @@ const ImageOptimization = ( { options = {} } ) => {
 					<div className="wppo-field-group">
 						<SwitchField
 							label="Enable Lazy Load"
-							description="Delay loading of images until scroll."
+							description="Images below the fold are loaded only when the user scrolls near them. Reduces initial page weight and improves Largest Contentful Paint (LCP) for above-the-fold content."
 							name="lazyLoadImages"
 							checked={ settings.lazyLoadImages }
 							onChange={ handleChange( setSettings ) }
@@ -180,10 +180,16 @@ const ImageOptimization = ( { options = {} } ) => {
 										value={ settings.excludeFirstImages }
 										onChange={ handleChange( setSettings ) }
 									/>
+									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+										Skip lazy loading for the first N images
+										on the page. Set to 1–3 to ensure your
+										hero/banner image loads immediately
+										without waiting for scroll.
+									</p>
 								</div>
 								<SwitchField
 									label="SVG Placeholders"
-									description="Lightweight blurred placeholders."
+									description="Replace the image src with a lightweight inline SVG blur placeholder while the real image loads. Prevents layout shift and gives a smooth loading experience."
 									name="replacePlaceholderWithSVG"
 									checked={
 										settings.replacePlaceholderWithSVG
@@ -195,7 +201,7 @@ const ImageOptimization = ( { options = {} } ) => {
 
 						<SwitchField
 							label="Wrap in Picture Tag"
-							description="Use modern picture elements."
+							description="Wrap &lt;img&gt; elements in a &lt;picture&gt; element to enable serving next-gen formats (WebP/AVIF) with a fallback for older browsers. Required for format conversion to work."
 							name="wrapInPicture"
 							checked={ settings.wrapInPicture }
 							onChange={ handleChange( setSettings ) }
@@ -210,7 +216,7 @@ const ImageOptimization = ( { options = {} } ) => {
 					<div className="wppo-field-group">
 						<SwitchField
 							label="Video Lazy Loading"
-							description="Delay iFrame and video tags."
+							description="Defer loading of &lt;iframe&gt; and &lt;video&gt; embeds until they enter the viewport. Significantly reduces initial page load time for pages with embedded YouTube, Vimeo, or other media."
 							name="lazyLoadVideos"
 							checked={ settings.lazyLoadVideos }
 							onChange={ handleChange( setSettings ) }
@@ -221,23 +227,25 @@ const ImageOptimization = ( { options = {} } ) => {
 								className="wppo-field-label"
 								htmlFor="excludeVideos"
 							>
-								Exclude from Lazy Load
+								Exclude from Video Lazy Load
 							</label>
 							<textarea
 								className="wppo-textarea"
 								id="excludeVideos"
 								name="excludeVideos"
 								rows="3"
-								placeholder="Class names or partial URLs"
+								placeholder="Class names or partial URLs (one per line)"
 								value={ settings.excludeVideos }
 								onChange={ handleChange( setSettings ) }
 							/>
+							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								Enter CSS class names or partial URLs of embeds
+								that should always load immediately.
+							</p>
 						</div>
 					</div>
 				</FeatureCard>
-			</div>
 
-			<div className="wppo-grid-2-col">
 				<FeatureCard
 					title="Next-Gen Conversion"
 					icon={ <FontAwesomeIcon icon={ faMagic } /> }
@@ -245,7 +253,7 @@ const ImageOptimization = ( { options = {} } ) => {
 					<div className="wppo-field-group">
 						<SwitchField
 							label="Auto Convert Formats"
-							description="Serve modern formats automatically."
+							description="Automatically convert uploaded JPEG/PNG images to modern formats (WebP or AVIF). Modern formats are 25–50% smaller than JPEG at the same quality, directly improving page speed scores."
 							name="convertImg"
 							checked={ settings.convertImg }
 							onChange={ handleChange( setSettings ) }
@@ -268,13 +276,17 @@ const ImageOptimization = ( { options = {} } ) => {
 										onChange={ handleChange( setSettings ) }
 									>
 										<option value="webp">
-											WebP (Standard)
+											WebP (Standard — 95%+ browser
+											support)
 										</option>
 										<option value="avif">
-											AVIF (Maximum Compression)
+											AVIF (Maximum Compression — newer
+											browsers only)
 										</option>
 										<option value="both">
-											Both (Best Compatibility)
+											Both (Best Compatibility — serves
+											AVIF where supported, WebP as
+											fallback)
 										</option>
 									</select>
 								</div>
@@ -290,10 +302,16 @@ const ImageOptimization = ( { options = {} } ) => {
 										id="excludeConvertImages"
 										name="excludeConvertImages"
 										rows="2"
-										placeholder="Partial URLs"
+										placeholder="Partial URLs (one per line)"
 										value={ settings.excludeConvertImages }
 										onChange={ handleChange( setSettings ) }
 									/>
+									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+										Images matching these partial URLs will
+										keep their original format. Useful for
+										logos or images where exact color
+										accuracy matters.
+									</p>
 								</div>
 							</div>
 						) }
@@ -320,6 +338,13 @@ const ImageOptimization = ( { options = {} } ) => {
 								value={ settings.maxWidthImgSize }
 								onChange={ handleChange( setSettings ) }
 							/>
+							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								Images wider than this value will have a{ ' ' }
+								<code>max-width</code> style applied. Set to{ ' ' }
+								<code>0</code> to disable. Useful for preventing
+								oversized images from breaking layouts on small
+								screens.
+							</p>
 						</div>
 						<div className="wppo-field">
 							<label
@@ -333,121 +358,137 @@ const ImageOptimization = ( { options = {} } ) => {
 								id="excludeSize"
 								type="text"
 								name="excludeSize"
-								placeholder="e.g. .no-resize, .hero"
+								placeholder="e.g. .no-resize, .hero-image"
 								value={ settings.excludeSize }
 								onChange={ handleChange( setSettings ) }
 							/>
+							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								Comma-separated CSS class names. Images with
+								these classes will not have the max-width
+								constraint applied.
+							</p>
+						</div>
+					</div>
+				</FeatureCard>
+
+				<FeatureCard
+					title="Advanced Preloading"
+					icon={ <FontAwesomeIcon icon={ faCloudUploadAlt } /> }
+				>
+					<div className="wppo-stacked-cards">
+						<div>
+							<SwitchField
+								label={ __(
+									'Preload Front Page Images',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Inject <link rel="preload"> hints for critical images on your homepage. Tells the browser to fetch these images at the highest priority, improving LCP scores for your most visited page.',
+									'performance-optimisation'
+								) }
+								name="preloadFrontPageImages"
+								checked={ settings.preloadFrontPageImages }
+								onChange={ handleChange( setSettings ) }
+							/>
+							{ settings.preloadFrontPageImages && (
+								<div className="wppo-field wppo-mt-12">
+									<label
+										className="wppo-field-label"
+										htmlFor="preloadFrontPageImagesUrls"
+									>
+										{ __(
+											'Frontpage Image URLs to Preload',
+											'performance-optimisation'
+										) }
+									</label>
+									<textarea
+										className="wppo-textarea"
+										id="preloadFrontPageImagesUrls"
+										name="preloadFrontPageImagesUrls"
+										rows="3"
+										placeholder="/wp-content/uploads/hero.jpg"
+										value={
+											settings.preloadFrontPageImagesUrls
+										}
+										onChange={ handleChange( setSettings ) }
+									/>
+									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+										One URL per line. Only add
+										above-the-fold images — preloading too
+										many images can hurt performance.
+									</p>
+								</div>
+							) }
+						</div>
+						<div>
+							<SwitchField
+								label="Preload Featured Images"
+								description="Automatically add preload hints for the featured image of posts and pages. Select which post types to apply this to below. Improves LCP for archive and single post pages."
+								name="preloadPostTypeImage"
+								checked={ settings.preloadPostTypeImage }
+								onChange={ handleChange( setSettings ) }
+							/>
+							{ settings.preloadPostTypeImage && (
+								<>
+									<div className="wppo-post-types-grid--chips">
+										{ settings.availablePostTypes.map(
+											( type ) => (
+												<label
+													key={ type }
+													htmlFor={ `type-${ type }` }
+													className={ `wppo-post-type-chip ${
+														settings.selectedPostType.includes(
+															type
+														)
+															? 'active'
+															: ''
+													}` }
+												>
+													<input
+														type="checkbox"
+														id={ `type-${ type }` }
+														className="screen-reader-text"
+														checked={ settings.selectedPostType.includes(
+															type
+														) }
+														onChange={ () =>
+															togglePostType(
+																type
+															)
+														}
+													/>
+													{ type }
+												</label>
+											)
+										) }
+									</div>
+									<div className="wppo-field wppo-field--spaced">
+										<label
+											className="wppo-field-label"
+											htmlFor="excludePostTypeImgUrl"
+										>
+											Exclude URLs from Preload
+										</label>
+										<textarea
+											className="wppo-textarea"
+											id="excludePostTypeImgUrl"
+											name="excludePostTypeImgUrl"
+											rows="2"
+											placeholder="Partial URLs (one per line)"
+											value={
+												settings.excludePostTypeImgUrl
+											}
+											onChange={ handleChange(
+												setSettings
+											) }
+										/>
+									</div>
+								</>
+							) }
 						</div>
 					</div>
 				</FeatureCard>
 			</div>
-
-			<FeatureCard
-				title="Advanced Preloading"
-				icon={ <FontAwesomeIcon icon={ faCloudUploadAlt } /> }
-			>
-				<div className="wppo-grid-2-col">
-					<div>
-						<SwitchField
-							label={ __(
-								'Preload Front Page Images',
-								'performance-optimisation'
-							) }
-							description={ __(
-								'Load critical images on your homepage early.',
-								'performance-optimisation'
-							) }
-							name="preloadFrontPageImages"
-							checked={ settings.preloadFrontPageImages }
-							onChange={ handleChange( setSettings ) }
-						/>
-						{ settings.preloadFrontPageImages && (
-							<div className="wppo-field wppo-mt-12">
-								<label
-									className="wppo-field-label"
-									htmlFor="preloadFrontPageImagesUrls"
-								>
-									{ __(
-										'Frontpage URLs to Preload',
-										'performance-optimisation'
-									) }
-								</label>
-								<textarea
-									className="wppo-textarea"
-									id="preloadFrontPageImagesUrls"
-									name="preloadFrontPageImagesUrls"
-									rows="3"
-									placeholder="URLs (one per line)"
-									value={
-										settings.preloadFrontPageImagesUrls
-									}
-									onChange={ handleChange( setSettings ) }
-								/>
-							</div>
-						) }
-					</div>
-					<div>
-						<SwitchField
-							label="Preload Featured Images"
-							description="Automatic preload for selected types."
-							name="preloadPostTypeImage"
-							checked={ settings.preloadPostTypeImage }
-							onChange={ handleChange( setSettings ) }
-						/>
-						{ settings.preloadPostTypeImage && (
-							<>
-								<div className="wppo-post-types-grid--chips">
-									{ settings.availablePostTypes.map(
-										( type ) => (
-											<label
-												key={ type }
-												htmlFor={ `type-${ type }` }
-												className={ `wppo-post-type-chip ${
-													settings.selectedPostType.includes(
-														type
-													)
-														? 'active'
-														: ''
-												}` }
-											>
-												<input
-													type="checkbox"
-													id={ `type-${ type }` }
-													className="screen-reader-text"
-													checked={ settings.selectedPostType.includes(
-														type
-													) }
-													onChange={ () =>
-														togglePostType( type )
-													}
-												/>
-												{ type }
-											</label>
-										)
-									) }
-								</div>
-								<div className="wppo-field wppo-field--spaced">
-									<label
-										className="wppo-field-label"
-										htmlFor="excludePostTypeImgUrl"
-									>
-										Exclude URLs from Preload
-									</label>
-									<textarea
-										className="wppo-textarea"
-										id="excludePostTypeImgUrl"
-										name="excludePostTypeImgUrl"
-										rows="2"
-										placeholder="Partial URLs (one per line)"
-										value={ settings.excludePostTypeImgUrl }
-										onChange={ handleChange( setSettings ) }
-									/>
-								</div>
-							</>
-						) }
-					</div>
-				</div>
-			</FeatureCard>
 		</div>
 	);
 };

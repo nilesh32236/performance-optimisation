@@ -1,43 +1,58 @@
 :root {
-	/* Colors */
-	--wppo-primary: #4f46e5;
-	--wppo-primary-hover: #4338ca;
-	--wppo-primary-soft: rgba(79, 70, 229, 0.1);
+	/* Brand Colors */
+	--wppo-primary: #6366f1;
+	--wppo-primary-hover: #4f46e5;
+	--wppo-primary-soft: rgba(99, 102, 241, 0.08);
+	--wppo-primary-medium: rgba(99, 102, 241, 0.15);
+
+	/* Backgrounds */
 	--wppo-bg-app: #f8fafc;
 	--wppo-bg-card: #ffffff;
+	--wppo-bg-sidebar: #0f172a;
+	--wppo-bg-sidebar-hover: rgba(255, 255, 255, 0.06);
+	--wppo-bg-sidebar-active: rgba(99, 102, 241, 0.2);
+
+	/* Borders */
 	--wppo-border: #e2e8f0;
-	--wppo-border-hover: #cbd5e1;
+	--wppo-border-hover: #c7d2e0;
+
+	/* Text */
 	--wppo-text-main: #0f172a;
 	--wppo-text-muted: #64748b;
 	--wppo-text-light: #94a3b8;
+	--wppo-text-sidebar: #94a3b8;
+	--wppo-text-sidebar-active: #ffffff;
 
 	/* Semantic Colors */
-	--wppo-success: #10b981;
+	--wppo-success: #059669;
 	--wppo-success-bg: #ecfdf5;
-	--wppo-success-border: #d1fae5;
-	--wppo-error: #ef4444;
+	--wppo-success-border: #a7f3d0;
+	--wppo-error: #dc2626;
 	--wppo-error-bg: #fef2f2;
 	--wppo-error-border: #fecaca;
-	--wppo-warning: #f59e0b;
+	--wppo-warning: #d97706;
 	--wppo-warning-bg: #fffbeb;
-	--wppo-warning-border: #fef3c7;
-	--wppo-info: #3b82f6;
+	--wppo-warning-border: #fde68a;
+	--wppo-info: #0284c7;
 	--wppo-info-bg: #f0f9ff;
 	--wppo-info-border: #bae6fd;
+
+	/* Danger */
+	--wppo-danger: #dc2626;
+	--wppo-danger-hover: #b91c1c;
 
 	/* Effects */
 	--wppo-radius: 12px;
 	--wppo-radius-sm: 8px;
-	--wppo-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-	--wppo-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-	--wppo-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-	
-	--wppo-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
+	--wppo-radius-xs: 6px;
+	--wppo-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+	--wppo-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+	--wppo-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+	--wppo-shadow-premium: 0 0 0 1px rgba(99, 102, 241, 0.08), 0 8px 24px -4px rgba(99, 102, 241, 0.12);
 
-$breakpoints: (
-	'sm': 640px,
-	'md': 768px,
-	'lg': 992px,
-	'xl': 1200px
-);
+	--wppo-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	--wppo-max-width: 1120px;
+
+	/* Sidebar */
+	--wppo-sidebar-width: 256px;
+}

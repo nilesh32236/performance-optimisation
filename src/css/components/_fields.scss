@@ -1,7 +1,7 @@
 .wppo-field-group {
 	display: flex;
 	flex-direction: column;
-	gap: 20px;
+	gap: 18px;
 }
 
 .wppo-switch-field {
@@ -9,29 +9,67 @@
 	justify-content: space-between;
 	align-items: flex-start;
 	gap: 16px;
+	padding: 14px 16px;
+	background: var(--wppo-bg-app);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius-sm);
+	transition: var(--wppo-transition);
+
+	&:hover {
+		border-color: var(--wppo-border-hover);
+		background: #f1f5f9;
+	}
+
+	.wppo-switch-field__info {
+		flex: 1;
+		min-width: 0;
+	}
 
 	strong {
 		display: block;
-		font-size: 15px;
+		font-size: 14px;
+		font-weight: 600;
 		color: var(--wppo-text-main);
 		margin-bottom: 2px;
+		line-height: 1.3;
 	}
 
 	.wppo-text-muted {
-		font-size: 13px;
+		font-size: 12.5px;
 		margin: 0;
+		line-height: 1.4;
+		color: var(--wppo-text-muted);
+	}
+
+	/* WordPress ToggleControl integration */
+	.components-toggle-control {
+		margin: 0 !important;
+		flex-shrink: 0;
+
+		.components-base-control__field {
+			margin: 0 !important;
+		}
+
+		/* Tint the WP toggle to match our brand color */
+		.components-form-toggle.is-checked .components-form-toggle__track {
+			background-color: var(--wppo-primary);
+		}
+
+		.components-form-toggle__track {
+			background-color: #cbd5e1;
+		}
 	}
 }
 
 .wppo-field-nest {
-	margin-top: -8px;
-	margin-left: 20px;
-	padding-left: 20px;
-	border-left: 2px solid var(--wppo-primary-soft);
+	margin-top: 4px;
+	margin-left: 16px;
+	padding-left: 16px;
+	border-left: 2px solid var(--wppo-primary-medium);
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
-	animation: wppo-slide-down 0.3s ease;
+	gap: 14px;
+	animation: wppo-slide-down 0.25s ease;
 
 	@media (prefers-reduced-motion: reduce) {
 		animation: none;
@@ -39,28 +77,34 @@
 }
 
 @keyframes wppo-slide-down {
-	from { opacity: 0; transform: translateY(-10px); }
-	to { opacity: 1; transform: translateY(0); }
+	from {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 .wppo-field {
 	&--spaced {
-		margin-top: 16px;
+		margin-top: 14px;
 	}
 
 	.wppo-field-label {
 		display: block;
-		font-size: 13px;
-		font-weight: 700;
+		font-size: 12px;
+		font-weight: 600;
 		color: var(--wppo-text-muted);
-		margin-bottom: 8px;
+		margin-bottom: 6px;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.06em;
 	}
 }
 
 .wppo-post-types-grid {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 10px;
+	gap: 8px;
 }

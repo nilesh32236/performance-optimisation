@@ -1,0 +1,110 @@
+.wppo-dialog-overlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(15, 23, 42, 0.55);
+	backdrop-filter: blur(3px);
+	z-index: 9999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	animation: wppo-overlay-in 0.15s ease;
+}
+
+@keyframes wppo-overlay-in {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+.wppo-dialog {
+	background: #fff;
+	border-radius: var(--wppo-radius);
+	box-shadow: 0 20px 60px -10px rgba(0, 0, 0, 0.25);
+	padding: 32px;
+	max-width: 440px;
+	width: 100%;
+	animation: wppo-dialog-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+	@keyframes wppo-dialog-in {
+		from {
+			opacity: 0;
+			transform: scale(0.95) translateY(8px);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1) translateY(0);
+		}
+	}
+
+	h3 {
+		margin: 0 0 12px 0;
+		font-size: 17px;
+		font-weight: 700;
+		color: var(--wppo-text-main);
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		letter-spacing: -0.02em;
+
+		svg {
+			color: var(--wppo-warning);
+			font-size: 18px;
+		}
+	}
+
+	p {
+		margin: 0 0 24px 0;
+		font-size: 14px;
+		line-height: 1.6;
+		color: var(--wppo-text-muted);
+	}
+
+	.wppo-dialog-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 10px;
+
+		.submit-button {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 7px;
+			padding: 9px 18px;
+			font-size: 13.5px;
+			font-weight: 600;
+			border-radius: var(--wppo-radius-sm);
+			cursor: pointer;
+			transition: var(--wppo-transition);
+			border: 1px solid transparent;
+
+			&.secondary {
+				background: #fff;
+				border-color: var(--wppo-border);
+				color: var(--wppo-text-main);
+
+				&:hover {
+					background: var(--wppo-bg-app);
+					border-color: var(--wppo-border-hover);
+				}
+			}
+
+			&.danger {
+				background: var(--wppo-danger);
+				color: #fff;
+
+				&:hover {
+					background: var(--wppo-danger-hover);
+				}
+			}
+
+			&:not(.secondary):not(.danger) {
+				background: var(--wppo-primary);
+				color: #fff;
+
+				&:hover {
+					background: var(--wppo-primary-hover);
+				}
+			}
+		}
+	}
+}
