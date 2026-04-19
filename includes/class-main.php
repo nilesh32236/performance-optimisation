@@ -953,9 +953,15 @@ class Main {
 	 * @return string Modified link tag with minified CSS.
 	 */
 	public function minify_css( $tag, $handle, $href ) {
+		// ⚡ Bolt: Early return for logged-in users, empty URLs, or excluded handles
+		// to avoid the expensive Util::get_local_path() computation.
+		if ( is_user_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) ) {
+			return $tag;
+		}
+
 		$local_path = Util::get_local_path( $href );
 
-		if ( is_user_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) || $this->is_css_minified( $local_path ) ) {
+		if ( $this->is_css_minified( $local_path ) ) {
 			return $tag;
 		}
 
@@ -983,9 +989,15 @@ class Main {
 	 * @return string Modified script tag with minified JavaScript.
 	 */
 	public function minify_js( $tag, $handle, $src ) {
+		// ⚡ Bolt: Early return for logged-in users, empty URLs, or excluded handles
+		// to avoid the expensive Util::get_local_path() computation.
+		if ( is_user_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) ) {
+			return $tag;
+		}
+
 		$local_path = Util::get_local_path( $src );
 
-		if ( is_user_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) || $this->is_js_minified( $local_path ) ) {
+		if ( $this->is_js_minified( $local_path ) ) {
 			return $tag;
 		}
 
