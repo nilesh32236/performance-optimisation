@@ -31,6 +31,7 @@ const PluginSetting = ( { options } ) => {
 	const [ logLoaded, setLogLoaded ] = useState( false );
 	const [ logPage, setLogPage ] = useState( 1 );
 	const [ logTotalPages, setLogTotalPages ] = useState( 1 );
+	const [ logError, setLogError ] = useState( null );
 
 	const getTimestamp = () => {
 		return new Date()
@@ -41,6 +42,7 @@ const PluginSetting = ( { options } ) => {
 
 	const loadActivityLog = async ( page = 1 ) => {
 		setLogLoading( true );
+		setLogError( null );
 		try {
 			const data = await fetchRecentActivities( page );
 			if ( data?.activities ) {
@@ -50,6 +52,7 @@ const PluginSetting = ( { options } ) => {
 				setLogLoaded( true );
 			}
 		} catch ( err ) {
+			setLogError( err.message || String( err ) );
 			console.error( 'Failed to load activity log:', err );
 		} finally {
 			setLogLoading( false );
@@ -240,6 +243,24 @@ const PluginSetting = ( { options } ) => {
 
 					{ logLoading && (
 						<p className="wppo-text-muted">Loading log…</p>
+					) }
+
+					{ logError && (
+						<div
+							className="wppo-notice wppo-notice--error"
+							role="alert"
+							aria-live="assertive"
+						>
+							{ logError }
+							<button
+								type="button"
+								className="wppo-button wppo-button--secondary wppo-button--sm"
+								style={ { marginLeft: '12px' } }
+								onClick={ () => loadActivityLog( logPage ) }
+							>
+								Retry
+							</button>
+						</div>
 					) }
 
 					{ logLoaded && (

@@ -180,14 +180,23 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		} )
 			.then( ( response ) => {
 				if ( response.data?.background ) {
+					// Background (Action Scheduler) path.
 					setBgProcessing( true );
 					setBgJobsQueued( response.data.jobs_queued || 0 );
-					// Clear raw paths — they are now queued.
 					setPendingPaths( { webp: [], avif: [] } );
 					if ( pollingRef.current ) {
 						clearInterval( pollingRef.current );
 					}
 					pollingRef.current = setInterval( pollJobStatus, 5000 );
+				} else {
+					// Synchronous path (Action Scheduler unavailable).
+					setPendingPaths( { webp: [], avif: [] } );
+					setBgJobsQueued( 0 );
+					setBgProcessing( false );
+					if ( pollingRef.current ) {
+						clearInterval( pollingRef.current );
+						pollingRef.current = null;
+					}
 				}
 			} )
 			.finally( () => handleLoading( 'optimize_images', false ) );

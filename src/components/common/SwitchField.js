@@ -12,9 +12,15 @@ import { ToggleControl } from '@wordpress/components';
  * @param {boolean}  props.checked       Whether the switch is on.
  * @param {Function} props.onChange      Change handler (receives synthetic event).
  * @param {boolean}  [props.showLabel]   Whether to show the label.
- * 
  */
-const SwitchField = ( { label, description, name, checked, onChange, showLabel = true } ) => {
+const SwitchField = ( {
+	label,
+	description,
+	name,
+	checked,
+	onChange,
+	showLabel = true,
+} ) => {
 	const id = useId();
 
 	const handleToggle = ( newValue ) => {
@@ -30,12 +36,14 @@ const SwitchField = ( { label, description, name, checked, onChange, showLabel =
 
 	return (
 		<div className="wppo-switch-field" id={ `${ id }-wrapper` }>
-			<div className="wppo-switch-field__info">
-				{ showLabel && <strong>{ label }</strong> }
-				{ description && (
-					<p className="wppo-text-muted">{ description }</p>
-				) }
-			</div>
+			{ ( showLabel || description ) && (
+				<div className="wppo-switch-field__info">
+					{ showLabel && <strong>{ label }</strong> }
+					{ description && (
+						<p className="wppo-text-muted">{ description }</p>
+					) }
+				</div>
+			) }
 			<ToggleControl
 				__nextHasNoMarginBottom
 				checked={ checked }

@@ -23,7 +23,10 @@ import StatusBadge from './common/StatusBadge';
 import Tooltip from './common/Tooltip';
 import SwitchField from './common/SwitchField';
 
-const t = wppoSettings.translations;
+const t =
+	typeof wppoSettings !== 'undefined' && wppoSettings.translations
+		? wppoSettings.translations
+		: {};
 
 /**
  * Metric definitions with descriptions for tooltips.
@@ -201,7 +204,10 @@ const MetricOverview = ( { result } ) => (
 );
 
 const PerformanceAudit = () => {
-	const homeUrl = wppoSettings.performance_audit?.homeUrl ?? '';
+	const homeUrl =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings.performance_audit?.homeUrl ?? ''
+			: '';
 
 	const [ url, setUrl ] = useState( homeUrl );
 	const [ scanning, setScanning ] = useState( false );
@@ -253,7 +259,9 @@ const PerformanceAudit = () => {
 					className="wppo-audit-controls__input"
 					value={ url }
 					onChange={ ( e ) => setUrl( e.target.value ) }
-					placeholder="https://example.com"
+					placeholder={
+						t.auditUrlPlaceholder || 'https://example.com'
+					}
 					required
 				/>
 				<div className="wppo-audit-controls__actions">
@@ -261,7 +269,7 @@ const PerformanceAudit = () => {
 						type="button"
 						className="wppo-button wppo-button--ghost"
 						onClick={ setHomeUrl }
-						title="Use Home URL"
+						title={ t.useHomeUrl || 'Use Home URL' }
 					>
 						<FontAwesomeIcon icon={ faGlobe } />
 					</button>
@@ -304,7 +312,9 @@ const PerformanceAudit = () => {
 								checked={ devMode }
 								onChange={ handleDevModeToggle }
 								name="devMode"
-								label="Developer Details"
+								label={
+									t.developerDetails || 'Developer Details'
+								}
 								showLabel={ false }
 							/>
 						</div>
@@ -330,36 +340,57 @@ const PerformanceAudit = () => {
 								label={
 									t.compression || 'Gzip/Brotli Compression'
 								}
-								value={ result.gzip_brotli_compression }
+								value={
+									result.gzip_brotli_compression
+										? t.enabled || 'Enabled'
+										: t.disabled || 'Disabled'
+								}
 								status={ boolStatus(
-									result.gzip_brotli_compression === 'Enabled'
+									result.gzip_brotli_compression
 								) }
 								tooltipKey="compression"
 							/>
 							<ResultRow
 								label={ t.cacheControl || 'Cache-Control' }
-								value={ result.cache_control_headers }
+								value={
+									result.cache_control_headers
+										? t.cacheControlGood ||
+										  'Set for at least 1 week'
+										: t.cacheControlPoor ||
+										  'Not set or shorter duration'
+								}
 								status={ boolStatus(
-									result.cache_control_headers ===
-										'Set for at least 1 week'
+									result.cache_control_headers
 								) }
 								tooltipKey="cache_control"
 							/>
 							<ResultRow
 								label={ t.modernImages || 'Modern Formats' }
-								value={ result.uses_modern_image_formats }
+								value={
+									result.uses_modern_image_formats
+										? t.modernFormatsUsed ||
+										  'Modern formats used'
+										: t.outdatedFormats ||
+										  'Outdated formats used'
+								}
 								status={ boolStatus(
-									result.uses_modern_image_formats ===
-										'Modern formats used'
+									result.uses_modern_image_formats
 								) }
 								tooltipKey="modern_images"
 							/>
 							<ResultRow
-								label={ t.altText || 'Image Alt Attributes' }
-								value={ result.image_alt_attributes }
+								label={
+									t.altAttributes || 'Image Alt Attributes'
+								}
+								value={
+									result.image_alt_attributes
+										? t.allImagesHaveAlt ||
+										  'All images have alt text'
+										: t.someImagesMissingAlt ||
+										  'Some images missing alt text'
+								}
 								status={ boolStatus(
-									result.image_alt_attributes ===
-										'All images have alt text'
+									result.image_alt_attributes
 								) }
 								tooltipKey="alt_text"
 							/>
@@ -368,36 +399,48 @@ const PerformanceAudit = () => {
 							{ devMode && (
 								<>
 									<AuditSection
-										title="Advanced Timings"
+										title={
+											t.advancedTimings ||
+											'Advanced Timings'
+										}
 										icon={ faTerminal }
 									/>
 									<ResultRow
-										label="DNS Lookup"
+										label={
+											t.dnsLookupLabel || 'DNS Lookup'
+										}
 										value={ `${ result.dns_lookup_time } ms` }
 										tooltipKey="dns"
 									/>
 									<ResultRow
-										label="TCP Connection"
+										label={
+											t.tcpConnection || 'TCP Connection'
+										}
 										value={ `${ result.connect_time } ms` }
 										tooltipKey="connect"
 									/>
 									<ResultRow
-										label="SSL Handshake"
+										label={
+											t.sslHandshake || 'SSL Handshake'
+										}
 										value={ `${ result.ssl_time } ms` }
 										tooltipKey="ssl"
 									/>
 									<ResultRow
-										label="True TTFB"
+										label={ t.trueTtfb || 'True TTFB' }
 										value={ `${ result.ttfb } ms` }
 										tooltipKey="ttfb"
 									/>
 
 									<AuditSection
-										title="Asset Breakdown"
+										title={
+											t.assetBreakdown ||
+											'Asset Breakdown'
+										}
 										icon={ faChartBar }
 									/>
 									<ResultRow
-										label="CSS Files"
+										label={ t.cssCount || 'CSS Files' }
 										value={ `${
 											result.css_count
 										} (${ formatBytes(
@@ -405,7 +448,7 @@ const PerformanceAudit = () => {
 										) })` }
 									/>
 									<ResultRow
-										label="JS Files"
+										label={ t.jsCount || 'JS Files' }
 										value={ `${
 											result.js_count
 										} (${ formatBytes(
@@ -413,7 +456,7 @@ const PerformanceAudit = () => {
 										) })` }
 									/>
 									<ResultRow
-										label="Total Images"
+										label={ t.mediaCount || 'Total Images' }
 										value={ `${
 											result.media_count
 										} (${ formatBytes(
@@ -421,39 +464,48 @@ const PerformanceAudit = () => {
 										) })` }
 									/>
 									<ResultRow
-										label="Lazy-Loaded"
+										label={ t.lazyLoaded || 'Lazy-Loaded' }
 										value={ result.lazy_image_count }
 									/>
 									<ResultRow
-										label="Eager-Loaded"
+										label={
+											t.eagerLoaded || 'Eager-Loaded'
+										}
 										value={ result.eager_image_count }
 									/>
 
 									<AuditSection
-										title="Environment"
+										title={ t.environment || 'Environment' }
 										icon={ faGlobe }
 									/>
 									<ResultRow
-										label="Page URL"
+										label={ t.pageUrl || 'Page URL' }
 										value={ result.page_url }
 									/>
 									<ResultRow
-										label="Scan Type"
+										label={ t.scanType || 'Scan Type' }
 										value={ result.scan_type }
 									/>
 									<ResultRow
-										label="HTTPS"
-										value={ result.uses_https }
+										label={ t.httpsStatus || 'HTTPS' }
+										value={
+											result.uses_https
+												? t.enabled || 'Enabled'
+												: t.disabled || 'Disabled'
+										}
 										status={ boolStatus(
-											result.uses_https === 'Enabled'
+											result.uses_https
 										) }
 									/>
 									<ResultRow
-										label="robots.txt"
-										value={ result.robots_txt_exists }
+										label={ t.robotsTxt || 'robots.txt' }
+										value={
+											result.robots_txt_exists
+												? t.exists || 'Exists'
+												: t.missing || 'Missing'
+										}
 										status={ boolStatus(
-											result.robots_txt_exists ===
-												'Exists'
+											result.robots_txt_exists
 										) }
 									/>
 								</>

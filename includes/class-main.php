@@ -144,8 +144,11 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
 		// Phase 1 — Local Diagnostics (v1.5.0).
-		require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
-		require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
+		// Only load on admin, AJAX, or REST requests — not on every frontend page load.
+		if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
+		}
 
 		if ( is_admin() ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
@@ -736,6 +739,38 @@ class Main {
 					'serverSoftware'           => __( 'Server Software', 'performance-optimisation' ),
 					'objectCache'              => __( 'Object Cache', 'performance-optimisation' ),
 					'activeCachePlugin'        => __( 'Active Cache Plugin', 'performance-optimisation' ),
+					// Status badge labels (used by StatusBadge.js).
+					'good'                     => __( 'Good', 'performance-optimisation' ),
+					'needsImprovement'         => __( 'Needs Improvement', 'performance-optimisation' ),
+					'poor'                     => __( 'Poor', 'performance-optimisation' ),
+					// PerformanceAudit developer details strings.
+					'auditUrlPlaceholder'      => __( 'https://example.com', 'performance-optimisation' ),
+					'useHomeUrl'               => __( 'Use Home URL', 'performance-optimisation' ),
+					'developerDetails'         => __( 'Developer Details', 'performance-optimisation' ),
+					'optimizations'            => __( 'Optimizations', 'performance-optimisation' ),
+					'advancedTimings'          => __( 'Advanced Timings', 'performance-optimisation' ),
+					'assetBreakdown'           => __( 'Asset Breakdown', 'performance-optimisation' ),
+					'environment'              => __( 'Environment', 'performance-optimisation' ),
+					'dnsLookupLabel'           => __( 'DNS Lookup', 'performance-optimisation' ),
+					'tcpConnection'            => __( 'TCP Connection', 'performance-optimisation' ),
+					'sslHandshake'             => __( 'SSL Handshake', 'performance-optimisation' ),
+					'trueTtfb'                 => __( 'True TTFB', 'performance-optimisation' ),
+					'lazyLoaded'               => __( 'Lazy-Loaded', 'performance-optimisation' ),
+					'eagerLoaded'              => __( 'Eager-Loaded', 'performance-optimisation' ),
+					'pageUrl'                  => __( 'Page URL', 'performance-optimisation' ),
+					'scanType'                 => __( 'Scan Type', 'performance-optimisation' ),
+					'enableDevDetails'         => __( 'Enable developer details to see granular network timings and environment info.', 'performance-optimisation' ),
+					// Boolean display labels.
+					'enabled'                  => __( 'Enabled', 'performance-optimisation' ),
+					'disabled'                 => __( 'Disabled', 'performance-optimisation' ),
+					'exists'                   => __( 'Exists', 'performance-optimisation' ),
+					'missing'                  => __( 'Missing', 'performance-optimisation' ),
+					'cacheControlGood'         => __( 'Set for at least 1 week', 'performance-optimisation' ),
+					'cacheControlPoor'         => __( 'Not set or shorter duration', 'performance-optimisation' ),
+					'modernFormatsUsed'        => __( 'Modern formats used', 'performance-optimisation' ),
+					'outdatedFormats'          => __( 'Outdated formats used', 'performance-optimisation' ),
+					'allImagesHaveAlt'         => __( 'All images have alt text', 'performance-optimisation' ),
+					'someImagesMissingAlt'     => __( 'Some images missing alt text', 'performance-optimisation' ),
 				),
 
 				// Frontend theme colors for accent syncing.

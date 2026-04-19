@@ -43,11 +43,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return array|\WP_Error   Associative array of metrics, or WP_Error on failure.
 		 */
 		public static function scan( string $url, string $scan_type = 'manual' ) {
-			$transient_key = 'wppo_telemetry_' . md5( $url );
+			$scan_type     = sanitize_key( $scan_type );
+			$transient_key = 'wppo_telemetry_' . md5( $url . '|' . $scan_type );
 			$cached        = get_transient( $transient_key );
 
 			if ( false !== $cached ) {
 				return $cached;
+			}
+
+			// SSRF protection: validate URL before making any network request.
+			if ( ! wp_http_validate_url( $url ) ) {
+				return new \WP_Error( 'invalid_url', __( 'The provided URL is not allowed.', 'performance-optimisation' ) );
+			}
+			$parsed_url = wp_parse_url( $url );
+			$scheme     = $parsed_url['scheme'] ?? '';
+			if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return new \WP_Error( 'invalid_url', __( 'Only http and https URLs are allowed.', 'performance-optimisation' ) );
+			}
+
+			// SSRF protection: validate that the URL belongs to this website.
+			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
+				return new \WP_Error( 'invalid_url', __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
 			}
 
 			$body      = '';
@@ -72,15 +89,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				curl_setopt( $ch, CURLOPT_HEADER, true );
 				curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, true );
 				curl_setopt( $ch, CURLOPT_ENCODING, '' ); // Auto-decode gzip/brotli/deflate.
-				curl_setopt( $ch, CURLOPT_MAXREDIRS, 5 );
+				curl_setopt( $ch, CURLOPT_MAXREDIRS, 2 );
 				curl_setopt( $ch, CURLOPT_TIMEOUT, 30 );
 				curl_setopt(
 					$ch,
 					CURLOPT_USERAGENT,
 					'WordPress/' . get_bloginfo( 'version' ) . '; ' . home_url()
 				);
-				curl_setopt( $ch, CURLOPT_SSL_VERIFYPEER, false );
-				curl_setopt( $ch, CURLOPT_SSL_VERIFYHOST, false );
+				// SSL verification enabled by default; filterable for local/dev environments.
+				$verify_ssl = (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url );
+				curl_setopt( $ch, CURLOPT_SSL_VERIFYPEER, $verify_ssl );
+				curl_setopt( $ch, CURLOPT_SSL_VERIFYHOST, $verify_ssl ? 2 : 0 );
+				// Restrict to HTTP/HTTPS only — prevent file://, ftp://, etc.
+				if ( defined( 'CURLPROTO_HTTP' ) && defined( 'CURLPROTO_HTTPS' ) ) {
+					curl_setopt( $ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS );
+					curl_setopt( $ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS );
+				}
 
 				$raw_response = curl_exec( $ch );
 				$info         = curl_getinfo( $ch );
@@ -110,7 +134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 					$timings   = array(
 						'dns'     => round( $info['namelookup_time'] * 1000, 2 ),
 						'connect' => round( ( $info['connect_time'] - $info['namelookup_time'] ) * 1000, 2 ),
-						'ssl'     => ( $info['appconnect_time'] > 0 )
+						'ssl'     => ( isset( $info['appconnect_time'] ) && $info['appconnect_time'] > 0 )
 							? round( ( $info['appconnect_time'] - $info['connect_time'] ) * 1000, 2 )
 							: 0,
 						'ttfb'    => round( ( $info['starttransfer_time'] - $info['pretransfer_time'] ) * 1000, 2 ),
@@ -129,7 +153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 					array(
 						'timeout'    => 30,
 						'user-agent' => 'WordPress/' . get_bloginfo( 'version' ) . '; ' . home_url(),
-						'sslverify'  => false,
+						'sslverify'  => (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url ),
 					)
 				);
 
@@ -176,13 +200,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				'js_total_size'             => $sizes['js'],
 				'media_total_size'          => $sizes['images'],
 				'total_size'                => $sizes['css'] + $sizes['js'] + $sizes['images'],
+				// Boolean/enum values — locale-independent so frontend comparisons work on any language.
 				'uses_https'                => self::check_https( $url ),
 				'uses_modern_image_formats' => self::check_modern_images( $resources['images'] ),
 				'image_alt_attributes'      => self::check_alt_attributes( $resources['images'] ),
 				'robots_txt_exists'         => self::check_robots_txt( $url ),
 				'gzip_brotli_compression'   => self::check_compression( $headers ),
 				'cache_control_headers'     => self::check_cache_control( $headers ),
-				'scan_type'                 => sanitize_text_field( $scan_type ),
+				'scan_type'                 => $scan_type,
+				// New metrics (Phase 1 refinements).
+				'dom_size'                  => $resources['dom_size'],
+				'unminified_assets_count'   => $resources['unminified_count'],
+				'third_party_scripts_count' => $resources['third_party_count'],
 			);
 
 			set_transient( $transient_key, $result, HOUR_IN_SECONDS );
@@ -211,11 +240,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * }
 		 */
 		private static function parse_resources( string $html ): array {
-			$css    = array();
-			$js     = array();
-			$images = array();
+			$css      = array();
+			$js       = array();
+			$images   = array();
+			$dom_size = 0;
 
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				// --- DOM Size ---
+				$processor = new \WP_HTML_Tag_Processor( $html );
+				while ( $processor->next_tag() ) {
+					++$dom_size;
+				}
+
 				// --- CSS stylesheets ---
 				$processor = new \WP_HTML_Tag_Processor( $html );
 				while ( $processor->next_tag( array( 'tag_name' => 'LINK' ) ) ) {
@@ -228,8 +264,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				}
 
 				// --- Scripts ---
-				// Also detect wppo-src: WPPO's Delay JS feature replaces src with wppo-src
-				// so the script is not executed until user interaction.
 				$processor = new \WP_HTML_Tag_Processor( $html );
 				while ( $processor->next_tag( array( 'tag_name' => 'SCRIPT' ) ) ) {
 					$src = $processor->get_attribute( 'src' );
@@ -242,8 +276,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				}
 
 				// --- Images ---
-				// An image is lazy-loaded when it uses data-src (WPPO lazy-load pattern)
-				// OR carries a loading="lazy" attribute (native browser lazy-load).
 				$processor = new \WP_HTML_Tag_Processor( $html );
 				while ( $processor->next_tag( array( 'tag_name' => 'IMG' ) ) ) {
 					$data_src = $processor->get_attribute( 'data-src' );
@@ -251,19 +283,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 					$loading  = strtolower( (string) ( $processor->get_attribute( 'loading' ) ?? '' ) );
 					$is_lazy  = ( null !== $data_src ) || ( 'lazy' === $loading );
 
-					// Prefer data-src (the real image URL) over src (often a placeholder).
 					$resolved_src = $data_src ? (string) $data_src : (string) $src;
 
 					if ( $resolved_src ) {
 						$images[] = array(
 							'src'  => $resolved_src,
-							'alt'  => (string) ( $processor->get_attribute( 'alt' ) ?? '' ),
+							'alt'  => $processor->get_attribute( 'alt' ),
 							'lazy' => $is_lazy,
 						);
 					}
 				}
 			} else {
-				// --- Fallback: regex-based parsing for WordPress < 6.2 ---
+				// --- Fallback: regex-based parsing ---
+				$dom_size = preg_match_all( '/<[a-zA-Z]/', $html );
+
 				preg_match_all(
 					'/<link\s[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)["\'][^>]*>/i',
 					$html,
@@ -271,7 +304,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				);
 				$css = $css_matches[1] ?? array();
 
-				// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript
 				preg_match_all(
 					'/<script\s[^>]*\b(?:src|wppo-src)=["\']([^"\']+)["\'][^>]*>/i',
 					$html,
@@ -299,7 +331,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 						$is_lazy = true;
 					}
 
-					$alt = '';
+					$alt = null;
 					if ( preg_match( '/\balt=["\']([^"\']*)["\']/', $attrs, $a ) ) {
 						$alt = $a[1];
 					}
@@ -312,7 +344,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				}
 			}
 
-			return compact( 'css', 'js', 'images' );
+			// --- New Metrics Calculation ---
+			$unminified_count = 0;
+			foreach ( array_merge( $css, $js ) as $asset ) {
+				if ( ! preg_match( '/\.min\.(js|css)(\?.*)?$/i', $asset ) ) {
+					++$unminified_count;
+				}
+			}
+
+			$third_party_count = 0;
+			$home_host         = wp_parse_url( home_url(), PHP_URL_HOST );
+			foreach ( $js as $script ) {
+				$host = wp_parse_url( $script, PHP_URL_HOST );
+				if ( $host && $host !== $home_host ) {
+					++$third_party_count;
+				}
+			}
+
+			return array(
+				'css'               => $css,
+				'js'                => $js,
+				'images'            => $images,
+				'dom_size'          => $dom_size,
+				'unminified_count'  => $unminified_count,
+				'third_party_count' => $third_party_count,
+			);
 		}
 
 		/**
@@ -348,6 +404,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				if ( $local_path && file_exists( $local_path ) ) {
 					return (int) filesize( $local_path );
 				}
+
+				// Fallback: Individual HEAD request for external/CDN assets.
+				$response = wp_remote_head(
+					$url,
+					array(
+						'timeout'   => 5,
+						'sslverify' => (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url ),
+					)
+				);
+
+				if ( ! is_wp_error( $response ) ) {
+					$content_length = wp_remote_retrieve_header( $response, 'content-length' );
+					if ( $content_length ) {
+						return (int) $content_length;
+					}
+				}
+
 				return 0;
 			};
 
@@ -377,41 +450,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 */
 		private static function measure_ttfb( string $url ): float {
 			$start = microtime( true );
-			wp_remote_head(
+			wp_remote_get(
 				$url,
 				array(
 					'timeout'   => 10,
-					'sslverify' => false,
+					'sslverify' => (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url ),
 				)
 			);
+			// TTFB is essentially the time until we start receiving the response body,
+			// which wp_remote_get returns after the whole body is fetched, but for a
+			// basic fallback, timing the full GET is more representative of rendering
+			// path than timing a HEAD request which often bypasses full PHP execution.
 			return round( ( microtime( true ) - $start ) * 1000, 2 );
 		}
 
 		/**
 		 * Check whether the URL uses HTTPS.
 		 *
+		 * Returns a locale-independent boolean string so frontend comparisons
+		 * work correctly on non-English installs.
+		 *
 		 * @since  1.5.0
 		 * @param  string $url The URL to check.
-		 * @return string 'Enabled' if HTTPS, 'Disabled' otherwise.
+		 * @return bool True if HTTPS, false otherwise.
 		 */
-		private static function check_https( string $url ): string {
-			return ( 0 === strpos( $url, 'https://' ) )
-				? esc_html__( 'Enabled', 'performance-optimisation' )
-				: esc_html__( 'Disabled', 'performance-optimisation' );
+		private static function check_https( string $url ): bool {
+			return 0 === strpos( $url, 'https://' );
 		}
 
 		/**
 		 * Check whether Gzip, Brotli, or Deflate compression is active.
 		 *
-		 * When cURL is used with CURLOPT_ENCODING, the server sends the original
-		 * Content-Encoding header but cURL decodes the body transparently. We check
-		 * the raw header value to report the actual compression method in use.
+		 * Returns a locale-independent boolean so frontend comparisons work on
+		 * non-English installs.
 		 *
 		 * @since  1.5.0
-		 * @param  \Requests_Utility_CaseInsensitiveDictionary|array $headers Response headers.
-		 * @return string 'Enabled' if compressed, 'Disabled' otherwise.
+		 * @param  object|array $headers Response headers.
+		 * @return bool True if compressed, false otherwise.
 		 */
-		private static function check_compression( $headers ): string {
+		private static function check_compression( $headers ): bool {
 			$encoding = '';
 
 			if ( is_object( $headers ) && method_exists( $headers, 'offsetGet' ) ) {
@@ -420,23 +497,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				$encoding = (string) ( $headers['content-encoding'] ?? $headers['Content-Encoding'] ?? '' );
 			}
 
-			return ( false !== stripos( $encoding, 'gzip' )
+			return false !== stripos( $encoding, 'gzip' )
 				|| false !== stripos( $encoding, 'br' )
-				|| false !== stripos( $encoding, 'deflate' ) )
-				? esc_html__( 'Enabled', 'performance-optimisation' )
-				: esc_html__( 'Disabled', 'performance-optimisation' );
+				|| false !== stripos( $encoding, 'deflate' );
 		}
 
 		/**
 		 * Check whether Cache-Control headers are set for at least one week.
 		 *
-		 * Looks for a max-age directive of 604800 seconds or greater.
+		 * Returns a locale-independent boolean so frontend comparisons work on
+		 * non-English installs.
 		 *
 		 * @since  1.5.0
-		 * @param  \Requests_Utility_CaseInsensitiveDictionary|array $headers Response headers.
-		 * @return string Human-readable cache-control status.
+		 * @param  object|array $headers Response headers.
+		 * @return bool True if max-age >= 604800, false otherwise.
 		 */
-		private static function check_cache_control( $headers ): string {
+		private static function check_cache_control( $headers ): bool {
 			$cc = '';
 
 			if ( is_object( $headers ) && method_exists( $headers, 'offsetGet' ) ) {
@@ -445,80 +521,92 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				$cc = (string) ( $headers['cache-control'] ?? $headers['Cache-Control'] ?? '' );
 			}
 
-			if ( preg_match( '/max-age\s*=\s*(\d+)/i', $cc, $matches ) && (int) $matches[1] >= 604800 ) {
-				return esc_html__( 'Set for at least 1 week', 'performance-optimisation' );
-			}
-
-			return esc_html__( 'Not set or set for a shorter duration', 'performance-optimisation' );
+			return preg_match( '/max-age\s*=\s*(\d+)/i', $cc, $matches )
+				&& (int) $matches[1] >= 604800;
 		}
 
 		/**
 		 * Check whether a robots.txt file exists at the given URL's root.
 		 *
-		 * Issues a secondary wp_remote_get() to {scheme}://{host}/robots.txt.
+		 * Returns a locale-independent boolean so frontend comparisons work on
+		 * non-English installs.
 		 *
 		 * @since  1.5.0
 		 * @param  string $url The page URL whose host to check.
-		 * @return string 'Exists' if robots.txt returns HTTP 200, 'Missing' otherwise.
+		 * @return bool True if robots.txt returns HTTP 200, false otherwise.
 		 */
-		private static function check_robots_txt( string $url ): string {
+		private static function check_robots_txt( string $url ): bool {
 			$parsed     = wp_parse_url( $url );
 			$scheme     = $parsed['scheme'] ?? 'https';
 			$host       = $parsed['host'] ?? '';
 			$robots_url = $scheme . '://' . $host . '/robots.txt';
 
+			// Validate robots.txt URL before fetching.
+			if ( ! wp_http_validate_url( $robots_url ) ) {
+				return false;
+			}
+
 			$response = wp_remote_get(
 				$robots_url,
 				array(
 					'timeout'   => 5,
-					'sslverify' => false,
+					'sslverify' => (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $robots_url ),
 				)
 			);
 
 			if ( is_wp_error( $response ) ) {
-				return esc_html__( 'Missing', 'performance-optimisation' );
+				return false;
 			}
 
-			return ( 200 === (int) wp_remote_retrieve_response_code( $response ) )
-				? esc_html__( 'Exists', 'performance-optimisation' )
-				: esc_html__( 'Missing', 'performance-optimisation' );
+			return 200 === (int) wp_remote_retrieve_response_code( $response );
 		}
 
 		/**
 		 * Check whether any images use modern formats (WebP or AVIF).
 		 *
+		 * Returns a locale-independent boolean so frontend comparisons work on
+		 * non-English installs.
+		 *
 		 * @since  1.5.0
 		 * @param  array $images Array of image data from parse_resources().
-		 * @return string 'Modern formats used' or 'Outdated formats used'.
+		 * @return bool True if at least one modern-format image found.
 		 */
-		private static function check_modern_images( array $images ): string {
+		private static function check_modern_images( array $images ): float {
+			if ( empty( $images ) ) {
+				return 100.0;
+			}
+
+			$modern_count = 0;
 			foreach ( $images as $img ) {
 				if ( preg_match( '/\.(webp|avif)(\?.*)?$/i', $img['src'] ) ) {
-					return esc_html__( 'Modern formats used', 'performance-optimisation' );
+					++$modern_count;
 				}
 			}
-			return esc_html__( 'Outdated formats used', 'performance-optimisation' );
+			return round( ( $modern_count / count( $images ) ) * 100, 2 );
 		}
 
 		/**
 		 * Check whether all images have non-empty alt attributes.
 		 *
+		 * Returns a locale-independent boolean so frontend comparisons work on
+		 * non-English installs.
+		 *
 		 * @since  1.5.0
 		 * @param  array $images Array of image data from parse_resources().
-		 * @return string 'All images have alt text' or 'Some or no images have alt text'.
+		 * @return bool True if all images have alt text, false otherwise.
 		 */
-		private static function check_alt_attributes( array $images ): string {
+		private static function check_alt_attributes( array $images ): bool {
 			if ( empty( $images ) ) {
-				return esc_html__( 'All images have alt text', 'performance-optimisation' );
+				return true;
 			}
 
 			foreach ( $images as $img ) {
-				if ( '' === trim( $img['alt'] ) ) {
-					return esc_html__( 'Some or no images have alt text', 'performance-optimisation' );
+				if ( null === $img['alt'] ) {
+					return false;
 				}
 			}
 
-			return esc_html__( 'All images have alt text', 'performance-optimisation' );
+			return true;
 		}
 
 		/**
@@ -533,9 +621,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return void
 		 */
 		public static function register_transient_key( string $key ): void {
-			$index   = get_option( 'wppo_transient_index', array() );
-			$index[] = $key;
-			update_option( 'wppo_transient_index', array_unique( $index ), false );
+			// Use an associative map keyed by transient name so adding is idempotent.
+			// Prune stale entries (transient no longer exists) and cap at 200 to prevent
+			// unbounded growth. This also reduces race-condition impact on high-traffic sites.
+			$index = get_option( 'wppo_transient_index', array() );
+
+			// Add/update this key with current timestamp.
+			$index[ $key ] = time();
+
+			// Prune entries whose transients have already expired.
+			foreach ( array_keys( $index ) as $stored_key ) {
+				if ( false === get_transient( $stored_key ) ) {
+					unset( $index[ $stored_key ] );
+				}
+			}
+
+			// Cap at 200 most-recent entries.
+			if ( count( $index ) > 200 ) {
+				arsort( $index ); // Sort by timestamp descending.
+				$index = array_slice( $index, 0, 200, true );
+			}
+
+			update_option( 'wppo_transient_index', $index, false );
 		}
 	}
 }

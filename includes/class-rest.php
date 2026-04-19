@@ -809,6 +809,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'A valid URL is required.', 'performance-optimisation' ) );
 			}
 
+			// SSRF protection: reject URLs that do not pass WordPress HTTP validation.
+			// wp_http_validate_url() rejects loopback, private, and reserved addresses.
+			if ( ! wp_http_validate_url( $url ) ) {
+				return $this->send_response( null, false, 400, __( 'A valid, allowed URL is required.', 'performance-optimisation' ) );
+			}
+
+			// Only allow http and https schemes.
+			$parsed_url = wp_parse_url( $url );
+			$scheme     = $parsed_url['scheme'] ?? '';
+			if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return $this->send_response( null, false, 400, __( 'A valid, allowed URL is required.', 'performance-optimisation' ) );
+			}
+
+			// SSRF protection: validate that the URL belongs to this website.
+			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
+				return $this->send_response( null, false, 400, __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
+			}
+
 			$result = Telemetry::scan( $url, 'manual' );
 
 			if ( is_wp_error( $result ) ) {

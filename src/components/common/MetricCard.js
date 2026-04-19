@@ -15,7 +15,7 @@ const MetricCard = ( { label, value, unit = '', status = null } ) => {
 			<span className="wppo-metric-card__label">{ label }</span>
 			<span className="wppo-metric-card__value">
 				{ value }
-				{ unit && (
+				{ unit !== null && unit !== undefined && unit !== '' && (
 					<span className="wppo-metric-card__unit"> { unit }</span>
 				) }
 			</span>

@@ -30,6 +30,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 		/**
 		 * Known cache plugin slugs used to detect active cache plugins.
+		 * Does NOT include 'performance-optimisation' — this plugin is never
+		 * reported as the active cache plugin for third-party detection purposes.
 		 *
 		 * @var   string[]
 		 * @since 1.5.0
@@ -43,7 +45,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			'wp-fastest-cache',
 			'comet-cache',
 			'hyper-cache',
-			'performance-optimisation',
 		);
 
 		/**
@@ -87,13 +88,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 */
 		public static function get_php(): array {
 			return array(
-				'version'             => phpversion() ? phpversion() : null,
-				'sapi'                => php_sapi_name() ? php_sapi_name() : null,
-				'memory_limit'        => ini_get( 'memory_limit' ) ? ini_get( 'memory_limit' ) : null,
-				'max_execution_time'  => ini_get( 'max_execution_time' ) ? ini_get( 'max_execution_time' ) : null,
-				'upload_max_filesize' => ini_get( 'upload_max_filesize' ) ? ini_get( 'upload_max_filesize' ) : null,
-				'post_max_size'       => ini_get( 'post_max_size' ) ? ini_get( 'post_max_size' ) : null,
-				'display_errors'      => ini_get( 'display_errors' ) ? ini_get( 'display_errors' ) : null,
+				'version'             => phpversion(),
+				'sapi'                => php_sapi_name(),
+				'memory_limit'        => false !== ini_get( 'memory_limit' ) ? ini_get( 'memory_limit' ) : null,
+				'max_execution_time'  => false !== ini_get( 'max_execution_time' ) ? ini_get( 'max_execution_time' ) : null,
+				'upload_max_filesize' => false !== ini_get( 'upload_max_filesize' ) ? ini_get( 'upload_max_filesize' ) : null,
+				'post_max_size'       => false !== ini_get( 'post_max_size' ) ? ini_get( 'post_max_size' ) : null,
+				'display_errors'      => false !== ini_get( 'display_errors' ) ? ini_get( 'display_errors' ) : null,
 				'extensions_count'    => count( get_loaded_extensions() ),
 			);
 		}
@@ -113,10 +114,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		public static function get_database(): array {
 			global $wpdb;
 
+			$extension      = null;
+			$client_version = null;
+
+			if ( isset( $wpdb->dbh ) && is_object( $wpdb->dbh ) ) {
+				$extension = get_class( $wpdb->dbh );
+				if ( $wpdb->dbh instanceof \mysqli ) {
+					$client_version = $wpdb->dbh->client_info ?? null;
+				} elseif ( property_exists( $wpdb->dbh, 'client_info' ) ) {
+					$client_version = $wpdb->dbh->client_info;
+				}
+			}
+
 			return array(
 				'server_version'  => $wpdb->db_version() ? $wpdb->db_version() : null,
-				'extension'       => isset( $wpdb->dbh ) ? get_class( $wpdb->dbh ) : null,
-				'client_version'  => $wpdb->dbh->client_info ?? null,
+				'extension'       => $extension,
+				'client_version'  => $client_version,
 				'max_connections' => self::get_mysql_var( 'max_connections' ),
 			);
 		}
@@ -136,7 +149,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		public static function get_wordpress(): array {
 			return array(
 				'version'             => get_bloginfo( 'version' ),
-				'environment_type'    => defined( 'WP_ENVIRONMENT_TYPE' ) ? WP_ENVIRONMENT_TYPE : 'production',
+				'environment_type'    => wp_get_environment_type(),
 				'permalink_structure' => get_option( 'permalink_structure' ) ? get_option( 'permalink_structure' ) : __( 'Default', 'performance-optimisation' ),
 				'using_https'         => is_ssl() ? __( 'Yes', 'performance-optimisation' ) : __( 'No', 'performance-optimisation' ),
 				'multisite'           => is_multisite() ? __( 'Yes', 'performance-optimisation' ) : __( 'No', 'performance-optimisation' ),
@@ -248,6 +261,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		private static function get_active_cache_plugin(): string {
 			$active_plugins = (array) get_option( 'active_plugins', array() );
 
+			// On multisite, also check network-activated plugins.
+			if ( is_multisite() ) {
+				$network_plugins = array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) );
+				$active_plugins  = array_merge( $active_plugins, $network_plugins );
+			}
+
 			foreach ( $active_plugins as $plugin_path ) {
 				$slug = dirname( $plugin_path );
 				// Single-file plugins have dirname of '.'.
@@ -273,11 +292,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			global $wpdb;
 
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$result = $wpdb->get_var(
+			$row = $wpdb->get_row(
 				$wpdb->prepare( 'SHOW VARIABLES LIKE %s', $variable )
 			);
 
-			return $result ? $result : null;
+			// SHOW VARIABLES returns two columns: Variable_name and Value.
+			// get_var() returns column 0 (Variable_name) by default, so we use get_row().
+			return isset( $row->Value ) ? (string) $row->Value : null; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 		}
 
 		/**

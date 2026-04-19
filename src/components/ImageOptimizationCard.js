@@ -55,7 +55,10 @@ const ImageOptimizationCard = ( {
 		>
 			<div className="wppo-progress-grid">
 				<div className="wppo-progress-section">
-					<div className="wppo-progress-header">
+					<div
+						className="wppo-progress-header"
+						id="wppo-webp-progress-label"
+					>
 						<span>WebP Conversion Progress</span>
 						<span>
 							{ completed.webp || 0 } / { totalWebP }
@@ -64,6 +67,7 @@ const ImageOptimizationCard = ( {
 					<div
 						className="wppo-progress-bar"
 						role="progressbar"
+						aria-labelledby="wppo-webp-progress-label"
 						aria-valuemin="0"
 						aria-valuemax="100"
 						aria-valuenow={ Math.round( webpPercent ) }
@@ -76,7 +80,10 @@ const ImageOptimizationCard = ( {
 				</div>
 
 				<div className="wppo-progress-section">
-					<div className="wppo-progress-header">
+					<div
+						className="wppo-progress-header"
+						id="wppo-avif-progress-label"
+					>
 						<span>AVIF Conversion Progress</span>
 						<span>
 							{ completed.avif || 0 } / { totalAvif }
@@ -85,6 +92,7 @@ const ImageOptimizationCard = ( {
 					<div
 						className="wppo-progress-bar"
 						role="progressbar"
+						aria-labelledby="wppo-avif-progress-label"
 						aria-valuemin="0"
 						aria-valuemax="100"
 						aria-valuenow={ Math.round( avifPercent ) }

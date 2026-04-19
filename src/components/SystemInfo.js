@@ -14,6 +14,8 @@ import FeatureCard from './common/FeatureCard';
 
 const t = wppoSettings.translations;
 
+const DEFAULT_SCAN_ERROR = 'Failed to fetch system info. Please try again.';
+
 /**
  * A single key-value row in a system info table.
  *
@@ -79,10 +81,12 @@ const SystemInfo = () => {
 				setInfo( response.data );
 				setLoaded( true );
 			} else {
-				setError( response.message || t.scanError );
+				setError(
+					response.message || t.scanError || DEFAULT_SCAN_ERROR
+				);
 			}
 		} catch ( err ) {
-			setError( t.scanError );
+			setError( t.scanError || DEFAULT_SCAN_ERROR );
 			console.error( 'System info fetch error:', err );
 		} finally {
 			setLoading( false );
