@@ -91,14 +91,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$parsed_url = wp_parse_url( $url );
 
 			// Get the path from the parsed URL.
-			$relative_path = wp_normalize_path( $parsed_url['path'] ) ?? '';
+			$relative_path = wp_normalize_path( $parsed_url['path'] ?? '' );
 
 			if ( strpos( $relative_path, '..' ) !== false ) {
 				return '';
 			}
 
-			// If home_url is present, remove it from the path.
-			$relative_path = str_replace( wp_normalize_path( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '' ), '', $relative_path );
+			// If home_url has a subdirectory path, remove it only from the start.
+			$home_path = wp_normalize_path( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '' );
+			if ( $home_path && '/' !== $home_path ) {
+				if ( 0 === strpos( $relative_path, $home_path ) ) {
+					$relative_path = substr( $relative_path, strlen( $home_path ) );
+				}
+			}
 
 			// Return the full local path.
 			return wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) );

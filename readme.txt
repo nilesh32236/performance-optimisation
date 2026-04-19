@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,6 +31,8 @@ Performance Optimisation helps you speed up your site with cache management, Jav
  - Advanced lazy loading options.
  - Database Optimization: Clean database bloat manually or schedule automated cleanups (Daily/Weekly/Monthly) with granular control over post revisions.
  - **Enterprise Redis Support:** High-availability Object Cache with Sentinel, Cluster, and TLS/SSL support.
+ - **Performance Monitor:** High-precision local telemetry for Core Web Vitals and network diagnostics.
+ - **System Info Dashboard:** Real-time environment diagnostic tool for PHP, DB, and WordPress.
  - **Import/export** plugin settings.
 
 == Installation ==
@@ -115,6 +117,13 @@ Composer configuration:
 7. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
 
 == Changelog ==
+
+= 1.5.0 (2026-04-20) =
+* New: Performance Monitor — High-precision local telemetry engine using raw cURL for granular network diagnostics (DNS, Connect, SSL, TTFB).
+* New: System Info Dashboard — Real-time environment diagnostic tool providing detailed PHP, Database, WordPress, and Server metrics.
+* New: Developer Mode — Advanced UI toggle for granular performance metrics and environment data.
+* Improvement: Enhanced SSRF protection for local telemetry scans.
+* Improvement: Modernized UI with dynamic WordPress admin color scheme adaptation using `color-mix()`.
 
 = 1.4.0 (2026-04-18) =
 * New: Enterprise Redis Object Cache support including Sentinel, Cluster, and TLS/SSL encryption modes.

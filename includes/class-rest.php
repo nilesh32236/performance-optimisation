@@ -107,6 +107,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'handle_object_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
+
+				// Phase 1 — Local Diagnostics (v1.5.0).
+				'system_info'             => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_system_info' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
+				'performance_scan'        => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'run_performance_scan' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
 			);
 		}
 
@@ -337,7 +349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$response = Img_Converter::get_img_info();
 
-			return new \WP_REST_Response( $response, 200 );
+			return $this->send_response( $response, true, 200, __( 'Images optimized successfully.', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -766,6 +778,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'nonce' => wp_create_nonce( 'wp_rest' ),
 				)
 			);
+		}
+
+		/**
+		 * Returns all system information groups (PHP, DB, WordPress, server, cache).
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since 1.5.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_system_info( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
+			return $this->send_response( System_Info::get_all() );
+		}
+
+		/**
+		 * Runs a local telemetry scan on the provided URL.
+		 *
+		 * Accepts a POST body with a 'url' parameter. Returns all 16 performance
+		 * metric keys or a WP_Error on failure.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.5.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function run_performance_scan( \WP_REST_Request $request ): \WP_REST_Response {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
+			$params = $request->get_params();
+			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
+
+			if ( empty( $url ) ) {
+				return $this->send_response( null, false, 400, __( 'A valid URL is required.', 'performance-optimisation' ) );
+			}
+
+			// SSRF protection: reject URLs that do not pass WordPress HTTP validation.
+			// wp_http_validate_url() rejects loopback, private, and reserved addresses.
+			if ( ! wp_http_validate_url( $url ) ) {
+				return $this->send_response( null, false, 400, __( 'A valid, allowed URL is required.', 'performance-optimisation' ) );
+			}
+
+			// Only allow http and https schemes.
+			$parsed_url = wp_parse_url( $url );
+			$scheme     = $parsed_url['scheme'] ?? '';
+			if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return $this->send_response( null, false, 400, __( 'A valid, allowed URL is required.', 'performance-optimisation' ) );
+			}
+
+			// SSRF protection: validate that the URL belongs to this website.
+			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
+				return $this->send_response( null, false, 400, __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
+			}
+
+			$force  = isset( $params['force'] ) ? (bool) $params['force'] : false;
+			$result = Telemetry::scan( $url, 'manual', $force );
+
+			if ( is_wp_error( $result ) ) {
+				return $this->send_response( null, false, 500, $result->get_error_message() );
+			}
+
+			return $this->send_response( $result );
 		}
 
 		/**

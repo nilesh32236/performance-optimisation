@@ -20,7 +20,6 @@
 	line-height: 1.5;
 	transition: var(--wppo-transition);
 	box-shadow: none !important;
-	vertical-align: middle;
 
 	&:focus,
 	&:focus-visible {
@@ -62,6 +61,7 @@
 /* Number input — hide browser spinners for cleaner look */
 .wppo-input[type="number"] {
 	-moz-appearance: textfield;
+	appearance: textfield;
 
 	&::-webkit-outer-spin-button,
 	&::-webkit-inner-spin-button {
@@ -131,6 +131,18 @@
 			background: var(--wppo-danger-hover);
 			box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 			transform: translateY(-1px);
+		}
+	}
+
+	&--ghost {
+		background: transparent;
+		border: 1px solid transparent;
+		color: var(--wppo-text-muted);
+
+		&:hover:not(:disabled) {
+			background: var(--wppo-bg-app);
+			color: var(--wppo-primary);
+			border-color: var(--wppo-border);
 		}
 	}
 

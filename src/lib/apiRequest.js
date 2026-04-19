@@ -30,3 +30,24 @@ export const fetchRecentActivities = ( page = 1 ) => {
 			throw error; // Re-throw the error for further handling if needed
 		} );
 };
+
+/**
+ * Run a local telemetry scan on the given URL.
+ *
+ * @since 1.5.0
+ * @param {string} url The URL to scan.
+ * @return {Promise<Object>} Resolved scan result data.
+ */
+export const runPerformanceScan = ( url, force = false ) => {
+	return apiCall( 'performance_scan', { url, force } );
+};
+
+/**
+ * Fetch system information (PHP, DB, WordPress, server, cache).
+ *
+ * @since 1.5.0
+ * @return {Promise<Object>} Resolved system info data.
+ */
+export const fetchSystemInfo = () => {
+	return apiCall( 'system_info', {}, 'GET' );
+};
