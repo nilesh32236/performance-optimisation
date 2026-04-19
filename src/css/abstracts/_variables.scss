@@ -1,9 +1,9 @@
 :root {
 	/* Brand Colors */
-	--wppo-primary: #6366f1;
-	--wppo-primary-hover: #4f46e5;
-	--wppo-primary-soft: rgba(99, 102, 241, 0.08);
-	--wppo-primary-medium: rgba(99, 102, 241, 0.15);
+	--wppo-primary: var(--wp-admin-theme-color, #2271b1);
+	--wppo-primary-hover: var(--wp-admin-theme-color-darker-10, #135e96);
+	--wppo-primary-soft: color-mix(in srgb, var(--wppo-primary) 8%, transparent);
+	--wppo-primary-medium: color-mix(in srgb, var(--wppo-primary) 15%, transparent);
 
 	/* Backgrounds */
 	--wppo-bg-app: #f8fafc;
