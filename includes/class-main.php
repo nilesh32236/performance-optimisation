@@ -143,6 +143,10 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
+		// Phase 1 — Local Diagnostics (v1.5.0).
+		require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
+
 		if ( is_admin() ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
 			new Admin_Notices();
@@ -472,13 +476,19 @@ class Main {
 			'performance-optimisation-script',
 			'wppoSettings',
 			array(
-				'apiUrl'       => get_rest_url( null, 'performance-optimisation/v1/' ),
-				'nonce'        => wp_create_nonce( 'wp_rest' ),
-				'settings'     => $this->options,
-				'image_info'   => get_option( 'wppo_img_info', array() ),
-				'cache_size'   => $cache_size,
-				'total_js_css' => $total_js_css,
-				'translations' => array(
+				'apiUrl'            => get_rest_url( null, 'performance-optimisation/v1/' ),
+				'nonce'             => wp_create_nonce( 'wp_rest' ),
+				'settings'          => $this->options,
+				'image_info'        => get_option( 'wppo_img_info', array() ),
+				'cache_size'        => $cache_size,
+				'total_js_css'      => $total_js_css,
+				'performance_audit' => array(
+					'homeUrl'                   => home_url( '/' ),
+					'pagespeedApiKeyConfigured' => false, // Phase 2 will populate this.
+					'highValueUrls'             => array(), // Phase 3 will populate this.
+					'autoFixEnabled'            => false,  // Phase 4 will populate this.
+				),
+				'translations'      => array(
 					'performanceSettings'      => __( 'Performance Settings', 'performance-optimisation' ),
 					'dashboard'                => __( ' Dashboard', 'performance-optimisation' ),
 					'openMenu'                 => __( 'Open Menu', 'performance-optimisation' ),
@@ -685,10 +695,51 @@ class Main {
 					'persistentConnection'     => __( 'Persistent Connections', 'performance-optimisation' ),
 					'advancedSecurity'         => __( 'Advanced Security & Encryption', 'performance-optimisation' ),
 					'highAvailability'         => __( 'High Availability Configuration', 'performance-optimisation' ),
+
+					// Phase 1 — Performance Audit translations (v1.5.0).
+					'performanceAudit'         => __( 'Performance Audit', 'performance-optimisation' ),
+					'runScan'                  => __( 'Run Scan', 'performance-optimisation' ),
+					'scanning'                 => __( 'Scanning...', 'performance-optimisation' ),
+					'scanError'                => __( 'Scan failed. Please try again.', 'performance-optimisation' ),
+					'scanUrl'                  => __( 'URL to scan', 'performance-optimisation' ),
+					'scanResults'              => __( 'Scan Results', 'performance-optimisation' ),
+					'systemInfo'               => __( 'System Info', 'performance-optimisation' ),
+					'systemInfoDesc'           => __( 'View PHP, database, WordPress, and server environment details.', 'performance-optimisation' ),
+					'loadSystemInfo'           => __( 'Load System Info', 'performance-optimisation' ),
+					'auditTabPerformance'      => __( 'Performance', 'performance-optimisation' ),
+					'auditTabAssets'           => __( 'Assets', 'performance-optimisation' ),
+					'auditTabSeo'              => __( 'SEO & Server', 'performance-optimisation' ),
+					'metric'                   => __( 'Metric', 'performance-optimisation' ),
+					'value'                    => __( 'Value', 'performance-optimisation' ),
+					'status'                   => __( 'Status', 'performance-optimisation' ),
+					'loadTime'                 => __( 'Load Time', 'performance-optimisation' ),
+					'ttfb'                     => __( 'Time to First Byte (TTFB)', 'performance-optimisation' ),
+					'dnsLookup'                => __( 'DNS Lookup Time', 'performance-optimisation' ),
+					'connectTime'              => __( 'TCP Connect Time', 'performance-optimisation' ),
+					'sslTime'                  => __( 'SSL Handshake Time', 'performance-optimisation' ),
+					'cssCount'                 => __( 'CSS Files', 'performance-optimisation' ),
+					'jsCount'                  => __( 'JS Files', 'performance-optimisation' ),
+					'mediaCount'               => __( 'Total Images', 'performance-optimisation' ),
+					'lazyImages'               => __( 'Lazy-Loaded Images', 'performance-optimisation' ),
+					'eagerImages'              => __( 'Eagerly-Loaded Images', 'performance-optimisation' ),
+					'totalSize'                => __( 'Total Page Size', 'performance-optimisation' ),
+					'httpsStatus'              => __( 'HTTPS', 'performance-optimisation' ),
+					'modernImages'             => __( 'Modern Image Formats (WebP/AVIF)', 'performance-optimisation' ),
+					'altAttributes'            => __( 'Image Alt Attributes', 'performance-optimisation' ),
+					'robotsTxt'                => __( 'robots.txt', 'performance-optimisation' ),
+					'compression'              => __( 'Compression (Gzip/Brotli)', 'performance-optimisation' ),
+					'cacheControl'             => __( 'Cache-Control Headers', 'performance-optimisation' ),
+					'phpVersion'               => __( 'PHP Version', 'performance-optimisation' ),
+					'memoryLimit'              => __( 'Memory Limit', 'performance-optimisation' ),
+					'dbVersion'                => __( 'Database Version', 'performance-optimisation' ),
+					'wpVersion'                => __( 'WordPress Version', 'performance-optimisation' ),
+					'serverSoftware'           => __( 'Server Software', 'performance-optimisation' ),
+					'objectCache'              => __( 'Object Cache', 'performance-optimisation' ),
+					'activeCachePlugin'        => __( 'Active Cache Plugin', 'performance-optimisation' ),
 				),
 
 				// Frontend theme colors for accent syncing.
-				'themeColors'  => $this->get_frontend_theme_colors(),
+				'themeColors'       => $this->get_frontend_theme_colors(),
 			),
 		);
 	}

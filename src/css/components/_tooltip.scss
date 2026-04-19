@@ -1,0 +1,59 @@
+/**
+ * Tooltip Styles
+ */
+
+.wppo-tooltip-container {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	margin-left: 6px;
+	cursor: help;
+
+	&:hover .wppo-tooltip-content {
+		opacity: 1;
+		visibility: visible;
+		transform: translateX(-50%) translateY(-8px);
+	}
+}
+
+.wppo-tooltip-icon {
+	font-size: 0.8rem;
+	color: var(--wppo-text-light);
+	transition: color 0.2s ease;
+
+	&:hover {
+		color: var(--wppo-primary);
+	}
+}
+
+.wppo-tooltip-content {
+	position: absolute;
+	bottom: 100%;
+	left: 50%;
+	transform: translateX(-50%) translateY(0);
+	background: #2c3338;
+	color: #fff;
+	padding: 8px 12px;
+	border-radius: var(--wppo-radius-sm);
+	font-size: 0.75rem;
+	line-height: 1.4;
+	width: 200px;
+	text-align: center;
+	z-index: 1000;
+	opacity: 0;
+	visibility: hidden;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	pointer-events: none;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+	&::after {
+		content: '';
+		position: absolute;
+		top: 100%;
+		left: 50%;
+		margin-left: -5px;
+		border-width: 5px;
+		border-style: solid;
+		border-color: #2c3338 transparent transparent transparent;
+	}
+}

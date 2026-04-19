@@ -1,0 +1,698 @@
+// =============================================================================
+// Performance Audit & System Info — Phase 1 (v1.5.0)
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Audit controls (URL input + Run Scan button row)
+// -----------------------------------------------------------------------------
+
+.wppo-audit-controls {
+	display: flex;
+	align-items: center;
+	gap: 0;
+	margin-bottom: 24px;
+	background: var(--wppo-bg-card-surface);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius);
+	padding: 4px;
+	transition: var(--wppo-transition);
+	box-shadow: var(--wppo-shadow-sm);
+
+	&:focus-within {
+		border-color: var(--wppo-primary);
+		box-shadow: 0 0 0 3px var(--wppo-primary-soft);
+	}
+
+	&__icon {
+		padding: 0 16px;
+		color: var(--wppo-text-light);
+		font-size: 1.1rem;
+	}
+
+	&__input {
+		flex: 1;
+		border: none !important;
+		background: transparent !important;
+		padding: 12px 0 !important;
+		font-size: 0.95rem !important;
+		color: var(--wppo-text-main) !important;
+		box-shadow: none !important;
+
+		&:focus {
+			outline: none !important;
+		}
+	}
+
+	&__actions {
+		display: flex;
+		gap: 8px;
+		padding-right: 4px;
+	}
+
+	.wppo-button {
+		height: 40px;
+		padding: 0 20px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		white-space: nowrap;
+	}
+}
+
+.wppo-audit-meta {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 24px;
+	padding-bottom: 16px;
+	border-bottom: 1px solid var(--wppo-border);
+
+	&__toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--wppo-text-muted);
+		cursor: pointer;
+		user-select: none;
+		transition: var(--wppo-transition);
+
+		&:hover {
+			color: var(--wppo-primary);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Audit results heading
+// -----------------------------------------------------------------------------
+
+.wppo-audit-results {
+	margin-top: 24px;
+
+	&__heading {
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--wppo-text-main);
+		margin: 0 0 16px;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Tab bar
+// -----------------------------------------------------------------------------
+
+.wppo-audit-tabs {
+	display: flex;
+	gap: 4px;
+	border-bottom: 2px solid var(--wppo-border);
+	margin-bottom: 20px;
+}
+
+.wppo-audit-tab {
+	padding: 8px 16px;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--wppo-text-muted);
+	background: transparent;
+	border: none;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -2px;
+	cursor: pointer;
+	transition: var(--wppo-transition);
+	border-radius: var(--wppo-radius-xs) var(--wppo-radius-xs) 0 0;
+
+	&:hover {
+		color: var(--wppo-primary);
+		background: var(--wppo-primary-soft);
+	}
+
+	&--active {
+		color: var(--wppo-primary);
+		border-bottom-color: var(--wppo-primary);
+		font-weight: 600;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Tab panel
+// -----------------------------------------------------------------------------
+
+.wppo-audit-panel {
+	&[hidden] {
+		display: none;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Results table (Unified layout)
+// -----------------------------------------------------------------------------
+
+.wppo-audit-overview {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+	gap: 16px;
+	margin-bottom: 32px;
+	padding-bottom: 24px;
+	border-bottom: 1px dashed var(--wppo-border);
+}
+
+.wppo-audit-overview-card {
+	padding: 20px;
+	background: var(--wppo-bg-card-surface);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	transition: var(--wppo-transition);
+
+	&:hover {
+		transform: translateY(-2px);
+		box-shadow: var(--wppo-shadow);
+		border-color: var(--wppo-primary-medium);
+	}
+
+	&__label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--wppo-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	&__value {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--wppo-text-main);
+	}
+
+	&__status {
+		margin-top: auto;
+	}
+}
+
+.wppo-audit-section-header {
+	background: var(--wppo-bg-card-surface);
+	border-top: 2px solid var(--wppo-border);
+	border-bottom: 1px solid var(--wppo-border);
+
+	td {
+		padding: 12px 12px !important;
+		font-weight: 700 !important;
+		color: var(--wppo-primary) !important;
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+}
+
+.wppo-audit-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.875rem;
+
+	thead tr {
+		background: var(--wppo-bg-card-surface);
+		border-bottom: 2px solid var(--wppo-border);
+	}
+
+	thead th {
+		padding: 12px;
+		text-align: left;
+		font-weight: 600;
+		color: var(--wppo-text-muted);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	&__row {
+		border-bottom: 1px solid var(--wppo-border);
+		transition: background 0.15s ease;
+
+		&:last-child {
+			border-bottom: none;
+		}
+
+		&:hover {
+			background: var(--wppo-bg-card-surface);
+		}
+	}
+
+	&__label {
+		padding: 12px;
+		color: var(--wppo-text-muted);
+		font-weight: 500;
+		width: 45%;
+	}
+
+	&__value {
+		padding: 12px;
+		color: var(--wppo-text-main);
+		font-weight: 500;
+		word-break: break-word;
+	}
+
+	&__status {
+		padding: 12px;
+		width: 140px;
+		text-align: right;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Metric grid (legacy — kept for backward compat, not used in tabbed view)
+// -----------------------------------------------------------------------------
+
+.wppo-metric-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 12px;
+}
+
+// -----------------------------------------------------------------------------
+// Individual metric card
+// -----------------------------------------------------------------------------
+
+.wppo-metric-card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 14px 16px;
+	background: var(--wppo-bg-card-surface);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius-sm);
+	box-shadow: var(--wppo-shadow-sm);
+	transition: var(--wppo-transition);
+
+	&:hover {
+		border-color: var(--wppo-border-hover);
+		box-shadow: var(--wppo-shadow);
+	}
+
+	&__label {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--wppo-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	&__value {
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--wppo-text-main);
+		word-break: break-word;
+	}
+
+	&__unit {
+		font-size: 0.8rem;
+		font-weight: 400;
+		color: var(--wppo-text-light);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Status badge — good / needs_improvement / poor
+// -----------------------------------------------------------------------------
+
+.wppo-status-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+	width: fit-content;
+
+	&--good {
+		background: var(--wppo-success-bg);
+		color: var(--wppo-success);
+		border: 1px solid var(--wppo-success-border);
+	}
+
+	&--needs_improvement {
+		background: var(--wppo-warning-bg);
+		color: var(--wppo-warning);
+		border: 1px solid var(--wppo-warning-border);
+	}
+
+	&--poor {
+		background: var(--wppo-error-bg);
+		color: var(--wppo-error);
+		border: 1px solid var(--wppo-error-border);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// System Info — on-demand trigger
+// -----------------------------------------------------------------------------
+
+.wppo-sysinfo-trigger {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 12px;
+
+	&__desc {
+		font-size: 0.875rem;
+		color: var(--wppo-text-muted);
+		margin: 0;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// System Info grid — two-column layout of tables
+// -----------------------------------------------------------------------------
+
+.wppo-sysinfo-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 20px;
+	margin-top: 8px;
+}
+
+.wppo-sysinfo-section {
+	background: var(--wppo-bg-card-surface);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius-sm);
+	overflow: hidden;
+
+	&__title {
+		font-size: 0.75rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--wppo-primary);
+		margin: 0;
+		padding: 10px 14px;
+		background: var(--wppo-primary-soft);
+		border-bottom: 1px solid var(--wppo-border);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// System Info table
+// -----------------------------------------------------------------------------
+
+.wppo-sysinfo-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.8rem;
+
+	&__row {
+		border-bottom: 1px solid var(--wppo-border);
+
+		&:last-child {
+			border-bottom: none;
+		}
+
+		&:hover {
+			background: var(--wppo-switch-hover);
+		}
+	}
+
+	&__label {
+		padding: 7px 14px;
+		color: var(--wppo-text-muted);
+		font-weight: 500;
+		width: 55%;
+		vertical-align: top;
+	}
+
+	&__value {
+		padding: 7px 14px;
+		color: var(--wppo-text-main);
+		font-weight: 500;
+		word-break: break-all;
+	}
+}
+
+.wppo-sysinfo-loading {
+	color: var(--wppo-text-muted);
+	font-size: 0.9rem;
+}
+
+// -----------------------------------------------------------------------------
+// Audit controls — icon + input + action buttons in one row
+// -----------------------------------------------------------------------------
+
+.wppo-audit-controls {
+	display: flex;
+	align-items: center;
+	gap: 0;
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius-sm);
+	background: #fff;
+	overflow: hidden;
+	margin-bottom: 24px;
+	transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+	&:focus-within {
+		border-color: var(--wppo-primary);
+		box-shadow: 0 0 0 3px var(--wppo-primary-soft);
+	}
+
+	&__icon {
+		padding: 0 12px;
+		color: var(--wppo-text-light);
+		font-size: 14px;
+		flex-shrink: 0;
+	}
+
+	&__input {
+		flex: 1;
+		border: none !important;
+		box-shadow: none !important;
+		outline: none !important;
+		padding: 10px 8px !important;
+		font-size: 13.5px !important;
+		background: transparent !important;
+		color: var(--wppo-text-main) !important;
+		min-width: 0;
+
+		&::placeholder {
+			color: var(--wppo-text-light);
+		}
+	}
+
+	&__actions {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 6px;
+		border-left: 1px solid var(--wppo-border);
+		flex-shrink: 0;
+	}
+
+	// Ghost button for the "use home URL" shortcut
+	.wppo-button--ghost {
+		background: transparent;
+		border: none;
+		color: var(--wppo-text-muted);
+		padding: 6px 8px;
+		border-radius: var(--wppo-radius-xs);
+
+		&:hover {
+			background: var(--wppo-bg-app);
+			color: var(--wppo-primary);
+		}
+	}
+
+	@include respond-to('sm') {
+		flex-wrap: wrap;
+
+		&__input {
+			width: 100%;
+			order: 2;
+			border-top: 1px solid var(--wppo-border) !important;
+		}
+
+		&__icon {
+			order: 1;
+		}
+
+		&__actions {
+			order: 3;
+			border-left: none;
+			border-top: 1px solid var(--wppo-border);
+			width: 100%;
+			justify-content: flex-end;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Overview cards — 4-up metric summary strip
+// -----------------------------------------------------------------------------
+
+.wppo-audit-overview {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 12px;
+	margin-bottom: 24px;
+
+	@include respond-to('lg') {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	@include respond-to('sm') {
+		grid-template-columns: repeat(2, 1fr);
+		gap: 8px;
+	}
+}
+
+.wppo-audit-overview-card {
+	background: var(--wppo-bg-card-surface);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius-sm);
+	padding: 14px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	position: relative;
+	overflow: hidden;
+
+	&::before {
+		content: '';
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 2px;
+		background: linear-gradient(90deg, var(--wppo-primary), #818cf8);
+		opacity: 0;
+		transition: opacity 0.2s ease;
+	}
+
+	&:hover::before {
+		opacity: 1;
+	}
+
+	&__label {
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--wppo-text-light);
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		display: flex;
+		align-items: center;
+		gap: 5px;
+	}
+
+	&__value {
+		font-size: 22px;
+		font-weight: 800;
+		color: var(--wppo-text-main);
+		letter-spacing: -0.02em;
+		line-height: 1.1;
+	}
+
+	&__status {
+		margin-top: 2px;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Results meta bar (title + developer toggle)
+// -----------------------------------------------------------------------------
+
+.wppo-audit-meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 16px;
+	flex-wrap: wrap;
+	gap: 10px;
+
+	&__title {
+		font-size: 13px;
+		font-weight: 700;
+		color: var(--wppo-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+	}
+
+	&__toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 13px;
+		color: var(--wppo-text-muted);
+
+		// Override SwitchField margin
+		.wppo-switch-field {
+			margin: 0;
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Section header rows inside the audit table
+// -----------------------------------------------------------------------------
+
+.wppo-audit-section-header {
+	td {
+		padding: 10px 14px 6px;
+		font-size: 11px;
+		font-weight: 700;
+		color: var(--wppo-primary);
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		background: var(--wppo-primary-soft);
+		border-bottom: 1px solid var(--wppo-border);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Tooltip container (used in ResultRow labels)
+// -----------------------------------------------------------------------------
+
+.wppo-tooltip-container {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	cursor: default;
+
+	.wppo-tooltip-icon {
+		font-size: 11px;
+		color: var(--wppo-text-light);
+		opacity: 0.7;
+		transition: opacity 0.15s ease;
+	}
+
+	.wppo-tooltip-content {
+		position: absolute;
+		bottom: calc(100% + 6px);
+		left: 50%;
+		transform: translateX(-50%);
+		background: var(--wppo-text-main);
+		color: #fff;
+		font-size: 12px;
+		font-weight: 400;
+		line-height: 1.4;
+		padding: 6px 10px;
+		border-radius: var(--wppo-radius-xs);
+		white-space: normal;
+		width: 220px;
+		text-align: left;
+		pointer-events: none;
+		opacity: 0;
+		transition: opacity 0.15s ease;
+		z-index: 100;
+		box-shadow: var(--wppo-shadow);
+	}
+
+	&:hover {
+		.wppo-tooltip-icon {
+			opacity: 1;
+		}
+
+		.wppo-tooltip-content {
+			opacity: 1;
+		}
+	}
+}

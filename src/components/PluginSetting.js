@@ -1,5 +1,5 @@
 import { useState, useRef } from '@wordpress/element';
-import { apiCall } from '../lib/apiRequest';
+import { apiCall, fetchRecentActivities } from '../lib/apiRequest';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -7,6 +7,7 @@ import {
 	faFileImport,
 	faCheckCircle,
 	faExclamationCircle,
+	faHistory,
 } from '@fortawesome/free-solid-svg-icons';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
@@ -24,11 +25,35 @@ const PluginSetting = ( { options } ) => {
 	const [ confirmImport, setConfirmImport ] = useState( false );
 	const fileInputRef = useRef( null );
 
+	// Activity log state
+	const [ logEntries, setLogEntries ] = useState( [] );
+	const [ logLoading, setLogLoading ] = useState( false );
+	const [ logLoaded, setLogLoaded ] = useState( false );
+	const [ logPage, setLogPage ] = useState( 1 );
+	const [ logTotalPages, setLogTotalPages ] = useState( 1 );
+
 	const getTimestamp = () => {
 		return new Date()
 			.toISOString()
 			.replace( /[:T]/g, '-' )
 			.split( '.' )[ 0 ];
+	};
+
+	const loadActivityLog = async ( page = 1 ) => {
+		setLogLoading( true );
+		try {
+			const data = await fetchRecentActivities( page );
+			if ( data?.activities ) {
+				setLogEntries( data.activities );
+				setLogPage( data.current_page || 1 );
+				setLogTotalPages( data.total_pages || 1 );
+				setLogLoaded( true );
+			}
+		} catch ( err ) {
+			console.error( 'Failed to load activity log:', err );
+		} finally {
+			setLogLoading( false );
+		}
 	};
 
 	const exportSettings = () => {
@@ -138,7 +163,7 @@ const PluginSetting = ( { options } ) => {
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
 				title="Tools"
-				description="Manage your configuration by exporting your current settings or importing a previously saved configuration file."
+				description="Manage your plugin configuration, view the full optimization activity log, and import or export settings."
 			/>
 
 			{ notification.message && (
@@ -159,6 +184,92 @@ const PluginSetting = ( { options } ) => {
 			) }
 
 			<div className="wppo-stacked-cards">
+				{ /* Activity Log */ }
+				<FeatureCard
+					title="Optimization Activity Log"
+					icon={ <FontAwesomeIcon icon={ faHistory } /> }
+					footer={
+						logLoaded && logTotalPages > 1 ? (
+							<div className="wppo-log-pagination">
+								<button
+									type="button"
+									className="wppo-button wppo-button--secondary wppo-button--sm"
+									disabled={ logPage <= 1 || logLoading }
+									onClick={ () =>
+										loadActivityLog( logPage - 1 )
+									}
+								>
+									← Previous
+								</button>
+								<span className="wppo-log-pagination__info">
+									Page { logPage } of { logTotalPages }
+								</span>
+								<button
+									type="button"
+									className="wppo-button wppo-button--secondary wppo-button--sm"
+									disabled={
+										logPage >= logTotalPages || logLoading
+									}
+									onClick={ () =>
+										loadActivityLog( logPage + 1 )
+									}
+								>
+									Next →
+								</button>
+							</div>
+						) : null
+					}
+				>
+					{ ! logLoaded && ! logLoading && (
+						<div className="wppo-log-trigger">
+							<p className="wppo-text-muted">
+								A full timestamped record of every cache clear,
+								image optimization, database cleanup, and
+								settings change performed by the plugin.
+							</p>
+							<button
+								type="button"
+								className="wppo-button wppo-button--secondary"
+								onClick={ () => loadActivityLog( 1 ) }
+							>
+								<FontAwesomeIcon icon={ faHistory } />
+								Load Activity Log
+							</button>
+						</div>
+					) }
+
+					{ logLoading && (
+						<p className="wppo-text-muted">Loading log…</p>
+					) }
+
+					{ logLoaded && (
+						<>
+							{ logEntries.length > 0 ? (
+								<ul className="wppo-activity-list wppo-activity-list--full">
+									{ logEntries.map( ( entry, i ) => (
+										<li key={ i }>
+											<div
+												className="wppo-activity-text"
+												// Activity text may contain safe anchor tags
+												// (logged by class-log.php with wp_kses).
+												// eslint-disable-next-line react/no-danger
+												dangerouslySetInnerHTML={ {
+													__html: entry.activity,
+												} }
+											/>
+										</li>
+									) ) }
+								</ul>
+							) : (
+								<div className="wppo-empty-state">
+									No activity recorded yet.
+								</div>
+							) }
+						</>
+					) }
+				</FeatureCard>
+
+				{ /* Export */ }
 				<FeatureCard
 					title="Export Configuration"
 					icon={ <FontAwesomeIcon icon={ faFileExport } /> }
@@ -168,7 +279,7 @@ const PluginSetting = ( { options } ) => {
 						style={ { marginBottom: '24px' } }
 					>
 						Download your current plugin settings as a JSON file for
-						backup or migration.
+						backup or migration to another site.
 					</p>
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"
@@ -177,13 +288,15 @@ const PluginSetting = ( { options } ) => {
 					/>
 				</FeatureCard>
 
+				{ /* Import */ }
 				<FeatureCard
 					title="Import Configuration"
 					icon={ <FontAwesomeIcon icon={ faFileImport } /> }
 				>
 					<p className="wppo-text-muted">
 						Upload a previously exported settings file to restore
-						your configuration.
+						your configuration. This will overwrite all current
+						settings.
 					</p>
 					<div className="wppo-field wppo-mt-24">
 						<label
