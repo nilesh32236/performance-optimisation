@@ -635,21 +635,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			// Prune stale entries (transient no longer exists) and cap at 200 to prevent
 			// unbounded growth. This also reduces race-condition impact on high-traffic sites.
 			$index = get_option( 'wppo_transient_index', array() );
+			$now   = time();
 
-			// Add/update this key with current timestamp.
-			$index[ $key ] = time();
+			// Add/update this key with its absolute expiry timestamp.
+			$index[ $key ] = $now + HOUR_IN_SECONDS;
 
-			// Prune entries whose transients have already expired.
-			foreach ( array_keys( $index ) as $stored_key ) {
-				if ( false === get_transient( $stored_key ) ) {
-					unset( $index[ $stored_key ] );
-				}
-			}
-
-			// Cap at 200 most-recent entries.
+			// Prune only when the index exceeds the soft cap to avoid unnecessary overhead.
 			if ( count( $index ) > 200 ) {
-				arsort( $index ); // Sort by timestamp descending.
-				$index = array_slice( $index, 0, 200, true );
+				foreach ( $index as $stored_key => $expiry ) {
+					if ( $expiry < $now ) {
+						unset( $index[ $stored_key ] );
+					}
+				}
+
+				// If still over cap after pruning expired, trim the oldest entries.
+				if ( count( $index ) > 200 ) {
+					asort( $index ); // Sort by expiry ascending (oldest first).
+					$index = array_slice( $index, -200, 200, true );
+				}
 			}
 
 			update_option( 'wppo_transient_index', $index, false );

@@ -1044,7 +1044,7 @@ class Main {
 	 * @return string Modified link tag with minified CSS.
 	 */
 	public function minify_css( $tag, $handle, $href ) {
-		// ⚡ Bolt: Early return for logged-in users, empty URLs, or excluded handles
+		// Early return for logged-in users, empty URLs, or excluded handles
 		// to avoid the expensive Util::get_local_path() computation.
 		if ( is_user_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) ) {
 			return $tag;
@@ -1080,7 +1080,7 @@ class Main {
 	 * @return string Modified script tag with minified JavaScript.
 	 */
 	public function minify_js( $tag, $handle, $src ) {
-		// ⚡ Bolt: Early return for logged-in users, empty URLs, or excluded handles
+		// Early return for logged-in users, empty URLs, or excluded handles
 		// to avoid the expensive Util::get_local_path() computation.
 		if ( is_user_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) ) {
 			return $tag;

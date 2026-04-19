@@ -12,7 +12,10 @@ import { useState } from '@wordpress/element';
 import { fetchSystemInfo } from '../lib/apiRequest';
 import FeatureCard from './common/FeatureCard';
 
-const t = wppoSettings.translations;
+const t =
+	typeof wppoSettings !== 'undefined' && wppoSettings.translations
+		? wppoSettings.translations
+		: {};
 
 const DEFAULT_SCAN_ERROR = 'Failed to fetch system info. Please try again.';
 
