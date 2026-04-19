@@ -38,8 +38,8 @@ export const fetchRecentActivities = ( page = 1 ) => {
  * @param {string} url The URL to scan.
  * @return {Promise<Object>} Resolved scan result data.
  */
-export const runPerformanceScan = ( url ) => {
-	return apiCall( 'performance_scan', { url } );
+export const runPerformanceScan = ( url, force = false ) => {
+	return apiCall( 'performance_scan', { url, force } );
 };
 
 /**

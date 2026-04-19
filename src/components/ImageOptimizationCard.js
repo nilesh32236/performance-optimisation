@@ -47,7 +47,7 @@ const ImageOptimizationCard = ( {
 						onClick={ onRemove }
 						isLoading={ loading.remove_images }
 						disabled={ ! completed.webp && ! completed.avif }
-						label={ t[ 'Remove Optimized' ] || 'Remove Optimized' }
+						label={ t.removeOptimized || 'Remove Optimized' }
 						loadingLabel="Removing..."
 					/>
 				</>

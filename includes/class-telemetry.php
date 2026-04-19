@@ -40,14 +40,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @since  1.5.0
 		 * @param  string $url       The URL to scan.
 		 * @param  string $scan_type Either 'manual' or 'scheduled'.
+		 * @param  bool   $force     Whether to bypass cache.
 		 * @return array|\WP_Error   Associative array of metrics, or WP_Error on failure.
 		 */
-		public static function scan( string $url, string $scan_type = 'manual' ) {
-			$scan_type     = sanitize_key( $scan_type );
-			$transient_key = 'wppo_telemetry_' . md5( $url . '|' . $scan_type );
+		public static function scan( string $url, string $scan_type = 'manual', bool $force = false ): array|\WP_Error {
+			$transient_key = 'wppo_audit_' . md5( $url );
 			$cached        = get_transient( $transient_key );
 
-			if ( false !== $cached ) {
+			if ( ! $force && false !== $cached ) {
+				$cached['is_cached'] = true;
 				return $cached;
 			}
 
@@ -132,13 +133,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 
 					// Precise network timings from cURL info struct.
 					$timings   = array(
-						'dns'     => round( $info['namelookup_time'] * 1000, 2 ),
-						'connect' => round( ( $info['connect_time'] - $info['namelookup_time'] ) * 1000, 2 ),
-						'ssl'     => ( isset( $info['appconnect_time'] ) && $info['appconnect_time'] > 0 )
+						'dns'              => round( $info['namelookup_time'] * 1000, 2 ),
+						'connect'          => round( ( $info['connect_time'] - $info['namelookup_time'] ) * 1000, 2 ),
+						'ssl'              => ( isset( $info['appconnect_time'] ) && $info['appconnect_time'] > 0 )
 							? round( ( $info['appconnect_time'] - $info['connect_time'] ) * 1000, 2 )
 							: 0,
-						'ttfb'    => round( ( $info['starttransfer_time'] - $info['pretransfer_time'] ) * 1000, 2 ),
-						'total'   => round( $info['total_time'] * 1000, 2 ),
+						'ttfb'             => round( $info['starttransfer_time'] * 1000, 2 ), // True TTFB.
+						'server_wait_time' => round( ( $info['starttransfer_time'] - $info['pretransfer_time'] ) * 1000, 2 ),
+						'total'            => round( $info['total_time'] * 1000, 2 ),
 					);
 					$load_time = round( $info['total_time'], 2 );
 				}
@@ -177,6 +179,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				$load_time = round( microtime( true ) - $start, 2 );
 				$body      = wp_remote_retrieve_body( $response );
 				$headers   = wp_remote_retrieve_headers( $response );
+
+				// Populate synthetic TTFB for fallback path to avoid second request.
+				$timings['ttfb'] = $load_time * 1000;
 			}
 
 			$resources    = self::parse_resources( $body );
@@ -187,7 +192,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			$result = array(
 				'page_url'                  => esc_url( $url ),
 				'load_time'                 => $load_time,
-				'ttfb'                      => isset( $timings['ttfb'] ) ? $timings['ttfb'] : self::measure_ttfb( $url ),
+				'ttfb'                      => $timings['ttfb'] ?? 0,
+				'server_wait_time'          => $timings['server_wait_time'] ?? 0,
 				'dns_lookup_time'           => $timings['dns'] ?? 0,
 				'connect_time'              => $timings['connect'] ?? 0,
 				'ssl_time'                  => $timings['ssl'] ?? 0,
@@ -212,6 +218,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				'dom_size'                  => $resources['dom_size'],
 				'unminified_assets_count'   => $resources['unminified_count'],
 				'third_party_scripts_count' => $resources['third_party_count'],
+				'is_cached'                 => false,
 			);
 
 			set_transient( $transient_key, $result, HOUR_IN_SECONDS );
@@ -297,15 +304,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				// --- Fallback: regex-based parsing ---
 				$dom_size = preg_match_all( '/<[a-zA-Z]/', $html );
 
+				// Match stylesheets with rel="stylesheet" appearing in any order.
 				preg_match_all(
-					'/<link\s[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)["\'][^>]*>/i',
+					'/<link\b(?=[^>]*\brel=["\']?stylesheet["\']?)[^>]*\bhref=["\']([^"\']+)["\'][^>]*>/i',
 					$html,
 					$css_matches
 				);
 				$css = $css_matches[1] ?? array();
 
+				// Match scripts with src or wppo-src appearing in any order.
 				preg_match_all(
-					'/<script\s[^>]*\b(?:src|wppo-src)=["\']([^"\']+)["\'][^>]*>/i',
+					'/<script\b[^>]*\b(?:src|wppo-src)=["\']([^"\']+)["\'][^>]*>/i',
 					$html,
 					$js_matches
 				);
@@ -440,9 +449,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		}
 
 		/**
-		 * Measure Time to First Byte (TTFB) in milliseconds via HEAD request.
+		 * Measure Time to First Byte (TTFB) in milliseconds via GET request.
 		 *
-		 * Used as a fallback when cURL is unavailable.
+		 * Performs a full GET as a more representative TTFB fallback (some servers
+		 * bypass full PHP execution for HEAD requests).
 		 *
 		 * @since  1.5.0
 		 * @param  string $url The URL to measure.
@@ -569,7 +579,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 *
 		 * @since  1.5.0
 		 * @param  array $images Array of image data from parse_resources().
-		 * @return bool True if at least one modern-format image found.
+		 * @return float Percentage of images using modern formats (0-100).
 		 */
 		private static function check_modern_images( array $images ): float {
 			if ( empty( $images ) ) {

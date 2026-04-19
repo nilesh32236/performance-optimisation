@@ -134,6 +134,18 @@
 		}
 	}
 
+	&--ghost {
+		background: transparent;
+		border: 1px solid transparent;
+		color: var(--wppo-text-muted);
+
+		&:hover:not(:disabled) {
+			background: var(--wppo-bg-app);
+			color: var(--wppo-primary);
+			border-color: var(--wppo-border);
+		}
+	}
+
 	&:disabled {
 		opacity: 0.45;
 		cursor: not-allowed;

@@ -193,6 +193,13 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					setPendingPaths( { webp: [], avif: [] } );
 					setBgJobsQueued( 0 );
 					setBgProcessing( false );
+
+					if ( response.success && response.data ) {
+						updateState( {
+							imageInfo: normalizeImageInfo( response.data ),
+						} );
+					}
+
 					if ( pollingRef.current ) {
 						clearInterval( pollingRef.current );
 						pollingRef.current = null;

@@ -349,7 +349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$response = Img_Converter::get_img_info();
 
-			return new \WP_REST_Response( $response, 200 );
+			return $this->send_response( $response, true, 200, __( 'Images optimized successfully.', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -788,6 +788,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_system_info( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
 			return $this->send_response( System_Info::get_all() );
 		}
 
@@ -802,6 +803,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function run_performance_scan( \WP_REST_Request $request ): \WP_REST_Response {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
 			$params = $request->get_params();
 			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
 
@@ -828,7 +830,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
 			}
 
-			$result = Telemetry::scan( $url, 'manual' );
+			$force  = isset( $params['force'] ) ? (bool) $params['force'] : false;
+			$result = Telemetry::scan( $url, 'manual', $force );
 
 			if ( is_wp_error( $result ) ) {
 				return $this->send_response( null, false, 500, $result->get_error_message() );

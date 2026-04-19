@@ -87,14 +87,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * }
 		 */
 		public static function get_php(): array {
+			$memory_limit        = ini_get( 'memory_limit' );
+			$max_execution_time  = ini_get( 'max_execution_time' );
+			$upload_max_filesize = ini_get( 'upload_max_filesize' );
+			$post_max_size       = ini_get( 'post_max_size' );
+			$display_errors      = ini_get( 'display_errors' );
+
 			return array(
 				'version'             => phpversion(),
 				'sapi'                => php_sapi_name(),
-				'memory_limit'        => false !== ini_get( 'memory_limit' ) ? ini_get( 'memory_limit' ) : null,
-				'max_execution_time'  => false !== ini_get( 'max_execution_time' ) ? ini_get( 'max_execution_time' ) : null,
-				'upload_max_filesize' => false !== ini_get( 'upload_max_filesize' ) ? ini_get( 'upload_max_filesize' ) : null,
-				'post_max_size'       => false !== ini_get( 'post_max_size' ) ? ini_get( 'post_max_size' ) : null,
-				'display_errors'      => false !== ini_get( 'display_errors' ) ? ini_get( 'display_errors' ) : null,
+				'memory_limit'        => false !== $memory_limit ? $memory_limit : null,
+				'max_execution_time'  => false !== $max_execution_time ? $max_execution_time : null,
+				'upload_max_filesize' => false !== $upload_max_filesize ? $upload_max_filesize : null,
+				'post_max_size'       => false !== $post_max_size ? $post_max_size : null,
+				'display_errors'      => false !== $display_errors ? $display_errors : null,
 				'extensions_count'    => count( get_loaded_extensions() ),
 			);
 		}
@@ -220,7 +226,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'active_cache_plugin'  => self::get_active_cache_plugin(),
 				'peak_memory_usage'    => size_format( memory_get_peak_usage( true ) ),
 				'current_memory_usage' => size_format( memory_get_usage() ),
-				'woocommerce_presets'  => self::get_woocommerce_presets(),
 			);
 		}
 

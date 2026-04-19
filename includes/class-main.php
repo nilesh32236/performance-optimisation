@@ -144,8 +144,8 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
 		// Phase 1 — Local Diagnostics (v1.5.0).
-		// Only load on admin, AJAX, or REST requests — not on every frontend page load.
-		if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+		// Load on admin or AJAX — lazy-load for REST requests in the REST handler.
+		if ( is_admin() || wp_doing_ajax() ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
 		}
@@ -761,6 +761,8 @@ class Main {
 					'scanType'                 => __( 'Scan Type', 'performance-optimisation' ),
 					'enableDevDetails'         => __( 'Enable developer details to see granular network timings and environment info.', 'performance-optimisation' ),
 					// Boolean display labels.
+					'scanFreshData'            => __( 'Scan Fresh Data', 'performance-optimisation' ),
+					'cachedResults'            => __( 'Displaying cached results from the last hour.', 'performance-optimisation' ),
 					'enabled'                  => __( 'Enabled', 'performance-optimisation' ),
 					'disabled'                 => __( 'Disabled', 'performance-optimisation' ),
 					'exists'                   => __( 'Exists', 'performance-optimisation' ),
@@ -771,6 +773,9 @@ class Main {
 					'outdatedFormats'          => __( 'Outdated formats used', 'performance-optimisation' ),
 					'allImagesHaveAlt'         => __( 'All images have alt text', 'performance-optimisation' ),
 					'someImagesMissingAlt'     => __( 'Some images missing alt text', 'performance-optimisation' ),
+					'domSize'                  => __( 'Total DOM Nodes', 'performance-optimisation' ),
+					'unminifiedAssets'         => __( 'Unminified Assets', 'performance-optimisation' ),
+					'thirdPartyScripts'        => __( 'Third-Party Scripts', 'performance-optimisation' ),
 				),
 
 				// Frontend theme colors for accent syncing.

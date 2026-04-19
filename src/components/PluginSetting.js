@@ -269,15 +269,9 @@ const PluginSetting = ( { options } ) => {
 								<ul className="wppo-activity-list wppo-activity-list--full">
 									{ logEntries.map( ( entry, i ) => (
 										<li key={ i }>
-											<div
-												className="wppo-activity-text"
-												// Activity text may contain safe anchor tags
-												// (logged by class-log.php with wp_kses).
-												// eslint-disable-next-line react/no-danger
-												dangerouslySetInnerHTML={ {
-													__html: entry.activity,
-												} }
-											/>
+											<div className="wppo-activity-text">
+												{ entry.activity }
+											</div>
 										</li>
 									) ) }
 								</ul>

@@ -45,9 +45,17 @@ const METRIC_INFO = {
 	cache_control:
 		'Whether the server instructs the browser to cache assets for a long duration.',
 	modern_images:
-		'Whether the page uses efficient image formats like WebP or AVIF.',
+		'The percentage of images on the page that use modern formats like WebP or AVIF.',
 	alt_text:
 		'Whether all images have descriptive alt attributes for accessibility.',
+	dom_size:
+		'The total number of HTML elements on the page. High numbers (> 1,500) can slow down rendering.',
+	unminified:
+		'The number of CSS and JS files that are not minified (lack .min in filename).',
+	third_party:
+		'The number of scripts loaded from external domains (e.g., Google, Facebook).',
+	server_wait:
+		'Server processing time. The time taken by the server to process the request before sending data.',
 };
 
 /**
@@ -219,7 +227,7 @@ const PerformanceAudit = () => {
 		setDevMode( e.target.checked );
 	};
 
-	const handleScan = async ( e ) => {
+	const handleScan = async ( e, force = false ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
@@ -228,7 +236,7 @@ const PerformanceAudit = () => {
 		setResult( null );
 
 		try {
-			const response = await runPerformanceScan( url );
+			const response = await runPerformanceScan( url, force );
 			if ( response.success && response.data ) {
 				setResult( response.data );
 			} else {
@@ -322,6 +330,35 @@ const PerformanceAudit = () => {
 
 					<MetricOverview result={ result } />
 
+					{ result.is_cached && (
+						<div
+							className="wppo-notice wppo-notice--info"
+							style={ {
+								marginBottom: '24px',
+								display: 'flex',
+								alignItems: 'center',
+								justifyContent: 'space-between',
+							} }
+						>
+							<span>
+								<FontAwesomeIcon
+									icon={ faLightbulb }
+									style={ { marginRight: '8px' } }
+								/>
+								{ t.cachedResults ||
+									'Displaying cached results from the last hour.' }
+							</span>
+							<button
+								type="button"
+								className="wppo-button wppo-button--ghost wppo-button--sm"
+								onClick={ ( e ) => handleScan( e, true ) }
+								disabled={ scanning }
+							>
+								{ t.scanFreshData || 'Scan Fresh Data' }
+							</button>
+						</div>
+					) }
+
 					<table className="wppo-audit-table">
 						<thead>
 							<tr>
@@ -366,15 +403,14 @@ const PerformanceAudit = () => {
 							/>
 							<ResultRow
 								label={ t.modernImages || 'Modern Formats' }
-								value={
-									result.uses_modern_image_formats
-										? t.modernFormatsUsed ||
-										  'Modern formats used'
-										: t.outdatedFormats ||
-										  'Outdated formats used'
-								}
-								status={ boolStatus(
-									result.uses_modern_image_formats
+								value={ `${ Number( result.uses_modern_image_formats || 0 ).toFixed( 1 ) }%` }
+								status={ numericStatus(
+									100 -
+										( parseFloat(
+											result.uses_modern_image_formats
+										) || 0 ),
+									20,
+									50
 								) }
 								tooltipKey="modern_images"
 							/>
@@ -431,6 +467,14 @@ const PerformanceAudit = () => {
 										value={ `${ result.ttfb } ms` }
 										tooltipKey="ttfb"
 									/>
+									<ResultRow
+										label={
+											t.serverWaitTime ||
+											'Server Processing'
+										}
+										value={ `${ result.server_wait_time } ms` }
+										tooltipKey="server_wait"
+									/>
 
 									<AuditSection
 										title={
@@ -468,10 +512,31 @@ const PerformanceAudit = () => {
 										value={ result.lazy_image_count }
 									/>
 									<ResultRow
-										label={
-											t.eagerLoaded || 'Eager-Loaded'
-										}
+										label={ t.eagerLoaded || 'Eager-Loaded' }
 										value={ result.eager_image_count }
+									/>
+									<ResultRow
+										label={ t.domSize || 'Total DOM Nodes' }
+										value={ result.dom_size }
+										tooltipKey="dom_size"
+									/>
+									<ResultRow
+										label={
+											t.unminifiedAssets ||
+											'Unminified Assets'
+										}
+										value={ result.unminified_assets_count }
+										tooltipKey="unminified"
+									/>
+									<ResultRow
+										label={
+											t.thirdPartyScripts ||
+											'Third-Party Scripts'
+										}
+										value={
+											result.third_party_scripts_count
+										}
+										tooltipKey="third_party"
 									/>
 
 									<AuditSection
