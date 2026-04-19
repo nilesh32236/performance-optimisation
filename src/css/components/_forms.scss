@@ -20,7 +20,6 @@
 	line-height: 1.5;
 	transition: var(--wppo-transition);
 	box-shadow: none !important;
-	vertical-align: middle;
 
 	&:focus,
 	&:focus-visible {
@@ -62,6 +61,7 @@
 /* Number input — hide browser spinners for cleaner look */
 .wppo-input[type="number"] {
 	-moz-appearance: textfield;
+	appearance: textfield;
 
 	&::-webkit-outer-spin-button,
 	&::-webkit-inner-spin-button {
@@ -98,11 +98,11 @@
 	&--primary {
 		background: var(--wppo-primary);
 		color: #fff;
-		box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
+		box-shadow: 0 1px 3px color-mix(in srgb, var(--wppo-primary) 30%, transparent);
 
 		&:hover:not(:disabled) {
 			background: var(--wppo-primary-hover);
-			box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+			box-shadow: 0 4px 12px color-mix(in srgb, var(--wppo-primary) 35%, transparent);
 			transform: translateY(-1px);
 		}
 
@@ -182,7 +182,7 @@
 		left: 0;
 		right: 0;
 		bottom: 0;
-		background-color: #cbd5e1;
+		background-color: var(--wppo-border-hover);
 		transition: 0.25s ease;
 		border-radius: 22px;
 
