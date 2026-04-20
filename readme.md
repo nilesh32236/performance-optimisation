@@ -191,5 +191,5 @@ I am a Web Developer specializing in custom WordPress solutions, high-performanc
 <br>
 
 <div align="center">
-<sub>Created by Nilesh Kanzariya. Built with a passion for high-performance web solutions.</sub>
+<sub>Created by Nilesh Kanzariya for Qrolic Technology. Built with a passion for high-performance web solutions.</sub>
 </div>

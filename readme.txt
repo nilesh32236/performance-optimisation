@@ -1,5 +1,5 @@
 === Performance Optimisation ===
-Contributors: nilesh912
+Contributors: nilesh912, qrolic
 Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
@@ -91,6 +91,10 @@ Composer configuration:
 		{
 			"name": "nilesh",
 			"email": "nilesh.kanzariya912@gmail.com"
+		},
+		{
+			"name": "Qrolic Technology",
+			"email": "info@qrolic.com"
 		}
 	],
 	"require": {
