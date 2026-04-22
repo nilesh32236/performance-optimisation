@@ -20,21 +20,21 @@ use PerformanceOptimise\Inc\Activate;
 use PerformanceOptimise\Inc\Deactivate;
 use PerformanceOptimise\Inc\Main;
 
-if (!defined('ABSPATH')) {
+if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Exit if accessed directly.
 }
 
 // Define plugin constants.
-if (!defined('WPPO_PLUGIN_PATH')) {
-	define('WPPO_PLUGIN_PATH', wp_normalize_path(plugin_dir_path(__FILE__)));
+if ( ! defined( 'WPPO_PLUGIN_PATH' ) ) {
+	define( 'WPPO_PLUGIN_PATH', wp_normalize_path( plugin_dir_path( __FILE__ ) ) );
 }
 
-if (!defined('WPPO_PLUGIN_URL')) {
-	define('WPPO_PLUGIN_URL', plugin_dir_url(__FILE__));
+if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
+	define( 'WPPO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 }
 
-if (!defined('WPPO_VERSION')) {
-	define('WPPO_VERSION', '1.5.0');
+if ( ! defined( 'WPPO_VERSION' ) ) {
+	define( 'WPPO_VERSION', '1.5.0' );
 }
 
 // Include the main class file.
