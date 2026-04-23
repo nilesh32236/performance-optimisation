@@ -1135,7 +1135,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			return array_unique( array_column( $preload_data, 'url' ) );
 		}
 
-
 		/**
 		 * Generates a base64-encoded SVG image with the given width and height.
 		 *
