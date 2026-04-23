@@ -433,7 +433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$selected_post_types = (array) ( $image_optimisation['selectedPostType'] ?? array() );
 
-			if ( ! is_singular( $selected_post_types ) || ! has_post_thumbnail() ) {
+			if ( empty( $selected_post_types ) || ! is_singular( $selected_post_types ) || ! has_post_thumbnail() ) {
 				return;
 			}
 
@@ -511,8 +511,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$parsed_sources = array();
 
 			foreach ( $sources as $source ) {
-				list($url, $descriptor) = array_map( 'trim', explode( ' ', $source ) );
-				$width                  = (int) rtrim( $descriptor, 'w' );
+				list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', trim( $source ), 2 ), 2, '' );
+				$width                    = (int) rtrim( $descriptor, 'w' );
 
 				if ( in_array( $width, $exclude_sizes, true ) || $width > $max_width ) {
 					continue;
@@ -1132,8 +1132,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 									$parsed_sources = array();
 									foreach ( $sources as $source ) {
-										list($url, $descriptor) = array_map( 'trim', explode( ' ', $source ) );
-										$width                  = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
+										list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', trim( $source ), 2 ), 2, '' );
+										$width                    = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
 
 										if ( in_array( (int) $width, $exclude_size, true ) ) {
 											continue;
