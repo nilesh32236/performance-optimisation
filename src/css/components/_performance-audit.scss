@@ -361,17 +361,6 @@
 		color: var(--wppo-text-muted);
 		margin: 0;
 	}
-
-	&--compact {
-		gap: 0;
-		margin-bottom: 8px;
-
-		.wppo-button {
-			height: 32px;
-			font-size: 0.8rem;
-			padding: 0 12px;
-		}
-	}
 }
 
 // -----------------------------------------------------------------------------

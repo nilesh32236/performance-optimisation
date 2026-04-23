@@ -28,13 +28,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 
 		/**
-		 * Default maximum width for preloading images.
-		 *
-		 * @since NEXT
-		 */
-		private const MAX_PRELOAD_WIDTH = 1478;
-
-		/**
 		 * Configuration options for image optimization.
 		 *
 		 * @var array
@@ -83,19 +76,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.0.0
 		 */
 		public function preload_images() {
-			$preload_data = $this->get_all_preload_data();
+			$image_optimisation = $this->options['image_optimisation'] ?? array();
 
-			foreach ( $preload_data as $data ) {
-				Util::generate_preload_link(
-					$data['url'],
-					'preload',
-					'image',
-					false,
-					Util::get_image_mime_type( $data['url'] ),
-					$data['media'] ?? '',
-					$data['priority'] ?? 'high'
-				);
-			}
+			$this->preload_front_page_images( $image_optimisation );
+			$this->preload_meta_images();
+			$this->preload_post_type_images( $image_optimisation );
 		}
 
 		/**
@@ -397,87 +382,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Retrieves all preloading data from front-page, post meta, and post types.
+		 * Preloads front page images based on the provided optimization settings.
 		 *
-		 * @since NEXT
-		 * @return array List of preload data items.
-		 */
-		private function get_all_preload_data(): array {
-			$image_optimisation = $this->options['image_optimisation'] ?? array();
-
-			return array_merge(
-				$this->get_front_page_preload_data( $image_optimisation ),
-				$this->get_meta_preload_data(),
-				$this->get_post_type_preload_data( $image_optimisation )
-			);
-		}
-
-		/**
-		 * Retrieves front page preload data if enabled.
+		 * @since 1.0.0
 		 *
-		 * @since NEXT
-		 * @param array $image_optimisation Image optimization configuration.
-		 * @return array List of preload items for the front page.
+		 * @param array $image_optimisation Image optimization configuration array.
+		 * @return void
 		 */
-		private function get_front_page_preload_data( array $image_optimisation ): array {
+		private function preload_front_page_images( $image_optimisation ) {
 			if ( empty( $image_optimisation['preloadFrontPageImages'] ) || ! is_front_page() ) {
-				return array();
+				return;
 			}
 
-			$urls = Util::process_urls( $image_optimisation['preloadFrontPageImagesUrls'] ?? array() );
-			return array_map( array( $this, 'prepare_preload_item' ), $urls );
+			$preload_img_urls = Util::process_urls( $image_optimisation['preloadFrontPageImagesUrls'] ?? array() );
+
+			foreach ( $preload_img_urls as $img_url ) {
+				$this->generate_img_preload( $img_url );
+			}
 		}
 
 		/**
-		 * Retrieves preload data from post meta.
+		 * Preloads meta images stored in post meta.
 		 *
-		 * @since NEXT
-		 * @return array List of preload items from meta.
+		 * @since 1.0.0
+		 *
+		 * @return void
 		 */
-		private function get_meta_preload_data(): array {
+		private function preload_meta_images() {
 			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
 
-			if ( empty( $page_img_urls ) ) {
-				return array();
+			if ( ! empty( $page_img_urls ) ) {
+				foreach ( Util::process_urls( $page_img_urls ) as $img_url ) {
+					$this->generate_img_preload( $img_url );
+				}
 			}
-
-			$urls = Util::process_urls( $page_img_urls );
-			return array_map( array( $this, 'prepare_preload_item' ), $urls );
 		}
 
 		/**
-		 * Retrieves preload data for specific post types.
+		 * Preloads images for specific post types if applicable.
 		 *
-		 * @since NEXT
-		 * @param array $image_optimisation Image optimization configuration.
-		 * @return array List of preload items for the post type.
+		 * @since 1.0.0
+		 *
+		 * @param array $image_optimisation Image optimization configuration array.
+		 * @return void
 		 */
-		private function get_post_type_preload_data( array $image_optimisation ): array {
+		private function preload_post_type_images( $image_optimisation ) {
 			if ( empty( $image_optimisation['preloadPostTypeImage'] ) ) {
-				return array();
+				return;
 			}
 
 			$selected_post_types = (array) ( $image_optimisation['selectedPostType'] ?? array() );
 
-			// P1 Fix: Only proceed if post types are explicitly selected.
-			if ( empty( $selected_post_types ) || ! is_singular( $selected_post_types ) || ! has_post_thumbnail() ) {
-				return array();
+			if ( ! is_singular( $selected_post_types ) || ! has_post_thumbnail() ) {
+				return;
 			}
 
 			$thumbnail_id = get_post_thumbnail_id();
 			if ( ! $thumbnail_id ) {
-				return array();
+				return;
 			}
 
 			$exclude_img_urls = Util::process_urls( $image_optimisation['excludePostTypeImgUrl'] ?? array() );
 			$image_url        = $this->get_image_url_by_post_type( $thumbnail_id );
 
 			if ( $this->should_exclude_image( $image_url, $exclude_img_urls ) ) {
-				return array();
+				return;
 			}
 
 			$srcset = wp_get_attachment_image_srcset( $thumbnail_id );
-			return $this->get_srcset_preload_items( $srcset, $image_url, $image_optimisation );
+			$this->process_srcset_for_preload( $srcset, $image_url, $image_optimisation );
 		}
 
 		/**
@@ -516,27 +489,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Robustly parses candidate URLs from a srcset string.
+		 * Extract candidate URLs from a srcset string and schedule them for preloading.
 		 *
-		 * @since NEXT
-		 * @param string $srcset             The srcset string from the image tag.
+		 * @since 1.0.0
+		 *
+		 * @param string $srcset The srcset string from the image tag.
+		 * @param string $default_image The fallback image URL.
 		 * @param array  $image_optimisation Image optimization configuration array.
-		 * @return array Array of parsed sources: array( 'url' => string, 'width' => int ).
+		 * @return void
 		 */
-		private function parse_srcset_data( $srcset, $image_optimisation ): array {
+		private function process_srcset_for_preload( $srcset, $default_image, $image_optimisation ) {
 			if ( ! $srcset ) {
-				return array();
+				$this->generate_img_preload( $default_image );
+				return;
 			}
 
 			$sources       = array_map( 'trim', explode( ',', $srcset ) );
-			$max_width     = (int) ( $image_optimisation['maxWidthImgSize'] ?? self::MAX_PRELOAD_WIDTH );
+			$max_width     = (int) ( $image_optimisation['maxWidthImgSize'] ?? 1478 );
 			$exclude_sizes = array_map( 'absint', Util::process_urls( $image_optimisation['excludeSize'] ?? array() ) );
 
 			$parsed_sources = array();
 
 			foreach ( $sources as $source ) {
-				list( $url, $descriptor ) = array_pad( preg_split( '/\s+/', trim( $source ), 2 ), 2, '' );
-				$width                    = (int) rtrim( $descriptor, 'w' );
+				list($url, $descriptor) = array_map( 'trim', explode( ' ', $source ) );
+				$width                  = (int) rtrim( $descriptor, 'w' );
 
 				if ( in_array( $width, $exclude_sizes, true ) || $width > $max_width ) {
 					continue;
@@ -549,30 +525,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			usort( $parsed_sources, fn( $a, $b ) => $a['width'] - $b['width'] );
-			return $parsed_sources;
+
+			$this->generate_media_preloads( $parsed_sources, $max_width );
 		}
 
 		/**
-		 * Retrieves preload data items from an image's srcset.
+		 * Generate preload links for a set of parsed image sources.
 		 *
-		 * @since NEXT
-		 * @param string $srcset             The srcset string from the image tag.
-		 * @param string $default_image      The fallback image URL.
-		 * @param array  $image_optimisation Image optimization configuration array.
-		 * @return array List of preload items.
+		 * @since 1.0.0
+		 *
+		 * @param array $parsed_sources Array of parsed image sources.
+		 * @param int   $max_width Maximum allowed width for preloading.
+		 * @return void
 		 */
-		private function get_srcset_preload_items( $srcset, $default_image, $image_optimisation ): array {
-			if ( ! $srcset ) {
-				return array( $this->prepare_preload_item( $default_image ) );
-			}
-
-			$parsed_sources = $this->parse_srcset_data( $srcset, $image_optimisation );
-			if ( empty( $parsed_sources ) ) {
-				return array( $this->prepare_preload_item( $default_image ) );
-			}
-
-			$max_width      = (int) ( $image_optimisation['maxWidthImgSize'] ?? self::MAX_PRELOAD_WIDTH );
-			$items          = array();
+		private function generate_media_preloads( $parsed_sources, $max_width ) {
 			$previous_width = 0;
 
 			foreach ( $parsed_sources as $index => $source ) {
@@ -584,51 +550,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$media .= " and (max-width: {$current_width}px)";
 				}
 
-				$items[] = array(
-					'url'      => $source['url'],
-					'media'    => $media,
-					'priority' => 'high',
-				);
+				Util::generate_preload_link( $source['url'], 'preload', 'image', false, Util::get_image_mime_type( $source['url'] ), $media, 'high' );
 				$previous_width = $current_width + 1;
 			}
-
-			return $items;
-		}
-
-		/**
-		 * Prepares a URL for preloading, handling specific prefixes and resolving relative paths.
-		 *
-		 * @since NEXT
-		 * @param string $img_url The original URL to prepare.
-		 * @return array Structured preload item.
-		 */
-		private function prepare_preload_item( string $img_url ): array {
-			$img_url = trim( $img_url );
-			$media   = '';
-
-			if ( 0 === strpos( $img_url, 'mobile:' ) ) {
-				$img_url = trim( str_replace( 'mobile:', '', $img_url ) );
-				if ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = content_url( $img_url );
-				}
-				$media = '(max-width: 768px)';
-			} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
-				$img_url = trim( str_replace( 'desktop:', '', $img_url ) );
-				if ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = content_url( $img_url );
-				}
-				$media = '(min-width: 768px)';
-			} else {
-				if ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = content_url( $img_url );
-				}
-			}
-
-			return array(
-				'url'      => $img_url,
-				'media'    => $media,
-				'priority' => 'high',
-			);
 		}
 
 		/**
@@ -640,16 +564,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return void
 		 */
 		public function generate_img_preload( $img_url ) {
-			$data = $this->prepare_preload_item( $img_url );
-			Util::generate_preload_link(
-				$data['url'],
-				'preload',
-				'image',
-				false,
-				Util::get_image_mime_type( $data['url'] ),
-				$data['media'] ?? '',
-				$data['priority'] ?? 'high'
-			);
+			if ( 0 === strpos( $img_url, 'mobile:' ) ) {
+				$mobile_url = trim( str_replace( 'mobile:', '', $img_url ) );
+
+				if ( 0 !== strpos( $img_url, 'http' ) ) {
+					$mobile_url = content_url( $mobile_url );
+				}
+
+				Util::generate_preload_link( $mobile_url, 'preload', 'image', false, Util::get_image_mime_type( $mobile_url ), '(max-width: 768px)', 'high' );
+			} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
+				$desktop_url = trim( str_replace( 'desktop:', '', $img_url ) );
+
+				if ( 0 !== strpos( $img_url, 'http' ) ) {
+					$desktop_url = content_url( $desktop_url );
+				}
+
+				Util::generate_preload_link( $desktop_url, 'preload', 'image', false, Util::get_image_mime_type( $desktop_url ), '(min-width: 768px)', 'high' );
+			} elseif ( '' !== trim( $img_url ) ) {
+				$img_url = trim( $img_url );
+
+				if ( 0 !== strpos( $img_url, 'http' ) ) {
+					$img_url = content_url( $img_url );
+				}
+
+				Util::generate_preload_link( $img_url, 'preload', 'image', false, Util::get_image_mime_type( $img_url ), '', 'high' );
+			}
 		}
 
 		/**
@@ -1125,14 +1064,161 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Retrieves URLs of images to preload for lazy-load exclusion.
+		 * Retrieves URLs of images to preload.
 		 *
 		 * @since 1.0.0
+		 *
 		 * @return array List of preload image URLs.
 		 */
-		private function get_preload_images_urls(): array {
-			$preload_data = $this->get_all_preload_data();
-			return array_unique( array_column( $preload_data, 'url' ) );
+		private function get_preload_images_urls() {
+			$image_optimisation = $this->options['image_optimisation'] ?? array();
+			$preload_img_urls   = array();
+
+			if ( is_front_page() && isset( $image_optimisation['preloadFrontPageImages'] ) && (bool) $image_optimisation['preloadFrontPageImages'] ) {
+				$preload_img_urls = array_merge( $preload_img_urls, $this->process_preload_urls( $image_optimisation['preloadFrontPageImagesUrls'] ?? array() ) );
+			}
+
+			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
+
+			if ( ! empty( $page_img_urls ) ) {
+				$preload_img_urls = array_merge( $preload_img_urls, $this->process_preload_urls( $page_img_urls ) );
+			}
+
+			if ( isset( $image_optimisation['preloadPostTypeImage'] ) && (bool) $image_optimisation['preloadPostTypeImage'] ) {
+				if ( isset( $image_optimisation['selectedPostType'] ) && ! empty( $image_optimisation['selectedPostType'] ) ) {
+					$selected_post_types = (array) $image_optimisation['selectedPostType'];
+
+					if ( is_singular( $selected_post_types ) && has_post_thumbnail() ) {
+						$thumbnail_id = get_post_thumbnail_id();
+
+						if ( $thumbnail_id ) {
+							$exclude_img_urls = array();
+							if ( isset( $image_optimisation['excludePostTypeImgUrl'] ) && ! empty( $image_optimisation['excludePostTypeImgUrl'] ) ) {
+								$exclude_img_urls = Util::process_urls( $image_optimisation['excludePostTypeImgUrl'] );
+							}
+
+							if ( 'product' === get_post_type() && class_exists( 'WooCommerce' ) ) {
+								$image_size = apply_filters( 'woocommerce_gallery_image_size', 'woocommerce_single' );
+								$img_url    = wp_get_attachment_image_url( $thumbnail_id, $image_size );
+
+								if ( is_array( $img_url ) ) {
+									$img_url = $img_url[0];
+								}
+							} else {
+								$img_url = wp_get_attachment_image_url( $thumbnail_id, 'blog-single-image' );
+							}
+
+							$should_exclude = false;
+							foreach ( $exclude_img_urls as $url ) {
+								if ( false !== strpos( $img_url, $url ) ) {
+									$should_exclude = true;
+									break;
+								}
+							}
+
+							$max_width    = $image_optimisation['maxWidthImgSize'] ? $image_optimisation['maxWidthImgSize'] : 1480;
+							$exclude_size = array();
+
+							if ( isset( $image_optimisation['excludeSize'] ) && ! empty( $image_optimisation['excludeSize'] ) ) {
+								$exclude_size = Util::process_urls( $image_optimisation['excludeSize'] );
+								$exclude_size = array_map( 'absint', $exclude_size );
+							}
+
+							if ( ! $should_exclude ) {
+								$srcset = wp_get_attachment_image_srcset( $thumbnail_id );
+
+								if ( $srcset ) {
+									$sources = array_map( 'trim', explode( ',', $srcset ) );
+
+									$parsed_sources = array();
+									foreach ( $sources as $source ) {
+										list($url, $descriptor) = array_map( 'trim', explode( ' ', $source ) );
+										$width                  = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
+
+										if ( in_array( (int) $width, $exclude_size, true ) ) {
+											continue;
+										}
+
+										$parsed_sources[] = array(
+											'url'   => $url,
+											'width' => $width,
+										);
+									}
+
+									usort(
+										$parsed_sources,
+										function ( $a, $b ) {
+											return $a['width'] - $b['width'];
+										}
+									);
+
+									$previous_width = 0;
+									foreach ( $parsed_sources as $index => $source ) {
+										$current_width = $source['width'];
+										$next_width    = isset( $parsed_sources[ $index + 1 ] ) ? $parsed_sources[ $index + 1 ]['width'] : null;
+
+										if ( $current_width > $max_width ) {
+											continue;
+										}
+
+										$media = '(min-width: ' . $previous_width . 'px)';
+										if ( $next_width && $next_width <= $max_width ) {
+											$media .= ' and (max-width: ' . $current_width . 'px)';
+										}
+
+										$preload_img_urls[] = $source['url'];
+
+										$previous_width = $current_width;
+									}
+								} else {
+									$preload_img_urls[] = $img_url;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			return array_unique( $preload_img_urls );
+		}
+
+		/**
+		 * Processes an URLs for preloading.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $urls URLs to process.
+		 * @return array Processed URLs ready for preloading.
+		 */
+		private function process_preload_urls( $urls ) {
+			$preload_urls = array();
+			if ( ! empty( $urls ) ) {
+				foreach ( Util::process_urls( $urls ) as $img ) {
+					$preload_urls[] = $this->prepare_url_for_preload( $img );
+				}
+			}
+			return $preload_urls;
+		}
+
+		/**
+		 * Prepares a URL for preloading, handling specific prefixes like 'mobile:' or 'desktop:'.
+		 *
+		 * @since 1.0.0
+		 *
+		 * @param string $url The original URL to prepare.
+		 * @return string The prepared URL.
+		 */
+		private function prepare_url_for_preload( $url ) {
+			$url = trim( $url );
+
+			// Handle mobile and desktop specific URLs.
+			if ( 0 === strpos( $url, 'mobile:' ) ) {
+				return content_url( trim( str_replace( 'mobile:', '', $url ) ) );
+			} elseif ( 0 === strpos( $url, 'desktop:' ) ) {
+				return content_url( trim( str_replace( 'desktop:', '', $url ) ) );
+			}
+
+			return ( 0 !== strpos( $url, 'http' ) ) ? content_url( $url ) : $url;
 		}
 
 		/**

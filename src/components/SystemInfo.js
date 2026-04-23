@@ -11,7 +11,6 @@
 import { useState } from '@wordpress/element';
 import { fetchSystemInfo } from '../lib/apiRequest';
 import FeatureCard from './common/FeatureCard';
-import LoadingSubmitButton from './common/LoadingSubmitButton';
 
 const t =
 	typeof wppoSettings !== 'undefined' && wppoSettings.translations
@@ -99,31 +98,29 @@ const SystemInfo = () => {
 
 	return (
 		<FeatureCard title={ t.systemInfo || 'System Info' }>
-			{ /* Load trigger — shown to initiate fetch or refresh data */ }
-			<div
-				className={ `wppo-sysinfo-trigger ${
-					loaded ? 'wppo-sysinfo-trigger--compact' : ''
-				}` }
-			>
-				{ ! loaded && ! error && (
+			{ /* Load trigger — shown until data is fetched */ }
+			{ ! loaded && ! loading && (
+				<div className="wppo-sysinfo-trigger">
 					<p className="wppo-sysinfo-trigger__desc">
 						{ t.systemInfoDesc ||
 							'View PHP, database, WordPress, and server environment details.' }
 					</p>
-				) }
-				<LoadingSubmitButton
-					type="button"
-					className="wppo-button wppo-button--secondary"
-					onClick={ handleLoad }
-					isLoading={ loading }
-					label={
-						loaded
-							? t.refresh || 'Refresh System Info'
-							: t.loadSystemInfo || 'Load System Info'
-					}
-					loadingLabel={ t.scanning || 'Loading...' }
-				/>
-			</div>
+					<button
+						type="button"
+						className="wppo-button wppo-button--secondary"
+						onClick={ handleLoad }
+					>
+						{ t.loadSystemInfo || 'Load System Info' }
+					</button>
+				</div>
+			) }
+
+			{ /* Loading state */ }
+			{ loading && (
+				<p className="wppo-sysinfo-loading" aria-live="polite">
+					{ t.scanning || 'Loading...' }
+				</p>
+			) }
 
 			{ /* Error state */ }
 			{ error && (

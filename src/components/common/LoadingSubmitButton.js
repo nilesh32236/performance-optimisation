@@ -34,17 +34,20 @@ const LoadingSubmitButton = ( {
 			aria-busy={ isLoading }
 			{ ...rest }
 		>
-			{ isLoading && (
-				<FontAwesomeIcon
-					icon={ faSpinner }
-					spin
-					aria-hidden="true"
-					style={ { marginRight: '8px' } }
-				/>
+			{ isLoading ? (
+				<>
+					<FontAwesomeIcon
+						icon={ faSpinner }
+						spin
+						aria-hidden="true"
+					/>{ ' ' }
+					<span role="status" aria-live="polite">
+						{ loadingLabel || children }
+					</span>
+				</>
+			) : (
+				label || children
 			) }
-			<span role="status" aria-live="polite">
-				{ isLoading ? ( loadingLabel || children ) : ( label || children ) }
-			</span>
 		</button>
 	);
 };

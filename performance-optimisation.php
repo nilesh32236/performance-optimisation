@@ -20,21 +20,21 @@ use PerformanceOptimise\Inc\Activate;
 use PerformanceOptimise\Inc\Deactivate;
 use PerformanceOptimise\Inc\Main;
 
-if ( ! defined( 'ABSPATH' ) ) {
+if (!defined('ABSPATH')) {
 	exit; // Exit if accessed directly.
 }
 
 // Define plugin constants.
-if ( ! defined( 'WPPO_PLUGIN_PATH' ) ) {
-	define( 'WPPO_PLUGIN_PATH', wp_normalize_path( plugin_dir_path( __FILE__ ) ) );
+if (!defined('WPPO_PLUGIN_PATH')) {
+	define('WPPO_PLUGIN_PATH', wp_normalize_path(plugin_dir_path(__FILE__)));
 }
 
-if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
-	define( 'WPPO_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+if (!defined('WPPO_PLUGIN_URL')) {
+	define('WPPO_PLUGIN_URL', plugin_dir_url(__FILE__));
 }
 
-if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.5.0' );
+if (!defined('WPPO_VERSION')) {
+	define('WPPO_VERSION', '1.5.0');
 }
 
 // Include the main class file.
@@ -49,11 +49,12 @@ new Main();
  * @since 1.0.0
  * Includes the activation class and runs the activation process.
  */
-function wppo_activate(): void {
+function wppo_activate(): void
+{
 	require_once WPPO_PLUGIN_PATH . 'includes/class-activate.php';
 	Activate::init();
 }
-register_activation_hook( __FILE__, 'wppo_activate' );
+register_activation_hook(__FILE__, 'wppo_activate');
 
 /**
  * Deactivation hook callback function.
@@ -61,8 +62,9 @@ register_activation_hook( __FILE__, 'wppo_activate' );
  * @since 1.0.0
  * Includes the deactivation class and runs the deactivation process.
  */
-function wppo_deactivate(): void {
+function wppo_deactivate(): void
+{
 	require_once WPPO_PLUGIN_PATH . 'includes/class-deactivate.php';
 	Deactivate::init();
 }
-register_deactivation_hook( __FILE__, 'wppo_deactivate' );
+register_deactivation_hook(__FILE__, 'wppo_deactivate');

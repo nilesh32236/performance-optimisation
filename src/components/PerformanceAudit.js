@@ -403,9 +403,7 @@ const PerformanceAudit = () => {
 							/>
 							<ResultRow
 								label={ t.modernImages || 'Modern Formats' }
-								value={ `${ Number(
-									result.uses_modern_image_formats || 0
-								).toFixed( 1 ) }%` }
+								value={ `${ Number( result.uses_modern_image_formats || 0 ).toFixed( 1 ) }%` }
 								status={ numericStatus(
 									100 -
 										( parseFloat(
@@ -514,9 +512,7 @@ const PerformanceAudit = () => {
 										value={ result.lazy_image_count }
 									/>
 									<ResultRow
-										label={
-											t.eagerLoaded || 'Eager-Loaded'
-										}
+										label={ t.eagerLoaded || 'Eager-Loaded' }
 										value={ result.eager_image_count }
 									/>
 									<ResultRow
