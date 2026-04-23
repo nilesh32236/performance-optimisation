@@ -776,6 +776,8 @@ class Main {
 					'domSize'                  => __( 'Total DOM Nodes', 'performance-optimisation' ),
 					'unminifiedAssets'         => __( 'Unminified Assets', 'performance-optimisation' ),
 					'thirdPartyScripts'        => __( 'Third-Party Scripts', 'performance-optimisation' ),
+					'refresh'                  => __( 'Refresh', 'performance-optimisation' ),
+					'refreshSystemInfo'        => __( 'Refresh System Info', 'performance-optimisation' ),
 				),
 
 				// Frontend theme colors for accent syncing.
