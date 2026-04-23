@@ -24,417 +24,552 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document provides comprehensive API documentation for the core REST API endpoints of the Performance Optimisation plugin. It covers the essential endpoints for cache management, settings updates, image optimization, database cleanup, and recent activities. For each endpoint, you will find HTTP methods, URL patterns, request/response schemas, parameter descriptions, authentication requirements, practical examples, expected responses, error handling scenarios, and permission/security considerations.
+
+The Performance Optimisation plugin provides a comprehensive REST API for managing WordPress performance optimization features. This documentation covers the core REST API endpoints that enable programmatic control over cache management, image optimization, database cleanup, and system monitoring capabilities.
+
+The plugin follows WordPress REST API standards and provides secure, authenticated endpoints for administrators to manage performance optimization features through external integrations and automation tools.
 
 ## Project Structure
-The plugin exposes REST endpoints via a dedicated REST controller class. The endpoints are registered under the namespace “performance-optimisation/v1” and require a valid WordPress REST nonce and administrative privileges.
+
+The REST API implementation is organized within the plugin's modular architecture:
 
 ```mermaid
 graph TB
-Client["Client"]
-WP["WordPress REST API"]
-REST["Rest Controller<br/>includes/class-rest.php"]
-Cache["Cache<br/>includes/class-cache.php"]
-ImgConv["Img_Converter<br/>includes/class-img-converter.php"]
-DB["Database_Cleanup<br/>includes/class-database-cleanup.php"]
-Log["Log<br/>includes/class-log.php"]
-Client --> WP
-WP --> REST
-REST --> Cache
-REST --> ImgConv
-REST --> DB
-REST --> Log
-```
-
-**Diagram sources**
-- [class-rest.php:30-123](file://includes/class-rest.php#L30-L123)
-- [class-cache.php:32-755](file://includes/class-cache.php#L32-L755)
-- [class-img-converter.php:22-762](file://includes/class-img-converter.php#L22-L762)
-- [class-database-cleanup.php:30-652](file://includes/class-database-cleanup.php#L30-L652)
-- [class-log.php:22-132](file://includes/class-log.php#L22-L132)
-
-**Section sources**
-- [class-rest.php:30-123](file://includes/class-rest.php#L30-L123)
-- [class-main.php:182-183](file://includes/class-main.php#L182-L183)
-
-## Core Components
-- REST Controller: Registers and validates endpoints, orchestrates business logic, and returns standardized responses.
-- Cache: Manages cache generation, invalidation, and statistics.
-- Image Converter: Converts images to WebP/AVIF formats and tracks conversion status.
-- Database Cleanup: Performs targeted cleanup operations on WordPress database tables.
-- Log: Records activities and retrieves recent activity logs.
-
-**Section sources**
-- [class-rest.php:26-136](file://includes/class-rest.php#L26-L136)
-- [class-cache.php:32-755](file://includes/class-cache.php#L32-L755)
-- [class-img-converter.php:22-762](file://includes/class-img-converter.php#L22-L762)
-- [class-database-cleanup.php:30-652](file://includes/class-database-cleanup.php#L30-L652)
-- [class-log.php:22-132](file://includes/class-log.php#L22-L132)
-
-## Architecture Overview
-The REST endpoints are registered during the REST API initialization hook and validated using a permission callback that checks for administrative capability and a valid nonce. Responses follow a consistent structure with data, success flag, and message.
-
-```mermaid
-sequenceDiagram
-participant Client as "Client"
-participant REST as "Rest Controller"
-participant Perm as "Permission Callback"
-participant Handler as "Endpoint Handler"
-participant Model as "Model Layer"
-Client->>REST : "HTTP Request"
-REST->>Perm : "Verify capabilities + nonce"
-Perm-->>REST : "Allowed/Denied"
-alt Allowed
-REST->>Handler : "Dispatch to handler"
-Handler->>Model : "Perform operation"
-Model-->>Handler : "Result"
-Handler-->>REST : "Response"
-REST-->>Client : "Standardized JSON"
-else Denied
-REST-->>Client : "403 Unauthorized"
+subgraph "Plugin Structure"
+A[performance-optimisation.php] --> B[class-main.php]
+B --> C[class-rest.php]
+C --> D[REST Handlers]
+subgraph "Core Features"
+E[class-cache.php]
+F[class-image-optimisation.php]
+G[class-database-cleanup.php]
+H[class-log.php]
+I[class-img-converter.php]
+end
+D --> E
+D --> F
+D --> G
+D --> H
+D --> I
 end
 ```
 
 **Diagram sources**
-- [class-rest.php:37-43](file://includes/class-rest.php#L37-L43)
+- [performance-optimisation.php:1-71](file://performance-optimisation.php#L1-L71)
+- [class-main.php:128-186](file://includes/class-main.php#L128-L186)
+- [class-rest.php:30-123](file://includes/class-rest.php#L30-L123)
+
+**Section sources**
+- [performance-optimisation.php:1-71](file://performance-optimisation.php#L1-L71)
+- [class-main.php:128-186](file://includes/class-main.php#L128-L186)
+
+## Core Components
+
+The REST API is built around several key components that handle different aspects of performance optimization:
+
+### REST Endpoint Registration
+The plugin registers all REST endpoints through the `Rest` class, which defines the namespace and route configurations. The namespace follows WordPress standards with versioning for future compatibility.
+
+### Authentication System
+All endpoints require WordPress administrator privileges combined with a valid REST nonce for security. The permission callback validates both user capabilities and nonce authenticity.
+
+### Data Processing Layer
+Each endpoint handler processes request parameters, sanitizes input data, and interacts with specialized classes for cache management, image optimization, and database operations.
+
+**Section sources**
+- [class-rest.php:30-136](file://includes/class-rest.php#L30-L136)
+- [class-main.php:185-186](file://includes/class-main.php#L185-L186)
+
+## Architecture Overview
+
+The REST API architecture follows a layered approach with clear separation of concerns:
+
+```mermaid
+sequenceDiagram
+participant Client as "External Client"
+participant REST as "Rest Handler"
+participant Auth as "Permission Check"
+participant Service as "Feature Service"
+participant Storage as "Storage Layer"
+Client->>REST : API Request
+REST->>Auth : Verify Permissions
+Auth-->>REST : Authentication Result
+alt Authentication Success
+REST->>Service : Process Request
+Service->>Storage : Access Data
+Storage-->>Service : Data Response
+Service-->>REST : Processed Result
+REST-->>Client : API Response
+else Authentication Failure
+REST-->>Client : 403 Forbidden
+end
+```
+
+**Diagram sources**
 - [class-rest.php:131-136](file://includes/class-rest.php#L131-L136)
-- [class-rest.php:831-840](file://includes/class-rest.php#L831-L840)
+- [class-rest.php:853-862](file://includes/class-rest.php#L853-L862)
+
+The architecture ensures that:
+- All requests are properly authenticated
+- Input data is sanitized and validated
+- Business logic is encapsulated in dedicated service classes
+- Responses follow consistent JSON schema
 
 ## Detailed Component Analysis
 
-### Authentication and Permission Model
-- Nonce: Requests must include the WordPress REST nonce via the “X-WP-Nonce” header.
-- Capability: Requires “manage_options” capability.
-- Validation: The permission callback verifies both the nonce and user capability.
+### Authentication and Permission System
+
+All endpoints require two-factor authentication:
+1. WordPress administrator capability (`manage_options`)
+2. Valid WordPress REST nonce (`X-WP-Nonce` header)
+
+The permission system provides robust security while maintaining flexibility for automated systems.
 
 **Section sources**
 - [class-rest.php:131-136](file://includes/class-rest.php#L131-L136)
 
-### Endpoint: clear_cache
-- Method: POST
-- URL: /wp-json/performance-optimisation/v1/clear_cache
-- Purpose: Clear the cache for a specific page or globally.
-- Request Parameters:
-  - action (string): “clear_single_page_cache” to clear a single page; otherwise clears all.
-  - path (string): URL path for the page to clear (sanitized and validated).
-- Response Schema:
-  - data: boolean (always true on success)
-  - success: boolean
-  - message: string
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-  - Body: { "action": "clear_single_page_cache", "path": "/about/" }
-- Example Success Response:
-  - Status: 200
-  - Body: { "data": true, "success": true, "message": null }
-- Error Handling:
-  - 400: Invalid path provided (contains directory traversal).
-  - 403: Unauthorized (nonce invalid or insufficient capability).
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
+### Endpoint 1: clear_cache
+
+**HTTP Method:** POST  
+**URL Pattern:** `/wp-json/performance-optimisation/v1/clear_cache`
+
+**Request Parameters:**
+- `action` (string, optional): `clear_single_page_cache` or empty for full cache clear
+- `path` (string, optional): URL path for single page cache clearing
+
+**Response Schema:**
+```json
+{
+  "data": true,
+  "success": true,
+  "message": "Cache cleared successfully"
+}
+```
+
+**Security Considerations:**
+- Validates path parameter to prevent directory traversal
+- Requires administrator privileges
+- Logs cache clearing actions in activity log
+
+**Example Usage:**
+```bash
+curl -X POST https://example.com/wp-json/performance-optimisation/v1/clear_cache \
+  -H "X-WP-Nonce: YOUR_NONCE" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "clear_single_page_cache", "path": "/about-us/"}'
+```
 
 **Section sources**
-- [class-rest.php:55-175](file://includes/class-rest.php#L55-L175)
+- [class-rest.php:145-175](file://includes/class-rest.php#L145-L175)
 - [class-cache.php:647-677](file://includes/class-cache.php#L647-L677)
 
-### Endpoint: update_settings
-- Method: POST
-- URL: /wp-json/performance-optimisation/v1/update_settings
-- Purpose: Update plugin settings by tab.
-- Request Parameters:
-  - tab (string): Target settings tab.
-  - settings (object): Nested settings to update.
-- Response Schema:
-  - data: object (updated settings)
-  - success: boolean
-  - message: string
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-  - Body: { "tab": "file_optimisation", "settings": { "combineCSS": true } }
-- Example Success Response:
-  - Status: 200
-  - Body: { "data": { "file_optimisation": { "combineCSS": true }, ... }, "success": true, "message": null }
-- Error Handling:
-  - 400: Malformed request payload.
-  - 500: Failed to update settings.
-  - 403: Unauthorized.
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
+### Endpoint 2: update_settings
+
+**HTTP Method:** POST  
+**URL Pattern:** `/wp-json/performance-optimisation/v1/update_settings`
+
+**Request Parameters:**
+- `tab` (string): Settings tab identifier
+- `settings` (object): Settings object to update
+
+**Response Schema:**
+```json
+{
+  "data": {
+    "file_optimisation": {},
+    "image_optimisation": {},
+    "preload_settings": {}
+  },
+  "success": true,
+  "message": "Settings updated successfully"
+}
+```
+
+**Security Considerations:**
+- Recursively sanitizes all settings data
+- Validates settings structure
+- Clears cache after successful update
+
+**Example Usage:**
+```bash
+curl -X POST https://example.com/wp-json/performance-optimisation/v1/update_settings \
+  -H "X-WP-Nonce: YOUR_NONCE" \
+  -H "Content-Type: application/json" \
+  -d '{"tab": "file_optimisation", "settings": {"combineCSS": true}}'
+```
 
 **Section sources**
-- [class-rest.php:60-200](file://includes/class-rest.php#L60-L200)
+- [class-rest.php:184-200](file://includes/class-rest.php#L184-L200)
 
-### Endpoint: optimise_image
-- Method: POST
-- URL: /wp-json/performance-optimisation/v1/optimise_image
-- Purpose: Convert images to WebP/AVIF formats; supports background processing via Action Scheduler.
-- Request Parameters:
-  - webp (array of strings): Paths to images to convert to WebP.
-  - avif (array of strings): Paths to images to convert to AVIF.
-- Behavior:
-  - Validates paths (no directory traversal).
-  - If Action Scheduler is available, schedules background jobs; otherwise processes synchronously.
-- Response Schema:
-  - Background mode:
-    - data.background: boolean (true)
-    - data.jobs_queued: number
-    - data.message: string
-  - Synchronous mode:
-    - data: object (image info)
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-  - Body: { "webp": ["/wp-content/uploads/2024/image1.jpg"], "avif": [] }
-- Example Success Response (Background):
-  - Status: 200
-  - Body: { "data": { "background": true, "jobs_queued": 1, "message": "1 images queued for background optimization." }, "success": true, "message": null }
-- Example Success Response (Synchronous):
-  - Status: 200
-  - Body: { "data": { "pending": {...}, "completed": {...}, "failed": {...} }, "success": true, "message": null }
-- Error Handling:
-  - 400: Invalid image path provided.
-  - 500: Internal processing errors.
-  - 403: Unauthorized.
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
+### Endpoint 3: optimise_image
+
+**HTTP Method:** POST  
+**URL Pattern:** `/wp-json/performance-optimisation/v1/optimise_image`
+
+**Request Parameters:**
+- `webp` (array, optional): Array of WebP image paths
+- `avif` (array, optional): Array of AVIF image paths
+
+**Response Schema (Background Processing):**
+```json
+{
+  "data": {
+    "background": true,
+    "jobs_queued": 5,
+    "message": "5 images queued for background optimization."
+  },
+  "success": true,
+  "message": "Images queued for background optimization"
+}
+```
+
+**Response Schema (Synchronous Processing):**
+```json
+{
+  "data": {
+    "pending": {
+      "webp": [],
+      "avif": []
+    },
+    "completed": {
+      "webp": ["/wp-content/uploads/image1.webp"],
+      "avif": []
+    },
+    "failed": {
+      "webp": [],
+      "avif": []
+    }
+  },
+  "success": true,
+  "message": "Images optimized successfully"
+}
+```
+
+**Security Considerations:**
+- Validates image paths to prevent directory traversal
+- Supports both synchronous and asynchronous processing
+- Uses Action Scheduler for background processing when available
+
+**Example Usage:**
+```bash
+curl -X POST https://example.com/wp-json/performance-optimisation/v1/optimise_image \
+  -H "X-WP-Nonce: YOUR_NONCE" \
+  -H "Content-Type: application/json" \
+  -d '{"webp": ["/wp-content/uploads/image1.jpg", "/wp-content/uploads/image2.jpg"]}'
+```
 
 **Section sources**
-- [class-rest.php:65-353](file://includes/class-rest.php#L65-L353)
+- [class-rest.php:253-353](file://includes/class-rest.php#L253-L353)
 - [class-img-converter.php:104-310](file://includes/class-img-converter.php#L104-L310)
 
-### Endpoint: delete_optimised_image
-- Method: POST
-- URL: /wp-json/performance-optimisation/v1/delete_optimised_image
-- Purpose: Delete the optimized images directory (WebP/AVIF copies).
-- Response Schema:
-  - data.success: boolean
-  - data.message: string
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-- Example Success Response:
-  - Status: 200
-  - Body: { "data": { "success": true, "message": "Optimized images folder deleted successfully." }, "success": true, "message": null }
-- Error Handling:
-  - 404: Optimized images folder does not exist.
-  - 500: Failed to delete the folder.
-  - 403: Unauthorized.
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
+### Endpoint 4: delete_optimised_image
+
+**HTTP Method:** POST  
+**URL Pattern:** `/wp-json/performance-optimisation/v1/delete_optimised_image`
+
+**Request Parameters:** None required
+
+**Response Schema:**
+```json
+{
+  "data": {
+    "success": true,
+    "message": "Optimized images folder deleted successfully."
+  },
+  "success": true,
+  "message": "Optimized images folder deleted successfully"
+}
+```
+
+**Security Considerations:**
+- Validates filesystem access
+- Uses WordPress filesystem abstraction
+- Clears completed format tracking after deletion
+
+**Example Usage:**
+```bash
+curl -X POST https://example.com/wp-json/performance-optimisation/v1/delete_optimised_image \
+  -H "X-WP-Nonce: YOUR_NONCE"
+```
 
 **Section sources**
-- [class-rest.php:70-400](file://includes/class-rest.php#L70-L400)
+- [class-rest.php:361-400](file://includes/class-rest.php#L361-L400)
 - [class-img-converter.php:692-703](file://includes/class-img-converter.php#L692-L703)
 
-### Endpoint: recent_activities
-- Method: GET
-- URL: /wp-json/performance-optimisation/v1/recent_activities
-- Purpose: Retrieve recent activities with pagination.
-- Query Parameters:
-  - page (integer): Page number (default 1).
-- Response Schema:
-  - data.activities: array of activity entries
-  - data.total_items: number
-  - data.current_page: number
-  - data.total_pages: number
-  - data.per_page: number
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-  - Query: page=1
-- Example Success Response:
-  - Status: 200
-  - Body: { "data": { "activities": [...], "total_items": 120, "current_page": 1, "total_pages": 12, "per_page": 10 }, "success": true, "message": null }
-- Error Handling:
-  - 403: Unauthorized.
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
+### Endpoint 5: recent_activities
+
+**HTTP Method:** GET  
+**URL Pattern:** `/wp-json/performance-optimisation/v1/recent_activities`
+
+**Request Parameters:**
+- `page` (integer, optional): Page number (default: 1)
+
+**Response Schema:**
+```json
+{
+  "data": {
+    "activities": [
+      {
+        "id": 1,
+        "activity": "Cache cleared for <a href=\"https://example.com/about-us/\">https://example.com/about-us/</a>",
+        "created_at": "2024-01-15 10:30:00"
+      }
+    ],
+    "total_items": 25,
+    "current_page": 1,
+    "total_pages": 3,
+    "per_page": 10
+  },
+  "success": true,
+  "message": "Activities retrieved successfully"
+}
+```
+
+**Security Considerations:**
+- Implements caching for performance
+- Paginates results for large datasets
+- Sanitizes HTML content in activity logs
+
+**Example Usage:**
+```bash
+curl -X GET https://example.com/wp-json/performance-optimisation/v1/recent_activities?page=1 \
+  -H "X-WP-Nonce: YOUR_NONCE"
+```
 
 **Section sources**
-- [class-rest.php:75-241](file://includes/class-rest.php#L75-L241)
+- [class-rest.php:232-241](file://includes/class-rest.php#L232-L241)
 - [class-log.php:73-130](file://includes/class-log.php#L73-L130)
 
-### Endpoint: import_settings
-- Method: POST
-- URL: /wp-json/performance-optimisation/v1/import_settings
-- Purpose: Import settings from a JSON payload.
-- Request Body:
-  - action (string): Must be “import_settings”.
-  - settings (object): Settings to import.
-- Response Schema:
-  - data: object (imported settings)
-  - success: boolean
-  - message: string
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-  - Body: { "action": "import_settings", "settings": { "file_optimisation": { "combineCSS": true } } }
-- Example Success Response:
-  - Status: 200
-  - Body: { "data": { "file_optimisation": { "combineCSS": true } }, "success": true, "message": "Settings updated successfully" }
-- Error Handling:
-  - 400: Invalid action or missing settings.
-  - 500: Failed to update settings.
-  - 403: Unauthorized.
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
+### Endpoint 6: import_settings
+
+**HTTP Method:** POST  
+**URL Pattern:** `/wp-json/performance-optimisation/v1/import_settings`
+
+**Request Parameters:**
+- `action` (string): Must be `import_settings`
+- `settings` (object): Settings object to import
+
+**Response Schema:**
+```json
+{
+  "data": {
+    "file_optimisation": {},
+    "image_optimisation": {},
+    "preload_settings": {}
+  },
+  "success": true,
+  "message": "Settings updated successfully"
+}
+```
+
+**Security Considerations:**
+- Validates action parameter
+- Recursively sanitizes settings data
+- Compares with existing settings to detect changes
+- Updates database only when changes are detected
+
+**Example Usage:**
+```bash
+curl -X POST https://example.com/wp-json/performance-optimisation/v1/import_settings \
+  -H "X-WP-Nonce: YOUR_NONCE" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "import_settings", "settings": {"file_optimisation": {"combineCSS": true}}}'
+```
 
 **Section sources**
-- [class-rest.php:80-432](file://includes/class-rest.php#L80-L432)
+- [class-rest.php:409-432](file://includes/class-rest.php#L409-L432)
 
-### Endpoint: database_cleanup
-- Method: POST
-- URL: /wp-json/performance-optimisation/v1/database_cleanup
-- Purpose: Perform database cleanup for a specified type or all types.
-- Query Parameters:
-  - type (string): One of “revisions”, “auto_drafts”, “trashed_posts”, “spam_comments”, “trashed_comments”, “expired_transients”, “orphan_postmeta”, “all”.
-- Response Schema:
-  - Single type:
-    - data.type: string
-    - data.deleted: number
-  - All types:
-    - data.results: object (per-type counts)
-    - data.deleted: number (total)
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-  - Query: type=all
-- Example Success Response:
-  - Status: 200
-  - Body: { "data": { "results": { "revisions": 100, "auto_drafts": 5 }, "deleted": 105 }, "success": true, "message": null }
-- Error Handling:
-  - 400: Invalid cleanup type.
-  - 500: Partial or total failure during cleanup.
-  - 403: Unauthorized.
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
+### Endpoint 7: database_cleanup
+
+**HTTP Method:** POST  
+**URL Pattern:** `/wp-json/performance-optimisation/v1/database_cleanup`
+
+**Request Parameters:**
+- `type` (string): Cleanup type (one of: `revisions`, `auto_drafts`, `trashed_posts`, `spam_comments`, `trashed_comments`, `expired_transients`, `orphan_postmeta`, `all`)
+
+**Response Schema (Single Type):**
+```json
+{
+  "data": {
+    "type": "revisions",
+    "deleted": 150
+  },
+  "success": true,
+  "message": "Database cleanup completed"
+}
+```
+
+**Response Schema (All Types):**
+```json
+{
+  "data": {
+    "results": {
+      "revisions": 150,
+      "auto_drafts": 5,
+      "trashed_posts": 2,
+      "spam_comments": 10,
+      "trashed_comments": 3,
+      "expired_transients": 25,
+      "orphan_postmeta": 8
+    },
+    "deleted": 203
+  },
+  "success": true,
+  "message": "All cleanup complete"
+}
+```
+
+**Error Response Schema:**
+```json
+{
+  "data": null,
+  "success": false,
+  "message": "Invalid cleanup type."
+}
+```
+
+**Security Considerations:**
+- Validates cleanup type parameter
+- Uses WordPress database abstraction
+- Implements batch processing for large datasets
+- Handles partial failures gracefully
+
+**Example Usage:**
+```bash
+curl -X POST https://example.com/wp-json/performance-optimisation/v1/database_cleanup \
+  -H "X-WP-Nonce: YOUR_NONCE" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "all"}'
+```
 
 **Section sources**
-- [class-rest.php:85-539](file://includes/class-rest.php#L85-L539)
-- [class-database-cleanup.php:529-650](file://includes/class-database-cleanup.php#L529-L650)
+- [class-rest.php:451-539](file://includes/class-rest.php#L451-L539)
+- [class-database-cleanup.php:529-546](file://includes/class-database-cleanup.php#L529-L546)
 
-### Endpoint: database_cleanup_counts
-- Method: GET
-- URL: /wp-json/performance-optimisation/v1/database_cleanup_counts
-- Purpose: Retrieve counts for each cleanup category.
-- Response Schema:
-  - data: object (counts per category)
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-- Example Success Response:
-  - Status: 200
-  - Body: { "data": { "revisions": 1200, "auto_drafts": 5, "trashed_posts": 10, "spam_comments": 200, "trashed_comments": 30, "expired_transients": 150, "orphan_postmeta": 40 }, "success": true, "message": null }
-- Error Handling:
-  - 403: Unauthorized.
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
+### Endpoint 8: database_cleanup_counts
+
+**HTTP Method:** GET  
+**URL Pattern:** `/wp-json/performance-optimisation/v1/database_cleanup_counts`
+
+**Request Parameters:** None required
+
+**Response Schema:**
+```json
+{
+  "data": {
+    "revisions": 150,
+    "auto_drafts": 5,
+    "trashed_posts": 2,
+    "spam_comments": 10,
+    "trashed_comments": 3,
+    "expired_transients": 25,
+    "orphan_postmeta": 8
+  },
+  "success": true,
+  "message": "Counts retrieved successfully"
+}
+```
+
+**Security Considerations:**
+- No parameters to validate
+- Uses WordPress database abstraction
+- Provides real-time counts for cleanup operations
+
+**Example Usage:**
+```bash
+curl -X GET https://example.com/wp-json/performance-optimisation/v1/database_cleanup_counts \
+  -H "X-WP-Nonce: YOUR_NONCE"
+```
 
 **Section sources**
-- [class-rest.php:90-551](file://includes/class-rest.php#L90-L551)
+- [class-rest.php:548-551](file://includes/class-rest.php#L548-L551)
 - [class-database-cleanup.php:598-634](file://includes/class-database-cleanup.php#L598-L634)
 
-### Endpoint: get_page_assets
-- Method: GET
-- URL: /wp-json/performance-optimisation/v1/get_page_assets
-- Purpose: Retrieve captured assets for a specific post.
-- Query Parameters:
-  - post_id (integer): Post ID.
-- Response Schema:
-  - data.scripts: array
-  - data.styles: array
-  - success: boolean
-  - message: string
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-  - Query: post_id=123
-- Example Success Response:
-  - Status: 200
-  - Body: { "data": { "scripts": [...], "styles": [...] }, "success": true, "message": null }
-- Error Handling:
-  - 400: Post ID is required.
-  - 403: Unauthorized.
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
-
-**Section sources**
-- [class-rest.php:95-583](file://includes/class-rest.php#L95-L583)
-- [class-asset-manager.php:200-202](file://includes/class-asset-manager.php#L200-L202)
-
-### Endpoint: image_job_status
-- Method: GET
-- URL: /wp-json/performance-optimisation/v1/image_job_status
-- Purpose: Get status of background image optimization jobs and counts.
-- Response Schema:
-  - data.pending.webp: number
-  - data.pending.avif: number
-  - data.completed.webp: number
-  - data.completed.avif: number
-  - data.failed.webp: number
-  - data.failed.avif: number
-  - data.queued_jobs: number (only if Action Scheduler is active)
-- Example Request:
-  - Headers: X-WP-Nonce: <valid_nonce>
-- Example Success Response:
-  - Status: 200
-  - Body: { "data": { "pending": { "webp": 2, "avif": 1 }, "completed": { "webp": 10, "avif": 8 }, "failed": { "webp": 0, "avif": 0 }, "queued_jobs": 3 }, "success": true, "message": null }
-- Error Handling:
-  - 403: Unauthorized.
-- Permissions and Security:
-  - Requires manage_options and valid nonce.
-
-**Section sources**
-- [class-rest.php:100-627](file://includes/class-rest.php#L100-L627)
-- [class-img-converter.php:667-760](file://includes/class-img-converter.php#L667-L760)
-
 ## Dependency Analysis
-- REST Controller depends on:
-  - Cache for cache operations
-  - Img_Converter for image conversion and status
-  - Database_Cleanup for database operations
-  - Log for activity logging
-- Endpoints are registered during REST API initialization and validated by a shared permission callback.
+
+The REST API endpoints depend on several specialized classes that handle different aspects of performance optimization:
 
 ```mermaid
 graph LR
-REST["Rest Controller"]
-Cache["Cache"]
-ImgConv["Img_Converter"]
-DB["Database_Cleanup"]
-Log["Log"]
-REST --> Cache
-REST --> ImgConv
-REST --> DB
-REST --> Log
+subgraph "REST Layer"
+A[Rest Handler]
+end
+subgraph "Service Layer"
+B[Cache Service]
+C[Image Service]
+D[Database Service]
+E[Log Service]
+end
+subgraph "Utility Layer"
+F[Filesystem Utility]
+G[Validation Utility]
+H[Conversion Utility]
+end
+A --> B
+A --> C
+A --> D
+A --> E
+B --> F
+C --> H
+C --> F
+D --> G
+E --> G
 ```
 
 **Diagram sources**
 - [class-rest.php:37-43](file://includes/class-rest.php#L37-L43)
-- [class-rest.php:131-136](file://includes/class-rest.php#L131-L136)
+- [class-cache.php:14-25](file://includes/class-cache.php#L14-L25)
+- [class-image-optimisation.php:18-28](file://includes/class-image-optimisation.php#L18-L28)
+- [class-database-cleanup.php:30-31](file://includes/class-database-cleanup.php#L30-L31)
 
 **Section sources**
-- [class-rest.php:37-136](file://includes/class-rest.php#L37-L136)
+- [class-rest.php:37-43](file://includes/class-rest.php#L37-L43)
 
 ## Performance Considerations
-- Background Processing: Image optimization can be offloaded to Action Scheduler when available, preventing long-running requests.
-- Batch Operations: Database cleanup uses batched queries to avoid timeouts and excessive memory usage.
-- Caching: Activity logs and counts are cached to reduce database load.
-- Filesystem Safety: All file operations are validated and sanitized to prevent directory traversal and unauthorized access.
 
-[No sources needed since this section provides general guidance]
+### Caching Strategy
+The plugin implements intelligent caching for frequently accessed data:
+- Activity logs are cached with 1-hour expiration
+- Cache size and statistics are cached with 15-minute intervals
+- Database cleanup counts are cached for performance
+
+### Background Processing
+Image optimization supports both synchronous and asynchronous processing:
+- Uses WordPress Action Scheduler for background jobs
+- Falls back to synchronous processing when scheduler is unavailable
+- Maintains job queues for processing multiple images
+
+### Resource Management
+- Implements file size and dimension limits to prevent memory exhaustion
+- Uses batch processing for database cleanup operations
+- Validates all file paths to prevent directory traversal attacks
 
 ## Troubleshooting Guide
-- Authentication Failures:
-  - Ensure the “X-WP-Nonce” header is present and valid.
-  - Verify the requesting user has “manage_options” capability.
-- Path Validation Errors:
-  - For cache and image endpoints, paths must not contain directory traversal sequences.
-- Database Cleanup Failures:
-  - Some cleanup types may fail individually while others succeed; check the “failures” field for details.
-- Image Conversion Issues:
-  - Large or unsupported images may fail conversion; verify image type and size limits.
-- Filesystem Access:
-  - Ensure the plugin has write access to the optimized images directory.
+
+### Common Authentication Issues
+**Problem:** 403 Forbidden responses
+**Solution:** Ensure the `X-WP-Nonce` header contains a valid nonce generated by the WordPress REST API
+
+**Problem:** Permission denied errors
+**Solution:** Verify the requesting user has `manage_options` capability
+
+### Image Optimization Issues
+**Problem:** Images not converting to WebP/AVIF
+**Solution:** Check that GD or Imagick extensions are available and properly configured
+
+**Problem:** Memory exhaustion during optimization
+**Solution:** Verify file size limits and image dimensions are within acceptable ranges
+
+### Database Cleanup Issues
+**Problem:** Cleanup operations failing silently
+**Solution:** Check database permissions and ensure sufficient privileges for cleanup operations
 
 **Section sources**
-- [class-rest.php:152-155](file://includes/class-rest.php#L152-L155)
-- [class-rest.php:260-264](file://includes/class-rest.php#L260-L264)
-- [class-database-cleanup.php:644-650](file://includes/class-database-cleanup.php#L644-L650)
-- [class-img-converter.php:122-128](file://includes/class-img-converter.php#L122-L128)
+- [class-rest.php:131-136](file://includes/class-rest.php#L131-L136)
+- [class-img-converter.php:121-152](file://includes/class-img-converter.php#L121-L152)
 
 ## Conclusion
-The Performance Optimisation plugin’s REST API provides robust, secure, and efficient endpoints for cache management, settings updates, image optimization, database cleanup, and activity monitoring. All endpoints enforce administrative privileges and nonce validation, and responses follow a consistent structure. Use the provided examples and error handling guidance to integrate these endpoints safely and effectively.
+
+The Performance Optimisation plugin provides a comprehensive REST API for managing WordPress performance optimization features. The API follows WordPress standards with robust security measures, including administrator-only access and nonce validation. The eight core endpoints cover essential functionality for cache management, image optimization, database cleanup, and system monitoring.
+
+The architecture supports both synchronous and asynchronous processing modes, implements intelligent caching strategies, and provides comprehensive error handling. The plugin's modular design ensures maintainability and extensibility for future enhancements.

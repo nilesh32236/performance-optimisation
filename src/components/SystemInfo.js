@@ -99,23 +99,31 @@ const SystemInfo = () => {
 
 	return (
 		<FeatureCard title={ t.systemInfo || 'System Info' }>
-			{ /* Load trigger — shown until data is fetched */ }
-			{ ! loaded && (
-				<div className="wppo-sysinfo-trigger">
+			{ /* Load trigger — shown to initiate fetch or refresh data */ }
+			<div
+				className={ `wppo-sysinfo-trigger ${
+					loaded ? 'wppo-sysinfo-trigger--compact' : ''
+				}` }
+			>
+				{ ! loaded && ! error && (
 					<p className="wppo-sysinfo-trigger__desc">
 						{ t.systemInfoDesc ||
 							'View PHP, database, WordPress, and server environment details.' }
 					</p>
-					<LoadingSubmitButton
-						type="button"
-						className="wppo-button wppo-button--secondary"
-						onClick={ handleLoad }
-						isLoading={ loading }
-						label={ t.loadSystemInfo || 'Load System Info' }
-						loadingLabel={ t.scanning || 'Loading...' }
-					/>
-				</div>
-			) }
+				) }
+				<LoadingSubmitButton
+					type="button"
+					className="wppo-button wppo-button--secondary"
+					onClick={ handleLoad }
+					isLoading={ loading }
+					label={
+						loaded
+							? t.refresh || 'Refresh System Info'
+							: t.loadSystemInfo || 'Load System Info'
+					}
+					loadingLabel={ t.scanning || 'Loading...' }
+				/>
+			</div>
 
 			{ /* Error state */ }
 			{ error && (
