@@ -1074,112 +1074,113 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 			$preload_img_urls   = array();
 
-			if ( is_front_page() && isset( $image_optimisation['preloadFrontPageImages'] ) && (bool) $image_optimisation['preloadFrontPageImages'] ) {
-				$preload_img_urls = array_merge( $preload_img_urls, $this->process_preload_urls( $image_optimisation['preloadFrontPageImagesUrls'] ?? array() ) );
-			}
-
-			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
-
-			if ( ! empty( $page_img_urls ) ) {
-				$preload_img_urls = array_merge( $preload_img_urls, $this->process_preload_urls( $page_img_urls ) );
-			}
-
-			if ( isset( $image_optimisation['preloadPostTypeImage'] ) && (bool) $image_optimisation['preloadPostTypeImage'] ) {
-				if ( isset( $image_optimisation['selectedPostType'] ) && ! empty( $image_optimisation['selectedPostType'] ) ) {
-					$selected_post_types = (array) $image_optimisation['selectedPostType'];
-
-					if ( is_singular( $selected_post_types ) && has_post_thumbnail() ) {
-						$thumbnail_id = get_post_thumbnail_id();
-
-						if ( $thumbnail_id ) {
-							$exclude_img_urls = array();
-							if ( isset( $image_optimisation['excludePostTypeImgUrl'] ) && ! empty( $image_optimisation['excludePostTypeImgUrl'] ) ) {
-								$exclude_img_urls = Util::process_urls( $image_optimisation['excludePostTypeImgUrl'] );
-							}
-
-							if ( 'product' === get_post_type() && class_exists( 'WooCommerce' ) ) {
-								$image_size = apply_filters( 'woocommerce_gallery_image_size', 'woocommerce_single' );
-								$img_url    = wp_get_attachment_image_url( $thumbnail_id, $image_size );
-
-								if ( is_array( $img_url ) ) {
-									$img_url = $img_url[0];
-								}
-							} else {
-								$img_url = wp_get_attachment_image_url( $thumbnail_id, 'blog-single-image' );
-							}
-
-							$should_exclude = false;
-							foreach ( $exclude_img_urls as $url ) {
-								if ( false !== strpos( $img_url, $url ) ) {
-									$should_exclude = true;
-									break;
-								}
-							}
-
-							$max_width    = $image_optimisation['maxWidthImgSize'] ? $image_optimisation['maxWidthImgSize'] : 1480;
-							$exclude_size = array();
-
-							if ( isset( $image_optimisation['excludeSize'] ) && ! empty( $image_optimisation['excludeSize'] ) ) {
-								$exclude_size = Util::process_urls( $image_optimisation['excludeSize'] );
-								$exclude_size = array_map( 'absint', $exclude_size );
-							}
-
-							if ( ! $should_exclude ) {
-								$srcset = wp_get_attachment_image_srcset( $thumbnail_id );
-
-								if ( $srcset ) {
-									$sources = array_map( 'trim', explode( ',', $srcset ) );
-
-									$parsed_sources = array();
-									foreach ( $sources as $source ) {
-										list($url, $descriptor) = array_map( 'trim', explode( ' ', $source ) );
-										$width                  = (int) rtrim( $descriptor, 'w' ); // Remove 'w' to get the number.
-
-										if ( in_array( (int) $width, $exclude_size, true ) ) {
-											continue;
-										}
-
-										$parsed_sources[] = array(
-											'url'   => $url,
-											'width' => $width,
-										);
-									}
-
-									usort(
-										$parsed_sources,
-										function ( $a, $b ) {
-											return $a['width'] - $b['width'];
-										}
-									);
-
-									$previous_width = 0;
-									foreach ( $parsed_sources as $index => $source ) {
-										$current_width = $source['width'];
-										$next_width    = isset( $parsed_sources[ $index + 1 ] ) ? $parsed_sources[ $index + 1 ]['width'] : null;
-
-										if ( $current_width > $max_width ) {
-											continue;
-										}
-
-										$media = '(min-width: ' . $previous_width . 'px)';
-										if ( $next_width && $next_width <= $max_width ) {
-											$media .= ' and (max-width: ' . $current_width . 'px)';
-										}
-
-										$preload_img_urls[] = $source['url'];
-
-										$previous_width = $current_width;
-									}
-								} else {
-									$preload_img_urls[] = $img_url;
-								}
-							}
-						}
-					}
-				}
-			}
+			$preload_img_urls = array_merge( $preload_img_urls, $this->get_front_page_preload_urls( $image_optimisation ) );
+			$preload_img_urls = array_merge( $preload_img_urls, $this->get_meta_preload_urls() );
+			$preload_img_urls = array_merge( $preload_img_urls, $this->get_post_type_preload_urls( $image_optimisation ) );
 
 			return array_unique( $preload_img_urls );
+		}
+
+		/**
+		 * Retrieves front page preload URLs if enabled.
+		 *
+		 * @since 1.4.0
+		 *
+		 * @param array $image_optimisation Image optimization configuration array.
+		 * @return array List of preload image URLs for the front page.
+		 */
+		private function get_front_page_preload_urls( $image_optimisation ) {
+			if ( ! is_front_page() || empty( $image_optimisation['preloadFrontPageImages'] ) ) {
+				return array();
+			}
+
+			return $this->process_preload_urls( $image_optimisation['preloadFrontPageImagesUrls'] ?? array() );
+		}
+
+		/**
+		 * Retrieves post meta preload URLs.
+		 *
+		 * @since 1.4.0
+		 *
+		 * @return array List of preload image URLs from post meta.
+		 */
+		private function get_meta_preload_urls() {
+			$page_img_urls = get_post_meta( get_the_ID(), '_wppo_preload_image_url', true );
+
+			if ( empty( $page_img_urls ) ) {
+				return array();
+			}
+
+			return $this->process_preload_urls( $page_img_urls );
+		}
+
+		/**
+		 * Retrieves post type preload URLs based on configuration.
+		 *
+		 * @since 1.4.0
+		 *
+		 * @param array $image_optimisation Image optimization configuration array.
+		 * @return array List of preload image URLs for the post type.
+		 */
+		private function get_post_type_preload_urls( $image_optimisation ) {
+			if ( empty( $image_optimisation['preloadPostTypeImage'] ) ) {
+				return array();
+			}
+
+			$selected_post_types = (array) ( $image_optimisation['selectedPostType'] ?? array() );
+
+			if ( ! is_singular( $selected_post_types ) || ! has_post_thumbnail() ) {
+				return array();
+			}
+
+			$thumbnail_id = get_post_thumbnail_id();
+			if ( ! $thumbnail_id ) {
+				return array();
+			}
+
+			$exclude_img_urls = Util::process_urls( $image_optimisation['excludePostTypeImgUrl'] ?? array() );
+			$image_url        = $this->get_image_url_by_post_type( $thumbnail_id );
+
+			if ( $this->should_exclude_image( $image_url, $exclude_img_urls ) ) {
+				return array();
+			}
+
+			$srcset = wp_get_attachment_image_srcset( $thumbnail_id );
+			return $this->extract_urls_from_srcset( $srcset, $image_url, $image_optimisation );
+		}
+
+		/**
+		 * Extracts URLs to preload from an image's srcset.
+		 *
+		 * @since 1.4.0
+		 *
+		 * @param string $srcset The srcset string from the image tag.
+		 * @param string $default_image The fallback image URL.
+		 * @param array  $image_optimisation Image optimization configuration array.
+		 * @return array List of extracted image URLs.
+		 */
+		private function extract_urls_from_srcset( $srcset, $default_image, $image_optimisation ) {
+			if ( empty( $srcset ) ) {
+				return array( $default_image );
+			}
+
+			$max_width     = (int) ( $image_optimisation['maxWidthImgSize'] ?? 1480 );
+			$exclude_sizes = array_map( 'absint', Util::process_urls( $image_optimisation['excludeSize'] ?? array() ) );
+			$sources       = array_map( 'trim', explode( ',', $srcset ) );
+
+			$preload_urls = array();
+			foreach ( $sources as $source ) {
+				list( $url, $descriptor ) = array_map( 'trim', explode( ' ', $source ) );
+				$width                    = (int) rtrim( $descriptor, 'w' );
+
+				if ( in_array( $width, $exclude_sizes, true ) || $width > $max_width ) {
+					continue;
+				}
+
+				$preload_urls[] = $url;
+			}
+
+			return empty( $preload_urls ) ? array( $default_image ) : $preload_urls;
 		}
 
 		/**

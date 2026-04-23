@@ -35,7 +35,8 @@ export const fetchRecentActivities = ( page = 1 ) => {
  * Run a local telemetry scan on the given URL.
  *
  * @since 1.5.0
- * @param {string} url The URL to scan.
+ * @param {string}  url   The URL to scan.
+ * @param {boolean} force Whether to force the scan.
  * @return {Promise<Object>} Resolved scan result data.
  */
 export const runPerformanceScan = ( url, force = false ) => {
