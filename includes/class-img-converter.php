@@ -39,14 +39,6 @@ class Img_Converter {
 	private static $img_info_shutdown_registered = false;
 
 	/**
-	 * Flag to check if image info has already been persisted in this request.
-	 *
-	 * @var bool
-	 * @since NEXT
-	 */
-	private static $img_info_persisted = false;
-
-	/**
 	 * Configuration options for image optimization.
 	 *
 	 * @var array
@@ -690,7 +682,6 @@ class Img_Converter {
 	public static function set_img_info( array $img_info ): void {
 		self::$deferred_img_info = $img_info;
 		update_option( 'wppo_img_info', $img_info, false );
-		self::$img_info_persisted = true;
 	}
 
 	/**
@@ -706,7 +697,6 @@ class Img_Converter {
 				// Write cleared completed to the DB immediately so that
 				// commit_img_info()'s live re-read cannot merge old entries back in.
 				update_option( 'wppo_img_info', $img_info, false );
-				self::$img_info_persisted = true;
 				return $img_info;
 			}
 		);
@@ -735,11 +725,6 @@ class Img_Converter {
 	 */
 	public static function commit_img_info(): void {
 		if ( null !== self::$deferred_img_info ) {
-			if ( self::$img_info_persisted ) {
-				self::$img_info_persisted = false; // Reset for potential later use.
-				return;
-			}
-
 			$live_info = get_option( 'wppo_img_info', array() );
 
 			// Merge live and deferred info here to avoid dropping queued/completed items from concurrent runs.
@@ -771,32 +756,6 @@ class Img_Converter {
 			}
 
 			update_option( 'wppo_img_info', self::$deferred_img_info, false );
-			self::$img_info_persisted = true;
-		}
-	}
-
-	/**
-	 * Forces the 'wppo_img_info' option to be non-autoloading.
-	 *
-	 * Should be called during plugin activation or upgrade to ensure large
-	 * image metadata doesn't bloat the 'alloptions' cache.
-	 *
-	 * @since NEXT
-	 * @return void
-	 */
-	public static function migrate_img_info_autoload(): void {
-		if ( function_exists( 'wp_set_option_autoload' ) ) {
-			wp_set_option_autoload( 'wppo_img_info', false );
-		} else {
-			global $wpdb;
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->update(
-				$wpdb->options,
-				array( 'autoload' => 'no' ),
-				array( 'option_name' => 'wppo_img_info' )
-			);
-			wp_cache_delete( 'wppo_img_info', 'options' );
-			wp_cache_delete( 'alloptions', 'options' );
 		}
 	}
 }

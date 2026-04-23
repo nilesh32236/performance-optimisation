@@ -8,11 +8,12 @@
 - [class-cache.php](file://includes/class-cache.php)
 - [class-main.php](file://includes/class-main.php)
 - [class-asset-manager.php](file://includes/class-asset-manager.php)
-- [class-core-tweaks.php](file://includes/class-core-tweaks.php)
 - [FileOptimization.js](file://src/components/FileOptimization.js)
 - [lazyload.js](file://src/lazyload.js)
-- [apiRequest.js](file://src/lib/apiRequest.js)
-- [util.js](file://src/lib/util.js)
+- [package.json](file://package.json)
+- [babel.config.json](file://babel.config.json)
+- [composer.json](file://composer.json)
+- [readme.md](file://readme.md)
 </cite>
 
 ## Table of Contents
@@ -25,325 +26,349 @@
 7. [Performance Considerations](#performance-considerations)
 8. [Troubleshooting Guide](#troubleshooting-guide)
 9. [Conclusion](#conclusion)
-10. [Appendices](#appendices)
 
 ## Introduction
-This document explains the JavaScript optimization capabilities implemented in the plugin, focusing on minification, combining, and safe transformation of JavaScript assets. It covers how minification is performed, how scripts are deferred or delayed for improved performance, and how the system preserves compatibility with modern JavaScript features and third-party libraries. It also documents configuration options, exclusion rules, and practical guidance for delivering optimized JavaScript efficiently.
+This document explains the JavaScript optimization capabilities of the plugin, focusing on minification, combining, and runtime loading strategies. It covers how the plugin minifies JavaScript files, combines CSS into a single file, defers and delays script execution, and safely transforms inline scripts. It also documents configuration options, exclusion rules, and compatibility considerations for modern JavaScript features.
 
 ## Project Structure
-The JavaScript optimization features are implemented across several PHP classes and a small amount of client-side JavaScript:
-- Minification: dedicated classes for JS, CSS, and HTML
-- Delivery and combining: cache and main controller classes
-- Runtime behavior: client-side lazy-loading and delay execution
-- Admin UI: React-based settings panel for toggling and configuring optimizations
+The JavaScript optimization pipeline spans PHP backend classes and a React-based admin interface:
+- Backend minification and caching: includes/minify/class-js.php, includes/minify/class-css.php, includes/minify/class-html.php, includes/class-cache.php
+- Runtime script handling and exclusions: includes/class-main.php, includes/class-asset-manager.php
+- Admin configuration UI: src/components/FileOptimization.js
+- Client-side lazy-loading and delayed execution: src/lazyload.js
+- Build toolchain and presets: package.json, babel.config.json
+- Dependencies and third-party libraries: composer.json, readme.md
 
 ```mermaid
 graph TB
 subgraph "Admin UI"
 FO["FileOptimization.js"]
-API["apiRequest.js"]
-U["util.js"]
 end
-subgraph "Runtime"
+subgraph "Backend"
+CM["class-main.php"]
+CA["class-cache.php"]
+MJ["class-js.php"]
+MC["class-css.php"]
+MH["class-html.php"]
+AM["class-asset-manager.php"]
+end
+subgraph "Frontend"
 LL["lazyload.js"]
 end
-subgraph "Core"
-MAIN["class-main.php"]
-AM["class-asset-manager.php"]
-CT["class-core-tweaks.php"]
-CACHE["class-cache.php"]
-end
-subgraph "Minification"
-MINJS["class-js.php"]
-MINCSS["class-css.php"]
-MINHTML["class-html.php"]
-end
-FO --> API
-MAIN --> CACHE
-MAIN --> MINJS
-MAIN --> MINCSS
-MAIN --> MINHTML
-CACHE --> MINCSS
-CACHE --> MINHTML
-LL -.-> MAIN
+FO --> CM
+CM --> MJ
+CM --> MC
+CM --> MH
+CM --> CA
+CM --> AM
+CA --> MC
+CM --> LL
 ```
 
 **Diagram sources**
-- [class-main.php:167-244](file://includes/class-main.php#L167-L244)
+- [class-main.php:164-241](file://includes/class-main.php#L164-L241)
 - [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
-- [class-js.php:74-99](file://includes/minify/class-js.php#L74-L99)
-- [class-css.php:63-106](file://includes/minify/class-css.php#L63-L106)
-- [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143)
-- [lazyload.js:55-126](file://src/lazyload.js#L55-L126)
-- [FileOptimization.js:55-90](file://src/components/FileOptimization.js#L55-L90)
+- [class-js.php:27-131](file://includes/minify/class-js.php#L27-L131)
+- [class-css.php:23-192](file://includes/minify/class-css.php#L23-L192)
+- [class-html.php:32-372](file://includes/minify/class-html.php#L32-L372)
+- [class-asset-manager.php:27-224](file://includes/class-asset-manager.php#L27-L224)
+- [lazyload.js:1-121](file://src/lazyload.js#L1-L121)
 
 **Section sources**
-- [class-main.php:128-157](file://includes/class-main.php#L128-L157)
-- [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
-- [class-js.php:74-99](file://includes/minify/class-js.php#L74-L99)
-- [class-css.php:63-106](file://includes/minify/class-css.php#L63-L106)
-- [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143)
-- [lazyload.js:55-126](file://src/lazyload.js#L55-L126)
-- [FileOptimization.js:55-90](file://src/components/FileOptimization.js#L55-L90)
-
-## Core Components
-- JavaScript Minification: Uses a third-party minifier to compress JS content and cache gzipped results.
-- CSS Minification and Image Rewriting: Minifies CSS and updates image URLs to next-gen formats when available.
-- HTML Minification and Inline Script Handling: Minifies HTML and safely handles inline CSS/JS, including JSON-LD and deferred/delayed scripts.
-- CSS Combining: Collects enqueued styles, optionally excludes selected handles/URLs, and serves a combined, minified CSS file.
-- Runtime Script Delay: Client-side logic converts type attributes for deferred/delayed scripts and loads them on first user interaction.
-- Admin Configuration UI: Provides toggles and exclusion lists for JS/CSS minification, defer, delay, and combining.
-
-**Section sources**
-- [class-js.php:74-99](file://includes/minify/class-js.php#L74-L99)
-- [class-css.php:63-106](file://includes/minify/class-css.php#L63-L106)
-- [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143)
-- [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
-- [lazyload.js:55-126](file://src/lazyload.js#L55-L126)
+- [class-main.php:128-154](file://includes/class-main.php#L128-L154)
 - [FileOptimization.js:19-620](file://src/components/FileOptimization.js#L19-L620)
 
+## Core Components
+- JavaScript Minification: Uses MatthiasMullie Minify to compress JS files and cache them with gzip. See [class-js.php:74-99](file://includes/minify/class-js.php#L74-L99).
+- CSS Minification and Image Optimization: Minifies CSS and updates image URLs to WebP/AVIF variants. See [class-css.php:63-106](file://includes/minify/class-css.php#L63-L106).
+- HTML Minification and Inline Script Handling: Minifies HTML and safely minifies/minimally transforms inline CSS/JS. See [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143).
+- CSS Combination: Collects enqueued styles, fetches and concatenates them, applies font-display optimizations, minifies, caches, and enqueues a single CSS file. See [class-cache.php:127-223](file://includes/class-cache.php#L127-223).
+- Script Loading Controls: Defers scripts, delays execution until user interaction, and excludes specific scripts. See [class-main.php:894-917](file://includes/class-main.php#L894-L917) and [class-main.php:1036-1055](file://includes/class-main.php#L1036-L1055).
+- Exclusion Lists: Maintains protected handles and configurable exclusion lists for JS/CSS/defer/delay. See [class-main.php:42-66](file://includes/class-main.php#L42-L66) and [class-main.php:185-222](file://includes/class-main.php#L185-L222).
+- Admin Configuration UI: Provides toggles and exclusion inputs for JS/CSS/HTML optimization and loading strategies. See [FileOptimization.js:22-382](file://src/components/FileOptimization.js#L22-L382).
+
+**Section sources**
+- [class-js.php:74-129](file://includes/minify/class-js.php#L74-L129)
+- [class-css.php:63-106](file://includes/minify/class-css.php#L63-L106)
+- [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143)
+- [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
+- [class-main.php:894-917](file://includes/class-main.php#L894-L917)
+- [class-main.php:1036-1055](file://includes/class-main.php#L1036-L1055)
+- [class-main.php:42-66](file://includes/class-main.php#L42-L66)
+- [class-main.php:185-222](file://includes/class-main.php#L185-L222)
+- [FileOptimization.js:22-382](file://src/components/FileOptimization.js#L22-L382)
+
 ## Architecture Overview
-The optimization pipeline integrates WordPress hooks, minification utilities, and runtime transformations:
-- WordPress hooks register filters/actions to enable minification and combining.
-- Minification classes compute cache paths, write gzipped files, and return URLs.
-- HTML minification preserves critical script blocks and applies safe transformations.
-- CSS combining aggregates styles, minifies, and enqueues a single file.
-- Client-side lazyload intercepts deferred/delayed scripts and executes them on first user interaction.
+The optimization pipeline integrates WordPress hooks with backend minification and caching, and client-side lazy-loading.
 
 ```mermaid
 sequenceDiagram
 participant WP as "WordPress Hooks"
-participant Main as "Main"
-participant Cache as "Cache"
-participant HTMLMin as "HTML Minifier"
-participant CSSMin as "CSS Minifier"
-participant JSMin as "JS Minifier"
-WP->>Main : "Register filters/actions"
-Main->>Cache : "combine_css()"
-Cache->>CSSMin : "Minify combined CSS"
-CSSMin-->>Cache : "Minified CSS"
-Cache-->>WP : "Enqueue combined CSS"
-WP->>Main : "Filter HTML output"
-Main->>HTMLMin : "Minify HTML + inline CSS/JS"
-HTMLMin-->>Main : "Minified HTML"
-Main-->>WP : "Output buffer"
+participant Main as "class-main.php"
+participant Cache as "class-cache.php"
+participant JSMin as "class-js.php"
+participant CSSMin as "class-css.php"
+participant HTMLMin as "class-html.php"
+participant Lazy as "lazyload.js"
+WP->>Main : "script_loader_tag" filter
+Main->>JSMin : "minify_js(tag, handle, src)"
+JSMin-->>Main : "minified URL or original tag"
+Main-->>WP : "modified script tag"
+WP->>Cache : "wp_enqueue_scripts" (combine CSS)
+Cache->>CSSMin : "update_image_paths + minify"
+Cache-->>WP : "single combined CSS"
+WP->>HTMLMin : "minify_buffer(html)"
+HTMLMin-->>WP : "minified HTML"
+WP->>Lazy : "enqueue lazyload.js"
+Lazy-->>WP : "execute delayed scripts on user interaction"
 ```
 
 **Diagram sources**
-- [class-main.php:167-244](file://includes/class-main.php#L167-L244)
+- [class-main.php:164-241](file://includes/class-main.php#L164-L241)
+- [class-main.php:894-917](file://includes/class-main.php#L894-L917)
+- [class-main.php:1036-1055](file://includes/class-main.php#L1036-L1055)
 - [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
-- [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143)
+- [class-js.php:74-99](file://includes/minify/class-js.php#L74-L99)
+- [class-css.php:77-106](file://includes/minify/class-css.php#L77-L106)
+- [class-html.php:391-396](file://includes/minify/class-html.php#L391-L396)
+- [lazyload.js:55-106](file://src/lazyload.js#L55-L106)
 
 ## Detailed Component Analysis
 
 ### JavaScript Minification
-JavaScript minification is performed by a dedicated class that:
-- Computes a cache file path based on the original file’s hash.
-- Ensures the cache directory exists.
-- Reads the original content, minifies it, and writes both uncompressed and gzipped files.
-- Returns the URL of the minified file for serving.
+- Purpose: Reduce JavaScript payload by removing whitespace/comments and caching gzipped versions.
+- Implementation:
+  - Reads the original file via the WordPress filesystem abstraction.
+  - Uses MatthiasMullie Minify to produce minified content.
+  - Saves both uncompressed and gzipped cache files under a hashed filename.
+  - Returns a content URL pointing to the cached file.
+- Safety checks:
+  - Skips minification if the file is already minified (based on extension and line count).
+  - Returns original tag if minification fails.
 
 ```mermaid
 flowchart TD
-Start(["Minify JS Entry"]) --> GetPath["Compute cache file path"]
-GetPath --> EnsureDir["Ensure cache dir exists"]
-EnsureDir --> Exists{"Cache exists?"}
-Exists --> |No| Read["Read original JS"]
-Read --> Minify["Minify JS"]
-Minify --> Write["Write JS + .gz"]
-Write --> ReturnURL["Return minified URL"]
-Exists --> |Yes| ReturnURL
+Start(["minify_js(tag, handle, src)"]) --> CheckUser["Logged in?"]
+CheckUser --> |Yes| ReturnOriginal["Return original tag"]
+CheckUser --> |No| CheckExclusions["In exclude list?"]
+CheckExclusions --> |Yes| ReturnOriginal
+CheckExclusions --> |No| AlreadyMin["Already minified?"]
+AlreadyMin --> |Yes| ReturnOriginal
+AlreadyMin --> |No| CallMin["Call JS minifier"]
+CallMin --> MinOK{"Minified OK?"}
+MinOK --> |No| ReturnOriginal
+MinOK --> |Yes| SaveCache["Save cache + gzip"]
+SaveCache --> ReturnMin["Return minified URL"]
 ```
 
 **Diagram sources**
-- [class-js.php:108-129](file://includes/minify/class-js.php#L108-L129)
-
-**Section sources**
+- [class-main.php:1036-1055](file://includes/class-main.php#L1036-L1055)
 - [class-js.php:74-99](file://includes/minify/class-js.php#L74-L99)
-- [class-js.php:108-129](file://includes/minify/class-js.php#L108-L129)
-
-### Safe Inline JavaScript Transformation
-The HTML minifier safely transforms inline JavaScript:
-- Detects JSON-LD and other non-JavaScript script types and encodes them safely.
-- Applies minification to eligible inline scripts.
-- Optionally marks scripts for deferral/delay by rewriting type attributes and deferring src assignment.
-
-```mermaid
-flowchart TD
-HStart(["Inline JS Transform"]) --> CheckType["Check script type/JSON-LD"]
-CheckType --> |JSON-LD| SafeJSON["Safe JSON encode"]
-CheckType --> |Other| MaybeMinify["Minify if enabled"]
-MaybeMinify --> MaybeDelay["Apply delay/defer rewrite"]
-SafeJSON --> Done(["Return transformed script"])
-MaybeDelay --> Done
-```
-
-**Diagram sources**
-- [class-html.php:264-342](file://includes/minify/class-html.php#L264-L342)
+- [class-main.php:1102-1129](file://includes/class-main.php#L1102-L1129)
 
 **Section sources**
-- [class-html.php:264-342](file://includes/minify/class-html.php#L264-L342)
+- [class-js.php:74-129](file://includes/minify/class-js.php#L74-L129)
+- [class-main.php:1036-1055](file://includes/class-main.php#L1036-L1055)
+- [class-main.php:1102-1129](file://includes/class-main.php#L1102-L1129)
 
-### CSS Combining and Minification
-The cache module combines enqueued CSS files:
-- Excludes handles/URLs based on configuration.
-- Fetches CSS content from local or remote sources.
-- Applies font-display normalization and minification.
-- Writes combined CSS and gzipped variant, enqueues it, and optionally preloads it.
-
-```mermaid
-flowchart TD
-CStart(["Combine CSS"]) --> Queue["Collect queued styles"]
-Queue --> Filter["Filter excluded handles/URLs"]
-Filter --> Fetch["Fetch CSS content"]
-Fetch --> Normalize["Normalize font-display"]
-Normalize --> Minify["Minify CSS"]
-Minify --> Save["Save combined CSS + .gz"]
-Save --> Enqueue["Enqueue combined CSS"]
-Enqueue --> Preload["Optional preload tag"]
-```
-
-**Diagram sources**
-- [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
-
-**Section sources**
-- [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
-
-### Runtime Script Delay and Deferred Loading
-Deferred and delayed scripts are handled client-side:
-- Scripts are marked with special attributes and loaded on first user interaction.
-- Inline scripts are encoded as data URIs when necessary.
-- After loading, synthetic DOM events are dispatched to ensure libraries initialize properly.
+### CSS Combination and Minification
+- Purpose: Reduce HTTP requests by combining enqueued CSS into a single file and minify it.
+- Implementation:
+  - Iterates queued styles, respecting exclusion lists (by handle or partial URL).
+  - Fetches CSS content from local filesystem or remote URLs.
+  - Applies font-display optimizations and minification.
+  - Saves combined CSS and gzipped cache, enqueues it, and adds a preload link.
 
 ```mermaid
 sequenceDiagram
-participant Doc as "Document"
-participant LL as "lazyload.js"
-participant Win as "Window"
-Doc->>LL : "First user interaction"
-LL->>LL : "Iterate scripts with special attributes"
-LL->>Win : "Dispatch DOMContentLoaded/load/pageshow"
-LL->>Doc : "Trigger jQuery ready if present"
+participant WP as "wp_enqueue_scripts"
+participant Cache as "class-cache.php"
+participant CSSMin as "class-css.php"
+participant FS as "Filesystem"
+WP->>Cache : "combine_css()"
+Cache->>FS : "get_contents(local CSS)"
+Cache->>CSSMin : "update_image_paths(content)"
+Cache->>CSSMin : "minify(combined)"
+CSSMin-->>Cache : "minified CSS"
+Cache->>FS : "save cache + gzip"
+Cache-->>WP : "enqueue single CSS + preload"
 ```
 
 **Diagram sources**
-- [lazyload.js:55-126](file://src/lazyload.js#L55-L126)
+- [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
+- [class-css.php:77-106](file://includes/minify/class-css.php#L77-L106)
 
 **Section sources**
-- [lazyload.js:55-126](file://src/lazyload.js#L55-L126)
+- [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
+- [class-css.php:77-106](file://includes/minify/class-css.php#L77-L106)
 
-### Configuration and Exclusions
-The plugin exposes configuration options through the admin UI and main controller:
-- Enable/disable JS minification and defer/delay.
-- Exclude specific scripts by handle or URL pattern.
-- Exclude CSS from combining and minification.
-- Exclude URLs for server rules and CDN rewriting.
+### HTML Minification and Inline Script Handling
+- Purpose: Compress HTML output and safely transform inline CSS/JS.
+- Implementation:
+  - Preserves script/template tags by temporarily replacing them.
+  - Minifies inline CSS/JS when enabled, with safety checks for JSON-LD and module/script types.
+  - Optionally marks scripts for delayed execution by altering type attributes and adding wppo-* markers.
+  - Restores preserved content after minification.
+
+```mermaid
+flowchart TD
+Start(["minify_buffer(html)"]) --> Preserve["Extract and preserve scripts/templates"]
+Preserve --> InlineCSS["Minify inline CSS if enabled"]
+InlineCSS --> InlineJS["Minify inline JS if enabled<br/>or mark for delay"]
+InlineJS --> HTMLMin["Minify HTML via HtmlMin"]
+HTMLMin --> Restore["Restore preserved scripts/templates"]
+Restore --> End(["Return minified HTML"])
+```
+
+**Diagram sources**
+- [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143)
+- [class-html.php:171-211](file://includes/minify/class-html.php#L171-L211)
+- [class-html.php:264-342](file://includes/minify/class-html.php#L264-L342)
+
+**Section sources**
+- [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143)
+- [class-html.php:171-211](file://includes/minify/class-html.php#L171-L211)
+- [class-html.php:264-342](file://includes/minify/class-html.php#L264-L342)
+
+### Script Loading Strategies: Defer and Delay
+- Defer:
+  - Adds the defer attribute to eligible scripts for non-logged-in users.
+  - Respects exclusion lists for handles/URLs.
+- Delay:
+  - Changes script type to a placeholder and moves the src to a wppo-src attribute.
+  - Client-side lazyloader restores attributes and loads scripts on first user interaction.
+
+```mermaid
+sequenceDiagram
+participant WP as "WordPress"
+participant Main as "class-main.php"
+participant Lazy as "lazyload.js"
+WP->>Main : "script_loader_tag" filter
+Main->>Main : "check defer/delay exclusions"
+alt Defer
+Main-->>WP : "add defer attribute"
+else Delay
+Main-->>WP : "replace src with wppo-src and change type"
+end
+WP->>Lazy : "enqueue lazyload.js"
+Lazy->>Lazy : "listen for user events"
+Lazy->>WP : "restore type/src and load script"
+```
+
+**Diagram sources**
+- [class-main.php:894-917](file://includes/class-main.php#L894-L917)
+- [lazyload.js:55-106](file://src/lazyload.js#L55-L106)
+
+**Section sources**
+- [class-main.php:894-917](file://includes/class-main.php#L894-L917)
+- [lazyload.js:55-106](file://src/lazyload.js#L55-L106)
+
+### Configuration Options and Exclusions
+- Admin UI exposes toggles and exclusion fields for:
+  - Minify JavaScript, CSS, HTML
+  - Combine CSS
+  - Defer/Delay JavaScript
+  - Exclude specific scripts/styles/handles
+- Backend merges user-provided exclusion lists with built-in protected handles.
 
 ```mermaid
 classDiagram
-class Main {
+class FileOptimization_UI {
++toggle minifyJS
++toggle minifyCSS
++toggle combineCSS
++toggle minifyHTML
++toggle deferJS
++toggle delayJS
++textarea excludeJS
++textarea excludeCSS
++textarea excludeCombineCSS
++textarea excludeDeferJS
++textarea excludeDelayJS
+}
+class Main_Config {
 +exclude_js : array
 +exclude_defer_js : array
 +exclude_delay_js : array
-+setup_hooks()
++protected_scripts : array
 }
-class FileOptimization {
-+handleSubmit()
-+settings : object
-}
-Main --> FileOptimization : "UI settings"
+FileOptimization_UI --> Main_Config : "updates settings"
 ```
 
 **Diagram sources**
-- [class-main.php:34-66](file://includes/class-main.php#L34-L66)
-- [FileOptimization.js:55-90](file://src/components/FileOptimization.js#L55-L90)
+- [FileOptimization.js:22-382](file://src/components/FileOptimization.js#L22-L382)
+- [class-main.php:42-66](file://includes/class-main.php#L42-L66)
+- [class-main.php:185-222](file://includes/class-main.php#L185-L222)
 
 **Section sources**
-- [class-main.php:34-66](file://includes/class-main.php#L34-L66)
-- [FileOptimization.js:19-620](file://src/components/FileOptimization.js#L19-L620)
+- [FileOptimization.js:22-382](file://src/components/FileOptimization.js#L22-L382)
+- [class-main.php:42-66](file://includes/class-main.php#L42-L66)
+- [class-main.php:185-222](file://includes/class-main.php#L185-L222)
 
 ## Dependency Analysis
-Key dependencies and relationships:
-- Main registers WordPress hooks and wires minification/combining based on settings.
-- Cache depends on minifiers and WordPress asset queues to combine CSS.
-- HTML minifier depends on third-party libraries for safe inline transformations.
-- Runtime lazyload depends on DOM events and browser APIs.
+- Third-party libraries:
+  - MatthiasMullie Minify for JS/CSS minification
+  - voku/html-min for HTML minification
+- Build toolchain:
+  - WordPress Scripts (Webpack) for bundling admin UI
+  - Babel preset @wordpress/default for transpilation
+- WordPress integration:
+  - Filters/actions for script/style tag manipulation and enqueue lifecycle
 
 ```mermaid
 graph LR
-MAIN["class-main.php"] --> CACHE["class-cache.php"]
-MAIN --> MINJS["class-js.php"]
-MAIN --> MINCSS["class-css.php"]
-MAIN --> MINHTML["class-html.php"]
-CACHE --> MINCSS
-CACHE --> MINHTML
-MINHTML --> |inline JS| MINJS
-LL["lazyload.js"] -.-> MAIN
+PJ["package.json"] --> WS["wp-scripts"]
+BC["babel.config.json"] --> WS
+CMJ["composer.json"] --> MM["matthiasmullie/minify"]
+CMJ --> VH["voku/html-min"]
+WS --> FO["FileOptimization.js"]
+FO --> CM["class-main.php"]
+CM --> MJ["class-js.php"]
+CM --> MC["class-css.php"]
+CM --> MH["class-html.php"]
+CM --> CA["class-cache.php"]
 ```
 
 **Diagram sources**
-- [class-main.php:167-244](file://includes/class-main.php#L167-L244)
-- [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
-- [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143)
-- [lazyload.js:55-126](file://src/lazyload.js#L55-L126)
+- [package.json:6-13](file://package.json#L6-L13)
+- [babel.config.json:1-6](file://babel.config.json#L1-L6)
+- [composer.json:134-144](file://composer.json#L134-L144)
+- [readme.md:123-144](file://readme.md#L123-L144)
 
 **Section sources**
-- [class-main.php:167-244](file://includes/class-main.php#L167-L244)
-- [class-cache.php:127-223](file://includes/class-cache.php#L127-L223)
-- [class-html.php:116-143](file://includes/minify/class-html.php#L116-L143)
-- [lazyload.js:55-126](file://src/lazyload.js#L55-L126)
+- [package.json:6-13](file://package.json#L6-L13)
+- [babel.config.json:1-6](file://babel.config.json#L1-L6)
+- [composer.json:134-144](file://composer.json#L134-L144)
+- [readme.md:123-144](file://readme.md#L123-L144)
 
 ## Performance Considerations
-- Minification reduces payload size and improves transfer speeds; gzipping further reduces bandwidth.
-- Combining CSS reduces HTTP requests; preloading the combined file accelerates rendering.
-- Deferring and delaying scripts prevents render-blocking and reduces initial CPU usage.
-- Exclusion lists protect critical scripts and third-party libraries from unintended transformations.
-- CDN rewriting reduces origin load and improves global delivery.
+- Minification reduces payload size and improves parse/execution time.
+- Combining CSS reduces HTTP requests; minification further shrinks the bundle.
+- Deferring non-critical scripts improves Time-to-Interactive.
+- Delaying scripts reduces initial CPU usage but requires careful testing to avoid breaking immediate functionality.
+- Gzip compression is applied at cache write time for both JS and CSS.
 
 [No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
 Common issues and resolutions:
-- Syntax errors after minification or inline transformations:
-  - Use exclusion lists to bypass problematic scripts or inline blocks.
-  - Temporarily disable minification to isolate the issue.
+- Syntax errors after minification:
+  - Ensure scripts are not already minified (extension or short content heuristic).
+  - Exclude problematic scripts via the admin UI exclusion fields.
 - Async script handling:
-  - Ensure deferred/delayed scripts are placed after DOM-ready events.
-  - Verify that libraries expecting synchronous initialization are not delayed.
+  - Deferred scripts execute after DOMContentLoaded; ensure dependent code is idempotent or guarded.
+  - For inline scripts marked for delay, confirm the lazyloader is present and functioning.
 - Third-party library compatibility:
-  - Exclude handles or URLs that conflict with deferred/delayed execution.
-  - Review inline JSON-LD and other non-JS script types to ensure safe encoding.
-- CDN and server rules:
-  - Confirm CDN hostnames and permissions for .htaccess updates.
-  - Validate exclusions for URLs that must remain on the origin.
+  - Some libraries rely on global variables or synchronous execution; exclude them from defer/delay.
+  - Use exclusion lists for handles/URLs to preserve required scripts.
+- CDN and asset rewriting:
+  - When CDN is enabled, verify that wp-content/wp-includes URLs are rewritten correctly.
 
 **Section sources**
-- [class-html.php:264-342](file://includes/minify/class-html.php#L264-L342)
-- [class-main.php:188-225](file://includes/class-main.php#L188-L225)
-- [FileOptimization.js:19-620](file://src/components/FileOptimization.js#L19-L620)
+- [class-main.php:1102-1129](file://includes/class-main.php#L1102-L1129)
+- [class-main.php:894-917](file://includes/class-main.php#L894-L917)
+- [class-main.php:1036-1055](file://includes/class-main.php#L1036-L1055)
+- [lazyload.js:55-106](file://src/lazyload.js#L55-L106)
 
 ## Conclusion
-The plugin provides a robust, layered approach to JavaScript optimization: server-side minification and combining, safe inline transformations, and client-side deferred/delayed execution. With configurable exclusion rules and compatibility safeguards, it balances performance gains with reliability across diverse WordPress setups and third-party integrations.
-
-[No sources needed since this section summarizes without analyzing specific files]
-
-## Appendices
-
-### Configuration Options Reference
-- Minify JavaScript: Toggle to enable/disable JS minification.
-- Exclude JS from Minification: Comma-separated handles or URL patterns to skip minification.
-- Defer JavaScript: Load scripts after page render to avoid render-blocking.
-- Exclude JS from Defer: Handles or URL patterns to keep non-deferred.
-- Delay JavaScript Execution: Delay all scripts until first user interaction.
-- Exclude JS from Delay: Handles or URL patterns to keep non-delayed.
-- Combine CSS: Merge enqueued CSS into a single file.
-- Exclude CSS from Combining: Handles or URL patterns to keep separate.
-- Minify CSS: Enable CSS minification.
-- Minify HTML: Enable HTML minification.
-- Minify Inline CSS/JS: Minify inline styles/scripts.
-- Enable Server Rules (.htaccess): Write server-level rules for caching/compression.
-- CDN Hostname: Rewrite asset URLs to a CDN domain.
-
-**Section sources**
-- [FileOptimization.js:19-620](file://src/components/FileOptimization.js#L19-L620)
-- [class-main.php:188-225](file://includes/class-main.php#L188-L225)
+The plugin provides a robust JavaScript optimization stack: backend minification with caching, CSS combination, HTML minification with safe inline transformations, and client-side deferred/delayed execution. Administrators can tailor behavior via granular toggles and exclusion lists, balancing performance gains with compatibility needs.

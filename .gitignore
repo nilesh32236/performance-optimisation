@@ -3,5 +3,3 @@ node_modules/
 reports/
 app/
 test-lab/
-*.log
-test-lab/vendor/

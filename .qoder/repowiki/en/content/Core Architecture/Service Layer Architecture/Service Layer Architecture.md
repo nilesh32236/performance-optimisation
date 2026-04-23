@@ -9,10 +9,11 @@
 - [class-image-optimisation.php](file://includes/class-image-optimisation.php)
 - [class-database-cleanup.php](file://includes/class-database-cleanup.php)
 - [class-img-converter.php](file://includes/class-img-converter.php)
+- [class-util.php](file://includes/class-util.php)
 - [class-css.php](file://includes/minify/class-css.php)
 - [class-js.php](file://includes/minify/class-js.php)
 - [class-html.php](file://includes/minify/class-html.php)
-- [class-util.php](file://includes/class-util.php)
+- [composer.json](file://composer.json)
 </cite>
 
 ## Table of Contents
@@ -28,137 +29,138 @@
 
 ## Introduction
 
-The Performance Optimisation plugin implements a comprehensive service layer architecture that manages multiple optimization capabilities through independent, modular services. Each service operates as a distinct module that can be instantiated and managed independently, coordinated by the central Main class. This architecture enables flexible service composition, clear separation of concerns, and extensible optimization strategies.
+The Performance Optimisation plugin implements a comprehensive service layer architecture that manages multiple optimization services independently. The system follows a modular design pattern where each optimization service operates as a standalone module that can be instantiated and managed by the central Main class. This architecture enables flexible service registration, dependency injection, and inter-service communication through shared interfaces and common data structures.
 
-The service layer follows a pattern where individual optimization services are structured as independent modules that can be instantiated and managed by the Main class. The architecture emphasizes dependency injection, service registration, and inter-service communication through shared interfaces and common data structures.
+The service layer provides four primary optimization capabilities: caching, asset management, image optimization, and database cleanup. Each service maintains its own lifecycle, configuration, and specialized functionality while coordinating with other services through well-defined interfaces.
 
 ## Project Structure
 
-The plugin organizes its service layer into clearly defined modules within the `includes` directory, each representing a specific optimization capability:
+The plugin follows a layered architecture with clear separation between presentation, service, and infrastructure layers:
 
 ```mermaid
 graph TB
-subgraph "Plugin Entry Point"
-EP[performance-optimisation.php]
+subgraph "Entry Point"
+A[performance-optimisation.php]
 end
-subgraph "Core Services"
-MAIN[Main Class]
-CACHE[Cache Service]
-IMG[Image Optimisation]
-ASSET[Asset Manager]
-DB[Database Cleanup]
+subgraph "Service Layer"
+B[Main Class]
+C[Cache Service]
+D[Asset Manager Service]
+E[Image Optimisation Service]
+F[Database Cleanup Service]
 end
-subgraph "Supporting Services"
-IMG_CONV[Image Converter]
-CSS_MIN[CSS Minifier]
-JS_MIN[JS Minifier]
-HTML_MIN[HTML Minifier]
+subgraph "Utility Layer"
+G[Util Class]
+H[Minify Classes]
 end
-subgraph "Utilities"
-UTIL[Utility Functions]
+subgraph "External Dependencies"
+I[voku/html-min]
+J[matthiasmullie/minify]
+K[action-scheduler]
 end
-EP --> MAIN
-MAIN --> CACHE
-MAIN --> IMG
-MAIN --> ASSET
-MAIN --> DB
-IMG --> IMG_CONV
-CACHE --> CSS_MIN
-CACHE --> JS_MIN
-CACHE --> HTML_MIN
-CACHE --> UTIL
-IMG --> UTIL
-ASSET --> UTIL
-DB --> UTIL
-IMG_CONV --> UTIL
+A --> B
+B --> C
+B --> D
+B --> E
+B --> F
+C --> G
+E --> G
+E --> H
+F --> G
+H --> I
+H --> J
+E --> K
 ```
 
 **Diagram sources**
-- [performance-optimisation.php:44](file://performance-optimisation.php#L44)
+- [performance-optimisation.php:43](file://performance-optimisation.php#L43)
 - [class-main.php:98-118](file://includes/class-main.php#L98-L118)
+- [composer.json:11-15](file://composer.json#L11-L15)
 
 **Section sources**
-- [performance-optimisation.php:18-44](file://performance-optimisation.php#L18-L44)
-- [class-main.php:128-157](file://includes/class-main.php#L128-L157)
+- [performance-optimisation.php:17-44](file://performance-optimisation.php#L17-L44)
+- [composer.json:1-40](file://composer.json#L1-L40)
 
 ## Core Components
 
-The service layer consists of five primary optimization services, each designed as an independent module:
+The service layer consists of five primary components, each implementing specific optimization functionality:
 
-### Cache Service
-The Cache service manages dynamic static HTML generation, CSS combination, and comprehensive cache management. It provides sophisticated caching mechanisms with automatic invalidation and CDN integration capabilities.
+### Main Class - Central Orchestrator
+The Main class serves as the central orchestrator that instantiates and coordinates all optimization services. It handles plugin initialization, service registration, and inter-service communication through WordPress hooks and filters.
 
-### Image Optimisation Service
-Handles advanced image optimization including WebP/AVIF conversion, lazy loading, preloading strategies, and next-generation format serving. Integrates with the Image Converter service for background processing.
+### Cache Service - Static Content Management
+Provides caching functionality for generated HTML content, CSS combination, and static file management with intelligent cache invalidation strategies.
 
-### Asset Manager Service
-Provides per-page/post control over script and style loading, enabling selective asset disabling through WordPress meta boxes with protection mechanisms for essential WordPress assets.
+### Asset Manager Service - Resource Control
+Manages per-page/post control over script and style loading, providing selective asset disabling through WordPress meta boxes.
 
-### Database Cleanup Service
-Manages database optimization through batched operations for cleaning revisions, auto-drafts, trashed content, spam comments, expired transients, and orphaned post meta.
+### Image Optimisation Service - Media Enhancement
+Handles image conversion to modern formats (WebP/AVIF), preloading strategies, lazy loading, and next-generation image serving.
 
-### Supporting Services
-- **Image Converter**: Handles background image format conversion with quality control and format validation
-- **Minification Services**: Separate CSS, JS, and HTML minifiers with caching capabilities
-- **Utility Services**: Shared filesystem operations, URL processing, and resource management
+### Database Cleanup Service - Data Maintenance
+Performs automated cleanup of WordPress database bloat including revisions, auto-drafts, trashed content, and orphaned metadata.
 
 **Section sources**
+- [class-main.php:29-118](file://includes/class-main.php#L29-L118)
 - [class-cache.php:32-120](file://includes/class-cache.php#L32-L120)
-- [class-image-optimisation.php:27-57](file://includes/class-image-optimisation.php#L27-L57)
 - [class-asset-manager.php:27-82](file://includes/class-asset-manager.php#L27-L82)
+- [class-image-optimisation.php:27-57](file://includes/class-image-optimisation.php#L27-L57)
 - [class-database-cleanup.php:30-82](file://includes/class-database-cleanup.php#L30-L82)
 
 ## Architecture Overview
 
-The service layer architecture follows a centralized coordination pattern where the Main class serves as the orchestrator for all optimization services:
+The service layer implements a dependency injection pattern where the Main class injects configuration options and shared utilities into each service during instantiation:
 
 ```mermaid
 sequenceDiagram
-participant WP as WordPress Core
-participant Main as Main Class
-participant Cache as Cache Service
-participant Image as Image Optimisation
-participant Asset as Asset Manager
-participant DB as Database Cleanup
-WP->>Main : Plugin Initialization
+participant Plugin as "Plugin Entry Point"
+participant Main as "Main Class"
+participant Cache as "Cache Service"
+participant Asset as "Asset Manager"
+participant Image as "Image Optimisation"
+participant DB as "Database Cleanup"
+participant Util as "Utility Services"
+Plugin->>Main : new Main()
 Main->>Main : __construct()
-Main->>Main : includes() - Load Dependencies
-Main->>Cache : new Cache()
+Main->>Main : includes() - Load dependencies
+Main->>Main : setup_hooks() - Register WordPress hooks
+Main->>Util : Util : : init_filesystem()
 Main->>Image : new Image_Optimisation(options)
+Main->>Cache : new Cache()
 Main->>Asset : new Asset_Manager()
 Main->>DB : new Database_Cleanup()
-Main->>Main : setup_hooks() - Register Actions
-Note over WP,Main : Runtime Operations
-WP->>Cache : generate_dynamic_static_html()
-WP->>Image : maybe_serve_next_gen_images()
-WP->>Asset : dequeue_selected_assets()
-WP->>DB : auto_clean(settings)
+Note over Main,Cache : Services are registered and ready
+Main->>Cache : register hooks for caching
+Main->>Asset : register hooks for asset management
+Main->>Image : register hooks for image optimization
+Main->>DB : register hooks for cleanup operations
 ```
 
 **Diagram sources**
-- [class-main.php:98-118](file://includes/class-main.php#L98-L118)
-- [class-main.php:167-244](file://includes/class-main.php#L167-L244)
+- [performance-optimisation.php:43](file://performance-optimisation.php#L43)
+- [class-main.php:98-149](file://includes/class-main.php#L98-L149)
+- [class-main.php:175-229](file://includes/class-main.php#L175-L229)
 
-The architecture implements several key patterns:
-
-### Dependency Injection Pattern
-Services receive their dependencies through constructors, enabling loose coupling and testability. The Main class injects configuration options and manages service lifecycles.
-
-### Service Registration Pattern
-Each service registers its own WordPress hooks and actions during initialization, creating a self-contained registration mechanism.
+The architecture employs several key design patterns:
 
 ### Strategy Pattern Implementation
-Different optimization approaches are implemented as interchangeable strategies, particularly evident in the image optimization service where multiple conversion formats can be selected.
+Services implement different optimization strategies through configurable options and runtime decisions. The Image_Optimisation service demonstrates this with format conversion strategies (WebP/AVIF/both) and lazy loading approaches.
+
+### Factory Pattern
+The Main class acts as a factory, instantiating services with appropriate configuration options and registering them with WordPress hooks.
+
+### Observer Pattern
+Services register WordPress actions and filters, allowing them to observe and react to WordPress events without tight coupling.
 
 **Section sources**
-- [class-main.php:114-118](file://includes/class-main.php#L114-L118)
-- [class-image-optimisation.php:53-57](file://includes/class-image-optimisation.php#L53-L57)
+- [class-main.php:164-241](file://includes/class-main.php#L164-L241)
+- [class-image-optimisation.php:53-71](file://includes/class-image-optimisation.php#L53-L71)
 
 ## Detailed Component Analysis
 
-### Main Class Architecture
+### Main Class - Service Orchestration
 
-The Main class serves as the central coordinator and orchestrator for all service layer components:
+The Main class implements the central coordination hub for all optimization services:
 
 ```mermaid
 classDiagram
@@ -177,119 +179,162 @@ class Main {
 +enqueue_scripts() void
 +minify_css(tag, handle, href) string
 +minify_js(tag, handle, src) string
++add_defer_attribute(tag, handle) string
++add_preload_prefatch_preconnect() void
 +process_background_image(args) void
-+clear_all_cache() static void
-+on_settings_update(old_value, value) static void
++clear_all_cache() void
++on_settings_update(old_value, value) void
 }
 class Cache {
 +generate_dynamic_static_html() void
 +invalidate_dynamic_static_html(page_id) void
 +combine_css() void
-+clear_cache(url_path) static bool
-+get_cache_size() static string
-}
-class Image_Optimisation {
--array options
--Img_Converter img_converter
-+__construct(options)
-+maybe_serve_next_gen_images(buffer) string
-+preload_images() void
-+process_img_tag(img_tag, original_src, exclude_imgs) string
++clear_cache(url_path) bool
++get_cache_size() string
 }
 class Asset_Manager {
-+__construct()
 +dequeue_selected_assets() void
 +capture_page_assets() void
 +get_page_assets(post_id) array|false
 }
-class Database_Cleanup {
-+clean_all() array
-+auto_clean(settings) void
-+get_counts() array
-+clean_revisions() int|false
-+clean_auto_drafts() int|false
+class Image_Optimisation {
++preload_images() void
++maybe_serve_next_gen_images(buffer) string
++process_img_tag(img_tag, original_src, exclude_imgs) string
++generate_img_preload(img_url) void
 }
-Main --> Cache : "coordinates"
-Main --> Image_Optimisation : "coordinates"
-Main --> Asset_Manager : "coordinates"
-Main --> Database_Cleanup : "coordinates"
+Main --> Cache : "instantiates"
+Main --> Asset_Manager : "instantiates"
+Main --> Image_Optimisation : "instantiates"
 ```
 
 **Diagram sources**
 - [class-main.php:29-118](file://includes/class-main.php#L29-L118)
 - [class-cache.php:32-120](file://includes/class-cache.php#L32-L120)
-- [class-image-optimisation.php:27-57](file://includes/class-image-optimisation.php#L27-L57)
 - [class-asset-manager.php:27-82](file://includes/class-asset-manager.php#L27-L82)
-- [class-database-cleanup.php:30-82](file://includes/class-database-cleanup.php#L30-L82)
+- [class-image-optimisation.php:27-57](file://includes/class-image-optimisation.php#L27-L57)
 
-#### Service Lifecycle Management
+#### Service Registration and Lifecycle Management
 
-The Main class implements comprehensive service lifecycle management:
+The Main class manages service lifecycle through a structured initialization process:
 
-**Initialization Phase:**
-- Loads all required dependencies through the includes() method
-- Initializes filesystem operations
-- Creates service instances with appropriate configuration
-- Registers WordPress hooks and actions
+1. **Configuration Loading**: Loads plugin settings from WordPress options
+2. **Dependency Inclusion**: Includes all service classes and utilities
+3. **Filesystem Initialization**: Establishes WordPress filesystem access
+4. **Service Instantiation**: Creates service instances with configuration
+5. **Hook Registration**: Registers services with WordPress action/filter system
 
-**Runtime Phase:**
-- Coordinates service execution through WordPress hooks
-- Manages service interactions and data flow
-- Handles error conditions and fallback mechanisms
-- Provides administrative interfaces for service control
+#### Inter-Service Communication Patterns
 
-**Shutdown Phase:**
-- Clears caches and releases resources
-- Finalizes background operations
-- Cleans up temporary files and data structures
+Services communicate through several mechanisms:
+
+- **Shared Configuration**: All services receive the same options array
+- **WordPress Hooks**: Services register callbacks that can trigger other services
+- **Static Method Calls**: Services call each other's static methods for shared functionality
+- **Event-Driven Architecture**: Services respond to WordPress events and triggers
 
 **Section sources**
-- [class-main.php:98-118](file://includes/class-main.php#L98-L118)
-- [class-main.php:128-157](file://includes/class-main.php#L128-L157)
-- [class-main.php:167-244](file://includes/class-main.php#L167-L244)
+- [class-main.php:98-149](file://includes/class-main.php#L98-L149)
+- [class-main.php:175-241](file://includes/class-main.php#L175-L241)
 
-### Cache Service Implementation
+### Cache Service - Static Content Management
 
-The Cache service provides comprehensive caching capabilities with sophisticated invalidation mechanisms:
+The Cache service implements sophisticated static content caching with intelligent invalidation:
 
 ```mermaid
 flowchart TD
 Start([Cache Request]) --> CheckUser["Check User Login Status"]
 CheckUser --> IsLoggedIn{"Is User Logged In?"}
 IsLoggedIn --> |Yes| SkipCache["Skip Caching"]
-IsLoggedIn --> |No| CheckCacheable["Check Cache Eligibility"]
-CheckCacheable --> IsCacheable{"Cacheable?"}
-IsCacheable --> |No| SkipCache
-IsCacheable --> |Yes| GenerateBuffer["Generate Output Buffer"]
-GenerateBuffer --> ProcessBuffer["Process Buffer"]
-ProcessBuffer --> MinifyPass{"Minify Pass Needed?"}
-MinifyPass --> |Yes| MinifyContent["Apply Minification"]
-MinifyPass --> |No| SkipMinify["Skip Minification"]
-MinifyContent --> ApplyCDN["Apply CDN Rewriting"]
-SkipMinify --> ApplyCDN
-ApplyCDN --> SaveCache["Save Cache Files"]
-SaveCache --> ReturnBuffer["Return Processed Buffer"]
-SkipCache --> End([End])
-ReturnBuffer --> End
+IsLoggedIn --> |No| CheckCachable["Check Cache Eligibility"]
+CheckCachable --> Eligible{"Eligible for Caching?"}
+Eligible --> |No| SkipCache
+Eligible --> |Yes| PrepareDir["Prepare Cache Directory"]
+PrepareDir --> StartBuffer["Start Output Buffer"]
+StartBuffer --> ProcessBuffer["Process Buffer Content"]
+ProcessBuffer --> MinifyContent["Apply Minification"]
+MinifyContent --> SaveFiles["Save Cache Files"]
+SaveFiles --> End([Return Processed Content])
+SkipCache --> End
 ```
 
 **Diagram sources**
 - [class-cache.php:260-310](file://includes/class-cache.php#L260-L310)
-- [class-cache.php:391-396](file://includes/class-cache.php#L391-L396)
-
-Key features include:
-- Dynamic static HTML generation with automatic invalidation
-- CSS combination and minification with CDN integration
-- Comprehensive cache directory management with gzip compression
-- Smart purging mechanisms for related content
-
-**Section sources**
-- [class-cache.php:260-381](file://includes/class-cache.php#L260-L381)
 - [class-cache.php:470-483](file://includes/class-cache.php#L470-L483)
 
-### Image Optimisation Service Architecture
+#### Cache Storage Strategy
 
-The Image Optimisation service implements advanced image processing with multiple optimization strategies:
+The Cache service implements a hierarchical storage system:
+
+- **Domain-based Organization**: Cache files organized by domain name
+- **Path-based Structure**: Maintains URL path structure within cache directories
+- **Dual-format Storage**: Stores both uncompressed and gzip-compressed versions
+- **Smart Invalidation**: Intelligent cache purging based on content changes
+
+#### Integration with Image Optimization
+
+The Cache service integrates with Image_Optimisation through buffer processing:
+
+- **Next-gen Image Serving**: Processes HTML to serve WebP/AVIF images when supported
+- **Lazy Loading Integration**: Applies lazy loading optimizations to cached content
+- **Video Optimization**: Integrates video lazy loading capabilities
+
+**Section sources**
+- [class-cache.php:287-310](file://includes/class-cache.php#L287-L310)
+- [class-cache.php:433-447](file://includes/class-cache.php#L433-L447)
+
+### Asset Manager Service - Resource Control
+
+The Asset Manager provides granular control over asset loading:
+
+```mermaid
+sequenceDiagram
+participant Frontend as "Frontend Request"
+participant AssetMgr as "Asset Manager"
+participant WP as "WordPress"
+participant PostMeta as "Post Meta"
+Frontend->>AssetMgr : dequeue_selected_assets()
+AssetMgr->>WP : get_the_ID()
+AssetMgr->>PostMeta : get_post_meta(_wppo_disabled_scripts)
+AssetMgr->>PostMeta : get_post_meta(_wppo_disabled_styles)
+loop For each disabled script
+AssetMgr->>WP : wp_dequeue_script(handle)
+AssetMgr->>WP : wp_deregister_script(handle)
+end
+loop For each disabled style
+AssetMgr->>WP : wp_dequeue_style(handle)
+AssetMgr->>WP : wp_deregister_style(handle)
+end
+Note over AssetMgr : Protected assets are never removed
+```
+
+**Diagram sources**
+- [class-asset-manager.php:91-121](file://includes/class-asset-manager.php#L91-L121)
+- [class-asset-manager.php:131-190](file://includes/class-asset-manager.php#L131-L190)
+
+#### Protected Assets Strategy
+
+The Asset Manager implements a protection mechanism for essential WordPress assets:
+
+- **Core Scripts Protection**: jQuery, WordPress core scripts, admin bar, heartbeat
+- **Core Styles Protection**: Admin bar styles, dashicons, block library
+- **Dynamic Exclusion**: Never removes assets that are essential for site functionality
+
+#### Transient-Based Asset Tracking
+
+The service uses WordPress transients to track page assets:
+
+- **24-Hour Caching**: Captured assets cached for 24 hours
+- **Change Detection**: Only updates when asset lists change
+- **Post-specific Storage**: Separate transient keys for each post ID
+
+**Section sources**
+- [class-asset-manager.php:44-67](file://includes/class-asset-manager.php#L44-L67)
+- [class-asset-manager.php:178-190](file://includes/class-asset-manager.php#L178-L190)
+
+### Image Optimisation Service - Media Enhancement
+
+The Image_Optimisation service implements comprehensive image optimization:
 
 ```mermaid
 classDiagram
@@ -297,115 +342,97 @@ class Image_Optimisation {
 -array options
 -Img_Converter img_converter
 +__construct(options)
-+maybe_serve_next_gen_images(buffer) string
 +preload_images() void
++maybe_serve_next_gen_images(buffer) string
 +process_img_tag(img_tag, original_src, exclude_imgs) string
--replace_image_with_next_gen(img_url, exclude_imgs, supports_avif, supports_webp) string
--get_img_converter() Img_Converter
++generate_img_preload(img_url) void
++preload_front_page_images(image_optimisation) void
++preload_meta_images() void
++preload_post_type_images(image_optimisation) void
 }
 class Img_Converter {
 -array options
+-array available_format
 -string format
 -array exclude_imgs
 +__construct(options)
 +convert_image(source_image, format, quality) bool
++convert_image_to_next_gen_format(metadata, attachment_id) array
 +maybe_serve_next_gen_image(image) array
 +add_img_into_queue(img_path, type) bool
-+get_img_path(source_image, format) string
-+get_img_url(source_image, format) string
-}
-class Util {
-+get_local_path(url) string
-+process_urls(urls) array
-+generate_preload_link(href, rel, resource_type) void
-+get_image_mime_type(url) string
++update_conversion_status(img_path, status, type) void
 }
 Image_Optimisation --> Img_Converter : "uses"
-Image_Optimisation --> Util : "uses"
-Img_Converter --> Util : "uses"
 ```
 
 **Diagram sources**
 - [class-image-optimisation.php:27-57](file://includes/class-image-optimisation.php#L27-L57)
 - [class-img-converter.php:22-91](file://includes/class-img-converter.php#L22-L91)
-- [class-util.php:29-80](file://includes/class-util.php#L29-L80)
 
-The service implements multiple optimization strategies:
-- Next-generation format conversion (WebP, AVIF)
-- Lazy loading with performance optimizations
-- Preloading strategies for critical images
-- Background processing for image conversions
-- Format detection and fallback mechanisms
+#### Next-Generation Image Strategy
+
+The service implements a sophisticated image format conversion strategy:
+
+- **Browser Capability Detection**: Uses HTTP_ACCEPT headers to detect WebP/AVIF support
+- **Format Priority**: Supports WebP, AVIF, or both conversion strategies
+- **Queue-based Processing**: Background processing of images through Action Scheduler
+- **Fallback Mechanisms**: Graceful degradation when formats are unsupported
+
+#### Lazy Loading Implementation
+
+The service provides multiple lazy loading strategies:
+
+- **HTML Tag Processing**: Uses WordPress HTML processor when available
+- **Regex Fallback**: Compatible regex-based processing for older WordPress versions
+- **Dimension Optimization**: Automatically adds width/height attributes for better layout stability
+- **Placeholder Support**: Optional SVG placeholder replacement for improved perceived performance
 
 **Section sources**
-- [class-image-optimisation.php:95-290](file://includes/class-image-optimisation.php#L95-L290)
+- [class-image-optimisation.php:95-208](file://includes/class-image-optimisation.php#L95-L208)
 - [class-img-converter.php:104-310](file://includes/class-img-converter.php#L104-L310)
 
-### Asset Manager Service
+### Database Cleanup Service - Data Maintenance
 
-The Asset Manager provides granular control over asset loading with protection mechanisms:
-
-```mermaid
-sequenceDiagram
-participant Frontend as Frontend
-participant AssetMgr as Asset Manager
-participant WP as WordPress
-participant PostMeta as Post Meta
-Frontend->>AssetMgr : dequeue_selected_assets()
-AssetMgr->>WP : get_the_ID()
-AssetMgr->>PostMeta : get_post_meta(disabled_scripts)
-AssetMgr->>PostMeta : get_post_meta(disabled_styles)
-AssetMgr->>WP : wp_dequeue_script(handle)
-AssetMgr->>WP : wp_deregister_script(handle)
-AssetMgr->>WP : wp_dequeue_style(handle)
-AssetMgr->>WP : wp_deregister_style(handle)
-Note over Frontend,AssetMgr : Asset Capture Phase
-Frontend->>AssetMgr : capture_page_assets()
-AssetMgr->>WP : get_the_ID()
-AssetMgr->>WP : Global $wp_scripts/$wp_styles
-AssetMgr->>PostMeta : set_transient(page_assets)
-```
-
-**Diagram sources**
-- [class-asset-manager.php:91-121](file://includes/class-asset-manager.php#L91-L121)
-- [class-asset-manager.php:131-191](file://includes/class-asset-manager.php#L131-L191)
-
-**Section sources**
-- [class-asset-manager.php:91-191](file://includes/class-asset-manager.php#L91-L191)
-
-### Database Cleanup Service
-
-The Database Cleanup service implements efficient batched operations for database optimization:
+The Database Cleanup service implements efficient database maintenance:
 
 ```mermaid
 flowchart TD
-Start([Database Cleanup Request]) --> GetSettings["Get Cleanup Settings"]
-GetSettings --> SelectMethod["Select Cleanup Method"]
-SelectMethod --> CleanRevisions["clean_revisions()"]
-SelectMethod --> CleanDrafts["clean_auto_drafts()"]
-SelectMethod --> CleanTrashed["clean_trashed_posts()"]
-SelectMethod --> CleanSpam["clean_spam_comments()"]
-SelectMethod --> CleanTransients["clean_expired_transients()"]
-SelectMethod --> CleanOrphan["clean_orphan_postmeta()"]
-CleanRevisions --> BatchProcess["Batch Processing"]
-CleanDrafts --> BatchProcess
-CleanTrashed --> BatchProcess
-CleanSpam --> BatchProcess
-CleanTransients --> BatchProcess
-CleanOrphan --> BatchProcess
-BatchProcess --> UpdateCounts["Update Progress Counts"]
-UpdateCounts --> CheckMore{"More Records?"}
-CheckMore --> |Yes| BatchProcess
-CheckMore --> |No| Complete["Cleanup Complete"]
-Complete --> End([End])
+Start([Cleanup Request]) --> ChooseMethod["Choose Cleanup Method"]
+ChooseMethod --> BatchOps["Batch Operations"]
+BatchOps --> ProcessBatch["Process 1000 Records"]
+ProcessBatch --> CheckError{"Database Error?"}
+CheckError --> |Yes| ReturnError["Return WP_Error"]
+CheckError --> |No| CheckMore{"More Records?"}
+CheckMore --> |Yes| ProcessBatch
+CheckMore --> |No| Complete["Complete Cleanup"]
+ReturnError --> End([Cleanup Failed])
+Complete --> End([Cleanup Success])
 ```
 
 **Diagram sources**
+- [class-database-cleanup.php:42-82](file://includes/class-database-cleanup.php#L42-L82)
 - [class-database-cleanup.php:529-546](file://includes/class-database-cleanup.php#L529-L546)
-- [class-database-cleanup.php:44-82](file://includes/class-database-cleanup.php#L44-L82)
+
+#### Advanced Cleanup Strategies
+
+The service implements several cleanup strategies:
+
+- **Batch Processing**: Processes 1000 records at a time to prevent memory issues
+- **Advanced Revision Cleanup**: Keeps latest revisions per post with configurable retention
+- **Orphan Detection**: Identifies and removes orphaned postmeta entries
+- **Error Handling**: Comprehensive error handling with WP_Error return values
+
+#### Automated Cleanup Scheduling
+
+The service supports automated cleanup operations:
+
+- **Scheduled Execution**: Can be triggered by WordPress cron system
+- **Configurable Parameters**: Allows customization of cleanup thresholds
+- **Progress Tracking**: Maintains detailed logs of cleanup operations
 
 **Section sources**
-- [class-database-cleanup.php:529-650](file://includes/class-database-cleanup.php#L529-L650)
+- [class-database-cleanup.php:561-586](file://includes/class-database-cleanup.php#L561-L586)
+- [class-database-cleanup.php:598-634](file://includes/class-database-cleanup.php#L598-L634)
 
 ## Dependency Analysis
 
@@ -414,140 +441,128 @@ The service layer exhibits clear dependency relationships with well-defined inte
 ```mermaid
 graph TB
 subgraph "External Dependencies"
-WP[WordPress Core]
-FS[WP_Filesystem API]
-MM[MatthiasMullie Minify]
-Voku[voku/html-min]
+A[voku/html-min]
+B[matthiasmullie/minify]
+C[action-scheduler]
 end
-subgraph "Internal Dependencies"
-Main[Main Class]
-Cache[Cache Service]
-Image[Image Optimisation]
-Asset[Asset Manager]
-DB[Database Cleanup]
-ImgConv[Image Converter]
-CSSMin[CSS Minifier]
-JSMin[JS Minifier]
-HTMLMin[HTML Minifier]
-Util[Utility Functions]
+subgraph "Internal Services"
+D[Main]
+E[Cache]
+F[Asset Manager]
+G[Image Optimisation]
+H[Database Cleanup]
+I[Minify Classes]
+J[Utilities]
 end
-WP --> Main
-FS --> Util
-MM --> CSSMin
-MM --> JSMin
-Voku --> HTMLMin
-Main --> Cache
-Main --> Image
-Main --> Asset
-Main --> DB
-Cache --> CSSMin
-Cache --> JSMin
-Cache --> HTMLMin
-Cache --> Util
-Image --> ImgConv
-Image --> Util
-Asset --> Util
-DB --> Util
-ImgConv --> Util
+A --> I
+B --> I
+C --> G
+D --> E
+D --> F
+D --> G
+D --> H
+E --> J
+F --> J
+G --> J
+H --> J
+I --> J
 ```
 
 **Diagram sources**
-- [class-main.php:128-144](file://includes/class-main.php#L128-L144)
-- [class-cache.php:16-18](file://includes/class-cache.php#L16-L18)
-- [class-css.php:16-18](file://includes/minify/class-css.php#L16-L18)
-- [class-js.php:15-16](file://includes/minify/class-js.php#L15-L16)
-- [class-html.php:16-19](file://includes/minify/class-html.php#L16-L19)
+- [composer.json:11-15](file://composer.json#L11-L15)
+- [class-main.php:128-149](file://includes/class-main.php#L128-L149)
 
-### Service Interactions
+### Dependency Injection Pattern
 
-The services communicate through well-defined interfaces and shared data structures:
+The Main class implements dependency injection through:
 
-**Shared Interfaces:**
-- Configuration options passed through constructor injection
-- WordPress hook system for event coordination
-- Filesystem abstraction for cross-platform compatibility
-- Common utility functions for URL processing and resource management
+- **Constructor Injection**: Services receive configuration options during instantiation
+- **Shared Utilities**: All services access common utilities through static methods
+- **Filesystem Access**: Services share WordPress filesystem instance
+- **WordPress Integration**: Services integrate with WordPress hooks and APIs
 
-**Data Flow Patterns:**
-- Configuration-driven service behavior
-- Event-driven service coordination
-- Batch processing for resource-intensive operations
-- Caching mechanisms for performance optimization
+### Circular Dependency Prevention
+
+The architecture prevents circular dependencies through:
+
+- **Service Separation**: Each service has distinct responsibilities
+- **Interface Abstraction**: Services communicate through well-defined interfaces
+- **Static Method Usage**: Cross-service communication uses static methods
+- **Hook-based Communication**: Services coordinate through WordPress action/filter system
 
 **Section sources**
-- [class-main.php:128-157](file://includes/class-main.php#L128-L157)
-- [class-util.php:38-60](file://includes/class-util.php#L38-L60)
+- [class-main.php:128-149](file://includes/class-main.php#L128-L149)
+- [composer.json:11-15](file://composer.json#L11-L15)
 
 ## Performance Considerations
 
-The service layer architecture incorporates several performance optimization strategies:
+The service layer implements several performance optimization strategies:
 
 ### Caching Strategies
-- Static HTML caching with automatic invalidation
-- Minified asset caching with version-based cache busting
-- Image conversion caching with format-specific directories
-- Database query result caching for statistics
+- **Output Buffer Caching**: Static HTML caching with intelligent invalidation
+- **Asset Caching**: Minified CSS/JS caching with gzip compression
+- **Transient-based Tracking**: Efficient asset tracking using WordPress transients
+- **Background Processing**: Image conversion performed asynchronously
 
-### Asynchronous Processing
-- Background image conversion through WordPress Action Scheduler
-- Non-blocking filesystem operations
-- Batch processing for database cleanup operations
-- Deferred processing for resource-intensive tasks
-
-### Resource Management
-- Efficient filesystem operations with proper cleanup
-- Memory-conscious image processing with size limits
-- Optimized WordPress hook registration and deregistration
-- Minimal overhead in production environments
+### Memory Management
+- **Batch Processing**: Database operations process in chunks of 1000 records
+- **Lazy Loading**: Images loaded only when needed
+- **Resource Cleanup**: Proper cleanup of file handles and memory
+- **Filesystem Optimization**: Efficient file operations using WordPress filesystem API
 
 ### Scalability Features
-- Modular service architecture allows selective service activation
-- Configurable optimization levels based on performance requirements
-- Extensible framework for adding new optimization strategies
-- Graceful degradation when optimization features are disabled
+- **Modular Design**: Independent services can be scaled separately
+- **Background Task Processing**: Heavy operations offloaded to Action Scheduler
+- **Configurable Limits**: Adjustable processing limits and timeouts
+- **Error Containment**: Failures in one service don't affect others
 
 ## Troubleshooting Guide
 
 ### Common Issues and Solutions
 
-**Cache-related Issues:**
-- Verify cache directory permissions and existence
-- Check filesystem API availability and configuration
-- Monitor cache invalidation triggers and timing
-- Review cache size limits and cleanup procedures
+#### Service Initialization Failures
+- **Symptom**: Services not responding to hooks
+- **Cause**: Filesystem permission issues or missing dependencies
+- **Solution**: Verify WordPress filesystem credentials and plugin dependencies
 
-**Image Optimization Problems:**
-- Validate GD library and Imagick extensions availability
-- Check image format support and conversion limits
-- Monitor background conversion queue status
-- Verify CDN configuration and URL rewriting
+#### Cache Invalidation Problems
+- **Symptom**: Outdated cached content serving
+- **Cause**: Improper cache invalidation triggers
+- **Solution**: Use built-in cache clearing methods or manual cache purging
 
-**Service Coordination Issues:**
-- Review WordPress hook registration order and conflicts
-- Check service initialization sequence and dependencies
-- Monitor background job scheduling and execution
-- Validate configuration option processing and validation
+#### Image Conversion Failures
+- **Symptom**: Images not converting to WebP/AVIF
+- **Cause**: Missing GD/ImageMagick extensions or file permission issues
+- **Solution**: Install required PHP extensions and verify file permissions
 
-**Database Cleanup Failures:**
-- Verify database connection and permissions
-- Check batch processing limits and timeouts
-- Monitor transaction rollback scenarios
-- Review error logging and recovery mechanisms
+#### Database Cleanup Errors
+- **Symptom**: Cleanup operations failing silently
+- **Cause**: Database connection issues or insufficient privileges
+- **Solution**: Check database connectivity and user permissions
+
+### Debug Information Access
+
+The Main class provides comprehensive debug information:
+
+- **Performance Metrics**: Cache size, minified asset counts
+- **Service Status**: Individual service health and activity
+- **Error Logging**: Detailed error messages and stack traces
+- **Configuration Validation**: Current settings verification
 
 **Section sources**
-- [class-cache.php:647-702](file://includes/class-cache.php#L647-L702)
-- [class-img-converter.php:111-152](file://includes/class-img-converter.php#L111-L152)
-- [class-database-cleanup.php:644-650](file://includes/class-database-cleanup.php#L644-L650)
+- [class-main.php:463-474](file://includes/class-main.php#L463-L474)
+- [class-cache.php:711-726](file://includes/class-cache.php#L711-L726)
 
 ## Conclusion
 
-The Performance Optimisation plugin demonstrates a sophisticated service layer architecture that effectively separates concerns while maintaining tight coordination between optimization services. The Main class serves as a robust orchestrator that manages service lifecycle, dependency injection, and inter-service communication.
+The Performance Optimisation plugin demonstrates a well-architected service layer that effectively separates concerns while maintaining loose coupling between components. The Main class serves as a central coordinator that implements dependency injection, service registration, and inter-service communication patterns.
 
-Key architectural strengths include:
-- Clear separation of concerns with independent service modules
-- Flexible dependency injection and service registration patterns
-- Comprehensive error handling and fallback mechanisms
-- Extensible framework supporting additional optimization strategies
-- Performance-conscious design with caching and asynchronous processing
+Key strengths of the architecture include:
 
-The service layer pattern implementation enables easy extension and modification of optimization capabilities while maintaining system stability and performance. The architecture provides a solid foundation for future enhancements and additional optimization features.
+- **Modular Design**: Each service operates independently with clear responsibilities
+- **Flexible Configuration**: Services adapt to different optimization strategies through configuration
+- **Robust Error Handling**: Comprehensive error handling and recovery mechanisms
+- **Performance Optimization**: Built-in caching, batch processing, and asynchronous operations
+- **WordPress Integration**: Seamless integration with WordPress hooks, filters, and APIs
+
+The service layer pattern enables easy extension and modification of optimization strategies. New services can be added following the established patterns, and existing services can be modified or replaced without affecting the overall system architecture. This design provides a solid foundation for continued development and enhancement of the plugin's optimization capabilities.
