@@ -10,7 +10,8 @@
 
 ## 2025-01-20 - Optimizing Autoload Options and Script Enqueuing
 
-**Learning:** Large options stored in `wp_options` (like `wppo_img_info` which tracks thousands of images) can cause severe memory bloat if they are autoloaded on every request. Additionally, enqueuing frontend scripts (like `lazyload.js`) unconditionally can negatively impact page load times for users who aren't actively using the feature.
+**Learning:** Large options stored in `wp_options` (like `wppo_img_info` which tracks thousands of images) can cause severe memory bloat if they are autoloaded on every request. Additionally, calling `update_option()` without passing `false` as the third parameter will fall back to the default `yes` or retain its previous state. Enqueuing frontend scripts (like `lazyload.js`) unconditionally can also negatively impact page load times.
+
 **Action:** When saving large datasets via `update_option()`, always explicitly pass `false` as the third parameter (`$autoload`) unless the data is strictly required on every single page load. When enqueuing scripts/styles, always wrap `wp_enqueue_script` inside conditional checks based on plugin settings.
 
 ## 2025-01-20 - Unconditional Transient Writes
@@ -37,7 +38,3 @@
 **Action:** Always use WordPress Transients to cache expensive file system results, and invalidate these transients within `clear_cache` methods.
 ## 2025-01-20 - Early Return Before Expensive Computations\n\n**Learning:** High-frequency operations like `Util::get_local_path` (which parses URLs) were being computed before short-circuit logic (`is_user_logged_in`, `empty( $href )`) in `minify_css` and `minify_js`. This caused significant performance overhead as they run on every page load.\n**Action:** Always place lightweight conditionals before heavy variable assignments. Avoid executing computationally expensive operations unless strictly necessary.
 
-## 2025-01-22 - Optimizing Autoload Options with Explicit Parameters
-
-**Learning:** Large options stored in `wp_options` (like `wppo_img_info` which tracks thousands of images) can cause severe memory bloat if they are autoloaded on every request. Calling `update_option()` without passing `false` as the third parameter will fall back to the default `yes` or retain its previous state (which could be `yes`).
-**Action:** When saving large datasets via `update_option()`, always explicitly pass `false` as the third parameter (`$autoload`) unless the data is strictly required on every single page load.

@@ -35,6 +35,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		public static function init(): void {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 
 			$notices = array();
 
@@ -65,6 +66,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			}
 
 			self::create_activity_log_table();
+			Img_Converter::migrate_img_info_autoload();
 		}
 
 		/**
