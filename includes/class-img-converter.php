@@ -26,7 +26,7 @@ class Img_Converter {
 	 * Deferred in-memory image info state.
 	 *
 	 * @var array|null
-	 * @since NEXT
+	 * @since 1.5.1
 	 */
 	private static $deferred_img_info = null;
 
@@ -34,7 +34,7 @@ class Img_Converter {
 	 * Flag to check if shutdown hook is registered.
 	 *
 	 * @var bool
-	 * @since NEXT
+	 * @since 1.5.1
 	 */
 	private static $img_info_shutdown_registered = false;
 
@@ -42,7 +42,7 @@ class Img_Converter {
 	 * Flag to check if image info has already been persisted in this request.
 	 *
 	 * @var bool
-	 * @since NEXT
+	 * @since 1.5.1
 	 */
 	private static $img_info_persisted = false;
 
@@ -781,7 +781,7 @@ class Img_Converter {
 	 * Should be called during plugin activation or upgrade to ensure large
 	 * image metadata doesn't bloat the 'alloptions' cache.
 	 *
-	 * @since NEXT
+	 * @since 1.5.1
 	 * @return void
 	 */
 	public static function migrate_img_info_autoload(): void {

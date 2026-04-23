@@ -128,12 +128,14 @@ This plugin leverages modern development practices, utilizing Composer for PHP d
   "authors": [
     {
       "name": "nilesh",
-      "email": "nilesh.kanzariya912@gmail.com"
+      "email": "nilesh.kanzariya912@gmail.com",
+      "homepage": "https://github.com/nilesh32236"
     }
   ],
   "require": {
     "voku/html-min": "^4.5",
-    "matthiasmullie/minify": "^1.3"
+    "matthiasmullie/minify": "^1.3",
+    "woocommerce/action-scheduler": "^3.8"
   },
   "extra": {
     "cleanup": {
@@ -151,7 +153,7 @@ Current version and scripts are defined in the repo; for example:
 ```json
 {
   "name": "performance-optimisation",
-  "version": "1.3.0",
+  "version": "1.5.1",
   "scripts": {
     "build": "wp-scripts build",
     "start": "wp-scripts start"
@@ -191,5 +193,5 @@ I am a Web Developer specializing in custom WordPress solutions, high-performanc
 <br>
 
 <div align="center">
-<sub>Created by Nilesh Kanzariya for Qrolic Technology. Built with a passion for high-performance web solutions.</sub>
+<sub>Created by Nilesh Kanzariya. Built with a passion for high-performance web solutions.</sub>
 </div>

@@ -43,7 +43,7 @@ const LoadingSubmitButton = ( {
 				/>
 			) }
 			<span role="status" aria-live="polite">
-				{ isLoading ? ( loadingLabel || children ) : ( label || children ) }
+				{ isLoading ? loadingLabel || children : label || children }
 			</span>
 		</button>
 	);

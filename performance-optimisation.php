@@ -4,9 +4,9 @@
  * Description:       A Performance Optimisation plugin for WordPress.
  * Requires at least: 6.2
  * Requires PHP:      7.4
- * Version:           1.5.0
- * Author:            Nilesh kanzariya & Qrolic Technology
- * Author URI:        https://www.qrolic.com/
+ * Version:           1.5.1
+ * Author:            Nilesh kanzariya
+ * Author URI:        https://github.com/nilesh32236
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       performance-optimisation
@@ -34,7 +34,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 }
 
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.5.0' );
+	define( 'WPPO_VERSION', '1.5.1' );
 }
 
 // Include the main class file.

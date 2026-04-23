@@ -30,7 +30,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Default maximum width for preloading images.
 		 *
-		 * @since NEXT
+		 * @since 1.5.1
 		 */
 		private const MAX_PRELOAD_WIDTH = 1478;
 
@@ -399,7 +399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Retrieves all preloading data from front-page, post meta, and post types.
 		 *
-		 * @since NEXT
+		 * @since 1.5.1
 		 * @return array List of preload data items.
 		 */
 		private function get_all_preload_data(): array {
@@ -415,7 +415,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Retrieves front page preload data if enabled.
 		 *
-		 * @since NEXT
+		 * @since 1.5.1
 		 * @param array $image_optimisation Image optimization configuration.
 		 * @return array List of preload items for the front page.
 		 */
@@ -431,7 +431,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Retrieves preload data from post meta.
 		 *
-		 * @since NEXT
+		 * @since 1.5.1
 		 * @return array List of preload items from meta.
 		 */
 		private function get_meta_preload_data(): array {
@@ -448,7 +448,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Retrieves preload data for specific post types.
 		 *
-		 * @since NEXT
+		 * @since 1.5.1
 		 * @param array $image_optimisation Image optimization configuration.
 		 * @return array List of preload items for the post type.
 		 */
@@ -518,7 +518,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Robustly parses candidate URLs from a srcset string.
 		 *
-		 * @since NEXT
+		 * @since 1.5.1
 		 * @param string $srcset             The srcset string from the image tag.
 		 * @param array  $image_optimisation Image optimization configuration array.
 		 * @return array Array of parsed sources: array( 'url' => string, 'width' => int ).
@@ -555,7 +555,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Retrieves preload data items from an image's srcset.
 		 *
-		 * @since NEXT
+		 * @since 1.5.1
 		 * @param string $srcset             The srcset string from the image tag.
 		 * @param string $default_image      The fallback image URL.
 		 * @param array  $image_optimisation Image optimization configuration array.
@@ -584,7 +584,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$media .= " and (max-width: {$current_width}px)";
 				}
 
-				$items[] = array(
+				$items[]        = array(
 					'url'      => $source['url'],
 					'media'    => $media,
 					'priority' => 'high',
@@ -598,7 +598,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Prepares a URL for preloading, handling specific prefixes and resolving relative paths.
 		 *
-		 * @since NEXT
+		 * @since 1.5.1
 		 * @param string $img_url The original URL to prepare.
 		 * @return array Structured preload item.
 		 */
@@ -618,10 +618,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$img_url = content_url( $img_url );
 				}
 				$media = '(min-width: 768px)';
-			} else {
-				if ( 0 !== strpos( $img_url, 'http' ) ) {
+			} elseif ( 0 !== strpos( $img_url, 'http' ) ) {
 					$img_url = content_url( $img_url );
-				}
 			}
 
 			return array(

@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.5.0
+Stable tag: 1.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -90,16 +90,14 @@ Composer configuration:
 	"authors": [
 		{
 			"name": "nilesh",
-			"email": "nilesh.kanzariya912@gmail.com"
-		},
-		{
-			"name": "Qrolic Technology",
-			"email": "info@qrolic.com"
+			"email": "nilesh.kanzariya912@gmail.com",
+			"homepage": "https://github.com/nilesh32236"
 		}
 	],
 	"require": {
 		"voku/html-min": "^4.5",
-		"matthiasmullie/minify": "^1.3"
+		"matthiasmullie/minify": "^1.3",
+		"woocommerce/action-scheduler": "^3.8"
 	},
 	"extra": {
 		"cleanup": {
@@ -121,6 +119,11 @@ Composer configuration:
 7. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
 
 == Changelog ==
+
+= 1.5.1 (2026-04-23) =
+* Improvement: Optimized `wppo_img_info` database option by disabling autoloading, significantly reducing memory usage on frontend page loads.
+* Improvement: Implemented atomic write protection for image metadata to prevent redundant database operations during request shutdown.
+* Fix: Consolidated performance guidelines in `bolt.md` to ensure consistent development patterns.
 
 = 1.5.0 (2026-04-20) =
 * New: Performance Monitor — High-precision local telemetry engine using raw cURL for granular network diagnostics (DNS, Connect, SSL, TTFB).

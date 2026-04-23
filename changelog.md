@@ -2,6 +2,14 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.5.1] - 2026-04-23
+
+### Changed
+
+- **Optimized Autoloading:** Disabled autoloading for the `wppo_img_info` database option to reduce memory footprint on frontend requests.
+- **Persistence Hardening:** Implemented a short-circuit flag in `Img_Converter` to prevent redundant database writes during the request shutdown.
+- **Documentation Consolidation:** Merged duplicate optimization guidelines in `.jules/bolt.md` into a single canonical entry.
+
 ## [1.5.0] - 2026-04-20
 
 ### Added

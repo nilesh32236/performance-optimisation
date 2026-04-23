@@ -5,12 +5,8 @@
     "authors": [
         {
             "name": "nilesh",
-            "email": "nilesh.kanzariya912@gmail.com"
-        },
-        {
-            "name": "Qrolic Technology",
-            "email": "info@qrolic.com",
-            "homepage": "https://www.qrolic.com/"
+            "email": "nilesh.kanzariya912@gmail.com",
+            "homepage": "https://github.com/nilesh32236"
         }
     ],
     "require": {

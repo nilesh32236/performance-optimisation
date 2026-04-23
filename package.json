@@ -1,6 +1,6 @@
 {
 	"name": "performance-optimisation",
-	"version": "1.5.0",
+	"version": "1.5.1",
 	"description": "Performance optimisation plugin for WordPress",
 	"main": "./src/index.js",
 	"scripts": {
@@ -11,7 +11,7 @@
 		"lint:js": "wp-scripts lint-js src",
 		"lint:js:fix": "wp-scripts lint-js src --fix"
 	},
-	"author": "Nilesh Kanzariya & Qrolic Technology <nilesh.kanzariya912@gmail.com>",
+	"author": "Nilesh Kanzariya <nilesh.kanzariya912@gmail.com>",
 	"license": "GPL-2.0-or-later",
 	"devDependencies": {
 		"@testing-library/jest-dom": "^6.9.1",
