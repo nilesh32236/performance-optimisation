@@ -681,7 +681,7 @@ class Img_Converter {
 	 */
 	public static function set_img_info( array $img_info ): void {
 		self::$deferred_img_info = $img_info;
-		update_option( 'wppo_img_info', $img_info );
+		update_option( 'wppo_img_info', $img_info, false );
 	}
 
 	/**
@@ -696,7 +696,7 @@ class Img_Converter {
 				$img_info['completed']['avif'] = array();
 				// Write cleared completed to the DB immediately so that
 				// commit_img_info()'s live re-read cannot merge old entries back in.
-				update_option( 'wppo_img_info', $img_info );
+				update_option( 'wppo_img_info', $img_info, false );
 				return $img_info;
 			}
 		);
@@ -755,7 +755,7 @@ class Img_Converter {
 				}
 			}
 
-			update_option( 'wppo_img_info', self::$deferred_img_info );
+			update_option( 'wppo_img_info', self::$deferred_img_info, false );
 		}
 	}
 }
