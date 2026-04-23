@@ -1,5 +1,5 @@
 === Performance Optimisation ===
-Contributors: nilesh912, qrolic
+Contributors: nilesh912
 Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
