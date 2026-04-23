@@ -223,26 +223,24 @@ const PluginSetting = ( { options } ) => {
 						) : null
 					}
 				>
-					{ ! logLoaded && ! logLoading && (
+					{ ! logLoaded && (
 						<div className="wppo-log-trigger">
 							<p className="wppo-text-muted">
 								A full timestamped record of every cache clear,
 								image optimization, database cleanup, and
 								settings change performed by the plugin.
 							</p>
-							<button
+							<LoadingSubmitButton
 								type="button"
 								className="wppo-button wppo-button--secondary"
 								onClick={ () => loadActivityLog( 1 ) }
+								isLoading={ logLoading }
+								loadingLabel="Loading log…"
 							>
 								<FontAwesomeIcon icon={ faHistory } />
 								Load Activity Log
-							</button>
+							</LoadingSubmitButton>
 						</div>
-					) }
-
-					{ logLoading && (
-						<p className="wppo-text-muted">Loading log…</p>
 					) }
 
 					{ logError && (
