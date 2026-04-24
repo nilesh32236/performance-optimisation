@@ -105,7 +105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
 
 			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-			$url_path    = wp_normalize_path( trim( wp_parse_url( $request_uri, PHP_URL_PATH ), '/' ) );
+			$url_path    = wp_normalize_path( trim( urldecode( (string) wp_parse_url( $request_uri, PHP_URL_PATH ) ), '/' ) );
 
 			// Reject directory traversal.
 			if ( strpos( $url_path, '..' ) !== false ) {
@@ -410,7 +410,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$parsed_path = wp_parse_url( $request_uri, PHP_URL_PATH );
-			$url_path    = trim( (string) $parsed_path, '/' );
+			$url_path    = trim( urldecode( (string) $parsed_path ), '/' );
 
 			if ( strpos( $url_path, '..' ) !== false ) {
 				return true;

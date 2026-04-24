@@ -16,3 +16,8 @@
 **Vulnerability:** The previously added path traversal validation in `class-advanced-cache-handler.php` relied on `strpos` directly executing on HTTP header values, leading to TypeErrors if headers were unset or missing. The top-level cache generation guard in `class-cache.php` (`maybe_store_cache`) was not comprehensively checking domain nullification causing CSS cache generation to erroneously bypass the checks.
 **Learning:** Checking inputs isn't enough, we must ensure the variables being checked actually exist and are correctly coerced to expected types before calling string operations like `strpos()`. Early exiting with `exit;` in a plugin can cause unintended side-effects (e.g. fataling out requests) rather than gracefully bypassing the cache handler using `return;`.
 **Prevention:** Guard all string operations using `isset` and explicit casting. Raise validation checks to the highest level possible in the call stack to halt cache artifact generation entirely when detecting invalid inputs.
+
+## 2024-05-20 - [Path Traversal in URL Parsing]
+**Vulnerability:** Path traversal check bypass in caching mechanisms using URL encoding (`%2e%2e` instead of `..`).
+**Learning:** Checking for `..` in a path via `strpos` is insufficient if the path originates from an un-decoded URL parameter like `$_SERVER['REQUEST_URI']`. `wp_parse_url` does not automatically decode the URL string.
+**Prevention:** Always use `urldecode()` on any URI component before checking it for directory traversal sequences or using it to construct file paths.
