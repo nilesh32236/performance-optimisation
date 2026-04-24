@@ -124,16 +124,16 @@ class Object_Cache {
 				$info = $redis->info();
 				if ( $info ) {
 					$status['telemetry'] = array(
-						'redis_version'          => $info['redis_version'] ?? 'Unknown',
-						'uptime_in_seconds'      => (int) ( $info['uptime_in_seconds'] ?? 0 ),
-						'uptime_in_days'         => $info['uptime_in_days'] ?? 0,
-						'connected_clients'      => $info['connected_clients'] ?? 0,
-						'used_memory_human'      => $info['used_memory_human'] ?? '0B',
-						'used_memory_peak_human' => $info['used_memory_peak_human'] ?? '0B',
+						'redis_version'              => $info['redis_version'] ?? 'Unknown',
+						'uptime_in_seconds'          => (int) ( $info['uptime_in_seconds'] ?? 0 ),
+						'uptime_in_days'             => $info['uptime_in_days'] ?? 0,
+						'connected_clients'          => $info['connected_clients'] ?? 0,
+						'used_memory_human'          => $info['used_memory_human'] ?? '0B',
+						'used_memory_peak_human'     => $info['used_memory_peak_human'] ?? '0B',
 						'total_connections_received' => $info['total_connections_received'] ?? 0,
-						'keyspace_hits'          => $info['keyspace_hits'] ?? 0,
-						'keyspace_misses'        => $info['keyspace_misses'] ?? 0,
-						'keys'                   => ( isset( $info['db0'] ) && preg_match( '/keys=([0-9]+)/', $info['db0'], $matches ) ) ? (int) $matches[1] : 0,
+						'keyspace_hits'              => $info['keyspace_hits'] ?? 0,
+						'keyspace_misses'            => $info['keyspace_misses'] ?? 0,
+						'keys'                       => ( isset( $info['db0'] ) && preg_match( '/keys=([0-9]+)/', $info['db0'], $matches ) ) ? (int) $matches[1] : 0,
 					);
 				}
 			}
