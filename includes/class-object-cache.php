@@ -96,48 +96,58 @@ class Object_Cache {
 			}
 		}
 
-		if ( ! $status['redis_missing'] ) {
-			try {
-				// Determine connection settings (Dashboard settings have priority over on-disk config).
-				$options = get_option( 'wppo_settings', array() );
-				$config  = $options['object_cache'] ?? array();
+		if ( $status['redis_missing'] ) {
+			return $status;
+		}
 
-				if ( empty( $config ) && file_exists( $this->config_path ) ) {
-					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
-				}
+		try {
+			// Determine connection settings (Dashboard settings have priority over on-disk config).
+			$options = get_option( 'wppo_settings', array() );
+			$config  = $options['object_cache'] ?? array();
 
-				$connection = $this->connect_internal( $config );
-
-				if ( ! is_wp_error( $connection ) ) {
-					$status['redis_reachable'] = true;
-					$redis                     = $connection;
-
-					// Collect telemetry if enabled and reachable.
-					if ( $status['enabled'] ) {
-						$info = $redis->info();
-						if ( $info ) {
-							$status['telemetry'] = array(
-								'redis_version'          => $info['redis_version'] ?? 'Unknown',
-								'uptime_in_seconds'      => (int) ( $info['uptime_in_seconds'] ?? 0 ),
-								'uptime_in_days'         => $info['uptime_in_days'] ?? 0,
-								'connected_clients'      => $info['connected_clients'] ?? 0,
-								'used_memory_human'      => $info['used_memory_human'] ?? '0B',
-								'used_memory_peak_human' => $info['used_memory_peak_human'] ?? '0B',
-								'total_connections_received' => $info['total_connections_received'] ?? 0,
-								'keyspace_hits'          => $info['keyspace_hits'] ?? 0,
-								'keyspace_misses'        => $info['keyspace_misses'] ?? 0,
-								'keys'                   => ( isset( $info['db0'] ) && preg_match( '/keys=([0-9]+)/', $info['db0'], $matches ) ) ? (int) $matches[1] : 0,
-							);
-						}
-					}
-					$redis->close();
-				} else {
-					$status['telemetry_error'] = $connection->get_error_message();
-				}
-			} catch ( \Exception $e ) {
-				$status['redis_reachable'] = false;
-				$status['telemetry_error'] = $e->getMessage();
+			if ( empty( $config ) && file_exists( $this->config_path ) ) {
+				$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
 			}
+
+			$connection = $this->connect_internal( $config );
+
+			if ( is_wp_error( $connection ) ) {
+				$status['telemetry_error'] = $connection->get_error_message();
+				return $status;
+			}
+
+			$status['redis_reachable'] = true;
+			$redis                     = $connection;
+
+			try {
+				// Collect telemetry if enabled and reachable.
+				if ( $status['enabled'] ) {
+					$info = $redis->info();
+					if ( $info ) {
+						$status['telemetry'] = array(
+							'redis_version'              => $info['redis_version'] ?? 'Unknown',
+							'uptime_in_seconds'          => (int) ( $info['uptime_in_seconds'] ?? 0 ),
+							'uptime_in_days'             => $info['uptime_in_days'] ?? 0,
+							'connected_clients'          => $info['connected_clients'] ?? 0,
+							'used_memory_human'          => $info['used_memory_human'] ?? '0B',
+							'used_memory_peak_human'     => $info['used_memory_peak_human'] ?? '0B',
+							'total_connections_received' => $info['total_connections_received'] ?? 0,
+							'keyspace_hits'              => $info['keyspace_hits'] ?? 0,
+							'keyspace_misses'            => $info['keyspace_misses'] ?? 0,
+							'keys'                       => ( isset( $info['db0'] ) && preg_match( '/keys=([0-9]+)/', $info['db0'], $matches ) ) ? (int) $matches[1] : 0,
+						);
+					}
+				}
+			} catch ( \Exception $te ) {
+				$status['telemetry_error'] = $te->getMessage();
+			} finally {
+				if ( method_exists( $redis, 'close' ) ) {
+					$redis->close();
+				}
+			}
+		} catch ( \Exception $e ) {
+			$status['redis_reachable'] = false;
+			$status['telemetry_error'] = $e->getMessage();
 		}
 
 		return $status;
@@ -164,7 +174,7 @@ class Object_Cache {
 	 */
 	public function ping( $config = array() ) {
 		if ( ! class_exists( 'Redis' ) ) {
-			return new \WP_Error( 'missing_extension', 'The PhpRedis extension is not installed.' );
+			return new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
 		}
 
 		$connection = $this->connect_internal( $config );
@@ -181,7 +191,7 @@ class Object_Cache {
 				if ( true === $result || '+PONG' === $result || ( is_string( $result ) && stripos( $result, 'PONG' ) !== false ) ) {
 					return true;
 				}
-				return new \WP_Error( 'ping_fail', 'Ping returned false' );
+				return new \WP_Error( 'ping_fail', __( 'Ping returned false', 'performance-optimisation' ) );
 			} catch ( \Exception $e ) {
 				if ( method_exists( $connection, 'close' ) ) {
 					$connection->close();
@@ -191,7 +201,7 @@ class Object_Cache {
 		}
 
 		$connection->close();
-		return new \WP_Error( 'no_ping_method', 'Connection does not support ping' );
+		return new \WP_Error( 'no_ping_method', __( 'Connection does not support ping', 'performance-optimisation' ) );
 	}
 
 
@@ -207,12 +217,12 @@ class Object_Cache {
 	 */
 	public function enable( $config ) {
 		if ( ! class_exists( 'Redis' ) ) {
-			return new \WP_Error( 'missing_extension', 'The PhpRedis extension is not installed.' );
+			return new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
 		}
 
 		$status = $this->get_status();
 		if ( $status['foreign_dropin'] ) {
-			return new \WP_Error( 'foreign_dropin', 'Another Object Cache drop-in is already present. Please disable it before enabling this one.' );
+			return new \WP_Error( 'foreign_dropin', __( 'Another Object Cache drop-in is already present. Please disable it before enabling this one.', 'performance-optimisation' ) );
 		}
 
 		// Format nodes as array for the config file if it's a string.
@@ -231,13 +241,13 @@ class Object_Cache {
 		$wp_filesystem = Util::init_filesystem();
 
 		if ( ! $wp_filesystem->put_contents( $this->config_path, $config_content, FS_CHMOD_FILE ) ) {
-			return new \WP_Error( 'write_error', 'Cannot write configuration file to wp-content.' );
+			return new \WP_Error( 'write_error', __( 'Cannot write configuration file to wp-content.', 'performance-optimisation' ) );
 		}
 
 		// Copy drop-in.
 		if ( ! $wp_filesystem->copy( $this->template_path, $this->dropin_path, true, FS_CHMOD_FILE ) ) {
 			$wp_filesystem->delete( $this->config_path );
-			return new \WP_Error( 'write_error', 'Cannot copy object-cache.php drop-in to wp-content.' );
+			return new \WP_Error( 'write_error', __( 'Cannot copy object-cache.php drop-in to wp-content.', 'performance-optimisation' ) );
 		}
 
 		// Optionally, ping cache flush if enabled just to clear old cruft.
@@ -256,14 +266,14 @@ class Object_Cache {
 	public function disable() {
 		$status = $this->get_status();
 		if ( $status['foreign_dropin'] ) {
-			return new \WP_Error( 'foreign_dropin', 'A foreign drop-in exists. We will not delete it for safety.' );
+			return new \WP_Error( 'foreign_dropin', __( 'A foreign drop-in exists. We will not delete it for safety.', 'performance-optimisation' ) );
 		}
 
 		$wp_filesystem = Util::init_filesystem();
 
 		if ( file_exists( $this->dropin_path ) ) {
 			if ( ! $wp_filesystem->delete( $this->dropin_path ) ) {
-				return new \WP_Error( 'delete_error', 'Cannot delete object-cache.php from wp-content.' );
+				return new \WP_Error( 'delete_error', __( 'Cannot delete object-cache.php from wp-content.', 'performance-optimisation' ) );
 			}
 		}
 
