@@ -431,8 +431,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function import_settings( \WP_REST_Request $request ) {
 			$data = $request->get_json_params();
 
-			if ( ! is_array( $data ) || ! isset( $data['action'] ) || 'import_settings' !== $data['action'] || empty( $data['settings'] ) || ! is_array( $data['settings'] ) ) {
-				return $this->send_response( null, false, 400, __( 'Invalid action or missing settings', 'performance-optimisation' ) );
+			if ( ! is_array( $data ) ) {
+				return $this->send_response( null, false, 400, __( 'Invalid payload.', 'performance-optimisation' ) );
+			}
+
+			if ( ! isset( $data['action'] ) || 'import_settings' !== $data['action'] ) {
+				return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
+			}
+
+			if ( empty( $data['settings'] ) || ! is_array( $data['settings'] ) ) {
+				return $this->send_response( null, false, 400, __( 'Settings are missing or invalid.', 'performance-optimisation' ) );
 			}
 
 			// Sanitize settings before saving.
