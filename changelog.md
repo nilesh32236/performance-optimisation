@@ -2,6 +2,13 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.6.1] - 2026-04-26
+
+### Changed
+
+- **PHP 8.2 Requirement:** Bumped minimum PHP requirement to 8.2 to ensure compatibility with modern Composer libraries and high-performance environments.
+- **Deployment Updates:** Updated CI/CD and deployment configurations to support PHP 8.2.
+
 ## [1.6.0] - 2026-04-26
 
 ### Added

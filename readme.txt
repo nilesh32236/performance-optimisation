@@ -2,9 +2,9 @@
 Contributors: nilesh912
 Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
-Requires PHP: 7.4
+Requires PHP: 8.2
 Tested up to: 6.9
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -119,6 +119,10 @@ Composer configuration:
 7. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
 
 == Changelog ==
+
+= 1.6.1 (2026-04-26) =
+* Improvement: Updated minimum PHP requirement to 8.2 for enhanced library compatibility and performance.
+* Maintenance: Updated deployment configuration to support PHP 8.2 environments.
 
 = 1.6.0 (2026-04-26) =
 * New: Google PageSpeed Insights integration — audit Mobile/Desktop performance from your dashboard.
@@ -256,6 +260,9 @@ Yes, lazy loading can be enabled in the Image Optimisation Settings tab. You can
 Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.6.1 (2026-04-26) =
+Bumps minimum PHP requirement to 8.2 to ensure compatibility with modern composer libraries and high-performance server environments.
 
 = 1.6.0 (2026-04-26) =
 Major feature release bringing official Google PageSpeed Insights integration to the WordPress dashboard. Introduces Nginx configuration support, automatic wp-config.php self-healing, and enhanced telemetry with modern compression support (Zstd).

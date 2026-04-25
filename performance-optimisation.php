@@ -3,8 +3,8 @@
  * Plugin Name:       Performance Optimisation
  * Description:       A Performance Optimisation plugin for WordPress.
  * Requires at least: 6.2
- * Requires PHP:      7.4
- * Version:           1.6.0
+ * Requires PHP:      8.2
+ * Version:           1.6.1
  * Author:            Nilesh kanzariya
  * Author URI:        https://github.com/nilesh32236
  * License:           GPL-2.0-or-later
@@ -34,7 +34,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 }
 
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.6.0' );
+	define( 'WPPO_VERSION', '1.6.1' );
 }
 
 // Include the main class file.
