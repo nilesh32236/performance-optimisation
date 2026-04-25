@@ -52,3 +52,61 @@ export const runPerformanceScan = ( url, force = false ) => {
 export const fetchSystemInfo = () => {
 	return apiCall( 'system_info', {}, 'GET' );
 };
+
+/**
+ * Queue a Google PageSpeed Insights scan as a background job.
+ *
+ * @since 1.6.0
+ * @param {string} url      The URL to scan.
+ * @param {string} strategy 'mobile' or 'desktop'.
+ * @return {Promise<Object>} Resolved response with job_id.
+ */
+export const queuePagespeedScan = ( url, strategy = 'mobile' ) => {
+	return apiCall( 'pagespeed_scan', { url, strategy } );
+};
+
+/**
+ * Retrieve cached PageSpeed Insights results for a URL and strategy.
+ *
+ * Returns { status: 'not_ready' } with HTTP 202 if the background job
+ * has not yet completed.
+ *
+ * @since 1.6.0
+ * @param {string} url      The scanned URL.
+ * @param {string} strategy 'mobile' or 'desktop'.
+ * @return {Promise<Object>} Resolved result data or not_ready status.
+ */
+export const getPagespeedResults = ( url, strategy = 'mobile' ) => {
+	return apiCall(
+		`pagespeed_results?url=${ encodeURIComponent(
+			url
+		) }&strategy=${ encodeURIComponent( strategy ) }`,
+		{},
+		'GET'
+	);
+};
+
+/**
+ * Retrieve Suggestion_Engine output for a cached telemetry scan.
+ *
+ * @since 1.6.0
+ * @param {string} url The scanned URL.
+ * @return {Promise<Object>} Resolved suggestions array.
+ */
+export const fetchSuggestions = ( url ) => {
+	return apiCall(
+		`suggestions?url=${ encodeURIComponent( url ) }`,
+		{},
+		'GET'
+	);
+};
+
+/**
+ * Retrieve server-level performance rules (Apache/Nginx).
+ *
+ * @since 1.6.0
+ * @return {Promise<Object>} Resolved server rules data.
+ */
+export const fetchServerRules = () => {
+	return apiCall( 'server_rules', {}, 'GET' );
+};

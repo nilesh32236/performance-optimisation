@@ -1,4 +1,4 @@
-import { useState } from '@wordpress/element';
+import { useState, useEffect } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -10,13 +10,14 @@ import {
 	faShieldAlt,
 	faExclamationTriangle,
 	faCheckCircle,
+	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 
-const FileOptimization = ( { options = {} } ) => {
+const FileOptimization = ( { options = {}, serverRules = null } ) => {
 	const [ activeSubTab, setActiveSubTab ] = useState( 'assets' );
 
 	const defaultSettings = {
@@ -51,6 +52,19 @@ const FileOptimization = ( { options = {} } ) => {
 		message: '',
 		success: false,
 	} );
+
+	useEffect( () => {
+		if (
+			serverRules &&
+			serverRules.server_type !== 'apache' &&
+			settings.enableServerRules
+		) {
+			setSettings( ( prev ) => ( {
+				...prev,
+				enableServerRules: false,
+			} ) );
+		}
+	}, [ serverRules, settings.enableServerRules, setSettings ] );
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
@@ -477,23 +491,108 @@ const FileOptimization = ( { options = {} } ) => {
 							icon={ <FontAwesomeIcon icon={ faServer } /> }
 						>
 							<div className="wppo-field-group">
-								<SwitchField
-									label="Enable Server Rules (.htaccess)"
-									description="Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
-									name="enableServerRules"
-									checked={ settings.enableServerRules }
-									onChange={ handleChange( setSettings ) }
-								/>
-								{ settings.enableServerRules && (
-									<div className="wppo-notice wppo-notice--warning">
+								{ serverRules === null ? (
+									<div className="wppo-loading-placeholder">
 										<FontAwesomeIcon
-											icon={ faExclamationTriangle }
+											icon={ faSpinner }
+											spin
 										/>
 										<span>
-											This modifies your .htaccess. Ensure
-											you have FTP access for recovery.
+											Loading server configuration...
 										</span>
 									</div>
+								) : (
+									<>
+										<SwitchField
+											label="Enable Server Rules (.htaccess)"
+											description="Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
+											name="enableServerRules"
+											checked={
+												serverRules?.server_type ===
+													'apache' &&
+												settings.enableServerRules
+											}
+											disabled={
+												serverRules?.server_type !==
+												'apache'
+											}
+											onChange={ handleChange(
+												setSettings
+											) }
+										/>
+
+										{ serverRules?.server_type ===
+											'apache' &&
+											settings.enableServerRules && (
+												<div className="wppo-notice wppo-notice--warning">
+													<FontAwesomeIcon
+														icon={
+															faExclamationTriangle
+														}
+													/>
+													<span>
+														This modifies your
+														.htaccess. Ensure you
+														have FTP access for
+														recovery.
+													</span>
+												</div>
+											) }
+
+										{ serverRules?.server_type ===
+											'nginx' && (
+											<div className="wppo-nginx-rules wppo-mt-20">
+												<div className="wppo-notice wppo-notice--info wppo-mb-16">
+													<FontAwesomeIcon
+														icon={ faServer }
+													/>
+													<span>
+														<strong>
+															Nginx Detected:
+														</strong>{ ' ' }
+														Server rules cannot be
+														applied automatically on
+														Nginx. Please copy the
+														rules below into your
+														server configuration.
+													</span>
+												</div>
+												<div className="wppo-field-label">
+													Nginx Configuration
+												</div>
+												<pre className="wppo-code-block">
+													<code>
+														{ serverRules.nginx }
+													</code>
+												</pre>
+												<p className="wppo-text-muted wppo-mt-12 wppo-text-13">
+													Add these rules inside your{ ' ' }
+													<code>
+														server { '{' } ...{ ' ' }
+														{ '}' }
+													</code>{ ' ' }
+													block, then restart Nginx.
+												</p>
+											</div>
+										) }
+
+										{ serverRules?.server_type ===
+											'other' && (
+											<div className="wppo-notice wppo-notice--warning wppo-mt-20">
+												<FontAwesomeIcon
+													icon={
+														faExclamationTriangle
+													}
+												/>
+												<span>
+													Unrecognised server
+													software. Automatic rules
+													are only available for
+													Apache (.htaccess).
+												</span>
+											</div>
+										) }
+									</>
 								) }
 							</div>
 						</FeatureCard>

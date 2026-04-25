@@ -17,7 +17,7 @@ import {
 	faChartBar,
 	faLightbulb,
 } from '@fortawesome/free-solid-svg-icons';
-import { runPerformanceScan } from '../lib/apiRequest';
+import { runPerformanceScan, fetchSuggestions } from '../lib/apiRequest';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
 import Tooltip from './common/Tooltip';
@@ -211,7 +211,7 @@ const MetricOverview = ( { result } ) => (
 	</div>
 );
 
-const PerformanceAudit = () => {
+const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 	const homeUrl =
 		typeof wppoSettings !== 'undefined'
 			? wppoSettings.performance_audit?.homeUrl ?? ''
@@ -239,6 +239,32 @@ const PerformanceAudit = () => {
 			const response = await runPerformanceScan( url, force );
 			if ( response.success && response.data ) {
 				setResult( response.data );
+
+				// Phase 2 — notify parent of the scanned URL so PageSpeedPanel
+				// can use the same URL without the user having to re-enter it.
+				if ( onUrlChange ) {
+					onUrlChange( url );
+				}
+
+				// Phase 2 — fetch telemetry-based suggestions and pass up to Dashboard.
+				if ( onSuggestionsReady ) {
+					fetchSuggestions( url )
+						.then( ( sugResp ) => {
+							if (
+								sugResp.success &&
+								sugResp.data?.suggestions
+							) {
+								onSuggestionsReady( sugResp.data.suggestions );
+							}
+						} )
+						.catch( ( sugErr ) => {
+							// Non-fatal — suggestions are a bonus, not required.
+							console.warn(
+								'Could not fetch suggestions:',
+								sugErr
+							);
+						} );
+				}
 			} else {
 				setError( response.message || t.scanError );
 			}
@@ -378,8 +404,9 @@ const PerformanceAudit = () => {
 									t.compression || 'Gzip/Brotli Compression'
 								}
 								value={
-									result.gzip_brotli_compression
-										? t.enabled || 'Enabled'
+									result.compression_value &&
+									result.compression_value !== 'none'
+										? result.compression_value
 										: t.disabled || 'Disabled'
 								}
 								status={ boolStatus(
@@ -390,11 +417,10 @@ const PerformanceAudit = () => {
 							<ResultRow
 								label={ t.cacheControl || 'Cache-Control' }
 								value={
-									result.cache_control_headers
-										? t.cacheControlGood ||
-										  'Set for at least 1 week'
-										: t.cacheControlPoor ||
-										  'Not set or shorter duration'
+									result.cache_control_value &&
+									result.cache_control_value !== 'none'
+										? result.cache_control_value
+										: t.missing || 'None'
 								}
 								status={ boolStatus(
 									result.cache_control_headers

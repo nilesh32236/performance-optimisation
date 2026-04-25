@@ -8,6 +8,7 @@ import {
 	faCheckCircle,
 	faExclamationCircle,
 	faHistory,
+	faTachometerAlt,
 } from '@fortawesome/free-solid-svg-icons';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
@@ -24,6 +25,69 @@ const PluginSetting = ( { options } ) => {
 	} );
 	const [ confirmImport, setConfirmImport ] = useState( false );
 	const fileInputRef = useRef( null );
+
+	// Phase 2 — PageSpeed API key state.
+	const [ pagespeedApiKey, setPagespeedApiKey ] = useState(
+		options?.performance_audit?.pagespeed_api_key ?? ''
+	);
+	const [ savingApiKey, setSavingApiKey ] = useState( false );
+	const [ apiKeyNotification, setApiKeyNotification ] = useState( {
+		message: '',
+		success: false,
+	} );
+
+	const saveApiKey = async () => {
+		setSavingApiKey( true );
+		setApiKeyNotification( { message: '', success: false } );
+		try {
+			const currentSettings =
+				wppoSettings?.settings?.performance_audit ?? {};
+			const response = await apiCall( 'update_settings', {
+				tab: 'performance_audit',
+				settings: {
+					...currentSettings,
+					pagespeed_api_key: pagespeedApiKey,
+				},
+			} );
+			if ( response.success ) {
+				// Update the in-memory wppoSettings so pagespeedApiKeyConfigured
+				// reflects the new state without a page reload.
+				if ( wppoSettings.performance_audit ) {
+					wppoSettings.performance_audit.pagespeedApiKeyConfigured =
+						pagespeedApiKey.trim().length > 0;
+				}
+				// Also update the global settings object for future saves.
+				if ( wppoSettings.settings?.performance_audit ) {
+					wppoSettings.settings.performance_audit.pagespeed_api_key =
+						pagespeedApiKey;
+				}
+
+				setApiKeyNotification( {
+					message:
+						translations.pagespeedApiKeySaved || 'API key saved.',
+					success: true,
+				} );
+			} else {
+				setApiKeyNotification( {
+					message:
+						response.message ||
+						translations.pagespeedApiKeySaveFailed ||
+						'Failed to save API key.',
+					success: false,
+				} );
+			}
+		} catch ( err ) {
+			setApiKeyNotification( {
+				message:
+					translations.pagespeedApiKeySaveError ||
+					'Error saving API key.',
+				success: false,
+			} );
+			console.error( 'Save API key error:', err );
+		} finally {
+			setSavingApiKey( false );
+		}
+	};
 
 	// Activity log state
 	const [ logEntries, setLogEntries ] = useState( [] );
@@ -60,7 +124,13 @@ const PluginSetting = ( { options } ) => {
 	};
 
 	const exportSettings = () => {
-		const blob = new Blob( [ JSON.stringify( options, null, 2 ) ], {
+		// Security: redact sensitive API keys from export.
+		const safeOptions = JSON.parse( JSON.stringify( options ) );
+		if ( safeOptions.performance_audit?.pagespeed_api_key ) {
+			safeOptions.performance_audit.pagespeed_api_key = 'REDACTED';
+		}
+
+		const blob = new Blob( [ JSON.stringify( safeOptions, null, 2 ) ], {
 			type: 'application/json',
 		} );
 		const link = document.createElement( 'a' );
@@ -280,6 +350,70 @@ const PluginSetting = ( { options } ) => {
 							) }
 						</>
 					) }
+				</FeatureCard>
+
+				{ /* Phase 2 — PageSpeed API Key (v1.6.0) */ }
+				<FeatureCard
+					title={
+						translations.pagespeedApiKey ||
+						'Google PageSpeed API Key'
+					}
+					icon={ <FontAwesomeIcon icon={ faTachometerAlt } /> }
+				>
+					<p
+						className="wppo-text-muted"
+						style={ { marginBottom: '16px' } }
+					>
+						{ translations.pagespeedApiKeyDesc ||
+							'Required to run PageSpeed Insights scans. Get a free key from Google Cloud Console.' }
+					</p>
+
+					{ apiKeyNotification.message && (
+						<div
+							className={ `wppo-notice wppo-notice--${
+								apiKeyNotification.success ? 'success' : 'error'
+							}` }
+							style={ { marginBottom: '16px' } }
+						>
+							<FontAwesomeIcon
+								icon={
+									apiKeyNotification.success
+										? faCheckCircle
+										: faExclamationCircle
+								}
+								style={ { marginRight: '8px' } }
+							/>
+							{ apiKeyNotification.message }
+						</div>
+					) }
+
+					<div className="wppo-field">
+						<label
+							className="wppo-field-label"
+							htmlFor="pagespeed-api-key"
+						>
+							{ translations.pagespeedApiKey || 'API Key' }
+						</label>
+						<input
+							type="password"
+							id="pagespeed-api-key"
+							className="wppo-input"
+							value={ pagespeedApiKey }
+							onChange={ ( e ) =>
+								setPagespeedApiKey( e.target.value )
+							}
+							placeholder="AIza..."
+							autoComplete="off"
+						/>
+					</div>
+
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--primary wppo-mt-16"
+						onClick={ saveApiKey }
+						isLoading={ savingApiKey }
+						label={ translations.saveSettings || 'Save' }
+						loadingLabel={ translations.saving || 'Saving...' }
+					/>
 				</FeatureCard>
 
 				{ /* Export */ }

@@ -105,6 +105,11 @@ class Main {
 				),
 				'preload_settings'   => array(),
 				'image_optimisation' => array(),
+				'performance_audit'  => array(
+					'pagespeed_api_key' => '',
+					'high_value_urls'   => array(),
+					'auto_fix_enabled'  => false,
+				),
 			)
 		);
 
@@ -127,6 +132,9 @@ class Main {
 	 */
 	private function includes(): void {
 		require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
+		if ( file_exists( WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
+			require_once WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
+		}
 		require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/minify/class-html.php';
@@ -135,19 +143,23 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-metabox.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-rest.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
-		// Phase 1 — Local Diagnostics (v1.5.0).
-		// Load on admin or AJAX — lazy-load for REST requests in the REST handler.
-		if ( is_admin() || wp_doing_ajax() ) {
+		// Phase 1 & 2 — Diagnostics & PageSpeed (v1.5.0-1.6.0).
+		// Load on admin, AJAX, Cron, or REST API requests.
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
 		}
 
 		if ( is_admin() ) {
@@ -166,6 +178,7 @@ class Main {
 	 */
 	private function setup_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'init_menu' ) );
+		add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
@@ -233,6 +246,9 @@ class Main {
 		// Register Action Scheduler callback for background image processing.
 		add_action( 'wppo_convert_image_background', array( $this, 'process_background_image' ), 10, 1 );
 
+		// Phase 2 — Register Action Scheduler callback for background PageSpeed scans.
+		add_action( 'wppo_pagespeed_scan', array( 'PerformanceOptimise\Inc\Pagespeed', 'run_scan' ), 10, 1 );
+
 		// Clear all cache on structural changes that invalidate every cached page.
 		add_action( 'permalink_structure_changed', array( __CLASS__, 'clear_all_cache' ) );
 		add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
@@ -241,6 +257,38 @@ class Main {
 		add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 
 		add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
+	}
+
+	/**
+	 * Automatically try to fix WP_CACHE if it is missing or disabled.
+	 *
+	 * Runs on admin_init.
+	 *
+	 * @return void
+	 */
+	public function maybe_fix_wp_cache(): void {
+		if ( defined( 'WP_CACHE' ) && WP_CACHE ) {
+			return;
+		}
+
+		// Only run this check once per hour to avoid constant I/O.
+		if ( get_transient( 'wppo_wp_cache_fix_checked' ) ) {
+			return;
+		}
+
+		require_once WPPO_PLUGIN_PATH . 'includes/class-activate.php';
+		$notices = Activate::add_wp_cache_constant();
+
+		if ( empty( $notices ) ) {
+			// Success — throttle for 1 hour.
+			set_transient( 'wppo_wp_cache_fix_checked', 1, HOUR_IN_SECONDS );
+		} else {
+			// Failure — merge notice keys into existing transient to notify user immediately.
+			$existing_notices = get_transient( 'wppo_activation_notices' );
+			$existing_notices = is_array( $existing_notices ) ? $existing_notices : array();
+			$new_notices      = array_unique( array_merge( $existing_notices, (array) $notices ) );
+			set_transient( 'wppo_activation_notices', $new_notices, 30 );
+		}
 	}
 
 	/**
@@ -487,9 +535,9 @@ class Main {
 				'total_js_css'      => $total_js_css,
 				'performance_audit' => array(
 					'homeUrl'                   => home_url( '/' ),
-					'pagespeedApiKeyConfigured' => false, // Phase 2 will populate this.
-					'highValueUrls'             => array(), // Phase 3 will populate this.
-					'autoFixEnabled'            => false,  // Phase 4 will populate this.
+					'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
+					'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
+					'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
 				),
 				'translations'      => array(
 					'performanceSettings'      => __( 'Performance Settings', 'performance-optimisation' ),
@@ -778,6 +826,31 @@ class Main {
 					'thirdPartyScripts'        => __( 'Third-Party Scripts', 'performance-optimisation' ),
 					'refresh'                  => __( 'Refresh', 'performance-optimisation' ),
 					'refreshSystemInfo'        => __( 'Refresh System Info', 'performance-optimisation' ),
+
+					// Phase 2 — PageSpeed Integration & Actionable Suggestions (v1.6.0).
+					'pagespeedScan'            => __( 'Run PageSpeed Scan', 'performance-optimisation' ),
+					'pagespeedScanning'        => __( 'Scanning with PageSpeed...', 'performance-optimisation' ),
+					'pagespeedResults'         => __( 'PageSpeed Results', 'performance-optimisation' ),
+					'pagespeedApiKeyMissing'   => __( 'PageSpeed API key is not configured. Add it in Settings.', 'performance-optimisation' ),
+					'pagespeedScoreLabel'      => __( 'Lighthouse Score', 'performance-optimisation' ),
+					'pagespeedMobile'          => __( 'Mobile', 'performance-optimisation' ),
+					'pagespeedDesktop'         => __( 'Desktop', 'performance-optimisation' ),
+					'pagespeedPending'         => __( 'PageSpeed scan is running in the background. Results will appear shortly.', 'performance-optimisation' ),
+					'pagespeedError'           => __( 'PageSpeed scan failed. Please try again.', 'performance-optimisation' ),
+					'suggestions'              => __( 'Suggestions', 'performance-optimisation' ),
+					'suggestionsDesc'          => __( 'Based on your scan results, here are the recommended actions to improve performance.', 'performance-optimisation' ),
+					'fixIt'                    => __( 'Fix It', 'performance-optimisation' ),
+					'noSuggestions'            => __( 'No suggestions — your site looks great!', 'performance-optimisation' ),
+					'suggestionGood'           => __( 'Passing', 'performance-optimisation' ),
+					'serverWaitTime'           => __( 'Server Processing Time', 'performance-optimisation' ),
+					'lcp'                      => __( 'Largest Contentful Paint', 'performance-optimisation' ),
+					'fcp'                      => __( 'First Contentful Paint', 'performance-optimisation' ),
+					'tbt'                      => __( 'Total Blocking Time', 'performance-optimisation' ),
+					'cls'                      => __( 'Cumulative Layout Shift', 'performance-optimisation' ),
+					'speedIndex'               => __( 'Speed Index', 'performance-optimisation' ),
+					'pagespeedApiKey'          => __( 'Google PageSpeed API Key', 'performance-optimisation' ),
+					'pagespeedApiKeyDesc'      => __( 'Required to run PageSpeed Insights scans. Get a free key from Google Cloud Console.', 'performance-optimisation' ),
+					'pagespeedApiKeySaved'     => __( 'API key saved.', 'performance-optimisation' ),
 				),
 
 				// Frontend theme colors for accent syncing.

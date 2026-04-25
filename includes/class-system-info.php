@@ -62,12 +62,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 */
 		public static function get_all(): array {
 			return array(
-				'php'          => self::get_php(),
-				'database'     => self::get_database(),
-				'wordpress'    => self::get_wordpress(),
-				'wp_constants' => self::get_wp_constants(),
-				'server'       => self::get_server(),
-				'cache'        => self::get_cache(),
+				'php'            => self::get_php(),
+				'database'       => self::get_database(),
+				'wordpress'      => self::get_wordpress(),
+				'wp_constants'   => self::get_wp_constants(),
+				'server'         => self::get_server(),
+				'cache'          => self::get_cache(),
+				'infrastructure' => self::get_infrastructure(),
 			);
 		}
 
@@ -226,6 +227,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'active_cache_plugin'  => self::get_active_cache_plugin(),
 				'peak_memory_usage'    => size_format( memory_get_peak_usage( true ) ),
 				'current_memory_usage' => size_format( memory_get_usage() ),
+			);
+		}
+
+		/**
+		 * Get infrastructure environment details.
+		 *
+		 * @since  1.6.0
+		 * @return array {
+		 *     @type array $action_scheduler Action Scheduler status.
+		 *     @type array $pagespeed_api    PageSpeed API status.
+		 * }
+		 */
+		public static function get_infrastructure(): array {
+			$options = get_option( 'wppo_settings', array() );
+			return array(
+				'action_scheduler' => array(
+					'available' => function_exists( 'as_enqueue_async_action' ),
+					'label'     => __( 'Action Scheduler', 'performance-optimisation' ),
+				),
+				'pagespeed_api'    => array(
+					'configured' => ! empty( $options['performance_audit']['pagespeed_api_key'] ),
+					'label'      => __( 'PageSpeed Insights API', 'performance-optimisation' ),
+				),
 			);
 		}
 

@@ -19,7 +19,7 @@ import PluginSettings from './components/PluginSetting';
 import Dashboard from './components/Dashboard';
 import DatabaseCleanup from './components/DatabaseCleanup';
 import ObjectCache from './components/ObjectCache';
-import { fetchRecentActivities } from './lib/apiRequest';
+import { fetchRecentActivities, fetchServerRules } from './lib/apiRequest';
 
 const translations = wppoSettings.translations;
 
@@ -31,6 +31,7 @@ const App = () => {
 	const [ sidebarCollapsed ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
+	const [ serverRules, setServerRules ] = useState( null );
 	const hasFetchedActivities = useRef( false );
 
 	const sidebarItems = useMemo(
@@ -85,6 +86,7 @@ const App = () => {
 			fileOptimization: (
 				<FileOptimization
 					options={ wppoSettings.settings.file_optimisation }
+					serverRules={ serverRules }
 				/>
 			),
 			preload: (
@@ -109,7 +111,7 @@ const App = () => {
 		};
 
 		return components[ activeTab ] || components.dashboard;
-	}, [ activeTab, recentActivities ] );
+	}, [ activeTab, recentActivities, serverRules ] );
 
 	const toggleMobileMenu = () =>
 		setMobileMenuOpen( ( prevState ) => ! prevState );
@@ -150,6 +152,8 @@ const App = () => {
 		}
 	}, [] );
 
+	const hasFetchedRules = useRef( false );
+
 	useEffect( () => {
 		if (
 			( activeTab === 'dashboard' || recentActivities.length === 0 ) &&
@@ -168,10 +172,29 @@ const App = () => {
 			fetchActivities();
 		}
 
+		const fetchRules = async () => {
+			if ( serverRules || hasFetchedRules.current ) {
+				return;
+			}
+			hasFetchedRules.current = true;
+			try {
+				const res = await fetchServerRules();
+				if ( res.success ) {
+					setServerRules( res.data );
+				} else {
+					hasFetchedRules.current = false;
+				}
+			} catch ( err ) {
+				hasFetchedRules.current = false;
+				console.error( 'Failed to fetch server rules', err );
+			}
+		};
+		fetchRules();
+
 		setTransition( true );
 		const timeout = setTimeout( () => setTransition( false ), 400 );
 		return () => clearTimeout( timeout );
-	}, [ activeTab, recentActivities.length ] );
+	}, [ activeTab, recentActivities.length, serverRules ] );
 
 	return (
 		<div className="wppo-container">
@@ -260,7 +283,7 @@ const App = () => {
 					</ul>
 				</nav>
 				<div className="wppo-sidebar-footer">
-					<div className="wppo-sidebar-version">v1.4.0</div>
+					<div className="wppo-sidebar-version">v1.6.0</div>
 				</div>
 			</div>
 

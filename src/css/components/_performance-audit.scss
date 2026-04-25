@@ -706,3 +706,325 @@
 		}
 	}
 }
+
+// =============================================================================
+// Phase 2 — PageSpeed Integration & Suggestions (v1.6.0)
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Suggestions panel
+// -----------------------------------------------------------------------------
+
+.wppo-suggestions-panel {
+	margin-top: 24px;
+	padding: 20px;
+	background: var(--wppo-bg-card-surface);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius);
+
+	&__header {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-bottom: 8px;
+	}
+
+	&__title {
+		font-size: 1rem;
+		font-weight: 700;
+		color: var(--wppo-text-main);
+		margin: 0;
+	}
+
+	&__badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 6px;
+		background: var(--wppo-error);
+		color: #fff;
+		font-size: 0.7rem;
+		font-weight: 700;
+		border-radius: 999px;
+	}
+
+	&__desc {
+		font-size: 0.875rem;
+		color: var(--wppo-text-muted);
+		margin: 0 0 16px;
+	}
+
+	&__list {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	&--empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 8px;
+		padding: 32px;
+		text-align: center;
+		color: var(--wppo-text-muted);
+	}
+
+	&__empty-icon {
+		font-size: 2rem;
+		color: var(--wppo-success);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Individual suggestion card
+// -----------------------------------------------------------------------------
+
+.wppo-suggestion-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 14px 16px;
+	border-radius: var(--wppo-radius-sm);
+	border: 1px solid var(--wppo-border);
+	border-left-width: 4px;
+	background: var(--wppo-bg-app);
+	transition: var(--wppo-transition);
+
+	&:hover {
+		box-shadow: var(--wppo-shadow-sm);
+	}
+
+	&--good {
+		border-left-color: var(--wppo-success);
+		background: var(--wppo-success-bg);
+	}
+
+	&--needs_improvement {
+		border-left-color: var(--wppo-warning);
+		background: var(--wppo-warning-bg);
+	}
+
+	&--poor {
+		border-left-color: var(--wppo-error);
+		background: var(--wppo-error-bg);
+	}
+
+	&__header {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+
+	&__description {
+		flex: 1;
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--wppo-text-main);
+	}
+
+	&__body {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+
+	&__value {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--wppo-text-muted);
+	}
+
+	&__passing {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--wppo-success);
+	}
+}
+
+.wppo-suggestion-icon {
+	font-size: 1rem;
+	flex-shrink: 0;
+
+	&--good    { color: var(--wppo-success); }
+	&--warning { color: var(--wppo-warning); }
+	&--poor    { color: var(--wppo-error); }
+}
+
+// -----------------------------------------------------------------------------
+// PageSpeed panel controls
+// -----------------------------------------------------------------------------
+
+.wppo-pagespeed-controls {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 20px;
+	flex-wrap: wrap;
+}
+
+.wppo-pagespeed-strategy {
+	display: flex;
+	gap: 4px;
+}
+
+.wppo-strategy-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	font-size: 0.85rem;
+	font-weight: 500;
+	color: var(--wppo-text-muted);
+	background: var(--wppo-bg-card-surface);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius-sm);
+	cursor: pointer;
+	transition: var(--wppo-transition);
+
+	&:hover:not(:disabled) {
+		border-color: var(--wppo-primary);
+		color: var(--wppo-primary);
+	}
+
+	&--active {
+		background: var(--wppo-primary-soft);
+		border-color: var(--wppo-primary);
+		color: var(--wppo-primary);
+		font-weight: 600;
+	}
+
+	&:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Lighthouse score gauges
+// -----------------------------------------------------------------------------
+
+.wppo-score-gauges {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+	gap: 16px;
+	margin-bottom: 24px;
+}
+
+.wppo-score-gauge {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+
+	&__circle {
+		width: 72px;
+		height: 72px;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 4px solid var(--wppo-border);
+		font-size: 1.25rem;
+		font-weight: 800;
+		color: var(--wppo-text-main);
+		transition: var(--wppo-transition);
+	}
+
+	&__label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--wppo-text-muted);
+		text-align: center;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	&--good .wppo-score-gauge__circle {
+		border-color: var(--wppo-success);
+		color: var(--wppo-success);
+		background: var(--wppo-success-bg);
+	}
+
+	&--needs_improvement .wppo-score-gauge__circle {
+		border-color: var(--wppo-warning);
+		color: var(--wppo-warning);
+		background: var(--wppo-warning-bg);
+	}
+
+	&--poor .wppo-score-gauge__circle {
+		border-color: var(--wppo-error);
+		color: var(--wppo-error);
+		background: var(--wppo-error-bg);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Core Web Vitals table
+// -----------------------------------------------------------------------------
+
+.wppo-vitals-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.875rem;
+	margin-bottom: 16px;
+
+	thead tr {
+		background: var(--wppo-bg-card-surface);
+		border-bottom: 2px solid var(--wppo-border);
+	}
+
+	thead th {
+		padding: 10px 12px;
+		text-align: left;
+		font-weight: 600;
+		color: var(--wppo-text-muted);
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	&__row {
+		border-bottom: 1px solid var(--wppo-border);
+
+		&:last-child { border-bottom: none; }
+		&:hover { background: var(--wppo-bg-card-surface); }
+	}
+
+	&__label {
+		padding: 10px 12px;
+		color: var(--wppo-text-muted);
+		font-weight: 500;
+		width: 50%;
+	}
+
+	&__value {
+		padding: 10px 12px;
+		color: var(--wppo-text-main);
+		font-weight: 600;
+	}
+
+	&__status {
+		padding: 10px 12px;
+		text-align: right;
+		width: 130px;
+	}
+}
+
+.wppo-pagespeed-meta {
+	font-size: 0.8rem;
+	color: var(--wppo-text-muted);
+	margin: 0;
+}
+
+.wppo-pagespeed-results {
+	margin-top: 20px;
+	padding-top: 20px;
+	border-top: 1px solid var(--wppo-border);
+}
