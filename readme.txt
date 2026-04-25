@@ -121,17 +121,18 @@ Composer configuration:
 == Changelog ==
 
 = 1.6.0 (2026-04-26) =
-* New: PageSpeed Insights Integration — Audit your site performance directly from the WordPress dashboard using the official Google API.
-* New: Nginx Support — Real-time generation of Nginx configuration rules for Gzip and Browser Caching.
-* New: Advanced Telemetry Details — Real-time reporting of specific compression types (zstd, gzip, br) and raw Cache-Control headers.
-* Improvement: Automatic `WP_CACHE` Fix — Automatically detects and repairs `define('WP_CACHE', false)` in `wp-config.php` during activation and hourly maintenance.
-* Improvement: Modernized suggestion engine with high-precision actionable performance tips.
-* Improvement: Enhanced Action Scheduler stability and infrastructure diagnostics.
+* New: Google PageSpeed Insights integration — audit Mobile/Desktop performance from your dashboard.
+* New: Suggestion Engine — actionable performance tips based on real-time site telemetry.
+* New: Nginx Support — dynamic configuration snippets for Gzip and Browser Caching.
+* New: WP_CACHE Self-Healing — automatically repairs wp-config.php constant issues.
+* Improvement: Modernized telemetry with Zstd support and detailed network timing breakdown.
+* Security: Implemented SSRF protection for PageSpeed scans and automated API key redaction.
+* Fix: Standardized Object Cache return contracts for multi-key operations.
 
 = 1.5.1 (2026-04-23) =
-* Improvement: Optimized `wppo_img_info` database option by disabling autoloading, significantly reducing memory usage on frontend page loads.
-* Improvement: Implemented atomic write protection for image metadata to prevent redundant database operations during request shutdown.
-* Fix: Consolidated performance guidelines in `bolt.md` to ensure consistent development patterns.
+* Performance: Optimized wppo_img_info database option to reduce memory overhead.
+* Fix: Implemented atomic write protection for image metadata.
+* Fix: Consolidated build patterns and performance guidelines.
 
 = 1.5.0 (2026-04-20) =
 * New: Performance Monitor — High-precision local telemetry engine using raw cURL for granular network diagnostics (DNS, Connect, SSL, TTFB).

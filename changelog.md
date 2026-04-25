@@ -6,15 +6,28 @@ All notable changes to the Performance Optimisation plugin will be documented in
 
 ### Added
 
-- **PageSpeed Insights Integration:** Audit your site performance directly from the WordPress dashboard using the official Google API.
-- **Nginx Support:** Real-time generation of Nginx configuration rules for Gzip and Browser Caching.
-- **Advanced Telemetry Details:** Real-time reporting of specific compression types (zstd, gzip, br) and raw Cache-Control headers.
+- **Google PageSpeed Insights Integration:** Run Lighthouse audits directly from the dashboard for Mobile and Desktop strategies.
+- **Actionable Optimization Suggestions:** New suggestion engine that correlates PageSpeed results with server telemetry to provide specific fix recommendations.
+- **Nginx Infrastructure Support:** Detailed Nginx configuration snippets for Gzip and Browser Caching, dynamically updated based on plugin settings.
+- **Enterprise Redis Improvements:** Enhanced support for Redis Sentinel and Cluster modes with improved connection reliability.
 
 ### Changed
 
-- **Automatic `WP_CACHE` Fix:** Automatically detects and repairs `define('WP_CACHE', false)` in `wp-config.php` during activation and hourly maintenance.
-- **Enhanced Infrastructure Diagnostics:** Improved status reporting for Action Scheduler and PageSpeed API configuration.
-- **Modernized Suggestion Engine:** High-precision actionable performance tips based on real-time telemetry.
+- **WP_CACHE Self-Healing:** Automatic monitoring and fixing of the `WP_CACHE` constant in `wp-config.php` during activation and hourly maintenance.
+- **Telemetry Breakdown:** Real-time reporting of specific compression types (zstd, gzip, br) and raw Cache-Control headers.
+- **Modernized UI:** Refined React state management with polling cleanups and ref-based fetch guards to prevent memory leaks and duplicate requests.
+
+### Fixed
+
+- **Object Cache Contract:** Fixed `WP_Object_Cache` multi-set/delete return contracts to comply with WordPress core.
+- **LCP Logic:** Corrected Largest Contentful Paint suggestion logic to handle missing or invalid data.
+- **React Hooks:** Resolved various linting violations and dependency issues in dashboard components.
+- **A11y:** Improved form label associations for screen readers in the optimization panels.
+
+### Security
+
+- **SSRF Hardening:** Implemented strict URL and host validation for PageSpeed scans to prevent Server-Side Request Forgery.
+- **API Key Redaction:** Automated redaction of PageSpeed API keys from all debug logs and exported settings.
 
 ## [1.5.1] - 2026-04-23
 
