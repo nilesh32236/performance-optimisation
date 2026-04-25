@@ -1036,6 +1036,28 @@ class Main {
 	}
 
 	/**
+	 * Checks if an asset name (URL or file path) indicates it is already minified.
+	 *
+	 * @since 1.5.1
+	 *
+	 * @param  string $url_or_path The asset URL or local file path.
+	 * @param  string $ext         The asset extension (css or js).
+	 * @return bool True if the asset name indicates it's minified.
+	 */
+	private function is_minified_asset_name( string $url_or_path, string $ext ): bool {
+		if ( empty( $url_or_path ) ) {
+			return false;
+		}
+
+		$path = wp_parse_url( $url_or_path, PHP_URL_PATH );
+		if ( ! is_string( $path ) ) {
+			$path = $url_or_path;
+		}
+
+		return (bool) preg_match( '/(\.min|\.bundle|-min)\.' . preg_quote( $ext, '/' ) . '$/i', $path );
+	}
+
+	/**
 	 * Rewrites CSS link tags to use minified versions if they exist.
 	 *
 	 * @since 1.0.0
@@ -1053,7 +1075,7 @@ class Main {
 		}
 
 		// Early return if the URL already indicates a minified file.
-		if ( preg_match( '/(\.min\.css|\.bundle\.css|\.bundle\.min\.css)(?:$|\?)/i', $href ) ) {
+		if ( $this->is_minified_asset_name( $href, 'css' ) ) {
 			return $tag;
 		}
 
@@ -1094,7 +1116,7 @@ class Main {
 		}
 
 		// Early return if the URL already indicates a minified file.
-		if ( preg_match( '/(\.min\.js|\.bundle\.js|\.bundle\.min\.js)(?:$|\?)/i', $src ) ) {
+		if ( $this->is_minified_asset_name( $src, 'js' ) ) {
 			return $tag;
 		}
 
@@ -1131,9 +1153,7 @@ class Main {
 			return true;
 		}
 
-		$file_name = basename( $file_path );
-
-		if ( preg_match( '/(\.min\.css|\.bundle\.css|\.bundle\.min\.css)$/i', $file_name ) ) {
+		if ( $this->is_minified_asset_name( $file_path, 'css' ) ) {
 			return true;
 		}
 
@@ -1168,9 +1188,7 @@ class Main {
 			return true;
 		}
 
-		$file_name = basename( $file_path );
-
-		if ( preg_match( '/(\.min\.js|\.bundle\.js|\.bundle\.min\.js)$/i', $file_name ) ) {
+		if ( $this->is_minified_asset_name( $file_path, 'js' ) ) {
 			return true;
 		}
 
