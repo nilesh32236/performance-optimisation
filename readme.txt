@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 7.4
 Tested up to: 6.9
-Stable tag: 1.5.1
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -119,6 +119,14 @@ Composer configuration:
 7. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
 
 == Changelog ==
+
+= 1.6.0 (2026-04-26) =
+* New: PageSpeed Insights Integration — Audit your site performance directly from the WordPress dashboard using the official Google API.
+* New: Nginx Support — Real-time generation of Nginx configuration rules for Gzip and Browser Caching.
+* New: Advanced Telemetry Details — Real-time reporting of specific compression types (zstd, gzip, br) and raw Cache-Control headers.
+* Improvement: Automatic `WP_CACHE` Fix — Automatically detects and repairs `define('WP_CACHE', false)` in `wp-config.php` during activation and hourly maintenance.
+* Improvement: Modernized suggestion engine with high-precision actionable performance tips.
+* Improvement: Enhanced Action Scheduler stability and infrastructure diagnostics.
 
 = 1.5.1 (2026-04-23) =
 * Improvement: Optimized `wppo_img_info` database option by disabling autoloading, significantly reducing memory usage on frontend page loads.
@@ -248,6 +256,15 @@ Use the Tools section to export your current settings or import settings from an
 
 == Upgrade Notice ==
 
+= 1.6.0 (2026-04-26) =
+Major feature release bringing official Google PageSpeed Insights integration to the WordPress dashboard. Introduces Nginx configuration support, automatic wp-config.php self-healing, and enhanced telemetry with modern compression support (Zstd).
+
+= 1.5.1 (2026-04-23) =
+Performance and stability release optimizing the `wppo_img_info` database option for reduced memory overhead and implementing atomic write protection for image metadata.
+
+= 1.5.0 (2026-04-20) =
+Introduces the Performance Monitor (high-precision local telemetry engine), System Info Dashboard for real-time environment diagnostics, and a new Developer Mode for granular network timings.
+
 = 1.4.0 (2026-04-18) =
 Major stability and feature release introducing Enterprise Redis Support, batched processing architecture for long-running tasks, and a refined Design System v2.1. Includes critical security hardening and AJAX-based session resilience.
 
@@ -256,6 +273,9 @@ Feature release introducing automated database optimization scheduling, comprehe
 
 = 1.2.3 (2026-04-14) =
 Stability and performance release: Fixed a fatal error during activation/admin notices, implemented lazy loading for cache handlers to reduce overhead, and aligned documentation with official directory limits.
+
+= 1.2.1 (2026-04-14) =
+Stability and security release with wp-config path resolution fixes, asset handle whitelisting, and improved activation logic for WP_CACHE management.
 
 = 1.2.0 (2026-04-13) =
 Major feature release completing the "Cache Core" milestone: .htaccess automation, CDN URL rewriting, and smart cache purging. Includes a full Design System v2.0 with WordPress admin color scheme sync, confirmation dialogs, and polished form controls. Significant security and performance improvements throughout.
@@ -266,11 +286,14 @@ Security release with path traversal fixes, image queue performance improvements
 = 1.1.3 (2026-04-07) =
 Maintenance release to fix vendor file exclusion in build packages.
 
+= 1.1.2 (2026-04-07) =
+Compatibility release ensuring React rendering compatibility with @wordpress/element and sanitized REST API imports.
+
 = 1.1.1 (2026-04-06) =
 Minor release with JS performance optimizations and security hardening.
 
 = 1.1.0 (2026-04-05) =
-Stable v1.1.0 release with security hardening and user interface refinements.
+Feature release introducing Database Cleanup tools, Asset Manager monitoring, and a major UI overhaul of File Optimization settings.
 
 = 1.0.0 (2024-12-18) =
 Initial release with core performance features.

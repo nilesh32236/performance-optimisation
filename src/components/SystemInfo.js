@@ -205,6 +205,23 @@ const SystemInfo = () => {
 						} }
 					/>
 					<InfoTable
+						title="Infrastructure"
+						data={ {
+							action_scheduler: info.infrastructure
+								?.action_scheduler?.available
+								? 'Available'
+								: 'Unavailable',
+							pagespeed_api: info.infrastructure?.pagespeed_api
+								?.configured
+								? 'Configured'
+								: 'Not Configured',
+						} }
+						labels={ {
+							action_scheduler: 'Action Scheduler',
+							pagespeed_api: 'PageSpeed Insights API',
+						} }
+					/>
+					<InfoTable
 						title="WP Constants"
 						data={ info.wp_constants }
 					/>

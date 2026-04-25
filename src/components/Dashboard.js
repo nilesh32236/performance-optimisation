@@ -10,6 +10,8 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import PerformanceAudit from './PerformanceAudit';
+import PageSpeedPanel from './PageSpeedPanel';
+import SuggestionsPanel from './SuggestionsPanel';
 import SystemInfo from './SystemInfo';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
@@ -42,6 +44,29 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		webp: Array.isArray( rawPending.webp ) ? rawPending.webp : [],
 		avif: Array.isArray( rawPending.avif ) ? rawPending.avif : [],
 	} );
+
+	// Phase 2 — suggestions state (populated by telemetry scan + PageSpeed scan).
+	const [ telemetrySuggestions, setTelemetrySuggestions ] = useState( [] );
+	const [ pagespeedSuggestions, setPagespeedSuggestions ] = useState( [] );
+	const [ auditUrl, setAuditUrl ] = useState(
+		wppoSettings.performance_audit?.homeUrl ?? ''
+	);
+
+	// Merge telemetry and PageSpeed suggestions, deduplicating by metric key.
+	const allSuggestions = useMemo( () => {
+		const seen = new Set();
+		const merged = [];
+		for ( const s of [
+			...pagespeedSuggestions,
+			...telemetrySuggestions,
+		] ) {
+			if ( ! seen.has( s.metric ) ) {
+				seen.add( s.metric );
+				merged.push( s );
+			}
+		}
+		return merged;
+	}, [ telemetrySuggestions, pagespeedSuggestions ] );
 
 	// Initialize state
 	const [ state, setState ] = useState( {
@@ -324,7 +349,25 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 			{ /* Phase 1 — Performance Audit & System Info (v1.5.0) */ }
 			<div className="wppo-stacked-cards">
-				<PerformanceAudit />
+				<PerformanceAudit
+					onSuggestionsReady={ setTelemetrySuggestions }
+					onUrlChange={ setAuditUrl }
+				/>
+
+				{ /* Phase 2 — SuggestionsPanel sits directly below PerformanceAudit (v1.6.0) */ }
+				{ allSuggestions.length > 0 && (
+					<SuggestionsPanel
+						suggestions={ allSuggestions }
+						onNavigate={ onNavigate }
+					/>
+				) }
+
+				{ /* Phase 2 — PageSpeed Insights panel (v1.6.0) */ }
+				<PageSpeedPanel
+					url={ auditUrl }
+					onSuggestionsReady={ setPagespeedSuggestions }
+				/>
+
 				<SystemInfo />
 			</div>
 

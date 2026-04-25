@@ -2,6 +2,20 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.6.0] - 2026-04-26
+
+### Added
+
+- **PageSpeed Insights Integration:** Audit your site performance directly from the WordPress dashboard using the official Google API.
+- **Nginx Support:** Real-time generation of Nginx configuration rules for Gzip and Browser Caching.
+- **Advanced Telemetry Details:** Real-time reporting of specific compression types (zstd, gzip, br) and raw Cache-Control headers.
+
+### Changed
+
+- **Automatic `WP_CACHE` Fix:** Automatically detects and repairs `define('WP_CACHE', false)` in `wp-config.php` during activation and hourly maintenance.
+- **Enhanced Infrastructure Diagnostics:** Improved status reporting for Action Scheduler and PageSpeed API configuration.
+- **Modernized Suggestion Engine:** High-precision actionable performance tips based on real-time telemetry.
+
 ## [1.5.1] - 2026-04-23
 
 ### Changed

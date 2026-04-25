@@ -75,15 +75,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @return string|null Notice key for the admin layer, or null if nothing to report.
 		 * @since 1.0.0
 		 */
-		private static function add_wp_cache_constant(): ?string {
+		public static function add_wp_cache_constant(): ?string {
 			global $wp_filesystem;
 
 			if ( defined( 'WP_CACHE' ) && WP_CACHE ) {
 				return null;
-			}
-
-			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
-				return 'wp_cache_disabled';
 			}
 
 			Util::init_filesystem();
@@ -108,18 +104,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				return 'wp_config_read';
 			}
 
-			if ( false !== strpos( $wp_config_content, 'Enables WordPress Cache' ) && false !== strpos( $wp_config_content, 'WP_CACHE' ) ) {
+			// If WP_CACHE is defined as false, try to replace it with true.
+			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
+				$wp_config_content = preg_replace(
+					'/define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\);/i',
+					"define( 'WP_CACHE', true );",
+					$wp_config_content
+				);
+			} elseif ( false !== strpos( $wp_config_content, 'WP_CACHE' ) ) {
+				// Already present but not necessarily true/false as literal (maybe a variable).
+				// If it's already there and we reached here, it means defined( 'WP_CACHE' ) is false or not matching our expectations.
 				return null;
-			}
-
-			$constant_code = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
-
-			$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
-
-			if ( false !== $insert_position ) {
-				$wp_config_content = substr_replace( $wp_config_content, $constant_code, $insert_position, 0 );
 			} else {
-				$wp_config_content .= $constant_code;
+				// Not present at all, add it.
+				$constant_code = "/** Enables WordPress Cache */\nif ( ! defined( 'WP_CACHE' ) ) {\n\tdefine( 'WP_CACHE', true );\n}\n";
+
+				$insert_position = strpos( $wp_config_content, "/* That's all, stop editing!" );
+
+				if ( false !== $insert_position ) {
+					$wp_config_content = substr_replace( $wp_config_content, $constant_code, $insert_position, 0 );
+				} else {
+					$wp_config_content .= $constant_code;
+				}
 			}
 
 			$ok = $wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
