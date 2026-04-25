@@ -30,6 +30,7 @@ Whether aiming for a perfect PageSpeed score or a seamless user experience, this
 - **Actionable Optimization Suggestions:** Get specific recommendations based on real-world site telemetry.
 - **Nginx Infrastructure Support:** View dynamic Nginx configuration rules tailored to your plugin settings.
 - **WP_CACHE Self-Healing:** Automatic monitoring and fixing of the `WP_CACHE` constant for reliable caching.
+- **PHP 8.2 Requirement:** Now optimized for high-performance modern server environments.
 
 ---
 
@@ -162,7 +163,7 @@ Current version and scripts are defined in the repo; for example:
 ```json
 {
   "name": "performance-optimisation",
-  "version": "1.6.1",
+  "version": "1.6.0",
   "scripts": {
     "build": "wp-scripts build",
     "start": "wp-scripts start"

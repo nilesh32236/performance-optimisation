@@ -2,13 +2,6 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
-## [1.6.1] - 2026-04-26
-
-### Changed
-
-- **PHP 8.2 Requirement:** Bumped minimum PHP requirement to 8.2 to ensure compatibility with modern Composer libraries and high-performance environments.
-- **Deployment Updates:** Updated CI/CD and deployment configurations to support PHP 8.2.
-
 ## [1.6.0] - 2026-04-26
 
 ### Added
@@ -20,6 +13,7 @@ All notable changes to the Performance Optimisation plugin will be documented in
 
 ### Changed
 
+- **PHP 8.2 Requirement:** Bumped minimum PHP requirement to 8.2 to ensure compatibility with modern Composer libraries.
 - **WP_CACHE Self-Healing:** Automatic monitoring and fixing of the `WP_CACHE` constant in `wp-config.php` during activation and hourly maintenance.
 - **Telemetry Breakdown:** Real-time reporting of specific compression types (zstd, gzip, br) and raw Cache-Control headers.
 - **Modernized UI:** Refined React state management with polling cleanups and ref-based fetch guards to prevent memory leaks and duplicate requests.

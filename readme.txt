@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 6.9
-Stable tag: 1.6.1
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -120,10 +120,6 @@ Composer configuration:
 
 == Changelog ==
 
-= 1.6.1 (2026-04-26) =
-* Improvement: Updated minimum PHP requirement to 8.2 for enhanced library compatibility and performance.
-* Maintenance: Updated deployment configuration to support PHP 8.2 environments.
-
 = 1.6.0 (2026-04-26) =
 * New: Google PageSpeed Insights integration — audit Mobile/Desktop performance from your dashboard.
 * New: Suggestion Engine — actionable performance tips based on real-time site telemetry.
@@ -132,6 +128,7 @@ Composer configuration:
 * Improvement: Modernized telemetry with Zstd support and detailed network timing breakdown.
 * Security: Implemented SSRF protection for PageSpeed scans and automated API key redaction.
 * Fix: Standardized Object Cache return contracts for multi-key operations.
+* Improvement: Updated minimum PHP requirement to 8.2 for enhanced library compatibility.
 
 = 1.5.1 (2026-04-23) =
 * Performance: Optimized wppo_img_info database option to reduce memory overhead.
@@ -261,11 +258,8 @@ Use the Tools section to export your current settings or import settings from an
 
 == Upgrade Notice ==
 
-= 1.6.1 (2026-04-26) =
-Bumps minimum PHP requirement to 8.2 to ensure compatibility with modern composer libraries and high-performance server environments.
-
 = 1.6.0 (2026-04-26) =
-Major feature release bringing official Google PageSpeed Insights integration to the WordPress dashboard. Introduces Nginx configuration support, automatic wp-config.php self-healing, and enhanced telemetry with modern compression support (Zstd).
+Major feature release bringing official Google PageSpeed Insights integration to the WordPress dashboard. Introduces Nginx configuration support, automatic wp-config.php self-healing, and enhanced telemetry with modern compression support (Zstd). Now requires PHP 8.2 for high-performance library compatibility.
 
 = 1.5.1 (2026-04-23) =
 Performance and stability release optimizing the `wppo_img_info` database option for reduced memory overhead and implementing atomic write protection for image metadata.
