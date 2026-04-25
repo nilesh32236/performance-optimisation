@@ -1052,6 +1052,11 @@ class Main {
 			return $tag;
 		}
 
+		// Early return if the URL already indicates a minified file.
+		if ( preg_match( '/(\.min\.css|\.bundle\.css|\.bundle\.min\.css)(?:$|\?)/i', $href ) ) {
+			return $tag;
+		}
+
 		$local_path = Util::get_local_path( $href );
 
 		if ( $this->is_css_minified( $local_path ) ) {
@@ -1085,6 +1090,11 @@ class Main {
 		// Early return for logged-in users, empty URLs, or excluded handles
 		// to avoid the expensive Util::get_local_path() computation.
 		if ( is_user_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) ) {
+			return $tag;
+		}
+
+		// Early return if the URL already indicates a minified file.
+		if ( preg_match( '/(\.min\.js|\.bundle\.js|\.bundle\.min\.js)(?:$|\?)/i', $src ) ) {
 			return $tag;
 		}
 
