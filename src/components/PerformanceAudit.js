@@ -17,7 +17,7 @@ import {
 	faChartBar,
 	faLightbulb,
 } from '@fortawesome/free-solid-svg-icons';
-import { runPerformanceScan } from '../lib/apiRequest';
+import { runPerformanceScan, fetchSuggestions } from '../lib/apiRequest';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
 import Tooltip from './common/Tooltip';
@@ -248,18 +248,22 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 
 				// Phase 2 — fetch telemetry-based suggestions and pass up to Dashboard.
 				if ( onSuggestionsReady ) {
-					try {
-						const { fetchSuggestions } = await import(
-							'../lib/apiRequest'
-						);
-						const sugResp = await fetchSuggestions( url );
-						if ( sugResp.success && sugResp.data?.suggestions ) {
-							onSuggestionsReady( sugResp.data.suggestions );
-						}
-					} catch ( sugErr ) {
-						// Non-fatal — suggestions are a bonus, not required.
-						console.warn( 'Could not fetch suggestions:', sugErr );
-					}
+					fetchSuggestions( url )
+						.then( ( sugResp ) => {
+							if (
+								sugResp.success &&
+								sugResp.data?.suggestions
+							) {
+								onSuggestionsReady( sugResp.data.suggestions );
+							}
+						} )
+						.catch( ( sugErr ) => {
+							// Non-fatal — suggestions are a bonus, not required.
+							console.warn(
+								'Could not fetch suggestions:',
+								sugErr
+							);
+						} );
 				}
 			} else {
 				setError( response.message || t.scanError );
@@ -416,7 +420,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 									result.cache_control_value &&
 									result.cache_control_value !== 'none'
 										? result.cache_control_value
-										: t.disabled || 'None'
+										: t.missing || 'None'
 								}
 								status={ boolStatus(
 									result.cache_control_headers

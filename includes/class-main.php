@@ -153,16 +153,11 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
-		// Phase 1 — Local Diagnostics (v1.5.0).
+		// Phase 1 & 2 — Diagnostics & PageSpeed (v1.5.0-1.6.0).
 		// Load on admin, AJAX, Cron, or REST API requests.
 		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
-		}
-
-		// Phase 2 — PageSpeed Integration & Actionable Suggestions (v1.6.0).
-		// Also loaded during cron so Action Scheduler can call Pagespeed::run_scan().
-		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
 		}
@@ -281,10 +276,19 @@ class Main {
 			return;
 		}
 
-		set_transient( 'wppo_wp_cache_fix_checked', 1, HOUR_IN_SECONDS );
-
 		require_once WPPO_PLUGIN_PATH . 'includes/class-activate.php';
-		Activate::add_wp_cache_constant();
+		$notices = Activate::add_wp_cache_constant();
+
+		if ( empty( $notices ) ) {
+			// Success — throttle for 1 hour.
+			set_transient( 'wppo_wp_cache_fix_checked', 1, HOUR_IN_SECONDS );
+		} else {
+			// Failure — merge notice keys into existing transient to notify user immediately.
+			$existing_notices = get_transient( 'wppo_activation_notices' );
+			$existing_notices = is_array( $existing_notices ) ? $existing_notices : array();
+			$new_notices      = array_unique( array_merge( $existing_notices, (array) $notices ) );
+			set_transient( 'wppo_activation_notices', $new_notices, 30 );
+		}
 	}
 
 	/**
@@ -533,7 +537,7 @@ class Main {
 					'homeUrl'                   => home_url( '/' ),
 					'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
 					'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
-					'autoFixEnabled'            => false,  // Phase 4 will populate this.
+					'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
 				),
 				'translations'      => array(
 					'performanceSettings'      => __( 'Performance Settings', 'performance-optimisation' ),

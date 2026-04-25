@@ -892,6 +892,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'A valid URL is required.', 'performance-optimisation' ) );
 			}
 
+			// Only allow http and https schemes.
+			$parsed_url = wp_parse_url( $url );
+			$scheme     = $parsed_url['scheme'] ?? '';
+			if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return $this->send_response( null, false, 400, __( 'A valid, allowed URL is required.', 'performance-optimisation' ) );
+			}
+
+			// Validate that the URL belongs to this website.
+			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
+				return $this->send_response( null, false, 400, __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
+			}
+
+			// Reject loopback/private addresses.
+			if ( ! wp_http_validate_url( $url ) ) {
+				return $this->send_response( null, false, 400, __( 'PageSpeed cannot scan local or non-public URLs.', 'performance-optimisation' ) );
+			}
+
 			// Validate strategy.
 			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
 				$strategy = 'mobile';

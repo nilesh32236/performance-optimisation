@@ -111,7 +111,7 @@ const App = () => {
 		};
 
 		return components[ activeTab ] || components.dashboard;
-	}, [ activeTab, recentActivities ] );
+	}, [ activeTab, recentActivities, serverRules ] );
 
 	const toggleMobileMenu = () =>
 		setMobileMenuOpen( ( prevState ) => ! prevState );
@@ -152,6 +152,8 @@ const App = () => {
 		}
 	}, [] );
 
+	const hasFetchedRules = useRef( false );
+
 	useEffect( () => {
 		if (
 			( activeTab === 'dashboard' || recentActivities.length === 0 ) &&
@@ -171,15 +173,19 @@ const App = () => {
 		}
 
 		const fetchRules = async () => {
-			if ( serverRules ) {
+			if ( serverRules || hasFetchedRules.current ) {
 				return;
 			}
+			hasFetchedRules.current = true;
 			try {
 				const res = await fetchServerRules();
 				if ( res.success ) {
 					setServerRules( res.data );
+				} else {
+					hasFetchedRules.current = false;
 				}
 			} catch ( err ) {
+				hasFetchedRules.current = false;
 				console.error( 'Failed to fetch server rules', err );
 			}
 		};
@@ -188,7 +194,7 @@ const App = () => {
 		setTransition( true );
 		const timeout = setTimeout( () => setTransition( false ), 400 );
 		return () => clearTimeout( timeout );
-	}, [ activeTab, recentActivities.length ] );
+	}, [ activeTab, recentActivities.length, serverRules ] );
 
 	return (
 		<div className="wppo-container">

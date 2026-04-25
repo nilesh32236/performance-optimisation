@@ -205,20 +205,22 @@ const SystemInfo = () => {
 						} }
 					/>
 					<InfoTable
-						title="Infrastructure"
+						title={ t.infrastructure || 'Infrastructure' }
 						data={ {
 							action_scheduler: info.infrastructure
 								?.action_scheduler?.available
-								? 'Available'
-								: 'Unavailable',
+								? t.available || 'Available'
+								: t.unavailable || 'Unavailable',
 							pagespeed_api: info.infrastructure?.pagespeed_api
 								?.configured
-								? 'Configured'
-								: 'Not Configured',
+								? t.configured || 'Configured'
+								: t.notConfigured || 'Not Configured',
 						} }
 						labels={ {
-							action_scheduler: 'Action Scheduler',
-							pagespeed_api: 'PageSpeed Insights API',
+							action_scheduler:
+								t.actionScheduler || 'Action Scheduler',
+							pagespeed_api:
+								t.pagespeedApi || 'PageSpeed Insights API',
 						} }
 					/>
 					<InfoTable

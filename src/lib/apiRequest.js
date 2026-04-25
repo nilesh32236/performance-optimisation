@@ -100,6 +100,7 @@ export const fetchSuggestions = ( url ) => {
 		'GET'
 	);
 };
+
 /**
  * Retrieve server-level performance rules (Apache/Nginx).
  *

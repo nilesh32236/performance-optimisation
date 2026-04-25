@@ -103,26 +103,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 			// --- Gzip/Brotli compression — strict boolean check ---
 			$comp_pass     = (bool) ( $telemetry['gzip_brotli_compression'] ?? false );
 			$comp_value    = (string) ( $telemetry['compression_value'] ?? ( $comp_pass ? 'pass' : 'fail' ) );
-			$suggestions[] = self::build(
+			$suggestions[] = self::make_boolean(
 				'gzip_brotli_compression',
-				$comp_value,
-				'encoding',
-				$comp_pass ? 'good' : 'poor',
-				'Gzip/Brotli Compression',
-				$comp_pass ? 'no_action_required' : 'enable_server_rules'
+				$comp_pass,
+				'enable_server_rules',
+				'Gzip/Brotli Compression'
 			);
+			// Override the 'pass'/'fail' value with the raw header if we have it.
+			if ( $comp_pass && 'pass' !== $comp_value ) {
+				$suggestions[ count( $suggestions ) - 1 ]['value'] = $comp_value;
+			}
 
 			// --- Cache-Control headers — strict boolean check ---
 			$cc_pass       = (bool) ( $telemetry['cache_control_headers'] ?? false );
 			$cc_value      = (string) ( $telemetry['cache_control_value'] ?? ( $cc_pass ? 'pass' : 'fail' ) );
-			$suggestions[] = self::build(
+			$suggestions[] = self::make_boolean(
 				'cache_control_headers',
-				$cc_value,
-				'header',
-				$cc_pass ? 'good' : 'poor',
-				'Cache-Control Headers',
-				$cc_pass ? 'no_action_required' : 'enable_server_rules'
+				$cc_pass,
+				'enable_server_rules',
+				'Cache-Control Headers'
 			);
+			// Override the 'pass'/'fail' value with the raw header if we have it.
+			if ( $cc_pass && 'pass' !== $cc_value ) {
+				$suggestions[ count( $suggestions ) - 1 ]['value'] = $cc_value;
+			}
 
 			return array_values( array_filter( $suggestions ) );
 		}
@@ -140,19 +144,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 			$vitals      = $pagespeed['vitals'] ?? array();
 
 			// --- LCP — lower is better (seconds) ---
-			$lcp_ms        = (float) ( $vitals['lcp']['value'] ?? 0 );
-			$lcp_s         = $lcp_ms / 1000;
-			$suggestions[] = self::make(
-				'lcp',
-				$lcp_s,
-				's',
-				array(
-					'good' => 2.5,
-					'poor' => 4.0,
-				),
-				'open_image_optimization_tab',
-				'Largest Contentful Paint'
-			);
+			$lcp_val = $vitals['lcp']['value'] ?? null;
+			if ( null !== $lcp_val && is_numeric( $lcp_val ) && $lcp_val > 0 ) {
+				$lcp_ms        = (float) $lcp_val;
+				$lcp_s         = $lcp_ms / 1000;
+				$suggestions[] = self::make(
+					'lcp',
+					$lcp_s,
+					's',
+					array(
+						'good' => 2.5,
+						'poor' => 4.0,
+					),
+					'open_image_optimization_tab',
+					'Largest Contentful Paint'
+				);
+			}
 
 			// --- Render-blocking resources ---
 			$rbs = (float) ( $diagnostics['render-blocking-resources']['score'] ?? 1.0 );

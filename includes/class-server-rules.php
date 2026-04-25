@@ -32,19 +32,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		 * @return string 'apache', 'nginx', or 'other'.
 		 */
 		public static function get_server_type(): string {
-			$server_software = isset( $_SERVER['SERVER_SOFTWARE'] ) ? strtolower( $_SERVER['SERVER_SOFTWARE'] ) : '';
+			$server_software = isset( $_SERVER['SERVER_SOFTWARE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) : '';
+			$server_software = strtolower( $server_software );
 
 			if ( false !== strpos( $server_software, 'apache' ) ) {
 				return 'apache';
 			}
 
 			if ( false !== strpos( $server_software, 'nginx' ) ) {
-				return 'nginx';
-			}
-
-			// Fallback: check SAPI or common environment variables.
-			if ( 'fpm-fcgi' === php_sapi_name() ) {
-				// Nginx usually uses FPM.
 				return 'nginx';
 			}
 
@@ -58,37 +53,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		 * @return string Nginx configuration snippet.
 		 */
 		public static function get_nginx_rules(): string {
-			return implode( "\n", array(
-				'# Gzip Compression',
-				'gzip on;',
-				'gzip_comp_level 5;',
-				'gzip_min_length 256;',
-				'gzip_proxied any;',
-				'gzip_vary on;',
-				'gzip_types',
-				'    application/atom+xml',
-				'    application/javascript',
-				'    application/json',
-				'    application/rss+xml',
-				'    application/vnd.ms-fontobject',
-				'    application/x-font-ttf',
-				'    application/x-web-app-manifest+json',
-				'    application/xhtml+xml',
-				'    application/xml',
-				'    font/opentype',
-				'    image/svg+xml',
-				'    image/x-icon',
-				'    text/css',
-				'    text/plain',
-				'    text/x-component;',
-				'',
-				'# Browser Caching',
-				'location ~* \.(jpg|jpeg|gif|png|webp|avif|svg|woff|woff2|ttf|otf|eot|ico|css|js)$ {',
-				'    expires 365d;',
-				'    add_header Cache-Control "public, no-transform";',
-				'    access_log off;',
-				'}',
-			) );
+			$options = get_option( 'wppo_settings', array() );
+			$rules   = array();
+
+			// Gzip Compression.
+			$minify_js  = isset( $options['file_optimisation']['minifyJS'] ) ? (bool) $options['file_optimisation']['minifyJS'] : false;
+			$minify_css = isset( $options['file_optimisation']['minifyCSS'] ) ? (bool) $options['file_optimisation']['minifyCSS'] : false;
+
+			if ( $minify_js || $minify_css ) {
+				$rules[] = '# Gzip Compression';
+				$rules[] = 'gzip on;';
+				$rules[] = 'gzip_comp_level 5;';
+				$rules[] = 'gzip_min_length 256;';
+				$rules[] = 'gzip_proxied any;';
+				$rules[] = 'gzip_vary on;';
+				$rules[] = 'gzip_types';
+				$rules[] = '    application/atom+xml';
+				$rules[] = '    application/javascript';
+				$rules[] = '    application/json';
+				$rules[] = '    application/rss+xml';
+				$rules[] = '    application/vnd.ms-fontobject';
+				$rules[] = '    application/x-font-ttf';
+				$rules[] = '    application/x-web-app-manifest+json';
+				$rules[] = '    application/xhtml+xml';
+				$rules[] = '    application/xml';
+				$rules[] = '    font/opentype';
+				$rules[] = '    image/svg+xml';
+				$rules[] = '    image/x-icon';
+				$rules[] = '    text/css';
+				$rules[] = '    text/plain';
+				$rules[] = '    text/x-component;';
+				$rules[] = '';
+			}
+
+			// Browser Caching.
+			$enable_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
+			if ( $enable_rules ) {
+				$rules[] = '# Browser Caching';
+				$rules[] = 'location ~* \.(jpg|jpeg|gif|png|webp|avif|svg|woff|woff2|ttf|otf|eot|ico|css|js)$ {';
+				$rules[] = '    expires 365d;';
+				$rules[] = '    add_header Cache-Control "public, no-transform";';
+				$rules[] = '    access_log off;';
+				$rules[] = '}';
+			}
+
+			$rules_str = implode( "\n", $rules );
+
+			return apply_filters( 'wppo_nginx_rules', $rules_str );
 		}
 
 		/**
@@ -101,17 +112,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 			if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				return '';
 			}
-			
-			// Reflectively call private get_rules and join it.
-			try {
-				$reflection = new \ReflectionClass( 'PerformanceOptimise\Inc\Htaccess_Handler' );
-				$method = $reflection->getMethod( 'get_rules' );
-				$method->setAccessible( true );
-				$rules = $method->invoke( null );
-				return implode( "\n", $rules );
-			} catch ( \Exception $e ) {
-				return '';
-			}
+
+			$rules = Htaccess_Handler::get_rules();
+			return implode( "\n", $rules );
 		}
 	}
 }

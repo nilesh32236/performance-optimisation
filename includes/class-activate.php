@@ -106,11 +106,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			// If WP_CACHE is defined as false, try to replace it with true.
 			if ( defined( 'WP_CACHE' ) && ! WP_CACHE ) {
-				$wp_config_content = preg_replace(
+				$new_content = preg_replace(
 					'/define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*false\s*\);/i',
 					"define( 'WP_CACHE', true );",
 					$wp_config_content
 				);
+
+				if ( null === $new_content || '' === $new_content ) {
+					new Log( 'Failed to replace WP_CACHE in wp-config.php' );
+					return null;
+				}
+				$wp_config_content = $new_content;
 			} elseif ( false !== strpos( $wp_config_content, 'WP_CACHE' ) ) {
 				// Already present but not necessarily true/false as literal (maybe a variable).
 				// If it's already there and we reached here, it means defined( 'WP_CACHE' ) is false or not matching our expectations.

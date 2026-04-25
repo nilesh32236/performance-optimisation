@@ -104,7 +104,7 @@ const formatValue = ( value, unit ) => {
 			deflate: 'Deflate',
 			zstd: 'Zstd',
 		};
-		return encodings[ value.toLowerCase() ] || value;
+		return encodings[ String( value ).toLowerCase() ] || value;
 	}
 	if ( unit === 'score' ) {
 		return `${ Math.round( parseFloat( value ) * 100 ) } / 100`;

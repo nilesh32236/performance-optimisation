@@ -13,7 +13,7 @@
  * @since 1.6.0
  */
 
-import { useState, useRef, useCallback } from '@wordpress/element';
+import { useState, useRef, useCallback, useEffect } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faTachometerAlt,
@@ -32,10 +32,7 @@ const t =
 		? wppoSettings.translations
 		: {};
 
-const apiKeyConfigured =
-	typeof wppoSettings !== 'undefined'
-		? wppoSettings.performance_audit?.pagespeedApiKeyConfigured ?? false
-		: false;
+// apiKeyConfigured is now derived inside the component for reactivity.
 
 /**
  * Polling interval in milliseconds.
@@ -133,6 +130,22 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 		pollCountRef.current = 0;
 	}, [] );
 
+	const isMounted = useRef( true );
+
+	// Component lifecycle and polling cleanup.
+	useEffect( () => {
+		isMounted.current = true;
+		return () => {
+			isMounted.current = false;
+			stopPolling();
+		};
+	}, [ stopPolling ] );
+
+	const apiKeyConfigured =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings.performance_audit?.pagespeedApiKeyConfigured ?? false
+			: false;
+
 	const pollForResults = useCallback(
 		( scanUrl, scanStrategy ) => {
 			pollRef.current = setInterval( async () => {
@@ -170,14 +183,19 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					}
 
 					// Results are ready.
-					stopPolling();
-					setPending( false );
-					setScanning( false );
-					setResult( response.data );
+					if ( isMounted.current ) {
+						stopPolling();
+						setPending( false );
+						setScanning( false );
+						setResult( response.data );
 
-					// Pass PageSpeed suggestions up to Dashboard → SuggestionsPanel.
-					if ( onSuggestionsReady && response.data?.suggestions ) {
-						onSuggestionsReady( response.data.suggestions );
+						// Pass PageSpeed suggestions up to Dashboard → SuggestionsPanel.
+						if (
+							onSuggestionsReady &&
+							response.data?.suggestions
+						) {
+							onSuggestionsReady( response.data.suggestions );
+						}
 					}
 				} catch ( err ) {
 					stopPolling();
@@ -373,9 +391,9 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 								color: 'var(--wppo-color-success)',
 							} }
 						/>
-						{ t.pagespeedDesktop === strategy
-							? t.pagespeedDesktop
-							: t.pagespeedMobile }
+						{ 'strategy:desktop' === `strategy:${ strategy }`
+							? t.pagespeedDesktop || 'Desktop'
+							: t.pagespeedMobile || 'Mobile' }
 						{ ' · ' }
 						{ result.fetched_at }
 					</p>
