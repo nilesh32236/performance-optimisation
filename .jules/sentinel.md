@@ -7,6 +7,7 @@
 **Vulnerability:** The `optimise_image` REST endpoint and `Util::get_local_path()` helper function accepted file paths (such as `$webp_images` array) and passed them to sensitive file system functions (`file_exists`, `getimagesize`) without verifying if the path stayed within `ABSPATH`. Since `wp_normalize_path` only normalizes slashes but does not resolve or reject directory traversal sequences (`..`), an attacker (or authenticated admin) could provide paths like `../../../../etc/passwd` to access arbitrary local files.
 **Learning:** `wp_normalize_path` is not a security function for preventing directory traversal. While it cleans up slashes, `..` remains in the string, and concatenating it with `ABSPATH` still leads out of the root directory.
 **Prevention:** Always check for directory traversal sequences (e.g. `strpos( $path, '..' ) !== false`) when accepting user-provided paths that are used in server-side file operations.
+
 ## 2025-02-14 - Fix Path Traversal in Cache Implementation
 **Vulnerability:** A path traversal vulnerability existed in the caching implementation (`includes/class-advanced-cache-handler.php` and `includes/class-cache.php`). The code directly used `$_SERVER['HTTP_HOST']` and `$_SERVER['REQUEST_URI']` to construct file paths for caching without validating for directory traversal characters (`..`, `/`, `\`).
 **Learning:** Using raw HTTP headers (`HTTP_HOST` and `REQUEST_URI`) directly in path construction allows attackers to manipulate file paths, potentially leading to unauthorized file reads or writes outside the intended cache directory. PHP operator precedence (specifically `&&` vs `||`) can also accidentally neutralize security checks if not carefully grouped.
@@ -20,4 +21,4 @@
 ## 2024-05-20 - [Path Traversal in URL Parsing]
 **Vulnerability:** Path traversal check bypass in caching mechanisms using URL encoding (`%2e%2e` instead of `..`).
 **Learning:** Checking for `..` in a path via `strpos` is insufficient if the path originates from an un-decoded URL parameter like `$_SERVER['REQUEST_URI']`. `wp_parse_url` does not automatically decode the URL string.
-**Prevention:** Always use `urldecode()` on any URI component before checking it for directory traversal sequences or using it to construct file paths.
+**Prevention:** Always use `rawurldecode()` on any URI component before checking it for directory traversal sequences or using it to construct file paths.

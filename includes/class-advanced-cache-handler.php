@@ -125,7 +125,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$root_directory = $_SERVER[\'DOCUMENT_ROOT\'];' . PHP_EOL .
 			'$site_domain    = isset( $_SERVER[\'HTTP_HOST\'] ) ? (string) $_SERVER[\'HTTP_HOST\'] : \'\';' . PHP_EOL .
 			'$request_uri    = isset( $_SERVER[\'REQUEST_URI\'] ) ? (string) parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH ) : \'\';' . PHP_EOL .
-			'$request_uri    = urldecode( $request_uri );' . PHP_EOL .
+			'$request_uri    = rawurldecode( $request_uri );' . PHP_EOL .
+			'$request_uri    = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL . PHP_EOL .
 
 			'if ( strpos( $site_domain, \'..\' ) !== false || strpos( $site_domain, \'/\' ) !== false || strpos( $site_domain, \'\\\\\' ) !== false || strpos( $request_uri, \'..\' ) !== false ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
