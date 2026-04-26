@@ -11,6 +11,7 @@ import {
 	faTimes,
 	faServer,
 	faBolt,
+	faChartLine,
 } from '@fortawesome/free-solid-svg-icons';
 import FileOptimization from './components/FileOptimization';
 import PreloadSettings from './components/PreloadSettings';
@@ -19,6 +20,7 @@ import PluginSettings from './components/PluginSetting';
 import Dashboard from './components/Dashboard';
 import DatabaseCleanup from './components/DatabaseCleanup';
 import ObjectCache from './components/ObjectCache';
+import PerformanceHistory from './components/PerformanceHistory';
 import { fetchRecentActivities, fetchServerRules } from './lib/apiRequest';
 
 const translations = wppoSettings.translations;
@@ -71,6 +73,11 @@ const App = () => {
 				icon: faTools,
 				label: translations.tools,
 			},
+			{
+				name: 'performanceHistory',
+				icon: faChartLine,
+				label: translations.performanceHistory || 'Performance History',
+			},
 		],
 		[]
 	);
@@ -108,6 +115,7 @@ const App = () => {
 				<ObjectCache options={ wppoSettings.settings.object_cache } />
 			),
 			tools: <PluginSettings options={ wppoSettings.settings } />,
+			performanceHistory: <PerformanceHistory />,
 		};
 
 		return components[ activeTab ] || components.dashboard;
@@ -283,7 +291,7 @@ const App = () => {
 					</ul>
 				</nav>
 				<div className="wppo-sidebar-footer">
-					<div className="wppo-sidebar-version">v1.6.0</div>
+				<div className="wppo-sidebar-version">v1.7.0</div>
 				</div>
 			</div>
 

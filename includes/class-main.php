@@ -162,6 +162,11 @@ class Main {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
 		}
 
+		// Phase 3 — High-Value Page Tracker (v1.7.0).
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry-table.php';
+		}
+
 		if ( is_admin() ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
 			new Admin_Notices();
@@ -471,6 +476,32 @@ class Main {
 	}
 
 	/**
+	 * Returns WooCommerce high-value preset URLs (cart and checkout) when WooCommerce is active.
+	 *
+	 * @since 1.7.0
+	 * @return array Array of preset URL strings, empty when WooCommerce is not active.
+	 */
+	private function get_woocommerce_preset_urls(): array {
+		if ( ! function_exists( 'WC' ) ) {
+			return array();
+		}
+
+		$presets = array();
+
+		$cart_page_id = wc_get_page_id( 'cart' );
+		if ( $cart_page_id > 0 ) {
+			$presets[] = get_permalink( $cart_page_id );
+		}
+
+		$checkout_page_id = wc_get_page_id( 'checkout' );
+		if ( $checkout_page_id > 0 ) {
+			$presets[] = get_permalink( $checkout_page_id );
+		}
+
+		return array_filter( $presets );
+	}
+
+	/**
 	 * Enqueue admin scripts and styles.
 	 *
 	 * Loads CSS and JavaScript files for the admin dashboard page.
@@ -536,8 +567,9 @@ class Main {
 				'performance_audit' => array(
 					'homeUrl'                   => home_url( '/' ),
 					'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
-					'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
+					'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(),
 					'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
+					'woocommercePresets'        => $this->get_woocommerce_preset_urls(),
 				),
 				'translations'      => array(
 					'performanceSettings'      => __( 'Performance Settings', 'performance-optimisation' ),
@@ -851,6 +883,22 @@ class Main {
 					'pagespeedApiKey'          => __( 'Google PageSpeed API Key', 'performance-optimisation' ),
 					'pagespeedApiKeyDesc'      => __( 'Required to run PageSpeed Insights scans. Get a free key from Google Cloud Console.', 'performance-optimisation' ),
 					'pagespeedApiKeySaved'     => __( 'API key saved.', 'performance-optimisation' ),
+
+					// Phase 3 — High-Value Page Tracker (v1.7.0).
+					'performanceHistory'       => __( ' Performance History', 'performance-optimisation' ),
+					'clearHistory'             => __( 'Clear History', 'performance-optimisation' ),
+					'noHistoryData'            => __( 'No history data yet. Add URLs and run scans to start tracking.', 'performance-optimisation' ),
+					'selectUrl'                => __( 'Select a URL', 'performance-optimisation' ),
+					'urlSelector'              => __( 'Filter by URL', 'performance-optimisation' ),
+					'trendData'                => __( 'Trend', 'performance-optimisation' ),
+					'notEnoughData'            => __( 'Not enough data points to show a trend.', 'performance-optimisation' ),
+					'addUrl'                   => __( 'Add URL', 'performance-optimisation' ),
+					'urlPlaceholder'           => __( 'https://example.com/page', 'performance-optimisation' ),
+					'woocommercePresets'       => __( 'WooCommerce Presets', 'performance-optimisation' ),
+					'clearHistoryConfirm'      => __( 'This will permanently delete all telemetry history and cached scan data. Continue?', 'performance-optimisation' ),
+					'historyCleared'           => __( 'History cleared successfully.', 'performance-optimisation' ),
+					'urlAdded'                 => __( 'URL added successfully.', 'performance-optimisation' ),
+					'urlAlreadyExists'         => __( 'This URL is already in your list.', 'performance-optimisation' ),
 				),
 
 				// Frontend theme colors for accent syncing.

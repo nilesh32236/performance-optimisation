@@ -136,6 +136,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'get_suggestions' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
+
+				// Phase 3 — High-Value Page Tracker (v1.7.0).
+				'telemetry'               => array(
+					array(
+						'methods'             => 'GET',
+						'callback'            => array( $this, 'get_telemetry' ),
+						'permission_callback' => array( $this, 'permission_callback' ),
+					),
+					array(
+						'methods'             => 'DELETE',
+						'callback'            => array( $this, 'delete_telemetry' ),
+						'permission_callback' => array( $this, 'permission_callback' ),
+					),
+				),
+				'telemetry/urls'          => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'save_telemetry_urls' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
 				'server_rules'            => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_server_rules' ),
@@ -1007,6 +1026,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$suggestions = Suggestion_Engine::from_telemetry( $telemetry );
 
 			return $this->send_response( array( 'suggestions' => $suggestions ) );
+		}
+
+		/**
+		 * Returns telemetry history rows, optionally filtered by URL.
+		 *
+		 * Accepts optional GET param: url (string).
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.7.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_telemetry( \WP_REST_Request $request ): \WP_REST_Response {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry-table.php';
+			$params = $request->get_params();
+			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : '';
+
+			$rows = Telemetry_Table::get_rows( $url );
+
+			return $this->send_response( $rows );
+		}
+
+		/**
+		 * Saves (merges + deduplicates) high-value URLs into plugin settings.
+		 *
+		 * Accepts POST body: urls (string[]).
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.7.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function save_telemetry_urls( \WP_REST_Request $request ): \WP_REST_Response {
+			$params   = $request->get_params();
+			$new_urls = isset( $params['urls'] ) ? (array) $params['urls'] : array();
+
+			// Sanitize each submitted URL.
+			$sanitized = array_filter( array_map( 'esc_url_raw', $new_urls ) );
+
+			$options  = get_option( 'wppo_settings', array() );
+			$existing = $options['performance_audit']['high_value_urls'] ?? array();
+			$merged   = array_values( array_unique( array_merge( $existing, $sanitized ) ) );
+			$options['performance_audit']['high_value_urls'] = $merged;
+
+			update_option( 'wppo_settings', $options );
+
+			return $this->send_response( $merged );
+		}
+
+		/**
+		 * Deletes all telemetry rows and clears the transient index.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since 1.7.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function delete_telemetry( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry-table.php';
+
+			$deleted = Telemetry_Table::truncate();
+
+			// Clear all registered transient keys.
+			$transient_index = get_option( 'wppo_transient_index', array() );
+			foreach ( $transient_index as $key ) {
+				delete_transient( $key );
+			}
+			update_option( 'wppo_transient_index', array() );
+
+			return $this->send_response( array( 'deleted' => $deleted ) );
 		}
 
 		/**

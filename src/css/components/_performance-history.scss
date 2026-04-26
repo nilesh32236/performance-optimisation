@@ -1,0 +1,270 @@
+// =============================================================================
+// Performance History — Phase 3 (v1.7.0)
+// =============================================================================
+
+.wppo-performance-history {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+// -----------------------------------------------------------------------------
+// Page header — title + Clear History button
+// -----------------------------------------------------------------------------
+
+.wppo-history-page-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 12px;
+	padding-bottom: 16px;
+	border-bottom: 1px solid var(--wppo-border);
+
+	&__title {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		color: var(--wppo-primary);
+
+		svg {
+			font-size: 1.1rem;
+		}
+
+		h2 {
+			margin: 0;
+			font-size: 1.1rem;
+			font-weight: 700;
+			color: var(--wppo-text-main);
+		}
+	}
+}
+
+// -----------------------------------------------------------------------------
+// URL input row — input + Add URL button side by side
+// -----------------------------------------------------------------------------
+
+.wppo-history-url-input-row {
+	display: flex;
+	gap: 10px;
+	flex-wrap: wrap;
+
+	.wppo-input {
+		flex: 1;
+		min-width: 220px;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// URL added / error message
+// -----------------------------------------------------------------------------
+
+.wppo-history-url-message {
+	margin: 8px 0 0;
+	font-size: 0.85rem;
+	color: var(--wppo-success);
+	font-weight: 500;
+}
+
+// -----------------------------------------------------------------------------
+// WooCommerce preset URL chips
+// -----------------------------------------------------------------------------
+
+.wppo-history-presets {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px dashed var(--wppo-border);
+
+	&__label {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--wppo-text-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		flex-shrink: 0;
+	}
+
+	// Override ghost button to look like a chip
+	.wppo-button--ghost {
+		font-size: 0.8rem;
+		padding: 4px 10px;
+		border: 1px solid var(--wppo-border);
+		border-radius: 999px;
+		max-width: 220px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Selectors row — inside the trend card header
+// -----------------------------------------------------------------------------
+
+.wppo-history-selectors {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	align-items: center;
+	margin-left: auto;
+}
+
+.wppo-history-select {
+	width: auto !important;
+	min-width: 160px;
+	max-width: 240px;
+	display: inline-block !important;
+}
+
+// -----------------------------------------------------------------------------
+// Trend card body — give the sparkline breathing room
+// -----------------------------------------------------------------------------
+
+.wppo-history-trend-body {
+	padding: 16px 24px !important;
+	background: var(--wppo-bg-card-surface);
+}
+
+// -----------------------------------------------------------------------------
+// TrendLine SVG
+// -----------------------------------------------------------------------------
+
+.wppo-trendline {
+	display: block;
+}
+
+.wppo-trendline-empty {
+	margin: 0;
+	font-size: 0.875rem;
+	color: var(--wppo-text-muted);
+	text-align: center;
+	padding: 24px 0;
+}
+
+// -----------------------------------------------------------------------------
+// Table card body — remove default padding so table bleeds to edges
+// -----------------------------------------------------------------------------
+
+.wppo-history-table-body {
+	padding: 0 !important;
+}
+
+// -----------------------------------------------------------------------------
+// State messages — loading / empty / error
+// -----------------------------------------------------------------------------
+
+.wppo-history-state-msg {
+	margin: 0;
+	padding: 32px 24px;
+	font-size: 0.875rem;
+	color: var(--wppo-text-muted);
+	text-align: center;
+
+	&--error {
+		color: var(--wppo-error);
+	}
+}
+
+// -----------------------------------------------------------------------------
+// Row count badge in card header
+// -----------------------------------------------------------------------------
+
+.wppo-history-count-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 22px;
+	height: 22px;
+	padding: 0 6px;
+	background: var(--wppo-primary-soft);
+	color: var(--wppo-primary);
+	font-size: 0.75rem;
+	font-weight: 700;
+	border-radius: 999px;
+	border: 1px solid var(--wppo-primary-medium);
+}
+
+// -----------------------------------------------------------------------------
+// Data table
+// -----------------------------------------------------------------------------
+
+.wppo-history-table-wrapper {
+	overflow-x: auto;
+}
+
+.wppo-history-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.8rem;
+
+	thead tr {
+		background: var(--wppo-bg-card-surface);
+		border-bottom: 2px solid var(--wppo-border);
+	}
+
+	thead th {
+		padding: 10px 12px;
+		text-align: left;
+		font-weight: 700;
+		color: var(--wppo-text-muted);
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		white-space: nowrap;
+	}
+
+	tbody tr {
+		border-bottom: 1px solid var(--wppo-border);
+		transition: background 0.12s ease;
+
+		&:last-child {
+			border-bottom: none;
+		}
+
+		&:hover {
+			background: var(--wppo-bg-card-surface);
+		}
+	}
+
+	td {
+		padding: 10px 12px;
+		color: var(--wppo-text-main);
+		white-space: nowrap;
+		vertical-align: middle;
+	}
+}
+
+.wppo-history-url-cell {
+	max-width: 200px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--wppo-primary) !important;
+	font-weight: 500;
+}
+
+.wppo-history-date-cell {
+	color: var(--wppo-text-muted) !important;
+	font-size: 0.75rem;
+}
+
+// -----------------------------------------------------------------------------
+// Scan type badge
+// -----------------------------------------------------------------------------
+
+.wppo-history-type-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 999px;
+	font-size: 0.7rem;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+	background: var(--wppo-info-bg);
+	color: var(--wppo-info);
+	border: 1px solid var(--wppo-info-border);
+	text-transform: capitalize;
+}

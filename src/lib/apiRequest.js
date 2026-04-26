@@ -102,6 +102,39 @@ export const fetchSuggestions = ( url ) => {
 };
 
 /**
+ * Delete all telemetry history rows and clear the transient index.
+ *
+ * @since 1.7.0
+ * @return {Promise<Object>} Resolved response with deleted count.
+ */
+export const deleteTelemetry = () => {
+	return apiCall( 'telemetry', {}, 'DELETE' );
+};
+
+/**
+ * Fetch telemetry history rows, optionally filtered by URL.
+ *
+ * @since 1.7.0
+ * @param {string} url Optional URL to filter by.
+ * @return {Promise<Object>} Resolved rows array.
+ */
+export const fetchTelemetry = ( url = '' ) => {
+	const query = url ? `?url=${ encodeURIComponent( url ) }` : '';
+	return apiCall( `telemetry${ query }`, {}, 'GET' );
+};
+
+/**
+ * Save (merge + deduplicate) high-value URLs into plugin settings.
+ *
+ * @since 1.7.0
+ * @param {string[]} urls Array of URLs to add.
+ * @return {Promise<Object>} Resolved deduplicated URL list.
+ */
+export const saveTelemetryUrls = ( urls ) => {
+	return apiCall( 'telemetry/urls', { urls } );
+};
+
+/**
  * Retrieve server-level performance rules (Apache/Nginx).
  *
  * @since 1.6.0

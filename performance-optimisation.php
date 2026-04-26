@@ -3,8 +3,8 @@
  * Plugin Name:       Performance Optimisation
  * Description:       A Performance Optimisation plugin for WordPress.
  * Requires at least: 6.2
- * Requires PHP:      8.2
- * Version:           1.6.0
+ * Requires PHP:      7.4
+ * Version:           1.7.0
  * Author:            Nilesh kanzariya
  * Author URI:        https://github.com/nilesh32236
  * License:           GPL-2.0-or-later
@@ -34,7 +34,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 }
 
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.6.0' );
+	define( 'WPPO_VERSION', '1.7.0' );
 }
 
 // Include the main class file.
@@ -42,6 +42,31 @@ require_once WPPO_PLUGIN_PATH . 'includes/class-main.php';
 
 // Initialize the main class.
 new Main();
+
+/**
+ * Run schema upgrades for already-active installs.
+ *
+ * Called on every page load via plugins_loaded (low priority so all plugins
+ * are available). Uses a stored version option to skip the work on every
+ * request — dbDelta() is only called when the stored version is behind the
+ * current plugin version.
+ *
+ * @since 1.7.0
+ * @return void
+ */
+function wppo_maybe_upgrade(): void {
+	$stored_version = get_option( 'wppo_db_version', '0' );
+
+	if ( version_compare( $stored_version, WPPO_VERSION, '>=' ) ) {
+		return;
+	}
+
+	require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry-table.php';
+	\PerformanceOptimise\Inc\Telemetry_Table::create_table();
+
+	update_option( 'wppo_db_version', WPPO_VERSION );
+}
+add_action( 'plugins_loaded', 'wppo_maybe_upgrade', 20 );
 
 /**
  * Activation hook callback function.
