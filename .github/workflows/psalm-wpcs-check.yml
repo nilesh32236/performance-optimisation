@@ -2,11 +2,11 @@ name: Psalm and WPCS Checks
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
   schedule:
-    - cron: '28 13 * * 0'
+    - cron: "28 13 * * 0"
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        php: ['8.0', '8.1', '8.2', '8.3']
+        php: ["8.2", "8.3", "8.4", "8.5"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -43,7 +43,7 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.1'
+          php-version: "8.2"
           tools: composer:v2
 
       - name: Install Dependencies

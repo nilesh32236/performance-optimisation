@@ -10,6 +10,7 @@
         }
     ],
     "require": {
+        "php": ">=8.2",
         "voku/html-min": "^4.5",
         "matthiasmullie/minify": "^1.3",
         "woocommerce/action-scheduler": "^3.8"

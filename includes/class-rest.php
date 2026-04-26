@@ -155,6 +155,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'save_telemetry_urls' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
+				'server_rules'            => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_server_rules' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
 			);
 		}
 
@@ -445,8 +450,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function import_settings( \WP_REST_Request $request ) {
 			$data = $request->get_json_params();
 
-			if ( ! is_array( $data ) || ! isset( $data['action'] ) || 'import_settings' !== $data['action'] || empty( $data['settings'] ) || ! is_array( $data['settings'] ) ) {
-				return $this->send_response( null, false, 400, __( 'Invalid action or missing settings', 'performance-optimisation' ) );
+			if ( ! is_array( $data ) ) {
+				return $this->send_response( null, false, 400, __( 'Invalid payload.', 'performance-optimisation' ) );
+			}
+
+			if ( ! isset( $data['action'] ) || 'import_settings' !== $data['action'] ) {
+				return $this->send_response( null, false, 400, __( 'Invalid action.', 'performance-optimisation' ) );
+			}
+
+			if ( empty( $data['settings'] ) || ! is_array( $data['settings'] ) ) {
+				return $this->send_response( null, false, 400, __( 'Settings are missing or invalid.', 'performance-optimisation' ) );
 			}
 
 			// Sanitize settings before saving.
@@ -898,6 +911,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'A valid URL is required.', 'performance-optimisation' ) );
 			}
 
+			// Only allow http and https schemes.
+			$parsed_url = wp_parse_url( $url );
+			$scheme     = $parsed_url['scheme'] ?? '';
+			if ( ! in_array( $scheme, array( 'http', 'https' ), true ) ) {
+				return $this->send_response( null, false, 400, __( 'A valid, allowed URL is required.', 'performance-optimisation' ) );
+			}
+
+			// Validate that the URL belongs to this website.
+			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
+				return $this->send_response( null, false, 400, __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
+			}
+
+			// Reject loopback/private addresses.
+			if ( ! wp_http_validate_url( $url ) ) {
+				return $this->send_response( null, false, 400, __( 'PageSpeed cannot scan local or non-public URLs.', 'performance-optimisation' ) );
+			}
+
 			// Validate strategy.
 			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
 				$strategy = 'mobile';
@@ -1062,6 +1093,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			update_option( 'wppo_transient_index', array() );
 
 			return $this->send_response( array( 'deleted' => $deleted ) );
+		}
+
+		/**
+		 * Returns server-level performance rules (Apache/Nginx).
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since 1.6.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_server_rules( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
+
+			return $this->send_response(
+				array(
+					'server_type' => Server_Rules::get_server_type(),
+					'nginx'       => Server_Rules::get_nginx_rules(),
+					'apache'      => Server_Rules::get_apache_rules(),
+				)
+			);
 		}
 
 		/**

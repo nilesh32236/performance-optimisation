@@ -18,9 +18,19 @@ Website speed is critical for SEO, user retention, and conversion rates. The Per
 
 Whether aiming for a perfect PageSpeed score or a seamless user experience, this plugin provides granular control over front-end delivery and backend asset management.
 
-**Requirements:** WordPress **6.2+** and PHP **7.4+** (same as the [WordPress.org](https://wordpress.org/plugins/performance-optimisation/) listing; the canonical requirements live in `readme.txt`).
+**Requirements:** WordPress **6.2+** and PHP **8.2+** (same as the [WordPress.org](https://wordpress.org/plugins/performance-optimisation/) listing; the canonical requirements live in `readme.txt`).
 
-**Safe defaults:** Aggressive options (defer/delay JavaScript, WooCommerce asset stripping, server rules) are **off** by default, with inline warnings when you enable them.
+**Safe defaults:** Aggressive options (defer/delay JavaScript, WooCommerce asset stripping, server rules, PageSpeed audits) are **off** by default, with inline warnings when you enable them.
+
+---
+
+## What's New in v1.6.0
+
+- **Google PageSpeed Insights Integration:** Audit Mobile and Desktop performance directly from your WordPress dashboard.
+- **Actionable Optimization Suggestions:** Get specific recommendations based on real-world site telemetry.
+- **Nginx Infrastructure Support:** View dynamic Nginx configuration rules tailored to your plugin settings.
+- **WP_CACHE Self-Healing:** Automatic monitoring and fixing of the `WP_CACHE` constant for reliable caching.
+- **PHP 8.2 Requirement:** Now optimized for high-performance modern server environments.
 
 ---
 
@@ -153,7 +163,7 @@ Current version and scripts are defined in the repo; for example:
 ```json
 {
   "name": "performance-optimisation",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "scripts": {
     "build": "wp-scripts build",
     "start": "wp-scripts start"

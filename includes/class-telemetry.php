@@ -212,7 +212,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				'image_alt_attributes'      => self::check_alt_attributes( $resources['images'] ),
 				'robots_txt_exists'         => self::check_robots_txt( $url ),
 				'gzip_brotli_compression'   => self::check_compression( $headers ),
+				'compression_value'         => self::get_compression_type( $headers ),
 				'cache_control_headers'     => self::check_cache_control( $headers ),
+				'cache_control_value'       => self::get_cache_control( $headers ),
 				'scan_type'                 => $scan_type,
 				// New metrics (Phase 1 refinements).
 				'dom_size'                  => $resources['dom_size'],
@@ -499,17 +501,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return bool True if compressed, false otherwise.
 		 */
 		private static function check_compression( $headers ): bool {
-			$encoding = '';
-
-			if ( is_object( $headers ) && method_exists( $headers, 'offsetGet' ) ) {
-				$encoding = (string) ( $headers['content-encoding'] ?? '' );
-			} elseif ( is_array( $headers ) ) {
-				$encoding = (string) ( $headers['content-encoding'] ?? $headers['Content-Encoding'] ?? '' );
-			}
+			$encoding = self::get_header_value( $headers, 'content-encoding' );
 
 			return false !== stripos( $encoding, 'gzip' )
 				|| false !== stripos( $encoding, 'br' )
+				|| false !== stripos( $encoding, 'zstd' )
 				|| false !== stripos( $encoding, 'deflate' );
+		}
+
+		/**
+		 * Retrieve the raw Content-Encoding header value.
+		 *
+		 * @since  1.6.0
+		 * @param  object|array $headers Response headers.
+		 * @return string The raw header value, or 'none' if not set.
+		 */
+		private static function get_compression_type( $headers ): string {
+			$encoding = self::get_header_value( $headers, 'content-encoding' );
+
+			return $encoding ? $encoding : 'none';
 		}
 
 		/**
@@ -523,16 +533,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return bool True if max-age >= 604800, false otherwise.
 		 */
 		private static function check_cache_control( $headers ): bool {
-			$cc = '';
-
-			if ( is_object( $headers ) && method_exists( $headers, 'offsetGet' ) ) {
-				$cc = (string) ( $headers['cache-control'] ?? '' );
-			} elseif ( is_array( $headers ) ) {
-				$cc = (string) ( $headers['cache-control'] ?? $headers['Cache-Control'] ?? '' );
-			}
+			$cc = self::get_header_value( $headers, 'cache-control' );
 
 			return preg_match( '/max-age\s*=\s*(\d+)/i', $cc, $matches )
 				&& (int) $matches[1] >= 604800;
+		}
+
+		/**
+		 * Retrieve the raw Cache-Control header value.
+		 *
+		 * @since  1.6.0
+		 * @param  object|array $headers Response headers.
+		 * @return string The raw header value, or 'none' if not set.
+		 */
+		private static function get_cache_control( $headers ): string {
+			$cc = self::get_header_value( $headers, 'cache-control' );
+
+			return $cc ? $cc : 'none';
+		}
+
+		/**
+		 * Helper to retrieve a header value from various header structures.
+		 *
+		 * Handles WP_HTTP_Response object-style (offsetGet) and raw arrays.
+		 * Tries both lowercase and Title-Case variations of the header name.
+		 *
+		 * @since  1.6.0
+		 * @param  object|array $headers Response headers.
+		 * @param  string       $name    Header name in lowercase (e.g. 'content-encoding').
+		 * @return string Header value or empty string if not found.
+		 */
+		private static function get_header_value( $headers, string $name ): string {
+			if ( is_object( $headers ) && method_exists( $headers, 'offsetGet' ) ) {
+				return (string) ( $headers[ $name ] ?? '' );
+			}
+
+			if ( ! is_array( $headers ) ) {
+				return '';
+			}
+
+			$title_case = str_replace( ' ', '-', ucwords( str_replace( '-', ' ', $name ) ) );
+
+			return (string) ( $headers[ $name ] ?? $headers[ $title_case ] ?? '' );
 		}
 
 		/**

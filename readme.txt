@@ -2,9 +2,9 @@
 Contributors: nilesh912
 Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
-Requires PHP: 7.4
+Requires PHP: 8.2
 Tested up to: 6.9
-Stable tag: 1.5.1
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -120,10 +120,20 @@ Composer configuration:
 
 == Changelog ==
 
+= 1.6.0 (2026-04-26) =
+* New: Google PageSpeed Insights integration — audit Mobile/Desktop performance from your dashboard.
+* New: Suggestion Engine — actionable performance tips based on real-time site telemetry.
+* New: Nginx Support — dynamic configuration snippets for Gzip and Browser Caching.
+* New: WP_CACHE Self-Healing — automatically repairs wp-config.php constant issues.
+* Improvement: Modernized telemetry with Zstd support and detailed network timing breakdown.
+* Security: Implemented SSRF protection for PageSpeed scans and automated API key redaction.
+* Fix: Standardized Object Cache return contracts for multi-key operations.
+* Improvement: Updated minimum PHP requirement to 8.2 for enhanced library compatibility.
+
 = 1.5.1 (2026-04-23) =
-* Improvement: Optimized `wppo_img_info` database option by disabling autoloading, significantly reducing memory usage on frontend page loads.
-* Improvement: Implemented atomic write protection for image metadata to prevent redundant database operations during request shutdown.
-* Fix: Consolidated performance guidelines in `bolt.md` to ensure consistent development patterns.
+* Performance: Optimized wppo_img_info database option to reduce memory overhead.
+* Fix: Implemented atomic write protection for image metadata.
+* Fix: Consolidated build patterns and performance guidelines.
 
 = 1.5.0 (2026-04-20) =
 * New: Performance Monitor — High-precision local telemetry engine using raw cURL for granular network diagnostics (DNS, Connect, SSL, TTFB).
@@ -248,6 +258,15 @@ Use the Tools section to export your current settings or import settings from an
 
 == Upgrade Notice ==
 
+= 1.6.0 (2026-04-26) =
+Major feature release bringing official Google PageSpeed Insights integration to the WordPress dashboard. Introduces Nginx configuration support, automatic wp-config.php self-healing, and enhanced telemetry with modern compression support (Zstd). Now requires PHP 8.2 for high-performance library compatibility.
+
+= 1.5.1 (2026-04-23) =
+Performance and stability release optimizing the `wppo_img_info` database option for reduced memory overhead and implementing atomic write protection for image metadata.
+
+= 1.5.0 (2026-04-20) =
+Introduces the Performance Monitor (high-precision local telemetry engine), System Info Dashboard for real-time environment diagnostics, and a new Developer Mode for granular network timings.
+
 = 1.4.0 (2026-04-18) =
 Major stability and feature release introducing Enterprise Redis Support, batched processing architecture for long-running tasks, and a refined Design System v2.1. Includes critical security hardening and AJAX-based session resilience.
 
@@ -256,6 +275,9 @@ Feature release introducing automated database optimization scheduling, comprehe
 
 = 1.2.3 (2026-04-14) =
 Stability and performance release: Fixed a fatal error during activation/admin notices, implemented lazy loading for cache handlers to reduce overhead, and aligned documentation with official directory limits.
+
+= 1.2.1 (2026-04-14) =
+Stability and security release with wp-config path resolution fixes, asset handle whitelisting, and improved activation logic for WP_CACHE management.
 
 = 1.2.0 (2026-04-13) =
 Major feature release completing the "Cache Core" milestone: .htaccess automation, CDN URL rewriting, and smart cache purging. Includes a full Design System v2.0 with WordPress admin color scheme sync, confirmation dialogs, and polished form controls. Significant security and performance improvements throughout.
@@ -266,11 +288,14 @@ Security release with path traversal fixes, image queue performance improvements
 = 1.1.3 (2026-04-07) =
 Maintenance release to fix vendor file exclusion in build packages.
 
+= 1.1.2 (2026-04-07) =
+Compatibility release ensuring React rendering compatibility with @wordpress/element and sanitized REST API imports.
+
 = 1.1.1 (2026-04-06) =
 Minor release with JS performance optimizations and security hardening.
 
 = 1.1.0 (2026-04-05) =
-Stable v1.1.0 release with security hardening and user interface refinements.
+Feature release introducing Database Cleanup tools, Asset Manager monitoring, and a major UI overhaul of File Optimization settings.
 
 = 1.0.0 (2024-12-18) =
 Initial release with core performance features.

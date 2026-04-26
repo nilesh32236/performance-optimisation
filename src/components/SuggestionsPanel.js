@@ -86,6 +86,26 @@ const formatValue = ( value, unit ) => {
 			? t.suggestionGood || 'Passing'
 			: t.poor || 'Failing';
 	}
+	if ( unit === 'header' ) {
+		if ( value === 'none' ) {
+			return t.disabled || 'None';
+		}
+		// Always show Cache-Control value as-is, never translate the header text.
+		return value;
+	}
+	if ( unit === 'encoding' ) {
+		if ( value === 'none' ) {
+			return t.disabled || 'None';
+		}
+		// Map raw content-encoding values to human-readable form.
+		const encodings = {
+			br: 'Brotli',
+			gzip: 'Gzip',
+			deflate: 'Deflate',
+			zstd: 'Zstd',
+		};
+		return encodings[ String( value ).toLowerCase() ] || value;
+	}
 	if ( unit === 'score' ) {
 		return `${ Math.round( parseFloat( value ) * 100 ) } / 100`;
 	}

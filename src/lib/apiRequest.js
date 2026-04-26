@@ -133,3 +133,13 @@ export const fetchTelemetry = ( url = '' ) => {
 export const saveTelemetryUrls = ( urls ) => {
 	return apiCall( 'telemetry/urls', { urls } );
 };
+
+/**
+ * Retrieve server-level performance rules (Apache/Nginx).
+ *
+ * @since 1.6.0
+ * @return {Promise<Object>} Resolved server rules data.
+ */
+export const fetchServerRules = () => {
+	return apiCall( 'server_rules', {}, 'GET' );
+};

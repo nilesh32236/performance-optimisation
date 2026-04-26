@@ -132,6 +132,9 @@ class Main {
 	 */
 	private function includes(): void {
 		require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
+		if ( file_exists( WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
+			require_once WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
+		}
 		require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/minify/class-html.php';
@@ -146,19 +149,15 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
-		// Phase 1 — Local Diagnostics (v1.5.0).
+		// Phase 1 & 2 — Diagnostics & PageSpeed (v1.5.0-1.6.0).
 		// Load on admin, AJAX, Cron, or REST API requests.
 		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
-		}
-
-		// Phase 2 — PageSpeed Integration & Actionable Suggestions (v1.6.0).
-		// Also loaded during cron so Action Scheduler can call Pagespeed::run_scan().
-		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
 		}
@@ -184,6 +183,7 @@ class Main {
 	 */
 	private function setup_hooks(): void {
 		add_action( 'admin_menu', array( $this, 'init_menu' ) );
+		add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 		add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 		add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
@@ -262,6 +262,38 @@ class Main {
 		add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 
 		add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
+	}
+
+	/**
+	 * Automatically try to fix WP_CACHE if it is missing or disabled.
+	 *
+	 * Runs on admin_init.
+	 *
+	 * @return void
+	 */
+	public function maybe_fix_wp_cache(): void {
+		if ( defined( 'WP_CACHE' ) && WP_CACHE ) {
+			return;
+		}
+
+		// Only run this check once per hour to avoid constant I/O.
+		if ( get_transient( 'wppo_wp_cache_fix_checked' ) ) {
+			return;
+		}
+
+		require_once WPPO_PLUGIN_PATH . 'includes/class-activate.php';
+		$notices = Activate::add_wp_cache_constant();
+
+		if ( empty( $notices ) ) {
+			// Success — throttle for 1 hour.
+			set_transient( 'wppo_wp_cache_fix_checked', 1, HOUR_IN_SECONDS );
+		} else {
+			// Failure — merge notice keys into existing transient to notify user immediately.
+			$existing_notices = get_transient( 'wppo_activation_notices' );
+			$existing_notices = is_array( $existing_notices ) ? $existing_notices : array();
+			$new_notices      = array_unique( array_merge( $existing_notices, (array) $notices ) );
+			set_transient( 'wppo_activation_notices', $new_notices, 30 );
+		}
 	}
 
 	/**
@@ -536,7 +568,7 @@ class Main {
 					'homeUrl'                   => home_url( '/' ),
 					'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
 					'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(),
-					'autoFixEnabled'            => false,  // Phase 4 will populate this.
+					'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
 					'woocommercePresets'        => $this->get_woocommerce_preset_urls(),
 				),
 				'translations'      => array(
@@ -1125,6 +1157,28 @@ class Main {
 	}
 
 	/**
+	 * Checks if an asset name (URL or file path) indicates it is already minified.
+	 *
+	 * @since 1.5.1
+	 *
+	 * @param  string $url_or_path The asset URL or local file path.
+	 * @param  string $ext         The asset extension (css or js).
+	 * @return bool True if the asset name indicates it's minified.
+	 */
+	private function is_minified_asset_name( string $url_or_path, string $ext ): bool {
+		if ( empty( $url_or_path ) ) {
+			return false;
+		}
+
+		$path = wp_parse_url( $url_or_path, PHP_URL_PATH );
+		if ( ! is_string( $path ) ) {
+			$path = $url_or_path;
+		}
+
+		return (bool) preg_match( '/(\.min|\.bundle|-min)\.' . preg_quote( $ext, '/' ) . '$/i', $path );
+	}
+
+	/**
 	 * Rewrites CSS link tags to use minified versions if they exist.
 	 *
 	 * @since 1.0.0
@@ -1138,6 +1192,11 @@ class Main {
 		// Early return for logged-in users, empty URLs, or excluded handles
 		// to avoid the expensive Util::get_local_path() computation.
 		if ( is_user_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) ) {
+			return $tag;
+		}
+
+		// Early return if the URL already indicates a minified file.
+		if ( $this->is_minified_asset_name( $href, 'css' ) ) {
 			return $tag;
 		}
 
@@ -1177,6 +1236,11 @@ class Main {
 			return $tag;
 		}
 
+		// Early return if the URL already indicates a minified file.
+		if ( $this->is_minified_asset_name( $src, 'js' ) ) {
+			return $tag;
+		}
+
 		$local_path = Util::get_local_path( $src );
 
 		if ( $this->is_js_minified( $local_path ) ) {
@@ -1210,9 +1274,7 @@ class Main {
 			return true;
 		}
 
-		$file_name = basename( $file_path );
-
-		if ( preg_match( '/(\.min\.css|\.bundle\.css|\.bundle\.min\.css)$/i', $file_name ) ) {
+		if ( $this->is_minified_asset_name( $file_path, 'css' ) ) {
 			return true;
 		}
 
@@ -1247,9 +1309,7 @@ class Main {
 			return true;
 		}
 
-		$file_name = basename( $file_path );
-
-		if ( preg_match( '/(\.min\.js|\.bundle\.js|\.bundle\.min\.js)$/i', $file_name ) ) {
+		if ( $this->is_minified_asset_name( $file_path, 'js' ) ) {
 			return true;
 		}
 

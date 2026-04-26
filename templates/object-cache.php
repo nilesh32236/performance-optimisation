@@ -527,9 +527,10 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 */
 		public function set_multiple( $data, $group = 'default', $expire = 0 ) {
 			if ( empty( $data ) ) {
-				return true;
+				return array();
 			}
 
+			$results        = array();
 			$formatted_data = array();
 			foreach ( $data as $key => $value ) {
 				$local_key                    = $this->get_key( $key, $group );
@@ -538,7 +539,10 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			}
 
 			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
-				return true;
+				foreach ( $data as $key => $value ) {
+					$results[ $key ] = true;
+				}
+				return $results;
 			}
 
 			if ( $expire > 0 ) {
@@ -547,11 +551,21 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				foreach ( $formatted_data as $k => $v ) {
 					$pipeline->setex( $k, $expire, $v );
 				}
-				$pipeline->exec();
-				return true;
+				$replies = $pipeline->exec();
+
+				$i = 0;
+				foreach ( $data as $key => $value ) {
+					$results[ $key ] = (bool) ( $replies[ $i ] ?? false );
+					++$i;
+				}
+				return $results;
 			}
 
-			return $this->redis->mSet( $formatted_data );
+			$ok = $this->redis->mSet( $formatted_data );
+			foreach ( $data as $key => $value ) {
+				$results[ $key ] = $ok;
+			}
+			return $results;
 		}
 
 		/**
@@ -581,9 +595,10 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 */
 		public function delete_multiple( $keys, $group = 'default' ) {
 			if ( empty( $keys ) ) {
-				return true;
+				return array();
 			}
 
+			$results        = array();
 			$formatted_keys = array();
 			foreach ( $keys as $key ) {
 				$local_key = $this->get_key( $key, $group );
@@ -592,10 +607,26 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			}
 
 			if ( in_array( $group, $this->no_mc_groups, true ) || ! $this->redis_connected ) {
-				return true;
+				foreach ( $keys as $key ) {
+					$results[ $key ] = true;
+				}
+				return $results;
 			}
 
-			return (bool) $this->redis->del( $formatted_keys );
+			// Redis DEL returns count of deleted keys, not per-key success.
+			// To match the contract strictly, we could use a pipeline, but standard DEL is more efficient.
+			// We'll use a pipeline to get individual results if strict contract is required.
+			$pipeline = $this->redis->multi( \Redis::PIPELINE );
+			foreach ( $formatted_keys as $k ) {
+				$pipeline->del( $k );
+			}
+			$replies = $pipeline->exec();
+
+			foreach ( $keys as $i => $key ) {
+				$results[ $key ] = (bool) ( $replies[ $i ] ?? false );
+			}
+
+			return $results;
 		}
 
 		/**

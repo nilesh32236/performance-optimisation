@@ -111,19 +111,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$api_key = self::get_api_key();
 			if ( empty( $api_key ) ) {
 				new Log( 'PageSpeed scan skipped: API key not configured.' );
-				self::store_failure( $url, $strategy, 'PageSpeed API key is not configured. Add it in the Tools tab.' );
+				self::store_failure( $url, $strategy, 'PageSpeed API key is not configured. Add it in the Performance Audit settings.' );
 				return;
 			}
 
-			// The Google PageSpeed API rejects localhost URLs.
-			// Swap them for a real URL so the job does not silently fail on dev environments.
-			if ( false !== strpos( $url, 'localhost' ) || false !== strpos( $url, '127.0.0.1' ) ) {
-				new Log( 'PageSpeed scan: localhost URL detected, substituting https://developers.google.com for API call.' );
-				$url = 'https://activewebsitemanagement.com/';
+			$request_url = $url;
+
+			// The Google PageSpeed API rejects localhost or non-public URLs.
+			if ( false !== strpos( $request_url, 'localhost' ) || false !== strpos( $request_url, '127.0.0.1' ) ) {
+				new Log( 'PageSpeed scan failed: local URL detected.' );
+				self::store_failure( $url, $strategy, 'PageSpeed cannot scan local or non-public URLs. Please use a public URL.' );
+				return;
 			}
 
 			$query_args = array(
-				'url'      => rawurlencode( $url ),
+				'url'      => $request_url, // add_query_arg will handle encoding.
 				'key'      => $api_key,
 				'strategy' => strtoupper( $strategy ),
 			);
@@ -134,11 +136,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$category_qs = implode( '&', array_map( fn( $c ) => 'category=' . rawurlencode( $c ), $categories ) );
 			$query_url   = add_query_arg( $query_args, self::API_ENDPOINT ) . '&' . $category_qs;
 
-			error_log( '$query_url: ' . $query_url );
+			// Security: redact API key from debug logs.
+			$redacted_url = str_replace( $api_key, 'REDACTED', $query_url );
+			new Log( 'PageSpeed API request: ' . $redacted_url );
+
 			$response = wp_remote_get(
 				$query_url,
 				array(
-					'timeout'   => 3000,
+					'timeout'   => 120,
 					'sslverify' => true,
 				)
 			);
@@ -151,7 +156,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			$http_code = (int) wp_remote_retrieve_response_code( $response );
 
-			error_log( '$http_code: ' . $http_code );
 			if ( 200 !== $http_code ) {
 				$msg = sprintf( 'PageSpeed API returned HTTP %d for %s.', $http_code, esc_url( $url ) );
 				new Log( $msg );

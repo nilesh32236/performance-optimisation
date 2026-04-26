@@ -68,6 +68,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		return merged;
 	}, [ telemetrySuggestions, pagespeedSuggestions ] );
 
+	// Reset suggestions when auditUrl changes to prevent stale results from merging.
+	useEffect( () => {
+		setTelemetrySuggestions( [] );
+		setPagespeedSuggestions( [] );
+	}, [ auditUrl ] );
+
 	// Initialize state
 	const [ state, setState ] = useState( {
 		totalCacheSize: wppoSettings.cache_size,
@@ -232,7 +238,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				}
 			} )
 			.finally( () => handleLoading( 'optimize_images', false ) );
-	}, [ handleLoading, pendingPaths, pollJobStatus ] );
+	}, [ handleLoading, pendingPaths, pollJobStatus, updateState ] );
 
 	const removeImages = useCallback( () => {
 		handleLoading( 'remove_images', true );

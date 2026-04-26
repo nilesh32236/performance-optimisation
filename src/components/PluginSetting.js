@@ -40,7 +40,8 @@ const PluginSetting = ( { options } ) => {
 		setSavingApiKey( true );
 		setApiKeyNotification( { message: '', success: false } );
 		try {
-			const currentSettings = options?.performance_audit ?? {};
+			const currentSettings =
+				wppoSettings?.settings?.performance_audit ?? {};
 			const response = await apiCall( 'update_settings', {
 				tab: 'performance_audit',
 				settings: {
@@ -55,6 +56,12 @@ const PluginSetting = ( { options } ) => {
 					wppoSettings.performance_audit.pagespeedApiKeyConfigured =
 						pagespeedApiKey.trim().length > 0;
 				}
+				// Also update the global settings object for future saves.
+				if ( wppoSettings.settings?.performance_audit ) {
+					wppoSettings.settings.performance_audit.pagespeed_api_key =
+						pagespeedApiKey;
+				}
+
 				setApiKeyNotification( {
 					message:
 						translations.pagespeedApiKeySaved || 'API key saved.',
@@ -62,13 +69,18 @@ const PluginSetting = ( { options } ) => {
 				} );
 			} else {
 				setApiKeyNotification( {
-					message: response.message || 'Failed to save API key.',
+					message:
+						response.message ||
+						translations.pagespeedApiKeySaveFailed ||
+						'Failed to save API key.',
 					success: false,
 				} );
 			}
 		} catch ( err ) {
 			setApiKeyNotification( {
-				message: 'Error saving API key.',
+				message:
+					translations.pagespeedApiKeySaveError ||
+					'Error saving API key.',
 				success: false,
 			} );
 			console.error( 'Save API key error:', err );
@@ -112,7 +124,13 @@ const PluginSetting = ( { options } ) => {
 	};
 
 	const exportSettings = () => {
-		const blob = new Blob( [ JSON.stringify( options, null, 2 ) ], {
+		// Security: redact sensitive API keys from export.
+		const safeOptions = JSON.parse( JSON.stringify( options ) );
+		if ( safeOptions.performance_audit?.pagespeed_api_key ) {
+			safeOptions.performance_audit.pagespeed_api_key = 'REDACTED';
+		}
+
+		const blob = new Blob( [ JSON.stringify( safeOptions, null, 2 ) ], {
 			type: 'application/json',
 		} );
 		const link = document.createElement( 'a' );

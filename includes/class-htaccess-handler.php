@@ -74,12 +74,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		}
 
 		/**
-		 * Generates the performance optimization rules for .htaccess.
+		 * Retrieve the rules to be added to .htaccess.
 		 *
-		 * @return array The list of rules.
-		 * @since 1.2.0
+		 * @return array Array of rules.
+		 * @since  1.0.0
 		 */
-		private static function get_rules(): array {
+		public static function get_rules(): array {
 			return array(
 				'<IfModule mod_deflate.c>',
 				'    # Compress HTML, CSS, JavaScript, Text, XML, and Fonts',
