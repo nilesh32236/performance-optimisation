@@ -105,6 +105,11 @@ class Main {
 				),
 				'preload_settings'   => array(),
 				'image_optimisation' => array(),
+				'performance_audit'  => array(
+					'pagespeed_api_key' => '',
+					'high_value_urls'   => array(),
+					'auto_fix_enabled'  => false,
+				),
 			)
 		);
 
@@ -135,6 +140,7 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-metabox.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
+		require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-rest.php';
 		require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
@@ -144,10 +150,22 @@ class Main {
 		require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
 		// Phase 1 — Local Diagnostics (v1.5.0).
-		// Load on admin or AJAX — lazy-load for REST requests in the REST handler.
-		if ( is_admin() || wp_doing_ajax() ) {
+		// Load on admin, AJAX, Cron, or REST API requests.
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
+		}
+
+		// Phase 2 — PageSpeed Integration & Actionable Suggestions (v1.6.0).
+		// Also loaded during cron so Action Scheduler can call Pagespeed::run_scan().
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
+		}
+
+		// Phase 3 — High-Value Page Tracker (v1.7.0).
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry-table.php';
 		}
 
 		if ( is_admin() ) {
@@ -232,6 +250,9 @@ class Main {
 
 		// Register Action Scheduler callback for background image processing.
 		add_action( 'wppo_convert_image_background', array( $this, 'process_background_image' ), 10, 1 );
+
+		// Phase 2 — Register Action Scheduler callback for background PageSpeed scans.
+		add_action( 'wppo_pagespeed_scan', array( 'PerformanceOptimise\Inc\Pagespeed', 'run_scan' ), 10, 1 );
 
 		// Clear all cache on structural changes that invalidate every cached page.
 		add_action( 'permalink_structure_changed', array( __CLASS__, 'clear_all_cache' ) );
@@ -423,6 +444,32 @@ class Main {
 	}
 
 	/**
+	 * Returns WooCommerce high-value preset URLs (cart and checkout) when WooCommerce is active.
+	 *
+	 * @since 1.7.0
+	 * @return array Array of preset URL strings, empty when WooCommerce is not active.
+	 */
+	private function get_woocommerce_preset_urls(): array {
+		if ( ! function_exists( 'WC' ) ) {
+			return array();
+		}
+
+		$presets = array();
+
+		$cart_page_id = wc_get_page_id( 'cart' );
+		if ( $cart_page_id > 0 ) {
+			$presets[] = get_permalink( $cart_page_id );
+		}
+
+		$checkout_page_id = wc_get_page_id( 'checkout' );
+		if ( $checkout_page_id > 0 ) {
+			$presets[] = get_permalink( $checkout_page_id );
+		}
+
+		return array_filter( $presets );
+	}
+
+	/**
 	 * Enqueue admin scripts and styles.
 	 *
 	 * Loads CSS and JavaScript files for the admin dashboard page.
@@ -487,9 +534,10 @@ class Main {
 				'total_js_css'      => $total_js_css,
 				'performance_audit' => array(
 					'homeUrl'                   => home_url( '/' ),
-					'pagespeedApiKeyConfigured' => false, // Phase 2 will populate this.
-					'highValueUrls'             => array(), // Phase 3 will populate this.
+					'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
+					'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(),
 					'autoFixEnabled'            => false,  // Phase 4 will populate this.
+					'woocommercePresets'        => $this->get_woocommerce_preset_urls(),
 				),
 				'translations'      => array(
 					'performanceSettings'      => __( 'Performance Settings', 'performance-optimisation' ),
@@ -778,6 +826,47 @@ class Main {
 					'thirdPartyScripts'        => __( 'Third-Party Scripts', 'performance-optimisation' ),
 					'refresh'                  => __( 'Refresh', 'performance-optimisation' ),
 					'refreshSystemInfo'        => __( 'Refresh System Info', 'performance-optimisation' ),
+
+					// Phase 2 — PageSpeed Integration & Actionable Suggestions (v1.6.0).
+					'pagespeedScan'            => __( 'Run PageSpeed Scan', 'performance-optimisation' ),
+					'pagespeedScanning'        => __( 'Scanning with PageSpeed...', 'performance-optimisation' ),
+					'pagespeedResults'         => __( 'PageSpeed Results', 'performance-optimisation' ),
+					'pagespeedApiKeyMissing'   => __( 'PageSpeed API key is not configured. Add it in Settings.', 'performance-optimisation' ),
+					'pagespeedScoreLabel'      => __( 'Lighthouse Score', 'performance-optimisation' ),
+					'pagespeedMobile'          => __( 'Mobile', 'performance-optimisation' ),
+					'pagespeedDesktop'         => __( 'Desktop', 'performance-optimisation' ),
+					'pagespeedPending'         => __( 'PageSpeed scan is running in the background. Results will appear shortly.', 'performance-optimisation' ),
+					'pagespeedError'           => __( 'PageSpeed scan failed. Please try again.', 'performance-optimisation' ),
+					'suggestions'              => __( 'Suggestions', 'performance-optimisation' ),
+					'suggestionsDesc'          => __( 'Based on your scan results, here are the recommended actions to improve performance.', 'performance-optimisation' ),
+					'fixIt'                    => __( 'Fix It', 'performance-optimisation' ),
+					'noSuggestions'            => __( 'No suggestions — your site looks great!', 'performance-optimisation' ),
+					'suggestionGood'           => __( 'Passing', 'performance-optimisation' ),
+					'serverWaitTime'           => __( 'Server Processing Time', 'performance-optimisation' ),
+					'lcp'                      => __( 'Largest Contentful Paint', 'performance-optimisation' ),
+					'fcp'                      => __( 'First Contentful Paint', 'performance-optimisation' ),
+					'tbt'                      => __( 'Total Blocking Time', 'performance-optimisation' ),
+					'cls'                      => __( 'Cumulative Layout Shift', 'performance-optimisation' ),
+					'speedIndex'               => __( 'Speed Index', 'performance-optimisation' ),
+					'pagespeedApiKey'          => __( 'Google PageSpeed API Key', 'performance-optimisation' ),
+					'pagespeedApiKeyDesc'      => __( 'Required to run PageSpeed Insights scans. Get a free key from Google Cloud Console.', 'performance-optimisation' ),
+					'pagespeedApiKeySaved'     => __( 'API key saved.', 'performance-optimisation' ),
+
+					// Phase 3 — High-Value Page Tracker (v1.7.0).
+					'performanceHistory'       => __( ' Performance History', 'performance-optimisation' ),
+					'clearHistory'             => __( 'Clear History', 'performance-optimisation' ),
+					'noHistoryData'            => __( 'No history data yet. Add URLs and run scans to start tracking.', 'performance-optimisation' ),
+					'selectUrl'                => __( 'Select a URL', 'performance-optimisation' ),
+					'urlSelector'              => __( 'Filter by URL', 'performance-optimisation' ),
+					'trendData'                => __( 'Trend', 'performance-optimisation' ),
+					'notEnoughData'            => __( 'Not enough data points to show a trend.', 'performance-optimisation' ),
+					'addUrl'                   => __( 'Add URL', 'performance-optimisation' ),
+					'urlPlaceholder'           => __( 'https://example.com/page', 'performance-optimisation' ),
+					'woocommercePresets'       => __( 'WooCommerce Presets', 'performance-optimisation' ),
+					'clearHistoryConfirm'      => __( 'This will permanently delete all telemetry history and cached scan data. Continue?', 'performance-optimisation' ),
+					'historyCleared'           => __( 'History cleared successfully.', 'performance-optimisation' ),
+					'urlAdded'                 => __( 'URL added successfully.', 'performance-optimisation' ),
+					'urlAlreadyExists'         => __( 'This URL is already in your list.', 'performance-optimisation' ),
 				),
 
 				// Frontend theme colors for accent syncing.

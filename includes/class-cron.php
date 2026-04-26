@@ -49,6 +49,10 @@ class Cron {
 		add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
 
 		add_action( 'wppo_database_cleanup_cron', array( $this, 'database_cleanup_cron' ) );
+
+		// Phase 3 — High-Value Page Tracker (v1.7.0).
+		add_action( 'wppo_weekly_telemetry_scan', array( $this, 'dispatch_weekly_telemetry' ) );
+		add_action( 'wppo_telemetry_scan_url', array( $this, 'run_scheduled_telemetry' ), 10, 1 );
 	}
 
 	/**
@@ -87,6 +91,11 @@ class Cron {
 
 		if ( ! wp_next_scheduled( 'wppo_database_cleanup_cron' ) ) {
 			wp_schedule_event( time(), 'daily', 'wppo_database_cleanup_cron' );
+		}
+
+		// Phase 3 — schedule weekly telemetry scan via Action Scheduler.
+		if ( function_exists( 'as_schedule_recurring_action' ) && ! as_next_scheduled_action( 'wppo_weekly_telemetry_scan' ) ) {
+			as_schedule_recurring_action( time(), WEEK_IN_SECONDS, 'wppo_weekly_telemetry_scan', array(), 'performance_optimisation' );
 		}
 	}
 
@@ -392,5 +401,78 @@ class Cron {
 			Database_Cleanup::auto_clean( $settings );
 			update_option( 'wppo_last_db_cleanup', $now );
 		}
+	}
+
+	/**
+	 * Dispatches individual per-URL telemetry scan jobs for all high-value URLs.
+	 *
+	 * Fired by the weekly `wppo_weekly_telemetry_scan` Action Scheduler action.
+	 * Enqueues one async `wppo_telemetry_scan_url` action per configured URL.
+	 *
+	 * @since 1.7.0
+	 * @return void
+	 */
+	public function dispatch_weekly_telemetry(): void {
+		if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+			return;
+		}
+
+		$options         = get_option( 'wppo_settings', array() );
+		$high_value_urls = $options['performance_audit']['high_value_urls'] ?? array();
+
+		foreach ( $high_value_urls as $url ) {
+			$url = esc_url_raw( $url );
+			if ( empty( $url ) ) {
+				continue;
+			}
+
+			as_enqueue_async_action(
+				'wppo_telemetry_scan_url',
+				array( array( 'url' => $url ) ),
+				'performance_optimisation'
+			);
+		}
+	}
+
+	/**
+	 * Runs a scheduled telemetry scan for a single URL and persists the result.
+	 *
+	 * Fired by the `wppo_telemetry_scan_url` Action Scheduler action.
+	 *
+	 * @since 1.7.0
+	 *
+	 * @param array $args Associative array with key 'url'.
+	 * @return void
+	 */
+	public function run_scheduled_telemetry( array $args ): void {
+		$url = isset( $args['url'] ) ? esc_url_raw( $args['url'] ) : '';
+		if ( empty( $url ) ) {
+			return;
+		}
+
+		if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
+		}
+		if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry_Table' ) ) {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry-table.php';
+		}
+
+		$result = Telemetry::scan( $url, 'scheduled' );
+
+		if ( is_wp_error( $result ) ) {
+			new Log(
+				sprintf(
+					/* translators: %s: URL that failed to scan */
+					__( 'Scheduled telemetry scan failed for %s on ', 'performance-optimisation' ),
+					esc_url( $url )
+				)
+			);
+			return;
+		}
+
+		// Attach the URL to the result so Telemetry_Table::insert() can read it.
+		$result['url'] = $url;
+
+		Telemetry_Table::insert( $result, array(), 'scheduled' );
 	}
 }

@@ -897,3 +897,54 @@ function wp_cache_decr( $key, $offset = 1, $group = '' ) {
 	global $wp_object_cache;
 	return $wp_object_cache->decr( $key, $offset, $group );
 }
+
+/**
+ * Closes the cache connection on shutdown.
+ *
+ * Called by WordPress core's shutdown_action_hook() in wp-includes/load.php.
+ * Must exist in every object-cache drop-in or WordPress throws a fatal error
+ * on shutdown: "Call to undefined function wp_cache_close()".
+ *
+ * @return bool Always true.
+ */
+function wp_cache_close() {
+	return true;
+}
+
+/**
+ * Gets multiple values from the cache.
+ *
+ * @param array  $keys  Array of keys.
+ * @param string $group Cache group.
+ * @param bool   $force Force from Redis.
+ * @return array Array of return values.
+ */
+function wp_cache_get_multiple( $keys, $group = '', $force = false ) {
+	global $wp_object_cache;
+	return $wp_object_cache->get_multiple( $keys, $group, $force );
+}
+
+/**
+ * Sets multiple values to the cache.
+ *
+ * @param array  $data   Array of keys and values.
+ * @param string $group  Cache group.
+ * @param int    $expire Expiration.
+ * @return bool True on success.
+ */
+function wp_cache_set_multiple( $data, $group = '', $expire = 0 ) {
+	global $wp_object_cache;
+	return $wp_object_cache->set_multiple( $data, $group, (int) $expire );
+}
+
+/**
+ * Deletes multiple values from the cache.
+ *
+ * @param array  $keys  Array of keys.
+ * @param string $group Cache group.
+ * @return bool True on success.
+ */
+function wp_cache_delete_multiple( $keys, $group = '' ) {
+	global $wp_object_cache;
+	return $wp_object_cache->delete_multiple( $keys, $group );
+}

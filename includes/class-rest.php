@@ -119,6 +119,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'callback'            => array( $this, 'run_performance_scan' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
 				),
+
+				// Phase 2 — PageSpeed Integration & Actionable Suggestions (v1.6.0).
+				'pagespeed_scan'          => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'queue_pagespeed_scan' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
+				'pagespeed_results'       => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_pagespeed_results' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
+				'suggestions'             => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_suggestions' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
+
+				// Phase 3 — High-Value Page Tracker (v1.7.0).
+				'telemetry'               => array(
+					array(
+						'methods'             => 'GET',
+						'callback'            => array( $this, 'get_telemetry' ),
+						'permission_callback' => array( $this, 'permission_callback' ),
+					),
+					array(
+						'methods'             => 'DELETE',
+						'callback'            => array( $this, 'delete_telemetry' ),
+						'permission_callback' => array( $this, 'permission_callback' ),
+					),
+				),
+				'telemetry/urls'          => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'save_telemetry_urls' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+				),
 			);
 		}
 
@@ -838,6 +874,194 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			return $this->send_response( $result );
+		}
+
+		/**
+		 * Queues a Google PageSpeed Insights scan as a background Action Scheduler job.
+		 *
+		 * Accepts POST body params: url (string), strategy ('mobile'|'desktop').
+		 * Returns HTTP 202 with the queued job ID so the React UI can poll
+		 * GET /pagespeed_results until the result is ready.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.6.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function queue_pagespeed_scan( \WP_REST_Request $request ): \WP_REST_Response {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
+			$params   = $request->get_params();
+			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
+			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : 'mobile';
+
+			if ( empty( $url ) ) {
+				return $this->send_response( null, false, 400, __( 'A valid URL is required.', 'performance-optimisation' ) );
+			}
+
+			// Validate strategy.
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
+
+			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+				return $this->send_response( null, false, 500, __( 'Action Scheduler is not available.', 'performance-optimisation' ) );
+			}
+
+			$job_id = Pagespeed::queue_scan( $url, $strategy );
+
+			return $this->send_response(
+				array(
+					'job_id'   => $job_id,
+					'url'      => $url,
+					'strategy' => $strategy,
+				),
+				true,
+				202
+			);
+		}
+
+		/**
+		 * Returns cached PageSpeed Insights results for a URL and strategy.
+		 *
+		 * Returns the prepared result array if the transient exists, or a
+		 * { status: 'not_ready' } response with HTTP 202 if the background
+		 * job has not yet completed.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.6.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_pagespeed_results( \WP_REST_Request $request ): \WP_REST_Response {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
+			$params   = $request->get_params();
+			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
+			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : 'mobile';
+
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
+				$strategy = 'mobile';
+			}
+
+			$results = Pagespeed::get_results( $url, $strategy );
+
+			if ( false === $results ) {
+				return $this->send_response( array( 'status' => 'not_ready' ), true, 202 );
+			}
+
+			// Detect failure sentinel stored by Pagespeed::store_failure().
+			if ( ! empty( $results['error'] ) ) {
+				return $this->send_response(
+					null,
+					false,
+					500,
+					$results['message'] ?? __( 'PageSpeed scan failed.', 'performance-optimisation' )
+				);
+			}
+
+			// Append Suggestion_Engine output so the React UI gets everything in one call.
+			$results['suggestions'] = Suggestion_Engine::from_pagespeed( $results );
+
+			return $this->send_response( $results );
+		}
+
+		/**
+		 * Returns Suggestion_Engine output for a given telemetry scan result.
+		 *
+		 * Accepts GET param: url (string). Retrieves the cached telemetry transient
+		 * and runs it through Suggestion_Engine::from_telemetry().
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.6.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_suggestions( \WP_REST_Request $request ): \WP_REST_Response {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
+			$params = $request->get_params();
+			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
+
+			$transient_key = 'wppo_audit_' . md5( $url );
+			$telemetry     = get_transient( $transient_key );
+
+			if ( false === $telemetry ) {
+				return $this->send_response(
+					array( 'suggestions' => array() ),
+					true,
+					200,
+					__( 'No cached scan found for this URL. Run a scan first.', 'performance-optimisation' )
+				);
+			}
+
+			$suggestions = Suggestion_Engine::from_telemetry( $telemetry );
+
+			return $this->send_response( array( 'suggestions' => $suggestions ) );
+		}
+
+		/**
+		 * Returns telemetry history rows, optionally filtered by URL.
+		 *
+		 * Accepts optional GET param: url (string).
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.7.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_telemetry( \WP_REST_Request $request ): \WP_REST_Response {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry-table.php';
+			$params = $request->get_params();
+			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : '';
+
+			$rows = Telemetry_Table::get_rows( $url );
+
+			return $this->send_response( $rows );
+		}
+
+		/**
+		 * Saves (merges + deduplicates) high-value URLs into plugin settings.
+		 *
+		 * Accepts POST body: urls (string[]).
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.7.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function save_telemetry_urls( \WP_REST_Request $request ): \WP_REST_Response {
+			$params   = $request->get_params();
+			$new_urls = isset( $params['urls'] ) ? (array) $params['urls'] : array();
+
+			// Sanitize each submitted URL.
+			$sanitized = array_filter( array_map( 'esc_url_raw', $new_urls ) );
+
+			$options  = get_option( 'wppo_settings', array() );
+			$existing = $options['performance_audit']['high_value_urls'] ?? array();
+			$merged   = array_values( array_unique( array_merge( $existing, $sanitized ) ) );
+			$options['performance_audit']['high_value_urls'] = $merged;
+
+			update_option( 'wppo_settings', $options );
+
+			return $this->send_response( $merged );
+		}
+
+		/**
+		 * Deletes all telemetry rows and clears the transient index.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since 1.7.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function delete_telemetry( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry-table.php';
+
+			$deleted = Telemetry_Table::truncate();
+
+			// Clear all registered transient keys.
+			$transient_index = get_option( 'wppo_transient_index', array() );
+			foreach ( $transient_index as $key ) {
+				delete_transient( $key );
+			}
+			update_option( 'wppo_transient_index', array() );
+
+			return $this->send_response( array( 'deleted' => $deleted ) );
 		}
 
 		/**
