@@ -8,3 +8,7 @@
 
 **Learning:** Replacing action triggers (like buttons) with simple text (e.g. `<p>Loading...</p>`) while fetching data causes jarring layout shifts and hurts accessibility because focus can be lost.
 **Action:** Always reuse the `LoadingSubmitButton` component for any asynchronous action. This ensures the button remains in the DOM, maintains its physical space, and gracefully displays a spinner internally to communicate progress.
+
+## 2026-04-29 - Dynamic Gradients
+**Learning:** When using `var(--wppo-primary)` in a gradient, avoid pairing it with a hardcoded hex color. This breaks dynamic WP theme adaptation because the primary color adapts but the hardcoded color clashes.
+**Action:** Use `color-mix(in srgb, var(--wppo-primary) X%, white)` to generate a dynamic lighter or darker shade that naturally adapts to the active WP Admin Color Scheme alongside the primary color.

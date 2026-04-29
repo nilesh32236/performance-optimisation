@@ -6,6 +6,7 @@
 	--wppo-primary-soft: color-mix(in srgb, var(--wppo-primary) 8%, transparent);
 	--wppo-primary-medium: rgba(34, 113, 177, 0.15);
 	--wppo-primary-medium: color-mix(in srgb, var(--wppo-primary) 15%, transparent);
+	--wppo-primary-light: color-mix(in srgb, var(--wppo-primary) 60%, white);
 
 	/* Backgrounds */
 	--wppo-bg-app: #f8fafc;
