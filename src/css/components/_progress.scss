@@ -7,7 +7,7 @@
 
 	&__fill {
 		height: 100%;
-		background: linear-gradient(90deg, var(--wppo-primary), #818cf8);
+		background: linear-gradient(90deg, var(--wppo-primary), var(--wppo-primary-light));
 		border-radius: 4px;
 		transition: width 0.6s ease;
 
