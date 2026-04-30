@@ -10,3 +10,8 @@
 **Bug/Gap:** Tests for components missing DOM implementation and babel config.
 **Root Cause:** Jest uses node by default if testEnvironment isn't specified, and misses WP-specific transpilation.
 **Test Added:** Tested the interaction behaviors, updated `package.json` with `testEnvironment: jsdom`, set `babel.config.json` to use `@wordpress/default`, and wrote `setupTests.js`.
+
+## 2024-04-30 - CheckboxOption Tests Added
+**Bug/Gap:** The `CheckboxOption` component (`src/components/common/CheckboxOption.js`), central to many settings toggles, lacked any unit tests for edge cases like dynamic rendering of nested content based on `checked` state and conditional `aria-describedby` generation based on `description` props.
+**Root Cause:** The UI components lacked unit test coverage resulting in potentially fragile components if nested styling logic or custom id logic is accidentally modified.
+**Test Added:** Added `CheckboxOption.test.js` to assert "happy path" checks, nested content display only when `is-checked` is true, custom id implementations, and `textarea` props functionalities. Tested with React testing library.
