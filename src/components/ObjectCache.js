@@ -155,24 +155,34 @@ const ObjectCache = ( { options = {} } ) => {
 					<div className="wppo-feature-header__actions">
 						{ cacheStatus.enabled ? (
 							<>
-								<button
+								<LoadingSubmitButton
+									type="button"
 									className="wppo-button wppo-button--secondary"
 									onClick={ () => handleAction( 'flush' ) }
 									disabled={ isActionLoading }
-								>
-									<FontAwesomeIcon icon={ faBroom } /> Flush
-									Cache
-								</button>
-								<button
+									isLoading={ isActionLoading }
+									label={
+										<>
+											<FontAwesomeIcon icon={ faBroom } /> Flush Cache
+										</>
+									}
+								/>
+								<LoadingSubmitButton
+									type="button"
 									className="wppo-button wppo-button--danger"
 									onClick={ () => handleAction( 'disable' ) }
 									disabled={ isActionLoading }
-								>
-									<FontAwesomeIcon icon={ faTimes } /> Disable
-								</button>
+									isLoading={ isActionLoading }
+									label={
+										<>
+											<FontAwesomeIcon icon={ faTimes } /> Disable
+										</>
+									}
+								/>
 							</>
 						) : (
-							<button
+							<LoadingSubmitButton
+								type="button"
 								className="wppo-button wppo-button--primary"
 								onClick={ () => handleAction( 'enable' ) }
 								disabled={
@@ -181,10 +191,13 @@ const ObjectCache = ( { options = {} } ) => {
 									! cacheStatus.redis_reachable ||
 									cacheStatus.foreign_dropin
 								}
-							>
-								<FontAwesomeIcon icon={ faCheckCircle } />{ ' ' }
-								Enable Object Cache
-							</button>
+								isLoading={ isActionLoading }
+								label={
+									<>
+										<FontAwesomeIcon icon={ faCheckCircle } /> Enable Object Cache
+									</>
+								}
+							/>
 						) }
 					</div>
 				}
@@ -423,15 +436,18 @@ const ObjectCache = ( { options = {} } ) => {
 						</div>
 
 						<div className="wppo-mt-24 wppo-flex-gap-12">
-							<button
+							<LoadingSubmitButton
 								type="button"
 								className="wppo-button wppo-button--secondary"
 								onClick={ () => handleAction( 'ping' ) }
 								disabled={ isActionLoading }
-							>
-								<FontAwesomeIcon icon={ faNetworkWired } />{ ' ' }
-								{ isActionLoading ? '...' : 'Test Connection' }
-							</button>
+								isLoading={ isActionLoading }
+								label={
+									<>
+										<FontAwesomeIcon icon={ faNetworkWired } /> Test Connection
+									</>
+								}
+							/>
 							<LoadingSubmitButton
 								className="wppo-button wppo-button--primary"
 								onClick={ handleSubmit }
