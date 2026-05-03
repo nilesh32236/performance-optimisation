@@ -1,0 +1,11 @@
+# https://docs.qoder.com/configuration-options/
+reviews:
+  profile: assertive
+  path_filters:
+    - "!vendor/**"
+    - "!build/**"
+    - "!node_modules/**"
+    - "!package-lock.json"
+    - "!composer.lock"
+    - "!.qoder"
+model: "gemini-2.5-flash"
