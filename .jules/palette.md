@@ -8,3 +8,6 @@
 
 **Learning:** Replacing action triggers (like buttons) with simple text (e.g. `<p>Loading...</p>`) while fetching data causes jarring layout shifts and hurts accessibility because focus can be lost.
 **Action:** Always reuse the `LoadingSubmitButton` component for any asynchronous action. This ensures the button remains in the DOM, maintains its physical space, and gracefully displays a spinner internally to communicate progress.
+## 2026-05-03 - [A11y Textarea Descriptions]
+**Learning:** Textareas with accompanying description `<p>` elements must be linked via `aria-describedby` so screen readers correctly announce the helper text.
+**Action:** Add matching `id` attributes to description `<p>` elements and reference them in the input/textarea's `aria-describedby` attribute.
