@@ -380,12 +380,16 @@ class Cron {
 
 		$should_run = false;
 
-		if ( 'daily' === $schedule ) {
-			$should_run = true;
-		} elseif ( 'weekly' === $schedule && ( $now - $last_run > WEEK_IN_SECONDS - HOUR_IN_SECONDS ) ) {
-			$should_run = true;
-		} elseif ( 'monthly' === $schedule && ( $now - $last_run > 30 * DAY_IN_SECONDS - HOUR_IN_SECONDS ) ) {
-			$should_run = true;
+		switch ( $schedule ) {
+			case 'daily':
+				$should_run = true;
+				break;
+			case 'weekly':
+				$should_run = ( $now - $last_run > WEEK_IN_SECONDS - HOUR_IN_SECONDS );
+				break;
+			case 'monthly':
+				$should_run = ( $now - $last_run > 30 * DAY_IN_SECONDS - HOUR_IN_SECONDS );
+				break;
 		}
 
 		if ( $should_run ) {

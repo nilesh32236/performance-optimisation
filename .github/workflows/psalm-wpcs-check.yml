@@ -23,13 +23,13 @@ jobs:
         php: ["8.2", "8.3", "8.4", "8.5"]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          tools: parallel-lint
+          tools: composer, parallel-lint
 
       - name: PHP Syntax Check
         run: parallel-lint --exclude vendor .
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
