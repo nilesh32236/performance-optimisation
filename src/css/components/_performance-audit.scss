@@ -572,7 +572,7 @@
 		left: 0;
 		right: 0;
 		height: 2px;
-		background: linear-gradient(90deg, var(--wppo-primary), #818cf8);
+		background: linear-gradient(90deg, var(--wppo-primary), color-mix(in srgb, var(--wppo-primary) 60%, white));
 		opacity: 0;
 		transition: opacity 0.2s ease;
 	}
