@@ -10,3 +10,7 @@
 **Bug/Gap:** Tests for components missing DOM implementation and babel config.
 **Root Cause:** Jest uses node by default if testEnvironment isn't specified, and misses WP-specific transpilation.
 **Test Added:** Tested the interaction behaviors, updated `package.json` with `testEnvironment: jsdom`, set `babel.config.json` to use `@wordpress/default`, and wrote `setupTests.js`.
+## $(date +%Y-%m-%d) - [JS Test Added] SystemInfo Component Verification
+**Bug/Gap:** The `SystemInfo` React component lacked tests, leaving its integration with `fetchSystemInfo` from `apiRequest` and its various UI states unverified against potential edge cases like missing globals or network errors.
+**Root Cause:** New UI component implemented without accompanying unit tests.
+**Test Added:** Added a React unit test for `SystemInfo.js` using `@testing-library/react` mocking the API request. Ensured proper initialization with mock globals (`wppoSettings`), asserted DOM updates upon a successful load, and verified appropriate sad-path behaviors for API responses indicating errors or full network exceptions.
