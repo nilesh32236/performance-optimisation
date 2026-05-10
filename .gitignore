@@ -1,7 +1,2 @@
+vendor/
 node_modules/
-.DS_Store
-reports/
-app/
-test-lab/
-*.log
-test-lab/vendor/
