@@ -616,8 +616,12 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 									placeholder="https://cdn.example.com"
 									value={ settings.cdnURL }
 									onChange={ handleChange( setSettings ) }
+									aria-describedby="cdnURL-desc"
 								/>
-								<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								<p
+									id="cdnURL-desc"
+									className="wppo-text-muted wppo-mt-10 wppo-text-small"
+								>
 									Enter your CDN hostname. All static asset
 									URLs (JS, CSS, images) will be rewritten to
 									load from this domain, reducing latency for
@@ -688,6 +692,7 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 									name="heartbeatControl"
 									value={ settings.heartbeatControl }
 									onChange={ handleChange( setSettings ) }
+									aria-describedby="heartbeatControl-desc"
 								>
 									<option value="default">
 										Default Mode
@@ -702,7 +707,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 										Disable Everywhere
 									</option>
 								</select>
-								<p className="wppo-text-muted wppo-mt-12 wppo-text-13">
+								<p
+									id="heartbeatControl-desc"
+									className="wppo-text-muted wppo-mt-12 wppo-text-13"
+								>
 									Restricting the Heartbeat API reduces server
 									CPU usage by limiting polling.
 								</p>
