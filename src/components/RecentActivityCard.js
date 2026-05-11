@@ -8,6 +8,7 @@
  * @since 1.5.0
  */
 
+import { memo } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHistory, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
@@ -61,4 +62,4 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 	);
 };
 
-export default RecentActivityCard;
+export default memo( RecentActivityCard );
