@@ -361,6 +361,7 @@ const PluginSetting = ( { options } ) => {
 					icon={ <FontAwesomeIcon icon={ faTachometerAlt } /> }
 				>
 					<p
+						id="pagespeed-api-key-desc"
 						className="wppo-text-muted"
 						style={ { marginBottom: '16px' } }
 					>
@@ -404,6 +405,7 @@ const PluginSetting = ( { options } ) => {
 							}
 							placeholder="AIza..."
 							autoComplete="off"
+							aria-describedby="pagespeed-api-key-desc"
 						/>
 					</div>
 

@@ -179,8 +179,12 @@ const ImageOptimization = ( { options = {} } ) => {
 										name="excludeFirstImages"
 										value={ settings.excludeFirstImages }
 										onChange={ handleChange( setSettings ) }
+										aria-describedby="excludeFirstImages-desc"
 									/>
-									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+									<p
+										id="excludeFirstImages-desc"
+										className="wppo-text-muted wppo-mt-10 wppo-text-small"
+									>
 										Skip lazy loading for the first N images
 										on the page. Set to 1–3 to ensure your
 										hero/banner image loads immediately
@@ -237,8 +241,12 @@ const ImageOptimization = ( { options = {} } ) => {
 								placeholder="Class names or partial URLs (one per line)"
 								value={ settings.excludeVideos }
 								onChange={ handleChange( setSettings ) }
+								aria-describedby="excludeVideos-desc"
 							/>
-							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+							<p
+								id="excludeVideos-desc"
+								className="wppo-text-muted wppo-mt-10 wppo-text-small"
+							>
 								Enter CSS class names or partial URLs of embeds
 								that should always load immediately.
 							</p>
@@ -305,8 +313,12 @@ const ImageOptimization = ( { options = {} } ) => {
 										placeholder="Partial URLs (one per line)"
 										value={ settings.excludeConvertImages }
 										onChange={ handleChange( setSettings ) }
+										aria-describedby="excludeConvertImages-desc"
 									/>
-									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+									<p
+										id="excludeConvertImages-desc"
+										className="wppo-text-muted wppo-mt-10 wppo-text-small"
+									>
 										Images matching these partial URLs will
 										keep their original format. Useful for
 										logos or images where exact color
@@ -337,8 +349,12 @@ const ImageOptimization = ( { options = {} } ) => {
 								name="maxWidthImgSize"
 								value={ settings.maxWidthImgSize }
 								onChange={ handleChange( setSettings ) }
+								aria-describedby="maxWidthImgSize-desc"
 							/>
-							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+							<p
+								id="maxWidthImgSize-desc"
+								className="wppo-text-muted wppo-mt-10 wppo-text-small"
+							>
 								Images wider than this value will have a{ ' ' }
 								<code>max-width</code> style applied. Set to{ ' ' }
 								<code>0</code> to disable. Useful for preventing
@@ -361,8 +377,12 @@ const ImageOptimization = ( { options = {} } ) => {
 								placeholder="e.g. .no-resize, .hero-image"
 								value={ settings.excludeSize }
 								onChange={ handleChange( setSettings ) }
+								aria-describedby="excludeSize-desc"
 							/>
-							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+							<p
+								id="excludeSize-desc"
+								className="wppo-text-muted wppo-mt-10 wppo-text-small"
+							>
 								Comma-separated CSS class names. Images with
 								these classes will not have the max-width
 								constraint applied.
@@ -411,8 +431,12 @@ const ImageOptimization = ( { options = {} } ) => {
 											settings.preloadFrontPageImagesUrls
 										}
 										onChange={ handleChange( setSettings ) }
+										aria-describedby="preloadFrontPageImagesUrls-desc"
 									/>
-									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+									<p
+										id="preloadFrontPageImagesUrls-desc"
+										className="wppo-text-muted wppo-mt-10 wppo-text-small"
+									>
 										One URL per line. Only add
 										above-the-fold images — preloading too
 										many images can hurt performance.

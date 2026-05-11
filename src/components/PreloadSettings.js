@@ -123,8 +123,12 @@ const PreloadSettings = ( { options = {} } ) => {
 									placeholder="Regex patterns, one per line"
 									value={ settings.excludePreloadCache }
 									onChange={ handleChange( setSettings ) }
+									aria-describedby="excludePreloadCache-desc"
 								/>
-								<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								<p
+									id="excludePreloadCache-desc"
+									className="wppo-text-muted wppo-mt-10 wppo-text-small"
+								>
 									Skip dynamic pages like cart, checkout, and
 									account pages that should never be cached.
 									Supports regex patterns.
@@ -162,8 +166,12 @@ const PreloadSettings = ( { options = {} } ) => {
 									placeholder="https://fonts.googleapis.com"
 									value={ settings.preconnectOrigins }
 									onChange={ handleChange( setSettings ) }
+									aria-describedby="preconnectOrigins-desc"
 								/>
-								<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								<p
+									id="preconnectOrigins-desc"
+									className="wppo-text-muted wppo-mt-10 wppo-text-small"
+								>
 									One origin per line. Use full URLs including
 									protocol.
 								</p>
@@ -193,8 +201,12 @@ const PreloadSettings = ( { options = {} } ) => {
 									placeholder="example.com"
 									value={ settings.dnsPrefetchOrigins }
 									onChange={ handleChange( setSettings ) }
+									aria-describedby="dnsPrefetchOrigins-desc"
 								/>
-								<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								<p
+									id="dnsPrefetchOrigins-desc"
+									className="wppo-text-muted wppo-mt-10 wppo-text-small"
+								>
 									One hostname per line, without protocol
 									(e.g. <code>cdn.example.com</code>).
 								</p>
@@ -232,8 +244,12 @@ const PreloadSettings = ( { options = {} } ) => {
 										placeholder="/wp-content/themes/my-theme/fonts/myfont.woff2"
 										value={ settings.preloadFontsUrls }
 										onChange={ handleChange( setSettings ) }
+										aria-describedby="preloadFontsUrls-desc"
 									/>
-									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+									<p
+										id="preloadFontsUrls-desc"
+										className="wppo-text-muted wppo-mt-10 wppo-text-small"
+									>
 										One URL per line. Prefer .woff2 format
 										for best browser support.
 									</p>
@@ -264,8 +280,12 @@ const PreloadSettings = ( { options = {} } ) => {
 										placeholder="/wp-content/themes/my-theme/style.css"
 										value={ settings.preloadCSSUrls }
 										onChange={ handleChange( setSettings ) }
+										aria-describedby="preloadCSSUrls-desc"
 									/>
-									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+									<p
+										id="preloadCSSUrls-desc"
+										className="wppo-text-muted wppo-mt-10 wppo-text-small"
+									>
 										One URL per line. Only add stylesheets
 										needed for above-the-fold content.
 									</p>
