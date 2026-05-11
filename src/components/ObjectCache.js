@@ -460,6 +460,7 @@ const ObjectCache = ( { options = {} } ) => {
 								name="compression"
 								value={ settings.compression }
 								onChange={ handleChange( setSettings ) }
+								aria-describedby="compression-desc"
 							>
 								<option value="none">None (Fastest)</option>
 								<option
@@ -503,6 +504,7 @@ const ObjectCache = ( { options = {} } ) => {
 								</option>
 							</select>
 							<p
+								id="compression-desc"
 								className="wppo-text-muted"
 								style={ {
 									marginTop: '12px',
