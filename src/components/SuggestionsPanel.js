@@ -12,6 +12,7 @@
  * @since 1.6.0
  */
 
+import { memo } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faCheckCircle,
@@ -267,4 +268,4 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 	);
 };
 
-export default SuggestionsPanel;
+export default memo( SuggestionsPanel );

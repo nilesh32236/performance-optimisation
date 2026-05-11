@@ -8,7 +8,7 @@
  * @since 1.5.0
  */
 
-import { useState } from '@wordpress/element';
+import { useState, memo } from '@wordpress/element';
 import { fetchSystemInfo } from '../lib/apiRequest';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -233,4 +233,4 @@ const SystemInfo = () => {
 	);
 };
 
-export default SystemInfo;
+export default memo( SystemInfo );
