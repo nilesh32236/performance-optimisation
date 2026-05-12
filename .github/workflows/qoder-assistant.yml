@@ -24,6 +24,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Qoder Configuration
+        run: |
+          mkdir -p .qoder
+          cat << 'JSONEOF' > .qoder/.qoder.json
+          {
+            "qoder_config": {
+              "models": [
+                {
+                  "id": "default",
+                  "provider": "openai",
+                  "model": "gpt-4"
+                }
+              ]
+            }
+          }
+          JSONEOF
+
       - name: Build Arguments
         id: build_args
         env:
