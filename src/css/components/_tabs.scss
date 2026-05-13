@@ -40,7 +40,7 @@
 		background: var(--wppo-primary);
 		color: #fff;
 		border-color: var(--wppo-primary);
-		box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+		box-shadow: 0 2px 8px color-mix(in srgb, var(--wppo-primary) 30%, transparent);
 	}
 }
 
