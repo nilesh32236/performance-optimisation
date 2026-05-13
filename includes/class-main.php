@@ -1041,67 +1041,55 @@ class Main {
 		$preload_settings = $this->options['preload_settings'] ?? array();
 
 		// Preconnect origins.
-		if ( isset( $preload_settings['preconnect'] ) && (bool) $preload_settings['preconnect'] ) {
-			if ( isset( $preload_settings['preconnectOrigins'] ) && ! empty( $preload_settings['preconnectOrigins'] ) ) {
-				$preconnect_origins = Util::process_urls( $preload_settings['preconnectOrigins'] );
+		if ( ! empty( $preload_settings['preconnect'] ) && ! empty( $preload_settings['preconnectOrigins'] ) ) {
+			$preconnect_origins = Util::process_urls( $preload_settings['preconnectOrigins'] );
 
-				foreach ( $preconnect_origins as $origin ) {
-					Util::generate_preload_link( $origin, 'preconnect', '', true );
-				}
+			foreach ( $preconnect_origins as $origin ) {
+				Util::generate_preload_link( $origin, 'preconnect', '', true );
 			}
 		}
 
 		// Prefetch DNS origins.
-		if ( isset( $preload_settings['prefetchDNS'] ) && (bool) $preload_settings['prefetchDNS'] ) {
-			if ( isset( $preload_settings['dnsPrefetchOrigins'] ) && ! empty( $preload_settings['dnsPrefetchOrigins'] ) ) {
-				$dns_prefetch_origins = Util::process_urls( $preload_settings['dnsPrefetchOrigins'] );
+		if ( ! empty( $preload_settings['prefetchDNS'] ) && ! empty( $preload_settings['dnsPrefetchOrigins'] ) ) {
+			$dns_prefetch_origins = Util::process_urls( $preload_settings['dnsPrefetchOrigins'] );
 
-				foreach ( $dns_prefetch_origins as $origin ) {
-					Util::generate_preload_link( $origin, 'dns-prefetch' );
-				}
+			foreach ( $dns_prefetch_origins as $origin ) {
+				Util::generate_preload_link( $origin, 'dns-prefetch' );
 			}
 		}
 
 		// Preload fonts.
-		if ( isset( $preload_settings['preloadFonts'] ) && (bool) $preload_settings['preloadFonts'] ) {
-			if ( isset( $preload_settings['preloadFontsUrls'] ) && ! empty( $preload_settings['preloadFontsUrls'] ) ) {
-				$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
+		if ( ! empty( $preload_settings['preloadFonts'] ) && ! empty( $preload_settings['preloadFontsUrls'] ) ) {
+			$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
 
-				foreach ( $preload_fonts_urls as $font_url ) {
+			foreach ( $preload_fonts_urls as $font_url ) {
+				$font_url       = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : content_url( $font_url );
+				$font_extension = pathinfo( wp_parse_url( $font_url, PHP_URL_PATH ), PATHINFO_EXTENSION );
+				$font_type      = '';
 
-					$font_url = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : content_url( $font_url );
-
-					$font_extension = pathinfo( wp_parse_url( $font_url, PHP_URL_PATH ), PATHINFO_EXTENSION );
-					$font_type      = '';
-
-					switch ( strtolower( $font_extension ) ) {
-						case 'woff2':
-							$font_type = 'font/woff2';
-							break;
-						case 'woff':
-							$font_type = 'font/woff';
-							break;
-						case 'ttf':
-							$font_type = 'font/ttf';
-							break;
-						default:
-							$font_type = ''; // Fallback if unknown extension.
-					}
-
-					Util::generate_preload_link( $font_url, 'preload', 'font', true, $font_type );
+				switch ( strtolower( $font_extension ) ) {
+					case 'woff2':
+						$font_type = 'font/woff2';
+						break;
+					case 'woff':
+						$font_type = 'font/woff';
+						break;
+					case 'ttf':
+						$font_type = 'font/ttf';
+						break;
 				}
+
+				Util::generate_preload_link( $font_url, 'preload', 'font', true, $font_type );
 			}
 		}
 
-		if ( isset( $preload_settings['preloadCSS'] ) && (bool) $preload_settings['preloadCSS'] ) {
-			if ( isset( $preload_settings['preloadCSSUrls'] ) && ! empty( $preload_settings['preloadCSSUrls'] ) ) {
-				$preload_css_urls = Util::process_urls( $preload_settings['preloadCSSUrls'] );
+		// Preload CSS.
+		if ( ! empty( $preload_settings['preloadCSS'] ) && ! empty( $preload_settings['preloadCSSUrls'] ) ) {
+			$preload_css_urls = Util::process_urls( $preload_settings['preloadCSSUrls'] );
 
-				foreach ( $preload_css_urls as $css_url ) {
-					$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : content_url( $css_url );
-
-					Util::generate_preload_link( $css_url, 'preload', 'style' );
-				}
+			foreach ( $preload_css_urls as $css_url ) {
+				$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : content_url( $css_url );
+				Util::generate_preload_link( $css_url, 'preload', 'style' );
 			}
 		}
 
