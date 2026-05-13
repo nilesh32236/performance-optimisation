@@ -45,7 +45,7 @@
 			align-items: center;
 			justify-content: center;
 			flex-shrink: 0;
-			box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+			box-shadow: 0 4px 12px color-mix(in srgb, var(--wppo-primary) 40%, transparent);
 
 			svg {
 				color: #fff;
@@ -114,7 +114,7 @@
 
 						.wppo-sidebar-icon {
 							color: var(--wppo-primary);
-							filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.5));
+							filter: drop-shadow(0 0 6px color-mix(in srgb, var(--wppo-primary) 50%, transparent));
 						}
 					}
 
