@@ -18,8 +18,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Create qoder.json Configuration
+        run: |
+          mkdir -p .qoder
+          echo '{"models": {"default": {"provider": "openai", "name": "gpt-4"}}}' > .qoder/qoder.json
+
       - name: Run Qoder Code Review
         uses: QoderAI/qoder-action@v0
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
           prompt: |
