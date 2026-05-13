@@ -533,6 +533,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.5.1
 		 * @param string $srcset             The srcset string from the image tag.
 		 * @param array  $image_optimisation Image optimization configuration array.
+		 * @param array  $exclude_sizes      Array of excluded sizes.
 		 * @return array Array of parsed sources: array( 'url' => string, 'width' => int ).
 		 */
 		private function parse_srcset_data( $srcset, $image_optimisation, $exclude_sizes = null ): array {
@@ -578,7 +579,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return array( $this->prepare_preload_item( $default_image ) );
 			}
 
-			$parsed_sources = $this->parse_srcset_data( $srcset, $image_optimisation, $exclude_sizes );
+			$parsed_sources = $this->parse_srcset_data( $srcset, $image_optimisation );
 			if ( empty( $parsed_sources ) ) {
 				return array( $this->prepare_preload_item( $default_image ) );
 			}
@@ -924,9 +925,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.0.0
 		 *
 		 * @param array  $matches       Regex match array containing the matched <img> or <picture> fragment.
+		 * @param array  $matches       Regex match array containing the matched <img> or <picture> fragment.
 		 * @param string $img_tag       The original <img> tag to process.
 		 * @param string $original_src  The original src attribute value of the image.
 		 * @param array  $exclude_imgs  List of URL substrings; if any is present in the image URL, source descriptors are not added.
+		 * @param array  $exclude_sizes Array of excluded sizes.
 		 * @return string The processed <picture> or <img> HTML fragment (or the original fragment if unchanged).
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs, $exclude_sizes = null ) {
@@ -1102,7 +1105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				$img_counter = 0;
 
-				// Pre-compute exclude sizes here so we don't do it per-image inside process_picture_tag
+				// Pre-compute exclude sizes here so we don't do it per-image inside process_picture_tag.
 				$exclude_sizes = array_map( 'absint', Util::process_urls( $image_optimisation['excludeSize'] ?? array() ) );
 
 				return preg_replace_callback(
