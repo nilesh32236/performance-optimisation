@@ -63,6 +63,11 @@ jobs:
           echo "$ARGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Create qoder.json Configuration
+        run: |
+          mkdir -p .qoder
+          echo '{"models": {"default": {"provider": "openai", "name": "gpt-4"}}}' > .qoder/qoder.json
+
       - name: Run Qoder Assistant
         uses: QoderAI/qoder-action@v0
         env:
