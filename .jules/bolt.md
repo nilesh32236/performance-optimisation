@@ -38,3 +38,8 @@
 **Action:** Always use WordPress Transients to cache expensive file system results, and invalidate these transients within `clear_cache` methods.
 ## 2025-01-20 - Early Return Before Expensive Computations\n\n**Learning:** High-frequency operations like `Util::get_local_path` (which parses URLs) were being computed before short-circuit logic (`is_user_logged_in`, `empty( $href )`) in `minify_css` and `minify_js`. This caused significant performance overhead as they run on every page load.\n**Action:** Always place lightweight conditionals before heavy variable assignments. Avoid executing computationally expensive operations unless strictly necessary.
 
+
+## 2025-01-20 - Expensive Util::process_urls in Regex Loops
+
+**Learning:** Calculating `Util::process_urls()` inside `preg_replace_callback` closures or nested functions called for every matched element (like `parse_srcset_data`) creates an N+1 performance bottleneck. String parsing and array mappings should be performed locally once and passed into closures, instead of moving them to class constructors which could trigger eager evaluation regressions.
+**Action:** Evaluate properties locally *outside* the closure loop and pass them in via `use` or as arguments to prevent redundant computation per element.
