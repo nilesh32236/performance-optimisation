@@ -32,20 +32,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 1.5.1
 		 */
-		private const MAX_PRELOAD_WIDTH = 1478;	/**
-	 * Configuration options for image optimization.
-	 *
-	 * @var array
-	 * @since 1.0.0
-	 */
-	private array $options;
+		private const MAX_PRELOAD_WIDTH = 1478; /**
+												 * Configuration options for image optimization.
+												 *
+												 * @var array
+												 * @since 1.0.0
+												 */
+		private array $options;
 
-	private array $exclude_convert_imgs = array();
-	private array $preload_front_page_urls = array();
-	private array $exclude_post_type_imgs = array();
-	private array $exclude_sizes = array();
-	private array $exclude_lazy_imgs = array();
-	private array $exclude_lazy_videos = array();
+		private array $exclude_convert_imgs    = array();
+		private array $preload_front_page_urls = array();
+		private array $exclude_post_type_imgs  = array();
+		private array $exclude_sizes           = array();
+		private array $exclude_lazy_imgs       = array();
+		private array $exclude_lazy_videos     = array();
 
 		/**
 		 * Cached instance of Img_Converter to avoid repeated parsing of settings.
@@ -62,7 +62,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @param array $options Configuration options for image optimization.
 		 */
-				public function __construct( $options ) {
+		public function __construct( $options ) {
 			$this->options = $options;
 
 			$this->exclude_convert_imgs    = Util::process_urls( $this->options['image_optimisation']['excludeConvertImages'] ?? array() );

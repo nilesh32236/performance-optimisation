@@ -1,4 +1,0 @@
-<?php
-/*
- * Some comment goes here
- */
