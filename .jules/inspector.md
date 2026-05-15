@@ -10,3 +10,11 @@
 **Bug/Gap:** Tests for components missing DOM implementation and babel config.
 **Root Cause:** Jest uses node by default if testEnvironment isn't specified, and misses WP-specific transpilation.
 **Test Added:** Tested the interaction behaviors, updated `package.json` with `testEnvironment: jsdom`, set `babel.config.json` to use `@wordpress/default`, and wrote `setupTests.js`.
+## 2026-05-15 - [SystemInfo React Component Tests]
+**Bug/Gap:** The SystemInfo component lacked unit tests covering edge cases like API failures or network errors when fetching system environment data.
+**Root Cause:** Component relies heavily on a backend AJAX call () and user-facing loading states, but the 'sad paths' (where the request rejects or returns an error message) were never verified on the frontend.
+**Test Added:** Added a comprehensive test suite in `src/components/__tests__/SystemInfo.test.js` that mocks the API request and specifically tests both successful data rendering and the graceful display of error alerts without breaking the UI.
+## 2024-05-15 - [SystemInfo React Component Tests]
+**Bug/Gap:** The SystemInfo component lacked unit tests covering edge cases like API failures or network errors when fetching system environment data.
+**Root Cause:** Component relies heavily on a backend AJAX call (`fetchSystemInfo`) and user-facing loading states, but the "sad paths" (where the request rejects or returns an error message) were never verified on the frontend.
+**Test Added:** Added a comprehensive test suite in `src/components/__tests__/SystemInfo.test.js` that mocks the API request and specifically tests both successful data rendering and the graceful display of error alerts without breaking the UI.
