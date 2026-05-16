@@ -18,6 +18,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Configure Qoder auth
+        run: |
+          mkdir -p ~/.qoder
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
+          mkdir -p $GITHUB_WORKSPACE/.qoder
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
+
       - name: Run Qoder Code Review
         uses: QoderAI/qoder-action@v0
         with:
