@@ -10,3 +10,7 @@
 **Bug/Gap:** Tests for components missing DOM implementation and babel config.
 **Root Cause:** Jest uses node by default if testEnvironment isn't specified, and misses WP-specific transpilation.
 **Test Added:** Tested the interaction behaviors, updated `package.json` with `testEnvironment: jsdom`, set `babel.config.json` to use `@wordpress/default`, and wrote `setupTests.js`.
+## 2025-01-20 - [JS Test Addition] src/lib/apiRequest.js tests
+**Bug/Gap:** Missing unit tests for the functions `runPerformanceScan`, `fetchSystemInfo`, `queuePagespeedScan`, `getPagespeedResults`, `fetchSuggestions`, and `fetchServerRules` inside `src/lib/apiRequest.js`.
+**Root Cause:** New functionality was added to the module but test coverage was not extended for the new exported functions, leaving API integration behavior unverified.
+**Test Added:** Added unit test blocks inside `src/lib/__tests__/apiRequest.test.js` asserting that each new function calls `apiCall` with correct parameters and accurately returns the expected response object.
