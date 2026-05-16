@@ -1,1 +1,5 @@
-{"models":{"model_name":"claude-3-5-sonnet"}}
+{
+  "models": {
+    "model_name": "claude-3-5-sonnet"
+  }
+}
