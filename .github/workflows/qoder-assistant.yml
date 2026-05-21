@@ -31,6 +31,11 @@ jobs:
           mkdir -p $GITHUB_WORKSPACE/.qoder
           echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
 
+      - name: Setup Qoder Directory
+        run: |
+          mkdir -p .qoder
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > .qoder/config.json
+
       - name: Build Arguments
         id: build_args
         env:
