@@ -32,15 +32,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 1.5.1
 		 */
-		private const MAX_PRELOAD_WIDTH = 1478;
+		private const MAX_PRELOAD_WIDTH = 1478; /**
+												 * Configuration options for image optimization.
+												 *
+												 * @var array
+												 * @since 1.0.0
+												 */
+		private array $options;
 
 		/**
-		 * Configuration options for image optimization.
+		 * Array of image URLs to exclude from conversion.
 		 *
 		 * @var array
-		 * @since 1.0.0
+		 * @since 1.5.1
 		 */
-		private array $options;
+		private array $exclude_convert_imgs = array();
+
+		/**
+		 * Array of image URLs to preload on the front page.
+		 *
+		 * @var array
+		 * @since 1.5.1
+		 */
+		private array $preload_front_page_urls = array();
+
+		/**
+		 * Array of image URLs to exclude from post type preloading.
+		 *
+		 * @var array
+		 * @since 1.5.1
+		 */
+		private array $exclude_post_type_imgs = array();
+
+		/**
+		 * Array of image sizes to exclude.
+		 *
+		 * @var array
+		 * @since 1.5.1
+		 */
+		private array $exclude_sizes = array();
+
+		/**
+		 * Array of image URLs to exclude from lazy loading.
+		 *
+		 * @var array
+		 * @since 1.5.1
+		 */
+		private array $exclude_lazy_imgs = array();
+
+		/**
+		 * Array of video URLs to exclude from lazy loading.
+		 *
+		 * @var array
+		 * @since 1.5.1
+		 */
+		private array $exclude_lazy_videos = array();
 
 		/**
 		 * Cached instance of Img_Converter to avoid repeated parsing of settings.
@@ -59,6 +105,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		public function __construct( $options ) {
 			$this->options = $options;
+
+			$this->exclude_convert_imgs    = Util::process_urls( $this->options['image_optimisation']['excludeConvertImages'] ?? array() );
+			$this->preload_front_page_urls = Util::process_urls( $this->options['image_optimisation']['preloadFrontPageImagesUrls'] ?? array() );
+			$this->exclude_post_type_imgs  = Util::process_urls( $this->options['image_optimisation']['excludePostTypeImgUrl'] ?? array() );
+			$this->exclude_sizes           = array_map( 'absint', Util::process_urls( $this->options['image_optimisation']['excludeSize'] ?? array() ) );
+			$this->exclude_lazy_imgs       = Util::process_urls( $this->options['image_optimisation']['excludeImages'] ?? array() );
+			$this->exclude_lazy_videos     = Util::process_urls( $this->options['image_optimisation']['excludeVideos'] ?? '' );
 
 			$this->setup_hooks();
 		}
@@ -111,7 +164,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
 				$conversion_format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
 
-				$exclude_imgs = Util::process_urls( $this->options['image_optimisation']['excludeConvertImages'] ?? array() );
+				$exclude_imgs = $this->exclude_convert_imgs;
 
 				$http_accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
 
@@ -424,7 +477,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return array();
 			}
 
-			$urls = Util::process_urls( $image_optimisation['preloadFrontPageImagesUrls'] ?? array() );
+			$urls = $this->preload_front_page_urls;
 			return array_map( array( $this, 'prepare_preload_item' ), $urls );
 		}
 
@@ -469,7 +522,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return array();
 			}
 
-			$exclude_img_urls = Util::process_urls( $image_optimisation['excludePostTypeImgUrl'] ?? array() );
+			$exclude_img_urls = $this->exclude_post_type_imgs;
 			$image_url        = $this->get_image_url_by_post_type( $thumbnail_id );
 
 			if ( $this->should_exclude_image( $image_url, $exclude_img_urls ) ) {
@@ -521,16 +574,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.5.1
 		 * @param string $srcset             The srcset string from the image tag.
 		 * @param array  $image_optimisation Image optimization configuration array.
+		 * @param array  $exclude_sizes      Array of excluded sizes.
 		 * @return array Array of parsed sources: array( 'url' => string, 'width' => int ).
 		 */
-		private function parse_srcset_data( $srcset, $image_optimisation ): array {
+		private function parse_srcset_data( $srcset, $image_optimisation, $exclude_sizes = null ): array {
 			if ( ! $srcset ) {
 				return array();
 			}
 
 			$sources       = array_map( 'trim', explode( ',', $srcset ) );
 			$max_width     = (int) ( $image_optimisation['maxWidthImgSize'] ?? self::MAX_PRELOAD_WIDTH );
-			$exclude_sizes = array_map( 'absint', Util::process_urls( $image_optimisation['excludeSize'] ?? array() ) );
+			$exclude_sizes = $this->exclude_sizes;
 
 			$parsed_sources = array();
 
@@ -911,10 +965,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 1.0.0
 		 *
-		 * @param array  $matches       Regex match array containing the matched <img> or <picture> fragment.
-		 * @param string $img_tag       The original <img> tag to process.
-		 * @param string $original_src  The original src attribute value of the image.
-		 * @param array  $exclude_imgs  List of URL substrings; if any is present in the image URL, source descriptors are not added.
+		 * @param array  $matches      Regex match array containing the matched <img> or <picture> fragment.
+		 * @param string $img_tag      The original <img> tag to process.
+		 * @param string $original_src The original src attribute value of the image.
+		 * @param array  $exclude_imgs List of URL substrings; if any is present in the image URL, source descriptors are not added.
 		 * @return string The processed <picture> or <img> HTML fragment (or the original fragment if unchanged).
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
@@ -1083,7 +1137,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$exclude_imgs       = array();
 
 			if ( isset( $image_optimisation['lazyLoadImages'] ) && (bool) $image_optimisation['lazyLoadImages'] ) {
-				$exclude_imgs = Util::process_urls( $image_optimisation['excludeImages'] ?? array() );
+				$exclude_imgs = $this->exclude_lazy_imgs;
 
 				$preload_img_urls = $this->get_preload_images_urls();
 				$exclude_imgs     = array_unique( array_merge( $exclude_imgs, $preload_img_urls ) );
@@ -1092,7 +1146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				return preg_replace_callback(
 					'#<picture\b[^>]*>.*?</picture>|<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>|<iframe\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#is',
-					function ( $matches ) use ( &$img_counter, $exclude_img_count, $exclude_imgs ) {
+					function ( $matches ) use ( &$img_counter, $exclude_img_count, &$exclude_imgs ) {
 						$img_counter++;
 
 						if ( 5 === count( $matches ) ) {
@@ -1177,7 +1231,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $buffer;
 			}
 
-			$exclude_videos = Util::process_urls( $image_opts['excludeVideos'] ?? '' );
+			$exclude_videos = $this->exclude_lazy_videos;
 
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				return preg_replace_callback(

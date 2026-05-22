@@ -191,21 +191,7 @@ class Cron {
 	 * @since 1.0.0
 	 */
 	public static function clear_cron_jobs(): void {
-		$pages = self::get_all_pages();
-
-		if ( empty( $pages ) ) {
-			return;
-		}
-
-		foreach ( $pages as $page_id ) {
-			$hook      = 'wppo_generate_static_page_' . $page_id;
-			$timestamp = wp_next_scheduled( $hook );
-
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, $hook, array( $page_id ) );
-			}
-		}
-
+		wp_unschedule_hook( 'wppo_generate_static_page' );
 		wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 		wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
 		delete_option( 'wppo_preload_cron_offset' );
@@ -380,12 +366,16 @@ class Cron {
 
 		$should_run = false;
 
-		if ( 'daily' === $schedule ) {
-			$should_run = true;
-		} elseif ( 'weekly' === $schedule && ( $now - $last_run > WEEK_IN_SECONDS - HOUR_IN_SECONDS ) ) {
-			$should_run = true;
-		} elseif ( 'monthly' === $schedule && ( $now - $last_run > 30 * DAY_IN_SECONDS - HOUR_IN_SECONDS ) ) {
-			$should_run = true;
+		switch ( $schedule ) {
+			case 'daily':
+				$should_run = true;
+				break;
+			case 'weekly':
+				$should_run = ( $now - $last_run > WEEK_IN_SECONDS - HOUR_IN_SECONDS );
+				break;
+			case 'monthly':
+				$should_run = ( $now - $last_run > 30 * DAY_IN_SECONDS - HOUR_IN_SECONDS );
+				break;
 		}
 
 		if ( $should_run ) {
