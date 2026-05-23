@@ -10,7 +10,3 @@
 **Bug/Gap:** Tests for components missing DOM implementation and babel config.
 **Root Cause:** Jest uses node by default if testEnvironment isn't specified, and misses WP-specific transpilation.
 **Test Added:** Tested the interaction behaviors, updated `package.json` with `testEnvironment: jsdom`, set `babel.config.json` to use `@wordpress/default`, and wrote `setupTests.js`.
-## 2024-05-23 - [JS Test Fix] Add PluginSetting coverage
-**Bug/Gap:** The `PluginSetting` React component was completely untested. This component handles critical operations like updating API keys and importing/exporting settings configurations, meaning a breaking change to API integration could go unnoticed.
-**Root Cause:** Initial frontend test suite did not cover every page-level UI component.
-**Test Added:** Created `src/components/__tests__/PluginSetting.test.js` to simulate rendering and interacting with settings form elements. Validated saving functionality triggers proper `apiCall` and updates UI state on success, and added sad path tests to confirm network errors are handled gracefully via user notifications.
