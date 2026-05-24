@@ -297,6 +297,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 						t.auditUrlPlaceholder || 'https://example.com'
 					}
 					required
+					aria-label={ t.auditUrlPlaceholder || 'URL to Audit' }
 				/>
 				<div className="wppo-audit-controls__actions">
 					<button
@@ -304,6 +305,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 						className="wppo-button wppo-button--ghost"
 						onClick={ setHomeUrl }
 						title={ t.useHomeUrl || 'Use Home URL' }
+						aria-label={ t.useHomeUrl || 'Use Home URL' }
 					>
 						<FontAwesomeIcon icon={ faGlobe } />
 					</button>
