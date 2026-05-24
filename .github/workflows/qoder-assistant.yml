@@ -30,6 +30,9 @@ jobs:
           echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
           mkdir -p $GITHUB_WORKSPACE/.qoder
           echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
+          echo "Writing to $HOME/.qoder/config.json as fallback"
+          mkdir -p $HOME/.qoder
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $HOME/.qoder/config.json
 
       - name: Build Arguments
         id: build_args
