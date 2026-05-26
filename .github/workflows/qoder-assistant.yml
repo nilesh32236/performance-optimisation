@@ -63,6 +63,12 @@ jobs:
           echo "$ARGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Setup Qoder Config
+        run: |
+          mkdir -p ~/.qoder $GITHUB_WORKSPACE/.qoder
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
+
       - name: Run Qoder Assistant
         uses: QoderAI/qoder-action@v0
         with:
