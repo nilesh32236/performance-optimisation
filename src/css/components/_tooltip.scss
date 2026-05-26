@@ -9,7 +9,9 @@
 	margin-left: 6px;
 	cursor: help;
 
-	&:hover .wppo-tooltip-content {
+	&:hover .wppo-tooltip-content,
+	&:focus .wppo-tooltip-content,
+	&:focus-visible .wppo-tooltip-content {
 		opacity: 1;
 		visibility: visible;
 		transform: translateX(-50%) translateY(-8px);
@@ -31,8 +33,8 @@
 	bottom: 100%;
 	left: 50%;
 	transform: translateX(-50%) translateY(0);
-	background: #2c3338;
-	color: #fff;
+	background: var(--wppo-text-main);
+	color: var(--wppo-bg-card);
 	padding: 8px 12px;
 	border-radius: var(--wppo-radius-sm);
 	font-size: 0.75rem;
@@ -54,6 +56,6 @@
 		margin-left: -5px;
 		border-width: 5px;
 		border-style: solid;
-		border-color: #2c3338 transparent transparent transparent;
+		border-color: var(--wppo-text-main) transparent transparent transparent;
 	}
 }
