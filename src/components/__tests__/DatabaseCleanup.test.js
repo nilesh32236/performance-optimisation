@@ -36,6 +36,7 @@ describe( 'DatabaseCleanup Component', () => {
 	} );
 
 	it( 'shows error notification on fetch failure', async () => {
+		const consoleSpy = jest.spyOn( console, 'error' ).mockImplementation( () => {} );
 		apiCall.mockRejectedValueOnce( new Error( 'Fetch Error' ) );
 		render( <DatabaseCleanup /> );
 
@@ -43,6 +44,9 @@ describe( 'DatabaseCleanup Component', () => {
 		await waitFor( () => {
 			expect( screen.getAllByText( '0' )[ 0 ] ).toBeInTheDocument();
 		} );
+
+		expect( consoleSpy ).toHaveBeenCalledWith( 'Error fetching database cleanup counts:', expect.any( Error ) );
+		consoleSpy.mockRestore();
 	} );
 
 	it( 'opens confirm dialog and calls cleanup api successfully', async () => {

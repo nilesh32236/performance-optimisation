@@ -10,3 +10,7 @@
 **Bug/Gap:** Tests for components missing DOM implementation and babel config.
 **Root Cause:** Jest uses node by default if testEnvironment isn't specified, and misses WP-specific transpilation.
 **Test Added:** Tested the interaction behaviors, updated `package.json` with `testEnvironment: jsdom`, set `babel.config.json` to use `@wordpress/default`, and wrote `setupTests.js`.
+## $(date +%Y-%m-%d) - [JS Test Fix] Unhandled Console Errors in UI Tests
+**Bug/Gap:** Tests for components (DatabaseCleanup and SystemInfo) that simulated API or network failures were triggering unhandled console.error logs to stdout during test runs.
+**Root Cause:** Network failure tests caught errors effectively in their try/catch blocks but logged them to the console. The tests did not intercept or spy on `console.error` to ensure the correct errors were actually being reported, allowing the logs to pollute test outputs.
+**Test Added:** Appended a `jest.spyOn(console, 'error')` spy and `expect(consoleSpy).toHaveBeenCalledWith()` assertion to assert expected error logs, followed by `.mockRestore()` to keep test runs clean and functionally rigorous.
