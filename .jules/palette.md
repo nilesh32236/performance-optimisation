@@ -8,3 +8,6 @@
 
 **Learning:** Replacing action triggers (like buttons) with simple text (e.g. `<p>Loading...</p>`) while fetching data causes jarring layout shifts and hurts accessibility because focus can be lost.
 **Action:** Always reuse the `LoadingSubmitButton` component for any asynchronous action. This ensures the button remains in the DOM, maintains its physical space, and gracefully displays a spinner internally to communicate progress.
+## 2024-05-19 - Keyboard Accessible Tooltips
+**Learning:** Hover-based tooltips need explicit focus states (`tabIndex="0"`) and pseudo-classes (`&:focus`, `&:focus-visible`) to be fully accessible for keyboard navigation. We also need to add ARIA labels to the container and `aria-hidden="true"` to visual icons and duplicate content so screen readers only announce the label.
+**Action:** When creating or modifying tooltips, ensure the container has `tabIndex="0"` and an `aria-label`, and use `:focus-visible` to provide clear, native-WP-styled visual focus indicators.

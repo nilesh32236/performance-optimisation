@@ -19,14 +19,19 @@ const Tooltip = ( { content, children } ) => {
 	}
 
 	return (
-		<span className="wppo-tooltip-container">
+		<span
+			className="wppo-tooltip-container"
+			tabIndex="0"
+			aria-label={ content }
+		>
 			{ children || (
 				<FontAwesomeIcon
 					icon={ faInfoCircle }
 					className="wppo-tooltip-icon"
+					aria-hidden="true"
 				/>
 			) }
-			<span className="wppo-tooltip-content">{ content }</span>
+			<span className="wppo-tooltip-content" aria-hidden="true">{ content }</span>
 		</span>
 	);
 };

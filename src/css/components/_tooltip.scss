@@ -9,10 +9,18 @@
 	margin-left: 6px;
 	cursor: help;
 
-	&:hover .wppo-tooltip-content {
+	&:hover .wppo-tooltip-content,
+	&:focus .wppo-tooltip-content,
+	&:focus-visible .wppo-tooltip-content {
 		opacity: 1;
 		visibility: visible;
 		transform: translateX(-50%) translateY(-8px);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--wppo-primary);
+		outline-offset: 2px;
+		border-radius: var(--wppo-radius-xs);
 	}
 }
 
