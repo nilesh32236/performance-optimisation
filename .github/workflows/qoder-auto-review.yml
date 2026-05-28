@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set Qoder configuration
+      - name: Setup Qoder Config
         run: |
           mkdir -p ~/.qoder
           echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > ~/.qoder/config.json

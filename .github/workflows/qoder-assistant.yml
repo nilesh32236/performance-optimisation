@@ -29,11 +29,18 @@ jobs:
           mkdir -p $GITHUB_WORKSPACE/.qoder
           echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
 
+      - name: Setup Qoder Config
+        run: |
+          mkdir -p ~/.qoder
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
+          mkdir -p $GITHUB_WORKSPACE/.qoder
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
+
       - name: Run Qoder Assistant
         uses: QoderAI/qoder-action@v0
         with:
           qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
           prompt: |
-            /reply-comment
-            REPO:${{ github.repository }} PR_NUMBER:${{ github.event.issue.number }} COMMENT_ID:${{ github.event.comment.id }}
+            /assistant
+            ${{ steps.build_args.outputs.args }}
             OUTPUT_LANGUAGE:English

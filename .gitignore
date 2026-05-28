@@ -5,3 +5,5 @@ app/
 test-lab/
 *.log
 test-lab/vendor/
+node_modules/
+vendor/
