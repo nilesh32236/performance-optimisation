@@ -22,16 +22,6 @@ const loadScript = ( script ) => {
 			script.onload = resolve;
 			script.onerror = reject;
 		} else {
-			if ( 'wppo/javascript' === script.getAttribute( 'type' ) ) {
-				script.removeAttribute( 'type' );
-			}
-
-			const typeAttr = script.getAttribute( 'wppo-type' );
-			if ( typeAttr ) {
-				script.removeAttribute( 'wppo-type' );
-				script.setAttribute( 'type', typeAttr );
-			}
-
 			try {
 				if ( script.text ) {
 					if ( ! script.src ) {

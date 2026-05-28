@@ -28,8 +28,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Main {
 
-
-
 	/**
 	 * List of CSS handles to exclude from combining.
 	 *

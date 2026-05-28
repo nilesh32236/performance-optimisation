@@ -21,7 +21,6 @@ namespace PerformanceOptimise\Inc;
  */
 class Img_Converter {
 
-
 	/**
 	 * Deferred in-memory image info state.
 	 *

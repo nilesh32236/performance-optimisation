@@ -41,7 +41,7 @@ This ensures the plugin ships with only production dependencies (`voku/html-min`
 ## Architecture
 
 ### Plugin entry
-`performance-optimisation.php` → `includes/class-main.php` (orchestrator). Namespace `PerformanceOptimisation\Inc`, PSR-4 via Composer.
+`performance-optimisation.php` → `includes/class-main.php` (orchestrator). Namespace `PerformanceOptimisation\Inc`. Classes are **manually loaded** via `Main::includes()` + `vendor/autoload.php` (Composer for vendor packages only, no PSR-4 autoload for plugin classes).
 
 ### React SPA
 - Mounts at `<div id="performance-optimisation">` in WP admin
@@ -156,7 +156,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (1
 ## JS conventions
 
 - ESLint extends `plugin:@wordpress/eslint-plugin/recommended`
-- Globals: `wppoSettings`, `wppoObject`, `FileReader`, `IntersectionObserver`, `MutationObserver`, `ScrollTrigger`, `jQuery`, `alert`
+- Globals (ESLint): `wppoSettings`, `wppoObject`, `ScrollTrigger`, `jQuery`, `alert`
 - `console.log` is error-level; only `console.error` and `console.warn` allowed
 - CSS: custom SCSS design system with `.wppo-` prefix, BEM-like naming, CSS custom properties, no Tailwind/CSS-in-JS
 - SCSS breakpoints: `sm` (640px), `md` (768px), `lg` (992px), `xl` (1200px) via `respond-to()` mixin
@@ -178,7 +178,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (1
 - Entry points: `src/index.js` (React SPA) + `src/lazyload.js` (frontend lazy loader)
 - **Build output is committed** to git: `build/index.js`, `build/lazyload.js`, `build/style-index.css`, `build/style-index-rtl.css`, `build/*.asset.php`
 - Always rebuild after JS/SCSS changes (`npm run build`)
-- Node version: 18.16.0 (`.nvmrc`)
+- Node version: 22.14.0 (`.nvmrc`)
 - `.browserslistrc`: `last 1` Chrome/Firefox/Safari, `not dead`
 
 ## Release
@@ -193,7 +193,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (1
 | Workflow | Trigger | What it does |
 |----------|---------|-------------|
 | `release.yml` | `v*` tag | Production build + ZIP + GitHub Release + WordPress.org SVN deploy |
-| `webpack.yml` | Push/PR to master | `npm run build` only (no lint/test) |
+| `webpack.yml` | Push/PR to master | `npm ci` → `npm run lint:js` → `npm run build` |
 | `psalm-wpcs-check.yml` | Push/PR to master + weekly | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, GitHub Issue/PR comment |
 | `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
 | `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |

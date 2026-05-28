@@ -3,9 +3,7 @@
   "globals": {
     "wppoSettings": "readonly",
     "wppoObject": "readonly",
-    "FileReader": "readonly",
-    "IntersectionObserver": "readonly",
-    "MutationObserver": "readonly",
+
     "ScrollTrigger": "readonly",
     "jQuery": "readonly",
     "alert": "readonly"

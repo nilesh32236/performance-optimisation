@@ -25,8 +25,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 	 */
 	class Rest {
 
-
-
 		const NAMESPACE = 'performance-optimisation/v1';
 
 		/**

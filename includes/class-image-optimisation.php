@@ -26,7 +26,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 	 */
 	class Image_Optimisation {
 
-
 		/**
 		 * Default maximum width for preloading images.
 		 *

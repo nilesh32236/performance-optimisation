@@ -171,7 +171,7 @@ jobs:
             Please check the [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
           fi
 
-          if [[ "$BRANCH" == "main" && "$EVENT_NAME" != "pull_request" ]]; then
+          if [[ "$BRANCH" == "master" && "$EVENT_NAME" != "pull_request" ]]; then
             if [[ "$STATUS" == "success" ]]; then
               EXISTING_ISSUE=$(gh issue list --label "code-quality" --search "in $BRANCH" --json number --jq '.[0].number')
               if [[ -n "$EXISTING_ISSUE" ]]; then

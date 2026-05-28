@@ -32,7 +32,10 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm ci || npm install
+        run: npm ci
+
+      - name: JS Lint
+        run: npm run lint:js
 
       - name: Build
         run: npm run build
