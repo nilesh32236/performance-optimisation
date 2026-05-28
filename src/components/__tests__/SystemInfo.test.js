@@ -13,7 +13,7 @@ import { fetchSystemInfo } from '../../lib/apiRequest';
 
 describe( 'SystemInfo Component', () => {
 	beforeEach( () => {
-		global.wppoSettings = { translations: {} };
+		global.wppoSettings = {};
 		jest.clearAllMocks();
 	} );
 

@@ -1,6 +1,25 @@
+/**
+ * Whether a deferred script load is currently in progress.
+ * @type {boolean}
+ */
 let scriptLoading = false;
+
+/**
+ * Cached promise for the in-progress or completed deferred script load.
+ * @type {Promise<void>|null}
+ */
 let scriptLoadPromise = null;
 
+/**
+ * Load a single deferred script element.
+ *
+ * Restores the original `src` and `type` attributes, then resolves
+ * once the script has loaded or errors.
+ *
+ * @since 1.0.0
+ * @param {HTMLScriptElement} script The script element to load.
+ * @return {Promise<void>}
+ */
 const loadScript = ( script ) => {
 	return new Promise( ( resolve, reject ) => {
 		if ( 'wppo/javascript' === script.getAttribute( 'type' ) ) {
@@ -42,6 +61,15 @@ const loadScript = ( script ) => {
 	} );
 };
 
+/**
+ * Load all deferred scripts queued in the DOM.
+ *
+ * Once all scripts are loaded, dispatches DOMContentLoaded,
+ * load, and pageshow events, and triggers lazy image loading.
+ *
+ * @since 1.0.0
+ * @return {Promise<void>}
+ */
 async function loadScripts() {
 	if ( scriptLoadPromise ) {
 		return scriptLoadPromise;
@@ -115,9 +143,24 @@ if ( ! scriptLoading ) {
 	);
 }
 
+/**
+ * IntersectionObserver instance for lazy-loading images/iframes/videos.
+ * @type {IntersectionObserver|null}
+ */
 let globalObserver = null;
+
+/**
+ * Set of elements already observed by globalObserver.
+ * @type {WeakSet<Element>}
+ */
 const observedElements = new WeakSet();
 
+/**
+ * Register an element for lazy-load observation if it has data-* attributes.
+ *
+ * @since 1.0.0
+ * @param {Element} el The DOM element to observe.
+ */
 const observeElement = ( el ) => {
 	if ( ! globalObserver || ! el ) {
 		return;
@@ -139,6 +182,16 @@ const observeElement = ( el ) => {
 	}
 };
 
+/**
+ * Initialise lazy-loading for images, iframes, and videos.
+ *
+ * Uses IntersectionObserver with a 600px root margin. Falls back to
+ * scroll-based detection when the Observer API is unavailable. Also
+ * sets up a MutationObserver and a periodic safety scan for dynamically
+ * added elements.
+ *
+ * @since 1.0.0
+ */
 const loadImages = () => {
 	if ( 'IntersectionObserver' in window ) {
 		if ( ! globalObserver ) {
@@ -325,6 +378,13 @@ const loadImages = () => {
 			} );
 		};
 
+		/**
+		 * Check whether an element is visible in the current viewport.
+		 *
+		 * @since 1.0.0
+		 * @param {Element} el The DOM element.
+		 * @return {boolean} True if the element is fully within the viewport.
+		 */
 		const isElementInViewport = ( el ) => {
 			const rect = el.getBoundingClientRect();
 			return (

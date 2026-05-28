@@ -8,6 +8,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faImages, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import { __ } from '@wordpress/i18n';
 
 const ImageOptimizationCard = ( {
 	completed = {},
@@ -19,8 +20,6 @@ const ImageOptimizationCard = ( {
 	onOptimize,
 	onRemove,
 } ) => {
-	const t = wppoSettings.translations;
-
 	const totalWebP = ( completed.webp || 0 ) + ( pending.webp || 0 );
 	const totalAvif = ( completed.avif || 0 ) + ( pending.avif || 0 );
 	const webpPercent =
@@ -47,7 +46,10 @@ const ImageOptimizationCard = ( {
 						onClick={ onRemove }
 						isLoading={ loading.remove_images }
 						disabled={ ! completed.webp && ! completed.avif }
-						label={ t.removeOptimized || 'Remove Optimized' }
+						label={ __(
+							'Remove Optimized',
+							'performance-optimisation'
+						) }
 						loadingLabel="Removing..."
 					/>
 				</>

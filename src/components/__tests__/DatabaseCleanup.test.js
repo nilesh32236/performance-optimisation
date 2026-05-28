@@ -19,7 +19,7 @@ import { apiCall } from '../../lib/apiRequest';
 
 describe( 'DatabaseCleanup Component', () => {
 	beforeEach( () => {
-		global.wppoSettings = { translations: {} };
+		global.wppoSettings = {};
 		jest.clearAllMocks();
 	} );
 

@@ -27,10 +27,7 @@ import { queuePagespeedScan, getPagespeedResults } from '../lib/apiRequest';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
 
-const t =
-	typeof wppoSettings !== 'undefined' && wppoSettings.translations
-		? wppoSettings.translations
-		: {};
+import { __ } from '@wordpress/i18n';
 
 // apiKeyConfigured is now derived inside the component for reactivity.
 
@@ -156,8 +153,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					setPending( false );
 					setScanning( false );
 					setError(
-						t.pagespeedError ||
-							'PageSpeed scan timed out. Please try again.'
+						__(
+							'PageSpeed scan timed out. Please try again.',
+							'performance-optimisation'
+						)
 					);
 					return;
 				}
@@ -173,7 +172,13 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						stopPolling();
 						setPending( false );
 						setScanning( false );
-						setError( response.message || t.pagespeedError );
+						setError(
+							response.message ||
+								__(
+									'PageSpeed scan failed. Please try again.',
+									'performance-optimisation'
+								)
+						);
 						return;
 					}
 
@@ -201,7 +206,12 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					stopPolling();
 					setPending( false );
 					setScanning( false );
-					setError( t.pagespeedError || 'PageSpeed scan failed.' );
+					setError(
+						__(
+							'PageSpeed scan failed.',
+							'performance-optimisation'
+						)
+					);
 					console.error( 'PageSpeed poll error:', err );
 				}
 			}, POLL_INTERVAL_MS );
@@ -225,7 +235,13 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 			if ( ! response.success ) {
 				setScanning( false );
-				setError( response.message || t.pagespeedError );
+				setError(
+					response.message ||
+						__(
+							'PageSpeed scan failed. Please try again.',
+							'performance-optimisation'
+						)
+				);
 				return;
 			}
 
@@ -234,18 +250,20 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			pollForResults( url, strategy );
 		} catch ( err ) {
 			setScanning( false );
-			setError( t.pagespeedError || 'PageSpeed scan failed.' );
+			setError(
+				__( 'PageSpeed scan failed.', 'performance-optimisation' )
+			);
 			console.error( 'PageSpeed scan error:', err );
 		}
 	}, [ url, strategy, stopPolling, pollForResults ] );
 
 	const vitalsLabels = {
-		fcp: t.fcp || 'First Contentful Paint',
-		lcp: t.lcp || 'Largest Contentful Paint',
-		tbt: t.tbt || 'Total Blocking Time',
-		cls: t.cls || 'Cumulative Layout Shift',
-		speed_index: t.speedIndex || 'Speed Index',
-		tti: t.tti || 'Time to Interactive',
+		fcp: __( 'First Contentful Paint', 'performance-optimisation' ),
+		lcp: __( 'Largest Contentful Paint', 'performance-optimisation' ),
+		tbt: __( 'Total Blocking Time', 'performance-optimisation' ),
+		cls: __( 'Cumulative Layout Shift', 'performance-optimisation' ),
+		speed_index: __( 'Speed Index', 'performance-optimisation' ),
+		tti: __( 'Time to Interactive', 'performance-optimisation' ),
 	};
 
 	const categoryLabels = {
@@ -256,15 +274,19 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	};
 
 	return (
-		<FeatureCard title={ t.pagespeedResults || 'PageSpeed Insights' }>
+		<FeatureCard
+			title={ __( 'PageSpeed Insights', 'performance-optimisation' ) }
+		>
 			{ ! apiKeyConfigured && (
 				<div className="wppo-notice wppo-notice--warning">
 					<FontAwesomeIcon
 						icon={ faExclamationCircle }
 						style={ { marginRight: '8px' } }
 					/>
-					{ t.pagespeedApiKeyMissing ||
-						'PageSpeed API key is not configured. Add it in Settings.' }
+					{ __(
+						'PageSpeed API key is not configured. Add it in Settings.',
+						'performance-optimisation'
+					) }
 				</div>
 			) }
 
@@ -282,7 +304,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						disabled={ scanning || pending }
 					>
 						<FontAwesomeIcon icon={ faMobileAlt } />
-						{ t.pagespeedMobile || 'Mobile' }
+						{ __( 'Mobile', 'performance-optimisation' ) }
 					</button>
 					<button
 						type="button"
@@ -295,7 +317,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						disabled={ scanning || pending }
 					>
 						<FontAwesomeIcon icon={ faDesktop } />
-						{ t.pagespeedDesktop || 'Desktop' }
+						{ __( 'Desktop', 'performance-optimisation' ) }
 					</button>
 				</div>
 
@@ -312,7 +334,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 								spin
 								style={ { marginRight: '8px' } }
 							/>
-							{ t.pagespeedScanning || 'Scanning...' }
+							{ __( 'Scanning…', 'performance-optimisation' ) }
 						</>
 					) : (
 						<>
@@ -320,7 +342,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 								icon={ faTachometerAlt }
 								style={ { marginRight: '8px' } }
 							/>
-							{ t.pagespeedScan || 'Run PageSpeed Scan' }
+							{ __(
+								'Run PageSpeed Scan',
+								'performance-optimisation'
+							) }
 						</>
 					) }
 				</button>
@@ -334,8 +359,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						spin
 						style={ { marginRight: '8px' } }
 					/>
-					{ t.pagespeedPending ||
-						'PageSpeed scan is running in the background. Results will appear shortly.' }
+					{ __(
+						'PageSpeed scan is running in the background. Results will appear shortly.',
+						'performance-optimisation'
+					) }
 				</div>
 			) }
 
@@ -364,9 +391,24 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					<table className="wppo-vitals-table">
 						<thead>
 							<tr>
-								<th>{ t.metric || 'Metric' }</th>
-								<th>{ t.value || 'Value' }</th>
-								<th>{ t.status || 'Status' }</th>
+								<th>
+									{ __(
+										'Metric',
+										'performance-optimisation'
+									) }
+								</th>
+								<th>
+									{ __(
+										'Value',
+										'performance-optimisation'
+									) }
+								</th>
+								<th>
+									{ __(
+										'Status',
+										'performance-optimisation'
+									) }
+								</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -392,8 +434,8 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 							} }
 						/>
 						{ 'strategy:desktop' === `strategy:${ strategy }`
-							? t.pagespeedDesktop || 'Desktop'
-							: t.pagespeedMobile || 'Mobile' }
+							? __( 'Desktop', 'performance-optimisation' )
+							: __( 'Mobile', 'performance-optimisation' ) }
 						{ ' · ' }
 						{ result.fetched_at }
 					</p>

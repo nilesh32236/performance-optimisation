@@ -374,7 +374,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								id="excludeSize"
 								type="text"
 								name="excludeSize"
-								placeholder="e.g. .no-resize, .hero-image"
+								placeholder="e.g. 300, 600, 1200"
 								value={ settings.excludeSize }
 								onChange={ handleChange( setSettings ) }
 								aria-describedby="excludeSize-desc"
@@ -383,9 +383,9 @@ const ImageOptimization = ( { options = {} } ) => {
 								id="excludeSize-desc"
 								className="wppo-text-muted wppo-mt-10 wppo-text-small"
 							>
-								Comma-separated CSS class names. Images with
-								these classes will not have the max-width
-								constraint applied.
+								Comma-separated image width values (pixels).
+								Images with these widths in srcset will be
+								skipped.
 							</p>
 						</div>
 					</div>

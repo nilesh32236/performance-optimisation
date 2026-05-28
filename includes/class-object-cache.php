@@ -26,7 +26,14 @@ class Object_Cache {
 	 *
 	 * @var string
 	 */
-	public const DROPIN_MARKER        = 'Redis Object Cache Drop-in for Performance Optimisation';
+	public const DROPIN_MARKER = 'Redis Object Cache Drop-in for Performance Optimisation';
+
+	/**
+	 * Legacy marker for backward compatibility.
+	 *
+	 * @var string
+	 * @since 1.4.0
+	 */
 	public const LEGACY_DROPIN_MARKER = 'Redis Object Cache Drop-in';
 
 	/**

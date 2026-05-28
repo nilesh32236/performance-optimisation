@@ -1,4 +1,14 @@
-// Utility function to handle API calls
+/**
+ * Make a REST API call to the Performance Optimisation plugin.
+ *
+ * Mutates wppoSettings.settings globally on successful `update_settings` calls.
+ *
+ * @since 1.0.0
+ * @param {string}      action The REST endpoint action (e.g. 'update_settings').
+ * @param {Object|null} body   Request body payload.
+ * @param {string}      method HTTP method ('POST' or 'GET'). Defaults to 'POST'.
+ * @return {Promise<Object>} Resolved JSON response data.
+ */
 export const apiCall = ( action, body, method = 'POST' ) => {
 	const isGet = 'GET' === method;
 	return fetch( wppoSettings.apiUrl + action, {
@@ -17,6 +27,13 @@ export const apiCall = ( action, body, method = 'POST' ) => {
 	} );
 };
 
+/**
+ * Fetch paginated recent activity log entries.
+ *
+ * @since 1.0.0
+ * @param {number} page Page number (defaults to 1).
+ * @return {Promise<Object>} Resolved activities data.
+ */
 export const fetchRecentActivities = ( page = 1 ) => {
 	return fetch( wppoSettings.apiUrl + 'recent_activities?page=' + page, {
 		method: 'GET',

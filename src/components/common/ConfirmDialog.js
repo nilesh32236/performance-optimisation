@@ -3,7 +3,7 @@ import { useEffect, useRef, useCallback } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
 
-const translations = wppoSettings.translations;
+import { __ } from '@wordpress/i18n';
 
 /**
  * A reusable confirmation dialog component for destructive actions.
@@ -123,7 +123,8 @@ const ConfirmDialog = ( {
 						className="wppo-button wppo-button--secondary wppo-dialog-cancel"
 						onClick={ onCancel }
 					>
-						{ cancelLabel || translations.cancel || 'Cancel' }
+						{ cancelLabel ||
+							__( 'Cancel', 'performance-optimisation' ) }
 					</button>
 					<button
 						type="button"
@@ -135,7 +136,8 @@ const ConfirmDialog = ( {
 						onClick={ onConfirm }
 						ref={ confirmBtnRef }
 					>
-						{ confirmLabel || translations.confirm || 'Confirm' }
+						{ confirmLabel ||
+							__( 'Confirm', 'performance-optimisation' ) }
 					</button>
 				</div>
 			</div>

@@ -16,9 +16,7 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 
-const translations =
-	( typeof wppoSettings !== 'undefined' ? wppoSettings.translations : {} ) ||
-	{};
+import { __ } from '@wordpress/i18n';
 
 const ObjectCache = ( { options = {} } ) => {
 	const defaultSettings = {
@@ -78,17 +76,20 @@ const ObjectCache = ( { options = {} } ) => {
 			if ( res.success ) {
 				setActionMsg( {
 					type: 'success',
-					text:
-						translations.formSubmitted ||
+					text: __(
 						'Settings saved successfully.',
+						'performance-optimisation'
+					),
 				} );
 			} else {
 				setActionMsg( {
 					type: 'error',
 					text:
 						res.message ||
-						translations.formSubmissionError ||
-						'Error saving settings.',
+						__(
+							'Error saving settings.',
+							'performance-optimisation'
+						),
 				} );
 			}
 		} finally {

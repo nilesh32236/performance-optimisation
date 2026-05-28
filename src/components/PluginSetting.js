@@ -14,9 +14,9 @@ import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 
-const PluginSetting = ( { options } ) => {
-	const translations = wppoSettings.translations;
+import { __ } from '@wordpress/i18n';
 
+const PluginSetting = ( { options } ) => {
 	const [ selectedFile, setSelectedFile ] = useState( null );
 	const [ isImporting, setIsImporting ] = useState( false );
 	const [ notification, setNotification ] = useState( {
@@ -63,24 +63,26 @@ const PluginSetting = ( { options } ) => {
 				}
 
 				setApiKeyNotification( {
-					message:
-						translations.pagespeedApiKeySaved || 'API key saved.',
+					message: __( 'API key saved.', 'performance-optimisation' ),
 					success: true,
 				} );
 			} else {
 				setApiKeyNotification( {
 					message:
 						response.message ||
-						translations.pagespeedApiKeySaveFailed ||
-						'Failed to save API key.',
+						__(
+							'Failed to save API key.',
+							'performance-optimisation'
+						),
 					success: false,
 				} );
 			}
 		} catch ( err ) {
 			setApiKeyNotification( {
-				message:
-					translations.pagespeedApiKeySaveError ||
+				message: __(
 					'Error saving API key.',
+					'performance-optimisation'
+				),
 				success: false,
 			} );
 			console.error( 'Save API key error:', err );
@@ -156,8 +158,10 @@ const PluginSetting = ( { options } ) => {
 	const importSettings = () => {
 		if ( ! selectedFile ) {
 			setNotification( {
-				message:
-					translations.selectFiles || 'Please select a file first.',
+				message: __(
+					'Please select a file first.',
+					'performance-optimisation'
+				),
 				success: false,
 			} );
 			return;
@@ -169,7 +173,7 @@ const PluginSetting = ( { options } ) => {
 
 		reader.onerror = () => {
 			setNotification( {
-				message: translations.fileErrorImport || 'Error reading file',
+				message: __( 'Error reading file', 'performance-optimisation' ),
 				success: false,
 			} );
 			setIsImporting( false );
@@ -178,7 +182,7 @@ const PluginSetting = ( { options } ) => {
 
 		reader.onabort = () => {
 			setNotification( {
-				message: translations.fileErrorImport || 'File read aborted',
+				message: __( 'Error reading file', 'performance-optimisation' ),
 				success: false,
 			} );
 			setIsImporting( false );
@@ -201,18 +205,23 @@ const PluginSetting = ( { options } ) => {
 							message:
 								data.message ||
 								( data.success
-									? translations.fileImported ||
-									  'Settings imported successfully.'
-									: translations.importFailed ||
-									  'Failed to import settings.' ),
+									? __(
+											'File imported successfully',
+											'performance-optimisation'
+									  )
+									: __(
+											'Import failed',
+											'performance-optimisation'
+									  ) ),
 							success: data.success,
 						} );
 					} )
 					.catch( () => {
 						setNotification( {
-							message:
-								translations.fileErrorImport ||
-								'Error importing settings.',
+							message: __(
+								'Error reading file',
+								'performance-optimisation'
+							),
 							success: false,
 						} );
 					} )
@@ -221,9 +230,10 @@ const PluginSetting = ( { options } ) => {
 					} );
 			} catch ( _error ) {
 				setNotification( {
-					message:
-						translations.invalidFileFormat ||
-						'Invalid file format.',
+					message: __(
+						'Invalid file format. Please select a valid JSON file.',
+						'performance-optimisation'
+					),
 					success: false,
 				} );
 				setIsImporting( false );
@@ -354,10 +364,10 @@ const PluginSetting = ( { options } ) => {
 
 				{ /* Phase 2 — PageSpeed API Key (v1.6.0) */ }
 				<FeatureCard
-					title={
-						translations.pagespeedApiKey ||
-						'Google PageSpeed API Key'
-					}
+					title={ __(
+						'Google PageSpeed API Key',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faTachometerAlt } /> }
 				>
 					<p
@@ -365,8 +375,10 @@ const PluginSetting = ( { options } ) => {
 						className="wppo-text-muted"
 						style={ { marginBottom: '16px' } }
 					>
-						{ translations.pagespeedApiKeyDesc ||
-							'Required to run PageSpeed Insights scans. Get a free key from Google Cloud Console.' }
+						{ __(
+							'Required to run PageSpeed Insights scans. Get a free key from Google Cloud Console.',
+							'performance-optimisation'
+						) }
 					</p>
 
 					{ apiKeyNotification.message && (
@@ -393,7 +405,10 @@ const PluginSetting = ( { options } ) => {
 							className="wppo-field-label"
 							htmlFor="pagespeed-api-key"
 						>
-							{ translations.pagespeedApiKey || 'API Key' }
+							{ __(
+								'Google PageSpeed API Key',
+								'performance-optimisation'
+							) }
 						</label>
 						<input
 							type="password"
@@ -413,8 +428,14 @@ const PluginSetting = ( { options } ) => {
 						className="wppo-button wppo-button--primary wppo-mt-16"
 						onClick={ saveApiKey }
 						isLoading={ savingApiKey }
-						label={ translations.saveSettings || 'Save' }
-						loadingLabel={ translations.saving || 'Saving...' }
+						label={ __(
+							'Save Settings',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Saving…',
+							'performance-optimisation'
+						) }
 					/>
 				</FeatureCard>
 

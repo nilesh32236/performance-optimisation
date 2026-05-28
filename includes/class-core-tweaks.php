@@ -57,6 +57,8 @@ class Core_Tweaks {
 
 	/**
 	 * Disable emojis.
+	 *
+	 * @return void
 	 */
 	public function disable_emojis() {
 		remove_action( 'wp_head', 'print_emoji_detection_script', 7 );
@@ -100,6 +102,8 @@ class Core_Tweaks {
 
 	/**
 	 * Disable embeds.
+	 *
+	 * @return void
 	 */
 	public function disable_embeds() {
 		remove_action( 'rest_api_init', 'wp_oembed_register_route' );
@@ -145,6 +149,8 @@ class Core_Tweaks {
 
 	/**
 	 * Disable dashicons on frontend if not logged in.
+	 *
+	 * @return void
 	 */
 	public function disable_dashicons() {
 		if ( ! is_user_logged_in() ) {
@@ -167,6 +173,8 @@ class Core_Tweaks {
 
 	/**
 	 * Control heartbeat depending on settings.
+	 *
+	 * @return void
 	 */
 	public function control_heartbeat() {
 		$heartbeat_control = $this->settings['heartbeatControl'] ?? 'default';

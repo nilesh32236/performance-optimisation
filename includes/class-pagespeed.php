@@ -104,13 +104,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$strategy = isset( $args['strategy'] ) ? sanitize_text_field( $args['strategy'] ) : 'mobile';
 
 			if ( empty( $url ) ) {
-				new Log( 'PageSpeed scan skipped: empty URL.' );
+				new Log( __( 'PageSpeed scan skipped: empty URL.', 'performance-optimisation' ) );
 				return;
 			}
 
 			$api_key = self::get_api_key();
 			if ( empty( $api_key ) ) {
-				new Log( 'PageSpeed scan skipped: API key not configured.' );
+				new Log( __( 'PageSpeed scan skipped: API key not configured.', 'performance-optimisation' ) );
 				self::store_failure( $url, $strategy, 'PageSpeed API key is not configured. Add it in the Performance Audit settings.' );
 				return;
 			}
@@ -119,7 +119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			// The Google PageSpeed API rejects localhost or non-public URLs.
 			if ( false !== strpos( $request_url, 'localhost' ) || false !== strpos( $request_url, '127.0.0.1' ) ) {
-				new Log( 'PageSpeed scan failed: local URL detected.' );
+				new Log( __( 'PageSpeed scan failed: local URL detected.', 'performance-optimisation' ) );
 				self::store_failure( $url, $strategy, 'PageSpeed cannot scan local or non-public URLs. Please use a public URL.' );
 				return;
 			}
@@ -138,7 +138,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			// Security: redact API key from debug logs.
 			$redacted_url = str_replace( $api_key, 'REDACTED', $query_url );
-			new Log( 'PageSpeed API request: ' . $redacted_url );
+			// Translators: %s is the redacted PageSpeed API request URL.
+			new Log( sprintf( __( 'PageSpeed API request: %s', 'performance-optimisation' ), $redacted_url ) );
 
 			$response = wp_remote_get(
 				$query_url,
@@ -149,7 +150,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			);
 
 			if ( is_wp_error( $response ) ) {
-				new Log( 'PageSpeed API error: ' . $response->get_error_message() );
+				// Translators: %s is the error message from the PageSpeed API.
+				new Log( sprintf( __( 'PageSpeed API error: %s', 'performance-optimisation' ), $response->get_error_message() ) );
 				self::store_failure( $url, $strategy, $response->get_error_message() );
 				return;
 			}
@@ -157,7 +159,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$http_code = (int) wp_remote_retrieve_response_code( $response );
 
 			if ( 200 !== $http_code ) {
-				$msg = sprintf( 'PageSpeed API returned HTTP %d for %s.', $http_code, esc_url( $url ) );
+				// Translators: %1$d is the HTTP status code, %2$s is the URL.
+				$msg = sprintf( __( 'PageSpeed API returned HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url( $url ) );
 				new Log( $msg );
 				self::store_failure( $url, $strategy, $msg );
 				return;
@@ -166,7 +169,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$body = json_decode( wp_remote_retrieve_body( $response ), true );
 
 			if ( ! is_array( $body ) ) {
-				$msg = 'PageSpeed API error: invalid JSON response.';
+				$msg = __( 'PageSpeed API error: invalid JSON response.', 'performance-optimisation' );
 				new Log( $msg );
 				self::store_failure( $url, $strategy, $msg );
 				return;
@@ -174,7 +177,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			if ( isset( $body['error'] ) ) {
 				$error_message = $body['error']['message'] ?? 'Unknown API error';
-				$msg           = 'PageSpeed API error: ' . sanitize_text_field( $error_message );
+				// Translators: %s is the error message from the PageSpeed API.
+				$msg = sprintf( __( 'PageSpeed API error: %s', 'performance-optimisation' ), sanitize_text_field( $error_message ) );
 				new Log( $msg );
 				self::store_failure( $url, $strategy, $msg );
 				return;
@@ -188,7 +192,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			new Log(
 				sprintf(
-					'PageSpeed scan completed for %s (%s). Performance score: %d.',
+					/* translators: %1$s is the URL, %2$s is the strategy (mobile/desktop), %3$d is the performance score. */
+					__( 'PageSpeed scan completed for %1$s (%2$s). Performance score: %3$d.', 'performance-optimisation' ),
 					esc_url( $url ),
 					esc_html( $strategy ),
 					(int) ( $prepared['scores']['performance'] ?? 0 )
