@@ -42,6 +42,7 @@ describe( 'SystemInfo Component', () => {
 	} );
 
 	it( 'renders error message on failure', async () => {
+		const consoleSpy = jest.spyOn( console, 'error' ).mockImplementation( () => {} );
 		fetchSystemInfo.mockRejectedValueOnce( new Error( 'Network Error' ) );
 		render( <SystemInfo /> );
 
@@ -55,5 +56,8 @@ describe( 'SystemInfo Component', () => {
 				screen.getByText( /Failed to fetch system info/i )
 			).toBeInTheDocument();
 		} );
+
+		expect( consoleSpy ).toHaveBeenCalledWith( 'System info fetch error:', expect.any( Error ) );
+		consoleSpy.mockRestore();
 	} );
 } );

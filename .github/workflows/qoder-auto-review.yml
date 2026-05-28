@@ -18,8 +18,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Qoder Config
+        run: |
+          mkdir -p ~/.qoder $GITHUB_WORKSPACE/.qoder
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
+          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
+          cat ~/.qoder/config.json
+
       - name: Run Qoder Code Review
         uses: QoderAI/qoder-action@v0
+        env:
+          QODER_CONFIG_DIR: /home/runner/.qoder
         with:
           qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
           prompt: |

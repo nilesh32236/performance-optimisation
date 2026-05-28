@@ -22,6 +22,7 @@ const Tooltip = ( { content, children } ) => {
 		<span
 			className="wppo-tooltip-container"
 			tabIndex="0"
+			role="tooltip"
 			aria-label={ content }
 		>
 			{ children || (
