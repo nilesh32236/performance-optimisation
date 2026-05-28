@@ -32,7 +32,9 @@ const Tooltip = ( { content, children } ) => {
 					aria-hidden="true"
 				/>
 			) }
-			<span className="wppo-tooltip-content" aria-hidden="true">{ content }</span>
+			<span className="wppo-tooltip-content" aria-hidden="true">
+				{ content }
+			</span>
 		</span>
 	);
 };
