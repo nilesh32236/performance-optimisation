@@ -113,7 +113,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				);
 
 				if ( null === $new_content || '' === $new_content ) {
-					new Log( 'Failed to replace WP_CACHE in wp-config.php' );
+					new Log( __( 'Failed to replace WP_CACHE in wp-config.php', 'performance-optimisation' ) );
 					return null;
 				}
 				$wp_config_content = $new_content;
@@ -169,7 +169,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			}
 
 			/* phpcs:enable */
-			new Log( 'Plugin activated on ' );
+			new Log( __( 'Plugin activated', 'performance-optimisation' ) );
 		}
 	}
 }

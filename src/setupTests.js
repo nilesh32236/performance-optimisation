@@ -1,10 +1,8 @@
 require( '@testing-library/jest-dom' );
-global.wppoSettings = {
-	translations: {
-		confirm: 'Confirm',
-		cancel: 'Cancel',
-	},
-};
+jest.mock( '@wordpress/i18n', () => ( {
+	__: ( str ) => str,
+} ) );
+global.wppoSettings = {};
 
 Object.defineProperty( window, 'matchMedia', {
 	writable: true,

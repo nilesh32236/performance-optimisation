@@ -122,6 +122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Combines all enqueued CSS files into a single file.
 		 *
+		 * @return void
 		 * @since 1.0.0
 		 */
 		public function combine_css() {
@@ -226,7 +227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Fetches CSS content from a remote URL or local path.
 		 *
 		 * @param string $url The URL of the CSS file.
-		 * @return string The CSS content or an empty string if fetching fails.
+		 * @return string|false The CSS content or false if fetching fails.
 		 *
 		 * @since 1.0.0
 		 */

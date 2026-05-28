@@ -22,7 +22,7 @@ npm run start                # dev watch mode
 | `npm run lint:js:fix` | Auto-fix JS lint |
 | `composer lint` | PHPCS (WordPress standard, config in `phpcs.xml`) |
 | `composer lint:fix` | PHPCBF auto-fix |
-| `npm run makepot` | Generate `.pot` translation file |
+| `composer makepot` | Generate `.pot` translation file (PHP + JS `@wordpress/i18n` strings) |
 | `composer release` | `composer install --no-dev --optimize-autoloader` |
 
 **Required order for full verification:** `npm run lint:js` → `composer lint` → `npm test` → `npm run build`

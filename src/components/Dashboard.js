@@ -15,6 +15,7 @@ import SuggestionsPanel from './SuggestionsPanel';
 import SystemInfo from './SystemInfo';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
+import { __ } from '@wordpress/i18n';
 
 /**
  * Normalize wppoSettings.image_info which stores arrays of file paths
@@ -269,14 +270,11 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
-				title={
-					wppoSettings.translations[ 'System Health' ] ||
-					'System Health'
-				}
-				description={
-					wppoSettings.translations[ 'System Health Description' ] ||
-					'Real-time performance overview and quick optimization actions.'
-				}
+				title={ __( 'System Health', 'performance-optimisation' ) }
+				description={ __(
+					'Real-time performance overview and quick optimization actions.',
+					'performance-optimisation'
+				) }
 				status={ <></> }
 				actions={
 					<LoadingSubmitButton
@@ -405,12 +403,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					removeImages();
 				} }
 				onCancel={ () => setConfirmRemove( false ) }
-				title={
-					wppoSettings.translations[ 'Remove Optimized Images' ] ||
-					'Remove Optimized Images'
-				}
+				title={ __(
+					'Remove Optimized Images',
+					'performance-optimisation'
+				) }
 				message="This will delete all optimized WebP and AVIF copies. Original images will not be affected."
-				confirmLabel={ wppoSettings.translations.Delete || 'Delete' }
+				confirmLabel={ __( 'Delete', 'performance-optimisation' ) }
 				variant="danger"
 			/>
 		</div>

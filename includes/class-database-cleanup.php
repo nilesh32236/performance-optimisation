@@ -580,7 +580,8 @@ class Database_Cleanup {
 			}
 
 			if ( is_wp_error( $result ) ) {
-				new Log( "Auto cleanup failed: {$method}" );
+				// Translators: %s is the cleanup method name that failed.
+				new Log( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $method ) );
 			}
 		}
 	}

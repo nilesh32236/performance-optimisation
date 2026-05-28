@@ -350,6 +350,7 @@ class Cron {
 	 *
 	 * Checks the user settings and runs cleanup if the schedule matches.
 	 *
+	 * @return void
 	 * @since 1.3.0
 	 */
 	public function database_cleanup_cron() {

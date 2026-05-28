@@ -31,12 +31,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 *
 		 * @since 1.5.1
 		 */
-		private const MAX_PRELOAD_WIDTH = 1478; /**
-												 * Configuration options for image optimization.
-												 *
-												 * @var array
-												 * @since 1.0.0
-												 */
+		private const MAX_PRELOAD_WIDTH = 1478;
+
+		/**
+		 * Configuration options for image optimization.
+		 *
+		 * @var array
+		 * @since 1.0.0
+		 */
 		private array $options;
 
 		/**
@@ -108,7 +110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$this->exclude_convert_imgs    = Util::process_urls( $this->options['image_optimisation']['excludeConvertImages'] ?? array() );
 			$this->preload_front_page_urls = Util::process_urls( $this->options['image_optimisation']['preloadFrontPageImagesUrls'] ?? array() );
 			$this->exclude_post_type_imgs  = Util::process_urls( $this->options['image_optimisation']['excludePostTypeImgUrl'] ?? array() );
-			$this->exclude_sizes           = array_map( 'absint', Util::process_urls( $this->options['image_optimisation']['excludeSize'] ?? array() ) );
+			$this->exclude_sizes           = array_map( 'absint', array_map( 'trim', explode( ',', ( $this->options['image_optimisation']['excludeSize'] ?? '' ) ) ) );
 			$this->exclude_lazy_imgs       = Util::process_urls( $this->options['image_optimisation']['excludeImages'] ?? array() );
 			$this->exclude_lazy_videos     = Util::process_urls( $this->options['image_optimisation']['excludeVideos'] ?? '' );
 
@@ -568,15 +570,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Robustly parses candidate URLs from a srcset string.
+		 * Parse srcset data from an image tag.
 		 *
 		 * @since 1.5.1
 		 * @param string $srcset             The srcset string from the image tag.
 		 * @param array  $image_optimisation Image optimization configuration array.
-		 * @param array  $exclude_sizes      Array of excluded sizes.
 		 * @return array Array of parsed sources: array( 'url' => string, 'width' => int ).
 		 */
-		private function parse_srcset_data( $srcset, $image_optimisation, $exclude_sizes = null ): array {
+		private function parse_srcset_data( $srcset, $image_optimisation ): array {
 			if ( ! $srcset ) {
 				return array();
 			}
@@ -1146,13 +1147,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return preg_replace_callback(
 					'#<picture\b[^>]*>.*?</picture>|<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>|<iframe\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#is',
 					function ( $matches ) use ( &$img_counter, $exclude_img_count, &$exclude_imgs ) {
-						$img_counter++;
-
 						if ( 5 === count( $matches ) ) {
 							return $this->process_iframe_tag( $matches[0], $matches[4], $exclude_imgs );
 						}
 
-						if ( $exclude_img_count > $img_counter ) {
+						$img_counter++;
+
+						if ( $exclude_img_count >= $img_counter ) {
 							$exclude_imgs[] = $matches[2];
 						}
 

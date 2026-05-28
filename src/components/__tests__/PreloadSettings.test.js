@@ -13,7 +13,7 @@ import { apiCall } from '../../lib/apiRequest';
 
 describe( 'PreloadSettings Component', () => {
 	beforeEach( () => {
-		global.wppoSettings = { translations: {} };
+		global.wppoSettings = {};
 		jest.clearAllMocks();
 	} );
 
