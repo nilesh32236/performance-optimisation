@@ -23,10 +23,7 @@ import StatusBadge from './common/StatusBadge';
 import Tooltip from './common/Tooltip';
 import SwitchField from './common/SwitchField';
 
-const t =
-	typeof wppoSettings !== 'undefined' && wppoSettings.translations
-		? wppoSettings.translations
-		: {};
+import { __ } from '@wordpress/i18n';
 
 /**
  * Metric definitions with descriptions for tooltips.
@@ -155,7 +152,7 @@ const MetricOverview = ( { result } ) => (
 	<div className="wppo-audit-overview">
 		<div className="wppo-audit-overview-card">
 			<div className="wppo-audit-overview-card__label">
-				{ t.loadTime || 'Load Time' }
+				{ __( 'Load Time', 'performance-optimisation' ) }
 				<Tooltip content={ METRIC_INFO.load_time } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
@@ -169,7 +166,7 @@ const MetricOverview = ( { result } ) => (
 		</div>
 		<div className="wppo-audit-overview-card">
 			<div className="wppo-audit-overview-card__label">
-				{ t.ttfb || 'TTFB' }
+				{ __( 'TTFB', 'performance-optimisation' ) }
 				<Tooltip content={ METRIC_INFO.ttfb } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
@@ -183,7 +180,7 @@ const MetricOverview = ( { result } ) => (
 		</div>
 		<div className="wppo-audit-overview-card">
 			<div className="wppo-audit-overview-card__label">
-				{ t.totalSize || 'Page Size' }
+				{ __( 'Page Size', 'performance-optimisation' ) }
 				<Tooltip content={ METRIC_INFO.page_size } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
@@ -201,7 +198,7 @@ const MetricOverview = ( { result } ) => (
 		</div>
 		<div className="wppo-audit-overview-card">
 			<div className="wppo-audit-overview-card__label">
-				{ t.assets || 'Total Assets' }
+				{ __( 'Total Assets', 'performance-optimisation' ) }
 				<Tooltip content={ METRIC_INFO.assets } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
@@ -266,10 +263,21 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 						} );
 				}
 			} else {
-				setError( response.message || t.scanError );
+				setError(
+					response.message ||
+						__(
+							'Scan failed. Please try again.',
+							'performance-optimisation'
+						)
+				);
 			}
 		} catch ( err ) {
-			setError( t.scanError );
+			setError(
+				__(
+					'Scan failed. Please try again.',
+					'performance-optimisation'
+				)
+			);
 			console.error( 'Performance scan error:', err );
 		} finally {
 			setScanning( false );
@@ -281,7 +289,9 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 	};
 
 	return (
-		<FeatureCard title={ t.performanceAudit || 'Performance Audit' }>
+		<FeatureCard
+			title={ __( 'Performance Audit', 'performance-optimisation' ) }
+		>
 			{ /* Modern Scan Bar */ }
 			<form className="wppo-audit-controls" onSubmit={ handleScan }>
 				<div className="wppo-audit-controls__icon">
@@ -293,19 +303,29 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 					className="wppo-audit-controls__input"
 					value={ url }
 					onChange={ ( e ) => setUrl( e.target.value ) }
-					placeholder={
-						t.auditUrlPlaceholder || 'https://example.com'
-					}
+					placeholder={ __(
+						'https://example.com',
+						'performance-optimisation'
+					) }
 					required
-					aria-label={ t.auditUrlPlaceholder || 'URL to Audit' }
+					aria-label={ __(
+						'URL to Audit',
+						'performance-optimisation'
+					) }
 				/>
 				<div className="wppo-audit-controls__actions">
 					<button
 						type="button"
 						className="wppo-button wppo-button--ghost"
 						onClick={ setHomeUrl }
-						title={ t.useHomeUrl || 'Use Home URL' }
-						aria-label={ t.useHomeUrl || 'Use Home URL' }
+						title={ __(
+							'Use Home URL',
+							'performance-optimisation'
+						) }
+						aria-label={ __(
+							'Use Home URL',
+							'performance-optimisation'
+						) }
 					>
 						<FontAwesomeIcon icon={ faGlobe } />
 					</button>
@@ -315,14 +335,14 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 						disabled={ scanning }
 					>
 						{ scanning ? (
-							t.scanning || 'Scanning...'
+							__( 'Scanning…', 'performance-optimisation' )
 						) : (
 							<>
 								<FontAwesomeIcon
 									icon={ faSearch }
 									style={ { marginRight: '8px' } }
 								/>
-								{ t.runScan || 'Run Scan' }
+								{ __( 'Run Scan', 'performance-optimisation' ) }
 							</>
 						) }
 					</button>
@@ -341,16 +361,17 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 								icon={ faChartBar }
 								style={ { marginRight: '8px' } }
 							/>
-							{ t.scanResults || 'Scan Results' }
+							{ __( 'Scan Results', 'performance-optimisation' ) }
 						</div>
 						<div className="wppo-audit-meta__toggle">
 							<SwitchField
 								checked={ devMode }
 								onChange={ handleDevModeToggle }
 								name="devMode"
-								label={
-									t.developerDetails || 'Developer Details'
-								}
+								label={ __(
+									'Developer Details',
+									'performance-optimisation'
+								) }
 								showLabel={ false }
 							/>
 						</div>
@@ -373,8 +394,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 									icon={ faLightbulb }
 									style={ { marginRight: '8px' } }
 								/>
-								{ t.cachedResults ||
-									'Displaying cached results from the last hour.' }
+								{ __(
+									'Displaying cached results from the last hour.',
+									'performance-optimisation'
+								) }
 							</span>
 							<button
 								type="button"
@@ -382,7 +405,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 								onClick={ ( e ) => handleScan( e, true ) }
 								disabled={ scanning }
 							>
-								{ t.scanFreshData || 'Scan Fresh Data' }
+								{ __(
+									'Scan Fresh Data',
+									'performance-optimisation'
+								) }
 							</button>
 						</div>
 					) }
@@ -390,26 +416,48 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 					<table className="wppo-audit-table">
 						<thead>
 							<tr>
-								<th>{ t.metric || 'Metric' }</th>
-								<th>{ t.value || 'Value' }</th>
-								<th>{ t.status || 'Status' }</th>
+								<th>
+									{ __(
+										'Metric',
+										'performance-optimisation'
+									) }
+								</th>
+								<th>
+									{ __(
+										'Value',
+										'performance-optimisation'
+									) }
+								</th>
+								<th>
+									{ __(
+										'Status',
+										'performance-optimisation'
+									) }
+								</th>
 							</tr>
 						</thead>
 						<tbody>
 							{ /* Optimizations Section */ }
 							<AuditSection
-								title={ t.optimizations || 'Optimizations' }
+								title={ __(
+									'Optimizations',
+									'performance-optimisation'
+								) }
 								icon={ faCogs }
 							/>
 							<ResultRow
-								label={
-									t.compression || 'Gzip/Brotli Compression'
-								}
+								label={ __(
+									'Gzip/Brotli Compression',
+									'performance-optimisation'
+								) }
 								value={
 									result.compression_value &&
 									result.compression_value !== 'none'
 										? result.compression_value
-										: t.disabled || 'Disabled'
+										: __(
+												'Disabled',
+												'performance-optimisation'
+										  )
 								}
 								status={ boolStatus(
 									result.gzip_brotli_compression
@@ -417,12 +465,18 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 								tooltipKey="compression"
 							/>
 							<ResultRow
-								label={ t.cacheControl || 'Cache-Control' }
+								label={ __(
+									'Cache-Control',
+									'performance-optimisation'
+								) }
 								value={
 									result.cache_control_value &&
 									result.cache_control_value !== 'none'
 										? result.cache_control_value
-										: t.missing || 'None'
+										: __(
+												'None',
+												'performance-optimisation'
+										  )
 								}
 								status={ boolStatus(
 									result.cache_control_headers
@@ -430,7 +484,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 								tooltipKey="cache_control"
 							/>
 							<ResultRow
-								label={ t.modernImages || 'Modern Formats' }
+								label={ __(
+									'Modern Formats',
+									'performance-optimisation'
+								) }
 								value={ `${ Number(
 									result.uses_modern_image_formats || 0
 								).toFixed( 1 ) }%` }
@@ -445,15 +502,20 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 								tooltipKey="modern_images"
 							/>
 							<ResultRow
-								label={
-									t.altAttributes || 'Image Alt Attributes'
-								}
+								label={ __(
+									'Image Alt Attributes',
+									'performance-optimisation'
+								) }
 								value={
 									result.image_alt_attributes
-										? t.allImagesHaveAlt ||
-										  'All images have alt text'
-										: t.someImagesMissingAlt ||
-										  'Some images missing alt text'
+										? __(
+												'All images have alt text',
+												'performance-optimisation'
+										  )
+										: __(
+												'Some images missing alt text',
+												'performance-optimisation'
+										  )
 								}
 								status={ boolStatus(
 									result.image_alt_attributes
@@ -465,56 +527,65 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 							{ devMode && (
 								<>
 									<AuditSection
-										title={
-											t.advancedTimings ||
-											'Advanced Timings'
-										}
+										title={ __(
+											'Advanced Timings',
+											'performance-optimisation'
+										) }
 										icon={ faTerminal }
 									/>
 									<ResultRow
-										label={
-											t.dnsLookupLabel || 'DNS Lookup'
-										}
+										label={ __(
+											'DNS Lookup',
+											'performance-optimisation'
+										) }
 										value={ `${ result.dns_lookup_time } ms` }
 										tooltipKey="dns"
 									/>
 									<ResultRow
-										label={
-											t.tcpConnection || 'TCP Connection'
-										}
+										label={ __(
+											'TCP Connection',
+											'performance-optimisation'
+										) }
 										value={ `${ result.connect_time } ms` }
 										tooltipKey="connect"
 									/>
 									<ResultRow
-										label={
-											t.sslHandshake || 'SSL Handshake'
-										}
+										label={ __(
+											'SSL Handshake',
+											'performance-optimisation'
+										) }
 										value={ `${ result.ssl_time } ms` }
 										tooltipKey="ssl"
 									/>
 									<ResultRow
-										label={ t.trueTtfb || 'True TTFB' }
+										label={ __(
+											'True TTFB',
+											'performance-optimisation'
+										) }
 										value={ `${ result.ttfb } ms` }
 										tooltipKey="ttfb"
 									/>
 									<ResultRow
-										label={
-											t.serverWaitTime ||
-											'Server Processing'
-										}
+										label={ __(
+											'Server Processing',
+											'performance-optimisation'
+										) }
 										value={ `${ result.server_wait_time } ms` }
 										tooltipKey="server_wait"
 									/>
 
 									<AuditSection
-										title={
-											t.assetBreakdown ||
-											'Asset Breakdown'
-										}
+										title={ __(
+											'Asset Breakdown',
+											'performance-optimisation'
+										) }
 										icon={ faChartBar }
 									/>
 									<ResultRow
-										label={ t.cssCount || 'CSS Files' }
+										label={ __(
+											'CSS Files',
+											'performance-optimisation'
+										) }
 										value={ `${
 											result.css_count
 										} (${ formatBytes(
@@ -522,7 +593,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 										) })` }
 									/>
 									<ResultRow
-										label={ t.jsCount || 'JS Files' }
+										label={ __(
+											'JS Files',
+											'performance-optimisation'
+										) }
 										value={ `${
 											result.js_count
 										} (${ formatBytes(
@@ -530,7 +604,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 										) })` }
 									/>
 									<ResultRow
-										label={ t.mediaCount || 'Total Images' }
+										label={ __(
+											'Total Images',
+											'performance-optimisation'
+										) }
 										value={ `${
 											result.media_count
 										} (${ formatBytes(
@@ -538,33 +615,40 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 										) })` }
 									/>
 									<ResultRow
-										label={ t.lazyLoaded || 'Lazy-Loaded' }
+										label={ __(
+											'Lazy-Loaded',
+											'performance-optimisation'
+										) }
 										value={ result.lazy_image_count }
 									/>
 									<ResultRow
-										label={
-											t.eagerLoaded || 'Eager-Loaded'
-										}
+										label={ __(
+											'Eager-Loaded',
+											'performance-optimisation'
+										) }
 										value={ result.eager_image_count }
 									/>
 									<ResultRow
-										label={ t.domSize || 'Total DOM Nodes' }
+										label={ __(
+											'Total DOM Nodes',
+											'performance-optimisation'
+										) }
 										value={ result.dom_size }
 										tooltipKey="dom_size"
 									/>
 									<ResultRow
-										label={
-											t.unminifiedAssets ||
-											'Unminified Assets'
-										}
+										label={ __(
+											'Unminified Assets',
+											'performance-optimisation'
+										) }
 										value={ result.unminified_assets_count }
 										tooltipKey="unminified"
 									/>
 									<ResultRow
-										label={
-											t.thirdPartyScripts ||
-											'Third-Party Scripts'
-										}
+										label={ __(
+											'Third-Party Scripts',
+											'performance-optimisation'
+										) }
 										value={
 											result.third_party_scripts_count
 										}
@@ -572,34 +656,61 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 									/>
 
 									<AuditSection
-										title={ t.environment || 'Environment' }
+										title={ __(
+											'Environment',
+											'performance-optimisation'
+										) }
 										icon={ faGlobe }
 									/>
 									<ResultRow
-										label={ t.pageUrl || 'Page URL' }
+										label={ __(
+											'Page URL',
+											'performance-optimisation'
+										) }
 										value={ result.page_url }
 									/>
 									<ResultRow
-										label={ t.scanType || 'Scan Type' }
+										label={ __(
+											'Scan Type',
+											'performance-optimisation'
+										) }
 										value={ result.scan_type }
 									/>
 									<ResultRow
-										label={ t.httpsStatus || 'HTTPS' }
+										label={ __(
+											'HTTPS',
+											'performance-optimisation'
+										) }
 										value={
 											result.uses_https
-												? t.enabled || 'Enabled'
-												: t.disabled || 'Disabled'
+												? __(
+														'Enabled',
+														'performance-optimisation'
+												  )
+												: __(
+														'Disabled',
+														'performance-optimisation'
+												  )
 										}
 										status={ boolStatus(
 											result.uses_https
 										) }
 									/>
 									<ResultRow
-										label={ t.robotsTxt || 'robots.txt' }
+										label={ __(
+											'robots.txt',
+											'performance-optimisation'
+										) }
 										value={
 											result.robots_txt_exists
-												? t.exists || 'Exists'
-												: t.missing || 'Missing'
+												? __(
+														'Exists',
+														'performance-optimisation'
+												  )
+												: __(
+														'Missing',
+														'performance-optimisation'
+												  )
 										}
 										status={ boolStatus(
 											result.robots_txt_exists

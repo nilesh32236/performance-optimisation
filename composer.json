@@ -36,6 +36,7 @@
     "scripts": {
         "lint": "phpcs",
         "lint:fix": "phpcbf",
+        "makepot": "wp i18n make-pot . languages/performance-optimisation.pot --slug=performance-optimisation --ignore-domain",
         "release": "composer install --no-dev --optimize-autoloader --ignore-platform-reqs",
         "dev-setup": "composer install --ignore-platform-reqs"
     }

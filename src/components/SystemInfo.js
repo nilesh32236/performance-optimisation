@@ -13,12 +13,7 @@ import { fetchSystemInfo } from '../lib/apiRequest';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 
-const t =
-	typeof wppoSettings !== 'undefined' && wppoSettings.translations
-		? wppoSettings.translations
-		: {};
-
-const DEFAULT_SCAN_ERROR = 'Failed to fetch system info. Please try again.';
+import { __ } from '@wordpress/i18n';
 
 /**
  * A single key-value row in a system info table.
@@ -86,11 +81,20 @@ const SystemInfo = () => {
 				setLoaded( true );
 			} else {
 				setError(
-					response.message || t.scanError || DEFAULT_SCAN_ERROR
+					response.message ||
+						__(
+							'Failed to fetch system info. Please try again.',
+							'performance-optimisation'
+						)
 				);
 			}
 		} catch ( err ) {
-			setError( t.scanError || DEFAULT_SCAN_ERROR );
+			setError(
+				__(
+					'Failed to fetch system info. Please try again.',
+					'performance-optimisation'
+				)
+			);
 			console.error( 'System info fetch error:', err );
 		} finally {
 			setLoading( false );
@@ -98,7 +102,7 @@ const SystemInfo = () => {
 	};
 
 	return (
-		<FeatureCard title={ t.systemInfo || 'System Info' }>
+		<FeatureCard title={ __( 'System Info', 'performance-optimisation' ) }>
 			{ /* Load trigger — shown to initiate fetch or refresh data */ }
 			<div
 				className={ `wppo-sysinfo-trigger ${
@@ -107,8 +111,10 @@ const SystemInfo = () => {
 			>
 				{ ! loaded && ! error && (
 					<p className="wppo-sysinfo-trigger__desc">
-						{ t.systemInfoDesc ||
-							'View PHP, database, WordPress, and server environment details.' }
+						{ __(
+							'View PHP, database, WordPress, and server environment details.',
+							'performance-optimisation'
+						) }
 					</p>
 				) }
 				<LoadingSubmitButton
@@ -118,10 +124,16 @@ const SystemInfo = () => {
 					isLoading={ loading }
 					label={
 						loaded
-							? t.refresh || 'Refresh System Info'
-							: t.loadSystemInfo || 'Load System Info'
+							? __( 'Refresh', 'performance-optimisation' )
+							: __(
+									'Load System Info',
+									'performance-optimisation'
+							  )
 					}
-					loadingLabel={ t.scanning || 'Loading...' }
+					loadingLabel={ __(
+						'Loading…',
+						'performance-optimisation'
+					) }
 				/>
 			</div>
 
@@ -143,9 +155,15 @@ const SystemInfo = () => {
 						title="PHP"
 						data={ info.php }
 						labels={ {
-							version: t.phpVersion || 'PHP Version',
+							version: __(
+								'PHP Version',
+								'performance-optimisation'
+							),
 							sapi: 'SAPI',
-							memory_limit: t.memoryLimit || 'Memory Limit',
+							memory_limit: __(
+								'Memory Limit',
+								'performance-optimisation'
+							),
 							max_execution_time: 'Max Execution Time',
 							upload_max_filesize: 'Upload Max Filesize',
 							post_max_size: 'Post Max Size',
@@ -157,7 +175,10 @@ const SystemInfo = () => {
 						title="Database"
 						data={ info.database }
 						labels={ {
-							server_version: t.dbVersion || 'DB Version',
+							server_version: __(
+								'DB Version',
+								'performance-optimisation'
+							),
 							extension: 'Extension',
 							client_version: 'Client Version',
 							max_connections: 'Max Connections',
@@ -167,10 +188,16 @@ const SystemInfo = () => {
 						title="WordPress"
 						data={ info.wordpress }
 						labels={ {
-							version: t.wpVersion || 'WP Version',
+							version: __(
+								'WP Version',
+								'performance-optimisation'
+							),
 							environment_type: 'Environment',
 							permalink_structure: 'Permalink Structure',
-							using_https: t.httpsStatus || 'HTTPS',
+							using_https: __(
+								'HTTPS',
+								'performance-optimisation'
+							),
 							multisite: 'Multisite',
 						} }
 					/>
@@ -178,8 +205,10 @@ const SystemInfo = () => {
 						title="Server"
 						data={ info.server }
 						labels={ {
-							server_software:
-								t.serverSoftware || 'Server Software',
+							server_software: __(
+								'Server Software',
+								'performance-optimisation'
+							),
 							os: 'Operating System',
 							architecture: 'Architecture',
 						} }
@@ -196,31 +225,48 @@ const SystemInfo = () => {
 								info.cache?.current_memory_usage,
 						} }
 						labels={ {
-							object_cache_status:
-								t.objectCache || 'Object Cache',
-							active_cache_plugin:
-								t.activeCachePlugin || 'Active Cache Plugin',
+							object_cache_status: __(
+								'Object Cache',
+								'performance-optimisation'
+							),
+							active_cache_plugin: __(
+								'Active Cache Plugin',
+								'performance-optimisation'
+							),
 							peak_memory_usage: 'Peak Memory',
 							current_memory_usage: 'Current Memory',
 						} }
 					/>
 					<InfoTable
-						title={ t.infrastructure || 'Infrastructure' }
+						title={ __(
+							'Infrastructure',
+							'performance-optimisation'
+						) }
 						data={ {
 							action_scheduler: info.infrastructure
 								?.action_scheduler?.available
-								? t.available || 'Available'
-								: t.unavailable || 'Unavailable',
+								? __( 'Available', 'performance-optimisation' )
+								: __(
+										'Unavailable',
+										'performance-optimisation'
+								  ),
 							pagespeed_api: info.infrastructure?.pagespeed_api
 								?.configured
-								? t.configured || 'Configured'
-								: t.notConfigured || 'Not Configured',
+								? __( 'Configured', 'performance-optimisation' )
+								: __(
+										'Not Configured',
+										'performance-optimisation'
+								  ),
 						} }
 						labels={ {
-							action_scheduler:
-								t.actionScheduler || 'Action Scheduler',
-							pagespeed_api:
-								t.pagespeedApi || 'PageSpeed Insights API',
+							action_scheduler: __(
+								'Action Scheduler',
+								'performance-optimisation'
+							),
+							pagespeed_api: __(
+								'PageSpeed Insights API',
+								'performance-optimisation'
+							),
 						} }
 					/>
 					<InfoTable

@@ -9,6 +9,7 @@
  *
  * @category PerformanceOptimization
  * @package  PerformanceOptimise\Inc\Minify
+ * @since    1.0.0
  */
 
 namespace PerformanceOptimise\Inc\Minify;

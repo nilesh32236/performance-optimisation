@@ -62,6 +62,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Initializes the WP_Filesystem API.
 		 *
+		 * @return mixed WP_Filesystem_Base|false The filesystem object or false on failure.
 		 * @since 1.0.0
 		 */
 		public static function init_filesystem() {

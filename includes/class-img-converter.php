@@ -548,8 +548,7 @@ class Img_Converter {
 		$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;
 		$supports_webp = strpos( $http_accept, 'image/webp' ) !== false;
 
-		$img_path   = Util::get_local_path( $image[0] );
-		$to_convert = false;
+		$img_path = Util::get_local_path( $image[0] );
 
 		if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
 			if ( $supports_avif || ( defined( 'DOING_CRON' ) && \DOING_CRON ) ) {

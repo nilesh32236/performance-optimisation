@@ -8,13 +8,16 @@
  * @since 1.5.0
  */
 
-const StatusBadge = ( { status } ) => {
-	const t = wppoSettings.translations;
+import { __ } from '@wordpress/i18n';
 
+const StatusBadge = ( { status } ) => {
 	const labelMap = {
-		good: t.good || 'Good',
-		needs_improvement: t.needsImprovement || 'Needs Improvement',
-		poor: t.poor || 'Poor',
+		good: __( 'Good', 'performance-optimisation' ),
+		needs_improvement: __(
+			'Needs Improvement',
+			'performance-optimisation'
+		),
+		poor: __( 'Poor', 'performance-optimisation' ),
 	};
 
 	const label = labelMap[ status ] || status;

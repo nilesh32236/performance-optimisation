@@ -23,10 +23,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import StatusBadge from './common/StatusBadge';
 
-const t =
-	typeof wppoSettings !== 'undefined' && wppoSettings.translations
-		? wppoSettings.translations
-		: {};
+import { __ } from '@wordpress/i18n';
 
 /**
  * Maps fix_action values to WPPO sidebar tab names.
@@ -84,19 +81,19 @@ const SuggestionIcon = ( { status } ) => {
 const formatValue = ( value, unit ) => {
 	if ( unit === 'boolean' ) {
 		return value === 'pass'
-			? t.suggestionGood || 'Passing'
-			: t.poor || 'Failing';
+			? __( 'Passing', 'performance-optimisation' )
+			: __( 'Failing', 'performance-optimisation' );
 	}
 	if ( unit === 'header' ) {
 		if ( value === 'none' ) {
-			return t.disabled || 'None';
+			return __( 'None', 'performance-optimisation' );
 		}
 		// Always show Cache-Control value as-is, never translate the header text.
 		return value;
 	}
 	if ( unit === 'encoding' ) {
 		if ( value === 'none' ) {
-			return t.disabled || 'None';
+			return __( 'None', 'performance-optimisation' );
 		}
 		// Map raw content-encoding values to human-readable form.
 		const encodings = {
@@ -163,11 +160,12 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 						type="button"
 						className="wppo-button wppo-button--sm wppo-button--primary"
 						onClick={ () => onNavigate( targetTab ) }
-						aria-label={ `${
-							t.fixIt || 'Fix It'
-						}: ${ description }` }
+						aria-label={ `${ __(
+							'Fix It',
+							'performance-optimisation'
+						) }: ${ description }` }
 					>
-						{ t.fixIt || 'Fix It' }
+						{ __( 'Fix It', 'performance-optimisation' ) }
 						<FontAwesomeIcon
 							icon={ faArrowRight }
 							style={ { marginLeft: '6px' } }
@@ -181,7 +179,7 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 							icon={ faCheckCircle }
 							style={ { marginRight: '4px' } }
 						/>
-						{ t.suggestionGood || 'Passing' }
+						{ __( 'Passing', 'performance-optimisation' ) }
 					</span>
 				) }
 			</div>
@@ -208,8 +206,10 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 					className="wppo-suggestions-panel__empty-icon"
 				/>
 				<p>
-					{ t.noSuggestions ||
-						'No suggestions — your site looks great!' }
+					{ __(
+						'No suggestions — your site looks great!',
+						'performance-optimisation'
+					) }
 				</p>
 			</div>
 		);
@@ -226,7 +226,7 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 					style={ { marginRight: '8px' } }
 				/>
 				<h3 className="wppo-suggestions-panel__title">
-					{ t.suggestions || 'Suggestions' }
+					{ __( 'Suggestions', 'performance-optimisation' ) }
 				</h3>
 				{ issues.length > 0 && (
 					<span className="wppo-suggestions-panel__badge">
@@ -235,16 +235,17 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 				) }
 			</div>
 
-			{ t.suggestionsDesc && (
-				<p className="wppo-suggestions-panel__desc">
-					{ t.suggestionsDesc }
-				</p>
-			) }
+			<p className="wppo-suggestions-panel__desc">
+				{ __(
+					'Based on your scan results, here are the recommended actions to improve performance.',
+					'performance-optimisation'
+				) }
+			</p>
 
 			<div
 				className="wppo-suggestions-panel__list"
 				role="list"
-				aria-label={ t.suggestions || 'Suggestions' }
+				aria-label={ __( 'Suggestions', 'performance-optimisation' ) }
 			>
 				{ /* Issues first */ }
 				{ issues.map( ( suggestion, i ) => (

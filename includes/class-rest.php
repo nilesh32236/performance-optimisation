@@ -25,6 +25,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 	 */
 	class Rest {
 
+		/**
+		 * REST API namespace.
+		 *
+		 * @var string
+		 * @since 1.0.0
+		 */
 		const NAMESPACE = 'performance-optimisation/v1';
 
 		/**

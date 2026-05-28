@@ -6,7 +6,6 @@
 	"scripts": {
 		"build": "wp-scripts build src/index.js src/lazyload.js",
 		"start": "wp-scripts start",
-		"makepot": "wp-scripts make-pot",
 		"test": "wp-scripts test-unit-js",
 		"lint:js": "wp-scripts lint-js src",
 		"lint:js:fix": "wp-scripts lint-js src --fix"
@@ -16,6 +15,7 @@
 	"devDependencies": {
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/react": "^16.3.2",
+		"@wordpress/i18n": "^6.20.0",
 		"@wordpress/scripts": "^30.7.0"
 	},
 	"dependencies": {
@@ -24,7 +24,9 @@
 		"@wordpress/element": "^6.43.0"
 	},
 	"jest": {
-		"setupFilesAfterEnv": ["<rootDir>/src/setupTests.js"],
+		"setupFilesAfterEnv": [
+			"<rootDir>/src/setupTests.js"
+		],
 		"testEnvironment": "jsdom"
 	}
 }

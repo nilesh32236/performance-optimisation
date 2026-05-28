@@ -21,7 +21,7 @@ import DatabaseCleanup from './components/DatabaseCleanup';
 import ObjectCache from './components/ObjectCache';
 import { fetchRecentActivities, fetchServerRules } from './lib/apiRequest';
 
-const translations = wppoSettings.translations;
+import { __ } from '@wordpress/i18n';
 
 const SIDEBAR_BREAKPOINT = 992;
 
@@ -39,37 +39,37 @@ const App = () => {
 			{
 				name: 'dashboard',
 				icon: faTachometerAlt,
-				label: translations.dashboard,
+				label: __( 'Dashboard', 'performance-optimisation' ),
 			},
 			{
 				name: 'fileOptimization',
 				icon: faFileCode,
-				label: translations.fileOptimization,
+				label: __( 'File Optimization', 'performance-optimisation' ),
 			},
 			{
 				name: 'preload',
 				icon: faBullseye,
-				label: translations.preload,
+				label: __( 'Preload', 'performance-optimisation' ),
 			},
 			{
 				name: 'imageOptimization',
 				icon: faImages,
-				label: translations.imageOptimization,
+				label: __( 'Image Optimization', 'performance-optimisation' ),
 			},
 			{
 				name: 'databaseCleanup',
 				icon: faDatabase,
-				label: translations.databaseOptimization || 'Database',
+				label: __( 'Database', 'performance-optimisation' ),
 			},
 			{
 				name: 'objectCache',
 				icon: faServer,
-				label: translations.objectCache || 'Object Cache',
+				label: __( 'Object Cache', 'performance-optimisation' ),
 			},
 			{
 				name: 'tools',
 				icon: faTools,
-				label: translations.tools,
+				label: __( 'Tools', 'performance-optimisation' ),
 			},
 		],
 		[]
@@ -165,7 +165,13 @@ const App = () => {
 					setRecentActivities( data );
 					hasFetchedActivities.current = true;
 				} catch ( error ) {
-					console.error( translations.failedFetchActivities, error );
+					console.error(
+						__(
+							'Failed to fetch activities:',
+							'performance-optimisation'
+						),
+						error
+					);
 				}
 			};
 
@@ -231,7 +237,10 @@ const App = () => {
 					} }
 					role="button"
 					tabIndex="0"
-					aria-label={ translations.closeMenu || 'Close Menu' }
+					aria-label={ __(
+						'Close Menu',
+						'performance-optimisation'
+					) }
 				/>
 			) }
 
