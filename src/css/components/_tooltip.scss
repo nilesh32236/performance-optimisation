@@ -16,6 +16,12 @@
 		visibility: visible;
 		transform: translateX(-50%) translateY(-8px);
 	}
+
+	&:focus-visible {
+		outline: 2px solid var(--wppo-primary);
+		outline-offset: 2px;
+		border-radius: var(--wppo-radius-xs);
+	}
 }
 
 .wppo-tooltip-icon {
