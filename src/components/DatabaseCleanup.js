@@ -235,8 +235,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								id="dbSchedule-desc"
 								className="wppo-text-muted wppo-mt-10 wppo-text-small"
 							>
-								Set how often to automatically clean up your
-								database overhead.
+								How often the automated database cleanup routine should run in the background.
 							</p>
 						</div>
 						<div className="wppo-grid-2-col wppo-mt-24">
@@ -245,7 +244,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="dbRevMaxAge"
 								>
-									Max Age (Days)
+									Revision Max Age (Days)
 								</label>
 								<input
 									className="wppo-input"
@@ -261,8 +260,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									id="dbRevMaxAge-desc"
 									className="wppo-text-muted wppo-mt-10 wppo-text-small"
 								>
-									Delete post revisions older than this many
-									days.
+									Delete post revisions older than this many days (0 for no age limit).
 								</p>
 							</div>
 							<div>
@@ -270,7 +268,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="dbRevKeepLatest"
 								>
-									Keep Latest
+									Keep Latest Revisions
 								</label>
 								<input
 									className="wppo-input"
@@ -286,8 +284,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									id="dbRevKeepLatest-desc"
 									className="wppo-text-muted wppo-mt-10 wppo-text-small"
 								>
-									Retain this many recent revisions per post,
-									regardless of age.
+									Always retain this many recent revisions per post, regardless of age.
 								</p>
 							</div>
 						</div>
