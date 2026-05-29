@@ -5,3 +5,4 @@ app/
 test-lab/
 *.log
 vendor/
+coverage/
