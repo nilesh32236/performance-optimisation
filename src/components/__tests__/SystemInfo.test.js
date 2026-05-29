@@ -41,6 +41,25 @@ describe( 'SystemInfo Component', () => {
 		} );
 	} );
 
+	it( 'renders error message on successful response but success false', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: false,
+			message: 'Custom error from API',
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Custom error from API' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders error message on failure', async () => {
 		const consoleSpy = jest
 			.spyOn( console, 'error' )
