@@ -25,28 +25,27 @@ jobs:
       - name: Set Qoder configuration
         run: |
           mkdir -p ~/.qoder
-          echo '{"models":{"default":{"model_name":"claude-3-5-sonnet"}}}' > ~/.qoder/config.json
+          echo '{"models":{"default_model":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
           mkdir -p $GITHUB_WORKSPACE/.qoder
-          echo '{"models":{"default":{"model_name":"claude-3-5-sonnet"}}}' > $GITHUB_WORKSPACE/.qoder/config.json
+          echo '{"models":{"default_model":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
 
       - name: Setup Qoder Config
         run: |
           mkdir -p ~/.qoder
-          echo '{"models":{"default":{"model_name":"claude-3-5-sonnet"}}}' > ~/.qoder/config.json
+          echo '{"models":{"default_model":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
           mkdir -p $GITHUB_WORKSPACE/.qoder
-          echo '{"models":{"default":{"model_name":"claude-3-5-sonnet"}}}' > $GITHUB_WORKSPACE/.qoder/config.json
+          echo '{"models":{"default_model":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
 
       - name: Setup Qoder Config
         run: |
           mkdir -p ~/.qoder $GITHUB_WORKSPACE/.qoder
-          echo '{"models":{"default":{"model_name":"claude-3-5-sonnet"}}}' > ~/.qoder/config.json
-          echo '{"models":{"default":{"model_name":"claude-3-5-sonnet"}}}' > $GITHUB_WORKSPACE/.qoder/config.json
+          echo '{"models":{"default_model":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
+          echo '{"models":{"default_model":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
 
       - name: Run Qoder Assistant
         uses: QoderAI/qoder-action@v0
-        continue-on-error: true
         with:
-          qoder_personal_access_token: ${{ secrets.GITHUB_TOKEN }}
+          qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
           prompt: |
             /assistant
             ${{ steps.build_args.outputs.args }}

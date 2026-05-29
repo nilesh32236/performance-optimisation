@@ -21,17 +21,16 @@ jobs:
       - name: Setup Qoder Config
         run: |
           mkdir -p ~/.qoder $GITHUB_WORKSPACE/.qoder
-          echo '{"models":{"default":{"model_name":"claude-3-5-sonnet"}}}' > ~/.qoder/config.json
-          echo '{"models":{"default":{"model_name":"claude-3-5-sonnet"}}}' > $GITHUB_WORKSPACE/.qoder/config.json
+          echo '{"models":{"default_model":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
+          echo '{"models":{"default_model":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
           cat ~/.qoder/config.json
 
       - name: Run Qoder Code Review
         uses: QoderAI/qoder-action@v0
-        continue-on-error: true
         env:
           QODER_CONFIG_DIR: /home/runner/.qoder
         with:
-          qoder_personal_access_token: ${{ secrets.GITHUB_TOKEN }}
+          qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
           prompt: |
             /review-pr
             REPO:${{ github.repository }} PR_NUMBER:${{ github.event.pull_request.number }}
