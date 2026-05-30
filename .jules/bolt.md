@@ -38,3 +38,6 @@
 **Action:** Always use WordPress Transients to cache expensive file system results, and invalidate these transients within `clear_cache` methods.
 ## 2025-01-20 - Early Return Before Expensive Computations\n\n**Learning:** High-frequency operations like `Util::get_local_path` (which parses URLs) were being computed before short-circuit logic (`is_user_logged_in`, `empty( $href )`) in `minify_css` and `minify_js`. This caused significant performance overhead as they run on every page load.\n**Action:** Always place lightweight conditionals before heavy variable assignments. Avoid executing computationally expensive operations unless strictly necessary.
 
+## 2024-05-18 - Avoid loading large CSS/JS files fully into memory for counting lines
+**Learning:** In a WordPress environment, loading the entire contents of a potentially large unminified CSS or JS file into memory using `file_get_contents` just to count lines with `substr_count` can cause massive memory spikes, particularly when executed repeatedly during `wp_enqueue_scripts` hooks.
+**Action:** Use `fopen` and `fgets` to read the file line by line. Break early if the line count exceeds the threshold (e.g., 10 lines for minified checks). This prevents memory bloat and speeds up processing time dramatically for large asset files.
