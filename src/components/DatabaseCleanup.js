@@ -308,7 +308,8 @@ const DatabaseCleanup = ( { options = {} } ) => {
 							key={ item.key }
 							title={ item.label }
 							actions={
-								<button
+								<LoadingSubmitButton
+									type="button"
 									className="wppo-button wppo-button--secondary wppo-button--sm"
 									onClick={ () =>
 										setConfirmDialog( {
@@ -321,9 +322,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 										( counts[ item.key ] || 0 ) === 0 ||
 										loading[ item.key ]
 									}
-								>
-									{ loading[ item.key ] ? '...' : 'Clean' }
-								</button>
+									isLoading={ loading[ item.key ] }
+									label="Clean"
+									loadingLabel="Cleaning"
+								/>
 							}
 						>
 							<div
