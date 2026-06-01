@@ -46,7 +46,7 @@ jobs:
         uses: QoderAI/qoder-action@v0
         continue-on-error: true
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          qoder_personal_access_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             /assistant
             ${{ steps.build_args.outputs.args }}
