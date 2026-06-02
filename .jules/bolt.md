@@ -38,3 +38,7 @@
 **Action:** Always use WordPress Transients to cache expensive file system results, and invalidate these transients within `clear_cache` methods.
 ## 2025-01-20 - Early Return Before Expensive Computations\n\n**Learning:** High-frequency operations like `Util::get_local_path` (which parses URLs) were being computed before short-circuit logic (`is_user_logged_in`, `empty( $href )`) in `minify_css` and `minify_js`. This caused significant performance overhead as they run on every page load.\n**Action:** Always place lightweight conditionals before heavy variable assignments. Avoid executing computationally expensive operations unless strictly necessary.
 
+
+## 2026-06-02 - Streaming File Reads vs file_get_contents
+**Learning:** Using `file_get_contents` to read entire files into memory just to count newlines (using `substr_count`) is highly inefficient for large compiled assets (JS/CSS) and causes memory spikes. This is a common bottleneck when checking if files are minified on the fly.
+**Action:** Use native PHP streaming functions (`fopen` and `fgets`) with early returns (`break`) to count lines efficiently without loading the entire file into memory. Always close the file handle (`fclose`) when done.

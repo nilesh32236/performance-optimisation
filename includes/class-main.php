@@ -1220,18 +1220,7 @@ class Main {
 			return true;
 		}
 
-		$css_content = $this->filesystem->get_contents( $file_path );
-		if ( ! is_string( $css_content ) ) {
-			return true;
-		}
-
-		$line_count = ( '' === $css_content ) ? 0 : substr_count( $css_content, "\n" ) + 1;
-
-		if ( 10 >= $line_count ) {
-			return true;
-		}
-
-		return false;
+		return $this->is_file_minified( $file_path );
 	}
 
 	/**
@@ -1255,12 +1244,48 @@ class Main {
 			return true;
 		}
 
-		$js_content = $this->filesystem->get_contents( $file_path );
-		if ( ! is_string( $js_content ) ) {
+		return $this->is_file_minified( $file_path );
+	}
+
+	/**
+	 * Shared logic to determine if a file is minified by checking its line count.
+	 * Uses streaming reads if possible, falling back to full reads if needed.
+	 *
+	 * @since 1.6.0
+	 *
+	 * @param  string $file_path Path to the file.
+	 * @return bool True if the file is minified (<= 10 lines), false otherwise.
+	 */
+	private function is_file_minified( $file_path ) {
+		// Optimize using native PHP streaming if the WP filesystem is using 'direct' access.
+		if ( isset( $this->filesystem->method ) && 'direct' === $this->filesystem->method ) {
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+			$handle = @fopen( $file_path, 'r' );
+			if ( $handle ) {
+				$line_count = 0;
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
+				while ( false !== fgets( $handle ) ) {
+					++$line_count;
+
+					if ( $line_count > 10 ) {
+						// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+						fclose( $handle );
+						return false;
+					}
+				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+				fclose( $handle );
+				return true;
+			}
+		}
+
+		// Fallback for non-direct filesystems (e.g., FTP/SSH).
+		$content = $this->filesystem->get_contents( $file_path );
+		if ( ! is_string( $content ) ) {
 			return true;
 		}
 
-		$line_count = ( '' === $js_content ) ? 0 : substr_count( $js_content, "\n" ) + 1;
+		$line_count = ( '' === $content ) ? 0 : substr_count( $content, "\n" ) + 1;
 
 		if ( 10 >= $line_count ) {
 			return true;
