@@ -1220,18 +1220,24 @@ class Main {
 			return true;
 		}
 
-		$css_content = $this->filesystem->get_contents( $file_path );
-		if ( ! is_string( $css_content ) ) {
+		$handle = @fopen( $file_path, 'r' );
+		if ( ! $handle ) {
 			return true;
 		}
 
-		$line_count = ( '' === $css_content ) ? 0 : substr_count( $css_content, "\n" ) + 1;
+		$line_count = 0;
+		while ( ! feof( $handle ) ) {
+			fgets( $handle );
+			$line_count++;
 
-		if ( 10 >= $line_count ) {
-			return true;
+			if ( $line_count > 10 ) {
+				fclose( $handle );
+				return false;
+			}
 		}
 
-		return false;
+		fclose( $handle );
+		return true;
 	}
 
 	/**
@@ -1255,17 +1261,23 @@ class Main {
 			return true;
 		}
 
-		$js_content = $this->filesystem->get_contents( $file_path );
-		if ( ! is_string( $js_content ) ) {
+		$handle = @fopen( $file_path, 'r' );
+		if ( ! $handle ) {
 			return true;
 		}
 
-		$line_count = ( '' === $js_content ) ? 0 : substr_count( $js_content, "\n" ) + 1;
+		$line_count = 0;
+		while ( ! feof( $handle ) ) {
+			fgets( $handle );
+			$line_count++;
 
-		if ( 10 >= $line_count ) {
-			return true;
+			if ( $line_count > 10 ) {
+				fclose( $handle );
+				return false;
+			}
 		}
 
-		return false;
+		fclose( $handle );
+		return true;
 	}
 }
