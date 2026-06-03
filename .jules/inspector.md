@@ -14,3 +14,7 @@
 **Bug/Gap:** Tests for components (DatabaseCleanup and SystemInfo) that simulated API or network failures were triggering unhandled console.error logs to stdout during test runs.
 **Root Cause:** Network failure tests caught errors effectively in their try/catch blocks but logged them to the console. The tests did not intercept or spy on `console.error` to ensure the correct errors were actually being reported, allowing the logs to pollute test outputs.
 **Test Added:** Appended a `jest.spyOn(console, 'error')` spy and `expect(consoleSpy).toHaveBeenCalledWith()` assertion to assert expected error logs, followed by `.mockRestore()` to keep test runs clean and functionally rigorous.
+## 2024-05-18 - [JS Test Fix] Testing SwitchField toggle disabled prop
+**Bug/Gap:** SwitchField.js component wrapper for WordPress' ToggleControl lacked a disabled property mapping.
+**Root Cause:** The `disabled` prop was ignored from `SwitchField.js` prop destructuring. Mock components of ToggleControl in tests were missing support for the disabled property. FileOptimization test asserting conditionally enabled or disabled field depending on apache vs nginx configuration was failing.
+**Test Added:** Added disabled property mapping from `SwitchField.js` component to `ToggleControl` from `@wordpress/components`, mapped same property for `setupTests.js` mock components, and created `FileOptimization.test.js`.

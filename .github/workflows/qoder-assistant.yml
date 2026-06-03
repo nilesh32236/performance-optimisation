@@ -44,8 +44,10 @@ jobs:
 
       - name: Run Qoder Assistant
         uses: QoderAI/qoder-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
+          qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           prompt: |
             /assistant
             ${{ steps.build_args.outputs.args }}

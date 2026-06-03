@@ -26,12 +26,13 @@ jest.mock(
 		// eslint-disable-next-line @wordpress/no-unused-vars-before-return, import/no-extraneous-dependencies
 		const React = require( 'react' );
 		return {
-			ToggleControl: ( { checked, onChange, label } ) => (
+			ToggleControl: ( { checked, onChange, label, disabled } ) => (
 				<input
 					type="checkbox"
 					checked={ checked }
 					onChange={ ( e ) => onChange( e.target.checked ) }
 					aria-label={ label }
+					disabled={ disabled }
 				/>
 			),
 		};
