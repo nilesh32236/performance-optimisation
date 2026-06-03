@@ -30,6 +30,7 @@ jobs:
         env:
           QODER_CONFIG_DIR: /home/runner/.qoder
         with:
+          qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
           prompt: |
             /review-pr
             REPO:${{ github.repository }} PR_NUMBER:${{ github.event.pull_request.number }}
