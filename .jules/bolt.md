@@ -43,3 +43,7 @@
 
 **Learning:** Using `$filesystem->get_contents()` to read entire asset files (CSS/JS) into memory just to determine if they are minified (e.g., checking if they have fewer than 10 lines) creates a massive memory bottleneck for large files.
 **Action:** Use native PHP streaming functions like `fopen()` and `fgets()` to read files line-by-line and break early. Ensure you add `// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen` and `_fgets` (and `_fclose`) to bypass WPCS checks safely.
+
+## 2025-01-22 - WPCS Error Suppression
+**Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
+**Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.

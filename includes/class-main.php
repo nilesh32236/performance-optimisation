@@ -1221,7 +1221,7 @@ class Main {
 		}
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-		$handle = @fopen( $file_path, 'r' );
+		$handle = fopen( $file_path, 'r' );
 		if ( ! $handle ) {
 			return true;
 		}
@@ -1262,7 +1262,7 @@ class Main {
 		}
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-		$handle = @fopen( $file_path, 'r' );
+		$handle = fopen( $file_path, 'r' );
 		if ( ! $handle ) {
 			return true;
 		}
