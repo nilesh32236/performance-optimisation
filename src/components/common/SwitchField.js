@@ -12,6 +12,7 @@ import { ToggleControl } from '@wordpress/components';
  * @param {boolean}  props.checked       Whether the switch is on.
  * @param {Function} props.onChange      Change handler (receives synthetic event).
  * @param {boolean}  [props.showLabel]   Whether to show the label.
+ * @param {boolean}  [props.disabled]    Whether the switch is disabled.
  */
 const SwitchField = ( {
 	label,
@@ -20,6 +21,7 @@ const SwitchField = ( {
 	checked,
 	onChange,
 	showLabel = true,
+	disabled = false,
 } ) => {
 	const id = useId();
 
@@ -49,7 +51,8 @@ const SwitchField = ( {
 				checked={ checked }
 				onChange={ handleToggle }
 				label={ label }
-				hideLabelFromVision
+				hideLabelFromVision={ true }
+				disabled={ disabled }
 			/>
 		</div>
 	);
