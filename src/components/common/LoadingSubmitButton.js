@@ -18,7 +18,7 @@ const LoadingSubmitButton = ( {
 	isLoading,
 	label,
 	loadingLabel,
-	className = 'submit-button',
+	className = 'wppo-button wppo-button--primary',
 	type = 'submit',
 	disabled,
 	children,

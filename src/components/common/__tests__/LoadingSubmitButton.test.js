@@ -9,7 +9,8 @@ describe( 'LoadingSubmitButton', () => {
 		const button = screen.getByRole( 'button', { name: /Submit/i } );
 		expect( button ).toBeInTheDocument();
 		expect( button ).not.toBeDisabled();
-		expect( button ).toHaveClass( 'submit-button' );
+		expect( button ).toHaveClass( 'wppo-button' );
+		expect( button ).toHaveClass( 'wppo-button--primary' );
 		expect( button ).toHaveAttribute( 'type', 'submit' );
 		expect( button ).not.toHaveAttribute( 'aria-busy', 'true' );
 	} );

@@ -64,47 +64,5 @@
 		justify-content: flex-end;
 		gap: 10px;
 
-		.submit-button {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			gap: 7px;
-			padding: 9px 18px;
-			font-size: 13.5px;
-			font-weight: 600;
-			border-radius: var(--wppo-radius-sm);
-			cursor: pointer;
-			transition: var(--wppo-transition);
-			border: 1px solid transparent;
-
-			&.secondary {
-				background: #fff;
-				border-color: var(--wppo-border);
-				color: var(--wppo-text-main);
-
-				&:hover {
-					background: var(--wppo-bg-app);
-					border-color: var(--wppo-border-hover);
-				}
-			}
-
-			&.danger {
-				background: var(--wppo-danger);
-				color: #fff;
-
-				&:hover {
-					background: var(--wppo-danger-hover);
-				}
-			}
-
-			&:not(.secondary):not(.danger) {
-				background: var(--wppo-primary);
-				color: #fff;
-
-				&:hover {
-					background: var(--wppo-primary-hover);
-				}
-			}
-		}
 	}
 }
