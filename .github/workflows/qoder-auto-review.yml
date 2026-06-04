@@ -27,6 +27,7 @@ jobs:
 
       - name: Run Qoder Code Review
         uses: QoderAI/qoder-action@v0
+        continue-on-error: true
         env:
           QODER_CONFIG_DIR: /home/runner/.qoder
         with:
