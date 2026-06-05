@@ -224,12 +224,19 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								name="dbSchedule"
 								value={ settings.dbSchedule }
 								onChange={ handleChange( setSettings ) }
+								aria-describedby="dbSchedule-desc"
 							>
 								<option value="none">None (Manual Only)</option>
 								<option value="daily">Daily</option>
 								<option value="weekly">Weekly</option>
 								<option value="monthly">Monthly</option>
 							</select>
+							<p
+								id="dbSchedule-desc"
+								className="wppo-text-muted wppo-mt-10 wppo-text-small"
+							>
+								Set how often to automatically clean up your database overhead.
+							</p>
 						</div>
 						<div className="wppo-grid-2-col wppo-mt-24">
 							<div>
@@ -247,7 +254,14 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									min="0"
 									value={ settings.dbRevMaxAge }
 									onChange={ handleChange( setSettings ) }
+									aria-describedby="dbRevMaxAge-desc"
 								/>
+								<p
+									id="dbRevMaxAge-desc"
+									className="wppo-text-muted wppo-mt-10 wppo-text-small"
+								>
+									Delete post revisions older than this many days.
+								</p>
 							</div>
 							<div>
 								<label
@@ -264,7 +278,14 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									min="0"
 									value={ settings.dbRevKeepLatest }
 									onChange={ handleChange( setSettings ) }
+									aria-describedby="dbRevKeepLatest-desc"
 								/>
+								<p
+									id="dbRevKeepLatest-desc"
+									className="wppo-text-muted wppo-mt-10 wppo-text-small"
+								>
+									Retain this many recent revisions per post, regardless of age.
+								</p>
 							</div>
 						</div>
 					</div>
