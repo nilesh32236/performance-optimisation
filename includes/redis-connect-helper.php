@@ -32,159 +32,228 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @since 1.4.0
  * @return \Redis|\RedisCluster|\WP_Error A connected Redis client (`Redis` or `RedisCluster`) on success, or a `WP_Error` describing the failure. */
 function wppo_redis_connect( $config ) {
-	$mode     = $config['mode'] ?? 'standalone';
-	$password = $config['password'] ?? '';
-	$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
-	$use_tls  = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
-	$timeout  = 0.5;
+	$mode = $config['mode'] ?? 'standalone';
 
 	try {
 		if ( 'cluster' === $mode ) {
-			if ( ! class_exists( 'RedisCluster' ) ) {
-				return new \WP_Error( 'missing_cluster', 'RedisCluster class not found.' );
-			}
-			$nodes = wppo_parse_nodes( $config['nodes'] ?? array() );
-			if ( empty( $nodes ) ) {
-				return new \WP_Error( 'low_nodes', 'No nodes provided for Cluster.' );
-			}
-
-			if ( $use_tls ) {
-				$nodes = array_map(
-					function ( $node ) {
-						return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
-					},
-					$nodes
-				);
-			}
-
-			try {
-				$persistent = ! empty( $config['persistent'] );
-				$cluster    = new \RedisCluster( null, $nodes, $timeout, $timeout, $persistent, $password );
-
-				wppo_apply_redis_options( $cluster, $config );
-
-				return $cluster;
-			} catch ( \Throwable $e ) {
-				return new \WP_Error( 'cluster_fail', 'Redis Cluster connection failed: ' . $e->getMessage() );
-			}
+			return wppo_redis_connect_cluster( $config );
 		}
 
 		if ( 'sentinel' === $mode ) {
-			if ( ! class_exists( 'RedisSentinel' ) ) {
-				return new \WP_Error( 'missing_sentinel', 'RedisSentinel class not found.' );
-			}
-			$nodes = wppo_parse_nodes( $config['nodes'] ?? array() );
-
-			if ( empty( $nodes ) ) {
-				return new \WP_Error( 'low_nodes', 'Not enough Sentinel nodes configured.' );
-			}
-
-			if ( version_compare( phpversion( 'redis' ), '6.0.0', '<' ) ) {
-				return new \WP_Error( 'redis_version', 'Sentinel mode requires phpredis version 6.0.0 or higher.' );
-			}
-
-			$master_name = $config['master_name'] ?? 'mymaster';
-			$errors      = array();
-			foreach ( $nodes as $node ) {
-				// Robust parsing of host and port (handles IPv6).
-				if ( strpos( $node, '[' ) === 0 ) {
-					$port_start = strpos( $node, ']:' );
-					if ( false !== $port_start ) {
-						$s_host = substr( $node, 1, $port_start - 1 );
-						$s_port = (int) substr( $node, $port_start + 2 );
-					} else {
-						$s_host = trim( $node, '[]' );
-						$s_port = 26379;
-					}
-				} else {
-					$last_colon = strrpos( $node, ':' );
-					if ( false !== $last_colon ) {
-						$s_host = substr( $node, 0, $last_colon );
-						$s_port = (int) substr( $node, $last_colon + 1 );
-					} else {
-						$s_host = $node;
-						$s_port = 26379;
-					}
-				}
-
-				try {
-					$sentinel = new \RedisSentinel(
-						array(
-							'host' => $s_host,
-							'port' => (int) $s_port,
-						)
-					);
-					$address  = $sentinel->getMasterAddrByName( $master_name );
-					if ( $address ) {
-						if ( ! class_exists( 'Redis' ) ) {
-							return new \WP_Error( 'missing_redis', 'The Redis class is not available.' );
-						}
-						$redis = new \Redis();
-						$host  = $use_tls ? 'tls://' . $address[0] : $address[0];
-						if ( $redis->connect( $host, (int) $address[1], $timeout ) ) {
-							if ( $password && ! $redis->auth( $password ) ) {
-								$redis->close();
-								return new \WP_Error( 'auth_fail', 'Sentinel Master Auth failed.' );
-							}
-
-							if ( ! $redis->select( $database ) ) {
-								$redis->close();
-								return new \WP_Error( 'select_fail', "Failed to select Redis database: $database" );
-							}
-
-							wppo_apply_redis_options( $redis, $config );
-
-							return $redis;
-						}
-					}
-				} catch ( \Throwable $e ) {
-					$errors[] = $s_host . ':' . $s_port . ' - ' . $e->getMessage();
-					continue;
-				}
-			}
-
-			$error_msg = 'Could not resolve master via Sentinels.';
-			if ( ! empty( $errors ) ) {
-				$error_msg .= ' Last error: ' . end( $errors );
-			} else {
-				$error_msg .= ' No sentinel nodes responded or master not found.';
-			}
-			return new \WP_Error( 'sentinel_fail', $error_msg );
+			return wppo_redis_connect_sentinel( $config );
 		}
 
-		// Standalone default connection.
-		if ( ! class_exists( 'Redis' ) ) {
-			return new \WP_Error( 'missing_redis', 'The Redis class is not available.' );
-		}
-		$host = $config['host'] ?? '127.0.0.1';
-		$port = isset( $config['port'] ) ? (int) $config['port'] : 6379;
-		if ( $use_tls && strpos( $host, 'tls://' ) !== 0 ) {
-			$host = 'tls://' . $host;
-		}
-
-		$redis = new \Redis();
-		$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		if ( @$redis->$func( $host, $port, $timeout ) ) {
-			if ( ! empty( $password ) && $redis->auth( $password ) === false ) {
-				$redis->close();
-				return new \WP_Error( 'auth_fail', 'Redis Auth failed.' );
-			}
-
-			if ( ! $redis->select( $database ) ) {
-				$redis->close();
-				return new \WP_Error( 'select_fail', "Failed to select Redis database: $database" );
-			}
-
-			wppo_apply_redis_options( $redis, $config );
-
-			return $redis;
-		}
+		return wppo_redis_connect_standalone( $config );
 	} catch ( \Throwable $e ) {
 		return new \WP_Error( 'redis_err', $e->getMessage() );
 	}
+}
 
-	return new \WP_Error( 'conn_fail', 'Could not connect to Redis. Please ensure the service is running.' );
+/**
+ * Establishes a Redis Cluster connection.
+ *
+ * @param array $config Redis configuration.
+ * @since NEXT
+ * @return \RedisCluster|\WP_Error A connected RedisCluster client or a WP_Error on failure.
+ */
+function wppo_redis_connect_cluster( $config ) {
+	if ( ! class_exists( 'RedisCluster' ) ) {
+		return new \WP_Error( 'missing_cluster', __( 'RedisCluster class not found.', 'performance-optimisation' ) );
+	}
+
+	$nodes = wppo_parse_nodes( $config['nodes'] ?? array() );
+	if ( empty( $nodes ) ) {
+		return new \WP_Error( 'low_nodes', __( 'No nodes provided for Cluster.', 'performance-optimisation' ) );
+	}
+
+	$use_tls = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
+	if ( $use_tls ) {
+		$nodes = array_map(
+			function ( $node ) {
+				return ( strpos( $node, 'tls://' ) === 0 ) ? $node : 'tls://' . $node;
+			},
+			$nodes
+		);
+	}
+
+	$timeout    = 0.5;
+	$password   = $config['password'] ?? '';
+	$persistent = ! empty( $config['persistent'] );
+
+	try {
+		$cluster = new \RedisCluster( null, $nodes, $timeout, $timeout, $persistent, $password );
+
+		wppo_apply_redis_options( $cluster, $config );
+
+		return $cluster;
+	} catch ( \Throwable $e ) {
+		return new \WP_Error( 'cluster_fail', __( 'Redis Cluster connection failed: ', 'performance-optimisation' ) . $e->getMessage() );
+	}
+}
+
+/**
+ * Establishes a Redis Sentinel connection.
+ *
+ * @param array $config Redis configuration.
+ * @since NEXT
+ * @return \Redis|\WP_Error A connected Redis client or a WP_Error on failure.
+ */
+function wppo_redis_connect_sentinel( $config ) {
+	if ( ! class_exists( 'RedisSentinel' ) ) {
+		return new \WP_Error( 'missing_sentinel', __( 'RedisSentinel class not found.', 'performance-optimisation' ) );
+	}
+
+	$nodes = wppo_parse_nodes( $config['nodes'] ?? array() );
+	if ( empty( $nodes ) ) {
+		return new \WP_Error( 'low_nodes', __( 'Not enough Sentinel nodes configured.', 'performance-optimisation' ) );
+	}
+
+	if ( version_compare( phpversion( 'redis' ), '6.0.0', '<' ) ) {
+		return new \WP_Error( 'redis_version', __( 'Sentinel mode requires phpredis version 6.0.0 or higher.', 'performance-optimisation' ) );
+	}
+
+	$master_name = $config['master_name'] ?? 'mymaster';
+	$use_tls     = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
+	$password    = $config['password'] ?? '';
+	$database    = isset( $config['database'] ) ? (int) $config['database'] : 0;
+	$timeout     = 0.5;
+	$errors      = array();
+
+	foreach ( $nodes as $node ) {
+		$parsed_node = wppo_parse_redis_node( $node );
+		$s_host      = $parsed_node['host'];
+		$s_port      = $parsed_node['port'];
+
+		try {
+			$sentinel = new \RedisSentinel(
+				array(
+					'host' => $s_host,
+					'port' => $s_port,
+				)
+			);
+			$address  = $sentinel->getMasterAddrByName( $master_name );
+
+			if ( $address ) {
+				if ( ! class_exists( 'Redis' ) ) {
+					return new \WP_Error( 'missing_redis', __( 'The Redis class is not available.', 'performance-optimisation' ) );
+				}
+				$redis = new \Redis();
+				$host  = $use_tls ? 'tls://' . $address[0] : $address[0];
+
+				if ( $redis->connect( $host, (int) $address[1], $timeout ) ) {
+					if ( $password && ! $redis->auth( $password ) ) {
+						$redis->close();
+						return new \WP_Error( 'auth_fail', __( 'Sentinel Master Auth failed.', 'performance-optimisation' ) );
+					}
+
+					if ( ! $redis->select( $database ) ) {
+						$redis->close();
+						/* translators: %d: Database index */
+						return new \WP_Error( 'select_fail', sprintf( __( 'Failed to select Redis database: %d', 'performance-optimisation' ), $database ) );
+					}
+
+					wppo_apply_redis_options( $redis, $config );
+
+					return $redis;
+				}
+			}
+		} catch ( \Throwable $e ) {
+			$errors[] = $s_host . ':' . $s_port . ' - ' . $e->getMessage();
+			continue;
+		}
+	}
+
+	$error_msg = __( 'Could not resolve master via Sentinels.', 'performance-optimisation' );
+	if ( ! empty( $errors ) ) {
+		$error_msg .= ' ' . __( 'Last error:', 'performance-optimisation' ) . ' ' . end( $errors );
+	} else {
+		$error_msg .= ' ' . __( 'No sentinel nodes responded or master not found.', 'performance-optimisation' );
+	}
+
+	return new \WP_Error( 'sentinel_fail', $error_msg );
+}
+
+/**
+ * Establishes a standalone Redis connection.
+ *
+ * @param array $config Redis configuration.
+ * @since NEXT
+ * @return \Redis|\WP_Error A connected Redis client or a WP_Error on failure.
+ */
+function wppo_redis_connect_standalone( $config ) {
+	if ( ! class_exists( 'Redis' ) ) {
+		return new \WP_Error( 'missing_redis', __( 'The Redis class is not available.', 'performance-optimisation' ) );
+	}
+
+	$use_tls  = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
+	$host     = $config['host'] ?? '127.0.0.1';
+	$port     = isset( $config['port'] ) ? (int) $config['port'] : 6379;
+	$password = $config['password'] ?? '';
+	$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
+	$timeout  = 0.5;
+
+	if ( $use_tls && strpos( $host, 'tls://' ) !== 0 ) {
+		$host = 'tls://' . $host;
+	}
+
+	$redis = new \Redis();
+	$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
+
+	// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+	if ( @$redis->$func( $host, $port, $timeout ) ) {
+		if ( ! empty( $password ) && $redis->auth( $password ) === false ) {
+			$redis->close();
+			return new \WP_Error( 'auth_fail', __( 'Redis Auth failed.', 'performance-optimisation' ) );
+		}
+
+		if ( ! $redis->select( $database ) ) {
+			$redis->close();
+			/* translators: %d: Database index */
+			return new \WP_Error( 'select_fail', sprintf( __( 'Failed to select Redis database: %d', 'performance-optimisation' ), $database ) );
+		}
+
+		wppo_apply_redis_options( $redis, $config );
+
+		return $redis;
+	}
+
+	return new \WP_Error( 'conn_fail', __( 'Could not connect to Redis. Please ensure the service is running.', 'performance-optimisation' ) );
+}
+
+/**
+ * Parses a Redis node string into host and port components.
+ *
+ * Handles standard "host:port" formats as well as IPv6 enclosed in brackets.
+ *
+ * @param string $node The node string to parse.
+ * @since NEXT
+ * @return array Associative array containing 'host' and 'port'.
+ */
+function wppo_parse_redis_node( $node ) {
+	if ( strpos( $node, '[' ) === 0 ) {
+		$port_start = strpos( $node, ']:' );
+		if ( false !== $port_start ) {
+			$host = substr( $node, 1, $port_start - 1 );
+			$port = (int) substr( $node, $port_start + 2 );
+		} else {
+			$host = trim( $node, '[]' );
+			$port = 26379;
+		}
+	} else {
+		$last_colon = strrpos( $node, ':' );
+		if ( false !== $last_colon ) {
+			$host = substr( $node, 0, $last_colon );
+			$port = (int) substr( $node, $last_colon + 1 );
+		} else {
+			$host = $node;
+			$port = 26379;
+		}
+	}
+
+	return array(
+		'host' => $host,
+		'port' => $port,
+	);
 }
 
 /**

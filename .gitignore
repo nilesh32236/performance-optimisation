@@ -4,3 +4,4 @@ reports/
 app/
 test-lab/
 *.log
+vendor/
