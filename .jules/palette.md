@@ -13,7 +13,3 @@
 
 **Learning:** Tooltips that appear only on `:hover` and aren't focusable are completely inaccessible to keyboard users. In addition, icons without an `aria-label` or `aria-hidden` attribute create confusing or empty experiences for screen readers.
 **Action:** When implementing tooltips, make the container focusable (`tabIndex="0"`), use `aria-label` for screen readers, and add `aria-hidden="true"` to both the decorative icon and the text content (since the label covers it). Update SCSS to include `&:focus` and `&:focus-visible` states that mirror `&:hover`. Use `var(--wppo-text-main)` instead of hardcoded hex values for better theme integration.
-
-## 2024-06-05 - Enhance form accessibility with descriptive text and aria-describedby
-**Learning:** React components containing input configurations (e.g., DatabaseCleanup) were missing descriptive `<p>` tags for complex settings, making it difficult for users to understand the implications of their choices.
-**Action:** Always add `<p className="wppo-text-muted">` describing the input's functionality immediately below the input, and ensure it is programmatically linked using `aria-describedby` matching the `<p>` element's `id`.
