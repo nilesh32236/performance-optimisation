@@ -14,7 +14,6 @@
 **Learning:** Tooltips that appear only on `:hover` and aren't focusable are completely inaccessible to keyboard users. In addition, icons without an `aria-label` or `aria-hidden` attribute create confusing or empty experiences for screen readers.
 **Action:** When implementing tooltips, make the container focusable (`tabIndex="0"`), use `aria-label` for screen readers, and add `aria-hidden="true"` to both the decorative icon and the text content (since the label covers it). Update SCSS to include `&:focus` and `&:focus-visible` states that mirror `&:hover`. Use `var(--wppo-text-main)` instead of hardcoded hex values for better theme integration.
 
-## 2024-06-04 - Legacy CSS Class Cleanup (submit-button)
-
-**Learning:** Relying on custom legacy styling classes (like `.submit-button`) bypassing the established component design system (`.wppo-button`) leads to fragmented UI styles and interferes with dynamic WordPress theme adaptations. Default component properties should map back to standard design variables.
-**Action:** Removed redundant `.submit-button` SCSS definitions in `_dialog.scss`. Updated `ConfirmDialog` and `LoadingSubmitButton` to use standard `.wppo-button` classes (`wppo-button--primary`, `wppo-button--secondary`, `wppo-button--danger`) to ensure correct rendering, hover states, and seamless WordPress theme variable integration. Updated corresponding unit tests to verify the expected design system classes.
+## 2024-06-05 - Enhance form accessibility with descriptive text and aria-describedby
+**Learning:** React components containing input configurations (e.g., DatabaseCleanup) were missing descriptive `<p>` tags for complex settings, making it difficult for users to understand the implications of their choices.
+**Action:** Always add `<p className="wppo-text-muted">` describing the input's functionality immediately below the input, and ensure it is programmatically linked using `aria-describedby` matching the `<p>` element's `id`.
