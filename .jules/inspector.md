@@ -18,3 +18,7 @@
 **Bug/Gap:** Keyboard tab navigation tests for `FileOptimization.js` failing asserting element focus using `.toHaveFocus()`.
 **Root Cause:** Component implementations for moving focus asynchronously used `setTimeout(..., 0)` internally, causing the assertion to evaluate before the focus state had propagated.
 **Test Added:** Updated the `fireEvent.keyDown` test flows to wrap the focus assertion inside `await waitFor(() => { expect(...).toHaveFocus(); });` to wait for the DOM mutation.
+## $(date +%Y-%m-%d) - [CI Fix] Node 20 Deprecation Warning
+**Bug/Gap:** CI workflows for Qoder code reviews failing due to actions using deprecated Node.js 20 runner environments.
+**Root Cause:** GitHub Actions runner deprecating Node 20 in favor of Node 24 causing the checksuite to fail or warn heavily during the action lifecycle.
+**Test Added:** Added `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` environment variable to the `actions/checkout@v4` step in CI workflows to opt-into the node 24 runtime manually.
