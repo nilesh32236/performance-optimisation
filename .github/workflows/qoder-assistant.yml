@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           fetch-depth: 0
 
@@ -44,6 +46,8 @@ jobs:
 
       - name: Run Qoder Assistant
         uses: QoderAI/qoder-action@v0
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
           prompt: |

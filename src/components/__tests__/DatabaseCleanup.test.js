@@ -1,4 +1,10 @@
-import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
+import {
+	render,
+	screen,
+	waitFor,
+	fireEvent,
+	act,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -36,14 +42,22 @@ describe( 'DatabaseCleanup Component', () => {
 		fireEvent.click( cleanButtons[ 0 ] );
 
 		// Dialog should be open
-		expect( screen.getByText( /This action will permanently delete post revisions/i ) ).toBeInTheDocument();
+		expect(
+			screen.getByText(
+				/This action will permanently delete post revisions/i
+			)
+		).toBeInTheDocument();
 
 		// Cancel cleanup
 		const cancelButton = screen.getByRole( 'button', { name: 'Cancel' } );
 		fireEvent.click( cancelButton );
 
 		await waitFor( () => {
-			expect( screen.queryByText( /This action will permanently delete post revisions/i ) ).not.toBeInTheDocument();
+			expect(
+				screen.queryByText(
+					/This action will permanently delete post revisions/i
+				)
+			).not.toBeInTheDocument();
 		} );
 	} );
 
@@ -60,11 +74,17 @@ describe( 'DatabaseCleanup Component', () => {
 		} );
 
 		// Click optimize everything
-		const optimizeButton = screen.getByRole( 'button', { name: 'Optimize Everything Now' } );
+		const optimizeButton = screen.getByRole( 'button', {
+			name: 'Optimize Everything Now',
+		} );
 		fireEvent.click( optimizeButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( /This action will permanently delete overhead items from your database. Proceed?/i ) ).toBeInTheDocument();
+			expect(
+				screen.getByText(
+					/This action will permanently delete overhead items from your database. Proceed?/i
+				)
+			).toBeInTheDocument();
 		} );
 	} );
 
@@ -81,7 +101,9 @@ describe( 'DatabaseCleanup Component', () => {
 		} );
 
 		const dbScheduleSelect = screen.getByLabelText( 'Schedule Frequency' );
-		fireEvent.change( dbScheduleSelect, { target: { value: 'daily', name: 'dbSchedule' } } );
+		fireEvent.change( dbScheduleSelect, {
+			target: { value: 'daily', name: 'dbSchedule' },
+		} );
 
 		expect( dbScheduleSelect.value ).toBe( 'daily' );
 	} );
@@ -98,12 +120,19 @@ describe( 'DatabaseCleanup Component', () => {
 			success: true,
 		} );
 
-		const saveButton = screen.getByRole( 'button', { name: /Save Settings/i } );
+		const saveButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
 		fireEvent.click( saveButton );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', expect.any(Object) );
-			expect( screen.getByText( 'Settings saved successfully.' ) ).toBeInTheDocument();
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.any( Object )
+			);
+			expect(
+				screen.getByText( 'Settings saved successfully.' )
+			).toBeInTheDocument();
 		} );
 	} );
 
@@ -117,11 +146,15 @@ describe( 'DatabaseCleanup Component', () => {
 		// Setup the next API call for update_settings failing
 		apiCall.mockRejectedValueOnce( new Error( 'Save Error' ) );
 
-		const saveButton = screen.getByRole( 'button', { name: /Save Settings/i } );
+		const saveButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
 		fireEvent.click( saveButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'Error saving settings.' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Error saving settings.' )
+			).toBeInTheDocument();
 		} );
 	} );
 
@@ -141,7 +174,7 @@ describe( 'DatabaseCleanup Component', () => {
 		apiCall.mockResolvedValueOnce( {
 			success: false,
 			message: 'Custom error message.',
-			data: { failures: { 'some_item': 'failed' }, deleted: 5 },
+			data: { failures: { some_item: 'failed' }, deleted: 5 },
 		} );
 
 		apiCall.mockResolvedValueOnce( {
@@ -218,7 +251,9 @@ describe( 'DatabaseCleanup Component', () => {
 		fireEvent.click( confirmButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'Error executing cleanup.' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Error executing cleanup.' )
+			).toBeInTheDocument();
 		} );
 	} );
 
@@ -233,18 +268,26 @@ describe( 'DatabaseCleanup Component', () => {
 			success: true,
 		} );
 
-		const saveButton = screen.getByRole( 'button', { name: /Save Settings/i } );
+		const saveButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
 		fireEvent.click( saveButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'Settings saved successfully.' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Settings saved successfully.' )
+			).toBeInTheDocument();
 		} );
 
-		const dismissButton = screen.getByRole( 'button', { name: /Dismiss/i } );
+		const dismissButton = screen.getByRole( 'button', {
+			name: /Dismiss/i,
+		} );
 		fireEvent.click( dismissButton );
 
 		await waitFor( () => {
-			expect( screen.queryByText( 'Settings saved successfully.' ) ).not.toBeInTheDocument();
+			expect(
+				screen.queryByText( 'Settings saved successfully.' )
+			).not.toBeInTheDocument();
 		} );
 	} );
 
@@ -260,17 +303,25 @@ describe( 'DatabaseCleanup Component', () => {
 			success: true,
 		} );
 
-		const saveButton = screen.getByRole( 'button', { name: /Save Settings/i } );
+		const saveButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
 		fireEvent.click( saveButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'Settings saved successfully.' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Settings saved successfully.' )
+			).toBeInTheDocument();
 		} );
 
-		act( () => { jest.advanceTimersByTime( 5000 ); } );
+		act( () => {
+			jest.advanceTimersByTime( 5000 );
+		} );
 
 		await waitFor( () => {
-			expect( screen.queryByText( 'Settings saved successfully.' ) ).not.toBeInTheDocument();
+			expect(
+				screen.queryByText( 'Settings saved successfully.' )
+			).not.toBeInTheDocument();
 		} );
 		jest.useRealTimers();
 	} );

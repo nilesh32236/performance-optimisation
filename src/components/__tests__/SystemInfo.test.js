@@ -55,8 +55,12 @@ describe( 'SystemInfo Component', () => {
 
 		await waitFor( () => {
 			expect( screen.getByText( 'Infrastructure' ) ).toBeInTheDocument();
-			expect( screen.getAllByText( 'Available' )[0] ).toBeInTheDocument();
-			expect( screen.getAllByText( 'Configured' )[0] ).toBeInTheDocument();
+			expect(
+				screen.getAllByText( 'Available' )[ 0 ]
+			).toBeInTheDocument();
+			expect(
+				screen.getAllByText( 'Configured' )[ 0 ]
+			).toBeInTheDocument();
 		} );
 	} );
 
