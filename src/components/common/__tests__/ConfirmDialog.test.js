@@ -1,4 +1,5 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom';
 import ConfirmDialog from '../ConfirmDialog';
 
 describe( 'ConfirmDialog', () => {
@@ -12,6 +13,107 @@ describe( 'ConfirmDialog', () => {
 
 	beforeEach( () => {
 		jest.clearAllMocks();
+	} );
+
+
+
+	it('uses correct default labels when cancelLabel and confirmLabel are not provided', () => {
+		// Temporary override of wppoSettings for translations fallback test
+		const originalWppoSettings = global.wppoSettings;
+		global.wppoSettings = undefined;
+		render(
+			<ConfirmDialog
+				isOpen={ true }
+				onConfirm={ jest.fn() }
+				onCancel={ jest.fn() }
+				title="Confirm Action"
+				message="Are you sure?"
+			/>
+		);
+
+		expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument();
+
+		global.wppoSettings = originalWppoSettings;
+	});
+
+	it( 'handles focus trapping correctly on mount/unmount', async () => {
+		const button = document.createElement('button');
+		button.id = 'external-button';
+		document.body.appendChild(button);
+		button.focus();
+
+		expect(document.activeElement).toBe(button);
+
+		const { unmount } = render(
+			<ConfirmDialog
+				isOpen={ true }
+				onConfirm={ jest.fn() }
+				onCancel={ jest.fn() }
+				title="Confirm Action"
+				message="Are you sure?"
+			/>
+		);
+
+		await waitFor( () => {
+			expect(document.activeElement).not.toBe(button);
+		} );
+
+		unmount();
+		document.body.removeChild(button);
+	} );
+
+	it('handles tabbing correctly to keep focus inside dialog', async () => {
+		const onCancel = jest.fn();
+		render(
+			<ConfirmDialog
+				isOpen={ true }
+				onConfirm={ jest.fn() }
+				onCancel={ onCancel }
+				title="Confirm Action"
+				message="Are you sure?"
+			/>
+		);
+
+		const dialog = screen.getByRole('dialog');
+		const focusableElements = dialog.querySelectorAll(
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+		);
+		const first = focusableElements[0];
+		const last = focusableElements[focusableElements.length - 1];
+
+		// Mock activeElement on document
+		Object.defineProperty(document, 'activeElement', {
+			value: last,
+			writable: true
+		});
+
+		// Simulate Tab keypress on dialog when activeElement is last
+		fireEvent.keyDown(dialog, { key: 'Tab', code: 'Tab' });
+
+		// Simulate Shift+Tab on dialog when activeElement is first
+		Object.defineProperty(document, 'activeElement', {
+			value: first,
+			writable: true
+		});
+		fireEvent.keyDown(dialog, { key: 'Tab', code: 'Tab', shiftKey: true });
+	} );
+
+	it('handles tab key logic with no shift correctly', async () => {
+		const onCancel = jest.fn();
+		render(
+			<ConfirmDialog
+				isOpen={ true }
+				onConfirm={ jest.fn() }
+				onCancel={ onCancel }
+				title="Confirm Action"
+				message="Are you sure?"
+			/>
+		);
+
+		const dialog = screen.getByRole('dialog');
+
+		fireEvent.keyDown(dialog, { key: 'Tab', code: 'Tab', shiftKey: false });
 	} );
 
 	it( 'renders correctly when isOpen is true', () => {

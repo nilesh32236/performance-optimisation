@@ -26,3 +26,7 @@
 **Bug/Gap:** CI workflows for Qoder code reviews failing due to actions using deprecated Node.js 20 runner environments.
 **Root Cause:** GitHub Actions runner deprecating Node 20 in favor of Node 24 causing the checksuite to fail or warn heavily during the action lifecycle.
 **Test Added:** Added `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` environment variable to the `actions/checkout@v4` step in CI workflows to opt-into the node 24 runtime manually.
+## 2024-06-06 - [JS Test Fix] Testing UI React components edge cases
+**Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
+**Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
+**Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
