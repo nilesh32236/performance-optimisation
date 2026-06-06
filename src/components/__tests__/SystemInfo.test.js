@@ -17,6 +17,53 @@ describe( 'SystemInfo Component', () => {
 		jest.clearAllMocks();
 	} );
 
+	it( 'renders error message on successful API response with success: false', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: false,
+			message: 'API returned an error message',
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'API returned an error message' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'renders infrastructure table when infrastructure data is present', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				infrastructure: {
+					action_scheduler: { available: true },
+					pagespeed_api: { configured: true },
+				},
+			},
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect( screen.getByText( 'Infrastructure' ) ).toBeInTheDocument();
+			expect(
+				screen.getAllByText( 'Available' )[ 0 ]
+			).toBeInTheDocument();
+			expect(
+				screen.getAllByText( 'Configured' )[ 0 ]
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders trigger button and then loads system info', async () => {
 		fetchSystemInfo.mockResolvedValueOnce( {
 			success: true,

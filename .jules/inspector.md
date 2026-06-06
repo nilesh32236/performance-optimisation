@@ -14,3 +14,7 @@
 **Bug/Gap:** Tests for components (DatabaseCleanup and SystemInfo) that simulated API or network failures were triggering unhandled console.error logs to stdout during test runs.
 **Root Cause:** Network failure tests caught errors effectively in their try/catch blocks but logged them to the console. The tests did not intercept or spy on `console.error` to ensure the correct errors were actually being reported, allowing the logs to pollute test outputs.
 **Test Added:** Appended a `jest.spyOn(console, 'error')` spy and `expect(consoleSpy).toHaveBeenCalledWith()` assertion to assert expected error logs, followed by `.mockRestore()` to keep test runs clean and functionally rigorous.
+## 2024-06-06 - [JS Test Fix] Testing UI React components edge cases
+**Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
+**Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
+**Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.

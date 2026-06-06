@@ -1,4 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	waitFor,
+	fireEvent,
+	act,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -15,6 +21,309 @@ describe( 'DatabaseCleanup Component', () => {
 	beforeEach( () => {
 		global.wppoSettings = { translations: {} };
 		jest.clearAllMocks();
+	} );
+
+	it( 'cancels cleanup when cancel button is clicked in dialog', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		// Click clean button for revisions
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
+
+		// Dialog should be open
+		expect(
+			screen.getByText(
+				/This action will permanently delete post revisions/i
+			)
+		).toBeInTheDocument();
+
+		// Cancel cleanup
+		const cancelButton = screen.getByRole( 'button', { name: 'Cancel' } );
+		fireEvent.click( cancelButton );
+
+		await waitFor( () => {
+			expect(
+				screen.queryByText(
+					/This action will permanently delete post revisions/i
+				)
+			).not.toBeInTheDocument();
+		} );
+	} );
+
+	it( 'opens confirm dialog to optimize everything', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10, spam_comments: 5 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getByText( '15' ) ).toBeInTheDocument();
+		} );
+
+		// Click optimize everything
+		const optimizeButton = screen.getByRole( 'button', {
+			name: 'Optimize Everything Now',
+		} );
+		fireEvent.click( optimizeButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText(
+					/This action will permanently delete overhead items from your database. Proceed?/i
+				)
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'handles settings change correctly', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		const dbScheduleSelect = screen.getByLabelText( 'Schedule Frequency' );
+		fireEvent.change( dbScheduleSelect, {
+			target: { value: 'daily', name: 'dbSchedule' },
+		} );
+
+		expect( dbScheduleSelect.value ).toBe( 'daily' );
+	} );
+
+	it( 'saves settings successfully and shows notification', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {},
+		} );
+		render( <DatabaseCleanup /> );
+
+		// Setup the next API call for update_settings
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+		} );
+
+		const saveButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( saveButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.any( Object )
+			);
+			expect(
+				screen.getByText( 'Settings saved successfully.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'shows error notification when saving settings fails', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {},
+		} );
+		render( <DatabaseCleanup /> );
+
+		// Setup the next API call for update_settings failing
+		apiCall.mockRejectedValueOnce( new Error( 'Save Error' ) );
+
+		const saveButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( saveButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Error saving settings.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'shows error notification with custom message on cleanup failure with success true', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		// Setup the next API call for cleanup failing but success true in db
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Custom error message.',
+			data: { failures: { some_item: 'failed' }, deleted: 5 },
+		} );
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 5 },
+		} );
+
+		// Click clean button for revisions
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
+
+		// Confirm cleanup
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Custom error message. Failures: some_item' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'shows fallback error when cleanup API throws an exception', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		// API throws an error
+		apiCall.mockRejectedValueOnce( new Error( 'API Exception' ) );
+
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
+
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
+
+		await waitFor( () => {
+			expect( screen.getByText( 'API Exception' ) ).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'shows empty error message fallback when cleanup API throws an exception without message', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		// API throws an error
+		apiCall.mockRejectedValueOnce( {} );
+
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
+
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Error executing cleanup.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'dismisses notification when dismiss button is clicked', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {},
+		} );
+		render( <DatabaseCleanup /> );
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+		} );
+
+		const saveButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( saveButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Settings saved successfully.' )
+			).toBeInTheDocument();
+		} );
+
+		const dismissButton = screen.getByRole( 'button', {
+			name: /Dismiss/i,
+		} );
+		fireEvent.click( dismissButton );
+
+		await waitFor( () => {
+			expect(
+				screen.queryByText( 'Settings saved successfully.' )
+			).not.toBeInTheDocument();
+		} );
+	} );
+
+	it( 'dismisses notification automatically after 5 seconds', async () => {
+		jest.useFakeTimers();
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {},
+		} );
+		render( <DatabaseCleanup /> );
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+		} );
+
+		const saveButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( saveButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Settings saved successfully.' )
+			).toBeInTheDocument();
+		} );
+
+		act( () => {
+			jest.advanceTimersByTime( 5000 );
+		} );
+
+		await waitFor( () => {
+			expect(
+				screen.queryByText( 'Settings saved successfully.' )
+			).not.toBeInTheDocument();
+		} );
+		jest.useRealTimers();
 	} );
 
 	it( 'renders table data correctly', async () => {
