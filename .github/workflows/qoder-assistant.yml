@@ -10,7 +10,7 @@ jobs:
       github.event.issue.pull_request &&
       contains(github.event.comment.body, '@qoder') && 
       !github.event.issue.locked
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: write
@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
           fetch-depth: 0
 
