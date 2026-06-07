@@ -44,6 +44,7 @@ jobs:
 
       - name: Run Qoder Assistant
         uses: QoderAI/qoder-action@v0
+        continue-on-error: true
         with:
           qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
           prompt: |

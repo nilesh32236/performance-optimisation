@@ -120,15 +120,17 @@ const ConfirmDialog = ( {
 				<div className="wppo-dialog-actions">
 					<button
 						type="button"
-						className="submit-button secondary wppo-dialog-cancel"
+						className="wppo-button wppo-button--secondary wppo-dialog-cancel"
 						onClick={ onCancel }
 					>
 						{ cancelLabel || translations.cancel || 'Cancel' }
 					</button>
 					<button
 						type="button"
-						className={ `submit-button ${
-							variant === 'danger' ? 'danger' : ''
+						className={ `wppo-button ${
+							variant === 'danger'
+								? 'wppo-button--danger'
+								: 'wppo-button--primary'
 						}` }
 						onClick={ onConfirm }
 						ref={ confirmBtnRef }
