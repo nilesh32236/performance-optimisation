@@ -38,3 +38,12 @@
 **Action:** Always use WordPress Transients to cache expensive file system results, and invalidate these transients within `clear_cache` methods.
 ## 2025-01-20 - Early Return Before Expensive Computations\n\n**Learning:** High-frequency operations like `Util::get_local_path` (which parses URLs) were being computed before short-circuit logic (`is_user_logged_in`, `empty( $href )`) in `minify_css` and `minify_js`. This caused significant performance overhead as they run on every page load.\n**Action:** Always place lightweight conditionals before heavy variable assignments. Avoid executing computationally expensive operations unless strictly necessary.
 
+
+## 2025-01-22 - Bypassing WP_Filesystem for large file reads
+
+**Learning:** Using `$filesystem->get_contents()` to read entire asset files (CSS/JS) into memory just to determine if they are minified (e.g., checking if they have fewer than 10 lines) creates a massive memory bottleneck for large files.
+**Action:** Use native PHP streaming functions like `fopen()` and `fgets()` to read files line-by-line and break early. Ensure you add `// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen` and `_fgets` (and `_fclose`) to bypass WPCS checks safely.
+
+## 2025-01-22 - WPCS Error Suppression
+**Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
+**Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
