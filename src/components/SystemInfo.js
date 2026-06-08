@@ -110,7 +110,7 @@ const SystemInfo = () => {
 				}` }
 			>
 				{ ! loaded && ! error && (
-					<p className="wppo-sysinfo-trigger__desc">
+					<p className="wppo-sysinfo-trigger__desc" id="sysinfo-trigger-desc">
 						{ __(
 							'View PHP, database, WordPress, and server environment details.',
 							'performance-optimisation'
@@ -122,6 +122,7 @@ const SystemInfo = () => {
 					className="wppo-button wppo-button--secondary"
 					onClick={ handleLoad }
 					isLoading={ loading }
+					aria-describedby={ ! loaded && ! error ? 'sysinfo-trigger-desc' : undefined }
 					label={
 						loaded
 							? __( 'Refresh', 'performance-optimisation' )
