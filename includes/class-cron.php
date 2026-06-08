@@ -192,8 +192,8 @@ class Cron {
 	 */
 	public static function clear_cron_jobs(): void {
 		wp_unschedule_hook( 'wppo_generate_static_page' );
-		wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
-		wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
+		wp_unschedule_hook( 'wppo_page_cron_hook' );
+		wp_unschedule_hook( 'wppo_page_cron_batch' );
 		delete_option( 'wppo_preload_cron_offset' );
 	}
 

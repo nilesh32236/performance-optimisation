@@ -47,3 +47,7 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+## 2025-01-22 - Optimizing Cron Job Removal
+
+**Learning:** When removing WordPress cron jobs, utilizing `wp_next_scheduled` coupled with `wp_unschedule_event` introduces an N+1 database operations problem and consumes extra memory.
+**Action:** Use `wp_unschedule_hook` instead, which eliminates parameterized events in O(1) time and gracefully reduces system overhead.
