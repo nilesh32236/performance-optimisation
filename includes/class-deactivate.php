@@ -58,27 +58,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * @return void
 		 */
 		private static function unschedule_crons(): void {
-			// Unschedule the 'wppo_page_cron_hook' event if it is scheduled.
-			$timestamp = wp_next_scheduled( 'wppo_page_cron_hook' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_page_cron_hook' );
-			}
-
-			$timestamp = wp_next_scheduled( 'wppo_page_cron_batch' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_page_cron_batch' );
-			}
-
-			// Unschedule the 'wppo_img_conversation' event if it is scheduled.
-			$timestamp = wp_next_scheduled( 'wppo_img_conversation' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_img_conversation' );
-			}
-
-			$timestamp = wp_next_scheduled( 'wppo_generate_static_page' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_generate_static_page' );
-			}
+			wp_unschedule_hook( 'wppo_page_cron_hook' );
+			wp_unschedule_hook( 'wppo_page_cron_batch' );
+			wp_unschedule_hook( 'wppo_img_conversation' );
+			wp_unschedule_hook( 'wppo_generate_static_page' );
+			wp_unschedule_hook( 'wppo_database_cleanup_cron' );
 		}
 
 		/**
