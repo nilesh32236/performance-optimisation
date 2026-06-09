@@ -30,3 +30,13 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+
+## 2024-12-05 - Testing RTL Key Events on Containers
+**Bug/Gap:** Passing synthetic keyboard events explicitly onto arbitrary nested elements dynamically does not immediately evaluate without triggering the exact DOM tree layer handled by `onKeyDown`.
+**Root Cause:** Using `fireEvent.keyDown` on `getByTestId('checkbox-container')` throws unless standard RTL selector functions or precise target containers are mapped via `container.querySelector()`.
+**Test Added:** Ensured components lacking standard form-control wrappers fallback strictly to using `container.querySelector('.classname')` over ambiguous `getByTestId` additions or complex simulated custom events.
+
+## 2024-12-05 - Mocking Default Submit Events in React RTL
+**Bug/Gap:** Testing `e.preventDefault()` via mock objects within `fireEvent.click()` falls back since `fireEvent` handles default browser abstractions inherently in JSDOM.
+**Root Cause:** Testing-library deliberately avoids granular mock payload injection for structural DOM attributes.
+**Test Added:** Instead of passing mocked objects to verify `preventDefault`, simulate full interactions normally and assert component state behaviors directly (`apiCall` tracking / `document.getByText` verification).

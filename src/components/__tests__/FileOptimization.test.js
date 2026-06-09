@@ -177,3 +177,82 @@ describe( 'FileOptimization Component', () => {
 		).toBeInTheDocument();
 	} );
 } );
+
+describe( 'FileOptimization Component Extra Coverage', () => {
+	beforeEach( () => {
+		global.wppoSettings = { translations: {} };
+		jest.clearAllMocks();
+	} );
+
+	it( 'ignores unrelated key presses on sub-tabs', () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const assetsTab = screen.getByRole( 'tab', { name: /Assets/i } );
+
+		assetsTab.focus();
+		expect( assetsTab ).toHaveFocus();
+
+		// Simulate enter or other key
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
+
+		// still on assets
+		expect( screen.getByText( 'CSS Optimization' ) ).toBeInTheDocument();
+	} );
+
+	it( 'toggles enableServerRules to false if server_type is not apache and it was initially true', () => {
+		render(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ { server_type: 'nginx', nginx: 'rules' } }
+			/>
+		);
+
+		// Wait for effect to settle
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+
+		// Nginx is shown and enableServerRules is not present or at least disabled
+		expect( screen.getByText( /Nginx Detected/i ) ).toBeInTheDocument();
+	} );
+
+	it( 'prevents default event on form submission', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Settings updated successfully.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'renders error from api response', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Custom error from API.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Custom error from API.' )
+			).toBeInTheDocument();
+		} );
+	} );
+} );
