@@ -449,3 +449,83 @@ describe( 'DatabaseCleanup Component', () => {
 		} );
 	} );
 } );
+
+describe( 'DatabaseCleanup Component Extra Coverage', () => {
+	beforeEach( () => {
+		global.wppoSettings = { translations: {} };
+		jest.clearAllMocks();
+	} );
+
+	it( 'handles custom failures in handleCleanup with success=false', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+		render( <DatabaseCleanup /> );
+		await waitFor( () =>
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument()
+		);
+
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Custom error from API.',
+			data: {
+				failures: { item1: 'Failed', item2: 'Failed' },
+				deleted: 5,
+			},
+		} );
+
+		// This makes sure fetchCounts is called because deleted > 0
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 5 },
+		} );
+
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText(
+					'Custom error from API. Failures: item1, item2'
+				)
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'does not re-fetch counts if deleted is 0 and success=false', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+		render( <DatabaseCleanup /> );
+		await waitFor( () =>
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument()
+		);
+
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Custom error from API.',
+			data: { deleted: 0 },
+		} );
+
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Custom error from API.' )
+			).toBeInTheDocument();
+		} );
+		// Ensure apiCall was only called for init, cleanup (2 times)
+		expect( apiCall ).toHaveBeenCalledTimes( 2 );
+	} );
+} );

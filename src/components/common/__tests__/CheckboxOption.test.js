@@ -99,3 +99,19 @@ describe( 'CheckboxOption', () => {
 		).not.toBeInTheDocument();
 	} );
 } );
+
+describe( 'CheckboxOption coverage', () => {
+	it( 'uses fallback aria-label on textarea if placeholder is not provided', () => {
+		render(
+			<CheckboxOption
+				label="Test Label"
+				checked={ true }
+				onChange={ jest.fn() }
+				textareaName="test_textarea"
+			/>
+		);
+
+		const textarea = screen.getByRole( 'textbox', { name: 'Test Label' } );
+		expect( textarea ).toBeInTheDocument();
+	} );
+} );

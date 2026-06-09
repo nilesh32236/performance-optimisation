@@ -132,3 +132,35 @@ describe( 'SystemInfo Component', () => {
 		consoleSpy.mockRestore();
 	} );
 } );
+
+describe( 'SystemInfo Component - Missing Data', () => {
+	beforeEach( () => {
+		global.wppoSettings = {};
+		jest.clearAllMocks();
+	} );
+
+	it( 'does not render InfoTable if data is null/undefined', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				php: null,
+				database: null,
+				wordpress: null,
+				server: null,
+			},
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			// "WP Constants" might still render if info.wp_constants is undefined vs absent, wait, we passed null.
+			expect(
+				screen.queryByText( 'PHP Version' )
+			).not.toBeInTheDocument();
+		} );
+	} );
+} );
