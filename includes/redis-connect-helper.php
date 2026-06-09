@@ -133,30 +133,36 @@ function wppo_redis_connect_sentinel( $config ) {
 			);
 			$address  = $sentinel->getMasterAddrByName( $master_name );
 
-			if ( $address ) {
-				if ( ! class_exists( 'Redis' ) ) {
-					return new \WP_Error( 'missing_redis', __( 'The Redis class is not available.', 'performance-optimisation' ) );
-				}
-				$redis = new \Redis();
-				$host  = $use_tls ? 'tls://' . $address[0] : $address[0];
-
-				if ( $redis->connect( $host, (int) $address[1], $timeout ) ) {
-					if ( $password && ! $redis->auth( $password ) ) {
-						$redis->close();
-						return new \WP_Error( 'auth_fail', __( 'Sentinel Master Auth failed.', 'performance-optimisation' ) );
-					}
-
-					if ( ! $redis->select( $database ) ) {
-						$redis->close();
-						/* translators: %d: Database index */
-						return new \WP_Error( 'select_fail', sprintf( __( 'Failed to select Redis database: %d', 'performance-optimisation' ), $database ) );
-					}
-
-					wppo_apply_redis_options( $redis, $config );
-
-					return $redis;
-				}
+			if ( ! $address ) {
+				continue;
 			}
+
+			if ( ! class_exists( 'Redis' ) ) {
+				return new \WP_Error( 'missing_redis', __( 'The Redis class is not available.', 'performance-optimisation' ) );
+			}
+
+			$redis = new \Redis();
+			$host  = $use_tls ? 'tls://' . $address[0] : $address[0];
+
+			if ( ! $redis->connect( $host, (int) $address[1], $timeout ) ) {
+				continue;
+			}
+
+			if ( $password && ! $redis->auth( $password ) ) {
+				$redis->close();
+				return new \WP_Error( 'auth_fail', __( 'Sentinel Master Auth failed.', 'performance-optimisation' ) );
+			}
+
+			if ( ! $redis->select( $database ) ) {
+				$redis->close();
+				/* translators: %d: Database index */
+				return new \WP_Error( 'select_fail', sprintf( __( 'Failed to select Redis database: %d', 'performance-optimisation' ), $database ) );
+			}
+
+			wppo_apply_redis_options( $redis, $config );
+
+			return $redis;
+
 		} catch ( \Throwable $e ) {
 			$errors[] = $s_host . ':' . $s_port . ' - ' . $e->getMessage();
 			continue;
@@ -200,24 +206,24 @@ function wppo_redis_connect_standalone( $config ) {
 	$func  = ! empty( $config['persistent'] ) ? 'pconnect' : 'connect';
 
 	// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-	if ( @$redis->$func( $host, $port, $timeout ) ) {
-		if ( ! empty( $password ) && $redis->auth( $password ) === false ) {
-			$redis->close();
-			return new \WP_Error( 'auth_fail', __( 'Redis Auth failed.', 'performance-optimisation' ) );
-		}
-
-		if ( ! $redis->select( $database ) ) {
-			$redis->close();
-			/* translators: %d: Database index */
-			return new \WP_Error( 'select_fail', sprintf( __( 'Failed to select Redis database: %d', 'performance-optimisation' ), $database ) );
-		}
-
-		wppo_apply_redis_options( $redis, $config );
-
-		return $redis;
+	if ( ! @$redis->$func( $host, $port, $timeout ) ) {
+		return new \WP_Error( 'conn_fail', __( 'Could not connect to Redis. Please ensure the service is running.', 'performance-optimisation' ) );
 	}
 
-	return new \WP_Error( 'conn_fail', __( 'Could not connect to Redis. Please ensure the service is running.', 'performance-optimisation' ) );
+	if ( ! empty( $password ) && $redis->auth( $password ) === false ) {
+		$redis->close();
+		return new \WP_Error( 'auth_fail', __( 'Redis Auth failed.', 'performance-optimisation' ) );
+	}
+
+	if ( ! $redis->select( $database ) ) {
+		$redis->close();
+		/* translators: %d: Database index */
+		return new \WP_Error( 'select_fail', sprintf( __( 'Failed to select Redis database: %d', 'performance-optimisation' ), $database ) );
+	}
+
+	wppo_apply_redis_options( $redis, $config );
+
+	return $redis;
 }
 
 /**
