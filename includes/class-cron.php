@@ -140,32 +140,9 @@ class Cron {
 		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
 
 		foreach ( $query_batch_posts as $page_id ) {
-			$page_url       = get_permalink( $page_id );
-			$should_exclude = false;
+			$page_url = get_permalink( $page_id );
 
-			foreach ( $exclude_urls as $exclude_url ) {
-				$exclude_url = rtrim( $exclude_url, '/' );
-
-				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-					$exclude_url = home_url( $exclude_url );
-				}
-
-				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-
-					if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
-						$should_exclude = true;
-						break;
-					}
-				}
-
-				if ( $page_url === $exclude_url ) {
-					$should_exclude = true;
-					break;
-				}
-			}
-
-			if ( $should_exclude ) {
+			if ( $this->is_url_excluded( $page_url, $exclude_urls ) ) {
 				continue;
 			}
 
@@ -181,6 +158,39 @@ class Cron {
 		if ( ! wp_next_scheduled( 'wppo_page_cron_batch' ) ) {
 			wp_schedule_single_event( time() + 60, 'wppo_page_cron_batch' );
 		}
+	}
+
+	/**
+	 * Checks whether a given URL matches any of the exclusion rules.
+	 *
+	 * @param string $page_url The URL to check.
+	 * @param array  $exclude_urls List of configured exclusion strings or patterns.
+	 * @return bool True if excluded, false otherwise.
+	 *
+	 * @since NEXT
+	 */
+	private function is_url_excluded( string $page_url, array $exclude_urls ): bool {
+		foreach ( $exclude_urls as $exclude_url ) {
+			$exclude_url = rtrim( $exclude_url, '/' );
+
+			if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+				$exclude_url = home_url( $exclude_url );
+			}
+
+			if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+				$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
+
+				if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
+					return true;
+				}
+			}
+
+			if ( $page_url === $exclude_url ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -317,14 +327,10 @@ class Cron {
 		if ( in_array( $conversation_format, array( 'avif', 'both' ), true ) ) {
 			$images = $img_info['pending']['avif'] ?? array();
 
-			$counter = 0;
 			if ( ! empty( $images ) ) {
-				foreach ( $images as $img ) {
-					++$counter;
-
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
-					}
+				$batch = array_slice( $images, 0, $batch_size );
+				foreach ( $batch as $img ) {
+					$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
 				}
 			}
 		}
@@ -332,14 +338,10 @@ class Cron {
 		if ( in_array( $conversation_format, array( 'webp', 'both' ), true ) ) {
 			$images = $img_info['pending']['webp'] ?? array();
 
-			$counter = 0;
 			if ( ! empty( $images ) ) {
-				foreach ( $images as $img ) {
-					++$counter;
-
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
-					}
+				$batch = array_slice( $images, 0, $batch_size );
+				foreach ( $batch as $img ) {
+					$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
 				}
 			}
 		}
