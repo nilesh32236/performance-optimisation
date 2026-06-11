@@ -311,34 +311,28 @@ class Cron {
 		$img_info = Img_Converter::get_img_info();
 
 		$conversation_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
+		$batch_size          = $options['image_optimisation']['batch'] ?? 50;
 
-		$batch_size = $options['image_optimisation']['batch'] ?? 50;
+		$formats_to_process = array( 'avif', 'webp' );
 
-		if ( in_array( $conversation_format, array( 'avif', 'both' ), true ) ) {
-			$images = $img_info['pending']['avif'] ?? array();
+		foreach ( $formats_to_process as $format ) {
+			if ( in_array( $conversation_format, array( $format, 'both' ), true ) ) {
+				$images = $img_info['pending'][ $format ] ?? array();
 
-			$counter = 0;
-			if ( ! empty( $images ) ) {
-				foreach ( $images as $img ) {
-					++$counter;
-
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
-					}
+				if ( empty( $images ) ) {
+					continue;
 				}
-			}
-		}
 
-		if ( in_array( $conversation_format, array( 'webp', 'both' ), true ) ) {
-			$images = $img_info['pending']['webp'] ?? array();
-
-			$counter = 0;
-			if ( ! empty( $images ) ) {
+				$counter = 0;
 				foreach ( $images as $img ) {
-					++$counter;
+					if ( ++$counter > $batch_size ) {
+						break;
+					}
 
-					if ( $counter <= $batch_size ) {
+					if ( 'webp' === $format ) {
 						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
+					} else {
+						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), $format );
 					}
 				}
 			}
