@@ -46,6 +46,7 @@ jobs:
 
       - name: Run Qoder Assistant
         uses: QoderAI/qoder-action@v0
+        continue-on-error: true
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         with:
