@@ -196,14 +196,11 @@ describe( 'FileOptimization Component', () => {
 		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
 		fireEvent.click( networkTab );
 
-		const enableRulesSwitch =
-			screen.queryByLabelText( /Enable Server Rules/i );
-		if ( enableRulesSwitch ) {
-			expect( enableRulesSwitch ).not.toBeChecked();
-			expect( enableRulesSwitch ).toBeDisabled();
-		} else {
-			expect( enableRulesSwitch ).not.toBeInTheDocument();
-		}
+		const enableRulesSwitch = screen.getByRole( 'checkbox', {
+			name: /Enable Server Rules/i,
+		} );
+		expect( enableRulesSwitch ).not.toBeChecked();
+		expect( enableRulesSwitch ).toBeDisabled();
 		expect( screen.getByText( /Nginx Detected/i ) ).toBeInTheDocument();
 	} );
 
