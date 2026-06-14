@@ -196,7 +196,8 @@ describe( 'FileOptimization Component', () => {
 		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
 		fireEvent.click( networkTab );
 
-		const enableRulesSwitch = screen.queryByLabelText( /Enable Server Rules/i );
+		const enableRulesSwitch =
+			screen.queryByLabelText( /Enable Server Rules/i );
 		expect( enableRulesSwitch ).toBeInTheDocument();
 		expect( enableRulesSwitch ).not.toBeChecked();
 		expect( enableRulesSwitch ).toBeDisabled();
