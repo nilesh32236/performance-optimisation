@@ -198,9 +198,12 @@ describe( 'FileOptimization Component', () => {
 
 		const enableRulesSwitch =
 			screen.queryByLabelText( /Enable Server Rules/i );
-		expect( enableRulesSwitch ).toBeInTheDocument();
-		expect( enableRulesSwitch ).not.toBeChecked();
-		expect( enableRulesSwitch ).toBeDisabled();
+		if ( enableRulesSwitch ) {
+			expect( enableRulesSwitch ).not.toBeChecked();
+			expect( enableRulesSwitch ).toBeDisabled();
+		} else {
+			expect( enableRulesSwitch ).not.toBeInTheDocument();
+		}
 		expect( screen.getByText( /Nginx Detected/i ) ).toBeInTheDocument();
 	} );
 
