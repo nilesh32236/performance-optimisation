@@ -176,4 +176,67 @@ describe( 'FileOptimization Component', () => {
 			screen.getByText( /Unrecognised server software/i )
 		).toBeInTheDocument();
 	} );
+
+	it( 'automatically disables enableServerRules if server is not apache', async () => {
+		const { rerender } = render(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ { server_type: 'apache' } }
+			/>
+		);
+
+		// Switch server type to nginx to trigger useEffect
+		rerender(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ { server_type: 'nginx' } }
+			/>
+		);
+
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+
+		const enableRulesSwitch = screen.queryByLabelText( /Enable Server Rules/i );
+		expect( enableRulesSwitch ).toBeInTheDocument();
+		expect( enableRulesSwitch ).not.toBeChecked();
+		expect( enableRulesSwitch ).toBeDisabled();
+		expect( screen.getByText( /Nginx Detected/i ) ).toBeInTheDocument();
+	} );
+
+	it( 'displays failed notification if api returns success: false', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: '',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to update settings.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'ignores non-arrow key presses on tabs', async () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const assetsTab = screen.getByRole( 'tab', { name: /Assets/i } );
+
+		assetsTab.focus();
+		expect( assetsTab ).toHaveFocus();
+
+		// Simulate Enter key
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
+
+		// Wait a bit to ensure no focus change happens
+		await new Promise( ( resolve ) => setTimeout( resolve, 100 ) );
+
+		expect( assetsTab ).toHaveFocus(); // Focus should remain on assets tab
+	} );
 } );
