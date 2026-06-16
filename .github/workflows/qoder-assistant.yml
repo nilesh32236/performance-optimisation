@@ -6,10 +6,7 @@ on:
 
 jobs:
   qoder-assistant:
-    if: >
-      github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@qoder') && 
-      !github.event.issue.locked
+    if: false
     runs-on: ubuntu-latest
     permissions:
       contents: read
