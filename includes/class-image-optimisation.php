@@ -162,118 +162,118 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string Modified HTML content buffer.
 		 */
 		public function maybe_serve_next_gen_images( $buffer ) {
-			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
-				$conversion_format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
+			if ( empty( $this->options['image_optimisation']['convertImg'] ) ) {
+				return $buffer;
+			}
 
-				$exclude_imgs = $this->exclude_convert_imgs;
+			$conversion_format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
 
-				$http_accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
+			$exclude_imgs = $this->exclude_convert_imgs;
 
-				$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;
-				$supports_webp = strpos( $http_accept, 'image/webp' ) !== false;
+			$http_accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
 
-				if ( ! $supports_avif && ! $supports_webp ) {
-					return $buffer;
-				}
+			$supports_avif = strpos( $http_accept, 'image/avif' ) !== false;
+			$supports_webp = strpos( $http_accept, 'image/webp' ) !== false;
 
-				if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
-					$tags = new \WP_HTML_Tag_Processor( $buffer );
+			if ( ! $supports_avif && ! $supports_webp ) {
+				return $buffer;
+			}
 
-					while ( $tags->next_tag() ) {
-						if ( 'IMG' !== $tags->get_tag() ) {
-							continue;
-						}
+			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				$tags = new \WP_HTML_Tag_Processor( $buffer );
 
-						$src = $tags->get_attribute( 'src' );
-						if ( $src ) {
-							$normalized_src = $this->normalize_url( $src );
-							if ( $this->is_valid_url( $normalized_src ) ) {
-								$new_src = $this->replace_image_with_next_gen( $normalized_src, $exclude_imgs, $supports_avif, $supports_webp );
-								// Only write back if the URL actually changed (i.e. conversion occurred).
-								if ( $new_src !== $normalized_src ) {
-									$tags->set_attribute( 'src', $new_src );
-								}
-							}
-						}
+				while ( $tags->next_tag() ) {
+					if ( 'IMG' !== $tags->get_tag() ) {
+						continue;
+					}
 
-						$srcset = $tags->get_attribute( 'srcset' );
-						if ( $srcset ) {
-							$new_srcset_parts = array();
-							$srcset_items     = explode( ',', $srcset );
-
-							foreach ( $srcset_items as $srcset_item ) {
-								$parts          = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
-								$original_token = $parts[0];
-								$normalized_url = $this->normalize_url( $original_token );
-								$descriptor     = $parts[1];
-
-								if ( $this->is_valid_url( $normalized_url ) ) {
-									$new_url = $this->replace_image_with_next_gen( $normalized_url, $exclude_imgs, $supports_avif, $supports_webp );
-									// Use the optimized URL if conversion happened, otherwise keep the original token.
-									$final_url          = ( $new_url !== $normalized_url ) ? $new_url : $original_token;
-									$new_srcset_parts[] = $final_url . ( $descriptor ? " $descriptor" : '' );
-								} else {
-									$new_srcset_parts[] = $original_token . ( $descriptor ? " $descriptor" : '' );
-								}
-							}
-
-							$new_srcset = implode( ', ', $new_srcset_parts );
-							if ( $new_srcset !== $srcset ) {
-								$tags->set_attribute( 'srcset', $new_srcset );
+					$src = $tags->get_attribute( 'src' );
+					if ( $src ) {
+						$normalized_src = $this->normalize_url( $src );
+						if ( $this->is_valid_url( $normalized_src ) ) {
+							$new_src = $this->replace_image_with_next_gen( $normalized_src, $exclude_imgs, $supports_avif, $supports_webp );
+							// Only write back if the URL actually changed (i.e. conversion occurred).
+							if ( $new_src !== $normalized_src ) {
+								$tags->set_attribute( 'src', $new_src );
 							}
 						}
 					}
 
-					return $tags->get_updated_html();
-				} else {
-					// Regex Fallback (Original logic restored from git history).
-					return preg_replace_callback(
-						'#<img\b[^>]*((?:src|srcset)=["\'][^"\']+["\'])[^>]*>#i',
-						function ( $matches ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
-							$img_tag = $matches[0];
+					$srcset = $tags->get_attribute( 'srcset' );
+					if ( $srcset ) {
+						$new_srcset_parts = array();
+						$srcset_items     = explode( ',', $srcset );
 
-							$updated_img_tag = preg_replace_callback(
-								'#src=["\']([^"\']+)["\']#i',
-								function ( $src_match ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
-									$url = $src_match[1];
-									if ( $this->is_valid_url( $url ) ) {
-										return 'src="' . $this->replace_image_with_next_gen( $src_match[1], $exclude_imgs, $supports_avif, $supports_webp ) . '"';
-									}
-									return $src_match[0];
-								},
-								$img_tag
-							);
+						foreach ( $srcset_items as $srcset_item ) {
+							$parts          = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
+							$original_token = $parts[0];
+							$normalized_url = $this->normalize_url( $original_token );
+							$descriptor     = $parts[1];
 
-							$updated_img_tag = preg_replace_callback(
-								'#srcset=["\']([^"\']+)["\']#i',
-								function ( $srcset_match ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
-									$srcset = $srcset_match[1];
+							if ( $this->is_valid_url( $normalized_url ) ) {
+								$new_url = $this->replace_image_with_next_gen( $normalized_url, $exclude_imgs, $supports_avif, $supports_webp );
+								// Use the optimized URL if conversion happened, otherwise keep the original token.
+								$final_url          = ( $new_url !== $normalized_url ) ? $new_url : $original_token;
+								$new_srcset_parts[] = $final_url . ( $descriptor ? " $descriptor" : '' );
+							} else {
+								$new_srcset_parts[] = $original_token . ( $descriptor ? " $descriptor" : '' );
+							}
+						}
 
-									$new_srcset = implode(
-										', ',
-										array_map(
-											function ( $srcset_item ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
-												list($url, $descriptor) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
-												$new_url                = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
-												return $new_url . ( $descriptor ? " $descriptor" : '' );
-											},
-											explode( ',', $srcset )
-										)
-									);
-
-									return 'srcset="' . $new_srcset . '"';
-								},
-								$updated_img_tag
-							);
-
-							return $updated_img_tag;
-						},
-						$buffer
-					);
+						$new_srcset = implode( ', ', $new_srcset_parts );
+						if ( $new_srcset !== $srcset ) {
+							$tags->set_attribute( 'srcset', $new_srcset );
+						}
+					}
 				}
-			}
 
-			return $buffer;
+				return $tags->get_updated_html();
+			} else {
+				// Regex Fallback (Original logic restored from git history).
+				return preg_replace_callback(
+					'#<img\b[^>]*((?:src|srcset)=["\'][^"\']+["\'])[^>]*>#i',
+					function ( $matches ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+						$img_tag = $matches[0];
+
+						$updated_img_tag = preg_replace_callback(
+							'#src=["\']([^"\']+)["\']#i',
+							function ( $src_match ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+								$url = $src_match[1];
+								if ( $this->is_valid_url( $url ) ) {
+									return 'src="' . $this->replace_image_with_next_gen( $src_match[1], $exclude_imgs, $supports_avif, $supports_webp ) . '"';
+								}
+								return $src_match[0];
+							},
+							$img_tag
+						);
+
+						$updated_img_tag = preg_replace_callback(
+							'#srcset=["\']([^"\']+)["\']#i',
+							function ( $srcset_match ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+								$srcset = $srcset_match[1];
+
+								$new_srcset = implode(
+									', ',
+									array_map(
+										function ( $srcset_item ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+											list($url, $descriptor) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
+											$new_url                = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
+											return $new_url . ( $descriptor ? " $descriptor" : '' );
+										},
+										explode( ',', $srcset )
+									)
+								);
+
+								return 'srcset="' . $new_srcset . '"';
+							},
+							$updated_img_tag
+						);
+
+						return $updated_img_tag;
+					},
+					$buffer
+				);
+			}
 		}
 
 		/**
