@@ -47,3 +47,6 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+## 2024-05-18 - [Cache Invalidation in File Minification]
+**Learning:** [When caching the minification status or minified file contents on disk, using just the file path (`md5($path)`) is insufficient. It completely breaks cache invalidation if the underlying file is modified (e.g., during a plugin/theme update), causing the system to serve permanently stale assets or read from a stale object cache.]
+**Action:** [Always include the original file's modification time (`filemtime`) in the cache key or comparison logic (e.g., `filemtime($local_path) <= filemtime($cache_file)`) to ensure automatic invalidation and prevent serving stale assets.]

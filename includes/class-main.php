@@ -828,18 +828,27 @@ class Main {
 
 		$local_path = Util::get_local_path( $href );
 
+		$cache_dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css' );
+		$cache_file = $cache_dir . '/' . md5( $local_path ) . '.css';
+
+		// If the minified file is already cached by the plugin and up-to-date, serve it immediately to bypass file reads.
+		if ( file_exists( $cache_file ) && file_exists( $local_path ) && filemtime( $local_path ) <= filemtime( $cache_file ) ) {
+			$file_version = filemtime( $cache_file );
+			$new_href     = content_url( 'cache/wppo/min/css/' . basename( $cache_file ) ) . '?ver=' . $file_version;
+			return str_replace( $href, $new_href, $tag );
+		}
+
 		if ( $this->is_css_minified( $local_path ) ) {
 			return $tag;
 		}
 
-		$css_minifier = new Minify\CSS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css' ) );
-		$cached_file  = $css_minifier->minify();
+		$css_minifier = new Minify\CSS( $local_path, $cache_dir );
+		$cached_url   = $css_minifier->minify();
 
-		if ( $cached_file ) {
-			$file_version = fileatime( Util::get_local_path( $cached_file ) );
-			$new_href     = content_url( 'cache/wppo/min/css/' . basename( $cached_file ) ) . '?ver=' . $file_version;
-			$new_tag      = str_replace( $href, $new_href, $tag );
-			return $new_tag;
+		if ( $cached_url ) {
+			$file_version = filemtime( $cache_file );
+			$new_href     = content_url( 'cache/wppo/min/css/' . basename( $cache_file ) ) . '?ver=' . $file_version;
+			return str_replace( $href, $new_href, $tag );
 		}
 
 		return $tag;
@@ -869,19 +878,27 @@ class Main {
 
 		$local_path = Util::get_local_path( $src );
 
+		$cache_dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/js' );
+		$cache_file = $cache_dir . '/' . md5( $local_path ) . '.js';
+
+		// If the minified file is already cached by the plugin and up-to-date, serve it immediately to bypass file reads.
+		if ( file_exists( $cache_file ) && file_exists( $local_path ) && filemtime( $local_path ) <= filemtime( $cache_file ) ) {
+			$file_version = filemtime( $cache_file );
+			$new_src      = content_url( 'cache/wppo/min/js/' . basename( $cache_file ) ) . '?ver=' . $file_version;
+			return str_replace( $src, $new_src, $tag );
+		}
+
 		if ( $this->is_js_minified( $local_path ) ) {
 			return $tag;
 		}
 
-		$js_minifier = new Minify\JS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/js' ) );
-		$cached_file = $js_minifier->minify();
+		$js_minifier = new Minify\JS( $local_path, $cache_dir );
+		$cached_url  = $js_minifier->minify();
 
-		if ( $cached_file ) {
-			$file_version = fileatime( Util::get_local_path( $cached_file ) );
-
-			$new_src = content_url( 'cache/wppo/min/js/' . basename( $cached_file ) ) . '?ver=' . $file_version;
-			$new_tag = str_replace( $src, $new_src, $tag );
-			return $new_tag;
+		if ( $cached_url ) {
+			$file_version = filemtime( $cache_file );
+			$new_src      = content_url( 'cache/wppo/min/js/' . basename( $cache_file ) ) . '?ver=' . $file_version;
+			return str_replace( $src, $new_src, $tag );
 		}
 
 		return $tag;
@@ -908,6 +925,13 @@ class Main {
 			return true;
 		}
 
+		$cache_key   = 'wppo_css_min_status_' . md5( $file_path . filemtime( $file_path ) );
+		$is_minified = wp_cache_get( $cache_key, 'wppo' );
+
+		if ( false !== $is_minified ) {
+			return (bool) $is_minified;
+		}
+
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		$handle = fopen( $file_path, 'r' );
 		if ( ! $handle ) {
@@ -925,7 +949,10 @@ class Main {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		fclose( $handle );
 
-		return 10 >= $line_count;
+		$result = 10 >= $line_count;
+		wp_cache_set( $cache_key, (int) $result, 'wppo', DAY_IN_SECONDS );
+
+		return $result;
 	}
 
 	/**
@@ -949,6 +976,13 @@ class Main {
 			return true;
 		}
 
+		$cache_key   = 'wppo_js_min_status_' . md5( $file_path . filemtime( $file_path ) );
+		$is_minified = wp_cache_get( $cache_key, 'wppo' );
+
+		if ( false !== $is_minified ) {
+			return (bool) $is_minified;
+		}
+
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		$handle = fopen( $file_path, 'r' );
 		if ( ! $handle ) {
@@ -966,6 +1000,9 @@ class Main {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		fclose( $handle );
 
-		return 10 >= $line_count;
+		$result = 10 >= $line_count;
+		wp_cache_set( $cache_key, (int) $result, 'wppo', DAY_IN_SECONDS );
+
+		return $result;
 	}
 }
