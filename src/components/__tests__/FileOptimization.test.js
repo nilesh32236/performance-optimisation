@@ -176,4 +176,61 @@ describe( 'FileOptimization Component', () => {
 			screen.getByText( /Unrecognised server software/i )
 		).toBeInTheDocument();
 	} );
+
+	it( 'disables server rules effect when server is not apache and rules are enabled', () => {
+		render(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ { server_type: 'nginx' } }
+			/>
+		);
+
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+
+		const enableRulesSwitch =
+			screen.queryByLabelText( /Enable Server Rules/i );
+		expect( enableRulesSwitch ).not.toBeChecked();
+	} );
+
+	it( 'displays error message on failed settings submission', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Custom error message',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Custom error message' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'ignores non-arrow key presses on sub-tabs', async () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const assetsTab = screen.getByRole( 'tab', { name: /Assets/i } );
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+
+		assetsTab.focus();
+		expect( assetsTab ).toHaveFocus();
+
+		// Simulate enter key
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
+
+		// Focus should remain on assetsTab
+		await waitFor( () => {
+			expect( assetsTab ).toHaveFocus();
+		} );
+
+		// Ensure it didn't switch to scriptsTab
+		expect( scriptsTab ).not.toHaveFocus();
+	} );
 } );

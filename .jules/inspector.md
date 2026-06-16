@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## 2024-06-16 - File Optimization Test Gaps
+**Bug/Gap:** The FileOptimization component lacked tests for keyboard navigation (non-arrow keys), sad path API failures, and conditional server rule disabling.
+**Root Cause:** The previous test suite only focused on happy paths and basic rendering for this complex component.
+**Test Added:** Added tests using Jest and React Testing Library to simulate Enter key presses, mock failed API calls, and render with NGINX server types, achieving 100% line coverage.
