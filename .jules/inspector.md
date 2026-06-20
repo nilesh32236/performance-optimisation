@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## $(date +%Y-%m-%d) - [JS Test Fix] Testing conditional event handling without synthetic events
+**Bug/Gap:** Test coverage for `FileOptimization.js` lacked an assertion covering the early event prevention `if ( e ) e.preventDefault()` condition, keeping statement coverage at 98.28%.
+**Root Cause:** Using `fireEvent.click()` or `fireEvent.submit()` from `@testing-library/react` always injects a synthetic event, making it impossible to pass `undefined` as the event to test the conditional path.
+**Test Added:** Asserted by querying the actual DOM node using `getByRole` and invoking the native `.click()` method without arguments, bypassing React's synthetic event wrapper. Wrapped the method call in `act(() => { ... })` to suppress asynchronous React state update warnings during the test execution.

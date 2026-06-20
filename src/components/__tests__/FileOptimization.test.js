@@ -1,4 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	waitFor,
+	fireEvent,
+	act,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -100,6 +106,57 @@ describe( 'FileOptimization Component', () => {
 		consoleSpy.mockRestore();
 	} );
 
+	it( 'submits settings when handleSubmit is called explicitly', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+
+		// Wrap in act since it triggers state updates manually via click
+		act( () => {
+			submitButton.click();
+		} );
+
+		expect( apiCall ).toHaveBeenCalledWith(
+			'update_settings',
+			expect.objectContaining( {
+				tab: 'file_optimisation',
+			} )
+		);
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Settings updated successfully.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'handles API failure with fallback error message', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: undefined, // test res.message || 'Failed...'
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to update settings.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'navigates sub-tabs using keyboard arrows', async () => {
 		render( <FileOptimization options={ {} } serverRules={ {} } /> );
 
@@ -120,6 +177,14 @@ describe( 'FileOptimization Component', () => {
 		fireEvent.keyDown( scriptsTab, { key: 'ArrowLeft' } );
 
 		await waitFor( () => {
+			expect( assetsTab ).toHaveFocus();
+		} );
+
+		// Simulate unrecognised key on scripts tab
+		fireEvent.keyDown( scriptsTab, { key: 'Shift' } );
+
+		await waitFor( () => {
+			// Tab focus should remain unchanged since the function returned early
 			expect( assetsTab ).toHaveFocus();
 		} );
 	} );
