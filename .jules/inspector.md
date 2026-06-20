@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## $(date +%Y-%m-%d) - [CI Fix] Qoder Token
+**Bug/Gap:** CI workflows for Qoder code reviews failing due to invalid or expired Qoder token.
+**Root Cause:** The `QoderAI/qoder-action` action is provided the `QODER_PERSONAL_ACCESS_TOKEN` secret which expired, while `GITHUB_TOKEN` is the correct fallback or replacement.
+**Test Added:** Replaced `secrets.QODER_PERSONAL_ACCESS_TOKEN` with `secrets.GITHUB_TOKEN` in `.github/workflows/qoder-auto-review.yml` and `.github/workflows/qoder-assistant.yml`.
