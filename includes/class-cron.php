@@ -324,6 +324,8 @@ class Cron {
 
 					if ( $counter <= $batch_size ) {
 						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
+					} else {
+						break;
 					}
 				}
 			}
@@ -339,6 +341,8 @@ class Cron {
 
 					if ( $counter <= $batch_size ) {
 						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
+					} else {
+						break;
 					}
 				}
 			}
