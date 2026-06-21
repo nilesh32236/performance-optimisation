@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## $(date +%Y-%m-%d) - [JS Test Added] SuggestionsPanel component tests
+**Bug/Gap:** The `SuggestionsPanel` component lacked unit tests, leaving its metric status logic, conditional rendering of "Fix It" buttons, and metric value formatting unverified against regressions.
+**Root Cause:** The project was missing frontend coverage for this critical dashboard integration component introduced in v1.6.0.
+**Test Added:** Created `src/components/__tests__/SuggestionsPanel.test.js` to ensure the component handles missing props safely, properly renders varying metric types (good, poor, needs_improvement), conditional components based on actions, and correct number formatting parsing edge cases.
