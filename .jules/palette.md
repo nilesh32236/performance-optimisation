@@ -18,3 +18,6 @@
 
 **Learning:** When listing an array of features with individual "Action" buttons (e.g., Clean Database items), replacing button text with loading ellipses ("...") inside a standard `<button>` element breaks the layout bounds, introduces jarring UI shifts, and fails to announce state changes to screen readers properly. Additionally, replacing the original native `.wppo-button` classes entirely can break visual alignment.
 **Action:** When refactoring granular action buttons to show loading states, replace the generic `<button>` with `<LoadingSubmitButton>`. Critically, preserve the original visual classes (e.g., `className="wppo-button wppo-button--secondary"`) and pass `isLoading={loadingState}` so that the component internally manages the loading spinner and accessible `aria-live` region while maintaining exact physical button dimensions.
+## 2024-06-21 - Standardize Hardcoded White Backgrounds
+**Learning:** Hardcoded white backgrounds (`#fff`) in SCSS components break dynamic theme adaptation and standard WP CSS implementations.
+**Action:** Replace hardcoded white backgrounds with `var(--wppo-bg-card)` or native WordPress CSS variables to enable deeper dynamic adaptations as native WP admin themes typically keep card backgrounds light.
