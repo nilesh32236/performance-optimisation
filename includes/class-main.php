@@ -521,6 +521,22 @@ class Main {
 			set_transient( 'wppo_total_js_css', $total_js_css, 15 * MINUTE_IN_SECONDS );
 		}
 
+		$raw_img_info      = get_option( 'wppo_img_info', array() );
+		$image_info_counts = array(
+			'completed' => array(
+				'webp' => isset( $raw_img_info['completed']['webp'] ) ? ( is_array( $raw_img_info['completed']['webp'] ) ? count( $raw_img_info['completed']['webp'] ) : $raw_img_info['completed']['webp'] ) : 0,
+				'avif' => isset( $raw_img_info['completed']['avif'] ) ? ( is_array( $raw_img_info['completed']['avif'] ) ? count( $raw_img_info['completed']['avif'] ) : $raw_img_info['completed']['avif'] ) : 0,
+			),
+			'pending'   => array(
+				'webp' => isset( $raw_img_info['pending']['webp'] ) ? ( is_array( $raw_img_info['pending']['webp'] ) ? count( $raw_img_info['pending']['webp'] ) : $raw_img_info['pending']['webp'] ) : 0,
+				'avif' => isset( $raw_img_info['pending']['avif'] ) ? ( is_array( $raw_img_info['pending']['avif'] ) ? count( $raw_img_info['pending']['avif'] ) : $raw_img_info['pending']['avif'] ) : 0,
+			),
+			'failed'    => array(
+				'webp' => isset( $raw_img_info['failed']['webp'] ) ? ( is_array( $raw_img_info['failed']['webp'] ) ? count( $raw_img_info['failed']['webp'] ) : $raw_img_info['failed']['webp'] ) : 0,
+				'avif' => isset( $raw_img_info['failed']['avif'] ) ? ( is_array( $raw_img_info['failed']['avif'] ) ? count( $raw_img_info['failed']['avif'] ) : $raw_img_info['failed']['avif'] ) : 0,
+			),
+		);
+
 		wp_localize_script(
 			'performance-optimisation-script',
 			'wppoSettings',
@@ -528,7 +544,7 @@ class Main {
 				'apiUrl'            => get_rest_url( null, 'performance-optimisation/v1/' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
 				'settings'          => $this->options,
-				'image_info'        => get_option( 'wppo_img_info', array() ),
+				'image_info'        => $image_info_counts,
 				'cache_size'        => $cache_size,
 				'total_js_css'      => $total_js_css,
 				'performance_audit' => array(

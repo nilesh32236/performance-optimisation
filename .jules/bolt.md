@@ -47,3 +47,8 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+
+## 2026-06-22 - Large Options in wp_localize_script
+
+**Learning:** Passing massive data arrays (like thousands of image paths in `wppo_img_info`) directly from PHP to `wp_localize_script` causes significant backend memory usage via `json_encode` and severe frontend HTML source bloat on the settings page, when the React app only actually needs aggregate metadata (like integer counts) for the UI.
+**Action:** When localizing data for a dashboard UI, compute aggregate values (like array lengths) in PHP instead of dumping the raw data structures. Let the REST API fetch the raw data directly from the database when it actually needs it, rather than depending on the frontend payload.

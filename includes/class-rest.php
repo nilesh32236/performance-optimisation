@@ -276,11 +276,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @since 1.0.0
 		 * @return \WP_REST_Response The response object.
 		 */
-		public function optimise_image( \WP_REST_Request $request ) {
-			$params = $request->get_params();
+		public function optimise_image( \WP_REST_Request $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$img_info = get_option( 'wppo_img_info', array() );
 
-			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
-			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
+			$webp_images = isset( $img_info['pending']['webp'] ) ? array_map( 'sanitize_text_field', (array) $img_info['pending']['webp'] ) : array();
+			$avif_images = isset( $img_info['pending']['avif'] ) ? array_map( 'sanitize_text_field', (array) $img_info['pending']['avif'] ) : array();
 
 			// Reject image paths if they contain directory traversal sequences.
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
