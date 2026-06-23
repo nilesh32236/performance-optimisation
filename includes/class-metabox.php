@@ -311,21 +311,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				}
 			}
 
-			// Process and whitelist disabled scripts.
-			$disabled_scripts = array();
-			if ( isset( $_POST['wppo_disabled_scripts'] ) && is_array( $_POST['wppo_disabled_scripts'] ) ) {
-				$submitted        = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_scripts'] ) );
-				$disabled_scripts = array_intersect( $submitted, $valid_scripts );
-			}
-			update_post_meta( $post_id, '_wppo_disabled_scripts', $disabled_scripts );
+			$this->process_and_save_assets( $post_id, 'wppo_disabled_scripts', $valid_scripts, '_wppo_disabled_scripts' );
+			$this->process_and_save_assets( $post_id, 'wppo_disabled_styles', $valid_styles, '_wppo_disabled_styles' );
+		}
 
-			// Process and whitelist disabled styles.
-			$disabled_styles = array();
-			if ( isset( $_POST['wppo_disabled_styles'] ) && is_array( $_POST['wppo_disabled_styles'] ) ) {
-				$submitted       = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_styles'] ) );
-				$disabled_styles = array_intersect( $submitted, $valid_styles );
+		/**
+		 * Processes and saves disabled assets.
+		 *
+		 * @param int    $post_id       The ID of the post being saved.
+		 * @param string $post_key      The key to look for in $_POST.
+		 * @param array  $valid_handles An array of valid handles to whitelist against.
+		 * @param string $meta_key      The post meta key to save the disabled assets to.
+		 * @since NEXT
+		 */
+		private function process_and_save_assets( $post_id, $post_key, $valid_handles, $meta_key ) {
+			$disabled_assets = array();
+			// phpcs:disable WordPress.Security.NonceVerification.Missing -- Nonce is verified in the calling method `save_asset_manager_settings`.
+			if ( isset( $_POST[ $post_key ] ) && is_array( $_POST[ $post_key ] ) ) {
+				$submitted       = array_map( 'sanitize_text_field', wp_unslash( $_POST[ $post_key ] ) );
+				$disabled_assets = array_intersect( $submitted, $valid_handles );
 			}
-			update_post_meta( $post_id, '_wppo_disabled_styles', $disabled_styles );
+			// phpcs:enable
+			update_post_meta( $post_id, $meta_key, $disabled_assets );
 		}
 	}
 }
