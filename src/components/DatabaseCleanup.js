@@ -157,14 +157,13 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					response.message ||
 					__( 'Cleanup failed.', 'performance-optimisation' );
 				if ( failures ) {
-					errorMsg += ' ' + sprintf(
-						/* translators: %s: comma separated list of failed items */
-						__(
-							'Failures: %s',
-							'performance-optimisation'
-						),
-						Object.keys( failures ).join( ', ' )
-					);
+					errorMsg +=
+						' ' +
+						sprintf(
+							/* translators: %s: comma separated list of failed items */
+							__( 'Failures: %s', 'performance-optimisation' ),
+							Object.keys( failures ).join( ', ' )
+						);
 				}
 				setNotification( { type: 'error', message: errorMsg } );
 				if ( response.data?.deleted > 0 ) {
@@ -176,7 +175,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				type: 'error',
 				message:
 					error.message ||
-					__( 'Error executing cleanup.', 'performance-optimisation' ),
+					__(
+						'Error executing cleanup.',
+						'performance-optimisation'
+					),
 			} );
 		} finally {
 			setLoading( ( prev ) => ( { ...prev, [ type ]: false } ) );
