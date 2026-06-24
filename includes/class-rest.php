@@ -282,6 +282,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
 			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
 
+			// If no paths are provided, get pending items natively to avoid heavy network payloads.
+			if ( empty( $webp_images ) && empty( $avif_images ) ) {
+				$img_info    = Img_Converter::get_img_info();
+				$webp_images = $img_info['pending']['webp'] ?? array();
+				$avif_images = $img_info['pending']['avif'] ?? array();
+			}
+
 			// Reject image paths if they contain directory traversal sequences.
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
 				if ( strpos( $img_path, '..' ) !== false ) {
@@ -373,7 +380,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			Cache::clear_cache();
 
-			$response = Img_Converter::get_img_info();
+			$raw_response = Img_Converter::get_img_info();
+			$response     = array(
+				'completed' => array(
+					'webp' => count( $raw_response['completed']['webp'] ?? array() ),
+					'avif' => count( $raw_response['completed']['avif'] ?? array() ),
+				),
+				'pending'   => array(
+					'webp' => count( $raw_response['pending']['webp'] ?? array() ),
+					'avif' => count( $raw_response['pending']['avif'] ?? array() ),
+				),
+				'failed'    => array(
+					'webp' => count( $raw_response['failed']['webp'] ?? array() ),
+					'avif' => count( $raw_response['failed']['avif'] ?? array() ),
+				),
+			);
 
 			return $this->send_response( $response, true, 200, __( 'Images optimized successfully.', 'performance-optimisation' ) );
 		}

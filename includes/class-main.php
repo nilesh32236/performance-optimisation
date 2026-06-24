@@ -521,6 +521,22 @@ class Main {
 			set_transient( 'wppo_total_js_css', $total_js_css, 15 * MINUTE_IN_SECONDS );
 		}
 
+		$raw_img_info = get_option( 'wppo_img_info', array() );
+		$image_info   = array(
+			'completed' => array(
+				'webp' => count( $raw_img_info['completed']['webp'] ?? array() ),
+				'avif' => count( $raw_img_info['completed']['avif'] ?? array() ),
+			),
+			'pending'   => array(
+				'webp' => count( $raw_img_info['pending']['webp'] ?? array() ),
+				'avif' => count( $raw_img_info['pending']['avif'] ?? array() ),
+			),
+			'failed'    => array(
+				'webp' => count( $raw_img_info['failed']['webp'] ?? array() ),
+				'avif' => count( $raw_img_info['failed']['avif'] ?? array() ),
+			),
+		);
+
 		wp_localize_script(
 			'performance-optimisation-script',
 			'wppoSettings',
@@ -528,7 +544,7 @@ class Main {
 				'apiUrl'            => get_rest_url( null, 'performance-optimisation/v1/' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
 				'settings'          => $this->options,
-				'image_info'        => get_option( 'wppo_img_info', array() ),
+				'image_info'        => $image_info,
 				'cache_size'        => $cache_size,
 				'total_js_css'      => $total_js_css,
 				'performance_audit' => array(
