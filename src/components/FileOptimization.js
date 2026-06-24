@@ -1,4 +1,5 @@
 import { useState, useEffect } from '@wordpress/element';
+import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -83,19 +84,32 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 
 			if ( res.success ) {
 				setNotification( {
-					message: res.message || 'Settings updated successfully.',
+					message:
+						res.message ||
+						__(
+							'Settings updated successfully.',
+							'performance-optimisation'
+						),
 					success: true,
 				} );
 			} else {
 				setNotification( {
-					message: res.message || 'Failed to update settings.',
+					message:
+						res.message ||
+						__(
+							'Failed to update settings.',
+							'performance-optimisation'
+						),
 					success: false,
 				} );
 			}
 		} catch ( err ) {
 			console.error( 'Failed updating file optimisation settings', err );
 			setNotification( {
-				message: 'An unexpected error occurred.',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
 				success: false,
 			} );
 		} finally {

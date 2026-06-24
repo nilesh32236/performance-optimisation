@@ -10,6 +10,15 @@ import '@testing-library/jest-dom';
 import React from 'react';
 import DatabaseCleanup from '../DatabaseCleanup';
 
+// Mock i18n
+jest.mock( '@wordpress/i18n', () => ( {
+	__: ( text ) => text,
+	sprintf: ( text, ...args ) => {
+		let i = 0;
+		return text.replace( /%[sd]/g, () => args[ i++ ] );
+	},
+} ) );
+
 // Mock the API request
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),

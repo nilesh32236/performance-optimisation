@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from '@wordpress/element';
+import { __, sprintf } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -115,12 +116,18 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			} );
 			setNotification( {
 				type: 'success',
-				message: 'Settings saved successfully.',
+				message: __(
+					'Settings saved successfully.',
+					'performance-optimisation'
+				),
 			} );
 		} catch ( error ) {
 			setNotification( {
 				type: 'error',
-				message: 'Error saving settings.',
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 			} );
 		} finally {
 			setIsSaving( false );
@@ -134,17 +141,30 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			if ( response.success ) {
 				setNotification( {
 					type: 'success',
-					message: `Cleanup successful: ${
+					message: sprintf(
+						/* translators: %d: number of items removed */
+						__(
+							'Cleanup successful: %d items removed.',
+							'performance-optimisation'
+						),
 						response.data?.deleted ?? 0
-					} items removed.`,
+					),
 				} );
 				fetchCounts();
 			} else {
 				const failures = response.data?.failures;
-				let errorMsg = response.message || 'Cleanup failed.';
+				let errorMsg =
+					response.message ||
+					__( 'Cleanup failed.', 'performance-optimisation' );
 				if ( failures ) {
-					errorMsg +=
-						' Failures: ' + Object.keys( failures ).join( ', ' );
+					errorMsg += ' ' + sprintf(
+						/* translators: %s: comma separated list of failed items */
+						__(
+							'Failures: %s',
+							'performance-optimisation'
+						),
+						Object.keys( failures ).join( ', ' )
+					);
 				}
 				setNotification( { type: 'error', message: errorMsg } );
 				if ( response.data?.deleted > 0 ) {
@@ -154,7 +174,9 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		} catch ( error ) {
 			setNotification( {
 				type: 'error',
-				message: error.message || 'Error executing cleanup.',
+				message:
+					error.message ||
+					__( 'Error executing cleanup.', 'performance-optimisation' ),
 			} );
 		} finally {
 			setLoading( ( prev ) => ( { ...prev, [ type ]: false } ) );
