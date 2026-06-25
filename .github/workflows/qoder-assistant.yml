@@ -48,8 +48,9 @@ jobs:
         uses: QoderAI/qoder-action@v0
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          qoder_personal_access_token: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
+          qoder_personal_access_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             /assistant
             ${{ steps.build_args.outputs.args }}
