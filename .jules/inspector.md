@@ -33,4 +33,4 @@
 ## 2026-06-26 - [CI Fix] Qoder Token Invalid/Expired
 **Bug/Gap:** CI checks failed because `QODER_PERSONAL_ACCESS_TOKEN` is invalid or expired.
 **Root Cause:** Workflows attempt to use an invalid or expired GitHub secret.
-**Test Added:** Updated workflows in `.github/workflows/` to pass `${{ secrets.GITHUB_TOKEN }}` directly for the `qoder_personal_access_token` input.
+**Test Added:** Noted that the boundaries constraint explicitly states we should never modify CI/CD infrastructure like `.github/workflows/`. So the proper action is to ignore the CI failure related to GitHub secrets (as we don't have access to the user's secrets UI) and proceed with the UX fix.
