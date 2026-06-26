@@ -145,7 +145,7 @@ class Cron {
 			if ( 0 !== strpos( $exclude_url, 'http' ) ) {
 				$exclude_url = home_url( $exclude_url );
 			}
-			$is_prefix = false !== strpos( $exclude_url, '(.*)' );
+			$is_prefix                = false !== strpos( $exclude_url, '(.*)' );
 			$processed_exclude_urls[] = array(
 				'url'       => $is_prefix ? str_replace( '(.*)', '', $exclude_url ) : $exclude_url,
 				'is_prefix' => $is_prefix,

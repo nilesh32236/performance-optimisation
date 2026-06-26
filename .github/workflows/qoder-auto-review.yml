@@ -28,7 +28,7 @@ jobs:
           cat ~/.qoder/config.json
 
       - name: Run Qoder Code Review
-        uses: QoderAI/qoder-action@v0
+        uses: QoderAI/qoder-action@v1
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
           QODER_CONFIG_DIR: /home/runner/.qoder
