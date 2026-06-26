@@ -139,27 +139,30 @@ class Cron {
 		$options      = get_option( 'wppo_settings', array() );
 		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
 
+		$processed_exclude_urls = array();
+		foreach ( $exclude_urls as $exclude_url ) {
+			$exclude_url = rtrim( $exclude_url, '/' );
+			if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+				$exclude_url = home_url( $exclude_url );
+			}
+			$is_prefix = false !== strpos( $exclude_url, '(.*)' );
+			$processed_exclude_urls[] = array(
+				'url'       => $is_prefix ? str_replace( '(.*)', '', $exclude_url ) : $exclude_url,
+				'is_prefix' => $is_prefix,
+			);
+		}
+
 		foreach ( $query_batch_posts as $page_id ) {
 			$page_url       = get_permalink( $page_id );
 			$should_exclude = false;
 
-			foreach ( $exclude_urls as $exclude_url ) {
-				$exclude_url = rtrim( $exclude_url, '/' );
-
-				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-					$exclude_url = home_url( $exclude_url );
-				}
-
-				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-
-					if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
+			foreach ( $processed_exclude_urls as $exclude_item ) {
+				if ( $exclude_item['is_prefix'] ) {
+					if ( 0 === strpos( $page_url, $exclude_item['url'] ) ) {
 						$should_exclude = true;
 						break;
 					}
-				}
-
-				if ( $page_url === $exclude_url ) {
+				} elseif ( $page_url === $exclude_item['url'] ) {
 					$should_exclude = true;
 					break;
 				}
@@ -324,6 +327,8 @@ class Cron {
 
 					if ( $counter <= $batch_size ) {
 						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
+					} else {
+						break;
 					}
 				}
 			}
@@ -339,6 +344,8 @@ class Cron {
 
 					if ( $counter <= $batch_size ) {
 						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
+					} else {
+						break;
 					}
 				}
 			}

@@ -47,3 +47,13 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+
+## 2025-01-22 - Optimizing Pre-processing Arrays Before Loops
+
+**Learning:** When dealing with functions inside batch loops like `schedule_page_cron_jobs` (e.g., iterating through 200 items), any logic that runs inside the inner loop is multiplied by N*M times (where N is batch size and M is the size of the array to match against). Performing operations like `home_url()` and `str_replace` for every combination was a massive overhead.
+**Action:** When filtering or matching against a static list within a loop, always extract the normalization/parsing logic *outside* the loop. Create a pre-processed array that contains exactly the parsed data needed (e.g., boolean flags for prefix vs exact match) so the inner loop merely executes highly optimized array element comparisons.
+
+## 2025-01-22 - Avoid useless array iterations with early Breaks
+
+**Learning:** Inside `img_convert_cron()`, iterating over an array to process a subset (`$counter <= $batch_size`) but failing to `break` after the batch limit is reached causes PHP to needlessly loop over the remaining thousands of items in the array, consuming CPU.
+**Action:** Whenever iterating over a large array to process a specific 'batch' or 'limit', explicitly include a `break` statement as soon as the limit is hit.
