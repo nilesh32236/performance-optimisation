@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## 2024-06-27 - [JS Test Added] ImageOptimization component full coverage
+**Bug/Gap:** The `src/components/ImageOptimization.js` file, a crucial settings form for image optimization settings, completely lacked unit testing coverage for form rendering, toggle-based state dependencies, and API request submissions.
+**Root Cause:** Component test coverage was missed during previous development efforts.
+**Test Added:** Implemented `src/components/__tests__/ImageOptimization.test.js` using React Testing Library to provide comprehensive coverage of rendering initial form states, resolving conditional sub-fields when toggles change (such as `preloadPostTypeImage` opening new sub-menus), and asserting updated payloads correctly transmit to `apiCall` simulating both successful updates and handled network errors.
