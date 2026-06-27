@@ -24,20 +24,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set Qoder configuration
-        run: |
-          mkdir -p ~/.qoder
-          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
-          mkdir -p $GITHUB_WORKSPACE/.qoder
-          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
-
-      - name: Setup Qoder Config
-        run: |
-          mkdir -p ~/.qoder
-          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > ~/.qoder/config.json
-          mkdir -p $GITHUB_WORKSPACE/.qoder
-          echo '{"models":{"model_name":"claude-3-5-sonnet"}}' > $GITHUB_WORKSPACE/.qoder/config.json
-
       - name: Setup Qoder Config
         run: |
           mkdir -p ~/.qoder $GITHUB_WORKSPACE/.qoder
@@ -48,6 +34,8 @@ jobs:
         uses: QoderAI/qoder-action@v0
         env:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QODER_CONFIG_DIR: /home/runner/.qoder
         with:
           qoder_personal_access_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
