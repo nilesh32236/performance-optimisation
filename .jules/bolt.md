@@ -47,3 +47,7 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+## 2026-06-27 - Batch Processing Early Returns
+
+**Learning:** In cron jobs iterating over arrays with a batch size limit (e.g., `img_convert_cron` iterating through pending images), omitting a `break` statement after the limit is reached causes the loop to continue iterating uselessly over the remaining elements. If the pending array contains thousands of items, this wastes significant CPU cycles parsing loop conditionals without taking action.
+**Action:** Always include an `else { break; }` or an equivalent early exit mechanism in foreach loops that process data up to a specific limit or batch size to prevent unnecessary evaluation of remaining array elements.
