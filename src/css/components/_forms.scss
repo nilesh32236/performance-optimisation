@@ -11,7 +11,7 @@
 	padding: 9px 12px;
 	border: 1px solid var(--wppo-border) !important;
 	border-radius: var(--wppo-radius-sm) !important;
-	background: #fff !important;
+	background: var(--wppo-bg-card) !important;
 	background-image: none;
 	color: var(--wppo-text-main) !important;
 	font-size: 13.5px !important;
@@ -112,7 +112,7 @@
 	}
 
 	&--secondary {
-		background: #fff;
+		background: var(--wppo-bg-card);
 		border-color: var(--wppo-border);
 		color: var(--wppo-text-main);
 
@@ -193,7 +193,7 @@
 			width: 16px;
 			left: 3px;
 			bottom: 3px;
-			background-color: white;
+			background-color: var(--wppo-bg-card);
 			transition: 0.25s ease;
 			border-radius: 50%;
 			box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
