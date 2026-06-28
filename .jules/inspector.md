@@ -30,3 +30,8 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+
+## 2026-06-28 - [QA: Component UI Tools Test Gap]
+**Bug/Gap:** The `PluginSetting.js` component, responsible for critical dashboard tools like exporting settings, importing JSON configurations, saving the Google PageSpeed API key, and loading the plugin activity log, had absolutely no UI test coverage.
+**Root Cause:** Component test suite lacked a `PluginSetting.test.js` file leaving edge case handling (API network failure when saving keys, invalid JSON files, failed log loading) completely unchecked.
+**Test Added:** Created `PluginSetting.test.js` covering API saves/errors, configuration exports with key redacting, and import validation.
