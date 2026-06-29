@@ -176,4 +176,69 @@ describe( 'FileOptimization Component', () => {
 			screen.getByText( /Unrecognised server software/i )
 		).toBeInTheDocument();
 	} );
+
+	it( 'disables enableServerRules automatically if server type is not apache', async () => {
+		render(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ { server_type: 'nginx' } }
+			/>
+		);
+		// Assuming there is some UI reflection of the updated options or we test the hook implicitly via the submit behavior,
+		// but `FileOptimization` just passes it internally.
+		// Let's trigger a save and check the payload to verify it was set to false
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						enableServerRules: false,
+					} ),
+				} )
+			);
+		} );
+	} );
+
+	it( 'displays error notification on failed API response (success: false)', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Custom API error message.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Custom API error message.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'ignores non-arrow keydown events during sub-tab navigation', async () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const assetsTab = screen.getByRole( 'tab', { name: /Assets/i } );
+
+		assetsTab.focus();
+		expect( assetsTab ).toHaveFocus();
+
+		// Simulate enter key, which is not an arrow key
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
+
+		// The focus should remain on assetsTab since no navigation occurred
+		await waitFor( () => {
+			expect( assetsTab ).toHaveFocus();
+		} );
+	} );
 } );
