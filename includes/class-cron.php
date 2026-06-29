@@ -318,13 +318,12 @@ class Cron {
 			$images = $img_info['pending']['avif'] ?? array();
 
 			$counter = 0;
-			if ( ! empty( $images ) ) {
-				foreach ( $images as $img ) {
-					++$counter;
+			foreach ( $images as $img ) {
+				$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
+				++$counter;
 
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
-					}
+				if ( $counter >= $batch_size ) {
+					break;
 				}
 			}
 		}
@@ -333,13 +332,12 @@ class Cron {
 			$images = $img_info['pending']['webp'] ?? array();
 
 			$counter = 0;
-			if ( ! empty( $images ) ) {
-				foreach ( $images as $img ) {
-					++$counter;
+			foreach ( $images as $img ) {
+				$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
+				++$counter;
 
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
-					}
+				if ( $counter >= $batch_size ) {
+					break;
 				}
 			}
 		}
