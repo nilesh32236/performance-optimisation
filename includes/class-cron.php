@@ -319,12 +319,12 @@ class Cron {
 
 			$counter = 0;
 			foreach ( $images as $img ) {
-				$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
-				++$counter;
-
 				if ( $counter >= $batch_size ) {
 					break;
 				}
+
+				$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
+				++$counter;
 			}
 		}
 
@@ -333,12 +333,12 @@ class Cron {
 
 			$counter = 0;
 			foreach ( $images as $img ) {
-				$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
-				++$counter;
-
 				if ( $counter >= $batch_size ) {
 					break;
 				}
+
+				$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
+				++$counter;
 			}
 		}
 	}
