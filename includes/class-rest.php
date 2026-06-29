@@ -176,7 +176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$path = wp_normalize_path( $path );
 
 			// Reject path if it contains directory traversal sequences.
-			if ( strpos( $path, '..' ) !== false ) {
+			if ( strpos( rawurldecode( $path ), '..' ) !== false ) {
 				return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
 			}
 
@@ -284,7 +284,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Reject image paths if they contain directory traversal sequences.
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
-				if ( strpos( $img_path, '..' ) !== false ) {
+				if ( strpos( rawurldecode( $img_path ), '..' ) !== false ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
 			}
