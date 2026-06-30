@@ -22,3 +22,7 @@
 **Vulnerability:** Path traversal check bypass in caching mechanisms using URL encoding (`%2e%2e` instead of `..`).
 **Learning:** Checking for `..` in a path via `strpos` is insufficient if the path originates from an un-decoded URL parameter like `$_SERVER['REQUEST_URI']`. `wp_parse_url` does not automatically decode the URL string.
 **Prevention:** Always use `rawurldecode()` on any URI component before checking it for directory traversal sequences or using it to construct file paths.
+## 2024-06-30 - URL Encoding Bypass in Directory Traversal Protection
+**Vulnerability:** User-supplied paths were checked for directory traversal (`..`) using `strpos()` without URL-decoding the string first. This allowed bypass via `%2e%2e` URL encoding.
+**Learning:** `sanitize_text_field()` and basic `strpos()` checks are insufficient when HTTP payload paths might be URL-encoded before being evaluated or used in filesystem paths.
+**Prevention:** Always use `rawurldecode()` before checking strings for traversal sequences, especially for paths supplied in REST API endpoints.
