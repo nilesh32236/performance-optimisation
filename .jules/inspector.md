@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## 2024-06-30 - Mocking document.createElement in Jest JSdom
+**Bug/Gap:** Tests simulating file downloads failed with `ReferenceError: document is not defined` when mocking `document.createElement`.
+**Root Cause:** The `jest.spyOn(document, 'createElement')` implementation did not correctly preserve the original method for non-mocked tags, leading to internal React/JSDom errors when rendering the component.
+**Test Added:** Prevented by binding the original `createElement` function before spying: `const original = document.createElement.bind(document);`, and returning `original(tag)` for non-target elements.
