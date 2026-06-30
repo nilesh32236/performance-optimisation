@@ -47,3 +47,7 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+## 2025-01-22 - Optimize URL Parsing in Cron Loops
+
+**Learning:** URL normalization (`rtrim`, `home_url`) inside a batch loop that processes hundreds of items (like `class-cron.php`) can redundantly compute the same fixed strings for every iteration.
+**Action:** When iterating over items in a batch process, always extract and pre-compute operations on fixed configuration arrays (like exclusion URLs) outside the main processing loop to minimize redundant string manipulations.

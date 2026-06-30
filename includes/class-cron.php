@@ -136,20 +136,23 @@ class Cron {
 			return;
 		}
 
-		$options      = get_option( 'wppo_settings', array() );
-		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
+		$options          = get_option( 'wppo_settings', array() );
+		$raw_exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
+
+		$normalized_exclude_urls = array();
+		foreach ( $raw_exclude_urls as $exclude_url ) {
+			$exclude_url = rtrim( $exclude_url, '/' );
+			if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+				$exclude_url = home_url( $exclude_url );
+			}
+			$normalized_exclude_urls[] = $exclude_url;
+		}
 
 		foreach ( $query_batch_posts as $page_id ) {
 			$page_url       = get_permalink( $page_id );
 			$should_exclude = false;
 
-			foreach ( $exclude_urls as $exclude_url ) {
-				$exclude_url = rtrim( $exclude_url, '/' );
-
-				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-					$exclude_url = home_url( $exclude_url );
-				}
-
+			foreach ( $normalized_exclude_urls as $exclude_url ) {
 				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
 					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
 
