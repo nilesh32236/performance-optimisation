@@ -18,6 +18,3 @@
 
 **Learning:** When listing an array of features with individual "Action" buttons (e.g., Clean Database items), replacing button text with loading ellipses ("...") inside a standard `<button>` element breaks the layout bounds, introduces jarring UI shifts, and fails to announce state changes to screen readers properly. Additionally, replacing the original native `.wppo-button` classes entirely can break visual alignment.
 **Action:** When refactoring granular action buttons to show loading states, replace the generic `<button>` with `<LoadingSubmitButton>`. Critically, preserve the original visual classes (e.g., `className="wppo-button wppo-button--secondary"`) and pass `isLoading={loadingState}` so that the component internally manages the loading spinner and accessible `aria-live` region while maintaining exact physical button dimensions.
-## 2025-02-18 - Avoid hardcoded white backgrounds in components
-**Learning:** Hardcoding `#fff` for component backgrounds (like dialogs, form inputs, buttons) breaks dynamic theme adaptation if the plugin needs to adapt to WordPress admin color schemes.
-**Action:** Replace `#fff` with `var(--wppo-bg-card)` for component backgrounds to ensure consistency and theme support.

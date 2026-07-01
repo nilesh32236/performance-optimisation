@@ -11,7 +11,7 @@
 	padding: 9px 12px;
 	border: 1px solid var(--wppo-border) !important;
 	border-radius: var(--wppo-radius-sm) !important;
-	background: var(--wppo-bg-card) !important;
+	background: #fff !important;
 	background-image: none;
 	color: var(--wppo-text-main) !important;
 	font-size: 13.5px !important;
@@ -112,7 +112,7 @@
 	}
 
 	&--secondary {
-		background: var(--wppo-bg-card);
+		background: #fff;
 		border-color: var(--wppo-border);
 		color: var(--wppo-text-main);
 
