@@ -414,7 +414,7 @@ class Img_Converter {
 				}
 
 				// Security: Block directory traversal.
-				if ( strpos( $relative_path, '..' ) !== false ) {
+				if ( strpos( rawurldecode( $relative_path ), '..' ) !== false ) {
 					return $source_image;
 				}
 

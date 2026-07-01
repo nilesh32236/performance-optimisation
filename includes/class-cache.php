@@ -94,7 +94,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public function __construct() {
 			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
-			if ( strpos( $domain, '..' ) !== false || strpos( $domain, '/' ) !== false || strpos( $domain, '\\' ) !== false ) {
+			if ( strpos( rawurldecode( $domain ), '..' ) !== false || strpos( $domain, '/' ) !== false || strpos( $domain, '\\' ) !== false ) {
 				$domain = '';
 			}
 
@@ -108,7 +108,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$url_path    = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $request_uri, PHP_URL_PATH ) ), '/' ) );
 
 			// Reject directory traversal.
-			if ( strpos( $url_path, '..' ) !== false ) {
+			if ( strpos( rawurldecode( $url_path ), '..' ) !== false ) {
 				$url_path = '';
 			}
 
@@ -413,7 +413,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$parsed_path    = wp_parse_url( $request_uri, PHP_URL_PATH );
 			$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
 
-			if ( strpos( $local_url_path, '..' ) !== false ) {
+			if ( strpos( rawurldecode( $local_url_path ), '..' ) !== false ) {
 				return true;
 			}
 
@@ -489,7 +489,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function maybe_store_cache() {
-			if ( empty( $this->domain ) || strpos( $this->url_path, '..' ) !== false ) {
+			if ( empty( $this->domain ) || strpos( rawurldecode( $this->url_path ), '..' ) !== false ) {
 				// Prevent empty domain caching which could occur after traversal sanitation.
 				return false;
 			}
@@ -608,7 +608,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function get_file_path( ?string $url_path = null, string $type = 'html' ): string {
 			$url_path = wp_normalize_path( trim( (string) $url_path, '/' ) );
 
-			if ( strpos( $url_path, '..' ) !== false ) {
+			if ( strpos( rawurldecode( $url_path ), '..' ) !== false ) {
 				return ''; // Return empty string to prevent deletion or creation outside cache root.
 			}
 
@@ -656,7 +656,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $url_path ) {
 				$url_path = wp_normalize_path( $url_path );
 
-				if ( strpos( $url_path, '..' ) !== false ) {
+				if ( strpos( rawurldecode( $url_path ), '..' ) !== false ) {
 					return false;
 				}
 
