@@ -136,32 +136,35 @@ class Cron {
 			return;
 		}
 
-		$options      = get_option( 'wppo_settings', array() );
-		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
+		$options          = get_option( 'wppo_settings', array() );
+		$raw_exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
+		$exclude_prefixes = array();
+		$exclude_exact    = array();
+
+		foreach ( $raw_exclude_urls as $exclude_url ) {
+			$exclude_url = rtrim( $exclude_url, '/' );
+			if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+				$exclude_url = home_url( $exclude_url );
+			}
+			if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+				$exclude_prefixes[] = str_replace( '(.*)', '', $exclude_url );
+			} else {
+				$exclude_exact[] = $exclude_url;
+			}
+		}
 
 		foreach ( $query_batch_posts as $page_id ) {
 			$page_url       = get_permalink( $page_id );
 			$should_exclude = false;
 
-			foreach ( $exclude_urls as $exclude_url ) {
-				$exclude_url = rtrim( $exclude_url, '/' );
-
-				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-					$exclude_url = home_url( $exclude_url );
-				}
-
-				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-
-					if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
+			if ( in_array( $page_url, $exclude_exact, true ) ) {
+				$should_exclude = true;
+			} else {
+				foreach ( $exclude_prefixes as $prefix ) {
+					if ( 0 === strpos( $page_url, $prefix ) ) {
 						$should_exclude = true;
 						break;
 					}
-				}
-
-				if ( $page_url === $exclude_url ) {
-					$should_exclude = true;
-					break;
 				}
 			}
 
@@ -320,11 +323,12 @@ class Cron {
 			$counter = 0;
 			if ( ! empty( $images ) ) {
 				foreach ( $images as $img ) {
+					if ( $counter >= $batch_size ) {
+						break;
+					}
 					++$counter;
 
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
-					}
+					$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
 				}
 			}
 		}
@@ -335,11 +339,12 @@ class Cron {
 			$counter = 0;
 			if ( ! empty( $images ) ) {
 				foreach ( $images as $img ) {
+					if ( $counter >= $batch_size ) {
+						break;
+					}
 					++$counter;
 
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
-					}
+					$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
 				}
 			}
 		}
