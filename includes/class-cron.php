@@ -320,11 +320,13 @@ class Cron {
 			$counter = 0;
 			if ( ! empty( $images ) ) {
 				foreach ( $images as $img ) {
+					if ( $counter >= $batch_size ) {
+						break;
+					}
+
 					++$counter;
 
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
-					}
+					$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
 				}
 			}
 		}
@@ -335,11 +337,13 @@ class Cron {
 			$counter = 0;
 			if ( ! empty( $images ) ) {
 				foreach ( $images as $img ) {
+					if ( $counter >= $batch_size ) {
+						break;
+					}
+
 					++$counter;
 
-					if ( $counter <= $batch_size ) {
-						$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
-					}
+					$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
 				}
 			}
 		}
