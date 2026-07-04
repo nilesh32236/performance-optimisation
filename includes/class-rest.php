@@ -543,11 +543,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'orphan_postmeta'    => 'clean_orphan_postmeta',
 			);
 
-			$method = $method_map[ $type ] ?? null;
-
-			if ( ! $method ) {
+			if ( ! array_key_exists( $type, $method_map ) ) {
 				return $this->send_response( array( 'deleted' => false ), false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
 			}
+
+			$method = $method_map[ $type ];
 
 			$result = Database_Cleanup::invoke_cleanup_method( $method );
 
