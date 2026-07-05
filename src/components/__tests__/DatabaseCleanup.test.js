@@ -230,7 +230,9 @@ describe( 'DatabaseCleanup Component', () => {
 
 		await waitFor( () => {
 			expect(
-				screen.getByText( 'Custom error message without failures list.' )
+				screen.getByText(
+					'Custom error message without failures list.'
+				)
 			).toBeInTheDocument();
 		} );
 	} );

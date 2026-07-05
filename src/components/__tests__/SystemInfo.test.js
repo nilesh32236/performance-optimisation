@@ -120,7 +120,9 @@ describe( 'SystemInfo Component', () => {
 
 		await waitFor( () => {
 			expect(
-				screen.getByText( 'Failed to fetch system info. Please try again.' )
+				screen.getByText(
+					'Failed to fetch system info. Please try again.'
+				)
 			).toBeInTheDocument();
 		} );
 	} );

@@ -9,7 +9,9 @@ describe( 'FeatureHeader', () => {
 		expect(
 			screen.getByRole( 'heading', { name: 'My Title' } )
 		).toBeInTheDocument();
-		expect( screen.queryByText( 'My Description' ) ).not.toBeInTheDocument();
+		expect(
+			screen.queryByText( 'My Description' )
+		).not.toBeInTheDocument();
 	} );
 
 	it( 'renders description when provided', () => {

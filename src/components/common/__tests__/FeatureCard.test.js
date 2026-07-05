@@ -5,9 +5,7 @@ import React from 'react';
 
 describe( 'FeatureCard', () => {
 	it( 'renders children only if no other props are provided', () => {
-		const { container } = render(
-			<FeatureCard>Body Content</FeatureCard>
-		);
+		const { container } = render( <FeatureCard>Body Content</FeatureCard> );
 		expect( screen.getByText( 'Body Content' ) ).toBeInTheDocument();
 		expect(
 			container.querySelector( '.wppo-feature-card__header' )
