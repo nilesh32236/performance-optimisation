@@ -107,6 +107,24 @@ describe( 'SystemInfo Component', () => {
 		} );
 	} );
 
+	it( 'renders fallback error message on successful response but success false with no message', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: false,
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to fetch system info. Please try again.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders error message on failure', async () => {
 		const consoleSpy = jest
 			.spyOn( console, 'error' )

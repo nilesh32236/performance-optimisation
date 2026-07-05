@@ -199,6 +199,82 @@ describe( 'DatabaseCleanup Component', () => {
 		} );
 	} );
 
+	it( 'shows error notification without failures list on cleanup failure with success true and no failures', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		// Setup the next API call for cleanup failing but success true in db, with no failures list
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Custom error message without failures list.',
+			data: { deleted: 0 },
+		} );
+
+		// Click clean button for revisions
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
+
+		// Confirm cleanup
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Custom error message without failures list.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'handles cleanup returning successful response with missing deleted count', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		// Setup the next API call for cleanup successful but no deleted count returned
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {}, // no deleted key
+		} );
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 0 },
+		} );
+
+		// Click clean button for revisions
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
+
+		// Confirm cleanup
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Cleanup successful: 0 items removed.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'shows fallback error when cleanup API throws an exception', async () => {
 		apiCall.mockResolvedValueOnce( {
 			success: true,
