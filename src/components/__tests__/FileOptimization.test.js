@@ -17,6 +17,18 @@ describe( 'FileOptimization Component', () => {
 		jest.clearAllMocks();
 	} );
 
+	it( 'disables enableServerRules setting if server_type is not apache', () => {
+		render(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ { server_type: 'nginx' } }
+			/>
+		);
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+		expect( screen.getByText( /Nginx Detected/i ) ).toBeInTheDocument();
+	} );
+
 	it( 'renders the component and defaults to the assets tab', () => {
 		render( <FileOptimization options={ {} } serverRules={ {} } /> );
 		expect(
@@ -67,6 +79,25 @@ describe( 'FileOptimization Component', () => {
 		await waitFor( () => {
 			expect(
 				screen.getByText( 'Settings updated successfully.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'handles API returning success: false with fallback message', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to update settings.' )
 			).toBeInTheDocument();
 		} );
 	} );
@@ -122,6 +153,16 @@ describe( 'FileOptimization Component', () => {
 		await waitFor( () => {
 			expect( assetsTab ).toHaveFocus();
 		} );
+	} );
+
+	it( 'ignores non-arrow keys in sub-tabs navigation', () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const assetsTab = screen.getByRole( 'tab', { name: /Assets/i } );
+		assetsTab.focus();
+
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
+		expect( assetsTab ).toHaveFocus(); // Focus should not move
 	} );
 
 	it( 'renders apache server rules correctly', () => {
