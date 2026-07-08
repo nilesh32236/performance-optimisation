@@ -71,6 +71,26 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	it( 'handles API response with success: false', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Failed to update settings.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to update settings.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'handles sad path network error and logs to console', async () => {
 		const mockError = new Error( 'Network Failure' );
 		apiCall.mockRejectedValueOnce( mockError );
@@ -118,6 +138,13 @@ describe( 'FileOptimization Component', () => {
 
 		// Simulate left arrow on scripts tab
 		fireEvent.keyDown( scriptsTab, { key: 'ArrowLeft' } );
+
+		await waitFor( () => {
+			expect( assetsTab ).toHaveFocus();
+		} );
+
+		// Simulate non-arrow key (e.g. Enter) on assets tab, active tab should not change
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
 
 		await waitFor( () => {
 			expect( assetsTab ).toHaveFocus();
@@ -175,5 +202,22 @@ describe( 'FileOptimization Component', () => {
 		expect(
 			screen.getByText( /Unrecognised server software/i )
 		).toBeInTheDocument();
+	} );
+
+	it( 'disables server rules if server_type is not apache but enableServerRules is true', () => {
+		render(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ { server_type: 'nginx', nginx: 'mock_rules' } }
+			/>
+		);
+
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+
+		const enableRulesSwitch =
+			screen.getByLabelText( /Enable Server Rules/i );
+
+		expect( enableRulesSwitch ).not.toBeChecked();
 	} );
 } );
