@@ -107,6 +107,49 @@ describe( 'SystemInfo Component', () => {
 		} );
 	} );
 
+	it( 'renders fallback error message on successful response with success false and no message', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: false,
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText(
+					'Failed to fetch system info. Please try again.'
+				)
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'renders unknown keys as labels when no mapping is provided', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				php: { unknown_key: 'test_value' },
+				database: {},
+				wordpress: {},
+				server: {},
+			},
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect( screen.getByText( 'unknown_key' ) ).toBeInTheDocument();
+			expect( screen.getByText( 'test_value' ) ).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders error message on failure', async () => {
 		const consoleSpy = jest
 			.spyOn( console, 'error' )

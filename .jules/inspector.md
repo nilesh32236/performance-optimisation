@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## $(date +%Y-%m-%d) - [JS Test Fix] Testing UI component in jsdom global events
+**Bug/Gap:** Focus trap tests in React components using `document.addEventListener` for keyboard navigation were not functioning properly in Jest because the `fireEvent.keyDown` was erroneously targeting the internal component `dialog` element rather than the `document` root.
+**Root Cause:** `ConfirmDialog.js` correctly binds the `keydown` event listener to `document`, but the Jest tests were dispatching the simulated keyboard events to the isolated `screen.getByRole('dialog')` wrapper, causing the listener to ignore the events. Additionally, focus assertions lacked strict spy interactions.
+**Test Added:** Updated the test to dispatch `fireEvent.keyDown` on `document` instead. Included rigorous `jest.spyOn(element, 'focus')` and `.toHaveBeenCalled()` checks to explicitly verify the focus logic without relying entirely on mocked `document.activeElement` states which can be brittle.

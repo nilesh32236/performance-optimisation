@@ -84,6 +84,9 @@ describe( 'ConfirmDialog', () => {
 		const first = focusableElements[ 0 ];
 		const last = focusableElements[ focusableElements.length - 1 ];
 
+		const focusFirstMock = jest.spyOn( first, 'focus' );
+		const focusLastMock = jest.spyOn( last, 'focus' );
+
 		// Mock activeElement on document
 		Object.defineProperty( document, 'activeElement', {
 			value: last,
@@ -91,18 +94,23 @@ describe( 'ConfirmDialog', () => {
 		} );
 
 		// Simulate Tab keypress on dialog when activeElement is last
-		fireEvent.keyDown( dialog, { key: 'Tab', code: 'Tab' } );
+		fireEvent.keyDown( document, { key: 'Tab', code: 'Tab' } );
+		expect( focusFirstMock ).toHaveBeenCalledTimes( 1 );
 
 		// Simulate Shift+Tab on dialog when activeElement is first
 		Object.defineProperty( document, 'activeElement', {
 			value: first,
 			writable: true,
 		} );
-		fireEvent.keyDown( dialog, {
+		fireEvent.keyDown( document, {
 			key: 'Tab',
 			code: 'Tab',
 			shiftKey: true,
 		} );
+		expect( focusLastMock ).toHaveBeenCalledTimes( 1 );
+
+		focusFirstMock.mockRestore();
+		focusLastMock.mockRestore();
 	} );
 
 	it( 'handles tab key logic with no shift correctly', async () => {
@@ -117,9 +125,7 @@ describe( 'ConfirmDialog', () => {
 			/>
 		);
 
-		const dialog = screen.getByRole( 'dialog' );
-
-		fireEvent.keyDown( dialog, {
+		fireEvent.keyDown( document, {
 			key: 'Tab',
 			code: 'Tab',
 			shiftKey: false,

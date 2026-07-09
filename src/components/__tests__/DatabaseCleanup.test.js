@@ -448,4 +448,39 @@ describe( 'DatabaseCleanup Component', () => {
 			).toBeInTheDocument();
 		} );
 	} );
+
+	it( 'shows fallback error message with failures when cleanup API fails without a message', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		// Setup the next API call for cleanup failing
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			data: { failures: { item1: 'error', item2: 'error' } },
+		} );
+
+		// Click clean button for revisions
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
+
+		// Confirm cleanup
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Cleanup failed. Failures: item1, item2' )
+			).toBeInTheDocument();
+		} );
+	} );
 } );
