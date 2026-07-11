@@ -38,6 +38,25 @@ describe( 'API Request library', () => {
 			expect( result ).toEqual( mockData );
 		} );
 
+		it( 'should use false as default force parameter', async () => {
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( {} ),
+			} );
+
+			const { runPerformanceScan } = await import( '../apiRequest' );
+			await runPerformanceScan( 'https://example.com' );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/performance_scan',
+				expect.objectContaining( {
+					body: JSON.stringify( {
+						url: 'https://example.com',
+						force: false,
+					} ),
+				} )
+			);
+		} );
+
 		it( 'should update global wppoSettings on successful update_settings action', async () => {
 			const mockData = { success: true, data: { newSetting: 'updated' } };
 			global.fetch.mockResolvedValueOnce( {
@@ -83,6 +102,25 @@ describe( 'API Request library', () => {
 			expect( result ).toEqual( mockData );
 		} );
 
+		it( 'should use mobile as default strategy', async () => {
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( {} ),
+			} );
+
+			const { queuePagespeedScan } = await import( '../apiRequest' );
+			await queuePagespeedScan( 'https://example.com' );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/pagespeed_scan',
+				expect.objectContaining( {
+					body: JSON.stringify( {
+						url: 'https://example.com',
+						strategy: 'mobile',
+					} ),
+				} )
+			);
+		} );
+
 		it( 'should throw an error on sad path network failure', async () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
@@ -122,6 +160,22 @@ describe( 'API Request library', () => {
 				}
 			);
 			expect( result ).toEqual( mockData );
+		} );
+
+		it( 'should use mobile as default strategy', async () => {
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( {} ),
+			} );
+
+			const { getPagespeedResults } = await import( '../apiRequest' );
+			await getPagespeedResults( 'https://example.com' );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/pagespeed_results?url=https%3A%2F%2Fexample.com&strategy=mobile',
+				expect.objectContaining( {
+					method: 'GET',
+				} )
+			);
 		} );
 
 		it( 'should throw an error on sad path network failure', async () => {

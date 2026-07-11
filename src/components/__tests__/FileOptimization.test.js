@@ -176,4 +176,58 @@ describe( 'FileOptimization Component', () => {
 			screen.getByText( /Unrecognised server software/i )
 		).toBeInTheDocument();
 	} );
+
+	it( 'disables enableServerRules when server is not apache', () => {
+		render(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ { server_type: 'nginx' } }
+			/>
+		);
+
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+
+		const enableRulesSwitch =
+			screen.getByLabelText( /Enable Server Rules/i );
+		expect( enableRulesSwitch ).toBeDisabled();
+		expect( enableRulesSwitch ).not.toBeChecked();
+	} );
+
+	it( 'displays error notification on unsuccessful submission', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Failed to update settings.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to update settings.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'ignores unrelated keys in handleSubTabKeyDown', async () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const assetsTab = screen.getByRole( 'tab', { name: /Assets/i } );
+
+		assetsTab.focus();
+		expect( assetsTab ).toHaveFocus();
+
+		// Simulate Enter key, which should do nothing for tab navigation
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
+
+		// Tab should remain focused
+		await waitFor( () => {
+			expect( assetsTab ).toHaveFocus();
+		} );
+	} );
 } );

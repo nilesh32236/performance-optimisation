@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## 2024-05-18 - Missing Frontend Coverage in React UI Components
+**Bug/Gap:** Missing branch and line test coverage in `src/components/FileOptimization.js` (untested conditionals for `useEffect` server rules toggling and failure states) and `src/lib/apiRequest.js` (missing verification that default parameters were being correctly passed to `fetch`).
+**Root Cause:** "Happy path" testing was prioritized, leaving side-effects (like unchecking "Enable Server Rules" on Nginx) and default parameters unverified.
+**Test Added:** Added tests in `FileOptimization.test.js` to cover state transitions for `useEffect` hooks, API submission failures, and unrelated keyboard events. Added tests in `apiRequest.test.js` to ensure functions with default arguments correctly populate the fetch payload.
