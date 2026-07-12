@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## 2026-07-12 - [JS Test Fix] Testing useEffect updates across component rerenders
+**Bug/Gap:** Component logic updating props triggered during renders by `useEffect` hook without test coverage (e.g., when a server rule sets to a different environment conditionally disabling switches).
+**Root Cause:** Component test coverage lacked thorough assertions for dynamic state/prop changes on conditional events during re-rendering, specifically ignoring non-user interactions that dispatch property overrides like disabled.
+**Test Added:** Implemented `rerender` test with RTL across variable conditions and mapped UI assertions against unmodifiable properties via screen.queryByLabelText() / expect().toBeDisabled() / not.toBeChecked().

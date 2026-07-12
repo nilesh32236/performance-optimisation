@@ -43,6 +43,34 @@ describe( 'FileOptimization Component', () => {
 		expect( minifyCssSwitch ).toBeChecked();
 	} );
 
+	it( 'disables server rules on non-apache servers upon render', () => {
+		const { rerender } = render(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ null }
+			/>
+		);
+
+		rerender(
+			<FileOptimization
+				options={ { enableServerRules: true } }
+				serverRules={ { server_type: 'nginx' } }
+			/>
+		);
+
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+
+		// Wait for the switch to render and check it's disabled.
+		// Also verify the internal state reset for enableServerRules triggered by useEffect.
+		// For nginx, the switch is rendered but it's disabled.
+		const enableRulesSwitch =
+			screen.getByLabelText( /Enable Server Rules/i );
+		expect( enableRulesSwitch ).toBeDisabled();
+		// In nginx, the state is forced to false.
+		expect( enableRulesSwitch ).not.toBeChecked();
+	} );
+
 	it( 'submits settings successfully and displays success notification', async () => {
 		apiCall.mockResolvedValueOnce( {
 			success: true,
@@ -67,6 +95,26 @@ describe( 'FileOptimization Component', () => {
 		await waitFor( () => {
 			expect(
 				screen.getByText( 'Settings updated successfully.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'displays failure notification on API failure response', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Failed to update settings.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to update settings.' )
 			).toBeInTheDocument();
 		} );
 	} );
@@ -119,6 +167,14 @@ describe( 'FileOptimization Component', () => {
 		// Simulate left arrow on scripts tab
 		fireEvent.keyDown( scriptsTab, { key: 'ArrowLeft' } );
 
+		await waitFor( () => {
+			expect( assetsTab ).toHaveFocus();
+		} );
+
+		// Simulate unrelated key
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
+
+		// Should not change focus
 		await waitFor( () => {
 			expect( assetsTab ).toHaveFocus();
 		} );
