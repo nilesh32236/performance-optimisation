@@ -47,3 +47,7 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+
+## 2025-02-14 - Optimizing WP Cache Fix Check
+**Learning:** The `maybe_fix_wp_cache` method checked if WP_CACHE could be fixed on every `admin_init` hook when it failed because the throttle `set_transient` was only running on success. This caused massive file I/O operations and database writes on every WP Admin load if permissions prevented writing to `wp-config.php`.
+**Action:** Throttle expensive environment operations with transients regardless of whether they succeed or fail to avoid continuous retry loops in hooks like `admin_init`.
