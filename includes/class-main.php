@@ -908,6 +908,16 @@ class Main {
 			return true;
 		}
 
+		$file_mtime = filemtime( $file_path );
+		$cache_key  = 'wppo_css_min_' . md5( $file_path . $file_mtime );
+		$found      = false;
+
+		$is_minified = wp_cache_get( $cache_key, 'wppo', false, $found );
+
+		if ( $found ) {
+			return (bool) $is_minified;
+		}
+
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		$handle = fopen( $file_path, 'r' );
 		if ( ! $handle ) {
@@ -925,7 +935,10 @@ class Main {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		fclose( $handle );
 
-		return 10 >= $line_count;
+		$is_minified = 10 >= $line_count;
+		wp_cache_set( $cache_key, $is_minified, 'wppo' );
+
+		return $is_minified;
 	}
 
 	/**
@@ -949,6 +962,16 @@ class Main {
 			return true;
 		}
 
+		$file_mtime = filemtime( $file_path );
+		$cache_key  = 'wppo_js_min_' . md5( $file_path . $file_mtime );
+		$found      = false;
+
+		$is_minified = wp_cache_get( $cache_key, 'wppo', false, $found );
+
+		if ( $found ) {
+			return (bool) $is_minified;
+		}
+
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		$handle = fopen( $file_path, 'r' );
 		if ( ! $handle ) {
@@ -966,6 +989,9 @@ class Main {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		fclose( $handle );
 
-		return 10 >= $line_count;
+		$is_minified = 10 >= $line_count;
+		wp_cache_set( $cache_key, $is_minified, 'wppo' );
+
+		return $is_minified;
 	}
 }

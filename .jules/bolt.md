@@ -47,3 +47,6 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+## 2024-07-13 - wp_cache_get handling of boolean false values
+**Learning:** When using WordPress Object Cache (`wp_cache_set` and `wp_cache_get`), caching a boolean `false` value requires special handling because `wp_cache_get` also returns `false` on a cache miss. A standard `if ( false !== wp_cache_get(...) )` check will fail to recognize the cached result.
+**Action:** Always use the 4th pass-by-reference parameter `$found` in `wp_cache_get( $key, $group, false, $found )` to differentiate between a cached `false` value and a cache miss, or alternatively cast/store the cached boolean as an integer (1 or 0).
