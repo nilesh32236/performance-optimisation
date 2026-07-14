@@ -52,3 +52,8 @@
 
 **Learning:** High-frequency cron jobs like `schedule_page_cron_jobs` (which schedules background static generation) were executing expensive database queries (`get_posts` for batch processing) even when the underlying feature (`preloadCache`) was disabled in settings.
 **Action:** When optimizing cron callbacks or backend hooks, read the plugin options early and add a guard clause (`if ( empty( ... ) ) return;`). This prevents the N+1 query problem and saves substantial DB resources on sites where the feature is inactive. Also remember to clean up state variables (like `delete_option`) before the early return to avoid leaving orphaned transients.
+
+## 2025-01-22 - Missing qoder_personal_access_token Fallback in CI
+
+**Learning:** Qoder requires `qoder_personal_access_token` to interact with GitHub APIs. The CI workflow was passing `${{ secrets.QODER_PERSONAL_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}` or `${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}` which evaluates incorrectly or throws invalid token errors if the secret isn't explicitly configured.
+**Action:** Always set `qoder_personal_access_token: ${{ secrets.GITHUB_TOKEN }}` directly for GitHub actions when Qoder runs, removing the `||` fallback syntax which can evaluate improperly depending on the shell context inside the action.
