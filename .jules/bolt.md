@@ -47,3 +47,8 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+
+## 2025-01-22 - Early Return Before Expensive Computations in Cron Jobs
+
+**Learning:** High-frequency cron jobs like `schedule_page_cron_jobs` (which schedules background static generation) were executing expensive database queries (`get_posts` for batch processing) even when the underlying feature (`preloadCache`) was disabled in settings.
+**Action:** When optimizing cron callbacks or backend hooks, read the plugin options early and add a guard clause (`if ( empty( ... ) ) return;`). This prevents the N+1 query problem and saves substantial DB resources on sites where the feature is inactive. Also remember to clean up state variables (like `delete_option`) before the early return to avoid leaving orphaned transients.

@@ -111,6 +111,13 @@ class Cron {
 	 * @since 1.0.0
 	 */
 	private function schedule_page_cron_jobs(): void {
+		$options = get_option( 'wppo_settings', array() );
+
+		if ( empty( $options['preload_settings']['enablePreloadCache'] ) ) {
+			delete_option( 'wppo_preload_cron_offset' );
+			return;
+		}
+
 		// Persist iteration offset across runs.
 		$paged_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
 
@@ -136,7 +143,6 @@ class Cron {
 			return;
 		}
 
-		$options      = get_option( 'wppo_settings', array() );
 		$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
 
 		foreach ( $query_batch_posts as $page_id ) {
