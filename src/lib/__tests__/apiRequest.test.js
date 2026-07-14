@@ -51,6 +51,38 @@ describe( 'API Request library', () => {
 			} );
 		} );
 
+		it( 'should not mutate wppoSettings if data.success is false', async () => {
+			const mockData = { success: false, data: { newSetting: 'updated' } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			await apiCall( 'update_settings', {} );
+
+			expect( global.wppoSettings.settings ).toEqual( {} );
+		} );
+
+		it( 'should not update wppoSettings for other actions', async () => {
+			const mockData = { success: true, data: { someSetting: 'value' } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			await apiCall( 'other_action', {} );
+
+			expect( global.wppoSettings.settings ).toEqual( {} );
+		} );
+
+		it( 'should default method to POST', async () => {
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( {} ),
+			} );
+
+			await apiCall( 'some_action', {} );
+
+			expect( global.fetch.mock.calls[0][1].method ).toBe( 'POST' );
+		} );
+
 		it( 'should throw an error on sad path network failure', async () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
@@ -124,6 +156,21 @@ describe( 'API Request library', () => {
 			expect( result ).toEqual( mockData );
 		} );
 
+		it( 'should default force to false', async () => {
+			const mockData = { success: true, data: { score: 90 } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const { runPerformanceScan } = await import( '../apiRequest' );
+			const result = await runPerformanceScan(
+				'https://example.com'
+			);
+
+			expect( global.fetch.mock.calls[0][1].body ).toContain( '"force":false' );
+			expect( result ).toEqual( mockData );
+		} );
+
 		it( 'should throw an error on sad path network failure', async () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
@@ -165,6 +212,21 @@ describe( 'API Request library', () => {
 			expect( result ).toEqual( mockData );
 		} );
 
+		it( 'should default strategy to mobile in queuePagespeedScan', async () => {
+			const mockData = { success: true, data: { job_id: 123 } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const { queuePagespeedScan } = await import( '../apiRequest' );
+			const result = await queuePagespeedScan(
+				'https://example.com'
+			);
+
+			expect( global.fetch.mock.calls[0][1].body ).toContain( '"strategy":"mobile"' );
+			expect( result ).toEqual( mockData );
+		} );
+
 		it( 'should throw an error on sad path network failure', async () => {
 			const mockError = new Error( 'Network error' );
 			global.fetch.mockRejectedValueOnce( mockError );
@@ -198,6 +260,21 @@ describe( 'API Request library', () => {
 					},
 				}
 			);
+			expect( result ).toEqual( mockData );
+		} );
+
+		it( 'should default strategy to mobile in getPagespeedResults', async () => {
+			const mockData = { success: true, data: { status: 'ready' } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const { getPagespeedResults } = await import( '../apiRequest' );
+			const result = await getPagespeedResults(
+				'https://example.com'
+			);
+
+			expect( global.fetch.mock.calls[0][0] ).toContain( 'strategy=mobile' );
 			expect( result ).toEqual( mockData );
 		} );
 
