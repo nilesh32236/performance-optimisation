@@ -436,12 +436,21 @@ class Main {
 					continue;
 				}
 
-				if ( in_array( $slug, array( 'primary', 'brand', 'accent' ), true ) ) {
-					$colors['primary'] = $hex;
-				} elseif ( in_array( $slug, array( 'secondary', 'secondary-brand' ), true ) ) {
-					$colors['secondary'] = $hex;
-				} elseif ( in_array( $slug, array( 'foreground', 'contrast', 'body-text' ), true ) ) {
-					$colors['text'] = $hex;
+				switch ( $slug ) {
+					case 'primary':
+					case 'brand':
+					case 'accent':
+						$colors['primary'] = $hex;
+						break;
+					case 'secondary':
+					case 'secondary-brand':
+						$colors['secondary'] = $hex;
+						break;
+					case 'foreground':
+					case 'contrast':
+					case 'body-text':
+						$colors['text'] = $hex;
+						break;
 				}
 			}
 		}
@@ -449,9 +458,7 @@ class Main {
 		// Strategy 2: Classic theme — check Customizer settings.
 		if ( empty( $colors['primary'] ) ) {
 			$primary = get_theme_mod( 'primary_color', '' );
-			if ( empty( $primary ) ) {
-				$primary = get_theme_mod( 'accent_color', '' );
-			}
+			$primary = ! empty( $primary ) ? $primary : get_theme_mod( 'accent_color', '' );
 			if ( ! empty( $primary ) ) {
 				$colors['primary'] = sanitize_hex_color( $primary );
 			}
@@ -460,7 +467,7 @@ class Main {
 		// Strategy 3: Extract from the theme's header_textcolor.
 		if ( empty( $colors['text'] ) ) {
 			$header_text_color = get_header_textcolor();
-			if ( 'blank' !== $header_text_color && ! empty( $header_text_color ) ) {
+			if ( ! empty( $header_text_color ) && 'blank' !== $header_text_color ) {
 				$colors['text'] = '#' . ltrim( sanitize_hex_color_no_hash( $header_text_color ), '#' );
 			}
 		}
