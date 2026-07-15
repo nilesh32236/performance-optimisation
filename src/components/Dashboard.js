@@ -298,6 +298,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						type="button"
 						className="wppo-stat-link"
 						onClick={ () => onNavigate( 'fileOptimization' ) }
+						aria-label={ __(
+							'Manage Cache Settings',
+							'performance-optimisation'
+						) }
 					>
 						Manage Cache →
 					</button>
@@ -313,6 +317,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						type="button"
 						className="wppo-stat-link"
 						onClick={ () => onNavigate( 'fileOptimization' ) }
+						aria-label={ __(
+							'View File Optimization Settings',
+							'performance-optimisation'
+						) }
 					>
 						View Settings →
 					</button>
@@ -326,6 +334,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						type="button"
 						className="wppo-stat-link"
 						onClick={ () => onNavigate( 'databaseCleanup' ) }
+						aria-label={ __(
+							'Clean Database Now',
+							'performance-optimisation'
+						) }
 					>
 						Clean Now →
 					</button>
@@ -345,6 +357,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						type="button"
 						className="wppo-stat-link"
 						onClick={ () => onNavigate( 'imageOptimization' ) }
+						aria-label={ __(
+							'View Image Optimization Settings',
+							'performance-optimisation'
+						) }
 					>
 						View Images →
 					</button>
