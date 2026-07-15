@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## YYYY-MM-DD - [JS Test Fix] Testing API Call Default Parameters
+**Bug/Gap:** Tests for API call wrappers (runPerformanceScan, queuePagespeedScan, getPagespeedResults) lacked test coverage for missing optional default parameters in JS assertions. Coverage report marked branch conditionals as uncovered.
+**Root Cause:** The tests strictly provided both the explicit inputs and default fallback inputs, failing to test what happens when fallbacks are used.
+**Test Added:** Added assertions strictly testing wrappers without default optional arguments to verify branch paths correctly interpolate defaults for REST API payloads.

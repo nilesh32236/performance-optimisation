@@ -95,6 +95,32 @@ describe( 'API Request library', () => {
 	} );
 
 	describe( 'runPerformanceScan', () => {
+		it( 'should call apiCall with correct default parameters for runPerformanceScan', async () => {
+			const mockData = { success: true, data: { score: 90 } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const { runPerformanceScan } = await import( '../apiRequest' );
+			const result = await runPerformanceScan( 'https://example.com' );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/performance_scan',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-WP-Nonce': 'testnonce',
+					},
+					body: JSON.stringify( {
+						url: 'https://example.com',
+						force: false,
+					} ),
+				}
+			);
+			expect( result ).toEqual( mockData );
+		} );
+
 		it( 'should call apiCall with correct parameters for runPerformanceScan', async () => {
 			const mockData = { success: true, data: { score: 90 } };
 			global.fetch.mockResolvedValueOnce( {
@@ -136,6 +162,32 @@ describe( 'API Request library', () => {
 	} );
 
 	describe( 'queuePagespeedScan', () => {
+		it( 'should call apiCall with correct default parameters for queuePagespeedScan', async () => {
+			const mockData = { success: true, data: { job_id: 123 } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const { queuePagespeedScan } = await import( '../apiRequest' );
+			const result = await queuePagespeedScan( 'https://example.com' );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/pagespeed_scan',
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-WP-Nonce': 'testnonce',
+					},
+					body: JSON.stringify( {
+						url: 'https://example.com',
+						strategy: 'mobile',
+					} ),
+				}
+			);
+			expect( result ).toEqual( mockData );
+		} );
+
 		it( 'should call apiCall with correct parameters for queuePagespeedScan', async () => {
 			const mockData = { success: true, data: { job_id: 123 } };
 			global.fetch.mockResolvedValueOnce( {
@@ -177,6 +229,27 @@ describe( 'API Request library', () => {
 	} );
 
 	describe( 'getPagespeedResults', () => {
+		it( 'should call apiCall with correct default parameters for getPagespeedResults', async () => {
+			const mockData = { success: true, data: { status: 'ready' } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const { getPagespeedResults } = await import( '../apiRequest' );
+			const result = await getPagespeedResults( 'https://example.com' );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/pagespeed_results?url=https%3A%2F%2Fexample.com&strategy=mobile',
+				{
+					method: 'GET',
+					headers: {
+						'X-WP-Nonce': 'testnonce',
+					},
+				}
+			);
+			expect( result ).toEqual( mockData );
+		} );
+
 		it( 'should call apiCall with correct parameters for getPagespeedResults', async () => {
 			const mockData = { success: true, data: { status: 'ready' } };
 			global.fetch.mockResolvedValueOnce( {
