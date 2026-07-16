@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## 2024-05-18 - [Missing Coverage on ObjectCache Component]
+**Bug/Gap:** The ObjectCache component was entirely missing unit tests.
+**Root Cause:** Fast feature development likely skipped adding test cases for connection testing.
+**Test Added:** Added a unit test validating that the "Test Connection" button triggers the API call with the correct payload and handles failed API calls correctly.
