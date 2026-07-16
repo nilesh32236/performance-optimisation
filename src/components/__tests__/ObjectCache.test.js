@@ -5,47 +5,62 @@ import React from 'react';
 import ObjectCache from '../ObjectCache';
 import { apiCall } from '../../lib/apiRequest';
 
-jest.mock('../../lib/apiRequest', () => ({
+jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
-}));
+} ) );
 
-describe('ObjectCache Component', () => {
-	beforeEach(() => {
+describe( 'ObjectCache Component', () => {
+	beforeEach( () => {
 		jest.clearAllMocks();
-	});
+	} );
 
-	it('should trigger Test Connection API call with correct payload', async () => {
-		apiCall.mockResolvedValueOnce({ success: true, message: 'Connection successful.' });
+	it( 'should trigger Test Connection API call with correct payload', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Connection successful.',
+		} );
 
-		render(<ObjectCache options={{}} />);
+		render( <ObjectCache options={ {} } /> );
 
-		const testConnectionButton = screen.getByRole('button', { name: /Test Connection/i });
-		fireEvent.click(testConnectionButton);
+		const testConnectionButton = screen.getByRole( 'button', {
+			name: /Test Connection/i,
+		} );
+		fireEvent.click( testConnectionButton );
 
-		await waitFor(() => {
-			expect(apiCall).toHaveBeenCalledWith('object_cache', expect.objectContaining({
-				action: 'ping',
-				mode: 'standalone',
-				host: '127.0.0.1',
-				port: 6379,
-				database: 0,
-				compression: 'none',
-				persistent: false,
-				use_tls: false,
-			}));
-		});
-	});
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'object_cache',
+				expect.objectContaining( {
+					action: 'ping',
+					mode: 'standalone',
+					host: '127.0.0.1',
+					port: 6379,
+					database: 0,
+					compression: 'none',
+					persistent: false,
+					use_tls: false,
+				} )
+			);
+		} );
+	} );
 
-	it('should handle failed API call for Test Connection', async () => {
-		apiCall.mockResolvedValueOnce({ success: false, message: 'Action failed.' });
+	it( 'should handle failed API call for Test Connection', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Action failed.',
+		} );
 
-		render(<ObjectCache options={{}} />);
+		render( <ObjectCache options={ {} } /> );
 
-		const testConnectionButton = screen.getByRole('button', { name: /Test Connection/i });
-		fireEvent.click(testConnectionButton);
+		const testConnectionButton = screen.getByRole( 'button', {
+			name: /Test Connection/i,
+		} );
+		fireEvent.click( testConnectionButton );
 
-		await waitFor(() => {
-			expect(screen.getByText(/Action failed\./i)).toBeInTheDocument();
-		});
-	});
-});
+		await waitFor( () => {
+			expect(
+				screen.getByText( /Action failed\./i )
+			).toBeInTheDocument();
+		} );
+	} );
+} );
