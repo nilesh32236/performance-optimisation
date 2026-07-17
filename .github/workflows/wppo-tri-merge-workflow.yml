@@ -1,4 +1,4 @@
-name: Triweekly Merge Release Cycle
+name: Tri-Weekly Merge and Release Cycle
 
 on:
   schedule:
@@ -302,7 +302,7 @@ ${NEWLINE}Write the resolved file content to /tmp/resolved-${CFILE//\//_}.txt"
           {
           echo "## Tri-Weekly Merge and Release Cycle"
           echo ""
-          echo "**Status:** ${{ steps.release-check.outputs.needs_release == 'true' && '✅ Release created' || '⏭️ No release needed' }}"
+          echo "**Status:** ${{ steps.release-check.outputs.needs_release == 'true' && 'Release created' || 'No release needed' }}"
           echo ""
           echo "| Detail | Value |"
           echo "|--------|-------|"
@@ -311,5 +311,5 @@ ${NEWLINE}Write the resolved file content to /tmp/resolved-${CFILE//\//_}.txt"
           echo "| Next version | ${{ steps.build-release.outputs.next_version || steps.release-check.outputs.next_version }} |"
           echo "| Verification | ${{ needs.verify.outputs.status }} |"
           echo ""
-          echo "${{ steps.release-check.outputs.needs_release == 'true' && format('Release tag **v{0}** pushed. The [release workflow]({1}/{2}/actions/workflows/release.yml) will deploy to WordPress.org.', steps.build-release.outputs.next_version || steps.release-check.outputs.next_version, github.server_url, github.repository) || '' }}"
+          echo "Release tag v${{ steps.build-release.outputs.next_version || steps.release-check.outputs.next_version }} pushed."
           } >> $GITHUB_STEP_SUMMARY
