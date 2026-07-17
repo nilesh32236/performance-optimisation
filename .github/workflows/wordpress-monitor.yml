@@ -209,42 +209,42 @@ jobs:
           if [ -f /tmp/wp-research.md ]; then
             RESEARCH_CONTENT=$(cat /tmp/wp-research.md)
 
-            cat << IMPLEMENT_PROMPT > /tmp/implement-prompt.txt
-            You are implementing WordPress feature improvements for the Performance Optimisation plugin.
-
-            RESEARCH REPORT:
-            ${RESEARCH_CONTENT}
-
-            INSTRUCTIONS:
-            1. For each improvement opportunity in the research, implement the change with backward compatibility.
-            2. ALWAYS use this pattern for feature-gating:
-
-            \`\`\`php
-            if ( function_exists( 'wp_new_function' ) ) {
-                // New WordPress core implementation
-            } else {
-                // Legacy fallback for older WordPress versions
-            }
-            \`\`\`
-
-            3. Add version comments referencing the WordPress version that introduced the feature.
-            4. Use has_filter() / has_action() checks for new hooks.
-            5. Only modify files that have clear improvement opportunities.
-            6. If a change would break existing functionality, DO NOT make it — document instead.
-
-            CONSTRAINTS:
-            - Minimum WordPress version: 6.2
-            - Minimum PHP version: 8.2
-            - All WordPress Coding Standards must be maintained
-            - All existing tests must continue to pass
-            - No breaking changes to the settings schema
-            - API responses must maintain backward compatibility
-
-            When finished, run verification and fix any issues:
-            npm run lint:js && composer lint && npm test && npm run build
-
-            Write a summary of all changes made to /tmp/improvement-summary.md
-            IMPLEMENT_PROMPT
+            {
+            echo "You are implementing WordPress feature improvements for the Performance Optimisation plugin."
+            echo ""
+            echo "RESEARCH REPORT:"
+            echo "${RESEARCH_CONTENT}"
+            echo ""
+            echo "INSTRUCTIONS:"
+            echo "1. For each improvement opportunity in the research, implement the change with backward compatibility."
+            echo "2. ALWAYS use this pattern for feature-gating:"
+            echo ""
+            echo '```php'
+            echo "if ( function_exists( 'wp_new_function' ) ) {"
+            echo "    // New WordPress core implementation"
+            echo "} else {"
+            echo "    // Legacy fallback for older WordPress versions"
+            echo "}"
+            echo '```'
+            echo ""
+            echo "3. Add version comments referencing the WordPress version that introduced the feature."
+            echo "4. Use has_filter() / has_action() checks for new hooks."
+            echo "5. Only modify files that have clear improvement opportunities."
+            echo "6. If a change would break existing functionality, do not make it -- document instead."
+            echo ""
+            echo "CONSTRAINTS:"
+            echo "- Minimum WordPress version: 6.2"
+            echo "- Minimum PHP version: 8.2"
+            echo "- All WordPress Coding Standards must be maintained"
+            echo "- All existing tests must continue to pass"
+            echo "- No breaking changes to the settings schema"
+            echo "- API responses must maintain backward compatibility"
+            echo ""
+            echo "When finished, run verification and fix any issues:"
+            echo "npm run lint:js && composer lint && npm test && npm run build"
+            echo ""
+            echo "Write a summary of all changes made to /tmp/improvement-summary.md"
+            } > /tmp/implement-prompt.txt
 
             opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/implement-prompt.txt || echo "::warning::OpenCode implementation exited with code $?"
           else
