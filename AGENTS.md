@@ -198,7 +198,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (1
 | `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
 | `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |
 | `daily-audit.yml` | Daily (2 AM UTC) + manual | Runs full verification suite + AI codebase audit + reviews open PRs + auto-merges at 95%+ confidence |
-| `tri-merge-cycle.yml` | Every 3 days (3 AM UTC) + manual | Verifies codebase, resolves merge conflicts, merges ready PRs, bumps version, creates release tag |
+| `tri-merge-cycle.yml` | Every 3 days (3 AM UTC) + `workflow_dispatch` | Verifies codebase, resolves merge conflicts, merges ready PRs, bumps version, creates release tag |
 | `wordpress-monitor.yml` | Weekly Sunday (4 AM UTC) + manual | Researches new WP features via web + Context7, analyzes plugin code, creates improvement PR with fallbacks |
 
 ## Autonomous Workflows (`.agents/`)

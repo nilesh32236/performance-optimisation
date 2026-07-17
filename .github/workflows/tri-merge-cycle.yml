@@ -1,4 +1,4 @@
-name: Tri-Weekly Merge & Release Cycle
+name: "Tri-Weekly Merge and Release Cycle"
 
 on:
   schedule:
@@ -304,7 +304,7 @@ ${NEWLINE}Write the resolved file content to /tmp/resolved-${CFILE//\//_}.txt"
         if: always()
         run: |
           {
-          echo "## Tri-Weekly Merge & Release Cycle"
+          echo "## Tri-Weekly Merge and Release Cycle"
           echo ""
           echo "**Status:** ${{ steps.release-check.outputs.needs_release == 'true' && '✅ Release created' || '⏭️ No release needed' }}"
           echo ""
