@@ -1,4 +1,4 @@
-name: "Tri-Weekly Merge and Release Cycle"
+name: Tri-Weekly Merge and Release Cycle
 
 on:
   schedule:
@@ -21,7 +21,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: tri-merge-cycle
+  group: ${{ github.workflow }}-${{ github.run_id }}
   cancel-in-progress: true
 
 env:
