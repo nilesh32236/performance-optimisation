@@ -1,4 +1,4 @@
-name: Tri-Weekly Merge and Release Cycle
+name: Triweekly Merge Release Cycle
 
 on:
   schedule:
@@ -19,10 +19,6 @@ permissions:
   pull-requests: write
   issues: write
   actions: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.run_id }}
-  cancel-in-progress: true
 
 env:
   CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
