@@ -1,0 +1,22 @@
+name: Minimal Tri-Merge Test
+
+on:
+  schedule:
+    - cron: '0 3 */3 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+env:
+  CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
+
+jobs:
+  test:
+    name: Test Job
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "OK"
