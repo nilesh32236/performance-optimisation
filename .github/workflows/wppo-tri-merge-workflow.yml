@@ -152,15 +152,16 @@ jobs:
                 for CFILE in $CONFLICT_FILES; do
                   CONTENT=$(cat "$CFILE")
                   NEWLINE=$'\n'
-                  CONFLICT_PROMPT="Resolve the merge conflict in file ${CFILE} for the Performance Optimisation WordPress plugin.
-${NEWLINE}The file has merge conflict markers. Analyze both sides and produce a clean merge.
-${NEWLINE}Follow these rules:
-${NEWLINE}1. Keep both changes if they don't conflict logically
-${NEWLINE}2. If one side is a version bump or trivial, prefer the incoming change
-${NEWLINE}3. Ensure PHP/JS syntax is valid after resolution
-${NEWLINE}4. Maintain WordPress Coding Standards
-${NEWLINE}5. Keep backward compatibility
-${NEWLINE}Write the resolved file content to /tmp/resolved-${CFILE//\//_}.txt"
+                  printf -v CONFLICT_PROMPT '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s' \
+                    "Resolve the merge conflict in file ${CFILE} for the Performance Optimisation WordPress plugin." \
+                    "The file has merge conflict markers. Analyze both sides and produce a clean merge." \
+                    "Follow these rules:" \
+                    "1. Keep both changes if they don't conflict logically" \
+                    "2. If one side is a version bump or trivial, prefer the incoming change" \
+                    "3. Ensure PHP/JS syntax is valid after resolution" \
+                    "4. Maintain WordPress Coding Standards" \
+                    "5. Keep backward compatibility" \
+                    "Write the resolved file content to /tmp/resolved-${CFILE//\//_}.txt"
                   opencode run --auto --model opencode/deepseek-v4-flash-free \
                     "Here is the conflicted file content:${NEWLINE}${NEWLINE}\`\`\`${NEWLINE}${CONTENT}${NEWLINE}\`\`\`${NEWLINE}${NEWLINE}${CONFLICT_PROMPT}" < /dev/null || echo "::warning::OpenCode conflict resolution exited with code $?"
 
