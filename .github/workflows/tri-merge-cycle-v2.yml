@@ -21,7 +21,7 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.run_id }}
+  group: tri-merge-cycle
   cancel-in-progress: true
 
 env:
