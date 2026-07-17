@@ -129,8 +129,8 @@ jobs:
 
           if [ -f /tmp/research-results.md ]; then
             cp /tmp/research-results.md /tmp/wp-research.md
-            IMPROVEMENTS=$(grep -c "^\- \*\*Feature Name\*\*:" /tmp/wp-research.md || echo "0")
-            IMPROVEMENTS=$((IMPROVEMENTS + $(grep -c "^\- \*\*Title\*\*:" /tmp/wp-research.md || echo "0")))
+            IMPROVEMENTS=$(grep -c "^\- \*\*Feature Name\*\*:" /tmp/wp-research.md || true)
+            IMPROVEMENTS=$((IMPROVEMENTS + $(grep -c "^\- \*\*Title\*\*:" /tmp/wp-research.md || true)))
             echo "improvements_found=${IMPROVEMENTS}" >> "$GITHUB_OUTPUT"
             echo "Research complete. ${IMPROVEMENTS} improvement opportunities found."
           else
