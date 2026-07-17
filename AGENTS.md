@@ -197,3 +197,33 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (1
 | `psalm-wpcs-check.yml` | Push/PR to master + weekly | `parallel-lint` (PHP 8.2-8.5), `phpcs` + Psalm security scan, GitHub Issue/PR comment |
 | `qoder-auto-review.yml` | PR opened/synced | `QoderAI/qoder-action` auto-review |
 | `qoder-assistant.yml` | Comment with `@qoder` | `QoderAI/qoder-action` on-demand |
+| `daily-audit.yml` | Daily (2 AM UTC) + manual | Runs full verification suite + AI codebase audit + reviews open PRs + auto-merges at 95%+ confidence |
+| `tri-merge-cycle.yml` | Every 3 days (3 AM UTC) + manual | Verifies codebase, resolves merge conflicts, merges ready PRs, bumps version, creates release tag |
+| `wordpress-monitor.yml` | Weekly Sunday (4 AM UTC) + manual | Researches new WP features via web + Context7, analyzes plugin code, creates improvement PR with fallbacks |
+
+## Autonomous Workflows (`.agents/`)
+
+This plugin has autonomous AI agent workflows. See `.agents/AGENTS.md` for agent workspace rules.
+
+### Skills
+- **`.agents/skills/wppo-reviewer/SKILL.md`** — Code review skill with confidence scoring (95%+ gate for merge)
+- **`.agents/skills/wppo-fixer/SKILL.md`** — Auto-fix skill with verification loop + WP backward-compat patterns
+- **`.agents/skills/wppo-wordpress-monitor/SKILL.md`** — WP feature monitor skill for researching/implementing new core features
+
+### Automation rules
+- **Merge gate**: AI confidence must be >= 95% AND all verification checks must pass
+- **All changes must maintain backward compatibility**: Use `function_exists()`, `has_filter()`, and version-gated fallbacks
+- **Scripts**: `.github/scripts/` contains setup/utility scripts for CI (setup-opencode, gather-context, etc.)
+
+## Required GitHub Secrets
+
+| Secret | Required | Purpose |
+|--------|----------|---------|
+| `GH_PAT` | Yes | GitHub Personal Access Token with `repo` + `workflow` scopes for cross-repo operations, merge, and tag push |
+| `CONTEXT7_API_KEY` | Yes | Upstash Context7 MCP key for querying latest WordPress/core developer documentation |
+| `GITHUB_TOKEN` | Auto | Built-in token (used as fallback when `GH_PAT` is unavailable) |
+| `OPENAI_API_KEY` | No | OpenCode model fallback |
+| `ANTHROPIC_API_KEY` | No | OpenCode model fallback |
+| `GEMINI_API_KEY` | No | OpenCode model fallback |
+| `SVN_USERNAME` | Yes (exists) | WordPress.org SVN username for plugin deployment |
+| `SVN_PASSWORD` | Yes (exists) | WordPress.org SVN password for plugin deployment |

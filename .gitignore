@@ -1,4 +1,5 @@
 node_modules/
+.opencode/
 .DS_Store
 reports/
 app/

@@ -1,0 +1,352 @@
+name: WordPress Feature Monitor
+
+on:
+  schedule:
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+    inputs:
+      create_prs:
+        description: 'Create PRs for improvements found'
+        type: boolean
+        default: true
+      force_check:
+        description: 'Force check specific WP feature (slug)'
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
+
+jobs:
+  research:
+    name: Research WordPress Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      improvements_found: ${{ steps.search.outputs.improvements_found }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install OpenCode
+        run: |
+          .github/scripts/setup-opencode.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Research latest WordPress features
+        id: search
+        run: |
+          cat << 'RESEARCH_PROMPT' > /tmp/research-prompt.txt
+          RESEARCH OBJECTIVE:
+          Search for and document recent WordPress core changes relevant to the Performance Optimisation plugin.
+
+          AREAS TO INVESTIGATE:
+          1. Caching API — Any new wp_cache_* functions, cache groups, or cache priming APIs
+          2. Object Cache — New backends, wp_cache_supports() additions
+          3. Image Processing — New image formats (AVIF improvements), wp_image_* additions
+          4. Script/Style API — Loading strategy changes (defer, async, module support)
+          5. REST API — New core endpoints, performance improvements
+          6. WP Cron — Any scheduling improvements
+          7. Filesystem API — New filesystem functions or constants
+          8. Performance Hooks — New performance-meta tags, server timing API
+          9. Database — Query optimization helpers, $wpdb improvements
+          10. Lazy Loading — Core lazy loading expansions
+          11. WebP/AVIF — Core image processing improvements
+          12. Interactivity API — New WordPress Interactivity API features
+          13. HTML API — New WP_HTML_Tag_Processor features
+          14. Block Editor — Performance improvements relevant to admin UI
+
+          Use these methods to research:
+          1. Web search for "WordPress 6.x performance features new hooks 2026"
+          2. Check make.wordpress.org/core for recent performance-related posts
+          3. If CONTEXT7_API_KEY is set, query it for latest WordPress developer docs
+          4. Check https://developer.wordpress.org/news/ for recent articles
+
+          OUTPUT FORMAT — Write results to /tmp/research-results.md:
+
+          # WordPress Feature Monitor — $(date -u '+%Y-%m-%d')
+
+          ## New Features Discovered
+          For each new feature found (or "None found" if nothing new):
+
+          - **Feature Name**: (name)
+          - **WordPress Version**: X.Y
+          - **Description**: What it does
+          - **Relevance to Plugin**: How this relates to our plugin
+          - **Priority**: high/medium/low
+          - **Implementation Difficulty**: easy/medium/hard
+
+          ## Plugin Code Review
+
+          ### Files checked
+          - includes/class-cache.php (caching, CDN, advanced-cache)
+          - includes/class-object-cache.php (Redis, WP_Object_Cache drop-in)
+          - includes/class-img-converter.php (WebP/AVIF conversion)
+          - includes/class-image-optimisation.php (lazy load, picture, preload)
+          - includes/class-main.php (hooks, enqueue, minification, preload)
+          - includes/class-advanced-cache-handler.php (advanced-cache.php drop-in)
+          - includes/class-rest.php (REST API endpoints)
+          - src/lazyload.js (frontend lazy loading)
+
+          For each file, note if any WordPress core changes make parts of it obsolete or if there are integration opportunities.
+
+          ## Improvement Opportunities
+
+          For each opportunity (or "None" if nothing actionable):
+
+          - **Title**: (short name)
+          - **Current Implementation**: How the plugin does it now
+          - **New WordPress Feature**: What WordPress now offers
+          - **Recommended Change**: How to update
+          - **Fallback Strategy**: How to keep backward compatibility
+          - **Risk**: low/medium/high
+
+          ## No-Action Items
+          Features checked but determined not relevant.
+
+          ## Summary
+          Overall recommendation.
+          RESEARCH_PROMPT
+
+          opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/research-prompt.txt || echo "::warning::OpenCode research exited with code $?"
+
+          if [ -f /tmp/research-results.md ]; then
+            cp /tmp/research-results.md /tmp/wp-research.md
+            IMPROVEMENTS=$(grep -c "^\- \*\*Feature Name\*\*:" /tmp/wp-research.md || echo "0")
+            IMPROVEMENTS=$((IMPROVEMENTS + $(grep -c "^\- \*\*Title\*\*:" /tmp/wp-research.md || echo "0")))
+            echo "improvements_found=${IMPROVEMENTS}" >> "$GITHUB_OUTPUT"
+            echo "Research complete. ${IMPROVEMENTS} improvement opportunities found."
+          else
+            echo "No research results file found. Creating placeholder..."
+            cat > /tmp/wp-research.md << EOF
+            # WordPress Feature Monitor — $(date -u '+%Y-%m-%d')
+
+            ## New Features Discovered
+            No significant new features found in this cycle.
+
+            ## Summary
+            Weekly WordPress feature check complete — no actionable improvements identified.
+            EOF
+            echo "improvements_found=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload research report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp-research-report
+          path: /tmp/wp-research.md
+          retention-days: 30
+
+  improve:
+    name: Create Improvement PR
+    needs: [research]
+    if: needs.research.outputs.improvements_found > 0 && github.event.inputs.create_prs != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.2
+          tools: composer:v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          composer install --ignore-platform-reqs
+          npm ci || npm install
+
+      - name: Download research report
+        uses: actions/download-artifact@v4
+        with:
+          name: wp-research-report
+          path: /tmp/
+
+      - name: Configure git
+        run: |
+          git config --global user.name "${{ github.actor || 'performance-optimisation[bot]' }}"
+          git config --global user.email "${{ github.actor || 'performance-optimisation[bot]' }}@users.noreply.github.com"
+
+      - name: Setup OpenCode
+        run: |
+          .github/scripts/setup-opencode.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Implement improvements
+        id: implement
+        run: |
+          BRANCH_NAME="feature/wp-monitor-$(date -u '+%Y-%m-%d')"
+          git checkout -b "$BRANCH_NAME"
+
+          if [ -f /tmp/wp-research.md ]; then
+            RESEARCH_CONTENT=$(cat /tmp/wp-research.md)
+
+            cat << IMPLEMENT_PROMPT > /tmp/implement-prompt.txt
+            You are implementing WordPress feature improvements for the Performance Optimisation plugin.
+
+            RESEARCH REPORT:
+            ${RESEARCH_CONTENT}
+
+            INSTRUCTIONS:
+            1. For each improvement opportunity in the research, implement the change with backward compatibility.
+            2. ALWAYS use this pattern for feature-gating:
+
+            \`\`\`php
+            if ( function_exists( 'wp_new_function' ) ) {
+                // New WordPress core implementation
+            } else {
+                // Legacy fallback for older WordPress versions
+            }
+            \`\`\`
+
+            3. Add version comments referencing the WordPress version that introduced the feature.
+            4. Use has_filter() / has_action() checks for new hooks.
+            5. Only modify files that have clear improvement opportunities.
+            6. If a change would break existing functionality, DO NOT make it — document instead.
+
+            CONSTRAINTS:
+            - Minimum WordPress version: 6.2
+            - Minimum PHP version: 8.2
+            - All WordPress Coding Standards must be maintained
+            - All existing tests must continue to pass
+            - No breaking changes to the settings schema
+            - API responses must maintain backward compatibility
+
+            When finished, run verification and fix any issues:
+            npm run lint:js && composer lint && npm test && npm run build
+
+            Write a summary of all changes made to /tmp/improvement-summary.md
+            IMPLEMENT_PROMPT
+
+            opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/implement-prompt.txt || echo "::warning::OpenCode implementation exited with code $?"
+          else
+            echo "No research report found."
+            echo "changes_made=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changes_made=true" >> "$GITHUB_OUTPUT"
+
+            git add -A
+
+            if npm run lint:js && composer lint && npm test && npm run build; then
+              git commit -m "feat: WordPress feature updates from weekly monitor
+
+              Automated improvement from WordPress Feature Monitor workflow.
+              $(date -u '+%Y-%m-%d')
+
+              Changes implement backward-compatible updates based on latest
+              WordPress core features. Old functionality preserved as fallback."
+              git push origin "$BRANCH_NAME" --force-with-lease
+              echo "branch=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
+              echo "Changes committed and pushed to ${BRANCH_NAME}"
+            else
+              echo "::warning::Verification failed after improvements. Skipping PR creation."
+              git checkout master
+              git branch -D "$BRANCH_NAME" 2>/dev/null || true
+              echo "branch=" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "changes_made=false" >> "$GITHUB_OUTPUT"
+            echo "No changes made during improvement implementation."
+          fi
+
+      - name: Create pull request
+        if: steps.implement.outputs.changes_made == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.implement.outputs.branch }}"
+
+          if [ -f /tmp/improvement-summary.md ]; then
+            PR_BODY=$(cat /tmp/improvement-summary.md)
+          else
+            PR_BODY="## WordPress Feature Improvements
+
+            Automated improvement PR from the WordPress Feature Monitor workflow (run #${{ github.run_id }}).
+
+            ### Changes
+            Updates based on latest WordPress core features with backward-compatible fallbacks.
+
+            ### Verification
+            - npm run lint:js ✅
+            - composer lint ✅
+            - npm test ✅
+            - npm run build ✅
+
+            ---
+            *Generated by [WordPress Feature Monitor workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*"
+          fi
+
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base master \
+            --head "$BRANCH" \
+            --title "[WP Monitor] WordPress feature update — $(date -u '+%Y-%m-%d')" \
+            --body "$PR_BODY" \
+            --label "enhancement" \
+            --label "wp-monitor"
+
+  summary:
+    name: Summary Report
+    needs: [research, improve]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download research report
+        uses: actions/download-artifact@v4
+        with:
+          name: wp-research-report
+          path: /tmp/
+        continue-on-error: true
+
+      - name: Post summary
+        run: |
+          {
+            echo "# WordPress Feature Monitor — $(date -u '+%Y-%m-%d')"
+            echo ""
+            echo "## Results"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| Improvement opportunities found | ${{ needs.research.outputs.improvements_found }} |"
+            echo "| PR created | ${{ needs.improve.result == 'success' && needs.improve.outputs.changes_made == 'true' && '✅' || '⏭️' }} |"
+            echo ""
+            if [ -f /tmp/wp-research.md ]; then
+              echo "<details>"
+              echo "<summary>Research Report</summary>"
+              echo ""
+              cat /tmp/wp-research.md
+              echo ""
+              echo "</details>"
+            fi
+          } >> $GITHUB_STEP_SUMMARY

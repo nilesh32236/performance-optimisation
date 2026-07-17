@@ -1,6 +1,7 @@
 # Exclude from WordPress.org SVN release
 /.git/
 /.github/
+/.agents/
 /.jules/
 /node_modules/
 /vendor/squizlabs/
