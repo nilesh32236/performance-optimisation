@@ -191,6 +191,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
+      - name: Ensure labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create audit --color "fbca04" --description "Codebase audit findings" -R "${{ github.repository }}" 2>/dev/null || true
+
       - name: Create issues from audit findings
         if: steps.ai-audit.outputs.critical_count != '0' || steps.ai-audit.outputs.important_count != '0'
         env:
@@ -258,28 +264,28 @@ jobs:
             gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json title,body,additions,deletions,changedFiles,headRefName > /tmp/pr-context.json
             gh pr diff "$PR_NUM" --repo "${{ github.repository }}" > /tmp/pr-diff.txt
 
-            cat << PROMPT > /tmp/review-prompt.txt
-            You are an AI code reviewer for the Performance Optimisation WordPress plugin.
-
-            ## PR #${PR_NUM}
-            Title: $(cat /tmp/pr-context.json | jq -r '.title')
-
-            ## Changes
-            \`\`\`diff
-            $(head -c 50000 /tmp/pr-diff.txt)
-            \`\`\`
-
-            Review this PR and output to /tmp/pr-review-${PR_NUM}.md with this format:
-            \`\`\`
-            VERDICT: approved|changes-requested
-            CONFIDENCE: <0-100>
-            SUMMARY: <2-3 sentence review>
-            ISSUES:
-            - severity: <description> [file:line]
-            STRENGTHS:
-            - <description>
-            \`\`\`
-            PROMPT
+            {
+            echo "You are an AI code reviewer for the Performance Optimisation WordPress plugin."
+            echo ""
+            echo "## PR #${PR_NUM}"
+            echo "Title: $(cat /tmp/pr-context.json | jq -r '.title')"
+            echo ""
+            echo "## Changes"
+            echo '```diff'
+            head -c 50000 /tmp/pr-diff.txt
+            echo '```'
+            echo ""
+            echo "Review this PR and output to /tmp/pr-review-${PR_NUM}.md with this format:"
+            echo '```'
+            echo "VERDICT: approved|changes-requested"
+            echo "CONFIDENCE: <0-100>"
+            echo "SUMMARY: <2-3 sentence review>"
+            echo "ISSUES:"
+            echo "- severity: <description> [file:line]"
+            echo "STRENGTHS:"
+            echo "- <description>"
+            echo '```'
+            } > /tmp/review-prompt.txt
 
             opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/review-prompt.txt || echo "::warning::OpenCode review exited with code $?"
 
@@ -295,17 +301,17 @@ jobs:
               fi
 
               REVIEW_BODY="/tmp/pr-review-comment-${PR_NUM}.md"
-              cat > "$REVIEW_BODY" << EOF
-              ## AI Review Result
-
-              **Verdict:** \`${VERDICT}\`
-              **Confidence:** ${CONFIDENCE}%
-
-              $(cat "/tmp/pr-review-${PR_NUM}.md")
-
-              ---
-              *Reviewed by [Daily Audit workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*
-              EOF
+              {
+              echo "## AI Review Result"
+              echo ""
+              echo "**Verdict:** \`${VERDICT}\`"
+              echo "**Confidence:** ${CONFIDENCE}%"
+              echo ""
+              cat "/tmp/pr-review-${PR_NUM}.md"
+              echo ""
+              echo "---"
+              echo "*Reviewed by [Daily Audit workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*"
+              } > "$REVIEW_BODY"
 
               .github/scripts/post-or-update-comment.sh \
                 "${{ github.repository }}" "$PR_NUM" \

@@ -135,15 +135,15 @@ jobs:
             echo "Research complete. ${IMPROVEMENTS} improvement opportunities found."
           else
             echo "No research results file found. Creating placeholder..."
-            cat > /tmp/wp-research.md << EOF
-            # WordPress Feature Monitor — $(date -u '+%Y-%m-%d')
-
-            ## New Features Discovered
-            No significant new features found in this cycle.
-
-            ## Summary
-            Weekly WordPress feature check complete — no actionable improvements identified.
-            EOF
+            {
+            echo "# WordPress Feature Monitor — $(date -u '+%Y-%m-%d')"
+            echo ""
+            echo "## New Features Discovered"
+            echo "No significant new features found in this cycle."
+            echo ""
+            echo "## Summary"
+            echo "Weekly WordPress feature check complete — no actionable improvements identified."
+            } > /tmp/wp-research.md
             echo "improvements_found=0" >> "$GITHUB_OUTPUT"
           fi
 

@@ -154,24 +154,19 @@ jobs:
                 CONFLICT_FILES=$(git diff --name-only --diff-filter=U)
 
                 for CFILE in $CONFLICT_FILES; do
-                  cat << PROMPT > /tmp/conflict-prompt.txt
-                  Resolve the merge conflict in file ${CFILE} for the Performance Optimisation WordPress plugin.
-
-                  The file has merge conflict markers. Analyze both sides and produce a clean merge.
-                  Follow these rules:
-                  1. Keep both changes if they don't conflict logically
-                  2. If one side is a version bump or trivial, prefer the incoming change
-                  3. Ensure PHP/JS syntax is valid after resolution
-                  4. Maintain WordPress Coding Standards
-                  5. Keep backward compatibility
-
-                  Write the resolved file content to /tmp/resolved-${CFILE//\//_}.txt
-                  PROMPT
-
                   CONTENT=$(cat "$CFILE")
                   NEWLINE=$'\n'
+                  CONFLICT_PROMPT="Resolve the merge conflict in file ${CFILE} for the Performance Optimisation WordPress plugin.
+${NEWLINE}The file has merge conflict markers. Analyze both sides and produce a clean merge.
+${NEWLINE}Follow these rules:
+${NEWLINE}1. Keep both changes if they don't conflict logically
+${NEWLINE}2. If one side is a version bump or trivial, prefer the incoming change
+${NEWLINE}3. Ensure PHP/JS syntax is valid after resolution
+${NEWLINE}4. Maintain WordPress Coding Standards
+${NEWLINE}5. Keep backward compatibility
+${NEWLINE}Write the resolved file content to /tmp/resolved-${CFILE//\//_}.txt"
                   opencode run --auto --model opencode/deepseek-v4-flash-free \
-                    "Here is the conflicted file content:${NEWLINE}${NEWLINE}\`\`\`${NEWLINE}${CONTENT}${NEWLINE}\`\`\`${NEWLINE}${NEWLINE}$(cat /tmp/conflict-prompt.txt)" < /dev/null || echo "::warning::OpenCode conflict resolution exited with code $?"
+                    "Here is the conflicted file content:${NEWLINE}${NEWLINE}\`\`\`${NEWLINE}${CONTENT}${NEWLINE}\`\`\`${NEWLINE}${NEWLINE}${CONFLICT_PROMPT}" < /dev/null || echo "::warning::OpenCode conflict resolution exited with code $?"
 
                   if [ -f "/tmp/resolved-${CFILE//\//_}.txt" ]; then
                     cp "/tmp/resolved-${CFILE//\//_}.txt" "$CFILE"
@@ -308,17 +303,17 @@ jobs:
       - name: Create release summary
         if: always()
         run: |
-          cat << EOF >> $GITHUB_STEP_SUMMARY
-          ## Tri-Weekly Merge & Release Cycle
-
-          **Status:** ${{ steps.release-check.outputs.needs_release == 'true' && '✅ Release created' || '⏭️ No release needed' }}
-
-          | Detail | Value |
-          |--------|-------|
-          | Current version | ${{ steps.release-check.outputs.current_version }} |
-          | Latest release | ${{ steps.release-check.outputs.latest_release_tag }} |
-          | Next version | ${{ steps.build-release.outputs.next_version || steps.release-check.outputs.next_version }} |
-          | Verification | ${{ needs.verify.outputs.status }} |
-
-          ${{ steps.release-check.outputs.needs_release == 'true' && format('Release tag **v{0}** pushed. The [release workflow]({1}/{2}/actions/workflows/release.yml) will deploy to WordPress.org.', steps.build-release.outputs.next_version || steps.release-check.outputs.next_version, github.server_url, github.repository) || '' }}
-          EOF
+          {
+          echo "## Tri-Weekly Merge & Release Cycle"
+          echo ""
+          echo "**Status:** ${{ steps.release-check.outputs.needs_release == 'true' && '✅ Release created' || '⏭️ No release needed' }}"
+          echo ""
+          echo "| Detail | Value |"
+          echo "|--------|-------|"
+          echo "| Current version | ${{ steps.release-check.outputs.current_version }} |"
+          echo "| Latest release | ${{ steps.release-check.outputs.latest_release_tag }} |"
+          echo "| Next version | ${{ steps.build-release.outputs.next_version || steps.release-check.outputs.next_version }} |"
+          echo "| Verification | ${{ needs.verify.outputs.status }} |"
+          echo ""
+          echo "${{ steps.release-check.outputs.needs_release == 'true' && format('Release tag **v{0}** pushed. The [release workflow]({1}/{2}/actions/workflows/release.yml) will deploy to WordPress.org.', steps.build-release.outputs.next_version || steps.release-check.outputs.next_version, github.server_url, github.repository) || '' }}"
+          } >> $GITHUB_STEP_SUMMARY
