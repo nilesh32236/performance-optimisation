@@ -101,9 +101,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 			);
 
 			// --- Gzip/Brotli compression — strict boolean check ---
-			$comp_pass     = (bool) ( $telemetry['gzip_brotli_compression'] ?? false );
-			$comp_value    = (string) ( $telemetry['compression_value'] ?? ( $comp_pass ? 'pass' : 'fail' ) );
-			$suggestions[] = self::make_boolean(
+			$comp_pass       = (bool) ( $telemetry['gzip_brotli_compression'] ?? false );
+			$comp_value      = (string) ( $telemetry['compression_value'] ?? ( $comp_pass ? 'pass' : 'fail' ) );
+			$comp_suggestion = self::make_boolean(
 				'gzip_brotli_compression',
 				$comp_pass,
 				'enable_server_rules',
@@ -111,13 +111,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 			);
 			// Override the 'pass'/'fail' value with the raw header if we have it.
 			if ( $comp_pass && 'pass' !== $comp_value ) {
-				$suggestions[ count( $suggestions ) - 1 ]['value'] = $comp_value;
+				$comp_suggestion['value'] = $comp_value;
 			}
+			$suggestions[] = $comp_suggestion;
 
 			// --- Cache-Control headers — strict boolean check ---
 			$cc_pass       = (bool) ( $telemetry['cache_control_headers'] ?? false );
 			$cc_value      = (string) ( $telemetry['cache_control_value'] ?? ( $cc_pass ? 'pass' : 'fail' ) );
-			$suggestions[] = self::make_boolean(
+			$cc_suggestion = self::make_boolean(
 				'cache_control_headers',
 				$cc_pass,
 				'enable_server_rules',
@@ -125,8 +126,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 			);
 			// Override the 'pass'/'fail' value with the raw header if we have it.
 			if ( $cc_pass && 'pass' !== $cc_value ) {
-				$suggestions[ count( $suggestions ) - 1 ]['value'] = $cc_value;
+				$cc_suggestion['value'] = $cc_value;
 			}
+			$suggestions[] = $cc_suggestion;
 
 			return array_values( array_filter( $suggestions ) );
 		}
