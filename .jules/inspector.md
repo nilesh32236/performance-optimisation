@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## $(date +%Y-%m-%d) - [JS Test Fix] Testing React components with expected console.error logs
+**Bug/Gap:** Tests for frontend components (like `ObjectCache`) that simulate network failures or rejection states trigger `console.error` logs that pollute test outputs.
+**Root Cause:** Network failure tests caught errors effectively in their catch blocks and logged them using `console.error`, but tests did not mock this to prevent standard output pollution.
+**Test Added:** Added `jest.spyOn(console, 'error').mockImplementation(() => {})` in the `beforeEach` block of `ObjectCache.test.js` to silence expected errors, then used `consoleErrorSpy.mockRestore()` in `afterEach` to clean up.
