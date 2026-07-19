@@ -113,7 +113,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				return;
 			}
 
-			$site_url = home_url();
+			$site_url    = home_url();
+			$cookie_hash = defined( 'COOKIEHASH' ) ? COOKIEHASH : md5( $site_url );
 
 			$handler_code = '<?php' . PHP_EOL .
 			'// ' . self::DROPIN_MARKER . PHP_EOL .
@@ -144,7 +145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL . PHP_EOL .
 
 			'function is_user_logged_in_without_wp( $site_url ) {' . PHP_EOL .
-			'	$logged_in_cookie = \'wordpress_logged_in_\' . md5( $site_url );' . PHP_EOL .
+			'	$logged_in_cookie = \'wordpress_logged_in_\' . \'' . $cookie_hash . '\';' . PHP_EOL .
 			'	$cookie_prefix = \'wp-wpml_\';' . PHP_EOL .
 			'	if ( isset( $_COOKIE[ $logged_in_cookie ] ) ) {' . PHP_EOL .
 			'		return true;' . PHP_EOL .

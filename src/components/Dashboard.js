@@ -94,6 +94,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
 	const pollingRef = useRef( null );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
+	const [ announcement, setAnnouncement ] = useState( '' );
 
 	const { imageInfo, loading, totalCacheSize, totalJs, totalCss, dbCounts } =
 		state;
@@ -165,6 +166,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 				if ( queuedJobs === 0 ) {
 					setBgProcessing( false );
+					setAnnouncement(
+						__(
+							'Image optimization completed.',
+							'performance-optimisation'
+						)
+					);
 					if ( pollingRef.current ) {
 						clearInterval( pollingRef.current );
 						pollingRef.current = null;
@@ -184,6 +191,15 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		};
 	}, [] );
 
+	// Clear announcement after 5 seconds so the aria-live region stays fresh.
+	useEffect( () => {
+		if ( ! announcement ) {
+			return;
+		}
+		const timer = setTimeout( () => setAnnouncement( '' ), 5000 );
+		return () => clearTimeout( timer );
+	}, [ announcement ] );
+
 	const onClearCache = useCallback(
 		( e ) => {
 			e.preventDefault();
@@ -191,6 +207,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			apiCall( 'clear_cache', { action: 'clear_cache' } )
 				.then( ( data ) => {
 					if ( data.success ) {
+						setAnnouncement(
+							__(
+								'Cache cleared successfully.',
+								'performance-optimisation'
+							)
+						);
 						updateState( {
 							totalCacheSize: '0 B',
 							totalJs: 0,
@@ -215,6 +237,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					// Background (Action Scheduler) path.
 					setBgProcessing( true );
 					setBgJobsQueued( response.data.jobs_queued || 0 );
+					setAnnouncement(
+						__(
+							'Image optimization started in background.',
+							'performance-optimisation'
+						)
+					);
 					setPendingPaths( { webp: [], avif: [] } );
 					if ( pollingRef.current ) {
 						clearInterval( pollingRef.current );
@@ -230,6 +258,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						updateState( {
 							imageInfo: normalizeImageInfo( response.data ),
 						} );
+						setAnnouncement(
+							__(
+								'Images optimized successfully.',
+								'performance-optimisation'
+							)
+						);
 					}
 
 					if ( pollingRef.current ) {
@@ -253,6 +287,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							completed: { webp: 0, avif: 0 },
 						},
 					} ) );
+					setAnnouncement(
+						__(
+							'Optimized images removed.',
+							'performance-optimisation'
+						)
+					);
 				}
 			} )
 			.finally( () => handleLoading( 'remove_images', false ) );
@@ -269,6 +309,13 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	return (
 		<div className="wppo-dashboard-view">
+			<div
+				aria-live="polite"
+				aria-atomic="true"
+				className="wppo-screen-reader-text"
+			>
+				{ announcement }
+			</div>
 			<FeatureHeader
 				title={ __( 'System Health', 'performance-optimisation' ) }
 				description={ __(

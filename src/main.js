@@ -49,6 +49,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	const refreshNonce = () => {
 		const formData = new FormData();
 		formData.append( 'action', 'wppo_get_nonce' );
+		formData.append( 'nonce', wppoObject.nonce_refresh );
 
 		return fetch( wppoObject.ajaxUrl, {
 			method: 'POST',
@@ -104,8 +105,18 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		}
 
 		if ( ! dispatched ) {
-			// eslint-disable-next-line no-alert
-			alert( message );
+			const noticeEl = document.createElement( 'div' );
+			noticeEl.className = `notice notice-${ type } is-dismissible wppo-admin-notice`;
+			noticeEl.setAttribute( 'role', 'alert' );
+			noticeEl.textContent = message;
+			const dismissBtn = document.createElement( 'button' );
+			dismissBtn.className = 'notice-dismiss';
+			dismissBtn.addEventListener( 'click', () => noticeEl.remove() );
+			noticeEl.appendChild( dismissBtn );
+			const target =
+				document.getElementById( 'wpbody-content' ) || document.body;
+			target.insertBefore( noticeEl, target.firstChild );
+			setTimeout( () => noticeEl.remove(), 5000 );
 		}
 	};
 
@@ -144,7 +155,15 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	if ( clearCacheBtn ) {
 		clearCacheBtn.addEventListener( 'click', function ( event ) {
 			event.preventDefault();
-			const path = window.location.pathname;
+			let path = window.location.pathname;
+			if (
+				! path ||
+				'string' !== typeof path ||
+				path.length > 2048 ||
+				path.includes( '..' )
+			) {
+				path = '/';
+			}
 			postJsonRequest( '/clear_cache', {
 				action: 'clear_single_page_cache',
 				path,

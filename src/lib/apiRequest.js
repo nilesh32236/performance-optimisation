@@ -43,7 +43,8 @@ export const apiCall = ( action, body, method = 'POST', signal ) => {
  * @return {Promise<Object>} Resolved activities data.
  */
 export const fetchRecentActivities = ( page = 1, signal ) => {
-	return fetch( wppoSettings.apiUrl + 'recent_activities?page=' + page, {
+	const params = new URLSearchParams( { page } );
+	return fetch( `${ wppoSettings.apiUrl }recent_activities?${ params }`, {
 		method: 'GET',
 		headers: {
 			'X-WP-Nonce': wppoSettings.nonce,

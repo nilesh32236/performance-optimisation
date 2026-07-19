@@ -290,9 +290,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
 			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
 
-			// Reject image paths if they contain directory traversal sequences.
+			// Validate image paths using realpath to prevent directory traversal.
+			$normalized_abspath = wp_normalize_path( ABSPATH );
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
-				if ( strpos( $img_path, '..' ) !== false ) {
+				$resolved = realpath( $normalized_abspath . $img_path );
+				if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
 			}
@@ -458,19 +460,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Sanitize settings before saving.
 			$sanitized_settings = $this->sanitize_settings_recursively( $data['settings'] );
 
-			// Retrieve the existing settings.
+			// Retrieve the existing settings and merge the imported settings on top,
+			// so newer setting keys from future plugin versions are preserved.
 			$existing_settings = get_option( 'wppo_settings', array() );
+			$merged_settings   = array_replace_recursive( $existing_settings, $sanitized_settings );
 
 			// Check if the settings are the same.
-			if ( $existing_settings === $sanitized_settings ) {
+			if ( $existing_settings === $merged_settings ) {
 				return $this->send_response( $existing_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
 			}
 
-			if ( ! update_option( 'wppo_settings', $sanitized_settings ) ) {
+			if ( ! update_option( 'wppo_settings', $merged_settings ) ) {
 				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 
-			return $this->send_response( $sanitized_settings, true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
+			return $this->send_response( $merged_settings, true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -815,7 +819,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'performance-optimisation' ) ), 403 );
 			}
 
-			if ( ! check_ajax_referer( 'wp_rest', 'nonce', false ) ) {
+			if ( ! check_ajax_referer( 'wppo_nonce_refresh', 'nonce', false ) ) {
 				wp_send_json_error( array( 'message' => __( 'Nonce verification failed.', 'performance-optimisation' ) ), 403 );
 			}
 

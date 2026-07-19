@@ -126,11 +126,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 			if ( isset( $wpdb->dbh ) && is_object( $wpdb->dbh ) ) {
 				$extension = get_class( $wpdb->dbh );
-				if ( $wpdb->dbh instanceof \mysqli ) {
-					$client_version = $wpdb->dbh->client_info ?? null;
-				} elseif ( property_exists( $wpdb->dbh, 'client_info' ) ) {
-					$client_version = $wpdb->dbh->client_info;
-				}
 			}
 
 			return array(

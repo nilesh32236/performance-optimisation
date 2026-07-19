@@ -20,6 +20,7 @@ import Dashboard from './components/Dashboard';
 import DatabaseCleanup from './components/DatabaseCleanup';
 import ObjectCache from './components/ObjectCache';
 import { fetchRecentActivities, fetchServerRules } from './lib/apiRequest';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 import { __ } from '@wordpress/i18n';
 
@@ -85,29 +86,29 @@ const App = () => {
 			),
 			fileOptimization: (
 				<FileOptimization
-					options={ wppoSettings.settings.file_optimisation }
+					options={ wppoSettings?.settings?.file_optimisation }
 					serverRules={ serverRules }
 				/>
 			),
 			preload: (
 				<PreloadSettings
-					options={ wppoSettings.settings.preload_settings }
+					options={ wppoSettings?.settings?.preload_settings }
 				/>
 			),
 			imageOptimization: (
 				<ImageOptimization
-					options={ wppoSettings.settings.image_optimisation }
+					options={ wppoSettings?.settings?.image_optimisation }
 				/>
 			),
 			databaseCleanup: (
 				<DatabaseCleanup
-					options={ wppoSettings.settings.database_cleanup }
+					options={ wppoSettings?.settings?.database_cleanup }
 				/>
 			),
 			objectCache: (
-				<ObjectCache options={ wppoSettings.settings.object_cache } />
+				<ObjectCache options={ wppoSettings?.settings?.object_cache } />
 			),
-			tools: <PluginSettings options={ wppoSettings.settings } />,
+			tools: <PluginSettings options={ wppoSettings?.settings } />,
 		};
 
 		return components[ activeTab ] || components.dashboard;
@@ -316,7 +317,9 @@ const App = () => {
 				</nav>
 				<div className="wppo-sidebar-footer">
 					<div className="wppo-sidebar-version">
-						{ __( 'v1.6.0', 'performance-optimisation' ) }
+						{ wppoSettings?.version
+							? `v${ wppoSettings.version }`
+							: '' }
 					</div>
 				</div>
 			</div>
@@ -324,7 +327,7 @@ const App = () => {
 			<div className="wppo-content">
 				<div className="wppo-main">
 					<div className={ transition ? 'fadeIn' : undefined }>
-						{ renderContent }
+						<ErrorBoundary>{ renderContent }</ErrorBoundary>
 					</div>
 				</div>
 			</div>

@@ -215,7 +215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$css_url = $this->get_cache_file_url( 'css' );
 
-				$version = fileatime( $css_file_path );
+				$version = filemtime( $css_file_path );
 				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 
 				$css_url_with_version = $css_url . "?ver=$version";
