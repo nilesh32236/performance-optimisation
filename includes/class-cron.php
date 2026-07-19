@@ -231,13 +231,14 @@ class Cron {
 
 		$post_types = array_unique( array_merge( array_values( $post_types ), array( 'page', 'post' ) ) );
 
-		// Get all posts of these types.
+		// Get all posts of these types (batched to prevent memory exhaustion).
 		$posts = get_posts(
 			array(
-				'post_type'   => $post_types,
-				'post_status' => 'publish',
-				'numberposts' => -1,
-				'fields'      => 'ids',
+				'post_type'      => $post_types,
+				'post_status'    => 'publish',
+				// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page
+				'posts_per_page' => 200,
+				'fields'         => 'ids',
 			)
 		);
 

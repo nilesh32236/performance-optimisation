@@ -87,10 +87,11 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return;
 			}
 
-			$use_tls  = $config['use_tls'] ?? false;
-			$database = isset( $config['database'] ) ? (int) $config['database'] : 0;
-			$password = $config['password'] ?? '';
-			$timeout  = 0.5;
+			$use_tls      = $config['use_tls'] ?? false;
+			$database     = isset( $config['database'] ) ? (int) $config['database'] : 0;
+			$env_password = getenv( 'WPPO_REDIS_PASSWORD' );
+			$password     = defined( 'WPPO_REDIS_PASSWORD' ) ? WPPO_REDIS_PASSWORD : ( false !== $env_password ? $env_password : ( $config['password'] ?? '' ) );
+			$timeout      = 0.5;
 
 			try {
 				$connection = self::wppo_redis_connect( $config );

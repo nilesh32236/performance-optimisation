@@ -269,6 +269,11 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	return (
 		<div className="wppo-dashboard-view">
+			<div
+				aria-live="polite"
+				aria-atomic="true"
+				className="wppo-screen-reader-text"
+			></div>
 			<FeatureHeader
 				title={ __( 'System Health', 'performance-optimisation' ) }
 				description={ __(

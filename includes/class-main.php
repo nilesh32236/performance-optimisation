@@ -485,9 +485,10 @@ class Main {
 				'wppo-admin-bar-script',
 				'wppoObject',
 				array(
-					'apiUrl'  => get_rest_url( null, 'performance-optimisation/v1' ),
-					'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-					'nonce'   => wp_create_nonce( 'wp_rest' ),
+					'apiUrl'        => get_rest_url( null, 'performance-optimisation/v1' ),
+					'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+					'nonce'         => wp_create_nonce( 'wp_rest' ),
+					'nonce_refresh' => wp_create_nonce( 'wppo_nonce_refresh' ),
 				)
 			);
 		}
@@ -527,6 +528,7 @@ class Main {
 			array(
 				'apiUrl'            => get_rest_url( null, 'performance-optimisation/v1/' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
+				'version'           => WPPO_VERSION,
 				'settings'          => $this->options,
 				'image_info'        => get_option( 'wppo_img_info', array() ),
 				'cache_size'        => $cache_size,
@@ -557,8 +559,9 @@ class Main {
 				'wppo-admin-bar-script',
 				'wppoObject',
 				array(
-					'apiUrl' => get_rest_url( null, 'performance-optimisation/v1' ),
-					'nonce'  => wp_create_nonce( 'wp_rest' ),
+					'apiUrl'        => get_rest_url( null, 'performance-optimisation/v1' ),
+					'nonce'         => wp_create_nonce( 'wp_rest' ),
+					'nonce_refresh' => wp_create_nonce( 'wppo_nonce_refresh' ),
 				)
 			);
 		}
@@ -836,7 +839,7 @@ class Main {
 		$cached_file  = $css_minifier->minify();
 
 		if ( $cached_file ) {
-			$file_version = fileatime( Util::get_local_path( $cached_file ) );
+			$file_version = filemtime( Util::get_local_path( $cached_file ) );
 			$new_href     = content_url( 'cache/wppo/min/css/' . basename( $cached_file ) ) . '?ver=' . $file_version;
 			$new_tag      = str_replace( $href, $new_href, $tag );
 			return $new_tag;
@@ -877,7 +880,7 @@ class Main {
 		$cached_file = $js_minifier->minify();
 
 		if ( $cached_file ) {
-			$file_version = fileatime( Util::get_local_path( $cached_file ) );
+			$file_version = filemtime( Util::get_local_path( $cached_file ) );
 
 			$new_src = content_url( 'cache/wppo/min/js/' . basename( $cached_file ) ) . '?ver=' . $file_version;
 			$new_tag = str_replace( $src, $new_src, $tag );
