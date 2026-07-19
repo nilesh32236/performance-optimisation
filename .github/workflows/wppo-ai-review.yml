@@ -1,0 +1,345 @@
+name: AI Multi-Agent Review
+
+# ─────────────────────────────────────────────────────────
+# TRIGGER MATRIX
+#
+#  Event                        Job that fires
+#  ─────────────────────────    ──────────────────────────
+#  issues.labeled               fix-issue  (audit → fixer)
+#    (label == autofix-trigger)
+#
+#  pull_request.opened/synced   review     (human PR → reviewer)
+#  pull_request.labeled         autofix    (audit PR  → loop)
+#    (label == autofix)
+#
+#  issue_comment.created        review     (slash /review on PR)
+#    (/review or /oc on PR)     autofix    (slash /fix on PR)
+#                               fix-issue  (slash /fix on Issue)
+#
+#  pull_request.closed+merged   notify-merged
+#    (had autofix:ready label)
+# ─────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled, closed]
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: wppo-ai-${{ github.event.pull_request.number || github.event.issue.number || github.sha }}
+  cancel-in-progress: false
+
+env:
+  CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
+
+jobs:
+  # ── 1. FIX ISSUE ─────────────────────────────────────────────────────────────
+  # Triggered when the audit agent creates an issue with label "autofix-trigger"
+  # OR when someone comments "/fix" on a plain issue (not a PR).
+  # Creates a branch autofix/issue-{N}, fixes the code, opens a PR with label "autofix".
+  fix-issue:
+    name: Fix Audit Issue
+    if: |
+      github.event.issue.pull_request == null && (
+        (
+          github.event_name == 'issues' &&
+          github.event.action == 'labeled' &&
+          github.event.label.name == 'autofix-trigger'
+        ) ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request == null &&
+          contains(github.event.comment.body || '', '/fix')
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Ensure required labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "autofix"                   --force --color "243cd4" --description "PR created by AI fix agent" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix:ready"             --force --color "0e8a16" --description "Approved by AI reviewer — ready to merge" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix:needs-fix"         --force --color "e4e669" --description "Reviewer found issues — fix in progress" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix:needs-manual-review" --force --color "d93f0b" --description "Max fix iterations reached — needs human review" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix-trigger"           --force --color "c2e0c6" --description "Triggers autofix workflow on issues" -R "${{ github.repository }}" 2>/dev/null || true
+
+      - name: Fix Issue
+        uses: nilesh32236/opencode-ai-reviewer@v1.0.0
+        with:
+          mode: fix
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          model: 'opencode/deepseek-v4-flash-free'
+          max_fix_iterations: 3
+          run_checks_after_fix: 'npm run lint:js && composer lint && npm test && npm run build'
+          project_context: >
+            WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
+            PHP follows WordPress Coding Standards (phpcs.xml). JS is React with @wordpress/scripts.
+            All REST endpoints require manage_options + X-WP-Nonce.
+            Run: npm run lint:js, composer lint, npm test, npm run build to verify.
+
+  # ── 2. REVIEW ────────────────────────────────────────────────────────────────
+  # Triggered on human-created PRs (not bot PRs, not autofix PRs).
+  # Posts a structured review comment with verdict, confidence, and issue list.
+  review:
+    name: AI Code Review
+    if: |
+      github.event_name != 'schedule' &&
+      github.event.action != 'closed' &&
+      github.actor != 'github-actions[bot]' &&
+      !contains(github.event.pull_request.labels.*.name, 'autofix') &&
+      !contains(github.event.pull_request.labels.*.name, 'autofix:approved') &&
+      !contains(github.event.pull_request.labels.*.name, 'autofix:merged') &&
+      (
+        github.event_name == 'pull_request' ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request != null &&
+          (
+            contains(github.event.comment.body || '', '/review') ||
+            contains(github.event.comment.body || '', '/oc')
+          )
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Resolve PR ref
+        id: resolve-ref
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
+            PR_NUMBER="${{ github.event.issue.number }}"
+            REF=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.resolve-ref.outputs.ref }}
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Setup PHP (for fix verification)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - name: Setup Node.js (for fix verification)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          composer install --ignore-platform-reqs
+          npm ci || npm install
+
+      - name: AI Code Review
+        uses: nilesh32236/opencode-ai-reviewer@v1.0.0
+        with:
+          mode: review
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          model: 'opencode/deepseek-v4-flash-free'
+          max_files_per_batch: 3
+          include_strengths: true
+          review_comment_summary: true
+          project_context: >
+            WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
+            PHP follows WordPress Coding Standards. JS is React with @wordpress/scripts.
+            All REST endpoints require manage_options + X-WP-Nonce.
+            SCSS uses .wppo- prefix, BEM-like naming. No Tailwind or CSS-in-JS.
+
+  # ── 3. AUTOFIX LOOP ──────────────────────────────────────────────────────────
+  # Triggered when a PR has label "autofix" (set by fix-issue or manually).
+  # Runs review → fix → review up to 3 iterations.
+  # On approval: sets "autofix:ready" label.
+  # On max iterations: sets "autofix:needs-manual-review".
+  autofix:
+    name: Autofix Review Loop
+    concurrency:
+      group: autofix-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: false
+    if: |
+      github.event_name != 'schedule' &&
+      github.event.action != 'closed' &&
+      (
+        (
+          github.event_name == 'pull_request' &&
+          contains(github.event.pull_request.labels.*.name, 'autofix') &&
+          !contains(github.event.pull_request.labels.*.name, 'autofix:approved') &&
+          !contains(github.event.pull_request.labels.*.name, 'autofix:merged') &&
+          !contains(github.event.pull_request.labels.*.name, 'autofix:ready')
+        ) ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request != null &&
+          contains(github.event.comment.body || '', '/fix')
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Resolve PR ref
+        id: resolve-ref
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
+            PR_NUMBER="${{ github.event.issue.number }}"
+            REF=$(gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json headRefName --jq .headRefName)
+            echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.resolve-ref.outputs.ref }}
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          composer install --ignore-platform-reqs
+          npm ci || npm install
+
+      - name: Autofix Review Loop
+        uses: nilesh32236/opencode-ai-reviewer@v1.0.0
+        with:
+          mode: fix
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          model: 'opencode/deepseek-v4-flash-free'
+          max_fix_iterations: 3
+          run_checks_after_fix: 'npm run lint:js && composer lint && npm test && npm run build'
+          enable_fix: true
+          project_context: >
+            WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
+            PHP follows WordPress Coding Standards. JS is React with @wordpress/scripts.
+            Build: npm run build (compiles src/). Lint: npm run lint:js && composer lint.
+            Tests: npm test. All must pass before approving.
+
+  # ── 4. AUTO-MERGE ────────────────────────────────────────────────────────────
+  # Triggered when "autofix:ready" label is added to a PR.
+  # Squash-merges and deletes the branch.
+  auto-merge:
+    name: Auto-Merge Approved PR
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'autofix:ready'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Squash merge PR
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          echo "Merging PR #${PR_NUMBER} (autofix:ready)..."
+          gh pr merge "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --squash \
+            --delete-branch \
+            --auto || {
+            echo "::warning::Auto-merge failed — PR #${PR_NUMBER} may need manual merge"
+          }
+
+  # ── 5. NOTIFY MERGED ─────────────────────────────────────────────────────────
+  # Triggered when an autofix PR is successfully merged.
+  # Posts a summary comment and updates labels.
+  notify-merged:
+    name: Post Merge Notification
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'autofix:ready')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Post merge notification
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          LINKED_ISSUE=$(echo "$PR_TITLE" | grep -oP '#\d+' | head -1 || echo "")
+
+          BODY="## ✅ Autofix PR Merged
+
+          PR #${PR_NUMBER} **${PR_TITLE}** has been merged to \`master\`.
+
+          All review iterations completed and the reviewer agent confirmed the PR was ready.
+          "
+
+          if [ -n "$LINKED_ISSUE" ]; then
+            BODY="${BODY}
+          **Closes:** ${LINKED_ISSUE}
+          "
+          fi
+
+          BODY="${BODY}
+          ---
+          *🤖 Merged automatically by the [AI Multi-Agent Review](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) workflow*"
+
+          gh pr comment "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --body "$BODY"
+
+      - name: Update labels
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          gh pr edit "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --remove-label "autofix:ready" 2>/dev/null || true
+          gh pr edit "$PR_NUMBER" \
+            --repo "${{ github.repository }}" \
+            --add-label "autofix:merged" 2>/dev/null || true

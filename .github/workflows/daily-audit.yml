@@ -134,84 +134,52 @@ jobs:
             gh issue create --title "$ISSUE_TITLE" --body "$BODY" --label "audit" --repo "${{ github.repository }}"
           fi
 
-      - name: Setup OpenCode
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
         run: |
-          .github/scripts/setup-opencode.sh
+          composer install --ignore-platform-reqs
+          npm ci || npm install
+
+      - name: Ensure audit labels exist
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "audit"             --force --color "fbca04" --description "Codebase audit findings" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix"           --force --color "243cd4" --description "PR created by AI fix agent" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix-trigger"   --force --color "c2e0c6" --description "Triggers autofix workflow on issues" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix:ready"     --force --color "0e8a16" --description "Approved by AI reviewer — ready to merge" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix:needs-manual-review" --force --color "d93f0b" --description "Max fix iterations reached" -R "${{ github.repository }}" 2>/dev/null || true
 
       - name: AI Codebase Audit
         id: ai-audit
-        run: |
-          cat << 'PROMPT' > /tmp/audit-prompt.txt
-          You are an AI codebase auditor for the Performance Optimisation WordPress plugin.
-
-          Audit the codebase and check for:
-          1. **PHP**: Sanitization, escaping, nonce verification, SQL injection, path traversal, capability checks
-          2. **JavaScript**: React best practices, accessibility (ARIA), i18n readiness, state management
-          3. **SCSS/CSS**: WPPO prefix convention, responsive patterns, CSS custom properties usage
-          4. **Performance**: Database query patterns, cache usage, asset loading
-          5. **Security**: SSRF prevention, API key handling, nonce refresh, output escaping
-          6. **Conventions**: WordPress Coding Standards, PSR compatibility, file naming
-
-          Write your audit report to /tmp/audit-report.md with this exact format:
-
-          ```
-          ## Audit Report
-          DATE: $(date -u '+%Y-%m-%d')
-          CRITICAL_COUNT: <number>
-          IMPORTANT_COUNT: <number>
-          MINOR_COUNT: <number>
-
-          ## Critical Issues
-          - <description> (file:line)
-
-          ## Important Issues
-          - <description> (file:line)
-
-          ## Minor Issues
-          - <description> (file:line)
-
-          ## Summary
-          <overall summary of codebase health>
-          ```
-          PROMPT
-
-          opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/audit-prompt.txt || echo "::warning::OpenCode audit exited with code $?"
-
-          if [ -f /tmp/audit-report.md ]; then
-            CRITICAL=$(grep -oP 'CRITICAL_COUNT:\s*\K\d+' /tmp/audit-report.md || echo "0")
-            IMPORTANT=$(grep -oP 'IMPORTANT_COUNT:\s*\K\d+' /tmp/audit-report.md || echo "0")
-            echo "critical_count=${CRITICAL}" >> $GITHUB_OUTPUT
-            echo "important_count=${IMPORTANT}" >> $GITHUB_OUTPUT
-          else
-            echo "critical_count=0" >> $GITHUB_OUTPUT
-            echo "important_count=0" >> $GITHUB_OUTPUT
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
-      - name: Ensure labels exist
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          gh label create audit --color "fbca04" --description "Codebase audit findings" -R "${{ github.repository }}" 2>/dev/null || true
-
-      - name: Create issues from audit findings
-        if: steps.ai-audit.outputs.critical_count != '0' || steps.ai-audit.outputs.important_count != '0'
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          if [ -f /tmp/audit-report.md ]; then
-            ISSUE_BODY=$(cat /tmp/audit-report.md)
-            ISSUE_TITLE="[Audit] Codebase audit findings — $(date -u '+%Y-%m-%d')"
-            EXISTING=$(gh issue list --repo "${{ github.repository }}" --label audit --state open --json title --jq '.[] | select(.title | startswith("[Audit] Codebase audit findings")) | .number' | head -1)
-            if [ -n "$EXISTING" ]; then
-              gh issue update "$EXISTING" --body "$ISSUE_BODY" --repo "${{ github.repository }}"
-            else
-              gh issue create --title "$ISSUE_TITLE" --body "$ISSUE_BODY" --label "audit" --repo "${{ github.repository }}"
-            fi
-          fi
+        uses: nilesh32236/opencode-ai-reviewer@v1.0.0
+        with:
+          mode: audit
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          model: 'opencode/deepseek-v4-flash-free'
+          audit_create_issues: true
+          audit_auto_fix: true
+          audit_labels: 'audit'
+          audit_target_dirs: 'includes,src'
+          project_context: >
+            WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
+            PHP follows WordPress Coding Standards (phpcs.xml). JS is React with @wordpress/scripts.
+            All REST endpoints require manage_options + X-WP-Nonce. Run npm run lint:js,
+            composer lint, npm test, npm run build to verify fixes.
 
   review:
     name: Review Open Pull Requests

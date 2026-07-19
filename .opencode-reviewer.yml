@@ -1,0 +1,57 @@
+# OpenCode AI Reviewer Config for Performance Optimisation WordPress Plugin
+# https://github.com/nilesh32236/opencode-ai-reviewer
+
+project:
+  name: "Performance Optimisation WordPress Plugin"
+  description: >
+    A WordPress performance plugin (PHP 8.2+, WP 6.2+) providing static HTML cache,
+    Redis object cache, JS/CSS/HTML minification, WebP/AVIF image conversion,
+    lazy loading, database cleanup, Google PageSpeed integration, and CDN support.
+  conventions:
+    - "PHP follows WordPress Coding Standards (WPCS) — tabs, Yoda conditions, spaces inside parens"
+    - "PHP minimum version is 8.2 — use typed properties, match expressions, named args where helpful"
+    - "All plugin classes loaded manually via require_once in Main::includes() — no PSR-4 autoload"
+    - "JS/React uses pure useState — no Redux, Zustand, or external state libraries"
+    - "All React components read initial settings from wppoSettings.settings[tabName] on mount"
+    - "API calls use apiCall() from src/lib/apiRequest.js — never raw fetch()"
+    - "All user-facing strings come from wppoSettings.translations.KEY with English fallback"
+    - "SCSS uses .wppo- prefix and BEM-like naming — no inline styles, no Tailwind"
+    - "All REST endpoints require manage_options capability + X-WP-Nonce header"
+    - "console.log is an ESLint error — use console.error or console.warn only"
+    - "Build output (build/) and vendor/ are both committed to git"
+  commandReference:
+    "npm run lint:js": "ESLint via @wordpress/scripts — must pass before any commit"
+    "composer lint": "PHPCS with WordPress standard (phpcs.xml) — must pass before any commit"
+    "npm test": "Jest unit tests in jsdom environment"
+    "npm run build": "wp-scripts build — compiles src/index.js and src/lazyload.js"
+
+review:
+  customRules:
+    - "Verify wp_verify_nonce() or check_ajax_referer() called in all REST endpoint handlers"
+    - "Check that every $wpdb query uses $wpdb->prepare() with dynamic values"
+    - "Ensure output is escaped with esc_html(), esc_attr(), esc_url(), or wp_kses_post()"
+    - "Verify current_user_can('manage_options') is the permission_callback on all REST routes"
+    - "Check useEffect cleanup functions prevent memory leaks (event listeners, AbortControllers)"
+    - "Confirm no console.log statements in JS files"
+    - "Validate that apiCall() is used for all REST calls — not raw fetch()"
+
+fix:
+  maxIterations: 3
+  runChecks:
+    - "npm run lint:js"
+    - "composer lint"
+    - "npm test"
+    - "npm run build"
+
+audit:
+  promptsDir: ".audit-prompts"
+  categories:
+    - "security"
+    - "performance"
+    - "code-quality"
+    - "javascript"
+  targetDirs:
+    - "includes"
+    - "src"
+  createIssues: true
+  autoFix: true
