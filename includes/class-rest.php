@@ -459,6 +459,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'Settings are missing or invalid.', 'performance-optimisation' ) );
 			}
 
+			// Validate that only known top-level setting keys are present.
+			$allowed_keys = array(
+				'file_optimisation',
+				'preload_settings',
+				'image_optimisation',
+				'database_cleanup',
+				'object_cache',
+				'performance_audit',
+				'core_tweaks',
+				'cache_settings',
+			);
+
+			foreach ( array_keys( $data['settings'] ) as $key ) {
+				if ( ! in_array( $key, $allowed_keys, true ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid setting key detected.', 'performance-optimisation' ) );
+				}
+			}
+
 			// Sanitize settings before saving.
 			$sanitized_settings = $this->sanitize_settings_recursively( $data['settings'] );
 

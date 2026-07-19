@@ -62,9 +62,13 @@ const PluginSetting = ( { options } ) => {
 	}, [] );
 
 	// Phase 2 — PageSpeed API key state.
-	const [ pagespeedApiKey, setPagespeedApiKey ] = useState(
-		options?.performance_audit?.pagespeed_api_key ?? ''
-	);
+	// Security: use boolean flag only, do not expose the actual key to the client.
+	const apiKeyConfigured =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings.performance_audit?.pagespeedApiKeyConfigured ?? false
+			: false;
+
+	const [ newApiKey, setNewApiKey ] = useState( '' );
 	const [ savingApiKey, setSavingApiKey ] = useState( false );
 	const [ apiKeyNotification, setApiKeyNotification ] = useState( {
 		message: '',
@@ -81,10 +85,11 @@ const PluginSetting = ( { options } ) => {
 				tab: 'performance_audit',
 				settings: {
 					...currentSettings,
-					pagespeed_api_key: pagespeedApiKey,
+					pagespeed_api_key: newApiKey,
 				},
 			} );
 			if ( response.success ) {
+				setNewApiKey( '' );
 				setApiKeyNotification( {
 					message: __( 'API key saved.', 'performance-optimisation' ),
 					success: true,
@@ -461,6 +466,31 @@ const PluginSetting = ( { options } ) => {
 						) }
 					</p>
 
+					<div
+						className={ `wppo-notice wppo-notice--${
+							apiKeyConfigured ? 'success' : 'warning'
+						}` }
+						style={ { marginBottom: '16px' } }
+					>
+						<FontAwesomeIcon
+							icon={
+								apiKeyConfigured
+									? faCheckCircle
+									: faExclamationCircle
+							}
+							style={ { marginRight: '8px' } }
+						/>
+						{ apiKeyConfigured
+							? __(
+									'API key is configured.',
+									'performance-optimisation'
+							  )
+							: __(
+									'API key is not configured.',
+									'performance-optimisation'
+							  ) }
+					</div>
+
 					{ apiKeyNotification.message && (
 						<div
 							className={ `wppo-notice wppo-notice--${
@@ -487,20 +517,22 @@ const PluginSetting = ( { options } ) => {
 							className="wppo-field-label"
 							htmlFor="pagespeed-api-key"
 						>
-							{ __(
-								'Google PageSpeed API Key',
-								'performance-optimisation'
-							) }
+							{ __( 'New API Key', 'performance-optimisation' ) }
 						</label>
 						<input
 							type="password"
 							id="pagespeed-api-key"
 							className="wppo-input"
-							value={ pagespeedApiKey }
-							onChange={ ( e ) =>
-								setPagespeedApiKey( e.target.value )
+							value={ newApiKey }
+							onChange={ ( e ) => setNewApiKey( e.target.value ) }
+							placeholder={
+								apiKeyConfigured
+									? __(
+											'Leave empty to keep current key',
+											'performance-optimisation'
+									  )
+									: 'AIza...'
 							}
-							placeholder="AIza..."
 							autoComplete="off"
 							aria-describedby="pagespeed-api-key-desc"
 						/>

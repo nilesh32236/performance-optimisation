@@ -93,6 +93,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	const [ bgProcessing, setBgProcessing ] = useState( false );
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
 	const pollingRef = useRef( null );
+	const submittingRef = useRef( false );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const [ announcement, setAnnouncement ] = useState( '' );
 
@@ -226,6 +227,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	);
 
 	const optimizeImages = useCallback( () => {
+		if (
+			loading.optimize_images ||
+			bgProcessing ||
+			submittingRef.current
+		) {
+			return;
+		}
+		submittingRef.current = true;
 		handleLoading( 'optimize_images', true );
 
 		apiCall( 'optimise_image', {
@@ -272,8 +281,18 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					}
 				}
 			} )
-			.finally( () => handleLoading( 'optimize_images', false ) );
-	}, [ handleLoading, pendingPaths, pollJobStatus, updateState ] );
+			.finally( () => {
+				submittingRef.current = false;
+				handleLoading( 'optimize_images', false );
+			} );
+	}, [
+		handleLoading,
+		pendingPaths,
+		pollJobStatus,
+		updateState,
+		bgProcessing,
+		loading.optimize_images,
+	] );
 
 	const removeImages = useCallback( () => {
 		handleLoading( 'remove_images', true );

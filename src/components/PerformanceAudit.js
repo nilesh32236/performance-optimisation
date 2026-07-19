@@ -7,7 +7,7 @@
  * @since 1.5.0
  */
 
-import { useState } from '@wordpress/element';
+import { useState, useRef } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faSearch,
@@ -219,12 +219,17 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 	const [ result, setResult ] = useState( null );
 	const [ error, setError ] = useState( null );
 	const [ devMode, setDevMode ] = useState( false );
+	const submittingRef = useRef( false );
 
 	const handleDevModeToggle = ( e ) => {
 		setDevMode( e.target.checked );
 	};
 
 	const handleScan = async ( e, force = false ) => {
+		if ( scanning || submittingRef.current ) {
+			return;
+		}
+		submittingRef.current = true;
 		if ( e ) {
 			e.preventDefault();
 		}
@@ -280,6 +285,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 			);
 			console.error( 'Performance scan error:', err );
 		} finally {
+			submittingRef.current = false;
 			setScanning( false );
 		}
 	};
