@@ -225,6 +225,9 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 	};
 
 	const handleScan = async ( e, force = false ) => {
+		if ( scanning ) {
+			return;
+		}
 		if ( e ) {
 			e.preventDefault();
 		}

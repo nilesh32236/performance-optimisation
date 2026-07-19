@@ -220,7 +220,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	);
 
 	const handleScan = useCallback( async () => {
-		if ( ! url ) {
+		if ( ! url || scanning || pending ) {
 			return;
 		}
 
@@ -255,7 +255,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			);
 			console.error( 'PageSpeed scan error:', err );
 		}
-	}, [ url, strategy, stopPolling, pollForResults ] );
+	}, [ url, strategy, stopPolling, pollForResults, scanning, pending ] );
 
 	const vitalsLabels = {
 		fcp: __( 'First Contentful Paint', 'performance-optimisation' ),
