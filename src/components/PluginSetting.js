@@ -1,4 +1,4 @@
-import { useState, useRef } from '@wordpress/element';
+import { useState, useRef, useEffect } from '@wordpress/element';
 import { apiCall, fetchRecentActivities } from '../lib/apiRequest';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -25,6 +25,13 @@ const PluginSetting = ( { options } ) => {
 	} );
 	const [ confirmImport, setConfirmImport ] = useState( false );
 	const fileInputRef = useRef( null );
+	const cancelledRef = useRef( false );
+
+	useEffect( () => {
+		return () => {
+			cancelledRef.current = true;
+		};
+	}, [] );
 
 	// Phase 2 — PageSpeed API key state.
 	const [ pagespeedApiKey, setPagespeedApiKey ] = useState(
@@ -170,10 +177,9 @@ const PluginSetting = ( { options } ) => {
 		setIsImporting( true );
 
 		const reader = new FileReader();
-		const cancelled = false;
 
 		reader.onerror = () => {
-			if ( cancelled ) {
+			if ( cancelledRef.current ) {
 				return;
 			}
 			setNotification( {
@@ -185,7 +191,7 @@ const PluginSetting = ( { options } ) => {
 		};
 
 		reader.onabort = () => {
-			if ( cancelled ) {
+			if ( cancelledRef.current ) {
 				return;
 			}
 			setNotification( {
@@ -197,7 +203,7 @@ const PluginSetting = ( { options } ) => {
 		};
 
 		reader.onload = ( e ) => {
-			if ( cancelled ) {
+			if ( cancelledRef.current ) {
 				return;
 			}
 			try {
@@ -207,7 +213,7 @@ const PluginSetting = ( { options } ) => {
 					settings: fileData,
 				} )
 					.then( ( data ) => {
-						if ( cancelled ) {
+						if ( cancelledRef.current ) {
 							return;
 						}
 						if ( data.success ) {
@@ -230,7 +236,7 @@ const PluginSetting = ( { options } ) => {
 						} );
 					} )
 					.catch( () => {
-						if ( cancelled ) {
+						if ( cancelledRef.current ) {
 							return;
 						}
 						setNotification( {
@@ -242,12 +248,12 @@ const PluginSetting = ( { options } ) => {
 						} );
 					} )
 					.finally( () => {
-						if ( ! cancelled ) {
+						if ( ! cancelledRef.current ) {
 							setIsImporting( false );
 						}
 					} );
 			} catch ( _error ) {
-				if ( cancelled ) {
+				if ( cancelledRef.current ) {
 					return;
 				}
 				setNotification( {

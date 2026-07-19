@@ -464,7 +464,7 @@ const ImageOptimization = ( { options = {} } ) => {
 														settings.selectedPostType.includes(
 															type
 														)
-															? 'active'
+															? 'wppo-post-type-chip--active'
 															: ''
 													}` }
 												>

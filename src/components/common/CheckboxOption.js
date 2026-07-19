@@ -1,3 +1,5 @@
+import { useState } from '@wordpress/element';
+
 /**
  * A reusable checkbox option component with optional description and nested settings.
  *  * Improved for Premium Indigo Design System.
@@ -28,11 +30,10 @@ export const CheckboxOption = ( {
 	description,
 	children,
 } ) => {
-	const id =
-		idProp ??
-		( description
-			? `cb-${ Math.random().toString( 36 ).slice( 2, 9 ) }`
-			: undefined );
+	const [ generatedId ] = useState(
+		() => `cb-${ Math.random().toString( 36 ).slice( 2, 9 ) }`
+	);
+	const id = idProp ?? ( description ? generatedId : undefined );
 	const descriptionId = description ? `desc-${ id }` : undefined;
 
 	return (

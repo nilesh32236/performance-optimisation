@@ -163,7 +163,10 @@ const App = () => {
 		) {
 			const fetchActivities = async () => {
 				try {
-					const data = await fetchRecentActivities();
+					const data = await fetchRecentActivities(
+						1,
+						abortController.signal
+					);
 					if ( ! abortController.signal.aborted ) {
 						setRecentActivities( data );
 						hasFetchedActivities.current = true;
@@ -190,17 +193,19 @@ const App = () => {
 			}
 			hasFetchedRules.current = true;
 			try {
-				const res = await fetchServerRules();
+				const res = await fetchServerRules( abortController.signal );
 				if ( ! abortController.signal.aborted ) {
 					if ( res.success ) {
 						setServerRules( res.data );
 					} else {
 						hasFetchedRules.current = false;
 					}
+				} else {
+					hasFetchedRules.current = false;
 				}
 			} catch ( err ) {
+				hasFetchedRules.current = false;
 				if ( ! abortController.signal.aborted ) {
-					hasFetchedRules.current = false;
 					console.error( 'Failed to fetch server rules', err );
 				}
 			}

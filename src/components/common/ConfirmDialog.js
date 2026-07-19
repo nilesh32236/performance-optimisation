@@ -101,7 +101,10 @@ const ConfirmDialog = ( {
 			className="wppo-dialog-overlay"
 			onClick={ onCancel }
 			onKeyDown={ ( e ) => {
-				if ( e.key === 'Enter' || e.key === ' ' ) {
+				if (
+					e.target === e.currentTarget &&
+					( e.key === 'Enter' || e.key === ' ' )
+				) {
 					onCancel();
 				}
 			} }
