@@ -136,19 +136,27 @@ jobs:
 
             # Count improvements using multiple patterns — OpenCode may format
             # them as numbered sections (### 1. Title), bullet lists, or other styles.
-            # Try all known patterns and take the maximum.
-            COUNT_TITLE=$(grep -cE "^\-\s+\*\*Title\*\*:|^\-\s+\*\*Feature Name\*\*:" /tmp/wp-research.md 2>/dev/null || echo 0)
-            COUNT_NUMBERED=$(grep -cE "^###\s+[0-9]+\." /tmp/wp-research.md 2>/dev/null || echo 0)
-            COUNT_BULLETS=$(grep -cE "^#{1,3}\s.+(Feature|Improvement|Integration|Opportunity|Enhancement)" /tmp/wp-research.md 2>/dev/null || echo 0)
+            # NOTE: use '|| true' not '|| echo 0' — grep -c already prints "0" when
+            # it finds no matches (and exits 1). '|| echo 0' would add a second "0"
+            # making the variable "0\n0" which breaks bash arithmetic.
+            COUNT_TITLE=$(grep -cE "^\-\s+\*\*Title\*\*:|^\-\s+\*\*Feature Name\*\*:" /tmp/wp-research.md 2>/dev/null || true)
+            COUNT_NUMBERED=$(grep -cE "^###\s+[0-9]+\." /tmp/wp-research.md 2>/dev/null || true)
+            COUNT_BULLETS=$(grep -cE "^#{1,3}\s.+(Feature|Improvement|Integration|Opportunity|Enhancement)" /tmp/wp-research.md 2>/dev/null || true)
+
+            # Default to 0 if var is empty (file didn't exist when grep ran)
+            COUNT_TITLE=${COUNT_TITLE:-0}
+            COUNT_NUMBERED=${COUNT_NUMBERED:-0}
+            COUNT_BULLETS=${COUNT_BULLETS:-0}
 
             # Use the highest count across all patterns
             IMPROVEMENTS=$(( COUNT_TITLE > COUNT_NUMBERED ? COUNT_TITLE : COUNT_NUMBERED ))
             IMPROVEMENTS=$(( IMPROVEMENTS > COUNT_BULLETS ? IMPROVEMENTS : COUNT_BULLETS ))
 
-            # Fallback: if file has substantial content and a ## section header,
+            # Fallback: if file has substantial content and multiple ## sections,
             # it almost certainly has improvements — treat as at least 1
             FILE_SIZE=$(wc -c < /tmp/wp-research.md)
-            HAS_SECTIONS=$(grep -c "^## " /tmp/wp-research.md 2>/dev/null || echo 0)
+            HAS_SECTIONS=$(grep -c "^## " /tmp/wp-research.md 2>/dev/null || true)
+            HAS_SECTIONS=${HAS_SECTIONS:-0}
             if [ "$IMPROVEMENTS" -eq 0 ] && [ "$FILE_SIZE" -gt 500 ] && [ "$HAS_SECTIONS" -gt 1 ]; then
               IMPROVEMENTS=1
               echo "::notice::Pattern match returned 0 but file has ${FILE_SIZE} bytes and ${HAS_SECTIONS} sections — treating as 1 improvement"
