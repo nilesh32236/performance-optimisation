@@ -123,12 +123,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 			'$site_url       = \'' . $site_url . '\';' . PHP_EOL .
 			'$root_directory = $_SERVER[\'DOCUMENT_ROOT\'];' . PHP_EOL .
-			'$site_domain    = isset( $_SERVER[\'HTTP_HOST\'] ) ? (string) $_SERVER[\'HTTP_HOST\'] : \'\';' . PHP_EOL .
-			'$request_uri    = isset( $_SERVER[\'REQUEST_URI\'] ) ? (string) parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH ) : \'\';' . PHP_EOL .
-			'$request_uri    = rawurldecode( $request_uri );' . PHP_EOL .
-			'$request_uri    = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL . PHP_EOL .
+			'$raw_domain    = isset( $_SERVER[\'HTTP_HOST\'] ) ? (string) $_SERVER[\'HTTP_HOST\'] : \'\';' . PHP_EOL .
+			'$site_domain   = preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $raw_domain );' . PHP_EOL .
+			'$request_uri   = isset( $_SERVER[\'REQUEST_URI\'] ) ? (string) parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH ) : \'\';' . PHP_EOL .
+			'$request_uri   = rawurldecode( $request_uri );' . PHP_EOL .
+			'$request_uri   = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL . PHP_EOL .
 
-			'if ( strpos( $site_domain, \'..\' ) !== false || strpos( $site_domain, \'/\' ) !== false || strpos( $site_domain, \'\\\\\' ) !== false || strpos( $request_uri, \'..\' ) !== false ) {' . PHP_EOL .
+			'if ( \'\' === $site_domain || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
@@ -143,8 +144,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL . PHP_EOL .
 
 			'function is_user_logged_in_without_wp( $site_url ) {' . PHP_EOL .
-			'	if ( isset( $_COOKIE[ \'wordpress_logged_in_\' . md5( $site_url ) ] ) ) {' . PHP_EOL .
+			'	$logged_in_cookie = \'wordpress_logged_in_\' . md5( $site_url );' . PHP_EOL .
+			'	$cookie_prefix = \'wp-wpml_\';' . PHP_EOL .
+			'	if ( isset( $_COOKIE[ $logged_in_cookie ] ) ) {' . PHP_EOL .
 			'		return true;' . PHP_EOL .
+			'	}' . PHP_EOL .
+			'	foreach ( $_COOKIE as $name => $value ) {' . PHP_EOL .
+			'		if ( strpos( $name, \'wordpress_logged_in_\' ) === 0 || strpos( $name, \'wp-rs-\' ) === 0 ) {' . PHP_EOL .
+			'			return true;' . PHP_EOL .
+			'		}' . PHP_EOL .
 			'	}' . PHP_EOL .
 			'	return false;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
@@ -152,6 +160,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'if ( ! is_user_logged_in_without_wp( $site_url ) &&' . PHP_EOL .
 			'	( empty( $_SERVER[\'QUERY_STRING\'] ) )' . PHP_EOL .
 			') {' . PHP_EOL .
+			'	header( \'X-Content-Type-Options: nosniff\' );' . PHP_EOL .
+			'	header( \'X-Frame-Options: SAMEORIGIN\' );' . PHP_EOL .
+			'	header( \'Referrer-Policy: strict-origin-when-cross-origin\' );' . PHP_EOL .
 			'	if ( file_exists( $gzip_file_path ) ) {' . PHP_EOL .
 			'		$last_modified_time = filemtime( $gzip_file_path );' . PHP_EOL .
 			'		$etag               = md5_file( $gzip_file_path );' . PHP_EOL .
@@ -174,7 +185,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'		$etag               = md5_file( $file_path );' . PHP_EOL .
 			'		header( \'Last-Modified: \' . gmdate( \'D, d M Y H:i:s\', $last_modified_time ) . \' GMT\' );' . PHP_EOL .
 			'		header( \'ETag: "\' . $etag . \'"\' );' . PHP_EOL .
-			'		header( \'Content-Type: text/html\' );' . PHP_EOL . PHP_EOL .
+			'		header( \'Content-Type: text/html\' );' . PHP_EOL .
+			'		header( \'X-Content-Type-Options: nosniff\' );' . PHP_EOL .
+			'		header( \'X-Frame-Options: SAMEORIGIN\' );' . PHP_EOL .
+			'		header( \'Referrer-Policy: strict-origin-when-cross-origin\' );' . PHP_EOL . PHP_EOL .
 
 			'		if ( ( isset( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) && strtotime( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) >= $last_modified_time ) ||' . PHP_EOL .
 			'		( isset( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) && trim( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) === $etag ) ) {' . PHP_EOL .

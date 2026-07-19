@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 import { useState, useEffect } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
@@ -64,7 +65,7 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 				enableServerRules: false,
 			} ) );
 		}
-	}, [ serverRules, settings.enableServerRules, setSettings ] );
+	}, [ serverRules, settings.enableServerRules ] );
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
@@ -104,11 +105,31 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 	};
 
 	const subTabs = [
-		{ id: 'assets', label: 'Assets', icon: faCode },
-		{ id: 'scripts', label: 'Scripts', icon: faRocket },
-		{ id: 'ecommerce', label: 'E-Commerce', icon: faStore },
-		{ id: 'network', label: 'Network', icon: faServer },
-		{ id: 'core', label: 'Core', icon: faShieldAlt },
+		{
+			id: 'assets',
+			label: __( 'Assets', 'performance-optimisation' ),
+			icon: faCode,
+		},
+		{
+			id: 'scripts',
+			label: __( 'Scripts', 'performance-optimisation' ),
+			icon: faRocket,
+		},
+		{
+			id: 'ecommerce',
+			label: __( 'E-Commerce', 'performance-optimisation' ),
+			icon: faStore,
+		},
+		{
+			id: 'network',
+			label: __( 'Network', 'performance-optimisation' ),
+			icon: faServer,
+		},
+		{
+			id: 'core',
+			label: __( 'Core', 'performance-optimisation' ),
+			icon: faShieldAlt,
+		},
 	];
 	const handleSubTabKeyDown = ( e, index ) => {
 		let nextIndex;
@@ -136,14 +157,20 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
-				title="File Optimization"
-				description="Fine-tune how your site delivers CSS, JS, and HTML for maximum performance."
+				title={ __( 'File Optimization', 'performance-optimisation' ) }
+				description={ __(
+					'Fine-tune how your site delivers CSS, JS, and HTML for maximum performance.',
+					'performance-optimisation'
+				) }
 				actions={
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"
 						isLoading={ isLoading }
 						onClick={ handleSubmit }
-						label="Save Settings"
+						label={ __(
+							'Save Settings',
+							'performance-optimisation'
+						) }
 					/>
 				}
 			>
@@ -169,8 +196,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						<button
 							key={ tab.id }
 							id={ `tab-${ tab.id }` }
-							className={ `wppo-sub-tab ${
-								activeSubTab === tab.id ? 'active' : ''
+							className={ `wppo-sub-tab${
+								activeSubTab === tab.id
+									? ' wppo-sub-tab--active'
+									: ''
 							}` }
 							onClick={ () => setActiveSubTab( tab.id ) }
 							onKeyDown={ ( e ) =>

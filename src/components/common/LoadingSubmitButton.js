@@ -42,7 +42,7 @@ const LoadingSubmitButton = ( {
 					style={ { marginRight: '8px' } }
 				/>
 			) }
-			<span role="status" aria-live="polite">
+			<span>
 				{ isLoading ? loadingLabel || children : label || children }
 			</span>
 		</button>

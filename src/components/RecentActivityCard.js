@@ -8,6 +8,7 @@
  * @since 1.5.0
  */
 
+import { __ } from '@wordpress/i18n';
 import { memo } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHistory, faArrowRight } from '@fortawesome/free-solid-svg-icons';
@@ -16,7 +17,10 @@ import FeatureCard from './common/FeatureCard';
 const RecentActivityCard = ( { activities, onNavigate } ) => {
 	return (
 		<FeatureCard
-			title="Recent Optimization Activity"
+			title={ __(
+				'Recent Optimization Activity',
+				'performance-optimisation'
+			) }
 			icon={ <FontAwesomeIcon icon={ faHistory } /> }
 			footer={
 				<button
@@ -24,7 +28,7 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 					className="wppo-button wppo-button--secondary"
 					onClick={ () => onNavigate( 'tools' ) }
 				>
-					View Full Log
+					{ __( 'View Full Log', 'performance-optimisation' ) }
 					<FontAwesomeIcon icon={ faArrowRight } />
 				</button>
 			}
@@ -33,28 +37,28 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 				className="wppo-text-muted wppo-text-small"
 				style={ { marginBottom: '16px' } }
 			>
-				The 5 most recent actions performed by the plugin. Open the
-				Tools tab for the complete paginated log.
+				{ __(
+					'The 5 most recent actions performed by the plugin. Open the Tools tab for the complete paginated log.',
+					'performance-optimisation'
+				) }
 			</p>
 			<div className="wppo-activity-wrapper">
 				{ activities?.length ? (
 					<ul className="wppo-activity-list">
-						{ activities.slice( 0, 5 ).map( ( activity, index ) => (
-							<li key={ index }>
-								{ /* Activity text is sanitized server-side via wp_kses */ }
-								{ /* eslint-disable-next-line react/no-danger */ }
-								<div
-									className="wppo-activity-text"
-									dangerouslySetInnerHTML={ {
-										__html: activity.activity,
-									} }
-								/>
+						{ activities.slice( 0, 5 ).map( ( activity ) => (
+							<li key={ activity.id ?? activity.activity }>
+								<span className="wppo-activity-text">
+									{ activity.activity }
+								</span>
 							</li>
 						) ) }
 					</ul>
 				) : (
 					<div className="wppo-empty-state">
-						No optimization activity recorded yet.
+						{ __(
+							'No optimization activity recorded yet.',
+							'performance-optimisation'
+						) }
 					</div>
 				) }
 			</div>

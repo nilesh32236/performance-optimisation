@@ -45,7 +45,7 @@ describe( 'CheckboxOption', () => {
 			'This is a feature description.'
 		);
 		expect( descriptionEl ).toBeInTheDocument();
-		expect( descriptionEl ).toHaveClass( 'option-description' );
+		expect( descriptionEl ).toHaveClass( 'wppo-option-description' );
 
 		const checkbox = screen.getByRole( 'checkbox', {
 			name: /Enable Feature/i,

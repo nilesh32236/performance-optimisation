@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 import { useState, useEffect, useCallback } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
@@ -169,14 +170,20 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
-				title="Database Cleanup"
-				description="Optimize your database by removing junk data and optimizing table overhead."
+				title={ __( 'Database Cleanup', 'performance-optimisation' ) }
+				description={ __(
+					'Optimize your database by removing junk data and optimizing table overhead.',
+					'performance-optimisation'
+				) }
 				actions={
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"
 						isLoading={ isSaving }
 						onClick={ onSubmitSettings }
-						label="Save Settings"
+						label={ __(
+							'Save Settings',
+							'performance-optimisation'
+						) }
 					/>
 				}
 			/>

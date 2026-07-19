@@ -36,7 +36,7 @@
 		color: var(--wppo-primary);
 	}
 
-	&.active {
+	&--active {
 		background: var(--wppo-primary);
 		color: #fff;
 		border-color: var(--wppo-primary);
@@ -76,7 +76,7 @@
 		background: var(--wppo-primary-soft);
 	}
 
-	&.active {
+	&--active {
 		background: var(--wppo-primary);
 		border-color: var(--wppo-primary);
 		color: #ffffff;

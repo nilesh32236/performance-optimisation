@@ -170,8 +170,12 @@ const PluginSetting = ( { options } ) => {
 		setIsImporting( true );
 
 		const reader = new FileReader();
+		const cancelled = false;
 
 		reader.onerror = () => {
+			if ( cancelled ) {
+				return;
+			}
 			setNotification( {
 				message: __( 'Error reading file', 'performance-optimisation' ),
 				success: false,
@@ -181,6 +185,9 @@ const PluginSetting = ( { options } ) => {
 		};
 
 		reader.onabort = () => {
+			if ( cancelled ) {
+				return;
+			}
 			setNotification( {
 				message: __( 'Error reading file', 'performance-optimisation' ),
 				success: false,
@@ -190,6 +197,9 @@ const PluginSetting = ( { options } ) => {
 		};
 
 		reader.onload = ( e ) => {
+			if ( cancelled ) {
+				return;
+			}
 			try {
 				const fileData = JSON.parse( e.target.result );
 				apiCall( 'import_settings', {
@@ -197,8 +207,11 @@ const PluginSetting = ( { options } ) => {
 					settings: fileData,
 				} )
 					.then( ( data ) => {
+						if ( cancelled ) {
+							return;
+						}
 						if ( data.success ) {
-							wppoSettings.settings = fileData;
+							wppoSettings.settings = Object.freeze( fileData );
 							resetFileInput();
 						}
 						setNotification( {
@@ -217,6 +230,9 @@ const PluginSetting = ( { options } ) => {
 						} );
 					} )
 					.catch( () => {
+						if ( cancelled ) {
+							return;
+						}
 						setNotification( {
 							message: __(
 								'Error reading file',
@@ -226,9 +242,14 @@ const PluginSetting = ( { options } ) => {
 						} );
 					} )
 					.finally( () => {
-						setIsImporting( false );
+						if ( ! cancelled ) {
+							setIsImporting( false );
+						}
 					} );
 			} catch ( _error ) {
+				if ( cancelled ) {
+					return;
+				}
 				setNotification( {
 					message: __(
 						'Invalid file format. Please select a valid JSON file.',
@@ -345,8 +366,8 @@ const PluginSetting = ( { options } ) => {
 						<>
 							{ logEntries.length > 0 ? (
 								<ul className="wppo-activity-list wppo-activity-list--full">
-									{ logEntries.map( ( entry, i ) => (
-										<li key={ i }>
+									{ logEntries.map( ( entry ) => (
+										<li key={ entry.id ?? entry.activity }>
 											<div className="wppo-activity-text">
 												{ entry.activity }
 											</div>

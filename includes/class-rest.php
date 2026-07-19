@@ -241,8 +241,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$sanitized[ $safe_key ] = $this->sanitize_settings_recursively( $value );
 				} elseif ( is_bool( $value ) ) {
 					$sanitized[ $safe_key ] = (bool) $value;
-				} else {
+				} elseif ( is_numeric( $value ) ) {
+					$sanitized[ $safe_key ] = (int) $value;
+				} elseif ( strpos( $safe_key, 'api_key' ) !== false || strpos( $safe_key, 'password' ) !== false ) {
+					$sanitized[ $safe_key ] = sanitize_text_field( $value );
+				} elseif ( strpos( $safe_key, 'url' ) !== false || strpos( $safe_key, 'cdn' ) !== false || strpos( $safe_key, 'host' ) !== false || strpos( $safe_key, 'origin' ) !== false ) {
+					$sanitized[ $safe_key ] = esc_url_raw( $value );
+				} elseif ( strpos( $safe_key, 'exclude' ) !== false || strpos( $safe_key, 'preload' ) !== false || strpos( $safe_key, 'delay' ) !== false || strpos( $safe_key, 'list' ) !== false ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( $value );
+				} else {
+					$sanitized[ $safe_key ] = sanitize_text_field( $value );
 				}
 			}
 			return $sanitized;
@@ -806,6 +814,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
 				wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'performance-optimisation' ) ), 403 );
 			}
+
+			check_ajax_referer( 'wp_rest', 'nonce' );
 
 			wp_send_json_success(
 				array(

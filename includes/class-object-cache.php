@@ -238,6 +238,11 @@ class Object_Cache {
 			$config['nodes'] = wppo_parse_nodes( $config['nodes'] );
 		}
 
+		// Replace password with constant reference to avoid plaintext in config file.
+		if ( isset( $config['password'] ) && '' !== $config['password'] ) {
+			$config['password'] = 'WPPO_REDIS_PASSWORD';
+		}
+
 		$config_data = $config;
 
 		// Write config file using var_export for clean array representation.

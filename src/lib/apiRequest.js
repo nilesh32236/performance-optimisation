@@ -18,13 +18,18 @@ export const apiCall = ( action, body, method = 'POST' ) => {
 			'X-WP-Nonce': wppoSettings.nonce,
 		},
 		...( ! isGet && { body: JSON.stringify( body ) } ),
-	} ).then( async ( response ) => {
-		const data = await response.json();
-		if ( 'update_settings' === action && data.success ) {
-			wppoSettings.settings = data.data;
-		}
-		return data;
-	} );
+	} )
+		.then( async ( response ) => {
+			const data = await response.json();
+			if ( 'update_settings' === action && data.success && data.data ) {
+				wppoSettings.settings = Object.freeze( data.data );
+			}
+			return data;
+		} )
+		.catch( ( error ) => {
+			console.error( 'API call failed:', action, error );
+			throw error;
+		} );
 };
 
 /**
