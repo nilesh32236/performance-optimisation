@@ -9,7 +9,7 @@
  */
 
 import { __ } from '@wordpress/i18n';
-import { memo, RawHTML } from '@wordpress/element';
+import { memo } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faHistory, faArrowRight } from '@fortawesome/free-solid-svg-icons';
 import FeatureCard from './common/FeatureCard';
@@ -46,9 +46,9 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 				{ activities?.length ? (
 					<ul className="wppo-activity-list">
 						{ activities.slice( 0, 5 ).map( ( activity ) => (
-							<li key={ activity.id ?? activity.activity }>
+							<li key={ activity.id }>
 								<span className="wppo-activity-text">
-									<RawHTML>{ activity.activity }</RawHTML>
+									{ activity.activity }
 								</span>
 							</li>
 						) ) }

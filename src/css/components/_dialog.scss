@@ -10,6 +10,10 @@
 	justify-content: center;
 	padding: 20px;
 	animation: wppo-overlay-in 0.15s ease;
+
+	@media (prefers-reduced-motion: reduce) {
+		animation: none;
+	}
 }
 
 @keyframes wppo-overlay-in {
@@ -35,6 +39,10 @@
 			opacity: 1;
 			transform: scale(1) translateY(0);
 		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		animation: none;
 	}
 
 	h3 {

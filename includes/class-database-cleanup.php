@@ -6,7 +6,7 @@
  * post revisions, auto-drafts, trashed posts/comments, spam comments,
  * expired transients, and orphaned post meta.
  *
- * @package PerformanceOptimise
+ * @package PerformanceOptimise\Inc
  * @since 1.1.0
  */
 

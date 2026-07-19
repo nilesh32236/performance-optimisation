@@ -6,7 +6,7 @@
  * for file system and resource management tasks, including cache directory creation,
  * filesystem initialization, URL processing, generating preload links, and handling image MIME types.
  *
- * @package PerformanceOptimise
+ * @package PerformanceOptimise\Inc
  * @since 1.0.0
  */
 

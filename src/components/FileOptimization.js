@@ -179,6 +179,8 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						className={ `wppo-notice wppo-notice--${
 							notification.success ? 'success' : 'error'
 						} wppo-mb-20` }
+						role="alert"
+						aria-live="polite"
 					>
 						<FontAwesomeIcon
 							icon={

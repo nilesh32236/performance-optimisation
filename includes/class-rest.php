@@ -7,7 +7,7 @@
  * It provides endpoints for interacting with the plugin's features programmatically.
  *
  * @since 1.0.0
- * @package PerformanceOptimise
+ * @package PerformanceOptimise\Inc
  */
 
 namespace PerformanceOptimise\Inc;

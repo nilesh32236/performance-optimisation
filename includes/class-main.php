@@ -6,7 +6,7 @@
  * which handles tasks like including necessary files, setting up hooks, and managing
  * image optimisation, JS and CSS minification, and more.
  *
- * @package PerformanceOptimise
+ * @package PerformanceOptimise\Inc
  * @since   1.0.0
  */
 
@@ -235,7 +235,7 @@ class Main {
 			}
 		}
 
-		add_action( 'wp_head', array( $this, 'add_preload_prefatch_preconnect' ), 1 );
+		add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
 
 		new Metabox();
 		new Cron();
@@ -725,7 +725,7 @@ class Main {
 	 *
 	 * @since 1.0.0
 	 */
-	public function add_preload_prefatch_preconnect() {
+	public function add_preload_prefetch_preconnect() {
 
 		$preload_settings = $this->options['preload_settings'] ?? array();
 

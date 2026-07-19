@@ -1,4 +1,30 @@
 /**
+ * Refresh the REST nonce from the admin-ajax endpoint.
+ *
+ * WordPress nonces have a 24-hour lifetime by default. If the admin page
+ * is left open across multiple days, the SPA needs a fresh nonce to keep
+ * making write requests.
+ *
+ * @since 1.6.0
+ * @return {Promise<string>} The refreshed nonce string.
+ */
+const refreshNonce = async () => {
+	try {
+		const res = await fetch( wppoSettings.apiUrl + 'refresh_nonce' );
+		if ( ! res.ok ) {
+			return wppoSettings.nonce;
+		}
+		const data = await res.json();
+		if ( data.success && data.nonce ) {
+			wppoSettings.nonce = data.nonce;
+		}
+	} catch ( e ) {
+		console.error( 'Nonce refresh failed:', e );
+	}
+	return wppoSettings.nonce;
+};
+
+/**
  * Make a REST API call to the Performance Optimisation plugin.
  *
  * Mutates wppoSettings.settings globally on successful `update_settings` calls.
@@ -10,28 +36,64 @@
  * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved JSON response data.
  */
-export const apiCall = ( action, body, method = 'POST', signal ) => {
+export const apiCall = async ( action, body, method = 'POST', signal ) => {
 	const isGet = 'GET' === method;
-	return fetch( wppoSettings.apiUrl + action, {
-		method,
-		headers: {
-			...( ! isGet && { 'Content-Type': 'application/json' } ),
-			'X-WP-Nonce': wppoSettings.nonce,
-		},
-		...( ! isGet && { body: JSON.stringify( body ) } ),
-		signal,
-	} )
-		.then( async ( response ) => {
-			const data = await response.json();
-			if ( 'update_settings' === action && data.success && data.data ) {
-				wppoSettings.settings = Object.freeze( data.data );
-			}
-			return data;
-		} )
-		.catch( ( error ) => {
-			console.error( 'API call failed:', action, error );
-			throw error;
+
+	const doFetch = ( nonce ) =>
+		fetch( wppoSettings.apiUrl + action, {
+			method,
+			headers: {
+				...( ! isGet && { 'Content-Type': 'application/json' } ),
+				'X-WP-Nonce': nonce || wppoSettings.nonce,
+			},
+			...( ! isGet && { body: JSON.stringify( body ) } ),
+			signal,
 		} );
+
+	const handleResponse = async ( response ) => {
+		let data;
+		try {
+			data = await response.json();
+		} catch ( parseError ) {
+			throw new Error(
+				`Invalid JSON response from ${ action }: ${ parseError.message }`
+			);
+		}
+
+		// Detect expired nonce (rest_forbidden, rest_cookie_invalid_nonce, etc.).
+		if (
+			! isGet &&
+			data.code &&
+			( data.code === 'rest_forbidden' ||
+				data.code === 'rest_cookie_invalid_nonce' ||
+				data.code === 'rest_cookie_nonce_invalid' )
+		) {
+			const freshNonce = await refreshNonce();
+			const retryResponse = await doFetch( freshNonce );
+			let retryData;
+			try {
+				retryData = await retryResponse.json();
+			} catch ( parseError ) {
+				throw new Error(
+					`Invalid JSON response from ${ action } (retry): ${ parseError.message }`
+				);
+			}
+			return retryData;
+		}
+
+		if ( 'update_settings' === action && data.success && data.data ) {
+			wppoSettings.settings = Object.freeze( data.data );
+		}
+		return data;
+	};
+
+	try {
+		const response = await doFetch( null );
+		return await handleResponse( response );
+	} catch ( error ) {
+		console.error( 'API call failed:', action, error );
+		throw error;
+	}
 };
 
 /**

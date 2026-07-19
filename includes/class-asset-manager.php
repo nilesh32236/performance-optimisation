@@ -6,7 +6,7 @@
  * on the frontend. Admins can selectively disable assets from the post
  * editor meta box.
  *
- * @package PerformanceOptimise
+ * @package PerformanceOptimise\Inc
  * @since   1.1.0
  */
 
