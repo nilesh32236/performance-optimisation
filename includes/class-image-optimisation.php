@@ -1200,8 +1200,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			preg_match( '/\bwidth=["\']?(\d+)["\']?/i', $img_attributes, $width_matches );
 			preg_match( '/\bheight=["\']?(\d+)["\']?/i', $img_attributes, $height_matches );
 
-			$width  = isset( $width_matches[1] ) ? $width_matches[1] : '100';
-			$height = isset( $height_matches[1] ) ? $height_matches[1] : '100';
+			$width  = isset( $width_matches[1] ) ? absint( $width_matches[1] ) : 100;
+			$height = isset( $height_matches[1] ) ? absint( $height_matches[1] ) : 100;
 
 			$svg_content = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '"><rect width="100%" height="100%" fill="#cfd4db" /></svg>';
 

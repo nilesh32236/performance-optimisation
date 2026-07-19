@@ -129,7 +129,7 @@ class Img_Converter {
 		$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
 		if ( filesize( $source_image ) > $max_bytes ) {
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( sprintf( 'WPPO Error: Image filesize (%d bytes) exceeds limit (%d bytes) - %s', filesize( $source_image ), $max_bytes, $source_image ) );
+			error_log( sprintf( 'WPPO Error: Image filesize (%d bytes) exceeds limit (%d bytes) - %s', filesize( $source_image ), $max_bytes, str_replace( ABSPATH, '', $source_image ) ) );
 			$this->update_conversion_status( $source_image, 'failed', $format );
 			return false;
 		}
@@ -646,7 +646,8 @@ class Img_Converter {
 
 		// Only queue images that live inside wp-content/uploads.
 		if ( strpos( $normalized, $upload_dir ) !== 0 ) {
-			error_log( sprintf( 'WPPO: add_img_into_queue rejected path "%s" — not inside uploads directory.', $normalized ) ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( sprintf( 'WPPO: add_img_into_queue rejected path "%s" — not inside uploads directory.', str_replace( wp_normalize_path( ABSPATH ), '', $normalized ) ) );
 			return false;
 		}
 

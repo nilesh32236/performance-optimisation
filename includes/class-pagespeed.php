@@ -118,7 +118,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$request_url = $url;
 
 			// The Google PageSpeed API rejects localhost or non-public URLs.
-			if ( false !== strpos( $request_url, 'localhost' ) || false !== strpos( $request_url, '127.0.0.1' ) ) {
+			// Use wp_http_validate_url() for robust SSRF protection (rejects loopback,
+			// private/reserved IP ranges including IPv6, 0.0.0.0, 10.x, 172.16-31.x, 192.168.x).
+			if ( ! wp_http_validate_url( $request_url ) ) {
 				new Log( __( 'PageSpeed scan failed: local URL detected.', 'performance-optimisation' ) );
 				self::store_failure( $url, $strategy, 'PageSpeed cannot scan local or non-public URLs. Please use a public URL.' );
 				return;
