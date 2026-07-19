@@ -47,3 +47,6 @@
 ## 2025-01-22 - WPCS Error Suppression
 **Learning:** WordPress Coding Standards (WPCS) strongly discourages using the error suppression operator (`@`) before functions like `fopen()`. While it suppresses warnings when a file doesn't exist, it is better to rely on `file_exists()` before opening or catch exceptions.
 **Action:** Never use `@fopen()`. Rely on `file_exists()` and standard `$handle = fopen(...)` with a falsy check, and use `// phpcs:ignore` annotations to bypass strict file system rules.
+## 2024-07-19 - Avoid repeated disk operations on non-minified assets
+**Learning:** `fopen()` and `fgets()` used to determine if CSS and JS assets are already minified are extremely expensive when executed repeatedly for assets without `.min` in the name, causing significant main thread blocking.
+**Action:** Use native Object Caching (`wp_cache_get` and `wp_cache_set`) based on the file content's `md5` and modification time to bypass file reads if the check was recently executed.

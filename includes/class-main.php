@@ -908,6 +908,14 @@ class Main {
 			return true;
 		}
 
+		// Cache the file line count check to avoid expensive fopen/fgets on every page load.
+		$cache_key = 'is_min_css_' . md5( $file_path . filemtime( $file_path ) );
+		$cached    = wp_cache_get( $cache_key, 'wppo_assets', false, $found );
+
+		if ( $found ) {
+			return (bool) $cached;
+		}
+
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		$handle = fopen( $file_path, 'r' );
 		if ( ! $handle ) {
@@ -925,7 +933,10 @@ class Main {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		fclose( $handle );
 
-		return 10 >= $line_count;
+		$is_minified = 10 >= $line_count;
+		wp_cache_set( $cache_key, (int) $is_minified, 'wppo_assets' );
+
+		return $is_minified;
 	}
 
 	/**
@@ -949,6 +960,14 @@ class Main {
 			return true;
 		}
 
+		// Cache the file line count check to avoid expensive fopen/fgets on every page load.
+		$cache_key = 'is_min_js_' . md5( $file_path . filemtime( $file_path ) );
+		$cached    = wp_cache_get( $cache_key, 'wppo_assets', false, $found );
+
+		if ( $found ) {
+			return (bool) $cached;
+		}
+
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 		$handle = fopen( $file_path, 'r' );
 		if ( ! $handle ) {
@@ -966,6 +985,9 @@ class Main {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		fclose( $handle );
 
-		return 10 >= $line_count;
+		$is_minified = 10 >= $line_count;
+		wp_cache_set( $cache_key, (int) $is_minified, 'wppo_assets' );
+
+		return $is_minified;
 	}
 }
