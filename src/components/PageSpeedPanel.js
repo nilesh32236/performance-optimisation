@@ -118,6 +118,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	const [ strategy, setStrategy ] = useState( 'mobile' );
 	const pollRef = useRef( null );
 	const pollCountRef = useRef( 0 );
+	const submittingRef = useRef( false );
 
 	const stopPolling = useCallback( () => {
 		if ( pollRef.current ) {
@@ -220,9 +221,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	);
 
 	const handleScan = useCallback( async () => {
-		if ( ! url || scanning || pending ) {
+		if ( ! url || scanning || pending || submittingRef.current ) {
 			return;
 		}
+		submittingRef.current = true;
 
 		stopPolling();
 		setScanning( true );
@@ -235,6 +237,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 			if ( ! response.success ) {
 				setScanning( false );
+				submittingRef.current = false;
 				setError(
 					response.message ||
 						__(
@@ -247,9 +250,11 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 			// Job queued — start polling.
 			setPending( true );
+			submittingRef.current = false;
 			pollForResults( url, strategy );
 		} catch ( err ) {
 			setScanning( false );
+			submittingRef.current = false;
 			setError(
 				__( 'PageSpeed scan failed.', 'performance-optimisation' )
 			);

@@ -527,6 +527,12 @@ class Main {
 			set_transient( 'wppo_total_js_css', $total_js_css, 15 * MINUTE_IN_SECONDS );
 		}
 
+		// Clone options and redact sensitive keys before exposing to the client.
+		$safe_options = $this->options;
+		if ( isset( $safe_options['performance_audit']['pagespeed_api_key'] ) ) {
+			unset( $safe_options['performance_audit']['pagespeed_api_key'] );
+		}
+
 		wp_localize_script(
 			'performance-optimisation-script',
 			'wppoSettings',
@@ -534,7 +540,7 @@ class Main {
 				'apiUrl'            => get_rest_url( null, 'performance-optimisation/v1/' ),
 				'nonce'             => wp_create_nonce( 'wp_rest' ),
 				'version'           => WPPO_VERSION,
-				'settings'          => $this->options,
+				'settings'          => $safe_options,
 				'image_info'        => get_option( 'wppo_img_info', array() ),
 				'cache_size'        => $cache_size,
 				'total_js_css'      => $total_js_css,
