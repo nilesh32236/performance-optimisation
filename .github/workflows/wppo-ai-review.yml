@@ -84,7 +84,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
@@ -98,6 +98,23 @@ jobs:
           gh label create "autofix:needs-fix"            --force --color "e4e669" --description "Reviewer found issues — fix in progress" 2>/dev/null || true
           gh label create "autofix:needs-manual-review"  --force --color "d93f0b" --description "Max fix iterations reached — needs human review" 2>/dev/null || true
           gh label create "autofix-trigger"              --force --color "c2e0c6" --description "Triggers autofix workflow on issues" 2>/dev/null || true
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          tools: composer:v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          composer install --ignore-platform-reqs
+          npm ci || npm install
 
       - name: Fix Issue
         uses: nilesh32236/opencode-ai-reviewer@latest
@@ -166,7 +183,7 @@ jobs:
             echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
@@ -179,7 +196,7 @@ jobs:
           tools: composer:v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -254,7 +271,7 @@ jobs:
             echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
@@ -267,7 +284,7 @@ jobs:
           tools: composer:v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
