@@ -94,7 +94,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public function __construct() {
 			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
-			if ( strpos( $domain, '..' ) !== false || strpos( $domain, '/' ) !== false || strpos( $domain, '\\' ) !== false ) {
+			if (
+				strpos( $domain, '..' ) !== false ||
+				strpos( $domain, '/' ) !== false ||
+				strpos( $domain, '\\' ) !== false ||
+				! preg_match( '/^[a-z0-9\.\-]+$/i', $domain )
+			) {
 				$domain = '';
 			}
 

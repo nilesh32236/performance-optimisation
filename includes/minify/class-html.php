@@ -353,9 +353,12 @@ class HTML {
 	 */
 	private function safe_json_encode( string $content, string $attributes ): string {
 		try {
-			return '<script' . $attributes . '>' . wp_json_encode( json_decode( $content, true ) ) . '</script>';
+			$decoded = json_decode( $content, true );
+			if ( JSON_ERROR_NONE !== json_last_error() || null === $decoded ) {
+				return '<script' . $attributes . '>' . $content . '</script>';
+			}
+			return '<script' . $attributes . '>' . wp_json_encode( $decoded ) . '</script>';
 		} catch ( \Exception $e ) {
-			// Return original content if there's an error.
 			return '<script' . $attributes . '>' . $content . '</script>';
 		}
 	}

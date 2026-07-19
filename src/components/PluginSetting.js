@@ -301,8 +301,11 @@ const PluginSetting = ( { options } ) => {
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
-				title="Tools"
-				description="Manage your plugin configuration, view the full optimization activity log, and import or export settings."
+				title={ __( 'Tools', 'performance-optimisation' ) }
+				description={ __(
+					'Manage your plugin configuration, view the full optimization activity log, and import or export settings.',
+					'performance-optimisation'
+				) }
 			/>
 
 			{ notification.message && (
@@ -310,6 +313,8 @@ const PluginSetting = ( { options } ) => {
 					className={ `wppo-notice wppo-notice--${
 						notification.success ? 'success' : 'error'
 					}` }
+					role="alert"
+					aria-live="polite"
 				>
 					<FontAwesomeIcon
 						icon={
@@ -325,7 +330,10 @@ const PluginSetting = ( { options } ) => {
 			<div className="wppo-stacked-cards">
 				{ /* Activity Log */ }
 				<FeatureCard
-					title="Optimization Activity Log"
+					title={ __(
+						'Optimization Activity Log',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faHistory } /> }
 					footer={
 						logLoaded && logTotalPages > 1 ? (
@@ -338,7 +346,10 @@ const PluginSetting = ( { options } ) => {
 										loadActivityLog( logPage - 1 )
 									}
 								>
-									← Previous
+									{ __(
+										'← Previous',
+										'performance-optimisation'
+									) }
 								</button>
 								<span className="wppo-log-pagination__info">
 									Page { logPage } of { logTotalPages }
@@ -353,7 +364,10 @@ const PluginSetting = ( { options } ) => {
 										loadActivityLog( logPage + 1 )
 									}
 								>
-									Next →
+									{ __(
+										'Next →',
+										'performance-optimisation'
+									) }
 								</button>
 							</div>
 						) : null
@@ -362,19 +376,26 @@ const PluginSetting = ( { options } ) => {
 					{ ! logLoaded && (
 						<div className="wppo-log-trigger">
 							<p className="wppo-text-muted">
-								A full timestamped record of every cache clear,
-								image optimization, database cleanup, and
-								settings change performed by the plugin.
+								{ __(
+									'A full timestamped record of every cache clear, image optimization, database cleanup, and settings change performed by the plugin.',
+									'performance-optimisation'
+								) }
 							</p>
 							<LoadingSubmitButton
 								type="button"
 								className="wppo-button wppo-button--secondary"
 								onClick={ () => loadActivityLog( 1 ) }
 								isLoading={ logLoading }
-								loadingLabel="Loading log…"
+								loadingLabel={ __(
+									'Loading log…',
+									'performance-optimisation'
+								) }
 							>
 								<FontAwesomeIcon icon={ faHistory } />
-								Load Activity Log
+								{ __(
+									'Load Activity Log',
+									'performance-optimisation'
+								) }
 							</LoadingSubmitButton>
 						</div>
 					) }
@@ -392,7 +413,7 @@ const PluginSetting = ( { options } ) => {
 								style={ { marginLeft: '12px' } }
 								onClick={ () => loadActivityLog( logPage ) }
 							>
-								Retry
+								{ __( 'Retry', 'performance-optimisation' ) }
 							</button>
 						</div>
 					) }
@@ -411,7 +432,10 @@ const PluginSetting = ( { options } ) => {
 								</ul>
 							) : (
 								<div className="wppo-empty-state">
-									No activity recorded yet.
+									{ __(
+										'No activity recorded yet.',
+										'performance-optimisation'
+									) }
 								</div>
 							) }
 						</>
@@ -443,6 +467,8 @@ const PluginSetting = ( { options } ) => {
 								apiKeyNotification.success ? 'success' : 'error'
 							}` }
 							style={ { marginBottom: '16px' } }
+							role="alert"
+							aria-live="polite"
 						>
 							<FontAwesomeIcon
 								icon={
@@ -497,39 +523,54 @@ const PluginSetting = ( { options } ) => {
 
 				{ /* Export */ }
 				<FeatureCard
-					title="Export Configuration"
+					title={ __(
+						'Export Configuration',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faFileExport } /> }
 				>
 					<p
 						className="wppo-text-muted"
 						style={ { marginBottom: '24px' } }
 					>
-						Download your current plugin settings as a JSON file for
-						backup or migration to another site.
+						{ __(
+							'Download your current plugin settings as a JSON file for backup or migration to another site.',
+							'performance-optimisation'
+						) }
 					</p>
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"
 						onClick={ exportSettings }
-						label="Export Settings"
+						label={ __(
+							'Export Settings',
+							'performance-optimisation'
+						) }
 					/>
 				</FeatureCard>
 
 				{ /* Import */ }
 				<FeatureCard
-					title="Import Configuration"
+					title={ __(
+						'Import Configuration',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faFileImport } /> }
 				>
 					<p className="wppo-text-muted">
-						Upload a previously exported settings file to restore
-						your configuration. This will overwrite all current
-						settings.
+						{ __(
+							'Upload a previously exported settings file to restore your configuration. This will overwrite all current settings.',
+							'performance-optimisation'
+						) }
 					</p>
 					<div className="wppo-field wppo-mt-24">
 						<label
 							className="wppo-field-label"
 							htmlFor="import-config"
 						>
-							Select configuration file
+							{ __(
+								'Select configuration file',
+								'performance-optimisation'
+							) }
 						</label>
 						<input
 							type="file"
@@ -549,8 +590,14 @@ const PluginSetting = ( { options } ) => {
 						} }
 						disabled={ ! selectedFile || isImporting }
 						isLoading={ isImporting }
-						label="Import Settings"
-						loadingLabel="Importing..."
+						label={ __(
+							'Import Settings',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Importing…',
+							'performance-optimisation'
+						) }
 					/>
 				</FeatureCard>
 			</div>
@@ -562,9 +609,12 @@ const PluginSetting = ( { options } ) => {
 					importSettings();
 				} }
 				onCancel={ () => setConfirmImport( false ) }
-				title="Confirm Import"
-				message="Importing this file will overwrite all current plugin settings. Continue?"
-				confirmLabel="Confirm"
+				title={ __( 'Confirm Import', 'performance-optimisation' ) }
+				message={ __(
+					'Importing this file will overwrite all current plugin settings. Continue?',
+					'performance-optimisation'
+				) }
+				confirmLabel={ __( 'Confirm', 'performance-optimisation' ) }
 				variant="warning"
 			/>
 		</div>
