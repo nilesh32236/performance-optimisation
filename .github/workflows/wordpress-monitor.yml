@@ -5,8 +5,8 @@ on:
     - cron: '0 4 * * 0'
   workflow_dispatch:
     inputs:
-      create_prs:
-        description: 'Create PRs for improvements found'
+      create_issues:
+        description: 'Create GitHub issues for improvements found'
         type: boolean
         default: true
       force_check:
@@ -27,6 +27,10 @@ env:
   CONTEXT7_API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
 
 jobs:
+  # ── 1. RESEARCH ──────────────────────────────────────────────────────────────
+  # Uses raw OpenCode with web search to find new WordPress features/APIs.
+  # Raw opencode is needed here — the action's audit mode only reads local
+  # code files; web search requires the raw CLI.
   research:
     name: Research WordPress Changes
     runs-on: ubuntu-latest
@@ -154,23 +158,23 @@ jobs:
           path: /tmp/wp-research.md
           retention-days: 30
 
-  improve:
-    name: Create Improvement PR
+  # ── 2. CREATE ISSUES ─────────────────────────────────────────────────────────
+  # Uses the opencode-ai-reviewer action in audit mode with the research
+  # findings as context. The action cross-references findings with actual plugin
+  # code and creates individual GitHub issues — one per actionable improvement.
+  # Each issue is labeled with 'wp-monitor' + 'autofix-trigger' so that
+  # wppo-ai-review.yml fix-issue fires automatically per issue.
+  create-issues:
+    name: Create Improvement Issues
     needs: [research]
-    if: needs.research.outputs.improvements_found > 0 && github.event.inputs.create_prs != 'false'
+    if: needs.research.outputs.improvements_found > 0 && github.event.inputs.create_issues != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: 8.2
-          tools: composer:v2
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -179,9 +183,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: |
-          composer install --ignore-platform-reqs
-          npm ci || npm install
+        run: npm ci || npm install
 
       - name: Download research report
         uses: actions/download-artifact@v4
@@ -189,136 +191,84 @@ jobs:
           name: wp-research-report
           path: /tmp/
 
-      - name: Configure git
-        run: |
-          git config --global user.name "${{ github.actor || 'performance-optimisation[bot]' }}"
-          git config --global user.email "${{ github.actor || 'performance-optimisation[bot]' }}@users.noreply.github.com"
-
-      - name: Setup OpenCode
-        run: |
-          .github/scripts/setup-opencode.sh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
-      - name: Implement improvements
-        id: implement
-        run: |
-          BRANCH_NAME="feature/wp-monitor-$(date -u '+%Y-%m-%d')"
-          git checkout -b "$BRANCH_NAME"
-
-          if [ -f /tmp/wp-research.md ]; then
-            RESEARCH_CONTENT=$(cat /tmp/wp-research.md)
-
-            {
-            echo "You are implementing WordPress feature improvements for the Performance Optimisation plugin."
-            echo ""
-            echo "RESEARCH REPORT:"
-            echo "${RESEARCH_CONTENT}"
-            echo ""
-            echo "INSTRUCTIONS:"
-            echo "1. For each improvement opportunity in the research, implement the change with backward compatibility."
-            echo "2. ALWAYS use this pattern for feature-gating:"
-            echo ""
-            echo '```php'
-            echo "if ( function_exists( 'wp_new_function' ) ) {"
-            echo "    // New WordPress core implementation"
-            echo "} else {"
-            echo "    // Legacy fallback for older WordPress versions"
-            echo "}"
-            echo '```'
-            echo ""
-            echo "3. Add version comments referencing the WordPress version that introduced the feature."
-            echo "4. Use has_filter() / has_action() checks for new hooks."
-            echo "5. Only modify files that have clear improvement opportunities."
-            echo "6. If a change would break existing functionality, do not make it -- document instead."
-            echo ""
-            echo "CONSTRAINTS:"
-            echo "- Minimum WordPress version: 6.2"
-            echo "- Minimum PHP version: 8.2"
-            echo "- All WordPress Coding Standards must be maintained"
-            echo "- All existing tests must continue to pass"
-            echo "- No breaking changes to the settings schema"
-            echo "- API responses must maintain backward compatibility"
-            echo ""
-            echo "When finished, run verification and fix any issues:"
-            echo "npm run lint:js && composer lint && npm test && npm run build"
-            echo ""
-            echo "Write a summary of all changes made to /tmp/improvement-summary.md"
-            } > /tmp/implement-prompt.txt
-
-            opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/implement-prompt.txt || echo "::warning::OpenCode implementation exited with code $?"
-          else
-            echo "No research report found."
-            echo "changes_made=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [ -n "$(git status --porcelain)" ]; then
-            echo "changes_made=true" >> "$GITHUB_OUTPUT"
-
-            git add -A
-
-            if npm run lint:js && composer lint && npm test && npm run build; then
-              git commit -m "feat: WordPress feature updates from weekly monitor
-
-              Automated improvement from WordPress Feature Monitor workflow.
-              $(date -u '+%Y-%m-%d')
-
-              Changes implement backward-compatible updates based on latest
-              WordPress core features. Old functionality preserved as fallback."
-              git push origin "$BRANCH_NAME" --force-with-lease
-              echo "branch=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
-              echo "Changes committed and pushed to ${BRANCH_NAME}"
-            else
-              echo "::warning::Verification failed after improvements. Skipping PR creation."
-              git checkout master
-              git branch -D "$BRANCH_NAME" 2>/dev/null || true
-              echo "branch=" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "changes_made=false" >> "$GITHUB_OUTPUT"
-            echo "No changes made during improvement implementation."
-          fi
-
-      - name: Create pull request
-        if: steps.implement.outputs.changes_made == 'true'
+      - name: Ensure wp-monitor label exists
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="${{ steps.implement.outputs.branch }}"
+          gh label create "wp-monitor"       --force --color "0075ca" --description "WordPress feature monitor improvement" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix-trigger"  --force --color "c2e0c6" --description "Triggers autofix workflow on issues"  -R "${{ github.repository }}" 2>/dev/null || true
 
-          if [ -f /tmp/improvement-summary.md ]; then
-            PR_BODY=$(cat /tmp/improvement-summary.md)
-          else
-            PR_BODY="## WordPress Feature Improvements
+      - name: Write research as audit prompt
+        run: |
+          # Build a targeted audit prompt that tells the action what WP features
+          # were found and asks it to create issues for implementing each one.
+          mkdir -p .audit-prompts
+          cat > .audit-prompts/wp-monitor-session.md << 'PROMPT_HEADER'
+          # WordPress Feature Monitor — Implementation Audit
 
-            Automated improvement PR from the WordPress Feature Monitor workflow (run #${{ github.run_id }}).
+          You are auditing the WordPress Performance Optimisation plugin code.
+          The research below identified new WordPress core features that this plugin
+          could adopt. Your job is to review the actual plugin files and create
+          individual GitHub issues for each actionable improvement.
 
-            ### Changes
-            Updates based on latest WordPress core features with backward-compatible fallbacks.
+          ## Rules
+          - Only create issues for changes that are backward-compatible with WordPress 6.2+
+          - Every new WP function call MUST be guarded with function_exists() or version_compare()
+          - Skip anything that would break existing functionality or the settings schema
+          - "low risk" means the change is isolated to a single function/method
+          - Prefer easy/medium difficulty improvements — skip hard ones that risk instability
+          - Each issue should describe ONE specific change with a clear file + function target
 
-            ### Verification
-            - npm run lint:js ✅
-            - composer lint ✅
-            - npm test ✅
-            - npm run build ✅
+          ## Research Findings
+          PROMPT_HEADER
 
-            ---
-            *Generated by [WordPress Feature Monitor workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*"
-          fi
+          cat /tmp/wp-research.md >> .audit-prompts/wp-monitor-session.md
 
-          gh pr create \
-            --repo "${{ github.repository }}" \
-            --base master \
-            --head "$BRANCH" \
-            --title "[WP Monitor] WordPress feature update — $(date -u '+%Y-%m-%d')" \
-            --body "$PR_BODY" \
-            --label "enhancement" \
-            --label "wp-monitor"
+          cat >> .audit-prompts/wp-monitor-session.md << 'PROMPT_FOOTER'
 
+          ## Plugin Architecture Reference
+          - PHP classes in includes/ (manually required, no PSR-4)
+          - React SPA in src/ (built with @wordpress/scripts, wppoSettings global)
+          - Settings stored in wppo_settings option (serialized array)
+          - All REST endpoints in includes/class-rest.php (manage_options + X-WP-Nonce)
+          - Image conversion: includes/class-img-converter.php (GD + Imagick)
+          - Cache: includes/class-cache.php (HTML cache) + includes/class-object-cache.php (Redis)
+
+          When you find an improvement in the research that applies to a specific file,
+          create an issue titled: [WP Monitor] <short description>
+          Include: which file to change, what function/hook to add, and the fallback pattern.
+          PROMPT_FOOTER
+
+      - name: Create improvement issues via AI audit
+        id: audit
+        uses: nilesh32236/opencode-ai-reviewer@latest
+        with:
+          mode: audit
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          model: 'opencode/deepseek-v4-flash-free'
+          # Custom prompt from research findings — overrides the default audit prompt
+          audit_prompt_file: '.audit-prompts/wp-monitor-session.md'
+          audit_target_dirs: 'includes,src'
+          audit_create_issues: true
+          # Label each created issue with autofix-trigger so wppo-ai-review.yml
+          # fix-issue job fires automatically for each improvement
+          audit_auto_fix: true
+          audit_labels: 'wp-monitor,autofix-trigger'
+          enable_mcp: false
+          project_context: >
+            WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
+            PHP follows WordPress Coding Standards (phpcs.xml). JS is React with @wordpress/scripts.
+            Always use function_exists() and version_compare() for new WordPress API calls.
+            Minimum WordPress version: 6.2. Only create issues for backward-compatible improvements.
+            Verification commands: npm run lint:js, composer lint, npm test, npm run build.
+
+  # ── 3. SUMMARY ───────────────────────────────────────────────────────────────
   summary:
     name: Summary Report
-    needs: [research, improve]
+    needs: [research, create-issues]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -339,7 +289,10 @@ jobs:
             echo "| Metric | Value |"
             echo "|--------|-------|"
             echo "| Improvement opportunities found | ${{ needs.research.outputs.improvements_found }} |"
-            echo "| PR created | ${{ needs.improve.result == 'success' && needs.improve.outputs.changes_made == 'true' && '✅' || '⏭️' }} |"
+            echo "| Issues created | ${{ needs.create-issues.result == 'success' && '✅' || needs.create-issues.result == 'skipped' && '⏭️ (0 improvements found)' || '❌' }} |"
+            echo ""
+            echo "Issues labeled \`wp-monitor\` + \`autofix-trigger\` are queued for the AI fix loop."
+            echo "The \`wppo-ai-review.yml\` \`fix-issue\` job will handle each one automatically."
             echo ""
             if [ -f /tmp/wp-research.md ]; then
               echo "<details>"

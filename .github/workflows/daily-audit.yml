@@ -1,14 +1,9 @@
-name: Daily Audit & Review
+name: Daily Codebase Audit
 
 on:
   schedule:
     - cron: '0 2 * * *'
   workflow_dispatch:
-    inputs:
-      audit_only:
-        description: 'Run audit only (skip PR review & merge)'
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -27,11 +22,9 @@ jobs:
   audit:
     name: Codebase Audit & Verification
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     outputs:
       verify_status: ${{ steps.verify.outputs.status }}
-      critical_count: ${{ steps.ai-audit.outputs.critical_count }}
-      important_count: ${{ steps.ai-audit.outputs.important_count }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -127,23 +120,28 @@ jobs:
 
           See [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for full logs.
           "
-          EXISTING=$(gh issue list --repo "${{ github.repository }}" --label audit --state open --json title --jq '.[] | select(.title | startswith("[Audit] Daily verification failed")) | .number' | head -1)
+          EXISTING=$(gh issue list --repo "${{ github.repository }}" --label audit --state open --json number --jq '.[] | select(.number) | .number' | head -1)
           if [ -n "$EXISTING" ]; then
-            gh issue update "$EXISTING" --body "$BODY" --repo "${{ github.repository }}"
+            gh issue edit "$EXISTING" --body "$BODY" --repo "${{ github.repository }}"
           else
             gh issue create --title "$ISSUE_TITLE" --body "$BODY" --label "audit" --repo "${{ github.repository }}"
           fi
 
-      - name: Ensure audit labels exist
+      - name: Ensure labels exist
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          gh label create "audit"             --force --color "fbca04" --description "Codebase audit findings" -R "${{ github.repository }}" 2>/dev/null || true
-          gh label create "autofix"           --force --color "243cd4" --description "PR created by AI fix agent" -R "${{ github.repository }}" 2>/dev/null || true
-          gh label create "autofix-trigger"   --force --color "c2e0c6" --description "Triggers autofix workflow on issues" -R "${{ github.repository }}" 2>/dev/null || true
-          gh label create "autofix:ready"     --force --color "0e8a16" --description "Approved by AI reviewer — ready to merge" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "audit"                      --force --color "fbca04" --description "Codebase audit findings" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix"                    --force --color "243cd4" --description "PR created by AI fix agent" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix-trigger"            --force --color "c2e0c6" --description "Triggers autofix workflow on issues" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix:ready"              --force --color "0e8a16" --description "Approved by AI reviewer — ready to merge" -R "${{ github.repository }}" 2>/dev/null || true
           gh label create "autofix:needs-manual-review" --force --color "d93f0b" --description "Max fix iterations reached" -R "${{ github.repository }}" 2>/dev/null || true
 
+      # ── AI Audit ─────────────────────────────────────────────────────────────
+      # Audits includes/ (PHP) and src/ (React/JS), creates a GitHub issue per
+      # finding labeled with 'audit' + 'autofix-trigger'.
+      # The autofix-trigger label fires the fix-issue job in wppo-ai-review.yml,
+      # which creates a branch → PR → review → fix loop automatically.
       - name: AI Codebase Audit
         id: ai-audit
         uses: nilesh32236/opencode-ai-reviewer@latest
@@ -155,159 +153,19 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: 'opencode/deepseek-v4-flash-free'
           audit_create_issues: true
+          # audit_auto_fix labels each created issue with autofix-trigger so that
+          # wppo-ai-review.yml picks it up automatically — no manual triggering needed.
           audit_auto_fix: true
-          audit_labels: 'audit'
+          audit_labels: 'audit,autofix-trigger'
           audit_target_dirs: 'includes,src'
-          # MCP disabled for audit — includes/ is PHP-only and MCP library detection
-          # currently maps it to Node.js libs (express, prisma). PHP audits don't need MCP docs.
+          # MCP disabled — includes/ is PHP-only; MCP would inject irrelevant
+          # Node.js docs (express, prisma) into PHP audit context.
           enable_mcp: false
           project_context: >
             WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
             PHP follows WordPress Coding Standards (phpcs.xml). JS is React with @wordpress/scripts.
             All REST endpoints require manage_options + X-WP-Nonce.
             Verification commands (all must pass): npm run lint:js, composer lint, npm test, npm run build.
-            PHP directory: includes/ (25 classes, manual require_once).
-            JS/React directory: src/ (React SPA, @wordpress/scripts, wppoSettings global).
-
-  review:
-    name: Review Open Pull Requests
-    needs: [audit]
-    if: github.event.inputs.audit_only != 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    outputs:
-      merge_prs: ${{ steps.collect.outputs.merge_prs }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci || npm install
-
-      - name: Setup OpenCode
-        run: |
-          .github/scripts/setup-opencode.sh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-
-      - name: List open PRs
-        id: list-prs
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          gh pr list --repo "${{ github.repository }}" --state open --json number,title,headRefName,baseRefName,mergeable --jq '.[] | select(.mergeable != "CONFLICTING") | .number' > /tmp/open-prs.txt
-          echo "count=$(wc -l < /tmp/open-prs.txt)" >> "$GITHUB_OUTPUT"
-          cat /tmp/open-prs.txt
-
-      - name: AI Review each PR
-        id: collect
-        if: steps.list-prs.outputs.count > 0
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          MERGE_CANDIDATES=""
-          while IFS= read -r PR_NUM; do
-            [ -z "$PR_NUM" ] && continue
-            echo "::group::Reviewing PR #${PR_NUM}"
-
-            gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json title,body,additions,deletions,changedFiles,headRefName > /tmp/pr-context.json
-            gh pr diff "$PR_NUM" --repo "${{ github.repository }}" > /tmp/pr-diff.txt
-
-            {
-            echo "You are an AI code reviewer for the Performance Optimisation WordPress plugin."
-            echo ""
-            echo "## PR #${PR_NUM}"
-            echo "Title: $(cat /tmp/pr-context.json | jq -r '.title')"
-            echo ""
-            echo "## Changes"
-            echo '```diff'
-            head -c 50000 /tmp/pr-diff.txt
-            echo '```'
-            echo ""
-            echo "Review this PR and output to /tmp/pr-review-${PR_NUM}.md with this format:"
-            echo '```'
-            echo "VERDICT: approved|changes-requested"
-            echo "CONFIDENCE: <0-100>"
-            echo "SUMMARY: <2-3 sentence review>"
-            echo "ISSUES:"
-            echo "- severity: <description> [file:line]"
-            echo "STRENGTHS:"
-            echo "- <description>"
-            echo '```'
-            } > /tmp/review-prompt.txt
-
-            opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/review-prompt.txt || echo "::warning::OpenCode review exited with code $?"
-
-            if [ -f "/tmp/pr-review-${PR_NUM}.md" ]; then
-              VERDICT=$(grep -oP 'VERDICT:\s*\K\w+' "/tmp/pr-review-${PR_NUM}.md" || echo "changes-requested")
-              CONFIDENCE=$(grep -oP 'CONFIDENCE:\s*\K\d+' "/tmp/pr-review-${PR_NUM}.md" || echo "0")
-
-              echo "PR #${PR_NUM}: verdict=${VERDICT}, confidence=${CONFIDENCE}"
-
-              if [ "$VERDICT" = "approved" ] && [ "$CONFIDENCE" -ge 95 ] && [ "${{ needs.audit.outputs.verify_status }}" = "passed" ]; then
-                MERGE_CANDIDATES="${MERGE_CANDIDATES}${PR_NUM} "
-                echo "PR #${PR_NUM} approved for merge"
-              fi
-
-              REVIEW_BODY="/tmp/pr-review-comment-${PR_NUM}.md"
-              {
-              echo "## AI Review Result"
-              echo ""
-              echo "**Verdict:** \`${VERDICT}\`"
-              echo "**Confidence:** ${CONFIDENCE}%"
-              echo ""
-              cat "/tmp/pr-review-${PR_NUM}.md"
-              echo ""
-              echo "---"
-              echo "*Reviewed by [Daily Audit workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})*"
-              } > "$REVIEW_BODY"
-
-              .github/scripts/post-or-update-comment.sh \
-                "${{ github.repository }}" "$PR_NUM" \
-                "<!-- wppo-daily-review -->" \
-                "$REVIEW_BODY" "${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}"
-            fi
-
-            echo "::endgroup::"
-          done < /tmp/open-prs.txt
-
-          MERGE_CANDIDATES="${MERGE_CANDIDATES% }"
-          echo "merge_prs=${MERGE_CANDIDATES}" >> "$GITHUB_OUTPUT"
-
-  merge:
-    name: Merge Approved PRs
-    needs: [audit, review]
-    if: needs.review.result == 'success' && needs.review.outputs.merge_prs != '' && needs.audit.outputs.verify_status == 'passed'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Merge approved PRs
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-        run: |
-          for PR_NUM in ${{ needs.review.outputs.merge_prs }}; do
-            # Skip PRs already merged by another workflow (e.g. wppo-ai-review auto-merge)
-            LABELS=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json labels --jq '[.labels[].name] | @json' 2>/dev/null || echo '[]')
-            if echo "$LABELS" | grep -q 'auto-merged\|autofix:merged'; then
-              echo "PR #${PR_NUM} already merged by another workflow — skipping"
-              continue
-            fi
-            echo "Merging PR #${PR_NUM}..."
-            if gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --delete-branch 2>/dev/null; then
-              echo "PR #${PR_NUM} merged successfully"
-              gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label "auto-merged" 2>/dev/null || true
-            else
-              echo "::warning::Failed to merge PR #${PR_NUM}"
-            fi
-          done
+            PHP directory: includes/ (25 classes, manual require_once, no PSR-4 autoload).
+            JS/React directory: src/ (React SPA, @wordpress/scripts, wppoSettings global injected by PHP).
+            Settings stored in single option wppo_settings. Activity log in wppo_activity_logs table.
