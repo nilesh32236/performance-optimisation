@@ -1,34 +1,36 @@
-name: NodeJS with Webpack
+name: CI — JS & PHP
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
     paths-ignore:
       - 'build/**'
+      - '**.md'
+      - '.distignore'
+      - '.gitignore'
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
+    paths-ignore:
+      - 'build/**'
+      - '**.md'
+      - '.distignore'
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
-  build:
-    name: Build Assets
+  js-build:
+    name: JS Lint, Test & Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
-
-      - name: Read Node.js version from .nvmrc
-        id: nvmrc
-        run: |
-          if [ -f .nvmrc ]; then
-            echo "node-version=$(cat .nvmrc | tr -d '[:space:]')" >> $GITHUB_ENV
-          else
-            echo "node-version=20" >> $GITHUB_ENV
-          fi
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.node-version }}
+          node-version-file: '.nvmrc'
           cache: 'npm'
 
       - name: Install Dependencies
@@ -37,12 +39,33 @@ jobs:
       - name: JS Lint
         run: npm run lint:js
 
+      - name: JS Tests
+        run: npm test
+
       - name: Build
         run: npm run build
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: webpack-build
           path: build/
           retention-days: 7
+
+  php-syntax:
+    name: PHP Syntax Check (8.2–8.5)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ["8.2", "8.3", "8.4", "8.5"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: parallel-lint
+
+      - name: PHP Syntax Check
+        run: parallel-lint --exclude vendor .

@@ -134,23 +134,6 @@ jobs:
             gh issue create --title "$ISSUE_TITLE" --body "$BODY" --label "audit" --repo "${{ github.repository }}"
           fi
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.2'
-          tools: composer:v2
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: |
-          composer install --ignore-platform-reqs
-          npm ci || npm install
-
       - name: Ensure audit labels exist
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
@@ -314,6 +297,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           for PR_NUM in ${{ needs.review.outputs.merge_prs }}; do
+            # Skip PRs already merged by another workflow (e.g. wppo-ai-review auto-merge)
+            LABELS=$(gh pr view "$PR_NUM" --repo "${{ github.repository }}" --json labels --jq '[.labels[].name] | @json' 2>/dev/null || echo '[]')
+            if echo "$LABELS" | grep -q 'auto-merged\|autofix:merged'; then
+              echo "PR #${PR_NUM} already merged by another workflow — skipping"
+              continue
+            fi
             echo "Merging PR #${PR_NUM}..."
             if gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --squash --delete-branch 2>/dev/null; then
               echo "PR #${PR_NUM} merged successfully"

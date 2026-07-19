@@ -1,44 +1,35 @@
-name: Psalm and WPCS Checks
+name: WPCS & Psalm Security Scan
 
 on:
   push:
     branches: ["master"]
+    paths:
+      - '**.php'
+      - 'composer.json'
+      - 'phpcs.xml'
   pull_request:
     branches: ["master"]
+    paths:
+      - '**.php'
+      - 'composer.json'
+      - 'phpcs.xml'
   schedule:
     - cron: "28 13 * * 0"
 
 permissions:
-  contents: write
+  contents: read
   issues: write
   pull-requests: write
   actions: read
   security-events: write
 
 jobs:
-  php-lint:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        php: ["8.2", "8.3", "8.4", "8.5"]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: ${{ matrix.php }}
-          tools: parallel-lint
-
-      - name: PHP Syntax Check
-        run: parallel-lint --exclude vendor .
-
   code-quality:
+    name: WPCS & Psalm Security Scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
@@ -70,7 +61,7 @@ jobs:
 
       - name: Upload Security Analysis results
         if: always() && steps.psalm.outcome != 'skipped' && steps.psalm_report.outputs.exists == 'true'
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: reports/psalm.sarif
 
@@ -105,8 +96,6 @@ jobs:
                           raw_msg = error.get('message', '')
                           msg = raw_msg.replace('|', '\\|')
                           table += f"| WPCS | {filename} | {line} | {msg} |\n"
-                          
-                          # Add GitHub workflow annotation (Shows as PR Review Comment)
                           clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                           print(f"::error file={rel_path},line={line},col={col}::WPCS: {clean_msg}")
               except Exception as e:
@@ -132,8 +121,6 @@ jobs:
                                   filename = rel_path.split('/')[-1]
                                   line = phys.get('region', {}).get('startLine', '?')
                                   table += f"| Psalm | {filename} | {line} | {msg} |\n"
-                                  
-                                  # Add GitHub workflow annotation (Shows as PR Review Comment)
                                   clean_msg = raw_msg.replace('\n', '%0A').replace('\r', '')
                                   print(f"::error file={rel_path},line={line}::Psalm: {clean_msg}")
               except Exception as e:
@@ -160,15 +147,15 @@ jobs:
 
           if [[ "$STATUS" == "success" ]]; then
             BODY="### Code Quality Issues Detected in $BRANCH
-            
-            ✅ All code quality checks passed! 🎉"
+
+          ✅ All code quality checks passed! 🎉"
           else
             SUMMARY=$(cat reports/summary.md)
             BODY="### Code Quality Issues Detected in $BRANCH
 
-            $SUMMARY
+          $SUMMARY
 
-            Please check the [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          Please check the [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
           fi
 
           if [[ "$BRANCH" == "master" && "$EVENT_NAME" != "pull_request" ]]; then
@@ -192,9 +179,8 @@ jobs:
 
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             PR_NUMBER="${{ github.event.pull_request.number }}"
-            # Find existing comment from this action
             COMMENT_ID=$(gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/comments" -q '.[] | select(.body | startswith("### Code Quality Issues Detected in")) | .id' | head -n 1)
-            
+
             if [[ -n "$COMMENT_ID" ]]; then
               gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$COMMENT_ID" -f body="$BODY"
             else
