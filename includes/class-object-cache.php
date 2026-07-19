@@ -244,7 +244,6 @@ class Object_Cache {
 		// in the `wppo_settings` option (database) and merged at load time via
 		// the `WPPO_REDIS_PASSWORD` constant, environment variable, or the
 		// object cache's REST handler.
-		$password = $config_data['password'] ?? '';
 		unset( $config_data['password'] );
 
 		// Write config file using var_export for clean array representation.

@@ -91,7 +91,7 @@ class Log {
 
 			// Get total number of activities.
 			$total_items = (int) $wpdb->get_var(
-				$wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs" ) // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnnecessaryPrepare
+				"SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs" // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 			);
 
 			// Calculate total pages.

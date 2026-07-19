@@ -213,44 +213,6 @@ class Cron {
 	}
 
 	/**
-	 * Get a list of all pages to process.
-	 *
-	 * Retrieves all public pages and posts and ensures the front page is included.
-	 *
-	 * @return array List of page IDs to process.
-	 *
-	 * @since 1.0.0
-	 */
-	private static function get_all_pages(): array {
-		$front_page_id = get_option( 'page_on_front' );
-
-		$post_types = get_post_types( array( 'public' => true ), 'names' );
-
-		$excluded_post_types = array( 'attachment', 'revision', 'nav_menu_item', 'custom_css', 'customize_changeset' );
-		$post_types          = array_diff( $post_types, $excluded_post_types );
-
-		$post_types = array_unique( array_merge( array_values( $post_types ), array( 'page', 'post' ) ) );
-
-		// Get all posts of these types (batched to prevent memory exhaustion).
-		$posts = get_posts(
-			array(
-				'post_type'      => $post_types,
-				'post_status'    => 'publish',
-				// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page
-				'posts_per_page' => 200,
-				'fields'         => 'ids',
-			)
-		);
-
-		// Add the front page ID at the beginning if it's not already included.
-		if ( $front_page_id && ! in_array( $front_page_id, $posts, true ) ) {
-			array_unshift( $posts, $front_page_id );
-		}
-
-		return $posts;
-	}
-
-	/**
 	 * Load a specific page.
 	 *
 	 * This method fetches the page via `wp_remote_get` to generate the static page.

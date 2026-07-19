@@ -94,6 +94,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
 	const pollingRef = useRef( null );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
+	const [ announcement, setAnnouncement ] = useState( '' );
 
 	const { imageInfo, loading, totalCacheSize, totalJs, totalCss, dbCounts } =
 		state;
@@ -191,6 +192,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			apiCall( 'clear_cache', { action: 'clear_cache' } )
 				.then( ( data ) => {
 					if ( data.success ) {
+						setAnnouncement( 'Cache cleared successfully.' );
 						updateState( {
 							totalCacheSize: '0 B',
 							totalJs: 0,
@@ -273,7 +275,9 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				aria-live="polite"
 				aria-atomic="true"
 				className="wppo-screen-reader-text"
-			></div>
+			>
+				{ announcement }
+			</div>
 			<FeatureHeader
 				title={ __( 'System Health', 'performance-optimisation' ) }
 				description={ __(
