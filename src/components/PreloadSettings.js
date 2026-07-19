@@ -1,3 +1,4 @@
+import { __ } from '@wordpress/i18n';
 import { useState } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
@@ -72,14 +73,20 @@ const PreloadSettings = ( { options = {} } ) => {
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
-				title="Preload Settings"
-				description="Improve perceived performance by pre-connecting to domains and preloading critical assets."
+				title={ __( 'Preload Settings', 'performance-optimisation' ) }
+				description={ __(
+					'Improve perceived performance by pre-connecting to domains and preloading critical assets.',
+					'performance-optimisation'
+				) }
 				actions={
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"
 						isLoading={ isLoading }
 						onClick={ handleSubmit }
-						label="Save Settings"
+						label={ __(
+							'Save Settings',
+							'performance-optimisation'
+						) }
 					/>
 				}
 			>

@@ -28,7 +28,7 @@ const SIDEBAR_BREAKPOINT = 992;
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
-	const [ sidebarCollapsed ] = useState( false );
+	const sidebarCollapsed = false;
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const [ serverRules, setServerRules ] = useState( null );
@@ -155,23 +155,32 @@ const App = () => {
 	const hasFetchedRules = useRef( false );
 
 	useEffect( () => {
+		const abortController = new AbortController();
+
 		if (
 			( activeTab === 'dashboard' || recentActivities.length === 0 ) &&
 			! hasFetchedActivities.current
 		) {
 			const fetchActivities = async () => {
 				try {
-					const data = await fetchRecentActivities();
-					setRecentActivities( data );
-					hasFetchedActivities.current = true;
-				} catch ( error ) {
-					console.error(
-						__(
-							'Failed to fetch activities:',
-							'performance-optimisation'
-						),
-						error
+					const data = await fetchRecentActivities(
+						1,
+						abortController.signal
 					);
+					if ( ! abortController.signal.aborted ) {
+						setRecentActivities( data );
+						hasFetchedActivities.current = true;
+					}
+				} catch ( error ) {
+					if ( ! abortController.signal.aborted ) {
+						console.error(
+							__(
+								'Failed to fetch activities:',
+								'performance-optimisation'
+							),
+							error
+						);
+					}
 				}
 			};
 
@@ -184,22 +193,31 @@ const App = () => {
 			}
 			hasFetchedRules.current = true;
 			try {
-				const res = await fetchServerRules();
-				if ( res.success ) {
-					setServerRules( res.data );
+				const res = await fetchServerRules( abortController.signal );
+				if ( ! abortController.signal.aborted ) {
+					if ( res.success ) {
+						setServerRules( res.data );
+					} else {
+						hasFetchedRules.current = false;
+					}
 				} else {
 					hasFetchedRules.current = false;
 				}
 			} catch ( err ) {
 				hasFetchedRules.current = false;
-				console.error( 'Failed to fetch server rules', err );
+				if ( ! abortController.signal.aborted ) {
+					console.error( 'Failed to fetch server rules', err );
+				}
 			}
 		};
 		fetchRules();
 
 		setTransition( true );
 		const timeout = setTimeout( () => setTransition( false ), 400 );
-		return () => clearTimeout( timeout );
+		return () => {
+			clearTimeout( timeout );
+			abortController.abort();
+		};
 	}, [ activeTab, recentActivities.length, serverRules ] );
 
 	return (
@@ -210,7 +228,10 @@ const App = () => {
 					<div className="wppo-mobile-logo">
 						<FontAwesomeIcon icon={ faBolt } />
 					</div>
-					Performance Optimisation
+					{ __(
+						'Performance Optimisation',
+						'performance-optimisation'
+					) }
 				</div>
 				<button
 					className="wppo-mobile-toggle"
@@ -255,8 +276,10 @@ const App = () => {
 						<FontAwesomeIcon icon={ faBolt } />
 					</div>
 					<h3>
-						Performance
-						<span>Optimisation</span>
+						{ __( 'Performance', 'performance-optimisation' ) }
+						<span>
+							{ __( 'Optimisation', 'performance-optimisation' ) }
+						</span>
 					</h3>
 				</div>
 				<nav aria-label="Main Navigation">
@@ -292,13 +315,15 @@ const App = () => {
 					</ul>
 				</nav>
 				<div className="wppo-sidebar-footer">
-					<div className="wppo-sidebar-version">v1.6.0</div>
+					<div className="wppo-sidebar-version">
+						{ __( 'v1.6.0', 'performance-optimisation' ) }
+					</div>
 				</div>
 			</div>
 
 			<div className="wppo-content">
 				<div className="wppo-main">
-					<div className={ transition ? 'fadeIn' : '' }>
+					<div className={ transition ? 'fadeIn' : undefined }>
 						{ renderContent }
 					</div>
 				</div>

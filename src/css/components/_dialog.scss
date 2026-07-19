@@ -2,6 +2,7 @@
 	position: fixed;
 	inset: 0;
 	background: rgba(15, 23, 42, 0.55);
+	-webkit-backdrop-filter: blur(3px);
 	backdrop-filter: blur(3px);
 	z-index: 9999;
 	display: flex;
@@ -64,5 +65,9 @@
 		justify-content: flex-end;
 		gap: 10px;
 
+	}
+
+	.wppo-dialog-cancel {
+		min-width: 80px;
 	}
 }

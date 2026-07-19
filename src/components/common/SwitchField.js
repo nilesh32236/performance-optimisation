@@ -1,4 +1,3 @@
-import { useId } from '@wordpress/element';
 import { ToggleControl } from '@wordpress/components';
 
 /**
@@ -23,8 +22,6 @@ const SwitchField = ( {
 	showLabel = true,
 	disabled = false,
 } ) => {
-	const id = useId();
-
 	const handleToggle = ( newValue ) => {
 		// Synthesize an event-like object so existing handleChange() util works unchanged.
 		onChange( {
@@ -37,10 +34,14 @@ const SwitchField = ( {
 	};
 
 	return (
-		<div className="wppo-switch-field" id={ `${ id }-wrapper` }>
+		<div className="wppo-switch-field">
 			{ ( showLabel || description ) && (
 				<div className="wppo-switch-field__info">
-					{ showLabel && <strong>{ label }</strong> }
+					{ showLabel && (
+						<span className="wppo-switch-field__label">
+							{ label }
+						</span>
+					) }
 					{ description && (
 						<p className="wppo-text-muted">{ description }</p>
 					) }

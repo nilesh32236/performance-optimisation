@@ -939,6 +939,23 @@ function wp_cache_decr( $key, $offset = 1, $group = '' ) {
  * @return bool Always true.
  */
 function wp_cache_close() {
+	global $wp_object_cache;
+	if ( isset( $wp_object_cache ) && $wp_object_cache instanceof WP_Object_Cache ) {
+		if ( $wp_object_cache->redis_connected && $wp_object_cache->redis ) {
+			try {
+				$wp_object_cache->redis->close();
+			} catch ( \Exception $e ) {
+				unset( $e );
+			}
+		}
+		if ( $wp_object_cache->redis_replica ) {
+			try {
+				$wp_object_cache->redis_replica->close();
+			} catch ( \Exception $e ) {
+				unset( $e );
+			}
+		}
+	}
 	return true;
 }
 

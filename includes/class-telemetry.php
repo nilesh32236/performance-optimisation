@@ -416,7 +416,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 					return (int) filesize( $local_path );
 				}
 
-				// Fallback: Individual HEAD request for external/CDN assets.
+				// Only allow HEAD requests to the site's own domain for security.
+				$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+				$url_host  = wp_parse_url( $url, PHP_URL_HOST );
+				if ( ! $home_host || ! $url_host || $url_host !== $home_host ) {
+					return 0;
+				}
+
+				// Fallback: Individual HEAD request for same-domain assets.
 				$response = wp_remote_head(
 					$url,
 					array(

@@ -1,4 +1,4 @@
-import { useState, useRef } from '@wordpress/element';
+import { useState, useRef, useEffect, RawHTML } from '@wordpress/element';
 import { apiCall, fetchRecentActivities } from '../lib/apiRequest';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -25,6 +25,13 @@ const PluginSetting = ( { options } ) => {
 	} );
 	const [ confirmImport, setConfirmImport ] = useState( false );
 	const fileInputRef = useRef( null );
+	const cancelledRef = useRef( false );
+
+	useEffect( () => {
+		return () => {
+			cancelledRef.current = true;
+		};
+	}, [] );
 
 	// Phase 2 — PageSpeed API key state.
 	const [ pagespeedApiKey, setPagespeedApiKey ] = useState(
@@ -172,6 +179,9 @@ const PluginSetting = ( { options } ) => {
 		const reader = new FileReader();
 
 		reader.onerror = () => {
+			if ( cancelledRef.current ) {
+				return;
+			}
 			setNotification( {
 				message: __( 'Error reading file', 'performance-optimisation' ),
 				success: false,
@@ -181,6 +191,9 @@ const PluginSetting = ( { options } ) => {
 		};
 
 		reader.onabort = () => {
+			if ( cancelledRef.current ) {
+				return;
+			}
 			setNotification( {
 				message: __( 'Error reading file', 'performance-optimisation' ),
 				success: false,
@@ -190,6 +203,9 @@ const PluginSetting = ( { options } ) => {
 		};
 
 		reader.onload = ( e ) => {
+			if ( cancelledRef.current ) {
+				return;
+			}
 			try {
 				const fileData = JSON.parse( e.target.result );
 				apiCall( 'import_settings', {
@@ -197,8 +213,11 @@ const PluginSetting = ( { options } ) => {
 					settings: fileData,
 				} )
 					.then( ( data ) => {
+						if ( cancelledRef.current ) {
+							return;
+						}
 						if ( data.success ) {
-							wppoSettings.settings = fileData;
+							wppoSettings.settings = Object.freeze( fileData );
 							resetFileInput();
 						}
 						setNotification( {
@@ -217,6 +236,9 @@ const PluginSetting = ( { options } ) => {
 						} );
 					} )
 					.catch( () => {
+						if ( cancelledRef.current ) {
+							return;
+						}
 						setNotification( {
 							message: __(
 								'Error reading file',
@@ -226,9 +248,14 @@ const PluginSetting = ( { options } ) => {
 						} );
 					} )
 					.finally( () => {
-						setIsImporting( false );
+						if ( ! cancelledRef.current ) {
+							setIsImporting( false );
+						}
 					} );
 			} catch ( _error ) {
+				if ( cancelledRef.current ) {
+					return;
+				}
 				setNotification( {
 					message: __(
 						'Invalid file format. Please select a valid JSON file.',
@@ -346,9 +373,11 @@ const PluginSetting = ( { options } ) => {
 							{ logEntries.length > 0 ? (
 								<ul className="wppo-activity-list wppo-activity-list--full">
 									{ logEntries.map( ( entry, i ) => (
-										<li key={ i }>
+										<li key={ entry.id ?? i }>
 											<div className="wppo-activity-text">
-												{ entry.activity }
+												<RawHTML>
+													{ entry.activity }
+												</RawHTML>
 											</div>
 										</li>
 									) ) }

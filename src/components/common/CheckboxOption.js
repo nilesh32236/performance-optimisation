@@ -31,11 +31,15 @@ export const CheckboxOption = ( {
 	children,
 } ) => {
 	const uid = useId();
-	const id = idProp ?? uid;
+	const id = idProp ?? ( description ? uid : undefined );
 	const descriptionId = description ? `desc-${ id }` : undefined;
 
 	return (
-		<div className={ `checkbox-option ${ checked ? 'is-checked' : '' }` }>
+		<div
+			className={ `wppo-checkbox-option ${
+				checked ? 'wppo-is-checked' : ''
+			}` }
+		>
 			<label htmlFor={ id }>
 				<input
 					id={ id }
@@ -45,24 +49,24 @@ export const CheckboxOption = ( {
 					onChange={ onChange }
 					aria-describedby={ descriptionId }
 				/>
-				<span className="option-label-text">{ label }</span>
+				<span className="wppo-option-label-text">{ label }</span>
 			</label>
 
 			{ description && (
-				<p id={ descriptionId } className="option-description">
+				<p id={ descriptionId } className="wppo-option-description">
 					{ description }
 				</p>
 			) }
 
 			{ checked && ( textareaName || children ) && (
 				<div
-					className="nested-content"
+					className="wppo-nested-content"
 					style={ { marginTop: '20px', paddingLeft: '36px' } }
 				>
 					{ textareaName && (
-						<div className="field-group">
+						<div className="wppo-field-group">
 							<textarea
-								className="text-area-field"
+								className="wppo-text-area-field"
 								placeholder={ textareaPlaceholder || '' }
 								aria-label={ textareaPlaceholder || label }
 								name={ textareaName }

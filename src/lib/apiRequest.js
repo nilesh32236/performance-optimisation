@@ -4,12 +4,13 @@
  * Mutates wppoSettings.settings globally on successful `update_settings` calls.
  *
  * @since 1.0.0
- * @param {string}      action The REST endpoint action (e.g. 'update_settings').
- * @param {Object|null} body   Request body payload.
- * @param {string}      method HTTP method ('POST' or 'GET'). Defaults to 'POST'.
+ * @param {string}      action   The REST endpoint action (e.g. 'update_settings').
+ * @param {Object|null} body     Request body payload.
+ * @param {string}      method   HTTP method ('POST' or 'GET'). Defaults to 'POST'.
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved JSON response data.
  */
-export const apiCall = ( action, body, method = 'POST' ) => {
+export const apiCall = ( action, body, method = 'POST', signal ) => {
 	const isGet = 'GET' === method;
 	return fetch( wppoSettings.apiUrl + action, {
 		method,
@@ -18,28 +19,36 @@ export const apiCall = ( action, body, method = 'POST' ) => {
 			'X-WP-Nonce': wppoSettings.nonce,
 		},
 		...( ! isGet && { body: JSON.stringify( body ) } ),
-	} ).then( async ( response ) => {
-		const data = await response.json();
-		if ( 'update_settings' === action && data.success ) {
-			wppoSettings.settings = data.data;
-		}
-		return data;
-	} );
+		signal,
+	} )
+		.then( async ( response ) => {
+			const data = await response.json();
+			if ( 'update_settings' === action && data.success && data.data ) {
+				wppoSettings.settings = Object.freeze( data.data );
+			}
+			return data;
+		} )
+		.catch( ( error ) => {
+			console.error( 'API call failed:', action, error );
+			throw error;
+		} );
 };
 
 /**
  * Fetch paginated recent activity log entries.
  *
  * @since 1.0.0
- * @param {number} page Page number (defaults to 1).
+ * @param {number}      page     Page number (defaults to 1).
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved activities data.
  */
-export const fetchRecentActivities = ( page = 1 ) => {
+export const fetchRecentActivities = ( page = 1, signal ) => {
 	return fetch( wppoSettings.apiUrl + 'recent_activities?page=' + page, {
 		method: 'GET',
 		headers: {
 			'X-WP-Nonce': wppoSettings.nonce,
 		},
+		signal,
 	} )
 		.then( ( response ) => response.json() )
 		.catch( ( error ) => {
@@ -122,8 +131,9 @@ export const fetchSuggestions = ( url ) => {
  * Retrieve server-level performance rules (Apache/Nginx).
  *
  * @since 1.6.0
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved server rules data.
  */
-export const fetchServerRules = () => {
-	return apiCall( 'server_rules', {}, 'GET' );
+export const fetchServerRules = ( signal ) => {
+	return apiCall( 'server_rules', {}, 'GET', signal );
 };
