@@ -1,4 +1,4 @@
-import { useState } from '@wordpress/element';
+import { useId } from '@wordpress/element';
 
 /**
  * A reusable checkbox option component with optional description and nested settings.
@@ -30,10 +30,8 @@ export const CheckboxOption = ( {
 	description,
 	children,
 } ) => {
-	const [ generatedId ] = useState(
-		() => `cb-${ Math.random().toString( 36 ).slice( 2, 9 ) }`
-	);
-	const id = idProp ?? ( description ? generatedId : undefined );
+	const uid = useId();
+	const id = idProp ?? ( description ? uid : undefined );
 	const descriptionId = description ? `desc-${ id }` : undefined;
 
 	return (

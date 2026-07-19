@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from '@wordpress/element';
+import { useState, useRef, useEffect, RawHTML } from '@wordpress/element';
 import { apiCall, fetchRecentActivities } from '../lib/apiRequest';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -372,10 +372,12 @@ const PluginSetting = ( { options } ) => {
 						<>
 							{ logEntries.length > 0 ? (
 								<ul className="wppo-activity-list wppo-activity-list--full">
-									{ logEntries.map( ( entry ) => (
-										<li key={ entry.id ?? entry.activity }>
+									{ logEntries.map( ( entry, i ) => (
+										<li key={ entry.id ?? i }>
 											<div className="wppo-activity-text">
-												{ entry.activity }
+												<RawHTML>
+													{ entry.activity }
+												</RawHTML>
 											</div>
 										</li>
 									) ) }

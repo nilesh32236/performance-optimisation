@@ -65,7 +65,7 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 				enableServerRules: false,
 			} ) );
 		}
-	}, [ serverRules, settings.enableServerRules ] );
+	}, [ serverRules, settings.enableServerRules, setSettings ] );
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {

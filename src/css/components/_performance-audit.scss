@@ -470,6 +470,41 @@
 
 // Results meta bar and tooltip container are defined in the tooltip component styles.
 
+.wppo-audit-meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 16px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid var(--wppo-border);
+
+	&__title {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--wppo-text-main);
+		display: flex;
+		align-items: center;
+	}
+
+	&__toggle {
+		flex-shrink: 0;
+	}
+}
+
+.wppo-audit-section-header {
+	background: var(--wppo-bg-card-surface);
+
+	td {
+		padding: 10px 12px;
+		font-size: 0.8rem;
+		font-weight: 700;
+		color: var(--wppo-primary);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		border-bottom: 1px solid var(--wppo-border);
+	}
+}
+
 // =============================================================================
 // Phase 2 — PageSpeed Integration & Suggestions (v1.6.0)
 // =============================================================================

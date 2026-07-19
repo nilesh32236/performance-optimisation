@@ -243,11 +243,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$sanitized[ $safe_key ] = (bool) $value;
 				} elseif ( is_numeric( $value ) ) {
 					$sanitized[ $safe_key ] = (int) $value;
-				} elseif ( strpos( $safe_key, 'api_key' ) !== false || strpos( $safe_key, 'password' ) !== false ) {
+				} elseif ( stripos( $safe_key, 'api_key' ) !== false || stripos( $safe_key, 'password' ) !== false ) {
 					$sanitized[ $safe_key ] = sanitize_text_field( $value );
-				} elseif ( strpos( $safe_key, 'url' ) !== false || strpos( $safe_key, 'cdn' ) !== false || strpos( $safe_key, 'origin' ) !== false ) {
+				} elseif ( stripos( $safe_key, 'url' ) !== false || stripos( $safe_key, 'cdn' ) !== false || stripos( $safe_key, 'origin' ) !== false ) {
 					$sanitized[ $safe_key ] = esc_url_raw( $value );
-				} elseif ( strpos( $safe_key, 'exclude' ) !== false || strpos( $safe_key, 'preload' ) !== false || strpos( $safe_key, 'delay' ) !== false || strpos( $safe_key, 'list' ) !== false ) {
+				} elseif ( stripos( $safe_key, 'exclude' ) !== false || stripos( $safe_key, 'preload' ) !== false || stripos( $safe_key, 'delay' ) !== false || stripos( $safe_key, 'list' ) !== false ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( $value );
 				} else {
 					$sanitized[ $safe_key ] = sanitize_text_field( $value );
@@ -815,7 +815,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				wp_send_json_error( array( 'message' => __( 'Unauthorized.', 'performance-optimisation' ) ), 403 );
 			}
 
-			check_ajax_referer( 'wp_rest', 'nonce' );
+			if ( ! check_ajax_referer( 'wp_rest', 'nonce', false ) ) {
+				wp_send_json_error( array( 'message' => __( 'Nonce verification failed.', 'performance-optimisation' ) ), 403 );
+			}
 
 			wp_send_json_success(
 				array(

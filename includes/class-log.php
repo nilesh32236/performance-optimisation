@@ -110,7 +110,7 @@ class Log {
 
 			// Append additional data.
 			foreach ( $results as $index => $result ) {
-				$results[ $index ]['activity'] .= ' ' . $result['created_at'];
+				$results[ $index ]['activity'] .= ' ' . esc_html( $result['created_at'] );
 			}
 
 			// Prepare data for caching.
