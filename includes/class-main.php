@@ -498,12 +498,17 @@ class Main {
 		}
 
 		$asset_file = WPPO_PLUGIN_PATH . 'build/index.asset.php';
+		$resolved   = wp_normalize_path( realpath( $asset_file ) );
 
-		// Include the asset file to retrieve dependencies and version.
-		$asset_data = file_exists( $asset_file ) ? include $asset_file : array(
-			'dependencies' => array(),
-			'version'      => false,
-		);
+		// Validate the resolved path is within the plugin directory before including.
+		if ( false !== $resolved && strpos( $resolved, WPPO_PLUGIN_PATH ) === 0 ) {
+			$asset_data = require $resolved;
+		} else {
+			$asset_data = array(
+				'dependencies' => array(),
+				'version'      => false,
+			);
+		}
 
 		wp_enqueue_style( 'performance-optimisation-style', WPPO_PLUGIN_URL . 'build/style-index.css', array(), $asset_data['version'], 'all' );
 		wp_enqueue_script( 'performance-optimisation-script', WPPO_PLUGIN_URL . 'build/index.js', $asset_data['dependencies'], $asset_data['version'], true );
