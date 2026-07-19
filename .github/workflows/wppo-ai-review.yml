@@ -1,24 +1,41 @@
 name: AI Multi-Agent Review
 
-# ─────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
 # TRIGGER MATRIX
 #
-#  Event                        Job that fires
-#  ─────────────────────────    ──────────────────────────
-#  issues.labeled               fix-issue  (audit → fixer)
+#  Event                          Job that fires
+#  ─────────────────────────────  ──────────────────────────────────────────────
+#  issues.labeled                 fix-issue  (audit → fixer creates autofix/ PR)
 #    (label == autofix-trigger)
 #
-#  pull_request.opened/synced   review     (human PR → reviewer)
-#  pull_request.labeled         autofix    (audit PR  → loop)
+#  pull_request.opened/synced     review     (human PR only — bot pushes skipped)
+#  pull_request.labeled           autofix    (PR with label "autofix" → loop)
 #    (label == autofix)
 #
-#  issue_comment.created        review     (slash /review on PR)
-#    (/review or /oc on PR)     autofix    (slash /fix on PR)
-#                               fix-issue  (slash /fix on Issue)
+#  issue_comment.created          review     (/review or /oc on a PR comment)
+#    (/review or /oc on PR)       autofix    (/fix on a PR comment)
+#    (/fix on PR)                 fix-issue  (/fix on a plain issue)
 #
-#  pull_request.closed+merged   notify-merged
-#    (had autofix:ready label)
-# ─────────────────────────────────────────────────────────
+#  pull_request.labeled           auto-merge  (label == autofix:ready)
+#  pull_request.closed+merged     notify-merged (had autofix:ready label)
+#
+# ─── Key conflict-prevention rules ───────────────────────────────────────────
+#
+#  1. The outer concurrency group includes github.actor so that bot-push
+#     "synchronize" events land in a DIFFERENT group from human reviews.
+#     This means a bot push never cancels a human review run.
+#
+#  2. cancel-in-progress is false everywhere so no run is ever killed
+#     mid-execution.  New triggers queue behind the running job.
+#
+#  3. The `review` job has an explicit guard: it skips when the pusher is a
+#     bot (actor ends with [bot]) OR when the PR branch is an autofix/ branch.
+#     This prevents the review job from even starting on bot commits.
+#
+#  4. The `autofix` job has its own per-PR inner concurrency group so that
+#     parallel fix runs on the same PR are serialised, not cancelled.
+#
+# ─────────────────────────────────────────────────────────────────────────────
 
 on:
   pull_request:
@@ -33,8 +50,10 @@ permissions:
   pull-requests: write
   issues: write
 
+# Outer group: differ by actor so bot-generated events don't compete with
+# human-triggered reviews.  cancel-in-progress: false everywhere.
 concurrency:
-  group: wppo-ai-${{ github.event.pull_request.number || github.event.issue.number || github.sha }}
+  group: wppo-ai-${{ github.event.pull_request.number || github.event.issue.number || github.sha }}-${{ github.actor }}
   cancel-in-progress: false
 
 env:
@@ -44,7 +63,8 @@ jobs:
   # ── 1. FIX ISSUE ─────────────────────────────────────────────────────────────
   # Triggered when the audit agent creates an issue with label "autofix-trigger"
   # OR when someone comments "/fix" on a plain issue (not a PR).
-  # Creates a branch autofix/issue-{N}, fixes the code, opens a PR with label "autofix".
+  # Creates a branch autofix/issue-{N}, fixes the code, opens a PR with label
+  # "autofix".  The PR then flows into the autofix loop on the next event.
   fix-issue:
     name: Fix Audit Issue
     if: |
@@ -64,7 +84,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
@@ -73,11 +93,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          gh label create "autofix"                   --force --color "243cd4" --description "PR created by AI fix agent" -R "${{ github.repository }}" 2>/dev/null || true
-          gh label create "autofix:ready"             --force --color "0e8a16" --description "Approved by AI reviewer — ready to merge" -R "${{ github.repository }}" 2>/dev/null || true
-          gh label create "autofix:needs-fix"         --force --color "e4e669" --description "Reviewer found issues — fix in progress" -R "${{ github.repository }}" 2>/dev/null || true
-          gh label create "autofix:needs-manual-review" --force --color "d93f0b" --description "Max fix iterations reached — needs human review" -R "${{ github.repository }}" 2>/dev/null || true
-          gh label create "autofix-trigger"           --force --color "c2e0c6" --description "Triggers autofix workflow on issues" -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix"                      --force --color "243cd4" --description "PR created by AI fix agent" 2>/dev/null || true
+          gh label create "autofix:ready"                --force --color "0e8a16" --description "Approved by AI reviewer — ready to merge" 2>/dev/null || true
+          gh label create "autofix:needs-fix"            --force --color "e4e669" --description "Reviewer found issues — fix in progress" 2>/dev/null || true
+          gh label create "autofix:needs-manual-review"  --force --color "d93f0b" --description "Max fix iterations reached — needs human review" 2>/dev/null || true
+          gh label create "autofix-trigger"              --force --color "c2e0c6" --description "Triggers autofix workflow on issues" 2>/dev/null || true
 
       - name: Fix Issue
         uses: nilesh32236/opencode-ai-reviewer@latest
@@ -88,11 +108,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: 'opencode/deepseek-v4-flash-free'
-          max_fix_iterations: 3
-          # NOTE: run_checks_after_fix only accepts a SINGLE npm/pnpm/yarn command
-          # (no && shell operators — see inputs.ts validateRunChecksCommand).
-          # The full check suite (composer lint, npm test, npm run build) is
-          # embedded in project_context and run by the AI agent itself.
+          max_fix_iterations: 1
           run_checks_after_fix: 'npm run lint:js'
           project_context: >
             WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
@@ -106,14 +122,19 @@ jobs:
             All 4 must pass before considering the fix complete.
 
   # ── 2. REVIEW ────────────────────────────────────────────────────────────────
-  # Triggered on human-created PRs (not bot PRs, not autofix PRs).
-  # Posts a structured review comment with verdict, confidence, and issue list.
+  # Triggered on human-created PRs only.
+  # Skipped when:
+  #   - The actor is a bot (github-actions[bot], opencode-ai-reviewer[bot], etc.)
+  #   - The PR branch is autofix/* (bot-managed)
+  #   - The PR already has an autofix-family label
   review:
     name: AI Code Review
     if: |
       github.event_name != 'schedule' &&
       github.event.action != 'closed' &&
       github.actor != 'github-actions[bot]' &&
+      !endsWith(github.actor, '[bot]') &&
+      !startsWith(github.event.pull_request.head.ref, 'autofix/') &&
       !contains(github.event.pull_request.labels.*.name, 'autofix') &&
       !contains(github.event.pull_request.labels.*.name, 'autofix:approved') &&
       !contains(github.event.pull_request.labels.*.name, 'autofix:merged') &&
@@ -145,20 +166,20 @@ jobs:
             echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
-      - name: Setup PHP (for fix verification)
+      - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
           tools: composer:v2
 
-      - name: Setup Node.js (for fix verification)
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -188,14 +209,16 @@ jobs:
             Verification commands: npm run lint:js, composer lint, npm test, npm run build.
 
   # ── 3. AUTOFIX LOOP ──────────────────────────────────────────────────────────
-  # Triggered when a PR has label "autofix" (set by fix-issue or manually).
-  # Runs review → fix → review up to 3 iterations.
-  # On approval: sets "autofix:ready" label.
-  # On max iterations: sets "autofix:needs-manual-review".
+  # Runs the complete review → fix → review cycle entirely within one workflow
+  # execution — no external triggers needed between iterations.
+  #
+  # The inner concurrency group is per-PR with cancel-in-progress: false so:
+  #   - A second labeling event queues rather than cancelling the running loop.
+  #   - Bot commit pushes (synchronize) that leak through are de-duplicated here.
   autofix:
     name: Autofix Review Loop
     concurrency:
-      group: autofix-${{ github.event.pull_request.number || github.event.issue.number }}
+      group: wppo-autofix-loop-${{ github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: false
     if: |
       github.event_name != 'schedule' &&
@@ -231,7 +254,7 @@ jobs:
             echo "ref=${{ github.event.pull_request.head.ref }}" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
@@ -244,7 +267,7 @@ jobs:
           tools: composer:v2
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -264,9 +287,10 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: 'opencode/deepseek-v4-flash-free'
           max_fix_iterations: 3
-          # Single command only — see fix-issue job comment for explanation.
-          run_checks_after_fix: 'npm run lint:js'
           enable_fix: true
+          # Single command only — see inputs.ts validateRunChecksCommand.
+          # The full check suite is described in project_context for the AI agent.
+          run_checks_after_fix: 'npm run lint:js'
           project_context: >
             WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
             PHP follows WordPress Coding Standards. JS is React with @wordpress/scripts.
@@ -278,8 +302,7 @@ jobs:
             All 4 must pass before considering the fix complete.
 
   # ── 4. AUTO-MERGE ────────────────────────────────────────────────────────────
-  # Triggered when "autofix:ready" label is added to a PR.
-  # Squash-merges and deletes the branch.
+  # Squash-merges and deletes the branch when "autofix:ready" label is added.
   auto-merge:
     name: Auto-Merge Approved PR
     if: |
@@ -305,8 +328,7 @@ jobs:
           }
 
   # ── 5. NOTIFY MERGED ─────────────────────────────────────────────────────────
-  # Triggered when an autofix PR is successfully merged.
-  # Posts a summary comment and updates labels.
+  # Posts a summary comment and updates labels when an autofix PR is merged.
   notify-merged:
     name: Post Merge Notification
     if: |
