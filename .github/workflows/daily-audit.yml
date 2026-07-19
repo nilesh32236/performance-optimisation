@@ -163,7 +163,7 @@ jobs:
 
       - name: AI Codebase Audit
         id: ai-audit
-        uses: nilesh32236/opencode-ai-reviewer@v1.0.0
+        uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: audit
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
@@ -175,11 +175,16 @@ jobs:
           audit_auto_fix: true
           audit_labels: 'audit'
           audit_target_dirs: 'includes,src'
+          # MCP disabled for audit — includes/ is PHP-only and MCP library detection
+          # currently maps it to Node.js libs (express, prisma). PHP audits don't need MCP docs.
+          enable_mcp: false
           project_context: >
             WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
             PHP follows WordPress Coding Standards (phpcs.xml). JS is React with @wordpress/scripts.
-            All REST endpoints require manage_options + X-WP-Nonce. Run npm run lint:js,
-            composer lint, npm test, npm run build to verify fixes.
+            All REST endpoints require manage_options + X-WP-Nonce.
+            Verification commands (all must pass): npm run lint:js, composer lint, npm test, npm run build.
+            PHP directory: includes/ (25 classes, manual require_once).
+            JS/React directory: src/ (React SPA, @wordpress/scripts, wppoSettings global).
 
   review:
     name: Review Open Pull Requests

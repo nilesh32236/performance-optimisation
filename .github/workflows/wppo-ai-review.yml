@@ -80,7 +80,7 @@ jobs:
           gh label create "autofix-trigger"           --force --color "c2e0c6" --description "Triggers autofix workflow on issues" -R "${{ github.repository }}" 2>/dev/null || true
 
       - name: Fix Issue
-        uses: nilesh32236/opencode-ai-reviewer@v1.0.0
+        uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: fix
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
@@ -89,12 +89,21 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: 'opencode/deepseek-v4-flash-free'
           max_fix_iterations: 3
-          run_checks_after_fix: 'npm run lint:js && composer lint && npm test && npm run build'
+          # NOTE: run_checks_after_fix only accepts a SINGLE npm/pnpm/yarn command
+          # (no && shell operators — see inputs.ts validateRunChecksCommand).
+          # The full check suite (composer lint, npm test, npm run build) is
+          # embedded in project_context and run by the AI agent itself.
+          run_checks_after_fix: 'npm run lint:js'
           project_context: >
             WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
             PHP follows WordPress Coding Standards (phpcs.xml). JS is React with @wordpress/scripts.
             All REST endpoints require manage_options + X-WP-Nonce.
-            Run: npm run lint:js, composer lint, npm test, npm run build to verify.
+            After making fixes, always run ALL of these verification commands in order:
+            1. npm run lint:js — ESLint via @wordpress/scripts
+            2. composer lint — PHPCS WordPress standard
+            3. npm test — Jest unit tests
+            4. npm run build — wp-scripts compile
+            All 4 must pass before considering the fix complete.
 
   # ── 2. REVIEW ────────────────────────────────────────────────────────────────
   # Triggered on human-created PRs (not bot PRs, not autofix PRs).
@@ -160,7 +169,7 @@ jobs:
           npm ci || npm install
 
       - name: AI Code Review
-        uses: nilesh32236/opencode-ai-reviewer@v1.0.0
+        uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: review
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
@@ -176,6 +185,7 @@ jobs:
             PHP follows WordPress Coding Standards. JS is React with @wordpress/scripts.
             All REST endpoints require manage_options + X-WP-Nonce.
             SCSS uses .wppo- prefix, BEM-like naming. No Tailwind or CSS-in-JS.
+            Verification commands: npm run lint:js, composer lint, npm test, npm run build.
 
   # ── 3. AUTOFIX LOOP ──────────────────────────────────────────────────────────
   # Triggered when a PR has label "autofix" (set by fix-issue or manually).
@@ -245,7 +255,7 @@ jobs:
           npm ci || npm install
 
       - name: Autofix Review Loop
-        uses: nilesh32236/opencode-ai-reviewer@v1.0.0
+        uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: fix
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
@@ -254,13 +264,18 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: 'opencode/deepseek-v4-flash-free'
           max_fix_iterations: 3
-          run_checks_after_fix: 'npm run lint:js && composer lint && npm test && npm run build'
+          # Single command only — see fix-issue job comment for explanation.
+          run_checks_after_fix: 'npm run lint:js'
           enable_fix: true
           project_context: >
             WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
             PHP follows WordPress Coding Standards. JS is React with @wordpress/scripts.
-            Build: npm run build (compiles src/). Lint: npm run lint:js && composer lint.
-            Tests: npm test. All must pass before approving.
+            After making fixes, always run ALL of these verification commands in order:
+            1. npm run lint:js — ESLint via @wordpress/scripts
+            2. composer lint — PHPCS WordPress standard
+            3. npm test — Jest unit tests
+            4. npm run build — wp-scripts compile
+            All 4 must pass before considering the fix complete.
 
   # ── 4. AUTO-MERGE ────────────────────────────────────────────────────────────
   # Triggered when "autofix:ready" label is added to a PR.

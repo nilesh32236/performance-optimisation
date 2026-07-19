@@ -37,11 +37,12 @@ review:
 
 fix:
   maxIterations: 3
+  # IMPORTANT: config.ts extractDefaultsFromConfig() only uses runChecks[0].
+  # All verification commands must be on a single entry.
+  # However, run_checks_after_fix input has a shell-metacharacter restriction in inputs.ts,
+  # so this is used as prompt context only, not as the action's run_checks_after_fix input.
   runChecks:
-    - "npm run lint:js"
-    - "composer lint"
-    - "npm test"
-    - "npm run build"
+    - 'npm run lint:js && composer lint && npm test && npm run build'
 
 audit:
   promptsDir: ".audit-prompts"
