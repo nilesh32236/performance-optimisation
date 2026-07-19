@@ -15,14 +15,13 @@
  * @package PerformanceOptimise
  */
 
-// Import required classes.
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 use PerformanceOptimise\Inc\Activate;
 use PerformanceOptimise\Inc\Deactivate;
 use PerformanceOptimise\Inc\Main;
-
-if ( ! defined( 'ABSPATH' ) ) {
-	exit; // Exit if accessed directly.
-}
 
 // Define plugin constants.
 if ( ! defined( 'WPPO_PLUGIN_PATH' ) ) {

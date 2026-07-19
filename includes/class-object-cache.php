@@ -4,7 +4,7 @@
  *
  * Handles Redis drop-in installation, removal, and testing.
  *
- * @package PerformanceOptimise
+ * @package PerformanceOptimise\Inc
  * @since 1.4.0
  */
 

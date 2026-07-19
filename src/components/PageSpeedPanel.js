@@ -353,7 +353,11 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 			{ /* Pending notice */ }
 			{ pending && (
-				<div className="wppo-notice wppo-notice--info">
+				<div
+					className="wppo-notice wppo-notice--info"
+					role="alert"
+					aria-live="polite"
+				>
 					<FontAwesomeIcon
 						icon={ faSpinner }
 						spin
@@ -368,7 +372,13 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 			{ /* Error notice */ }
 			{ error && (
-				<div className="wppo-notice wppo-notice--error">{ error }</div>
+				<div
+					className="wppo-notice wppo-notice--error"
+					role="alert"
+					aria-live="assertive"
+				>
+					{ error }
+				</div>
 			) }
 
 			{ /* Results */ }

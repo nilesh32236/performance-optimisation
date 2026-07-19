@@ -423,6 +423,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 					return 0;
 				}
 
+				if ( ! wp_http_validate_url( $url ) ) {
+					return 0;
+				}
+
 				// Fallback: Individual HEAD request for same-domain assets.
 				$response = wp_remote_head(
 					$url,

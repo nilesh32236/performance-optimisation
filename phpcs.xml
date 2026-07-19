@@ -9,4 +9,6 @@
 	<exclude-pattern>build/*</exclude-pattern>
 
 	<arg name="extensions" value="php" />
+
+	<config name="testVersion" value="8.2-" />
 </ruleset>

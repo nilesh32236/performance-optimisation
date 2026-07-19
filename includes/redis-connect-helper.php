@@ -4,7 +4,7 @@
  *
  * Provides a shared connection logic for both the admin dashboard and the object cache drop-in.
  *
- * @package PerformanceOptimise
+ * @package PerformanceOptimise\Inc
  * @since 1.4.0
  */
 
@@ -45,7 +45,7 @@ function wppo_redis_connect( $config ) {
 
 		return wppo_redis_connect_standalone( $config );
 	} catch ( \Throwable $e ) {
-		return new \WP_Error( 'redis_err', $e->getMessage() );
+		return new \WP_Error( 'redis_err', __( 'Redis connection failed.', 'performance-optimisation' ) );
 	}
 }
 
@@ -87,7 +87,7 @@ function wppo_redis_connect_cluster( $config ) {
 
 		return $cluster;
 	} catch ( \Throwable $e ) {
-		return new \WP_Error( 'cluster_fail', __( 'Redis Cluster connection failed: ', 'performance-optimisation' ) . $e->getMessage() );
+		return new \WP_Error( 'cluster_fail', __( 'Redis Cluster connection failed.', 'performance-optimisation' ) );
 	}
 }
 
@@ -158,14 +158,14 @@ function wppo_redis_connect_sentinel( $config ) {
 				}
 			}
 		} catch ( \Throwable $e ) {
-			$errors[] = $s_host . ':' . $s_port . ' - ' . $e->getMessage();
+			$errors[] = __( 'Sentinel node connection failed.', 'performance-optimisation' );
 			continue;
 		}
 	}
 
 	$error_msg = __( 'Could not resolve master via Sentinels.', 'performance-optimisation' );
 	if ( ! empty( $errors ) ) {
-		$error_msg .= ' ' . __( 'Last error:', 'performance-optimisation' ) . ' ' . end( $errors );
+		$error_msg .= ' ' . end( $errors );
 	} else {
 		$error_msg .= ' ' . __( 'No sentinel nodes responded or master not found.', 'performance-optimisation' );
 	}

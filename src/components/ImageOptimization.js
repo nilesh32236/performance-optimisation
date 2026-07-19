@@ -127,6 +127,8 @@ const ImageOptimization = ( { options = {} } ) => {
 			{ notification && (
 				<div
 					className={ `wppo-notice wppo-notice--${ notification.type }` }
+					role="alert"
+					aria-live="polite"
 				>
 					<div className="wppo-notice__content">
 						<FontAwesomeIcon

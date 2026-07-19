@@ -6,7 +6,7 @@
  * to allow users to add and save a list of image URLs to preload, and to manage
  * per-page script/style assets.
  *
- * @package PerformanceOptimise
+ * @package PerformanceOptimise\Inc
  * @since 1.0.0
  */
 
@@ -25,7 +25,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 	 * metabox and the asset manager metabox to the WordPress post editor.
 	 *
 	 * @since 1.0.0
-	 * @package PerformanceOptimise
+	 * @package PerformanceOptimise\Inc
 	 */
 	class Metabox {
 

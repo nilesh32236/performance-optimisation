@@ -76,7 +76,8 @@ const App = () => {
 		[]
 	);
 
-	const renderContent = useMemo( () => {
+	const renderContent = () => {
+		const settings = wppoSettings?.settings ?? {};
 		const components = {
 			dashboard: (
 				<Dashboard
@@ -86,33 +87,23 @@ const App = () => {
 			),
 			fileOptimization: (
 				<FileOptimization
-					options={ wppoSettings?.settings?.file_optimisation }
+					options={ settings.file_optimisation }
 					serverRules={ serverRules }
 				/>
 			),
-			preload: (
-				<PreloadSettings
-					options={ wppoSettings?.settings?.preload_settings }
-				/>
-			),
+			preload: <PreloadSettings options={ settings.preload_settings } />,
 			imageOptimization: (
-				<ImageOptimization
-					options={ wppoSettings?.settings?.image_optimisation }
-				/>
+				<ImageOptimization options={ settings.image_optimisation } />
 			),
 			databaseCleanup: (
-				<DatabaseCleanup
-					options={ wppoSettings?.settings?.database_cleanup }
-				/>
+				<DatabaseCleanup options={ settings.database_cleanup } />
 			),
-			objectCache: (
-				<ObjectCache options={ wppoSettings?.settings?.object_cache } />
-			),
-			tools: <PluginSettings options={ wppoSettings?.settings } />,
+			objectCache: <ObjectCache options={ settings.object_cache } />,
+			tools: <PluginSettings options={ settings } />,
 		};
 
 		return components[ activeTab ] || components.dashboard;
-	}, [ activeTab, recentActivities, serverRules ] );
+	};
 
 	const toggleMobileMenu = () =>
 		setMobileMenuOpen( ( prevState ) => ! prevState );
@@ -326,8 +317,8 @@ const App = () => {
 
 			<div className="wppo-content">
 				<div className="wppo-main">
-					<div className={ transition ? 'fadeIn' : undefined }>
-						<ErrorBoundary>{ renderContent }</ErrorBoundary>
+					<div className={ transition ? 'wppo-fadeIn' : undefined }>
+						<ErrorBoundary>{ renderContent() }</ErrorBoundary>
 					</div>
 				</div>
 			</div>
