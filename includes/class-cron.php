@@ -244,7 +244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			$url_path   = trim( wp_parse_url( $permalink, PHP_URL_PATH ), '/' );
 			$site_url   = get_option( 'siteurl' );
 			$parsed_url = wp_parse_url( $site_url );
-			$domain     = sanitize_text_field( $parsed_url['host'] . ( $parsed_url['port'] ?? '' ) );
+			$domain     = sanitize_text_field( $parsed_url['host'] . ( isset( $parsed_url['port'] ) ? ':' . $parsed_url['port'] : '' ) );
 
 			$cache_dir = wp_normalize_path( WP_CONTENT_DIR . "/cache/wppo/{$domain}/{$url_path}" );
 

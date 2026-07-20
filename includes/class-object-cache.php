@@ -260,6 +260,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			$wp_filesystem = Util::init_filesystem();
 
+			if ( ! $wp_filesystem ) {
+				return new \WP_Error( 'write_error', __( 'Unable to initialize filesystem.', 'performance-optimisation' ) );
+			}
+
 			if ( ! $wp_filesystem->put_contents( $this->config_path, $config_content, FS_CHMOD_FILE ) ) {
 				return new \WP_Error( 'write_error', __( 'Cannot write Redis configuration file.', 'performance-optimisation' ) );
 			}
@@ -290,6 +294,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			$wp_filesystem = Util::init_filesystem();
+
+			if ( ! $wp_filesystem ) {
+				return new \WP_Error( 'delete_error', __( 'Unable to initialize filesystem.', 'performance-optimisation' ) );
+			}
 
 			if ( file_exists( $this->dropin_path ) ) {
 				if ( ! $wp_filesystem->delete( $this->dropin_path ) ) {

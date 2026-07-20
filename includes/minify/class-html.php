@@ -134,7 +134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			if ( isset( $this->options['file_optimisation']['minifyHTML'] ) && (bool) $this->options['file_optimisation']['minifyHTML'] ) {
 				try {
 					$html = $this->html_min->minify( $html );
-				} catch ( \Exception $e ) {
+				} catch ( \Exception $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 					// Fall through with unminified HTML on error.
 				}
 			}

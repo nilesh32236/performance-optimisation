@@ -119,7 +119,7 @@ wppo_cleanup_site();
 
 // Clean up all sites in a multisite network.
 if ( is_multisite() && function_exists( 'get_sites' ) ) {
-	$sites = get_sites();
+	$sites = get_sites( array( 'number' => 0 ) );
 	foreach ( $sites as $site ) {
 		switch_to_blog( $site->blog_id );
 		wppo_cleanup_site();

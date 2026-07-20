@@ -581,8 +581,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				}
 
 				if ( is_wp_error( $result ) ) {
-					// Translators: %s is the cleanup method name that failed.
-					new Log( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $method ) );
+					$labels = array(
+						'clean_revisions_advanced' => __( 'Revisions', 'performance-optimisation' ),
+						'clean_auto_drafts'        => __( 'Auto Drafts', 'performance-optimisation' ),
+						'clean_trashed_posts'      => __( 'Trashed Posts', 'performance-optimisation' ),
+						'clean_spam_comments'      => __( 'Spam Comments', 'performance-optimisation' ),
+						'clean_trashed_comments'   => __( 'Trashed Comments', 'performance-optimisation' ),
+						'clean_expired_transients' => __( 'Expired Transients', 'performance-optimisation' ),
+						'clean_orphan_postmeta'    => __( 'Orphan Post Meta', 'performance-optimisation' ),
+					);
+					$label = $labels[ $method ] ?? $method;
+					// Translators: %s is the cleanup type label.
+					new Log( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
 				}
 			}
 		}
@@ -646,7 +656,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public static function invoke_cleanup_method( $method, ...$args ) {
 			$res = self::$method( ...$args );
 			if ( false === $res ) {
-				return new WP_Error( 'db_cleanup_failed', sprintf( '%s failed', $method ) );
+				return new WP_Error( 'db_cleanup_failed', __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
 			return $res;
 		}

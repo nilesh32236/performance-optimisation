@@ -741,7 +741,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
-					$tag = preg_replace( '/\bsrc=["\']/', ' defer="defer" src=', $tag );
+					$tag = preg_replace( '/\bsrc=(["\'])/', ' defer="defer" src=$1', $tag );
 				}
 			}
 
