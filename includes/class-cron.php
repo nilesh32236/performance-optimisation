@@ -208,8 +208,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 */
 		public function process_page( $page_id ): void {
 			if ( $page_id ) {
-				$this->mark_page_as_processed( $page_id );
 				$this->load_page( $page_id );
+				$this->mark_page_as_processed( $page_id );
 			}
 		}
 
@@ -237,7 +237,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		private function mark_page_as_processed( $page_id ): void {
-			$permalink  = get_permalink( $page_id );
+			$permalink = get_permalink( $page_id );
+			if ( ! $permalink ) {
+				return;
+			}
 			$url_path   = trim( wp_parse_url( $permalink, PHP_URL_PATH ), '/' );
 			$site_url   = get_option( 'siteurl' );
 			$parsed_url = wp_parse_url( $site_url );

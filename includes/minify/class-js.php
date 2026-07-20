@@ -15,6 +15,10 @@ namespace PerformanceOptimise\Inc\Minify;
 use MatthiasMullie\Minify;
 use PerformanceOptimise\Inc\Util;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 	/**
 	 * Class JS
@@ -85,10 +89,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 					$js_content  = $this->filesystem->get_contents( $this->file_path );
 					$js_minifier = new Minify\JS( $js_content );
 					$minified_js = $js_minifier->minify();
-
-					if ( $minified_js === $js_content ) {
-						return;
-					}
 
 					$this->save_min_file( $minified_js, $cache_file );
 				} catch ( \Exception $e ) {

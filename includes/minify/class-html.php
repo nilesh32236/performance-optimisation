@@ -132,7 +132,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			}
 
 			if ( isset( $this->options['file_optimisation']['minifyHTML'] ) && (bool) $this->options['file_optimisation']['minifyHTML'] ) {
-				$html = $this->html_min->minify( $html );
+				try {
+					$html = $this->html_min->minify( $html );
+				} catch ( \Exception $e ) {
+					// Fall through with unminified HTML on error.
+					$html = $html;
+				}
 			}
 
 			if ( ! empty( $scripts ) ) {
@@ -206,7 +211,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 */
 		private function restore_preserved_scripts_template( $html, $scripts ) {
 			foreach ( $scripts as $index => $script ) {
-				$html = str_replace( '<script data-wppo-preserve=' . ( $index ) . '></script>', $script, $html );
+				$html = str_replace( '<script data-wppo-preserve="' . ( $index ) . '"></script>', $script, $html );
 			}
 
 			return $html;

@@ -17,6 +17,10 @@ use MatthiasMullie\Minify;
 use PerformanceOptimise\Inc\Img_Converter;
 use PerformanceOptimise\Inc\Util;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 	/**
 	 * CSS Minification and Image Optimization.
@@ -92,10 +96,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 					$css_minifier = new Minify\CSS( $css_content );
 					$minified_css = $css_minifier->minify();
-
-					if ( $minified_css === $css_content ) {
-						return;
-					}
 
 					$this->save_min_file( $minified_css, $cache_file );
 				} catch ( \Exception $e ) {

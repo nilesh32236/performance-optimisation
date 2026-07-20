@@ -12,6 +12,10 @@
 
 namespace PerformanceOptimise\Inc;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 	/**
 	 * Img_Converter Class
@@ -239,7 +243,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							$imagick->readImage( $source_image );
 
 							// Check if the image has transparency (alpha channel).
-							$has_transparency = $imagick->getImageAlphaChannel() === \Imagick::ALPHACHANNEL_ACTIVATE;
+							$alpha_channel    = $imagick->getImageAlphaChannel();
+							$has_transparency = \Imagick::ALPHACHANNEL_UNDEFINED !== $alpha_channel && \Imagick::ALPHACHANNEL_OPAQUE !== $alpha_channel;
 
 							// Set WebP format.
 							$imagick->setImageFormat( 'webp' );

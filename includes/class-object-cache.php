@@ -147,7 +147,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 						}
 					}
 				} catch ( \Exception $te ) {
-					$status['telemetry_error'] = $te->getMessage();
+					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $te->getMessage() : __( 'Redis telemetry error.', 'performance-optimisation' );
 				} finally {
 					if ( method_exists( $redis, 'close' ) ) {
 						$redis->close();
@@ -155,7 +155,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				}
 			} catch ( \Exception $e ) {
 				$status['redis_reachable'] = false;
-				$status['telemetry_error'] = $e->getMessage();
+				$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $e->getMessage() : __( 'Redis connection error.', 'performance-optimisation' );
 			}
 
 			return $status;
@@ -231,6 +231,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$status = $this->get_status();
 			if ( $status['foreign_dropin'] ) {
 				return new \WP_Error( 'foreign_dropin', __( 'Another Object Cache drop-in is already present. Please disable it before enabling this one.', 'performance-optimisation' ) );
+			}
+
+			// Test connection before writing config.
+			$ping_result = $this->ping( $config );
+			if ( is_wp_error( $ping_result ) ) {
+				return new \WP_Error( 'redis_unreachable', __( 'Cannot connect to Redis with provided settings.', 'performance-optimisation' ) );
 			}
 
 			// Format nodes as array for the config file if it's a string.

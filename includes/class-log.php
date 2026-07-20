@@ -12,6 +12,10 @@
 
 namespace PerformanceOptimise\Inc;
 
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
 if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 	/**
 	 * Log Class
@@ -58,8 +62,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			/* phpcs:enable */
 
 			if ( $result ) {
-				wp_cache_delete( 'wppo_activity_logs' );
+				self::bump_cache_version();
 			}
+		}
+
+		/**
+		 * Bump the cache version to invalidate all cached activity log queries.
+		 *
+		 * @since 1.0.0
+		 */
+		private static function bump_cache_version() {
+			$version = (int) get_option( 'wppo_activity_cache_version', 0 );
+			update_option( 'wppo_activity_cache_version', $version + 1, false );
+		}
+
+		/**
+		 * Get the current cache version.
+		 *
+		 * @since 1.0.0
+		 * @return int Current cache version.
+		 */
+		private static function get_cache_version() {
+			return (int) get_option( 'wppo_activity_cache_version', 0 );
 		}
 
 		/**
@@ -80,8 +104,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			// Calculate offset for pagination.
 			$offset = ( $page - 1 ) * $per_page;
 
-			// Cache key.
-			$cache_key = 'wppo_activity_logs_page_' . $page . '_per_page_' . $per_page;
+			// Cache key with versioning to support per-page invalidation.
+			$cache_key = 'wppo_activity_logs_v' . self::get_cache_version() . '_page_' . $page . '_per_page_' . $per_page;
 
 			// Attempt to fetch cached data.
 			$data = wp_cache_get( $cache_key, 'wppo_activity_logs' );

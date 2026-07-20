@@ -54,8 +54,8 @@ if ( ! function_exists( 'wppo_redis_connect' ) ) {
 	function wppo_redis_connect( $config ) {
 		$mode = $config['mode'] ?? 'standalone';
 
-		// Prefer WPPO_REDIS_PASSWORD constant or env var over stored config.
-		// The password is never stored in the database — it must come from wp-config.php.
+		// Use config password if provided; fall back to WPPO_REDIS_PASSWORD constant,
+		// then WPPO_REDIS_PASSWORD environment variable.
 		if ( empty( $config['password'] ) ) {
 			$env_password = getenv( 'WPPO_REDIS_PASSWORD' );
 			if ( defined( 'WPPO_REDIS_PASSWORD' ) ) {

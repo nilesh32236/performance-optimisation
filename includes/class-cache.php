@@ -94,12 +94,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public function __construct() {
 			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
-			if (
+			$valid_domain = ! (
 				strpos( $domain, '..' ) !== false ||
 				strpos( $domain, '/' ) !== false ||
 				strpos( $domain, '\\' ) !== false ||
 				! preg_match( '/^[a-z0-9\.\-]+$/i', $domain )
-			) {
+			);
+
+			if ( ! $valid_domain ) {
 				$domain = '';
 			}
 
@@ -122,6 +124,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Initialize filesystem and options.
 			$this->filesystem = Util::init_filesystem();
 			$this->options    = get_option( 'wppo_settings', array() );
+
+			if ( ! $valid_domain && ! empty( $this->options['debug'] ) ) {
+				do_action( 'wppo_debug_log', 'Cache domain validation failed' );
+			}
 		}
 
 		/**
