@@ -410,6 +410,9 @@ const loadImages = () => {
 			);
 		};
 
+		if ( window.wppoLazyLoadFallback ) {
+			window.removeEventListener( 'scroll', window.wppoLazyLoadFallback );
+		}
 		window.addEventListener( 'scroll', lazyLoadFallback );
 		window.wppoLazyLoadFallback = lazyLoadFallback;
 		lazyLoadFallback();
