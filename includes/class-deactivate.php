@@ -43,6 +43,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			Advanced_Cache_Handler::remove();
 
+			// Remove Redis object cache drop-in if it belongs to this plugin.
+			$object_cache_file = WP_CONTENT_DIR . '/object-cache.php';
+			if ( file_exists( $object_cache_file ) ) {
+				$content = file_get_contents( $object_cache_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+				if ( false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
+					@unlink( $object_cache_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				}
+			}
+
+			// Remove Redis config file.
+			$redis_config_file = WP_CONTENT_DIR . '/wppo-redis-config.php';
+			if ( file_exists( $redis_config_file ) ) {
+				@unlink( $redis_config_file ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			}
+
 			// Remove WP_CACHE constant from wp-config.php.
 			self::remove_wp_cache_constant();
 			new Log( __( 'Plugin deactivated', 'performance-optimisation' ) );

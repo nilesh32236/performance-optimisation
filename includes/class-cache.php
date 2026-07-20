@@ -716,13 +716,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$instance = new self();
 
 			if ( ! $instance->filesystem ) {
-				return 'Unable to initialize filesystem.';
+				return __( 'Unable to initialize filesystem.', 'performance-optimisation' );
 			}
 
 			$cache_dir = "{$instance->cache_root_dir}/{$instance->domain}";
 
 			if ( ! $instance->filesystem->is_dir( $cache_dir ) ) {
-				return 'Cache directory does not exist.';
+				return __( 'Cache directory does not exist.', 'performance-optimisation' );
 			}
 
 			$total_size = $instance->calculate_directory_size( $cache_dir );

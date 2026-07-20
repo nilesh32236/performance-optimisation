@@ -1,3 +1,5 @@
+@use '../abstracts/mixins' as *;
+
 .wppo-feature-card {
 	background: var(--wppo-bg-card);
 	border: 1px solid var(--wppo-border);

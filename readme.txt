@@ -35,78 +35,22 @@ Performance Optimisation helps you speed up your site with cache management, Jav
  - **System Info Dashboard:** Real-time environment diagnostic tool for PHP, DB, and WordPress.
  - **Import/export** plugin settings.
 
+This plugin uses `voku/html-min` for HTML minification, `matthiasmullie/minify` for JavaScript and CSS minification, and `woocommerce/action-scheduler` for background job processing.
+
 == Installation ==
 
 1. Upload the plugin files to the `/wp-content/plugins/performance-optimisation` directory, or install the plugin through the WordPress plugins screen directly.
 2. Activate the plugin through the 'Plugins' screen in WordPress.
 3. Configure the settings via the **Performance Optimisation** menu in the WordPress admin panel.
 
-== Usage ==
+After activation, you can manage the following from the settings tabs:
 
-1. **Dashboard Overview**  
- - View cache size and clear cache.  
- - Check the number of minified JavaScript and CSS files.  
- - Monitor image optimisation (WebP/AVIF status).  
- - Review recent plugin activities.  
-
-2. **File Optimization Settings**  
- - Minify JavaScript, CSS, and HTML.  
- - Combine CSS and exclude specific files.  
- - Defer and delay JavaScript loading.  
- - **Core Tweaks:** Disable emojis, embeds, XML-RPC, and control Heartbeat limits.
-
-3. **Preload Settings**  
- - Enable cache preloading.  
- - Preconnect to origins and prefetch DNS.  
- - Preload fonts, CSS, and images.  
-
-4. **Image Optimisation Settings**  
- - Lazy load images with SVG placeholders.  
- - Convert images to WebP/AVIF formats and exclude specific images.  
- - Preload feature images for selected post types.  
-
-5. **Database Cleanup**  
- - Schedule automatic cleanup for revisions, auto-drafts, and transients.
- - Keep recent revisions based on age or maximum count.
- - Clean all overhead in one click.
-
-6. **Tools**  
- - Import/export plugin settings for quick setup.
-
-== Composer Libraries ==
-
-This plugin uses the following composer libraries:
-
- - `voku/html-min` - For HTML minification.
- - `matthiasmullie/minify` - For JavaScript and CSS minification.
-
-Composer configuration:
-
-`
-{
-	"name": "nilesh/performance-optimisation",
-	"description": "A package for performance optimization, including HTML minification and code minification tools.",
-	"license": "GPL-2.0-or-later",
-	"authors": [
-		{
-			"name": "nilesh",
-			"email": "nilesh.kanzariya912@gmail.com",
-			"homepage": "https://github.com/nilesh32236"
-		}
-	],
-	"require": {
-		"voku/html-min": "^4.5",
-		"matthiasmullie/minify": "^1.3",
-		"woocommerce/action-scheduler": "^3.8"
-	},
-	"extra": {
-		"cleanup": {
-			"dirs": ["bin", "tests", "docs"],
-			"exclude": ["*.md", "*.yml", "*.xml", "tests", "docs"]
-		}
-	}
-}
-`
+- **Dashboard Overview** — View cache size, minified file counts, image optimisation status, and recent activities.
+- **File Optimization** — Minify JS/CSS/HTML, combine CSS, defer/delay JS, and configure Core Tweaks (emojis, embeds, XML-RPC, Heartbeat).
+- **Preload Settings** — Cache preloading, preconnect, DNS prefetch, font and CSS preloading.
+- **Image Optimisation** — Lazy load images with SVG placeholders, convert to WebP/AVIF, and preload feature images.
+- **Database Cleanup** — Schedule automatic cleanup for revisions, auto-drafts, transients, and orphaned data.
+- **Tools** — Import/export plugin settings for quick setup across environments.
 
 == Screenshots ==
 

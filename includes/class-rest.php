@@ -215,6 +215,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Sanitize settings array recursively.
 			$sanitized_settings = $this->sanitize_settings_recursively( $settings );
 
+			// Never store Redis password in the database. Store a boolean flag instead.
+			// The password must be provided via the WPPO_REDIS_PASSWORD constant in wp-config.php.
+			if ( 'object_cache' === $tab && isset( $sanitized_settings['password'] ) ) {
+				$password_provided = ! empty( $sanitized_settings['password'] );
+				unset( $sanitized_settings['password'] );
+				if ( $password_provided ) {
+					$sanitized_settings['password_set'] = true;
+				}
+			}
+
 			$options         = get_option( 'wppo_settings', array() );
 			$options[ $tab ] = $sanitized_settings;
 
@@ -399,8 +409,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function delete_optimised_image(): \WP_REST_Response {
 			global $wp_filesystem;
 			if ( ! Util::init_filesystem() ) {
-				require_once wp_normalize_path( ABSPATH . 'wp-admin/includes/file.php' );
-				new \WP_Filesystem_Direct( null );
+				return new \WP_REST_Response(
+					array(
+						'success' => false,
+						'message' => __( 'Unable to initialize filesystem.', 'performance-optimisation' ),
+					),
+					500
+				);
 			}
 
 			$wppo_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
@@ -531,7 +546,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 				foreach ( $results as $key => $value ) {
 					if ( is_wp_error( $value ) ) {
-						$failures[ $key ] = $value->get_error_message();
+						$failures[ $key ] = sprintf(
+							/* translators: %s: Cleanup type */
+							__( 'Failed to clean %s.', 'performance-optimisation' ),
+							$key
+						);
 					} else {
 						$total += (int) $value;
 					}
@@ -584,7 +603,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$result = Database_Cleanup::invoke_cleanup_method( $method );
 
 			if ( is_wp_error( $result ) ) {
-				return $this->send_response( null, false, 500, $result->get_error_message() );
+				return $this->send_response( null, false, 500, __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
 
 			new Log(
@@ -719,7 +738,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$config = $this->build_redis_config( $params );
 				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
-					return $this->send_response( null, false, 400, $ping->get_error_message() );
+					return $this->send_response( null, false, 400, __( 'Redis connection test failed.', 'performance-optimisation' ) );
 				}
 
 				return $this->send_response( array( 'success' => true ) );
@@ -730,7 +749,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					return $this->send_response( null, false, 400, $result->get_error_message() );
+					return $this->send_response( null, false, 400, __( 'Failed to enable object cache.', 'performance-optimisation' ) );
 				}
 
 				new Log( __( 'Object Cache enabled.', 'performance-optimisation' ) );
@@ -741,7 +760,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->disable();
 
 				if ( is_wp_error( $result ) ) {
-					return $this->send_response( null, false, 400, $result->get_error_message() );
+					return $this->send_response( null, false, 400, __( 'Failed to disable object cache.', 'performance-optimisation' ) );
 				}
 
 				new Log( __( 'Object Cache disabled.', 'performance-optimisation' ) );
@@ -904,7 +923,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$result = Telemetry::scan( $url, 'manual', $force );
 
 			if ( is_wp_error( $result ) ) {
-				return $this->send_response( null, false, 500, $result->get_error_message() );
+				return $this->send_response( null, false, 500, __( 'Performance scan failed.', 'performance-optimisation' ) );
 			}
 
 			return $this->send_response( $result );

@@ -32,3 +32,13 @@
 /.geminiignore
 /changelog.md
 .qoder
+/.browserslistrc
+/.eslintrc.json
+/.opencode-reviewer.yml
+/.audit-prompts/
+/__mocks__/
+/babel.config.json
+/AGENTS.md
+/test-lab/
+/reports/
+/vendor/phpcompatibility/

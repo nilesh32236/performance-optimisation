@@ -2,28 +2,23 @@
  * Performance Optimisation Plugin - Design System v5.0
  */
 
-/* Abstracts - imported first so mixins/variables are globally available */
-@import 'abstracts/variables';
-@import 'abstracts/mixins';
+@use 'abstracts/variables';
+@use 'abstracts/mixins';
 
-/* Base */
-@import 'base/base';
+@use 'base/base';
 
-/* Layout */
-@import 'layout/container';
-@import 'layout/sidebar';
+@use 'layout/container';
+@use 'layout/sidebar';
 
-/* Components */
-@import 'components/card';
-@import 'components/header';
-@import 'components/stats';
-@import 'components/forms';
-@import 'components/notices';
-@import 'components/progress';
-@import 'components/tabs';
-@import 'components/fields';
-@import 'components/dialog';
-@import 'components/tooltip';
+@use 'components/card';
+@use 'components/header';
+@use 'components/stats';
+@use 'components/forms';
+@use 'components/notices';
+@use 'components/progress';
+@use 'components/tabs';
+@use 'components/fields';
+@use 'components/dialog';
+@use 'components/tooltip';
 
-// Phase 1 — Performance Audit & System Info (v1.5.0)
-@import 'components/performance-audit';
+@use 'components/performance-audit';
