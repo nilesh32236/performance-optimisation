@@ -926,23 +926,24 @@ class Main {
 	}
 
 	/**
-	 * Checks if a CSS file is already minified.
+	 * Checks if a file is already minified (shared helper for CSS/JS).
 	 *
-	 * @since 1.0.0
+	 * @since 1.5.1
 	 *
-	 * @param  string $file_path Path to the CSS file.
+	 * @param  string $file_path Path to the file.
+	 * @param  string $type      Asset type ('css' or 'js').
 	 * @return bool True if the file is minified, false otherwise.
 	 */
-	private function is_css_minified( $file_path ) {
+	private function is_file_minified( $file_path, $type ) {
 		if ( empty( $file_path ) ) {
 			return true;
 		}
 
-		if ( $this->is_minified_asset_name( $file_path, 'css' ) ) {
+		if ( $this->is_minified_asset_name( $file_path, $type ) ) {
 			return true;
 		}
 
-		$cache_key   = 'min_css_' . md5( $file_path );
+		$cache_key   = 'min_' . $type . '_' . md5( $file_path );
 		$cache_group = 'wppo_minify_check';
 		$found       = false;
 		$cached      = wp_cache_get( $cache_key, $cache_group, false, $found );
@@ -979,6 +980,18 @@ class Main {
 	}
 
 	/**
+	 * Checks if a CSS file is already minified.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param  string $file_path Path to the CSS file.
+	 * @return bool True if the file is minified, false otherwise.
+	 */
+	private function is_css_minified( $file_path ) {
+		return $this->is_file_minified( $file_path, 'css' );
+	}
+
+	/**
 	 * Checks if a JavaScript file is already minified.
 	 *
 	 * @since 1.0.0
@@ -987,47 +1000,6 @@ class Main {
 	 * @return bool True if the file is minified, false otherwise.
 	 */
 	private function is_js_minified( $file_path ) {
-		if ( empty( $file_path ) ) {
-			return true;
-		}
-
-		if ( $this->is_minified_asset_name( $file_path, 'js' ) ) {
-			return true;
-		}
-
-		$cache_key   = 'min_js_' . md5( $file_path );
-		$cache_group = 'wppo_minify_check';
-		$found       = false;
-		$cached      = wp_cache_get( $cache_key, $cache_group, false, $found );
-
-		if ( $found ) {
-			return (bool) $cached;
-		}
-
-		if ( ! file_exists( $file_path ) ) {
-			return true;
-		}
-
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
-		$handle = fopen( $file_path, 'r' );
-		if ( ! $handle ) {
-			return true;
-		}
-
-		$line_count = 0;
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
-		while ( false !== fgets( $handle ) ) {
-			++$line_count;
-			if ( $line_count > 10 ) {
-				break;
-			}
-		}
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
-		fclose( $handle );
-
-		$is_minified = 10 >= $line_count;
-		wp_cache_set( $cache_key, (int) $is_minified, $cache_group, HOUR_IN_SECONDS );
-
-		return $is_minified;
+		return $this->is_file_minified( $file_path, 'js' );
 	}
 }
