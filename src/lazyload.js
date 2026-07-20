@@ -94,10 +94,12 @@ async function loadScripts() {
 			scriptLoading = false;
 		}
 
-		document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
-		window.dispatchEvent( new Event( 'DOMContentLoaded' ) );
-		window.dispatchEvent( new Event( 'load' ) );
-		window.dispatchEvent( new Event( 'pageshow' ) );
+		if ( document.readyState === 'loading' ) {
+			document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
+			window.dispatchEvent( new Event( 'DOMContentLoaded' ) );
+			window.dispatchEvent( new Event( 'load' ) );
+			window.dispatchEvent( new Event( 'pageshow' ) );
+		}
 
 		if ( typeof jQuery !== 'undefined' ) {
 			jQuery( document ).triggerHandler( 'ready' );
@@ -302,8 +304,15 @@ const loadImages = () => {
 				subtree: true,
 			} );
 
+			const stopObservation = () => {
+				mutationObserver.disconnect();
+				clearInterval( intervalId );
+			};
+
 			// Periodic Safety Scan for unobserved dynamic content
+			let safetyScanCount = 0;
 			const intervalId = setInterval( () => {
+				safetyScanCount++;
 				const elements = document.querySelectorAll(
 					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
 				);
@@ -314,10 +323,12 @@ const loadImages = () => {
 						unobservedCount++;
 					}
 				} );
-				if ( unobservedCount === 0 ) {
-					clearInterval( intervalId );
+				if ( unobservedCount === 0 || safetyScanCount >= 3 ) {
+					stopObservation();
 				}
-			}, 2000 );
+			}, 30000 );
+
+			setTimeout( stopObservation, 10000 );
 		}
 
 		document

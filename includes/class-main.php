@@ -480,7 +480,19 @@ class Main {
 		$screen = get_current_screen();
 
 		if ( is_admin_bar_showing() ) {
-			wp_enqueue_script( 'wppo-admin-bar-script', WPPO_PLUGIN_URL . 'src/main.js', array(), WPPO_VERSION, true );
+			$asset_file = WPPO_PLUGIN_PATH . 'build/main.asset.php';
+			$resolved   = wp_normalize_path( realpath( $asset_file ) );
+
+			if ( false !== $resolved && strpos( $resolved, WPPO_PLUGIN_PATH ) === 0 ) {
+				$asset_data = require $resolved;
+			} else {
+				$asset_data = array(
+					'dependencies' => array(),
+					'version'      => WPPO_VERSION,
+				);
+			}
+
+			wp_enqueue_script( 'wppo-admin-bar-script', WPPO_PLUGIN_URL . 'build/main.js', $asset_data['dependencies'], $asset_data['version'], true );
 			wp_localize_script(
 				'wppo-admin-bar-script',
 				'wppoObject',
@@ -565,7 +577,19 @@ class Main {
 	 */
 	public function enqueue_scripts() {
 		if ( is_admin_bar_showing() ) {
-			wp_enqueue_script( 'wppo-admin-bar-script', WPPO_PLUGIN_URL . 'src/main.js', array(), WPPO_VERSION, true );
+			$asset_file = WPPO_PLUGIN_PATH . 'build/main.asset.php';
+			$resolved   = wp_normalize_path( realpath( $asset_file ) );
+
+			if ( false !== $resolved && strpos( $resolved, WPPO_PLUGIN_PATH ) === 0 ) {
+				$asset_data = require $resolved;
+			} else {
+				$asset_data = array(
+					'dependencies' => array(),
+					'version'      => WPPO_VERSION,
+				);
+			}
+
+			wp_enqueue_script( 'wppo-admin-bar-script', WPPO_PLUGIN_URL . 'build/main.js', $asset_data['dependencies'], $asset_data['version'], true );
 			wp_localize_script(
 				'wppo-admin-bar-script',
 				'wppoObject',

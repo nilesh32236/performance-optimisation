@@ -204,13 +204,16 @@ const App = () => {
 		};
 		fetchRules();
 
-		setTransition( true );
-		const timeout = setTimeout( () => setTransition( false ), 400 );
 		return () => {
-			clearTimeout( timeout );
 			abortController.abort();
 		};
 	}, [ activeTab, recentActivities.length, serverRules ] );
+
+	useEffect( () => {
+		setTransition( true );
+		const timeout = setTimeout( () => setTransition( false ), 400 );
+		return () => clearTimeout( timeout );
+	}, [ activeTab ] );
 
 	return (
 		<div className="wppo-container">
