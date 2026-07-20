@@ -942,6 +942,15 @@ class Main {
 			return true;
 		}
 
+		$cache_key   = 'min_css_' . md5( $file_path );
+		$cache_group = 'wppo_minify_check';
+		$found       = false;
+		$cached      = wp_cache_get( $cache_key, $cache_group, false, $found );
+
+		if ( $found ) {
+			return (bool) $cached;
+		}
+
 		if ( ! file_exists( $file_path ) ) {
 			return true;
 		}
@@ -963,7 +972,10 @@ class Main {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		fclose( $handle );
 
-		return 10 >= $line_count;
+		$is_minified = 10 >= $line_count;
+		wp_cache_set( $cache_key, (int) $is_minified, $cache_group, HOUR_IN_SECONDS );
+
+		return $is_minified;
 	}
 
 	/**
@@ -983,6 +995,15 @@ class Main {
 			return true;
 		}
 
+		$cache_key   = 'min_js_' . md5( $file_path );
+		$cache_group = 'wppo_minify_check';
+		$found       = false;
+		$cached      = wp_cache_get( $cache_key, $cache_group, false, $found );
+
+		if ( $found ) {
+			return (bool) $cached;
+		}
+
 		if ( ! file_exists( $file_path ) ) {
 			return true;
 		}
@@ -1004,6 +1025,9 @@ class Main {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		fclose( $handle );
 
-		return 10 >= $line_count;
+		$is_minified = 10 >= $line_count;
+		wp_cache_set( $cache_key, (int) $is_minified, $cache_group, HOUR_IN_SECONDS );
+
+		return $is_minified;
 	}
 }
