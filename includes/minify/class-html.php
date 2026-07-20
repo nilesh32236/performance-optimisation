@@ -136,7 +136,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					$html = $this->html_min->minify( $html );
 				} catch ( \Exception $e ) {
 					// Fall through with unminified HTML on error.
-					$html = $html;
 				}
 			}
 
