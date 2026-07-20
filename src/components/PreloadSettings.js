@@ -50,19 +50,32 @@ const PreloadSettings = ( { options = {} } ) => {
 
 			if ( res.success ) {
 				setNotification( {
-					message: res.message || 'Settings updated successfully.',
+					message:
+						res.message ||
+						__(
+							'Settings updated successfully.',
+							'performance-optimisation'
+						),
 					success: true,
 				} );
 			} else {
 				setNotification( {
-					message: res.message || 'Failed to update settings.',
+					message:
+						res.message ||
+						__(
+							'Failed to update settings.',
+							'performance-optimisation'
+						),
 					success: false,
 				} );
 			}
 		} catch ( err ) {
 			console.error( 'Failed updating preload settings', err );
 			setNotification( {
-				message: 'An unexpected error occurred.',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
 				success: false,
 			} );
 		} finally {
@@ -95,6 +108,7 @@ const PreloadSettings = ( { options = {} } ) => {
 						className={ `wppo-notice wppo-notice--${
 							notification.success ? 'success' : 'error'
 						} wppo-mb-20` }
+						role="alert"
 					>
 						<span>{ notification.message }</span>
 					</div>
@@ -103,13 +117,19 @@ const PreloadSettings = ( { options = {} } ) => {
 
 			<form onSubmit={ handleSubmit } className="wppo-stacked-cards">
 				<FeatureCard
-					title="Cache Warm-up"
+					title={ __( 'Cache Warm-up', 'performance-optimisation' ) }
 					icon={ <FontAwesomeIcon icon={ faHourglassStart } /> }
 				>
 					<div className="wppo-field-group">
 						<SwitchField
-							label="Enable Preload Cache"
-							description="Automatically visit all pages to pre-generate the cache. The first real visitor gets a fast cached response instead of waiting for a cold page build."
+							label={ __(
+								'Enable Preload Cache',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Automatically visit all pages to pre-generate the cache. The first real visitor gets a fast cached response instead of waiting for a cold page build.',
+								'performance-optimisation'
+							) }
 							name="enablePreloadCache"
 							checked={ settings.enablePreloadCache }
 							onChange={ handleChange( setSettings ) }
@@ -120,14 +140,20 @@ const PreloadSettings = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="excludePreloadCache"
 								>
-									Exclude URLs from Cache Warm-up
+									{ __(
+										'Exclude URLs from Cache Warm-up',
+										'performance-optimisation'
+									) }
 								</label>
 								<textarea
 									className="wppo-textarea"
 									id="excludePreloadCache"
 									name="excludePreloadCache"
 									rows="3"
-									placeholder="Regex patterns, one per line"
+									placeholder={ __(
+										'Regex patterns, one per line',
+										'performance-optimisation'
+									) }
 									value={ settings.excludePreloadCache }
 									onChange={ handleChange( setSettings ) }
 									aria-describedby="excludePreloadCache-desc"
@@ -136,9 +162,10 @@ const PreloadSettings = ( { options = {} } ) => {
 									id="excludePreloadCache-desc"
 									className="wppo-text-muted wppo-mt-10 wppo-text-small"
 								>
-									Skip dynamic pages like cart, checkout, and
-									account pages that should never be cached.
-									Supports regex patterns.
+									{ __(
+										'Skip dynamic pages like cart, checkout, and account pages that should never be cached. Supports regex patterns.',
+										'performance-optimisation'
+									) }
 								</p>
 							</div>
 						) }
@@ -146,13 +173,22 @@ const PreloadSettings = ( { options = {} } ) => {
 				</FeatureCard>
 
 				<FeatureCard
-					title="Third-Party Connections"
+					title={ __(
+						'Third-Party Connections',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faLink } /> }
 				>
 					<div className="wppo-field-group">
 						<SwitchField
-							label="Preconnect"
-							description="Open a TCP/TLS connection to third-party origins before the browser needs them. Eliminates connection setup latency for fonts, analytics, and CDN resources."
+							label={ __(
+								'Preconnect',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Open a TCP/TLS connection to third-party origins before the browser needs them. Eliminates connection setup latency for fonts, analytics, and CDN resources.',
+								'performance-optimisation'
+							) }
 							name="preconnect"
 							checked={ settings.preconnect }
 							onChange={ handleChange( setSettings ) }
@@ -163,7 +199,10 @@ const PreloadSettings = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="preconnectOrigins"
 								>
-									Preconnect Origins
+									{ __(
+										'Preconnect Origins',
+										'performance-optimisation'
+									) }
 								</label>
 								<textarea
 									className="wppo-textarea"
@@ -179,15 +218,23 @@ const PreloadSettings = ( { options = {} } ) => {
 									id="preconnectOrigins-desc"
 									className="wppo-text-muted wppo-mt-10 wppo-text-small"
 								>
-									One origin per line. Use full URLs including
-									protocol.
+									{ __(
+										'One origin per line. Use full URLs including protocol.',
+										'performance-optimisation'
+									) }
 								</p>
 							</div>
 						) }
 
 						<SwitchField
-							label="DNS Prefetch"
-							description="Resolve domain names in the background before the browser requests resources from them. Faster than preconnect but only handles DNS — useful for domains you don't need a full connection to immediately."
+							label={ __(
+								'DNS Prefetch',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Resolve domain names in the background before the browser requests resources from them. Faster than preconnect but only handles DNS — useful for domains you do not need a full connection to immediately.',
+								'performance-optimisation'
+							) }
 							name="prefetchDNS"
 							checked={ settings.prefetchDNS }
 							onChange={ handleChange( setSettings ) }
@@ -198,7 +245,10 @@ const PreloadSettings = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="dnsPrefetchOrigins"
 								>
-									DNS Prefetch Origins
+									{ __(
+										'DNS Prefetch Origins',
+										'performance-optimisation'
+									) }
 								</label>
 								<textarea
 									className="wppo-textarea"
@@ -214,8 +264,11 @@ const PreloadSettings = ( { options = {} } ) => {
 									id="dnsPrefetchOrigins-desc"
 									className="wppo-text-muted wppo-mt-10 wppo-text-small"
 								>
-									One hostname per line, without protocol
-									(e.g. <code>cdn.example.com</code>).
+									{ __(
+										'One hostname per line, without protocol (e.g.',
+										'performance-optimisation'
+									) }{ ' ' }
+									<code>cdn.example.com</code>).
 								</p>
 							</div>
 						) }
@@ -223,14 +276,23 @@ const PreloadSettings = ( { options = {} } ) => {
 				</FeatureCard>
 
 				<FeatureCard
-					title="Critical Assets Preloading"
+					title={ __(
+						'Critical Assets Preloading',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faFont } /> }
 				>
 					<div className="wppo-stacked-cards">
 						<div className="wppo-field-group">
 							<SwitchField
-								label="Preload Fonts"
-								description='Inject <link rel="preload"> hints for critical font files so the browser fetches them at the highest priority. Eliminates the flash of invisible text (FOIT) on first load.'
+								label={ __(
+									'Preload Fonts',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Inject preload hints for critical font files so the browser fetches them at the highest priority. Eliminates the flash of invisible text (FOIT) on first load.',
+									'performance-optimisation'
+								) }
 								name="preloadFonts"
 								checked={ settings.preloadFonts }
 								onChange={ handleChange( setSettings ) }
@@ -241,7 +303,10 @@ const PreloadSettings = ( { options = {} } ) => {
 										className="wppo-field-label"
 										htmlFor="preloadFontsUrls"
 									>
-										Font URLs to Preload
+										{ __(
+											'Font URLs to Preload',
+											'performance-optimisation'
+										) }
 									</label>
 									<textarea
 										className="wppo-textarea"
@@ -257,16 +322,24 @@ const PreloadSettings = ( { options = {} } ) => {
 										id="preloadFontsUrls-desc"
 										className="wppo-text-muted wppo-mt-10 wppo-text-small"
 									>
-										One URL per line. Prefer .woff2 format
-										for best browser support.
+										{ __(
+											'One URL per line. Prefer .woff2 format for best browser support.',
+											'performance-optimisation'
+										) }
 									</p>
 								</div>
 							) }
 						</div>
 						<div className="wppo-field-group">
 							<SwitchField
-								label="Preload Critical CSS"
-								description='Inject <link rel="preload"> hints for above-the-fold stylesheets. Ensures critical styles are fetched before the browser renders the page, reducing render-blocking delays.'
+								label={ __(
+									'Preload Critical CSS',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Inject preload hints for above-the-fold stylesheets. Ensures critical styles are fetched before the browser renders the page, reducing render-blocking delays.',
+									'performance-optimisation'
+								) }
 								name="preloadCSS"
 								checked={ settings.preloadCSS }
 								onChange={ handleChange( setSettings ) }
@@ -277,7 +350,10 @@ const PreloadSettings = ( { options = {} } ) => {
 										className="wppo-field-label"
 										htmlFor="preloadCSSUrls"
 									>
-										CSS URLs to Preload
+										{ __(
+											'CSS URLs to Preload',
+											'performance-optimisation'
+										) }
 									</label>
 									<textarea
 										className="wppo-textarea"
@@ -293,8 +369,10 @@ const PreloadSettings = ( { options = {} } ) => {
 										id="preloadCSSUrls-desc"
 										className="wppo-text-muted wppo-mt-10 wppo-text-small"
 									>
-										One URL per line. Only add stylesheets
-										needed for above-the-fold content.
+										{ __(
+											'One URL per line. Only add stylesheets needed for above-the-fold content.',
+											'performance-optimisation'
+										) }
 									</p>
 								</div>
 							) }

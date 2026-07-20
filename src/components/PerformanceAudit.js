@@ -237,6 +237,8 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 		setError( null );
 		setResult( null );
 
+		const abortController = new AbortController();
+
 		try {
 			const response = await runPerformanceScan( url, force );
 			if ( response.success && response.data ) {
@@ -250,8 +252,11 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 
 				// Phase 2 — fetch telemetry-based suggestions and pass up to Dashboard.
 				if ( onSuggestionsReady ) {
-					fetchSuggestions( url )
+					fetchSuggestions( url, abortController.signal )
 						.then( ( sugResp ) => {
+							if ( abortController.signal.aborted ) {
+								return;
+							}
 							if (
 								sugResp.success &&
 								sugResp.data?.suggestions
@@ -260,6 +265,9 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 							}
 						} )
 						.catch( ( sugErr ) => {
+							if ( abortController.signal.aborted ) {
+								return;
+							}
 							// Non-fatal — suggestions are a bonus, not required.
 							console.warn(
 								'Could not fetch suggestions:',
@@ -277,6 +285,9 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 				);
 			}
 		} catch ( err ) {
+			if ( abortController.signal.aborted ) {
+				return;
+			}
 			setError(
 				__(
 					'Scan failed. Please try again.',

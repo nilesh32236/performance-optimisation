@@ -58,6 +58,13 @@ const ObjectCache = ( { options = {} } ) => {
 			}
 		} catch ( error ) {
 			console.error( 'Error fetching cache status', error );
+			setActionMsg( {
+				type: 'error',
+				text: __(
+					'Failed to check cache status.',
+					'performance-optimisation'
+				),
+			} );
 		}
 	};
 
@@ -92,6 +99,15 @@ const ObjectCache = ( { options = {} } ) => {
 						),
 				} );
 			}
+		} catch ( err ) {
+			setActionMsg( {
+				type: 'error',
+				text: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
+			} );
+			console.error( err );
 		} finally {
 			setIsLoading( false );
 		}
@@ -118,7 +134,9 @@ const ObjectCache = ( { options = {} } ) => {
 			if ( ! res?.success ) {
 				setActionMsg( {
 					type: 'error',
-					text: res?.message || 'Action failed.',
+					text:
+						res?.message ||
+						__( 'Action failed.', 'performance-optimisation' ),
 				} );
 				return;
 			}
@@ -128,7 +146,9 @@ const ObjectCache = ( { options = {} } ) => {
 			}
 			setActionMsg( {
 				type: 'success',
-				text: res.message || 'Action successful.',
+				text:
+					res.message ||
+					__( 'Action successful.', 'performance-optimisation' ),
 			} );
 		} finally {
 			setIsActionLoading( false );
@@ -150,8 +170,11 @@ const ObjectCache = ( { options = {} } ) => {
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
-				title="Object Cache"
-				description="Enterprise-grade Redis object caching with Sentinel and Cluster support."
+				title={ __( 'Object Cache', 'performance-optimisation' ) }
+				description={ __(
+					'Enterprise-grade Redis object caching with Sentinel and Cluster support.',
+					'performance-optimisation'
+				) }
 				actions={
 					<div className="wppo-feature-header__actions">
 						{ cacheStatus.enabled ? (
@@ -165,7 +188,10 @@ const ObjectCache = ( { options = {} } ) => {
 									label={
 										<>
 											<FontAwesomeIcon icon={ faBroom } />{ ' ' }
-											Flush Cache
+											{ __(
+												'Flush Cache',
+												'performance-optimisation'
+											) }
 										</>
 									}
 								/>
@@ -178,7 +204,10 @@ const ObjectCache = ( { options = {} } ) => {
 									label={
 										<>
 											<FontAwesomeIcon icon={ faTimes } />{ ' ' }
-											Disable
+											{ __(
+												'Disable',
+												'performance-optimisation'
+											) }
 										</>
 									}
 								/>
@@ -200,7 +229,10 @@ const ObjectCache = ( { options = {} } ) => {
 										<FontAwesomeIcon
 											icon={ faCheckCircle }
 										/>{ ' ' }
-										Enable Object Cache
+										{ __(
+											'Enable Object Cache',
+											'performance-optimisation'
+										) }
 									</>
 								}
 							/>
@@ -212,6 +244,7 @@ const ObjectCache = ( { options = {} } ) => {
 			{ actionMsg && (
 				<div
 					className={ `wppo-notice wppo-notice--${ actionMsg.type }` }
+					role="alert"
 				>
 					<FontAwesomeIcon
 						icon={
@@ -229,10 +262,17 @@ const ObjectCache = ( { options = {} } ) => {
 					<div className="wppo-notice wppo-notice--error">
 						<FontAwesomeIcon icon={ faExclamationCircle } />
 						<div>
-							<strong>Extension Missing</strong>
+							<strong>
+								{ __(
+									'Extension Missing',
+									'performance-optimisation'
+								) }
+							</strong>
 							<p>
-								The PhpRedis extension is not installed. Native
-								performance will be limited.
+								{ __(
+									'The PhpRedis extension is not installed. Native performance will be limited.',
+									'performance-optimisation'
+								) }
 							</p>
 						</div>
 					</div>
@@ -241,10 +281,17 @@ const ObjectCache = ( { options = {} } ) => {
 					<div className="wppo-notice wppo-notice--warning">
 						<FontAwesomeIcon icon={ faExclamationCircle } />
 						<div>
-							<strong>Conflict Detected</strong>
+							<strong>
+								{ __(
+									'Conflict Detected',
+									'performance-optimisation'
+								) }
+							</strong>
 							<p>
-								Another object cache plugin is currently active.
-								Please disable it to avoid site crashes.
+								{ __(
+									'Another object cache plugin is currently active. Please disable it to avoid site crashes.',
+									'performance-optimisation'
+								) }
 							</p>
 						</div>
 					</div>
@@ -254,18 +301,22 @@ const ObjectCache = ( { options = {} } ) => {
 			{ cacheStatus.telemetry && cacheStatus.enabled && (
 				<div className="wppo-stats-grid">
 					<div className="wppo-stat-item">
-						<span className="wppo-stat-label">Memory Usage</span>
+						<span className="wppo-stat-label">
+							{ __( 'Memory Usage', 'performance-optimisation' ) }
+						</span>
 						<span className="wppo-stat-value">
 							{ cacheStatus.telemetry?.used_memory_human || '0B' }
 						</span>
 						<span className="wppo-text-muted">
-							Peak:{ ' ' }
+							{ __( 'Peak:', 'performance-optimisation' ) }{ ' ' }
 							{ cacheStatus.telemetry?.used_memory_peak_human ||
 								'0B' }
 						</span>
 					</div>
 					<div className="wppo-stat-item">
-						<span className="wppo-stat-label">Hit Ratio</span>
+						<span className="wppo-stat-label">
+							{ __( 'Hit Ratio', 'performance-optimisation' ) }
+						</span>
 						<span className="wppo-stat-value">{ hitRatio }%</span>
 						<div className="wppo-progress-bar">
 							<div
@@ -275,23 +326,33 @@ const ObjectCache = ( { options = {} } ) => {
 						</div>
 					</div>
 					<div className="wppo-stat-item">
-						<span className="wppo-stat-label">Active Clients</span>
+						<span className="wppo-stat-label">
+							{ __(
+								'Active Clients',
+								'performance-optimisation'
+							) }
+						</span>
 						<span className="wppo-stat-value">
 							{ cacheStatus.telemetry?.connected_clients || 0 }
 						</span>
 						<span className="wppo-text-muted">
-							Total:{ ' ' }
+							{ __( 'Total:', 'performance-optimisation' ) }{ ' ' }
 							{ cacheStatus.telemetry
 								?.total_connections_received || 0 }
 						</span>
 					</div>
 					<div className="wppo-stat-item">
-						<span className="wppo-stat-label">Redis Version</span>
+						<span className="wppo-stat-label">
+							{ __(
+								'Redis Version',
+								'performance-optimisation'
+							) }
+						</span>
 						<span className="wppo-stat-value">
 							{ cacheStatus.telemetry?.redis_version || 'N/A' }
 						</span>
 						<span className="wppo-text-muted">
-							Uptime:{ ' ' }
+							{ __( 'Uptime:', 'performance-optimisation' ) }{ ' ' }
 							{ cacheStatus.telemetry?.uptime_in_seconds
 								? (
 										cacheStatus.telemetry
@@ -306,13 +367,19 @@ const ObjectCache = ( { options = {} } ) => {
 
 			<form className="wppo-stacked-cards" onSubmit={ handleSubmit }>
 				<FeatureCard
-					title="Connection Settings"
+					title={ __(
+						'Connection Settings',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faLink } /> }
 				>
 					<div className="wppo-field-group">
 						<div className="wppo-field">
 							<label className="wppo-field-label" htmlFor="mode">
-								Deployment Mode
+								{ __(
+									'Deployment Mode',
+									'performance-optimisation'
+								) }
 							</label>
 							<select
 								className="wppo-select"
@@ -322,12 +389,23 @@ const ObjectCache = ( { options = {} } ) => {
 								onChange={ handleChange( setSettings ) }
 							>
 								<option value="standalone">
-									Standalone (Single Node)
+									{ __(
+										'Standalone (Single Node)',
+										'performance-optimisation'
+									) }
 								</option>
 								<option value="sentinel">
-									Redis Sentinel (HA)
+									{ __(
+										'Redis Sentinel (HA)',
+										'performance-optimisation'
+									) }
 								</option>
-								<option value="cluster">Redis Cluster</option>
+								<option value="cluster">
+									{ __(
+										'Redis Cluster',
+										'performance-optimisation'
+									) }
+								</option>
 							</select>
 						</div>
 
@@ -338,7 +416,10 @@ const ObjectCache = ( { options = {} } ) => {
 										className="wppo-field-label"
 										htmlFor="host"
 									>
-										Host
+										{ __(
+											'Host',
+											'performance-optimisation'
+										) }
 									</label>
 									<input
 										className="wppo-input"
@@ -354,7 +435,10 @@ const ObjectCache = ( { options = {} } ) => {
 										className="wppo-field-label"
 										htmlFor="port"
 									>
-										Port
+										{ __(
+											'Port',
+											'performance-optimisation'
+										) }
 									</label>
 									<input
 										className="wppo-input"
@@ -372,14 +456,20 @@ const ObjectCache = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="nodes"
 								>
-									Server Nodes
+									{ __(
+										'Server Nodes',
+										'performance-optimisation'
+									) }
 								</label>
 								<textarea
 									className="wppo-textarea"
 									id="nodes"
 									name="nodes"
 									rows="3"
-									placeholder="host:port (one per line)"
+									placeholder={ __(
+										'host:port (one per line)',
+										'performance-optimisation'
+									) }
 									value={ settings.nodes }
 									onChange={ handleChange( setSettings ) }
 								/>
@@ -392,7 +482,10 @@ const ObjectCache = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="master_name"
 								>
-									Sentinel Master Name
+									{ __(
+										'Sentinel Master Name',
+										'performance-optimisation'
+									) }
 								</label>
 								<input
 									className="wppo-input"
@@ -411,14 +504,20 @@ const ObjectCache = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="password"
 								>
-									Auth Password
+									{ __(
+										'Auth Password',
+										'performance-optimisation'
+									) }
 								</label>
 								<input
 									className="wppo-input"
 									id="password"
 									type="password"
 									name="password"
-									placeholder="Optional"
+									placeholder={ __(
+										'Optional',
+										'performance-optimisation'
+									) }
 									value={ settings.password }
 									onChange={ handleChange( setSettings ) }
 								/>
@@ -428,7 +527,10 @@ const ObjectCache = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="database"
 								>
-									Database ID
+									{ __(
+										'Database ID',
+										'performance-optimisation'
+									) }
 								</label>
 								<input
 									className="wppo-input"
@@ -453,22 +555,31 @@ const ObjectCache = ( { options = {} } ) => {
 										<FontAwesomeIcon
 											icon={ faNetworkWired }
 										/>{ ' ' }
-										Test Connection
+										{ __(
+											'Test Connection',
+											'performance-optimisation'
+										) }
 									</>
 								}
 							/>
 							<LoadingSubmitButton
+								type="submit"
 								className="wppo-button wppo-button--primary"
-								onClick={ handleSubmit }
 								isLoading={ isLoading }
-								label="Save Changes"
+								label={ __(
+									'Save Changes',
+									'performance-optimisation'
+								) }
 							/>
 						</div>
 					</div>
 				</FeatureCard>
 
 				<FeatureCard
-					title="Enterprise Performance"
+					title={ __(
+						'Enterprise Performance',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faShieldAlt } /> }
 				>
 					<div className="wppo-field-group">
@@ -477,7 +588,10 @@ const ObjectCache = ( { options = {} } ) => {
 								className="wppo-field-label"
 								htmlFor="compression"
 							>
-								Memory Compression
+								{ __(
+									'Memory Compression',
+									'performance-optimisation'
+								) }
 							</label>
 							<select
 								className="wppo-select"
@@ -487,7 +601,12 @@ const ObjectCache = ( { options = {} } ) => {
 								onChange={ handleChange( setSettings ) }
 								aria-describedby="compression-desc"
 							>
-								<option value="none">None (Fastest)</option>
+								<option value="none">
+									{ __(
+										'None (Fastest)',
+										'performance-optimisation'
+									) }
+								</option>
 								<option
 									value="lzf"
 									disabled={
@@ -495,10 +614,13 @@ const ObjectCache = ( { options = {} } ) => {
 										! cacheStatus.supported_compressors.lzf
 									}
 								>
-									LZF{ ' ' }
+									{ __( 'LZF', 'performance-optimisation' ) }{ ' ' }
 									{ cacheStatus.supported_compressors &&
 									! cacheStatus.supported_compressors.lzf
-										? '(Disabled)'
+										? __(
+												'(Disabled)',
+												'performance-optimisation'
+										  )
 										: '' }
 								</option>
 								<option
@@ -508,11 +630,17 @@ const ObjectCache = ( { options = {} } ) => {
 										! cacheStatus.supported_compressors.zstd
 									}
 								>
-									ZSTD{ ' ' }
+									{ __( 'ZSTD', 'performance-optimisation' ) }{ ' ' }
 									{ cacheStatus.supported_compressors &&
 									! cacheStatus.supported_compressors.zstd
-										? '(Disabled)'
-										: '(Recommended)' }
+										? __(
+												'(Disabled)',
+												'performance-optimisation'
+										  )
+										: __(
+												'(Recommended)',
+												'performance-optimisation'
+										  ) }
 								</option>
 								<option
 									value="lz4"
@@ -521,10 +649,13 @@ const ObjectCache = ( { options = {} } ) => {
 										! cacheStatus.supported_compressors.lz4
 									}
 								>
-									LZ4{ ' ' }
+									{ __( 'LZ4', 'performance-optimisation' ) }{ ' ' }
 									{ cacheStatus.supported_compressors &&
 									! cacheStatus.supported_compressors.lz4
-										? '(Disabled)'
+										? __(
+												'(Disabled)',
+												'performance-optimisation'
+										  )
 										: '' }
 								</option>
 							</select>
@@ -536,21 +667,36 @@ const ObjectCache = ( { options = {} } ) => {
 									fontSize: '13px',
 								} }
 							>
-								Reduces memory footprint for enterprise caches.
+								{ __(
+									'Reduces memory footprint for enterprise caches.',
+									'performance-optimisation'
+								) }
 							</p>
 						</div>
 
 						<SwitchField
-							label="Persistent Connections"
-							description="Keep connections alive between PHP requests."
+							label={ __(
+								'Persistent Connections',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Keep connections alive between PHP requests.',
+								'performance-optimisation'
+							) }
 							name="persistent"
 							checked={ settings.persistent }
 							onChange={ handleChange( setSettings ) }
 						/>
 
 						<SwitchField
-							label="TLS / SSL Encryption"
-							description="Encrypt traffic between WordPress and Redis."
+							label={ __(
+								'TLS / SSL Encryption',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Encrypt traffic between WordPress and Redis.',
+								'performance-optimisation'
+							) }
 							name="use_tls"
 							checked={ settings.use_tls }
 							onChange={ handleChange( setSettings ) }

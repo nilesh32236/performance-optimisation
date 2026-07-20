@@ -29,7 +29,7 @@ const ImageOptimizationCard = ( {
 
 	return (
 		<FeatureCard
-			title="Image Optimization"
+			title={ __( 'Image Optimization', 'performance-optimisation' ) }
 			icon={ <FontAwesomeIcon icon={ faImages } /> }
 			footer={
 				<>
@@ -38,8 +38,14 @@ const ImageOptimizationCard = ( {
 						onClick={ onOptimize }
 						isLoading={ loading.optimize_images }
 						disabled={ bgProcessing || pendingPathsCount === 0 }
-						label="Optimize All"
-						loadingLabel="Optimizing..."
+						label={ __(
+							'Optimize All',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Optimizing…',
+							'performance-optimisation'
+						) }
 					/>
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--danger"
@@ -50,7 +56,10 @@ const ImageOptimizationCard = ( {
 							'Remove Optimized',
 							'performance-optimisation'
 						) }
-						loadingLabel="Removing..."
+						loadingLabel={ __(
+							'Removing…',
+							'performance-optimisation'
+						) }
 					/>
 				</>
 			}
@@ -61,7 +70,12 @@ const ImageOptimizationCard = ( {
 						className="wppo-progress-header"
 						id="wppo-webp-progress-label"
 					>
-						<span>WebP Conversion Progress</span>
+						<span>
+							{ __(
+								'WebP Conversion Progress',
+								'performance-optimisation'
+							) }
+						</span>
 						<span>
 							{ completed.webp || 0 } / { totalWebP }
 						</span>
@@ -86,7 +100,12 @@ const ImageOptimizationCard = ( {
 						className="wppo-progress-header"
 						id="wppo-avif-progress-label"
 					>
-						<span>AVIF Conversion Progress</span>
+						<span>
+							{ __(
+								'AVIF Conversion Progress',
+								'performance-optimisation'
+							) }
+						</span>
 						<span>
 							{ completed.avif || 0 } / { totalAvif }
 						</span>
@@ -114,8 +133,12 @@ const ImageOptimizationCard = ( {
 				>
 					<FontAwesomeIcon icon={ faSpinner } spin />
 					<span>
-						Currently processing background optimization jobs ({ ' ' }
-						{ bgJobsQueued } queued)
+						{ __(
+							'Currently processing background optimization jobs',
+							'performance-optimisation'
+						) }{ ' ' }
+						( { bgJobsQueued }{ ' ' }
+						{ __( 'queued', 'performance-optimisation' ) })
 					</span>
 				</div>
 			) }

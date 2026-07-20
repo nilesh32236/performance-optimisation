@@ -1,5 +1,5 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useRef } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -32,6 +32,7 @@ const escapeHtml = ( str ) => {
 
 const FileOptimization = ( { options = {}, serverRules = null } ) => {
 	const [ activeSubTab, setActiveSubTab ] = useState( 'assets' );
+	const tabRefs = useRef( {} );
 
 	const defaultSettings = {
 		minifyJS: false,
@@ -96,19 +97,32 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 
 			if ( res.success ) {
 				setNotification( {
-					message: res.message || 'Settings updated successfully.',
+					message:
+						res.message ||
+						__(
+							'Settings updated successfully.',
+							'performance-optimisation'
+						),
 					success: true,
 				} );
 			} else {
 				setNotification( {
-					message: res.message || 'Failed to update settings.',
+					message:
+						res.message ||
+						__(
+							'Failed to update settings.',
+							'performance-optimisation'
+						),
 					success: false,
 				} );
 			}
 		} catch ( err ) {
 			console.error( 'Failed updating file optimisation settings', err );
 			setNotification( {
-				message: 'An unexpected error occurred.',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
 				success: false,
 			} );
 		} finally {
@@ -158,12 +172,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 		setActiveSubTab( nextTab.id );
 
 		// Move focus to the next button.
-		setTimeout( () => {
-			const nextButton = document.getElementById( `tab-${ nextTab.id }` );
-			if ( nextButton ) {
-				nextButton.focus();
-			}
-		}, 0 );
+		const nextButton = tabRefs.current[ nextTab.id ];
+		if ( nextButton ) {
+			nextButton.focus();
+		}
 	};
 
 	return (
@@ -210,6 +222,7 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						<button
 							key={ tab.id }
 							id={ `tab-${ tab.id }` }
+							ref={ ( el ) => ( tabRefs.current[ tab.id ] = el ) }
 							className={ `wppo-sub-tab${
 								activeSubTab === tab.id
 									? ' wppo-sub-tab--active'
@@ -241,20 +254,35 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						aria-labelledby="tab-assets"
 					>
 						<FeatureCard
-							title="CSS Optimization"
+							title={ __(
+								'CSS Optimization',
+								'performance-optimisation'
+							) }
 							icon={ <FontAwesomeIcon icon={ faCode } /> }
 						>
 							<div className="wppo-field-group">
 								<SwitchField
-									label="Minify CSS"
-									description="Remove whitespace and comments from stylesheets to reduce file size."
+									label={ __(
+										'Minify CSS',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove whitespace and comments from stylesheets to reduce file size.',
+										'performance-optimisation'
+									) }
 									name="minifyCSS"
 									checked={ settings.minifyCSS }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
-									label="Combine CSS"
-									description="Merge all CSS files into a single file to reduce the number of HTTP requests."
+									label={ __(
+										'Combine CSS',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Merge all CSS files into a single file to reduce the number of HTTP requests.',
+										'performance-optimisation'
+									) }
 									name="combineCSS"
 									checked={ settings.combineCSS }
 									onChange={ handleChange( setSettings ) }
@@ -265,14 +293,20 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											className="wppo-field-label"
 											htmlFor="excludeCombineCSS"
 										>
-											Exclude CSS from Combining
+											{ __(
+												'Exclude CSS from Combining',
+												'performance-optimisation'
+											) }
 										</label>
 										<textarea
 											className="wppo-textarea"
 											id="excludeCombineCSS"
 											name="excludeCombineCSS"
 											rows="3"
-											placeholder="Handles or partial URLs"
+											placeholder={ __(
+												'Handles or partial URLs',
+												'performance-optimisation'
+											) }
 											value={ settings.excludeCombineCSS }
 											onChange={ handleChange(
 												setSettings
@@ -286,14 +320,20 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											className="wppo-field-label"
 											htmlFor="excludeCSS"
 										>
-											Exclude CSS from Minification
+											{ __(
+												'Exclude CSS from Minification',
+												'performance-optimisation'
+											) }
 										</label>
 										<textarea
 											className="wppo-textarea"
 											id="excludeCSS"
 											name="excludeCSS"
 											rows="3"
-											placeholder="Handles or partial URLs (one per line)"
+											placeholder={ __(
+												'Handles or partial URLs (one per line)',
+												'performance-optimisation'
+											) }
 											value={ settings.excludeCSS }
 											onChange={ handleChange(
 												setSettings
@@ -305,12 +345,21 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						</FeatureCard>
 
 						<FeatureCard
-							title="HTML Optimization"
+							title={ __(
+								'HTML Optimization',
+								'performance-optimisation'
+							) }
 							icon={ <FontAwesomeIcon icon={ faCode } /> }
 						>
 							<SwitchField
-								label="Minify HTML"
-								description="Compress the HTML output of your website by removing unnecessary whitespace and comments."
+								label={ __(
+									'Minify HTML',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Compress the HTML output of your website by removing unnecessary whitespace and comments.',
+									'performance-optimisation'
+								) }
 								name="minifyHTML"
 								checked={ settings.minifyHTML }
 								onChange={ handleChange( setSettings ) }
@@ -327,20 +376,35 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						aria-labelledby="tab-scripts"
 					>
 						<FeatureCard
-							title="JavaScript Loading"
+							title={ __(
+								'JavaScript Loading',
+								'performance-optimisation'
+							) }
 							icon={ <FontAwesomeIcon icon={ faRocket } /> }
 						>
 							<div className="wppo-field-group">
 								<SwitchField
-									label="Minify JavaScript"
-									description="Compress JS files by removing whitespace and comments to reduce execution time."
+									label={ __(
+										'Minify JavaScript',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Compress JS files by removing whitespace and comments to reduce execution time.',
+										'performance-optimisation'
+									) }
 									name="minifyJS"
 									checked={ settings.minifyJS }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
-									label="Defer JavaScript"
-									description="Load scripts after the page renders to prevent render-blocking and improve page speed."
+									label={ __(
+										'Defer JavaScript',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Load scripts after the page renders to prevent render-blocking and improve page speed.',
+										'performance-optimisation'
+									) }
 									name="deferJS"
 									checked={ settings.deferJS }
 									onChange={ handleChange( setSettings ) }
@@ -351,14 +415,20 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											className="wppo-field-label"
 											htmlFor="excludeDeferJS"
 										>
-											Exclude JS from Deferring
+											{ __(
+												'Exclude JS from Deferring',
+												'performance-optimisation'
+											) }
 										</label>
 										<textarea
 											className="wppo-textarea"
 											id="excludeDeferJS"
 											name="excludeDeferJS"
 											rows="3"
-											placeholder="Handles or partial URLs"
+											placeholder={ __(
+												'Handles or partial URLs',
+												'performance-optimisation'
+											) }
 											value={ settings.excludeDeferJS }
 											onChange={ handleChange(
 												setSettings
@@ -367,8 +437,14 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 									</div>
 								) }
 								<SwitchField
-									label="Delay JavaScript Execution"
-									description="Delay all scripts until the user interacts (keyboard/mouse). Reduces initial CPU usage but may break immediate functionality — test carefully."
+									label={ __(
+										'Delay JavaScript Execution',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Delay all scripts until the user interacts (keyboard/mouse). Reduces initial CPU usage but may break immediate functionality — test carefully.',
+										'performance-optimisation'
+									) }
 									name="delayJS"
 									checked={ settings.delayJS }
 									onChange={ handleChange( setSettings ) }
@@ -378,7 +454,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 
 						{ ( settings.minifyJS || settings.delayJS ) && (
 							<FeatureCard
-								title="Script Rules"
+								title={ __(
+									'Script Rules',
+									'performance-optimisation'
+								) }
 								icon={ <FontAwesomeIcon icon={ faRocket } /> }
 							>
 								{ settings.minifyJS && (
@@ -387,14 +466,20 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											className="wppo-field-label"
 											htmlFor="excludeJS"
 										>
-											Exclude JS from Minification
+											{ __(
+												'Exclude JS from Minification',
+												'performance-optimisation'
+											) }
 										</label>
 										<textarea
 											className="wppo-textarea"
 											id="excludeJS"
 											name="excludeJS"
 											rows="3"
-											placeholder="Handles or partial URLs"
+											placeholder={ __(
+												'Handles or partial URLs',
+												'performance-optimisation'
+											) }
 											value={ settings.excludeJS }
 											onChange={ handleChange(
 												setSettings
@@ -408,14 +493,20 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											className="wppo-field-label"
 											htmlFor="delayJSList"
 										>
-											Scripts to Delay
+											{ __(
+												'Scripts to Delay',
+												'performance-optimisation'
+											) }
 										</label>
 										<textarea
 											className="wppo-textarea"
 											id="delayJSList"
 											name="delayJSList"
 											rows="3"
-											placeholder="Partial URLs or keywords"
+											placeholder={ __(
+												'Partial URLs or keywords',
+												'performance-optimisation'
+											) }
 											value={ settings.delayJSList }
 											onChange={ handleChange(
 												setSettings
@@ -426,9 +517,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 												icon={ faExclamationTriangle }
 											/>
 											<span>
-												Delaying scripts can break
-												immediate functionality. Test
-												carefully.
+												{ __(
+													'Delaying scripts can break immediate functionality. Test carefully.',
+													'performance-optimisation'
+												) }
 											</span>
 										</div>
 									</div>
@@ -446,13 +538,22 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						aria-labelledby="tab-ecommerce"
 					>
 						<FeatureCard
-							title="WooCommerce Core"
+							title={ __(
+								'WooCommerce Core',
+								'performance-optimisation'
+							) }
 							icon={ <FontAwesomeIcon icon={ faStore } /> }
 						>
 							<div className="wppo-field-group">
 								<SwitchField
-									label="Optimize WooCommerce Assets"
-									description="Disable WooCommerce scripts and styles on non-ecommerce pages (e.g. blog, about). This reduces page weight but may break cart widgets on custom pages — verify your checkout flow after enabling."
+									label={ __(
+										'Optimize WooCommerce Assets',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Disable WooCommerce scripts and styles on non-ecommerce pages (e.g. blog, about). This reduces page weight but may break cart widgets on custom pages — verify your checkout flow after enabling.',
+										'performance-optimisation'
+									) }
 									name="removeWooCSSJS"
 									checked={ settings.removeWooCSSJS }
 									onChange={ handleChange( setSettings ) }
@@ -465,9 +566,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 												icon={ faExclamationTriangle }
 											/>
 											<span>
-												This may break carts on custom
-												pages. Verify your checkout
-												flow.
+												{ __(
+													'This may break carts on custom pages. Verify your checkout flow.',
+													'performance-optimisation'
+												) }
 											</span>
 										</div>
 										<div className="wppo-stacked-cards wppo-mt-24">
@@ -476,14 +578,20 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 													className="wppo-field-label"
 													htmlFor="excludeUrlToKeepJSCSS"
 												>
-													Keep Assets on these URLs
+													{ __(
+														'Keep Assets on these URLs',
+														'performance-optimisation'
+													) }
 												</label>
 												<textarea
 													className="wppo-textarea"
 													id="excludeUrlToKeepJSCSS"
 													name="excludeUrlToKeepJSCSS"
 													rows="4"
-													placeholder="e.g. shop/.* (regex supported)"
+													placeholder={ __(
+														'e.g. shop/.* (regex supported)',
+														'performance-optimisation'
+													) }
 													value={
 														settings.excludeUrlToKeepJSCSS
 													}
@@ -497,15 +605,20 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 													className="wppo-field-label"
 													htmlFor="removeCssJsHandle"
 												>
-													Remove specific CSS/JS
-													handles
+													{ __(
+														'Remove specific CSS/JS handles',
+														'performance-optimisation'
+													) }
 												</label>
 												<textarea
 													className="wppo-textarea"
 													id="removeCssJsHandle"
 													name="removeCssJsHandle"
 													rows="4"
-													placeholder="Handles (one per line)"
+													placeholder={ __(
+														'Handles (one per line)',
+														'performance-optimisation'
+													) }
 													value={
 														settings.removeCssJsHandle
 													}
@@ -530,7 +643,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						aria-labelledby="tab-network"
 					>
 						<FeatureCard
-							title="Server Rules"
+							title={ __(
+								'Server Rules',
+								'performance-optimisation'
+							) }
 							icon={ <FontAwesomeIcon icon={ faServer } /> }
 						>
 							<div className="wppo-field-group">
@@ -541,14 +657,23 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											spin
 										/>
 										<span>
-											Loading server configuration...
+											{ __(
+												'Loading server configuration…',
+												'performance-optimisation'
+											) }
 										</span>
 									</div>
 								) : (
 									<>
 										<SwitchField
-											label="Enable Server Rules (.htaccess)"
-											description="Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
+											label={ __(
+												'Enable Server Rules (.htaccess)',
+												'performance-optimisation'
+											) }
+											description={ __(
+												'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong.',
+												'performance-optimisation'
+											) }
 											name="enableServerRules"
 											checked={
 												serverRules?.server_type ===
@@ -574,10 +699,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 														}
 													/>
 													<span>
-														This modifies your
-														.htaccess. Ensure you
-														have FTP access for
-														recovery.
+														{ __(
+															'This modifies your .htaccess. Ensure you have FTP access for recovery.',
+															'performance-optimisation'
+														) }
 													</span>
 												</div>
 											) }
@@ -591,17 +716,22 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 													/>
 													<span>
 														<strong>
-															Nginx Detected:
+															{ __(
+																'Nginx Detected:',
+																'performance-optimisation'
+															) }
 														</strong>{ ' ' }
-														Server rules cannot be
-														applied automatically on
-														Nginx. Please copy the
-														rules below into your
-														server configuration.
+														{ __(
+															'Server rules cannot be applied automatically on Nginx. Please copy the rules below into your server configuration.',
+															'performance-optimisation'
+														) }
 													</span>
 												</div>
 												<div className="wppo-field-label">
-													Nginx Configuration
+													{ __(
+														'Nginx Configuration',
+														'performance-optimisation'
+													) }
 												</div>
 												<pre className="wppo-code-block">
 													<code>
@@ -611,12 +741,18 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 													</code>
 												</pre>
 												<p className="wppo-text-muted wppo-mt-12 wppo-text-13">
-													Add these rules inside your{ ' ' }
+													{ __(
+														'Add these rules inside your',
+														'performance-optimisation'
+													) }{ ' ' }
 													<code>
 														server { '{' } ...{ ' ' }
 														{ '}' }
 													</code>{ ' ' }
-													block, then restart Nginx.
+													{ __(
+														'block, then restart Nginx.',
+														'performance-optimisation'
+													) }
 												</p>
 											</div>
 										) }
@@ -630,10 +766,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 													}
 												/>
 												<span>
-													Unrecognised server
-													software. Automatic rules
-													are only available for
-													Apache (.htaccess).
+													{ __(
+														'Unrecognised server software. Automatic rules are only available for Apache (.htaccess).',
+														'performance-optimisation'
+													) }
 												</span>
 											</div>
 										) }
@@ -643,7 +779,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						</FeatureCard>
 
 						<FeatureCard
-							title="CDN Settings"
+							title={ __(
+								'CDN Settings',
+								'performance-optimisation'
+							) }
 							icon={ <FontAwesomeIcon icon={ faServer } /> }
 						>
 							<div className="wppo-field">
@@ -651,7 +790,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 									className="wppo-field-label"
 									htmlFor="cdnURL"
 								>
-									CDN Hostname
+									{ __(
+										'CDN Hostname',
+										'performance-optimisation'
+									) }
 								</label>
 								<input
 									className="wppo-input"
@@ -667,10 +809,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 									id="cdnURL-desc"
 									className="wppo-text-muted wppo-mt-10 wppo-text-small"
 								>
-									Enter your CDN hostname. All static asset
-									URLs (JS, CSS, images) will be rewritten to
-									load from this domain, reducing latency for
-									global visitors.
+									{ __(
+										'Enter your CDN hostname. All static asset URLs (JS, CSS, images) will be rewritten to load from this domain, reducing latency for global visitors.',
+										'performance-optimisation'
+									) }
 								</p>
 							</div>
 						</FeatureCard>
@@ -685,34 +827,61 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						aria-labelledby="tab-core"
 					>
 						<FeatureCard
-							title="Cleanup Core Bloat"
+							title={ __(
+								'Cleanup Core Bloat',
+								'performance-optimisation'
+							) }
 							icon={ <FontAwesomeIcon icon={ faShieldAlt } /> }
 						>
 							<div className="wppo-field-group">
 								<SwitchField
-									label="Disable Emojis"
-									description="Remove the WordPress emoji script and stylesheet. Saves ~10 KB per page if you don't use emojis in your content."
+									label={ __(
+										'Disable Emojis',
+										'performance-optimisation'
+									) }
+									description={ __(
+										"Remove the WordPress emoji script and stylesheet. Saves ~10 KB per page if you don't use emojis in your content.",
+										'performance-optimisation'
+									) }
 									name="disableEmojis"
 									checked={ settings.disableEmojis }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
-									label="Disable Embeds"
-									description="Remove the oEmbed script that allows embedding external content. Saves ~1 HTTP request if you don't embed tweets, YouTube videos, etc."
+									label={ __(
+										'Disable Embeds',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove the oEmbed script that allows embedding external content. Saves ~1 HTTP request if you do not embed tweets, YouTube videos, etc.',
+										'performance-optimisation'
+									) }
 									name="disableEmbeds"
 									checked={ settings.disableEmbeds }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
-									label="Disable Dashicons (Frontend)"
-									description="Prevent the WordPress admin icon font from loading on the frontend for logged-out users. Only disable if your theme doesn't use Dashicons."
+									label={ __(
+										'Disable Dashicons (Frontend)',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Prevent the WordPress admin icon font from loading on the frontend for logged-out users. Only disable if your theme does not use Dashicons.',
+										'performance-optimisation'
+									) }
 									name="disableDashicons"
 									checked={ settings.disableDashicons }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
-									label="Disable XML-RPC"
-									description="Block the XML-RPC endpoint (xmlrpc.php). Reduces attack surface and server load. Only disable if you don't use Jetpack, mobile apps, or remote publishing."
+									label={ __(
+										'Disable XML-RPC',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Block the XML-RPC endpoint (xmlrpc.php). Reduces attack surface and server load. Only disable if you do not use Jetpack, mobile apps, or remote publishing.',
+										'performance-optimisation'
+									) }
 									name="disableXMLRPC"
 									checked={ settings.disableXMLRPC }
 									onChange={ handleChange( setSettings ) }
@@ -721,7 +890,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 						</FeatureCard>
 
 						<FeatureCard
-							title="Heartbeat Control"
+							title={ __(
+								'Heartbeat Control',
+								'performance-optimisation'
+							) }
 							icon={ <FontAwesomeIcon icon={ faRocket } /> }
 						>
 							<div className="wppo-field">
@@ -729,7 +901,10 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 									className="wppo-field-label"
 									htmlFor="heartbeatControl"
 								>
-									API Frequency
+									{ __(
+										'API Frequency',
+										'performance-optimisation'
+									) }
 								</label>
 								<select
 									className="wppo-select"
@@ -740,24 +915,38 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 									aria-describedby="heartbeatControl-desc"
 								>
 									<option value="default">
-										Default Mode
+										{ __(
+											'Default Mode',
+											'performance-optimisation'
+										) }
 									</option>
 									<option value="60s">
-										Reduce Frequency (60s)
+										{ __(
+											'Reduce Frequency (60s)',
+											'performance-optimisation'
+										) }
 									</option>
 									<option value="disable_ext">
-										Disable on Frontend
+										{ __(
+											'Disable on Frontend',
+											'performance-optimisation'
+										) }
 									</option>
 									<option value="disable_all">
-										Disable Everywhere
+										{ __(
+											'Disable Everywhere',
+											'performance-optimisation'
+										) }
 									</option>
 								</select>
 								<p
 									id="heartbeatControl-desc"
 									className="wppo-text-muted wppo-mt-12 wppo-text-13"
 								>
-									Restricting the Heartbeat API reduces server
-									CPU usage by limiting polling.
+									{ __(
+										'Restricting the Heartbeat API reduces server CPU usage by limiting polling.',
+										'performance-optimisation'
+									) }
 								</p>
 							</div>
 						</FeatureCard>

@@ -35,6 +35,9 @@ const App = () => {
 	const [ serverRules, setServerRules ] = useState( null );
 	const hasFetchedActivities = useRef( false );
 
+	const sidebarRef = useRef( null );
+	const toggleBtnRef = useRef( null );
+
 	const sidebarItems = useMemo(
 		() => [
 			{
@@ -118,6 +121,54 @@ const App = () => {
 		window.addEventListener( 'resize', handleResize );
 		return () => window.removeEventListener( 'resize', handleResize );
 	}, [] );
+
+	// Focus trap for mobile sidebar.
+	useEffect( () => {
+		if ( ! mobileMenuOpen ) {
+			return;
+		}
+
+		const sidebar = sidebarRef.current;
+		const toggleBtn = toggleBtnRef.current;
+		if ( ! sidebar ) {
+			return;
+		}
+
+		const focusable = sidebar.querySelectorAll(
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+		);
+		const first = focusable[ 0 ];
+		const last = focusable[ focusable.length - 1 ];
+		const doc = sidebar.ownerDocument;
+
+		if ( first ) {
+			first.focus();
+		}
+
+		const handleKeyDown = ( e ) => {
+			if ( e.key !== 'Tab' ) {
+				return;
+			}
+			if ( e.shiftKey && doc.activeElement === first ) {
+				e.preventDefault();
+				last.focus();
+				return;
+			}
+			if ( ! e.shiftKey && doc.activeElement === last ) {
+				e.preventDefault();
+				first.focus();
+			}
+		};
+
+		sidebar.addEventListener( 'keydown', handleKeyDown );
+
+		return () => {
+			sidebar.removeEventListener( 'keydown', handleKeyDown );
+			if ( toggleBtn ) {
+				toggleBtn.focus();
+			}
+		};
+	}, [ mobileMenuOpen ] );
 
 	// Inject frontend theme accent colors as CSS custom properties.
 	useEffect( () => {
@@ -207,6 +258,7 @@ const App = () => {
 		return () => {
 			abortController.abort();
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ activeTab, recentActivities.length, serverRules ] );
 
 	useEffect( () => {
@@ -234,6 +286,7 @@ const App = () => {
 					aria-label="Toggle Menu"
 					aria-expanded={ mobileMenuOpen }
 					aria-controls="mobile-sidebar"
+					ref={ toggleBtnRef }
 				>
 					<FontAwesomeIcon
 						icon={ mobileMenuOpen ? faTimes : faBars }
@@ -262,6 +315,7 @@ const App = () => {
 
 			<div
 				id="mobile-sidebar"
+				ref={ sidebarRef }
 				className={ `wppo-sidebar ${
 					sidebarCollapsed ? 'wppo-sidebar--collapsed' : ''
 				} ${ mobileMenuOpen ? 'wppo-sidebar--mobile-open' : '' }` }
