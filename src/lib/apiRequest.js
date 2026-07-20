@@ -179,14 +179,16 @@ export const getPagespeedResults = ( url, strategy = 'mobile' ) => {
  * Retrieve Suggestion_Engine output for a cached telemetry scan.
  *
  * @since 1.6.0
- * @param {string} url The scanned URL.
+ * @param {string}      url      The scanned URL.
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved suggestions array.
  */
-export const fetchSuggestions = ( url ) => {
+export const fetchSuggestions = ( url, signal ) => {
 	return apiCall(
 		`suggestions?url=${ encodeURIComponent( url ) }`,
 		{},
-		'GET'
+		'GET',
+		signal
 	);
 };
 

@@ -10,12 +10,15 @@
  *
  * @since 1.5.0
  */
-import { useState } from '@wordpress/element';
+import { useState, useRef } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 const Tooltip = ( { content, children } ) => {
 	const [ visible, setVisible ] = useState( false );
+	const id = useRef(
+		`wppo-tooltip-${ Math.random().toString( 36 ).slice( 2, 9 ) }`
+	);
 
 	if ( ! content ) {
 		return children;
@@ -27,8 +30,7 @@ const Tooltip = ( { content, children } ) => {
 				visible ? ' wppo-tooltip-container--visible' : ''
 			}` }
 			tabIndex="0"
-			role="tooltip"
-			aria-label={ content }
+			aria-describedby={ id.current }
 			onFocus={ () => setVisible( true ) }
 			onBlur={ () => setVisible( false ) }
 			onMouseEnter={ () => setVisible( true ) }
@@ -41,7 +43,11 @@ const Tooltip = ( { content, children } ) => {
 					aria-hidden="true"
 				/>
 			) }
-			<span className="wppo-tooltip-content" aria-hidden="true">
+			<span
+				className="wppo-tooltip-content"
+				role="tooltip"
+				id={ id.current }
+			>
 				{ content }
 			</span>
 		</span>

@@ -207,6 +207,7 @@ const App = () => {
 		return () => {
 			abortController.abort();
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ activeTab, recentActivities.length, serverRules ] );
 
 	useEffect( () => {

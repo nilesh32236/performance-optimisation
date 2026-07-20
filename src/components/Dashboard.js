@@ -125,6 +125,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			}
 		} catch ( error ) {
 			console.error( 'Error fetching db counts:', error );
+			setAnnouncement(
+				__(
+					'Failed to load database counts.',
+					'performance-optimisation'
+				)
+			);
 		} finally {
 			handleLoading( 'db_counts', false );
 		}
@@ -181,6 +187,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			}
 		} catch ( error ) {
 			console.error( 'Error polling job status:', error );
+			setAnnouncement(
+				__(
+					'Status check failed. Retrying…',
+					'performance-optimisation'
+				)
+			);
 		}
 	}, [ updateState ] );
 
@@ -221,6 +233,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						} );
 					}
 				} )
+				.catch( () =>
+					setAnnouncement(
+						__(
+							'Failed to clear cache.',
+							'performance-optimisation'
+						)
+					)
+				)
 				.finally( () => handleLoading( 'clear_cache', false ) );
 		},
 		[ handleLoading, updateState ]
@@ -281,6 +301,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					}
 				}
 			} )
+			.catch( () =>
+				setAnnouncement(
+					__(
+						'Image optimization failed.',
+						'performance-optimisation'
+					)
+				)
+			)
 			.finally( () => {
 				submittingRef.current = false;
 				handleLoading( 'optimize_images', false );
@@ -314,6 +342,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					);
 				}
 			} )
+			.catch( () =>
+				setAnnouncement(
+					__(
+						'Failed to remove optimized images.',
+						'performance-optimisation'
+					)
+				)
+			)
 			.finally( () => handleLoading( 'remove_images', false ) );
 	}, [ handleLoading ] );
 
@@ -347,8 +383,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						className="wppo-button wppo-button--primary"
 						onClick={ onClearCache }
 						isLoading={ loading.clear_cache }
-						label="Purge All Cache"
-						loadingLabel="Purging..."
+						label={ __(
+							'Purge All Cache',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Purging…',
+							'performance-optimisation'
+						) }
 					/>
 				}
 			/>
@@ -357,7 +399,9 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			<div className="wppo-stats-grid">
 				<div className="wppo-stat-item">
 					<div className="wppo-stat-header">
-						<span className="wppo-stat-label">Cache Size</span>
+						<span className="wppo-stat-label">
+							{ __( 'Cache Size', 'performance-optimisation' ) }
+						</span>
 					</div>
 					<span className="wppo-stat-value">{ totalCacheSize }</span>
 					<button
@@ -365,12 +409,17 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						className="wppo-stat-link"
 						onClick={ () => onNavigate( 'fileOptimization' ) }
 					>
-						Manage Cache →
+						{ __( 'Manage Cache →', 'performance-optimisation' ) }
 					</button>
 				</div>
 				<div className="wppo-stat-item">
 					<div className="wppo-stat-header">
-						<span className="wppo-stat-label">Optimized Files</span>
+						<span className="wppo-stat-label">
+							{ __(
+								'Optimized Files',
+								'performance-optimisation'
+							) }
+						</span>
 					</div>
 					<span className="wppo-stat-value">
 						{ ( totalJs || 0 ) + ( totalCss || 0 ) }
@@ -380,12 +429,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						className="wppo-stat-link"
 						onClick={ () => onNavigate( 'fileOptimization' ) }
 					>
-						View Settings →
+						{ __( 'View Settings →', 'performance-optimisation' ) }
 					</button>
 				</div>
 				<div className="wppo-stat-item">
 					<div className="wppo-stat-header">
-						<span className="wppo-stat-label">DB Overhead</span>
+						<span className="wppo-stat-label">
+							{ __( 'DB Overhead', 'performance-optimisation' ) }
+						</span>
 					</div>
 					<span className="wppo-stat-value">{ dbOverheadCount }</span>
 					<button
@@ -393,13 +444,16 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						className="wppo-stat-link"
 						onClick={ () => onNavigate( 'databaseCleanup' ) }
 					>
-						Clean Now →
+						{ __( 'Clean Now →', 'performance-optimisation' ) }
 					</button>
 				</div>
 				<div className="wppo-stat-item">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
-							Images Optimized
+							{ __(
+								'Images Optimized',
+								'performance-optimisation'
+							) }
 						</span>
 					</div>
 					<span className="wppo-stat-value">
@@ -412,7 +466,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						className="wppo-stat-link"
 						onClick={ () => onNavigate( 'imageOptimization' ) }
 					>
-						View Images →
+						{ __( 'View Images →', 'performance-optimisation' ) }
 					</button>
 				</div>
 			</div>
@@ -473,7 +527,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					'Remove Optimized Images',
 					'performance-optimisation'
 				) }
-				message="This will delete all optimized WebP and AVIF copies. Original images will not be affected."
+				message={ __(
+					'This will delete all optimized WebP and AVIF copies. Original images will not be affected.',
+					'performance-optimisation'
+				) }
 				confirmLabel={ __( 'Delete', 'performance-optimisation' ) }
 				variant="danger"
 			/>

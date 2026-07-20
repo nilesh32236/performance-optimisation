@@ -18,38 +18,59 @@ import ConfirmDialog from './common/ConfirmDialog';
 const CLEANUP_TYPES = [
 	{
 		key: 'revisions',
-		label: 'Post Revisions',
-		description: 'Old versions of your posts saved during editing.',
+		label: __( 'Post Revisions', 'performance-optimisation' ),
+		description: __(
+			'Old versions of your posts saved during editing.',
+			'performance-optimisation'
+		),
 	},
 	{
 		key: 'auto_drafts',
-		label: 'Auto Drafts',
-		description: 'Automatically saved drafts that are no longer needed.',
+		label: __( 'Auto Drafts', 'performance-optimisation' ),
+		description: __(
+			'Automatically saved drafts that are no longer needed.',
+			'performance-optimisation'
+		),
 	},
 	{
 		key: 'trashed_posts',
-		label: 'Trashed Posts',
-		description: 'Posts that have been moved to the trash.',
+		label: __( 'Trashed Posts', 'performance-optimisation' ),
+		description: __(
+			'Posts that have been moved to the trash.',
+			'performance-optimisation'
+		),
 	},
 	{
 		key: 'spam_comments',
-		label: 'Spam Comments',
-		description: 'Comments marked as spam.',
+		label: __( 'Spam Comments', 'performance-optimisation' ),
+		description: __(
+			'Comments marked as spam.',
+			'performance-optimisation'
+		),
 	},
 	{
 		key: 'trashed_comments',
-		label: 'Trashed Comments',
-		description: 'Comments that have been moved to the trash.',
+		label: __( 'Trashed Comments', 'performance-optimisation' ),
+		description: __(
+			'Comments that have been moved to the trash.',
+			'performance-optimisation'
+		),
 	},
 	{
 		key: 'expired_transients',
-		label: 'Expired Transients',
-		description: 'Temporary cached data that has expired.',
+		label: __( 'Expired Transients', 'performance-optimisation' ),
+		description: __(
+			'Temporary cached data that has expired.',
+			'performance-optimisation'
+		),
 	},
 	{
 		key: 'orphan_postmeta',
-		label: 'Orphaned Post Meta',
-		description: 'Metadata entries with no associated post.',
+		label: __( 'Orphaned Post Meta', 'performance-optimisation' ),
+		description: __(
+			'Metadata entries with no associated post.',
+			'performance-optimisation'
+		),
 	},
 ];
 
@@ -116,12 +137,18 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			} );
 			setNotification( {
 				type: 'success',
-				message: 'Settings saved successfully.',
+				message: __(
+					'Settings saved successfully.',
+					'performance-optimisation'
+				),
 			} );
 		} catch ( error ) {
 			setNotification( {
 				type: 'error',
-				message: 'Error saving settings.',
+				message: __(
+					'Error saving settings.',
+					'performance-optimisation'
+				),
 			} );
 		} finally {
 			setIsSaving( false );
@@ -135,17 +162,26 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			if ( response.success ) {
 				setNotification( {
 					type: 'success',
-					message: `Cleanup successful: ${
-						response.data?.deleted ?? 0
-					} items removed.`,
+					message:
+						__(
+							'Cleanup successful:',
+							'performance-optimisation'
+						) +
+						` ${ response.data?.deleted ?? 0 } ` +
+						__( 'items removed.', 'performance-optimisation' ),
 				} );
 				fetchCounts();
 			} else {
 				const failures = response.data?.failures;
-				let errorMsg = response.message || 'Cleanup failed.';
+				let errorMsg =
+					response.message ||
+					__( 'Cleanup failed.', 'performance-optimisation' );
 				if ( failures ) {
 					errorMsg +=
-						' Failures: ' + Object.keys( failures ).join( ', ' );
+						' ' +
+						__( 'Failures:', 'performance-optimisation' ) +
+						' ' +
+						Object.keys( failures ).join( ', ' );
 				}
 				setNotification( { type: 'error', message: errorMsg } );
 				if ( response.data?.deleted > 0 ) {
@@ -155,7 +191,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		} catch ( error ) {
 			setNotification( {
 				type: 'error',
-				message: error.message || 'Error executing cleanup.',
+				message:
+					error.message ||
+					__(
+						'Error executing cleanup.',
+						'performance-optimisation'
+					),
 			} );
 		} finally {
 			setLoading( ( prev ) => ( { ...prev, [ type ]: false } ) );
@@ -207,7 +248,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					<button
 						className="wppo-notice__dismiss"
 						onClick={ () => setNotification( null ) }
-						aria-label="Dismiss"
+						aria-label={ __(
+							'Dismiss',
+							'performance-optimisation'
+						) }
 					>
 						<FontAwesomeIcon icon={ faTimes } />
 					</button>
@@ -216,7 +260,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 
 			<div className="wppo-stacked-cards">
 				<FeatureCard
-					title="Automated Database Cleanup"
+					title={ __(
+						'Automated Database Cleanup',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faCalendarAlt } /> }
 				>
 					<div className="wppo-field-group">
@@ -225,7 +272,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								className="wppo-field-label"
 								htmlFor="dbSchedule"
 							>
-								Schedule Frequency
+								{ __(
+									'Schedule Frequency',
+									'performance-optimisation'
+								) }
 							</label>
 							<select
 								className="wppo-select"
@@ -235,17 +285,39 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								onChange={ handleChange( setSettings ) }
 								aria-describedby="dbSchedule-desc"
 							>
-								<option value="none">None (Manual Only)</option>
-								<option value="daily">Daily</option>
-								<option value="weekly">Weekly</option>
-								<option value="monthly">Monthly</option>
+								<option value="none">
+									{ __(
+										'None (Manual Only)',
+										'performance-optimisation'
+									) }
+								</option>
+								<option value="daily">
+									{ __(
+										'Daily',
+										'performance-optimisation'
+									) }
+								</option>
+								<option value="weekly">
+									{ __(
+										'Weekly',
+										'performance-optimisation'
+									) }
+								</option>
+								<option value="monthly">
+									{ __(
+										'Monthly',
+										'performance-optimisation'
+									) }
+								</option>
 							</select>
 							<p
 								id="dbSchedule-desc"
 								className="wppo-text-muted wppo-mt-10 wppo-text-small"
 							>
-								How often the automated database cleanup routine
-								should run in the background.
+								{ __(
+									'How often the automated database cleanup routine should run in the background.',
+									'performance-optimisation'
+								) }
 							</p>
 						</div>
 						<div className="wppo-grid-2-col wppo-mt-24">
@@ -254,7 +326,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="dbRevMaxAge"
 								>
-									Revision Max Age (Days)
+									{ __(
+										'Revision Max Age (Days)',
+										'performance-optimisation'
+									) }
 								</label>
 								<input
 									className="wppo-input"
@@ -270,8 +345,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									id="dbRevMaxAge-desc"
 									className="wppo-text-muted wppo-mt-10 wppo-text-small"
 								>
-									Delete post revisions older than this many
-									days (0 for no age limit).
+									{ __(
+										'Delete post revisions older than this many days (0 for no age limit).',
+										'performance-optimisation'
+									) }
 								</p>
 							</div>
 							<div>
@@ -279,7 +356,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									className="wppo-field-label"
 									htmlFor="dbRevKeepLatest"
 								>
-									Keep Latest Revisions
+									{ __(
+										'Keep Latest Revisions',
+										'performance-optimisation'
+									) }
 								</label>
 								<input
 									className="wppo-input"
@@ -295,8 +375,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									id="dbRevKeepLatest-desc"
 									className="wppo-text-muted wppo-mt-10 wppo-text-small"
 								>
-									Always retain this many recent revisions per
-									post, regardless of age.
+									{ __(
+										'Always retain this many recent revisions per post, regardless of age.',
+										'performance-optimisation'
+									) }
 								</p>
 							</div>
 						</div>
@@ -304,7 +386,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				</FeatureCard>
 
 				<FeatureCard
-					title="Total Database Overhead"
+					title={ __(
+						'Total Database Overhead',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faDatabase } /> }
 					footer={
 						<LoadingSubmitButton
@@ -313,12 +398,18 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								setConfirmDialog( {
 									isOpen: true,
 									type: 'all',
-									label: 'Optimize Everything',
+									label: __(
+										'Optimize Everything',
+										'performance-optimisation'
+									),
 								} )
 							}
 							isLoading={ loading.all }
 							disabled={ totalItems === 0 }
-							label="Optimize Everything Now"
+							label={ __(
+								'Optimize Everything Now',
+								'performance-optimisation'
+							) }
 						/>
 					}
 				>
@@ -327,14 +418,22 @@ const DatabaseCleanup = ( { options = {} } ) => {
 							{ loadingCounts ? '...' : totalItems }
 						</span>
 						<span className="wppo-stat-hero__label">
-							Total Optimization Opportunities
+							{ __(
+								'Total Optimization Opportunities',
+								'performance-optimisation'
+							) }
 						</span>
 					</div>
 				</FeatureCard>
 			</div>
 
 			<div className="wppo-mt-40">
-				<h4 className="wppo-section-title">Granular Cleanup Options</h4>
+				<h4 className="wppo-section-title">
+					{ __(
+						'Granular Cleanup Options',
+						'performance-optimisation'
+					) }
+				</h4>
 				<div className="wppo-grid-2-col wppo-mt-20">
 					{ CLEANUP_TYPES.map( ( item ) => (
 						<FeatureCard
@@ -356,8 +455,14 @@ const DatabaseCleanup = ( { options = {} } ) => {
 										loading[ item.key ]
 									}
 									isLoading={ loading[ item.key ] }
-									label="Clean"
-									loadingLabel="Cleaning"
+									label={ __(
+										'Clean',
+										'performance-optimisation'
+									) }
+									loadingLabel={ __(
+										'Cleaning',
+										'performance-optimisation'
+									) }
 								/>
 							}
 						>
@@ -397,13 +502,26 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				onCancel={ () =>
 					setConfirmDialog( { ...confirmDialog, isOpen: false } )
 				}
-				title={ `Confirm ${ confirmDialog.label }` }
-				message={ `This action will permanently delete ${
-					confirmDialog.type === 'all'
-						? 'overhead items'
-						: confirmDialog.label.toLowerCase()
-				} from your database. Proceed?` }
-				confirmLabel="Delete"
+				title={
+					__( 'Confirm', 'performance-optimisation' ) +
+					` ${ confirmDialog.label }`
+				}
+				message={
+					__(
+						'This action will permanently delete',
+						'performance-optimisation'
+					) +
+					` ${
+						confirmDialog.type === 'all'
+							? __( 'overhead items', 'performance-optimisation' )
+							: confirmDialog.label.toLowerCase()
+					} ` +
+					__(
+						'from your database. Proceed?',
+						'performance-optimisation'
+					)
+				}
+				confirmLabel={ __( 'Delete', 'performance-optimisation' ) }
 				variant="danger"
 			/>
 		</div>

@@ -248,18 +248,18 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 				aria-label={ __( 'Suggestions', 'performance-optimisation' ) }
 			>
 				{ /* Issues first */ }
-				{ issues.map( ( suggestion, i ) => (
+				{ issues.map( ( suggestion ) => (
 					<SuggestionCard
-						key={ `issue-${ suggestion.metric }-${ i }` }
+						key={ suggestion.metric }
 						suggestion={ suggestion }
 						onNavigate={ onNavigate }
 					/>
 				) ) }
 
 				{ /* Passing items below */ }
-				{ passing.map( ( suggestion, i ) => (
+				{ passing.map( ( suggestion ) => (
 					<SuggestionCard
-						key={ `pass-${ suggestion.metric }-${ i }` }
+						key={ suggestion.metric }
 						suggestion={ suggestion }
 						onNavigate={ onNavigate }
 					/>

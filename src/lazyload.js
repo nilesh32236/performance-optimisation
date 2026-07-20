@@ -411,6 +411,7 @@ const loadImages = () => {
 		};
 
 		window.addEventListener( 'scroll', lazyLoadFallback );
+		window.wppoLazyLoadFallback = lazyLoadFallback;
 		lazyLoadFallback();
 	}
 };
