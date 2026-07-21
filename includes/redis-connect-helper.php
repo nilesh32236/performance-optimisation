@@ -56,7 +56,7 @@ if ( ! function_exists( 'wppo_redis_connect' ) ) {
 
 		// Use config password if provided; fall back to WPPO_REDIS_PASSWORD constant,
 		// then WPPO_REDIS_PASSWORD environment variable.
-		if ( empty( $config['password'] ) ) {
+		if ( ! isset( $config['password'] ) || '' === $config['password'] ) {
 			$env_password = getenv( 'WPPO_REDIS_PASSWORD' );
 			if ( defined( 'WPPO_REDIS_PASSWORD' ) ) {
 				$config['password'] = WPPO_REDIS_PASSWORD;
@@ -187,13 +187,15 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 					if ( $redis->connect( $host, (int) $address[1], $timeout ) ) {
 						if ( $password && ! $redis->auth( $password ) ) {
 							$redis->close();
-							return new \WP_Error( 'auth_fail', __( 'Sentinel Master Auth failed.', 'performance-optimisation' ) );
+							$errors[] = __( 'Sentinel Master Auth failed.', 'performance-optimisation' );
+								continue;
 						}
 
 						if ( ! $redis->select( $database ) ) {
 							$redis->close();
-							/* translators: %d: Database index */
-							return new \WP_Error( 'select_fail', sprintf( __( 'Failed to select Redis database: %d', 'performance-optimisation' ), $database ) );
+							/* translators: %d: The Redis database index number */
+							$errors[] = sprintf( __( 'Failed to select Redis database: %d', 'performance-optimisation' ), $database );
+							continue;
 						}
 
 						wppo_apply_redis_options( $redis, $config );

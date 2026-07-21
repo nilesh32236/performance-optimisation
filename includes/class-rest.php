@@ -175,8 +175,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$path = wp_normalize_path( $path );
 
-			// Reject path if it contains directory traversal sequences.
-			if ( strpos( $path, '..' ) !== false ) {
+			// Reject paths with directory traversal or outside the cache directory.
+			$real_path = realpath( $this->cache_dir . $path );
+			if ( false === $real_path || 0 !== strpos( $real_path, $this->cache_dir ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
 			}
 
@@ -211,6 +212,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params   = $request->get_params();
 			$tab      = isset( $params['tab'] ) ? sanitize_text_field( $params['tab'] ) : '';
 			$settings = isset( $params['settings'] ) && is_array( $params['settings'] ) ? $params['settings'] : array();
+
+			// Validate tab against known whitelist.
+			$allowed_tabs = array(
+				'file_optimisation',
+				'preload_settings',
+				'image_optimisation',
+				'database_cleanup',
+				'object_cache',
+				'performance_audit',
+				'core_tweaks',
+				'cache_settings',
+			);
+			if ( empty( $tab ) || ! in_array( $tab, $allowed_tabs, true ) ) {
+				return $this->send_response( null, false, 400, __( 'Invalid settings tab.', 'performance-optimisation' ) );
+			}
 
 			// Sanitize settings array recursively.
 			$sanitized_settings = $this->sanitize_settings_recursively( $settings );
@@ -724,7 +740,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$config = $this->build_redis_config( $params );
 				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
-					return $this->send_response( null, false, 400, $ping->get_error_message() );
+					Log::add( 'Redis ping failed: ' . $ping->get_error_message() );
+					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				return $this->send_response( array( 'success' => true ) );
@@ -735,7 +752,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					return $this->send_response( null, false, 400, $result->get_error_message() );
+					Log::add( 'Redis enable failed: ' . $result->get_error_message() );
+					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
 				Log::add( __( 'Object Cache enabled.', 'performance-optimisation' ) );

@@ -417,7 +417,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				foreach ( $attributes as $attr ) {
 					$val = $tags->get_attribute( $attr );
 
-					if ( $val && 0 === strpos( $val, $site_url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $val ) ) {
+					if ( $val && preg_match( '#^' . preg_quote( $site_url, '#' ) . '(/|$)#', $val ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $val ) ) {
 						$tags->set_attribute( $attr, str_replace( $site_url, $cdn_url, $val ) );
 					}
 				}
@@ -434,7 +434,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							$url       = $parts[0];
 							$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
 
-							if ( 0 === strpos( $url, $site_url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $url ) ) {
+							if ( preg_match( '#^' . preg_quote( $site_url, '#' ) . '(/|$)#', $url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $url ) ) {
 								$url = str_replace( $site_url, $cdn_url, $url );
 							}
 							$new_srcset[] = $url . $suffix;
@@ -547,8 +547,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			$fs->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
 
-			$gzip_output = gzencode( $buffer, 9 );
-			$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+			if ( function_exists( 'gzencode' ) ) {
+				$gzip_output = gzencode( $buffer, 9 );
+				$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+			}
 		}
 
 		/**
@@ -574,7 +576,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( isset( $this->options['preload_settings']['excludePreloadCache'] ) && ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
 					$exclude_urls = Util::process_urls( $this->options['preload_settings']['excludePreloadCache'] );
 
-					$current_url = home_url( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ) ) ) );
+					$request_uri = sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ) );
+					$home_path   = wp_parse_url( home_url(), PHP_URL_PATH ) ?? '';
+					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
+						$request_uri = substr( $request_uri, strlen( $home_path ) );
+					}
+					$current_url = home_url( $request_uri );
 					$current_url = rtrim( $current_url, '/' );
 
 					foreach ( $exclude_urls as $exclude_url ) {

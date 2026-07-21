@@ -40,27 +40,10 @@ const loadScript = ( script ) => {
 
 			script.onload = resolve;
 			script.onerror = reject;
+		} else if ( script.text ) {
+			resolve();
 		} else {
-			try {
-				if ( script.text ) {
-					if ( ! script.src ) {
-						const encoder = new TextEncoder();
-						const bytes = encoder.encode( script.text );
-						let binary = '';
-						for ( let i = 0; i < bytes.length; i++ ) {
-							binary += String.fromCharCode( bytes[ i ] );
-						}
-						const base64Script = btoa( binary );
-						script.setAttribute(
-							'src',
-							`data:text/javascript;base64,${ base64Script }`
-						);
-					}
-				}
-				resolve();
-			} catch ( err ) {
-				reject( `Error encoding inline script: ${ err.message }` );
-			}
+			reject( 'Inline script has no text content' );
 		}
 	} );
 };
@@ -313,16 +296,18 @@ const loadImages = () => {
 			} );
 
 			// Periodic Safety Scan for unobserved dynamic content
-			setInterval( () => {
-				const elements = document.querySelectorAll(
-					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
-				);
-				elements.forEach( ( el ) => {
-					if ( ! observedElements.has( el ) ) {
-						observeElement( el );
-					}
-				} );
-			}, 10000 );
+			if ( ! window.wppoSafetyScanId ) {
+				window.wppoSafetyScanId = setInterval( () => {
+					const elements = document.querySelectorAll(
+						'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+					);
+					elements.forEach( ( el ) => {
+						if ( ! observedElements.has( el ) ) {
+							observeElement( el );
+						}
+					} );
+				}, 10000 );
+			}
 		}
 
 		document

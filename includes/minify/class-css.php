@@ -61,9 +61,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @param string $cache_dir  Directory where the minified file will be cached.
 		 */
 		public function __construct( $file_path, $cache_dir ) {
-			$this->file_path  = $file_path;
-			$this->cache_dir  = $cache_dir;
-			$this->cache_url  = content_url( str_replace( wp_normalize_path( WP_CONTENT_DIR ), '', wp_normalize_path( $cache_dir ) ) );
+			$real_path = realpath( $file_path );
+			if ( false === $real_path || 0 !== strpos( $real_path, wp_normalize_path( WP_CONTENT_DIR ) ) ) {
+				$this->file_path = '';
+			} else {
+				$this->file_path = $file_path;
+			}
+			$this->cache_dir        = $cache_dir;
+			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
+			$content_dir_normalized = wp_normalize_path( WP_CONTENT_DIR );
+			if ( 0 !== strpos( $cache_dir_normalized, $content_dir_normalized ) ) {
+				$this->cache_url = content_url( '/' );
+			} else {
+				$this->cache_url = content_url( str_replace( $content_dir_normalized, '', $cache_dir_normalized ) );
+			}
 			$this->filesystem = Util::init_filesystem();
 		}
 

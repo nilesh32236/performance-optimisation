@@ -126,8 +126,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		private static function remove_wp_cache_constant(): void {
 			global $wp_filesystem;
 
-			Util::init_filesystem();
-
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
 				return;
 			}

@@ -112,13 +112,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				// Determine connection settings (Dashboard settings have priority over on-disk config).
 				$options = get_option( 'wppo_settings', array() );
 				$config  = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
-				unset( $config['password'] );
+
+				// Keep password for probing but don't store in status response.
+				$probe_password = $config['password'] ?? '';
 
 				if ( empty( $config ) && file_exists( $this->config_path ) ) {
 					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
 				}
 
-				$connection = $this->connect_internal( $config );
+				$config['password'] = $probe_password;
+				$connection         = $this->connect_internal( $config );
 
 				if ( is_wp_error( $connection ) ) {
 					$status['telemetry_error'] = $connection->get_error_message();
@@ -133,6 +136,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 					if ( $status['enabled'] ) {
 						$info = $redis->info();
 						if ( $info ) {
+							$keys    = 0;
+							$db_info = '';
+							if ( $connection instanceof \RedisCluster && is_array( $info ) ) {
+								// Cluster mode returns info keyed per node; extract from first node.
+								$first_node_info = reset( $info );
+								if ( isset( $first_node_info['db0'] ) ) {
+									$db_info = $first_node_info['db0'];
+								}
+							} elseif ( isset( $info['db0'] ) ) {
+								$db_info = $info['db0'];
+							}
+							if ( $db_info && preg_match( '/keys=([0-9]+)/', $db_info, $matches ) ) {
+								$keys = (int) $matches[1];
+							}
+
 							$status['telemetry'] = array(
 								'redis_version'          => $info['redis_version'] ?? 'Unknown',
 								'uptime_in_seconds'      => (int) ( $info['uptime_in_seconds'] ?? 0 ),
@@ -143,7 +161,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 								'total_connections_received' => $info['total_connections_received'] ?? 0,
 								'keyspace_hits'          => $info['keyspace_hits'] ?? 0,
 								'keyspace_misses'        => $info['keyspace_misses'] ?? 0,
-								'keys'                   => ( isset( $info['db0'] ) && preg_match( '/keys=([0-9]+)/', $info['db0'], $matches ) ) ? (int) $matches[1] : 0,
+								'keys'                   => $keys,
 							);
 						}
 					}

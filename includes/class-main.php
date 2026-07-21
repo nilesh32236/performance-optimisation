@@ -122,7 +122,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$this->includes();
 			$this->setup_hooks();
-			$this->filesystem         = Util::init_filesystem();
+			$this->filesystem = Util::init_filesystem();
+			if ( ! $this->filesystem ) {
+				$this->filesystem = null;
+			}
 			$this->image_optimisation = new Image_Optimisation( $this->options );
 
 			$file_optimisation_opts = $this->options['file_optimisation'] ?? array();

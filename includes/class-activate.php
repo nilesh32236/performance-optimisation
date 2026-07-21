@@ -64,7 +64,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			$enable_server_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
 
 			if ( $enable_server_rules ) {
-				Htaccess_Handler::update_rules( true );
+				$rules_updated = Htaccess_Handler::update_rules( true );
+				if ( ! $rules_updated ) {
+					$notices[] = __( 'Failed to update .htaccess rules during activation.', 'performance-optimisation' );
+					set_transient( 'wppo_activation_notices', array_unique( $notices ), WEEK_IN_SECONDS );
+				}
 			}
 
 			self::create_activity_log_table();

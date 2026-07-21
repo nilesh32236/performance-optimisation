@@ -54,7 +54,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 						$activity,
 						array(
 							'a'      => array(
-								'href' => array(),
+								'href' => array(
+									'protocols' => array( 'http', 'https' ),
+								),
 							),
 							'strong' => array(),
 							'em'     => array(),

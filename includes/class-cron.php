@@ -236,7 +236,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			$response = wp_remote_get( $permalink, array( 'timeout' => 30 ) );
 			if ( is_wp_error( $response ) ) {
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO preload failed for page ID: ' . $page_id );
+				error_log( 'WPPO preload failed for page ID: ' . $page_id . ' - ' . $response->get_error_message() );
+			} elseif ( wp_remote_retrieve_response_code( $response ) >= 400 ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'WPPO preload returned HTTP ' . wp_remote_retrieve_response_code( $response ) . ' for page ID: ' . $page_id );
 			}
 		}
 

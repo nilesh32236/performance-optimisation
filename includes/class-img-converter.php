@@ -214,6 +214,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 									return false;
 								}
 							} catch ( \Exception $e ) {
+								if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+									// phpcs:ignore
+								imagedestroy( $image );
+								}
 								$this->update_conversion_status( $source_image, 'failed', $format );
 								return false;
 							}
@@ -240,6 +244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							}
 							// Initialize Imagick and read the image file.
 							$imagick = new \Imagick();
+							$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024 );
 							$imagick->readImage( $source_image );
 
 							// Check if the image has transparency (alpha channel).
@@ -314,8 +319,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					}
 				}
 
+				if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+				// phpcs:ignore
+				imagedestroy( $image );
+				}
+
 				return $success;
 			} catch ( \Exception $e ) {
+
+				if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
+					// phpcs:ignore
+					imagedestroy( $image );
+				}
 
 				$this->update_conversion_status( $source_image, 'failed', $format );
 
@@ -330,7 +345,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return \GdImage The true color image resource.
 		 * @since 1.0.0
 		 */
-		private function convert_palette_to_truecolor( $image ) {
+		private function convert_palette_to_truecolor( $image ): \GdImage {
 			if ( ! imageistruecolor( $image ) ) {
 				$width     = imagesx( $image );
 				$height    = imagesy( $image );
@@ -340,6 +355,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$transparent = imagecolorallocatealpha( $truecolor, 255, 255, 255, 127 );
 				imagefill( $truecolor, 0, 0, $transparent );
 				imagecopy( $truecolor, $image, 0, 0, 0, 0, $width, $height );
+				// phpcs:ignore
+				imagedestroy( $image );
 				return $truecolor;
 			}
 			return $image;
