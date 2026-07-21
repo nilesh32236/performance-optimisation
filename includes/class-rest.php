@@ -254,9 +254,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				} elseif ( is_numeric( $value ) ) {
 					$sanitized[ $safe_key ] = (int) $value;
 				} elseif ( stripos( $safe_key, 'api_key' ) !== false || stripos( $safe_key, 'password' ) !== false ) {
-					// Use wp_kses() to strip HTML tags and null bytes while preserving
-					// special characters (e.g. +, /, = in base64 keys, or special chars in passwords).
-					$sanitized[ $safe_key ] = wp_kses( $value, array() );
+					$sanitized[ $safe_key ] = sanitize_text_field( $value );
 				} elseif ( stripos( $safe_key, 'url' ) !== false || stripos( $safe_key, 'cdn' ) !== false || stripos( $safe_key, 'origin' ) !== false ) {
 					$sanitized[ $safe_key ] = esc_url_raw( $value );
 				} elseif ( stripos( $safe_key, 'exclude' ) !== false || stripos( $safe_key, 'preload' ) !== false || stripos( $safe_key, 'delay' ) !== false || stripos( $safe_key, 'list' ) !== false ) {

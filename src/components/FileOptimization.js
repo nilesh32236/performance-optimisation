@@ -30,7 +30,12 @@ const escapeHtml = ( str ) => {
 		.replace( /'/g, '&#039;' );
 };
 
-const FileOptimization = ( { options = {}, serverRules = null } ) => {
+const FileOptimization = ( {
+	options = {},
+	serverRules = null,
+	serverRulesError = false,
+	onRetryServerRules,
+} ) => {
 	const [ activeSubTab, setActiveSubTab ] = useState( 'assets' );
 	const tabRefs = useRef( {} );
 
@@ -650,7 +655,28 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 							icon={ <FontAwesomeIcon icon={ faServer } /> }
 						>
 							<div className="wppo-field-group">
-								{ serverRules === null ? (
+								{ serverRulesError ? (
+									<div className="wppo-notice wppo-notice--error">
+										<span>
+											{ __(
+												'Unable to load server configuration. Check your server setup.',
+												'performance-optimisation'
+											) }
+										</span>
+										{ onRetryServerRules && (
+											<button
+												className="wppo-button wppo-button--secondary"
+												onClick={ onRetryServerRules }
+											>
+												{ __(
+													'Retry',
+													'performance-optimisation'
+												) }
+											</button>
+										) }
+									</div>
+								) : null }
+								{ serverRules === null && ! serverRulesError ? (
 									<div className="wppo-loading-placeholder">
 										<FontAwesomeIcon
 											icon={ faSpinner }
@@ -663,7 +689,8 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											) }
 										</span>
 									</div>
-								) : (
+								) : null }
+								{ serverRules !== null && ! serverRulesError ? (
 									<>
 										<SwitchField
 											label={ __(
@@ -774,7 +801,7 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											</div>
 										) }
 									</>
-								) }
+								) : null }
 							</div>
 						</FeatureCard>
 

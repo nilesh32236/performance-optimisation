@@ -56,10 +56,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 				// Delete associated meta data for these specific revisions.
 				$wpdb->last_error = '';
-				if ( empty( $post_ids ) ) {
-					return 0;
-				}
-				$placeholders = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
+				$placeholders     = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
 				$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->postmeta WHERE post_id IN ($placeholders)", ...$post_ids ) );
 

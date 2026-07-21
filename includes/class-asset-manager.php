@@ -145,7 +145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			$styles  = array();
 
 			if ( $wp_scripts instanceof \WP_Scripts ) {
-				foreach ( $wp_scripts->done as $handle ) {
+				foreach ( $wp_scripts->queue as $handle ) {
 					if ( isset( $wp_scripts->registered[ $handle ] ) ) {
 						$registered = $wp_scripts->registered[ $handle ];
 						$scripts[]  = array(
@@ -158,7 +158,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			}
 
 			if ( $wp_styles instanceof \WP_Styles ) {
-				foreach ( $wp_styles->done as $handle ) {
+				foreach ( $wp_styles->queue as $handle ) {
 					if ( isset( $wp_styles->registered[ $handle ] ) ) {
 						$registered = $wp_styles->registered[ $handle ];
 						$styles[]   = array(

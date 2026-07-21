@@ -598,7 +598,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function invalidate_dynamic_static_html( $page_id ): void {
-			$path = str_replace( home_url(), '', get_permalink( $page_id ) );
+			$path = wp_make_link_relative( get_permalink( $page_id ) );
 
 			$html_file_path = $this->get_file_path( $path, 'html' );
 			$css_file_path  = $this->get_file_path( $path, 'css' );
@@ -606,7 +606,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->delete_cache_files( $css_file_path );
 
 			// Smart Purging: Always clear the home page and blog archive.
-			$home_path = str_replace( home_url(), '', home_url( '/' ) );
+			$home_path = wp_make_link_relative( home_url( '/' ) );
 			$this->delete_cache_files( $this->get_file_path( $home_path, 'html' ) );
 
 			if ( 'page' === get_option( 'show_on_front' ) ) {

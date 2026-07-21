@@ -33,6 +33,7 @@ const App = () => {
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const [ serverRules, setServerRules ] = useState( null );
+	const [ serverRulesError, setServerRulesError ] = useState( false );
 	const hasFetchedActivities = useRef( false );
 
 	const sidebarRef = useRef( null );
@@ -92,6 +93,11 @@ const App = () => {
 				<FileOptimization
 					options={ settings.file_optimisation }
 					serverRules={ serverRules }
+					serverRulesError={ serverRulesError }
+					onRetryServerRules={ () => {
+						hasFetchedRules.current = false;
+						setServerRulesError( false );
+					} }
 				/>
 			),
 			preload: <PreloadSettings options={ settings.preload_settings } />,
@@ -240,8 +246,10 @@ const App = () => {
 				if ( ! abortController.signal.aborted ) {
 					if ( res.success ) {
 						setServerRules( res.data );
+						setServerRulesError( false );
 					} else {
 						hasFetchedRules.current = false;
+						setServerRulesError( true );
 					}
 				} else {
 					hasFetchedRules.current = false;
@@ -249,7 +257,7 @@ const App = () => {
 			} catch ( err ) {
 				hasFetchedRules.current = false;
 				if ( ! abortController.signal.aborted ) {
-					console.error( 'Failed to fetch server rules', err );
+					setServerRulesError( true );
 				}
 			}
 		};

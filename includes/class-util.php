@@ -75,7 +75,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( WP_Filesystem() ) {
 				return $wp_filesystem;
 			} else {
-				new \WP_Filesystem_Direct( null );
+				// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
+				$wp_filesystem = new \WP_Filesystem_Direct( null );
 				return $wp_filesystem;
 			}
 		}

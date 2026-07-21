@@ -158,7 +158,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 */
 		private function modify_canonical_link( string $html ): ?string {
 			return preg_replace_callback(
-				'#<link\b[^>]*\brel=["\'](canonical|shortlink)["\'][^>]*>#i',
+				'#<link\b[^>]*\brel=(?:["\']?)(canonical|shortlink)(?:["\']?)[^>]*>#i',
 				function ( $matches ) {
 					$link_tag = str_replace( 'href', 'wppo-href', $matches[0] );
 
@@ -292,12 +292,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			// Check if type is 'text/javascript' or type is not defined.
 			$type_matches = array();
 			preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches );
+			$script_type = $type_matches[2] ?? '';
 
-			if ( false !== strpos( $attributes, 'application/ld+json' ) || false !== strpos( $attributes, 'application/json' ) ) {
+			if ( 'application/ld+json' === $script_type || 'application/json' === $script_type ) {
 				return $this->safe_json_encode( $content, $attributes );
 			}
 
-			if ( isset( $type_matches[2] ) && 'text/javascript' !== $type_matches[2] ) {
+			if ( '' !== $script_type && 'text/javascript' !== $script_type ) {
 				// If a type attribute exists and is not 'text/javascript', return unmodified content.
 				return '<script' . $attributes . '>' . $content . '</script>';
 			}

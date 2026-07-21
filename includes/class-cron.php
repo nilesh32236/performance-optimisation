@@ -341,7 +341,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			switch ( $schedule ) {
 				case 'daily':
-					$should_run = true;
+					$should_run = ( $now - $last_run > DAY_IN_SECONDS - HOUR_IN_SECONDS );
 					break;
 				case 'weekly':
 					$should_run = ( $now - $last_run > WEEK_IN_SECONDS - HOUR_IN_SECONDS );

@@ -138,7 +138,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 			$this->filesystem->put_contents( $file_path, $css, FS_CHMOD_FILE );
 
 			$gzip_output = gzencode( $css, 9 );
-			$this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+			if ( false !== $gzip_output ) {
+				$this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+			}
 		}
 
 		/**
