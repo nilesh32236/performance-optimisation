@@ -118,81 +118,81 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			}
 			set_transient( 'wppo_preload_cron_lock', 1, 20 * MINUTE_IN_SECONDS );
 
-			// Persist iteration offset across runs.
-			$paged_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
+			try {
+				// Persist iteration offset across runs.
+				$paged_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
 
-			$post_types = get_post_types( array( 'public' => true ), 'names' );
-			$post_types = array_unique( array_merge( array_values( array_diff( $post_types, array( 'attachment' ) ) ), array( 'page', 'post' ) ) );
+				$post_types = get_post_types( array( 'public' => true ), 'names' );
+				$post_types = array_unique( array_merge( array_values( array_diff( $post_types, array( 'attachment' ) ) ), array( 'page', 'post' ) ) );
 
-			$args = array(
-				'post_type'      => $post_types,
-				'post_status'    => 'publish',
-				// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page
-				'posts_per_page' => 200, // Process pages in batches to prevent OOM.
-				'offset'         => $paged_offset,
-				'fields'         => 'ids',
-				'orderby'        => 'ID',
-				'order'          => 'ASC',
-			);
+				$args = array(
+					'post_type'      => $post_types,
+					'post_status'    => 'publish',
+					// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page
+					'posts_per_page' => 200, // Process pages in batches to prevent OOM.
+					'offset'         => $paged_offset,
+					'fields'         => 'ids',
+					'orderby'        => 'ID',
+					'order'          => 'ASC',
+				);
 
-			$query_batch_posts = get_posts( $args );
+				$query_batch_posts = get_posts( $args );
 
-			if ( empty( $query_batch_posts ) ) {
-				// Reset offset and release lock on completion.
-				delete_option( 'wppo_preload_cron_offset' );
-				delete_transient( 'wppo_preload_cron_lock' );
-				return;
-			}
+				if ( empty( $query_batch_posts ) ) {
+					// Reset offset on completion.
+					delete_option( 'wppo_preload_cron_offset' );
+					return; // Lock released in finally.
+				}
 
-			$options      = get_option( 'wppo_settings', array() );
-			$preload      = $options['preload_settings'] ?? array();
-			$exclude_urls = Util::process_urls( $preload['excludePreloadCache'] ?? array() );
+				$options      = get_option( 'wppo_settings', array() );
+				$preload      = $options['preload_settings'] ?? array();
+				$exclude_urls = Util::process_urls( $preload['excludePreloadCache'] ?? array() );
 
-			foreach ( $query_batch_posts as $page_id ) {
-				$page_url       = get_permalink( $page_id );
-				$should_exclude = false;
+				foreach ( $query_batch_posts as $page_id ) {
+					$page_url       = get_permalink( $page_id );
+					$should_exclude = false;
 
-				foreach ( $exclude_urls as $exclude_url ) {
-					$exclude_url = rtrim( $exclude_url, '/' );
+					foreach ( $exclude_urls as $exclude_url ) {
+						$exclude_url = rtrim( $exclude_url, '/' );
 
-					if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-						$exclude_url = home_url( $exclude_url );
-					}
+						if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+							$exclude_url = home_url( $exclude_url );
+						}
 
-					if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-						$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
+						if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+							$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
 
-						if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
+							if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
+								$should_exclude = true;
+								break;
+							}
+						}
+
+						if ( $page_url === $exclude_url ) {
 							$should_exclude = true;
 							break;
 						}
 					}
 
-					if ( $page_url === $exclude_url ) {
-						$should_exclude = true;
-						break;
+					if ( $should_exclude ) {
+						continue;
+					}
+
+					if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
+						wp_schedule_single_event( time() + \wp_rand( 0, 1800 ), 'wppo_generate_static_page', array( $page_id ) );
 					}
 				}
 
-				if ( $should_exclude ) {
-					continue;
+				// Update iteration offset for the next batch.
+				update_option( 'wppo_preload_cron_offset', $paged_offset + 200, false );
+
+				// Schedule next batch if needed.
+				if ( ! wp_next_scheduled( 'wppo_page_cron_batch' ) ) {
+					wp_schedule_single_event( time() + 60, 'wppo_page_cron_batch' );
 				}
-
-				if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
-					wp_schedule_single_event( time() + \wp_rand( 0, 1800 ), 'wppo_generate_static_page', array( $page_id ) );
-				}
+			} finally {
+				delete_transient( 'wppo_preload_cron_lock' );
 			}
-
-			// Update iteration offset for the next batch.
-			update_option( 'wppo_preload_cron_offset', $paged_offset + 200, false );
-
-			// Schedule next batch if needed.
-			if ( ! wp_next_scheduled( 'wppo_page_cron_batch' ) ) {
-				wp_schedule_single_event( time() + 60, 'wppo_page_cron_batch' );
-			}
-
-			// Release lock so the next scheduled batch event can run.
-			delete_transient( 'wppo_preload_cron_lock' );
 		}
 
 		/**
@@ -242,7 +242,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( is_wp_error( $response ) ) {
 				$clean_err = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO preload failed: ' . $clean_err );
+				error_log( 'WPPO preload failed for page ' . (int) $page_id . ': ' . $clean_err );
 			} elseif ( wp_remote_retrieve_response_code( $response ) >= 400 ) {
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 				error_log( 'WPPO preload failed: HTTP status ' . (int) wp_remote_retrieve_response_code( $response ) );

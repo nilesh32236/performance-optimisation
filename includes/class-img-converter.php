@@ -565,7 +565,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			} catch ( \Exception $e ) {
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Image conversion error with attachment ID: ' . (int) $attachment_id );
+				error_log( 'WPPO Image conversion error for attachment ID ' . (int) $attachment_id . ': ' . str_replace( ABSPATH, '', $e->getMessage() ) );
 				return $metadata;
 			}
 		}

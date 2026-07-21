@@ -61,7 +61,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 			signal,
 		} );
 
-	const handleResponse = async ( response ) => {
+	const handleResponse = async ( response, isRetrying = false ) => {
 		let data;
 		try {
 			data = await response.json();
@@ -78,9 +78,14 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 				data.code === 'rest_cookie_invalid_nonce' ||
 				data.code === 'rest_cookie_nonce_invalid' )
 		) {
+			if ( isRetrying ) {
+				throw new Error(
+					'Nonce retry failed — authentication error persists.'
+				);
+			}
 			const freshNonce = await refreshNonce();
 			const retryResponse = await doFetch( freshNonce );
-			return handleResponse( retryResponse );
+			return handleResponse( retryResponse, true );
 		}
 
 		if ( 'update_settings' === action && data.success && data.data ) {

@@ -25,6 +25,7 @@
 /scripts/
 /test_*.js
 /npm-debug.log*
+/src/
 # Keep build/ and essential PHP files
 /.coderabbit.yaml
 /.gitattributes

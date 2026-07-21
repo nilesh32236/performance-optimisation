@@ -88,6 +88,9 @@ const loadScript = ( script ) => {
 			resolve();
 		} else {
 			// Empty inline script: resolve benignly.
+			if ( ! script.text ) {
+				console.warn( 'WPPO: empty inline script found', script );
+			}
 			resolve();
 		}
 	} );

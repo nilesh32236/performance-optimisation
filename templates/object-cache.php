@@ -96,13 +96,15 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			$config['password'] = $password;
 
 			if ( ! function_exists( 'wppo_redis_connect' ) ) {
-				$helper_file = WP_CONTENT_DIR . '/plugins/performance-optimisation/includes/redis-connect-helper.php';
+				$helper_file = WP_PLUGIN_DIR . '/performance-optimisation/includes/redis-connect-helper.php';
 				if ( file_exists( $helper_file ) ) {
 					require_once $helper_file;
 				}
 			}
 
 			if ( ! function_exists( 'wppo_redis_connect' ) ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'WPPO Redis object cache drop-in: wppo_redis_connect() not found — helper may be missing.' );
 				$this->redis_connected = false;
 				return;
 			}
