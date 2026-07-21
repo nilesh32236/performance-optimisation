@@ -50,18 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			$result = $wpdb->insert(
 				$table_name,
 				array(
-					'activity' => wp_kses(
-						$activity,
-						array(
-							'a'      => array(
-								'href' => array(
-									'protocols' => array( 'http', 'https' ),
-								),
-							),
-							'strong' => array(),
-							'em'     => array(),
-						)
-					),
+					'activity' => wp_kses_post( $activity ),
 				),
 				array(
 					'%s',

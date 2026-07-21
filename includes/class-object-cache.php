@@ -113,18 +113,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 				$options = get_option( 'wppo_settings', array() );
 				$config  = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
 
-				// Keep password for probing but don't store in status response.
-				$probe_password = $config['password'] ?? '';
-
 				if ( empty( $config ) && file_exists( $this->config_path ) ) {
 					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
 				}
 
-				$config['password'] = $probe_password;
-				$connection         = $this->connect_internal( $config );
+				$connection = $this->connect_internal( $config );
 
 				if ( is_wp_error( $connection ) ) {
-					$status['telemetry_error'] = $connection->get_error_message();
+					$status['telemetry_error'] = defined( 'WP_DEBUG' ) && WP_DEBUG ? $connection->get_error_message() : __( 'Redis connection error.', 'performance-optimisation' );
 					return $status;
 				}
 

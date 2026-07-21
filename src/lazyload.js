@@ -35,12 +35,35 @@ const loadScript = ( script ) => {
 		const src = script.getAttribute( 'wppo-src' );
 
 		if ( src ) {
-			// External deferred script: set src on the existing node and wait for load/error.
-			script.removeAttribute( 'wppo-src' );
-			script.setAttribute( 'src', src );
+			// External deferred script: create a replacement script node, copy original attributes,
+			// assign the deferred src, and swap it into the DOM.
+			const replacement = document.createElement( 'script' );
 
-			script.onload = resolve;
-			script.onerror = reject;
+			Array.from( script.attributes ).forEach( ( attr ) => {
+				replacement.setAttribute( attr.name, attr.value );
+			} );
+
+			replacement.removeAttribute( 'wppo-src' );
+			replacement.setAttribute( 'src', src );
+
+			replacement.onload = () => {
+				if ( typeof script.onload === 'function' ) {
+					script.onload();
+				}
+				resolve();
+			};
+			replacement.onerror = ( err ) => {
+				if ( typeof script.onerror === 'function' ) {
+					script.onerror( err );
+				}
+				reject( err );
+			};
+
+			if ( script.parentNode ) {
+				script.parentNode.replaceChild( replacement, script );
+			} else {
+				document.head.appendChild( replacement );
+			}
 		} else if ( script.text ) {
 			// Inline script: browsers execute a script element only once after insertion.
 			// Mutating the already-inserted node does nothing, so we must replace it with
@@ -160,10 +183,35 @@ if ( ! scriptLoading ) {
 let globalObserver = null;
 
 /**
+ * MutationObserver instance for lazy-loading.
+ * @type {MutationObserver|null}
+ */
+let mutationObserver = null;
+
+/**
  * Set of elements already observed by globalObserver.
  * @type {WeakSet<Element>}
  */
 const observedElements = new WeakSet();
+
+/**
+ * Check if all lazy-loadable elements have been processed, and clean up observers if so.
+ */
+const checkCleanup = () => {
+	const remaining = document.querySelectorAll(
+		'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+	);
+	if ( remaining.length === 0 ) {
+		if ( window.wppoSafetyScanId ) {
+			clearInterval( window.wppoSafetyScanId );
+			window.wppoSafetyScanId = null;
+		}
+		if ( mutationObserver ) {
+			mutationObserver.disconnect();
+			mutationObserver = null;
+		}
+	}
+};
 
 /**
  * Register an element for lazy-load observation if it has data-* attributes.
@@ -211,12 +259,9 @@ const loadImages = () => {
 						if ( entry.isIntersecting ) {
 							const el = entry.target;
 
-							let isPicture = false;
-
 							if ( el.tagName === 'IMG' ) {
 								const parent = el.parentNode;
 								if ( parent && parent.tagName === 'PICTURE' ) {
-									isPicture = true;
 									const sources =
 										parent.querySelectorAll( 'source' );
 									sources.forEach( ( s ) => {
@@ -247,11 +292,6 @@ const loadImages = () => {
 									el.srcset =
 										el.getAttribute( 'data-srcset' );
 									el.removeAttribute( 'data-srcset' );
-								}
-
-								if ( isPicture ) {
-									const currentSizes = el.sizes;
-									el.sizes = currentSizes;
 								}
 							} else if ( el.tagName === 'IFRAME' ) {
 								if ( el.hasAttribute( 'data-src' ) ) {
@@ -285,6 +325,7 @@ const loadImages = () => {
 							}
 
 							globalObserver.unobserve( el );
+							checkCleanup();
 						}
 					} );
 				},
@@ -293,7 +334,7 @@ const loadImages = () => {
 				}
 			);
 
-			const mutationObserver = new MutationObserver( ( mutations ) => {
+			mutationObserver = new MutationObserver( ( mutations ) => {
 				mutations.forEach( ( mutation ) => {
 					mutation.addedNodes.forEach( ( node ) => {
 						if ( node.nodeType === 1 ) {
@@ -325,6 +366,15 @@ const loadImages = () => {
 					const elements = document.querySelectorAll(
 						'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
 					);
+					if ( elements.length === 0 ) {
+						clearInterval( window.wppoSafetyScanId );
+						window.wppoSafetyScanId = null;
+						if ( mutationObserver ) {
+							mutationObserver.disconnect();
+							mutationObserver = null;
+						}
+						return;
+					}
 					elements.forEach( ( el ) => {
 						if ( ! observedElements.has( el ) ) {
 							observeElement( el );
@@ -341,6 +391,8 @@ const loadImages = () => {
 			.forEach( ( el ) => {
 				observeElement( el );
 			} );
+
+		checkCleanup();
 	} else {
 		const lazyLoadFallback = () => {
 			const lazyElements = document.querySelectorAll(

@@ -207,6 +207,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 			wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
 			delete_option( 'wppo_preload_cron_offset' );
+			delete_transient( 'wppo_preload_cron_lock' );
 		}
 
 		/**
@@ -261,7 +262,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				return;
 			}
 			$url_path   = trim( wp_parse_url( $permalink, PHP_URL_PATH ), '/' );
-			$site_url   = get_option( 'siteurl' );
+			$site_url   = site_url();
 			$parsed_url = wp_parse_url( $site_url );
 			$domain     = sanitize_text_field( $parsed_url['host'] . ( isset( $parsed_url['port'] ) ? ':' . $parsed_url['port'] : '' ) );
 

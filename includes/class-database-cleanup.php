@@ -99,91 +99,99 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$max_age_seconds = $max_age_days * DAY_IN_SECONDS;
 			$cutoff_date_gmt = gmdate( 'Y-m-d H:i:s', time() - $max_age_seconds );
 
-			// PERFORMANCE FIX: Apply strict batching mechanism limit by adding "LIMIT 200".
-			$wpdb->last_error = '';
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
-			$parent_ids = $wpdb->get_col(
-				$wpdb->prepare(
-					"SELECT post_parent FROM $wpdb->posts WHERE post_type = 'revision' GROUP BY post_parent HAVING COUNT(*) > %d LIMIT 200",
-					$keep_latest
-				)
-			);
+			$greatest_parent_id = 0;
+			$has_more           = true;
 
-			if ( ! empty( $wpdb->last_error ) ) {
-				return false;
-			}
-
-			if ( empty( $parent_ids ) ) {
-				return 0;
-			}
-
-			$revisions_to_delete = array();
-
-			foreach ( $parent_ids as $parent_id ) {
+			do {
 				$wpdb->last_error = '';
-				// Select exactly the cutoff entries so PHP handles almost no object data.
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
-				$revisions = $wpdb->get_results(
+				$parent_ids = $wpdb->get_col(
 					$wpdb->prepare(
-						"SELECT ID, post_date_gmt FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date_gmt DESC LIMIT 500",
-						$parent_id
+						"SELECT post_parent FROM $wpdb->posts WHERE post_type = 'revision' AND post_parent > %d GROUP BY post_parent HAVING COUNT(*) > %d ORDER BY post_parent ASC LIMIT 200",
+						$greatest_parent_id,
+						$keep_latest
 					)
 				);
 
-				if ( null === $revisions || ! empty( $wpdb->last_error ) ) {
-					continue;
+				if ( ! empty( $wpdb->last_error ) ) {
+					return false;
 				}
 
-				// Keep the latest X revisions; dump others onto our purge list.
-				$older_revisions = array_slice( $revisions, $keep_latest );
-
-				foreach ( $older_revisions as $rev ) {
-					// Delete if older than cutoff.
-					if ( $rev->post_date_gmt < $cutoff_date_gmt ) {
-						$revisions_to_delete[] = $rev->ID;
-					}
+				if ( empty( $parent_ids ) ) {
+					break;
 				}
-			}
 
-			if ( ! empty( $revisions_to_delete ) ) {
-				// Safe deletions capped exactly per max length boundaries.
-				$chunks = array_chunk( $revisions_to_delete, 50 );
+				$greatest_parent_id  = (int) end( $parent_ids );
+				$revisions_to_delete = array();
+				$has_more            = ( count( $parent_ids ) === 200 );
 
-				foreach ( $chunks as $chunk ) {
-					$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
-
-					// SubQuery Meta Purge.
+				foreach ( $parent_ids as $parent_id ) {
+					$wpdb->last_error = '';
+					// Select exactly the cutoff entries so PHP handles almost no object data.
 					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
-					$meta_deleted = $wpdb->query(
+					$revisions = $wpdb->get_results(
 						$wpdb->prepare(
-							"DELETE FROM $wpdb->postmeta WHERE post_id IN (" . $placeholders . ')', // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-							...$chunk
+							"SELECT ID, post_date_gmt FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date_gmt DESC LIMIT 500",
+							$parent_id
 						)
 					);
 
-					if ( false === $meta_deleted ) {
-						return false;
+					if ( null === $revisions || ! empty( $wpdb->last_error ) ) {
+						continue;
 					}
 
-					// Post Database Delete Executions.
-					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
-					$result = $wpdb->query(
-						// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
-						$wpdb->prepare(
-							"DELETE FROM $wpdb->posts WHERE ID IN (" . $placeholders . ')', // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-							...$chunk
-						)
-					);
+					// Keep the latest X revisions; dump others onto our purge list.
+					$older_revisions = array_slice( $revisions, $keep_latest );
 
-					if ( false === $result ) {
-						return false;
-					}
-
-					if ( $result ) {
-						$deleted += $result;
+					foreach ( $older_revisions as $rev ) {
+						// Delete if older than cutoff.
+						if ( $rev->post_date_gmt < $cutoff_date_gmt ) {
+							$revisions_to_delete[] = $rev->ID;
+						}
 					}
 				}
-			}
+
+				if ( ! empty( $revisions_to_delete ) ) {
+					// Safe deletions capped exactly per max length boundaries.
+					$chunks = array_chunk( $revisions_to_delete, 50 );
+
+					foreach ( $chunks as $chunk ) {
+						$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%d' ) );
+
+						// SubQuery Meta Purge.
+						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+						$meta_deleted = $wpdb->query(
+							$wpdb->prepare(
+								"DELETE FROM $wpdb->postmeta WHERE post_id IN (" . $placeholders . ')', // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+								...$chunk
+							)
+						);
+
+						if ( false === $meta_deleted ) {
+							return false;
+						}
+
+						// Post Database Delete Executions.
+						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+						$result = $wpdb->query(
+							// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared
+							$wpdb->prepare(
+								"DELETE FROM $wpdb->posts WHERE ID IN (" . $placeholders . ')', // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+								...$chunk
+							)
+						);
+
+						if ( false === $result ) {
+							return false;
+						}
+
+						if ( $result ) {
+							$deleted += $result;
+						}
+					}
+				}
+			} while ( $has_more );
+
 			return $deleted;
 		}
 
@@ -637,6 +645,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$transient_count = 0;
 			foreach ( array( '_transient_', '_site_transient_' ) as $prefix ) {
+				if ( '_site_transient_' === $prefix && is_multisite() ) {
+					continue;
+				}
 				$timeout_prefix   = $prefix . 'timeout_';
 				$transient_count += (int) $wpdb->get_var(
 					$wpdb->prepare(

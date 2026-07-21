@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 			if ( false === $real_path || 0 !== strpos( $real_path, wp_normalize_path( WP_CONTENT_DIR ) ) ) {
 				$this->file_path = '';
 			} else {
-				$this->file_path = $file_path;
+				$this->file_path = $real_path;
 			}
 			$this->cache_dir        = $cache_dir;
 			$cache_dir_normalized   = wp_normalize_path( $cache_dir );

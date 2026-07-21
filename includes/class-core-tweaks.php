@@ -46,10 +46,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			}
 
 			if ( ! empty( $this->settings['disableXMLRPC'] ) ) {
-				// wp_xmlrpc_server_class is a filter (not a function) available since WP 3.1.
-				// Returning an empty string from it causes WP to skip XML-RPC entirely.
-				// xmlrpc_enabled is kept as a belt-and-suspenders fallback for older WP builds.
-				add_filter( 'wp_xmlrpc_server_class', '__return_empty_string' );
+				// xmlrpc_methods is filtered to return empty array to block all methods.
+				add_filter( 'xmlrpc_methods', array( $this, 'block_xmlrpc_methods' ) );
 				add_filter( 'xmlrpc_enabled', '__return_false' );
 				add_filter( 'wp_headers', array( $this, 'remove_x_pingback' ) );
 			}
@@ -141,12 +139,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 * @return array
 		 */
 		public function disable_embeds_rewrites( $rules ) {
+			if ( ! is_array( $rules ) ) {
+				return $rules;
+			}
 			$new_rules = array();
-			if ( is_array( $rules ) ) {
-				foreach ( $rules as $rule => $rewrite ) {
-					if ( false === strpos( $rewrite, 'embed=true' ) ) {
-						$new_rules[ $rule ] = $rewrite;
-					}
+			foreach ( $rules as $rule => $rewrite ) {
+				if ( false === strpos( $rewrite, 'embed=true' ) ) {
+					$new_rules[ $rule ] = $rewrite;
 				}
 			}
 			return $new_rules;
@@ -174,6 +173,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 				unset( $headers['X-Pingback'] );
 			}
 			return $headers;
+		}
+
+		/**
+		 * Block all XML-RPC methods by returning an empty array.
+		 *
+		 * @param array $methods XML-RPC methods.
+		 * @return array Empty array.
+		 */
+		public function block_xmlrpc_methods( $methods ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return array();
 		}
 
 		/**

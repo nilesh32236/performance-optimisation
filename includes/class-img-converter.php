@@ -283,6 +283,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							$imagick->clear();
 							return true;
 						} catch ( \Exception $e ) {
+							if ( isset( $imagick ) && $imagick instanceof \Imagick ) {
+								$imagick->clear();
+							}
 							$this->update_conversion_status( $source_image, 'failed', $format );
 							wp_delete_file( $webp_path );
 							return false;
@@ -351,11 +354,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return \GdImage The true color image resource.
 		 * @since 1.0.0
 		 */
-		private function convert_palette_to_truecolor( $image ): \GdImage {
+		private function convert_palette_to_truecolor( $image ) {
 			if ( ! imageistruecolor( $image ) ) {
 				$width     = imagesx( $image );
 				$height    = imagesy( $image );
 				$truecolor = imagecreatetruecolor( $width, $height );
+				if ( false === $truecolor ) {
+					// phpcs:ignore
+					imagedestroy( $image );
+					return $image;
+				}
 				imagealphablending( $truecolor, false );
 				imagesavealpha( $truecolor, true );
 				$transparent = imagecolorallocatealpha( $truecolor, 255, 255, 255, 127 );

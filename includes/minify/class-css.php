@@ -65,7 +65,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 			if ( false === $real_path || 0 !== strpos( $real_path, wp_normalize_path( WP_CONTENT_DIR ) ) ) {
 				$this->file_path = '';
 			} else {
-				$this->file_path = $file_path;
+				$this->file_path = $real_path;
 			}
 			$this->cache_dir        = $cache_dir;
 			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
@@ -175,7 +175,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		public static function update_image_paths( $css_content, $file_path ) {
 			$file_path   = wp_normalize_path( $file_path );
 			$pattern     = '/url\(\s*([\'"]?)(.*?)\s*\1\s*\)/';
-			$css_dir_url = content_url( str_replace( wp_normalize_path( WP_CONTENT_DIR ), '', dirname( $file_path ) ) );
+			$css_dir     = wp_normalize_path( dirname( $file_path ) );
+			$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+			$abs_path    = trailingslashit( wp_normalize_path( ABSPATH ) );
+
+			if ( 0 === strpos( $css_dir, $content_dir ) ) {
+				$relative_path = str_replace( $content_dir, '', $css_dir );
+				$css_dir_url   = content_url( $relative_path );
+			} elseif ( 0 === strpos( $css_dir, $abs_path ) ) {
+				$relative_path = str_replace( $abs_path, '', $css_dir );
+				$css_dir_url   = site_url( $relative_path );
+			} else {
+				$css_dir_url = site_url();
+			}
 
 			return preg_replace_callback(
 				$pattern,
@@ -184,7 +196,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 					$image_path_no_qs = strtok( $image_path, '?' );
 					if ( preg_match( '/\.(jpg|jpeg|png|gif|webp)$/i', $image_path_no_qs, $ext_matches ) ) {
-						if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
+						if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^\/\//', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
 							$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
 						}
 
@@ -211,7 +223,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 						return 'url("' . $image_path . '")';
 					}
 
-					if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
+					if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^\/\//', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
 						$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
 						return 'url("' . $image_path . '")';
 					}

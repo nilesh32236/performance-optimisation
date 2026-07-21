@@ -80,15 +80,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 		) {
 			const freshNonce = await refreshNonce();
 			const retryResponse = await doFetch( freshNonce );
-			let retryData;
-			try {
-				retryData = await retryResponse.json();
-			} catch ( parseError ) {
-				throw new Error(
-					`Invalid JSON response from ${ action } (retry): ${ parseError.message }`
-				);
-			}
-			return retryData;
+			return handleResponse( retryResponse );
 		}
 
 		if ( 'update_settings' === action && data.success && data.data ) {

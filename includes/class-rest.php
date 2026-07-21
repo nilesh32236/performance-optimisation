@@ -34,6 +34,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		const NAMESPACE = 'performance-optimisation/v1';
 
 		/**
+		 * Cache directory path.
+		 *
+		 * @var string
+		 * @since 1.6.0
+		 */
+		private $cache_dir;
+
+		/**
+		 * Constructor.
+		 *
+		 * @since 1.6.0
+		 */
+		public function __construct() {
+			$this->cache_dir = trailingslashit( WP_CONTENT_DIR ) . 'cache/wppo';
+		}
+
+		/**
 		 * Registers the REST API routes.
 		 *
 		 * @since 1.0.0
@@ -176,8 +193,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$path = wp_normalize_path( $path );
 
 			// Reject paths with directory traversal or outside the cache directory.
-			$real_path = realpath( $this->cache_dir . $path );
-			if ( false === $real_path || 0 !== strpos( $real_path, trailingslashit( $this->cache_dir ) ) ) {
+			$real_path            = realpath( $this->cache_dir . $path );
+			$normalized_cache_dir = wp_normalize_path( $this->cache_dir );
+			$normalized_real_path = false !== $real_path ? wp_normalize_path( $real_path ) : '';
+
+			$is_exact_match = ( $normalized_real_path === $normalized_cache_dir );
+			$is_under_dir   = ( 0 === strpos( $normalized_real_path, trailingslashit( $normalized_cache_dir ) ) );
+
+			if ( false === $real_path || ( ! $is_exact_match && ! $is_under_dir ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
 			}
 
@@ -256,6 +279,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			if ( isset( $options['performance_audit'] ) ) {
 				unset( $options['performance_audit']['pagespeed_api_key'] );
+			}
+
+			if ( isset( $options['object_cache'] ) && isset( $options['object_cache']['password'] ) ) {
+				unset( $options['object_cache']['password'] );
 			}
 
 			return $this->send_response( $options );
@@ -496,6 +523,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
+			// Never store Redis password in the database. Store a boolean flag instead.
+			if ( isset( $data['settings']['object_cache'] ) && isset( $data['settings']['object_cache']['password'] ) ) {
+				$password_provided = ! empty( $data['settings']['object_cache']['password'] );
+				unset( $data['settings']['object_cache']['password'] );
+				if ( $password_provided ) {
+					$data['settings']['object_cache']['password_set'] = true;
+				}
+			}
+
 			// Sanitize settings before saving.
 			$sanitized_settings = $this->sanitize_settings_recursively( $data['settings'] );
 
@@ -506,14 +542,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Check if the settings are the same.
 			if ( $existing_settings === $merged_settings ) {
-				return $this->send_response( $existing_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
+				$response_settings = $existing_settings;
+				if ( isset( $response_settings['performance_audit'] ) ) {
+					unset( $response_settings['performance_audit']['pagespeed_api_key'] );
+				}
+				if ( isset( $response_settings['object_cache'] ) && isset( $response_settings['object_cache']['password'] ) ) {
+					unset( $response_settings['object_cache']['password'] );
+				}
+				return $this->send_response( $response_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
 			}
 
 			if ( ! update_option( 'wppo_settings', $merged_settings ) ) {
 				return $this->send_response( null, false, 500, __( 'Failed to update settings', 'performance-optimisation' ) );
 			}
 
-			return $this->send_response( $merged_settings, true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
+			$response_settings = $merged_settings;
+			if ( isset( $response_settings['performance_audit'] ) ) {
+				unset( $response_settings['performance_audit']['pagespeed_api_key'] );
+			}
+			if ( isset( $response_settings['object_cache'] ) && isset( $response_settings['object_cache']['password'] ) ) {
+				unset( $response_settings['object_cache']['password'] );
+			}
+
+			return $this->send_response( $response_settings, true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -766,7 +817,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->disable();
 
 				if ( is_wp_error( $result ) ) {
-					return $this->send_response( null, false, 400, $result->get_error_message() );
+					Log::add( 'Redis disable failed: ' . $result->get_error_message() );
+					return $this->send_response( null, false, 400, __( 'Failed to disable object cache.', 'performance-optimisation' ) );
 				}
 
 				Log::add( __( 'Object Cache disabled.', 'performance-optimisation' ) );

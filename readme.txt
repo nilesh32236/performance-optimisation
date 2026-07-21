@@ -3,7 +3,7 @@ Contributors: nilesh912
 Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 8.2
-Tested up to: 6.9
+Tested up to: 6.8
 Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html

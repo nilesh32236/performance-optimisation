@@ -144,8 +144,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				try {
 					$html = $this->html_min->minify( $html );
 				} catch ( \Exception $e ) {
-					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO HTML minify failed: ' . $e->getMessage() );
+					do_action( 'wppo_debug_log', 'WPPO HTML minify failed: ' . $e->getMessage(), array( 'exception' => $e ) );
 				}
 			}
 
@@ -192,10 +191,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				function ( $matches ) use ( &$scripts ) {
 					$attributes = $matches[1];
 
-					// Use case-insensitive matching with a quote backreference so the opening
-					// and closing quote must agree; lowercase the value before comparing.
-					if ( preg_match( '/\btype\s*=\s*(["\'])([^"\']+)\1/i', $attributes, $type_matches ) ) {
-						$type = strtolower( $type_matches[2] );
+					// Support quoted, unquoted, and empty values using regex and fallback extraction.
+					if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
+						$type = isset( $type_matches[3] ) ? $type_matches[3] : ( $type_matches[2] ?? '' );
+						$type = strtolower( trim( $type ) );
 
 						$exclude_types = array( 'text/javascript', 'application/ld+json', 'module', 'importmap' );
 						if ( ! in_array( $type, $exclude_types, true ) ) {
@@ -300,13 +299,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private function safe_minify_js( string $attributes, string $content ): string {
 			$content = trim( $content );
 
-			// Check if type is 'text/javascript' or type is not defined.
+			// Support quoted, unquoted, and empty values using regex and fallback extraction.
 			$type_matches = array();
-			preg_match( '/\btype\s*=\s*(["\'])([^"\']+)\1/i', $attributes, $type_matches );
-			$script_type = strtolower( $type_matches[2] ?? '' );
+			$script_type  = '';
+			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
+				$script_type = isset( $type_matches[3] ) ? $type_matches[3] : ( $type_matches[2] ?? '' );
+				$script_type = strtolower( trim( $script_type ) );
+			}
 
 			if ( 'application/ld+json' === $script_type || 'application/json' === $script_type ) {
-				return $this->safe_json_encode( $content, $attributes );
+				return $this->preserve_json_ld( $content, $attributes );
 			}
 
 			if ( '' !== $script_type && 'text/javascript' !== $script_type ) {
@@ -333,11 +335,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 
 				if ( ! $should_exclude ) {
-					if ( preg_match( '/\btype\s*=\s*(["\'])[^"\']*\1/i', $attributes ) ) {
-						// If the 'type' attribute exists, modify it (case-insensitive, quote backreference).
+					if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
+						// Capture the original quote character or fallback to double quotes.
+						$quote = ( ! empty( $type_matches[1] ) ) ? $type_matches[1] : '"';
+						// Replace the type attribute unconditionally.
 						$attributes = preg_replace(
-							'/\btype\s*=\s*(["\'])text\/javascript\1/i',
-							'type="wppo/javascript" wppo-type="text/javascript"',
+							'/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i',
+							'type=' . $quote . 'wppo/javascript' . $quote . ' wppo-type=' . $quote . 'text/javascript' . $quote,
 							$attributes
 						);
 					} else {
@@ -362,14 +366,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 
 		/**
-		 * Safely JSON encode content.
+		 * Preserve JSON-LD content by passing it through.
 		 *
-		 * @param string $content The JSON-LD content to encode.
+		 * @param string $content The JSON-LD content.
 		 * @param string $attributes The script attributes.
-		 * @return string Encoded JSON-LD or original content if error occurs.
+		 * @return string Original script tag with content.
 		 * @since 1.0.0
 		 */
-		private function safe_json_encode( string $content, string $attributes ): string {
+		private function preserve_json_ld( string $content, string $attributes ): string {
 			// Pass through JSON-LD as-is; decode+re-encode cycle alters structured data.
 			return '<script' . $attributes . '>' . $content . '</script>';
 		}

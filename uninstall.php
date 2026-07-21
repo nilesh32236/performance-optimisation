@@ -69,7 +69,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		$advanced_cache = WP_CONTENT_DIR . '/advanced-cache.php';
 		if ( file_exists( $advanced_cache ) ) {
 			$content = file_get_contents( $advanced_cache ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-			if ( false !== strpos( $content, 'WPPO_ADVANCED_CACHE_DROPIN' ) || false !== strpos( $content, 'is_user_logged_in_without_wp' ) ) {
+			if ( false !== $content && ( false !== strpos( $content, 'WPPO_ADVANCED_CACHE_DROPIN' ) || false !== strpos( $content, 'is_user_logged_in_without_wp' ) ) ) {
 				wp_delete_file( $advanced_cache );
 			}
 		}
@@ -78,7 +78,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		$object_cache = WP_CONTENT_DIR . '/object-cache.php';
 		if ( file_exists( $object_cache ) ) {
 			$content = file_get_contents( $object_cache ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-			if ( false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
+			if ( false !== $content && false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
 				wp_delete_file( $object_cache );
 			}
 		}
@@ -133,7 +133,7 @@ wppo_cleanup_site();
 
 // Clean up all sites in a multisite network.
 if ( is_multisite() && function_exists( 'get_sites' ) ) {
-	$sites = get_sites( array( 'number' => 0 ) );
+	$sites = get_sites( array( 'number' => 99999 ) );
 	foreach ( $sites as $site ) {
 		switch_to_blog( $site->blog_id );
 		wppo_cleanup_site();

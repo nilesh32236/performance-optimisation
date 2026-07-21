@@ -118,15 +118,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 			}
 
+			// Strip the port before validation.
+			$host = explode( ':', $domain, 2 )[0];
+
 			$valid_domain = ! (
-				strpos( $domain, '..' ) !== false ||
-				strpos( $domain, '/' ) !== false ||
-				strpos( $domain, '\\' ) !== false ||
-				! preg_match( '/^[a-z0-9\.\-]+$/i', $domain )
+				strpos( $host, '..' ) !== false ||
+				strpos( $host, '/' ) !== false ||
+				strpos( $host, '\\' ) !== false ||
+				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
 			);
 
 			if ( ! $valid_domain ) {
 				$domain = '';
+			} else {
+				$domain = $host;
 			}
 
 			$this->domain = $domain;
@@ -566,7 +571,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( function_exists( 'gzencode' ) ) {
 				$gzip_output = gzencode( $buffer, 9 );
-				$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+				if ( false !== $gzip_output ) {
+					$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+				}
 			}
 		}
 
@@ -593,7 +600,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( isset( $this->options['preload_settings']['excludePreloadCache'] ) && ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
 					$exclude_urls = Util::process_urls( $this->options['preload_settings']['excludePreloadCache'] );
 
-					$request_uri = sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ) );
+					$request_uri = $this->request_uri;
 					$home_path   = wp_parse_url( home_url(), PHP_URL_PATH ) ?? '';
 					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
 						$request_uri = substr( $request_uri, strlen( $home_path ) );

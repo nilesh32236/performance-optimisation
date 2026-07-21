@@ -79,12 +79,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( WP_Filesystem() ) {
 				return $wp_filesystem;
 			} else {
-				if ( ! class_exists( 'WP_Filesystem_Direct' ) ) {
-					require_once ABSPATH . 'wp-admin/includes/class-wp-filesystem-direct.php';
-				}
-				// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-				$wp_filesystem = new \WP_Filesystem_Direct( null );
-				return $wp_filesystem;
+				return false;
 			}
 		}
 
