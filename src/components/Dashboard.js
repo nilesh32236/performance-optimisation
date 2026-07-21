@@ -77,10 +77,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	// Initialize state
 	const [ state, setState ] = useState( {
-		totalCacheSize: wppoSettings.cache_size,
-		totalJs: wppoSettings.total_js_css.js,
-		totalCss: wppoSettings.total_js_css.css,
-		imageInfo: normalizeImageInfo( wppoSettings.image_info ),
+		totalCacheSize: wppoSettings?.cache_size ?? '0 B',
+		totalJs: wppoSettings?.total_js_css?.js ?? 0,
+		totalCss: wppoSettings?.total_js_css?.css ?? 0,
+		imageInfo: normalizeImageInfo( wppoSettings?.image_info ),
 		dbCounts: {},
 		loading: {
 			clear_cache: false,
@@ -150,8 +150,8 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	const pollJobStatus = useCallback( async () => {
 		try {
-			pollRetryRef.current = 0;
 			const response = await apiCall( 'image_job_status', {}, 'GET' );
+			pollRetryRef.current = 0;
 			if ( response.success && response.data ) {
 				const { queued_jobs: queuedJobs } = response.data;
 				setBgJobsQueued( queuedJobs );

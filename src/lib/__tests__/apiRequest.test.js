@@ -6,7 +6,9 @@ describe( 'API Request library', () => {
 	beforeEach( () => {
 		global.wppoSettings = {
 			apiUrl: 'http://test.com/wp-json/wppo/v1/',
+			ajaxUrl: 'http://test.com/wp-admin/admin-ajax.php',
 			nonce: 'testnonce',
+			nonce_refresh: 'testnonce_refresh',
 			settings: {},
 		};
 		global.fetch = jest.fn();

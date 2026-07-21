@@ -229,7 +229,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			$response = wp_remote_get( $permalink, array( 'timeout' => 30 ) );
 			if ( is_wp_error( $response ) ) {
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO preload failed for ' . $permalink . ': ' . $response->get_error_message() );
+				error_log( 'WPPO preload failed for page ID: ' . $page_id );
 			}
 		}
 

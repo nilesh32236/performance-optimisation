@@ -60,6 +60,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			// Remove WP_CACHE constant from wp-config.php.
 			self::remove_wp_cache_constant();
+			require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
 			Log::add( __( 'Plugin deactivated', 'performance-optimisation' ) );
 			Cache::clear_cache();
 		}

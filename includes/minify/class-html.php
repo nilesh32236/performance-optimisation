@@ -103,7 +103,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			->doSortCssClassNames( true )
 			->doSortHtmlAttributes( true )
 			->doRemoveSpacesBetweenTags( true )
-			->doRemoveOmittedQuotes( true )
+			->doRemoveOmittedQuotes( false )
 			->doRemoveOmittedHtmlTags( true )
 			->doMakeSameDomainsLinksRelative( array( $base_url ) );
 		}
@@ -136,7 +136,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					$html = $this->html_min->minify( $html );
 				} catch ( \Exception $e ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO HTML minify failed: ' . $e->getMessage() );
+					error_log( 'WPPO HTML minify failed' );
 				}
 			}
 

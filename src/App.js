@@ -283,7 +283,10 @@ const App = () => {
 				<button
 					className="wppo-mobile-toggle"
 					onClick={ toggleMobileMenu }
-					aria-label="Toggle Menu"
+					aria-label={ __(
+						'Toggle Menu',
+						'performance-optimisation'
+					) }
 					aria-expanded={ mobileMenuOpen }
 					aria-controls="mobile-sidebar"
 					ref={ toggleBtnRef }

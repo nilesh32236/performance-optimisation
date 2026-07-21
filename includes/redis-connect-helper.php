@@ -77,7 +77,7 @@ if ( ! function_exists( 'wppo_redis_connect' ) ) {
 			return wppo_redis_connect_standalone( $config );
 		} catch ( \Throwable $e ) {
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'WPPO Redis connection error: ' . $e->getMessage() );
+			error_log( 'WPPO Redis connection failed' );
 			return new \WP_Error( 'redis_err', __( 'Redis connection failed.', 'performance-optimisation' ) );
 		}
 	}
@@ -123,7 +123,7 @@ if ( ! function_exists( 'wppo_redis_connect_cluster' ) ) {
 			return $cluster;
 		} catch ( \Throwable $e ) {
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-			error_log( 'WPPO Redis cluster error: ' . $e->getMessage() );
+			error_log( 'WPPO Redis cluster connection failed' );
 			return new \WP_Error( 'cluster_fail', __( 'Redis Cluster connection failed.', 'performance-optimisation' ) );
 		}
 	}

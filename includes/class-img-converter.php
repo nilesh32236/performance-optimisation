@@ -134,7 +134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
 			if ( filesize( $source_image ) > $max_bytes ) {
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( sprintf( 'WPPO Error: Image filesize (%d bytes) exceeds limit (%d bytes).', filesize( $source_image ), $max_bytes ) );
+				error_log( 'WPPO Error: Image exceeds maximum filesize limit' );
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
 			}
@@ -158,7 +158,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			);
 			if ( $image_info[0] > $max_dims['width'] || $image_info[1] > $max_dims['height'] ) {
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( sprintf( 'WPPO Error: Image dimensions (%dx%d) exceed limits (%dx%d).', $image_info[0], $image_info[1], $max_dims['width'], $max_dims['height'] ) );
+				error_log( 'WPPO Error: Image dimensions exceed maximum allowed' );
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
 			}

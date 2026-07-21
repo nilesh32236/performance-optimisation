@@ -100,9 +100,6 @@ async function loadScripts() {
 
 		if ( document.readyState === 'loading' ) {
 			document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
-			window.dispatchEvent( new Event( 'DOMContentLoaded' ) );
-			window.dispatchEvent( new Event( 'load' ) );
-			window.dispatchEvent( new Event( 'pageshow' ) );
 		}
 
 		if ( typeof jQuery !== 'undefined' ) {
