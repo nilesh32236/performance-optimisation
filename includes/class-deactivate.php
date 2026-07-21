@@ -44,19 +44,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			Advanced_Cache_Handler::remove();
 
+			global $wp_filesystem;
+			if ( ! $wp_filesystem ) {
+				Util::init_filesystem();
+			}
+
 			// Remove Redis object cache drop-in if it belongs to this plugin.
-			$object_cache_file = WP_CONTENT_DIR . '/object-cache.php';
-			if ( file_exists( $object_cache_file ) ) {
-				$content = file_get_contents( $object_cache_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+			$object_cache_file = wp_normalize_path( WP_CONTENT_DIR . '/object-cache.php' );
+			if ( $wp_filesystem && $wp_filesystem->exists( $object_cache_file ) ) {
+				$content = $wp_filesystem->get_contents( $object_cache_file );
 				if ( false !== $content && false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
-					wp_delete_file( $object_cache_file );
+					$wp_filesystem->delete( $object_cache_file );
 				}
 			}
 
 			// Remove Redis config file.
-			$redis_config_file = WP_CONTENT_DIR . '/wppo-redis-config.php';
-			if ( file_exists( $redis_config_file ) ) {
-				wp_delete_file( $redis_config_file );
+			$redis_config_file = wp_normalize_path( WP_CONTENT_DIR . '/wppo-redis-config.php' );
+			if ( $wp_filesystem && $wp_filesystem->exists( $redis_config_file ) ) {
+				$wp_filesystem->delete( $redis_config_file );
 			}
 
 			// Remove WP_CACHE constant from wp-config.php.

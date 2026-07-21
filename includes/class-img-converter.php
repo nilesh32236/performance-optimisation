@@ -360,8 +360,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				$height    = imagesy( $image );
 				$truecolor = imagecreatetruecolor( $width, $height );
 				if ( false === $truecolor ) {
-					// phpcs:ignore
-					imagedestroy( $image );
 					return $image;
 				}
 				imagealphablending( $truecolor, false );
@@ -566,8 +564,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return $metadata;
 
 			} catch ( \Exception $e ) {
+				$msg = str_replace( ABSPATH, '', $e->getMessage() );
 				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Image conversion error: ' . $e->getMessage() );
+				error_log( 'WPPO Image conversion error: ' . $msg );
 				return $metadata;
 			}
 		}
@@ -781,6 +780,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					return;
 				}
 
+				global $wpdb;
+				$lock_acquired = false;
+
+				// Try to acquire MySQL lock to prevent race condition.
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$lock = $wpdb->get_var( "SELECT GET_LOCK('wppo_img_info_lock', 5)" );
+				if ( 1 === (int) $lock ) {
+					$lock_acquired = true;
+				}
+
 				$live_info = get_option( 'wppo_img_info', array() );
 
 				// Merge live and deferred info here to avoid dropping queued/completed items from concurrent runs.
@@ -813,6 +822,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 				update_option( 'wppo_img_info', self::$deferred_img_info, false );
 				self::$img_info_persisted = true;
+
+				if ( $lock_acquired ) {
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+					$wpdb->query( "SELECT RELEASE_LOCK('wppo_img_info_lock')" );
+				}
 			}
 		}
 

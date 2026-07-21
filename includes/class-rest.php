@@ -793,7 +793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$config = $this->build_redis_config( $params );
 				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
-					Log::add( 'Redis ping failed: ' . $ping->get_error_message() );
+					Log::add( __( 'Redis connection ping failed.', 'performance-optimisation' ) );
 					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
@@ -805,7 +805,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( 'Redis enable failed: ' . $result->get_error_message() );
+					Log::add( __( 'Redis connection enable failed.', 'performance-optimisation' ) );
 					return $this->send_response( null, false, 400, __( 'Redis connection failed.', 'performance-optimisation' ) );
 				}
 
@@ -817,7 +817,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->disable();
 
 				if ( is_wp_error( $result ) ) {
-					Log::add( 'Redis disable failed: ' . $result->get_error_message() );
+					Log::add( __( 'Redis connection disable failed.', 'performance-optimisation' ) );
 					return $this->send_response( null, false, 400, __( 'Failed to disable object cache.', 'performance-optimisation' ) );
 				}
 

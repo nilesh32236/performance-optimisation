@@ -121,6 +121,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function get_js_css_minified_file() {
 			$filesystem = self::init_filesystem();
+			if ( ! $filesystem ) {
+				return array(
+					'js'  => 0,
+					'css' => 0,
+				);
+			}
 			$minify_dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
 
 			$total_js  = 0;

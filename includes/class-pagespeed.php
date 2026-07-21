@@ -161,9 +161,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			);
 
 			if ( is_wp_error( $response ) ) {
+				$clean_error = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
 				// Translators: %s is the error message from the PageSpeed API.
-				Log::add( sprintf( __( 'PageSpeed API error: %s', 'performance-optimisation' ), $response->get_error_message() ) );
-				self::store_failure( $url, $strategy, $response->get_error_message() );
+				Log::add( sprintf( __( 'PageSpeed API error: %s', 'performance-optimisation' ), $clean_error ) );
+				self::store_failure( $url, $strategy, $clean_error );
 				return;
 			}
 

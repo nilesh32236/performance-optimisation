@@ -61,16 +61,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @param string $cache_dir  Directory where the minified file will be cached.
 		 */
 		public function __construct( $file_path, $cache_dir ) {
-			$real_path = realpath( $file_path );
-			if ( false === $real_path || 0 !== strpos( $real_path, wp_normalize_path( WP_CONTENT_DIR ) ) ) {
+			$real_path   = realpath( $file_path );
+			$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+			if ( false === $real_path ) {
 				$this->file_path = '';
 			} else {
-				$this->file_path = $real_path;
+				$real_path_normalized = wp_normalize_path( $real_path );
+				$is_inside            = ( 0 === strpos( $real_path_normalized, $content_dir ) && ( strlen( $real_path_normalized ) === strlen( $content_dir ) || '/' === substr( $real_path_normalized, strlen( $content_dir ), 1 ) ) );
+				if ( ! $is_inside ) {
+					$this->file_path = '';
+				} else {
+					$this->file_path = $real_path;
+				}
 			}
 			$this->cache_dir        = $cache_dir;
 			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
 			$content_dir_normalized = wp_normalize_path( WP_CONTENT_DIR );
-			if ( 0 !== strpos( $cache_dir_normalized, $content_dir_normalized ) ) {
+			$cache_inside           = ( 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
+			if ( ! $cache_inside ) {
 				$this->cache_url = content_url( '/' );
 			} else {
 				$this->cache_url = content_url( str_replace( $content_dir_normalized, '', $cache_dir_normalized ) );
@@ -107,21 +115,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 					}
 
 					// Inject font-display: swap into @font-face declarations.
-					$font_face_result = preg_replace_callback(
-						'/@font-face\s*{[^}]*}/i',
-						function ( $matches ) {
-							$font_face = $matches[0];
-							if ( stripos( $font_face, 'font-display' ) === false ) {
-								$font_face = preg_replace( '/(})$/', 'font-display: swap;$1', $font_face );
-							}
-							return $font_face;
-						},
-						$css_content
-					);
-					// Fall back to unmodified content if the regex failed.
-					if ( null !== $font_face_result ) {
-						$css_content = $font_face_result;
-					}
+					$css_content = self::inject_font_display_swap( $css_content );
 
 					$css_minifier = new Minify\CSS( $css_content );
 					$minified_css = $css_minifier->minify();
@@ -232,6 +226,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				},
 				$css_content
 			);
+		}
+
+		/**
+		 * Injects font-display: swap into font-face declarations safely.
+		 *
+		 * Tracks brace depth to correctly handle string literals, escaped quotes,
+		 * and nested blocks within CSS content.
+		 *
+		 * @param string $css The original CSS content.
+		 * @return string The modified CSS content.
+		 * @since 1.6.1
+		 */
+		public static function inject_font_display_swap( $css ) {
+			$offset = 0;
+			while ( true ) {
+				$pos = stripos( $css, '@font-face', $offset );
+				if ( false === $pos ) {
+					break;
+				}
+
+				$brace_pos = strpos( $css, '{', $pos );
+				if ( false === $brace_pos ) {
+					break;
+				}
+
+				$len         = strlen( $css );
+				$depth       = 1;
+				$end_pos     = false;
+				$in_string   = false;
+				$string_char = '';
+
+				for ( $i = $brace_pos + 1; $i < $len; $i++ ) {
+					$char = $css[ $i ];
+					if ( $in_string ) {
+						if ( '\\' === $char ) {
+							++$i;
+							continue;
+						}
+						if ( $char === $string_char ) {
+							$in_string = false;
+						}
+					} elseif ( '"' === $char || "'" === $char ) {
+							$in_string   = true;
+							$string_char = $char;
+					} elseif ( '{' === $char ) {
+						++$depth;
+					} elseif ( '}' === $char ) {
+						--$depth;
+						if ( 0 === $depth ) {
+							$end_pos = $i;
+							break;
+						}
+					}
+				}
+
+				if ( false === $end_pos ) {
+					$offset = $brace_pos + 1;
+					continue;
+				}
+
+				$block = substr( $css, $pos, $end_pos - $pos + 1 );
+
+				if ( stripos( $block, 'font-display' ) === false ) {
+					$modified_block = substr( $block, 0, -1 ) . 'font-display: swap;}';
+					$css            = substr_replace( $css, $modified_block, $pos, $end_pos - $pos + 1 );
+					$offset         = $pos + strlen( $modified_block );
+				} else {
+					$offset = $end_pos + 1;
+				}
+			}
+
+			return $css;
 		}
 	}
 }

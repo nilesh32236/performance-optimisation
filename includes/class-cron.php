@@ -292,55 +292,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		public function img_convert_cron() {
-			$options       = get_option( 'wppo_settings', array() );
-			$img_converter = new Img_Converter( $options );
-
-			$img_info = Img_Converter::get_img_info();
-
-			$conversion_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
-
-			$batch_size = $options['image_optimisation']['batch'] ?? 50;
-
-			$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
-
-			if ( in_array( $conversion_format, array( 'avif', 'both' ), true ) ) {
-				$images = $img_info['pending']['avif'] ?? array();
-
-				$counter = 0;
-				if ( ! empty( $images ) ) {
-					foreach ( $images as $img ) {
-						++$counter;
-
-						if ( $counter <= $batch_size ) {
-							$source_path = wp_normalize_path( ABSPATH . $img );
-							$resolved    = realpath( $source_path );
-							if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
-								continue;
-							}
-							$img_converter->convert_image( $source_path, 'avif' );
-						}
-					}
-				}
+			if ( get_transient( 'wppo_img_convert_lock' ) ) {
+				return;
 			}
+			set_transient( 'wppo_img_convert_lock', true, 5 * MINUTE_IN_SECONDS );
 
-			if ( in_array( $conversion_format, array( 'webp', 'both' ), true ) ) {
-				$images = $img_info['pending']['webp'] ?? array();
+			try {
+				$options       = get_option( 'wppo_settings', array() );
+				$img_converter = new Img_Converter( $options );
 
-				$counter = 0;
-				if ( ! empty( $images ) ) {
-					foreach ( $images as $img ) {
-						++$counter;
+				$img_info = Img_Converter::get_img_info();
 
-						if ( $counter <= $batch_size ) {
-							$source_path = wp_normalize_path( ABSPATH . $img );
-							$resolved    = realpath( $source_path );
-							if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
-								continue;
+				$conversion_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
+
+				$batch_size = $options['image_optimisation']['batch'] ?? 50;
+
+				$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
+
+				if ( in_array( $conversion_format, array( 'avif', 'both' ), true ) ) {
+					$images = $img_info['pending']['avif'] ?? array();
+
+					$counter = 0;
+					if ( ! empty( $images ) ) {
+						foreach ( $images as $img ) {
+							++$counter;
+
+							if ( $counter <= $batch_size ) {
+								$source_path = wp_normalize_path( ABSPATH . $img );
+								$resolved    = realpath( $source_path );
+								if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
+									continue;
+								}
+								$img_converter->convert_image( $source_path, 'avif' );
 							}
-							$img_converter->convert_image( $source_path );
 						}
 					}
 				}
+
+				if ( in_array( $conversion_format, array( 'webp', 'both' ), true ) ) {
+					$images = $img_info['pending']['webp'] ?? array();
+
+					$counter = 0;
+					if ( ! empty( $images ) ) {
+						foreach ( $images as $img ) {
+							++$counter;
+
+							if ( $counter <= $batch_size ) {
+								$source_path = wp_normalize_path( ABSPATH . $img );
+								$resolved    = realpath( $source_path );
+								if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
+									continue;
+								}
+								$img_converter->convert_image( $source_path );
+							}
+						}
+					}
+				}
+			} finally {
+				delete_transient( 'wppo_img_convert_lock' );
 			}
 		}
 

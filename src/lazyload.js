@@ -394,54 +394,65 @@ const loadImages = () => {
 
 		checkCleanup();
 	} else {
+		let active = false;
 		const lazyLoadFallback = () => {
-			const lazyElements = document.querySelectorAll(
-				'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
-			);
-			lazyElements.forEach( ( el ) => {
-				if ( isElementInViewport( el ) ) {
-					if ( el.tagName === 'VIDEO' ) {
-						if ( el.hasAttribute( 'data-poster' ) ) {
-							el.poster = el.getAttribute( 'data-poster' );
-							el.removeAttribute( 'data-poster' );
-						}
-						if ( el.hasAttribute( 'data-src' ) ) {
-							el.src = el.getAttribute( 'data-src' );
-							el.removeAttribute( 'data-src' );
-						}
-						el.querySelectorAll(
-							'source[data-src], source[data-srcset]'
-						).forEach( ( s ) => {
-							if ( s.hasAttribute( 'data-src' ) ) {
-								s.src = s.getAttribute( 'data-src' );
-								s.removeAttribute( 'data-src' );
+			if ( active ) {
+				return;
+			}
+			active = true;
+			setTimeout( () => {
+				const lazyElements = document.querySelectorAll(
+					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+				);
+				lazyElements.forEach( ( el ) => {
+					if ( isElementInViewport( el ) ) {
+						if ( el.tagName === 'VIDEO' ) {
+							if ( el.hasAttribute( 'data-poster' ) ) {
+								el.poster = el.getAttribute( 'data-poster' );
+								el.removeAttribute( 'data-poster' );
 							}
-							if ( s.hasAttribute( 'data-srcset' ) ) {
-								s.srcset = s.getAttribute( 'data-srcset' );
-								s.removeAttribute( 'data-srcset' );
+							if ( el.hasAttribute( 'data-src' ) ) {
+								el.src = el.getAttribute( 'data-src' );
+								el.removeAttribute( 'data-src' );
 							}
-						} );
-						el.load();
-						if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
-							el.play().catch( () => {} );
-						}
-						el.classList.remove( 'wppo-lazy-video' );
-					} else {
-						if ( el.hasAttribute( 'data-sizes' ) ) {
-							el.sizes = el.getAttribute( 'data-sizes' );
-							el.removeAttribute( 'data-sizes' );
-						}
-						if ( el.hasAttribute( 'data-src' ) ) {
-							el.src = el.getAttribute( 'data-src' );
-							el.removeAttribute( 'data-src' );
-						}
-						if ( el.hasAttribute( 'data-srcset' ) ) {
-							el.srcset = el.getAttribute( 'data-srcset' );
-							el.removeAttribute( 'data-srcset' );
+							el.querySelectorAll(
+								'source[data-src], source[data-srcset]'
+							).forEach( ( s ) => {
+								if ( s.hasAttribute( 'data-src' ) ) {
+									s.src = s.getAttribute( 'data-src' );
+									s.removeAttribute( 'data-src' );
+								}
+								if ( s.hasAttribute( 'data-srcset' ) ) {
+									s.srcset = s.getAttribute( 'data-srcset' );
+									s.removeAttribute( 'data-srcset' );
+								}
+							} );
+							el.load();
+							if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+								el.play().catch( () => {} );
+							}
+							el.classList.remove( 'wppo-lazy-video' );
+						} else {
+							if ( el.hasAttribute( 'data-sizes' ) ) {
+								el.sizes = el.getAttribute( 'data-sizes' );
+								el.removeAttribute( 'data-sizes' );
+							}
+							if ( el.hasAttribute( 'data-src' ) ) {
+								el.src = el.getAttribute( 'data-src' );
+								el.removeAttribute( 'data-src' );
+							}
+							if ( el.hasAttribute( 'data-srcset' ) ) {
+								el.srcset = el.getAttribute( 'data-srcset' );
+								el.removeAttribute( 'data-srcset' );
+							}
 						}
 					}
+				} );
+				if ( lazyElements.length === 0 ) {
+					window.removeEventListener( 'scroll', lazyLoadFallback );
 				}
-			} );
+				active = false;
+			}, 200 );
 		};
 
 		/**

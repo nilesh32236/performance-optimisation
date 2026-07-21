@@ -199,7 +199,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$css_file_path = $this->get_cache_file_path( 'css' );
 
 			if ( $fs->exists( $css_file_path ) ) {
-				$cache_mtime  = (int) filemtime( $css_file_path );
+				$cache_mtime  = (int) $fs->mtime( $css_file_path );
 				$source_newer = false;
 
 				foreach ( $styles as $handle ) {
@@ -208,7 +208,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					}
 					$src      = $wp_styles->registered[ $handle ]->src;
 					$src_path = Util::get_local_path( (string) $src );
-					if ( '' !== $src_path && file_exists( $src_path ) && filemtime( $src_path ) > $cache_mtime ) {
+					if ( '' !== $src_path && $fs->exists( $src_path ) && $fs->mtime( $src_path ) > $cache_mtime ) {
 						$source_newer = true;
 						break;
 					}
@@ -282,18 +282,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! empty( $combined_css ) ) {
 				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: swap;', $combined_css );
 
-				$combined_css = preg_replace_callback(
-					'/@font-face\s*{[^}]*}/',
-					function ( $matches ) {
-						$font_face = $matches[0];
-						if ( strpos( $font_face, 'font-display' ) === false ) {
-							// Add 'font-display: swap;' if it's not already there.
-							$font_face = preg_replace( '/(})$/', 'font-display: swap;$1', $font_face );
-						}
-						return $font_face;
-					},
-					$combined_css
-				);
+				require_once WPPO_PLUGIN_PATH . 'includes/minify/class-css.php';
+				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css );
 
 				$css_minifier  = new CSSMinifier( $combined_css );
 				$combined_css  = $css_minifier->minify();
@@ -303,7 +293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$css_url = $this->get_cache_file_url( 'css' );
 
-				$version = filemtime( $css_file_path );
+				$version = $fs->mtime( $css_file_path );
 				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 
 				$css_url_with_version = $css_url . "?ver=$version";

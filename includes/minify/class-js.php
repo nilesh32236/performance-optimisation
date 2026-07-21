@@ -70,16 +70,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 * @since 1.0.0
 		 */
 		public function __construct( $file_path, $cache_dir ) {
-			$real_path = realpath( $file_path );
-			if ( false === $real_path || 0 !== strpos( $real_path, wp_normalize_path( WP_CONTENT_DIR ) ) ) {
+			$real_path   = realpath( $file_path );
+			$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+			if ( false === $real_path ) {
 				$this->file_path = '';
 			} else {
-				$this->file_path = $real_path;
+				$real_path_normalized = wp_normalize_path( $real_path );
+				$is_inside            = ( 0 === strpos( $real_path_normalized, $content_dir ) && ( strlen( $real_path_normalized ) === strlen( $content_dir ) || '/' === substr( $real_path_normalized, strlen( $content_dir ), 1 ) ) );
+				if ( ! $is_inside ) {
+					$this->file_path = '';
+				} else {
+					$this->file_path = $real_path;
+				}
 			}
 			$this->cache_dir        = $cache_dir;
 			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
 			$content_dir_normalized = wp_normalize_path( WP_CONTENT_DIR );
-			if ( 0 !== strpos( $cache_dir_normalized, $content_dir_normalized ) ) {
+			$cache_inside           = ( 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
+			if ( ! $cache_inside ) {
 				$this->cache_url = content_url( '/' );
 			} else {
 				$this->cache_url = content_url( str_replace( $content_dir_normalized, '', $cache_dir_normalized ) );

@@ -169,7 +169,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 					}
 					$nodes = $config['nodes'] ?? array();
 					if ( is_string( $nodes ) ) {
-						$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
+						$nodes = array_filter( array_map( 'trim', preg_split( '/[\s,;]+/', $nodes ) ) );
 					}
 					if ( empty( $nodes ) ) {
 						return new \WP_Error( 'low_nodes', 'No nodes provided for Cluster.' );
@@ -192,7 +192,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 
 						return $cluster;
 					} catch ( \Throwable $e ) {
-						return new \WP_Error( 'cluster_fail', 'Redis Cluster connection failed: ' . $e->getMessage() );
+						return new \WP_Error( 'cluster_fail', 'Redis Cluster connection failed.' );
 					}
 				}
 
@@ -204,7 +204,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 					$master_name = $config['master_name'] ?? 'mymaster';
 
 					if ( is_string( $nodes ) ) {
-						$nodes = array_filter( array_map( 'trim', explode( "\n", $nodes ) ) );
+						$nodes = array_filter( array_map( 'trim', preg_split( '/[\s,;]+/', $nodes ) ) );
 					}
 
 					if ( empty( $nodes ) ) {
@@ -269,7 +269,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 								}
 							}
 						} catch ( \Throwable $e ) {
-							$errors[] = $s_host . ':' . $s_port . ' - ' . $e->getMessage();
+							$errors[] = $s_host . ':' . $s_port . ' - connection failed.';
 							continue;
 						}
 					}
@@ -312,7 +312,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 					return $redis;
 				}
 			} catch ( \Throwable $e ) {
-				return new \WP_Error( 'redis_err', $e->getMessage() );
+				return new \WP_Error( 'redis_err', 'Redis connection failed.' );
 			}
 
 			return new \WP_Error( 'conn_fail', 'Could not connect to Redis. Please ensure the service is running.' );

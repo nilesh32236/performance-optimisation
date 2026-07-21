@@ -476,7 +476,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					<span className="wppo-stat-value">
 						{ totalOptimizedPercent !== null
 							? `${ totalOptimizedPercent.toFixed( 0 ) }%`
-							: 'N/A' }
+							: __( 'N/A', 'performance-optimisation' ) }
 					</span>
 					<button
 						type="button"

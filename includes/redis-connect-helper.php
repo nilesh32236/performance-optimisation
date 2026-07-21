@@ -57,11 +57,13 @@ if ( ! function_exists( 'wppo_redis_connect' ) ) {
 		// Use config password if provided; fall back to WPPO_REDIS_PASSWORD constant,
 		// then WPPO_REDIS_PASSWORD environment variable.
 		if ( ! isset( $config['password'] ) || '' === $config['password'] ) {
-			$env_password = getenv( 'WPPO_REDIS_PASSWORD' );
 			if ( defined( 'WPPO_REDIS_PASSWORD' ) ) {
 				$config['password'] = WPPO_REDIS_PASSWORD;
-			} elseif ( false !== $env_password ) {
-				$config['password'] = $env_password;
+			} else {
+				$env_password = getenv( 'WPPO_REDIS_PASSWORD' );
+				if ( false !== $env_password ) {
+					$config['password'] = $env_password;
+				}
 			}
 		}
 

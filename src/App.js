@@ -29,7 +29,6 @@ const SIDEBAR_BREAKPOINT = 992;
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
-	const sidebarCollapsed = false;
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const [ serverRules, setServerRules ] = useState( null );
@@ -330,8 +329,8 @@ const App = () => {
 				id="mobile-sidebar"
 				ref={ sidebarRef }
 				className={ `wppo-sidebar ${
-					sidebarCollapsed ? 'wppo-sidebar--collapsed' : ''
-				} ${ mobileMenuOpen ? 'wppo-sidebar--mobile-open' : '' }` }
+					mobileMenuOpen ? 'wppo-sidebar--mobile-open' : ''
+				}` }
 			>
 				<div className="wppo-sidebar-header">
 					<div className="wppo-sidebar-logo">

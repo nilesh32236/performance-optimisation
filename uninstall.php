@@ -35,21 +35,10 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_option( 'wppo_preload_cron_offset' );
 		delete_option( 'wppo_last_db_cleanup' );
 
-		// Delete post meta.
-		// phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key
-		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->postmeta,
-			array( 'meta_key' => '_wppo_preload_image_url' )
-		);
-		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->postmeta,
-			array( 'meta_key' => '_wppo_disabled_scripts' )
-		);
-		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->postmeta,
-			array( 'meta_key' => '_wppo_disabled_styles' )
-		);
-		// phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+		// Delete post meta using the meta API to respect hooks.
+		delete_post_meta_by_key( '_wppo_preload_image_url' );
+		delete_post_meta_by_key( '_wppo_disabled_scripts' );
+		delete_post_meta_by_key( '_wppo_disabled_styles' );
 
 		// Remove cache directory.
 		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
@@ -133,10 +122,26 @@ wppo_cleanup_site();
 
 // Clean up all sites in a multisite network.
 if ( is_multisite() && function_exists( 'get_sites' ) ) {
-	$sites = get_sites( array( 'number' => 99999 ) );
-	foreach ( $sites as $site ) {
-		switch_to_blog( $site->blog_id );
-		wppo_cleanup_site();
-		restore_current_blog();
-	}
+	$site_page      = 1;
+	$limit          = 100;
+	$has_more_sites = true;
+	do {
+		$offset = ( $site_page - 1 ) * $limit;
+		$sites  = get_sites(
+			array(
+				'number' => $limit,
+				'offset' => $offset,
+			)
+		);
+		if ( empty( $sites ) ) {
+			break;
+		}
+		$has_more_sites = ( count( $sites ) === $limit );
+		foreach ( $sites as $site ) {
+			switch_to_blog( $site->blog_id );
+			wppo_cleanup_site();
+			restore_current_blog();
+		}
+		++$site_page;
+	} while ( $has_more_sites );
 }

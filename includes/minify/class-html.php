@@ -238,7 +238,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			return preg_replace_callback(
 				'#<link\b[^>]*\brel=(?:["\']?)(canonical|shortlink)(?:["\']?)[^>]*>#i',
 				function ( $matches ) {
-					$link_tag = str_replace( 'wppo-href', 'href', $matches[0] );
+					$link_tag = preg_replace( '/\bwppo-href\s*=/i', 'href=', $matches[0] );
 
 					return $link_tag;
 				},
