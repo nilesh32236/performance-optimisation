@@ -590,7 +590,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 						'clean_expired_transients' => __( 'Expired Transients', 'performance-optimisation' ),
 						'clean_orphan_postmeta'    => __( 'Orphan Post Meta', 'performance-optimisation' ),
 					);
-					$label = $labels[ $method ] ?? $method;
+					$label  = $labels[ $method ] ?? $method;
 					// Translators: %s is the cleanup type label.
 					new Log( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
 				}

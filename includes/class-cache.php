@@ -154,7 +154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function get_filesystem() {
 			if ( ! $this->fs_initialized ) {
-				$this->filesystem    = Util::init_filesystem();
+				$this->filesystem     = Util::init_filesystem();
 				$this->fs_initialized = true;
 			}
 			return $this->filesystem;
