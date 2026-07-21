@@ -210,7 +210,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function update_settings( \WP_REST_Request $request ) {
 			$params   = $request->get_params();
 			$tab      = isset( $params['tab'] ) ? sanitize_text_field( $params['tab'] ) : '';
-			$settings = isset( $params['settings'] ) ? (array) $params['settings'] : array();
+			$settings = isset( $params['settings'] ) && is_array( $params['settings'] ) ? $params['settings'] : array();
 
 			// Sanitize settings array recursively.
 			$sanitized_settings = $this->sanitize_settings_recursively( $settings );
@@ -225,7 +225,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			$options         = get_option( 'wppo_settings', array() );
+			$options = get_option( 'wppo_settings', array() );
+
+			// Preserve the pagespeed_api_key when the request omits it.
+			if ( 'performance_audit' === $tab && ! isset( $params['settings']['pagespeed_api_key'] ) && isset( $options['performance_audit']['pagespeed_api_key'] ) ) {
+				$sanitized_settings['pagespeed_api_key'] = $options['performance_audit']['pagespeed_api_key'];
+			}
+
 			$options[ $tab ] = $sanitized_settings;
 
 			if ( update_option( 'wppo_settings', $options ) ) {
@@ -255,7 +261,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$sanitized[ $safe_key ] = (bool) $value;
 				} elseif ( is_numeric( $value ) ) {
 					$sanitized[ $safe_key ] = (int) $value;
-				} elseif ( stripos( $safe_key, 'api_key' ) !== false || stripos( $safe_key, 'password' ) !== false ) {
+				} elseif ( in_array( $safe_key, array( 'pagespeed_api_key', 'password' ), true ) ) {
 					$sanitized[ $safe_key ] = sanitize_text_field( $value );
 				} elseif ( stripos( $safe_key, 'url' ) !== false || stripos( $safe_key, 'cdn' ) !== false || stripos( $safe_key, 'origin' ) !== false ) {
 					$sanitized[ $safe_key ] = esc_url_raw( $value );
@@ -305,7 +311,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Validate image paths using realpath to prevent directory traversal.
 			$normalized_abspath = wp_normalize_path( ABSPATH );
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
-				$resolved = realpath( $normalized_abspath . $img_path );
+				$source_path = $normalized_abspath . $img_path;
+				if ( ! file_exists( $source_path ) ) {
+					continue;
+				}
+				$resolved = realpath( $source_path );
 				if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
 					return $this->send_response( null, false, 400, __( 'Invalid image path provided.', 'performance-optimisation' ) );
 				}
@@ -785,7 +795,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						$config[ $key ] = (int) $value;
 						break;
 					case 'password':
-						$config[ $key ] = (string) $value;
+						$config[ $key ] = sanitize_text_field( (string) $value );
 						break;
 					case 'use_tls':
 					case 'persistent':

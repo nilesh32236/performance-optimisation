@@ -46,7 +46,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			}
 
 			if ( ! empty( $this->settings['disableXMLRPC'] ) ) {
-				add_filter( 'xmlrpc_enabled', '__return_false' );
+				if ( has_filter( 'xmlrpc_enabled' ) ) {
+					add_filter( 'xmlrpc_enabled', '__return_false' );
+				} else {
+					add_filter( 'wp_xmlrpc_server_class', '__return_empty_string' );
+				}
 				add_filter( 'wp_headers', array( $this, 'remove_x_pingback' ) );
 			}
 

@@ -81,7 +81,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 			// Parse the home URL and extract just the base domain (e.g., http://localhost).
 			$parsed_url = wp_parse_url( $home_url );
-			$base_url   = $parsed_url['scheme'] . '://' . $parsed_url['host'];
+			if ( false === $parsed_url ) {
+				$parsed_url = wp_parse_url( site_url() );
+			}
+			$base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'];
 
 			if ( isset( $parsed_url['port'] ) && ! empty( $parsed_url['port'] ) ) {
 				$base_url .= ( ':' . $parsed_url['port'] );
@@ -160,7 +163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			return preg_replace_callback(
 				'#<link\b[^>]*\brel=(?:["\']?)(canonical|shortlink)(?:["\']?)[^>]*>#i',
 				function ( $matches ) {
-					$link_tag = str_replace( 'href', 'wppo-href', $matches[0] );
+					$link_tag = preg_replace( '/\bhref=/i', 'wppo-href=', $matches[0] );
 
 					return $link_tag;
 				},
@@ -359,15 +362,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @since 1.0.0
 		 */
 		private function safe_json_encode( string $content, string $attributes ): string {
-			try {
-				$decoded = json_decode( $content, true );
-				if ( JSON_ERROR_NONE !== json_last_error() || null === $decoded ) {
-					return '<script' . $attributes . '>' . $content . '</script>';
-				}
-				return '<script' . $attributes . '>' . wp_json_encode( $decoded ) . '</script>';
-			} catch ( \Exception $e ) {
-				return '<script' . $attributes . '>' . $content . '</script>';
-			}
+			// Pass through JSON-LD as-is; decode+re-encode cycle alters structured data.
+			return '<script' . $attributes . '>' . $content . '</script>';
 		}
 
 		/**

@@ -153,7 +153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 */
 		public static function update_image_paths( $css_content, $file_path ) {
 			$file_path   = wp_normalize_path( $file_path );
-			$pattern     = '/url\((\'|\"|)(.*?)(\'|\"|)\)/';
+			$pattern     = '/url\(\s*([\'"]?)(.*?)\s*\1\s*\)/';
 			$css_dir_url = content_url( str_replace( wp_normalize_path( WP_CONTENT_DIR ), '', dirname( $file_path ) ) );
 
 			return preg_replace_callback(
@@ -161,15 +161,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				function ( $matches ) use ( $css_dir_url ) {
 					$image_path = trim( $matches[2] );
 
-					if ( preg_match( '/\.(jpg|jpeg|png|gif|webp)$/i', $image_path, $ext_matches ) ) {
+					$image_path_no_qs = strtok( $image_path, '?' );
+					if ( preg_match( '/\.(jpg|jpeg|png|gif|webp)$/i', $image_path_no_qs, $ext_matches ) ) {
 						if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
 							$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
 						}
 
 						$local_path = Util::get_local_path( $image_path );
 
-						// Check if corresponding .avif image exists.
-						if ( file_exists( Img_Converter::get_img_path( $image_path, 'avif' ) ) ) {
+						$avif_path = Img_Converter::get_img_path( $image_path, 'avif' );
+						if ( file_exists( $avif_path ) ) {
 							return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';
 						} else {
 							Img_Converter::add_img_into_queue( $local_path, 'avif' );

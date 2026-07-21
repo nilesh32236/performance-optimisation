@@ -112,6 +112,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		private function schedule_page_cron_jobs(): void {
+			// Transient-based lock to prevent concurrent workers from duplicating or skipping work.
+			if ( get_transient( 'wppo_preload_cron_lock' ) ) {
+				return;
+			}
+			set_transient( 'wppo_preload_cron_lock', 1, 5 * MINUTE_IN_SECONDS );
+
 			// Persist iteration offset across runs.
 			$paged_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
 
@@ -287,6 +293,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			$batch_size = $options['image_optimisation']['batch'] ?? 50;
 
+			$normalized_abspath = wp_normalize_path( ABSPATH );
+
 			if ( in_array( $conversion_format, array( 'avif', 'both' ), true ) ) {
 				$images = $img_info['pending']['avif'] ?? array();
 
@@ -296,7 +304,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						++$counter;
 
 						if ( $counter <= $batch_size ) {
-							$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ), 'avif' );
+							$source_path = wp_normalize_path( ABSPATH . $img );
+							$resolved    = realpath( $source_path );
+							if ( false === $resolved || 0 !== strpos( $resolved, $normalized_abspath ) ) {
+								continue;
+							}
+							$img_converter->convert_image( $source_path, 'avif' );
 						}
 					}
 				}
@@ -311,7 +324,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						++$counter;
 
 						if ( $counter <= $batch_size ) {
-							$img_converter->convert_image( wp_normalize_path( ABSPATH . $img ) );
+							$source_path = wp_normalize_path( ABSPATH . $img );
+							$resolved    = realpath( $source_path );
+							if ( false === $resolved || 0 !== strpos( $resolved, $normalized_abspath ) ) {
+								continue;
+							}
+							$img_converter->convert_image( $source_path );
 						}
 					}
 				}
@@ -353,9 +371,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			}
 
 			if ( $should_run ) {
-				if ( ! wp_cache_add( 'wppo_db_cleanup_lock', 1, '', 5 * MINUTE_IN_SECONDS ) ) {
+				// Use transient-based lock as primary mechanism (works without persistent object cache).
+				if ( get_transient( 'wppo_db_cleanup_lock' ) ) {
 					return;
 				}
+				set_transient( 'wppo_db_cleanup_lock', 1, 5 * MINUTE_IN_SECONDS );
 				Database_Cleanup::auto_clean( $settings );
 				update_option( 'wppo_last_db_cleanup', $now, false );
 			}

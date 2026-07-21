@@ -40,19 +40,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 			self::init_filesystem();
 
-			// Check if the directory already exists.
-			if ( ! $wp_filesystem->is_dir( $cache_dir ) ) {
+			if ( $wp_filesystem->is_dir( $cache_dir ) ) {
+				return true;
+			}
 
-				// Recursively create parent directories first.
-				$parent_dir = dirname( $cache_dir );
+			// Build parent directories iteratively to avoid deep recursion.
+			$path  = wp_normalize_path( $cache_dir );
+			$parts = explode( '/', trim( $path, '/' ) );
+			$build = '';
 
-				if ( ! $wp_filesystem->is_dir( $parent_dir ) ) {
-					self::prepare_cache_dir( $parent_dir );
-				}
-
-				// Create the final directory.
-				if ( ! $wp_filesystem->mkdir( $cache_dir, FS_CHMOD_DIR ) ) {
-					return false;
+			foreach ( $parts as $part ) {
+				$build = $build ? $build . '/' . $part : '/' . $part;
+				if ( ! $wp_filesystem->is_dir( $build ) ) {
+					if ( ! $wp_filesystem->mkdir( $build, FS_CHMOD_DIR ) ) {
+						return false;
+					}
 				}
 			}
 

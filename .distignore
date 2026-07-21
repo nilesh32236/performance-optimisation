@@ -31,7 +31,7 @@
 /readme.md
 /.geminiignore
 /changelog.md
-.qoder
+/.qoder
 /.browserslistrc
 /.eslintrc.json
 /.opencode-reviewer.yml

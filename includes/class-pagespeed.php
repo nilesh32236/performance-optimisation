@@ -133,10 +133,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			);
 
 			// The API accepts multiple category params; add_query_arg does not support
-			// repeated keys, so we append them manually.
-			$categories  = array( 'PERFORMANCE', 'ACCESSIBILITY', 'BEST_PRACTICES', 'SEO' );
-			$category_qs = implode( '&', array_map( fn( $c ) => 'category=' . rawurlencode( $c ), $categories ) );
-			$query_url   = add_query_arg( $query_args, self::API_ENDPOINT ) . '&' . $category_qs;
+			// repeated keys, so we build the query string manually.
+			$categories = array( 'PERFORMANCE', 'ACCESSIBILITY', 'BEST_PRACTICES', 'SEO' );
+			foreach ( $categories as $cat ) {
+				$query_args['category'][] = $cat;
+			}
+			$query_url = add_query_arg( $query_args, self::API_ENDPOINT );
 
 			// Security: redact API key from debug logs.
 			// phpcs:ignore WordPress.Security.NonceVerification.Recommended

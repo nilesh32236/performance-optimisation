@@ -410,59 +410,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public static function clean_expired_transients() {
 			global $wpdb;
 
-			$time    = time();
-			$deleted = 0;
-			$batch   = 1000;
+			$time           = time();
+			$deleted        = 0;
+			$batch          = 1000;
+			$transient_keys = array(
+				'_transient_'      => '_transient_timeout_',
+				'_site_transient_' => '_site_transient_timeout_',
+			);
 
-			do {
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup.
-				$ids = $wpdb->get_col(
-					$wpdb->prepare(
-						"SELECT a.option_name FROM $wpdb->options a
-						INNER JOIN $wpdb->options b ON b.option_name = CONCAT( '_transient_timeout_', SUBSTRING( a.option_name, 12 ) )
-						WHERE a.option_name LIKE %s
-						AND a.option_name NOT LIKE %s
-						AND b.option_value < %d
-						LIMIT %d",
-						$wpdb->esc_like( '_transient_' ) . '%',
-						$wpdb->esc_like( '_transient_timeout_' ) . '%',
-						$time,
-						$batch
-					)
-				);
-
-				if ( ! empty( $wpdb->last_error ) ) {
-					return false;
+			foreach ( $transient_keys as $prefix => $timeout_prefix ) {
+				if ( '_site_transient_' === $prefix && ! is_multisite() ) {
+					continue;
 				}
 
-				$ids_count = is_array( $ids ) ? count( $ids ) : 0;
-				if ( 0 === $ids_count ) {
-					break;
-				}
+				do {
+					$wpdb->last_error = '';
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup.
+					$ids = $wpdb->get_col(
+						$wpdb->prepare(
+							"SELECT a.option_name FROM $wpdb->options a
+							INNER JOIN $wpdb->options b ON b.option_name = CONCAT( %s, SUBSTRING( a.option_name, %d ) )
+							WHERE a.option_name LIKE %s
+							AND a.option_name NOT LIKE %s
+							AND b.option_value < %d
+							LIMIT %d",
+							$timeout_prefix,
+							strlen( $prefix ) + 1,
+							$wpdb->esc_like( $prefix ) . '%',
+							$wpdb->esc_like( $timeout_prefix ) . '%',
+							$time,
+							$batch
+						)
+					);
 
-				// For each transient, we need to delete both the data and the timeout.
-				$to_delete = array();
-				foreach ( $ids as $name ) {
-					$to_delete[] = $name;
-					$to_delete[] = '_transient_timeout_' . substr( $name, 11 );
-				}
+					if ( ! empty( $wpdb->last_error ) ) {
+						return false;
+					}
 
-				$placeholders = implode( ',', array_fill( 0, count( $to_delete ), '%s' ) );
+					$ids_count = is_array( $ids ) ? count( $ids ) : 0;
+					if ( 0 === $ids_count ) {
+						break;
+					}
+
+					// For each transient, we need to delete both the data and the timeout.
+					$to_delete  = array();
+					$prefix_len = strlen( $prefix );
+					foreach ( $ids as $name ) {
+						$to_delete[] = $name;
+						$to_delete[] = $timeout_prefix . substr( $name, $prefix_len + 1 );
+					}
+
+					$placeholders = implode( ',', array_fill( 0, count( $to_delete ), '%s' ) );
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$result = $wpdb->query(
-					$wpdb->prepare(
-						"DELETE FROM $wpdb->options WHERE option_name IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-						...$to_delete
-					)
-				);
+					$result = $wpdb->query(
+						$wpdb->prepare(
+							"DELETE FROM $wpdb->options WHERE option_name IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+							...$to_delete
+						)
+					);
 
-				if ( false === $result ) {
-					return false;
-				}
+					if ( false === $result ) {
+						return false;
+					}
 
-				$deleted += (int) $result;
-			} while ( $ids_count === $batch );
+					$deleted += (int) $result;
+				} while ( $ids_count === $batch );
+			} // End foreach transient prefix.
 
 			return $deleted;
 		}

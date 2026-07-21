@@ -64,6 +64,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private array $exclude_delay_js = array();
 
 		/**
+		 * Cache instance for static HTML cache operations.
+		 *
+		 * @var   Cache|null
+		 * @since 2.0.0
+		 */
+		private $cache;
+
+		/**
 		 * Filesystem instance for file operations.
 		 *
 		 * @var   object
@@ -187,17 +195,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'wp_enqueue_scripts', array( $this, 'remove_woocommerce_scripts' ), 999 );
 			}
 
-			$cache = false;
 			if ( ! empty( $this->options['cache']['enableCache'] ) ) {
-				$cache = new Cache();
-				add_action( 'template_redirect', array( $cache, 'generate_dynamic_static_html' ) );
-				add_action( 'save_post', array( $cache, 'invalidate_dynamic_static_html' ) );
+				$this->cache = new Cache();
+				add_action( 'template_redirect', array( $this->cache, 'generate_dynamic_static_html' ) );
+				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
 			if ( isset( $this->options['file_optimisation']['combineCSS'] ) && (bool) $this->options['file_optimisation']['combineCSS'] ) {
-				if ( ! $cache ) {
-					$cache = new Cache();
+				if ( ! $this->cache ) {
+					$this->cache = new Cache();
 				}
-				add_action( 'wp_enqueue_scripts', array( $cache, 'combine_css' ), PHP_INT_MAX );
+				add_action( 'wp_enqueue_scripts', array( $this->cache, 'combine_css' ), PHP_INT_MAX );
 			}
 
 			$rest = new Rest();
@@ -363,6 +370,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( file_exists( $source_path ) ) {
 				$img_converter->convert_image( $source_path, $format );
+			}
+		}
+
+		/**
+		 * Invalidate cache on save_post, skipping revisions and autosaves.
+		 *
+		 * @param int      $post_id Post ID.
+		 * @param \WP_Post $post    Post object.
+		 * @param bool     $update  Whether this is an existing post being updated.
+		 * @since 2.0.0
+		 */
+		public function on_save_post_invalidate_cache( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found, Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+				return;
+			}
+			if ( $this->cache ) {
+				$this->cache->invalidate_dynamic_static_html( $post_id );
 			}
 		}
 

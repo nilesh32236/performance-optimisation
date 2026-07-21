@@ -94,6 +94,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 				return;
 			}
 
+			if ( ! is_singular() ) {
+				return;
+			}
+
 			$post_id = get_the_ID();
 			if ( ! $post_id ) {
 				return;
@@ -131,6 +135,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 */
 		public function capture_page_assets() {
 			if ( is_admin() ) {
+				return;
+			}
+
+			if ( ! is_singular() ) {
 				return;
 			}
 

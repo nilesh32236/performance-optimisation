@@ -26,9 +26,9 @@ const refreshNonce = async () => {
 		const data = await res.json();
 		if ( data.success && data.data?.nonce ) {
 			wppoSettings.nonce = data.data.nonce;
-		} else {
-			throw new Error( 'Nonce refresh returned invalid response' );
+			return data.data.nonce;
 		}
+		throw new Error( 'Nonce refresh returned invalid response' );
 	} catch ( e ) {
 		console.error( 'Nonce refresh failed:', e );
 		throw e;
@@ -73,7 +73,6 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 
 		// Detect expired nonce (rest_forbidden, rest_cookie_invalid_nonce, etc.).
 		if (
-			! isGet &&
 			data.code &&
 			( data.code === 'rest_forbidden' ||
 				data.code === 'rest_cookie_invalid_nonce' ||

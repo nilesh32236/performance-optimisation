@@ -243,19 +243,14 @@ const loadImages = () => {
 								}
 
 								if ( isPicture ) {
-									// More aggressive picture re-evaluation
-									const currentSrc = el.src;
-									el.removeAttribute( 'src' );
-									el.src = currentSrc;
+									const currentSizes = el.sizes;
+									el.sizes = currentSizes;
 								}
 							} else if ( el.tagName === 'IFRAME' ) {
 								if ( el.hasAttribute( 'data-src' ) ) {
 									const iframeSrc =
 										el.getAttribute( 'data-src' );
-									if (
-										iframeSrc &&
-										iframeSrc.startsWith( 'http' )
-									) {
+									if ( iframeSrc ) {
 										el.src = iframeSrc;
 									}
 									el.removeAttribute( 'data-src' );

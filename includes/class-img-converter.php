@@ -208,7 +208,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								Util::prepare_cache_dir( dirname( $avif_path ) );
 
 								if ( imageavif( $image, $avif_path, $quality ) ) {
-									$this->update_conversion_status( $source_image, 'completed', $format );
+									$this->update_conversion_status( $source_image, 'completed', 'avif' );
 								} else {
 									$this->update_conversion_status( $source_image, 'failed', $format );
 									return false;
@@ -235,7 +235,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						try {
 
 							if ( file_exists( $webp_path ) ) {
-								$this->update_conversion_status( $source_image, 'completed', $format );
+								$this->update_conversion_status( $source_image, 'completed', 'webp' );
 								return true;
 							}
 							// Initialize Imagick and read the image file.
@@ -304,6 +304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					if ( ! file_exists( $avif_path ) ) {
 						Util::prepare_cache_dir( dirname( $avif_path ) );
 						if ( ! function_exists( 'imageavif' ) || ! imageavif( $image, $avif_path, $quality ) ) {
+							$success = false;
 							$this->update_conversion_status( $source_image, 'failed', 'avif' );
 						} else {
 							$this->update_conversion_status( $source_image, 'completed', 'avif' );
@@ -534,6 +535,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return $metadata;
 
 			} catch ( \Exception $e ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'WPPO Image conversion error: ' . $e->getMessage() );
 				return $metadata;
 			}
 		}

@@ -29,11 +29,12 @@ const SIDEBAR_BREAKPOINT = 992;
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
-	const [ sidebarCollapsed ] = useState( false );
+	const sidebarCollapsed = false;
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const [ serverRules, setServerRules ] = useState( null );
 	const [ serverRulesError, setServerRulesError ] = useState( false );
+	const [ rulesRetryTrigger, setRulesRetryTrigger ] = useState( 0 );
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedRules = useRef( false );
 
@@ -99,6 +100,7 @@ const App = () => {
 						hasFetchedRules.current = false;
 						setServerRulesError( false );
 						setServerRules( null );
+						setRulesRetryTrigger( ( c ) => c + 1 );
 					} }
 				/>
 			),
@@ -267,7 +269,7 @@ const App = () => {
 			abortController.abort();
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ activeTab, recentActivities.length, serverRules ] );
+	}, [ activeTab, recentActivities.length, serverRules, rulesRetryTrigger ] );
 
 	useEffect( () => {
 		setTransition( true );
