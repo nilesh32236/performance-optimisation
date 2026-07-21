@@ -41,10 +41,12 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_post_meta_by_key( '_wppo_disabled_styles' );
 
 		// Remove cache directory.
+		// NOTE: This path must stay in sync with Cache::CACHE_DIR constant in includes/class-cache.php.
 		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';
 		wppo_delete_directory( $cache_dir );
 
 		// Remove converted images directory.
+		// NOTE: This path must stay in sync with Img_Converter class uploads paths in includes/class-img-converter.php.
 		$wppo_dir = WP_CONTENT_DIR . '/wppo/';
 		wppo_delete_directory( $wppo_dir );
 

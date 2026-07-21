@@ -78,9 +78,6 @@ const loadScript = ( script ) => {
 
 			replacement.text = script.text;
 
-			replacement.onload = resolve;
-			replacement.onerror = reject;
-
 			if ( script.parentNode ) {
 				script.parentNode.replaceChild( replacement, script );
 			} else {
@@ -90,7 +87,8 @@ const loadScript = ( script ) => {
 			// Inline scripts execute synchronously during DOM insertion, so resolve here.
 			resolve();
 		} else {
-			reject( 'Inline script has no text content' );
+			// Empty inline script: resolve benignly.
+			resolve();
 		}
 	} );
 };

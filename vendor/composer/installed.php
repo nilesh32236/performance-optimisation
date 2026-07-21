@@ -3,7 +3,7 @@
         'name' => 'nilesh/performance-optimisation',
         'pretty_version' => 'dev-master',
         'version' => 'dev-master',
-        'reference' => '18c8a5542a182999c137d7edf398aa47654c711b',
+        'reference' => '46bee7682e07a4adbd89662fff7b795d9446cd7b',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -31,7 +31,7 @@
         'nilesh/performance-optimisation' => array(
             'pretty_version' => 'dev-master',
             'version' => 'dev-master',
-            'reference' => '18c8a5542a182999c137d7edf398aa47654c711b',
+            'reference' => '46bee7682e07a4adbd89662fff7b795d9446cd7b',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
