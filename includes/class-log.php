@@ -101,6 +101,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			$page     = isset( $params['page'] ) ? absint( $params['page'] ) : 1;
 			$per_page = isset( $params['per_page'] ) ? absint( $params['per_page'] ) : 10;
 
+			if ( $per_page < 1 ) {
+				$per_page = 10;
+			}
+
 			// Calculate offset for pagination.
 			$offset = ( $page - 1 ) * $per_page;
 
@@ -132,11 +136,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					ARRAY_A
 				);
 				/* phpcs:enable */
-
-				// Append additional data.
-				foreach ( $results as $index => $result ) {
-					$results[ $index ]['activity'] .= ' ' . esc_html( $result['created_at'] );
-				}
 
 				// Prepare data for caching.
 				$data = array(

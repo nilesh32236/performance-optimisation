@@ -35,8 +35,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * @return void
 		 */
 		public static function init(): void {
-
 			self::unschedule_crons();
+			self::unschedule_database_cleanup_cron();
 			delete_option( 'wppo_preload_cron_offset' );
 
 			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
@@ -93,6 +93,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			$timestamp = wp_next_scheduled( 'wppo_generate_static_page' );
 			if ( $timestamp ) {
 				wp_unschedule_event( $timestamp, 'wppo_generate_static_page' );
+			}
+		}
+
+		/**
+		 * Unschedule the database cleanup cron job.
+		 *
+		 * @since 1.6.0
+		 * @return void
+		 */
+		private static function unschedule_database_cleanup_cron(): void {
+			$timestamp = wp_next_scheduled( 'wppo_database_cleanup_cron' );
+			if ( $timestamp ) {
+				wp_unschedule_event( $timestamp, 'wppo_database_cleanup_cron' );
 			}
 		}
 

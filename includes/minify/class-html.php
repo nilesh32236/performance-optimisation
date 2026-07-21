@@ -118,9 +118,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private function minify_html( string $html ): string {
 			$html = $this->modify_canonical_link( $html );
 
-			$content_aray = $this->extract_and_preserve_scripts_template( $html );
-			$html         = $content_aray[0];
-			$scripts      = $content_aray[1];
+			$content_array = $this->extract_and_preserve_scripts_template( $html );
+			$html         = $content_array[0];
+			$scripts      = $content_array[1];
 
 			if ( isset( $this->options['file_optimisation']['minifyInlineCSS'] ) && (bool) $this->options['file_optimisation']['minifyInlineCSS'] ) {
 				$html = $this->minify_inline_css( $html );

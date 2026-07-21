@@ -76,7 +76,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
 				try {
 					$css_content = $this->filesystem->get_contents( $this->file_path );
-					if ( false === $css_content || null === $css_content ) {
+					if ( false === $css_content ) {
 						return null;
 					}
 					$css_content = self::update_image_paths( $css_content, $this->file_path );
@@ -152,7 +152,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 					$image_path = trim( $matches[2] );
 
 					if ( preg_match( '/\.(jpg|jpeg|png|gif|webp)$/i', $image_path, $ext_matches ) ) {
-						if ( false === strpos( $image_path, 'http' ) && ! preg_match( '/^data:/', $image_path ) ) {
+						if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
 							$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
 						}
 
@@ -179,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 						return 'url("' . $image_path . '")';
 					}
 
-					if ( false === strpos( $image_path, 'http' ) && ! preg_match( '/^data:/', $image_path ) ) {
+					if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
 						$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
 						return 'url("' . $image_path . '")';
 					}

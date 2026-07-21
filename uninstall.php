@@ -20,7 +20,8 @@ global $wpdb;
  *
  * @return void
  */
-function wppo_cleanup_site(): void {
+if ( ! function_exists( 'wppo_cleanup_site' ) ) {
+	function wppo_cleanup_site(): void {
 	global $wpdb;
 
 	// Drop custom table.
@@ -86,32 +87,42 @@ function wppo_cleanup_site(): void {
 	delete_transient( 'wppo_cache_size' );
 	delete_transient( 'wppo_total_js_css' );
 	delete_transient( 'wppo_wp_cache_fix_checked' );
+	}
 }
 
 /**
- * Recursively delete a directory using WP_Filesystem.
+ * Recursively delete a directory using native PHP (safe for uninstall context).
  *
  * @param string $dir Absolute path to the directory.
  * @return void
  */
-function wppo_delete_directory( string $dir ): void {
-	if ( ! is_dir( $dir ) ) {
-		return;
+if ( ! function_exists( 'wppo_delete_directory' ) ) {
+	function wppo_delete_directory( string $dir ): void {
+		if ( ! is_dir( $dir ) ) {
+			return;
+		}
+
+		$items = scandir( $dir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.scandir_scandir
+		if ( false === $items ) {
+			return;
+		}
+
+		foreach ( $items as $item ) {
+			if ( '.' === $item || '..' === $item ) {
+				continue;
+			}
+
+			$path = $dir . '/' . $item;
+
+			if ( is_dir( $path ) ) {
+				wppo_delete_directory( $path );
+			} else {
+				@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
+			}
+		}
+
+		@rmdir( $dir ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir
 	}
-
-	global $wp_filesystem;
-
-	if ( ! $wp_filesystem && ! function_exists( 'WP_Filesystem' ) ) {
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-	}
-
-	WP_Filesystem();
-
-	if ( ! $wp_filesystem ) {
-		return;
-	}
-
-	$wp_filesystem->rmdir( $dir, true );
 }
 
 // Clean up current site.
