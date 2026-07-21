@@ -159,11 +159,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
 				require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
 				require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
-			}
 
-			if ( is_admin() ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
-				new Admin_Notices();
+				if ( defined( 'WP_ADMIN' ) ) {
+					require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
+					new Admin_Notices();
+				}
 			}
 		}
 
@@ -187,10 +187,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'wp_enqueue_scripts', array( $this, 'remove_woocommerce_scripts' ), 999 );
 			}
 
-			$cache = new Cache();
-			add_action( 'template_redirect', array( $cache, 'generate_dynamic_static_html' ) );
-			add_action( 'save_post', array( $cache, 'invalidate_dynamic_static_html' ) );
+			$cache = false;
+			if ( ! empty( $this->options['cache']['enableCache'] ) ) {
+				$cache = new Cache();
+				add_action( 'template_redirect', array( $cache, 'generate_dynamic_static_html' ) );
+				add_action( 'save_post', array( $cache, 'invalidate_dynamic_static_html' ) );
+			}
 			if ( isset( $this->options['file_optimisation']['combineCSS'] ) && (bool) $this->options['file_optimisation']['combineCSS'] ) {
+				if ( ! $cache ) {
+					$cache = new Cache();
+				}
 				add_action( 'wp_enqueue_scripts', array( $cache, 'combine_css' ), PHP_INT_MAX );
 			}
 
@@ -554,7 +560,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wppoSettings',
 				array(
 					'apiUrl'            => get_rest_url( null, 'performance-optimisation/v1/' ),
+					'ajaxUrl'           => admin_url( 'admin-ajax.php' ),
 					'nonce'             => wp_create_nonce( 'wp_rest' ),
+					'nonce_refresh'     => wp_create_nonce( 'wppo_nonce_refresh' ),
 					'version'           => WPPO_VERSION,
 					'settings'          => $safe_options,
 					'image_info'        => get_option( 'wppo_img_info', array() ),
@@ -741,7 +749,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
-					$tag = preg_replace( '/\bsrc=(["\'])/', ' defer="defer" src=$1', $tag );
+					$tag = preg_replace( '/\bsrc=(["\'])/', ' defer="defer" src=$1', $tag ) ?? $tag;
 				}
 			}
 
@@ -752,7 +760,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'/type=("|\')text\/javascript("|\')/',
 						'type="wppo/javascript" wppo-type="text/javascript"',
 						$tag
-					);
+					) ?? $tag;
 				}
 			}
 

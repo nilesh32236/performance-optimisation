@@ -111,7 +111,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			try {
 				// Determine connection settings (Dashboard settings have priority over on-disk config).
 				$options = get_option( 'wppo_settings', array() );
-				$config  = $options['object_cache'] ?? array();
+				$config  = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
+				unset( $config['password'] );
 
 				if ( empty( $config ) && file_exists( $this->config_path ) ) {
 					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound

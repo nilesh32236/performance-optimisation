@@ -138,7 +138,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			}
 
 			$options      = get_option( 'wppo_settings', array() );
-			$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] ?? array() );
+			$preload      = $options['preload_settings'] ?? array();
+			$exclude_urls = Util::process_urls( $preload['excludePreloadCache'] ?? array() );
 
 			foreach ( $query_batch_posts as $page_id ) {
 				$page_url       = get_permalink( $page_id );
@@ -208,8 +209,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 */
 		public function process_page( $page_id ): void {
 			if ( $page_id ) {
-				$this->load_page( $page_id );
 				$this->mark_page_as_processed( $page_id );
+				$this->load_page( $page_id );
 			}
 		}
 
@@ -352,6 +353,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			}
 
 			if ( $should_run ) {
+				if ( ! wp_cache_add( 'wppo_db_cleanup_lock', 1, '', 5 * MINUTE_IN_SECONDS ) ) {
+					return;
+				}
 				Database_Cleanup::auto_clean( $settings );
 				update_option( 'wppo_last_db_cleanup', $now, false );
 			}

@@ -75,8 +75,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @since 1.1.0
 		 */
 		public function __construct() {
-			// Capture all enqueued assets early so disabled assets are not lost.
-			add_action( 'wp_enqueue_scripts', array( $this, 'capture_page_assets' ), 1 );
+			// Capture assets after they've been printed so $done arrays are populated.
+			add_action( 'wp_footer', array( $this, 'capture_page_assets' ), 9999 );
 
 			// Dequeue disabled assets on the frontend at a very late priority.
 			add_action( 'wp_enqueue_scripts', array( $this, 'dequeue_selected_assets' ), 9999 );
@@ -145,7 +145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			$styles  = array();
 
 			if ( $wp_scripts instanceof \WP_Scripts ) {
-				foreach ( $wp_scripts->queue as $handle ) {
+				foreach ( $wp_scripts->done as $handle ) {
 					if ( isset( $wp_scripts->registered[ $handle ] ) ) {
 						$registered = $wp_scripts->registered[ $handle ];
 						$scripts[]  = array(
@@ -158,7 +158,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			}
 
 			if ( $wp_styles instanceof \WP_Styles ) {
-				foreach ( $wp_styles->queue as $handle ) {
+				foreach ( $wp_styles->done as $handle ) {
 					if ( isset( $wp_styles->registered[ $handle ] ) ) {
 						$registered = $wp_styles->registered[ $handle ];
 						$styles[]   = array(

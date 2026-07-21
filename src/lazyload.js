@@ -317,15 +317,8 @@ const loadImages = () => {
 				subtree: true,
 			} );
 
-			const stopObservation = () => {
-				mutationObserver.disconnect();
-				clearInterval( intervalId );
-			};
-
 			// Periodic Safety Scan for unobserved dynamic content
-			let safetyScanCount = 0;
-			const intervalId = setInterval( () => {
-				safetyScanCount++;
+			setInterval( () => {
 				const elements = document.querySelectorAll(
 					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
 				);
@@ -334,10 +327,7 @@ const loadImages = () => {
 						observeElement( el );
 					}
 				} );
-				if ( safetyScanCount >= 3 ) {
-					stopObservation();
-				}
-			}, 30000 );
+			}, 10000 );
 		}
 
 		document
@@ -407,15 +397,15 @@ const loadImages = () => {
 		 */
 		const isElementInViewport = ( el ) => {
 			const rect = el.getBoundingClientRect();
+			const vh =
+				window.innerHeight || document.documentElement.clientHeight;
+			const vw =
+				window.innerWidth || document.documentElement.clientWidth;
 			return (
-				rect.top >= 0 &&
-				rect.left >= 0 &&
-				rect.bottom <=
-					( window.innerHeight ||
-						document.documentElement.clientHeight ) &&
-				rect.right <=
-					( window.innerWidth ||
-						document.documentElement.clientWidth )
+				rect.top < vh &&
+				rect.bottom > 0 &&
+				rect.left < vw &&
+				rect.right > 0
 			);
 		};
 

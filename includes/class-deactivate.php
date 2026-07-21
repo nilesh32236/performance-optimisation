@@ -39,6 +39,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			self::unschedule_database_cleanup_cron();
 			delete_option( 'wppo_preload_cron_offset' );
 
+			require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 
 			Advanced_Cache_Handler::remove();
@@ -47,7 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 			$object_cache_file = WP_CONTENT_DIR . '/object-cache.php';
 			if ( file_exists( $object_cache_file ) ) {
 				$content = file_get_contents( $object_cache_file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-				if ( false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
+				if ( false !== $content && false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
 					wp_delete_file( $object_cache_file );
 				}
 			}
@@ -143,16 +144,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
 
-			$pattern = '/\/\*\*\s*Enables WordPress Cache\s*\*\/\s*\nif\s*\(\s*!\s*defined\s*\(\s*[\'"]WP_CACHE[\'"]\s*\)\s*\)\s*\{\s*define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\s*\)\s*;\s*\}\s*/';
+			$pattern = '/\/\*\*\s*Enables WordPress Cache\s*\*\/\s*(?:\r?\n|\n)if\s*\(\s*!\s*defined\s*\(\s*[\'"]WP_CACHE[\'"]\s*\)\s*\)\s*\{\s*define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)\s*;\s*\}\s*/';
 
 			if ( preg_match( $pattern, $wp_config_content, $matches ) ) {
-				// Remove the WP_CACHE line.
 				$wp_config_content = preg_replace( $pattern, '', $wp_config_content );
 			} else {
-				$wp_config_content = preg_replace( "/\n?define\(\s*'WP_CACHE'\s*,\s*true\s*\);\s*/", '', $wp_config_content );
+				$wp_config_content = preg_replace( '/\n?define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\);\s*/', '', $wp_config_content );
 			}
 
-			// Write the modified content back to wp-config.php.
 			$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
 		}
 	}

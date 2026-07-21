@@ -120,6 +120,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$revisions_to_delete = array();
 
 			foreach ( $parent_ids as $parent_id ) {
+				$wpdb->last_error = '';
 				// Select exactly the cutoff entries so PHP handles almost no object data.
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$revisions = $wpdb->get_results(

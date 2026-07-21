@@ -145,10 +145,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$this->url_path = $url_path;
 
-			// Initialize filesystem and options.
-			$this->filesystem     = Util::init_filesystem();
-			$this->fs_initialized = true;
-			$this->options        = get_option( 'wppo_settings', array() );
+			// Initialize filesystem lazily via get_filesystem().
+			$this->options = get_option( 'wppo_settings', array() );
 
 			if ( ! $valid_domain && ! empty( $this->options['debug'] ) ) {
 				do_action( 'wppo_debug_log', 'Cache domain validation failed' );
@@ -184,6 +182,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$styles = $wp_styles->queue;
 
 			if ( empty( $styles ) ) {
+				return;
+			}
+
+			$fs = $this->get_filesystem();
+			if ( ! $fs ) {
+				return;
+			}
+
+			// Reuse fresh cache if available.
+			$css_file_path = $this->get_cache_file_path( 'css' );
+
+			if ( $fs->exists( $css_file_path ) ) {
+				$css_url = $this->get_cache_file_url( 'css' );
+				$version = filemtime( $css_file_path );
+				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 				return;
 			}
 
@@ -319,7 +332,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$file_path = $this->get_cache_file_path();
 
-			if ( ! $this->filesystem || ! $this->prepare_cache_dir() ) {
+			if ( ! $this->get_filesystem() || ! $this->prepare_cache_dir() ) {
 				return;
 			}
 
@@ -705,7 +718,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$instance = new self();
 
-			if ( ! $instance->filesystem ) {
+			if ( ! $instance->get_filesystem() ) {
 				return false;
 			}
 
@@ -768,7 +781,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public static function get_cache_size(): string {
 			$instance = new self();
 
-			if ( ! $instance->filesystem ) {
+			if ( ! $instance->get_filesystem() ) {
 				return __( 'Unable to initialize filesystem.', 'performance-optimisation' );
 			}
 

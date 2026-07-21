@@ -35,6 +35,7 @@ const App = () => {
 	const [ serverRules, setServerRules ] = useState( null );
 	const [ serverRulesError, setServerRulesError ] = useState( false );
 	const hasFetchedActivities = useRef( false );
+	const hasFetchedRules = useRef( false );
 
 	const sidebarRef = useRef( null );
 	const toggleBtnRef = useRef( null );
@@ -97,6 +98,7 @@ const App = () => {
 					onRetryServerRules={ () => {
 						hasFetchedRules.current = false;
 						setServerRulesError( false );
+						setServerRules( null );
 					} }
 				/>
 			),
@@ -200,8 +202,6 @@ const App = () => {
 			root.style.setProperty( '--wppo-frontend-text', themeColors.text );
 		}
 	}, [] );
-
-	const hasFetchedRules = useRef( false );
 
 	useEffect( () => {
 		const abortController = new AbortController();

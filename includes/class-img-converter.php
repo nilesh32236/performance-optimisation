@@ -252,7 +252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							// If transparent, use lossless compression for WebP to retain transparency.
 							if ( $has_transparency ) {
 								$imagick->setImageCompressionQuality( $quality );
-								$imagick->setImageAlphaChannel( \Imagick::ALPHACHANNEL_KEEP );  // Keep transparency.
+								$imagick->setImageAlphaChannel( \Imagick::ALPHACHANNEL_ACTIVATE );
 								$imagick->setOption( 'webp:lossless', 'true' );
 							} else {
 								// For non-transparent images, use lossy compression.

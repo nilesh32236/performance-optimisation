@@ -104,12 +104,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		public static function get_recent_activities( $params ) {
 			global $wpdb;
 
-			$page     = isset( $params['page'] ) ? absint( $params['page'] ) : 1;
-			$per_page = isset( $params['per_page'] ) ? absint( $params['per_page'] ) : 10;
-
-			if ( $per_page < 1 ) {
-				$per_page = 10;
-			}
+			$page     = max( 1, absint( $params['page'] ?? 1 ) );
+			$per_page = min( 100, max( 1, absint( $params['per_page'] ?? 10 ) ) );
 
 			// Calculate offset for pagination.
 			$offset = ( $page - 1 ) * $per_page;

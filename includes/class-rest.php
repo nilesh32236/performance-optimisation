@@ -188,14 +188,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				Log::add(
 					sprintf(
 						/* translators: %s: The URL of the page */
-						__( 'Clear cache of <a href="%1$s">%2$s</a> on ', 'performance-optimisation' ),
+						__( 'Clear cache of <a href="%1$s">%2$s</a>', 'performance-optimisation' ),
 						esc_url( home_url( $path ) ),
 						esc_html( home_url( $path ) )
 					)
 				);
 			} else {
 				Cache::clear_cache();
-				Log::add( __( 'Clear all cache on ', 'performance-optimisation' ) );
+				Log::add( __( 'Clear all cache', 'performance-optimisation' ) );
 			}
 			return $this->send_response( true );
 		}
@@ -231,6 +231,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			if ( update_option( 'wppo_settings', $options ) ) {
 				Cache::clear_cache();
 			}
+
+			unset( $options['performance_audit']['pagespeed_api_key'] );
 
 			return $this->send_response( $options );
 		}
@@ -712,7 +714,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$config = $this->build_redis_config( $params );
 				$ping   = $manager->ping( $config );
 				if ( is_wp_error( $ping ) ) {
-					return $this->send_response( null, false, 400, __( 'Redis connection test failed.', 'performance-optimisation' ) );
+					return $this->send_response( null, false, 400, $ping->get_error_message() );
 				}
 
 				return $this->send_response( array( 'success' => true ) );
@@ -723,7 +725,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->enable( $config );
 
 				if ( is_wp_error( $result ) ) {
-					return $this->send_response( null, false, 400, __( 'Failed to enable object cache.', 'performance-optimisation' ) );
+					return $this->send_response( null, false, 400, $result->get_error_message() );
 				}
 
 				Log::add( __( 'Object Cache enabled.', 'performance-optimisation' ) );
@@ -734,7 +736,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$result = $manager->disable();
 
 				if ( is_wp_error( $result ) ) {
-					return $this->send_response( null, false, 400, __( 'Failed to disable object cache.', 'performance-optimisation' ) );
+					return $this->send_response( null, false, 400, $result->get_error_message() );
 				}
 
 				Log::add( __( 'Object Cache disabled.', 'performance-optimisation' ) );
@@ -999,7 +1001,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					null,
 					false,
 					500,
-					$results['message'] ?? __( 'PageSpeed scan failed.', 'performance-optimisation' )
+					__( 'PageSpeed scan failed. Please check your API key and try again.', 'performance-optimisation' )
 				);
 			}
 

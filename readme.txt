@@ -45,21 +45,22 @@ This plugin uses `voku/html-min` for HTML minification, `matthiasmullie/minify` 
 
 After activation, you can manage the following from the settings tabs:
 
-- **Dashboard Overview** — View cache size, minified file counts, image optimisation status, and recent activities.
-- **File Optimization** — Minify JS/CSS/HTML, combine CSS, defer/delay JS, and configure Core Tweaks (emojis, embeds, XML-RPC, Heartbeat).
-- **Preload Settings** — Cache preloading, preconnect, DNS prefetch, font and CSS preloading.
-- **Image Optimisation** — Lazy load images with SVG placeholders, convert to WebP/AVIF, and preload feature images.
-- **Database Cleanup** — Schedule automatic cleanup for revisions, auto-drafts, transients, and orphaned data.
+- **Dashboard** — View cache size, minified file counts, image optimisation status, and recent activities.
+- **File Optimization** — Minify JS/CSS/HTML, combine CSS, defer/delay JS, disable emojis/embeds, and control the Heartbeat API.
+- **Preload** — Cache preloading, preconnect, DNS prefetch, font and CSS preloading.
+- **Image Optimization** — Lazy load images with SVG placeholders, convert to WebP/AVIF, and preload feature images.
+- **Database** — Schedule automatic cleanup for revisions, auto-drafts, transients, and orphaned data.
+- **Object Cache** — Redis integration with standalone, sentinel, and cluster support.
 - **Tools** — Import/export plugin settings for quick setup across environments.
 
 == Screenshots ==
 
 1. **Dashboard**: Comprehensive overview of cache status, file optimization metrics, and recent activity log.
 2. **File Optimization**: Minification settings for JavaScript, CSS, and HTML with Basic, Advanced, E-commerce, and Network tab configurations.
-3. **Preload Settings**: Granular controls for cache warm-up, connection prediction (DNS/Preconnect), and critical asset prioritization (Fonts/CSS).
+3. **Preload**: Granular controls for cache warm-up, connection prediction (DNS/Preconnect), and critical asset prioritization (Fonts/CSS).
 4. **Image Optimization**: Automated Next-Gen format conversion (WebP/AVIF), smart lazy loading with SVG placeholders, and intelligent LCP preloading.
-5. **Database Optimization**: Safe manual and automated maintenance tools with advanced rules to keep specific historical revisions.
-6. **Core Tweaks**: Advanced interface for controlling Heartbeat API frequency and stripping unneeded core WordPress bloat.
+5. **Database**: Safe manual and automated maintenance tools with advanced rules to keep specific historical revisions.
+6. **Object Cache**: Redis integration with standalone, sentinel, and cluster topology support.
 7. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
 
 == Changelog ==

@@ -55,7 +55,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 			method,
 			headers: {
 				...( ! isGet && { 'Content-Type': 'application/json' } ),
-				'X-WP-Nonce': nonce || wppoSettings.nonce,
+				'X-WP-Nonce': nonce || wppoSettings.nonce || '',
 			},
 			...( ! isGet && { body: JSON.stringify( body ) } ),
 			signal,
