@@ -203,6 +203,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								return false;
 							}
 
+							if ( ! function_exists( 'imagecreatefromwebp' ) ) {
+								$this->update_conversion_status( $source_image, 'failed', $format );
+								return false;
+							}
+
 							try {
 								$image = imagecreatefromwebp( $source_image );
 								if ( ! $image ) {
@@ -431,6 +436,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			);
 
 			if ( $is_already_local ) {
+				if ( strpos( $normalized_source, '..' ) !== false ) {
+					return '';
+				}
 				$local_path = $normalized_source;
 			} else {
 				// Use Util::get_local_path to get a clean local path from URL or existing path.
@@ -538,11 +546,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 
 				if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
-					$this->add_img_into_queue( $file );
+					self::add_img_into_queue( $file );
 				}
 
 				if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
-					$this->add_img_into_queue( $file, 'avif' );
+					self::add_img_into_queue( $file, 'avif' );
 				}
 
 				// Queue additional image sizes for conversion.
@@ -551,11 +559,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$image_path = wp_normalize_path( $upload_dir['path'] . '/' . $size_data['file'] );
 						if ( file_exists( $image_path ) ) {
 							if ( in_array( $this->format, array( 'webp', 'both' ), true ) ) {
-								$this->add_img_into_queue( $image_path );
+								self::add_img_into_queue( $image_path );
 							}
 
 							if ( in_array( $this->format, array( 'avif', 'both' ), true ) ) {
-								$this->add_img_into_queue( $image_path, 'avif' );
+								self::add_img_into_queue( $image_path, 'avif' );
 							}
 						}
 					}
@@ -598,7 +606,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$image[0] = $this->get_img_url( $image[0], 'avif' );
 						return $image;
 					} else {
-						$this->add_img_into_queue( $img_path, 'avif' );
+						self::add_img_into_queue( $img_path, 'avif' );
 					}
 				}
 			}
@@ -611,7 +619,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$image[0] = $this->get_img_url( $image[0] );
 						return $image;
 					} else {
-						$this->add_img_into_queue( $img_path );
+						self::add_img_into_queue( $img_path );
 					}
 				}
 			}

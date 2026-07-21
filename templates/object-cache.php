@@ -209,13 +209,12 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return true;
 			}
 
-			$formatted_key = $this->get_key( $key, $group );
+			$local_key = $this->get_key( $key, $group );
 
-			if ( $this->redis->exists( $formatted_key ) ) {
-				return false;
+			if ( $expire ) {
+				return $this->redis->set( $local_key, $data, array( 'nx' => true, 'ex' => $expire ) );
 			}
-
-			return $this->set( $key, $data, $group, $expire );
+			return $this->redis->setnx( $local_key, $data );
 		}
 
 		/**
@@ -376,6 +375,10 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				}
 				$replies = $pipeline->exec();
 
+				if ( ! is_array( $replies ) ) {
+					return array_fill( 0, count( $keys ), false );
+				}
+
 				$i = 0;
 				foreach ( $data as $key => $value ) {
 					$results[ $key ] = (bool) ( $replies[ $i ] ?? false );
@@ -406,7 +409,8 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				return true;
 			}
 
-			return (bool) $this->redis->del( $local_key );
+			$this->redis->del( $local_key );
+			return true;
 		}
 
 		/**

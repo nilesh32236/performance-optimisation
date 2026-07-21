@@ -93,6 +93,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function get_local_path( string $url ): string {
 			// Parse the URL to get the path.
 			$parsed_url = wp_parse_url( $url );
+			if ( false === $parsed_url ) {
+				return '';
+			}
 
 			// Get the path from the parsed URL.
 			$relative_path = wp_normalize_path( $parsed_url['path'] ?? '' );

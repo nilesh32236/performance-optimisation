@@ -76,6 +76,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return int Action Scheduler job ID.
 		 */
 		public static function queue_scan( string $url, string $strategy = 'mobile' ): int {
+			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+				return 0;
+			}
 			return (int) as_enqueue_async_action(
 				self::AS_HOOK,
 				array(
@@ -275,7 +278,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 */
 		private static function get_api_key(): string {
 			$options = get_option( 'wppo_settings', array() );
-			return (string) ( $options['performance_audit']['pagespeed_api_key'] ?? '' );
+			return (string) ( isset( $options['performance_audit']['pagespeed_api_key'] ) ? $options['performance_audit']['pagespeed_api_key'] : '' );
 		}
 
 		/**

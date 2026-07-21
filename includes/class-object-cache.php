@@ -96,6 +96,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 				if ( $wp_filesystem ) {
 					$content = $wp_filesystem->get_contents( $this->dropin_path );
+				} elseif ( is_readable( $this->dropin_path ) ) {
+					$content = file_get_contents( $this->dropin_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+				}
+
+				if ( isset( $content ) && is_string( $content ) ) {
 					if ( false !== strpos( $content, self::DROPIN_MARKER ) || false !== strpos( $content, self::LEGACY_DROPIN_MARKER ) ) {
 						$status['enabled'] = true;
 					} else {

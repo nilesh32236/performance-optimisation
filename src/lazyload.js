@@ -331,7 +331,7 @@ const loadImages = () => {
 					} );
 				},
 				{
-					rootMargin: '600px', // More aggressive margin for marquees
+					rootMargin: '200px',
 				}
 			);
 
@@ -370,10 +370,6 @@ const loadImages = () => {
 					if ( elements.length === 0 ) {
 						clearInterval( window.wppoSafetyScanId );
 						window.wppoSafetyScanId = null;
-						if ( mutationObserver ) {
-							mutationObserver.disconnect();
-							mutationObserver = null;
-						}
 						return;
 					}
 					elements.forEach( ( el ) => {

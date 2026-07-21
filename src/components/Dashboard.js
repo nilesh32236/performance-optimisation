@@ -347,8 +347,9 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					setState( ( prev ) => ( {
 						...prev,
 						imageInfo: {
-							...prev.imageInfo,
 							completed: { webp: 0, avif: 0 },
+							pending: { webp: 0, avif: 0 },
+							failed: { webp: 0, avif: 0 },
 						},
 					} ) );
 					setAnnouncement(

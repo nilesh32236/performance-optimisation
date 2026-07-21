@@ -93,6 +93,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return int|false Number of rows deleted, or `false` on database error.
 		 */
 		public static function clean_revisions_advanced( $max_age_days = 30, $keep_latest = 5 ) {
+			$keep_latest = max( 1, $keep_latest );
 			global $wpdb;
 			$deleted = 0;
 
@@ -598,6 +599,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'clean_orphan_postmeta',
 			);
 
+			$failures = array();
+
 			foreach ( $methods as $method ) {
 				if ( 'clean_revisions_advanced' === $method ) {
 					$result = self::invoke_cleanup_method( $method, $max_age, $keep );
@@ -615,11 +618,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 						'clean_expired_transients' => __( 'Expired Transients', 'performance-optimisation' ),
 						'clean_orphan_postmeta'    => __( 'Orphan Post Meta', 'performance-optimisation' ),
 					);
-					$label  = $labels[ $method ] ?? $method;
+					$label   = $labels[ $method ] ?? $method;
 					// Translators: %s is the cleanup type label.
 					Log::add( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
+					$failures[] = $method;
 				}
 			}
+
+			return $failures;
 		}
 
 		/**

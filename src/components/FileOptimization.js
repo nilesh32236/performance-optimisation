@@ -1,5 +1,5 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useEffect, useRef } from '@wordpress/element';
+import { useState, useRef } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -13,6 +13,7 @@ import {
 	faCheckCircle,
 	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
+import Tooltip from './common/Tooltip';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -71,19 +72,6 @@ const FileOptimization = ( {
 		message: '',
 		success: false,
 	} );
-
-	useEffect( () => {
-		if (
-			serverRules &&
-			serverRules.server_type !== 'apache' &&
-			settings.enableServerRules
-		) {
-			setSettings( ( prev ) => ( {
-				...prev,
-				enableServerRules: false,
-			} ) );
-		}
-	}, [ serverRules, settings.enableServerRules, setSettings ] );
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
@@ -692,29 +680,41 @@ const FileOptimization = ( {
 								) : null }
 								{ serverRules !== null && ! serverRulesError ? (
 									<>
-										<SwitchField
-											label={ __(
-												'Enable Server Rules (.htaccess)',
-												'performance-optimisation'
-											) }
-											description={ __(
-												'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong.',
-												'performance-optimisation'
-											) }
-											name="enableServerRules"
-											checked={
-												serverRules?.server_type ===
-													'apache' &&
-												settings.enableServerRules
-											}
-											disabled={
+										<Tooltip
+											content={
 												serverRules?.server_type !==
 												'apache'
+													? __(
+															'Server rules require Apache.',
+															'performance-optimisation'
+													  )
+													: ''
 											}
-											onChange={ handleChange(
-												setSettings
-											) }
-										/>
+										>
+											<SwitchField
+												label={ __(
+													'Enable Server Rules (.htaccess)',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong.',
+													'performance-optimisation'
+												) }
+												name="enableServerRules"
+												checked={
+													serverRules?.server_type ===
+														'apache' &&
+													settings.enableServerRules
+												}
+												disabled={
+													serverRules?.server_type !==
+													'apache'
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+											/>
+										</Tooltip>
 
 										{ serverRules?.server_type ===
 											'apache' &&

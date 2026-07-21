@@ -11,7 +11,7 @@
 	transition: var(--wppo-transition);
 	/* Stick to the top as the page scrolls, accounting for WP admin bar */
 	position: sticky;
-	top: var(--wp-admin--admin-bar--height, 15px);
+	top: var(--wp-admin--admin-bar--height, 0px);
 	height: calc(98dvh - var(--wp-admin--admin-bar--height, 0px));
 	overflow-y: auto;
 

@@ -128,6 +128,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			$this->image_optimisation = new Image_Optimisation( $this->options );
 
+			if ( defined( 'WP_ADMIN' ) ) {
+				new Admin_Notices();
+			}
+
 			$file_optimisation_opts = $this->options['file_optimisation'] ?? array();
 			new Core_Tweaks( $file_optimisation_opts );
 		}
@@ -173,7 +177,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 				if ( defined( 'WP_ADMIN' ) ) {
 					require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
-					new Admin_Notices();
 				}
 			}
 		}

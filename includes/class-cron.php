@@ -394,7 +394,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					return;
 				}
 				set_transient( 'wppo_db_cleanup_lock', 1, 5 * MINUTE_IN_SECONDS );
-				Database_Cleanup::auto_clean( $settings );
+				try {
+					Database_Cleanup::auto_clean( $settings );
+				} finally {
+					delete_transient( 'wppo_db_cleanup_lock' );
+				}
 				update_option( 'wppo_last_db_cleanup', $now, false );
 			}
 		}
