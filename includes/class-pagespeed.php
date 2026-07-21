@@ -139,9 +139,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$query_url   = add_query_arg( $query_args, self::API_ENDPOINT ) . '&' . $category_qs;
 
 			// Security: redact API key from debug logs.
-			$redacted_url = str_replace( $api_key, 'REDACTED', $query_url );
-			// Translators: %s is the redacted PageSpeed API request URL.
-			Log::add( sprintf( __( 'PageSpeed API request: %s', 'performance-optimisation' ), $redacted_url ) );
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$redacted_url = remove_query_arg( 'key', $query_url );
+			/* translators: %s is the PageSpeed API request URL (API key redacted). */
+			Log::add( sprintf( __( 'PageSpeed API request: %s', 'performance-optimisation' ), esc_url( $redacted_url ) ) );
 
 			$response = wp_remote_get(
 				$query_url,
@@ -251,7 +252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return string Transient key.
 		 */
 		public static function get_transient_key( string $url, string $strategy ): string {
-			return 'wppo_pagespeed_' . md5( $url ) . '_' . sanitize_key( $strategy );
+			return 'wppo_pagespeed_' . md5( esc_url_raw( $url ) ) . '_' . sanitize_key( $strategy );
 		}
 
 		/**

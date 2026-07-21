@@ -1,5 +1,7 @@
 import { apiCall, fetchRecentActivities } from '../apiRequest';
 
+const originalFetch = global.fetch;
+
 describe( 'API Request library', () => {
 	beforeEach( () => {
 		global.wppoSettings = {
@@ -12,6 +14,7 @@ describe( 'API Request library', () => {
 
 	afterEach( () => {
 		jest.restoreAllMocks();
+		global.fetch = originalFetch;
 	} );
 
 	describe( 'apiCall', () => {

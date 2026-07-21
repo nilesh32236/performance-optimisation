@@ -94,7 +94,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
 				try {
-					$js_content  = $this->filesystem->get_contents( $this->file_path );
+					$js_content = $this->filesystem->get_contents( $this->file_path );
+					if ( false === $js_content ) {
+						return null;
+					}
 					$js_minifier = new Minify\JS( $js_content );
 					$minified_js = $js_minifier->minify();
 

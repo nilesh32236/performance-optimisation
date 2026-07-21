@@ -293,8 +293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$type_matches = array();
 			preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches );
 
-			$is_json = isset( $content[0] ) && ( '{' === $content[0] || '[' === $content[0] );
-			if ( $is_json || false !== strpos( $attributes, 'application/ld+json' ) ) {
+			if ( false !== strpos( $attributes, 'application/ld+json' ) || false !== strpos( $attributes, 'application/json' ) ) {
 				return $this->safe_json_encode( $content, $attributes );
 			}
 
@@ -306,6 +305,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 
 				$exclude_delay = array_merge( array( 'wppo-lazyload', 'data-wppo-preserve' ), Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() ) );
+				$exclude_delay = array_values( array_filter( $exclude_delay, 'strlen' ) );
 
 				$should_exclude = false;
 				if ( ! empty( $exclude_delay ) ) {

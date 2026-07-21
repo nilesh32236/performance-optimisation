@@ -93,6 +93,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	const [ bgProcessing, setBgProcessing ] = useState( false );
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
 	const pollingRef = useRef( null );
+	const pollRetryRef = useRef( 0 );
 	const submittingRef = useRef( false );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const [ announcement, setAnnouncement ] = useState( '' );
@@ -149,6 +150,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	const pollJobStatus = useCallback( async () => {
 		try {
+			pollRetryRef.current = 0;
 			const response = await apiCall( 'image_job_status', {}, 'GET' );
 			if ( response.success && response.data ) {
 				const { queued_jobs: queuedJobs } = response.data;
@@ -187,6 +189,21 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			}
 		} catch ( error ) {
 			console.error( 'Error polling job status:', error );
+			pollRetryRef.current++;
+			if ( pollRetryRef.current >= 5 ) {
+				setBgProcessing( false );
+				if ( pollingRef.current ) {
+					clearInterval( pollingRef.current );
+					pollingRef.current = null;
+				}
+				setAnnouncement(
+					__(
+						'Status check stopped after repeated failures.',
+						'performance-optimisation'
+					)
+				);
+				return;
+			}
 			setAnnouncement(
 				__(
 					'Status check failed. Retrying…',

@@ -21,16 +21,18 @@ const refreshNonce = async () => {
 			} ),
 		} );
 		if ( ! res.ok ) {
-			return wppoSettings.nonce;
+			throw new Error( 'Nonce refresh failed with status ' + res.status );
 		}
 		const data = await res.json();
 		if ( data.success && data.data?.nonce ) {
 			wppoSettings.nonce = data.data.nonce;
+		} else {
+			throw new Error( 'Nonce refresh returned invalid response' );
 		}
 	} catch ( e ) {
 		console.error( 'Nonce refresh failed:', e );
+		throw e;
 	}
-	return wppoSettings.nonce;
 };
 
 /**

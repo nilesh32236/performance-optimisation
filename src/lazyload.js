@@ -253,13 +253,25 @@ const loadImages = () => {
 								}
 							} else if ( el.tagName === 'IFRAME' ) {
 								if ( el.hasAttribute( 'data-src' ) ) {
-									el.src = el.getAttribute( 'data-src' );
+									const iframeSrc =
+										el.getAttribute( 'data-src' );
+									if (
+										iframeSrc &&
+										iframeSrc.startsWith( 'http' )
+									) {
+										el.src = iframeSrc;
+									}
 									el.removeAttribute( 'data-src' );
 								}
 							} else if ( el.tagName === 'VIDEO' ) {
 								if ( el.hasAttribute( 'data-src' ) ) {
 									el.src = el.getAttribute( 'data-src' );
 									el.removeAttribute( 'data-src' );
+								}
+								if ( el.hasAttribute( 'data-poster' ) ) {
+									el.poster =
+										el.getAttribute( 'data-poster' );
+									el.removeAttribute( 'data-poster' );
 								}
 								el.querySelectorAll(
 									'source[data-src]'

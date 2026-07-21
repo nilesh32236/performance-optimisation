@@ -38,7 +38,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			}
 
 			if ( ! empty( $this->settings['disableEmbeds'] ) ) {
-				add_action( 'init', array( $this, 'disable_embeds' ), 9999 );
+				add_action( 'init', array( $this, 'disable_embeds' ), -1000 );
 			}
 
 			if ( ! empty( $this->settings['disableDashicons'] ) ) {

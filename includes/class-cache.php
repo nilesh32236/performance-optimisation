@@ -110,6 +110,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public function __construct() {
 			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
+			// Convert internationalized domain names to ASCII (punycode) to support IDN chars.
+			if ( function_exists( 'idn_to_ascii' ) ) {
+				$converted = idn_to_ascii( $domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
+				if ( false !== $converted ) {
+					$domain = $converted;
+				}
+			}
+
 			$valid_domain = ! (
 				strpos( $domain, '..' ) !== false ||
 				strpos( $domain, '/' ) !== false ||
@@ -187,6 +195,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$combined_css = '';
 
 			foreach ( $styles as $handle ) {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
 				$style_data = $wp_styles->registered[ $handle ];
 
 				if ( ! empty( $exclude_combine_css ) ) {
@@ -546,7 +557,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( isset( $this->options['preload_settings']['enablePreloadCache'] ) && (bool) $this->options['preload_settings']['enablePreloadCache'] ) {
+			if ( isset( $this->options['preload_settings']['enablePreloadCache'] ) && ! empty( $this->options['preload_settings']['enablePreloadCache'] ) ) {
 				if ( isset( $this->options['preload_settings']['excludePreloadCache'] ) && ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
 					$exclude_urls = Util::process_urls( $this->options['preload_settings']['excludePreloadCache'] );
 
@@ -573,11 +584,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						}
 					}
 				}
-
-				return true;
 			}
 
-			return false;
+			return true;
 		}
 
 		/**
