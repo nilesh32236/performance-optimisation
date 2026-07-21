@@ -118,25 +118,29 @@ class Database_Cleanup {
 
 		$revisions_to_delete = array();
 
-		foreach ( $parent_ids as $parent_id ) {
-			// Select exactly the cutoff entries so PHP handles almost no object data.
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
-			$revisions = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT ID, post_date FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date DESC LIMIT 500",
-					$parent_id
-				)
-			);
+		$placeholders = implode( ',', array_fill( 0, count( $parent_ids ), '%d' ) );
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+		$all_revisions = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT ID, post_parent, post_date FROM $wpdb->posts WHERE post_parent IN ( $placeholders ) AND post_type = 'revision' ORDER BY post_parent, post_date DESC",
+				$parent_ids
+			)
+		);
+		// phpcs:enable
 
-			if ( null === $revisions || ! empty( $wpdb->last_error ) ) {
-				continue;
-			}
+		if ( null === $all_revisions || ! empty( $wpdb->last_error ) ) {
+			return false;
+		}
 
-			// Keep the latest X revisions; dump others onto our purge list.
-			$older_revisions = array_slice( $revisions, $keep_latest );
+		$revisions_by_parent = array();
+		foreach ( $all_revisions as $rev ) {
+			$revisions_by_parent[ $rev->post_parent ][] = $rev;
+		}
 
-			foreach ( $older_revisions as $rev ) {
-				// Delete if older than cutoff.
+		foreach ( $revisions_by_parent as $parent_revisions ) {
+			$parent_revisions = array_slice( $parent_revisions, $keep_latest );
+
+			foreach ( $parent_revisions as $rev ) {
 				if ( $rev->post_date < $cutoff_date ) {
 					$revisions_to_delete[] = $rev->ID;
 				}
@@ -597,22 +601,22 @@ class Database_Cleanup {
 	 * @return array<string,int> Associative array mapping cleanup type to its current count.
 	 */
 	public static function get_counts() {
+		$cached = get_transient( 'wppo_db_cleanup_counts' );
+		if ( false !== $cached ) {
+			return $cached;
+		}
+
 		global $wpdb;
 
 		$time = time();
 
-		return array(
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$counts = array(
 			'revisions'          => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_type = 'revision'" ),
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'auto_drafts'        => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'auto-draft'" ),
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'trashed_posts'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'trash'" ),
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'spam_comments'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'spam'" ),
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'trashed_comments'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'trash'" ),
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'expired_transients' => (int) $wpdb->get_var(
 				$wpdb->prepare(
 					"SELECT COUNT(*) FROM $wpdb->options a
@@ -625,13 +629,16 @@ class Database_Cleanup {
 					$time
 				)
 			),
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 			'orphan_postmeta'    => (int) $wpdb->get_var(
 				"SELECT COUNT(*) FROM $wpdb->postmeta pm
 				LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
 				WHERE p.ID IS NULL"
 			),
 		);
+		// phpcs:enable
+
+		set_transient( 'wppo_db_cleanup_counts', $counts, 5 * MINUTE_IN_SECONDS );
+		return $counts;
 	}
 
 	/**
@@ -647,6 +654,7 @@ class Database_Cleanup {
 		if ( false === $res ) {
 			return new WP_Error( 'db_cleanup_failed', sprintf( '%s failed', $method ) );
 		}
+		delete_transient( 'wppo_db_cleanup_counts' );
 		return $res;
 	}
 }

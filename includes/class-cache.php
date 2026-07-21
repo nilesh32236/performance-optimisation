@@ -119,9 +119,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$this->url_path = $url_path;
 
-			// Initialize filesystem and options.
-			$this->filesystem = Util::init_filesystem();
-			$this->options    = get_option( 'wppo_settings', array() );
+			$this->options = get_option( 'wppo_settings', array() );
+		}
+
+		/**
+		 * Lazily initializes and returns the WP_Filesystem object.
+		 *
+		 * @return object|false The filesystem object or false on failure.
+		 * @since 1.6.0
+		 */
+		private function get_filesystem() {
+			if ( ! isset( $this->filesystem ) ) {
+				$this->filesystem = Util::init_filesystem();
+			}
+			return $this->filesystem;
 		}
 
 		/**
@@ -140,6 +151,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( empty( $styles ) ) {
 				return;
+			}
+
+			// Check if combined CSS file already exists and is fresh.
+			$css_file_path = $this->get_cache_file_path( 'css' );
+			if ( file_exists( $css_file_path ) ) {
+				$combined_mtime = filemtime( $css_file_path );
+				$all_fresh      = true;
+
+				foreach ( $styles as $handle ) {
+					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+						$all_fresh = false;
+						break;
+					}
+
+					$src = $wp_styles->registered[ $handle ]->src;
+					if ( empty( $src ) ) {
+						$all_fresh = false;
+						break;
+					}
+
+					$local_path = Util::get_local_path( $src );
+					if ( ! $local_path || ! file_exists( $local_path ) ) {
+						$all_fresh = false;
+						break;
+					}
+
+					if ( filemtime( $local_path ) >= $combined_mtime ) {
+						$all_fresh = false;
+						break;
+					}
+				}
+
+				if ( $all_fresh ) {
+					$css_url = $this->get_cache_file_url( 'css' );
+					$version = $combined_mtime;
+					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
+
+					$css_url_with_version = $css_url . "?ver=$version";
+					echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
+					return;
+				}
 			}
 
 			$exclude_combine_css = array();
@@ -242,8 +294,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$css_file = Util::get_local_path( $url );
-			if ( $this->filesystem ) {
-				$css_content = $this->filesystem->get_contents( $css_file );
+			$fs       = $this->get_filesystem();
+			if ( $fs ) {
+				$css_content = $fs->get_contents( $css_file );
 
 				if ( false !== $css_content ) {
 					$css_content = CSS::update_image_paths( $css_content, $css_file );
@@ -270,7 +323,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$file_path = $this->get_cache_file_path();
 
-			if ( ! $this->filesystem || ! $this->prepare_cache_dir() ) {
+			if ( ! $this->get_filesystem() || ! $this->prepare_cache_dir() ) {
 				return;
 			}
 
@@ -480,10 +533,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->prepare_cache_dir();
 			$gzip_file_path = $file_path . '.gz';
 
-			$this->filesystem->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
+			$fs = $this->get_filesystem();
+			$fs->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
 
 			$gzip_output = gzencode( $buffer, 9 );
-			$this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+			$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
 		}
 
 		/**
@@ -631,9 +685,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function delete_cache_files( $file_path ): bool {
 			$gzip_file_path = $file_path . '.gz';
 
-			if ( $this->filesystem ) {
-				$res1 = ! $this->filesystem->exists( $file_path ) || $this->filesystem->delete( $file_path );
-				$res2 = ! $this->filesystem->exists( $gzip_file_path ) || $this->filesystem->delete( $gzip_file_path );
+			$fs = $this->get_filesystem();
+			if ( $fs ) {
+				$res1 = ! $fs->exists( $file_path ) || $fs->delete( $file_path );
+				$res2 = ! $fs->exists( $gzip_file_path ) || $fs->delete( $gzip_file_path );
 				return $res1 && $res2;
 			}
 
@@ -692,14 +747,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$res1      = true;
 			$res2      = true;
 
-			if ( $this->filesystem && $this->filesystem->is_dir( $cache_dir ) ) {
-				$res1 = $this->filesystem->delete( $cache_dir, true ); // 'true' ensures recursive deletion.
+			$fs = $this->get_filesystem();
+
+			if ( $fs && $fs->is_dir( $cache_dir ) ) {
+				$res1 = $fs->delete( $cache_dir, true ); // 'true' ensures recursive deletion.
 			}
 
 			$min_dir = "{$this->cache_root_dir}/min";
 
-			if ( $this->filesystem && $this->filesystem->is_dir( $min_dir ) ) {
-				$res2 = $this->filesystem->delete( $min_dir, true ); // 'true' ensures recursive deletion.
+			if ( $fs && $fs->is_dir( $min_dir ) ) {
+				$res2 = $fs->delete( $min_dir, true ); // 'true' ensures recursive deletion.
 			}
 
 			return $res1 && $res2;
@@ -739,7 +796,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function calculate_directory_size( string $directory ): int {
 			$total_size = 0;
-			$files      = $this->filesystem->dirlist( $directory );
+			$fs         = $this->get_filesystem();
+			$files      = $fs->dirlist( $directory );
 
 			if ( ! $files ) {
 				return $total_size;
@@ -749,7 +807,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$file_path   = trailingslashit( $directory ) . $file['name'];
 				$total_size += ( 'd' === $file['type'] )
 					? $this->calculate_directory_size( $file_path )
-					: $this->filesystem->size( $file_path );
+					: $fs->size( $file_path );
 			}
 
 			return $total_size;

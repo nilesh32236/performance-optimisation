@@ -479,6 +479,10 @@ class Main {
 	public function admin_enqueue_scripts(): void {
 		$screen = get_current_screen();
 
+		if ( 'toplevel_page_performance-optimisation' !== $screen->base ) {
+			return;
+		}
+
 		if ( is_admin_bar_showing() ) {
 			$asset_file = WPPO_PLUGIN_PATH . 'build/main.asset.php';
 			$resolved   = wp_normalize_path( realpath( $asset_file ) );
@@ -503,10 +507,6 @@ class Main {
 					'nonce_refresh' => wp_create_nonce( 'wppo_nonce_refresh' ),
 				)
 			);
-		}
-
-		if ( 'toplevel_page_performance-optimisation' !== $screen->base ) {
-			return;
 		}
 
 		$asset_file = WPPO_PLUGIN_PATH . 'build/index.asset.php';

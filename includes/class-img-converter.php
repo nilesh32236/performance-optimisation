@@ -266,6 +266,9 @@ class Img_Converter {
 						$imagick->clear();
 						return true;
 					} catch ( \Exception $e ) {
+						if ( isset( $imagick ) ) {
+							$imagick->clear();
+						}
 						$this->update_conversion_status( $source_image, 'failed', $format );
 						wp_delete_file( $webp_path );
 						return false;
@@ -346,22 +349,24 @@ class Img_Converter {
 	 * @since 1.0.0
 	 */
 	private function is_animated_webp( $file ) {
-		global $wp_filesystem;
-
-		if ( ! Util::init_filesystem() ) {
+		if ( ! file_exists( $file ) || ! is_readable( $file ) ) {
 			return false;
 		}
 
-		if ( ! $wp_filesystem->exists( $file ) || ! $wp_filesystem->is_readable( $file ) ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
+		$handle = fopen( $file, 'rb' );
+		if ( false === $handle ) {
 			return false;
 		}
 
-		$header = $wp_filesystem->get_contents( $file );
-		if ( false === $header ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fread
+		$header = fread( $handle, 40 );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+		fclose( $handle );
+
+		if ( false === $header || strlen( $header ) < 12 ) {
 			return false;
 		}
-
-		$header = substr( $header, 0, 40 );
 
 		if ( 'RIFF' !== substr( $header, 0, 4 ) || 'WEBP' !== substr( $header, 8, 4 ) ) {
 			return false;
