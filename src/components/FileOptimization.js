@@ -1,5 +1,5 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useEffect, useRef } from '@wordpress/element';
+import { useState, useRef } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -13,6 +13,7 @@ import {
 	faCheckCircle,
 	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
+import Tooltip from './common/Tooltip';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
@@ -30,7 +31,12 @@ const escapeHtml = ( str ) => {
 		.replace( /'/g, '&#039;' );
 };
 
-const FileOptimization = ( { options = {}, serverRules = null } ) => {
+const FileOptimization = ( {
+	options = {},
+	serverRules = null,
+	serverRulesError = false,
+	onRetryServerRules,
+} ) => {
 	const [ activeSubTab, setActiveSubTab ] = useState( 'assets' );
 	const tabRefs = useRef( {} );
 
@@ -66,19 +72,6 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 		message: '',
 		success: false,
 	} );
-
-	useEffect( () => {
-		if (
-			serverRules &&
-			serverRules.server_type !== 'apache' &&
-			settings.enableServerRules
-		) {
-			setSettings( ( prev ) => ( {
-				...prev,
-				enableServerRules: false,
-			} ) );
-		}
-	}, [ serverRules, settings.enableServerRules, setSettings ] );
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
@@ -650,7 +643,28 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 							icon={ <FontAwesomeIcon icon={ faServer } /> }
 						>
 							<div className="wppo-field-group">
-								{ serverRules === null ? (
+								{ serverRulesError ? (
+									<div className="wppo-notice wppo-notice--error">
+										<span>
+											{ __(
+												'Unable to load server configuration. Check your server setup.',
+												'performance-optimisation'
+											) }
+										</span>
+										{ onRetryServerRules && (
+											<button
+												className="wppo-button wppo-button--secondary"
+												onClick={ onRetryServerRules }
+											>
+												{ __(
+													'Retry',
+													'performance-optimisation'
+												) }
+											</button>
+										) }
+									</div>
+								) : null }
+								{ serverRules === null && ! serverRulesError ? (
 									<div className="wppo-loading-placeholder">
 										<FontAwesomeIcon
 											icon={ faSpinner }
@@ -663,31 +677,44 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											) }
 										</span>
 									</div>
-								) : (
+								) : null }
+								{ serverRules !== null && ! serverRulesError ? (
 									<>
-										<SwitchField
-											label={ __(
-												'Enable Server Rules (.htaccess)',
-												'performance-optimisation'
-											) }
-											description={ __(
-												'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong.',
-												'performance-optimisation'
-											) }
-											name="enableServerRules"
-											checked={
-												serverRules?.server_type ===
-													'apache' &&
-												settings.enableServerRules
-											}
-											disabled={
+										<Tooltip
+											content={
 												serverRules?.server_type !==
 												'apache'
+													? __(
+															'Server rules require Apache.',
+															'performance-optimisation'
+													  )
+													: ''
 											}
-											onChange={ handleChange(
-												setSettings
-											) }
-										/>
+										>
+											<SwitchField
+												label={ __(
+													'Enable Server Rules (.htaccess)',
+													'performance-optimisation'
+												) }
+												description={ __(
+													'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong.',
+													'performance-optimisation'
+												) }
+												name="enableServerRules"
+												checked={
+													serverRules?.server_type ===
+														'apache' &&
+													settings.enableServerRules
+												}
+												disabled={
+													serverRules?.server_type !==
+													'apache'
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+											/>
+										</Tooltip>
 
 										{ serverRules?.server_type ===
 											'apache' &&
@@ -774,7 +801,7 @@ const FileOptimization = ( { options = {}, serverRules = null } ) => {
 											</div>
 										) }
 									</>
-								) }
+								) : null }
 							</div>
 						</FeatureCard>
 

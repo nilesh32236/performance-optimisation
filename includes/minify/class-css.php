@@ -17,175 +17,287 @@ use MatthiasMullie\Minify;
 use PerformanceOptimise\Inc\Img_Converter;
 use PerformanceOptimise\Inc\Util;
 
-/**
- * CSS Minification and Image Optimization.
- */
-class CSS {
-	/**
-	 * Path to the original CSS file.
-	 *
-	 * @var string
-	 */
-	private string $file_path;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
+if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 	/**
-	 * Directory for caching minified files.
-	 *
-	 * @var string
+	 * CSS Minification and Image Optimization.
 	 */
-	private string $cache_dir;
+	class CSS {
+		/**
+		 * Path to the original CSS file.
+		 *
+		 * @var string
+		 */
+		private string $file_path;
 
-	/**
-	 * Filesystem handler instance.
-	 *
-	 * @var object
-	 */
-	private $filesystem;
+		/**
+		 * Directory for caching minified files.
+		 *
+		 * @var string
+		 */
+		private string $cache_dir;
 
-	/**
-	 * Constructor for the CSS class.
-	 *
-	 * @param string $file_path  Path to the CSS file to be minified.
-	 * @param string $cache_dir  Directory where the minified file will be cached.
-	 */
-	public function __construct( $file_path, $cache_dir ) {
-		$this->file_path  = $file_path;
-		$this->cache_dir  = $cache_dir;
-		$this->filesystem = Util::init_filesystem();
-	}
+		/**
+		 * Filesystem handler instance.
+		 *
+		 * @var object
+		 */
+		private $filesystem;
 
-	/**
-	 * Minifies the CSS file and stores it in the cache directory.
-	 *
-	 * @return string|null The URL of the minified CSS file, or null on failure.
-	 * @since 1.0.0
-	 */
-	public function minify() {
-		$cache_file = $this->get_cache_file_path();
+		/**
+		 * URL base for cache files, derived from $cache_dir.
+		 *
+		 * @var string
+		 */
+		private string $cache_url;
 
-		$min_dir = dirname( $cache_file );
-		if ( ! $this->filesystem || ! Util::prepare_cache_dir( $min_dir ) ) {
-			return;
+		/**
+		 * Constructor for the CSS class.
+		 *
+		 * @param string $file_path  Path to the CSS file to be minified.
+		 * @param string $cache_dir  Directory where the minified file will be cached.
+		 */
+		public function __construct( $file_path, $cache_dir ) {
+			$real_path   = realpath( $file_path );
+			$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+			if ( false === $real_path ) {
+				$this->file_path = '';
+			} else {
+				$real_path_normalized = wp_normalize_path( $real_path );
+				$is_inside            = ( 0 === strpos( $real_path_normalized, $content_dir ) && ( strlen( $real_path_normalized ) === strlen( $content_dir ) || '/' === substr( $real_path_normalized, strlen( $content_dir ), 1 ) ) );
+				if ( ! $is_inside ) {
+					$this->file_path = '';
+				} else {
+					$this->file_path = $real_path;
+				}
+			}
+			$this->cache_dir        = $cache_dir;
+			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
+			$content_dir_normalized = wp_normalize_path( WP_CONTENT_DIR );
+			$cache_inside           = ( 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
+			if ( ! $cache_inside ) {
+				$this->cache_url = content_url( '/' );
+			} else {
+				$this->cache_url = content_url( str_replace( $content_dir_normalized, '', $cache_dir_normalized ) );
+			}
+			$this->filesystem = Util::init_filesystem();
 		}
 
-		if ( ! $this->filesystem->exists( $cache_file ) ) {
-			try {
-				$css_content = $this->filesystem->get_contents( $this->file_path );
-				if ( false === $css_content || null === $css_content ) {
+		/**
+		 * Minifies the CSS file and stores it in the cache directory.
+		 *
+		 * @return string|null The URL of the minified CSS file, or null on failure.
+		 * @since 1.0.0
+		 */
+		public function minify() {
+			$cache_file = $this->get_cache_file_path();
+
+			$min_dir = dirname( $cache_file );
+			if ( ! $this->filesystem || ! Util::prepare_cache_dir( $min_dir ) ) {
+				return;
+			}
+
+			if ( ! $this->filesystem->exists( $cache_file ) ) {
+				try {
+					$css_content = $this->filesystem->get_contents( $this->file_path );
+					if ( false === $css_content ) {
+						return null;
+					}
+
+					// update_image_paths uses preg_replace_callback internally; fall back to
+					// original content if the regex engine returns null (PCRE error).
+					$updated = self::update_image_paths( $css_content, $this->file_path );
+					if ( null !== $updated ) {
+						$css_content = $updated;
+					}
+
+					// Inject font-display: swap into @font-face declarations.
+					$css_content = self::inject_font_display_swap( $css_content );
+
+					$css_minifier = new Minify\CSS( $css_content );
+					$minified_css = $css_minifier->minify();
+
+					$this->save_min_file( $minified_css, $cache_file );
+				} catch ( \Exception $e ) {
 					return null;
 				}
-				$css_content = self::update_image_paths( $css_content, $this->file_path );
+			}
 
-				// Inject font-display: swap into @font-face declarations.
-				$css_content = preg_replace_callback(
-					'/@font-face\s*{[^}]*}/i',
-					function ( $matches ) {
-						$font_face = $matches[0];
-						if ( stripos( $font_face, 'font-display' ) === false ) {
-							$font_face = preg_replace( '/(})$/', 'font-display: swap;$1', $font_face );
-						}
-						return $font_face;
-					},
-					$css_content
-				);
+			return $this->cache_url . '/' . basename( $cache_file );
+		}
 
-				$css_minifier = new Minify\CSS( $css_content );
-				$minified_css = $css_minifier->minify();
+		/**
+		 * Gets the cache file path for the minified CSS.
+		 *
+		 * @return string The full path to the cache file.
+		 * @since 1.0.0
+		 */
+		private function get_cache_file_path(): string {
+			$filename = md5( $this->file_path ) . '.css';
+			return "{$this->cache_dir}/{$filename}";
+		}
 
-				if ( $minified_css === $css_content ) {
-					return;
-				}
+		/**
+		 * Saves the minified CSS and its gzip version to the cache.
+		 *
+		 * @param string $css The minified CSS content.
+		 * @param string $file_path The file path to save the minified CSS.
+		 * @since 1.0.0
+		 */
+		private function save_min_file( $css, $file_path ) {
+			$gzip_file_path = $file_path . '.gz';
 
-				$this->save_min_file( $minified_css, $cache_file );
-			} catch ( \Exception $e ) {
-				return null;
+			$this->filesystem->put_contents( $file_path, $css, FS_CHMOD_FILE );
+
+			$gzip_output = gzencode( $css, 9 );
+			if ( false !== $gzip_output ) {
+				$this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
 			}
 		}
 
-		return content_url( 'cache/wppo/min/css/' . basename( $cache_file ) );
-	}
+		/**
+		 * Updates image paths in the CSS content.
+		 *
+		 * @param string $css_content The CSS content to modify.
+		 * @param string $file_path The file path of the original CSS file.
+		 * @return string The updated CSS content with modified image paths.
+		 * @since 1.0.0
+		 */
+		public static function update_image_paths( $css_content, $file_path ) {
+			$file_path   = wp_normalize_path( $file_path );
+			$pattern     = '/url\(\s*([\'"]?)(.*?)\s*\1\s*\)/';
+			$css_dir     = wp_normalize_path( dirname( $file_path ) );
+			$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+			$abs_path    = trailingslashit( wp_normalize_path( ABSPATH ) );
 
-	/**
-	 * Gets the cache file path for the minified CSS.
-	 *
-	 * @return string The full path to the cache file.
-	 * @since 1.0.0
-	 */
-	private function get_cache_file_path(): string {
-		$filename = md5( $this->file_path ) . '.css';
-		return "{$this->cache_dir}/{$filename}";
-	}
+			if ( 0 === strpos( $css_dir, $content_dir ) ) {
+				$relative_path = str_replace( $content_dir, '', $css_dir );
+				$css_dir_url   = content_url( $relative_path );
+			} elseif ( 0 === strpos( $css_dir, $abs_path ) ) {
+				$relative_path = str_replace( $abs_path, '', $css_dir );
+				$css_dir_url   = site_url( $relative_path );
+			} else {
+				$css_dir_url = site_url();
+			}
 
-	/**
-	 * Saves the minified CSS and its gzip version to the cache.
-	 *
-	 * @param string $css The minified CSS content.
-	 * @param string $file_path The file path to save the minified CSS.
-	 * @since 1.0.0
-	 */
-	private function save_min_file( $css, $file_path ) {
-		$gzip_file_path = $file_path . '.gz';
+			return preg_replace_callback(
+				$pattern,
+				function ( $matches ) use ( $css_dir_url ) {
+					$image_path = trim( $matches[2] );
 
-		$this->filesystem->put_contents( $file_path, $css, FS_CHMOD_FILE );
+					$image_path_no_qs = strtok( $image_path, '?' );
+					if ( preg_match( '/\.(jpg|jpeg|png|gif|webp)$/i', $image_path_no_qs, $ext_matches ) ) {
+						if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^\/\//', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
+							$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
+						}
 
-		$gzip_output = gzencode( $css, 9 );
-		$this->filesystem->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
-	}
+						$local_path = Util::get_local_path( $image_path );
 
-	/**
-	 * Updates image paths in the CSS content.
-	 *
-	 * @param string $css_content The CSS content to modify.
-	 * @param string $file_path The file path of the original CSS file.
-	 * @return string The updated CSS content with modified image paths.
-	 * @since 1.0.0
-	 */
-	public static function update_image_paths( $css_content, $file_path ) {
-		$file_path   = wp_normalize_path( $file_path );
-		$pattern     = '/url\((\'|\"|)(.*?)(\'|\"|)\)/';
-		$css_dir_url = content_url( str_replace( wp_normalize_path( WP_CONTENT_DIR ), '', dirname( $file_path ) ) );
+						$avif_path = Img_Converter::get_img_path( $image_path, 'avif' );
+						if ( file_exists( $avif_path ) ) {
+							return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';
+						} else {
+							Img_Converter::add_img_into_queue( $local_path, 'avif' );
+						}
 
-		return preg_replace_callback(
-			$pattern,
-			function ( $matches ) use ( $css_dir_url ) {
-				$image_path = trim( $matches[2] );
+						if ( 'webp' === $ext_matches[1] ) {
+							return 'url("' . $image_path . '")';
+						}
 
-				if ( preg_match( '/\.(jpg|jpeg|png|gif|webp)$/i', $image_path, $ext_matches ) ) {
-					if ( false === strpos( $image_path, 'http' ) && ! preg_match( '/^data:/', $image_path ) ) {
-						$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
-					}
+						// Check if corresponding .webp image exists.
+						if ( file_exists( Img_Converter::get_img_path( $image_path ) ) ) {
+							return 'url("' . Img_Converter::get_img_url( $image_path ) . '")';
+						} else {
+							Img_Converter::add_img_into_queue( $local_path, 'webp' );
+						}
 
-					$local_path = Util::get_local_path( $image_path );
-
-					// Check if corresponding .avif image exists.
-					if ( file_exists( Img_Converter::get_img_path( $image_path, 'avif' ) ) ) {
-						return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';
-					} else {
-						Img_Converter::add_img_into_queue( $local_path, 'avif' );
-					}
-
-					if ( 'webp' === $ext_matches[1] ) {
 						return 'url("' . $image_path . '")';
 					}
 
-					// Check if corresponding .webp image exists.
-					if ( file_exists( Img_Converter::get_img_path( $image_path ) ) ) {
-						return 'url("' . Img_Converter::get_img_url( $image_path ) . '")';
-					} else {
-						Img_Converter::add_img_into_queue( $local_path, 'webp' );
+					if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^\/\//', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
+						$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
+						return 'url("' . $image_path . '")';
 					}
 
-					return 'url("' . $image_path . '")';
+					return $matches[0];
+				},
+				$css_content
+			);
+		}
+
+		/**
+		 * Injects font-display: swap into font-face declarations safely.
+		 *
+		 * Tracks brace depth to correctly handle string literals, escaped quotes,
+		 * and nested blocks within CSS content.
+		 *
+		 * @param string $css The original CSS content.
+		 * @return string The modified CSS content.
+		 * @since 1.6.1
+		 */
+		public static function inject_font_display_swap( $css ) {
+			$offset = 0;
+			while ( true ) {
+				$pos = stripos( $css, '@font-face', $offset );
+				if ( false === $pos ) {
+					break;
 				}
 
-				if ( false === strpos( $image_path, 'http' ) && ! preg_match( '/^data:/', $image_path ) ) {
-					$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
-					return 'url("' . $image_path . '")';
+				$brace_pos = strpos( $css, '{', $pos );
+				if ( false === $brace_pos ) {
+					break;
 				}
 
-				return $matches[0];
-			},
-			$css_content
-		);
+				$len         = strlen( $css );
+				$depth       = 1;
+				$end_pos     = false;
+				$in_string   = false;
+				$string_char = '';
+
+				for ( $i = $brace_pos + 1; $i < $len; $i++ ) {
+					$char = $css[ $i ];
+					if ( $in_string ) {
+						if ( '\\' === $char ) {
+							++$i;
+							continue;
+						}
+						if ( $char === $string_char ) {
+							$in_string = false;
+						}
+					} elseif ( '"' === $char || "'" === $char ) {
+							$in_string   = true;
+							$string_char = $char;
+					} elseif ( '{' === $char ) {
+						++$depth;
+					} elseif ( '}' === $char ) {
+						--$depth;
+						if ( 0 === $depth ) {
+							$end_pos = $i;
+							break;
+						}
+					}
+				}
+
+				if ( false === $end_pos ) {
+					$offset = $brace_pos + 1;
+					continue;
+				}
+
+				$block = substr( $css, $pos, $end_pos - $pos + 1 );
+
+				if ( stripos( $block, 'font-display' ) === false ) {
+					$modified_block = substr( $block, 0, -1 ) . 'font-display: swap;}';
+					$css            = substr_replace( $css, $modified_block, $pos, $end_pos - $pos + 1 );
+					$offset         = $pos + strlen( $modified_block );
+				} else {
+					$offset = $end_pos + 1;
+				}
+			}
+
+			return $css;
+		}
 	}
 }

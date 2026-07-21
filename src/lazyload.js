@@ -35,28 +35,63 @@ const loadScript = ( script ) => {
 		const src = script.getAttribute( 'wppo-src' );
 
 		if ( src ) {
-			script.removeAttribute( 'wppo-src' );
-			script.setAttribute( 'src', src );
+			// External deferred script: create a replacement script node, copy original attributes,
+			// assign the deferred src, and swap it into the DOM.
+			const replacement = document.createElement( 'script' );
 
-			script.onload = resolve;
-			script.onerror = reject;
-		} else {
-			try {
-				if ( script.text ) {
-					if ( ! script.src ) {
-						const base64Script = btoa(
-							unescape( encodeURIComponent( script.text ) )
-						);
-						script.setAttribute(
-							'src',
-							`data:text/javascript;base64,${ base64Script }`
-						);
-					}
+			Array.from( script.attributes ).forEach( ( attr ) => {
+				replacement.setAttribute( attr.name, attr.value );
+			} );
+
+			replacement.removeAttribute( 'wppo-src' );
+			replacement.setAttribute( 'src', src );
+
+			replacement.onload = () => {
+				if ( typeof script.onload === 'function' ) {
+					script.onload();
 				}
 				resolve();
-			} catch ( err ) {
-				reject( `Error encoding inline script: ${ err.message }` );
+			};
+			replacement.onerror = ( err ) => {
+				if ( typeof script.onerror === 'function' ) {
+					script.onerror( err );
+				}
+				reject( err );
+			};
+
+			if ( script.parentNode ) {
+				script.parentNode.replaceChild( replacement, script );
+			} else {
+				document.head.appendChild( replacement );
 			}
+		} else if ( script.text ) {
+			// Inline script: browsers execute a script element only once after insertion.
+			// Mutating the already-inserted node does nothing, so we must replace it with
+			// a fresh element. Copy all attributes and content to the new node, swap it
+			// into the DOM, and resolve once it has been processed.
+			const replacement = document.createElement( 'script' );
+
+			// Copy attributes from the original node to the replacement.
+			Array.from( script.attributes ).forEach( ( attr ) => {
+				replacement.setAttribute( attr.name, attr.value );
+			} );
+
+			replacement.text = script.text;
+
+			if ( script.parentNode ) {
+				script.parentNode.replaceChild( replacement, script );
+			} else {
+				document.head.appendChild( replacement );
+			}
+
+			// Inline scripts execute synchronously during DOM insertion, so resolve here.
+			resolve();
+		} else {
+			// Empty inline script: resolve benignly.
+			if ( ! script.text ) {
+				console.warn( 'WPPO: empty inline script found', script );
+			}
+			resolve();
 		}
 	} );
 };
@@ -96,9 +131,6 @@ async function loadScripts() {
 
 		if ( document.readyState === 'loading' ) {
 			document.dispatchEvent( new Event( 'DOMContentLoaded' ) );
-			window.dispatchEvent( new Event( 'DOMContentLoaded' ) );
-			window.dispatchEvent( new Event( 'load' ) );
-			window.dispatchEvent( new Event( 'pageshow' ) );
 		}
 
 		if ( typeof jQuery !== 'undefined' ) {
@@ -152,10 +184,35 @@ if ( ! scriptLoading ) {
 let globalObserver = null;
 
 /**
+ * MutationObserver instance for lazy-loading.
+ * @type {MutationObserver|null}
+ */
+let mutationObserver = null;
+
+/**
  * Set of elements already observed by globalObserver.
  * @type {WeakSet<Element>}
  */
 const observedElements = new WeakSet();
+
+/**
+ * Check if all lazy-loadable elements have been processed, and clean up observers if so.
+ */
+const checkCleanup = () => {
+	const remaining = document.querySelectorAll(
+		'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+	);
+	if ( remaining.length === 0 ) {
+		if ( window.wppoSafetyScanId ) {
+			clearInterval( window.wppoSafetyScanId );
+			window.wppoSafetyScanId = null;
+		}
+		if ( mutationObserver ) {
+			mutationObserver.disconnect();
+			mutationObserver = null;
+		}
+	}
+};
 
 /**
  * Register an element for lazy-load observation if it has data-* attributes.
@@ -203,12 +260,9 @@ const loadImages = () => {
 						if ( entry.isIntersecting ) {
 							const el = entry.target;
 
-							let isPicture = false;
-
 							if ( el.tagName === 'IMG' ) {
 								const parent = el.parentNode;
 								if ( parent && parent.tagName === 'PICTURE' ) {
-									isPicture = true;
 									const sources =
 										parent.querySelectorAll( 'source' );
 									sources.forEach( ( s ) => {
@@ -240,22 +294,24 @@ const loadImages = () => {
 										el.getAttribute( 'data-srcset' );
 									el.removeAttribute( 'data-srcset' );
 								}
-
-								if ( isPicture ) {
-									// More aggressive picture re-evaluation
-									const currentSrc = el.src;
-									el.removeAttribute( 'src' );
-									el.src = currentSrc;
-								}
 							} else if ( el.tagName === 'IFRAME' ) {
 								if ( el.hasAttribute( 'data-src' ) ) {
-									el.src = el.getAttribute( 'data-src' );
+									const iframeSrc =
+										el.getAttribute( 'data-src' );
+									if ( iframeSrc ) {
+										el.src = iframeSrc;
+									}
 									el.removeAttribute( 'data-src' );
 								}
 							} else if ( el.tagName === 'VIDEO' ) {
 								if ( el.hasAttribute( 'data-src' ) ) {
 									el.src = el.getAttribute( 'data-src' );
 									el.removeAttribute( 'data-src' );
+								}
+								if ( el.hasAttribute( 'data-poster' ) ) {
+									el.poster =
+										el.getAttribute( 'data-poster' );
+									el.removeAttribute( 'data-poster' );
 								}
 								el.querySelectorAll(
 									'source[data-src]'
@@ -270,15 +326,16 @@ const loadImages = () => {
 							}
 
 							globalObserver.unobserve( el );
+							checkCleanup();
 						}
 					} );
 				},
 				{
-					rootMargin: '600px', // More aggressive margin for marquees
+					rootMargin: '200px',
 				}
 			);
 
-			const mutationObserver = new MutationObserver( ( mutations ) => {
+			mutationObserver = new MutationObserver( ( mutations ) => {
 				mutations.forEach( ( mutation ) => {
 					mutation.addedNodes.forEach( ( node ) => {
 						if ( node.nodeType === 1 ) {
@@ -304,31 +361,24 @@ const loadImages = () => {
 				subtree: true,
 			} );
 
-			const stopObservation = () => {
-				mutationObserver.disconnect();
-				clearInterval( intervalId );
-			};
-
 			// Periodic Safety Scan for unobserved dynamic content
-			let safetyScanCount = 0;
-			const intervalId = setInterval( () => {
-				safetyScanCount++;
-				const elements = document.querySelectorAll(
-					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
-				);
-				let unobservedCount = 0;
-				elements.forEach( ( el ) => {
-					if ( ! observedElements.has( el ) ) {
-						observeElement( el );
-						unobservedCount++;
+			if ( ! window.wppoSafetyScanId ) {
+				window.wppoSafetyScanId = setInterval( () => {
+					const elements = document.querySelectorAll(
+						'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+					);
+					if ( elements.length === 0 ) {
+						clearInterval( window.wppoSafetyScanId );
+						window.wppoSafetyScanId = null;
+						return;
 					}
-				} );
-				if ( unobservedCount === 0 || safetyScanCount >= 3 ) {
-					stopObservation();
-				}
-			}, 30000 );
-
-			setTimeout( stopObservation, 10000 );
+					elements.forEach( ( el ) => {
+						if ( ! observedElements.has( el ) ) {
+							observeElement( el );
+						}
+					} );
+				}, 10000 );
+			}
 		}
 
 		document
@@ -338,55 +388,68 @@ const loadImages = () => {
 			.forEach( ( el ) => {
 				observeElement( el );
 			} );
+
+		checkCleanup();
 	} else {
+		let active = false;
 		const lazyLoadFallback = () => {
-			const lazyElements = document.querySelectorAll(
-				'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
-			);
-			lazyElements.forEach( ( el ) => {
-				if ( isElementInViewport( el ) ) {
-					if ( el.tagName === 'VIDEO' ) {
-						if ( el.hasAttribute( 'data-poster' ) ) {
-							el.poster = el.getAttribute( 'data-poster' );
-							el.removeAttribute( 'data-poster' );
-						}
-						if ( el.hasAttribute( 'data-src' ) ) {
-							el.src = el.getAttribute( 'data-src' );
-							el.removeAttribute( 'data-src' );
-						}
-						el.querySelectorAll(
-							'source[data-src], source[data-srcset]'
-						).forEach( ( s ) => {
-							if ( s.hasAttribute( 'data-src' ) ) {
-								s.src = s.getAttribute( 'data-src' );
-								s.removeAttribute( 'data-src' );
+			if ( active ) {
+				return;
+			}
+			active = true;
+			setTimeout( () => {
+				const lazyElements = document.querySelectorAll(
+					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
+				);
+				lazyElements.forEach( ( el ) => {
+					if ( isElementInViewport( el ) ) {
+						if ( el.tagName === 'VIDEO' ) {
+							if ( el.hasAttribute( 'data-poster' ) ) {
+								el.poster = el.getAttribute( 'data-poster' );
+								el.removeAttribute( 'data-poster' );
 							}
-							if ( s.hasAttribute( 'data-srcset' ) ) {
-								s.srcset = s.getAttribute( 'data-srcset' );
-								s.removeAttribute( 'data-srcset' );
+							if ( el.hasAttribute( 'data-src' ) ) {
+								el.src = el.getAttribute( 'data-src' );
+								el.removeAttribute( 'data-src' );
 							}
-						} );
-						el.load();
-						if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
-							el.play().catch( () => {} );
-						}
-						el.classList.remove( 'wppo-lazy-video' );
-					} else {
-						if ( el.hasAttribute( 'data-sizes' ) ) {
-							el.sizes = el.getAttribute( 'data-sizes' );
-							el.removeAttribute( 'data-sizes' );
-						}
-						if ( el.hasAttribute( 'data-src' ) ) {
-							el.src = el.getAttribute( 'data-src' );
-							el.removeAttribute( 'data-src' );
-						}
-						if ( el.hasAttribute( 'data-srcset' ) ) {
-							el.srcset = el.getAttribute( 'data-srcset' );
-							el.removeAttribute( 'data-srcset' );
+							el.querySelectorAll(
+								'source[data-src], source[data-srcset]'
+							).forEach( ( s ) => {
+								if ( s.hasAttribute( 'data-src' ) ) {
+									s.src = s.getAttribute( 'data-src' );
+									s.removeAttribute( 'data-src' );
+								}
+								if ( s.hasAttribute( 'data-srcset' ) ) {
+									s.srcset = s.getAttribute( 'data-srcset' );
+									s.removeAttribute( 'data-srcset' );
+								}
+							} );
+							el.load();
+							if ( el.hasAttribute( 'data-wppo-autoplay' ) ) {
+								el.play().catch( () => {} );
+							}
+							el.classList.remove( 'wppo-lazy-video' );
+						} else {
+							if ( el.hasAttribute( 'data-sizes' ) ) {
+								el.sizes = el.getAttribute( 'data-sizes' );
+								el.removeAttribute( 'data-sizes' );
+							}
+							if ( el.hasAttribute( 'data-src' ) ) {
+								el.src = el.getAttribute( 'data-src' );
+								el.removeAttribute( 'data-src' );
+							}
+							if ( el.hasAttribute( 'data-srcset' ) ) {
+								el.srcset = el.getAttribute( 'data-srcset' );
+								el.removeAttribute( 'data-srcset' );
+							}
 						}
 					}
+				} );
+				if ( lazyElements.length === 0 ) {
+					window.removeEventListener( 'scroll', lazyLoadFallback );
 				}
-			} );
+				active = false;
+			}, 200 );
 		};
 
 		/**
@@ -398,15 +461,15 @@ const loadImages = () => {
 		 */
 		const isElementInViewport = ( el ) => {
 			const rect = el.getBoundingClientRect();
+			const vh =
+				window.innerHeight || document.documentElement.clientHeight;
+			const vw =
+				window.innerWidth || document.documentElement.clientWidth;
 			return (
-				rect.top >= 0 &&
-				rect.left >= 0 &&
-				rect.bottom <=
-					( window.innerHeight ||
-						document.documentElement.clientHeight ) &&
-				rect.right <=
-					( window.innerWidth ||
-						document.documentElement.clientWidth )
+				rect.top < vh &&
+				rect.bottom > 0 &&
+				rect.left < vw &&
+				rect.right > 0
 			);
 		};
 

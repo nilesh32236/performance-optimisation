@@ -10,18 +10,29 @@
  */
 const refreshNonce = async () => {
 	try {
-		const res = await fetch( wppoSettings.apiUrl + 'refresh_nonce' );
+		const res = await fetch( wppoSettings.ajaxUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded',
+			},
+			body: new URLSearchParams( {
+				action: 'wppo_get_nonce',
+				nonce: wppoSettings.nonce_refresh,
+			} ),
+		} );
 		if ( ! res.ok ) {
-			return wppoSettings.nonce;
+			throw new Error( 'Nonce refresh failed with status ' + res.status );
 		}
 		const data = await res.json();
-		if ( data.success && data.nonce ) {
-			wppoSettings.nonce = data.nonce;
+		if ( data.success && data.data?.nonce ) {
+			wppoSettings.nonce = data.data.nonce;
+			return data.data.nonce;
 		}
+		throw new Error( 'Nonce refresh returned invalid response' );
 	} catch ( e ) {
 		console.error( 'Nonce refresh failed:', e );
+		throw e;
 	}
-	return wppoSettings.nonce;
 };
 
 /**
@@ -44,13 +55,13 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 			method,
 			headers: {
 				...( ! isGet && { 'Content-Type': 'application/json' } ),
-				'X-WP-Nonce': nonce || wppoSettings.nonce,
+				'X-WP-Nonce': nonce || wppoSettings.nonce || '',
 			},
 			...( ! isGet && { body: JSON.stringify( body ) } ),
 			signal,
 		} );
 
-	const handleResponse = async ( response ) => {
+	const handleResponse = async ( response, isRetrying = false ) => {
 		let data;
 		try {
 			data = await response.json();
@@ -62,23 +73,19 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 
 		// Detect expired nonce (rest_forbidden, rest_cookie_invalid_nonce, etc.).
 		if (
-			! isGet &&
 			data.code &&
 			( data.code === 'rest_forbidden' ||
 				data.code === 'rest_cookie_invalid_nonce' ||
 				data.code === 'rest_cookie_nonce_invalid' )
 		) {
-			const freshNonce = await refreshNonce();
-			const retryResponse = await doFetch( freshNonce );
-			let retryData;
-			try {
-				retryData = await retryResponse.json();
-			} catch ( parseError ) {
+			if ( isRetrying ) {
 				throw new Error(
-					`Invalid JSON response from ${ action } (retry): ${ parseError.message }`
+					'Nonce retry failed — authentication error persists.'
 				);
 			}
-			return retryData;
+			const freshNonce = await refreshNonce();
+			const retryResponse = await doFetch( freshNonce );
+			return handleResponse( retryResponse, true );
 		}
 
 		if ( 'update_settings' === action && data.success && data.data ) {
@@ -105,19 +112,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
  * @return {Promise<Object>} Resolved activities data.
  */
 export const fetchRecentActivities = ( page = 1, signal ) => {
-	const params = new URLSearchParams( { page } );
-	return fetch( `${ wppoSettings.apiUrl }recent_activities?${ params }`, {
-		method: 'GET',
-		headers: {
-			'X-WP-Nonce': wppoSettings.nonce,
-		},
-		signal,
-	} )
-		.then( ( response ) => response.json() )
-		.catch( ( error ) => {
-			console.error( 'Error fetching recent activities: ', error );
-			throw error; // Re-throw the error for further handling if needed
-		} );
+	return apiCall( `recent_activities?page=${ page }`, {}, 'GET', signal );
 };
 
 /**

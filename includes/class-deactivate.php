@@ -35,17 +35,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		 * @return void
 		 */
 		public static function init(): void {
-
 			self::unschedule_crons();
+			self::unschedule_database_cleanup_cron();
 			delete_option( 'wppo_preload_cron_offset' );
 
+			require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 
 			Advanced_Cache_Handler::remove();
 
+			global $wp_filesystem;
+			if ( ! $wp_filesystem ) {
+				Util::init_filesystem();
+			}
+
+			// Remove Redis object cache drop-in if it belongs to this plugin.
+			$object_cache_file = wp_normalize_path( WP_CONTENT_DIR . '/object-cache.php' );
+			if ( $wp_filesystem && $wp_filesystem->exists( $object_cache_file ) ) {
+				$content = $wp_filesystem->get_contents( $object_cache_file );
+				if ( false !== $content && false !== strpos( $content, 'Redis Object Cache Drop-in for Performance Optimisation' ) ) {
+					$wp_filesystem->delete( $object_cache_file );
+				}
+			}
+
+			// Remove Redis config file.
+			$redis_config_file = wp_normalize_path( WP_CONTENT_DIR . '/wppo-redis-config.php' );
+			if ( $wp_filesystem && $wp_filesystem->exists( $redis_config_file ) ) {
+				$wp_filesystem->delete( $redis_config_file );
+			}
+
 			// Remove WP_CACHE constant from wp-config.php.
 			self::remove_wp_cache_constant();
-			new Log( __( 'Plugin deactivated', 'performance-optimisation' ) );
+			require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
+			Log::add( __( 'Plugin deactivated', 'performance-optimisation' ) );
 			Cache::clear_cache();
 		}
 
@@ -69,15 +92,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				wp_unschedule_event( $timestamp, 'wppo_page_cron_batch' );
 			}
 
-			// Unschedule the 'wppo_img_conversation' event if it is scheduled.
-			$timestamp = wp_next_scheduled( 'wppo_img_conversation' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_img_conversation' );
+			// Unschedule image conversion cron events (old + new hook name for backward compat).
+			foreach ( array( 'wppo_img_conversation', 'wppo_img_conversion' ) as $hook ) {
+				$timestamp = wp_next_scheduled( $hook );
+				if ( $timestamp ) {
+					wp_unschedule_event( $timestamp, $hook );
+				}
 			}
 
 			$timestamp = wp_next_scheduled( 'wppo_generate_static_page' );
 			if ( $timestamp ) {
 				wp_unschedule_event( $timestamp, 'wppo_generate_static_page' );
+			}
+		}
+
+		/**
+		 * Unschedule the database cleanup cron job.
+		 *
+		 * @since 1.6.0
+		 * @return void
+		 */
+		private static function unschedule_database_cleanup_cron(): void {
+			$timestamp = wp_next_scheduled( 'wppo_database_cleanup_cron' );
+			if ( $timestamp ) {
+				wp_unschedule_event( $timestamp, 'wppo_database_cleanup_cron' );
 			}
 		}
 
@@ -93,15 +131,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 		private static function remove_wp_cache_constant(): void {
 			global $wp_filesystem;
 
-			Util::init_filesystem();
-
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
 				return;
 			}
 
 			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 
-			if ( ! file_exists( $wp_config_path ) ) {
+			if ( ! $wp_filesystem->exists( $wp_config_path ) ) {
 				$wp_config_path = wp_normalize_path( dirname( ABSPATH ) . '/wp-config.php' );
 			}
 
@@ -111,16 +147,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			$wp_config_content = $wp_filesystem->get_contents( $wp_config_path );
 
-			$pattern = '/\/\*\*\s*Enables WordPress Cache\s*\*\/\s*\nif\s*\(\s*!\s*defined\s*\(\s*[\'"]WP_CACHE[\'"]\s*\)\s*\)\s*\{\s*define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\s*\)\s*;\s*\}\s*/';
+			$pattern = '/\/\*\*\s*Enables WordPress Cache\s*\*\/\s*(?:\r?\n|\n)if\s*\(\s*!\s*defined\s*\(\s*[\'"]WP_CACHE[\'"]\s*\)\s*\)\s*\{\s*define\s*\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\)\s*;\s*\}\s*/';
 
 			if ( preg_match( $pattern, $wp_config_content, $matches ) ) {
-				// Remove the WP_CACHE line.
 				$wp_config_content = preg_replace( $pattern, '', $wp_config_content );
 			} else {
-				$wp_config_content = preg_replace( "/\n?define\(\s*'WP_CACHE'\s*,\s*true\s*\);\s*/", '', $wp_config_content );
+				$wp_config_content = preg_replace( '/\n?define\(\s*[\'"]WP_CACHE[\'"]\s*,\s*true\s*\);\s*/', '', $wp_config_content );
 			}
 
-			// Write the modified content back to wp-config.php.
 			$wp_filesystem->put_contents( $wp_config_path, $wp_config_content, FS_CHMOD_FILE );
 		}
 	}

@@ -40,7 +40,8 @@ const normalizeImageInfo = ( raw ) => {
 
 const Dashboard = ( { activities, onNavigate } ) => {
 	// Raw pending paths from the initial API response — used for optimise_image payload.
-	const rawPending = wppoSettings.image_info?.pending ?? {};
+	const rawPending = wppoSettings?.image_info?.pending ?? {};
+
 	const [ pendingPaths, setPendingPaths ] = useState( {
 		webp: Array.isArray( rawPending.webp ) ? rawPending.webp : [],
 		avif: Array.isArray( rawPending.avif ) ? rawPending.avif : [],
@@ -50,9 +51,8 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	const [ telemetrySuggestions, setTelemetrySuggestions ] = useState( [] );
 	const [ pagespeedSuggestions, setPagespeedSuggestions ] = useState( [] );
 	const [ auditUrl, setAuditUrl ] = useState(
-		wppoSettings.performance_audit?.homeUrl ?? ''
+		wppoSettings?.performance_audit?.homeUrl ?? ''
 	);
-
 	// Merge telemetry and PageSpeed suggestions, deduplicating by metric key.
 	const allSuggestions = useMemo( () => {
 		const seen = new Set();
@@ -77,10 +77,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	// Initialize state
 	const [ state, setState ] = useState( {
-		totalCacheSize: wppoSettings.cache_size,
-		totalJs: wppoSettings.total_js_css.js,
-		totalCss: wppoSettings.total_js_css.css,
-		imageInfo: normalizeImageInfo( wppoSettings.image_info ),
+		totalCacheSize: wppoSettings?.cache_size ?? '0 B',
+		totalJs: wppoSettings?.total_js_css?.js ?? 0,
+		totalCss: wppoSettings?.total_js_css?.css ?? 0,
+		imageInfo: normalizeImageInfo( wppoSettings?.image_info ),
 		dbCounts: {},
 		loading: {
 			clear_cache: false,
@@ -93,6 +93,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	const [ bgProcessing, setBgProcessing ] = useState( false );
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
 	const pollingRef = useRef( null );
+	const pollRetryRef = useRef( 0 );
 	const submittingRef = useRef( false );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
 	const [ announcement, setAnnouncement ] = useState( '' );
@@ -150,6 +151,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	const pollJobStatus = useCallback( async () => {
 		try {
 			const response = await apiCall( 'image_job_status', {}, 'GET' );
+			pollRetryRef.current = 0;
 			if ( response.success && response.data ) {
 				const { queued_jobs: queuedJobs } = response.data;
 				setBgJobsQueued( queuedJobs );
@@ -187,6 +189,21 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			}
 		} catch ( error ) {
 			console.error( 'Error polling job status:', error );
+			pollRetryRef.current++;
+			if ( pollRetryRef.current >= 5 ) {
+				setBgProcessing( false );
+				if ( pollingRef.current ) {
+					clearInterval( pollingRef.current );
+					pollingRef.current = null;
+				}
+				setAnnouncement(
+					__(
+						'Status check stopped after repeated failures.',
+						'performance-optimisation'
+					)
+				);
+				return;
+			}
 			setAnnouncement(
 				__(
 					'Status check failed. Retrying…',
@@ -330,8 +347,9 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					setState( ( prev ) => ( {
 						...prev,
 						imageInfo: {
-							...prev.imageInfo,
 							completed: { webp: 0, avif: 0 },
+							pending: { webp: 0, avif: 0 },
+							failed: { webp: 0, avif: 0 },
 						},
 					} ) );
 					setAnnouncement(
@@ -459,7 +477,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					<span className="wppo-stat-value">
 						{ totalOptimizedPercent !== null
 							? `${ totalOptimizedPercent.toFixed( 0 ) }%`
-							: 'N/A' }
+							: __( 'N/A', 'performance-optimisation' ) }
 					</span>
 					<button
 						type="button"

@@ -1,10 +1,14 @@
 import { apiCall, fetchRecentActivities } from '../apiRequest';
 
+const originalFetch = global.fetch;
+
 describe( 'API Request library', () => {
 	beforeEach( () => {
 		global.wppoSettings = {
 			apiUrl: 'http://test.com/wp-json/wppo/v1/',
+			ajaxUrl: 'http://test.com/wp-admin/admin-ajax.php',
 			nonce: 'testnonce',
+			nonce_refresh: 'testnonce_refresh',
 			settings: {},
 		};
 		global.fetch = jest.fn();
@@ -12,6 +16,7 @@ describe( 'API Request library', () => {
 
 	afterEach( () => {
 		jest.restoreAllMocks();
+		global.fetch = originalFetch;
 	} );
 
 	describe( 'apiCall', () => {
@@ -210,6 +215,94 @@ describe( 'API Request library', () => {
 				getPagespeedResults( 'https://example.com', 'desktop' )
 			).rejects.toThrow( 'Network error' );
 		} );
+
+		it( 'should refresh nonce and retry on rest_cookie_invalid_nonce', async () => {
+			const freshNonce = 'freshnonce123';
+			const successData = { success: true, data: { done: true } };
+
+			// First call returns expired-nonce error
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( {
+					code: 'rest_cookie_invalid_nonce',
+					message: 'Nonce expired',
+				} ),
+			} );
+
+			// Nonce refresh call (to admin-ajax)
+			global.fetch.mockResolvedValueOnce( {
+				ok: true,
+				json: jest.fn().mockResolvedValueOnce( {
+					success: true,
+					data: { nonce: freshNonce },
+				} ),
+			} );
+
+			// Retry with fresh nonce succeeds
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( successData ),
+			} );
+
+			const result = await apiCall( 'update_settings', { foo: 'bar' } );
+
+			expect( global.fetch ).toHaveBeenNthCalledWith(
+				1,
+				'http://test.com/wp-json/wppo/v1/update_settings',
+				expect.objectContaining( {
+					headers: expect.objectContaining( {
+						'X-WP-Nonce': 'testnonce',
+					} ),
+				} )
+			);
+
+			expect( global.fetch ).toHaveBeenNthCalledWith(
+				2,
+				'http://test.com/wp-admin/admin-ajax.php',
+				expect.objectContaining( {
+					method: 'POST',
+				} )
+			);
+
+			expect( global.fetch ).toHaveBeenNthCalledWith(
+				3,
+				'http://test.com/wp-json/wppo/v1/update_settings',
+				expect.objectContaining( {
+					headers: expect.objectContaining( {
+						'X-WP-Nonce': freshNonce,
+					} ),
+				} )
+			);
+
+			expect( result ).toEqual( successData );
+		} );
+
+		it( 'should refresh nonce and retry on rest_forbidden', async () => {
+			const freshNonce = 'freshnonce456';
+			const successData = { success: true, data: { done: true } };
+
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( {
+					code: 'rest_forbidden',
+					message: 'Forbidden',
+				} ),
+			} );
+
+			global.fetch.mockResolvedValueOnce( {
+				ok: true,
+				json: jest.fn().mockResolvedValueOnce( {
+					success: true,
+					data: { nonce: freshNonce },
+				} ),
+			} );
+
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( successData ),
+			} );
+
+			const result = await apiCall( 'some_action', {} );
+
+			expect( global.fetch ).toHaveBeenCalledTimes( 3 );
+			expect( result ).toEqual( successData );
+		} );
 	} );
 
 	describe( 'fetchSuggestions', () => {
@@ -332,7 +425,8 @@ describe( 'API Request library', () => {
 				'Failed to fetch'
 			);
 			expect( consoleSpy ).toHaveBeenCalledWith(
-				'Error fetching recent activities: ',
+				'API call failed:',
+				'recent_activities?page=1',
 				mockError
 			);
 

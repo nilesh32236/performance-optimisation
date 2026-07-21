@@ -36,23 +36,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function prepare_cache_dir( $cache_dir ): bool {
-			global $wp_filesystem;
+			$fs = self::init_filesystem();
 
-			self::init_filesystem();
+			if ( ! $fs ) {
+				return false;
+			}
 
-			// Check if the directory already exists.
-			if ( ! $wp_filesystem->is_dir( $cache_dir ) ) {
+			if ( $fs->is_dir( $cache_dir ) ) {
+				return true;
+			}
 
-				// Recursively create parent directories first.
-				$parent_dir = dirname( $cache_dir );
+			// Build parent directories iteratively to avoid deep recursion.
+			$path  = wp_normalize_path( $cache_dir );
+			$parts = explode( '/', trim( $path, '/' ) );
+			$build = '';
 
-				if ( ! $wp_filesystem->is_dir( $parent_dir ) ) {
-					self::prepare_cache_dir( $parent_dir );
-				}
-
-				// Create the final directory.
-				if ( ! $wp_filesystem->mkdir( $cache_dir, FS_CHMOD_DIR ) ) {
-					return false;
+			foreach ( $parts as $part ) {
+				$build = $build ? $build . '/' . $part : '/' . $part;
+				if ( ! $fs->is_dir( $build ) ) {
+					if ( ! $fs->mkdir( $build, FS_CHMOD_DIR ) ) {
+						return false;
+					}
 				}
 			}
 
@@ -75,8 +79,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			if ( WP_Filesystem() ) {
 				return $wp_filesystem;
 			} else {
-				new \WP_Filesystem_Direct( null );
-				return $wp_filesystem;
+				return false;
 			}
 		}
 
@@ -90,6 +93,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function get_local_path( string $url ): string {
 			// Parse the URL to get the path.
 			$parsed_url = wp_parse_url( $url );
+			if ( false === $parsed_url ) {
+				return '';
+			}
 
 			// Get the path from the parsed URL.
 			$relative_path = wp_normalize_path( $parsed_url['path'] ?? '' );
@@ -118,6 +124,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function get_js_css_minified_file() {
 			$filesystem = self::init_filesystem();
+			if ( ! $filesystem ) {
+				return array(
+					'js'  => 0,
+					'css' => 0,
+				);
+			}
 			$minify_dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
 
 			$total_js  = 0;

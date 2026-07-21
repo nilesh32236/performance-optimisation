@@ -24,11 +24,22 @@
 /bin/
 /scripts/
 /test_*.js
-/npm_output.log
+/npm-debug.log*
+/src/
 # Keep build/ and essential PHP files
 /.coderabbit.yaml
 /.gitattributes
 /readme.md
 /.geminiignore
 /changelog.md
-.qoder
+/.qoder
+/.browserslistrc
+/.eslintrc.json
+/.opencode-reviewer.yml
+/.audit-prompts/
+/__mocks__/
+/babel.config.json
+/AGENTS.md
+/test-lab/
+/reports/
+/vendor/phpcompatibility/

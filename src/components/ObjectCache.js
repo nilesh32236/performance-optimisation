@@ -349,7 +349,8 @@ const ObjectCache = ( { options = {} } ) => {
 							) }
 						</span>
 						<span className="wppo-stat-value">
-							{ cacheStatus.telemetry?.redis_version || 'N/A' }
+							{ cacheStatus.telemetry?.redis_version ||
+								__( 'N/A', 'performance-optimisation' ) }
 						</span>
 						<span className="wppo-text-muted">
 							{ __( 'Uptime:', 'performance-optimisation' ) }{ ' ' }

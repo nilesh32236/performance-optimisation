@@ -33,6 +33,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function init(): void {
+			require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
@@ -62,7 +64,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			$enable_server_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
 
 			if ( $enable_server_rules ) {
-				Htaccess_Handler::update_rules( true );
+				$rules_updated = Htaccess_Handler::update_rules( true );
+				if ( ! $rules_updated ) {
+					$notices[] = __( 'Failed to update .htaccess rules during activation.', 'performance-optimisation' );
+					set_transient( 'wppo_activation_notices', array_unique( $notices ), WEEK_IN_SECONDS );
+				}
 			}
 
 			self::create_activity_log_table();
@@ -90,11 +96,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			$wp_config_path = wp_normalize_path( ABSPATH . 'wp-config.php' );
 
-			if ( ! file_exists( $wp_config_path ) ) {
+			if ( ! $wp_filesystem->exists( $wp_config_path ) ) {
 				$wp_config_path = wp_normalize_path( dirname( ABSPATH ) . '/wp-config.php' );
 			}
 
-			if ( ! file_exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
+			if ( ! $wp_filesystem->exists( $wp_config_path ) || ! $wp_filesystem->is_writable( $wp_config_path ) ) {
 				return 'wp_config_writable';
 			}
 
@@ -113,7 +119,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				);
 
 				if ( null === $new_content || '' === $new_content ) {
-					new Log( __( 'Failed to replace WP_CACHE in wp-config.php', 'performance-optimisation' ) );
+					Log::add( __( 'Failed to replace WP_CACHE in wp-config.php', 'performance-optimisation' ) );
 					return null;
 				}
 				$wp_config_content = $new_content;
@@ -169,7 +175,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			}
 
 			/* phpcs:enable */
-			new Log( __( 'Plugin activated', 'performance-optimisation' ) );
+			Log::add( __( 'Plugin activated', 'performance-optimisation' ) );
 		}
 	}
 }

@@ -73,10 +73,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * The filesystem object used for file operations.
 		 *
-		 * @var object
+		 * @var object|null
 		 * @since 1.0.0
 		 */
 		private $filesystem;
+
+		/**
+		 * Whether the filesystem has been initialized.
+		 *
+		 * @var bool
+		 * @since 1.6.0
+		 */
+		private bool $fs_initialized = false;
+
+		/**
+		 * The sanitized request URI from $_SERVER.
+		 *
+		 * @var string
+		 * @since 1.6.0
+		 */
+		private string $request_uri;
 
 		/**
 		 * The options/settings for the cache system.
@@ -94,13 +110,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public function __construct() {
 			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
-			if (
-				strpos( $domain, '..' ) !== false ||
-				strpos( $domain, '/' ) !== false ||
-				strpos( $domain, '\\' ) !== false ||
-				! preg_match( '/^[a-z0-9\.\-]+$/i', $domain )
-			) {
+			// Convert internationalized domain names to ASCII (punycode) to support IDN chars.
+			if ( function_exists( 'idn_to_ascii' ) ) {
+				$converted = idn_to_ascii( $domain, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46 );
+				if ( false !== $converted ) {
+					$domain = $converted;
+				}
+			}
+
+			// Strip the port before validation.
+			$host = explode( ':', $domain, 2 )[0];
+
+			$valid_domain = ! (
+				strpos( $host, '..' ) !== false ||
+				strpos( $host, '/' ) !== false ||
+				strpos( $host, '\\' ) !== false ||
+				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
+			);
+
+			if ( ! $valid_domain ) {
 				$domain = '';
+			} else {
+				$domain = $host;
 			}
 
 			$this->domain = $domain;
@@ -109,8 +140,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR );
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
 
-			$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-			$url_path    = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $request_uri, PHP_URL_PATH ) ), '/' ) );
+			$this->request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			$url_path          = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
 
 			// Reject directory traversal.
 			if ( strpos( $url_path, '..' ) !== false ) {
@@ -119,7 +150,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$this->url_path = $url_path;
 
+			// Initialize filesystem lazily via get_filesystem().
 			$this->options = get_option( 'wppo_settings', array() );
+
+			if ( ! $valid_domain && ! empty( $this->options['debug'] ) ) {
+				do_action( 'wppo_debug_log', 'Cache domain validation failed' );
+			}
 		}
 
 		/**
@@ -129,8 +165,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.6.0
 		 */
 		private function get_filesystem() {
-			if ( ! isset( $this->filesystem ) ) {
-				$this->filesystem = Util::init_filesystem();
+			if ( ! $this->fs_initialized ) {
+				$this->filesystem     = Util::init_filesystem();
+				$this->fs_initialized = true;
 			}
 			return $this->filesystem;
 		}
@@ -153,43 +190,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			// Check if combined CSS file already exists and is fresh.
+			$fs = $this->get_filesystem();
+			if ( ! $fs ) {
+				return;
+			}
+
+			// Reuse cached CSS only if it is still fresh (no source file is newer).
 			$css_file_path = $this->get_cache_file_path( 'css' );
-			if ( file_exists( $css_file_path ) ) {
-				$combined_mtime = filemtime( $css_file_path );
-				$all_fresh      = true;
+
+			if ( $fs->exists( $css_file_path ) ) {
+				$cache_mtime  = (int) $fs->mtime( $css_file_path );
+				$source_newer = false;
 
 				foreach ( $styles as $handle ) {
 					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
-						$all_fresh = false;
-						break;
+						continue;
 					}
-
-					$src = $wp_styles->registered[ $handle ]->src;
-					if ( empty( $src ) ) {
-						$all_fresh = false;
-						break;
-					}
-
-					$local_path = Util::get_local_path( $src );
-					if ( ! $local_path || ! file_exists( $local_path ) ) {
-						$all_fresh = false;
-						break;
-					}
-
-					if ( filemtime( $local_path ) >= $combined_mtime ) {
-						$all_fresh = false;
+					$src      = $wp_styles->registered[ $handle ]->src;
+					$src_path = Util::get_local_path( (string) $src );
+					if ( '' !== $src_path && $fs->exists( $src_path ) && $fs->mtime( $src_path ) > $cache_mtime ) {
+						$source_newer = true;
 						break;
 					}
 				}
 
-				if ( $all_fresh ) {
+				if ( ! $source_newer ) {
 					$css_url = $this->get_cache_file_url( 'css' );
-					$version = $combined_mtime;
+					$version = $cache_mtime;
 					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
-
-					$css_url_with_version = $css_url . "?ver=$version";
-					echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
 					return;
 				}
 			}
@@ -202,6 +230,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$combined_css = '';
 
 			foreach ( $styles as $handle ) {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
 				$style_data = $wp_styles->registered[ $handle ];
 
 				if ( ! empty( $exclude_combine_css ) ) {
@@ -251,18 +282,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! empty( $combined_css ) ) {
 				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: swap;', $combined_css );
 
-				$combined_css = preg_replace_callback(
-					'/@font-face\s*{[^}]*}/',
-					function ( $matches ) {
-						$font_face = $matches[0];
-						if ( strpos( $font_face, 'font-display' ) === false ) {
-							// Add 'font-display: swap;' if it's not already there.
-							$font_face = preg_replace( '/(})$/', 'font-display: swap;$1', $font_face );
-						}
-						return $font_face;
-					},
-					$combined_css
-				);
+				require_once WPPO_PLUGIN_PATH . 'includes/minify/class-css.php';
+				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css );
 
 				$css_minifier  = new CSSMinifier( $combined_css );
 				$combined_css  = $css_minifier->minify();
@@ -272,7 +293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$css_url = $this->get_cache_file_url( 'css' );
 
-				$version = filemtime( $css_file_path );
+				$version = $fs->mtime( $css_file_path );
 				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 
 				$css_url_with_version = $css_url . "?ver=$version";
@@ -408,7 +429,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				foreach ( $attributes as $attr ) {
 					$val = $tags->get_attribute( $attr );
 
-					if ( $val && 0 === strpos( $val, $site_url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $val ) ) {
+					if ( $val && preg_match( '#^' . preg_quote( $site_url, '#' ) . '(/|$)#', $val ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $val ) ) {
 						$tags->set_attribute( $attr, str_replace( $site_url, $cdn_url, $val ) );
 					}
 				}
@@ -425,7 +446,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							$url       = $parts[0];
 							$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
 
-							if ( 0 === strpos( $url, $site_url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $url ) ) {
+							if ( preg_match( '#^' . preg_quote( $site_url, '#' ) . '(/|$)#', $url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $url ) ) {
 								$url = str_replace( $site_url, $cdn_url, $url );
 							}
 							$new_srcset[] = $url . $suffix;
@@ -467,8 +488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
-			$request_uri    = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-			$parsed_path    = wp_parse_url( $request_uri, PHP_URL_PATH );
+			$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
 			$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
 
 			if ( strpos( $local_url_path, '..' ) !== false ) {
@@ -534,10 +554,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$gzip_file_path = $file_path . '.gz';
 
 			$fs = $this->get_filesystem();
+			if ( ! $fs ) {
+				return;
+			}
 			$fs->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
 
-			$gzip_output = gzencode( $buffer, 9 );
-			$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+			if ( function_exists( 'gzencode' ) ) {
+				$gzip_output = gzencode( $buffer, 9 );
+				if ( false !== $gzip_output ) {
+					$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+				}
+			}
 		}
 
 		/**
@@ -559,11 +586,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( isset( $this->options['preload_settings']['enablePreloadCache'] ) && (bool) $this->options['preload_settings']['enablePreloadCache'] ) {
+			if ( isset( $this->options['preload_settings']['enablePreloadCache'] ) && ! empty( $this->options['preload_settings']['enablePreloadCache'] ) ) {
 				if ( isset( $this->options['preload_settings']['excludePreloadCache'] ) && ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
 					$exclude_urls = Util::process_urls( $this->options['preload_settings']['excludePreloadCache'] );
 
-					$current_url = home_url( str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ) ) ) );
+					$request_uri = $this->request_uri;
+					$home_path   = wp_parse_url( home_url(), PHP_URL_PATH ) ?? '';
+					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
+						$request_uri = substr( $request_uri, strlen( $home_path ) );
+					}
+					$current_url = home_url( $request_uri );
 					$current_url = rtrim( $current_url, '/' );
 
 					foreach ( $exclude_urls as $exclude_url ) {
@@ -586,11 +618,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						}
 					}
 				}
-
-				return true;
 			}
 
-			return false;
+			return true;
 		}
 
 		/**
@@ -602,7 +632,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function invalidate_dynamic_static_html( $page_id ): void {
-			$path = str_replace( home_url(), '', get_permalink( $page_id ) );
+			$path = wp_make_link_relative( get_permalink( $page_id ) );
 
 			$html_file_path = $this->get_file_path( $path, 'html' );
 			$css_file_path  = $this->get_file_path( $path, 'css' );
@@ -610,13 +640,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->delete_cache_files( $css_file_path );
 
 			// Smart Purging: Always clear the home page and blog archive.
-			$home_path = str_replace( home_url(), '', home_url( '/' ) );
+			$home_path = wp_make_link_relative( home_url( '/' ) );
 			$this->delete_cache_files( $this->get_file_path( $home_path, 'html' ) );
 
 			if ( 'page' === get_option( 'show_on_front' ) ) {
 				$posts_page_id = get_option( 'page_for_posts' );
 				if ( $posts_page_id ) {
-					$posts_path = str_replace( home_url(), '', get_permalink( $posts_page_id ) );
+					$posts_path = wp_make_link_relative( get_permalink( $posts_page_id ) );
 					$this->delete_cache_files( $this->get_file_path( $posts_path, 'html' ) );
 				}
 			}
@@ -627,7 +657,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $post_type ) {
 				$archive_link = get_post_type_archive_link( $post_type );
 				if ( ! empty( $archive_link ) && ! is_wp_error( $archive_link ) ) {
-					$archive_path = str_replace( home_url(), '', $archive_link );
+					$archive_path = wp_make_link_relative( $archive_link );
 					$this->delete_cache_files( $this->get_file_path( $archive_path, 'html' ) );
 				}
 
@@ -642,7 +672,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						foreach ( $terms as $term ) {
 							$term_link = get_term_link( $term );
 							if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
-								$term_path = str_replace( home_url(), '', $term_link );
+								$term_path = wp_make_link_relative( $term_link );
 								$this->delete_cache_files( $this->get_file_path( $term_path, 'html' ) );
 							}
 						}
@@ -709,7 +739,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$instance = new self();
 
-			if ( ! $instance->filesystem ) {
+			if ( ! $instance->get_filesystem() ) {
 				return false;
 			}
 
@@ -750,13 +780,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$fs = $this->get_filesystem();
 
 			if ( $fs && $fs->is_dir( $cache_dir ) ) {
-				$res1 = $fs->delete( $cache_dir, true ); // 'true' ensures recursive deletion.
+				$res1 = $fs->delete( $cache_dir, true );
 			}
 
 			$min_dir = "{$this->cache_root_dir}/min";
 
 			if ( $fs && $fs->is_dir( $min_dir ) ) {
-				$res2 = $fs->delete( $min_dir, true ); // 'true' ensures recursive deletion.
+				$res2 = $fs->delete( $min_dir, true );
 			}
 
 			return $res1 && $res2;
@@ -772,14 +802,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public static function get_cache_size(): string {
 			$instance = new self();
 
-			if ( ! $instance->filesystem ) {
-				return 'Unable to initialize filesystem.';
+			if ( ! $instance->get_filesystem() ) {
+				return __( 'Unable to initialize filesystem.', 'performance-optimisation' );
 			}
 
 			$cache_dir = "{$instance->cache_root_dir}/{$instance->domain}";
 
 			if ( ! $instance->filesystem->is_dir( $cache_dir ) ) {
-				return 'Cache directory does not exist.';
+				return __( 'Cache directory does not exist.', 'performance-optimisation' );
 			}
 
 			$total_size = $instance->calculate_directory_size( $cache_dir );

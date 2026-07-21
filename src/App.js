@@ -29,11 +29,13 @@ const SIDEBAR_BREAKPOINT = 992;
 const App = () => {
 	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
 	const [ transition, setTransition ] = useState( false );
-	const sidebarCollapsed = false;
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
 	const [ serverRules, setServerRules ] = useState( null );
+	const [ serverRulesError, setServerRulesError ] = useState( false );
+	const [ rulesRetryTrigger, setRulesRetryTrigger ] = useState( 0 );
 	const hasFetchedActivities = useRef( false );
+	const hasFetchedRules = useRef( false );
 
 	const sidebarRef = useRef( null );
 	const toggleBtnRef = useRef( null );
@@ -92,6 +94,13 @@ const App = () => {
 				<FileOptimization
 					options={ settings.file_optimisation }
 					serverRules={ serverRules }
+					serverRulesError={ serverRulesError }
+					onRetryServerRules={ () => {
+						hasFetchedRules.current = false;
+						setServerRulesError( false );
+						setServerRules( null );
+						setRulesRetryTrigger( ( c ) => c + 1 );
+					} }
 				/>
 			),
 			preload: <PreloadSettings options={ settings.preload_settings } />,
@@ -195,8 +204,6 @@ const App = () => {
 		}
 	}, [] );
 
-	const hasFetchedRules = useRef( false );
-
 	useEffect( () => {
 		const abortController = new AbortController();
 
@@ -240,8 +247,10 @@ const App = () => {
 				if ( ! abortController.signal.aborted ) {
 					if ( res.success ) {
 						setServerRules( res.data );
+						setServerRulesError( false );
 					} else {
 						hasFetchedRules.current = false;
+						setServerRulesError( true );
 					}
 				} else {
 					hasFetchedRules.current = false;
@@ -249,7 +258,7 @@ const App = () => {
 			} catch ( err ) {
 				hasFetchedRules.current = false;
 				if ( ! abortController.signal.aborted ) {
-					console.error( 'Failed to fetch server rules', err );
+					setServerRulesError( true );
 				}
 			}
 		};
@@ -259,7 +268,7 @@ const App = () => {
 			abortController.abort();
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ activeTab, recentActivities.length, serverRules ] );
+	}, [ activeTab, recentActivities.length, serverRules, rulesRetryTrigger ] );
 
 	useEffect( () => {
 		setTransition( true );
@@ -283,7 +292,10 @@ const App = () => {
 				<button
 					className="wppo-mobile-toggle"
 					onClick={ toggleMobileMenu }
-					aria-label="Toggle Menu"
+					aria-label={ __(
+						'Toggle Menu',
+						'performance-optimisation'
+					) }
 					aria-expanded={ mobileMenuOpen }
 					aria-controls="mobile-sidebar"
 					ref={ toggleBtnRef }
@@ -317,8 +329,8 @@ const App = () => {
 				id="mobile-sidebar"
 				ref={ sidebarRef }
 				className={ `wppo-sidebar ${
-					sidebarCollapsed ? 'wppo-sidebar--collapsed' : ''
-				} ${ mobileMenuOpen ? 'wppo-sidebar--mobile-open' : '' }` }
+					mobileMenuOpen ? 'wppo-sidebar--mobile-open' : ''
+				}` }
 			>
 				<div className="wppo-sidebar-header">
 					<div className="wppo-sidebar-logo">
