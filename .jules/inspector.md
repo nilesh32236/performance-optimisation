@@ -30,3 +30,7 @@
 **Bug/Gap:** Some React UI components had uncovered lines handling edge cases such as rendering fallback components or API responses with 'success: false' rather than network errors.
 **Root Cause:** Component test coverage lacked thorough assertions for alternative code paths.
 **Test Added:** Implemented extensive frontend unit testing coverage using Jest + RTL to test these sad paths for SystemInfo and DatabaseCleanup components. Added mock assertions, timeout delays mocking using jest.useFakeTimers and explicit DOM interaction testing for React ConfirmDialog component.
+## 2026-07-21 - Missing edge case coverage in API library
+**Bug/Gap:** Missing branch coverage for `refreshNonce` error handling and initial API JSON parse failures.
+**Root Cause:** The `apiRequest.js` tests only checked successful network mocks and simple `fetch` rejections, missing the `rest_forbidden` retry logic flow.
+**Test Added:** Added explicit mocked `fetch` chained resolutions in Jest to simulate `rest_forbidden`, nonce refresh, and subsequent successful retries, as well as parsing failures.
