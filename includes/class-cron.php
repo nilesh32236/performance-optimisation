@@ -176,7 +176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			}
 
 			// Update iteration offset for the next batch.
-			update_option( 'wppo_preload_cron_offset', $paged_offset + 200 );
+			update_option( 'wppo_preload_cron_offset', $paged_offset + 200, false );
 
 			// Schedule next batch if needed.
 			if ( ! wp_next_scheduled( 'wppo_page_cron_batch' ) ) {
@@ -348,7 +348,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			if ( $should_run ) {
 				Database_Cleanup::auto_clean( $settings );
-				update_option( 'wppo_last_db_cleanup', $now );
+				update_option( 'wppo_last_db_cleanup', $now, false );
 			}
 		}
 	}

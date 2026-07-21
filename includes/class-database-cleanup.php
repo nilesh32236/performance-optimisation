@@ -608,22 +608,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return array<string,int> Associative array mapping cleanup type to its current count.
 		 */
 		public static function get_counts() {
+			$cached = get_transient( 'wppo_db_cleanup_counts' );
+			if ( false !== $cached ) {
+				return $cached;
+			}
+
 			global $wpdb;
 
 			$time = time();
 
-			return array(
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$counts = array(
 				'revisions'          => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_type = 'revision'" ),
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 				'auto_drafts'        => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'auto-draft'" ),
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 				'trashed_posts'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->posts WHERE post_status = 'trash'" ),
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 				'spam_comments'      => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'spam'" ),
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 				'trashed_comments'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM $wpdb->comments WHERE comment_approved = 'trash'" ),
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 				'expired_transients' => (int) $wpdb->get_var(
 					$wpdb->prepare(
 						"SELECT COUNT(*) FROM $wpdb->options a
@@ -636,13 +636,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 						$time
 					)
 				),
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fetching latest database counts for cleanup; caching is not required for these live stats.
 				'orphan_postmeta'    => (int) $wpdb->get_var(
 					"SELECT COUNT(*) FROM $wpdb->postmeta pm
 					LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
 					WHERE p.ID IS NULL"
 				),
 			);
+			// phpcs:enable
+
+			set_transient( 'wppo_db_cleanup_counts', $counts, 5 * MINUTE_IN_SECONDS );
+			return $counts;
 		}
 
 		/**
@@ -658,6 +661,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( false === $res ) {
 				return new WP_Error( 'db_cleanup_failed', __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
+			delete_transient( 'wppo_db_cleanup_counts' );
 			return $res;
 		}
 	}
