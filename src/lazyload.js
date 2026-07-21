@@ -35,12 +35,36 @@ const loadScript = ( script ) => {
 		const src = script.getAttribute( 'wppo-src' );
 
 		if ( src ) {
+			// External deferred script: set src on the existing node and wait for load/error.
 			script.removeAttribute( 'wppo-src' );
 			script.setAttribute( 'src', src );
 
 			script.onload = resolve;
 			script.onerror = reject;
 		} else if ( script.text ) {
+			// Inline script: browsers execute a script element only once after insertion.
+			// Mutating the already-inserted node does nothing, so we must replace it with
+			// a fresh element. Copy all attributes and content to the new node, swap it
+			// into the DOM, and resolve once it has been processed.
+			const replacement = document.createElement( 'script' );
+
+			// Copy attributes from the original node to the replacement.
+			Array.from( script.attributes ).forEach( ( attr ) => {
+				replacement.setAttribute( attr.name, attr.value );
+			} );
+
+			replacement.text = script.text;
+
+			replacement.onload = resolve;
+			replacement.onerror = reject;
+
+			if ( script.parentNode ) {
+				script.parentNode.replaceChild( replacement, script );
+			} else {
+				document.head.appendChild( replacement );
+			}
+
+			// Inline scripts execute synchronously during DOM insertion, so resolve here.
 			resolve();
 		} else {
 			reject( 'Inline script has no text content' );

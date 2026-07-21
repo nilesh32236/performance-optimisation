@@ -81,13 +81,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 			// Parse the home URL and extract just the base domain (e.g., http://localhost).
 			$parsed_url = wp_parse_url( $home_url );
-			if ( false === $parsed_url ) {
+			if ( false === $parsed_url || empty( $parsed_url['scheme'] ) || empty( $parsed_url['host'] ) ) {
 				$parsed_url = wp_parse_url( site_url() );
 			}
-			$base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'];
 
-			if ( isset( $parsed_url['port'] ) && ! empty( $parsed_url['port'] ) ) {
-				$base_url .= ( ':' . $parsed_url['port'] );
+			// Guard against malformed or relative URLs that have no scheme/host.
+			if ( ! is_array( $parsed_url ) || empty( $parsed_url['scheme'] ) || empty( $parsed_url['host'] ) ) {
+				$base_url = home_url();
+			} else {
+				$base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'];
+
+				if ( isset( $parsed_url['port'] ) && ! empty( $parsed_url['port'] ) ) {
+					$base_url .= ( ':' . $parsed_url['port'] );
+				}
 			}
 
 			$this->html_min
@@ -139,7 +145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					$html = $this->html_min->minify( $html );
 				} catch ( \Exception $e ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-					error_log( 'WPPO HTML minify failed' );
+					error_log( 'WPPO HTML minify failed: ' . $e->getMessage() );
 				}
 			}
 
@@ -163,7 +169,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			return preg_replace_callback(
 				'#<link\b[^>]*\brel=(?:["\']?)(canonical|shortlink)(?:["\']?)[^>]*>#i',
 				function ( $matches ) {
-					$link_tag = preg_replace( '/\bhref=/i', 'wppo-href=', $matches[0] );
+					$link_tag = preg_replace( '/\bhref\s*=/i', 'wppo-href=', $matches[0] );
 
 					return $link_tag;
 				},
@@ -186,11 +192,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				function ( $matches ) use ( &$scripts ) {
 					$attributes = $matches[1];
 
-					if ( preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches ) ) {
-						$type = $type_matches[2];
+					// Use case-insensitive matching with a quote backreference so the opening
+					// and closing quote must agree; lowercase the value before comparing.
+					if ( preg_match( '/\btype\s*=\s*(["\'])([^"\']+)\1/i', $attributes, $type_matches ) ) {
+						$type = strtolower( $type_matches[2] );
 
 						$exclude_types = array( 'text/javascript', 'application/ld+json', 'module', 'importmap' );
-						if ( ! in_array( strtolower( $type ), $exclude_types, true ) ) {
+						if ( ! in_array( $type, $exclude_types, true ) ) {
 							$scripts[] = $matches[0];
 							return '<script data-wppo-preserve="' . ( count( $scripts ) - 1 ) . '"></script>';
 						}
@@ -294,8 +302,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 			// Check if type is 'text/javascript' or type is not defined.
 			$type_matches = array();
-			preg_match( '/type=("|\')([^"\']+)("|\')/', $attributes, $type_matches );
-			$script_type = $type_matches[2] ?? '';
+			preg_match( '/\btype\s*=\s*(["\'])([^"\']+)\1/i', $attributes, $type_matches );
+			$script_type = strtolower( $type_matches[2] ?? '' );
 
 			if ( 'application/ld+json' === $script_type || 'application/json' === $script_type ) {
 				return $this->safe_json_encode( $content, $attributes );
@@ -325,10 +333,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 
 				if ( ! $should_exclude ) {
-					if ( preg_match( '/type=("|\')[^"\']*("|\')/', $attributes ) ) {
-						// If the 'type' attribute exists, modify it.
+					if ( preg_match( '/\btype\s*=\s*(["\'])[^"\']*\1/i', $attributes ) ) {
+						// If the 'type' attribute exists, modify it (case-insensitive, quote backreference).
 						$attributes = preg_replace(
-							'/type=("|\')text\/javascript("|\')/',
+							'/\btype\s*=\s*(["\'])text\/javascript\1/i',
 							'type="wppo/javascript" wppo-type="text/javascript"',
 							$attributes
 						);

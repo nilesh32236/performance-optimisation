@@ -170,6 +170,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				switch ( $image_type ) {
 					case IMAGETYPE_JPEG:
 						$image = imagecreatefromjpeg( $source_image );
+
+						if ( ! $image ) {
+							$this->update_conversion_status( $source_image, 'failed', $format );
+							return false;
+						}
+
 						break;
 
 					case IMAGETYPE_PNG:
@@ -215,8 +221,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								}
 							} catch ( \Exception $e ) {
 								if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
-									// phpcs:ignore
-								imagedestroy( $image );
+									// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- imagedestroy() is still the correct way to free GD resources in PHP 8.x
+									imagedestroy( $image );
 								}
 								$this->update_conversion_status( $source_image, 'failed', $format );
 								return false;
@@ -320,8 +326,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 
 				if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
-				// phpcs:ignore
-				imagedestroy( $image );
+					// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- imagedestroy() is still the correct way to free GD resources in PHP 8.x
+					imagedestroy( $image );
 				}
 
 				return $success;

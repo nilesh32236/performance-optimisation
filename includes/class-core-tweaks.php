@@ -46,11 +46,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			}
 
 			if ( ! empty( $this->settings['disableXMLRPC'] ) ) {
-				if ( function_exists( 'wp_xmlrpc_server_class' ) ) {
-					add_filter( 'wp_xmlrpc_server_class', '__return_empty_string' );
-				} else {
-					add_filter( 'xmlrpc_enabled', '__return_false' );
-				}
+				// wp_xmlrpc_server_class is a filter (not a function) available since WP 3.1.
+				// Returning an empty string from it causes WP to skip XML-RPC entirely.
+				// xmlrpc_enabled is kept as a belt-and-suspenders fallback for older WP builds.
+				add_filter( 'wp_xmlrpc_server_class', '__return_empty_string' );
+				add_filter( 'xmlrpc_enabled', '__return_false' );
 				add_filter( 'wp_headers', array( $this, 'remove_x_pingback' ) );
 			}
 

@@ -127,22 +127,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			}
 
 			$query_args = array(
-				'url'      => $request_url, // add_query_arg will handle encoding.
+				'url'      => $request_url,
 				'key'      => $api_key,
 				'strategy' => strtoupper( $strategy ),
 			);
 
-			// The API accepts multiple category params; add_query_arg does not support
-			// repeated keys, so we build the query string manually.
+			// The PageSpeed API requires repeated `category` params (e.g. category=PERFORMANCE&category=SEO).
+			// add_query_arg() serialises arrays as category[0]=... so we build the base URL first,
+			// then append each category value manually.
+			$base_url   = add_query_arg( $query_args, self::API_ENDPOINT );
 			$categories = array( 'PERFORMANCE', 'ACCESSIBILITY', 'BEST_PRACTICES', 'SEO' );
-			foreach ( $categories as $cat ) {
-				$query_args['category'][] = $cat;
-			}
-			$query_url = add_query_arg( $query_args, self::API_ENDPOINT );
+			$query_url  = $base_url . '&' . implode( '&', array_map( fn( $cat ) => 'category=' . rawurlencode( $cat ), $categories ) );
 
-			// Security: redact API key from debug logs.
-			// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			$redacted_url = remove_query_arg( 'key', $query_url );
+			// Build a redacted URL for logging (omit the API key).
+			$redacted_base = add_query_arg(
+				array(
+					'url'      => $request_url,
+					'strategy' => strtoupper( $strategy ),
+				),
+				self::API_ENDPOINT
+			);
+			$redacted_url  = $redacted_base . '&' . implode( '&', array_map( fn( $cat ) => 'category=' . rawurlencode( $cat ), $categories ) );
+
 			/* translators: %s is the PageSpeed API request URL (API key redacted). */
 			Log::add( sprintf( __( 'PageSpeed API request: %s', 'performance-optimisation' ), esc_url( $redacted_url ) ) );
 

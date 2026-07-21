@@ -98,10 +98,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 					if ( false === $css_content ) {
 						return null;
 					}
-					$css_content = self::update_image_paths( $css_content, $this->file_path );
+
+					// update_image_paths uses preg_replace_callback internally; fall back to
+					// original content if the regex engine returns null (PCRE error).
+					$updated = self::update_image_paths( $css_content, $this->file_path );
+					if ( null !== $updated ) {
+						$css_content = $updated;
+					}
 
 					// Inject font-display: swap into @font-face declarations.
-					$css_content = preg_replace_callback(
+					$font_face_result = preg_replace_callback(
 						'/@font-face\s*{[^}]*}/i',
 						function ( $matches ) {
 							$font_face = $matches[0];
@@ -112,6 +118,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 						},
 						$css_content
 					);
+					// Fall back to unmodified content if the regex failed.
+					if ( null !== $font_face_result ) {
+						$css_content = $font_face_result;
+					}
 
 					$css_minifier = new Minify\CSS( $css_content );
 					$minified_css = $css_minifier->minify();

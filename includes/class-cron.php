@@ -138,8 +138,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			$query_batch_posts = get_posts( $args );
 
 			if ( empty( $query_batch_posts ) ) {
-				// Reset offset on completion.
+				// Reset offset and release lock on completion.
 				delete_option( 'wppo_preload_cron_offset' );
+				delete_transient( 'wppo_preload_cron_lock' );
 				return;
 			}
 
@@ -189,6 +190,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( ! wp_next_scheduled( 'wppo_page_cron_batch' ) ) {
 				wp_schedule_single_event( time() + 60, 'wppo_page_cron_batch' );
 			}
+
+			// Release lock so the next scheduled batch event can run.
+			delete_transient( 'wppo_preload_cron_lock' );
 		}
 
 		/**
@@ -296,7 +300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			$batch_size = $options['image_optimisation']['batch'] ?? 50;
 
-			$normalized_abspath = wp_normalize_path( ABSPATH );
+			$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 
 			if ( in_array( $conversion_format, array( 'avif', 'both' ), true ) ) {
 				$images = $img_info['pending']['avif'] ?? array();
@@ -309,7 +313,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						if ( $counter <= $batch_size ) {
 							$source_path = wp_normalize_path( ABSPATH . $img );
 							$resolved    = realpath( $source_path );
-							if ( false === $resolved || 0 !== strpos( $resolved, $normalized_abspath ) ) {
+							if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
 								continue;
 							}
 							$img_converter->convert_image( $source_path, 'avif' );
@@ -329,7 +333,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						if ( $counter <= $batch_size ) {
 							$source_path = wp_normalize_path( ABSPATH . $img );
 							$resolved    = realpath( $source_path );
-							if ( false === $resolved || 0 !== strpos( $resolved, $normalized_abspath ) ) {
+							if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
 								continue;
 							}
 							$img_converter->convert_image( $source_path );

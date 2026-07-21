@@ -177,7 +177,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Reject paths with directory traversal or outside the cache directory.
 			$real_path = realpath( $this->cache_dir . $path );
-			if ( false === $real_path || 0 !== strpos( $real_path, $this->cache_dir ) ) {
+			if ( false === $real_path || 0 !== strpos( $real_path, trailingslashit( $this->cache_dir ) ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
 			}
 
@@ -254,7 +254,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				Cache::clear_cache();
 			}
 
-			unset( $options['performance_audit']['pagespeed_api_key'] );
+			if ( isset( $options['performance_audit'] ) ) {
+				unset( $options['performance_audit']['pagespeed_api_key'] );
+			}
 
 			return $this->send_response( $options );
 		}
@@ -325,7 +327,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
 
 			// Validate image paths using realpath to prevent directory traversal.
-			$normalized_abspath = wp_normalize_path( ABSPATH );
+			$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
 				$source_path = $normalized_abspath . $img_path;
 				if ( ! file_exists( $source_path ) ) {

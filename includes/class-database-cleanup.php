@@ -419,7 +419,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			);
 
 			foreach ( $transient_keys as $prefix => $timeout_prefix ) {
-				if ( '_site_transient_' === $prefix && ! is_multisite() ) {
+				// On multisite, _site_transient_ entries live in wp_sitemeta — skip them here
+				// (the options table query below only applies to the wp_options table).
+				// On single-site, _site_transient_ entries are stored in wp_options and must be cleaned.
+				if ( '_site_transient_' === $prefix && is_multisite() ) {
 					continue;
 				}
 
@@ -457,7 +460,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$prefix_len = strlen( $prefix );
 					foreach ( $ids as $name ) {
 						$to_delete[] = $name;
-						$to_delete[] = $timeout_prefix . substr( $name, $prefix_len + 1 );
+						$to_delete[] = $timeout_prefix . substr( $name, $prefix_len );
 					}
 
 					$placeholders = implode( ',', array_fill( 0, count( $to_delete ), '%s' ) );

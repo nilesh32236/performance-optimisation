@@ -190,14 +190,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			// Reuse fresh cache if available.
+			// Reuse cached CSS only if it is still fresh (no source file is newer).
 			$css_file_path = $this->get_cache_file_path( 'css' );
 
 			if ( $fs->exists( $css_file_path ) ) {
-				$css_url = $this->get_cache_file_url( 'css' );
-				$version = filemtime( $css_file_path );
-				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
-				return;
+				$cache_mtime  = (int) filemtime( $css_file_path );
+				$source_newer = false;
+
+				foreach ( $styles as $handle ) {
+					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+						continue;
+					}
+					$src      = $wp_styles->registered[ $handle ]->src;
+					$src_path = Util::get_local_path( (string) $src );
+					if ( '' !== $src_path && file_exists( $src_path ) && filemtime( $src_path ) > $cache_mtime ) {
+						$source_newer = true;
+						break;
+					}
+				}
+
+				if ( ! $source_newer ) {
+					$css_url = $this->get_cache_file_url( 'css' );
+					$version = $cache_mtime;
+					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
+					return;
+				}
 			}
 
 			$exclude_combine_css = array();
@@ -632,7 +649,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( 'page' === get_option( 'show_on_front' ) ) {
 				$posts_page_id = get_option( 'page_for_posts' );
 				if ( $posts_page_id ) {
-					$posts_path = str_replace( home_url(), '', get_permalink( $posts_page_id ) );
+					$posts_path = wp_make_link_relative( get_permalink( $posts_page_id ) );
 					$this->delete_cache_files( $this->get_file_path( $posts_path, 'html' ) );
 				}
 			}
@@ -643,7 +660,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $post_type ) {
 				$archive_link = get_post_type_archive_link( $post_type );
 				if ( ! empty( $archive_link ) && ! is_wp_error( $archive_link ) ) {
-					$archive_path = str_replace( home_url(), '', $archive_link );
+					$archive_path = wp_make_link_relative( $archive_link );
 					$this->delete_cache_files( $this->get_file_path( $archive_path, 'html' ) );
 				}
 
@@ -658,7 +675,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						foreach ( $terms as $term ) {
 							$term_link = get_term_link( $term );
 							if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
-								$term_path = str_replace( home_url(), '', $term_link );
+								$term_path = wp_make_link_relative( $term_link );
 								$this->delete_cache_files( $this->get_file_path( $term_path, 'html' ) );
 							}
 						}
