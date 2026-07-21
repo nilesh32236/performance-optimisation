@@ -10,13 +10,22 @@
  */
 const refreshNonce = async () => {
 	try {
-		const res = await fetch( wppoSettings.apiUrl + 'refresh_nonce' );
+		const res = await fetch( wppoSettings.ajaxUrl, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded',
+			},
+			body: new URLSearchParams( {
+				action: 'wppo_get_nonce',
+				nonce: wppoSettings.nonce_refresh,
+			} ),
+		} );
 		if ( ! res.ok ) {
 			return wppoSettings.nonce;
 		}
 		const data = await res.json();
-		if ( data.success && data.nonce ) {
-			wppoSettings.nonce = data.nonce;
+		if ( data.success && data.data?.nonce ) {
+			wppoSettings.nonce = data.data.nonce;
 		}
 	} catch ( e ) {
 		console.error( 'Nonce refresh failed:', e );
@@ -105,19 +114,7 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
  * @return {Promise<Object>} Resolved activities data.
  */
 export const fetchRecentActivities = ( page = 1, signal ) => {
-	const params = new URLSearchParams( { page } );
-	return fetch( `${ wppoSettings.apiUrl }recent_activities?${ params }`, {
-		method: 'GET',
-		headers: {
-			'X-WP-Nonce': wppoSettings.nonce,
-		},
-		signal,
-	} )
-		.then( ( response ) => response.json() )
-		.catch( ( error ) => {
-			console.error( 'Error fetching recent activities: ', error );
-			throw error; // Re-throw the error for further handling if needed
-		} );
+	return apiCall( `recent_activities?page=${ page }`, {}, 'GET', signal );
 };
 
 /**

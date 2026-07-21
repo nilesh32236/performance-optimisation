@@ -40,7 +40,8 @@ const normalizeImageInfo = ( raw ) => {
 
 const Dashboard = ( { activities, onNavigate } ) => {
 	// Raw pending paths from the initial API response — used for optimise_image payload.
-	const rawPending = wppoSettings.image_info?.pending ?? {};
+	const rawPending = wppoSettings?.image_info?.pending ?? {};
+
 	const [ pendingPaths, setPendingPaths ] = useState( {
 		webp: Array.isArray( rawPending.webp ) ? rawPending.webp : [],
 		avif: Array.isArray( rawPending.avif ) ? rawPending.avif : [],
@@ -50,9 +51,8 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	const [ telemetrySuggestions, setTelemetrySuggestions ] = useState( [] );
 	const [ pagespeedSuggestions, setPagespeedSuggestions ] = useState( [] );
 	const [ auditUrl, setAuditUrl ] = useState(
-		wppoSettings.performance_audit?.homeUrl ?? ''
+		wppoSettings?.performance_audit?.homeUrl ?? ''
 	);
-
 	// Merge telemetry and PageSpeed suggestions, deduplicating by metric key.
 	const allSuggestions = useMemo( () => {
 		const seen = new Set();

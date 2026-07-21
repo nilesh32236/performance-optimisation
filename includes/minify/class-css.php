@@ -48,6 +48,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		private $filesystem;
 
 		/**
+		 * URL base for cache files, derived from $cache_dir.
+		 *
+		 * @var string
+		 */
+		private string $cache_url;
+
+		/**
 		 * Constructor for the CSS class.
 		 *
 		 * @param string $file_path  Path to the CSS file to be minified.
@@ -56,6 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		public function __construct( $file_path, $cache_dir ) {
 			$this->file_path  = $file_path;
 			$this->cache_dir  = $cache_dir;
+			$this->cache_url  = content_url( str_replace( wp_normalize_path( WP_CONTENT_DIR ), '', wp_normalize_path( $cache_dir ) ) );
 			$this->filesystem = Util::init_filesystem();
 		}
 
@@ -103,7 +111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				}
 			}
 
-			return content_url( 'cache/wppo/min/css/' . basename( $cache_file ) );
+			return $this->cache_url . '/' . basename( $cache_file );
 		}
 
 		/**

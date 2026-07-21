@@ -97,7 +97,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$deleted = 0;
 
 			$max_age_seconds = $max_age_days * DAY_IN_SECONDS;
-			$cutoff_date     = gmdate( 'Y-m-d H:i:s', time() - $max_age_seconds );
+			$cutoff_date_gmt = gmdate( 'Y-m-d H:i:s', time() - $max_age_seconds );
 
 			// PERFORMANCE FIX: Apply strict batching mechanism limit by adding "LIMIT 200".
 			$wpdb->last_error = '';
@@ -124,7 +124,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 				$revisions = $wpdb->get_results(
 					$wpdb->prepare(
-						"SELECT ID, post_date FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date DESC LIMIT 500",
+						"SELECT ID, post_date_gmt FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date_gmt DESC LIMIT 500",
 						$parent_id
 					)
 				);
@@ -138,7 +138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 				foreach ( $older_revisions as $rev ) {
 					// Delete if older than cutoff.
-					if ( $rev->post_date < $cutoff_date ) {
+					if ( $rev->post_date_gmt < $cutoff_date_gmt ) {
 						$revisions_to_delete[] = $rev->ID;
 					}
 				}
@@ -592,7 +592,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					);
 					$label  = $labels[ $method ] ?? $method;
 					// Translators: %s is the cleanup type label.
-					new Log( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
+					Log::add( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
 				}
 			}
 		}

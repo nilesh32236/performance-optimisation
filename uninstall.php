@@ -36,18 +36,20 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_option( 'wppo_last_db_cleanup' );
 
 		// Delete post meta.
-		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+		// phpcs:disable WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->postmeta,
 			array( 'meta_key' => '_wppo_preload_image_url' )
 		);
-		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->postmeta,
 			array( 'meta_key' => '_wppo_disabled_scripts' )
 		);
-		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+		$wpdb->delete( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$wpdb->postmeta,
 			array( 'meta_key' => '_wppo_disabled_styles' )
 		);
+		// phpcs:enable WordPress.DB.SlowDBQuery.slow_db_query_meta_key
 
 		// Remove cache directory.
 		$cache_dir = WP_CONTENT_DIR . '/cache/wppo/';

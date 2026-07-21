@@ -185,7 +185,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( ! $cleared ) {
 					return $this->send_response( null, false, 400, __( 'Failed to clear cache: Invalid path.', 'performance-optimisation' ) );
 				}
-				new Log(
+				Log::add(
 					sprintf(
 						/* translators: %s: The URL of the page */
 						__( 'Clear cache of <a href="%1$s">%2$s</a> on ', 'performance-optimisation' ),
@@ -195,7 +195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				);
 			} else {
 				Cache::clear_cache();
-				new Log( __( 'Clear all cache on ', 'performance-optimisation' ) );
+				Log::add( __( 'Clear all cache on ', 'performance-optimisation' ) );
 			}
 			return $this->send_response( true );
 		}
@@ -283,7 +283,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$data = Log::get_recent_activities( $sanitized_params );
 
-			return new \WP_REST_Response( $data, 200 );
+			return $this->send_response( $data, true, 200, __( 'Activities fetched successfully.', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -352,7 +352,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 
-				new Log(
+				Log::add(
 					sprintf(
 						/* translators: %d: Number of image jobs queued */
 						__( 'Scheduled %d image optimization jobs for background processing on ', 'performance-optimisation' ),
@@ -409,47 +409,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function delete_optimised_image(): \WP_REST_Response {
 			global $wp_filesystem;
 			if ( ! Util::init_filesystem() ) {
-				return new \WP_REST_Response(
-					array(
-						'success' => false,
-						'message' => __( 'Unable to initialize filesystem.', 'performance-optimisation' ),
-					),
-					500
-				);
+				return $this->send_response( null, false, 500, __( 'Unable to initialize filesystem.', 'performance-optimisation' ) );
 			}
 
 			$wppo_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo' );
 
 			if ( ! $wp_filesystem || ! $wp_filesystem->is_dir( $wppo_dir ) ) {
-				return new \WP_REST_Response(
-					array(
-						'success' => false,
-						'message' => __( 'Optimized images folder does not exist.', 'performance-optimisation' ),
-					),
-					404
-				);
+				return $this->send_response( null, false, 404, __( 'Optimized images folder does not exist.', 'performance-optimisation' ) );
 			}
 
 			if ( ! $wp_filesystem->delete( $wppo_dir, true ) ) {
-				return new \WP_REST_Response(
-					array(
-						'success' => false,
-						'message' => __( 'Failed to delete the optimized images folder.', 'performance-optimisation' ),
-					),
-					500
-				);
+				return $this->send_response( null, false, 500, __( 'Failed to delete the optimized images folder.', 'performance-optimisation' ) );
 			}
 
 			Img_Converter::clear_completed_formats();
 			Cache::clear_cache();
 
-			return new \WP_REST_Response(
-				array(
-					'success' => true,
-					'message' => __( 'Optimized images folder deleted successfully.', 'performance-optimisation' ),
-				),
-				200
-			);
+			return $this->send_response( null, true, 200, __( 'Optimized images folder deleted successfully.', 'performance-optimisation' ) );
 		}
 
 		/**
@@ -556,7 +532,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					}
 				}
 
-				new Log(
+				Log::add(
 					sprintf(
 						/* translators: %d: Number of items cleaned */
 						__( 'Database cleanup (all): %d items removed on ', 'performance-optimisation' ),
@@ -606,7 +582,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 500, __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
 
-			new Log(
+			Log::add(
 				sprintf(
 					/* translators: %1$s: Cleanup type, %2$d: Number of items */
 					__( 'Database cleanup (%1$s): %2$d items removed on ', 'performance-optimisation' ),
@@ -752,7 +728,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					return $this->send_response( null, false, 400, __( 'Failed to enable object cache.', 'performance-optimisation' ) );
 				}
 
-				new Log( __( 'Object Cache enabled.', 'performance-optimisation' ) );
+				Log::add( __( 'Object Cache enabled.', 'performance-optimisation' ) );
 				return $this->send_response( true, true, 200, __( 'Object Cache enabled successfully.', 'performance-optimisation' ) );
 			}
 
@@ -763,14 +739,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					return $this->send_response( null, false, 400, __( 'Failed to disable object cache.', 'performance-optimisation' ) );
 				}
 
-				new Log( __( 'Object Cache disabled.', 'performance-optimisation' ) );
+				Log::add( __( 'Object Cache disabled.', 'performance-optimisation' ) );
 				return $this->send_response( true, true, 200, __( 'Object Cache disabled.', 'performance-optimisation' ) );
 			}
 
 			if ( 'flush' === $action ) {
 				$result = $manager->flush();
 				if ( $result ) {
-					new Log( __( 'Object Cache flushed.', 'performance-optimisation' ) );
+					Log::add( __( 'Object Cache flushed.', 'performance-optimisation' ) );
 					return $this->send_response( true, true, 200, __( 'Object Cache flushed.', 'performance-optimisation' ) );
 				}
 				return $this->send_response( null, false, 400, __( 'Failed to flush object cache.', 'performance-optimisation' ) );

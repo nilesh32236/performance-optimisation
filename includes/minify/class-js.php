@@ -55,6 +55,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		private $filesystem;
 
 		/**
+		 * URL base for cache files, derived from $cache_dir.
+		 *
+		 * @var string
+		 */
+		private string $cache_url;
+
+		/**
 		 * JS constructor to initialize file path, cache directory, and filesystem.
 		 *
 		 * @param string $file_path The path to the JavaScript file to minify.
@@ -65,6 +72,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		public function __construct( $file_path, $cache_dir ) {
 			$this->file_path  = $file_path;
 			$this->cache_dir  = $cache_dir;
+			$this->cache_url  = content_url( str_replace( wp_normalize_path( WP_CONTENT_DIR ), '', wp_normalize_path( $cache_dir ) ) );
 			$this->filesystem = Util::init_filesystem();
 		}
 
@@ -96,7 +104,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 				}
 			}
 
-			return content_url( 'cache/wppo/min/js/' . basename( $cache_file ) );
+			return $this->cache_url . '/' . basename( $cache_file );
 		}
 
 		/**

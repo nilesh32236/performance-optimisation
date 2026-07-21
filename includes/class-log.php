@@ -27,14 +27,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 	class Log {
 
 		/**
-		 * Log constructor.
+		 * Private constructor to prevent direct instantiation.
 		 *
-		 * Inserts a new activity log entry into the database.
+		 * @since 2.0.0
+		 */
+		private function __construct() {}
+
+		/**
+		 * Add a new activity log entry.
 		 *
 		 * @param string $activity The activity description to log.
-		 * @since 1.0.0
+		 * @return void
+		 * @since 2.0.0
 		 */
-		public function __construct( $activity ) {
+		public static function add( $activity ): void {
 			global $wpdb;
 
 			$table_name = $wpdb->prefix . 'wppo_activity_logs';

@@ -104,13 +104,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			$strategy = isset( $args['strategy'] ) ? sanitize_text_field( $args['strategy'] ) : 'mobile';
 
 			if ( empty( $url ) ) {
-				new Log( __( 'PageSpeed scan skipped: empty URL.', 'performance-optimisation' ) );
+				Log::add( __( 'PageSpeed scan skipped: empty URL.', 'performance-optimisation' ) );
 				return;
 			}
 
 			$api_key = self::get_api_key();
 			if ( empty( $api_key ) ) {
-				new Log( __( 'PageSpeed scan skipped: API key not configured.', 'performance-optimisation' ) );
+				Log::add( __( 'PageSpeed scan skipped: API key not configured.', 'performance-optimisation' ) );
 				self::store_failure( $url, $strategy, 'PageSpeed API key is not configured. Add it in the Performance Audit settings.' );
 				return;
 			}
@@ -121,7 +121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			// Use wp_http_validate_url() for robust SSRF protection (rejects loopback,
 			// private/reserved IP ranges including IPv6, 0.0.0.0, 10.x, 172.16-31.x, 192.168.x).
 			if ( ! wp_http_validate_url( $request_url ) ) {
-				new Log( __( 'PageSpeed scan failed: local URL detected.', 'performance-optimisation' ) );
+				Log::add( __( 'PageSpeed scan failed: local URL detected.', 'performance-optimisation' ) );
 				self::store_failure( $url, $strategy, 'PageSpeed cannot scan local or non-public URLs. Please use a public URL.' );
 				return;
 			}
@@ -141,7 +141,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			// Security: redact API key from debug logs.
 			$redacted_url = str_replace( $api_key, 'REDACTED', $query_url );
 			// Translators: %s is the redacted PageSpeed API request URL.
-			new Log( sprintf( __( 'PageSpeed API request: %s', 'performance-optimisation' ), $redacted_url ) );
+			Log::add( sprintf( __( 'PageSpeed API request: %s', 'performance-optimisation' ), $redacted_url ) );
 
 			$response = wp_remote_get(
 				$query_url,
@@ -153,7 +153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			if ( is_wp_error( $response ) ) {
 				// Translators: %s is the error message from the PageSpeed API.
-				new Log( sprintf( __( 'PageSpeed API error: %s', 'performance-optimisation' ), $response->get_error_message() ) );
+				Log::add( sprintf( __( 'PageSpeed API error: %s', 'performance-optimisation' ), $response->get_error_message() ) );
 				self::store_failure( $url, $strategy, $response->get_error_message() );
 				return;
 			}
@@ -163,7 +163,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			if ( 200 !== $http_code ) {
 				// Translators: %1$d is the HTTP status code, %2$s is the URL.
 				$msg = sprintf( __( 'PageSpeed API returned HTTP %1$d for %2$s.', 'performance-optimisation' ), $http_code, esc_url( $url ) );
-				new Log( $msg );
+				Log::add( $msg );
 				self::store_failure( $url, $strategy, $msg );
 				return;
 			}
@@ -172,7 +172,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			if ( ! is_array( $body ) ) {
 				$msg = __( 'PageSpeed API error: invalid JSON response.', 'performance-optimisation' );
-				new Log( $msg );
+				Log::add( $msg );
 				self::store_failure( $url, $strategy, $msg );
 				return;
 			}
@@ -181,7 +181,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				$error_message = $body['error']['message'] ?? 'Unknown API error';
 				// Translators: %s is the error message from the PageSpeed API.
 				$msg = sprintf( __( 'PageSpeed API error: %s', 'performance-optimisation' ), sanitize_text_field( $error_message ) );
-				new Log( $msg );
+				Log::add( $msg );
 				self::store_failure( $url, $strategy, $msg );
 				return;
 			}
@@ -192,7 +192,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			set_transient( $transient_key, $prepared, self::TRANSIENT_TTL );
 			Telemetry::register_transient_key( $transient_key );
 
-			new Log(
+			Log::add(
 				sprintf(
 					/* translators: %1$s is the URL, %2$s is the strategy (mobile/desktop), %3$d is the performance score. */
 					__( 'PageSpeed scan completed for %1$s (%2$s). Performance score: %3$d.', 'performance-optimisation' ),

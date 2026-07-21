@@ -138,8 +138,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->url_path = $url_path;
 
 			// Initialize filesystem and options.
-			$this->filesystem = Util::init_filesystem();
-			$this->options    = get_option( 'wppo_settings', array() );
+			$this->filesystem     = Util::init_filesystem();
+			$this->fs_initialized = true;
+			$this->options        = get_option( 'wppo_settings', array() );
 
 			if ( ! $valid_domain && ! empty( $this->options['debug'] ) ) {
 				do_action( 'wppo_debug_log', 'Cache domain validation failed' );
@@ -517,6 +518,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$gzip_file_path = $file_path . '.gz';
 
 			$fs = $this->get_filesystem();
+			if ( ! $fs ) {
+				return;
+			}
 			$fs->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
 
 			$gzip_output = gzencode( $buffer, 9 );

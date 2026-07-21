@@ -332,7 +332,8 @@ describe( 'API Request library', () => {
 				'Failed to fetch'
 			);
 			expect( consoleSpy ).toHaveBeenCalledWith(
-				'Error fetching recent activities: ',
+				'API call failed:',
+				'recent_activities?page=1',
 				mockError
 			);
 

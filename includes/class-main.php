@@ -249,7 +249,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'wppo_pagespeed_scan', array( 'PerformanceOptimise\Inc\Pagespeed', 'run_scan' ), 10, 1 );
 
 			// Clear all cache on structural changes that invalidate every cached page.
-			add_action( 'permalink_structure_changed', array( __CLASS__, 'clear_all_cache' ) );
+			add_action( 'update_option_permalink_structure', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'update_option_wppo_settings', array( __CLASS__, 'on_settings_update' ), 10, 2 );
 			add_action( 'activated_plugin', array( __CLASS__, 'clear_all_cache' ) );

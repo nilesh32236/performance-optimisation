@@ -33,7 +33,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Hooks registered:
 		 * - init → schedule_cron_jobs
 		 * - wppo_page_cron_hook, wppo_page_cron_batch → wppo_page_cron_callback
-		 * - wppo_img_conversation → img_convert_cron
+		 * - wppo_img_conversion → img_convert_cron
 		 * - cron_schedules (filter) → add_custom_cron_interval
 		 * - wppo_generate_static_page → process_page (priority 10, 1 arg)
 		 * - wppo_database_cleanup_cron → database_cleanup_cron
@@ -44,7 +44,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
 			add_action( 'wppo_page_cron_hook', array( $this, 'wppo_page_cron_callback' ) );
 			add_action( 'wppo_page_cron_batch', array( $this, 'wppo_page_cron_callback' ) );
-			add_action( 'wppo_img_conversation', array( $this, 'img_convert_cron' ) );
+			add_action( 'wppo_img_conversion', array( $this, 'img_convert_cron' ) );
 			add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 
 			add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
@@ -82,8 +82,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				wp_schedule_event( time(), 'every_5_hours', 'wppo_page_cron_hook' );
 			}
 
-			if ( ! wp_next_scheduled( 'wppo_img_conversation' ) ) {
-				wp_schedule_event( time(), 'hourly', 'wppo_img_conversation' );
+			if ( ! wp_next_scheduled( 'wppo_img_conversion' ) ) {
+				wp_schedule_event( time(), 'hourly', 'wppo_img_conversion' );
 			}
 
 			if ( ! wp_next_scheduled( 'wppo_database_cleanup_cron' ) ) {
@@ -223,8 +223,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 */
 		private function load_page( $page_id ): void {
 			$permalink = get_permalink( $page_id );
-			if ( $permalink ) {
-				wp_remote_get( $permalink, array( 'timeout' => 30 ) );
+			if ( ! $permalink ) {
+				return;
+			}
+			$response = wp_remote_get( $permalink, array( 'timeout' => 30 ) );
+			if ( is_wp_error( $response ) ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'WPPO preload failed for ' . $permalink . ': ' . $response->get_error_message() );
 			}
 		}
 
@@ -277,11 +282,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			$img_info = Img_Converter::get_img_info();
 
-			$conversation_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
+			$conversion_format = $options['image_optimisation']['conversionFormat'] ?? 'webp';
 
 			$batch_size = $options['image_optimisation']['batch'] ?? 50;
 
-			if ( in_array( $conversation_format, array( 'avif', 'both' ), true ) ) {
+			if ( in_array( $conversion_format, array( 'avif', 'both' ), true ) ) {
 				$images = $img_info['pending']['avif'] ?? array();
 
 				$counter = 0;
@@ -296,7 +301,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				}
 			}
 
-			if ( in_array( $conversation_format, array( 'webp', 'both' ), true ) ) {
+			if ( in_array( $conversion_format, array( 'webp', 'both' ), true ) ) {
 				$images = $img_info['pending']['webp'] ?? array();
 
 				$counter = 0;

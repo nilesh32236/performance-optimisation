@@ -83,7 +83,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			if ( is_array( $plugins ) ) {
 				return array_diff( $plugins, array( 'wpemoji' ) );
 			}
-			return array();
+			return $plugins;
 		}
 
 		/**
@@ -127,7 +127,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			if ( is_array( $plugins ) ) {
 				return array_diff( $plugins, array( 'wpembed' ) );
 			}
-			return array();
+			return $plugins;
 		}
 
 		/**
@@ -182,7 +182,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 
 			if ( 'disable_all' === $heartbeat_control ) {
 				wp_deregister_script( 'heartbeat' );
-			} elseif ( 'disable_ext' === $heartbeat_control && ! is_admin() ) {
+			} elseif ( 'disable_ext' === $heartbeat_control && ! is_admin() && ! ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) {
 				wp_deregister_script( 'heartbeat' );
 			} elseif ( '60s' === $heartbeat_control ) {
 				add_filter( 'heartbeat_settings', array( $this, 'heartbeat_60s' ) );

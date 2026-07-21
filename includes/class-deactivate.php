@@ -60,7 +60,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			// Remove WP_CACHE constant from wp-config.php.
 			self::remove_wp_cache_constant();
-			new Log( __( 'Plugin deactivated', 'performance-optimisation' ) );
+			Log::add( __( 'Plugin deactivated', 'performance-optimisation' ) );
 			Cache::clear_cache();
 		}
 
@@ -84,10 +84,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 				wp_unschedule_event( $timestamp, 'wppo_page_cron_batch' );
 			}
 
-			// Unschedule the 'wppo_img_conversation' event if it is scheduled.
-			$timestamp = wp_next_scheduled( 'wppo_img_conversation' );
-			if ( $timestamp ) {
-				wp_unschedule_event( $timestamp, 'wppo_img_conversation' );
+			// Unschedule image conversion cron events (old + new hook name for backward compat).
+			foreach ( array( 'wppo_img_conversation', 'wppo_img_conversion' ) as $hook ) {
+				$timestamp = wp_next_scheduled( $hook );
+				if ( $timestamp ) {
+					wp_unschedule_event( $timestamp, $hook );
+				}
 			}
 
 			$timestamp = wp_next_scheduled( 'wppo_generate_static_page' );

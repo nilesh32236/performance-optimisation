@@ -76,6 +76,8 @@ if ( ! function_exists( 'wppo_redis_connect' ) ) {
 
 			return wppo_redis_connect_standalone( $config );
 		} catch ( \Throwable $e ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'WPPO Redis connection error: ' . $e->getMessage() );
 			return new \WP_Error( 'redis_err', __( 'Redis connection failed.', 'performance-optimisation' ) );
 		}
 	}
@@ -120,6 +122,8 @@ if ( ! function_exists( 'wppo_redis_connect_cluster' ) ) {
 
 			return $cluster;
 		} catch ( \Throwable $e ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+			error_log( 'WPPO Redis cluster error: ' . $e->getMessage() );
 			return new \WP_Error( 'cluster_fail', __( 'Redis Cluster connection failed.', 'performance-optimisation' ) );
 		}
 	}
@@ -147,12 +151,14 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 			return new \WP_Error( 'redis_version', __( 'Sentinel mode requires phpredis version 6.0.0 or higher.', 'performance-optimisation' ) );
 		}
 
-		$master_name = $config['master_name'] ?? 'mymaster';
-		$use_tls     = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
-		$password    = $config['password'] ?? '';
-		$database    = isset( $config['database'] ) ? (int) $config['database'] : 0;
-		$timeout     = 0.5;
-		$errors      = array();
+		$master_name  = $config['master_name'] ?? 'mymaster';
+		$use_tls      = isset( $config['use_tls'] ) ? (bool) $config['use_tls'] : false;
+		$password     = $config['password'] ?? '';
+		$database     = isset( $config['database'] ) ? (int) $config['database'] : 0;
+		$timeout      = 0.5;
+		$retry        = 0;
+		$read_timeout = 0;
+		$errors       = array();
 
 		foreach ( $nodes as $node ) {
 			$parsed_node = wppo_parse_redis_node( $node );
@@ -162,8 +168,11 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 			try {
 				$sentinel = new \RedisSentinel(
 					array(
-						'host' => $s_host,
-						'port' => $s_port,
+						'host'           => $s_host,
+						'port'           => $s_port,
+						'timeout'        => $timeout,
+						'retry_interval' => $retry,
+						'read_timeout'   => $read_timeout,
 					)
 				);
 				$address  = $sentinel->getMasterAddrByName( $master_name );
@@ -278,6 +287,9 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 				$host = trim( $node, '[]' );
 				$port = 26379;
 			}
+		} elseif ( substr_count( $node, ':' ) > 1 ) {
+			$host = $node;
+			$port = 26379;
 		} else {
 			$last_colon = strrpos( $node, ':' );
 			if ( false !== $last_colon ) {

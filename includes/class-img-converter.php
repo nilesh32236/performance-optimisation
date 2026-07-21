@@ -225,8 +225,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							return false;
 						}
 
-						if ( 'webp' !== $format ) {
-							$this->update_conversion_status( $source_image, 'completed', $format );
+						if ( 'avif' === $format ) {
+							$this->update_conversion_status( $source_image, 'failed', $format );
 							return false;
 						}
 

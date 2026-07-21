@@ -44,9 +44,13 @@ const loadScript = ( script ) => {
 			try {
 				if ( script.text ) {
 					if ( ! script.src ) {
-						const base64Script = btoa(
-							unescape( encodeURIComponent( script.text ) )
-						);
+						const encoder = new TextEncoder();
+						const bytes = encoder.encode( script.text );
+						let binary = '';
+						for ( let i = 0; i < bytes.length; i++ ) {
+							binary += String.fromCharCode( bytes[ i ] );
+						}
+						const base64Script = btoa( binary );
 						script.setAttribute(
 							'src',
 							`data:text/javascript;base64,${ base64Script }`
@@ -316,19 +320,15 @@ const loadImages = () => {
 				const elements = document.querySelectorAll(
 					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
 				);
-				let unobservedCount = 0;
 				elements.forEach( ( el ) => {
 					if ( ! observedElements.has( el ) ) {
 						observeElement( el );
-						unobservedCount++;
 					}
 				} );
-				if ( unobservedCount === 0 || safetyScanCount >= 3 ) {
+				if ( safetyScanCount >= 3 ) {
 					stopObservation();
 				}
 			}, 30000 );
-
-			setTimeout( stopObservation, 10000 );
 		}
 
 		document

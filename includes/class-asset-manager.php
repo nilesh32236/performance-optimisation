@@ -75,11 +75,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @since 1.1.0
 		 */
 		public function __construct() {
+			// Capture all enqueued assets early so disabled assets are not lost.
+			add_action( 'wp_enqueue_scripts', array( $this, 'capture_page_assets' ), 1 );
+
 			// Dequeue disabled assets on the frontend at a very late priority.
 			add_action( 'wp_enqueue_scripts', array( $this, 'dequeue_selected_assets' ), 9999 );
-
-			// Capture all enqueued assets on the frontend for the admin meta box.
-			add_action( 'wp_footer', array( $this, 'capture_page_assets' ), PHP_INT_MAX );
 		}
 
 		/**
