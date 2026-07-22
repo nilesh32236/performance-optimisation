@@ -27,10 +27,6 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 					type="button"
 					className="wppo-button wppo-button--secondary"
 					onClick={ () => onNavigate( 'tools' ) }
-					aria-label={ __(
-						'View Full Optimization Activity Log',
-						'performance-optimisation'
-					) }
 				>
 					{ __( 'View Full Log', 'performance-optimisation' ) }
 					<FontAwesomeIcon icon={ faArrowRight } />
