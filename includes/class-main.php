@@ -297,10 +297,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-activate.php';
 			$notices = Activate::add_wp_cache_constant();
 
-			if ( empty( $notices ) ) {
-				// Success — throttle for 1 hour.
-				set_transient( 'wppo_wp_cache_fix_checked', 1, HOUR_IN_SECONDS );
-			} else {
+			// Always throttle for 1 hour to avoid constant I/O on failure.
+			set_transient( 'wppo_wp_cache_fix_checked', 1, HOUR_IN_SECONDS );
+
+			if ( ! empty( $notices ) ) {
 				// Failure — merge notice keys into existing transient to notify user immediately.
 				$existing_notices = get_transient( 'wppo_activation_notices' );
 				$existing_notices = is_array( $existing_notices ) ? $existing_notices : array();
