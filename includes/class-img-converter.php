@@ -348,6 +348,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 				$this->update_conversion_status( $source_image, 'failed', $format );
 
+				// Log failure for debugging — include details only in debug mode.
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO Image conversion failed: ' . str_replace( ABSPATH, '', $e->getMessage() ) );
+				}
+				new Log( __( 'Image conversion failed.', 'performance-optimisation' ) );
+
 				return false;
 			}
 		}

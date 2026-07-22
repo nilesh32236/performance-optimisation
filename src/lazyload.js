@@ -11,6 +11,13 @@ let scriptLoading = false;
 let scriptLoadPromise = null;
 
 /**
+ * Selector for all lazy-loadable elements.
+ * @type {string}
+ */
+const LAZY_SELECTOR =
+	'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
+
+/**
  * Load a single deferred script element.
  *
  * Restores the original `src` and `type` attributes, then resolves
@@ -199,9 +206,7 @@ const observedElements = new WeakSet();
  * Check if all lazy-loadable elements have been processed, and clean up observers if so.
  */
 const checkCleanup = () => {
-	const remaining = document.querySelectorAll(
-		'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
-	);
+	const remaining = document.querySelectorAll( LAZY_SELECTOR );
 	if ( remaining.length === 0 ) {
 		if ( window.wppoSafetyScanId ) {
 			clearInterval( window.wppoSafetyScanId );
@@ -346,11 +351,11 @@ const loadImages = () => {
 							) {
 								observeElement( node );
 							}
-							node.querySelectorAll(
-								'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
-							).forEach( ( child ) => {
-								observeElement( child );
-							} );
+							node.querySelectorAll( LAZY_SELECTOR ).forEach(
+								( child ) => {
+									observeElement( child );
+								}
+							);
 						}
 					} );
 				} );
@@ -364,9 +369,7 @@ const loadImages = () => {
 			// Periodic Safety Scan for unobserved dynamic content
 			if ( ! window.wppoSafetyScanId ) {
 				window.wppoSafetyScanId = setInterval( () => {
-					const elements = document.querySelectorAll(
-						'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
-					);
+					const elements = document.querySelectorAll( LAZY_SELECTOR );
 					if ( elements.length === 0 ) {
 						clearInterval( window.wppoSafetyScanId );
 						window.wppoSafetyScanId = null;
@@ -381,13 +384,9 @@ const loadImages = () => {
 			}
 		}
 
-		document
-			.querySelectorAll(
-				'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
-			)
-			.forEach( ( el ) => {
-				observeElement( el );
-			} );
+		document.querySelectorAll( LAZY_SELECTOR ).forEach( ( el ) => {
+			observeElement( el );
+		} );
 
 		checkCleanup();
 	} else {
@@ -398,9 +397,7 @@ const loadImages = () => {
 			}
 			active = true;
 			setTimeout( () => {
-				const lazyElements = document.querySelectorAll(
-					'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video'
-				);
+				const lazyElements = document.querySelectorAll( LAZY_SELECTOR );
 				lazyElements.forEach( ( el ) => {
 					if ( isElementInViewport( el ) ) {
 						if ( el.tagName === 'VIDEO' ) {
