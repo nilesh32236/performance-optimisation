@@ -21,13 +21,15 @@ describe( 'Tooltip', () => {
 	} );
 
 	it( 'renders tooltip content and children', () => {
-		render(
+		const { container } = render(
 			<Tooltip content="Tooltip Content">
 				<button>Hover Me</button>
 			</Tooltip>
 		);
-		const container = document.querySelector( '.wppo-tooltip-container' );
-		expect( container ).toBeInTheDocument();
+		const tooltipContainer = container.querySelector(
+			'.wppo-tooltip-container'
+		);
+		expect( tooltipContainer ).toBeInTheDocument();
 		expect(
 			screen.getByRole( 'button', { name: /Hover Me/i } )
 		).toBeInTheDocument();
@@ -38,45 +40,59 @@ describe( 'Tooltip', () => {
 	} );
 
 	it( 'renders default icon if children are not provided', () => {
-		render( <Tooltip content="Info tooltip" /> );
-		const container = document.querySelector( '.wppo-tooltip-container' );
-		expect( container ).toBeInTheDocument();
-		const icon = container.querySelector( '.wppo-tooltip-icon' );
+		const { container } = render( <Tooltip content="Info tooltip" /> );
+		const tooltipContainer = container.querySelector(
+			'.wppo-tooltip-container'
+		);
+		expect( tooltipContainer ).toBeInTheDocument();
+		const icon = tooltipContainer.querySelector( '.wppo-tooltip-icon' );
 		expect( icon ).toBeInTheDocument();
 		expect( icon.tagName.toLowerCase() ).toBe( 'svg' );
 		expect( screen.getByText( 'Info tooltip' ) ).toBeInTheDocument();
 	} );
 
 	it( 'toggles visible class on hover', () => {
-		render( <Tooltip content="Hover content">Hover Me</Tooltip> );
-		const container = document.querySelector( '.wppo-tooltip-container' );
+		const { container } = render(
+			<Tooltip content="Hover content">Hover Me</Tooltip>
+		);
+		const tooltipContainer = container.querySelector(
+			'.wppo-tooltip-container'
+		);
 
-		expect( container ).not.toHaveClass(
+		expect( tooltipContainer ).not.toHaveClass(
 			'wppo-tooltip-container--visible'
 		);
 
-		fireEvent.mouseEnter( container );
-		expect( container ).toHaveClass( 'wppo-tooltip-container--visible' );
+		fireEvent.mouseEnter( tooltipContainer );
+		expect( tooltipContainer ).toHaveClass(
+			'wppo-tooltip-container--visible'
+		);
 
-		fireEvent.mouseLeave( container );
-		expect( container ).not.toHaveClass(
+		fireEvent.mouseLeave( tooltipContainer );
+		expect( tooltipContainer ).not.toHaveClass(
 			'wppo-tooltip-container--visible'
 		);
 	} );
 
 	it( 'toggles visible class on focus and blur', () => {
-		render( <Tooltip content="Focus content">Focus Me</Tooltip> );
-		const container = document.querySelector( '.wppo-tooltip-container' );
+		const { container } = render(
+			<Tooltip content="Focus content">Focus Me</Tooltip>
+		);
+		const tooltipContainer = container.querySelector(
+			'.wppo-tooltip-container'
+		);
 
-		expect( container ).not.toHaveClass(
+		expect( tooltipContainer ).not.toHaveClass(
 			'wppo-tooltip-container--visible'
 		);
 
-		fireEvent.focus( container );
-		expect( container ).toHaveClass( 'wppo-tooltip-container--visible' );
+		fireEvent.focus( tooltipContainer );
+		expect( tooltipContainer ).toHaveClass(
+			'wppo-tooltip-container--visible'
+		);
 
-		fireEvent.blur( container );
-		expect( container ).not.toHaveClass(
+		fireEvent.blur( tooltipContainer );
+		expect( tooltipContainer ).not.toHaveClass(
 			'wppo-tooltip-container--visible'
 		);
 	} );
