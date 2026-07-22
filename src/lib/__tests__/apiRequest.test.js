@@ -12,6 +12,7 @@ describe( 'API Request library', () => {
 			settings: {},
 		};
 		global.fetch = jest.fn();
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
 	} );
 
 	afterEach( () => {
@@ -63,6 +64,168 @@ describe( 'API Request library', () => {
 			await expect( apiCall( 'some_action', {} ) ).rejects.toThrow(
 				'Network error'
 			);
+		} );
+
+		it( 'should throw custom error on initial JSON parse failure', async () => {
+			global.fetch.mockResolvedValueOnce( {
+				json: jest
+					.fn()
+					.mockRejectedValueOnce( new Error( 'Unexpected token <' ) ),
+			} );
+
+			await expect( apiCall( 'some_action', {} ) ).rejects.toThrow(
+				'Invalid JSON response from some_action: Unexpected token <'
+			);
+		} );
+
+		it( 'should refresh nonce and retry on rest_forbidden', async () => {
+			// 1. Initial request fails with rest_forbidden
+			const initialMockData = {
+				code: 'rest_forbidden',
+				message: 'Forbidden',
+			};
+			// 2. Refresh nonce request succeeds
+			const refreshMockData = { success: true, nonce: 'newnonce123' };
+			// 3. Retry request succeeds
+			const retryMockData = {
+				success: true,
+				data: { status: 'retried' },
+			};
+
+			global.fetch
+				.mockResolvedValueOnce( {
+					json: jest.fn().mockResolvedValueOnce( initialMockData ),
+				} )
+				.mockResolvedValueOnce( {
+					ok: true,
+					json: jest.fn().mockResolvedValueOnce( refreshMockData ),
+				} )
+				.mockResolvedValueOnce( {
+					json: jest.fn().mockResolvedValueOnce( retryMockData ),
+				} );
+
+			const result = await apiCall( 'some_action', {} );
+
+			// Check if nonce was updated in wppoSettings
+			expect( global.wppoSettings.nonce ).toBe( 'newnonce123' );
+			expect( result ).toEqual( retryMockData );
+			expect( global.fetch ).toHaveBeenCalledTimes( 3 );
+			// Check if refresh nonce was called
+			expect( global.fetch ).toHaveBeenNthCalledWith(
+				2,
+				'http://test.com/wp-json/wppo/v1/refresh_nonce'
+			);
+			// Check if retry was called with new nonce
+			expect( global.fetch ).toHaveBeenNthCalledWith(
+				3,
+				'http://test.com/wp-json/wppo/v1/some_action',
+				expect.objectContaining( {
+					headers: expect.objectContaining( {
+						'X-WP-Nonce': 'newnonce123',
+					} ),
+				} )
+			);
+		} );
+
+		it( 'should throw custom error on retry JSON parse failure', async () => {
+			// 1. Initial request fails with rest_forbidden
+			const initialMockData = {
+				code: 'rest_forbidden',
+				message: 'Forbidden',
+			};
+			// 2. Refresh nonce request succeeds
+			const refreshMockData = { success: true, nonce: 'newnonce123' };
+
+			global.fetch
+				.mockResolvedValueOnce( {
+					json: jest.fn().mockResolvedValueOnce( initialMockData ),
+				} )
+				.mockResolvedValueOnce( {
+					ok: true,
+					json: jest.fn().mockResolvedValueOnce( refreshMockData ),
+				} )
+				.mockResolvedValueOnce( {
+					json: jest
+						.fn()
+						.mockRejectedValueOnce(
+							new Error( 'Unexpected end of input' )
+						),
+				} );
+
+			await expect( apiCall( 'some_action', {} ) ).rejects.toThrow(
+				'Invalid JSON response from some_action (retry): Unexpected end of input'
+			);
+		} );
+
+		it( 'should fall back to old nonce if refreshNonce fetch fails', async () => {
+			// 1. Initial request fails with rest_forbidden
+			const initialMockData = {
+				code: 'rest_forbidden',
+				message: 'Forbidden',
+			};
+			// 3. Retry request succeeds (using old nonce because refresh failed)
+			const retryMockData = {
+				success: true,
+				data: { status: 'retried_with_old_nonce' },
+			};
+
+			global.fetch
+				.mockResolvedValueOnce( {
+					json: jest.fn().mockResolvedValueOnce( initialMockData ),
+				} )
+				.mockResolvedValueOnce( {
+					ok: false, // Simulate !res.ok
+				} )
+				.mockResolvedValueOnce( {
+					json: jest.fn().mockResolvedValueOnce( retryMockData ),
+				} );
+
+			const result = await apiCall( 'some_action', {} );
+
+			expect( global.wppoSettings.nonce ).toBe( 'testnonce' );
+			expect( result ).toEqual( retryMockData );
+			// Check if retry was called with OLD nonce
+			expect( global.fetch ).toHaveBeenNthCalledWith(
+				3,
+				'http://test.com/wp-json/wppo/v1/some_action',
+				expect.objectContaining( {
+					headers: expect.objectContaining( {
+						'X-WP-Nonce': 'testnonce',
+					} ),
+				} )
+			);
+		} );
+
+		it( 'should log error if refreshNonce throws error', async () => {
+			// 1. Initial request fails with rest_forbidden
+			const initialMockData = {
+				code: 'rest_forbidden',
+				message: 'Forbidden',
+			};
+			// 3. Retry request succeeds (using old nonce because refresh failed)
+			const retryMockData = {
+				success: true,
+				data: { status: 'retried_with_old_nonce' },
+			};
+			const refreshError = new Error( 'Refresh error' );
+
+			global.fetch
+				.mockResolvedValueOnce( {
+					json: jest.fn().mockResolvedValueOnce( initialMockData ),
+				} )
+				.mockRejectedValueOnce( refreshError ) // Simulate fetch rejection
+				.mockResolvedValueOnce( {
+					json: jest.fn().mockResolvedValueOnce( retryMockData ),
+				} );
+
+			const result = await apiCall( 'some_action', {} );
+
+			expect( console.error ).toHaveBeenCalledWith(
+				'Nonce refresh failed:',
+				refreshError
+			);
+			expect( global.wppoSettings.nonce ).toBe( 'testnonce' );
+			expect( result ).toEqual( retryMockData );
 		} );
 	} );
 
@@ -416,11 +579,6 @@ describe( 'API Request library', () => {
 			const mockError = new Error( 'Failed to fetch' );
 			global.fetch.mockRejectedValueOnce( mockError );
 
-			// Mock console.error
-			const consoleSpy = jest
-				.spyOn( console, 'error' )
-				.mockImplementation( () => {} );
-
 			await expect( fetchRecentActivities() ).rejects.toThrow(
 				'Failed to fetch'
 			);
@@ -429,8 +587,6 @@ describe( 'API Request library', () => {
 				'recent_activities?page=1',
 				mockError
 			);
-
-			consoleSpy.mockRestore();
 		} );
 	} );
 } );
