@@ -421,6 +421,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 								className="wppo-button wppo-button--ghost wppo-button--sm"
 								onClick={ ( e ) => handleScan( e, true ) }
 								disabled={ scanning }
+								aria-label={ __(
+									'Scan Fresh Data for Performance Audit',
+									'performance-optimisation'
+								) }
 							>
 								{ __(
 									'Scan Fresh Data',

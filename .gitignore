@@ -6,3 +6,4 @@ app/
 test-lab/
 *.log
 coverage/
+*.orig
