@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import Tooltip from '../Tooltip';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import React from 'react';
@@ -45,5 +45,39 @@ describe( 'Tooltip', () => {
 		expect( icon ).toBeInTheDocument();
 		expect( icon.tagName.toLowerCase() ).toBe( 'svg' );
 		expect( screen.getByText( 'Info tooltip' ) ).toBeInTheDocument();
+	} );
+
+	it( 'toggles visible class on hover', () => {
+		render( <Tooltip content="Hover content">Hover Me</Tooltip> );
+		const container = document.querySelector( '.wppo-tooltip-container' );
+
+		expect( container ).not.toHaveClass(
+			'wppo-tooltip-container--visible'
+		);
+
+		fireEvent.mouseEnter( container );
+		expect( container ).toHaveClass( 'wppo-tooltip-container--visible' );
+
+		fireEvent.mouseLeave( container );
+		expect( container ).not.toHaveClass(
+			'wppo-tooltip-container--visible'
+		);
+	} );
+
+	it( 'toggles visible class on focus and blur', () => {
+		render( <Tooltip content="Focus content">Focus Me</Tooltip> );
+		const container = document.querySelector( '.wppo-tooltip-container' );
+
+		expect( container ).not.toHaveClass(
+			'wppo-tooltip-container--visible'
+		);
+
+		fireEvent.focus( container );
+		expect( container ).toHaveClass( 'wppo-tooltip-container--visible' );
+
+		fireEvent.blur( container );
+		expect( container ).not.toHaveClass(
+			'wppo-tooltip-container--visible'
+		);
 	} );
 } );
