@@ -85,7 +85,10 @@ describe( 'API Request library', () => {
 				message: 'Forbidden',
 			};
 			// 2. Refresh nonce request succeeds
-			const refreshMockData = { success: true, nonce: 'newnonce123' };
+			const refreshMockData = {
+				success: true,
+				data: { nonce: 'newnonce123' },
+			};
 			// 3. Retry request succeeds
 			const retryMockData = {
 				success: true,
@@ -110,10 +113,14 @@ describe( 'API Request library', () => {
 			expect( global.wppoSettings.nonce ).toBe( 'newnonce123' );
 			expect( result ).toEqual( retryMockData );
 			expect( global.fetch ).toHaveBeenCalledTimes( 3 );
-			// Check if refresh nonce was called
+			// Check if refresh nonce was called via admin-ajax
 			expect( global.fetch ).toHaveBeenNthCalledWith(
 				2,
-				'http://test.com/wp-json/wppo/v1/refresh_nonce'
+				'http://test.com/wp-admin/admin-ajax.php',
+				expect.objectContaining( {
+					method: 'POST',
+					body: expect.any( URLSearchParams ),
+				} )
 			);
 			// Check if retry was called with new nonce
 			expect( global.fetch ).toHaveBeenNthCalledWith(
@@ -134,7 +141,10 @@ describe( 'API Request library', () => {
 				message: 'Forbidden',
 			};
 			// 2. Refresh nonce request succeeds
-			const refreshMockData = { success: true, nonce: 'newnonce123' };
+			const refreshMockData = {
+				success: true,
+				data: { nonce: 'newnonce123' },
+			};
 
 			global.fetch
 				.mockResolvedValueOnce( {
@@ -153,20 +163,15 @@ describe( 'API Request library', () => {
 				} );
 
 			await expect( apiCall( 'some_action', {} ) ).rejects.toThrow(
-				'Invalid JSON response from some_action (retry): Unexpected end of input'
+				'Unexpected end of input'
 			);
 		} );
 
-		it( 'should fall back to old nonce if refreshNonce fetch fails', async () => {
+		it( 'should throw error if refreshNonce fetch fails', async () => {
 			// 1. Initial request fails with rest_forbidden
 			const initialMockData = {
 				code: 'rest_forbidden',
 				message: 'Forbidden',
-			};
-			// 3. Retry request succeeds (using old nonce because refresh failed)
-			const retryMockData = {
-				success: true,
-				data: { status: 'retried_with_old_nonce' },
 			};
 
 			global.fetch
@@ -175,24 +180,11 @@ describe( 'API Request library', () => {
 				} )
 				.mockResolvedValueOnce( {
 					ok: false, // Simulate !res.ok
-				} )
-				.mockResolvedValueOnce( {
-					json: jest.fn().mockResolvedValueOnce( retryMockData ),
+					status: 403,
 				} );
 
-			const result = await apiCall( 'some_action', {} );
-
-			expect( global.wppoSettings.nonce ).toBe( 'testnonce' );
-			expect( result ).toEqual( retryMockData );
-			// Check if retry was called with OLD nonce
-			expect( global.fetch ).toHaveBeenNthCalledWith(
-				3,
-				'http://test.com/wp-json/wppo/v1/some_action',
-				expect.objectContaining( {
-					headers: expect.objectContaining( {
-						'X-WP-Nonce': 'testnonce',
-					} ),
-				} )
+			await expect( apiCall( 'some_action', {} ) ).rejects.toThrow(
+				'Nonce refresh failed with status 403'
 			);
 		} );
 
@@ -202,30 +194,22 @@ describe( 'API Request library', () => {
 				code: 'rest_forbidden',
 				message: 'Forbidden',
 			};
-			// 3. Retry request succeeds (using old nonce because refresh failed)
-			const retryMockData = {
-				success: true,
-				data: { status: 'retried_with_old_nonce' },
-			};
 			const refreshError = new Error( 'Refresh error' );
 
 			global.fetch
 				.mockResolvedValueOnce( {
 					json: jest.fn().mockResolvedValueOnce( initialMockData ),
 				} )
-				.mockRejectedValueOnce( refreshError ) // Simulate fetch rejection
-				.mockResolvedValueOnce( {
-					json: jest.fn().mockResolvedValueOnce( retryMockData ),
-				} );
+				.mockRejectedValueOnce( refreshError ); // Simulate fetch rejection
 
-			const result = await apiCall( 'some_action', {} );
+			await expect( apiCall( 'some_action', {} ) ).rejects.toThrow(
+				'Refresh error'
+			);
 
 			expect( console.error ).toHaveBeenCalledWith(
 				'Nonce refresh failed:',
 				refreshError
 			);
-			expect( global.wppoSettings.nonce ).toBe( 'testnonce' );
-			expect( result ).toEqual( retryMockData );
 		} );
 	} );
 
@@ -582,7 +566,7 @@ describe( 'API Request library', () => {
 			await expect( fetchRecentActivities() ).rejects.toThrow(
 				'Failed to fetch'
 			);
-			expect( consoleSpy ).toHaveBeenCalledWith(
+			expect( console.error ).toHaveBeenCalledWith(
 				'API call failed:',
 				'recent_activities?page=1',
 				mockError
