@@ -212,7 +212,14 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			$local_key = $this->get_key( $key, $group );
 
 			if ( $expire ) {
-				return $this->redis->set( $local_key, $data, array( 'nx' => true, 'ex' => $expire ) );
+				return $this->redis->set(
+					$local_key,
+					$data,
+					array(
+						'nx' => true,
+						'ex' => $expire,
+					)
+				);
 			}
 			return $this->redis->setnx( $local_key, $data );
 		}

@@ -113,9 +113,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 
 				// Get total number of activities.
 				$total_items = (int) $wpdb->get_var(
-					$wpdb->prepare(
-						"SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs"
-					)
+					"SELECT COUNT(*) FROM {$wpdb->prefix}wppo_activity_logs"
 				);
 
 				// Calculate total pages.
