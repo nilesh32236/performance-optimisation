@@ -310,43 +310,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 				$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 
-				if ( in_array( $conversion_format, array( 'avif', 'both' ), true ) ) {
-					$images = $img_info['pending']['avif'] ?? array();
-
-					$counter = 0;
-					if ( ! empty( $images ) ) {
-						foreach ( $images as $img ) {
-							++$counter;
-
-							if ( $counter <= $batch_size ) {
-								$source_path = wp_normalize_path( ABSPATH . $img );
-								$resolved    = realpath( $source_path );
-								if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
-									continue;
-								}
-								$img_converter->convert_image( $source_path, 'avif' );
-							}
-						}
-					}
+				$formats_to_process = array();
+				if ( 'both' === $conversion_format ) {
+					$formats_to_process = array( 'avif', 'webp' );
+				} elseif ( in_array( $conversion_format, array( 'avif', 'webp' ), true ) ) {
+					$formats_to_process[] = $conversion_format;
 				}
 
-				if ( in_array( $conversion_format, array( 'webp', 'both' ), true ) ) {
-					$images = $img_info['pending']['webp'] ?? array();
+				foreach ( $formats_to_process as $format ) {
+					$images = $img_info['pending'][ $format ] ?? array();
+
+					if ( empty( $images ) ) {
+						continue;
+					}
 
 					$counter = 0;
-					if ( ! empty( $images ) ) {
-						foreach ( $images as $img ) {
-							++$counter;
-
-							if ( $counter <= $batch_size ) {
-								$source_path = wp_normalize_path( ABSPATH . $img );
-								$resolved    = realpath( $source_path );
-								if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
-									continue;
-								}
-								$img_converter->convert_image( $source_path );
-							}
+					foreach ( $images as $img ) {
+						if ( $counter >= $batch_size ) {
+							break;
 						}
+
+						++$counter;
+
+						$source_path = wp_normalize_path( ABSPATH . $img );
+						$resolved    = realpath( $source_path );
+						if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
+							continue;
+						}
+
+						$img_converter->convert_image( $source_path, $format );
 					}
 				}
 			} finally {
