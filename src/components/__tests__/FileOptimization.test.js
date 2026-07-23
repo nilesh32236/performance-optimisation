@@ -143,11 +143,9 @@ describe( 'FileOptimization Component', () => {
 			expect( assetsTab ).toHaveFocus();
 		} );
 
-        // Simulate ignored key
-        fireEvent.keyDown( assetsTab, { key: 'Enter' } );
-        await waitFor( () => {
-			expect( assetsTab ).toHaveFocus();
-		} );
+		// Simulate ignored key
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
+		expect( assetsTab ).toHaveFocus();
 	} );
 
 	it( 'renders apache server rules correctly', () => {
