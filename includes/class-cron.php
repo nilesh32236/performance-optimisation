@@ -179,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					}
 
 					if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
-						wp_schedule_single_event( time() + \wp_rand( 0, 1800 ), 'wppo_generate_static_page', array( $page_id ) );
+						wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_page', array( $page_id ) );
 					}
 				}
 
@@ -241,11 +241,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			$response = wp_remote_get( $permalink, array( 'timeout' => 30 ) );
 			if ( is_wp_error( $response ) ) {
 				$clean_err = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO preload failed for page ' . (int) $page_id . ': ' . $clean_err );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO preload failed for page ' . (int) $page_id . ': ' . $clean_err );
+				}
 			} elseif ( wp_remote_retrieve_response_code( $response ) >= 400 ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO preload failed: HTTP status ' . (int) wp_remote_retrieve_response_code( $response ) );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO preload failed: HTTP status ' . (int) wp_remote_retrieve_response_code( $response ) );
+				}
 			}
 		}
 

@@ -681,7 +681,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
-				wp_schedule_single_event( time() + \wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $page_id ) );
+				wp_schedule_single_event( time() + wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $page_id ) );
 			}
 		}
 

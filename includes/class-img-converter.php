@@ -133,8 +133,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// Security Fix: Prevent File Size & Memory Bomb DoS.
 			$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
 			if ( filesize( $source_image ) > $max_bytes ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Error: Image exceeds maximum filesize limit' );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO Error: Image exceeds maximum filesize limit' );
+				}
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
 			}
@@ -157,8 +159,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				)
 			);
 			if ( $image_info[0] > $max_dims['width'] || $image_info[1] > $max_dims['height'] ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Error: Image dimensions exceed maximum allowed' );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO Error: Image dimensions exceed maximum allowed' );
+				}
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
 			}
@@ -353,7 +357,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO Image conversion failed: ' . str_replace( ABSPATH, '', $e->getMessage() ) );
 				}
-				new Log( __( 'Image conversion failed.', 'performance-optimisation' ) );
+				Log::add( __( 'Image conversion failed.', 'performance-optimisation' ) );
 
 				return false;
 			}
@@ -579,8 +583,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return $metadata;
 
 			} catch ( \Exception $e ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Image conversion error for attachment ID ' . (int) $attachment_id . ': ' . str_replace( ABSPATH, '', $e->getMessage() ) );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO Image conversion error for attachment ID ' . (int) $attachment_id . ': ' . str_replace( ABSPATH, '', $e->getMessage() ) );
+				}
 				return $metadata;
 			}
 		}
@@ -701,8 +707,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// Only queue images that live inside wp-content/uploads.
 			if ( strpos( $normalized, $upload_dir ) !== 0 ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO: add_img_into_queue rejected path — not inside uploads directory.' );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO: add_img_into_queue rejected path — not inside uploads directory.' );
+				}
 				return false;
 			}
 
