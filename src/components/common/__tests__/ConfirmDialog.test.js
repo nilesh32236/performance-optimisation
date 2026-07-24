@@ -169,4 +169,18 @@ describe( 'ConfirmDialog', () => {
 		fireEvent.keyDown( document, { key: 'Escape', code: 'Escape' } );
 		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
 	} );
+
+	it( 'calls onCancel when Enter key is pressed on overlay', () => {
+		render( <ConfirmDialog { ...defaultProps } /> );
+		const overlay = screen.getByRole( 'presentation' );
+		fireEvent.keyDown( overlay, { key: 'Enter', code: 'Enter' } );
+		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'calls onCancel when Space key is pressed on overlay', () => {
+		render( <ConfirmDialog { ...defaultProps } /> );
+		const overlay = screen.getByRole( 'presentation' );
+		fireEvent.keyDown( overlay, { key: ' ', code: 'Space' } );
+		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
+	} );
 } );

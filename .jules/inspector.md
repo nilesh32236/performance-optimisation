@@ -6,3 +6,8 @@
 **Bug/Gap:** The `FileOptimization` component lacked test coverage for API failure sad paths, non-string input HTML escaping, and ignored keydown events during tab navigation.
 **Root Cause:** The test suite only covered happy-path API responses and correct keyboard navigation, and the `escapeHtml` utility internal to the component wasn't tested with invalid inputs.
 **Test Added:** Added explicit Jest tests simulating rejected API responses from `apiCall`, triggering an unsupported key event (`Enter`), and passing integers to the component's `nginx` server rules prop to ensure `escapeHtml` safely returns empty strings without throwing.
+
+## 2024-07-24 - [Test Added for ConfirmDialog keypress]
+**Bug/Gap:** Missing test coverage for Enter and Space keypresses on the overlay of ConfirmDialog.
+**Root Cause:** The onClick behaviour was mocked with Space and Enter but without specific unit tests for those events.
+**Test Added:** Added fireEvent.keyDown simulate tests for 'Enter' and 'Space' on the 'presentation' role.
