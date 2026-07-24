@@ -11,3 +11,8 @@
 **Bug/Gap:** Missing test coverage for Enter and Space keypresses on the overlay of ConfirmDialog.
 **Root Cause:** The onClick behaviour was mocked with Space and Enter but without specific unit tests for those events.
 **Test Added:** Added fireEvent.keyDown simulate tests for 'Enter' and 'Space' on the 'presentation' role.
+
+## 2024-07-24 - [Add edge case tests for ConfirmDialog keypress gating]
+**Bug/Gap:** Missing test coverage for the gating logic e.target === e.currentTarget on the overlay of ConfirmDialog.
+**Root Cause:** The tests didn't verify the negative case where a keypress bubbles from a child (e.g., pressing Enter while a button inside the dialog is focused), which should NOT trigger onCancel.
+**Test Added:** Added fireEvent.keyDown simulate tests for 'Enter' and 'Space' on the 'dialog' role and asserting onCancel is not called.

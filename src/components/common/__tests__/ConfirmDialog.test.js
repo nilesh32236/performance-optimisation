@@ -183,4 +183,18 @@ describe( 'ConfirmDialog', () => {
 		fireEvent.keyDown( overlay, { key: ' ', code: 'Space' } );
 		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
 	} );
+
+	it( 'does not call onCancel when Enter key is pressed on a child element', () => {
+		render( <ConfirmDialog { ...defaultProps } /> );
+		const dialog = screen.getByRole( 'dialog' );
+		fireEvent.keyDown( dialog, { key: 'Enter', code: 'Enter' } );
+		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 0 );
+	} );
+
+	it( 'does not call onCancel when Space key is pressed on a child element', () => {
+		render( <ConfirmDialog { ...defaultProps } /> );
+		const dialog = screen.getByRole( 'dialog' );
+		fireEvent.keyDown( dialog, { key: ' ', code: 'Space' } );
+		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 0 );
+	} );
 } );
