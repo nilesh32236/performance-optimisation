@@ -51,3 +51,7 @@
 ## 2026-07-21 - Throttle Environment Failure Checks
 **Learning:** When performing expensive environment checks (like file I/O to check or write to `wp-config.php`) inside high-frequency hooks like `admin_init`, failing to throttle the execution when the check *fails* will cause the application to repeatedly retry the failing operation on every single page load.
 **Action:** Always unconditionally set the throttle transient (using `set_transient`) outside of success/failure conditional blocks to prevent constant retry loops.
+
+## 2025-01-22 - Redundant Operations in Parsers
+**Learning:** Functions called within high-frequency loops, such as parsing HTML tags, can cause significant performance degradation. Generating regular expressions via `preg_quote` and doing complex URL processing (like `Util::get_local_path`) for each tag or property evaluated can add substantial overhead across a large document.
+**Action:** Lift static computations and string transformations out of loops when parsing. Delay expensive lookups (like resolving local filesystem paths) with lazy evaluation, ensuring they're executed at most once per distinct resource.

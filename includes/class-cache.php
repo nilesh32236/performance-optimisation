@@ -416,7 +416,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $buffer;
 			}
 
-			$tags = new \WP_HTML_Tag_Processor( $buffer );
+			// Cache the expensive regex generation outside the loop to improve performance.
+			$site_url_regex = '#^' . preg_quote( $site_url, '#' ) . '(/|$)#';
+			$tags           = new \WP_HTML_Tag_Processor( $buffer );
 
 			while ( $tags->next_tag() ) {
 				$tag_name = strtolower( $tags->get_tag() );
@@ -429,7 +431,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				foreach ( $attributes as $attr ) {
 					$val = $tags->get_attribute( $attr );
 
-					if ( $val && preg_match( '#^' . preg_quote( $site_url, '#' ) . '(/|$)#', $val ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $val ) ) {
+					if ( $val && preg_match( $site_url_regex, $val ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $val ) ) {
 						$tags->set_attribute( $attr, str_replace( $site_url, $cdn_url, $val ) );
 					}
 				}
@@ -446,7 +448,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							$url       = $parts[0];
 							$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
 
-							if ( preg_match( '#^' . preg_quote( $site_url, '#' ) . '(/|$)#', $url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $url ) ) {
+							if ( preg_match( $site_url_regex, $url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $url ) ) {
 								$url = str_replace( $site_url, $cdn_url, $url );
 							}
 							$new_srcset[] = $url . $suffix;

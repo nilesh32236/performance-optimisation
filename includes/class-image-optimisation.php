@@ -324,6 +324,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$avif_img_path = $img_converter->get_img_path( $img_url, 'avif' );
 			$webp_img_path = $img_converter->get_img_path( $img_url, 'webp' );
 
+			// Cache local path lookups to avoid redundant expensive file system checks.
+			$source_image_path = null;
+
 			if ( 'avif' === $conversion_format || 'both' === $conversion_format ) {
 				// Convert to AVIF if supported and not already converted.
 				if ( ! file_exists( $avif_img_path ) ) {
@@ -338,7 +341,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( 'webp' === $conversion_format || 'both' === $conversion_format ) {
 				// Convert to WebP if supported and not already converted.
 				if ( ! file_exists( $webp_img_path ) ) {
-					$source_image_path = Util::get_local_path( $img_url );
+					if ( null === $source_image_path ) {
+						$source_image_path = Util::get_local_path( $img_url );
+					}
 
 					if ( file_exists( $source_image_path ) ) {
 						$img_converter->add_img_into_queue( $source_image_path );
