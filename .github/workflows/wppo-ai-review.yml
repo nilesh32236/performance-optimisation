@@ -216,6 +216,7 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: 'opencode/deepseek-v4-flash-free'
           max_files_per_batch: 3
+          enable_mcp: false
           include_strengths: true
           review_comment_summary: true
           project_context: >
@@ -304,6 +305,7 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: 'opencode/deepseek-v4-flash-free'
           max_fix_iterations: 3
+          enable_mcp: false
           enable_fix: true
           # Single command only — see inputs.ts validateRunChecksCommand.
           # The full check suite is described in project_context for the AI agent.
