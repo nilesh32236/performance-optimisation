@@ -71,6 +71,26 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	it( 'submits settings but fails and displays error notification', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Failed updating settings on server.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed updating settings on server.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'handles sad path network error and logs to console', async () => {
 		const mockError = new Error( 'Network Failure' );
 		apiCall.mockRejectedValueOnce( mockError );
@@ -122,6 +142,10 @@ describe( 'FileOptimization Component', () => {
 		await waitFor( () => {
 			expect( assetsTab ).toHaveFocus();
 		} );
+
+		// Simulate ignored key
+		fireEvent.keyDown( assetsTab, { key: 'Enter' } );
+		expect( assetsTab ).toHaveFocus();
 	} );
 
 	it( 'renders apache server rules correctly', () => {
@@ -175,5 +199,24 @@ describe( 'FileOptimization Component', () => {
 		expect(
 			screen.getByText( /Unrecognised server software/i )
 		).toBeInTheDocument();
+	} );
+
+	it( 'escapes html entities in server rules properly handling non-string inputs', () => {
+		render(
+			<FileOptimization
+				options={ {} }
+				serverRules={ {
+					server_type: 'nginx',
+					nginx: 12345, // Not a string
+				} }
+			/>
+		);
+
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+
+		expect( screen.getByText( /Nginx Detected/i ) ).toBeInTheDocument();
+		// With a non-string input to escapeHtml, it returns ''. The pre > code block should be empty or just not contain '12345'
+		expect( screen.queryByText( '12345' ) ).not.toBeInTheDocument();
 	} );
 } );
