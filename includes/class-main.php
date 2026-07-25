@@ -665,10 +665,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.0.0
 		 */
 		public function remove_woocommerce_scripts() {
-			$exclude_url_to_keep_js_css = array();
-			if ( isset( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) && ! empty( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) ) {
-				$exclude_url_to_keep_js_css = Util::process_urls( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] );
+			if ( empty( $this->options['file_optimisation']['removeCssJsHandle'] ) ) {
+				return;
+			}
 
+			$exclude_url_to_keep_js_css = array();
+			if ( ! empty( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] ) ) {
+				$exclude_url_to_keep_js_css = Util::process_urls( $this->options['file_optimisation']['excludeUrlToKeepJSCSS'] );
+			}
+
+			if ( ! empty( $exclude_url_to_keep_js_css ) ) {
 				// Safely retrieve and sanitize the current URL.
 				$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 				$parsed_uri  = str_replace( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '', '', $request_uri );
@@ -693,24 +699,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			$remove_css_js_handle = array();
-			if ( isset( $this->options['file_optimisation']['removeCssJsHandle'] ) && ! empty( $this->options['file_optimisation']['removeCssJsHandle'] ) ) {
-				$remove_css_js_handle = Util::process_urls( $this->options['file_optimisation']['removeCssJsHandle'] );
-			}
+			$remove_css_js_handle = Util::process_urls( $this->options['file_optimisation']['removeCssJsHandle'] );
 
-			if ( ! empty( $remove_css_js_handle ) ) {
-				foreach ( $remove_css_js_handle as $handle ) {
-					if ( 0 === strpos( $handle, 'style:' ) ) {
-						$handle = str_replace( 'style:', '', $handle );
-						$handle = trim( $handle );
+			foreach ( $remove_css_js_handle as $handle ) {
+				if ( 0 === strpos( $handle, 'style:' ) ) {
+					$handle = str_replace( 'style:', '', $handle );
+					$handle = trim( $handle );
 
-						wp_dequeue_style( $handle );
-					} elseif ( 0 === strpos( $handle, 'script:' ) ) {
-						$handle = str_replace( 'script:', '', $handle );
-						$handle = trim( $handle );
+					wp_dequeue_style( $handle );
+				} elseif ( 0 === strpos( $handle, 'script:' ) ) {
+					$handle = str_replace( 'script:', '', $handle );
+					$handle = trim( $handle );
 
-						wp_dequeue_script( $handle );
-					}
+					wp_dequeue_script( $handle );
 				}
 			}
 		}
