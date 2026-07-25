@@ -144,7 +144,10 @@ const ImageOptimization = ( { options = {} } ) => {
 						className="wppo-notice__dismiss"
 						type="button"
 						onClick={ () => setNotification( null ) }
-						aria-label="Dismiss"
+						aria-label={ __(
+							'Dismiss',
+							'performance-optimisation'
+						) }
 					>
 						<FontAwesomeIcon icon={ faTimes } />
 					</button>
@@ -153,13 +156,19 @@ const ImageOptimization = ( { options = {} } ) => {
 
 			<div className="wppo-stacked-cards">
 				<FeatureCard
-					title="Lazy Loading"
+					title={ __( 'Lazy Loading', 'performance-optimisation' ) }
 					icon={ <FontAwesomeIcon icon={ faEye } /> }
 				>
 					<div className="wppo-field-group">
 						<SwitchField
-							label="Enable Lazy Load"
-							description="Images below the fold are loaded only when the user scrolls near them. Reduces initial page weight and improves Largest Contentful Paint (LCP) for above-the-fold content."
+							label={ __(
+								'Enable Lazy Load',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Images below the fold are loaded only when the user scrolls near them. Reduces initial page weight and improves Largest Contentful Paint (LCP) for above-the-fold content.',
+								'performance-optimisation'
+							) }
 							name="lazyLoadImages"
 							checked={ settings.lazyLoadImages }
 							onChange={ handleChange( setSettings ) }
@@ -194,8 +203,14 @@ const ImageOptimization = ( { options = {} } ) => {
 									</p>
 								</div>
 								<SwitchField
-									label="SVG Placeholders"
-									description="Replace the image src with a lightweight inline SVG blur placeholder while the real image loads. Prevents layout shift and gives a smooth loading experience."
+									label={ __(
+										'SVG Placeholders',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Replace the image src with a lightweight inline SVG blur placeholder while the real image loads. Prevents layout shift and gives a smooth loading experience.',
+										'performance-optimisation'
+									) }
 									name="replacePlaceholderWithSVG"
 									checked={
 										settings.replacePlaceholderWithSVG
@@ -206,8 +221,14 @@ const ImageOptimization = ( { options = {} } ) => {
 						) }
 
 						<SwitchField
-							label="Wrap in Picture Tag"
-							description="Wrap <img> elements in a <picture> element to enable serving next-gen formats (WebP/AVIF) with a fallback for older browsers. Required for format conversion to work."
+							label={ __(
+								'Wrap in Picture Tag',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Wrap <img> elements in a <picture> element to enable serving next-gen formats (WebP/AVIF) with a fallback for older browsers. Required for format conversion to work.',
+								'performance-optimisation'
+							) }
 							name="wrapInPicture"
 							checked={ settings.wrapInPicture }
 							onChange={ handleChange( setSettings ) }
@@ -216,13 +237,19 @@ const ImageOptimization = ( { options = {} } ) => {
 				</FeatureCard>
 
 				<FeatureCard
-					title="Video & Media"
+					title={ __( 'Video & Media', 'performance-optimisation' ) }
 					icon={ <FontAwesomeIcon icon={ faMagic } /> }
 				>
 					<div className="wppo-field-group">
 						<SwitchField
-							label="Video Lazy Loading"
-							description="Defer loading of <iframe> and <video> embeds until they enter the viewport. Significantly reduces initial page load time for pages with embedded YouTube, Vimeo, or other media."
+							label={ __(
+								'Video Lazy Loading',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Defer loading of <iframe> and <video> embeds until they enter the viewport. Significantly reduces initial page load time for pages with embedded YouTube, Vimeo, or other media.',
+								'performance-optimisation'
+							) }
 							name="lazyLoadVideos"
 							checked={ settings.lazyLoadVideos }
 							onChange={ handleChange( setSettings ) }
@@ -257,13 +284,22 @@ const ImageOptimization = ( { options = {} } ) => {
 				</FeatureCard>
 
 				<FeatureCard
-					title="Next-Gen Conversion"
+					title={ __(
+						'Next-Gen Conversion',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faMagic } /> }
 				>
 					<div className="wppo-field-group">
 						<SwitchField
-							label="Auto Convert Formats"
-							description="Automatically convert uploaded JPEG/PNG images to modern formats (WebP or AVIF). Modern formats are 25–50% smaller than JPEG at the same quality, directly improving page speed scores."
+							label={ __(
+								'Auto Convert Formats',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Automatically convert uploaded JPEG/PNG images to modern formats (WebP or AVIF). Modern formats are 25–50 percent smaller than JPEG at the same quality, directly improving page speed scores.',
+								'performance-optimisation'
+							) }
 							name="convertImg"
 							checked={ settings.convertImg }
 							onChange={ handleChange( setSettings ) }
@@ -333,7 +369,10 @@ const ImageOptimization = ( { options = {} } ) => {
 				</FeatureCard>
 
 				<FeatureCard
-					title="Responsive Limits"
+					title={ __(
+						'Responsive Limits',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faMagic } /> }
 				>
 					<div className="wppo-field-group">
@@ -394,7 +433,10 @@ const ImageOptimization = ( { options = {} } ) => {
 				</FeatureCard>
 
 				<FeatureCard
-					title="Advanced Preloading"
+					title={ __(
+						'Advanced Preloading',
+						'performance-optimisation'
+					) }
 					icon={ <FontAwesomeIcon icon={ faCloudUploadAlt } /> }
 				>
 					<div className="wppo-stacked-cards">
@@ -448,8 +490,14 @@ const ImageOptimization = ( { options = {} } ) => {
 						</div>
 						<div>
 							<SwitchField
-								label="Preload Featured Images"
-								description="Automatically add preload hints for the featured image of posts and pages. Select which post types to apply this to below. Improves LCP for archive and single post pages."
+								label={ __(
+									'Preload Featured Images',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Automatically add preload hints for the featured image of posts and pages. Select which post types to apply this to below. Improves LCP for archive and single post pages.',
+									'performance-optimisation'
+								) }
 								name="preloadPostTypeImage"
 								checked={ settings.preloadPostTypeImage }
 								onChange={ handleChange( setSettings ) }

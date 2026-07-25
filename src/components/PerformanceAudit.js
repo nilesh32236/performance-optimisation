@@ -7,7 +7,7 @@
  * @since 1.5.0
  */
 
-import { useState, useRef } from '@wordpress/element';
+import { useState, useRef, useEffect } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faSearch,
@@ -220,6 +220,15 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 	const [ error, setError ] = useState( null );
 	const [ devMode, setDevMode ] = useState( false );
 	const submittingRef = useRef( false );
+	const abortControllerRef = useRef( null );
+
+	useEffect( () => {
+		return () => {
+			if ( abortControllerRef.current ) {
+				abortControllerRef.current.abort();
+			}
+		};
+	}, [] );
 
 	const handleDevModeToggle = ( e ) => {
 		setDevMode( e.target.checked );
@@ -237,7 +246,11 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 		setError( null );
 		setResult( null );
 
-		const abortController = new AbortController();
+		if ( abortControllerRef.current ) {
+			abortControllerRef.current.abort();
+		}
+		abortControllerRef.current = new AbortController();
+		const abortController = abortControllerRef.current;
 
 		try {
 			const response = await runPerformanceScan( url, force );
