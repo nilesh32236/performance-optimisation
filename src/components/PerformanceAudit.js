@@ -246,6 +246,9 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 		setError( null );
 		setResult( null );
 
+		if ( abortControllerRef.current ) {
+			abortControllerRef.current.abort();
+		}
 		abortControllerRef.current = new AbortController();
 		const abortController = abortControllerRef.current;
 
