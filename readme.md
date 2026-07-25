@@ -24,13 +24,13 @@ Whether aiming for a perfect PageSpeed score or a seamless user experience, this
 
 ---
 
-## What's New in v1.6.0
+## What's New in v1.7.0
 
-- **Google PageSpeed Insights Integration:** Audit Mobile and Desktop performance directly from your WordPress dashboard.
-- **Actionable Optimization Suggestions:** Get specific recommendations based on real-world site telemetry.
-- **Nginx Infrastructure Support:** View dynamic Nginx configuration rules tailored to your plugin settings.
-- **WP_CACHE Self-Healing:** Automatic monitoring and fixing of the `WP_CACHE` constant for reliable caching.
-- **PHP 8.2 Requirement:** Now optimized for high-performance modern server environments.
+- **Cached Minification Status:** Avoids redundant disk I/O when checking minification status.
+- **Streaming Minification Checkers:** High-performance streaming file readers for CSS and JS minification detection.
+- **Enhanced Accessibility:** Keyboard-accessible tooltips, ARIA labels, and explicit field descriptions.
+- **Request Cancellation Safety:** Automatic abort of pending telemetry requests when starting a new scan.
+- **Comprehensive React Testing:** Complete unit test suite for UI components.
 
 ---
 

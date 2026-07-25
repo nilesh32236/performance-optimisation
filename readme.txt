@@ -4,7 +4,7 @@ Tags: performance, optimization, cache, minify, image optimisation
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 6.8
-Stable tag: 1.6.0
+Stable tag: 1.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -64,6 +64,16 @@ After activation, you can manage the following from the settings tabs:
 7. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
 
 == Changelog ==
+
+= 1.7.0 (2026-07-26) =
+* Improvement: Cached minification status checks to reduce disk I/O overhead.
+* Improvement: Optimized minification detection using streaming file readers.
+* Accessibility: Made Tooltip component fully keyboard accessible and theme-adaptive.
+* Accessibility: Added ARIA labels and accessible descriptions across Performance Audit and Database Cleanup settings.
+* UI: Integrated LoadingSubmitButton for granular database cleanup actions.
+* Fix: Throttled WP_CACHE environment verification checks on failure.
+* Fix: Aligned PageSpeed result strategy labels with scan output and prevented stale suggestion responses on consecutive scans.
+* Localization: Migrated client-side translations to @wordpress/i18n.
 
 = 1.6.0 (2026-04-26) =
 * New: Google PageSpeed Insights integration — audit Mobile/Desktop performance from your dashboard.
@@ -202,6 +212,9 @@ Yes, lazy loading can be enabled in the Image Optimisation Settings tab. You can
 Use the Tools section to export your current settings or import settings from another instance.
 
 == Upgrade Notice ==
+
+= 1.7.0 (2026-07-26) =
+Performance, accessibility, and stability release adding cached minification checks, keyboard-accessible tooltips, ARIA accessibility labels, request cancellation safety, and 100% React component test coverage.
 
 = 1.6.0 (2026-04-26) =
 Major feature release bringing official Google PageSpeed Insights integration to the WordPress dashboard. Introduces Nginx configuration support, automatic wp-config.php self-healing, and enhanced telemetry with modern compression support (Zstd). Now requires PHP 8.2 for high-performance library compatibility.

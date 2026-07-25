@@ -2,6 +2,26 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.7.0] - 2026-07-26
+
+### Added
+
+- **Keyboard-Accessible Tooltips:** Tooltip component now supports full keyboard navigation and focus management.
+- **Granular Loading Action Buttons:** Replaced generic buttons in Database Cleanup with accessible `LoadingSubmitButton` components.
+- **Component Test Suite:** Complete React component test coverage (`FileOptimization`, `PreloadSettings`, `SystemInfo`, `PerformanceAudit`, `DatabaseCleanup`, etc.).
+
+### Changed
+
+- **Minification Check Caching:** Cached minification checks to prevent excessive disk I/O on asset detection.
+- **Streaming Minification Checkers:** Refactored `is_css_minified` and `is_js_minified` to use streaming file readers for enhanced performance.
+- **Translation Migration:** Migrated client-side text domains and strings to `@wordpress/i18n`.
+
+### Fixed
+
+- **PageSpeed Result Strategy Alignment:** Strategy labels rendered under PageSpeed results now match the scanned output strategy (`result.strategy`).
+- **Request Abort Safety:** Ensured pending `fetchSuggestions` requests are aborted when initiating a new scan to prevent race conditions.
+- **WP_CACHE Throttling:** Throttled `WP_CACHE` constant verification on failure to eliminate redundant checks.
+
 ## [1.6.0] - 2026-04-26
 
 ### Added
