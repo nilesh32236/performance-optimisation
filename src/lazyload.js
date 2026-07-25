@@ -171,6 +171,7 @@ if ( ! scriptLoading ) {
 		'mouseover',
 		'touchstart',
 		'scroll',
+		'keydown',
 	];
 	const loadHandler = () => {
 		triggerEvents.forEach( ( event ) =>
@@ -215,6 +216,10 @@ const checkCleanup = () => {
 		if ( mutationObserver ) {
 			mutationObserver.disconnect();
 			mutationObserver = null;
+		}
+		if ( globalObserver ) {
+			globalObserver.disconnect();
+			globalObserver = null;
 		}
 	}
 };

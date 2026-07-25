@@ -1,7 +1,17 @@
 require( '@testing-library/jest-dom' );
-jest.mock( '@wordpress/i18n', () => ( {
-	__: ( str ) => str,
-} ) );
+jest.mock( '@wordpress/i18n', () => {
+	const _n = ( singular, plural, count ) => {
+		return count === 1 ? singular : plural;
+	};
+	const sprintf = ( format, ...args ) => {
+		return format.replace( /%[sd]/g, () => args.shift() );
+	};
+	return {
+		__: ( str ) => str,
+		_n,
+		sprintf,
+	};
+} );
 global.wppoSettings = {};
 
 Object.defineProperty( window, 'matchMedia', {

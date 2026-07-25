@@ -448,7 +448,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 								color: 'var(--wppo-color-success)',
 							} }
 						/>
-						{ 'strategy:desktop' === `strategy:${ strategy }`
+						{ strategy === 'desktop'
 							? __( 'Desktop', 'performance-optimisation' )
 							: __( 'Mobile', 'performance-optimisation' ) }
 						{ ' · ' }

@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, _n, sprintf } from '@wordpress/i18n';
 import { useState, useEffect, useCallback } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
@@ -162,13 +162,16 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			if ( response.success ) {
 				setNotification( {
 					type: 'success',
-					message:
-						__(
-							'Cleanup successful:',
+					message: sprintf(
+						// translators: %d is the number of items removed during cleanup.
+						_n(
+							'Cleanup successful: %d item removed.',
+							'Cleanup successful: %d items removed.',
+							response.data?.deleted ?? 0,
 							'performance-optimisation'
-						) +
-						` ${ response.data?.deleted ?? 0 } ` +
-						__( 'items removed.', 'performance-optimisation' ),
+						),
+						response.data?.deleted ?? 0
+					),
 				} );
 				fetchCounts();
 			} else {
