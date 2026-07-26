@@ -55,3 +55,7 @@
 ## 2025-01-22 - Redundant Operations in Parsers
 **Learning:** Functions called within high-frequency loops, such as parsing HTML tags, can cause significant performance degradation. Generating regular expressions via `preg_quote` and doing complex URL processing (like `Util::get_local_path`) for each tag or property evaluated can add substantial overhead across a large document.
 **Action:** Lift static computations and string transformations out of loops when parsing. Delay expensive lookups (like resolving local filesystem paths) with lazy evaluation, ensuring they're executed at most once per distinct resource.
+
+## 2025-01-22 - Array Processing in Regex Callback Loops
+**Learning:** Calling array processing operations (like `Util::process_urls`, which filters, maps and unique-ifies arrays) inside high-frequency regex callbacks (like parsing every `<script>` tag on a page for minification or delayJS) can severely impact performance.
+**Action:** When a static or configuration-based array needs to be processed to be used as exclusions or matches inside a regex callback loop, process and cache it once as a class property during instantiation instead of computing it dynamically for each match.
