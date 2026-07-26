@@ -144,10 +144,15 @@ describe( 'PerformanceAudit Component', () => {
 			uses_modern_image_formats: 80,
 			image_alt_attributes: true,
 		};
-		runPerformanceScan.mockResolvedValueOnce( { success: true, data: mockData } );
+		runPerformanceScan.mockResolvedValueOnce( {
+			success: true,
+			data: mockData,
+		} );
 
 		render( <PerformanceAudit /> );
-		const submitButton = screen.getByRole( 'button', { name: /Run Scan/i } );
+		const submitButton = screen.getByRole( 'button', {
+			name: /Run Scan/i,
+		} );
 		fireEvent.click( submitButton );
 
 		await waitFor( () => {
@@ -160,7 +165,9 @@ describe( 'PerformanceAudit Component', () => {
 		expect( screen.getByText( 'gzip' ) ).toBeInTheDocument();
 		expect( screen.getByText( 'max-age=31536000' ) ).toBeInTheDocument();
 		expect( screen.getByText( '80.0%' ) ).toBeInTheDocument();
-		expect( screen.getByText( 'All images have alt text' ) ).toBeInTheDocument();
+		expect(
+			screen.getByText( 'All images have alt text' )
+		).toBeInTheDocument();
 	} );
 
 	it( 'toggles developer mode and shows advanced timings', async () => {
@@ -188,19 +195,28 @@ describe( 'PerformanceAudit Component', () => {
 			uses_https: true,
 			robots_txt_exists: true,
 		};
-		runPerformanceScan.mockResolvedValueOnce( { success: true, data: mockData } );
+		runPerformanceScan.mockResolvedValueOnce( {
+			success: true,
+			data: mockData,
+		} );
 
 		render( <PerformanceAudit /> );
-		const submitButton = screen.getByRole( 'button', { name: /Run Scan/i } );
+		const submitButton = screen.getByRole( 'button', {
+			name: /Run Scan/i,
+		} );
 		fireEvent.click( submitButton );
 
 		await waitFor( () => {
 			expect( screen.getByText( 'Scan Results' ) ).toBeInTheDocument();
 		} );
 
-		expect( screen.queryByText( 'Advanced Timings' ) ).not.toBeInTheDocument();
+		expect(
+			screen.queryByText( 'Advanced Timings' )
+		).not.toBeInTheDocument();
 
-		const devModeToggle = screen.getByRole( 'checkbox', { name: /Developer Details/i } );
+		const devModeToggle = screen.getByRole( 'checkbox', {
+			name: /Developer Details/i,
+		} );
 		fireEvent.click( devModeToggle );
 
 		expect( screen.getByText( 'Advanced Timings' ) ).toBeInTheDocument();
@@ -225,22 +241,41 @@ describe( 'PerformanceAudit Component', () => {
 			js_count: 3,
 			media_count: 5,
 		};
-		runPerformanceScan.mockResolvedValueOnce( { success: true, data: mockData } );
+		runPerformanceScan.mockResolvedValueOnce( {
+			success: true,
+			data: mockData,
+		} );
 
 		render( <PerformanceAudit /> );
 		fireEvent.click( screen.getByRole( 'button', { name: /Run Scan/i } ) );
 
 		await waitFor( () => {
-			expect( screen.getByText( /Displaying cached results from the last hour/i ) ).toBeInTheDocument();
+			expect(
+				screen.getByText(
+					/Displaying cached results from the last hour/i
+				)
+			).toBeInTheDocument();
 		} );
 
-		runPerformanceScan.mockResolvedValueOnce( { success: true, data: { ...mockData, is_cached: false } } );
-		fireEvent.click( screen.getByRole( 'button', { name: /Scan Fresh Data/i } ) );
+		runPerformanceScan.mockResolvedValueOnce( {
+			success: true,
+			data: { ...mockData, is_cached: false },
+		} );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Scan Fresh Data/i } )
+		);
 
 		await waitFor( () => {
-			expect( screen.queryByText( /Displaying cached results from the last hour/i ) ).not.toBeInTheDocument();
+			expect(
+				screen.queryByText(
+					/Displaying cached results from the last hour/i
+				)
+			).not.toBeInTheDocument();
 		} );
-		expect( runPerformanceScan ).toHaveBeenCalledWith( 'https://example.com', true );
+		expect( runPerformanceScan ).toHaveBeenCalledWith(
+			'https://example.com',
+			true
+		);
 	} );
 
 	it( 'uses home URL when "Use Home URL" button is clicked', () => {
@@ -249,19 +284,26 @@ describe( 'PerformanceAudit Component', () => {
 		fireEvent.change( input, { target: { value: 'https://test.com' } } );
 		expect( input ).toHaveValue( 'https://test.com' );
 
-		const homeButton = screen.getByRole( 'button', { name: /Use Home URL/i } );
+		const homeButton = screen.getByRole( 'button', {
+			name: /Use Home URL/i,
+		} );
 		fireEvent.click( homeButton );
 		expect( input ).toHaveValue( 'https://example.com' );
 	} );
 
 	it( 'displays error message on scan failure with message', async () => {
-		runPerformanceScan.mockResolvedValueOnce( { success: false, message: 'Custom Error Message' } );
+		runPerformanceScan.mockResolvedValueOnce( {
+			success: false,
+			message: 'Custom Error Message',
+		} );
 
 		render( <PerformanceAudit /> );
 		fireEvent.click( screen.getByRole( 'button', { name: /Run Scan/i } ) );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'Custom Error Message' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Custom Error Message' )
+			).toBeInTheDocument();
 		} );
 	} );
 
@@ -272,19 +314,27 @@ describe( 'PerformanceAudit Component', () => {
 		fireEvent.click( screen.getByRole( 'button', { name: /Run Scan/i } ) );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'Scan failed. Please try again.' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Scan failed. Please try again.' )
+			).toBeInTheDocument();
 		} );
 	} );
 
 	it( 'displays default error message on scan exception', async () => {
-		runPerformanceScan.mockRejectedValueOnce( new Error( 'Network error' ) );
-		const consoleSpy = jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		runPerformanceScan.mockRejectedValueOnce(
+			new Error( 'Network error' )
+		);
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
 
 		render( <PerformanceAudit /> );
 		fireEvent.click( screen.getByRole( 'button', { name: /Run Scan/i } ) );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'Scan failed. Please try again.' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Scan failed. Please try again.' )
+			).toBeInTheDocument();
 		} );
 		expect( consoleSpy ).toHaveBeenCalled();
 		consoleSpy.mockRestore();
@@ -302,18 +352,27 @@ describe( 'PerformanceAudit Component', () => {
 				media_count: 5,
 			},
 		} );
-		fetchSuggestions.mockRejectedValueOnce( new Error( 'Suggestions error' ) );
-		const consoleSpy = jest.spyOn( console, 'warn' ).mockImplementation( () => {} );
+		fetchSuggestions.mockRejectedValueOnce(
+			new Error( 'Suggestions error' )
+		);
+		const consoleSpy = jest
+			.spyOn( console, 'warn' )
+			.mockImplementation( () => {} );
 		const onSuggestionsReady = jest.fn();
 
-		render( <PerformanceAudit onSuggestionsReady={ onSuggestionsReady } /> );
+		render(
+			<PerformanceAudit onSuggestionsReady={ onSuggestionsReady } />
+		);
 		fireEvent.click( screen.getByRole( 'button', { name: /Run Scan/i } ) );
 
 		await waitFor( () => {
 			expect( screen.getByText( 'Scan Results' ) ).toBeInTheDocument();
 		} );
 		expect( onSuggestionsReady ).not.toHaveBeenCalled();
-		expect( consoleSpy ).toHaveBeenCalledWith( 'Could not fetch suggestions:', expect.any( Error ) );
+		expect( consoleSpy ).toHaveBeenCalledWith(
+			'Could not fetch suggestions:',
+			expect.any( Error )
+		);
 		consoleSpy.mockRestore();
 	} );
 } );
