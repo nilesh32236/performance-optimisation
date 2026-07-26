@@ -405,7 +405,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$replies = $pipeline->exec();
 
 				if ( ! is_array( $replies ) ) {
-					return array_fill( 0, count( $keys ), false );
+					return array_fill( 0, count( $data ), false );
 				}
 
 				$i = 0;
@@ -866,7 +866,7 @@ function wp_cache_delete_multiple( $keys, $group = '' ) {
  */
 function wp_cache_add_salt( $salt ) {
 	global $wp_object_cache;
-	if ( $wp_object_cache instanceof WP_Object_Cache && method_exists( $wp_object_cache, 'add_salt' ) ) {
+	if ( $wp_object_cache instanceof WP_Object_Cache ) {
 		$wp_object_cache->add_salt( $salt );
 	}
 }

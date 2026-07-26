@@ -273,10 +273,7 @@ const observeElement = ( el ) => {
  */
 const loadImages = () => {
 	// When native lazy is active and no video lazy elements exist, skip observer setup entirely.
-	if (
-		useNativeLazy &&
-		! document.querySelector( 'video.wppo-lazy-video' )
-	) {
+	if ( useNativeLazy && ! document.querySelector( LAZY_SELECTOR ) ) {
 		return;
 	}
 

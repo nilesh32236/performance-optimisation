@@ -708,7 +708,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						}
 					}
 
-					if ( 'failed' === $status ) {
+					if ( 'failed' === $status || 'skipped' === $status ) {
 						if ( isset( $img_info['pending'][ $type ] ) ) {
 							$key = array_search( $img_path, $img_info['pending'][ $type ], true );
 							if ( false !== $key ) {
