@@ -640,7 +640,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			$method_map = array(
-				'revisions'          => 'clean_revisions',
+				'revisions'          => 'clean_revisions_advanced',
 				'auto_drafts'        => 'clean_auto_drafts',
 				'trashed_posts'      => 'clean_trashed_posts',
 				'spam_comments'      => 'clean_spam_comments',
@@ -655,7 +655,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( array( 'deleted' => false ), false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
 			}
 
-			$result = Database_Cleanup::invoke_cleanup_method( $method );
+			if ( 'revisions' === $type ) {
+				$result = Database_Cleanup::invoke_cleanup_method( $method, 30, 5 );
+			} else {
+				$result = Database_Cleanup::invoke_cleanup_method( $method );
+			}
 
 			if ( is_wp_error( $result ) ) {
 				return $this->send_response( null, false, 500, __( 'Database cleanup failed.', 'performance-optimisation' ) );

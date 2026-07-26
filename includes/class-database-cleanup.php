@@ -555,7 +555,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function clean_all() {
 			$methods = array(
-				'revisions'          => 'clean_revisions',
+				'revisions'          => 'clean_revisions_advanced',
 				'auto_drafts'        => 'clean_auto_drafts',
 				'trashed_posts'      => 'clean_trashed_posts',
 				'spam_comments'      => 'clean_spam_comments',
@@ -566,7 +566,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 			$results = array();
 			foreach ( $methods as $key => $method ) {
-				$results[ $key ] = self::invoke_cleanup_method( $method );
+				if ( 'revisions' === $key ) {
+					$results[ $key ] = self::invoke_cleanup_method( $method, 30, 5 );
+				} else {
+					$results[ $key ] = self::invoke_cleanup_method( $method );
+				}
 			}
 
 			return $results;
@@ -703,9 +707,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( false === $res ) {
 				return new WP_Error( 'db_cleanup_failed', __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
-			if ( $res > 0 ) {
-				delete_transient( 'wppo_db_cleanup_counts' );
-			}
+			delete_transient( 'wppo_db_cleanup_counts' );
 			return $res;
 		}
 	}

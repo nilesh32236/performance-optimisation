@@ -805,6 +805,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						static $img_size_cache = array();
 
 						if ( ! isset( $img_size_cache[ $local_path ] ) ) {
+							if ( count( $img_size_cache ) >= 100 ) {
+								array_shift( $img_size_cache );
+							}
 							$img_size_cache[ $local_path ] = getimagesize( $local_path );
 						}
 

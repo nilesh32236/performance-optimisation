@@ -103,11 +103,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private $options;
 
 		/**
+		 * Image_Optimisation instance for buffer processing.
+		 *
+		 * @var Image_Optimisation|null
+		 * @since 2.0.0
+		 */
+		private $image_optimisation;
+
+		/**
 		 * Constructor to initialize cache settings and configurations.
 		 *
+		 * @param array $options Plugin options (optional). When empty, loaded from DB.
 		 * @since 1.0.0
 		 */
-		public function __construct() {
+		public function __construct( array $options = array() ) {
 			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
 			// Convert internationalized domain names to ASCII (punycode) to support IDN chars.
@@ -151,11 +160,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->url_path = $url_path;
 
 			// Initialize filesystem lazily via get_filesystem().
-			$this->options = get_option( 'wppo_settings', array() );
+			$this->options = ! empty( $options ) ? $options : get_option( 'wppo_settings', array() );
 
 			if ( ! $valid_domain && ! empty( $this->options['debug'] ) ) {
 				do_action( 'wppo_debug_log', 'Cache domain validation failed' );
 			}
+		}
+
+		/**
+		 * Set the Image_Optimisation instance to reuse instead of creating a new one.
+		 *
+		 * @param Image_Optimisation $image_optimisation The existing instance.
+		 * @return void
+		 * @since 2.0.0
+		 */
+		public function set_image_optimisation( Image_Optimisation $image_optimisation ): void {
+			$this->image_optimisation = $image_optimisation;
 		}
 
 		/**
@@ -365,7 +385,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function process_buffer( $buffer, $file_path ) {
-			$image_optimisation = new Image_Optimisation( $this->options );
+			$image_optimisation = $this->image_optimisation ? $this->image_optimisation : new Image_Optimisation( $this->options );
 
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
 			$buffer = $image_optimisation->add_delay_load_img( $buffer );
@@ -663,19 +683,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$this->delete_cache_files( $this->get_file_path( $archive_path, 'html' ) );
 				}
 
-				$taxonomies = get_object_taxonomies( $post_type, 'objects' );
-				foreach ( $taxonomies as $taxonomy ) {
-					if ( ! $taxonomy->public ) {
-						continue;
-					}
-
-					$terms = get_the_terms( $page_id, $taxonomy->name );
-					if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
-						foreach ( $terms as $term ) {
-							$term_link = get_term_link( $term );
-							if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
-								$term_path = wp_make_link_relative( $term_link );
-								$this->delete_cache_files( $this->get_file_path( $term_path, 'html' ) );
+				$taxonomy_names = get_object_taxonomies( $post_type, 'names' );
+				if ( ! empty( $taxonomy_names ) ) {
+					$all_terms = wp_get_object_terms( $page_id, $taxonomy_names );
+					if ( ! empty( $all_terms ) && ! is_wp_error( $all_terms ) ) {
+						$terms_by_taxonomy = array();
+						foreach ( $all_terms as $term ) {
+							$terms_by_taxonomy[ $term->taxonomy ][] = $term;
+						}
+						foreach ( $terms_by_taxonomy as $taxonomy_name => $terms ) {
+							$taxonomy_obj = get_taxonomy( $taxonomy_name );
+							if ( ! $taxonomy_obj || ! $taxonomy_obj->public ) {
+								continue;
+							}
+							foreach ( $terms as $term ) {
+								$term_link = get_term_link( $term );
+								if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
+									$term_path = wp_make_link_relative( $term_link );
+									$this->delete_cache_files( $this->get_file_path( $term_path, 'html' ) );
+								}
 							}
 						}
 					}

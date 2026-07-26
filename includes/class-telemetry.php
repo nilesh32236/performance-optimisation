@@ -255,51 +255,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			$dom_size = 0;
 
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
-				// --- DOM Size ---
 				$processor = new \WP_HTML_Tag_Processor( $html );
 				while ( $processor->next_tag() ) {
 					++$dom_size;
-				}
 
-				// --- CSS stylesheets ---
-				$processor = new \WP_HTML_Tag_Processor( $html );
-				while ( $processor->next_tag( array( 'tag_name' => 'LINK' ) ) ) {
-					if ( 'stylesheet' === strtolower( (string) $processor->get_attribute( 'rel' ) ) ) {
-						$href = $processor->get_attribute( 'href' );
-						if ( $href ) {
-							$css[] = (string) $href;
-						}
-					}
-				}
+					switch ( $processor->get_tag() ) {
+						case 'LINK':
+							if ( 'stylesheet' === strtolower( (string) $processor->get_attribute( 'rel' ) ) ) {
+								$href = $processor->get_attribute( 'href' );
+								if ( $href ) {
+									$css[] = (string) $href;
+								}
+							}
+							break;
+						case 'SCRIPT':
+							$src = $processor->get_attribute( 'src' );
+							if ( ! $src ) {
+								$src = $processor->get_attribute( 'wppo-src' );
+							}
+							if ( $src ) {
+								$js[] = (string) $src;
+							}
+							break;
+						case 'IMG':
+							$data_src = $processor->get_attribute( 'data-src' );
+							$src      = $processor->get_attribute( 'src' );
+							$loading  = strtolower( (string) ( $processor->get_attribute( 'loading' ) ?? '' ) );
+							$is_lazy  = ( null !== $data_src ) || ( 'lazy' === $loading );
 
-				// --- Scripts ---
-				$processor = new \WP_HTML_Tag_Processor( $html );
-				while ( $processor->next_tag( array( 'tag_name' => 'SCRIPT' ) ) ) {
-					$src = $processor->get_attribute( 'src' );
-					if ( ! $src ) {
-						$src = $processor->get_attribute( 'wppo-src' );
-					}
-					if ( $src ) {
-						$js[] = (string) $src;
-					}
-				}
+							$resolved_src = $data_src ? (string) $data_src : (string) $src;
 
-				// --- Images ---
-				$processor = new \WP_HTML_Tag_Processor( $html );
-				while ( $processor->next_tag( array( 'tag_name' => 'IMG' ) ) ) {
-					$data_src = $processor->get_attribute( 'data-src' );
-					$src      = $processor->get_attribute( 'src' );
-					$loading  = strtolower( (string) ( $processor->get_attribute( 'loading' ) ?? '' ) );
-					$is_lazy  = ( null !== $data_src ) || ( 'lazy' === $loading );
-
-					$resolved_src = $data_src ? (string) $data_src : (string) $src;
-
-					if ( $resolved_src ) {
-						$images[] = array(
-							'src'  => $resolved_src,
-							'alt'  => $processor->get_attribute( 'alt' ),
-							'lazy' => $is_lazy,
-						);
+							if ( $resolved_src ) {
+								$images[] = array(
+									'src'  => $resolved_src,
+									'alt'  => $processor->get_attribute( 'alt' ),
+									'lazy' => $is_lazy,
+								);
+							}
+							break;
 					}
 				}
 			} else {

@@ -202,13 +202,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( ! empty( $this->options['cache']['enableCache'] ) ) {
-				$this->cache = new Cache();
+				$this->cache = new Cache( $this->options );
+				$this->cache->set_image_optimisation( $this->image_optimisation );
 				add_action( 'template_redirect', array( $this->cache, 'generate_dynamic_static_html' ) );
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
 			if ( isset( $this->options['file_optimisation']['combineCSS'] ) && (bool) $this->options['file_optimisation']['combineCSS'] ) {
 				if ( ! $this->cache ) {
-					$this->cache = new Cache();
+					$this->cache = new Cache( $this->options );
+					$this->cache->set_image_optimisation( $this->image_optimisation );
 				}
 				add_action( 'wp_enqueue_scripts', array( $this->cache, 'combine_css' ), PHP_INT_MAX );
 			}
@@ -317,7 +319,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.2.0
 		 */
 		public static function on_settings_update( $old_value, $value ) {
-			self::clear_all_cache();
+			// Only clear cache when tabs that affect HTML output change.
+			$cache_relevant_tabs = array( 'cache_settings', 'file_optimisation', 'image_optimisation' );
+			$should_clear        = false;
+			foreach ( $cache_relevant_tabs as $tab ) {
+				$old_tab = isset( $old_value[ $tab ] ) ? $old_value[ $tab ] : null;
+				$new_tab = isset( $value[ $tab ] ) ? $value[ $tab ] : null;
+				if ( $old_tab !== $new_tab ) {
+					$should_clear = true;
+					break;
+				}
+			}
+
+			if ( $should_clear ) {
+				self::clear_all_cache();
+			}
 
 			// Handle .htaccess rules update.
 			$old_enable = isset( $old_value['file_optimisation']['enableServerRules'] ) ? (bool) $old_value['file_optimisation']['enableServerRules'] : false;
