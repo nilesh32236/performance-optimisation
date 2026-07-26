@@ -728,7 +728,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function set_loading_optimization_attributes( $tags, array $defaults = array() ): void {
 			if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
-				$src = $tags->get_attribute( 'src' ) ?? '';
+				$src           = $tags->get_attribute( 'src' ) ?? '';
 				$loading_attrs = wp_get_loading_optimization_attributes(
 					'img',
 					$src,
@@ -775,7 +775,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( false !== strpos( $original_src, $exclude_img ) ) {
 							$tags = new \WP_HTML_Tag_Processor( $img_tag );
 							if ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-								$this->set_loading_optimization_attributes( $tags, array( 'fetchpriority' => 'high', 'decoding' => 'sync' ) );
+								$this->set_loading_optimization_attributes(
+									$tags,
+									array(
+										'fetchpriority' => 'high',
+										'decoding'      => 'sync',
+									)
+								);
 								return $tags->get_updated_html();
 							}
 							return $img_tag;
@@ -930,39 +936,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$img_tag
 						);
 
-					// Replace with SVG placeholder if the option is enabled.
-					if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
-						$new_src = $this->generate_svg_base64( $img_tag );
-						if ( ! empty( $new_src ) ) {
-							$img_tag = preg_replace_callback(
-								'#<img\b([^>]*)#i',
-								function ( $matches ) use ( $new_src ) {
-									return '<img src="' . esc_attr( $new_src ) . '"' . $matches[1];
-								},
+						// Replace with SVG placeholder if the option is enabled.
+						if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
+							$new_src = $this->generate_svg_base64( $img_tag );
+							if ( ! empty( $new_src ) ) {
+								$img_tag = preg_replace_callback(
+									'#<img\b([^>]*)#i',
+									function ( $matches ) use ( $new_src ) {
+										return '<img src="' . esc_attr( $new_src ) . '"' . $matches[1];
+									},
+									$img_tag
+								);
+							}
+						}
+
+						// Replace 'srcset' with 'data-srcset' if 'srcset' is present.
+						if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
+							$img_tag = preg_replace(
+								'#srcset=["\']([^"\']+)["\']#i',
+								'data-srcset="' . esc_attr( $srcset_matches[1] ) . '"',
+								$img_tag
+							);
+						}
+
+						// Replace 'sizes' with 'data-sizes' if 'sizes' is present.
+						if ( preg_match( '#\bsizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
+							$img_tag = preg_replace(
+								'#\bsizes=["\']([^"\']+)["\']#i',
+								'data-sizes="' . esc_attr( $sizes_matches[1] ) . '"',
 								$img_tag
 							);
 						}
 					}
-
-					// Replace 'srcset' with 'data-srcset' if 'srcset' is present.
-					if ( preg_match( '#srcset=["\']([^"\']+)["\']#i', $img_tag, $srcset_matches ) ) {
-						$img_tag = preg_replace(
-							'#srcset=["\']([^"\']+)["\']#i',
-							'data-srcset="' . esc_attr( $srcset_matches[1] ) . '"',
-							$img_tag
-						);
-					}
-
-					// Replace 'sizes' with 'data-sizes' if 'sizes' is present.
-					if ( preg_match( '#\bsizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
-						$img_tag = preg_replace(
-							'#\bsizes=["\']([^"\']+)["\']#i',
-							'data-sizes="' . esc_attr( $sizes_matches[1] ) . '"',
-							$img_tag
-						);
-					}
 				}
-			}
 
 				// Add missing width and height attributes if possible.
 				$has_width  = (bool) preg_match( '/\bwidth=["\']\d+["\']/i', $img_tag );
