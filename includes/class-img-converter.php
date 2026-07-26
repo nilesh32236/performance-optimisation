@@ -152,7 +152,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			// Skip WebP conversion when WP 6.7+ core handles it natively.
-			if ( 'webp' === $format && self::core_handles_webp() ) {
+			if ( in_array( $format, array( 'webp', 'both' ), true ) && self::core_handles_webp() ) {
 				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
 			}

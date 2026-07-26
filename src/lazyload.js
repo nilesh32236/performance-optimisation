@@ -272,6 +272,14 @@ const observeElement = ( el ) => {
  * @since 1.0.0
  */
 const loadImages = () => {
+	// When native lazy is active and no video lazy elements exist, skip observer setup entirely.
+	if (
+		useNativeLazy &&
+		! document.querySelector( 'video.wppo-lazy-video' )
+	) {
+		return;
+	}
+
 	if ( 'IntersectionObserver' in window ) {
 		if ( ! globalObserver ) {
 			globalObserver = new IntersectionObserver(

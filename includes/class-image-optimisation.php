@@ -126,8 +126,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
 				$img_converter = $this->get_img_converter();
 
-				// Skip the conversion hook for WebP when WP 6.7+ core handles it natively.
-				$should_hook_conversion = ! ( Img_Converter::core_handles_webp() && 'avif' === $img_converter->get_format() );
+				// Skip the conversion hook when core handles all formats (get_format() returns 'none').
+				$should_hook_conversion = 'none' !== $img_converter->get_format();
 
 				if ( $should_hook_conversion ) {
 					add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
@@ -742,13 +742,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( isset( $loading_attrs['decoding'] ) && null === $tags->get_attribute( 'decoding' ) ) {
 					$tags->set_attribute( 'decoding', $loading_attrs['decoding'] );
 				}
-			} else {
-				if ( isset( $defaults['fetchpriority'] ) && null === $tags->get_attribute( 'fetchpriority' ) ) {
-					$tags->set_attribute( 'fetchpriority', $defaults['fetchpriority'] );
-				}
-				if ( isset( $defaults['decoding'] ) && null === $tags->get_attribute( 'decoding' ) ) {
-					$tags->set_attribute( 'decoding', $defaults['decoding'] );
-				}
+			}
+			if ( isset( $defaults['fetchpriority'] ) && null === $tags->get_attribute( 'fetchpriority' ) ) {
+				$tags->set_attribute( 'fetchpriority', $defaults['fetchpriority'] );
+			}
+			if ( isset( $defaults['decoding'] ) && null === $tags->get_attribute( 'decoding' ) ) {
+				$tags->set_attribute( 'decoding', $defaults['decoding'] );
 			}
 		}
 
