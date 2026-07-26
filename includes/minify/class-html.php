@@ -57,6 +57,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private array $options;
 
 		/**
+		 * Cached array of scripts to exclude from delayJS.
+		 *
+		 * @since 1.7.0
+		 * @var array $exclude_delay_js
+		 */
+		private array $exclude_delay_js;
+
+		/**
 		 * Constructor to initialize HTML minification.
 		 *
 		 * @param string $html The HTML content to minify.
@@ -66,6 +74,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		public function __construct( $html, $options ) {
 			$this->options = (array) $options;
 			$this->initialize_minification_settings();
+
+			// Cache delay JS exclusions to avoid redundant processing in loops.
+			$this->exclude_delay_js = array_merge(
+				array( 'wppo-lazyload', 'data-wppo-preserve' ),
+				Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() )
+			);
+			$this->exclude_delay_js = array_values( array_filter( $this->exclude_delay_js, 'strlen' ) );
+
 			$this->minified_html = $this->minify_html( $html );
 		}
 
@@ -318,12 +334,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 			if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 
-				$exclude_delay = array_merge( array( 'wppo-lazyload', 'data-wppo-preserve' ), Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() ) );
-				$exclude_delay = array_values( array_filter( $exclude_delay, 'strlen' ) );
-
 				$should_exclude = false;
-				if ( ! empty( $exclude_delay ) ) {
-					foreach ( $exclude_delay as $exclude ) {
+				if ( ! empty( $this->exclude_delay_js ) ) {
+					foreach ( $this->exclude_delay_js as $exclude ) {
 						if (
 						false !== strpos( $attributes, trim( $exclude ) ) ||
 						false !== strpos( $content, trim( $exclude ) )
