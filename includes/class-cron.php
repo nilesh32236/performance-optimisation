@@ -130,7 +130,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					'post_status'    => 'publish',
 					// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page
 					'posts_per_page' => 200, // Process pages in batches to prevent OOM.
-					'offset'         => $paged_offset,
+					'paged'          => max( 1, (int) ceil( ( $paged_offset + 1 ) / 200 ) ),
 					'fields'         => 'ids',
 					'orderby'        => 'ID',
 					'order'          => 'ASC',
