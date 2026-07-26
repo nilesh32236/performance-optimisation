@@ -194,7 +194,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
-			add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
+			if ( function_exists( 'wp_script_add_data' ) ) {
+				add_action( 'wp_enqueue_scripts', array( $this, 'add_defer_strategy' ), 1000 );
+			} else {
+				add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
+			}
 			add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
 			if ( ! empty( $this->options['file_optimisation']['removeWooCSSJS'] ) ) {
@@ -663,9 +667,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$lazy_load_images = isset( $this->options['image_optimisation']['lazyLoadImages'] ) && (bool) $this->options['image_optimisation']['lazyLoadImages'];
 				$lazy_load_videos = isset( $this->options['image_optimisation']['lazyLoadVideos'] ) && (bool) $this->options['image_optimisation']['lazyLoadVideos'];
 				$delay_js         = isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'];
+				$use_native_lazy  = ! empty( $this->options['image_optimisation']['lazyLoadNative'] );
 
-				if ( $lazy_load_images || $lazy_load_videos || $delay_js ) {
-					wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, true );
+				// When native lazy loading is active and no videos/delayed JS is needed, skip script enqueue.
+				$needs_script = ( ! $use_native_lazy && $lazy_load_images ) || $lazy_load_videos || $delay_js;
+
+				if ( $needs_script ) {
+					$lazy_args = array(
+						'in_footer' => true,
+					);
+					if ( version_compare( $GLOBALS['wp_version'], '6.9', '>=' ) ) {
+						$lazy_args['fetchpriority'] = 'low';
+					}
+					wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
+
+					if ( $use_native_lazy ) {
+						wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
+					}
 				}
 			}
 		}
@@ -781,6 +799,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Applies defer strategy to non-logged-in users' scripts using wp_script_add_data.
+		 *
+		 * @since 2.1.0
+		 *
+		 * @return void
+		 */
+		public function add_defer_strategy(): void {
+			if ( is_user_logged_in() ) {
+				return;
+			}
+
+			if ( empty( $this->options['file_optimisation']['deferJS'] ) ) {
+				return;
+			}
+
+			global $wp_scripts;
+			if ( ! $wp_scripts instanceof \WP_Scripts || empty( $wp_scripts->queue ) ) {
+				return;
+			}
+
+			foreach ( $wp_scripts->queue as $handle ) {
+				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
+					wp_script_add_data( $handle, 'strategy', 'defer' );
+				}
+			}
+		}
+
+		/**
 		 * Adds defer attribute to non-logged-in users' scripts.
 		 *
 		 * @since 1.0.0
@@ -794,9 +840,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
-				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
-					$tag = preg_replace( '/\bsrc=(["\'])/', ' defer="defer" src=$1', $tag ) ?? $tag;
+			// Fallback: use regex defer injection when wp_script_add_data is unavailable.
+			if ( ! function_exists( 'wp_script_add_data' ) ) {
+				if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
+					if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
+						$tag = preg_replace( '/\bsrc=(["\'])/', ' defer="defer" src=$1', $tag ) ?? $tag;
+					}
 				}
 			}
 

@@ -72,61 +72,74 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return array<string, array> Associative array of route slugs to route configuration arrays.
 		 */
 		private function get_routes() {
+			$schemas = array( $this, 'get_schema_for_route' );
+
 			return array(
 				'clear_cache'             => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'clear_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'update_settings'         => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'update_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'optimise_image'          => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'optimise_image' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'delete_optimised_image'  => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'delete_optimised_image' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'recent_activities'       => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_recent_activities' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'import_settings'         => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'import_settings' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'database_cleanup'        => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'database_cleanup' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'database_cleanup_counts' => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_database_cleanup_counts' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'get_page_assets'         => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_page_assets' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'image_job_status'        => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_image_job_status' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'object_cache'            => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'handle_object_cache' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 
 				// Phase 1 — Local Diagnostics (v1.5.0).
@@ -134,11 +147,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_system_info' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'performance_scan'        => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'run_performance_scan' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 
 				// Phase 2 — PageSpeed Integration & Actionable Suggestions (v1.6.0).
@@ -146,21 +161,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'queue_pagespeed_scan' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'pagespeed_results'       => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_pagespeed_results' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'suggestions'             => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_suggestions' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
 				),
 				'server_rules'            => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_server_rules' ),
 					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+			);
+		}
+
+		/**
+		 * Returns the JSON schema for a given REST route.
+		 *
+		 * Provides a standard response schema including success status, data payload,
+		 * and error message structure. Enables API discoverability and integration
+		 * with WP REST API tooling.
+		 *
+		 * @since 2.1.0
+		 *
+		 * @return array The JSON schema definition.
+		 */
+		public function get_schema_for_route(): array {
+			return array(
+				'$schema'    => 'http://json-schema.org/draft-04/schema#',
+				'title'      => 'performance-optimisation',
+				'type'       => 'object',
+				'properties' => array(
+					'success' => array(
+						'description' => esc_html__( 'Whether the request was successful.', 'performance-optimisation' ),
+						'type'        => 'boolean',
+						'context'     => array( 'view', 'edit' ),
+						'readonly'    => true,
+					),
+					'data'    => array(
+						'description' => esc_html__( 'Response data payload.', 'performance-optimisation' ),
+						'type'        => array( 'object', 'array', 'string' ),
+						'context'     => array( 'view', 'edit' ),
+						'readonly'    => true,
+					),
+					'message' => array(
+						'description' => esc_html__( 'Response message.', 'performance-optimisation' ),
+						'type'        => 'string',
+						'context'     => array( 'view', 'edit' ),
+						'readonly'    => true,
+					),
 				),
 			);
 		}
@@ -189,6 +247,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			$action = isset( $params['action'] ) ? sanitize_text_field( $params['action'] ) : '';
 			$path   = isset( $params['path'] ) ? sanitize_text_field( $params['path'] ) : '';
+			$group  = isset( $params['group'] ) ? sanitize_text_field( $params['group'] ) : '';
+
+			// Handle cache group flushing.
+			if ( ! empty( $group ) ) {
+				$flushed = Cache::flush_group( $group );
+				Log::add(
+					sprintf(
+						/* translators: %s: The cache group name */
+						__( 'Flushed cache group: %s', 'performance-optimisation' ),
+						$group
+					)
+				);
+				return $this->send_response( array( 'flushed' => $flushed ) );
+			}
 
 			$path = wp_normalize_path( $path );
 

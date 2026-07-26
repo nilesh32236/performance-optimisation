@@ -126,7 +126,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
 				$img_converter = $this->get_img_converter();
 
-				add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
+				// Skip the conversion hook for WebP when WP 6.7+ core handles it natively.
+				$should_hook_conversion = ! ( Img_Converter::core_handles_webp() && 'avif' === $img_converter->get_format() );
+
+				if ( $should_hook_conversion ) {
+					add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
+				}
 				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ) );
 			}
 		}
@@ -710,6 +715,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Sets loading optimization attributes (fetchpriority, decoding) on a tag processor.
+		 *
+		 * Uses wp_get_loading_optimization_attributes() (WP 6.7+) when available,
+		 * falling back to manual attribute assignment.
+		 *
+		 * @since 2.1.0
+		 *
+		 * @param \WP_HTML_Tag_Processor $tags    The tag processor instance.
+		 * @param array                  $defaults Default attributes to set if core function is unavailable.
+		 * @return void
+		 */
+		private function set_loading_optimization_attributes( $tags, array $defaults = array() ): void {
+			if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+				$src = $tags->get_attribute( 'src' ) ?? '';
+				$loading_attrs = wp_get_loading_optimization_attributes(
+					'img',
+					$src,
+					array(
+						'context' => 'wp-html-tag-processor',
+					)
+				);
+				if ( isset( $loading_attrs['fetchpriority'] ) && null === $tags->get_attribute( 'fetchpriority' ) ) {
+					$tags->set_attribute( 'fetchpriority', $loading_attrs['fetchpriority'] );
+				}
+				if ( isset( $loading_attrs['decoding'] ) && null === $tags->get_attribute( 'decoding' ) ) {
+					$tags->set_attribute( 'decoding', $loading_attrs['decoding'] );
+				}
+			} else {
+				if ( isset( $defaults['fetchpriority'] ) && null === $tags->get_attribute( 'fetchpriority' ) ) {
+					$tags->set_attribute( 'fetchpriority', $defaults['fetchpriority'] );
+				}
+				if ( isset( $defaults['decoding'] ) && null === $tags->get_attribute( 'decoding' ) ) {
+					$tags->set_attribute( 'decoding', $defaults['decoding'] );
+				}
+			}
+		}
+
+		/**
 		 * Optimize an <img> tag for lazy loading, placeholders, dimensions, and performance attributes.
 		 *
 		 * If the image URL matches any exclusion substring, ensures the tag has `decoding="sync"` and
@@ -732,18 +775,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( false !== strpos( $original_src, $exclude_img ) ) {
 							$tags = new \WP_HTML_Tag_Processor( $img_tag );
 							if ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-								if ( null === $tags->get_attribute( 'decoding' ) ) {
-									$tags->set_attribute( 'decoding', 'sync' );
-								}
-								if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
-									$tags->set_attribute( 'fetchpriority', 'high' );
-								}
+								$this->set_loading_optimization_attributes( $tags, array( 'fetchpriority' => 'high', 'decoding' => 'sync' ) );
 								return $tags->get_updated_html();
 							}
 							return $img_tag;
 						}
 					}
 				}
+
+				$use_native_lazy = ! empty( $this->options['image_optimisation']['lazyLoadNative'] );
 
 				$tags = new \WP_HTML_Tag_Processor( $img_tag );
 				if ( ! $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
@@ -756,40 +796,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					// Skip base64 images to avoid rewriting them.
 					if ( ! preg_match( '#^data:image/#i', $original_src_decoded ) ) {
-						$tags->set_attribute( 'data-src', $original_src_decoded );
+						if ( $use_native_lazy ) {
+							// Native lazy loading: add loading="lazy" and decoding="async" instead of data-src swapping.
+							if ( null === $tags->get_attribute( 'loading' ) ) {
+								$tags->set_attribute( 'loading', 'lazy' );
+							}
+							if ( null === $tags->get_attribute( 'decoding' ) ) {
+								$tags->set_attribute( 'decoding', 'async' );
+							}
+						} else {
+							$tags->set_attribute( 'data-src', $original_src_decoded );
 
-						// WP_HTML_Tag_Processor blocks data: URIs in src for security.
-						// Use regex on the serialized HTML to swap src to the SVG placeholder.
-						if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
-							$new_placeholder_src = $this->generate_svg_base64( $img_tag );
-							if ( ! empty( $new_placeholder_src ) ) {
-								$img_tag = preg_replace(
-									'#(?<!data-)src=(["\'])[^"\']*\1#i',
-									'src="' . $new_placeholder_src . '"',
-									$tags->get_updated_html(),
-									1
-								);
-								$tags    = new \WP_HTML_Tag_Processor( $img_tag );
-								$tags->next_tag( array( 'tag_name' => 'img' ) );
+							// WP_HTML_Tag_Processor blocks data: URIs in src for security.
+							// Use regex on the serialized HTML to swap src to the SVG placeholder.
+							if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
+								$new_placeholder_src = $this->generate_svg_base64( $img_tag );
+								if ( ! empty( $new_placeholder_src ) ) {
+									$img_tag = preg_replace(
+										'#(?<!data-)src=(["\'])[^"\']*\1#i',
+										'src="' . $new_placeholder_src . '"',
+										$tags->get_updated_html(),
+										1
+									);
+									$tags    = new \WP_HTML_Tag_Processor( $img_tag );
+									$tags->next_tag( array( 'tag_name' => 'img' ) );
+								} else {
+									$tags->remove_attribute( 'src' );
+								}
 							} else {
 								$tags->remove_attribute( 'src' );
 							}
-						} else {
-							$tags->remove_attribute( 'src' );
-						}
 
-						// Replace 'srcset' with 'data-srcset'.
-						$srcset = $tags->get_attribute( 'srcset' );
-						if ( $srcset ) {
-							$tags->set_attribute( 'data-srcset', $srcset );
-							$tags->remove_attribute( 'srcset' );
-						}
+							// Replace 'srcset' with 'data-srcset'.
+							$srcset = $tags->get_attribute( 'srcset' );
+							if ( $srcset ) {
+								$tags->set_attribute( 'data-srcset', $srcset );
+								$tags->remove_attribute( 'srcset' );
+							}
 
-						// Replace 'sizes' with 'data-sizes'.
-						$sizes = $tags->get_attribute( 'sizes' );
-						if ( $sizes ) {
-							$tags->set_attribute( 'data-sizes', $sizes );
-							$tags->remove_attribute( 'sizes' );
+							// Replace 'sizes' with 'data-sizes'.
+							$sizes = $tags->get_attribute( 'sizes' );
+							if ( $sizes ) {
+								$tags->set_attribute( 'data-sizes', $sizes );
+								$tags->remove_attribute( 'sizes' );
+							}
 						}
 					}
 				}
@@ -830,18 +880,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! empty( $exclude_imgs ) ) {
 					foreach ( $exclude_imgs as $exclude_img ) {
 						if ( false !== strpos( $original_src, $exclude_img ) ) {
-							if ( strpos( $img_tag, 'decoding' ) === false ) {
-								$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 decoding="sync"', $img_tag );
-							}
+							if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+								$loading_attrs = wp_get_loading_optimization_attributes( 'img', $original_src, array( 'context' => 'regex-fallback' ) );
+								if ( isset( $loading_attrs['decoding'] ) && false === strpos( $img_tag, 'decoding' ) ) {
+									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 decoding="' . esc_attr( $loading_attrs['decoding'] ) . '"', $img_tag );
+								}
+								if ( isset( $loading_attrs['fetchpriority'] ) && false === strpos( $img_tag, 'fetchpriority' ) ) {
+									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="' . esc_attr( $loading_attrs['fetchpriority'] ) . '"', $img_tag );
+								}
+							} else {
+								if ( strpos( $img_tag, 'decoding' ) === false ) {
+									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 decoding="sync"', $img_tag );
+								}
 
-							if ( false === strpos( $img_tag, 'fetchpriority' ) ) {
-								$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="high"', $img_tag );
+								if ( false === strpos( $img_tag, 'fetchpriority' ) ) {
+									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="high"', $img_tag );
+								}
 							}
 
 							return $img_tag;
 						}
 					}
 				}
+
+				$use_native_lazy = ! empty( $this->options['image_optimisation']['lazyLoadNative'] );
 
 				// If the image does not have 'data-src', replace 'src' with 'data-src'.
 				if ( strpos( $img_tag, 'data-src' ) === false ) {
@@ -852,13 +914,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						return $img_tag;
 					}
 
-					$img_tag = preg_replace_callback(
-						'#src=["\']([^"\']+)["\']#i',
-						function () use ( $original_src_decoded ) {
-							return 'data-src="' . esc_attr( $original_src_decoded ) . '"';
-						},
-						$img_tag
-					);
+					if ( $use_native_lazy ) {
+						if ( false === stripos( $img_tag, 'loading=' ) ) {
+							$img_tag = preg_replace( '#<img\b#i', '<img loading="lazy"', $img_tag );
+						}
+						if ( false === stripos( $img_tag, 'decoding=' ) ) {
+							$img_tag = preg_replace( '#<img\b#i', '<img decoding="async"', $img_tag );
+						}
+					} else {
+						$img_tag = preg_replace_callback(
+							'#src=["\']([^"\']+)["\']#i',
+							function () use ( $original_src_decoded ) {
+								return 'data-src="' . esc_attr( $original_src_decoded ) . '"';
+							},
+							$img_tag
+						);
 
 					// Replace with SVG placeholder if the option is enabled.
 					if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
@@ -892,6 +962,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						);
 					}
 				}
+			}
 
 				// Add missing width and height attributes if possible.
 				$has_width  = (bool) preg_match( '/\bwidth=["\']\d+["\']/i', $img_tag );

@@ -870,5 +870,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			return $total_size;
 		}
+
+		/**
+		 * Flush a specific cache group via wp_cache_flush_group().
+		 *
+		 * Allows targeted flushing of object cache groups (e.g. wppo_minify_check,
+		 * wppo_activity_logs) instead of a full cache flush.
+		 *
+		 * @since 2.1.0
+		 *
+		 * @param string $group The cache group to flush.
+		 * @return bool True if the flush succeeded or the function is unavailable, false on failure.
+		 */
+		public static function flush_group( string $group ): bool {
+			if ( function_exists( 'wp_cache_flush_group' ) ) {
+				return wp_cache_flush_group( $group );
+			}
+			return false;
+		}
 	}
 }

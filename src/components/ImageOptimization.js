@@ -19,6 +19,7 @@ import FeatureCard from './common/FeatureCard';
 const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
+		lazyLoadNative: false,
 		wrapInPicture: true,
 		excludeFirstImages: 0,
 		excludeImages: '',
@@ -202,6 +203,19 @@ const ImageOptimization = ( { options = {} } ) => {
 										without waiting for scroll.
 									</p>
 								</div>
+								<SwitchField
+									label={ __(
+										'Use Native Lazy Loading',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Use the browser\'s native loading="lazy" attribute instead of JavaScript-based IntersectionObserver. Supported in modern browsers and reduces JS overhead.',
+										'performance-optimisation'
+									) }
+									name="lazyLoadNative"
+									checked={ settings.lazyLoadNative }
+									onChange={ handleChange( setSettings ) }
+								/>
 								<SwitchField
 									label={ __(
 										'SVG Placeholders',

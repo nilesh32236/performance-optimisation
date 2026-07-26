@@ -100,6 +100,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			$this->format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
+
+			// If WP 6.7+ natively generates WebP, skip plugin's own WebP conversion.
+			if ( self::core_handles_webp() ) {
+				if ( 'webp' === $this->format ) {
+					$this->format = 'none';
+				} elseif ( 'both' === $this->format ) {
+					$this->format = 'avif';
+				}
+			}
+		}
+
+		/**
+		 * Check if WordPress core (6.7+) natively handles WebP generation.
+		 *
+		 * @since 2.1.0
+		 *
+		 * @return bool True if core handles WebP natively.
+		 */
+		public static function core_handles_webp(): bool {
+			return function_exists( 'wp_image_quality' );
+		}
+
+		/**
+		 * Get the current conversion format.
+		 *
+		 * @since 2.1.0
+		 *
+		 * @return string The format ('webp', 'avif', 'both', or 'none').
+		 */
+		public function get_format(): string {
+			return $this->format;
 		}
 
 		/**
@@ -117,6 +148,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			if ( ! in_array( $format, $this->available_format, true ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
+				return false;
+			}
+
+			// Skip WebP conversion when WP 6.7+ core handles it natively.
+			if ( 'webp' === $format && self::core_handles_webp() ) {
+				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
 			}
 
