@@ -127,29 +127,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$has_more            = ( count( $parent_ids ) === 200 );
 
 				foreach ( $parent_ids as $parent_id ) {
-					$wpdb->last_error = '';
-					// Select exactly the cutoff entries so PHP handles almost no object data.
-					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
-					$revisions = $wpdb->get_results(
-						$wpdb->prepare(
-							"SELECT ID, post_date_gmt FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date_gmt DESC LIMIT 500",
-							$parent_id
-						)
-					);
+					$offset     = 0;
+					$first_page = true;
+					$batch_size = 500;
 
-					if ( null === $revisions || ! empty( $wpdb->last_error ) ) {
-						continue;
-					}
+					do {
+						$wpdb->last_error = '';
+						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
+						$revisions = $wpdb->get_results(
+							$wpdb->prepare(
+								"SELECT ID, post_date_gmt FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date_gmt DESC LIMIT %d OFFSET %d",
+								$parent_id,
+								$batch_size,
+								$offset
+							)
+						);
 
-					// Keep the latest X revisions; dump others onto our purge list.
-					$older_revisions = array_slice( $revisions, $keep_latest );
-
-					foreach ( $older_revisions as $rev ) {
-						// Delete if older than cutoff.
-						if ( $rev->post_date_gmt < $cutoff_date_gmt ) {
-							$revisions_to_delete[] = $rev->ID;
+						if ( null === $revisions || ! empty( $wpdb->last_error ) ) {
+							break;
 						}
-					}
+
+						if ( empty( $revisions ) ) {
+							break;
+						}
+
+						// Keep the latest X revisions only on the first page; subsequent pages are all older.
+						$eligible   = $first_page ? array_slice( $revisions, $keep_latest ) : $revisions;
+						$first_page = false;
+
+						foreach ( $eligible as $rev ) {
+							// Delete if older than cutoff.
+							if ( $rev->post_date_gmt < $cutoff_date_gmt ) {
+								$revisions_to_delete[] = $rev->ID;
+							}
+						}
+
+						$offset        += $batch_size;
+						$revision_count = count( $revisions );
+					} while ( $revision_count === $batch_size );
 				}
 
 				if ( ! empty( $revisions_to_delete ) ) {

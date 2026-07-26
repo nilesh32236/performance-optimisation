@@ -786,7 +786,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			if ( ! self::$img_info_shutdown_registered ) {
 				add_action( 'shutdown', array( __CLASS__, 'commit_img_info' ) );
-				register_shutdown_function( array( __CLASS__, 'commit_img_info' ) );
 				self::$img_info_shutdown_registered = true;
 			}
 		}

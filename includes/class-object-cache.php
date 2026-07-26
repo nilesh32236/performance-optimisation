@@ -94,10 +94,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( file_exists( $this->dropin_path ) ) {
 				$wp_filesystem = Util::init_filesystem();
 
-				if ( $wp_filesystem ) {
-					$content = $wp_filesystem->get_contents( $this->dropin_path );
-				} elseif ( is_readable( $this->dropin_path ) && filesize( $this->dropin_path ) < 1048576 ) {
-					$content = file_get_contents( $this->dropin_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+				if ( is_readable( $this->dropin_path ) && filesize( $this->dropin_path ) < 1048576 ) {
+					if ( $wp_filesystem ) {
+						$content = $wp_filesystem->get_contents( $this->dropin_path );
+					} else {
+						$content = file_get_contents( $this->dropin_path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+					}
 				}
 
 				if ( isset( $content ) && is_string( $content ) ) {

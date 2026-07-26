@@ -121,12 +121,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			);
 
 			$this->includes();
+			$this->image_optimisation = new Image_Optimisation( $this->options );
 			$this->setup_hooks();
 			$this->filesystem = Util::init_filesystem();
 			if ( ! $this->filesystem ) {
 				$this->filesystem = null;
 			}
-			$this->image_optimisation = new Image_Optimisation( $this->options );
 
 			if ( defined( 'WP_ADMIN' ) ) {
 				new Admin_Notices();

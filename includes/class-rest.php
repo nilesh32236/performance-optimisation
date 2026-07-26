@@ -273,9 +273,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$options[ $tab ] = $sanitized_settings;
 
-			if ( update_option( 'wppo_settings', $options ) ) {
-				Cache::clear_cache();
-			}
+			update_option( 'wppo_settings', $options );
 
 			if ( isset( $options['performance_audit'] ) ) {
 				unset( $options['performance_audit']['pagespeed_api_key'] );
