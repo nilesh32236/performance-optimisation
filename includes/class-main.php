@@ -197,7 +197,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
 			add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
-			if ( isset( $this->options['file_optimisation']['removeWooCSSJS'] ) && (bool) $this->options['file_optimisation']['removeWooCSSJS'] ) {
+			if ( ! empty( $this->options['file_optimisation']['removeWooCSSJS'] ) ) {
 				add_action( 'wp_enqueue_scripts', array( $this, 'remove_woocommerce_scripts' ), 999 );
 			}
 
@@ -206,7 +206,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'template_redirect', array( $this->cache, 'generate_dynamic_static_html' ) );
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
-			if ( isset( $this->options['file_optimisation']['combineCSS'] ) && (bool) $this->options['file_optimisation']['combineCSS'] ) {
+			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
 				if ( ! $this->cache ) {
 					$this->cache = new Cache();
 				}
@@ -216,8 +216,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$rest = new Rest();
 			add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
 
-			if ( isset( $this->options['file_optimisation']['minifyJS'] ) && (bool) $this->options['file_optimisation']['minifyJS'] ) {
-				if ( isset( $this->options['file_optimisation']['excludeJS'] ) && ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
+			if ( ! empty( $this->options['file_optimisation']['minifyJS'] ) ) {
+				if ( ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
 					$exclude_js = Util::process_urls( $this->options['file_optimisation']['excludeJS'] );
 
 					$this->exclude_js = array_merge( $this->exclude_js, (array) $exclude_js );
@@ -226,8 +226,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_filter( 'script_loader_tag', array( $this, 'minify_js' ), 10, 3 );
 			}
 
-			if ( isset( $this->options['file_optimisation']['minifyCSS'] ) && (bool) $this->options['file_optimisation']['minifyCSS'] ) {
-				if ( isset( $this->options['file_optimisation']['excludeCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCSS'] ) ) {
+			if ( ! empty( $this->options['file_optimisation']['minifyCSS'] ) ) {
+				if ( ! empty( $this->options['file_optimisation']['excludeCSS'] ) ) {
 					$exclude_css       = Util::process_urls( $this->options['file_optimisation']['excludeCSS'] );
 					$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
 				}
@@ -235,9 +235,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 			}
 
-			if ( isset( $this->options['file_optimisation']['deferJS'] ) && (bool) $this->options['file_optimisation']['deferJS'] ) {
+			if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
 				$exclude_js = array( 'wppo-lazyload' );
-				if ( isset( $this->options['file_optimisation']['excludeDeferJS'] ) && ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
+				if ( ! empty( $this->options['file_optimisation']['excludeDeferJS'] ) ) {
 					$exclude_defer          = Util::process_urls( $this->options['file_optimisation']['excludeDeferJS'] );
 					$this->exclude_defer_js = array_merge( $exclude_js, (array) $exclude_defer );
 				} else {
@@ -245,9 +245,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
+			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 				$exclude_js = array( 'wppo-lazyload' );
-				if ( isset( $this->options['file_optimisation']['excludeDelayJS'] ) && ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
+				if ( ! empty( $this->options['file_optimisation']['excludeDelayJS'] ) ) {
 					$exclude_delay          = Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] );
 					$this->exclude_delay_js = array_merge( $exclude_js, (array) $exclude_delay );
 				} else {

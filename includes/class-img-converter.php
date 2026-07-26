@@ -95,7 +95,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		public function __construct( $options ) {
 			$this->options = $options;
 
-			if ( isset( $this->options['image_optimisation']['excludeWebPImages'] ) && ! empty( $this->options['image_optimisation']['excludeWebPImages'] ) ) {
+			if ( ! empty( $this->options['image_optimisation']['excludeWebPImages'] ) ) {
 				$this->exclude_imgs = Util::process_urls( $this->options['image_optimisation']['excludeWebPImages'] );
 			}
 
