@@ -223,7 +223,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$exclude_combine_css = array();
-			if ( isset( $this->options['file_optimisation']['excludeCombineCSS'] ) && ! empty( $this->options['file_optimisation']['excludeCombineCSS'] ) ) {
+			if ( ! empty( $this->options['file_optimisation']['excludeCombineCSS'] ) ) {
 				$exclude_combine_css = Util::process_urls( $this->options['file_optimisation']['excludeCombineCSS'] );
 			}
 
@@ -588,8 +588,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			if ( isset( $this->options['preload_settings']['enablePreloadCache'] ) && ! empty( $this->options['preload_settings']['enablePreloadCache'] ) ) {
-				if ( isset( $this->options['preload_settings']['excludePreloadCache'] ) && ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
+			if ( ! empty( $this->options['preload_settings']['enablePreloadCache'] ) ) {
+				if ( ! empty( $this->options['preload_settings']['excludePreloadCache'] ) ) {
 					$exclude_urls = Util::process_urls( $this->options['preload_settings']['excludePreloadCache'] );
 
 					$request_uri = $this->request_uri;
