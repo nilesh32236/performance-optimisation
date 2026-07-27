@@ -122,7 +122,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 	const stopPolling = useCallback( () => {
 		if ( pollRef.current ) {
-			clearInterval( pollRef.current );
+			clearTimeout( pollRef.current );
 			pollRef.current = null;
 		}
 		pollCountRef.current = 0;
@@ -146,7 +146,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 
 	const pollForResults = useCallback(
 		( scanUrl, scanStrategy ) => {
-			pollRef.current = setInterval( async () => {
+			const poll = async () => {
 				pollCountRef.current += 1;
 
 				if ( pollCountRef.current > MAX_POLL_ATTEMPTS ) {
@@ -168,7 +168,6 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						scanStrategy
 					);
 
-					// Any non-success response (including failure sentinel) stops polling.
 					if ( ! response.success ) {
 						stopPolling();
 						setPending( false );
@@ -183,19 +182,17 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						return;
 					}
 
-					// HTTP 202 with status: 'not_ready' means still processing.
 					if ( response.data?.status === 'not_ready' ) {
+						pollRef.current = setTimeout( poll, POLL_INTERVAL_MS );
 						return;
 					}
 
-					// Results are ready.
 					if ( isMounted.current ) {
 						stopPolling();
 						setPending( false );
 						setScanning( false );
 						setResult( response.data );
 
-						// Pass PageSpeed suggestions up to Dashboard → SuggestionsPanel.
 						if (
 							onSuggestionsReady &&
 							response.data?.suggestions
@@ -215,7 +212,8 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					);
 					console.error( 'PageSpeed poll error:', err );
 				}
-			}, POLL_INTERVAL_MS );
+			};
+			pollRef.current = setTimeout( poll, POLL_INTERVAL_MS );
 		},
 		[ stopPolling, onSuggestionsReady ]
 	);
