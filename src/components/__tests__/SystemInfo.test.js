@@ -88,6 +88,49 @@ describe( 'SystemInfo Component', () => {
 		} );
 	} );
 
+	it( 'renders nothing for missing data sections in InfoTable', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				php: {
+					version: '8.0.0',
+					unknown_key: 'Unknown Value' // will use `key` instead of `labels[key]` on line 57
+				},
+				database: null, // this will trigger the if ( ! data ) condition
+				wordpress: undefined, // this will trigger the if ( ! data ) condition
+			},
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			// fallback label for unknown_key
+			expect( screen.getByText( 'unknown_key' ) ).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'renders default error message on successful response with success false and no message', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: false,
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /Failed to fetch system info\. Please try again\./i )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders error message on successful response but success false', async () => {
 		fetchSystemInfo.mockResolvedValueOnce( {
 			success: false,

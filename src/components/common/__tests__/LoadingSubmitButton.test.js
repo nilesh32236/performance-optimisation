@@ -51,4 +51,15 @@ describe( 'LoadingSubmitButton', () => {
 		const button = screen.getByRole( 'button', { name: /Submit/i } );
 		expect( button ).toHaveClass( 'custom-class' );
 	} );
+
+	it( 'renders children when isLoading is true and loadingLabel is not provided', () => {
+		render(
+			<LoadingSubmitButton isLoading={ true }>
+				Custom Loading Children
+			</LoadingSubmitButton>
+		);
+		const button = screen.getByRole( 'button', { name: /Custom Loading Children/i } );
+		expect( button ).toBeInTheDocument();
+		expect( button ).toBeDisabled();
+	} );
 } );
