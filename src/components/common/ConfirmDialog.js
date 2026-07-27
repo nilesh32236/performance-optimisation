@@ -32,6 +32,7 @@ const ConfirmDialog = ( {
 } ) => {
 	const dialogRef = useRef( null );
 	const confirmBtnRef = useRef( null );
+	const focusableRef = useRef( [] );
 
 	const handleKeyDown = useCallback(
 		( e ) => {
@@ -41,9 +42,7 @@ const ConfirmDialog = ( {
 
 			// Focus trap.
 			if ( e.key === 'Tab' && dialogRef.current ) {
-				const focusable = dialogRef.current.querySelectorAll(
-					'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-				);
+				const focusable = focusableRef.current;
 				const first = focusable[ 0 ];
 				const last = focusable[ focusable.length - 1 ];
 
@@ -67,8 +66,19 @@ const ConfirmDialog = ( {
 	);
 
 	useEffect( () => {
+		if ( isOpen && dialogRef.current ) {
+			focusableRef.current = Array.from(
+				dialogRef.current.querySelectorAll(
+					'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+				)
+			);
+		} else {
+			focusableRef.current = [];
+		}
+	}, [ isOpen ] );
+
+	useEffect( () => {
 		if ( isOpen && confirmBtnRef.current ) {
-			// Focus the cancel button (safer default) on open.
 			const cancelBtn = dialogRef.current?.querySelector(
 				'.wppo-dialog-cancel'
 			);
@@ -83,7 +93,6 @@ const ConfirmDialog = ( {
 		const doc = currentDialog?.ownerDocument || document;
 		if ( isOpen ) {
 			doc.addEventListener( 'keydown', handleKeyDown );
-			// Prevent body scroll while dialog is open.
 			doc.body.style.overflow = 'hidden';
 		}
 		return () => {

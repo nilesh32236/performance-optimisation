@@ -149,6 +149,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	}, [ dbCounts ] );
 
 	const pollJobStatus = useCallback( async () => {
+		const currentTimeout = pollingRef.current;
 		try {
 			const response = await apiCall( 'image_job_status', {}, 'GET' );
 			pollRetryRef.current = 0;
@@ -181,10 +182,8 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							'performance-optimisation'
 						)
 					);
-					if ( pollingRef.current ) {
-						clearInterval( pollingRef.current );
-						pollingRef.current = null;
-					}
+					pollingRef.current = null;
+					return;
 				}
 			}
 		} catch ( error ) {
@@ -192,10 +191,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			pollRetryRef.current++;
 			if ( pollRetryRef.current >= 5 ) {
 				setBgProcessing( false );
-				if ( pollingRef.current ) {
-					clearInterval( pollingRef.current );
-					pollingRef.current = null;
-				}
+				pollingRef.current = null;
 				setAnnouncement(
 					__(
 						'Status check stopped after repeated failures.',
@@ -211,12 +207,15 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				)
 			);
 		}
+		if ( pollingRef.current === currentTimeout ) {
+			pollingRef.current = setTimeout( pollJobStatus, 5000 );
+		}
 	}, [ updateState ] );
 
 	useEffect( () => {
 		return () => {
 			if ( pollingRef.current ) {
-				clearInterval( pollingRef.current );
+				clearTimeout( pollingRef.current );
 			}
 		};
 	}, [] );
@@ -291,9 +290,9 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					);
 					setPendingPaths( { webp: [], avif: [] } );
 					if ( pollingRef.current ) {
-						clearInterval( pollingRef.current );
+						clearTimeout( pollingRef.current );
 					}
-					pollingRef.current = setInterval( pollJobStatus, 5000 );
+					pollingRef.current = setTimeout( pollJobStatus, 5000 );
 				} else {
 					// Synchronous path (Action Scheduler unavailable).
 					setPendingPaths( { webp: [], avif: [] } );
@@ -313,7 +312,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					}
 
 					if ( pollingRef.current ) {
-						clearInterval( pollingRef.current );
+						clearTimeout( pollingRef.current );
 						pollingRef.current = null;
 					}
 				}

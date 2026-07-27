@@ -345,6 +345,25 @@ const loadImages = () => {
 				}
 			);
 
+			const startSafetyScan = () => {
+				if ( window.wppoSafetyScanId ) {
+					return;
+				}
+				window.wppoSafetyScanId = setInterval( () => {
+					const elements = document.querySelectorAll( LAZY_SELECTOR );
+					if ( elements.length === 0 ) {
+						clearInterval( window.wppoSafetyScanId );
+						window.wppoSafetyScanId = null;
+						return;
+					}
+					elements.forEach( ( el ) => {
+						if ( ! observedElements.has( el ) ) {
+							observeElement( el );
+						}
+					} );
+				}, 10000 );
+			};
+
 			mutationObserver = new MutationObserver( ( mutations ) => {
 				mutations.forEach( ( mutation ) => {
 					mutation.addedNodes.forEach( ( node ) => {
@@ -361,6 +380,12 @@ const loadImages = () => {
 									observeElement( child );
 								}
 							);
+							if (
+								node.matches( LAZY_SELECTOR ) ||
+								node.querySelector( LAZY_SELECTOR )
+							) {
+								startSafetyScan();
+							}
 						}
 					} );
 				} );
@@ -371,29 +396,16 @@ const loadImages = () => {
 				subtree: true,
 			} );
 
-			// Periodic Safety Scan for unobserved dynamic content
-			if ( ! window.wppoSafetyScanId ) {
-				window.wppoSafetyScanId = setInterval( () => {
-					const elements = document.querySelectorAll( LAZY_SELECTOR );
-					if ( elements.length === 0 ) {
-						clearInterval( window.wppoSafetyScanId );
-						window.wppoSafetyScanId = null;
-						return;
-					}
-					elements.forEach( ( el ) => {
-						if ( ! observedElements.has( el ) ) {
-							observeElement( el );
-						}
-					} );
-				}, 10000 );
+			if ( document.querySelectorAll( LAZY_SELECTOR ).length > 0 ) {
+				startSafetyScan();
 			}
+
+			document.querySelectorAll( LAZY_SELECTOR ).forEach( ( el ) => {
+				observeElement( el );
+			} );
+
+			checkCleanup();
 		}
-
-		document.querySelectorAll( LAZY_SELECTOR ).forEach( ( el ) => {
-			observeElement( el );
-		} );
-
-		checkCleanup();
 	} else {
 		let active = false;
 		const lazyLoadFallback = () => {

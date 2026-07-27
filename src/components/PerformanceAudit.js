@@ -252,41 +252,18 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 		abortControllerRef.current = new AbortController();
 		const abortController = abortControllerRef.current;
 
+		let scanResult = null;
+
 		try {
 			const response = await runPerformanceScan( url, force );
 			if ( response.success && response.data ) {
-				setResult( response.data );
+				scanResult = response.data;
+				setResult( scanResult );
 
 				// Phase 2 — notify parent of the scanned URL so PageSpeedPanel
 				// can use the same URL without the user having to re-enter it.
 				if ( onUrlChange ) {
 					onUrlChange( url );
-				}
-
-				// Phase 2 — fetch telemetry-based suggestions and pass up to Dashboard.
-				if ( onSuggestionsReady ) {
-					fetchSuggestions( url, abortController.signal )
-						.then( ( sugResp ) => {
-							if ( abortController.signal.aborted ) {
-								return;
-							}
-							if (
-								sugResp.success &&
-								sugResp.data?.suggestions
-							) {
-								onSuggestionsReady( sugResp.data.suggestions );
-							}
-						} )
-						.catch( ( sugErr ) => {
-							if ( abortController.signal.aborted ) {
-								return;
-							}
-							// Non-fatal — suggestions are a bonus, not required.
-							console.warn(
-								'Could not fetch suggestions:',
-								sugErr
-							);
-						} );
 				}
 			} else {
 				setError(
@@ -311,6 +288,27 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 		} finally {
 			submittingRef.current = false;
 			setScanning( false );
+		}
+
+		// Phase 2 — fetch telemetry-based suggestions after scan completes.
+		if ( onSuggestionsReady && scanResult ) {
+			try {
+				const sugResp = await fetchSuggestions(
+					url,
+					abortController.signal
+				);
+				if (
+					! abortController.signal.aborted &&
+					sugResp.success &&
+					sugResp.data?.suggestions
+				) {
+					onSuggestionsReady( sugResp.data.suggestions );
+				}
+			} catch ( sugErr ) {
+				if ( ! abortController.signal.aborted ) {
+					console.warn( 'Could not fetch suggestions:', sugErr );
+				}
+			}
 		}
 	};
 
