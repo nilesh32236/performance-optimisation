@@ -588,7 +588,7 @@ const PluginSetting = ( { options } ) => {
 					) }
 					icon={ <FontAwesomeIcon icon={ faFileImport } /> }
 				>
-					<p className="wppo-text-muted">
+					<p className="wppo-text-muted" id="import-config-desc">
 						{ __(
 							'Upload a previously exported settings file to restore your configuration. This will overwrite all current settings.',
 							'performance-optimisation'
@@ -611,6 +611,7 @@ const PluginSetting = ( { options } ) => {
 							onChange={ handleFileSelection }
 							ref={ fileInputRef }
 							className="wppo-input"
+							aria-describedby="import-config-desc"
 						/>
 					</div>
 					<LoadingSubmitButton
