@@ -183,7 +183,12 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					}
 
 					if ( response.data?.status === 'not_ready' ) {
-						pollRef.current = setTimeout( poll, POLL_INTERVAL_MS );
+						if ( isMounted.current ) {
+							pollRef.current = setTimeout(
+								poll,
+								POLL_INTERVAL_MS
+							);
+						}
 						return;
 					}
 

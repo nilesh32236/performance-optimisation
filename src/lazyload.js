@@ -380,7 +380,12 @@ const loadImages = () => {
 									observeElement( child );
 								}
 							);
-							startSafetyScan();
+							if (
+								node.matches( LAZY_SELECTOR ) ||
+								node.querySelector( LAZY_SELECTOR )
+							) {
+								startSafetyScan();
+							}
 						}
 					} );
 				} );
@@ -394,13 +399,13 @@ const loadImages = () => {
 			if ( document.querySelectorAll( LAZY_SELECTOR ).length > 0 ) {
 				startSafetyScan();
 			}
+
+			document.querySelectorAll( LAZY_SELECTOR ).forEach( ( el ) => {
+				observeElement( el );
+			} );
+
+			checkCleanup();
 		}
-
-		document.querySelectorAll( LAZY_SELECTOR ).forEach( ( el ) => {
-			observeElement( el );
-		} );
-
-		checkCleanup();
 	} else {
 		let active = false;
 		const lazyLoadFallback = () => {

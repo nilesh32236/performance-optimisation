@@ -149,6 +149,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	}, [ dbCounts ] );
 
 	const pollJobStatus = useCallback( async () => {
+		const currentTimeout = pollingRef.current;
 		try {
 			const response = await apiCall( 'image_job_status', {}, 'GET' );
 			pollRetryRef.current = 0;
@@ -206,7 +207,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				)
 			);
 		}
-		if ( pollingRef.current ) {
+		if ( pollingRef.current === currentTimeout ) {
 			pollingRef.current = setTimeout( pollJobStatus, 5000 );
 		}
 	}, [ updateState ] );

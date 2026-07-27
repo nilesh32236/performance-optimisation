@@ -306,10 +306,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 				}
 			} catch ( sugErr ) {
 				if ( ! abortController.signal.aborted ) {
-					console.warn(
-						'Could not fetch suggestions:',
-						sugErr
-					);
+					console.warn( 'Could not fetch suggestions:', sugErr );
 				}
 			}
 		}
