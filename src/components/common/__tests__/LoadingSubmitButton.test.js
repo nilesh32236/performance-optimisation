@@ -58,7 +58,9 @@ describe( 'LoadingSubmitButton', () => {
 				Custom Loading Children
 			</LoadingSubmitButton>
 		);
-		const button = screen.getByRole( 'button', { name: /Custom Loading Children/i } );
+		const button = screen.getByRole( 'button', {
+			name: /Custom Loading Children/i,
+		} );
 		expect( button ).toBeInTheDocument();
 		expect( button ).toBeDisabled();
 	} );

@@ -94,7 +94,7 @@ describe( 'SystemInfo Component', () => {
 			data: {
 				php: {
 					version: '8.0.0',
-					unknown_key: 'Unknown Value' // will use `key` instead of `labels[key]` on line 57
+					unknown_key: 'Unknown Value', // will use `key` instead of `labels[key]` on line 57
 				},
 				database: null, // this will trigger the if ( ! data ) condition
 				wordpress: undefined, // this will trigger the if ( ! data ) condition
@@ -126,7 +126,9 @@ describe( 'SystemInfo Component', () => {
 
 		await waitFor( () => {
 			expect(
-				screen.getByText( /Failed to fetch system info\. Please try again\./i )
+				screen.getByText(
+					/Failed to fetch system info\. Please try again\./i
+				)
 			).toBeInTheDocument();
 		} );
 	} );
