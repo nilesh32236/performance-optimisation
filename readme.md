@@ -26,7 +26,7 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 ## What's New in v1.8.0
 
-- **WordPress 6.9+ Object Cache Salt Support:** Native `add_salt()` support in `WP_Object_Cache` (`wp_cache_add_salt()`) for key space invalidation.
+- **WordPress 6.9+ Object Cache Salt Support:** Added object cache key salt prefixing for cache key space invalidation.
 - **Iframe Lazy Loading:** Added `iframe` element support in HTML Tag Processor and frontend lazy loader.
 - **Minification & Utility Performance:** Pre-cached delayJS exclusion patterns and blog-specific home URL path resolution in worker loops.
 - **Enhanced Accessibility:** Added `aria-describedby` associations and keyboard focus trap management.
@@ -165,7 +165,7 @@ Current version and scripts are defined in the repo; for example:
   "name": "performance-optimisation",
   "version": "1.8.0",
   "scripts": {
-    "build": "wp-scripts build",
+    "build": "wp-scripts build src/index.js src/lazyload.js src/main.js",
     "start": "wp-scripts start"
   }
 }

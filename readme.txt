@@ -47,7 +47,7 @@ Built-in Redis object cache with support for standalone, Sentinel, and Cluster t
 Built-in performance scanner that measures real load times, TTFB, DNS resolution, and Core Web Vitals — right from your WordPress dashboard.
 
 **🛠️ Developer Friendly**
-System Info dashboard, Google PageSpeed Insights integration, per-page asset manager, import/export settings, and full WP-CLI compatibility.
+System Info dashboard, Google PageSpeed Insights integration, per-page asset manager, and import/export settings.
 
 = Who is this plugin for? =
 
@@ -87,7 +87,7 @@ After activation, you can manage the following from the settings tabs:
 == Changelog ==
 
 = 1.8.0 (2026-07-28) =
-* New: WordPress 6.9+ `wp_cache_add_salt()` support for salt-based object cache key space invalidation.
+* New: WordPress 6.9+ object cache key salt support for cache key space invalidation.
 * New: Lazy loading and HTML Tag Processor support for `iframe` elements.
 * Performance: Pre-cached delayJS script exclusion parsing in HTML minification worker loops.
 * Performance: Cached `home_url()` path per blog ID in URL utility resolution.

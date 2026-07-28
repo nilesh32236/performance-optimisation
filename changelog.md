@@ -6,7 +6,7 @@ All notable changes to the Performance Optimisation plugin will be documented in
 
 ### Added
 
-- **WordPress 6.9+ Object Cache Salt Support:** Native `add_salt()` support in `WP_Object_Cache` (`wp_cache_add_salt()`) for key space invalidation.
+- **WordPress 6.9+ Object Cache Salt Support:** Added object cache key salt prefixing for key space invalidation.
 - **Iframe Lazy Loading:** Added `iframe` element support in HTML Tag Processor and frontend lazy loader.
 - **React ErrorBoundary Integration:** SPA tab rendering is now wrapped in an ErrorBoundary component to prevent UI crashes.
 - **Enhanced Edge Case Tests:** Added test suites for `PerformanceAudit`, `SystemInfo`, `LoadingSubmitButton`, and `DatabaseCleanup`.
