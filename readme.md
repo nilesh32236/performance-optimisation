@@ -2,10 +2,10 @@
 
 # Performance Optimisation for WordPress
 
-**A comprehensive WordPress plugin designed to optimize website performance by managing cache, minifying assets, and improving delivery with advanced routing and modern image formats.**
+**Speed up WordPress with page caching, JS/CSS minify, lazy load, WebP/AVIF images, Redis object cache, and database cleanup. Simple and powerful.**
 
 [![WordPress Version](https://img.shields.io/badge/WordPress-6.2+-blue.svg?style=flat-square&logo=wordpress)](https://wordpress.org/)
-[![PHP Version](https://img.shields.io/badge/PHP-7.4+-777BB4.svg?style=flat-square&logo=php)](https://php.net/)
+[![PHP Version](https://img.shields.io/badge/PHP-8.2+-777BB4.svg?style=flat-square&logo=php)](https://php.net/)
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-success.svg?style=flat-square)](https://www.gnu.org/licenses/gpl-2.0.html)
 
 </div>
@@ -14,23 +14,23 @@
 
 ## About The Project
 
-Website speed is critical for SEO, user retention, and conversion rates. The Performance Optimisation plugin acts as a centralized engine to fine-tune how a WordPress site loads. Instead of relying on multiple fragmented plugins, this solution provides a singular dashboard to manage caching, minify JavaScript/CSS/HTML, convert modern image formats, and intelligently preload critical resources.
+Performance Optimisation is a free, all-in-one speed plugin that makes your WordPress site faster — without the complexity. Page caching, file minification, image optimization, lazy loading, database cleanup, and Redis object cache — all from one clean dashboard.
 
-Whether aiming for a perfect PageSpeed score or a seamless user experience, this plugin provides granular control over front-end delivery and backend asset management.
+Most performance plugins either do too little or overwhelm you with dozens of confusing settings. This plugin gives you everything you need to speed up WordPress in one place, with safe defaults and clear explanations for every option.
 
 **Requirements:** WordPress **6.2+** and PHP **8.2+** (same as the [WordPress.org](https://wordpress.org/plugins/performance-optimisation/) listing; the canonical requirements live in `readme.txt`).
 
-**Safe defaults:** Aggressive options (defer/delay JavaScript, WooCommerce asset stripping, server rules, PageSpeed audits) are **off** by default, with inline warnings when you enable them.
+**Safe defaults:** Aggressive options (defer/delay JavaScript, WooCommerce asset stripping, server rules) are **off** by default, with clear warnings when you enable them.
 
 ---
 
-## What's New in v1.7.0
+## What's New in v1.8.0
 
-- **Cached Minification Status:** Avoids redundant disk I/O when checking minification status.
-- **Streaming Minification Checkers:** High-performance streaming file readers for CSS and JS minification detection.
-- **Enhanced Accessibility:** Keyboard-accessible tooltips, ARIA labels, and explicit field descriptions.
-- **Request Cancellation Safety:** Automatic abort of pending telemetry requests when starting a new scan.
-- **Comprehensive React Testing:** Complete unit test suite for UI components.
+- **WordPress 6.9+ Object Cache Salt Support:** Added object cache key salt prefixing for cache key space invalidation.
+- **Iframe Lazy Loading:** Added `iframe` element support in HTML Tag Processor and frontend lazy loader.
+- **Minification & Utility Performance:** Pre-cached delayJS exclusion patterns and blog-specific home URL path resolution in worker loops.
+- **Enhanced Accessibility:** Added `aria-describedby` associations and keyboard focus trap management.
+- **React ErrorBoundary Integration:** Protected SPA rendering with React ErrorBoundary component.
 
 ---
 
@@ -163,9 +163,9 @@ Current version and scripts are defined in the repo; for example:
 ```json
 {
   "name": "performance-optimisation",
-  "version": "1.6.0",
+  "version": "1.8.0",
   "scripts": {
-    "build": "wp-scripts build",
+    "build": "wp-scripts build src/index.js src/lazyload.js src/main.js",
     "start": "wp-scripts start"
   }
 }
