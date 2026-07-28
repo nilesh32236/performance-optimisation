@@ -209,17 +209,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					),
 					'data'    => array(
 						'description' => esc_html__( 'Response data payload.', 'performance-optimisation' ),
-						'type'        => array( 'object', 'array', 'string' ),
+						'type'        => array( 'object', 'array', 'string', 'boolean', 'null' ),
 						'context'     => array( 'view', 'edit' ),
 						'readonly'    => true,
 					),
 					'message' => array(
 						'description' => esc_html__( 'Response message.', 'performance-optimisation' ),
-						'type'        => 'string',
+						'type'        => array( 'string', 'null' ),
 						'context'     => array( 'view', 'edit' ),
 						'readonly'    => true,
 					),
 				),
+				'required'   => array( 'success', 'data', 'message' ),
 			);
 		}
 
@@ -252,6 +253,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Handle cache group flushing.
 			if ( ! empty( $group ) ) {
 				$flushed = Cache::flush_group( $group );
+
+				if ( ! $flushed ) {
+					Log::add(
+						sprintf(
+							/* translators: %s: The cache group name */
+							__( 'Failed to flush cache group: %s', 'performance-optimisation' ),
+							$group
+						)
+					);
+					return $this->send_response( array( 'flushed' => $flushed ), false, 500, __( 'Failed to flush cache group.', 'performance-optimisation' ) );
+				}
+
 				Log::add(
 					sprintf(
 						/* translators: %s: The cache group name */

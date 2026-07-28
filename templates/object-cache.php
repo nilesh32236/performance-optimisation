@@ -405,7 +405,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$replies = $pipeline->exec();
 
 				if ( ! is_array( $replies ) ) {
-					return array_fill( 0, count( $data ), false );
+					return array_fill_keys( array_keys( $data ), false );
 				}
 
 				$i = 0;
@@ -853,20 +853,22 @@ function wp_cache_delete_multiple( $keys, $group = '' ) {
 	return $wp_object_cache->delete_multiple( $keys, $group );
 }
 
-/**
- * Adds salt to the cache key prefix (WP 6.9+).
- *
- * Allows core to invalidate all cached data by changing the key space.
- * The drop-in must support this via WP_Object_Cache::add_salt().
- *
- * @since 2.1.0
- *
- * @param string $salt The salt string to add.
- * @return void
- */
-function wp_cache_add_salt( $salt ) {
-	global $wp_object_cache;
-	if ( $wp_object_cache instanceof WP_Object_Cache ) {
-		$wp_object_cache->add_salt( $salt );
+if ( ! function_exists( 'wp_cache_add_salt' ) ) {
+	/**
+	 * Adds salt to the cache key prefix (WP 6.9+).
+	 *
+	 * Allows core to invalidate all cached data by changing the key space.
+	 * The drop-in must support this via WP_Object_Cache::add_salt().
+	 *
+	 * @since 2.1.0
+	 *
+	 * @param string $salt The salt string to add.
+	 * @return void
+	 */
+	function wp_cache_add_salt( $salt ) {
+		global $wp_object_cache;
+		if ( $wp_object_cache instanceof WP_Object_Cache ) {
+			$wp_object_cache->add_salt( $salt );
+		}
 	}
 }

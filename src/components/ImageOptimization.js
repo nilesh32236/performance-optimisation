@@ -204,14 +204,22 @@ const ImageOptimization = ( { options = {} } ) => {
 									</p>
 								</div>
 								<SwitchField
-									label={ __(
-										'Use Native Lazy Loading',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Use the browser\'s native loading="lazy" attribute instead of JavaScript-based IntersectionObserver. Supported in modern browsers and reduces JS overhead.',
-										'performance-optimisation'
-									) }
+									label={
+										wppoSettings?.translations
+											?.lazyLoadNative ||
+										__(
+											'Use Native Lazy Loading',
+											'performance-optimisation'
+										)
+									}
+									description={
+										wppoSettings?.translations
+											?.lazyLoadNativeDesc ||
+										__(
+											'Use the browser\'s native loading="lazy" attribute instead of JavaScript-based IntersectionObserver. Supported in modern browsers and reduces JS overhead.',
+											'performance-optimisation'
+										)
+									}
 									name="lazyLoadNative"
 									checked={ settings.lazyLoadNative }
 									onChange={ handleChange( setSettings ) }

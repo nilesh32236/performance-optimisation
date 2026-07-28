@@ -727,14 +727,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function set_loading_optimization_attributes( $tags, array $defaults = array() ): void {
 			if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
-				$src           = $tags->get_attribute( 'src' ) ?? '';
+				$tag_attr = array();
+				$src      = $tags->get_attribute( 'src' );
+				if ( null !== $src ) {
+					$tag_attr['src'] = $src;
+				}
+				$width = $tags->get_attribute( 'width' );
+				if ( null !== $width ) {
+					$tag_attr['width'] = (int) $width;
+				}
+				$height = $tags->get_attribute( 'height' );
+				if ( null !== $height ) {
+					$tag_attr['height'] = (int) $height;
+				}
+				$loading = $tags->get_attribute( 'loading' );
+				if ( null !== $loading ) {
+					$tag_attr['loading'] = $loading;
+				}
+				$decoding = $tags->get_attribute( 'decoding' );
+				if ( null !== $decoding ) {
+					$tag_attr['decoding'] = $decoding;
+				}
+				$fetchpriority = $tags->get_attribute( 'fetchpriority' );
+				if ( null !== $fetchpriority ) {
+					$tag_attr['fetchpriority'] = $fetchpriority;
+				}
 				$loading_attrs = wp_get_loading_optimization_attributes(
 					'img',
-					$src,
+					$tag_attr,
 					array(
 						'context' => 'wp-html-tag-processor',
 					)
 				);
+				if ( isset( $loading_attrs['loading'] ) && null === $tags->get_attribute( 'loading' ) ) {
+					$tags->set_attribute( 'loading', $loading_attrs['loading'] );
+				}
 				if ( isset( $loading_attrs['fetchpriority'] ) && null === $tags->get_attribute( 'fetchpriority' ) ) {
 					$tags->set_attribute( 'fetchpriority', $loading_attrs['fetchpriority'] );
 				}
@@ -885,7 +912,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					foreach ( $exclude_imgs as $exclude_img ) {
 						if ( false !== strpos( $original_src, $exclude_img ) ) {
 							if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
-								$loading_attrs = wp_get_loading_optimization_attributes( 'img', $original_src, array( 'context' => 'regex-fallback' ) );
+								$tag_attr = array( 'src' => $original_src );
+								if ( preg_match( '/\bwidth=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['width'] = (int) $m[2];
+								}
+								if ( preg_match( '/\bheight=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['height'] = (int) $m[2];
+								}
+								if ( preg_match( '/\bloading=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['loading'] = $m[2];
+								}
+								if ( preg_match( '/\bdecoding=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['decoding'] = $m[2];
+								}
+								if ( preg_match( '/\bfetchpriority=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['fetchpriority'] = $m[2];
+								}
+								$loading_attrs = wp_get_loading_optimization_attributes( 'img', $tag_attr, array( 'context' => 'regex-fallback' ) );
+								if ( isset( $loading_attrs['loading'] ) && false === strpos( $img_tag, 'loading' ) ) {
+									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 loading="' . esc_attr( $loading_attrs['loading'] ) . '"', $img_tag );
+								}
 								if ( isset( $loading_attrs['decoding'] ) && false === strpos( $img_tag, 'decoding' ) ) {
 									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 decoding="' . esc_attr( $loading_attrs['decoding'] ) . '"', $img_tag );
 								}

@@ -880,12 +880,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.1.0
 		 *
 		 * @param string $group The cache group to flush.
-		 * @return bool True if the flush succeeded or the function is unavailable, false on failure.
+		 * @return bool True if the flush succeeded, false if the cache implementation
+		 *              does not support flush_group or the function is unavailable.
 		 */
 		public static function flush_group( string $group ): bool {
-			if ( function_exists( 'wp_cache_flush_group' ) ) {
-				return wp_cache_flush_group( $group );
+			if ( function_exists( 'wp_cache_flush_group' ) && wp_cache_supports( 'flush_group' ) ) {
+				global $wp_object_cache;
+
+				if ( isset( $wp_object_cache ) && method_exists( $wp_object_cache, 'flush_group' ) ) {
+					return wp_cache_flush_group( $group );
+				}
 			}
+
 			return false;
 		}
 	}

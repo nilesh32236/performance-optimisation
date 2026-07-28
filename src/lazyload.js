@@ -20,11 +20,12 @@ const useNativeLazy =
 
 /**
  * Selector for all lazy-loadable elements.
- * In native mode, only videos use data-* attributes; images/iframes use native loading="lazy".
+ * In native mode, images use native loading="lazy" but iframes still use data-src
+ * until PHP emits native loading="lazy" for iframes.
  * @type {string}
  */
 const LAZY_SELECTOR = useNativeLazy
-	? 'video.wppo-lazy-video'
+	? 'iframe[data-src], video.wppo-lazy-video'
 	: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
 
 /**
