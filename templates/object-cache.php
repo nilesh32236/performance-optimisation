@@ -570,10 +570,14 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * @return bool True on success.
 		 */
 		public function flush_group( $group ) {
-			$this->cache = array();
+			$group_prefix = $this->get_key( '', $group );
+			foreach ( array_keys( $this->cache ) as $local_key ) {
+				if ( strpos( $local_key, $group_prefix ) === 0 ) {
+					unset( $this->cache[ $local_key ] );
+				}
+			}
 			if ( $this->redis_connected ) {
-				$prefix  = $this->get_key( '', $group );
-				$pattern = $prefix . '*';
+				$pattern = $group_prefix . '*';
 
 				if ( $this->redis instanceof \RedisCluster ) {
 					$masters = $this->redis->_masters();
