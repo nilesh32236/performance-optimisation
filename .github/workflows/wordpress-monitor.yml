@@ -187,11 +187,13 @@ jobs:
           retention-days: 30
 
   # ── 2. CREATE ISSUES ─────────────────────────────────────────────────────────
-  # Uses the opencode-ai-reviewer action in audit mode with the research
-  # findings as context. The action cross-references findings with actual plugin
-  # code and creates individual GitHub issues — one per actionable improvement.
-  # Each issue is labeled with 'wp-monitor' + 'autofix-trigger' so that
-  # wppo-ai-review.yml fix-issue fires automatically per issue.
+  # Runs OpenCode CLI directly with a prompt that instructs it to create
+  # individual GitHub issues via `gh issue create` — one per actionable
+  # improvement. Each issue is labeled with 'wp-monitor' + 'autofix-trigger'
+  # so that wppo-ai-review.yml fix-issue fires automatically per issue.
+  # We avoid the opencode-ai-reviewer audit mode here because its circuit
+  # breaker trips on label-creation 422s and its prompt template conflicts
+  # with the custom research-driven audit prompt.
   create-issues:
     name: Create Improvement Issues
     needs: [research]
@@ -219,40 +221,50 @@ jobs:
           name: wp-research-report
           path: /tmp/
 
-      - name: Ensure wp-monitor label exists
+      - name: Install OpenCode
+        run: |
+          .github/scripts/setup-opencode.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Ensure labels exist
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          gh label create "wp-monitor"       --force --color "0075ca" --description "WordPress feature monitor improvement" -R "${{ github.repository }}" 2>/dev/null || true
-          gh label create "autofix-trigger"  --force --color "c2e0c6" --description "Triggers autofix workflow on issues"  -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "wp-monitor"       --force --color "0075ca" --description "WordPress feature monitor improvement"  -R "${{ github.repository }}" 2>/dev/null || true
+          gh label create "autofix-trigger"  --force --color "c2e0c6" --description "Triggers autofix workflow on issues"    -R "${{ github.repository }}" 2>/dev/null || true
 
-      - name: Write research as audit prompt
+      - name: Create improvement issues
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          # Build a targeted audit prompt that tells the action what WP features
-          # were found and asks it to create issues for implementing each one.
-          mkdir -p .audit-prompts
-          cat > .audit-prompts/wp-monitor-session.md << 'PROMPT_HEADER'
-          # WordPress Feature Monitor — Implementation Audit
+          cat > /tmp/create-issues-prompt.md << 'PROMPT_HEADER'
+          # Create GitHub Issues for WordPress Feature Monitor Findings
 
-          You are auditing the WordPress Performance Optimisation plugin code.
-          The research below identified new WordPress core features that this plugin
-          could adopt. Your job is to review the actual plugin files and create
-          individual GitHub issues for each actionable improvement.
+          The research below identified improvement opportunities for the Performance
+          Optimisation plugin. Your task is to read the research and create one GitHub
+          issue per actionable improvement using `gh issue create`.
 
-          ## Rules
-          - Only create issues for changes that are backward-compatible with WordPress 6.2+
+          Rules:
+          - Only create issues for changes that are backward-compatible with WP 6.2+
           - Every new WP function call MUST be guarded with function_exists() or version_compare()
           - Skip anything that would break existing functionality or the settings schema
           - "low risk" means the change is isolated to a single function/method
           - Prefer easy/medium difficulty improvements — skip hard ones that risk instability
           - Each issue should describe ONE specific change with a clear file + function target
 
+          Use this command to create each issue:
+          gh issue create --title "[WP Monitor] <short description>" \
+            --label "wp-monitor,autofix-trigger" \
+            --body "<issue body with details>"
+
           ## Research Findings
           PROMPT_HEADER
 
-          cat /tmp/wp-research.md >> .audit-prompts/wp-monitor-session.md
+          cat /tmp/wp-research.md >> /tmp/create-issues-prompt.md
 
-          cat >> .audit-prompts/wp-monitor-session.md << 'PROMPT_FOOTER'
+          cat >> /tmp/create-issues-prompt.md << 'PROMPT_FOOTER'
 
           ## Plugin Architecture Reference
           - PHP classes in includes/ (manually required, no PSR-4)
@@ -262,36 +274,13 @@ jobs:
           - Image conversion: includes/class-img-converter.php (GD + Imagick)
           - Cache: includes/class-cache.php (HTML cache) + includes/class-object-cache.php (Redis)
 
-          When you find an improvement in the research that applies to a specific file,
-          create an issue titled: [WP Monitor] <short description>
-          Include: which file to change, what function/hook to add, and the fallback pattern.
+          IMPORTANT: Run "gh issue create" for EACH improvement opportunity, one at a time.
+          Do NOT skip any opportunity. Create all issues before finishing.
           PROMPT_FOOTER
 
-      - name: Create improvement issues via AI audit
-        id: audit
-        uses: nilesh32236/opencode-ai-reviewer@latest
-        with:
-          mode: audit
-          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          model: 'opencode/deepseek-v4-flash-free'
-          # Custom prompt from research findings — overrides the default audit prompt
-          audit_prompt_file: '.audit-prompts/wp-monitor-session.md'
-          audit_target_dirs: 'includes,src'
-          audit_create_issues: true
-          # Label each created issue with autofix-trigger so wppo-ai-review.yml
-          # fix-issue job fires automatically for each improvement
-          audit_auto_fix: true
-          audit_labels: 'wp-monitor,autofix-trigger'
-          enable_mcp: false
-          project_context: >
-            WordPress Performance Optimisation Plugin — PHP 8.2+, WP 6.2+.
-            PHP follows WordPress Coding Standards (phpcs.xml). JS is React with @wordpress/scripts.
-            Always use function_exists() and version_compare() for new WordPress API calls.
-            Minimum WordPress version: 6.2. Only create issues for backward-compatible improvements.
-            Verification commands: npm run lint:js, composer lint, npm test, npm run build.
+          # Allow OpenCode to use gh via bash tool — auto mode approves all permissions
+          opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/create-issues-prompt.md
+          echo "created=true" >> "$GITHUB_OUTPUT"
 
   # ── 3. SUMMARY ───────────────────────────────────────────────────────────────
   summary:
