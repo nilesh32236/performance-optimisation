@@ -88,16 +88,17 @@ describe( 'SystemInfo Component', () => {
 		} );
 	} );
 
-	it( 'renders nothing for missing data sections in InfoTable', async () => {
+	it( 'renders fallback label for unknown keys and omits missing sections in InfoTable', async () => {
+		global.wppoSettings = { translations: {} };
 		fetchSystemInfo.mockResolvedValueOnce( {
 			success: true,
 			data: {
 				php: {
 					version: '8.0.0',
-					unknown_key: 'Unknown Value', // will use `key` instead of `labels[key]` on line 57
+					unknown_key: 'Unknown Value',
 				},
-				database: null, // this will trigger the if ( ! data ) condition
-				wordpress: undefined, // this will trigger the if ( ! data ) condition
+				database: null,
+				wordpress: undefined,
 			},
 		} );
 		render( <SystemInfo /> );
@@ -108,12 +109,14 @@ describe( 'SystemInfo Component', () => {
 		fireEvent.click( loadButton );
 
 		await waitFor( () => {
-			// fallback label for unknown_key
 			expect( screen.getByText( 'unknown_key' ) ).toBeInTheDocument();
+			expect( screen.queryByText( 'Database' ) ).not.toBeInTheDocument();
+			expect( screen.queryByText( 'WordPress' ) ).not.toBeInTheDocument();
 		} );
 	} );
 
 	it( 'renders default error message on successful response with success false and no message', async () => {
+		global.wppoSettings = { translations: {} };
 		fetchSystemInfo.mockResolvedValueOnce( {
 			success: false,
 		} );
