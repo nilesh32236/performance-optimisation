@@ -561,6 +561,54 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		}
 
 		/**
+		 * Flushes a specific cache group.
+		 *
+		 * Uses a SCAN loop to find and delete all keys matching the group's
+		 * prefix pattern, leaving other cache groups untouched.
+		 *
+		 * @param string $group The cache group to flush.
+		 * @return bool True on success.
+		 */
+		public function flush_group( $group ) {
+			$this->cache = array();
+			if ( $this->redis_connected ) {
+				$prefix  = $this->get_key( '', $group );
+				$pattern = $prefix . '*';
+
+				if ( $this->redis instanceof \RedisCluster ) {
+					$masters = $this->redis->_masters();
+					foreach ( $masters as $node ) {
+						$cursor = null;
+						do {
+							$keys = $this->redis->scan( $cursor, $node, $pattern, 100 );
+							if ( false === $keys ) {
+								break;
+							}
+							if ( is_array( $keys ) && ! empty( $keys ) ) {
+								$this->redis->del( $keys );
+							}
+						} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
+					}
+					return true;
+				}
+
+				$cursor = null;
+				do {
+					$keys = $this->redis->scan( $cursor, $pattern, 100 );
+					if ( false === $keys ) {
+						break;
+					}
+					if ( is_array( $keys ) && ! empty( $keys ) ) {
+						$this->redis->del( $keys );
+					}
+				} while ( $cursor && ( is_numeric( $cursor ) && 0 !== (int) $cursor ) );
+
+				return true;
+			}
+			return true;
+		}
+
+		/**
 		 * Increases a cached value.
 		 *
 		 * @param int|string $key    Cache key.
@@ -646,7 +694,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 *
 		 * @var array
 		 */
-		private $global_groups = array();
+		private $global_groups = array( 'image_editor' );
 	}
 }
 
@@ -714,6 +762,17 @@ function wp_cache_delete( $key, $group = '' ) {
 function wp_cache_flush() {
 	global $wp_object_cache;
 	return $wp_object_cache->flush();
+}
+
+/**
+ * Flushes a specific cache group.
+ *
+ * @param string $group The cache group to flush.
+ * @return bool True on success.
+ */
+function wp_cache_flush_group( $group ) {
+	global $wp_object_cache;
+	return $wp_object_cache->flush_group( $group );
 }
 
 /**
