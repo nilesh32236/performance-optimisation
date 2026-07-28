@@ -1,69 +1,99 @@
 === Performance Optimisation ===
 Contributors: nilesh912
-Tags: performance, optimization, cache, minify, image optimisation
+Tags: cache, performance, speed, pagespeed, minify
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 6.8
-Stable tag: 1.7.0
+Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Lightweight performance toolkit: cache, file minification, WebP/AVIF conversion, and Core Web Vitals tools with safe defaults.
+Speed up WordPress with page caching, JS/CSS minify, lazy load, WebP/AVIF images, Redis object cache, and database cleanup. Simple and powerful.
 
 == Description ==
 
-Performance Optimisation helps you speed up your site with cache management, JavaScript and CSS minification, image conversion (WebP and AVIF), lazy loading, preload hints, and a modern admin UI. It is designed to stay **off by default** for aggressive options (defer/delay JS, WooCommerce asset removal, server rules) so you can enable features gradually and test as you go—similar to how you would tune Autoptimize or a caching stack, but with a focused, dashboard-first workflow.
+**Performance Optimisation** is a free, all-in-one speed plugin that makes your WordPress site faster — without the complexity. Page caching, file minification, image optimization, lazy loading, database cleanup, and Redis object cache — all from one clean dashboard.
 
-**Why use this plugin?**
+= Why choose Performance Optimisation? =
 
- - **Clear scope:** One place for cache stats, file optimisation, images, preload, and tools—without bundling unrelated features.
- - **Safety-first UX:** Advanced toggles show warnings; WooCommerce-related options remind you to test cart and checkout.
- - **Core Web Vitals & PageSpeed:** Lazy loading, minification, preconnect/prefetch, and image formats help real-world metrics—not just a higher score on a single lab test.
+Most performance plugins either do too little or overwhelm you with dozens of confusing settings. This plugin gives you **everything you need to speed up WordPress** in one place, with safe defaults and clear explanations for every option.
 
-**Features:**
+ - **Simple to use:** Clean, modern dashboard. Enable what you need, leave the rest off. No guesswork.
+ - **Powerful features:** Page cache, JS/CSS/HTML minify, WebP/AVIF image conversion, lazy loading, Redis object cache, database cleanup — the full stack.
+ - **Safe by default:** Aggressive options like defer JS, delay JS, and WooCommerce asset removal are off by default with clear warnings when you turn them on.
+ - **Works everywhere:** Shared hosting, VPS, dedicated servers, Apache, Nginx — it adapts to your environment.
 
- - Dashboard with an overview of cache, JavaScript, CSS, and image optimisation status.
- - Cache management tools, including size display and a "Clear Cache" button.
- - JavaScript & CSS Optimization: Minify, combine, defer/delay (opt-in), and exclude specific files.
- - Core Tweaks: Safely disable Core bloat (Emojis, Embeds, Dashicons, XML-RPC, Heartbeat API).
- - Image optimization: Convert images to WebP and AVIF formats.
- - Preload settings for cache, fonts, DNS, and images.
- - Advanced lazy loading options.
- - Database Optimization: Clean database bloat manually or schedule automated cleanups (Daily/Weekly/Monthly) with granular control over post revisions.
- - **Enterprise Redis Support:** High-availability Object Cache with Sentinel, Cluster, and TLS/SSL support.
- - **Performance Monitor:** High-precision local telemetry for Core Web Vitals and network diagnostics.
- - **System Info Dashboard:** Real-time environment diagnostic tool for PHP, DB, and WordPress.
- - **Import/export** plugin settings.
+= What does this plugin do? =
+
+**🚀 Page Caching**
+Generate static HTML files for your pages so they load instantly. Includes Gzip compression, CDN support, and smart cache clearing when you update content.
+
+**📦 File Optimization**
+Minify and combine JavaScript, CSS, and HTML. Defer or delay render-blocking scripts. Remove WordPress bloat like emojis, embeds, dashicons, and XML-RPC.
+
+**🖼️ Image Optimization**
+Convert images to next-gen WebP and AVIF formats automatically. Lazy load images, iframes, and videos with lightweight SVG placeholders. Preload critical images for faster LCP.
+
+**⚡ Preloading & Prefetching**
+Warm up your cache automatically. Preconnect to third-party origins, prefetch DNS, and preload critical fonts and CSS for faster page rendering.
+
+**🗄️ Database Cleanup**
+Remove post revisions, auto-drafts, spam comments, expired transients, and orphaned metadata. Schedule automated cleanups daily, weekly, or monthly.
+
+**🔴 Redis Object Cache**
+Built-in Redis object cache with support for standalone, Sentinel, and Cluster topologies. TLS/SSL encryption included. No separate plugin needed.
+
+**📊 Performance Monitor**
+Built-in performance scanner that measures real load times, TTFB, DNS resolution, and Core Web Vitals — right from your WordPress dashboard.
+
+**🛠️ Developer Friendly**
+System Info dashboard, Google PageSpeed Insights integration, per-page asset manager, import/export settings, and full WP-CLI compatibility.
+
+= Who is this plugin for? =
+
+ - **Site owners** who want a faster website without hiring a developer.
+ - **Freelancers and agencies** who need a reliable speed plugin they can deploy across client sites.
+ - **Developers** who want granular control over caching, minification, and delivery without vendor lock-in.
 
 This plugin uses `voku/html-min` for HTML minification, `matthiasmullie/minify` for JavaScript and CSS minification, and `woocommerce/action-scheduler` for background job processing.
 
 == Installation ==
 
-1. Upload the plugin files to the `/wp-content/plugins/performance-optimisation` directory, or install the plugin through the WordPress plugins screen directly.
-2. Activate the plugin through the 'Plugins' screen in WordPress.
-3. Configure the settings via the **Performance Optimisation** menu in the WordPress admin panel.
+1. Install the plugin from the **WordPress Plugin Directory** (search for "Performance Optimisation") or upload it manually to `/wp-content/plugins/performance-optimisation`.
+2. Activate the plugin through the **Plugins** screen in WordPress.
+3. Go to the **Performance Optimisation** menu in your WordPress admin panel.
+4. Start with the **Dashboard** to see your current performance status, then enable features one at a time.
 
 After activation, you can manage the following from the settings tabs:
 
-- **Dashboard** — View cache size, minified file counts, image optimisation status, and recent activities.
-- **File Optimization** — Minify JS/CSS/HTML, combine CSS, defer/delay JS, disable emojis/embeds, and control the Heartbeat API.
-- **Preload** — Cache preloading, preconnect, DNS prefetch, font and CSS preloading.
+- **Dashboard** — See your cache size, optimized file counts, image status, and recent activity at a glance.
+- **File Optimization** — Minify JS/CSS/HTML, combine CSS, defer/delay JS, and remove WordPress bloat.
+- **Preload** — Cache warm-up, preconnect, DNS prefetch, and font/CSS preloading.
 - **Image Optimization** — Lazy load images with SVG placeholders, convert to WebP/AVIF, and preload feature images.
-- **Database** — Schedule automatic cleanup for revisions, auto-drafts, transients, and orphaned data.
-- **Object Cache** — Redis integration with standalone, sentinel, and cluster support.
-- **Tools** — Import/export plugin settings for quick setup across environments.
+- **Database** — Clean up revisions, auto-drafts, transients, spam, and orphaned data — manually or on a schedule.
+- **Object Cache** — One-click Redis integration with standalone, sentinel, and cluster support.
+- **Tools** — Import/export settings for quick deployment across multiple sites.
 
 == Screenshots ==
 
-1. **Dashboard**: Comprehensive overview of cache status, file optimization metrics, and recent activity log.
-2. **File Optimization**: Minification settings for JavaScript, CSS, and HTML with Basic, Advanced, E-commerce, and Network tab configurations.
-3. **Preload**: Granular controls for cache warm-up, connection prediction (DNS/Preconnect), and critical asset prioritization (Fonts/CSS).
-4. **Image Optimization**: Automated Next-Gen format conversion (WebP/AVIF), smart lazy loading with SVG placeholders, and intelligent LCP preloading.
-5. **Database**: Safe manual and automated maintenance tools with advanced rules to keep specific historical revisions.
-6. **Object Cache**: Redis integration with standalone, sentinel, and cluster topology support.
-7. **Tools**: Simplified interface for exporting and importing your performance configurations across environments.
+1. **Dashboard**: Real-time overview of cache status, optimized files, image conversion progress, and recent activity log.
+2. **File Optimization**: Minify JavaScript, CSS, and HTML with granular controls for defer, delay, combine, and exclude rules.
+3. **Preload**: Cache warm-up, preconnect, DNS prefetch, and critical asset preloading with fetchpriority hints.
+4. **Image Optimization**: One-click WebP/AVIF conversion, smart lazy loading with SVG placeholders, and LCP image preloading.
+5. **Database Cleanup**: Safe manual and automated cleanup with fine-grained revision control (by age and count).
+6. **Object Cache**: Redis integration with standalone, sentinel, and cluster topology support — no separate plugin needed.
+7. **Tools**: One-click import/export for deploying your performance configuration across multiple sites.
 
 == Changelog ==
+
+= 1.8.0 (2026-07-28) =
+* New: WordPress 6.9+ `wp_cache_add_salt()` support for salt-based object cache key space invalidation.
+* New: Lazy loading and HTML Tag Processor support for `iframe` elements.
+* Performance: Pre-cached delayJS script exclusion parsing in HTML minification worker loops.
+* Performance: Cached `home_url()` path per blog ID in URL utility resolution.
+* Accessibility: Added `aria-describedby` accessibility associations and modal focus trap management.
+* Safety: Integrated React ErrorBoundary wrapper for SPA runtime exception handling.
+* Fix: Corrected key-indexed return array structure in Redis Object Cache fallback methods.
 
 = 1.7.0 (2026-07-26) =
 * Improvement: Cached minification status checks to reduce disk I/O overhead.
@@ -190,28 +220,46 @@ Import/export settings tools.
 
 == Frequently Asked Questions ==
 
+= How do I speed up my WordPress site with this plugin? =
+Install and activate the plugin, then visit the **Dashboard**. Start by enabling **Page Caching** for the biggest speed boost. Then enable **JS/CSS Minification** and **Lazy Loading** for images. Each feature can be turned on independently — enable one at a time and test your site.
+
 = Will this work with WooCommerce? =
-Yes. WooCommerce-specific asset removal is **optional** and off by default. If you enable it, test cart, checkout, and product pages—incorrect URL or handle exclusions can break the storefront.
+Yes. The plugin is fully compatible with WooCommerce. WooCommerce-specific asset removal is **optional** and off by default. If you enable it, the plugin shows a clear warning reminding you to test cart, checkout, and product pages.
 
-= Can I use this with another cache plugin (WP Super Cache, LiteSpeed, WP Rocket, etc.)? =
-You should run **one** full-page caching solution. This plugin can install a `advanced-cache.php` drop-in when appropriate; if another plugin or your host already manages that file, Performance Optimisation will not replace it and may show an admin notice. Minify/image features may still be usable depending on your stack—test carefully.
+= Can I use this alongside another cache plugin? =
+You should only run **one** full-page caching solution at a time. If another plugin (WP Super Cache, LiteSpeed Cache, WP Rocket, etc.) already manages caching, this plugin will detect it and won't overwrite the existing setup. You can still use the minification, image optimization, and database cleanup features alongside most other plugins.
 
-= Does this plugin improve Core Web Vitals or PageSpeed Insights? =
-It can help when you enable features that address LCP, CLS, and JS blocking (lazy load, minify, preload, modern image formats). Results depend on your theme and other plugins; always measure before and after.
+= Does this plugin improve Core Web Vitals and PageSpeed scores? =
+Yes. Features like lazy loading (improves LCP and CLS), minification (reduces render-blocking resources), preloading (speeds up font and CSS delivery), and WebP/AVIF conversion (reduces image file size) all directly target Core Web Vitals metrics. Results depend on your theme and hosting — always measure before and after.
 
-= How do I optimize images using this plugin? =
-Go to the Image Optimisation Settings tab, enable image conversion, and choose the format (WebP, AVIF, or both). Click "Optimize Now" to start the process.
+= Does this work on shared hosting? =
+Yes. The plugin works on any standard WordPress hosting — shared hosting, VPS, dedicated servers, and managed WordPress hosts. Redis Object Cache requires Redis to be installed on your server, but all other features work everywhere.
 
-= Can I exclude specific JavaScript or CSS files from minification? =
-Yes, in the File Optimization Settings tab, use the provided text areas to list files you want to exclude.
+= Is this compatible with page builders like Elementor or Divi? =
+Yes. The plugin works with all major page builders. If you experience any layout issues after enabling minification, you can exclude specific files using the built-in exclusion rules.
 
-= Does the plugin support lazy loading for images? =
-Yes, lazy loading can be enabled in the Image Optimisation Settings tab. You can also use SVG placeholders for better performance.
+= How do I convert images to WebP or AVIF? =
+Go to the **Image Optimization** tab, enable image conversion, and choose your format (WebP, AVIF, or both). Click **Optimize Now** to start converting your existing images. New uploads are converted automatically in the background.
 
-= How can I import/export plugin settings? =
-Use the Tools section to export your current settings or import settings from another instance.
+= Can I exclude specific files from minification? =
+Yes. In the **File Optimization** tab, you can list specific JavaScript or CSS files to exclude from minification, defer, or delay. This is useful for scripts that break when minified.
+
+= Does the plugin support lazy loading? =
+Yes. The plugin lazy loads images, iframes, and videos using an IntersectionObserver. You can use lightweight SVG placeholders for a better loading experience. A MutationObserver also catches dynamically injected content.
+
+= How do I clean up my WordPress database? =
+Go to the **Database** tab. You can manually clean post revisions, auto-drafts, spam comments, expired transients, trashed posts, and orphaned metadata. You can also schedule automatic cleanups to run daily, weekly, or monthly.
+
+= Can I import/export plugin settings? =
+Yes. Use the **Tools** tab to export your current configuration as a JSON file and import it on another site. This is useful for agencies deploying the same setup across multiple client sites.
+
+= Is this plugin free? =
+Yes. Performance Optimisation is 100% free and open source. There is no premium version, no upsells, and no feature restrictions.
 
 == Upgrade Notice ==
+
+= 1.8.0 (2026-07-28) =
+Feature and performance release introducing WordPress 6.9+ object cache salt support, iframe lazy loading, delayJS parsing optimizations, and accessibility enhancements.
 
 = 1.7.0 (2026-07-26) =
 Performance, accessibility, and stability release adding cached minification checks, keyboard-accessible tooltips, ARIA accessibility labels, request cancellation safety, and 100% React component test coverage.

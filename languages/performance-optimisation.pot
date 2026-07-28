@@ -2,24 +2,23 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Performance Optimisation 1.7.0\n"
+"Project-Id-Version: Performance Optimisation 1.8.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/performance-optimisation\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-07-25T19:57:55+00:00\n"
+"POT-Creation-Date: 2026-07-28T16:29:29+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
-"X-Domain: performance-optimisation\n"
 
 #. Plugin Name of the plugin
 #: performance-optimisation.php
 #: includes/class-admin-notices.php:163
-#: includes/class-main.php:409
-#: includes/class-main.php:410
-#: includes/class-main.php:730
+#: includes/class-main.php:430
+#: includes/class-main.php:431
+#: includes/class-main.php:763
 #: build/index.js:4
 #: src/App.js:287
 msgid "Performance Optimisation"
@@ -27,7 +26,7 @@ msgstr ""
 
 #. Description of the plugin
 #: performance-optimisation.php
-msgid "A Performance Optimisation plugin for WordPress."
+msgid "Speed up WordPress with page caching, minify, lazy load, WebP/AVIF, Redis object cache, and database cleanup."
 msgstr ""
 
 #. Author of the plugin
@@ -62,8 +61,8 @@ msgstr ""
 
 #: includes/class-admin-notices.php:114
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:254
-#: src/components/ImageOptimization.js:147
+#: src/components/DatabaseCleanup.js:253
+#: src/components/ImageOptimization.js:148
 msgid "Dismiss"
 msgstr ""
 
@@ -95,14 +94,14 @@ msgstr ""
 msgid "Running multiple full-page cache solutions can cause conflicts. Consider using only one."
 msgstr ""
 
-#: includes/class-cache.php:808
-#: includes/class-object-cache.php:297
-#: includes/class-object-cache.php:332
-#: includes/class-rest.php:467
+#: includes/class-cache.php:834
+#: includes/class-object-cache.php:299
+#: includes/class-object-cache.php:334
+#: includes/class-rest.php:578
 msgid "Unable to initialize filesystem."
 msgstr ""
 
-#: includes/class-cache.php:814
+#: includes/class-cache.php:840
 msgid "Cache directory does not exist."
 msgstr ""
 
@@ -110,52 +109,52 @@ msgstr ""
 msgid "Every 5 Hours"
 msgstr ""
 
-#: includes/class-database-cleanup.php:613
+#: includes/class-database-cleanup.php:632
 msgid "Revisions"
 msgstr ""
 
-#: includes/class-database-cleanup.php:614
+#: includes/class-database-cleanup.php:633
 #: build/index.js:1
 #: src/components/DatabaseCleanup.js:29
 msgid "Auto Drafts"
 msgstr ""
 
-#: includes/class-database-cleanup.php:615
+#: includes/class-database-cleanup.php:634
 #: build/index.js:1
 #: src/components/DatabaseCleanup.js:37
 msgid "Trashed Posts"
 msgstr ""
 
-#: includes/class-database-cleanup.php:616
+#: includes/class-database-cleanup.php:635
 #: build/index.js:1
 #: src/components/DatabaseCleanup.js:45
 msgid "Spam Comments"
 msgstr ""
 
-#: includes/class-database-cleanup.php:617
+#: includes/class-database-cleanup.php:636
 #: build/index.js:1
 #: src/components/DatabaseCleanup.js:53
 msgid "Trashed Comments"
 msgstr ""
 
-#: includes/class-database-cleanup.php:618
+#: includes/class-database-cleanup.php:637
 #: build/index.js:1
 #: src/components/DatabaseCleanup.js:61
 msgid "Expired Transients"
 msgstr ""
 
-#: includes/class-database-cleanup.php:619
+#: includes/class-database-cleanup.php:638
 msgid "Orphan Post Meta"
 msgstr ""
 
 #. Translators: %s is the cleanup type label.
-#: includes/class-database-cleanup.php:623
+#: includes/class-database-cleanup.php:642
 #, php-format
 msgid "Auto cleanup failed: %s"
 msgstr ""
 
-#: includes/class-database-cleanup.php:704
-#: includes/class-rest.php:661
+#: includes/class-database-cleanup.php:723
+#: includes/class-rest.php:776
 msgid "Database cleanup failed."
 msgstr ""
 
@@ -163,27 +162,27 @@ msgstr ""
 msgid "Plugin deactivated"
 msgstr ""
 
-#: includes/class-img-converter.php:360
+#: includes/class-img-converter.php:397
 msgid "Image conversion failed."
 msgstr ""
 
-#: includes/class-main.php:341
+#: includes/class-main.php:362
 msgid "Performance Optimization: Failed to update .htaccess rules. Please check file permissions."
 msgstr ""
 
-#: includes/class-main.php:734
+#: includes/class-main.php:767
 msgid "Go to Performance Optimisation Setting"
 msgstr ""
 
-#: includes/class-main.php:744
+#: includes/class-main.php:777
 msgid "Clear All Cache"
 msgstr ""
 
-#: includes/class-main.php:756
+#: includes/class-main.php:789
 msgid "Clear This Page Cache"
 msgstr ""
 
-#: includes/class-main.php:759
+#: includes/class-main.php:792
 msgid "Clear cache for this specific page or post"
 msgstr ""
 
@@ -215,7 +214,7 @@ msgstr ""
 
 #: includes/class-metabox.php:153
 #: build/index.js:1
-#: src/components/FileOptimization.js:134
+#: src/components/FileOptimization.js:122
 msgid "Scripts"
 msgstr ""
 
@@ -245,56 +244,56 @@ msgstr ""
 msgid "Styles"
 msgstr ""
 
-#: includes/class-object-cache.php:128
-#: includes/class-object-cache.php:178
+#: includes/class-object-cache.php:130
+#: includes/class-object-cache.php:180
 msgid "Redis connection error."
 msgstr ""
 
-#: includes/class-object-cache.php:170
+#: includes/class-object-cache.php:172
 msgid "Redis telemetry error."
 msgstr ""
 
-#: includes/class-object-cache.php:205
-#: includes/class-object-cache.php:252
+#: includes/class-object-cache.php:207
+#: includes/class-object-cache.php:254
 msgid "The PhpRedis extension is not installed."
 msgstr ""
 
-#: includes/class-object-cache.php:222
+#: includes/class-object-cache.php:224
 msgid "Ping returned false"
 msgstr ""
 
-#: includes/class-object-cache.php:231
-#: includes/class-rest.php:797
-#: includes/class-rest.php:809
+#: includes/class-object-cache.php:233
+#: includes/class-rest.php:912
+#: includes/class-rest.php:924
 #: includes/redis-connect-helper.php:85
 msgid "Redis connection failed."
 msgstr ""
 
-#: includes/class-object-cache.php:236
+#: includes/class-object-cache.php:238
 msgid "Connection does not support ping"
 msgstr ""
 
-#: includes/class-object-cache.php:257
+#: includes/class-object-cache.php:259
 msgid "Another Object Cache drop-in is already present. Please disable it before enabling this one."
 msgstr ""
 
-#: includes/class-object-cache.php:263
+#: includes/class-object-cache.php:265
 msgid "Cannot connect to Redis with provided settings."
 msgstr ""
 
-#: includes/class-object-cache.php:301
+#: includes/class-object-cache.php:303
 msgid "Cannot write Redis configuration file."
 msgstr ""
 
-#: includes/class-object-cache.php:307
+#: includes/class-object-cache.php:309
 msgid "Cannot copy object-cache.php drop-in."
 msgstr ""
 
-#: includes/class-object-cache.php:326
+#: includes/class-object-cache.php:328
 msgid "A foreign drop-in exists. We will not delete it for safety."
 msgstr ""
 
-#: includes/class-object-cache.php:337
+#: includes/class-object-cache.php:339
 msgid "Cannot delete object-cache.php drop-in."
 msgstr ""
 
@@ -339,210 +338,243 @@ msgstr ""
 msgid "PageSpeed scan completed for %1$s (%2$s). Performance score: %3$d."
 msgstr ""
 
-#: includes/class-rest.php:204
+#: includes/class-rest.php:205
+msgid "Whether the request was successful."
+msgstr ""
+
+#: includes/class-rest.php:211
+msgid "Response data payload."
+msgstr ""
+
+#: includes/class-rest.php:217
+msgid "Response message."
+msgstr ""
+
+#. translators: %s: The cache group name
+#: includes/class-rest.php:261
+#, php-format
+msgid "Failed to flush cache group: %s"
+msgstr ""
+
+#: includes/class-rest.php:265
+msgid "Failed to flush cache group."
+msgstr ""
+
+#. translators: %s: The cache group name
+#: includes/class-rest.php:271
+#, php-format
+msgid "Flushed cache group: %s"
+msgstr ""
+
+#: includes/class-rest.php:289
 msgid "Invalid path provided."
 msgstr ""
 
-#: includes/class-rest.php:210
+#: includes/class-rest.php:295
 msgid "Failed to clear cache: Invalid path."
 msgstr ""
 
 #. translators: %s: The URL of the page
-#: includes/class-rest.php:215
+#: includes/class-rest.php:300
 #, php-format
 msgid "Clear cache of <a href=\"%1$s\">%2$s</a>"
 msgstr ""
 
-#: includes/class-rest.php:222
+#: includes/class-rest.php:307
 msgid "Clear all cache"
 msgstr ""
 
-#: includes/class-rest.php:251
+#: includes/class-rest.php:336
 msgid "Invalid settings tab."
 msgstr ""
 
-#: includes/class-rest.php:337
+#: includes/class-rest.php:420
 msgid "Activities fetched successfully."
 msgstr ""
 
-#: includes/class-rest.php:365
+#: includes/class-rest.php:450
+#: includes/class-rest.php:454
+msgid "No pending images to optimize."
+msgstr ""
+
+#: includes/class-rest.php:468
 msgid "Invalid image path provided."
 msgstr ""
 
 #. translators: %d: Number of image jobs queued
-#: includes/class-rest.php:413
+#: includes/class-rest.php:516
 #, php-format
 msgid "Scheduled %d image optimization jobs for background processing on "
 msgstr ""
 
 #. translators: %d: Number of jobs
-#: includes/class-rest.php:424
+#: includes/class-rest.php:527
 #, php-format
 msgid "%d images queued for background optimization."
 msgstr ""
 
-#: includes/class-rest.php:455
+#: includes/class-rest.php:566
 #: build/index.js:1
-#: src/components/Dashboard.js:308
+#: src/components/Dashboard.js:294
 msgid "Images optimized successfully."
 msgstr ""
 
-#: includes/class-rest.php:473
+#: includes/class-rest.php:584
 msgid "Optimized images folder does not exist."
 msgstr ""
 
-#: includes/class-rest.php:477
+#: includes/class-rest.php:588
 msgid "Failed to delete the optimized images folder."
 msgstr ""
 
-#: includes/class-rest.php:483
+#: includes/class-rest.php:594
 msgid "Optimized images folder deleted successfully."
 msgstr ""
 
-#: includes/class-rest.php:497
+#: includes/class-rest.php:608
 msgid "Invalid payload."
 msgstr ""
 
-#: includes/class-rest.php:501
-#: includes/class-rest.php:837
+#: includes/class-rest.php:612
+#: includes/class-rest.php:952
 msgid "Invalid action."
 msgstr ""
 
-#: includes/class-rest.php:505
+#: includes/class-rest.php:616
 msgid "Settings are missing or invalid."
 msgstr ""
 
-#: includes/class-rest.php:522
+#: includes/class-rest.php:633
 msgid "Invalid setting key detected."
 msgstr ""
 
-#: includes/class-rest.php:552
+#: includes/class-rest.php:663
 msgid "No changes detected, settings are already up-to-date"
 msgstr ""
 
-#: includes/class-rest.php:556
+#: includes/class-rest.php:667
 msgid "Failed to update settings"
 msgstr ""
 
-#: includes/class-rest.php:567
+#: includes/class-rest.php:678
 msgid "Settings updated successfully"
 msgstr ""
 
-#: includes/class-rest.php:594
-#: includes/class-rest.php:655
+#: includes/class-rest.php:705
+#: includes/class-rest.php:766
 msgid "Invalid cleanup type."
 msgstr ""
 
 #. translators: %s: Cleanup type
-#: includes/class-rest.php:606
+#: includes/class-rest.php:717
 #, php-format
 msgid "Failed to clean %s."
 msgstr ""
 
 #. translators: %d: Number of items cleaned
-#: includes/class-rest.php:617
+#: includes/class-rest.php:728
 #, php-format
 msgid "Database cleanup (all): %d items removed on "
 msgstr ""
 
-#: includes/class-rest.php:630
+#: includes/class-rest.php:741
 msgid "Partial or total failure during database cleanup."
 msgstr ""
 
 #. translators: %1$s: Cleanup type, %2$d: Number of items
-#: includes/class-rest.php:667
+#: includes/class-rest.php:782
 #, php-format
 msgid "Database cleanup (%1$s): %2$d items removed on "
 msgstr ""
 
-#: includes/class-rest.php:705
+#: includes/class-rest.php:820
 msgid "Post ID is required."
 msgstr ""
 
-#: includes/class-rest.php:718
+#: includes/class-rest.php:833
 msgid "No assets captured yet. Visit the page on the frontend first."
 msgstr ""
 
-#: includes/class-rest.php:796
+#: includes/class-rest.php:911
 msgid "Redis connection ping failed."
 msgstr ""
 
-#: includes/class-rest.php:808
+#: includes/class-rest.php:923
 msgid "Redis connection enable failed."
 msgstr ""
 
-#: includes/class-rest.php:812
+#: includes/class-rest.php:927
 msgid "Object Cache enabled."
 msgstr ""
 
-#: includes/class-rest.php:813
+#: includes/class-rest.php:928
 msgid "Object Cache enabled successfully."
 msgstr ""
 
-#: includes/class-rest.php:820
+#: includes/class-rest.php:935
 msgid "Redis connection disable failed."
 msgstr ""
 
-#: includes/class-rest.php:821
+#: includes/class-rest.php:936
 msgid "Failed to disable object cache."
 msgstr ""
 
-#: includes/class-rest.php:824
-#: includes/class-rest.php:825
+#: includes/class-rest.php:939
+#: includes/class-rest.php:940
 msgid "Object Cache disabled."
 msgstr ""
 
-#: includes/class-rest.php:831
-#: includes/class-rest.php:832
+#: includes/class-rest.php:946
+#: includes/class-rest.php:947
 msgid "Object Cache flushed."
 msgstr ""
 
-#: includes/class-rest.php:834
+#: includes/class-rest.php:949
 msgid "Failed to flush object cache."
 msgstr ""
 
-#: includes/class-rest.php:916
+#: includes/class-rest.php:1031
 msgid "Unauthorized."
 msgstr ""
 
-#: includes/class-rest.php:920
+#: includes/class-rest.php:1035
 msgid "Nonce verification failed."
 msgstr ""
 
-#: includes/class-rest.php:958
-#: includes/class-rest.php:1009
+#: includes/class-rest.php:1073
+#: includes/class-rest.php:1124
 msgid "A valid URL is required."
 msgstr ""
 
-#: includes/class-rest.php:964
-#: includes/class-rest.php:971
-#: includes/class-rest.php:1016
+#: includes/class-rest.php:1079
+#: includes/class-rest.php:1086
+#: includes/class-rest.php:1131
 msgid "A valid, allowed URL is required."
 msgstr ""
 
-#: includes/class-rest.php:977
-#: includes/class-rest.php:1022
+#: includes/class-rest.php:1092
+#: includes/class-rest.php:1137
 #: includes/class-telemetry.php:68
 msgid "You can only scan URLs belonging to this website."
 msgstr ""
 
-#: includes/class-rest.php:984
+#: includes/class-rest.php:1099
 msgid "Performance scan failed."
 msgstr ""
 
-#: includes/class-rest.php:1027
+#: includes/class-rest.php:1142
 msgid "PageSpeed cannot scan local or non-public URLs."
 msgstr ""
 
-#: includes/class-rest.php:1036
+#: includes/class-rest.php:1151
 msgid "Action Scheduler is not available."
 msgstr ""
 
-#: includes/class-rest.php:1086
+#: includes/class-rest.php:1201
 msgid "PageSpeed scan failed. Please check your API key and try again."
 msgstr ""
 
-#: includes/class-rest.php:1120
+#: includes/class-rest.php:1235
 msgid "No cached scan found for this URL. Run a scan first."
 msgstr ""
 
@@ -562,14 +594,14 @@ msgstr ""
 
 #: includes/class-system-info.php:220
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:720
+#: src/components/PerformanceAudit.js:718
 msgid "Enabled"
 msgstr ""
 
 #: includes/class-system-info.php:221
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:491
-#: src/components/PerformanceAudit.js:724
+#: src/components/PerformanceAudit.js:489
+#: src/components/PerformanceAudit.js:722
 msgid "Disabled"
 msgstr ""
 
@@ -587,7 +619,7 @@ msgstr ""
 
 #: includes/class-system-info.php:305
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:510
+#: src/components/PerformanceAudit.js:508
 #: src/components/SuggestionsPanel.js:89
 #: src/components/SuggestionsPanel.js:96
 msgid "None"
@@ -669,394 +701,394 @@ msgid "Could not connect to Redis. Please ensure the service is running."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:129
+#: src/components/FileOptimization.js:117
 msgid "Assets"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:139
+#: src/components/FileOptimization.js:127
 msgid "E-Commerce"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:144
+#: src/components/FileOptimization.js:132
 msgid "Network"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:149
+#: src/components/FileOptimization.js:137
 msgid "Core"
 msgstr ""
 
 #: build/index.js:1
 #: build/index.js:4
 #: src/App.js:53
-#: src/components/FileOptimization.js:177
+#: src/components/FileOptimization.js:165
 msgid "File Optimization"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:178
+#: src/components/FileOptimization.js:166
 msgid "Fine-tune how your site delivers CSS, JS, and HTML for maximum performance."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:95
+#: src/components/FileOptimization.js:83
 #: src/components/PreloadSettings.js:55
 msgid "Settings updated successfully."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:105
+#: src/components/FileOptimization.js:93
 #: src/components/PreloadSettings.js:65
 msgid "Failed to update settings."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:115
+#: src/components/FileOptimization.js:103
 #: src/components/PreloadSettings.js:75
 msgid "An unexpected error occurred."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:227
-#: src/components/FileOptimization.js:187
-#: src/components/ImageOptimization.js:119
-#: src/components/PluginSetting.js:545
+#: src/components/DatabaseCleanup.js:226
+#: src/components/FileOptimization.js:175
+#: src/components/ImageOptimization.js:120
+#: src/components/PluginSetting.js:547
 #: src/components/PreloadSettings.js:99
 msgid "Save Settings"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:250
+#: src/components/FileOptimization.js:238
 msgid "CSS Optimization"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:258
+#: src/components/FileOptimization.js:246
 msgid "Minify CSS"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:262
+#: src/components/FileOptimization.js:250
 msgid "Remove whitespace and comments from stylesheets to reduce file size."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:271
+#: src/components/FileOptimization.js:259
 msgid "Combine CSS"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:275
+#: src/components/FileOptimization.js:263
 msgid "Merge all CSS files into a single file to reduce the number of HTTP requests."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:289
+#: src/components/FileOptimization.js:277
 msgid "Exclude CSS from Combining"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:299
-#: src/components/FileOptimization.js:421
-#: src/components/FileOptimization.js:472
+#: src/components/FileOptimization.js:287
+#: src/components/FileOptimization.js:409
+#: src/components/FileOptimization.js:460
 msgid "Handles or partial URLs"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:316
+#: src/components/FileOptimization.js:304
 msgid "Exclude CSS from Minification"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:326
+#: src/components/FileOptimization.js:314
 msgid "Handles or partial URLs (one per line)"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:341
+#: src/components/FileOptimization.js:329
 msgid "HTML Optimization"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:348
+#: src/components/FileOptimization.js:336
 msgid "Minify HTML"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:352
+#: src/components/FileOptimization.js:340
 msgid "Compress the HTML output of your website by removing unnecessary whitespace and comments."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:372
+#: src/components/FileOptimization.js:360
 msgid "JavaScript Loading"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:380
+#: src/components/FileOptimization.js:368
 msgid "Minify JavaScript"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:384
+#: src/components/FileOptimization.js:372
 msgid "Compress JS files by removing whitespace and comments to reduce execution time."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:393
+#: src/components/FileOptimization.js:381
 msgid "Defer JavaScript"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:397
+#: src/components/FileOptimization.js:385
 msgid "Load scripts after the page renders to prevent render-blocking and improve page speed."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:411
+#: src/components/FileOptimization.js:399
 msgid "Exclude JS from Deferring"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:433
+#: src/components/FileOptimization.js:421
 msgid "Delay JavaScript Execution"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:437
+#: src/components/FileOptimization.js:425
 msgid "Delay all scripts until the user interacts (keyboard/mouse). Reduces initial CPU usage but may break immediate functionality — test carefully."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:450
+#: src/components/FileOptimization.js:438
 msgid "Script Rules"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:462
+#: src/components/FileOptimization.js:450
 msgid "Exclude JS from Minification"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:489
+#: src/components/FileOptimization.js:477
 msgid "Scripts to Delay"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:499
+#: src/components/FileOptimization.js:487
 msgid "Partial URLs or keywords"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:513
+#: src/components/FileOptimization.js:501
 msgid "Delaying scripts can break immediate functionality. Test carefully."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:534
+#: src/components/FileOptimization.js:522
 msgid "WooCommerce Core"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:542
+#: src/components/FileOptimization.js:530
 msgid "Optimize WooCommerce Assets"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:546
+#: src/components/FileOptimization.js:534
 msgid "Disable WooCommerce scripts and styles on non-ecommerce pages (e.g. blog, about). This reduces page weight but may break cart widgets on custom pages — verify your checkout flow after enabling."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:562
+#: src/components/FileOptimization.js:550
 msgid "This may break carts on custom pages. Verify your checkout flow."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:574
+#: src/components/FileOptimization.js:562
 msgid "Keep Assets on these URLs"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:584
+#: src/components/FileOptimization.js:572
 msgid "e.g. shop/.* (regex supported)"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:601
+#: src/components/FileOptimization.js:589
 msgid "Remove specific CSS/JS handles"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:611
+#: src/components/FileOptimization.js:599
 msgid "Handles (one per line)"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:639
+#: src/components/FileOptimization.js:627
 msgid "Server Rules"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:649
+#: src/components/FileOptimization.js:637
 msgid "Unable to load server configuration. Check your server setup."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:659
-#: src/components/PluginSetting.js:421
+#: src/components/FileOptimization.js:647
+#: src/components/PluginSetting.js:423
 msgid "Retry"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:674
+#: src/components/FileOptimization.js:662
 msgid "Loading server configuration…"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:687
+#: src/components/FileOptimization.js:675
 msgid "Server rules require Apache."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:695
+#: src/components/FileOptimization.js:683
 msgid "Enable Server Rules (.htaccess)"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:699
+#: src/components/FileOptimization.js:687
 msgid "Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:729
+#: src/components/FileOptimization.js:717
 msgid "This modifies your .htaccess. Ensure you have FTP access for recovery."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:746
+#: src/components/FileOptimization.js:734
 msgid "Nginx Detected:"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:751
+#: src/components/FileOptimization.js:739
 msgid "Server rules cannot be applied automatically on Nginx. Please copy the rules below into your server configuration."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:758
+#: src/components/FileOptimization.js:746
 msgid "Nginx Configuration"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:771
+#: src/components/FileOptimization.js:757
 msgid "Add these rules inside your"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:779
+#: src/components/FileOptimization.js:765
 msgid "block, then restart Nginx."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:796
+#: src/components/FileOptimization.js:782
 msgid "Unrecognised server software. Automatic rules are only available for Apache (.htaccess)."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:809
+#: src/components/FileOptimization.js:795
 msgid "CDN Settings"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:820
+#: src/components/FileOptimization.js:806
 msgid "CDN Hostname"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:839
+#: src/components/FileOptimization.js:825
 msgid "Enter your CDN hostname. All static asset URLs (JS, CSS, images) will be rewritten to load from this domain, reducing latency for global visitors."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:857
+#: src/components/FileOptimization.js:843
 msgid "Cleanup Core Bloat"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:865
+#: src/components/FileOptimization.js:851
 msgid "Disable Emojis"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:869
+#: src/components/FileOptimization.js:855
 msgid "Remove the WordPress emoji script and stylesheet. Saves ~10 KB per page if you don't use emojis in your content."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:878
+#: src/components/FileOptimization.js:864
 msgid "Disable Embeds"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:882
+#: src/components/FileOptimization.js:868
 msgid "Remove the oEmbed script that allows embedding external content. Saves ~1 HTTP request if you do not embed tweets, YouTube videos, etc."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:891
+#: src/components/FileOptimization.js:877
 msgid "Disable Dashicons (Frontend)"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:895
+#: src/components/FileOptimization.js:881
 msgid "Prevent the WordPress admin icon font from loading on the frontend for logged-out users. Only disable if your theme does not use Dashicons."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:904
+#: src/components/FileOptimization.js:890
 msgid "Disable XML-RPC"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:908
+#: src/components/FileOptimization.js:894
 msgid "Block the XML-RPC endpoint (xmlrpc.php). Reduces attack surface and server load. Only disable if you do not use Jetpack, mobile apps, or remote publishing."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:920
+#: src/components/FileOptimization.js:906
 msgid "Heartbeat Control"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:931
+#: src/components/FileOptimization.js:917
 msgid "API Frequency"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:945
+#: src/components/FileOptimization.js:931
 msgid "Default Mode"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:951
+#: src/components/FileOptimization.js:937
 msgid "Reduce Frequency (60s)"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:957
+#: src/components/FileOptimization.js:943
 msgid "Disable on Frontend"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:963
+#: src/components/FileOptimization.js:949
 msgid "Disable Everywhere"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/FileOptimization.js:973
+#: src/components/FileOptimization.js:959
 msgid "Restricting the Heartbeat API reduces server CPU usage by limiting polling."
 msgstr ""
 
@@ -1193,20 +1225,20 @@ msgstr ""
 #: build/index.js:1
 #: build/index.js:4
 #: src/App.js:63
-#: src/components/ImageOptimization.js:109
+#: src/components/ImageOptimization.js:110
 #: src/components/ImageOptimizationCard.js:32
 msgid "Image Optimization"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:110
+#: src/components/ImageOptimization.js:111
 msgid "Optimize media delivery with advanced lazy loading, next-gen formats, and preloading rules."
 msgstr ""
 
 #: build/index.js:1
 #: build/index.js:4
 #: src/components/DatabaseCleanup.js:140
-#: src/components/ImageOptimization.js:78
+#: src/components/ImageOptimization.js:79
 #: src/components/ObjectCache.js:86
 msgid "Settings saved successfully."
 msgstr ""
@@ -1214,200 +1246,215 @@ msgstr ""
 #: build/index.js:1
 #: build/index.js:4
 #: src/components/DatabaseCleanup.js:148
-#: src/components/ImageOptimization.js:88
-#: src/components/ImageOptimization.js:99
+#: src/components/ImageOptimization.js:89
+#: src/components/ImageOptimization.js:100
 #: src/components/ObjectCache.js:96
 #: src/components/ObjectCache.js:105
 msgid "Error saving settings."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:159
+#: src/components/ImageOptimization.js:160
 msgid "Lazy Loading"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:164
+#: src/components/ImageOptimization.js:165
 msgid "Enable Lazy Load"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:168
+#: src/components/ImageOptimization.js:169
 msgid "Images below the fold are loaded only when the user scrolls near them. Reduces initial page weight and improves Largest Contentful Paint (LCP) for above-the-fold content."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:206
-msgid "SVG Placeholders"
-msgstr ""
-
-#: build/index.js:1
 #: src/components/ImageOptimization.js:210
-msgid "Replace the image src with a lightweight inline SVG blur placeholder while the real image loads. Prevents layout shift and gives a smooth loading experience."
+msgid "Use Native Lazy Loading"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:224
-msgid "Wrap in Picture Tag"
+#: src/components/ImageOptimization.js:218
+msgid "Use the browser's native loading=\"lazy\" attribute instead of JavaScript-based IntersectionObserver. Supported in modern browsers and reduces JS overhead."
 msgstr ""
 
 #: build/index.js:1
 #: src/components/ImageOptimization.js:228
+msgid "SVG Placeholders"
+msgstr ""
+
+#: build/index.js:1
+#: src/components/ImageOptimization.js:232
+msgid "Replace the image src with a lightweight inline SVG blur placeholder while the real image loads. Prevents layout shift and gives a smooth loading experience."
+msgstr ""
+
+#: build/index.js:1
+#: src/components/ImageOptimization.js:246
+msgid "Wrap in Picture Tag"
+msgstr ""
+
+#: build/index.js:1
+#: src/components/ImageOptimization.js:250
 msgid "Wrap <img> elements in a <picture> element to enable serving next-gen formats (WebP/AVIF) with a fallback for older browsers. Required for format conversion to work."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:240
+#: src/components/ImageOptimization.js:262
 msgid "Video & Media"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:245
+#: src/components/ImageOptimization.js:267
 msgid "Video Lazy Loading"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:249
+#: src/components/ImageOptimization.js:271
 msgid "Defer loading of <iframe> and <video> embeds until they enter the viewport. Significantly reduces initial page load time for pages with embedded YouTube, Vimeo, or other media."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:287
+#: src/components/ImageOptimization.js:309
 msgid "Next-Gen Conversion"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:295
+#: src/components/ImageOptimization.js:317
 msgid "Auto Convert Formats"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:299
+#: src/components/ImageOptimization.js:321
 msgid "Automatically convert uploaded JPEG/PNG images to modern formats (WebP or AVIF). Modern formats are 25–50 percent smaller than JPEG at the same quality, directly improving page speed scores."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:372
+#: src/components/ImageOptimization.js:394
 msgid "Responsive Limits"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:436
+#: src/components/ImageOptimization.js:458
 msgid "Advanced Preloading"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:445
+#: src/components/ImageOptimization.js:467
 msgid "Preload Front Page Images"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:449
+#: src/components/ImageOptimization.js:471
 msgid "Inject <link rel=\"preload\"> hints for critical images on your homepage. Tells the browser to fetch these images at the highest priority, improving LCP scores for your most visited page."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:463
+#: src/components/ImageOptimization.js:485
 msgid "Frontpage Image URLs to Preload"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:493
+#: src/components/ImageOptimization.js:515
 msgid "Preload Featured Images"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/ImageOptimization.js:497
+#: src/components/ImageOptimization.js:519
 msgid "Automatically add preload hints for the featured image of posts and pages. Select which post types to apply this to below. Improves LCP for archive and single post pages."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/common/ConfirmDialog.js:135
+#: src/components/common/ConfirmDialog.js:144
 msgid "Cancel"
 msgstr ""
 
 #: build/index.js:1
 #: build/index.js:4
-#: src/components/common/ConfirmDialog.js:148
-#: src/components/DatabaseCleanup.js:509
-#: src/components/PluginSetting.js:649
+#: src/components/common/ConfirmDialog.js:157
+#: src/components/DatabaseCleanup.js:508
+#: src/components/PluginSetting.js:652
 msgid "Confirm"
+msgstr ""
+
+#: build/index.js:1
+#: src/components/PluginSetting.js:150
+msgid "Failed to load activity log."
 msgstr ""
 
 #: build/index.js:1
 #: build/index.js:4
 #: src/App.js:78
-#: src/components/PluginSetting.js:309
+#: src/components/PluginSetting.js:311
 msgid "Tools"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:310
+#: src/components/PluginSetting.js:312
 msgid "Manage your plugin configuration, view the full optimization activity log, and import or export settings."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:338
+#: src/components/PluginSetting.js:340
 msgid "Optimization Activity Log"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:354
+#: src/components/PluginSetting.js:356
 msgid "← Previous"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:372
+#: src/components/PluginSetting.js:374
 msgid "Next →"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:384
+#: src/components/PluginSetting.js:386
 msgid "A full timestamped record of every cache clear, image optimization, database cleanup, and settings change performed by the plugin."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:394
+#: src/components/PluginSetting.js:396
 msgid "Loading log…"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:400
+#: src/components/PluginSetting.js:402
 msgid "Load Activity Log"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:440
+#: src/components/PluginSetting.js:442
 msgid "No activity recorded yet."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:452
+#: src/components/PluginSetting.js:454
 msgid "Google PageSpeed API Key"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:463
+#: src/components/PluginSetting.js:465
 msgid "Required to run PageSpeed Insights scans. Get a free key from Google Cloud Console."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:484
+#: src/components/PluginSetting.js:486
 msgid "API key is configured."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:488
+#: src/components/PluginSetting.js:490
 msgid "API key is not configured."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:520
+#: src/components/PluginSetting.js:522
 msgid "New API Key"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:530
+#: src/components/PluginSetting.js:532
 msgid "Leave empty to keep current key"
 msgstr ""
 
@@ -1427,89 +1474,89 @@ msgid "Error saving API key."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:549
+#: src/components/PluginSetting.js:551
 msgid "Saving…"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:558
+#: src/components/PluginSetting.js:560
 msgid "Export Configuration"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:568
+#: src/components/PluginSetting.js:570
 msgid "Download your current plugin settings as a JSON file for backup or migration to another site."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:576
+#: src/components/PluginSetting.js:578
 msgid "Export Settings"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:585
+#: src/components/PluginSetting.js:587
 msgid "Import Configuration"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:592
+#: src/components/PluginSetting.js:594
 msgid "Upload a previously exported settings file to restore your configuration. This will overwrite all current settings."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:602
+#: src/components/PluginSetting.js:604
 msgid "Select configuration file"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:625
+#: src/components/PluginSetting.js:628
 msgid "Import Settings"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:629
+#: src/components/PluginSetting.js:632
 msgid "Importing…"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:189
+#: src/components/PluginSetting.js:191
 msgid "Please select a file first."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:207
-#: src/components/PluginSetting.js:219
-#: src/components/PluginSetting.js:277
+#: src/components/PluginSetting.js:209
+#: src/components/PluginSetting.js:221
+#: src/components/PluginSetting.js:279
 msgid "Error reading file"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:235
+#: src/components/PluginSetting.js:237
 msgid "Invalid settings file. The file must contain valid plugin settings."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:258
+#: src/components/PluginSetting.js:260
 msgid "File imported successfully"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:262
+#: src/components/PluginSetting.js:264
 msgid "Import failed"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:294
+#: src/components/PluginSetting.js:296
 msgid "Invalid file format. Please select a valid JSON file."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:644
+#: src/components/PluginSetting.js:647
 msgid "Confirm Import"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PluginSetting.js:645
+#: src/components/PluginSetting.js:648
 msgid "Importing this file will overwrite all current plugin settings. Continue?"
 msgstr ""
 
@@ -1549,229 +1596,229 @@ msgid "Total Assets"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:294
-#: src/components/PerformanceAudit.js:305
+#: src/components/PerformanceAudit.js:271
+#: src/components/PerformanceAudit.js:282
 msgid "Scan failed. Please try again."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:323
+#: src/components/PerformanceAudit.js:321
 msgid "Performance Audit"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:336
+#: src/components/PerformanceAudit.js:334
 msgid "https://example.com"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:341
+#: src/components/PerformanceAudit.js:339
 msgid "URL to Audit"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:351
-#: src/components/PerformanceAudit.js:355
+#: src/components/PerformanceAudit.js:349
+#: src/components/PerformanceAudit.js:353
 msgid "Use Home URL"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:342
-#: src/components/PerformanceAudit.js:368
+#: src/components/PageSpeedPanel.js:345
+#: src/components/PerformanceAudit.js:366
 msgid "Scanning…"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:375
+#: src/components/PerformanceAudit.js:373
 msgid "Run Scan"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:394
+#: src/components/PerformanceAudit.js:392
 msgid "Scan Results"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:401
+#: src/components/PerformanceAudit.js:399
 msgid "Developer Details"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:427
+#: src/components/PerformanceAudit.js:425
 msgid "Displaying cached results from the last hour."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:437
+#: src/components/PerformanceAudit.js:435
 msgid "Scan Fresh Data for Performance Audit"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:442
+#: src/components/PerformanceAudit.js:440
 msgid "Scan Fresh Data"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:410
-#: src/components/PerformanceAudit.js:454
+#: src/components/PageSpeedPanel.js:413
+#: src/components/PerformanceAudit.js:452
 msgid "Metric"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:416
-#: src/components/PerformanceAudit.js:460
+#: src/components/PageSpeedPanel.js:419
+#: src/components/PerformanceAudit.js:458
 msgid "Value"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:422
-#: src/components/PerformanceAudit.js:466
+#: src/components/PageSpeedPanel.js:425
+#: src/components/PerformanceAudit.js:464
 msgid "Status"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:476
+#: src/components/PerformanceAudit.js:474
 msgid "Optimizations"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:483
+#: src/components/PerformanceAudit.js:481
 msgid "Gzip/Brotli Compression"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:502
+#: src/components/PerformanceAudit.js:500
 msgid "Cache-Control"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:521
+#: src/components/PerformanceAudit.js:519
 msgid "Modern Formats"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:539
+#: src/components/PerformanceAudit.js:537
 msgid "Image Alt Attributes"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:545
+#: src/components/PerformanceAudit.js:543
 msgid "All images have alt text"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:549
+#: src/components/PerformanceAudit.js:547
 msgid "Some images missing alt text"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:564
+#: src/components/PerformanceAudit.js:562
 msgid "Advanced Timings"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:571
+#: src/components/PerformanceAudit.js:569
 msgid "DNS Lookup"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:579
+#: src/components/PerformanceAudit.js:577
 msgid "TCP Connection"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:587
+#: src/components/PerformanceAudit.js:585
 msgid "SSL Handshake"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:595
+#: src/components/PerformanceAudit.js:593
 msgid "True TTFB"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:603
+#: src/components/PerformanceAudit.js:601
 msgid "Server Processing"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:612
+#: src/components/PerformanceAudit.js:610
 msgid "Asset Breakdown"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:619
+#: src/components/PerformanceAudit.js:617
 msgid "CSS Files"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:630
+#: src/components/PerformanceAudit.js:628
 msgid "JS Files"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:641
+#: src/components/PerformanceAudit.js:639
 msgid "Total Images"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:652
+#: src/components/PerformanceAudit.js:650
 msgid "Lazy-Loaded"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:659
+#: src/components/PerformanceAudit.js:657
 msgid "Eager-Loaded"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:666
+#: src/components/PerformanceAudit.js:664
 msgid "Total DOM Nodes"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:674
+#: src/components/PerformanceAudit.js:672
 msgid "Unminified Assets"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:682
+#: src/components/PerformanceAudit.js:680
 msgid "Third-Party Scripts"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:693
+#: src/components/PerformanceAudit.js:691
 msgid "Environment"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:700
+#: src/components/PerformanceAudit.js:698
 msgid "Page URL"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:707
+#: src/components/PerformanceAudit.js:705
 msgid "Scan Type"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:714
+#: src/components/PerformanceAudit.js:712
 #: src/components/SystemInfo.js:197
 msgid "HTTPS"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:734
+#: src/components/PerformanceAudit.js:732
 msgid "robots.txt"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:740
+#: src/components/PerformanceAudit.js:738
 msgid "Exists"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PerformanceAudit.js:744
+#: src/components/PerformanceAudit.js:742
 msgid "Missing"
 msgstr ""
 
@@ -1781,76 +1828,76 @@ msgid "PageSpeed scan timed out. Please try again."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:178
-#: src/components/PageSpeedPanel.js:243
+#: src/components/PageSpeedPanel.js:177
+#: src/components/PageSpeedPanel.js:246
 msgid "PageSpeed scan failed. Please try again."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:211
-#: src/components/PageSpeedPanel.js:259
+#: src/components/PageSpeedPanel.js:213
+#: src/components/PageSpeedPanel.js:262
 msgid "PageSpeed scan failed."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:266
+#: src/components/PageSpeedPanel.js:269
 msgid "First Contentful Paint"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:267
+#: src/components/PageSpeedPanel.js:270
 msgid "Largest Contentful Paint"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:268
+#: src/components/PageSpeedPanel.js:271
 msgid "Total Blocking Time"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:269
+#: src/components/PageSpeedPanel.js:272
 msgid "Cumulative Layout Shift"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:270
+#: src/components/PageSpeedPanel.js:273
 msgid "Speed Index"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:271
+#: src/components/PageSpeedPanel.js:274
 msgid "Time to Interactive"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:283
+#: src/components/PageSpeedPanel.js:286
 msgid "PageSpeed Insights"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:291
+#: src/components/PageSpeedPanel.js:294
 msgid "PageSpeed API key is not configured. Add it in Settings."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:312
-#: src/components/PageSpeedPanel.js:454
+#: src/components/PageSpeedPanel.js:315
+#: src/components/PageSpeedPanel.js:457
 msgid "Mobile"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:325
-#: src/components/PageSpeedPanel.js:453
+#: src/components/PageSpeedPanel.js:328
+#: src/components/PageSpeedPanel.js:456
 msgid "Desktop"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:350
+#: src/components/PageSpeedPanel.js:353
 msgid "Run PageSpeed Scan"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/PageSpeedPanel.js:371
+#: src/components/PageSpeedPanel.js:374
 msgid "PageSpeed scan is running in the background. Results will appear shortly."
 msgstr ""
 
@@ -2047,136 +2094,136 @@ msgid "No optimization activity recorded yet."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:130
+#: src/components/Dashboard.js:122
 msgid "Failed to load database counts."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:179
+#: src/components/Dashboard.js:172
 msgid "Image optimization completed."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:200
+#: src/components/Dashboard.js:188
 msgid "Status check stopped after repeated failures."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:208
+#: src/components/Dashboard.js:196
 msgid "Status check failed. Retrying…"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:241
+#: src/components/Dashboard.js:232
 msgid "Cache cleared successfully."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:255
+#: src/components/Dashboard.js:246
 msgid "Failed to clear cache."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:287
+#: src/components/Dashboard.js:275
 msgid "Image optimization started in background."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:323
+#: src/components/Dashboard.js:309
 msgid "Image optimization failed."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:356
+#: src/components/Dashboard.js:341
 msgid "Optimized images removed."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:365
+#: src/components/Dashboard.js:350
 msgid "Failed to remove optimized images."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:393
+#: src/components/Dashboard.js:378
 msgid "System Health"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:394
+#: src/components/Dashboard.js:379
 msgid "Real-time performance overview and quick optimization actions."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:404
+#: src/components/Dashboard.js:389
 msgid "Purge All Cache"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:408
+#: src/components/Dashboard.js:393
 msgid "Purging…"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:421
+#: src/components/Dashboard.js:406
 msgid "Cache Size"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:430
+#: src/components/Dashboard.js:415
 msgid "Manage Cache →"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:436
+#: src/components/Dashboard.js:421
 msgid "Optimized Files"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:450
+#: src/components/Dashboard.js:435
 msgid "View Settings →"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:456
+#: src/components/Dashboard.js:441
 msgid "DB Overhead"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:465
+#: src/components/Dashboard.js:450
 msgid "Clean Now →"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:471
+#: src/components/Dashboard.js:456
 msgid "Images Optimized"
 msgstr ""
 
 #: build/index.js:1
 #: build/index.js:4
-#: src/components/Dashboard.js:480
+#: src/components/Dashboard.js:465
 #: src/components/ObjectCache.js:353
 msgid "N/A"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:487
+#: src/components/Dashboard.js:472
 msgid "View Images →"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:544
+#: src/components/Dashboard.js:529
 msgid "Remove Optimized Images"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/Dashboard.js:548
+#: src/components/Dashboard.js:533
 msgid "This will delete all optimized WebP and AVIF copies. Original images will not be affected."
 msgstr ""
 
 #: build/index.js:1
 #: build/index.js:4
-#: src/components/Dashboard.js:552
-#: src/components/DatabaseCleanup.js:527
+#: src/components/Dashboard.js:537
+#: src/components/DatabaseCleanup.js:526
 msgid "Delete"
 msgstr ""
 
@@ -2226,102 +2273,102 @@ msgid "Metadata entries with no associated post."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:217
+#: src/components/DatabaseCleanup.js:216
 msgid "Database Cleanup"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:218
+#: src/components/DatabaseCleanup.js:217
 msgid "Optimize your database by removing junk data and optimizing table overhead."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:266
+#: src/components/DatabaseCleanup.js:265
 msgid "Automated Database Cleanup"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:278
+#: src/components/DatabaseCleanup.js:277
 msgid "Schedule Frequency"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:292
+#: src/components/DatabaseCleanup.js:291
 msgid "None (Manual Only)"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:298
+#: src/components/DatabaseCleanup.js:297
 msgid "Daily"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:304
+#: src/components/DatabaseCleanup.js:303
 msgid "Weekly"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:310
+#: src/components/DatabaseCleanup.js:309
 msgid "Monthly"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:320
+#: src/components/DatabaseCleanup.js:319
 msgid "How often the automated database cleanup routine should run in the background."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:332
+#: src/components/DatabaseCleanup.js:331
 msgid "Revision Max Age (Days)"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:351
+#: src/components/DatabaseCleanup.js:350
 msgid "Delete post revisions older than this many days (0 for no age limit)."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:362
+#: src/components/DatabaseCleanup.js:361
 msgid "Keep Latest Revisions"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:381
+#: src/components/DatabaseCleanup.js:380
 msgid "Always retain this many recent revisions per post, regardless of age."
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:392
+#: src/components/DatabaseCleanup.js:391
 msgid "Total Database Overhead"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:404
+#: src/components/DatabaseCleanup.js:403
 msgid "Optimize Everything"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:412
+#: src/components/DatabaseCleanup.js:411
 msgid "Optimize Everything Now"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:424
+#: src/components/DatabaseCleanup.js:423
 msgid "Total Optimization Opportunities"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:435
+#: src/components/DatabaseCleanup.js:434
 msgid "Granular Cleanup Options"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:461
+#: src/components/DatabaseCleanup.js:460
 msgid "Clean"
 msgstr ""
 
 #: build/index.js:1
-#: src/components/DatabaseCleanup.js:465
+#: src/components/DatabaseCleanup.js:464
 msgid "Cleaning"
 msgstr ""
 
@@ -2345,22 +2392,22 @@ msgid "Failures:"
 msgstr ""
 
 #: build/index.js:4
-#: src/components/DatabaseCleanup.js:199
+#: src/components/DatabaseCleanup.js:198
 msgid "Error executing cleanup."
 msgstr ""
 
 #: build/index.js:4
-#: src/components/DatabaseCleanup.js:513
+#: src/components/DatabaseCleanup.js:512
 msgid "This action will permanently delete"
 msgstr ""
 
 #: build/index.js:4
-#: src/components/DatabaseCleanup.js:519
+#: src/components/DatabaseCleanup.js:518
 msgid "overhead items"
 msgstr ""
 
 #: build/index.js:4
-#: src/components/DatabaseCleanup.js:522
+#: src/components/DatabaseCleanup.js:521
 msgid "from your database. Proceed?"
 msgstr ""
 

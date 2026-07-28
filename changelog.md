@@ -2,6 +2,24 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.8.0] - 2026-07-28
+
+### Added
+
+- **WordPress 6.9+ Object Cache Salt Support:** Native `add_salt()` support in `WP_Object_Cache` (`wp_cache_add_salt()`) for key space invalidation.
+- **Iframe Lazy Loading:** Added `iframe` element support in HTML Tag Processor and frontend lazy loader.
+- **React ErrorBoundary Integration:** SPA tab rendering is now wrapped in an ErrorBoundary component to prevent UI crashes.
+- **Enhanced Edge Case Tests:** Added test suites for `PerformanceAudit`, `SystemInfo`, `LoadingSubmitButton`, and `DatabaseCleanup`.
+
+### Changed
+
+- **Minification & Utility Performance:** Pre-cached delayJS exclusion patterns in `Minify\HTML` constructor and blog-specific home URL path resolution in worker loops.
+- **Accessibility Improvements:** Added `aria-describedby` associations, modal focus trap management, and accessible labels across components.
+
+### Fixed
+
+- **Redis Object Cache Indexing:** Corrected key-indexed return array structure in Redis Object Cache fallback methods.
+
 ## [1.7.0] - 2026-07-26
 
 ### Added
