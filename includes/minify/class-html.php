@@ -181,15 +181,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @since 1.0.0
 		 */
 		private function modify_canonical_link( string $html ): ?string {
-			return preg_replace_callback(
-				'#<link\b[^>]*\brel=(?:["\']?)(canonical|shortlink)(?:["\']?)[^>]*>#i',
-				function ( $matches ) {
-					$link_tag = preg_replace( '/\bhref\s*=/i', 'wppo-href=', $matches[0] );
-
-					return $link_tag;
-				},
-				$html
-			);
+			$tags = new \WP_HTML_Tag_Processor( $html );
+			while ( $tags->next_tag( array( 'tag_name' => 'link' ) ) ) {
+				$rel = strtolower( (string) $tags->get_attribute( 'rel' ) );
+				if ( in_array( $rel, array( 'canonical', 'shortlink' ), true ) ) {
+					$href = $tags->get_attribute( 'href' );
+					if ( null !== $href ) {
+						$tags->set_attribute( 'wppo-href', $href );
+						$tags->remove_attribute( 'href' );
+					}
+				}
+			}
+			return $tags->get_updated_html();
 		}
 
 		/**
@@ -251,15 +254,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 * @since 1.0.0
 		 */
 		private function restore_canonical_link( string $html ): string {
-			return preg_replace_callback(
-				'#<link\b[^>]*\brel=(?:["\']?)(canonical|shortlink)(?:["\']?)[^>]*>#i',
-				function ( $matches ) {
-					$link_tag = preg_replace( '/\bwppo-href\s*=/i', 'href=', $matches[0] );
-
-					return $link_tag;
-				},
-				$html
-			);
+			$tags = new \WP_HTML_Tag_Processor( $html );
+			while ( $tags->next_tag( array( 'tag_name' => 'link' ) ) ) {
+				$rel = strtolower( (string) $tags->get_attribute( 'rel' ) );
+				if ( in_array( $rel, array( 'canonical', 'shortlink' ), true ) ) {
+					$wppo_href = $tags->get_attribute( 'wppo-href' );
+					if ( null !== $wppo_href ) {
+						$tags->set_attribute( 'href', $wppo_href );
+						$tags->remove_attribute( 'wppo-href' );
+					}
+				}
+			}
+			return $tags->get_updated_html();
 		}
 
 		/**
