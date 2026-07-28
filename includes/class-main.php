@@ -940,7 +940,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$preload_settings   = $this->options['preload_settings'] ?? array();
 			$enable_speculation = ! empty( $preload_settings['enableSpeculationRules'] );
-			$cache_enabled      = ! empty( $this->options['cache']['enableCache'] );
 
 			add_filter(
 				'wp_speculation_rules_href_exclude_paths',
@@ -952,11 +951,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			);
 
-			if ( $cache_enabled || $enable_speculation ) {
+			if ( $enable_speculation ) {
 				add_filter(
 					'wp_speculation_rules_configuration',
-					function ( $config ) use ( $preload_settings, $cache_enabled ) {
-						if ( $cache_enabled ) {
+					function ( $config ) use ( $preload_settings ) {
+						if ( is_array( $config ) ) {
 							$config['mode']      = $preload_settings['speculationMode'] ?? 'prerender';
 							$config['eagerness'] = $preload_settings['speculationEagerness'] ?? 'moderate';
 						}
