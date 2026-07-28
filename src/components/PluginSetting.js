@@ -146,7 +146,9 @@ const PluginSetting = ( { options } ) => {
 				setLogLoaded( true );
 			}
 		} catch ( err ) {
-			setLogError( err.message || String( err ) );
+			setLogError(
+				__( 'Failed to load activity log.', 'performance-optimisation' )
+			);
 			console.error( 'Failed to load activity log:', err );
 		} finally {
 			setLogLoading( false );

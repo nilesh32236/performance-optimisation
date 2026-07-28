@@ -19,18 +19,6 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 
-const escapeHtml = ( str ) => {
-	if ( typeof str !== 'string' ) {
-		return '';
-	}
-	return str
-		.replace( /&/g, '&amp;' )
-		.replace( /</g, '&lt;' )
-		.replace( />/g, '&gt;' )
-		.replace( /"/g, '&quot;' )
-		.replace( /'/g, '&#039;' );
-};
-
 const FileOptimization = ( {
 	options = {},
 	serverRules = null,
@@ -762,9 +750,7 @@ const FileOptimization = ( {
 												</div>
 												<pre className="wppo-code-block">
 													<code>
-														{ escapeHtml(
-															serverRules.nginx
-														) }
+														{ serverRules.nginx }
 													</code>
 												</pre>
 												<p className="wppo-text-muted wppo-mt-12 wppo-text-13">

@@ -223,7 +223,9 @@ describe( 'DatabaseCleanup Component', () => {
 		fireEvent.click( confirmButton );
 
 		await waitFor( () => {
-			expect( screen.getByText( 'API Exception' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'Error executing cleanup.' )
+			).toBeInTheDocument();
 		} );
 	} );
 

@@ -201,13 +201,13 @@ describe( 'FileOptimization Component', () => {
 		).toBeInTheDocument();
 	} );
 
-	it( 'escapes html entities in server rules properly handling non-string inputs', () => {
+	it( 'renders server rules correctly without double-encoding', () => {
 		render(
 			<FileOptimization
 				options={ {} }
 				serverRules={ {
 					server_type: 'nginx',
-					nginx: 12345, // Not a string
+					nginx: 'server { listen 80; }',
 				} }
 			/>
 		);
@@ -216,7 +216,8 @@ describe( 'FileOptimization Component', () => {
 		fireEvent.click( networkTab );
 
 		expect( screen.getByText( /Nginx Detected/i ) ).toBeInTheDocument();
-		// With a non-string input to escapeHtml, it returns ''. The pre > code block should be empty or just not contain '12345'
-		expect( screen.queryByText( '12345' ) ).not.toBeInTheDocument();
+		expect(
+			screen.getByText( 'server { listen 80; }' )
+		).toBeInTheDocument();
 	} );
 } );
