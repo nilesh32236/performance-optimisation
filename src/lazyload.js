@@ -11,11 +11,22 @@ let scriptLoading = false;
 let scriptLoadPromise = null;
 
 /**
+ * Whether native lazy loading is active (loading="lazy" on img/iframe instead of IntersectionObserver).
+ * Set by PHP via wp_add_inline_script before the lazyload script.
+ * @type {boolean}
+ */
+const useNativeLazy =
+	typeof window.wppoNativeLazy !== 'undefined' && window.wppoNativeLazy;
+
+/**
  * Selector for all lazy-loadable elements.
+ * In native mode, images use native loading="lazy" but iframes still use data-src
+ * until PHP emits native loading="lazy" for iframes.
  * @type {string}
  */
-const LAZY_SELECTOR =
-	'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
+const LAZY_SELECTOR = useNativeLazy
+	? 'iframe[data-src], video.wppo-lazy-video'
+	: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
 
 /**
  * Load a single deferred script element.
@@ -262,6 +273,11 @@ const observeElement = ( el ) => {
  * @since 1.0.0
  */
 const loadImages = () => {
+	// When native lazy is active and no video lazy elements exist, skip observer setup entirely.
+	if ( useNativeLazy && ! document.querySelector( LAZY_SELECTOR ) ) {
+		return;
+	}
+
 	if ( 'IntersectionObserver' in window ) {
 		if ( ! globalObserver ) {
 			globalObserver = new IntersectionObserver(

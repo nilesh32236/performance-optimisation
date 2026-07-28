@@ -54,6 +54,13 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		public $blog_prefix;
 
 		/**
+		 * Salt for cache key prefixing (WP 6.9+).
+		 *
+		 * @var string
+		 */
+		private $salt = '';
+
+		/**
 		 * Constructor.
 		 */
 		public function __construct() {
@@ -62,6 +69,21 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			$this->blog_prefix = ( is_multisite() ? get_current_blog_id() : $table_prefix ) . ':';
 
 			$this->connect_redis();
+		}
+
+		/**
+		 * Adds salt to the cache key prefix.
+		 *
+		 * Called by wp_cache_add_salt() (WP 6.9+) to invalidate all cached data
+		 * by changing the key space.
+		 *
+		 * @since 2.1.0
+		 *
+		 * @param string $salt The salt string to add.
+		 * @return void
+		 */
+		public function add_salt( $salt ) {
+			$this->salt = $salt;
 		}
 
 		/**
@@ -183,7 +205,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$prefix = $this->blog_prefix;
 			}
 
-			return $prefix . $group . ':' . $key;
+			return $prefix . $this->salt . $group . ':' . $key;
 		}
 
 		/**
@@ -383,7 +405,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				$replies = $pipeline->exec();
 
 				if ( ! is_array( $replies ) ) {
-					return array_fill( 0, count( $keys ), false );
+					return array_fill_keys( array_keys( $data ), false );
 				}
 
 				$i = 0;
@@ -829,4 +851,24 @@ function wp_cache_set_multiple( $data, $group = '', $expire = 0 ) {
 function wp_cache_delete_multiple( $keys, $group = '' ) {
 	global $wp_object_cache;
 	return $wp_object_cache->delete_multiple( $keys, $group );
+}
+
+if ( ! function_exists( 'wp_cache_add_salt' ) ) {
+	/**
+	 * Adds salt to the cache key prefix (WP 6.9+).
+	 *
+	 * Allows core to invalidate all cached data by changing the key space.
+	 * The drop-in must support this via WP_Object_Cache::add_salt().
+	 *
+	 * @since 2.1.0
+	 *
+	 * @param string $salt The salt string to add.
+	 * @return void
+	 */
+	function wp_cache_add_salt( $salt ) {
+		global $wp_object_cache;
+		if ( $wp_object_cache instanceof WP_Object_Cache ) {
+			$wp_object_cache->add_salt( $salt );
+		}
+	}
 }
