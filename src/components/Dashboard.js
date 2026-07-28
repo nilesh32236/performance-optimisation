@@ -39,14 +39,6 @@ const normalizeImageInfo = ( raw ) => {
 };
 
 const Dashboard = ( { activities, onNavigate } ) => {
-	// Raw pending paths from the initial API response — used for optimise_image payload.
-	const rawPending = wppoSettings?.image_info?.pending ?? {};
-
-	const [ pendingPaths, setPendingPaths ] = useState( {
-		webp: Array.isArray( rawPending.webp ) ? rawPending.webp : [],
-		avif: Array.isArray( rawPending.avif ) ? rawPending.avif : [],
-	} );
-
 	// Phase 2 — suggestions state (populated by telemetry scan + PageSpeed scan).
 	const [ telemetrySuggestions, setTelemetrySuggestions ] = useState( [] );
 	const [ pagespeedSuggestions, setPagespeedSuggestions ] = useState( [] );
@@ -273,10 +265,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		submittingRef.current = true;
 		handleLoading( 'optimize_images', true );
 
-		apiCall( 'optimise_image', {
-			webp: pendingPaths.webp,
-			avif: pendingPaths.avif,
-		} )
+		apiCall( 'optimise_image', {} )
 			.then( ( response ) => {
 				if ( response.data?.background ) {
 					// Background (Action Scheduler) path.
@@ -288,14 +277,12 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							'performance-optimisation'
 						)
 					);
-					setPendingPaths( { webp: [], avif: [] } );
 					if ( pollingRef.current ) {
 						clearTimeout( pollingRef.current );
 					}
 					pollingRef.current = setTimeout( pollJobStatus, 5000 );
 				} else {
 					// Synchronous path (Action Scheduler unavailable).
-					setPendingPaths( { webp: [], avif: [] } );
 					setBgJobsQueued( 0 );
 					setBgProcessing( false );
 
@@ -331,7 +318,6 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			} );
 	}, [
 		handleLoading,
-		pendingPaths,
 		pollJobStatus,
 		updateState,
 		bgProcessing,
@@ -521,7 +507,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					bgJobsQueued={ bgJobsQueued }
 					loading={ loading }
 					pendingPathsCount={
-						pendingPaths.webp.length + pendingPaths.avif.length
+						( pending.webp || 0 ) + ( pending.avif || 0 )
 					}
 					onOptimize={ optimizeImages }
 					onRemove={ () => setConfirmRemove( true ) }

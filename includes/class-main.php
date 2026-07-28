@@ -611,7 +611,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'nonce_refresh'     => wp_create_nonce( 'wppo_nonce_refresh' ),
 					'version'           => WPPO_VERSION,
 					'settings'          => $safe_options,
-					'image_info'        => get_option( 'wppo_img_info', array() ),
+					'image_info'        => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
 					'cache_size'        => $cache_size,
 					'total_js_css'      => $total_js_css,
 					'performance_audit' => array(
@@ -1060,6 +1060,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		private function is_js_minified( $file_path ) {
 			return $this->is_file_minified( $file_path, 'js' );
+		}
+
+		/**
+		 * Sanitizes image info for client exposure — replaces path arrays with counts.
+		 *
+		 * Prevents filesystem paths from being visible in wppoSettings via View Page Source.
+		 *
+		 * @since 1.7.0
+		 *
+		 * @param  array $img_info Raw image info from wppo_img_info option.
+		 * @return array Image info with only counts (no file paths).
+		 */
+		private function sanitize_image_info_for_client( array $img_info ): array {
+			$sanitized = array();
+			foreach ( array( 'pending', 'completed', 'failed' ) as $bucket ) {
+				$bucket_data          = $img_info[ $bucket ] ?? array();
+				$sanitized[ $bucket ] = array(
+					'webp' => is_array( $bucket_data['webp'] ?? null ) ? count( $bucket_data['webp'] ) : ( $bucket_data['webp'] ?? 0 ),
+					'avif' => is_array( $bucket_data['avif'] ?? null ) ? count( $bucket_data['avif'] ) : ( $bucket_data['avif'] ?? 0 ),
+				);
+			}
+			return $sanitized;
 		}
 	}
 }

@@ -351,6 +351,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$webp_images = isset( $params['webp'] ) ? array_map( 'sanitize_text_field', (array) $params['webp'] ) : array();
 			$avif_images = isset( $params['avif'] ) ? array_map( 'sanitize_text_field', (array) $params['avif'] ) : array();
 
+			// If no paths sent from client, fall back to reading pending paths from DB.
+			if ( empty( $webp_images ) && empty( $avif_images ) ) {
+				$img_info    = Img_Converter::get_img_info();
+				$webp_images = isset( $img_info['pending'] ) ? ( $img_info['pending']['webp'] ?? array() ) : array();
+				$avif_images = isset( $img_info['pending'] ) ? ( $img_info['pending']['avif'] ?? array() ) : array();
+
+				if ( empty( $webp_images ) && empty( $avif_images ) ) {
+					return $this->send_response(
+						array(
+							'background'  => false,
+							'jobs_queued' => 0,
+							'message'     => __( 'No pending images to optimize.', 'performance-optimisation' ),
+						),
+						true,
+						200,
+						__( 'No pending images to optimize.', 'performance-optimisation' )
+					);
+				}
+			}
+
 			// Validate image paths using realpath to prevent directory traversal.
 			$normalized_abspath = trailingslashit( wp_normalize_path( ABSPATH ) );
 			foreach ( array_merge( $webp_images, $avif_images ) as $img_path ) {
@@ -448,9 +468,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			Cache::clear_cache();
 
-			$response = Img_Converter::get_img_info();
+			$response  = Img_Converter::get_img_info();
+			$sanitized = array();
+			foreach ( array( 'pending', 'completed', 'failed' ) as $bucket ) {
+				$bucket_data          = $response[ $bucket ] ?? array();
+				$sanitized[ $bucket ] = array(
+					'webp' => is_array( $bucket_data['webp'] ?? null ) ? count( $bucket_data['webp'] ) : ( $bucket_data['webp'] ?? 0 ),
+					'avif' => is_array( $bucket_data['avif'] ?? null ) ? count( $bucket_data['avif'] ) : ( $bucket_data['avif'] ?? 0 ),
+				);
+			}
 
-			return $this->send_response( $response, true, 200, __( 'Images optimized successfully.', 'performance-optimisation' ) );
+			return $this->send_response( $sanitized, true, 200, __( 'Images optimized successfully.', 'performance-optimisation' ) );
 		}
 
 		/**

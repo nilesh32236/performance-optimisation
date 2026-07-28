@@ -192,14 +192,13 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				}
 			}
 		} catch ( error ) {
+			console.error( 'Database cleanup error:', error );
 			setNotification( {
 				type: 'error',
-				message:
-					error.message ||
-					__(
-						'Error executing cleanup.',
-						'performance-optimisation'
-					),
+				message: __(
+					'Error executing cleanup.',
+					'performance-optimisation'
+				),
 			} );
 		} finally {
 			setLoading( ( prev ) => ( { ...prev, [ type ]: false } ) );
