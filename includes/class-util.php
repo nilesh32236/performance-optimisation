@@ -105,10 +105,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			// If home_url has a subdirectory path, remove it only from the start.
-			$home_path = wp_normalize_path( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '' );
-			if ( $home_path && '/' !== $home_path ) {
-				if ( 0 === strpos( $relative_path, $home_path ) ) {
-					$relative_path = substr( $relative_path, strlen( $home_path ) );
+			static $home_path = array();
+			$blog_id          = get_current_blog_id();
+
+			if ( ! isset( $home_path[ $blog_id ] ) ) {
+				$home_path[ $blog_id ] = wp_normalize_path( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '' );
+			}
+
+			if ( $home_path[ $blog_id ] && '/' !== $home_path[ $blog_id ] ) {
+				if ( 0 === strpos( $relative_path, $home_path[ $blog_id ] ) ) {
+					$relative_path = substr( $relative_path, strlen( $home_path[ $blog_id ] ) );
 				}
 			}
 

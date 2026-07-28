@@ -59,3 +59,7 @@
 ## 2025-01-22 - Array Processing in Regex Callback Loops
 **Learning:** Calling array processing operations (like `Util::process_urls`, which filters, maps and unique-ifies arrays) inside high-frequency regex callbacks (like parsing every `<script>` tag on a page for minification or delayJS) can severely impact performance.
 **Action:** When a static or configuration-based array needs to be processed to be used as exclusions or matches inside a regex callback loop, process and cache it once as a class property during instantiation instead of computing it dynamically for each match.
+
+## 2025-01-28 - Caching WP Core Functions in Loops
+**Learning:** Executing WordPress core functions like `home_url()`, `content_url()`, or `wp_upload_dir()` repeatedly inside high-frequency loops (e.g., regex callbacks parsing hundreds of images or CSS tags) creates significant performance overhead due to redundant hook executions and string processing within WP Core.
+**Action:** When WordPress core utility functions that return static paths/URLs are needed inside parsing loops, cache their results in PHP `static` variables so they are computed only once per request and reused across all subsequent loop iterations.

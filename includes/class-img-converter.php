@@ -457,15 +457,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 				if ( empty( $local_path ) ) {
 					// If Util::get_local_path failed, manually resolve if it's a URL.
-					$home_url    = untrailingslashit( home_url() );
-					$content_url = untrailingslashit( content_url() );
-					$local_base  = wp_normalize_path( ABSPATH );
+					static $home_url    = array();
+					static $content_url = array();
+					$blog_id            = get_current_blog_id();
 
-					if ( strpos( $source_image, $content_url ) === 0 ) {
-						$relative_path = substr( $source_image, strlen( $content_url ) );
+					if ( ! isset( $home_url[ $blog_id ] ) ) {
+						$home_url[ $blog_id ] = untrailingslashit( home_url() );
+					}
+					if ( ! isset( $content_url[ $blog_id ] ) ) {
+						$content_url[ $blog_id ] = untrailingslashit( content_url() );
+					}
+
+					$local_base = wp_normalize_path( ABSPATH );
+
+					if ( strpos( $source_image, $content_url[ $blog_id ] ) === 0 ) {
+						$relative_path = substr( $source_image, strlen( $content_url[ $blog_id ] ) );
 						$local_base    = wp_normalize_path( WP_CONTENT_DIR );
-					} elseif ( strpos( $source_image, $home_url ) === 0 ) {
-						$relative_path = substr( $source_image, strlen( $home_url ) );
+					} elseif ( strpos( $source_image, $home_url[ $blog_id ] ) === 0 ) {
+						$relative_path = substr( $source_image, strlen( $home_url[ $blog_id ] ) );
 					} else {
 						$relative_path = $source_image;
 					}
@@ -514,7 +523,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		public static function get_img_url( string $source_image, string $format = 'webp' ): string {
 
-			if ( 0 === strpos( $source_image, home_url() ) ) {
+			static $home_url = array();
+			$blog_id         = get_current_blog_id();
+
+			if ( ! isset( $home_url[ $blog_id ] ) ) {
+				$home_url[ $blog_id ] = home_url();
+			}
+
+			if ( 0 === strpos( $source_image, $home_url[ $blog_id ] ) ) {
 				// Replace the extension only at the end of the file name.
 				$path_info     = pathinfo( $source_image );
 				$converted_img = $path_info['dirname'] . '/' . $path_info['filename'] . '.' . $format;
@@ -703,10 +719,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			$normalized = wp_normalize_path( $img_path );
 			// Ensure trailing slash so strpos can't match a same-prefix sibling directory.
-			$upload_dir = rtrim( wp_normalize_path( wp_upload_dir()['basedir'] ), '/' ) . '/';
+			static $upload_dir = array();
+			$blog_id           = get_current_blog_id();
+
+			if ( ! isset( $upload_dir[ $blog_id ] ) ) {
+				$upload_dir[ $blog_id ] = rtrim( wp_normalize_path( wp_upload_dir()['basedir'] ), '/' ) . '/';
+			}
 
 			// Only queue images that live inside wp-content/uploads.
-			if ( strpos( $normalized, $upload_dir ) !== 0 ) {
+			if ( strpos( $normalized, $upload_dir[ $blog_id ] ) !== 0 ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO: add_img_into_queue rejected path — not inside uploads directory.' );
