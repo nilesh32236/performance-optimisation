@@ -311,7 +311,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function replace_image_with_next_gen( $img_url, $exclude_imgs, $supports_avif, $supports_webp ) {
 			$img_extension = pathinfo( $img_url, PATHINFO_EXTENSION );
 
-				$img_converter = $this->get_img_converter();
+			$img_converter     = $this->get_img_converter();
 			$conversion_format = $img_converter->get_format();
 			if ( 'avif' === $img_extension ) {
 				return $img_url;
