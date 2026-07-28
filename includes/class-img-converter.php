@@ -591,6 +591,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @since 1.0.0
 		 */
 		public function convert_image_to_next_gen_format( $metadata, $attachment_id ) {
+
+			// Skip server-side conversion for uploads when WP 7.1+ client-side
+			// media processing handles it in-browser. Batch conversion of
+			// existing media library items remains unaffected.
+			if ( function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled() ) {
+				return $metadata;
+			}
+
 			$upload_dir = wp_upload_dir();
 
 			try {
