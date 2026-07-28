@@ -735,7 +735,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
-			$img_path_rel = str_replace( wp_normalize_path( ABSPATH ), '', $normalized );
+			static $abspath = array();
+
+			if ( ! isset( $abspath[ $blog_id ] ) ) {
+				$abspath[ $blog_id ] = wp_normalize_path( ABSPATH );
+			}
+
+			$img_path_rel = str_replace( $abspath[ $blog_id ], '', $normalized );
 
 			self::update_img_info_atomic(
 				function ( $img_info ) use ( $img_path_rel, $type ) {

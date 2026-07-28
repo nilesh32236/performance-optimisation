@@ -387,6 +387,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $url;
 			}
 
+			// Cache home_url() once per blog for the request.
+			static $home_base = array();
+
 			// Protocol-relative URLs (e.g., //example.com/image.jpg).
 			if ( strpos( $url, '//' ) === 0 ) {
 				static $scheme = array();
@@ -403,7 +406,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			// Root-relative paths (e.g., /wp-content/uploads/image.jpg).
 			if ( strpos( $url, '/' ) === 0 ) {
-				return home_url( $url );
+				$blog_id = get_current_blog_id();
+
+				if ( ! isset( $home_base[ $blog_id ] ) ) {
+					$home_base[ $blog_id ] = home_url();
+				}
+				return rtrim( $home_base[ $blog_id ], '/' ) . '/' . ltrim( $url, '/' );
 			}
 
 			// True relative paths (e.g., images/photo.jpg or ../uploads/img.jpg).
@@ -419,7 +427,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 				$absolute_path = $this->resolve_relative_path( $current_url_path[ $blog_id ], $url );
-				return home_url( $absolute_path );
+				if ( ! isset( $home_base[ $blog_id ] ) ) {
+					$home_base[ $blog_id ] = home_url();
+				}
+				return rtrim( $home_base[ $blog_id ], '/' ) . '/' . ltrim( $absolute_path, '/' );
 			}
 
 			return $url;
