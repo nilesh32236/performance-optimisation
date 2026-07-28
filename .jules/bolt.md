@@ -36,8 +36,11 @@
 
 **Learning:** Calculating file sizes or counts via recursive directory scanning (`dirlist`) on every WP-admin load creates a severe bottleneck that can crash or slow down the settings page.
 **Action:** Always use WordPress Transients to cache expensive file system results, and invalidate these transients within `clear_cache` methods.
-## 2025-01-20 - Early Return Before Expensive Computations\n\n**Learning:** High-frequency operations like `Util::get_local_path` (which parses URLs) were being computed before short-circuit logic (`is_user_logged_in`, `empty( $href )`) in `minify_css` and `minify_js`. This caused significant performance overhead as they run on every page load.\n**Action:** Always place lightweight conditionals before heavy variable assignments. Avoid executing computationally expensive operations unless strictly necessary.
 
+## 2025-01-20 - Early Return Before Expensive Computations
+
+**Learning:** High-frequency operations like `Util::get_local_path` (which parses URLs) were being computed before short-circuit logic (`is_user_logged_in`, `empty( $href )`) in `minify_css` and `minify_js`. This caused significant performance overhead as they run on every page load.
+**Action:** Always place lightweight conditionals before heavy variable assignments. Avoid executing computationally expensive operations unless strictly necessary.
 
 ## 2025-01-22 - Bypassing WP_Filesystem for large file reads
 
@@ -59,3 +62,11 @@
 ## 2025-01-22 - Array Processing in Regex Callback Loops
 **Learning:** Calling array processing operations (like `Util::process_urls`, which filters, maps and unique-ifies arrays) inside high-frequency regex callbacks (like parsing every `<script>` tag on a page for minification or delayJS) can severely impact performance.
 **Action:** When a static or configuration-based array needs to be processed to be used as exclusions or matches inside a regex callback loop, process and cache it once as a class property during instantiation instead of computing it dynamically for each match.
+
+## 2025-01-28 - Caching WP Core Functions in Loops
+
+**Learning:** Executing WordPress core functions like `home_url()`, `content_url()`, or `wp_upload_dir()` repeatedly inside high-frequency loops (e.g., regex callbacks parsing hundreds of images or CSS tags) creates significant performance overhead due to redundant hook executions and string processing within WP Core.
+
+**Action:** When WordPress core utility functions that return static paths/URLs are needed inside parsing loops, cache their results in PHP `static` variables so they are computed only once per request and reused across all subsequent loop iterations.
+
+**Exception (multisite):** In WordPress multisite, contexts can switch (e.g., via `switch_to_blog()`). When caching WP core function results, key the static cache by `get_current_blog_id()` to ensure lookups resolve correctly when the active site context changes within a single request.

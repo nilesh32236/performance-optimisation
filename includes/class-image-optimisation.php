@@ -387,29 +387,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $url;
 			}
 
+			// Cache home_url() once per blog for the request.
+			static $home_base = array();
+
 			// Protocol-relative URLs (e.g., //example.com/image.jpg).
 			if ( strpos( $url, '//' ) === 0 ) {
-				$scheme = wp_parse_url( home_url(), PHP_URL_SCHEME );
-				if ( empty( $scheme ) ) {
-					$scheme = is_ssl() ? 'https' : 'http';
+				static $scheme = array();
+				$blog_id       = get_current_blog_id();
+
+				if ( ! isset( $scheme[ $blog_id ] ) ) {
+					$scheme[ $blog_id ] = wp_parse_url( home_url(), PHP_URL_SCHEME );
+					if ( empty( $scheme[ $blog_id ] ) ) {
+						$scheme[ $blog_id ] = is_ssl() ? 'https' : 'http';
+					}
 				}
-				return $scheme . ':' . $url;
+				return $scheme[ $blog_id ] . ':' . $url;
 			}
 
 			// Root-relative paths (e.g., /wp-content/uploads/image.jpg).
 			if ( strpos( $url, '/' ) === 0 ) {
-				return home_url( $url );
+				$blog_id = get_current_blog_id();
+
+				if ( ! isset( $home_base[ $blog_id ] ) ) {
+					$home_base[ $blog_id ] = home_url();
+				}
+				return rtrim( $home_base[ $blog_id ], '/' ) . '/' . ltrim( $url, '/' );
 			}
 
 			// True relative paths (e.g., images/photo.jpg or ../uploads/img.jpg).
 			if ( strpos( $url, 'http' ) !== 0 ) {
 				// Get the current URL path to resolve relative paths like ../.
-				$current_url_path = wp_parse_url( add_query_arg( array() ), PHP_URL_PATH );
-				if ( empty( $current_url_path ) ) {
-					$current_url_path = '/';
+				static $current_url_path = array();
+				$blog_id                 = get_current_blog_id();
+
+				if ( ! isset( $current_url_path[ $blog_id ] ) ) {
+					$current_url_path[ $blog_id ] = wp_parse_url( add_query_arg( array() ), PHP_URL_PATH );
+					if ( empty( $current_url_path[ $blog_id ] ) ) {
+						$current_url_path[ $blog_id ] = '/';
+					}
 				}
-				$absolute_path = $this->resolve_relative_path( $current_url_path, $url );
-				return home_url( $absolute_path );
+				$absolute_path = $this->resolve_relative_path( $current_url_path[ $blog_id ], $url );
+				if ( ! isset( $home_base[ $blog_id ] ) ) {
+					$home_base[ $blog_id ] = home_url();
+				}
+				return rtrim( $home_base[ $blog_id ], '/' ) . '/' . ltrim( $absolute_path, '/' );
 			}
 
 			return $url;
