@@ -88,6 +88,54 @@ describe( 'SystemInfo Component', () => {
 		} );
 	} );
 
+	it( 'renders fallback label for unknown keys and omits missing sections in InfoTable', async () => {
+		global.wppoSettings = { translations: {} };
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				php: {
+					version: '8.0.0',
+					unknown_key: 'Unknown Value',
+				},
+				database: null,
+				wordpress: undefined,
+			},
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect( screen.getByText( 'unknown_key' ) ).toBeInTheDocument();
+			expect( screen.queryByText( 'Database' ) ).not.toBeInTheDocument();
+			expect( screen.queryByText( 'WordPress' ) ).not.toBeInTheDocument();
+		} );
+	} );
+
+	it( 'renders default error message on successful response with success false and no message', async () => {
+		global.wppoSettings = { translations: {} };
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: false,
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText(
+					/Failed to fetch system info\. Please try again\./i
+				)
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders error message on successful response but success false', async () => {
 		fetchSystemInfo.mockResolvedValueOnce( {
 			success: false,
