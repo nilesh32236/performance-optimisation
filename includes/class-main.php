@@ -1067,7 +1067,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Prevents filesystem paths from being visible in wppoSettings via View Page Source.
 		 *
-		 * @since 1.0.0
+		 * @since 1.7.0
 		 *
 		 * @param  array $img_info Raw image info from wppo_img_info option.
 		 * @return array Image info with only counts (no file paths).
@@ -1075,9 +1075,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private function sanitize_image_info_for_client( array $img_info ): array {
 			$sanitized = array();
 			foreach ( array( 'pending', 'completed', 'failed' ) as $bucket ) {
+				$bucket_data          = $img_info[ $bucket ] ?? array();
 				$sanitized[ $bucket ] = array(
-					'webp' => is_array( $img_info[ $bucket ]['webp'] ?? null ) ? count( $img_info[ $bucket ]['webp'] ) : ( $img_info[ $bucket ]['webp'] ?? 0 ),
-					'avif' => is_array( $img_info[ $bucket ]['avif'] ?? null ) ? count( $img_info[ $bucket ]['avif'] ) : ( $img_info[ $bucket ]['avif'] ?? 0 ),
+					'webp' => is_array( $bucket_data['webp'] ?? null ) ? count( $bucket_data['webp'] ) : ( $bucket_data['webp'] ?? 0 ),
+					'avif' => is_array( $bucket_data['avif'] ?? null ) ? count( $bucket_data['avif'] ) : ( $bucket_data['avif'] ?? 0 ),
 				);
 			}
 			return $sanitized;

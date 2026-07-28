@@ -156,13 +156,17 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		clearCacheBtn.addEventListener( 'click', function ( event ) {
 			event.preventDefault();
 			let path = window.location.pathname;
-			const decodedPath = decodeURIComponent( path );
+			let decodedPath;
+			try {
+				decodedPath = decodeURIComponent( path );
+			} catch ( _e ) {
+				decodedPath = '';
+			}
 			if (
 				! path ||
 				'string' !== typeof path ||
 				path.length > 2048 ||
 				path[ 0 ] !== '/' ||
-				path.includes( '..' ) ||
 				decodedPath.includes( '..' )
 			) {
 				path = '/';
