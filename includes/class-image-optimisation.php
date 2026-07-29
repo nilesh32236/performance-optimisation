@@ -143,6 +143,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ) );
 			}
+
+			// Clean up placeholder data when images are deleted.
+			add_action( 'delete_attachment', array( 'PerformanceOptimise\Inc\Img_Converter', 'clean_placeholder_on_delete' ) );
 		}
 
 		/**
@@ -182,7 +185,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return preg_replace_callback(
-				'#<img\b[^>]*data-src=["\']([^"\']+)["\'][^>]*>#i',
+				'#<img\b[^>]*\sdata-src=["\']([^"\']+)["\'][^>]*>#i',
 				function ( $matches ) {
 					$img_tag = $matches[0];
 					if ( preg_match( '#\ssrc=#i', $img_tag ) ) {
@@ -213,7 +216,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function post_process_img_dimensions( string $buffer ): string {
 			return preg_replace_callback(
-				'#<img\b[^>]*data-src=["\']([^"\']+)["\'][^>]*>#i',
+				'#<img\b[^>]*\sdata-src=["\']([^"\']+)["\'][^>]*>#i',
 				function ( $matches ) {
 					$img_tag    = $matches[0];
 					$data_src   = $matches[1];
@@ -1864,7 +1867,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string One of 'none', 'svg', 'dominant_color', 'lqip'.
 		 */
 		private function get_placeholder_type(): string {
-			return $this->options['image_optimisation']['placeholderType'] ?? 'none';
+			$type    = $this->options['image_optimisation']['placeholderType'] ?? 'none';
+			$allowed = array( 'none', 'svg', 'dominant_color', 'lqip' );
+			return in_array( $type, $allowed, true ) ? $type : 'none';
 		}
 
 		/**
@@ -1917,7 +1922,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				$dominant_color = $img_info_cache['dominant_color'][ $rel_path ] ?? '';
 				if ( ! empty( $dominant_color ) && preg_match( '/^#[a-f0-9]{6}$/i', $dominant_color ) ) {
-					$result['src']                               = $this->generate_svg_base64( $img_tag, $dominant_color );
+					// Use a transparent 1x1 SVG so the CSS background-color transition is visible.
+					$result['src']                               = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221%22%20height%3D%221%22%2F%3E';
 					$result['attrs']['data-wppo-dominant-color'] = $dominant_color;
 				} else {
 					// Fallback to gray svg if no dominant color stored.

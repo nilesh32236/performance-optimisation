@@ -309,6 +309,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								return false;
 							}
 						}
+
+						// Extract placeholder data from WebP source GD resource before cleanup.
+						if ( null !== $image && $image instanceof \GdImage ) {
+							$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
+							$dominant_color = $this->extract_dominant_color( $image );
+							$lqip           = $this->generate_lqip( $image );
+							$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+						}
+
 						return true;
 					case IMAGETYPE_GIF:
 						if ( ! extension_loaded( 'imagick' ) ) {
@@ -359,6 +368,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							} else {
 								$this->update_conversion_status( $source_image, 'failed', 'webp' );
 								return false;
+							}
+
+							// Extract placeholder data from GIF via Imagick->GD conversion.
+							try {
+								$gif_gd = imagecreatefromstring( (string) $imagick->getImageBlob() );
+								if ( $gif_gd instanceof \GdImage ) {
+									$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
+									$dominant_color = $this->extract_dominant_color( $gif_gd );
+									$lqip           = $this->generate_lqip( $gif_gd );
+									$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+									// phpcs:ignore
+									imagedestroy( $gif_gd );
+								}
+							} catch ( \Exception $e ) {
+								if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+									// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+									error_log( 'WPPO: Failed to extract placeholder data from GIF: ' . $e->getMessage() );
+								}
 							}
 
 							$imagick->clear();
@@ -485,9 +512,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return '#cfd4db';
 			}
 
-			$width       = imagesx( $image );
-			$height      = imagesy( $image );
-			$sample_rate = max( 1, (int) ( min( $width, $height ) / 20 ) );
+			$width  = imagesx( $image );
+			$height = imagesy( $image );
+			// Ensure a minimum number of samples (~500 pixels) for accuracy
+			// across both small and large non-square images.
+			$min_samples = 500;
+			$sample_rate = max( 1, (int) sqrt( ( $width * $height ) / $min_samples ) );
 			$total_r     = 0;
 			$total_g     = 0;
 			$total_b     = 0;
@@ -543,18 +573,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( $thumb_height < 1 ) {
 				$thumb_height = 1;
 			}
+			// Cap height to prevent overly large LQIP data URIs.
+			$thumb_height = min( $thumb_height, 200 );
 
 			$thumb = imagecreatetruecolor( $thumb_width, $thumb_height );
 			if ( false === $thumb ) {
 				return '';
 			}
 
+			// Fill with white to avoid black background for transparent PNG/GIF sources.
+			$white = imagecolorallocate( $thumb, 255, 255, 255 );
+			imagefill( $thumb, 0, 0, $white );
+
 			imagecopyresampled( $thumb, $image, 0, 0, 0, 0, $thumb_width, $thumb_height, $orig_width, $orig_height );
 
 			ob_start();
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-			$success = @imagejpeg( $thumb, null, 40 );
+			$success = imagejpeg( $thumb, null, 40 );
 			$data    = ob_get_clean();
+
+			if ( ! $success || false === $data ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO: Failed to generate LQIP thumbnail' );
+				}
+			}
 
 			// phpcs:ignore
 			imagedestroy( $thumb );
@@ -595,6 +637,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					return $img_info;
 				}
 			);
+		}
+
+		/**
+		 * Clean up placeholder data (dominant_color, lqip) when an attachment is deleted.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param int $post_id The attachment ID.
+		 * @return void
+		 */
+		public static function clean_placeholder_on_delete( int $post_id ): void {
+			$file_path = get_attached_file( $post_id );
+			if ( ! $file_path ) {
+				return;
+			}
+			$rel_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file_path ) );
+			$info     = get_option( 'wppo_img_info', array() );
+			$changed  = false;
+			foreach ( array( 'dominant_color', 'lqip' ) as $key ) {
+				if ( isset( $info[ $key ][ $rel_path ] ) ) {
+					unset( $info[ $key ][ $rel_path ] );
+					$changed = true;
+				}
+			}
+			if ( $changed ) {
+				update_option( 'wppo_img_info', $info, false );
+				self::invalidate_img_info_cache();
+			}
 		}
 
 		/**
@@ -1080,6 +1150,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$deferred_items = self::$deferred_img_info[ $status ][ $type ] ?? array();
 
 						self::$deferred_img_info[ $status ][ $type ] = array_unique( array_merge( $live_items, $deferred_items ) );
+					}
+				}
+
+				// Merge placeholder data arrays (dominant_color, lqip) to prevent
+				// concurrent conversion jobs from overwriting each other's data.
+				foreach ( array( 'dominant_color', 'lqip' ) as $key ) {
+					$live_items     = $live_info[ $key ] ?? array();
+					$deferred_items = self::$deferred_img_info[ $key ] ?? array();
+					if ( is_array( $live_items ) && is_array( $deferred_items ) ) {
+						self::$deferred_img_info[ $key ] = array_merge( $live_items, $deferred_items );
 					}
 				}
 

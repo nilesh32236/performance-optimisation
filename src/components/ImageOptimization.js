@@ -271,27 +271,47 @@ const ImageOptimization = ( { options = {} } ) => {
 										</option>
 									</select>
 									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
-										{ settings.placeholderType === 'lqip' &&
-											__(
-												'Images must be re-optimized for LQIP to take effect.',
+										<strong>None:</strong>{ ' ' }
+										{ __(
+											'The src attribute is removed until the image is in view.',
+											'performance-optimisation'
+										) }
+										<br />
+										<strong>
+											{ __(
+												'SVG',
 												'performance-optimisation'
 											) }
-										{ settings.placeholderType ===
-											'dominant_color' &&
-											__(
-												'Dominant color is extracted during image conversion.',
+											:
+										</strong>{ ' ' }
+										{ __(
+											'Lightweight inline SVG while the real image loads. Prevents layout shift.',
+											'performance-optimisation'
+										) }
+										<br />
+										<strong>
+											{ __(
+												'Dominant Color',
 												'performance-optimisation'
 											) }
-										{ settings.placeholderType === 'svg' &&
-											__(
-												'Replaces the image src with a lightweight inline SVG while the real image loads. Prevents layout shift.',
+											:
+										</strong>{ ' ' }
+										{ __(
+											'Extracted during image conversion. Smooth background-color fade transition.',
+											'performance-optimisation'
+										) }
+										<br />
+										<strong>
+											{ __(
+												'LQIP',
 												'performance-optimisation'
 											) }
-										{ settings.placeholderType === 'none' &&
-											__(
-												'No placeholder will be used. The src attribute is removed until the image is in view.',
-												'performance-optimisation'
-											) }
+											:
+										</strong>{ ' ' }
+										{ __(
+											'20×20 blurred preview. Images must be re-optimized for LQIP to take effect.',
+											'performance-optimisation'
+										) }
 									</p>
 								</div>
 							</div>

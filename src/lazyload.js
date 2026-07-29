@@ -378,7 +378,7 @@ const loadImages = () => {
 									el.removeAttribute( 'data-srcset' );
 								}
 
-								// Smooth transition on image load.
+								// Clean up placeholder data attributes after load.
 								el.addEventListener(
 									'load',
 									function onImgLoad() {
@@ -395,6 +395,9 @@ const loadImages = () => {
 												'background-color 0.4s ease-out';
 											el.style.backgroundColor =
 												'transparent';
+											el.removeAttribute(
+												'data-wppo-dominant-color'
+											);
 										}
 										if (
 											el.classList.contains(
@@ -406,6 +409,9 @@ const loadImages = () => {
 											);
 											el.classList.add(
 												'wppo-lqip-loaded'
+											);
+											el.removeAttribute(
+												'data-wppo-lqip'
 											);
 										}
 									}
@@ -556,6 +562,20 @@ const loadImages = () => {
 							}
 							el.classList.remove( 'wppo-lazy-video' );
 						} else {
+							// Apply dominant color background before loading.
+							if (
+								el.hasAttribute( 'data-wppo-dominant-color' )
+							) {
+								el.style.backgroundColor = el.getAttribute(
+									'data-wppo-dominant-color'
+								);
+							}
+
+							// Apply LQIP blur effect before loading.
+							if ( el.hasAttribute( 'data-wppo-lqip' ) ) {
+								el.classList.add( 'wppo-lqip-active' );
+							}
+
 							if ( el.hasAttribute( 'data-sizes' ) ) {
 								el.sizes = el.getAttribute( 'data-sizes' );
 								el.removeAttribute( 'data-sizes' );
@@ -568,6 +588,30 @@ const loadImages = () => {
 								el.srcset = el.getAttribute( 'data-srcset' );
 								el.removeAttribute( 'data-srcset' );
 							}
+
+							// Smooth transition on image load for fallback path.
+							el.addEventListener( 'load', function onImgLoad() {
+								el.removeEventListener( 'load', onImgLoad );
+								if (
+									el.hasAttribute(
+										'data-wppo-dominant-color'
+									)
+								) {
+									el.style.transition =
+										'background-color 0.4s ease-out';
+									el.style.backgroundColor = 'transparent';
+									el.removeAttribute(
+										'data-wppo-dominant-color'
+									);
+								}
+								if (
+									el.classList.contains( 'wppo-lqip-active' )
+								) {
+									el.classList.remove( 'wppo-lqip-active' );
+									el.classList.add( 'wppo-lqip-loaded' );
+									el.removeAttribute( 'data-wppo-lqip' );
+								}
+							} );
 						}
 					}
 				} );
