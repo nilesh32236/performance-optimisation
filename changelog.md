@@ -2,12 +2,6 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
-## [1.8.1] - 2026-07-29
-
-### Changed
-
-- **WordPress 7.0 Compatibility:** Updated "Tested up to" to WordPress 7.0.
-
 ## [1.8.0] - 2026-07-28
 
 ### Added
@@ -21,6 +15,7 @@ All notable changes to the Performance Optimisation plugin will be documented in
 
 - **Minification & Utility Performance:** Pre-cached delayJS exclusion patterns in `Minify\HTML` constructor and blog-specific home URL path resolution in worker loops.
 - **Accessibility Improvements:** Added `aria-describedby` associations, modal focus trap management, and accessible labels across components.
+- **WordPress 7.0 Compatibility:** Updated "Tested up to" to WordPress 7.0.
 
 ### Fixed
 

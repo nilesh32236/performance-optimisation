@@ -94,6 +94,7 @@ After activation, you can manage the following from the settings tabs:
 * Accessibility: Added `aria-describedby` accessibility associations and modal focus trap management.
 * Safety: Integrated React ErrorBoundary wrapper for SPA runtime exception handling.
 * Fix: Corrected key-indexed return array structure in Redis Object Cache fallback methods.
+* Compatibility: Tested up to WordPress 7.0.
 
 = 1.7.0 (2026-07-26) =
 * Improvement: Cached minification status checks to reduce disk I/O overhead.
@@ -177,8 +178,6 @@ After activation, you can manage the following from the settings tabs:
 * Improvement: Faster database operations for image processing.
 * Security: Fixed several file path security issues.
  * Compatibility: Tested up to WordPress 6.9.
- * Compatibility: Tested up to WordPress 7.0.
-
 = 1.1.4 (2026-04-08) =
 * Security: Fixed path traversal vulnerability in the Image Optimisation REST endpoint.
 * Security: Added directory traversal protection in URL-to-path resolution.
