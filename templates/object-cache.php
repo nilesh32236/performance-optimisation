@@ -916,6 +916,25 @@ function wp_cache_delete_multiple( $keys, $group = '' ) {
 	return $wp_object_cache->delete_multiple( $keys, $group );
 }
 
+if ( ! function_exists( 'wp_cache_supports' ) ) {
+	/**
+	 * Determines whether the object cache implementation supports a particular feature.
+	 *
+	 * @since 2.1.0
+	 *
+	 * @param string $feature The feature to check support for.
+	 * @return bool True if the feature is supported, false otherwise.
+	 */
+	function wp_cache_supports( $feature ) {
+		switch ( $feature ) {
+			case 'flush_group':
+				return true;
+			default:
+				return false;
+		}
+	}
+}
+
 if ( ! function_exists( 'wp_cache_add_salt' ) ) {
 	/**
 	 * Adds salt to the cache key prefix (WP 6.9+).
