@@ -607,40 +607,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			if ( is_admin_bar_showing() ) {
-				$asset_file = WPPO_PLUGIN_PATH . 'build/main.asset.php';
-				$resolved   = wp_normalize_path( realpath( $asset_file ) );
-
-				if ( false !== $resolved && strpos( $resolved, WPPO_PLUGIN_PATH ) === 0 ) {
-					$asset_data = require $resolved;
-				} else {
-					$asset_data = array(
-						'dependencies' => array(),
-						'version'      => WPPO_VERSION,
-					);
-				}
-
-				wp_enqueue_script(
-					'wppo-admin-bar-script',
-					WPPO_PLUGIN_URL . 'build/main.js',
-					$asset_data['dependencies'],
-					$asset_data['version'],
-					array(
-						'in_footer'     => true,
-						'fetchpriority' => 'low',
-					)
-				);
-				wp_localize_script(
-					'wppo-admin-bar-script',
-					'wppoObject',
-					array(
-						'apiUrl'        => get_rest_url( null, 'performance-optimisation/v1' ),
-						'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
-						'nonce'         => wp_create_nonce( 'wp_rest' ),
-						'nonce_refresh' => wp_create_nonce( 'wppo_nonce_refresh' ),
-					)
-				);
-			}
+			$this->enqueue_admin_bar_script();
 
 			$asset_file = WPPO_PLUGIN_PATH . 'build/index.asset.php';
 			$resolved   = wp_normalize_path( realpath( $asset_file ) );
@@ -733,37 +700,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function enqueue_scripts() {
 			if ( is_admin_bar_showing() ) {
-				$asset_file = WPPO_PLUGIN_PATH . 'build/main.asset.php';
-				$resolved   = wp_normalize_path( realpath( $asset_file ) );
-
-				if ( false !== $resolved && strpos( $resolved, WPPO_PLUGIN_PATH ) === 0 ) {
-					$asset_data = require $resolved;
-				} else {
-					$asset_data = array(
-						'dependencies' => array(),
-						'version'      => WPPO_VERSION,
-					);
-				}
-
-				wp_enqueue_script(
-					'wppo-admin-bar-script',
-					WPPO_PLUGIN_URL . 'build/main.js',
-					$asset_data['dependencies'],
-					$asset_data['version'],
-					array(
-						'in_footer'     => true,
-						'fetchpriority' => 'low',
-					)
-				);
-				wp_localize_script(
-					'wppo-admin-bar-script',
-					'wppoObject',
-					array(
-						'apiUrl'        => get_rest_url( null, 'performance-optimisation/v1' ),
-						'nonce'         => wp_create_nonce( 'wp_rest' ),
-						'nonce_refresh' => wp_create_nonce( 'wppo_nonce_refresh' ),
-					)
-				);
+				$this->enqueue_admin_bar_script();
 			}
 
 			if ( ! is_user_logged_in() ) {
@@ -1299,6 +1236,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				);
 			}
 			return $sanitized;
+		}
+
+		/**
+		 * Enqueues the admin bar cache-clearing script and its data.
+		 *
+		 * Shared between admin and frontend to ensure consistent wppoObject data.
+		 *
+		 * @since 2.5.0
+		 *
+		 * @return void
+		 */
+		private function enqueue_admin_bar_script(): void {
+			$asset_file = WPPO_PLUGIN_PATH . 'build/main.asset.php';
+			$resolved   = wp_normalize_path( realpath( $asset_file ) );
+
+			if ( false !== $resolved && strpos( $resolved, WPPO_PLUGIN_PATH ) === 0 ) {
+				$asset_data = require $resolved;
+			} else {
+				$asset_data = array(
+					'dependencies' => array(),
+					'version'      => WPPO_VERSION,
+				);
+			}
+
+			wp_enqueue_script(
+				'wppo-admin-bar-script',
+				WPPO_PLUGIN_URL . 'build/main.js',
+				$asset_data['dependencies'],
+				$asset_data['version'],
+				array(
+					'in_footer'     => true,
+					'fetchpriority' => 'low',
+				)
+			);
+
+			$data = array(
+				'apiUrl'        => get_rest_url( null, 'performance-optimisation/v1' ),
+				'ajaxUrl'       => admin_url( 'admin-ajax.php' ),
+				'nonce'         => wp_create_nonce( 'wp_rest' ),
+				'nonce_refresh' => wp_create_nonce( 'wppo_nonce_refresh' ),
+			);
+
+			wp_add_inline_script(
+				'wppo-admin-bar-script',
+				'const wppoObject = ' . wp_json_encode( $data ) . ';',
+				'before'
+			);
 		}
 	}
 }
