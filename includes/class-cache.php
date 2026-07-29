@@ -309,6 +309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$combined_css  = $css_minifier->minify();
 				$css_file_path = $this->get_cache_file_path( 'css' );
 
+				$this->prepare_cache_dir();
 				$this->save_cache_files( $combined_css, $css_file_path, 'css' );
 
 				$css_url = $this->get_cache_file_url( 'css' );
