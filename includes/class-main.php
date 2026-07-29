@@ -110,7 +110,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'enableServerRules' => false,
 						'cdnURL'            => '',
 					),
-					'preload_settings'   => array(),
+					'preload_settings'   => array(
+						'enableSpeculationRules' => false,
+						'speculationMode'        => 'prerender',
+						'speculationEagerness'   => 'moderate',
+					),
 					'image_optimisation' => array(),
 					'performance_audit'  => array(
 						'pagespeed_api_key' => '',
@@ -209,7 +213,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $this->options['cache']['enableCache'] ) ) {
 				$this->cache = new Cache( $this->options );
 				$this->cache->set_image_optimisation( $this->image_optimisation );
-				add_action( 'template_redirect', array( $this->cache, 'generate_dynamic_static_html' ) );
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
+					add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this->cache, 'stash_cache' ) );
+				} else {
+					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
+				}
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
 			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
@@ -263,6 +272,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
+			add_action( 'wp_head', array( $this, 'add_speculation_rules' ), 0 );
 
 			new Metabox();
 			new Cron();
@@ -325,7 +335,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function on_settings_update( $old_value, $value ) {
 			// Only clear cache when tabs that affect HTML output change.
-			$cache_relevant_tabs = array( 'cache_settings', 'file_optimisation', 'image_optimisation' );
+			$cache_relevant_tabs = array( 'cache_settings', 'file_optimisation', 'image_optimisation', 'preload_settings' );
 			$should_clear        = false;
 			foreach ( $cache_relevant_tabs as $tab ) {
 				$old_tab = isset( $old_value[ $tab ] ) ? $old_value[ $tab ] : null;
@@ -935,6 +945,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$this->image_optimisation->preload_images();
+		}
+
+		/**
+		 * Adds speculation rules for prefetching/prerendering via the WP 6.8+ Speculation Rules API.
+		 *
+		 * Enhances eagerness when static cache is active and excludes sensitive/dynamic paths
+		 * (login, admin, REST API) from all speculation.
+		 *
+		 * @since 2.2.0
+		 *
+		 * @return void
+		 */
+		public function add_speculation_rules() {
+			if ( ! function_exists( 'wp_get_speculation_rules_configuration' ) ) {
+				return;
+			}
+
+			$preload_settings   = $this->options['preload_settings'] ?? array();
+			$enable_speculation = ! empty( $preload_settings['enableSpeculationRules'] );
+
+			add_filter(
+				'wp_speculation_rules_href_exclude_paths',
+				function ( $exclude_paths ) {
+					$exclude_paths[] = '/wp-login.php';
+					$exclude_paths[] = '/wp-admin/*';
+					$exclude_paths[] = '/wp-json/*';
+					return $exclude_paths;
+				}
+			);
+
+			if ( $enable_speculation ) {
+				add_filter(
+					'wp_speculation_rules_configuration',
+					function ( $config ) use ( $preload_settings ) {
+						if ( is_array( $config ) ) {
+							$config['mode']      = $preload_settings['speculationMode'] ?? 'prerender';
+							$config['eagerness'] = $preload_settings['speculationEagerness'] ?? 'moderate';
+						}
+						return $config;
+					}
+				);
+			}
 		}
 
 		/**
