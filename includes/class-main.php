@@ -380,9 +380,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$old_audit = $old_value['performance_audit'] ?? array();
 			$new_audit = $value['performance_audit'] ?? array();
 			if ( $old_audit !== $new_audit ) {
-				if ( function_exists( 'wp_cache_get_salted' ) ) {
-					update_option( 'wppo_audit_salt', time(), false );
-				}
+				Telemetry::invalidate_audit_cache();
 			}
 
 			// Handle .htaccess rules update.

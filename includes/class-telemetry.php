@@ -684,6 +684,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		}
 
 		/**
+		 * Invalidate the audit cache salt so future scans bypass stale cached data.
+		 *
+		 * Should be called when performance audit settings change or when
+		 * a fresh scan should be forced next request.
+		 *
+		 * @since 2.6.0
+		 * @return void
+		 */
+		public static function invalidate_audit_cache(): void {
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				update_option( self::AUDIT_SALT_KEY, time(), false );
+			}
+		}
+
+		/**
 		 * Register a transient key in the master index for safe bulk deletion.
 		 *
 		 * Appends the key to the wppo_transient_index option so that
