@@ -248,7 +248,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			while ( $offset < $length ) {
 				if ( '@' === $css[ $offset ] ) {
-					$at_rule_end = strpos( $css, '{', $offset );
+					$semicolon_pos = strpos( $css, ';', $offset );
+					$at_rule_end   = strpos( $css, '{', $offset );
+
+					// Handle semicolon-terminated at-rules (@import, @charset, @namespace).
+					if ( false !== $semicolon_pos && ( false === $at_rule_end || $semicolon_pos < $at_rule_end ) ) {
+						$rules[] = array(
+							'type'    => 'at-rule',
+							'content' => substr( $css, $offset, $semicolon_pos - $offset + 1 ),
+						);
+						$offset  = $semicolon_pos + 1;
+						continue;
+					}
+
 					if ( false === $at_rule_end ) {
 						break;
 					}
@@ -539,6 +551,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			if ( '[' === $simple[0] ) {
+				// Conservatively allow all data-* attribute selectors — commonly used in Gutenberg blocks.
+				if ( 0 === strpos( $simple, '[data-' ) ) {
+					return true;
+				}
 				$attr_end = strpos( $simple, ']' );
 				if ( false !== $attr_end ) {
 					$attr_content = substr( $simple, 1, $attr_end - 1 );
@@ -1034,6 +1050,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		public function process_buffer( string $buffer ): string {
+			// Skip processing during background used-CSS regeneration requests to prevent infinite loops.
+			if ( isset( $_SERVER['HTTP_X_WPPO_USED_CSS'] ) ) {
+				return $buffer;
+			}
+
 			$file_opts = $this->options['file_optimisation'] ?? array();
 
 			if ( empty( $file_opts['removeUnusedCSS'] ) ) {
@@ -1052,7 +1073,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$current_url = home_url( isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '' );
 
-			$this->save_used_css( $purged_css, $current_url );
+			$saved = $this->save_used_css( $purged_css, $current_url );
+			if ( ! $saved ) {
+				// Filesystem write failed — return original buffer to avoid unstyled page.
+				return $buffer;
+			}
 
 			$used_css_path = $this->get_used_css_path( $current_url );
 			$used_css_url  = $this->get_used_css_url( $current_url );

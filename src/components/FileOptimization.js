@@ -99,6 +99,10 @@ const FileOptimization = ( {
 			} );
 		} finally {
 			setIsLoading( false );
+			setTimeout(
+				() => setNotification( { message: '', success: false } ),
+				3000
+			);
 		}
 	};
 
