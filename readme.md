@@ -27,7 +27,7 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 ## What's New in v1.8.0
 
 - **WordPress 6.9+ Object Cache Salt Support:** Added object cache key salt prefixing for cache key space invalidation.
-- **Iframe Lazy Loading:** Added `iframe` element support in HTML Tag Processor and frontend lazy loader.
+- **WP_HTML_Tag_Processor Integration:** Replaced fragile regex HTML manipulation with WordPress core `WP_HTML_Tag_Processor` API (WP 6.2+) for robust `<img>` and `<iframe>` attribute modifications.
 - **Minification & Utility Performance:** Pre-cached delayJS exclusion patterns and blog-specific home URL path resolution in worker loops.
 - **Enhanced Accessibility:** Added `aria-describedby` associations and keyboard focus trap management.
 - **React ErrorBoundary Integration:** Protected SPA rendering with React ErrorBoundary component.
