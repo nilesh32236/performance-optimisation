@@ -101,8 +101,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			$this->format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
 
-			// If WP 6.7+ natively generates WebP, skip plugin's own WebP conversion.
-			if ( self::core_handles_webp() ) {
+			// If WP 6.7+ natively generates next-gen formats, skip plugin's own WebP conversion.
+			if ( self::core_handles_next_gen() ) {
 				if ( 'webp' === $this->format ) {
 					$this->format = 'none';
 				} elseif ( 'both' === $this->format ) {
@@ -112,13 +112,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
-		 * Check if WordPress core (6.7+) natively handles WebP generation.
+		 * Check if WordPress core (6.7+) natively handles next-gen format generation (WebP/AVIF).
 		 *
 		 * @since 2.1.0
 		 *
-		 * @return bool True if core handles WebP natively.
+		 * @return bool True if core handles next-gen formats natively.
 		 */
-		public static function core_handles_webp(): bool {
+		public static function core_handles_next_gen(): bool {
 			return function_exists( 'wp_image_quality' );
 		}
 
@@ -152,9 +152,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			// Skip WebP conversion when WP 6.7+ core handles it natively.
-			if ( in_array( $format, array( 'webp', 'both' ), true ) && self::core_handles_webp() ) {
+			if ( in_array( $format, array( 'webp', 'both' ), true ) && self::core_handles_next_gen() ) {
 				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
+			}
+
+			// Resolve default quality using core API when available (WP 6.7+).
+			if ( -1 === $quality && function_exists( 'wp_image_quality' ) ) {
+				$mime = 'image/webp';
+				if ( 'avif' === $format ) {
+					$mime = 'image/avif';
+				} elseif ( 'both' === $format ) {
+					$mime = 'image/avif';
+				}
+				$quality = (int) wp_image_quality( $mime );
+			}
+			if ( -1 === $quality ) {
+				$quality = 82;
 			}
 
 			if ( ! function_exists( 'imagecreatefromjpeg' ) || ! function_exists( 'imagecreatefrompng' ) ) {
