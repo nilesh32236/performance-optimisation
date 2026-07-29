@@ -309,6 +309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$combined_css  = $css_minifier->minify();
 				$css_file_path = $this->get_cache_file_path( 'css' );
 
+				$this->prepare_cache_dir();
 				$this->save_cache_files( $combined_css, $css_file_path, 'css' );
 
 				$css_url = $this->get_cache_file_url( 'css' );
@@ -358,20 +359,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function start_output_buffer(): void {
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && is_admin() ) {
+				_doing_it_wrong(
+					__METHOD__,
+					esc_html__(
+						'The legacy template_redirect output buffer path is deprecated. Use the WP 6.9+ wp_template_enhancement_output_buffer hooks instead.',
+						'performance-optimisation'
+					),
+					'2.4.0'
+				);
+			}
+
 			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
 				return;
 			}
 
 			$file_path = $this->get_cache_file_path();
 
-			if ( ! $this->get_filesystem() || ! $this->prepare_cache_dir() ) {
-				return;
-			}
-
 			ob_start(
 				function ( $buffer ) use ( $file_path ) {
 					$buffer = $this->process_buffer_only( $buffer );
-					$this->save_cache_files( $buffer, $file_path );
+					$this->save_processed_buffer( $buffer, $file_path );
 					return $buffer;
 				}
 			);
@@ -444,11 +452,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$file_path = $this->get_cache_file_path();
 
-			if ( ! $this->get_filesystem() || ! $this->prepare_cache_dir() ) {
-				return;
-			}
-
-			$this->save_cache_files( $output, $file_path );
+			$this->save_processed_buffer( $output, $file_path );
 		}
 
 		/**
@@ -614,7 +618,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			$this->prepare_cache_dir();
 			$gzip_file_path = $file_path . '.gz';
 
 			$fs = $this->get_filesystem();
@@ -629,6 +632,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
 				}
 			}
+		}
+
+		/**
+		 * Save processed buffer with filesystem guard (shared by legacy and WP 6.9+ paths).
+		 *
+		 * @param string $buffer   The processed buffer content.
+		 * @param string $file_path The file path for saving.
+		 * @return void
+		 *
+		 * @since 2.4.0
+		 */
+		private function save_processed_buffer( string $buffer, string $file_path ): void {
+			if ( ! $this->get_filesystem() || ! $this->prepare_cache_dir() ) {
+				return;
+			}
+			$this->save_cache_files( $buffer, $file_path );
 		}
 
 		/**
@@ -935,6 +954,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *              does not support flush_group or the function is unavailable.
 		 */
 		public static function flush_group( string $group ): bool {
+			// WP 6.1+: use wp_cache_supports() to check capability.
+			if ( function_exists( 'wp_cache_supports' ) ) {
+				if ( ! wp_cache_supports( 'flush_group' ) ) {
+					return false;
+				}
+
+				return wp_cache_flush_group( $group );
+			}
+
+			// Legacy fallback for WP < 6.1.
 			if ( function_exists( 'wp_cache_flush_group' ) ) {
 				global $wp_object_cache;
 

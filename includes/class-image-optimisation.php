@@ -134,10 +134,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ) );
 			}
-
-			if ( ! empty( $this->options['image_optimisation']['disableCoreAutoSizes'] ) && function_exists( 'wp_img_tag_add_auto_sizes' ) ) {
-				add_filter( 'wp_img_tag_add_auto_sizes', '__return_false' );
-			}
 		}
 
 		/**
