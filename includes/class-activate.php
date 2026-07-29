@@ -77,6 +77,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			self::create_activity_log_table();
 			Img_Converter::migrate_img_info_autoload();
+
+			if ( get_current_user_id() ) {
+				update_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', 0 );
+			}
 		}
 
 		/**

@@ -199,6 +199,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'dismiss_welcome'         => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'dismiss_welcome' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
 		}
 
@@ -1364,6 +1370,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$status = Critical_CSS::get_status_all();
 
 			return $this->send_response( $status );
+		}
+
+		/**
+		 * Dismisses the welcome panel for the current user.
+		 *
+		 * @since 2.8.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function dismiss_welcome(): \WP_REST_Response {
+			if ( get_current_user_id() ) {
+				update_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', 1 );
+			}
+			return $this->send_response( null, true );
 		}
 
 		/**

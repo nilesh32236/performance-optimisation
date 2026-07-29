@@ -122,6 +122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options = get_option(
 				'wppo_settings',
 				array(
+					'cache_settings'     => array(),
 					'file_optimisation'  => array(
 						'enableServerRules'      => false,
 						'cdnURL'                 => '',
@@ -243,7 +244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'wp_enqueue_scripts', array( $this, 'remove_woocommerce_scripts' ), 999 );
 			}
 
-			if ( ! empty( $this->options['cache']['enableCache'] ) ) {
+			if ( ! empty( $this->options['cache_settings']['enableCache'] ) ) {
 				$this->cache = new Cache( $this->options );
 				$this->cache->set_image_optimisation( $this->image_optimisation );
 				$this->cache->set_google_fonts( $this->google_fonts );
@@ -259,7 +260,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Standalone used-CSS output buffer when page cache is disabled.
-			if ( empty( $this->options['cache']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
+			if ( empty( $this->options['cache_settings']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
@@ -819,6 +820,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'nonce_refresh'     => wp_create_nonce( 'wppo_nonce_refresh' ),
 					'version'           => WPPO_VERSION,
 					'settings'          => $safe_options,
+					'show_welcome'      => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
 					'image_info'        => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
 					'cache_size'        => $cache_size,
 					'total_js_css'      => $total_js_css,
