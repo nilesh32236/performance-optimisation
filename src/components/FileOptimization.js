@@ -50,6 +50,7 @@ const FileOptimization = ( {
 		removeCssJsHandle: '',
 		enableServerRules: false,
 		criticalCSS: false,
+		hostGoogleFontsLocally: false,
 		cdnURL: '',
 		removeUnusedCSS: false,
 		excludeUnusedCSS: '',
@@ -458,6 +459,19 @@ const FileOptimization = ( {
 										onRegenerate={ handleRegenerateCss }
 									/>
 								) }
+								<SwitchField
+									label={ __(
+										'Host Google Fonts Locally',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Automatically detect Google Fonts and serve them from your own server. Eliminates external DNS lookups, improves GDPR compliance, and applies font-display: swap.',
+										'performance-optimisation'
+									) }
+									name="hostGoogleFontsLocally"
+									checked={ settings.hostGoogleFontsLocally }
+									onChange={ handleChange( setSettings ) }
+								/>
 							</div>
 						</FeatureCard>
 

@@ -96,6 +96,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private Image_Optimisation $image_optimisation;
 
 		/**
+		 * Google_Fonts instance for hosting Google Fonts locally.
+		 *
+		 * @var   Google_Fonts
+		 * @since 2.7.0
+		 */
+		private Google_Fonts $google_fonts;
+
+		/**
 		 * Options for performance optimisation settings.
 		 *
 		 * @var   array
@@ -115,11 +123,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wppo_settings',
 				array(
 					'file_optimisation'  => array(
-						'enableServerRules' => false,
-						'cdnURL'            => '',
-						'removeUnusedCSS'   => false,
-						'excludeUnusedCSS'  => '',
-						'criticalCSS'       => false,
+						'enableServerRules'      => false,
+						'cdnURL'                 => '',
+						'removeUnusedCSS'        => false,
+						'excludeUnusedCSS'       => '',
+						'criticalCSS'            => false,
+						'hostGoogleFontsLocally' => false,
 					),
 					'preload_settings'   => array(
 						'enableSpeculationRules' => false,
@@ -137,6 +146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$this->includes();
 			$this->image_optimisation = new Image_Optimisation( $this->options );
+			$this->google_fonts       = new Google_Fonts( $this->options );
 			$this->setup_hooks();
 			$this->filesystem = Util::init_filesystem();
 			if ( ! $this->filesystem ) {
@@ -184,6 +194,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-used-css.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-abilities.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-google-fonts.php';
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
@@ -235,6 +246,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $this->options['cache']['enableCache'] ) ) {
 				$this->cache = new Cache( $this->options );
 				$this->cache->set_image_optimisation( $this->image_optimisation );
+				$this->cache->set_google_fonts( $this->google_fonts );
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
@@ -265,6 +277,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! $this->cache ) {
 					$this->cache = new Cache( $this->options );
 					$this->cache->set_image_optimisation( $this->image_optimisation );
+					$this->cache->set_google_fonts( $this->google_fonts );
 				}
 				add_action( 'wp_enqueue_scripts', array( $this->cache, 'combine_css' ), PHP_INT_MAX );
 			}
@@ -289,6 +302,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
+			}
+
+			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
+				add_filter( 'style_loader_tag', array( $this->google_fonts, 'process_style_tag' ), 9, 3 );
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
@@ -460,6 +477,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					);
 				}
 			}
+
+			// Clear Google Fonts cache when the setting toggles.
+			$old_gf = $old_value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			$new_gf = $value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			if ( $old_gf !== $new_gf ) {
+				Google_Fonts::clear_font_cache();
+			}
 		}
 
 		/**
@@ -560,6 +584,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( is_user_logged_in() || is_admin() ) {
 				return $filtered_output;
 			}
+
+			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
+				$filtered_output = $this->google_fonts->process_buffer( $filtered_output );
+			}
+
 			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
 			return $used_css->process_buffer( $filtered_output );
 		}
@@ -588,6 +617,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( empty( $buffer ) ) {
 				return $buffer;
 			}
+
+			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
+				$buffer = $this->google_fonts->process_buffer( $buffer );
+			}
+
 			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
 			return $used_css->process_buffer( $buffer );
 		}

@@ -602,4 +602,57 @@ describe( 'FileOptimization Component', () => {
 		expect( screen.getByText( 'Generated' ) ).toBeInTheDocument();
 		expect( screen.getByText( 'Not Generated' ) ).toBeInTheDocument();
 	} );
+
+	it( 'renders Host Google Fonts Locally switch in the assets tab', () => {
+		render(
+			<FileOptimization
+				options={ { hostGoogleFontsLocally: false } }
+				serverRules={ {} }
+			/>
+		);
+
+		expect(
+			screen.getByLabelText( /Host Google Fonts Locally/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Host Google Fonts Locally/i )
+		).not.toBeChecked();
+	} );
+
+	it( 'submits hostGoogleFontsLocally setting correctly', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render(
+			<FileOptimization
+				options={ { hostGoogleFontsLocally: false } }
+				serverRules={ {} }
+			/>
+		);
+
+		const switchField = screen.getByLabelText(
+			/Host Google Fonts Locally/i
+		);
+		fireEvent.click( switchField );
+		expect( switchField ).toBeChecked();
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						hostGoogleFontsLocally: true,
+					} ),
+				} )
+			);
+		} );
+	} );
 } );
