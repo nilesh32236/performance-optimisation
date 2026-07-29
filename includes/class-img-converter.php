@@ -612,6 +612,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Store dominant color and LQIP data for an image atomically.
 		 *
+		 * Writes to both wppo_img_info (for backward compat) and wppo_placeholder_info
+		 * (for lightweight front-end lookups).
+		 *
 		 * @since 3.0.0
 		 *
 		 * @param string $rel_path       The relative image path (ABSPATH-stripped).
@@ -637,10 +640,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					return $img_info;
 				}
 			);
+
+			// Also immediately persist to the lightweight placeholder-only option so front-end
+			// lookups in get_placeholder_src_for_image() don't need to load the full wppo_img_info.
+			self::update_placeholder_option( $rel_path, $dominant_color, $lqip );
+		}
+
+		/**
+		 * Immediately persist placeholder data to the lightweight placeholder-only option.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param string $rel_path       The relative image path.
+		 * @param string $dominant_color Hex color string.
+		 * @param string $lqip           LQIP data URI.
+		 * @return void
+		 */
+		private static function update_placeholder_option( string $rel_path, string $dominant_color, string $lqip ): void {
+			$info = get_option( 'wppo_placeholder_info', array() );
+			if ( ! is_array( $info ) ) {
+				$info = array();
+			}
+			if ( ! isset( $info['dominant_color'] ) || ! is_array( $info['dominant_color'] ) ) {
+				$info['dominant_color'] = array();
+			}
+			if ( ! isset( $info['lqip'] ) || ! is_array( $info['lqip'] ) ) {
+				$info['lqip'] = array();
+			}
+			$info['dominant_color'][ $rel_path ] = $dominant_color;
+			if ( ! empty( $lqip ) ) {
+				$info['lqip'][ $rel_path ] = $lqip;
+			}
+			update_option( 'wppo_placeholder_info', $info, false );
+		}
+
+		/**
+		 * Get placeholder-only data (dominant_color, lqip) without loading the full wppo_img_info.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @return array{dominant_color: array<string, string>, lqip: array<string, string>}
+		 */
+		public static function get_placeholder_info(): array {
+			$info = get_option( 'wppo_placeholder_info', array() );
+			if ( ! is_array( $info ) ) {
+				return array(
+					'dominant_color' => array(),
+					'lqip'           => array(),
+				);
+			}
+			$info['dominant_color'] = $info['dominant_color'] ?? array();
+			$info['lqip']           = $info['lqip'] ?? array();
+			return $info;
 		}
 
 		/**
 		 * Clean up placeholder data (dominant_color, lqip) when an attachment is deleted.
+		 *
+		 * Removes entries for the main file AND all registered resized versions
+		 * from both wppo_img_info and wppo_placeholder_info options.
 		 *
 		 * @since 3.0.0
 		 *
@@ -652,18 +710,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! $file_path ) {
 				return;
 			}
-			$rel_path = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file_path ) );
-			$info     = get_option( 'wppo_img_info', array() );
+			$rel_paths   = array();
+			$main_rel    = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file_path ) );
+			$rel_paths[] = $main_rel;
+
+			// Also clean up resized versions from attachment metadata.
+			$metadata = wp_get_attachment_metadata( $post_id );
+			if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
+				$dir = dirname( $file_path );
+				foreach ( $metadata['sizes'] as $size_data ) {
+					if ( isset( $size_data['file'] ) ) {
+						$size_path   = wp_normalize_path( $dir . '/' . $size_data['file'] );
+						$size_rel    = str_replace( wp_normalize_path( ABSPATH ), '', $size_path );
+						$rel_paths[] = $size_rel;
+					}
+				}
+			}
+
+			// Clean from wppo_img_info.
+			$img_info = get_option( 'wppo_img_info', array() );
 			$changed  = false;
 			foreach ( array( 'dominant_color', 'lqip' ) as $key ) {
-				if ( isset( $info[ $key ][ $rel_path ] ) ) {
-					unset( $info[ $key ][ $rel_path ] );
-					$changed = true;
+				foreach ( $rel_paths as $rel ) {
+					if ( isset( $img_info[ $key ][ $rel ] ) ) {
+						unset( $img_info[ $key ][ $rel ] );
+						$changed = true;
+					}
 				}
 			}
 			if ( $changed ) {
-				update_option( 'wppo_img_info', $info, false );
+				update_option( 'wppo_img_info', $img_info, false );
 				self::invalidate_img_info_cache();
+			}
+
+			// Clean from wppo_placeholder_info.
+			$placeholder_info    = get_option( 'wppo_placeholder_info', array() );
+			$placeholder_changed = false;
+			if ( is_array( $placeholder_info ) ) {
+				foreach ( array( 'dominant_color', 'lqip' ) as $key ) {
+					foreach ( $rel_paths as $rel ) {
+						if ( isset( $placeholder_info[ $key ][ $rel ] ) ) {
+							unset( $placeholder_info[ $key ][ $rel ] );
+							$placeholder_changed = true;
+						}
+					}
+				}
+				if ( $placeholder_changed ) {
+					update_option( 'wppo_placeholder_info', $placeholder_info, false );
+				}
 			}
 		}
 

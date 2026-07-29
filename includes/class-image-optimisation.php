@@ -1885,8 +1885,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return array{src: string, attrs: array<string, string>} Placeholder src and extra attributes.
 		 */
 		private function get_placeholder_src_for_image( string $img_tag, string $data_src ): array {
-			static $img_info_cache = null;
-			static $path_cache     = array();
+			static $placeholder_cache = null;
+			static $path_cache        = array();
 
 			$result = array(
 				'src'   => '',
@@ -1916,32 +1916,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $result;
 			}
 
+			// Load only the lightweight placeholder option instead of the full wppo_img_info.
+			if ( null === $placeholder_cache ) {
+				$placeholder_cache = Img_Converter::get_placeholder_info();
+			}
+
 			if ( 'dominant_color' === $placeholder_type ) {
-				if ( null === $img_info_cache ) {
-					$img_info_cache = Img_Converter::get_img_info();
-				}
-				$dominant_color = $img_info_cache['dominant_color'][ $rel_path ] ?? '';
+				$dominant_color = $placeholder_cache['dominant_color'][ $rel_path ] ?? '';
 				if ( ! empty( $dominant_color ) && preg_match( '/^#[a-f0-9]{6}$/i', $dominant_color ) ) {
-					// Use a transparent 1x1 SVG so the CSS background-color transition is visible.
 					$result['src']                               = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221%22%20height%3D%221%22%2F%3E';
 					$result['attrs']['data-wppo-dominant-color'] = $dominant_color;
 				} else {
-					// Fallback to gray svg if no dominant color stored.
 					$result['src'] = $this->generate_svg_base64( $img_tag );
 				}
 				return $result;
 			}
 
 			if ( 'lqip' === $placeholder_type ) {
-				if ( null === $img_info_cache ) {
-					$img_info_cache = Img_Converter::get_img_info();
-				}
-				$lqip = $img_info_cache['lqip'][ $rel_path ] ?? '';
+				$lqip = $placeholder_cache['lqip'][ $rel_path ] ?? '';
 				if ( ! empty( $lqip ) ) {
 					$result['src']                     = $lqip;
 					$result['attrs']['data-wppo-lqip'] = '1';
 				} else {
-					// Fallback to gray SVG if no LQIP stored.
 					$result['src'] = $this->generate_svg_base64( $img_tag );
 				}
 				return $result;
