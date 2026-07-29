@@ -105,20 +105,22 @@
 	}
 }
 
-.wppo-button--secondary {
-	background: var(--wppo-bg-card-surface);
-	border: 1px solid var(--wppo-border);
-	color: var(--wppo-text-main);
-	padding: 8px 20px;
-	border-radius: var(--wppo-radius-xs);
-	font-size: 13px;
-	font-weight: 500;
-	cursor: pointer;
-	transition: var(--wppo-transition);
+.wppo-welcome-panel {
+	.wppo-button--secondary {
+		background: var(--wppo-bg-card-surface);
+		border: 1px solid var(--wppo-border);
+		color: var(--wppo-text-main);
+		padding: 8px 20px;
+		border-radius: var(--wppo-radius-xs);
+		font-size: 13px;
+		font-weight: 500;
+		cursor: pointer;
+		transition: var(--wppo-transition);
 
-	&:hover {
-		border-color: var(--wppo-border-hover);
-		background: var(--wppo-switch-hover);
+		&:hover {
+			border-color: var(--wppo-border-hover);
+			background: var(--wppo-switch-hover);
+		}
 	}
 }
 

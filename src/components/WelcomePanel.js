@@ -69,10 +69,8 @@ const WelcomePanel = () => {
 				tab: step.settings.tab,
 				settings: step.settings.payload,
 			} );
+			await apiCall( 'dismiss_welcome' );
 			setVisible( false );
-			apiCall( 'dismiss_welcome' ).catch( ( error ) => {
-				console.error( 'Welcome dismiss failed:', error );
-			} );
 		} catch ( error ) {
 			console.error( 'Welcome panel action failed:', error );
 		} finally {
@@ -81,9 +79,9 @@ const WelcomePanel = () => {
 	};
 
 	const handleDismiss = async () => {
-		setVisible( false );
 		try {
 			await apiCall( 'dismiss_welcome' );
+			setVisible( false );
 		} catch ( error ) {
 			console.error( 'Welcome dismiss failed:', error );
 		}

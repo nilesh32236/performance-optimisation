@@ -74,6 +74,9 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 			}
 		}
 
+		// Delete user meta.
+		delete_user_meta_by_key( 'wppo_welcome_dismissed' );
+
 		// Delete transients.
 		delete_transient( 'wppo_activation_notices' );
 		delete_transient( 'wppo_show_welcome_notice' );
