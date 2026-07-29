@@ -560,15 +560,39 @@ const loadImages = () => {
 };
 
 /**
+ * Whether the global video-placeholder image error handler has been registered.
+ * Prevents duplicate listeners when initVideoPlaceholders runs multiple times.
+ * @type {boolean}
+ */
+let videoPlaceholderErrorHandlerAdded = false;
+
+/**
  * Initialise video placeholder click-to-load handlers.
  *
- * Attaches click and keyboard event listeners to `.wppo-video-placeholder`
+ * Attaches click event listeners to `.wppo-video-placeholder`
  * elements. On activation, injects the actual YouTube iframe with autoplay
- * and replaces the placeholder.
+ * within the existing placeholder container.
  *
  * @since 2.5.0
  */
 const initVideoPlaceholders = () => {
+	if ( ! videoPlaceholderErrorHandlerAdded ) {
+		document.addEventListener(
+			'error',
+			( e ) => {
+				if (
+					e.target.tagName === 'IMG' &&
+					e.target.hasAttribute( 'data-fallback' )
+				) {
+					e.target.src = e.target.getAttribute( 'data-fallback' );
+					e.target.removeAttribute( 'data-fallback' );
+				}
+			},
+			true
+		);
+		videoPlaceholderErrorHandlerAdded = true;
+	}
+
 	document.querySelectorAll( '.wppo-video-placeholder' ).forEach( ( el ) => {
 		if ( el.dataset.wppoInit ) {
 			return;
@@ -576,15 +600,11 @@ const initVideoPlaceholders = () => {
 		el.dataset.wppoInit = '1';
 
 		const loadVideo = () => {
-			if ( el.dataset.wppoLoaded ) {
+			const src = el.getAttribute( 'data-video-src' );
+			if ( ! src || el.dataset.wppoLoaded ) {
 				return;
 			}
 			el.dataset.wppoLoaded = '1';
-
-			const src = el.getAttribute( 'data-video-src' );
-			if ( ! src ) {
-				return;
-			}
 
 			const separator = src.indexOf( '?' ) !== -1 ? '&' : '?';
 			const iframe = document.createElement( 'iframe' );
@@ -602,20 +622,6 @@ const initVideoPlaceholders = () => {
 
 		el.addEventListener( 'click', loadVideo );
 	} );
-
-	document.addEventListener(
-		'error',
-		( e ) => {
-			if (
-				e.target.tagName === 'IMG' &&
-				e.target.hasAttribute( 'data-fallback' )
-			) {
-				e.target.src = e.target.getAttribute( 'data-fallback' );
-				e.target.removeAttribute( 'data-fallback' );
-			}
-		},
-		true
-	);
 };
 
 if ( document.readyState === 'loading' ) {
