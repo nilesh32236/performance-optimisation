@@ -282,14 +282,22 @@ const ImageOptimization = ( { options = {} } ) => {
 						{ settings.lazyLoadVideos && (
 							<div className="wppo-field-nest">
 								<SwitchField
-									label={ __(
-										'Video Placeholder',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Replace YouTube embeds with lightweight thumbnail previews. The actual video player loads only when the user clicks the play button, saving up to 800KB per embed.',
-										'performance-optimisation'
-									) }
+									label={
+										wppoSettings?.translations
+											?.videoPlaceholder ||
+										__(
+											'Video Placeholder',
+											'performance-optimisation'
+										)
+									}
+									description={
+										wppoSettings?.translations
+											?.videoPlaceholderDesc ||
+										__(
+											'Replace YouTube embeds with lightweight thumbnail previews. The actual video player loads only when the user clicks the play button, saving up to 800KB per embed.',
+											'performance-optimisation'
+										)
+									}
 									name="enableVideoPlaceholder"
 									checked={ settings.enableVideoPlaceholder }
 									onChange={ handleChange( setSettings ) }

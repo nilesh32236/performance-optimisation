@@ -1124,7 +1124,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$play_button = apply_filters( 'wppo_video_play_button_html', $play_button, $video_id, $video_type );
 
-			$placeholder_html = '<div class="wppo-video-placeholder" data-video-src="' . esc_url( $original_src ) . '" data-video-type="' . esc_attr( $video_type ) . '" role="button" tabindex="0" aria-label="' . esc_attr__( 'Play video', 'performance-optimisation' ) . '">
+			$placeholder_html = '<div class="wppo-video-placeholder" data-video-src="' . esc_url( $original_src ) . '" data-video-type="' . esc_attr( $video_type ) . '">
 				' . $noscript_iframe . '
 				<picture>
 					<img src="' . esc_url( $thumbnail_url ) . '" alt="' . esc_attr__( 'Video thumbnail', 'performance-optimisation' ) . '" loading="lazy" data-fallback="' . esc_url( $fallback_thumbnail_url ) . '">

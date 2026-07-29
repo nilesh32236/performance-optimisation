@@ -443,6 +443,12 @@ const loadImages = () => {
 							) {
 								startSafetyScan();
 							}
+							if (
+								node.matches( '.wppo-video-placeholder' ) ||
+								node.querySelector( '.wppo-video-placeholder' )
+							) {
+								initVideoPlaceholders();
+							}
 						}
 					} );
 				} );
@@ -586,25 +592,15 @@ const initVideoPlaceholders = () => {
 			iframe.allow = 'autoplay; fullscreen';
 			iframe.allowFullscreen = true;
 			iframe.loading = 'lazy';
-			iframe.width = '100%';
-			iframe.height = '100%';
 			iframe.title = 'YouTube video player';
+			iframe.style.cssText =
+				'position:absolute;inset:0;width:100%;height:100%;border:0;';
 
-			iframe.onerror = () => {
-				delete el.dataset.wppoLoaded;
-				el.style.display = '';
-			};
-
-			el.parentNode.replaceChild( iframe, el );
+			el.innerHTML = '';
+			el.appendChild( iframe );
 		};
 
 		el.addEventListener( 'click', loadVideo );
-		el.addEventListener( 'keydown', ( e ) => {
-			if ( e.key === 'Enter' || e.key === ' ' ) {
-				e.preventDefault();
-				loadVideo();
-			}
-		} );
 	} );
 
 	document.addEventListener(
