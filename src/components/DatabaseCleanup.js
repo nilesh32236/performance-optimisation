@@ -142,7 +142,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					'performance-optimisation'
 				),
 			} );
-		} catch ( error ) {
+		} catch {
 			setNotification( {
 				type: 'error',
 				message: __(

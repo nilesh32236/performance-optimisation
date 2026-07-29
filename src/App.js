@@ -255,7 +255,7 @@ const App = () => {
 				} else {
 					hasFetchedRules.current = false;
 				}
-			} catch ( err ) {
+			} catch {
 				hasFetchedRules.current = false;
 				if ( ! abortController.signal.aborted ) {
 					setServerRulesError( true );
@@ -267,7 +267,6 @@ const App = () => {
 		return () => {
 			abortController.abort();
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ activeTab, recentActivities.length, serverRules, rulesRetryTrigger ] );
 
 	useEffect( () => {
