@@ -587,14 +587,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'orphan_postmeta'    => 'clean_orphan_postmeta',
 			);
 
-			$results = array();
+			$results       = array();
+			$total_deleted = 0;
+
 			foreach ( $methods as $key => $method ) {
 				if ( 'revisions' === $key ) {
-					$results[ $key ] = self::invoke_cleanup_method( $method, 30, 5 );
+					$res = self::invoke_cleanup_method( $method, 30, 5 );
 				} else {
-					$results[ $key ] = self::invoke_cleanup_method( $method );
+					$res = self::invoke_cleanup_method( $method );
+				}
+				$results[ $key ] = $res;
+				if ( ! is_wp_error( $res ) && false !== $res ) {
+					$total_deleted += (int) $res;
 				}
 			}
+
+			do_action( 'wppo_database_cleanup_completed', 'all', $total_deleted, $results );
 
 			return $results;
 		}

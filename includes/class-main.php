@@ -283,6 +283,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} else {
 					$this->exclude_defer_js = $exclude_js;
 				}
+				$this->exclude_defer_js = apply_filters( 'wppo_exclude_defer_js', $this->exclude_defer_js );
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
@@ -293,6 +294,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} else {
 					$this->exclude_delay_js = $exclude_js;
 				}
+				$this->exclude_delay_js = apply_filters( 'wppo_exclude_delay_js', $this->exclude_delay_js );
 			}
 
 			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
@@ -1119,12 +1121,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
+			$local_path = Util::get_local_path( $href );
+			if ( empty( $local_path ) ) {
+				return $tag;
+			}
+
+			if ( apply_filters( 'wppo_exclude_minification', false, $local_path, $handle, 'css' ) ) {
+				return $tag;
+			}
+
 			// Early return if the URL already indicates a minified file.
 			if ( $this->is_minified_asset_name( $href, 'css' ) ) {
 				return $tag;
 			}
-
-			$local_path = Util::get_local_path( $href );
 
 			if ( $this->is_css_minified( $local_path ) ) {
 				return $tag;
@@ -1160,12 +1169,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
+			$local_path = Util::get_local_path( $src );
+			if ( empty( $local_path ) ) {
+				return $tag;
+			}
+
+			if ( apply_filters( 'wppo_exclude_minification', false, $local_path, $handle, 'js' ) ) {
+				return $tag;
+			}
+
 			// Early return if the URL already indicates a minified file.
 			if ( $this->is_minified_asset_name( $src, 'js' ) ) {
 				return $tag;
 			}
-
-			$local_path = Util::get_local_path( $src );
 
 			if ( $this->is_js_minified( $local_path ) ) {
 				return $tag;

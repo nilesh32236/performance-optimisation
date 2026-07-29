@@ -1076,12 +1076,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified `<iframe>` tag HTML.
 		 */
 		public function process_iframe_tag( $iframe_tag, $original_src, $exclude_imgs ) {
-			foreach ( $exclude_imgs as $exclude_img ) {
-				if ( false !== strpos( $original_src, $exclude_img ) ) {
-					return $iframe_tag;
+			if ( ! empty( $exclude_imgs ) ) {
+				foreach ( $exclude_imgs as $exclude_img ) {
+					if ( false !== strpos( $original_src, $exclude_img ) ) {
+						return $iframe_tag;
+					}
 				}
 			}
 
+			$allowed = apply_filters( 'wppo_lazyload_iframe_allowed', true, $original_src, $iframe_tag );
+			if ( ! $allowed ) {
+				return $iframe_tag;
+			}
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				$tags = new \WP_HTML_Tag_Processor( $iframe_tag );
 				if ( $tags->next_tag( array( 'tag_name' => 'iframe' ) ) ) {

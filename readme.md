@@ -94,6 +94,7 @@ See the complete methodology and detailed desktop/mobile breakdown in [PERFORMAN
   - `wp wppo settings get [<tab>]`
   - `wp wppo settings update <tab> --settings=<json>`
   - `wp wppo object-cache flush`
+- **Developer Action Hooks & Filters:** Easily extend plugin behavior with standard WordPress hooks (`wppo_before_cache_clear`, `wppo_after_cache_clear`, `wppo_exclude_delay_js`, `wppo_exclude_defer_js`, `wppo_exclude_minification`, `wppo_cache_page_html`, `wppo_lazyload_iframe_allowed`, `wppo_database_cleanup_completed`). See the full [Developer Hooks Reference](docs/hooks.md).
 
 ### Compatibility & Ecosystem
 
