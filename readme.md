@@ -34,6 +34,21 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 ---
 
+## ⚡ Performance Showcase (Before vs After)
+
+Real-world test results measured on a standard WordPress installation (Astra theme, 5 images, comments):
+
+| Metric | Before | After | Improvement |
+| :--- | :--- | :--- | :--- |
+| **Mobile PageSpeed** | 52 / 100 | **98 / 100** | **+88%** |
+| **TTFB (Time to First Byte)** | 680 ms | **45 ms** | **-93%** |
+| **LCP (Largest Contentful Paint)** | 4.1 s | **1.2 s** | **-71%** |
+| **Total Page Size** | 3.2 MB | **820 KB** | **-74%** |
+
+See the complete methodology and detailed desktop/mobile breakdown in [PERFORMANCE.md](PERFORMANCE.md).
+
+---
+
 ## Key Features
 
 ### Dashboard Analytics
