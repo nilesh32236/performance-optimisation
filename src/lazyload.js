@@ -19,13 +19,25 @@ const useNativeLazy =
 	typeof window.wppoNativeLazy !== 'undefined' && window.wppoNativeLazy;
 
 /**
+ * Whether the browser supports native loading="lazy" for images and iframes.
+ * @type {boolean}
+ */
+const NATIVE_LAZY_SUPPORTED = 'loading' in HTMLImageElement.prototype;
+
+/**
+ * Whether native lazy loading is both enabled AND supported by the browser.
+ * When true, images and iframes use native loading="lazy" instead of IntersectionObserver.
+ * @type {boolean}
+ */
+const USE_NATIVE_LAZY = useNativeLazy && NATIVE_LAZY_SUPPORTED;
+
+/**
  * Selector for all lazy-loadable elements.
- * In native mode, images use native loading="lazy" but iframes still use data-src
- * until PHP emits native loading="lazy" for iframes.
+ * In full native mode, only videos need JS-based lazy loading.
  * @type {string}
  */
-const LAZY_SELECTOR = useNativeLazy
-	? 'iframe[data-src], video.wppo-lazy-video'
+const LAZY_SELECTOR = USE_NATIVE_LAZY
+	? 'video.wppo-lazy-video'
 	: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
 
 /**
@@ -250,6 +262,22 @@ const observeElement = ( el ) => {
 		return;
 	}
 
+	// When native lazy is supported, restore iframes immediately instead of observing.
+	if (
+		USE_NATIVE_LAZY &&
+		el.tagName === 'IFRAME' &&
+		el.hasAttribute( 'data-src' )
+	) {
+		const src = el.getAttribute( 'data-src' );
+		el.setAttribute( 'loading', 'lazy' );
+		if ( src ) {
+			el.src = src;
+		}
+		el.removeAttribute( 'data-src' );
+		observedElements.add( el );
+		return;
+	}
+
 	if (
 		( el.tagName === 'IMG' &&
 			( el.hasAttribute( 'data-src' ) ||
@@ -265,7 +293,7 @@ const observeElement = ( el ) => {
 /**
  * Initialise lazy-loading for images, iframes, and videos.
  *
- * Uses IntersectionObserver with a 600px root margin. Falls back to
+ * Uses IntersectionObserver with a 200px root margin. Falls back to
  * scroll-based detection when the Observer API is unavailable. Also
  * sets up a MutationObserver and a periodic safety scan for dynamically
  * added elements.
@@ -273,8 +301,21 @@ const observeElement = ( el ) => {
  * @since 1.0.0
  */
 const loadImages = () => {
+	// When full native lazy is supported, restore iframes immediately with loading="lazy"
+	// so the browser handles lazy loading natively. No IntersectionObserver needed for them.
+	if ( USE_NATIVE_LAZY ) {
+		document.querySelectorAll( 'iframe[data-src]' ).forEach( ( iframe ) => {
+			const src = iframe.getAttribute( 'data-src' );
+			iframe.setAttribute( 'loading', 'lazy' );
+			if ( src ) {
+				iframe.src = src;
+			}
+			iframe.removeAttribute( 'data-src' );
+		} );
+	}
+
 	// When native lazy is active and no video lazy elements exist, skip observer setup entirely.
-	if ( useNativeLazy && ! document.querySelector( LAZY_SELECTOR ) ) {
+	if ( USE_NATIVE_LAZY && ! document.querySelector( LAZY_SELECTOR ) ) {
 		return;
 	}
 
