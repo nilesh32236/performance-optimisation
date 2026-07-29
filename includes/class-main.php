@@ -564,7 +564,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					);
 				}
 
-				wp_enqueue_script( 'wppo-admin-bar-script', WPPO_PLUGIN_URL . 'build/main.js', $asset_data['dependencies'], $asset_data['version'], true );
+				wp_enqueue_script(
+					'wppo-admin-bar-script',
+					WPPO_PLUGIN_URL . 'build/main.js',
+					$asset_data['dependencies'],
+					$asset_data['version'],
+					array(
+						'in_footer'     => true,
+						'fetchpriority' => 'low',
+					)
+				);
 				wp_localize_script(
 					'wppo-admin-bar-script',
 					'wppoObject',
@@ -662,7 +671,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					);
 				}
 
-				wp_enqueue_script( 'wppo-admin-bar-script', WPPO_PLUGIN_URL . 'build/main.js', $asset_data['dependencies'], $asset_data['version'], true );
+				wp_enqueue_script(
+					'wppo-admin-bar-script',
+					WPPO_PLUGIN_URL . 'build/main.js',
+					$asset_data['dependencies'],
+					$asset_data['version'],
+					array(
+						'in_footer'     => true,
+						'fetchpriority' => 'low',
+					)
+				);
 				wp_localize_script(
 					'wppo-admin-bar-script',
 					'wppoObject',
@@ -686,7 +704,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 				if ( $needs_script ) {
 					$lazy_args = array(
-						'in_footer' => true,
+						'in_footer'     => true,
+						'fetchpriority' => 'low',
 					);
 					wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
 
