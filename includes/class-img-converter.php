@@ -106,7 +106,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				if ( 'webp' === $this->format ) {
 					$this->format = 'none';
 				} elseif ( 'both' === $this->format ) {
-					$this->format = 'avif';
+					$this->format = self::core_handles_both_next_gen() ? 'none' : 'avif';
 				}
 			}
 		}
@@ -120,6 +120,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		public static function core_handles_next_gen(): bool {
 			return function_exists( 'wp_image_quality' );
+		}
+
+		/**
+		 * Check if WordPress core (7.1+) natively handles both WebP and AVIF generation.
+		 *
+		 * @since 2.2.0
+		 *
+		 * @return bool True if core can generate both WebP and AVIF natively.
+		 */
+		public static function core_handles_both_next_gen(): bool {
+			return function_exists( 'wp_image_quality' )
+				&& null !== wp_image_quality( 'image/webp' )
+				&& null !== wp_image_quality( 'image/avif' );
 		}
 
 		/**
