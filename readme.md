@@ -74,6 +74,14 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 - **Portability:** Import and export plugin settings with a single click for rapid deployment across multiple client sites.
 
+### Compatibility & Ecosystem
+
+Performance Optimisation is tested and verified compatible with popular themes, page builders, e-commerce platforms, and SEO plugins:
+- **Themes:** Astra, GeneratePress, Kadence, OceanWP, Blocksy, Twenty Twenty-Four.
+- **Page Builders:** Elementor, Divi, Beaver Builder, WPBakery.
+- **E-Commerce:** WooCommerce (cart, checkout, and account pages are automatically excluded from full-page caching).
+- **SEO Plugins:** Yoast SEO, Rank Math, All in One SEO, SEOPress (XML sitemaps and feeds bypass caching/minification).
+
 ---
 
 ## Dependencies & Tech Stack
