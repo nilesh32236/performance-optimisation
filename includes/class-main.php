@@ -179,6 +179,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
+			if ( defined( 'WP_CLI' ) && WP_CLI ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
+				\WP_CLI::add_command( 'wppo', 'PerformanceOptimise\Inc\WPPO_CLI_Command' );
+			}
+
 			// Phase 1 & 2 — Diagnostics & PageSpeed (v1.5.0-1.6.0).
 			// Load on admin, AJAX, Cron, or REST API requests.
 			if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {

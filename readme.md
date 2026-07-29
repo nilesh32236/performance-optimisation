@@ -85,9 +85,15 @@ See the complete methodology and detailed desktop/mobile breakdown in [PERFORMAN
 - **Automated Scheduling:** Automatically run cleanup routines Daily, Weekly, or Monthly via WP-Cron.
 - **Advanced Revision Control:** Retain precise post revisions based on either their maximum age or minimum number to keep per-post.
 
-### Administrative Tools
+### Administrative Tools & WP-CLI
 
 - **Portability:** Import and export plugin settings with a single click for rapid deployment across multiple client sites.
+- **WP-CLI Commands:** Manage caching, database cleanup, settings, and object cache from terminal:
+  - `wp wppo cache clear [--page=<url>]`
+  - `wp wppo database cleanup [--type=<type>]`
+  - `wp wppo settings get [<tab>]`
+  - `wp wppo settings update <tab> --settings=<json>`
+  - `wp wppo object-cache flush`
 
 ### Compatibility & Ecosystem
 
