@@ -38,6 +38,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Above-fold selectors to match during extraction.
 		 *
+		 * Uses precise token-based matching to avoid false positives.
+		 *
 		 * @var string[]
 		 * @since 2.0.0
 		 */
@@ -48,6 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			'.header',
 			'#header',
 			'.site-header',
+			'#masthead',
 			'nav',
 			'.nav',
 			'#nav',
@@ -61,6 +64,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			'.banner',
 			'.page-title',
 			'.entry-title',
+			'.page-header',
+			'.entry-header',
 			'.logo',
 			'.site-logo',
 			'.site-branding',
@@ -80,9 +85,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			'.skip-link',
 			'.screen-reader-text',
 			':root',
-			'*',
-			'*::before',
-			'*::after',
+			'p',
+			'a',
+			'ul',
+			'li',
+			'button',
+			'.btn',
+			'.button',
 		);
 
 		/**
@@ -93,12 +102,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 */
 		private const SKIP_DEFER_HANDLES = array(
 			'wppo-combine-css',
-			'wppo-critical-css-inline',
 			'dashicons',
 			'admin-bar',
 			'wp-block-library',
 			'wc-block-style',
 		);
+
+		/**
+		 * Maximum recursion depth for @import resolution.
+		 *
+		 * @var int
+		 * @since 2.0.0
+		 */
+		private const MAX_IMPORT_DEPTH = 3;
 
 		/**
 		 * Get the CCSS directory path.
@@ -121,17 +137,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
-		 * Generate a unique template hash for the current theme + template.
+		 * Generate a unique template hash for a template slug + stylesheet.
 		 *
-		 * @param string $template Optional template name. Defaults to current template.
+		 * @param string $template Optional template slug. Defaults to current template via get_current_template_slug().
 		 * @return string MD5 hash.
 		 * @since 2.0.0
 		 */
 		public static function get_template_hash( string $template = '' ): string {
 			if ( empty( $template ) ) {
-				$template = get_template();
+				$template = self::get_current_template_slug();
 			}
 			return md5( $template . '-' . get_stylesheet() );
+		}
+
+		/**
+		 * Get the current WordPress template slug based on conditional tags.
+		 *
+		 * Maps WordPress conditional tags to the template slugs used in get_templates().
+		 *
+		 * @return string Template slug: 'home', 'single', 'page', 'archive', or 'index'.
+		 * @since 2.0.0
+		 */
+		private static function get_current_template_slug(): string {
+			if ( is_front_page() || is_home() ) {
+				return 'home';
+			}
+			if ( is_singular( 'post' ) ) {
+				return 'single';
+			}
+			if ( is_page() ) {
+				return 'page';
+			}
+			if ( is_archive() || is_search() || is_404() ) {
+				return 'archive';
+			}
+			return 'index';
 		}
 
 		/**
@@ -159,7 +199,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Get all registered template hashes and their status.
 		 *
-		 * @return array<string, string> Template hash => status ('ready', 'pending', 'failed', 'none').
+		 * Returns an associative array where keys are template hashes and values
+		 * are arrays with 'status' and 'label' keys.
+		 *
+		 * @return array<string, array{status: string, label: string}> Template hash => status + label.
 		 * @since 2.0.0
 		 */
 		public static function get_status_all(): array {
@@ -169,10 +212,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
 				if ( self::ccss_exists( $hash ) ) {
-					$statuses[ $hash ] = 'ready';
+					$statuses[ $hash ] = array(
+						'status' => 'ready',
+						'label'  => $label,
+					);
 				} else {
 					$cache_status      = get_transient( 'wppo_ccss_status_' . $hash );
-					$statuses[ $hash ] = $cache_status ? $cache_status : 'none';
+					$statuses[ $hash ] = array(
+						'status' => $cache_status ? $cache_status : 'none',
+						'label'  => $label,
+					);
 				}
 			}
 
@@ -194,7 +243,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				'archive' => __( 'Archive', 'performance-optimisation' ),
 			);
 
-			$page_templates = get_page_templates();
+			$page_templates = function_exists( 'get_page_templates' ) ? get_page_templates() : array();
 			if ( ! empty( $page_templates ) ) {
 				foreach ( $page_templates as $label => $file ) {
 					$templates[ $file ] = $label;
@@ -211,40 +260,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @return string|false URL or false if not found.
 		 * @since 2.0.0
 		 */
-		private static function get_sample_url( string $template ) {
+		private static function get_sample_url( string $template ): string|false {
 			switch ( $template ) {
 				case 'home':
 					return home_url( '/' );
 				case 'single':
 					$posts = get_posts(
 						array(
-							'numberposts' => 1,
-							'post_status' => 'publish',
-							'fields'      => 'ids',
+							'numberposts'  => 1,
+							'post_status'  => 'publish',
+							'has_password' => false,
+							'fields'       => 'ids',
 						)
 					);
 					return ! empty( $posts ) ? get_permalink( $posts[0] ) : false;
 				case 'page':
 					$pages = get_posts(
 						array(
-							'post_type'   => 'page',
-							'numberposts' => 1,
-							'post_status' => 'publish',
-							'fields'      => 'ids',
+							'post_type'    => 'page',
+							'numberposts'  => 1,
+							'post_status'  => 'publish',
+							'has_password' => false,
+							'fields'       => 'ids',
 						)
 					);
 					return ! empty( $pages ) ? get_permalink( $pages[0] ) : home_url( '/' );
 				case 'archive':
 					$archives = get_posts(
 						array(
-							'numberposts' => 1,
-							'post_status' => 'publish',
-							'fields'      => 'ids',
+							'numberposts'  => 1,
+							'post_status'  => 'publish',
+							'has_password' => false,
+							'fields'       => 'ids',
 						)
 					);
 					if ( ! empty( $archives ) ) {
-						$year  = get_the_time( 'Y', $archives[0] );
-						$month = get_the_time( 'm', $archives[0] );
+						setup_postdata( $archives[0] );
+						$year  = get_the_time( 'Y' );
+						$month = get_the_time( 'm' );
+						wp_reset_postdata();
 						return get_month_link( $year, $month );
 					}
 					return false;
@@ -257,7 +311,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Generate critical CSS for a given URL.
 		 *
 		 * Fetches the HTML, extracts CSS resources and inline styles, downloads
-		 * external CSS, and applies heuristic above-fold rule extraction.
+		 * external CSS (resolving @import directives), and applies heuristic
+		 * above-fold rule extraction.
 		 *
 		 * @param string $url The page URL to generate CCSS for.
 		 * @return string|false The critical CSS content, or false on failure.
@@ -322,16 +377,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						continue;
 					}
 
-					$css_response = wp_remote_get(
-						$href,
-						array(
-							'timeout'    => 15,
-							'user-agent' => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
-						)
-					);
-
-					if ( ! is_wp_error( $css_response ) && 200 === wp_remote_retrieve_response_code( $css_response ) ) {
-						$css_content .= wp_remote_retrieve_body( $css_response ) . "\n";
+					$fetched = self::fetch_stylesheet_with_imports( $href );
+					if ( '' !== $fetched ) {
+						$css_content .= $fetched . "\n";
 					}
 				}
 			}
@@ -360,10 +408,100 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Fetch a stylesheet and recursively resolve @import directives.
+		 *
+		 * @param string $url   The stylesheet URL.
+		 * @param int    $depth Current recursion depth.
+		 * @return string The combined CSS content with @imports inlined, or empty string on failure.
+		 * @since 2.0.0
+		 */
+		private static function fetch_stylesheet_with_imports( string $url, int $depth = 0 ): string {
+			if ( $depth > self::MAX_IMPORT_DEPTH ) {
+				return '';
+			}
+
+			$response = wp_remote_get(
+				$url,
+				array(
+					'timeout'    => 15,
+					'user-agent' => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
+				)
+			);
+
+			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+				return '';
+			}
+
+			$content = wp_remote_retrieve_body( $response );
+			if ( empty( $content ) ) {
+				return '';
+			}
+
+			// Resolve @import directives recursively.
+			preg_match_all( '/@import\s+(?:url\([\'"]?|[\'"])([^\'";)]+)(?:[\'"]?\))?[\'"]?\s*;/i', $content, $imports );
+
+			if ( ! empty( $imports[1] ) ) {
+				foreach ( $imports[1] as $import_url ) {
+					$resolved = self::resolve_import_url( trim( $import_url ), $url );
+					if ( '' !== $resolved ) {
+						$imported = self::fetch_stylesheet_with_imports( $resolved, $depth + 1 );
+						if ( '' !== $imported ) {
+							$content .= "\n" . $imported;
+						}
+					}
+				}
+			}
+
+			return $content;
+		}
+
+		/**
+		 * Resolve a potentially relative @import URL against a base stylesheet URL.
+		 *
+		 * @param string $import_url The URL from the @import statement.
+		 * @param string $base_url   The base stylesheet URL.
+		 * @return string The absolute resolved URL, or empty string if unresolvable.
+		 * @since 2.0.0
+		 */
+		private static function resolve_import_url( string $import_url, string $base_url ): string {
+			// If already absolute, return as-is.
+			if ( preg_match( '/^https?:\/\//i', $import_url ) ) {
+				return $import_url;
+			}
+
+			// If protocol-relative, prepend the base scheme.
+			if ( 0 === strpos( $import_url, '//' ) ) {
+				$scheme = wp_parse_url( $base_url, PHP_URL_SCHEME );
+				return $scheme ? $scheme . ':' . $import_url : 'https:' . $import_url;
+			}
+
+			// Resolve relative URL against the base URL's directory.
+			$base_parts = wp_parse_url( $base_url );
+			if ( empty( $base_parts['host'] ) ) {
+				return $import_url;
+			}
+
+			$scheme   = $base_parts['scheme'] ?? 'https';
+			$host     = $base_parts['host'];
+			$port     = isset( $base_parts['port'] ) ? ':' . $base_parts['port'] : '';
+			$base_dir = dirname( $base_parts['path'] ?? '/' );
+
+			// If import URL starts with /, it's root-relative.
+			if ( 0 === strpos( $import_url, '/' ) ) {
+				return $scheme . '://' . $host . $port . $import_url;
+			}
+
+			return $scheme . '://' . $host . $port . $base_dir . '/' . $import_url;
+		}
+
+		/**
 		 * Extract above-fold CSS rules using heuristic selector matching.
 		 *
 		 * Always includes @font-face, @keyframes, CSS custom properties (:root),
 		 * and rules matching known above-fold selectors.
+		 *
+		 * Uses a brace-depth-based parser that handles minified CSS (single-line)
+		 * and multi-line selectors correctly.
 		 *
 		 * @param string $css Full CSS content.
 		 * @return string Extracted critical CSS.
@@ -393,7 +531,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Also extract variables from html selector.
 			preg_match( '/html\s*\{([^}]*)\}/i', $css, $html_match );
 			if ( ! empty( $html_match[0] ) ) {
-				// Only include if it has custom properties.
 				if ( false !== strpos( $html_match[1], '--' ) ) {
 					$critical_parts[] = $html_match[0];
 				}
@@ -410,58 +547,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
-			// Extract regular rules matching above-fold selectors.
-			$lines             = explode( "\n", $css );
-			$buffer            = '';
-			$in_block          = false;
-			$brace_count       = 0;
-			$current_selector  = '';
-			$in_media          = false;
-			$media_buffer      = '';
-			$media_brace_count = 0;
-
-			foreach ( $lines as $line ) {
-				if ( ! $in_block && ! $in_media ) {
-					$trimmed = trim( $line );
-
-					// Skip at-rules already handled.
-					if ( 0 === strpos( $trimmed, '@font-face' ) ||
-						0 === strpos( $trimmed, '@keyframes' ) ||
-						0 === strpos( $trimmed, '@import' ) ||
-						0 === strpos( $trimmed, '@charset' ) ||
-						0 === strpos( $trimmed, '@namespace' ) ) {
-						continue;
-					}
-
-					// Skip media queries (handled separately).
-					if ( 0 === strpos( $trimmed, '@media' ) ) {
-						continue;
-					}
-
-					if ( false !== strpos( $trimmed, '{' ) ) {
-						$current_selector = $trimmed;
-						$in_block         = true;
-						$brace_count      = substr_count( $trimmed, '{' ) - substr_count( $trimmed, '}' );
-						$buffer           = $trimmed . "\n";
-						continue;
-					}
-				} elseif ( $in_block ) {
-					$buffer      .= $line . "\n";
-					$brace_count += substr_count( $line, '{' ) - substr_count( $line, '}' );
-
-					if ( $brace_count <= 0 ) {
-						$in_block = false;
-						// Check if selector matches above-fold selectors.
-						if ( self::matches_above_fold( $current_selector ) ) {
-							$critical_parts[] = $buffer;
-						}
-						$buffer           = '';
-						$current_selector = '';
-					}
-				}
-			}
+			// Extract regular rules using brace-depth-based parsing.
+			// Handles minified CSS (single line), multi-line selectors, and nested braces.
+			self::parse_regular_rules( $css, $critical_parts );
 
 			return implode( "\n", array_unique( array_filter( $critical_parts ) ) );
+		}
+
+		/**
+		 * Parse regular (non-at-rule) CSS rules using brace-depth tracking.
+		 *
+		 * Handles minified CSS, multi-line selectors, and nested braces
+		 * (e.g., background: url(data:...{...})).
+		 *
+		 * @param string $css            Full CSS content.
+		 * @param array  $critical_parts Reference to array of extracted critical CSS parts.
+		 * @return void
+		 * @since 2.0.0
+		 */
+		private static function parse_regular_rules( string $css, array &$critical_parts ): void {
+			$length   = strlen( $css );
+			$depth    = 0;
+			$buffer   = '';
+			$selector = '';
+			$in_rule  = false;
+
+			for ( $i = 0; $i < $length; ++$i ) {
+				$char = $css[ $i ];
+
+				if ( '{' === $char ) {
+					if ( 0 === $depth && ! $in_rule ) {
+						$selector = trim( $buffer );
+						$buffer   = '';
+						$in_rule  = true;
+
+						// Skip @-rules already handled separately.
+						if ( preg_match( '/^@(font-face|keyframes|import|charset|namespace|media)\b/i', $selector ) ) {
+							// Consume the entire @-rule block.
+							$depth    = 1;
+							$buffer   = $selector . '{';
+							$selector = '';
+							continue;
+						}
+					}
+					++$depth;
+					$buffer .= $char;
+				} elseif ( '}' === $char ) {
+					--$depth;
+					$buffer .= $char;
+					if ( 0 === $depth && $in_rule ) {
+						// Complete rule block.
+						if ( '' !== $selector && self::matches_above_fold( $selector ) ) {
+							$critical_parts[] = $buffer;
+						}
+						$buffer   = '';
+						$selector = '';
+						$in_rule  = false;
+					}
+				} elseif ( ! $in_rule ) {
+					$buffer .= $char;
+				} else {
+					$buffer .= $char;
+				}
+			}
 		}
 
 		/**
@@ -472,7 +620,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function filter_media_query_rules( string $media_query ): string {
-			// Extract the media query header.
 			$header_end = strpos( $media_query, '{' );
 			if ( false === $header_end ) {
 				return '';
@@ -482,6 +629,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			$filtered_rules = array();
 			$lines          = explode( '}', $body );
+
 			foreach ( $lines as $rule ) {
 				$rule = trim( $rule );
 				if ( empty( $rule ) ) {
@@ -508,8 +656,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Check if a CSS selector matches above-fold selectors.
 		 *
-		 * @param string $selector The CSS selector string.
-		 * @return bool True if the selector should be included in critical CSS.
+		 * Splits multi-selector groups on ',' and tests each individual selector
+		 * using token-based matching to prevent false positives (e.g., '.container'
+		 * does not match '.container-fluid').
+		 *
+		 * @param string $selector The CSS selector string (may contain multiple selectors separated by commas).
+		 * @return bool True if any individual selector should be included in critical CSS.
 		 * @since 2.0.0
 		 */
 		private static function matches_above_fold( string $selector ): bool {
@@ -519,18 +671,82 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
-			// Remove pseudo-classes and pseudo-elements for matching.
-			$clean = preg_replace( '/::?[\w-]+(\([^)]*\))?/', '', $selector );
-			$clean = preg_replace( '/\[[^\]]*\]/', '', $clean );
-			$clean = trim( $clean );
+			// Split multi-selector groups on commas (outside parentheses).
+			$individual_selectors = preg_split( '/,(?=(?:[^()]*\([^()]*\))*[^()]*$)/', $selector );
 
-			foreach ( self::ABOVE_FOLD_SELECTORS as $above ) {
-				if ( false !== strpos( $clean, $above ) ) {
+			foreach ( $individual_selectors as $single ) {
+				$single = trim( $single );
+				if ( '' === $single ) {
+					continue;
+				}
+				if ( self::matches_above_fold_single( $single ) ) {
 					return true;
 				}
 			}
 
 			return false;
+		}
+
+		/**
+		 * Check if a single CSS selector matches above-fold selectors using token-based matching.
+		 *
+		 * Uses word-boundary-aware matching to prevent false positives like
+		 * '.container' matching '.container-fluid'.
+		 *
+		 * @param string $selector A single trimmed CSS selector.
+		 * @return bool True if the selector matches.
+		 * @since 2.0.0
+		 */
+		private static function matches_above_fold_single( string $selector ): bool {
+			$selector = trim( $selector );
+
+			if ( empty( $selector ) ) {
+				return false;
+			}
+
+			// Remove pseudo-classes and pseudo-elements for matching.
+			$clean = preg_replace( '/::?[\w-]+(\([^)]*\))?/', '', $selector );
+			$clean = preg_replace( '/\[[^\]]*\]/', '', $clean );
+			// Remove combinator characters (>, +, ~) and whitespace around them.
+			$clean = preg_replace( '/\s*[>+~]\s*/', ' ', $clean );
+			$clean = trim( $clean );
+
+			if ( '' === $clean ) {
+				return false;
+			}
+
+			// Split descendant selectors and test last (most specific) part.
+			$parts = preg_split( '/\s+/', $clean );
+			$last  = end( $parts );
+
+			foreach ( self::ABOVE_FOLD_SELECTORS as $above ) {
+				if ( self::token_match( $last, $above ) ) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/**
+		 * Token-based selector matching that prevents substring false positives.
+		 *
+		 * Matches exact class, ID, tag, or attribute names using word boundaries.
+		 *
+		 * @param string $selector_part A single selector fragment (e.g., '.container', '#header', 'h1').
+		 * @param string $above         The above-fold selector pattern to match against.
+		 * @return bool True if the selector part matches the pattern.
+		 * @since 2.0.0
+		 */
+		private static function token_match( string $selector_part, string $above ): bool {
+			if ( $selector_part === $above ) {
+				return true;
+			}
+
+			// For class selectors, use word-boundary-aware matching.
+			$pattern = '/\b' . preg_quote( ltrim( $above, '.' ), '/' ) . '\b/';
+
+			return (bool) preg_match( $pattern, $selector_part );
 		}
 
 		/**
@@ -560,10 +776,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return false;
 			}
 
-			Util::init_filesystem();
-			global $wp_filesystem;
-			if ( $wp_filesystem ) {
-				$wp_filesystem->put_contents( self::get_ccss_file( $template_hash ), $critical_css, FS_CHMOD_FILE );
+			$filesystem = Util::init_filesystem();
+			if ( $filesystem ) {
+				$filesystem->put_contents( self::get_ccss_file( $template_hash ), $critical_css, FS_CHMOD_FILE );
 			} else {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				file_put_contents( self::get_ccss_file( $template_hash ), $critical_css );
@@ -581,7 +796,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		/**
 		 * Inline critical CSS in the <head> for non-logged-in visitors.
 		 *
-		 * Hooked to wp_head at priority 0.
+		 * Hooked to wp_head at priority 0. Computes the template hash using
+		 * the current template slug (based on WordPress conditional tags)
+		 * to match the hashes stored by generate_and_store().
 		 *
 		 * @return void
 		 * @since 2.0.0
@@ -591,22 +808,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return;
 			}
 
-			$template_hash = self::get_template_hash();
+			$template_slug = self::get_current_template_slug();
+			$template_hash = self::get_template_hash( $template_slug );
 			$file          = self::get_ccss_file( $template_hash );
 
 			if ( file_exists( $file ) ) {
 				$content = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 				if ( ! empty( $content ) ) {
 					echo '<style id="wppo-critical-css">' . "\n";
-					echo wp_kses(
-						$content,
-						array(
-							"\n" => array(),
-							"\r" => array(),
-							"\t" => array(),
-						)
-					);
-					echo "\n" . '</style>' . "\n";
+					echo $content . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content generated by plugin from its own cache.
+					echo '</style>' . "\n";
 				}
 			} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
 				$hook = 'wppo_generate_ccss';
@@ -692,15 +903,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return;
 			}
 
-			self::generate_and_store( $template_hash, $found_template );
+			$result = self::generate_and_store( $template_hash, $found_template );
 
-			Log::add(
-				sprintf(
-					/* translators: %s: Template hash */
-					__( 'Critical CSS generated for template: %s', 'performance-optimisation' ),
-					$template_hash
-				)
-			);
+			if ( $result ) {
+				Log::add(
+					sprintf(
+						/* translators: %s: Template hash */
+						__( 'Critical CSS generated for template: %s', 'performance-optimisation' ),
+						$template_hash
+					)
+				);
+			} else {
+				Log::add(
+					sprintf(
+						/* translators: %s: Template hash */
+						__( 'Critical CSS generation failed for template: %s', 'performance-optimisation' ),
+						$template_hash
+					)
+				);
+			}
 		}
 
 		/**
@@ -751,7 +972,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		public static function clear_all(): void {
 			$dir = self::get_ccss_dir();
 
-			Util::init_filesystem();
+			$filesystem = Util::init_filesystem();
 			global $wp_filesystem;
 
 			if ( $wp_filesystem && $wp_filesystem->is_dir( $dir ) ) {

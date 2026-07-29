@@ -1,6 +1,5 @@
 import { __ } from '@wordpress/i18n';
 import { useState } from '@wordpress/element';
-import { apiCall } from '../lib/apiRequest';
 import {
 	faCheckCircle,
 	faExclamationTriangle,
@@ -39,11 +38,7 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 	const handleRegenerate = async () => {
 		setIsRegenerating( true );
 		try {
-			if ( onRegenerate ) {
-				await onRegenerate();
-			} else {
-				await apiCall( 'regenerate_ccss' );
-			}
+			await onRegenerate();
 		} catch ( err ) {
 			console.error( 'Failed to regenerate CCSS', err );
 		} finally {
@@ -66,13 +61,19 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 			</p>
 			{ entries.length > 0 ? (
 				<div className="wppo-ccss-status-list wppo-mb-16">
-					{ entries.map( ( [ hash, statusKey ] ) => {
+					{ entries.map( ( [ hash, entry ] ) => {
+						const statusKey =
+							typeof entry === 'string' ? entry : entry.status;
+						const label =
+							typeof entry === 'object' && entry.label
+								? entry.label
+								: hash.substring( 0, 8 ) + '…';
 						const config =
 							STATUS_CONFIG[ statusKey ] || STATUS_CONFIG.none;
 						return (
 							<div key={ hash } className="wppo-ccss-status-item">
 								<span className="wppo-ccss-status-hash">
-									{ hash.substring( 0, 8 ) }…
+									{ label }
 								</span>
 								<span
 									className={ `wppo-badge ${ config.className }` }
