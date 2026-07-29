@@ -912,7 +912,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$css_file_path  = $instance->get_file_path( $url_path, 'css' );
 				$used_css_path  = $instance->get_file_path( $url_path, 'used-css' );
 
-				if ( empty( $html_file_path ) || empty( $css_file_path ) ) {
+				if ( empty( $html_file_path ) || empty( $css_file_path ) || empty( $used_css_path ) ) {
 					return false;
 				}
 
@@ -961,23 +961,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( $fs && $fs->is_dir( $min_dir ) ) {
 				$res2 = $fs->delete( $min_dir, true );
-			}
-
-			// Delete all used-CSS files across domains.
-			$used_css_dir = "{$this->cache_root_dir}";
-			if ( $fs && $fs->is_dir( $used_css_dir ) ) {
-				$domain_dirs = $fs->dirlist( $used_css_dir );
-				if ( $domain_dirs ) {
-					foreach ( $domain_dirs as $entry ) {
-						if ( 'd' !== $entry['type'] ) {
-							continue;
-						}
-						$used_css_file = "{$used_css_dir}/{$entry['name']}/used-css.css";
-						if ( $fs->exists( $used_css_file ) ) {
-							$fs->delete( $used_css_file );
-						}
-					}
-				}
 			}
 
 			$res3 = Used_CSS::delete_all_used_css();

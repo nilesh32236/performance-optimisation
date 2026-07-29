@@ -1258,23 +1258,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params  = $request->get_params();
 			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
 
+			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+				return $this->send_response( null, false, 500, __( 'Action Scheduler is not available.', 'performance-optimisation' ) );
+			}
+
 			if ( $post_id ) {
-				// Regenerate single post synchronously.
-				Used_CSS::process_background( $post_id );
+				as_enqueue_async_action(
+					'wppo_used_css_generate',
+					array( 'post_id' => $post_id ),
+					'performance_optimisation'
+				);
 				return $this->send_response(
 					array(
 						'mode'    => 'single',
 						'post_id' => $post_id,
 					),
 					true,
-					200,
-					__( 'Used CSS regenerated for the specified page.', 'performance-optimisation' )
+					202,
+					__( 'Used CSS regeneration queued.', 'performance-optimisation' )
 				);
-			}
-
-			// Queue full regeneration via Action Scheduler.
-			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
-				return $this->send_response( null, false, 500, __( 'Action Scheduler is not available.', 'performance-optimisation' ) );
 			}
 
 			$used_css = new Used_CSS();

@@ -63,34 +63,28 @@ const FileOptimization = ( {
 		success: false,
 	} );
 
-	const handleRegenerateUsedCSS = async () => {
+	const withNotification = async (
+		apiCallPromise,
+		successMessage,
+		errorMessage
+	) => {
 		setIsLoading( true );
 		setNotification( { message: '', success: false } );
 		try {
-			const res = await apiCall( 'used_css_regenerate' );
+			const res = await apiCallPromise;
 			if ( res.success ) {
 				setNotification( {
-					message:
-						res.message ||
-						__(
-							'Used CSS regeneration queued.',
-							'performance-optimisation'
-						),
+					message: res.message || successMessage,
 					success: true,
 				} );
 			} else {
 				setNotification( {
-					message:
-						res.message ||
-						__(
-							'Failed to regenerate used CSS.',
-							'performance-optimisation'
-						),
+					message: res.message || errorMessage,
 					success: false,
 				} );
 			}
 		} catch ( err ) {
-			console.error( 'Failed regenerating used CSS', err );
+			console.error( errorMessage, err );
 			setNotification( {
 				message: __(
 					'An unexpected error occurred.',
@@ -103,54 +97,29 @@ const FileOptimization = ( {
 		}
 	};
 
+	const handleRegenerateUsedCSS = async () => {
+		withNotification(
+			apiCall( 'used_css_regenerate' ),
+			__( 'Used CSS regeneration queued.', 'performance-optimisation' ),
+			__( 'Failed to regenerate used CSS.', 'performance-optimisation' )
+		);
+	};
+
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
-		setIsLoading( true );
-		setNotification( { message: '', success: false } );
-		try {
-			const res = await apiCall( 'update_settings', {
+		withNotification(
+			apiCall( 'update_settings', {
 				tab: 'file_optimisation',
 				settings: {
 					...settings,
 					excludeDelayJS: settings.delayJSList,
 				},
-			} );
-
-			if ( res.success ) {
-				setNotification( {
-					message:
-						res.message ||
-						__(
-							'Settings updated successfully.',
-							'performance-optimisation'
-						),
-					success: true,
-				} );
-			} else {
-				setNotification( {
-					message:
-						res.message ||
-						__(
-							'Failed to update settings.',
-							'performance-optimisation'
-						),
-					success: false,
-				} );
-			}
-		} catch ( err ) {
-			console.error( 'Failed updating file optimisation settings', err );
-			setNotification( {
-				message: __(
-					'An unexpected error occurred.',
-					'performance-optimisation'
-				),
-				success: false,
-			} );
-		} finally {
-			setIsLoading( false );
-		}
+			} ),
+			__( 'Settings updated successfully.', 'performance-optimisation' ),
+			__( 'Failed to update settings.', 'performance-optimisation' )
+		);
 	};
 
 	const subTabs = [

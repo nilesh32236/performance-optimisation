@@ -25,6 +25,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 	class Used_CSS {
 
 		/**
+		 * Cache root directory constant.
+		 *
+		 * @var string
+		 * @since 1.9.0
+		 */
+		private const CACHE_ROOT_DIR = '/cache/wppo';
+
+		/**
 		 * Plugin options.
 		 *
 		 * @var array
@@ -135,8 +143,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 			$this->domain = $host;
 
-			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo' );
-			$this->cache_root_url = WP_CONTENT_URL . '/cache/wppo';
+			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_ROOT_DIR );
+			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_ROOT_DIR;
 
 			$this->init_safelist();
 		}
@@ -157,16 +165,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$this->safelist = array_merge( $this->built_in_safelist, $user_list );
 			$this->safelist = array_unique( array_filter( $this->safelist ) );
-		}
-
-		/**
-		 * Get the safelist.
-		 *
-		 * @return array
-		 * @since 1.9.0
-		 */
-		public function get_safelist(): array {
-			return $this->safelist;
 		}
 
 		/**
@@ -342,10 +340,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					$offset = $rule_end;
 				}
 
-				$css    = substr( $css, $offset );
-				$css    = ltrim( $css );
-				$offset = 0;
-				$length = strlen( $css );
+				while ( $offset < $length && ctype_space( $css[ $offset ] ) ) {
+					++$offset;
+				}
 			}
 
 			return $rules;
@@ -522,8 +519,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return true;
 			}
 
-			$simple = preg_replace( '/::?[a-z\-]+(\([^)]*\))?/', '', $simple );
-			$simple = trim( $simple );
+			if ( false !== strpos( $simple, ':' ) ) {
+				$simple = preg_replace( '/::?[a-z\-]+(?:\([^()]*\))?/', '', $simple );
+				$simple = trim( $simple );
+			}
 
 			if ( '' === $simple ) {
 				return true;
@@ -536,15 +535,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			if ( '.' === $simple[0] ) {
 				$class = substr( $simple, 1 );
-				if ( isset( $used['classes'][ $class ] ) ) {
-					return true;
-				}
-				foreach ( $used['classes'] as $used_class => $val ) {
-					if ( false !== strpos( $used_class, $class ) ) {
-						return true;
-					}
-				}
-				return false;
+				return isset( $used['classes'][ $class ] );
 			}
 
 			if ( '[' === $simple[0] ) {
@@ -558,7 +549,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return false;
 			}
 
-			$tag = preg_replace( '/[#.:\[]\.*/', '', $simple );
+			$tag = preg_replace( '/[.#:\[].*$/S', '', $simple );
 			$tag = trim( $tag );
 
 			if ( '' !== $tag && isset( $used['tags'][ $tag ] ) ) {
@@ -748,12 +739,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		public function delete_used_css( $url = null ): bool {
-			$fs = Util::init_filesystem();
-			if ( ! $fs ) {
-				return false;
-			}
-
 			if ( null !== $url ) {
+				$fs = Util::init_filesystem();
+				if ( ! $fs ) {
+					return false;
+				}
 				$file_path = $this->get_used_css_path( $url );
 				if ( $fs->exists( $file_path ) ) {
 					return $fs->delete( $file_path );
@@ -761,12 +751,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return true;
 			}
 
-			$used_css_dir = "{$this->cache_root_dir}/used-css";
-			if ( $fs->is_dir( $used_css_dir ) ) {
-				return $fs->delete( $used_css_dir, true );
-			}
-
-			return true;
+			return self::delete_all_used_css();
 		}
 
 		/**
@@ -781,8 +766,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return false;
 			}
 
-			$instance = new self();
-			$root     = $instance->cache_root_dir;
+			$root = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_ROOT_DIR );
 
 			if ( ! $fs->is_dir( $root ) ) {
 				return true;
@@ -839,24 +823,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$post_types = get_post_types( array( 'public' => true ), 'names' );
 			$post_types = array_diff( $post_types, array( 'attachment' ) );
 
-			$args = array(
-				'post_type'      => $post_types,
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-				'fields'         => 'ids',
-			);
+			$queued = 0;
+			$offset = 0;
+			$batch  = 200;
 
-			$post_ids = get_posts( $args );
-			$queued   = 0;
-
-			foreach ( $post_ids as $post_id ) {
-				as_enqueue_async_action(
-					'wppo_used_css_generate',
-					array( 'post_id' => $post_id ),
-					'performance_optimisation'
+			do {
+				$args = array(
+					'post_type'      => $post_types,
+					'post_status'    => 'publish',
+					'posts_per_page' => $batch,
+					'offset'         => $offset,
+					'fields'         => 'ids',
+					'orderby'        => 'ID',
+					'order'          => 'ASC',
 				);
-				++$queued;
-			}
+
+				$post_ids = get_posts( $args );
+				if ( empty( $post_ids ) ) {
+					break;
+				}
+
+				foreach ( $post_ids as $post_id ) {
+					as_enqueue_async_action(
+						'wppo_used_css_generate',
+						array( 'post_id' => $post_id ),
+						'performance_optimisation'
+					);
+					++$queued;
+				}
+
+				$offset   = $offset + $batch;
+				$has_more = count( $post_ids ) === $batch;
+			} while ( $has_more );
 
 			if ( $queued > 0 ) {
 				Log::add(
@@ -903,19 +901,72 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return;
 			}
 
-			$options  = get_option( 'wppo_settings', array() );
-			$used_css = new self( $options );
-
-			$css_assets = $used_css->get_all_css_assets();
+			$css_assets = self::extract_css_assets_from_html( $html );
 			if ( empty( $css_assets ) ) {
 				return;
 			}
 
+			$options    = get_option( 'wppo_settings', array() );
+			$used_css   = new self( $options );
 			$purged_css = $used_css->generate_used_css( $html, $css_assets );
 
 			if ( ! empty( $purged_css ) ) {
 				$used_css->save_used_css( $purged_css, $permalink );
 			}
+		}
+
+		/**
+		 * Extract CSS assets from HTML content by finding <link rel="stylesheet"> tags.
+		 *
+		 * @param string $html The HTML content.
+		 * @return array Array of CSS content strings keyed by md5 hash of URL.
+		 * @since 1.9.0
+		 */
+		private static function extract_css_assets_from_html( string $html ): array {
+			$assets = array();
+			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
+				return $assets;
+			}
+			$tags = new \WP_HTML_Tag_Processor( $html );
+			while ( $tags->next_tag( 'link' ) ) {
+				$rel = $tags->get_attribute( 'rel' );
+				if ( 'stylesheet' !== $rel ) {
+					continue;
+				}
+				$href = $tags->get_attribute( 'href' );
+				if ( ! $href ) {
+					continue;
+				}
+				$content = self::fetch_css_content_static( $href );
+				if ( false !== $content ) {
+					$assets[ md5( $href ) ] = $content;
+				}
+			}
+			return $assets;
+		}
+
+		/**
+		 * Fetch CSS content from a URL or local path (static version).
+		 *
+		 * @param string $url The CSS URL.
+		 * @return string|false CSS content or false on failure.
+		 * @since 1.9.0
+		 */
+		private static function fetch_css_content_static( string $url ) {
+			$local_path = Util::get_local_path( $url );
+			if ( '' !== $local_path ) {
+				$fs = Util::init_filesystem();
+				if ( $fs && $fs->exists( $local_path ) ) {
+					return $fs->get_contents( $local_path );
+				}
+			}
+
+			$response = wp_remote_get( $url, array( 'timeout' => 15 ) );
+			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+				return false;
+			}
+
+			return wp_remote_retrieve_body( $response );
 		}
 
 		/**
@@ -1003,20 +1054,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$this->save_used_css( $purged_css, $current_url );
 
-			$used_css_url = $this->get_used_css_url( $current_url ) . '?ver=' . time();
+			$used_css_path = $this->get_used_css_path( $current_url );
+			$used_css_url  = $this->get_used_css_url( $current_url );
+			$ver           = file_exists( $used_css_path ) ? filemtime( $used_css_path ) : time();
+			$used_css_url  = $used_css_url . '?ver=' . $ver;
 
-			$buffer = preg_replace(
-				'/<link[^>]*rel=[\'"]stylesheet[\'"][^>]*\/?>\s*/i',
-				'',
-				$buffer
-			);
+			// Only remove <link> tags for styles we have captured.
+			global $wp_styles;
+			if ( $wp_styles && ! empty( $wp_styles->queue ) ) {
+				foreach ( $wp_styles->queue as $handle ) {
+					if ( isset( $css_assets[ $handle ] ) && isset( $wp_styles->registered[ $handle ] ) ) {
+						$src = $wp_styles->registered[ $handle ]->src;
+						if ( ! empty( $src ) ) {
+							$quoted_src = preg_quote( $src, '/' );
+							$buffer     = preg_replace(
+								'/<link[^>]*rel=[\'"]stylesheet[\'"][^>]*href=[\'"]' . $quoted_src . '[\'"][^>]*\/?>\s*/i',
+								'',
+								$buffer
+							);
+						}
+					}
+				}
+			}
 
 			// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
 			$used_css_tag = '<link id="wppo-used-css" rel="stylesheet" href="' . esc_url( $used_css_url ) . '" media="all">';
 
 			$noscript_fallback = '';
 			foreach ( $css_assets as $handle => $content ) {
-				global $wp_styles;
 				if ( isset( $wp_styles->registered[ $handle ] ) ) {
 					$original_url = $wp_styles->registered[ $handle ]->src;
 					if ( ! empty( $original_url ) ) {

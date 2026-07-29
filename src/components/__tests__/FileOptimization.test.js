@@ -113,7 +113,7 @@ describe( 'FileOptimization Component', () => {
 		} );
 
 		expect( consoleSpy ).toHaveBeenCalledWith(
-			'Failed updating file optimisation settings',
+			'Failed to update settings.',
 			mockError
 		);
 
