@@ -309,6 +309,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								return false;
 							}
 						}
+
+						// Extract placeholder data from WebP source GD resource before cleanup.
+						if ( null !== $image && $image instanceof \GdImage ) {
+							$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
+							$dominant_color = $this->extract_dominant_color( $image );
+							$lqip           = $this->generate_lqip( $image );
+							$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+						}
+
+						// When $image is null (format is 'webp' and didn't enter the AVIF branch),
+						// create a temporary GD resource just for placeholder extraction.
+						if ( null === $image && ! $this->is_animated_webp( $source_image ) && function_exists( 'imagecreatefromwebp' ) ) {
+							$webp_gd = imagecreatefromwebp( $source_image );
+							if ( $webp_gd instanceof \GdImage ) {
+								$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
+								$dominant_color = $this->extract_dominant_color( $webp_gd );
+								$lqip           = $this->generate_lqip( $webp_gd );
+								$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+								// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated
+								imagedestroy( $webp_gd );
+							}
+						}
+
 						return true;
 					case IMAGETYPE_GIF:
 						if ( ! extension_loaded( 'imagick' ) ) {
@@ -361,6 +384,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								return false;
 							}
 
+							// Extract placeholder data from GIF via Imagick->GD conversion.
+							try {
+								$gif_gd = imagecreatefromstring( (string) $imagick->getImageBlob() );
+								if ( $gif_gd instanceof \GdImage ) {
+									$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
+									$dominant_color = $this->extract_dominant_color( $gif_gd );
+									$lqip           = $this->generate_lqip( $gif_gd );
+									$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+									// phpcs:ignore
+									imagedestroy( $gif_gd );
+								}
+							} catch ( \Exception $e ) {
+								Log::add( __( 'Failed to extract placeholder data from GIF image.', 'performance-optimisation' ) );
+								if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+									// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+									error_log( 'WPPO: Failed to extract placeholder data from GIF: ' . $e->getMessage() );
+								}
+							}
+
 							$imagick->clear();
 							return true;
 						} catch ( \Exception $e ) {
@@ -407,6 +449,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					} else {
 						$this->update_conversion_status( $source_image, 'completed', 'avif' );
 					}
+				}
+
+				// Extract placeholder data (dominant color + LQIP) whenever the source image
+				// was successfully decoded, independent of individual WebP/AVIF encode outcomes.
+				if ( null !== $image && $image instanceof \GdImage ) {
+					$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
+					$dominant_color = $this->extract_dominant_color( $image );
+					$lqip           = $this->generate_lqip( $image );
+					$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
 				}
 
 				if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
@@ -460,6 +511,220 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return $truecolor;
 			}
 			return $image;
+		}
+
+		/**
+		 * Extract dominant color from a GD image resource.
+		 *
+		 * Samples pixels at a reduced stride to compute the average color.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param \GdImage $image The GD image resource.
+		 * @return string Hex color string (e.g. '#aabbcc').
+		 */
+		private function extract_dominant_color( $image ): string {
+			if ( ! $image instanceof \GdImage ) {
+				return '#cfd4db';
+			}
+
+			$width  = imagesx( $image );
+			$height = imagesy( $image );
+			// Ensure a minimum number of samples (~500 pixels) for accuracy
+			// across both small and large non-square images.
+			$min_samples = 500;
+			$sample_rate = max( 1, (int) sqrt( ( $width * $height ) / $min_samples ) );
+			$total_r     = 0;
+			$total_g     = 0;
+			$total_b     = 0;
+			$pixel_count = 0;
+
+			// phpcs:ignore Generic.CodeAnalysis.JumbledIncrementer -- $sample_rate is a read-only step value, not a loop incrementer variable.
+			for ( $y = 0; $y < $height; $y += $sample_rate ) {
+				// phpcs:ignore Generic.CodeAnalysis.JumbledIncrementer
+				for ( $x = 0; $x < $width; $x += $sample_rate ) {
+					$rgb = imagecolorat( $image, $x, $y );
+					if ( false !== $rgb ) {
+						$total_r += ( $rgb >> 16 ) & 0xFF;
+						$total_g += ( $rgb >> 8 ) & 0xFF;
+						$total_b += $rgb & 0xFF;
+						++$pixel_count;
+					}
+				}
+			}
+
+			if ( 0 === $pixel_count ) {
+				return '#cfd4db';
+			}
+
+			$avg_r = round( $total_r / $pixel_count );
+			$avg_g = round( $total_g / $pixel_count );
+			$avg_b = round( $total_b / $pixel_count );
+
+			return sprintf( '#%02x%02x%02x', $avg_r, $avg_g, $avg_b );
+		}
+
+		/**
+		 * Generate a Low-Quality Image Placeholder (LQIP) from a GD image resource.
+		 *
+		 * Creates a 20x20 JPEG thumbnail and returns it as a base64 data URI.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param \GdImage $image The GD image resource.
+		 * @return string Base64-encoded data URI, or empty string on failure.
+		 */
+		private function generate_lqip( $image ): string {
+			if ( ! $image instanceof \GdImage || ! function_exists( 'imagecreatetruecolor' ) || ! function_exists( 'imagecopyresampled' ) || ! function_exists( 'imagejpeg' ) ) {
+				return '';
+			}
+
+			$orig_width  = imagesx( $image );
+			$orig_height = imagesy( $image );
+
+			if ( false === $orig_width || false === $orig_height || $orig_width < 1 || $orig_height < 1 ) {
+				return '';
+			}
+
+			$thumb_width  = 20;
+			$thumb_height = (int) round( $orig_height * ( $thumb_width / $orig_width ) );
+			if ( $thumb_height < 1 ) {
+				$thumb_height = 1;
+			}
+			// Cap height to prevent overly large LQIP data URIs.
+			$thumb_height = min( $thumb_height, 200 );
+
+			$thumb = imagecreatetruecolor( $thumb_width, $thumb_height );
+			if ( false === $thumb ) {
+				return '';
+			}
+
+			// Fill with white to avoid black background for transparent PNG/GIF sources.
+			$white = imagecolorallocate( $thumb, 255, 255, 255 );
+			imagefill( $thumb, 0, 0, $white );
+
+			imagecopyresampled( $thumb, $image, 0, 0, 0, 0, $thumb_width, $thumb_height, $orig_width, $orig_height );
+
+			if ( ! ob_start() ) {
+				// phpcs:ignore
+				imagedestroy( $thumb );
+				return '';
+			}
+			$success = imagejpeg( $thumb, null, 40 );
+			$data    = ob_get_clean();
+
+			if ( ! $success || false === $data ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO: Failed to generate LQIP thumbnail' );
+				}
+			}
+
+			// phpcs:ignore
+			imagedestroy( $thumb );
+
+			if ( ! $success || false === $data ) {
+				return '';
+			}
+
+			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+			return 'data:image/jpeg;base64,' . base64_encode( $data );
+		}
+
+		/**
+		 * Store dominant color and LQIP data for an image atomically via the
+		 * existing deferred-commit pattern (wppo_img_info).
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param string $rel_path       The relative image path (ABSPATH-stripped).
+		 * @param string $dominant_color Hex color string.
+		 * @param string $lqip           LQIP data URI (empty string if not generated).
+		 * @return void
+		 */
+		private function store_placeholder_data( string $rel_path, string $dominant_color, string $lqip ): void {
+			self::update_img_info_atomic(
+				function ( $img_info ) use ( $rel_path, $dominant_color, $lqip ) {
+					if ( ! isset( $img_info['dominant_color'] ) || ! is_array( $img_info['dominant_color'] ) ) {
+						$img_info['dominant_color'] = array();
+					}
+					if ( ! isset( $img_info['lqip'] ) || ! is_array( $img_info['lqip'] ) ) {
+						$img_info['lqip'] = array();
+					}
+
+					$img_info['dominant_color'][ $rel_path ] = $dominant_color;
+					if ( ! empty( $lqip ) ) {
+						$img_info['lqip'][ $rel_path ] = $lqip;
+					}
+
+					return $img_info;
+				}
+			);
+		}
+
+		/**
+		 * Get placeholder data (dominant_color, lqip) from the shared wppo_img_info option.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @return array{dominant_color: array<string, string>, lqip: array<string, string>}
+		 */
+		public static function get_placeholder_info(): array {
+			$info = self::get_img_info();
+			return array(
+				'dominant_color' => $info['dominant_color'] ?? array(),
+				'lqip'           => $info['lqip'] ?? array(),
+			);
+		}
+
+		/**
+		 * Clean up placeholder data (dominant_color, lqip) when an attachment is deleted.
+		 *
+		 * Removes entries for the main file AND all registered resized versions
+		 * from wppo_img_info.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param int $post_id The attachment ID.
+		 * @return void
+		 */
+		public static function clean_placeholder_on_delete( int $post_id ): void {
+			$file_path = get_attached_file( $post_id );
+			if ( ! $file_path ) {
+				return;
+			}
+			$rel_paths   = array();
+			$main_rel    = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file_path ) );
+			$rel_paths[] = $main_rel;
+
+			// Also clean up resized versions from attachment metadata.
+			$metadata = wp_get_attachment_metadata( $post_id );
+			if ( isset( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
+				$dir = dirname( $file_path );
+				foreach ( $metadata['sizes'] as $size_data ) {
+					if ( isset( $size_data['file'] ) ) {
+						$size_path   = wp_normalize_path( $dir . '/' . $size_data['file'] );
+						$size_rel    = str_replace( wp_normalize_path( ABSPATH ), '', $size_path );
+						$rel_paths[] = $size_rel;
+					}
+				}
+			}
+
+			// Read the latest state via get_img_info() which may include
+			// deferred-but-not-yet-committed entries from the current request.
+			$img_info = self::get_img_info();
+			$changed  = false;
+			foreach ( array( 'dominant_color', 'lqip' ) as $key ) {
+				foreach ( $rel_paths as $rel ) {
+					if ( isset( $img_info[ $key ][ $rel ] ) ) {
+						unset( $img_info[ $key ][ $rel ] );
+						$changed = true;
+					}
+				}
+			}
+			if ( $changed ) {
+				self::set_img_info( $img_info );
+			}
 		}
 
 		/**
@@ -945,6 +1210,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$deferred_items = self::$deferred_img_info[ $status ][ $type ] ?? array();
 
 						self::$deferred_img_info[ $status ][ $type ] = array_unique( array_merge( $live_items, $deferred_items ) );
+					}
+				}
+
+				// Merge placeholder data arrays (dominant_color, lqip) to prevent
+				// concurrent conversion jobs from overwriting each other's data.
+				foreach ( array( 'dominant_color', 'lqip' ) as $key ) {
+					$live_items     = $live_info[ $key ] ?? array();
+					$deferred_items = self::$deferred_img_info[ $key ] ?? array();
+					if ( is_array( $live_items ) && is_array( $deferred_items ) ) {
+						self::$deferred_img_info[ $key ] = array_merge( $live_items, $deferred_items );
 					}
 				}
 

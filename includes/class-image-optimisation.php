@@ -107,6 +107,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public function __construct( $options ) {
 			$this->options = $options;
 
+			// Backward compat: migrate replacePlaceholderWithSVG to placeholderType.
+			if ( ! isset( $this->options['image_optimisation']['placeholderType'] ) ) {
+				if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) ) {
+					$this->options['image_optimisation']['placeholderType'] = (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ? 'svg' : 'none';
+				} else {
+					$this->options['image_optimisation']['placeholderType'] = 'none';
+				}
+			}
+
 			$this->exclude_convert_imgs    = Util::process_urls( $this->options['image_optimisation']['excludeConvertImages'] ?? array() );
 			$this->preload_front_page_urls = Util::process_urls( $this->options['image_optimisation']['preloadFrontPageImagesUrls'] ?? array() );
 			$this->exclude_post_type_imgs  = Util::process_urls( $this->options['image_optimisation']['excludePostTypeImgUrl'] ?? array() );
@@ -134,6 +143,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ) );
 			}
+
+			// Clean up placeholder data when images are deleted.
+			add_action( 'delete_attachment', array( 'PerformanceOptimise\Inc\Img_Converter', 'clean_placeholder_on_delete' ) );
 		}
 
 		/**
@@ -158,35 +170,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Post-processes the serialized buffer to inject SVG base64 placeholders into lazy-loaded images
+		 * Post-processes the serialized buffer to inject placeholders into lazy-loaded images
 		 * that have data-src but no src attribute. Called after the WP_HTML_Tag_Processor pass.
 		 *
 		 * @since 2.5.0
 		 *
 		 * @param string $buffer                  The HTML buffer after WP_HTML_Tag_Processor serialization.
-		 * @param bool   $enable_svg_placeholder  Whether SVG placeholders are enabled.
+		 * @param bool   $enable_placeholder      Whether placeholders are enabled.
 		 * @return string The modified buffer.
 		 */
-		private function post_process_svg_placeholders( string $buffer, bool $enable_svg_placeholder ): string {
-			if ( ! $enable_svg_placeholder ) {
+		private function post_process_placeholders( string $buffer, bool $enable_placeholder ): string {
+			if ( ! $enable_placeholder ) {
 				return $buffer;
 			}
 
-			return preg_replace_callback(
-				'#<img\b[^>]*data-src=["\'][^"\']+["\'][^>]*>#i',
+			$result = preg_replace_callback(
+				'#<img\b[^>]*\sdata-src=["\']([^"\']+)["\'][^>]*>#i',
 				function ( $matches ) {
 					$img_tag = $matches[0];
 					if ( preg_match( '#\ssrc=#i', $img_tag ) ) {
 						return $img_tag;
 					}
-					$svg_src = $this->generate_svg_base64( $img_tag );
-					if ( ! empty( $svg_src ) ) {
-						return preg_replace( '#<img\b#i', '<img src="' . esc_attr( $svg_src ) . '"', $img_tag, 1 );
+					$data_src    = $matches[1];
+					$placeholder = $this->get_placeholder_src_for_image( $img_tag, $data_src );
+					if ( ! empty( $placeholder['src'] ) ) {
+						$extra_attrs = '';
+						foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
+							$extra_attrs .= ' ' . $attr_name . '="' . esc_attr( $attr_value ) . '"';
+						}
+						$replaced = preg_replace( '#<img\b#i', '<img src="' . esc_attr( $placeholder['src'] ) . '"' . $extra_attrs, $img_tag, 1 );
+						return null !== $replaced ? $replaced : $img_tag;
 					}
 					return $img_tag;
 				},
 				$buffer
 			);
+			return null !== $result ? $result : $buffer;
 		}
 
 		/**
@@ -199,7 +218,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function post_process_img_dimensions( string $buffer ): string {
 			return preg_replace_callback(
-				'#<img\b[^>]*data-src=["\']([^"\']+)["\'][^>]*>#i',
+				'#<img\b[^>]*\sdata-src=["\']([^"\']+)["\'][^>]*>#i',
 				function ( $matches ) {
 					$img_tag    = $matches[0];
 					$data_src   = $matches[1];
@@ -1008,16 +1027,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$tags->set_attribute( 'data-src', $original_src_decoded );
 
 							// WP_HTML_Tag_Processor blocks data: URIs in src for security.
-							// Use regex on the serialized HTML to swap src to the SVG placeholder.
-							if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
-								$new_placeholder_src = $this->generate_svg_base64( $img_tag );
-								if ( ! empty( $new_placeholder_src ) ) {
-									$img_tag = preg_replace(
+							// Use regex on the serialized HTML to swap src to the placeholder.
+							if ( 'none' !== $this->get_placeholder_type() ) {
+								$placeholder = $this->get_placeholder_src_for_image( $img_tag, $original_src_decoded );
+								if ( ! empty( $placeholder['src'] ) ) {
+									$serialized = $tags->get_updated_html();
+									$img_tag    = preg_replace(
 										'#(?<!data-)src=(["\'])[^"\']*\1#i',
-										'src="' . $new_placeholder_src . '"',
-										$tags->get_updated_html(),
+										'src="' . $placeholder['src'] . '"',
+										$serialized,
 										1
 									);
+									// Guard against null return from preg_replace (PCRE engine failure).
+									if ( null === $img_tag ) {
+										$img_tag = $serialized;
+									}
+									$tags = new \WP_HTML_Tag_Processor( $img_tag );
+									$tags->next_tag( array( 'tag_name' => 'img' ) );
+									// Add extra placeholder data attributes.
+									foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
+										$tags->set_attribute( $attr_name, $attr_value );
+									}
+									$img_tag = $tags->get_updated_html();
 									$tags    = new \WP_HTML_Tag_Processor( $img_tag );
 									$tags->next_tag( array( 'tag_name' => 'img' ) );
 								} else {
@@ -1141,25 +1172,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$img_tag = preg_replace( '#<img\b#i', '<img decoding="async"', $img_tag );
 						}
 					} else {
-						$img_tag = preg_replace_callback(
+						$replaced_tag = preg_replace_callback(
 							'#src=["\']([^"\']+)["\']#i',
 							function () use ( $original_src_decoded ) {
 								return 'data-src="' . esc_attr( $original_src_decoded ) . '"';
 							},
 							$img_tag
 						);
+						// Guard against null return from preg_replace_callback (PCRE engine failure).
+						if ( null !== $replaced_tag ) {
+							$img_tag = $replaced_tag;
+						}
 
-						// Replace with SVG placeholder if the option is enabled.
-						if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
-							$new_src = $this->generate_svg_base64( $img_tag );
-							if ( ! empty( $new_src ) ) {
-								$img_tag = preg_replace_callback(
+						// Replace with placeholder if the option is enabled.
+						if ( 'none' !== $this->get_placeholder_type() ) {
+							$placeholder = $this->get_placeholder_src_for_image( $img_tag, $original_src_decoded );
+							if ( ! empty( $placeholder['src'] ) ) {
+								$replaced_placeholder = preg_replace_callback(
 									'#<img\b([^>]*)#i',
-									function ( $matches ) use ( $new_src ) {
-										return '<img src="' . esc_attr( $new_src ) . '"' . $matches[1];
+									function ( $matches ) use ( $placeholder ) {
+										$extra_attrs = '';
+										foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
+											$extra_attrs .= ' ' . $attr_name . '="' . esc_attr( $attr_value ) . '"';
+										}
+										return '<img src="' . esc_attr( $placeholder['src'] ) . '"' . $extra_attrs . $matches[1];
 									},
 									$img_tag
 								);
+								if ( null !== $replaced_placeholder ) {
+									$img_tag = $replaced_placeholder;
+								}
 							}
 						}
 
@@ -1426,16 +1468,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$tags_check = new \WP_HTML_Tag_Processor( $img_tag );
 
 						if ( $tags_check->next_tag( array( 'tag_name' => 'img' ) ) && null !== $tags_check->get_attribute( 'data-src' ) ) {
-							if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
-								$tags_write = new \WP_HTML_Tag_Processor( $img_tag );
-								if ( $tags_write->next_tag( array( 'tag_name' => 'img' ) ) && null === $tags_write->get_attribute( 'src' ) ) {
-									$svg_src = $this->generate_svg_base64( $img_tag );
-									if ( ! empty( $svg_src ) ) {
-										$updated_tags = new \WP_HTML_Tag_Processor( $updated_html );
-										if ( $updated_tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
-											$updated_tags->set_attribute( 'src', $svg_src );
-											return $updated_tags->get_updated_html();
+							if ( 'none' !== $this->get_placeholder_type() ) {
+								$original_src = $tags_check->get_attribute( 'data-src' ) ?? '';
+								$placeholder  = $this->get_placeholder_src_for_image( $img_tag, htmlspecialchars_decode( $original_src, ENT_QUOTES ) );
+								if ( ! empty( $placeholder['src'] ) ) {
+									$updated_tags = new \WP_HTML_Tag_Processor( $updated_html );
+									if ( $updated_tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+										$updated_tags->set_attribute( 'src', $placeholder['src'] );
+										foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
+											$updated_tags->set_attribute( $attr_name, $attr_value );
 										}
+										return $updated_tags->get_updated_html();
 									}
 								}
 							}
@@ -1507,16 +1550,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$tags_check = new \WP_HTML_Tag_Processor( $img_tag );
 
 					if ( $tags_check->next_tag( array( 'tag_name' => 'img' ) ) && null !== $tags_check->get_attribute( 'data-src' ) ) {
-						// Already lazy-loaded — only inject SVG placeholder if src is missing.
-						if (
-							isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) &&
-							(bool) $this->options['image_optimisation']['replacePlaceholderWithSVG']
-						) {
-							$tags_write = new \WP_HTML_Tag_Processor( $img_tag );
-							if ( $tags_write->next_tag( array( 'tag_name' => 'img' ) ) && null === $tags_write->get_attribute( 'src' ) ) {
-								$svg_src = $this->generate_svg_base64( $img_tag );
-								if ( ! empty( $svg_src ) ) {
-									$tags_write->set_attribute( 'src', $svg_src );
+						// Already lazy-loaded — only inject placeholder if src is missing.
+						if ( 'none' !== $this->get_placeholder_type() ) {
+							$original_src = $tags_check->get_attribute( 'data-src' ) ?? '';
+							$placeholder  = $this->get_placeholder_src_for_image( $img_tag, htmlspecialchars_decode( $original_src, ENT_QUOTES ) );
+							if ( ! empty( $placeholder['src'] ) ) {
+								$tags_write = new \WP_HTML_Tag_Processor( $img_tag );
+								if ( $tags_write->next_tag( array( 'tag_name' => 'img' ) ) && null === $tags_write->get_attribute( 'src' ) ) {
+									$tags_write->set_attribute( 'src', $placeholder['src'] );
+									foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
+										$tags_write->set_attribute( $attr_name, $attr_value );
+									}
 									return str_replace( $img_tag, $tags_write->get_updated_html(), $matches[0] );
 								}
 							}
@@ -1648,8 +1692,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				$img_counter = 0;
 
-				$use_native_lazy        = ! empty( $image_optimisation['lazyLoadNative'] );
-				$enable_svg_placeholder = ! empty( $image_optimisation['replacePlaceholderWithSVG'] );
+				$use_native_lazy    = ! empty( $image_optimisation['lazyLoadNative'] );
+				$enable_placeholder = 'none' !== ( $image_optimisation['placeholderType'] ?? 'none' );
 
 				if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
 					$wppo_tags = new \WP_HTML_Tag_Processor( $buffer );
@@ -1751,7 +1795,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					$buffer = $wppo_tags->get_updated_html();
 
-					$buffer = $this->post_process_svg_placeholders( $buffer, $enable_svg_placeholder );
+					$buffer = $this->post_process_placeholders( $buffer, $enable_placeholder );
 					$buffer = $this->post_process_img_dimensions( $buffer );
 
 					if ( class_exists( 'WP_HTML_Processor' ) ) {
@@ -1811,9 +1855,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.0.0
 		 *
 		 * @param string $img_attributes The image's attributes (including width and height).
+		 * @param string $color          Optional hex fill color. Default '#cfd4db'.
 		 * @return string The base64-encoded SVG.
 		 */
-		private function generate_svg_base64( $img_attributes ) {
+		private function generate_svg_base64( $img_attributes, $color = '#cfd4db' ) {
 			// Match both quoted (width="59") and unquoted (width=59) attribute formats.
 			preg_match( '/\bwidth=["\']?(\d+)["\']?/i', $img_attributes, $width_matches );
 			preg_match( '/\bheight=["\']?(\d+)["\']?/i', $img_attributes, $height_matches );
@@ -1821,11 +1866,98 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$width  = isset( $width_matches[1] ) ? absint( $width_matches[1] ) : 100;
 			$height = isset( $height_matches[1] ) ? absint( $height_matches[1] ) : 100;
 
-			$svg_content = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '"><rect width="100%" height="100%" fill="#cfd4db" /></svg>';
+			$svg_content = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '"><rect width="100%" height="100%" fill="' . esc_attr( $color ) . '" /></svg>';
 
 			// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
 			return 'data:image/svg+xml;base64,' . base64_encode( $svg_content );
 			// phpcs:enable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+		}
+
+		/**
+		 * Get the current placeholder type.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @return string One of 'none', 'svg', 'dominant_color', 'lqip'.
+		 */
+		private function get_placeholder_type(): string {
+			$type    = $this->options['image_optimisation']['placeholderType'] ?? 'none';
+			$allowed = array( 'none', 'svg', 'dominant_color', 'lqip' );
+			return in_array( $type, $allowed, true ) ? $type : 'none';
+		}
+
+		/**
+		 * Get the appropriate placeholder src and extra attributes for a lazy-loaded image.
+		 *
+		 * Looks up stored placeholder data (dominant color, LQIP) from Img_Converter's
+		 * image info by resolving the data-src URL to a local path.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param string $img_tag  The <img> tag HTML.
+		 * @param string $data_src The data-src URL of the image.
+		 * @return array{src: string, attrs: array<string, string>} Placeholder src and extra attributes.
+		 */
+		private function get_placeholder_src_for_image( string $img_tag, string $data_src ): array {
+			static $placeholder_cache = null;
+			static $path_cache        = array();
+
+			$result = array(
+				'src'   => '',
+				'attrs' => array(),
+			);
+
+			$placeholder_type = $this->get_placeholder_type();
+
+			if ( 'none' === $placeholder_type ) {
+				return $result;
+			}
+
+			// Resolve data-src to a local path key for looking up placeholder data.
+			$rel_path = '';
+			if ( ! isset( $path_cache[ $data_src ] ) ) {
+				$local_path = Util::get_local_path( $data_src );
+				if ( ! empty( $local_path ) ) {
+					$path_cache[ $data_src ] = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $local_path ) );
+				} else {
+					$path_cache[ $data_src ] = '';
+				}
+			}
+			$rel_path = $path_cache[ $data_src ];
+
+			// Load placeholder data from the shared wppo_img_info option.
+			if ( null === $placeholder_cache ) {
+				$placeholder_cache = Img_Converter::get_placeholder_info();
+			}
+
+			if ( 'svg' === $placeholder_type ) {
+				$result['src'] = $this->generate_svg_base64( $img_tag );
+				return $result;
+			}
+
+			if ( 'dominant_color' === $placeholder_type ) {
+				$dominant_color = $placeholder_cache['dominant_color'][ $rel_path ] ?? '';
+				if ( ! empty( $dominant_color ) && preg_match( '/^#[a-f0-9]{6}$/i', $dominant_color ) ) {
+					$result['src']                               = 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221%22%20height%3D%221%22%2F%3E';
+					$result['attrs']['data-wppo-dominant-color'] = $dominant_color;
+				} else {
+					$result['src'] = $this->generate_svg_base64( $img_tag );
+				}
+				return $result;
+			}
+
+			if ( 'lqip' === $placeholder_type ) {
+				$lqip = $placeholder_cache['lqip'][ $rel_path ] ?? '';
+				if ( ! empty( $lqip ) ) {
+					$result['src']                     = $lqip;
+					$result['attrs']['data-wppo-lqip'] = '1';
+				} else {
+					$result['src'] = $this->generate_svg_base64( $img_tag );
+				}
+				return $result;
+			}
+
+			return $result;
 		}
 
 		/**

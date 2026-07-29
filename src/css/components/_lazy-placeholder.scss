@@ -1,0 +1,16 @@
+.wppo-lqip-active {
+	--wppo-lqip-blur: 20px;
+	--wppo-lqip-scale: 1.05;
+	filter: blur(var(--wppo-lqip-blur));
+	transform: scale(var(--wppo-lqip-scale));
+}
+
+.wppo-lqip-loaded {
+	--wppo-lqip-loaded-blur: 0;
+	--wppo-lqip-loaded-scale: 1;
+	--wppo-lqip-transition-duration: 0.4s;
+	--wppo-lqip-transition-easing: ease-out;
+	filter: blur(var(--wppo-lqip-loaded-blur));
+	transform: scale(var(--wppo-lqip-loaded-scale));
+	transition: filter var(--wppo-lqip-transition-duration) var(--wppo-lqip-transition-easing), transform var(--wppo-lqip-transition-duration) var(--wppo-lqip-transition-easing);
+}

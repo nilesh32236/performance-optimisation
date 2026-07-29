@@ -30,7 +30,6 @@ const ImageOptimization = ( { options = {} } ) => {
 		convertImg: false,
 		conversionFormat: 'webp',
 		excludeConvertImages: '',
-		replacePlaceholderWithSVG: false,
 		preloadFrontPageImages: false,
 		preloadFrontPageImagesUrls: '',
 		preloadPostTypeImage: false,
@@ -40,6 +39,9 @@ const ImageOptimization = ( { options = {} } ) => {
 		maxWidthImgSize: 0,
 		excludeSize: '',
 		...options,
+		placeholderType:
+			options.placeholderType ||
+			( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
 	};
 
 	const [ settings, setSettings ] = useState( defaultSettings );
@@ -226,21 +228,116 @@ const ImageOptimization = ( { options = {} } ) => {
 									checked={ settings.lazyLoadNative }
 									onChange={ handleChange( setSettings ) }
 								/>
-								<SwitchField
-									label={ __(
-										'SVG Placeholders',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Replace the image src with a lightweight inline SVG blur placeholder while the real image loads. Prevents layout shift and gives a smooth loading experience.',
-										'performance-optimisation'
-									) }
-									name="replacePlaceholderWithSVG"
-									checked={
-										settings.replacePlaceholderWithSVG
-									}
-									onChange={ handleChange( setSettings ) }
-								/>
+								<div className="wppo-field">
+									<label
+										className="wppo-field-label"
+										htmlFor="placeholderType"
+									>
+										{ wppoSettings?.translations
+											?.placeholderType ||
+											__(
+												'Placeholder Type',
+												'performance-optimisation'
+											) }
+									</label>
+									<select
+										className="wppo-select"
+										id="placeholderType"
+										name="placeholderType"
+										value={ settings.placeholderType }
+										onChange={ handleChange( setSettings ) }
+									>
+										<option value="none">
+											{ wppoSettings?.translations
+												?.placeholderNone ||
+												__(
+													'None',
+													'performance-optimisation'
+												) }
+										</option>
+										<option value="svg">
+											{ wppoSettings?.translations
+												?.placeholderSvg ||
+												__(
+													'SVG Placeholder (Lightweight)',
+													'performance-optimisation'
+												) }
+										</option>
+										<option value="dominant_color">
+											{ wppoSettings?.translations
+												?.placeholderDominantColor ||
+												__(
+													'Dominant Color (Extracted from Image)',
+													'performance-optimisation'
+												) }
+										</option>
+										<option value="lqip">
+											{ wppoSettings?.translations
+												?.placeholderLqip ||
+												__(
+													'LQIP (Blur Preview)',
+													'performance-optimisation'
+												) }
+										</option>
+									</select>
+									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+										<strong>None:</strong>{ ' ' }
+										{ wppoSettings?.translations
+											?.placeholderNoneDesc ||
+											__(
+												'The src attribute is removed until the image is in view.',
+												'performance-optimisation'
+											) }
+										<br />
+										<strong>
+											{ wppoSettings?.translations
+												?.placeholderSvgLabel ||
+												__(
+													'SVG',
+													'performance-optimisation'
+												) }
+											:
+										</strong>{ ' ' }
+										{ wppoSettings?.translations
+											?.placeholderSvgDesc ||
+											__(
+												'Lightweight inline SVG while the real image loads. Prevents layout shift.',
+												'performance-optimisation'
+											) }
+										<br />
+										<strong>
+											{ wppoSettings?.translations
+												?.placeholderDominantColorLabel ||
+												__(
+													'Dominant Color',
+													'performance-optimisation'
+												) }
+											:
+										</strong>{ ' ' }
+										{ wppoSettings?.translations
+											?.placeholderDominantColorDesc ||
+											__(
+												'Extracted during image conversion. Smooth background-color fade transition.',
+												'performance-optimisation'
+											) }
+										<br />
+										<strong>
+											{ wppoSettings?.translations
+												?.placeholderLqipLabel ||
+												__(
+													'LQIP',
+													'performance-optimisation'
+												) }
+											:
+										</strong>{ ' ' }
+										{ wppoSettings?.translations
+											?.placeholderLqipDesc ||
+											__(
+												'20×20 blurred preview. Images must be re-optimized for LQIP to take effect.',
+												'performance-optimisation'
+											) }
+									</p>
+								</div>
 							</div>
 						) }
 

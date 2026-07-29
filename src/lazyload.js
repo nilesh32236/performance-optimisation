@@ -227,6 +227,50 @@ let mutationObserver = null;
 const observedElements = new WeakSet();
 
 /**
+ * Apply placeholder styling (dominant color background / LQIP blur) before
+ * the full image source is assigned. Called from both the IntersectionObserver
+ * and scroll-fallback paths.
+ *
+ * @since 3.0.0
+ * @param {Element} el The IMG element to prepare.
+ */
+const applyPlaceholderBeforeLoad = ( el ) => {
+	if ( el.hasAttribute( 'data-wppo-dominant-color' ) ) {
+		el.style.backgroundColor = el.getAttribute(
+			'data-wppo-dominant-color'
+		);
+	}
+	if ( el.hasAttribute( 'data-wppo-lqip' ) ) {
+		el.classList.add( 'wppo-lqip-active' );
+	}
+};
+
+/**
+ * Create a self-removing load event handler that cleans up placeholder
+ * styling after the real image has loaded.
+ *
+ * @since 3.0.0
+ * @param {Element} el The IMG element.
+ * @return {Function} The load event handler.
+ */
+const makePlaceholderLoadHandler = ( el ) => {
+	const handler = () => {
+		el.removeEventListener( 'load', handler );
+		if ( el.hasAttribute( 'data-wppo-dominant-color' ) ) {
+			el.style.transition = 'background-color 0.4s ease-out';
+			el.style.backgroundColor = 'transparent';
+			el.removeAttribute( 'data-wppo-dominant-color' );
+		}
+		if ( el.classList.contains( 'wppo-lqip-active' ) ) {
+			el.classList.remove( 'wppo-lqip-active' );
+			el.classList.add( 'wppo-lqip-loaded' );
+			el.removeAttribute( 'data-wppo-lqip' );
+		}
+	};
+	return handler;
+};
+
+/**
  * Check if all lazy-loadable elements have been processed, and clean up observers if so.
  */
 const checkCleanup = () => {
@@ -345,6 +389,14 @@ const loadImages = () => {
 										}
 									} );
 								}
+
+								// Apply placeholder styling before the full image loads.
+								applyPlaceholderBeforeLoad( el );
+
+								// Register handler BEFORE setting src to avoid missing cached-image load events.
+								const onImgLoad =
+									makePlaceholderLoadHandler( el );
+								el.addEventListener( 'load', onImgLoad );
 
 								if ( el.hasAttribute( 'data-sizes' ) ) {
 									el.sizes = el.getAttribute( 'data-sizes' );
@@ -507,6 +559,14 @@ const loadImages = () => {
 							}
 							el.classList.remove( 'wppo-lazy-video' );
 						} else {
+							// Apply placeholder styling before the full image loads.
+							applyPlaceholderBeforeLoad( el );
+
+							// Register handler BEFORE setting src to avoid missing cached-image load events.
+							const onImgLoadFallback =
+								makePlaceholderLoadHandler( el );
+							el.addEventListener( 'load', onImgLoadFallback );
+
 							if ( el.hasAttribute( 'data-sizes' ) ) {
 								el.sizes = el.getAttribute( 'data-sizes' );
 								el.removeAttribute( 'data-sizes' );
