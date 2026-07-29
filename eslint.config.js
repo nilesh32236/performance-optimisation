@@ -5,19 +5,28 @@ const config = [
 
 	...wpPlugin.configs?.[ 'test-unit' ]?.map( ( c ) => ( {
 		...c,
-		files: [ '**/@(test|__tests__)/**/*.js', '**/?(*.)test.js' ],
+		files: [
+			'**/@(test|__tests__)/**/*.{js,jsx}',
+			'**/?(*.)test.{js,jsx}',
+		],
 	} ) ) ?? [],
 
 	{
-		files: [ '**/@(test|__tests__)/**/*.js', '**/?(*.)test.js' ],
+		files: [
+			'**/@(test|__tests__)/**/*.{js,jsx}',
+			'**/?(*.)test.{js,jsx}',
+		],
 		rules: {
 			'no-console': [ 'error', { allow: [ 'error', 'warn' ] } ],
 		},
 	},
 
 	{
-		files: [ '**/*.js' ],
-		ignores: [ '**/@(test|__tests__)/**/*.js', '**/?(*.)test.js' ],
+		files: [ '**/*.{js,jsx}' ],
+		ignores: [
+			'**/@(test|__tests__)/**/*.{js,jsx}',
+			'**/?(*.)test.{js,jsx}',
+		],
 		languageOptions: {
 			globals: {
 				wppoSettings: 'readonly',
@@ -36,9 +45,8 @@ const config = [
 		},
 	},
 
-	// setupFiles (like setupTests.js) run in Jest environment.
 	{
-		files: [ 'src/setupTests.js' ],
+		files: [ 'src/setupTests.{js,jsx}' ],
 		languageOptions: {
 			globals: {
 				jest: 'readonly',
