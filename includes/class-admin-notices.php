@@ -73,6 +73,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				delete_transient( 'wppo_activation_notices' );
 			}
 
+			if ( 'review_done' === $key ) {
+				update_option( 'wppo_review_dismissed', 1 );
+			}
+
+			if ( 'review_snooze' === $key ) {
+				update_option( 'wppo_review_snoozed_until', time() + ( 30 * DAY_IN_SECONDS ) );
+			}
+
 			wp_safe_redirect( remove_query_arg( array( 'wppo_dismiss', '_wpnonce' ) ) );
 			exit;
 		}
@@ -90,6 +98,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$this->maybe_welcome_notice();
 			$this->maybe_activation_notices();
 			$this->maybe_competing_plugins_notice();
+			$this->maybe_review_notice();
 		}
 
 		/**
@@ -197,6 +206,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			echo '<div class="notice notice-info is-dismissible"><p>';
 			echo esc_html__( 'You have another page caching plugin active:', 'performance-optimisation' ) . ' ' . esc_html( $names ) . '. ';
 			echo esc_html__( 'Running multiple full-page cache solutions can cause conflicts. Consider using only one.', 'performance-optimisation' );
+			echo '</p></div>';
+		}
+
+		/**
+		 * Display a gentle review request prompt after 7 days of active plugin use.
+		 *
+		 * @return void
+		 */
+		private function maybe_review_notice(): void {
+			if ( ! is_admin() || ! current_user_can( 'manage_options' ) ) {
+				return;
+			}
+
+			if ( get_option( 'wppo_review_dismissed' ) ) {
+				return;
+			}
+
+			$snoozed_until = (int) get_option( 'wppo_review_snoozed_until', 0 );
+			if ( $snoozed_until > time() ) {
+				return;
+			}
+
+			$activation_time = get_option( 'wppo_activation_time' );
+			if ( false === $activation_time ) {
+				update_option( 'wppo_activation_time', time() );
+				return;
+			}
+
+			if ( ( time() - (int) $activation_time ) < ( 7 * DAY_IN_SECONDS ) ) {
+				return;
+			}
+
+			$review_url = 'https://wordpress.org/support/plugin/performance-optimisation/reviews/#new-post';
+
+			$dismiss_done_url = wp_nonce_url(
+				add_query_arg( 'wppo_dismiss', 'review_done' ),
+				'wppo_dismiss_notice',
+				'_wpnonce'
+			);
+
+			$dismiss_snooze_url = wp_nonce_url(
+				add_query_arg( 'wppo_dismiss', 'review_snooze' ),
+				'wppo_dismiss_notice',
+				'_wpnonce'
+			);
+
+			echo '<div class="notice notice-info is-dismissible wppo-review-notice"><p><strong>';
+			echo esc_html__( 'Enjoying Performance Optimisation?', 'performance-optimisation' );
+			echo '</strong> ';
+			echo esc_html__( 'A quick review helps other WordPress users discover it.', 'performance-optimisation' );
+			echo '</p><p>';
+			echo '<a href="' . esc_url( $review_url ) . '" target="_blank" rel="noopener noreferrer" class="button button-primary">' . esc_html__( 'Leave a Review', 'performance-optimisation' ) . '</a> ';
+			echo '<a href="' . esc_url( $dismiss_done_url ) . '" class="button button-secondary">' . esc_html__( 'Already did', 'performance-optimisation' ) . '</a> ';
+			echo '<a href="' . esc_url( $dismiss_snooze_url ) . '" class="button button-secondary">' . esc_html__( 'Not now', 'performance-optimisation' ) . '</a>';
 			echo '</p></div>';
 		}
 

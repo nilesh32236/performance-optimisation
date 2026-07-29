@@ -60,6 +60,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			set_transient( 'wppo_show_welcome_notice', 1, WEEK_IN_SECONDS );
 
+			if ( ! get_option( 'wppo_activation_time' ) ) {
+				update_option( 'wppo_activation_time', time() );
+			}
+
 			$options             = get_option( 'wppo_settings', array() );
 			$enable_server_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
 
