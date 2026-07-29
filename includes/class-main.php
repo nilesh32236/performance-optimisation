@@ -385,6 +385,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				Cache::flush_runtime();
 			}
 
+			// Bump image info salt when image settings change.
+			$old_img = $old_value['image_optimisation'] ?? array();
+			$new_img = $value['image_optimisation'] ?? array();
+			if ( $old_img !== $new_img ) {
+				Img_Converter::invalidate_img_info_cache();
+			}
+
+			// Bump audit salt when performance audit settings change.
+			$old_audit = $old_value['performance_audit'] ?? array();
+			$new_audit = $value['performance_audit'] ?? array();
+			if ( $old_audit !== $new_audit ) {
+				Telemetry::invalidate_audit_cache();
+			}
+
 			// Handle .htaccess rules update.
 			$old_enable = isset( $old_value['file_optimisation']['enableServerRules'] ) ? (bool) $old_value['file_optimisation']['enableServerRules'] : false;
 			$new_enable = isset( $value['file_optimisation']['enableServerRules'] ) ? (bool) $value['file_optimisation']['enableServerRules'] : false;
