@@ -658,9 +658,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return array<string,int> Associative array mapping cleanup type to its current count.
 		 */
 		public static function get_counts() {
-			$cached = get_transient( 'wppo_db_cleanup_counts' );
-			if ( false !== $cached ) {
-				return $cached;
+			$salt_key = 'wppo_db_cleanup_salt';
+
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				$cached = wp_cache_get_salted( 'wppo_db_cleanup_counts', 'wppo', $salt_key );
+				if ( false !== $cached ) {
+					return $cached;
+				}
+			} else {
+				$cached = get_transient( 'wppo_db_cleanup_counts' );
+				if ( false !== $cached ) {
+					return $cached;
+				}
 			}
 
 			global $wpdb;
@@ -705,7 +714,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			);
 			// phpcs:enable
 
-			set_transient( 'wppo_db_cleanup_counts', $counts, 5 * MINUTE_IN_SECONDS );
+			if ( function_exists( 'wp_cache_set_salted' ) ) {
+				wp_cache_set_salted( 'wppo_db_cleanup_counts', $counts, 'wppo', $salt_key );
+			} else {
+				set_transient( 'wppo_db_cleanup_counts', $counts, 5 * MINUTE_IN_SECONDS );
+			}
 			return $counts;
 		}
 
@@ -722,8 +735,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			if ( false === $res ) {
 				return new WP_Error( 'db_cleanup_failed', __( 'Database cleanup failed.', 'performance-optimisation' ) );
 			}
-			delete_transient( 'wppo_db_cleanup_counts' );
+			self::invalidate_counts_cache();
 			return $res;
+		}
+
+		/**
+		 * Invalidate the DB cleanup counts cache by incrementing the salt or deleting the transient.
+		 *
+		 * @since 2.5.0
+		 * @return void
+		 */
+		public static function invalidate_counts_cache(): void {
+			$salt_key = 'wppo_db_cleanup_salt';
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				$salt = (int) get_option( $salt_key, 0 ) + 1;
+				update_option( $salt_key, $salt, false );
+			} else {
+				delete_transient( 'wppo_db_cleanup_counts' );
+			}
+		}
+
+		/**
+		 * Callback for save_post/deleted_post to invalidate DB cleanup counts for public post types.
+		 *
+		 * @param int           $post_id Post ID.
+		 * @param \WP_Post|null $post    Post object (provided by deleted_post).
+		 * @since 2.5.0
+		 * @return void
+		 */
+		public static function on_post_change( $post_id, $post = null ): void {
+			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+				return;
+			}
+			$post_type = $post ? $post->post_type : get_post_type( $post_id );
+			if ( $post_type && is_post_type_viewable( $post_type ) ) {
+				self::invalidate_counts_cache();
+			}
 		}
 	}
 }
