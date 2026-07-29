@@ -563,6 +563,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
+			// Exclude RSS feeds and XML sitemaps.
+			if ( function_exists( 'is_feed' ) && is_feed() ) {
+				return true;
+			}
+			if ( preg_match( '/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i', $local_url_path ) ) {
+				return true;
+			}
+
+			// Exclude WooCommerce cart, checkout, and account pages.
+			if ( function_exists( 'is_cart' ) && is_cart() ) {
+				return true;
+			}
+			if ( function_exists( 'is_checkout' ) && is_checkout() ) {
+				return true;
+			}
+			if ( function_exists( 'is_account_page' ) && is_account_page() ) {
+				return true;
+			}
+			if ( preg_match( '#^(?:/)?(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path ) ) {
+				return true;
+			}
+
+			// Exclude if active WooCommerce cart session cookies exist.
+			if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) || ! empty( $_COOKIE['woocommerce_cart_hash'] ) ) {
+				return true;
+			}
+
 			$path_info = pathinfo( $local_url_path, PATHINFO_EXTENSION );
 			return is_404() || ! empty( $path_info );
 		}

@@ -134,6 +134,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
+			'if ( isset( $_COOKIE[\'woocommerce_items_in_cart\'] ) || isset( $_COOKIE[\'woocommerce_cart_hash\'] ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
+			'if ( preg_match( \'#^(?:/)?(?:cart|checkout|my-account)(?:/|$)\#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'if ( \'/\' !== substr( $request_uri, -1 ) ) {' . PHP_EOL .
 			'	$request_uri .= \'/\';' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
