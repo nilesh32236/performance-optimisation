@@ -64,9 +64,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private array $exclude_delay_js = array();
 
 		/**
-		 * List of script handles that have been deferred.
+		 * Associative array of deferred script handles (keyed by handle for O(1) lookups).
 		 *
-		 * @var   array
+		 * @var   array<string, bool>
 		 * @since 2.4.0
 		 */
 		private array $deferred_handles = array();
@@ -861,7 +861,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			foreach ( $wp_scripts->queue as $handle ) {
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
 					wp_script_add_data( $handle, 'strategy', 'defer' );
-					$this->deferred_handles[] = $handle;
+					$this->deferred_handles[ $handle ] = true;
 					wp_script_add_data( $handle, 'fetchpriority', 'low' );
 				}
 			}
@@ -906,7 +906,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified script tag with fetchpriority="low".
 		 */
 		public function add_fetchpriority_to_deferred( $tag, $handle ): string {
-			if ( in_array( $handle, $this->deferred_handles, true ) ) {
+			if ( isset( $this->deferred_handles[ $handle ] ) && false === strpos( $tag, 'fetchpriority=' ) ) {
 				$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 			}
 			return $tag;
