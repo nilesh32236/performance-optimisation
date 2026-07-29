@@ -48,6 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 			'open_object_cache_tab',
 			'open_image_optimization_tab',
 			'open_file_optimization_tab',
+			'open_ccss_settings',
 			'enable_server_rules',
 			'open_preload_tab',
 			'no_action_required',
@@ -167,7 +168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 				$suggestions[] = self::make_score(
 					'render_blocking_resources',
 					$rbs,
-					'open_file_optimization_tab',
+					'open_ccss_settings',
 					'Render-Blocking Resources'
 				);
 			}
@@ -189,7 +190,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 				$suggestions[] = self::make_score(
 					'unused_css',
 					$ucss,
-					'open_file_optimization_tab',
+					'open_ccss_settings',
 					'Unused CSS'
 				);
 			}

@@ -2,6 +2,12 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [1.8.1] - 2026-07-29
+
+### Changed
+
+- **WordPress 7.0 Compatibility:** Updated "Tested up to" to WordPress 7.0.
+
 ## [1.8.0] - 2026-07-28
 
 ### Added

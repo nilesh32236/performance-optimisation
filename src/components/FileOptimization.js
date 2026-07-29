@@ -19,11 +19,15 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 
+import CriticalCssPanel from './CriticalCssPanel';
+
 const FileOptimization = ( {
 	options = {},
 	serverRules = null,
 	serverRulesError = false,
+	ccssStatus = {},
 	onRetryServerRules,
+	onCcssRefresh,
 } ) => {
 	const [ activeSubTab, setActiveSubTab ] = useState( 'assets' );
 	const tabRefs = useRef( {} );
@@ -45,6 +49,7 @@ const FileOptimization = ( {
 		excludeUrlToKeepJSCSS: '',
 		removeCssJsHandle: '',
 		enableServerRules: false,
+		criticalCSS: false,
 		cdnURL: '',
 		removeUnusedCSS: false,
 		excludeUnusedCSS: '',
@@ -94,6 +99,17 @@ const FileOptimization = ( {
 			} );
 		} finally {
 			setIsLoading( false );
+		}
+	};
+
+	const handleRegenerateCss = async () => {
+		try {
+			await apiCall( 'regenerate_ccss' );
+			if ( onCcssRefresh ) {
+				onCcssRefresh();
+			}
+		} catch ( err ) {
+			console.error( 'Failed to regenerate CCSS', err );
 		}
 	};
 
@@ -390,6 +406,25 @@ const FileOptimization = ( {
 											) }
 										/>
 									</div>
+								) }
+								<SwitchField
+									label={ __(
+										'Critical CSS',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Generate and inline above-the-fold CSS, then defer full stylesheets. Improves FCP and LCP by eliminating render-blocking CSS.',
+										'performance-optimisation'
+									) }
+									name="criticalCSS"
+									checked={ settings.criticalCSS }
+									onChange={ handleChange( setSettings ) }
+								/>
+								{ settings.criticalCSS && (
+									<CriticalCssPanel
+										status={ ccssStatus }
+										onRegenerate={ handleRegenerateCss }
+									/>
 								) }
 							</div>
 						</FeatureCard>

@@ -35,6 +35,7 @@ const FIX_ACTION_TAB_MAP = {
 	open_object_cache_tab: 'objectCache',
 	open_image_optimization_tab: 'imageOptimization',
 	open_file_optimization_tab: 'fileOptimization',
+	open_ccss_settings: 'fileOptimization',
 	enable_server_rules: 'fileOptimization',
 	open_preload_tab: 'preload',
 	no_action_required: null,

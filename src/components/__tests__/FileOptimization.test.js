@@ -293,4 +293,96 @@ describe( 'FileOptimization Component', () => {
 			screen.getByText( 'server { listen 80; }' )
 		).toBeInTheDocument();
 	} );
+
+	it( 'renders Critical CSS switch in the assets tab', () => {
+		render(
+			<FileOptimization
+				options={ { criticalCSS: false } }
+				serverRules={ {} }
+			/>
+		);
+
+		expect( screen.getByLabelText( /Critical CSS/i ) ).toBeInTheDocument();
+		expect( screen.getByLabelText( /Critical CSS/i ) ).not.toBeChecked();
+	} );
+
+	it( 'shows CriticalCssPanel when Critical CSS is enabled', () => {
+		render(
+			<FileOptimization
+				options={ { criticalCSS: true } }
+				serverRules={ {} }
+				ccssStatus={ {} }
+			/>
+		);
+
+		expect(
+			screen.getByText( /Critical CSS Status/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole( 'button', { name: /Regenerate All/i } )
+		).toBeInTheDocument();
+	} );
+
+	it( 'toggles Critical CSS switch to show/hide panel', () => {
+		render(
+			<FileOptimization
+				options={ { criticalCSS: false } }
+				serverRules={ {} }
+				ccssStatus={ {} }
+			/>
+		);
+
+		expect(
+			screen.queryByText( /Critical CSS Status/i )
+		).not.toBeInTheDocument();
+
+		const criticalCssSwitch = screen.getByLabelText( /Critical CSS/i );
+		fireEvent.click( criticalCssSwitch );
+
+		expect(
+			screen.getByText( /Critical CSS Status/i )
+		).toBeInTheDocument();
+	} );
+
+	it( 'calls apiCall when Regenerate All is clicked', async () => {
+		apiCall.mockResolvedValueOnce( { success: true } );
+
+		render(
+			<FileOptimization
+				options={ { criticalCSS: true } }
+				serverRules={ {} }
+				ccssStatus={ { test_hash: { status: 'none', label: 'Test' } } }
+				onCcssRefresh={ jest.fn() }
+			/>
+		);
+
+		const regenerateButton = screen.getByRole( 'button', {
+			name: /Regenerate All/i,
+		} );
+		fireEvent.click( regenerateButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'regenerate_ccss' );
+		} );
+
+		expect( apiCall ).toHaveBeenCalledTimes( 1 );
+	} );
+
+	it( 'displays template label from ccssStatus object', () => {
+		render(
+			<FileOptimization
+				options={ { criticalCSS: true } }
+				serverRules={ {} }
+				ccssStatus={ {
+					abc123: { status: 'ready', label: 'Home' },
+					def456: { status: 'none', label: 'Single Post' },
+				} }
+			/>
+		);
+
+		expect( screen.getByText( 'Home' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Single Post' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Generated' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Not Generated' ) ).toBeInTheDocument();
+	} );
 } );
