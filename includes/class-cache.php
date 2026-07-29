@@ -112,6 +112,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private $image_optimisation;
 
 		/**
+		 * Google_Fonts instance for buffer-level font interception.
+		 *
+		 * @var Google_Fonts|null
+		 * @since 2.7.0
+		 */
+		private $google_fonts;
+
+		/**
 		 * Constructor to initialize cache settings and configurations.
 		 *
 		 * @param array $options Plugin options (optional). When empty, loaded from DB.
@@ -177,6 +185,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		public function set_image_optimisation( Image_Optimisation $image_optimisation ): void {
 			$this->image_optimisation = $image_optimisation;
+		}
+
+		/**
+		 * Set the Google_Fonts instance to reuse instead of creating a new one.
+		 *
+		 * @param Google_Fonts $google_fonts The existing instance.
+		 * @return void
+		 * @since 2.7.0
+		 */
+		public function set_google_fonts( Google_Fonts $google_fonts ): void {
+			$this->google_fonts = $google_fonts;
 		}
 
 		/**
@@ -403,7 +422,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Host Google Fonts locally via buffer-level interception.
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
-				$buffer = ( new Google_Fonts( $this->options ) )->process_buffer( $buffer );
+				$google_fonts = $this->google_fonts ? $this->google_fonts : new Google_Fonts( $this->options );
+				$buffer       = $google_fonts->process_buffer( $buffer );
 			}
 
 			$file_opts         = $this->options['file_optimisation'] ?? array();
@@ -964,7 +984,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			Used_CSS::delete_all_used_css();
-			Google_Fonts::clear_font_cache();
 
 			return $res1 && $res2;
 		}

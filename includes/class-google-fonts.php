@@ -248,7 +248,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		}
 
 		/**
-		 * Normalize a Google Fonts URL — convert v1 API (css?) to v2 (css2?) format.
+		 * Normalize a Google Fonts URL.
+		 *
+		 * For v1 API URLs (/css), keeps the original URL to avoid format conversion
+		 * issues with weight/style syntax. For v2 (/css2), returns as-is.
 		 *
 		 * @param string $url The raw URL.
 		 * @return string Normalized URL or empty string if not a Google Fonts URL.
@@ -259,32 +262,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return '';
 			}
 
-			// Already css2 format.
+			// Already css2 format — return as-is.
 			if ( false !== strpos( $url, '/css2' ) ) {
 				return $url;
 			}
 
-			// Convert v1 css?family=... to css2?family=... preserving query params.
-			$parsed = wp_parse_url( $url );
-			if ( false === $parsed ) {
-				return $url;
-			}
-
-			$path   = $parsed['path'] ?? '';
-			$query  = $parsed['query'] ?? '';
-			$scheme = $parsed['scheme'] ?? 'https';
-			$host   = $parsed['host'] ?? 'fonts.googleapis.com';
-			$path   = '/css2';
-
-			$query_params = array();
-			parse_str( $query, $query_params );
-
-			// Rename 'family' to 'family' (it's the same in v2, but v2 uses ?family=).
-			// Google's css2 API uses the same 'family' parameter.
-			if ( ! empty( $query_params ) ) {
-				return $scheme . '://' . $host . $path . '?' . http_build_query( $query_params, '', '&', PHP_QUERY_RFC3986 );
-			}
-
+			// For v1 URLs, keep using the /css endpoint with the same URL to avoid
+			// format conversion issues (v1 uses ':weight' syntax which differs from
+			// v2's '@' syntax).
 			return $url;
 		}
 
@@ -297,22 +282,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @since 2.7.0
 		 */
 		private function download_font_file( $url, $dest ) {
+			$tmp = $dest . '.tmp.' . wp_rand();
+
 			$response = wp_remote_get(
 				$url,
 				array(
 					'timeout'    => 30,
 					'user-agent' => self::CHROME_UA,
 					'stream'     => true,
-					'filename'   => $dest,
+					'filename'   => $tmp,
 				)
 			);
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
-				// Clean up partial download.
-				if ( file_exists( $dest ) ) {
-					wp_delete_file( $dest );
+				if ( file_exists( $tmp ) ) {
+					wp_delete_file( $tmp );
 				}
 				return false;
+			}
+
+			$result = rename( $tmp, $dest ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
+			if ( ! $result && file_exists( $tmp ) ) {
+				wp_delete_file( $tmp );
 			}
 
 			return file_exists( $dest );

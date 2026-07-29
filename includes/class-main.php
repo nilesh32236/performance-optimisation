@@ -96,6 +96,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private Image_Optimisation $image_optimisation;
 
 		/**
+		 * Google_Fonts instance for hosting Google Fonts locally.
+		 *
+		 * @var   Google_Fonts
+		 * @since 2.7.0
+		 */
+		private Google_Fonts $google_fonts;
+
+		/**
 		 * Options for performance optimisation settings.
 		 *
 		 * @var   array
@@ -138,6 +146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$this->includes();
 			$this->image_optimisation = new Image_Optimisation( $this->options );
+			$this->google_fonts       = new Google_Fonts( $this->options );
 			$this->setup_hooks();
 			$this->filesystem = Util::init_filesystem();
 			if ( ! $this->filesystem ) {
@@ -237,6 +246,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $this->options['cache']['enableCache'] ) ) {
 				$this->cache = new Cache( $this->options );
 				$this->cache->set_image_optimisation( $this->image_optimisation );
+				$this->cache->set_google_fonts( $this->google_fonts );
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
@@ -267,6 +277,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! $this->cache ) {
 					$this->cache = new Cache( $this->options );
 					$this->cache->set_image_optimisation( $this->image_optimisation );
+					$this->cache->set_google_fonts( $this->google_fonts );
 				}
 				add_action( 'wp_enqueue_scripts', array( $this->cache, 'combine_css' ), PHP_INT_MAX );
 			}
@@ -294,8 +305,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
-				$google_fonts = new Google_Fonts( $this->options );
-				add_filter( 'style_loader_tag', array( $google_fonts, 'process_style_tag' ), 9, 3 );
+				add_filter( 'style_loader_tag', array( $this->google_fonts, 'process_style_tag' ), 9, 3 );
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {

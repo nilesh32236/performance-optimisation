@@ -466,7 +466,10 @@ describe( 'FileOptimization Component', () => {
 	} );
 
 	it( 'submits hostGoogleFontsLocally setting correctly', async () => {
-		apiCall.mockResolvedValueOnce( { success: true } );
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
 
 		render(
 			<FileOptimization
