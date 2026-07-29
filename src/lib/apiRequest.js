@@ -88,6 +88,9 @@ export const apiCall = async ( action, body, method = 'POST', signal ) => {
 			return handleResponse( retryResponse, true );
 		}
 
+		// Mutates the global wppoSettings.settings so all components reading from it
+		// (e.g. WelcomePanel.STEPS.isEnabled) reflect the new state without re-rendering.
+		// This is an implicit coupling — the global serves as a shared reactive store.
 		if ( 'update_settings' === action && data.success && data.data ) {
 			wppoSettings.settings = Object.freeze( data.data );
 		}

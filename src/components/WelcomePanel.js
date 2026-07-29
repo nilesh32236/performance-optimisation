@@ -1,5 +1,5 @@
 import { useState } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { apiCall } from '../lib/apiRequest';
 import FeatureCard from './common/FeatureCard';
 
@@ -56,25 +56,27 @@ const WelcomePanel = () => {
 	const [ visible, setVisible ] = useState(
 		wppoSettings?.show_welcome ?? false
 	);
+	const [ activatingStep, setActivatingStep ] = useState( null );
 
 	if ( ! visible ) {
 		return null;
 	}
 
 	const handleStepAction = async ( step ) => {
+		setActivatingStep( step.key );
 		try {
 			await apiCall( 'update_settings', {
 				tab: step.settings.tab,
 				settings: step.settings.payload,
 			} );
+			setVisible( false );
+			apiCall( 'dismiss_welcome' ).catch( ( error ) => {
+				console.error( 'Welcome dismiss failed:', error );
+			} );
 		} catch ( error ) {
 			console.error( 'Welcome panel action failed:', error );
-		}
-		setVisible( false );
-		try {
-			await apiCall( 'dismiss_welcome' );
-		} catch ( error ) {
-			console.error( 'Welcome dismiss failed:', error );
+		} finally {
+			setActivatingStep( null );
 		}
 	};
 
@@ -161,14 +163,28 @@ const WelcomePanel = () => {
 									<button
 										type="button"
 										className="wppo-button wppo-button--primary"
+										disabled={ activatingStep === step.key }
+										aria-label={ sprintf(
+											/* translators: %s: feature name */
+											__(
+												'Enable %s',
+												'performance-optimisation'
+											),
+											step.label
+										) }
 										onClick={ () =>
 											handleStepAction( step )
 										}
 									>
-										{ __(
-											'Enable',
-											'performance-optimisation'
-										) }
+										{ activatingStep === step.key
+											? __(
+													'Enabling…',
+													'performance-optimisation'
+											  )
+											: __(
+													'Enable',
+													'performance-optimisation'
+											  ) }
 									</button>
 								) }
 							</div>

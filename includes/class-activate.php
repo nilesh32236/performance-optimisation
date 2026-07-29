@@ -58,8 +58,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				delete_transient( 'wppo_activation_notices' );
 			}
 
-			set_transient( 'wppo_show_welcome_notice', 1, WEEK_IN_SECONDS );
-
 			if ( ! get_option( 'wppo_activation_time' ) ) {
 				update_option( 'wppo_activation_time', time() );
 			}
