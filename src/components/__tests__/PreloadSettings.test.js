@@ -203,4 +203,67 @@ describe( 'PreloadSettings Component', () => {
 
 		consoleSpy.mockRestore();
 	} );
+
+	it( 'renders speculative loading fields correctly when hidden by default', () => {
+		render( <PreloadSettings /> );
+
+		expect(
+			screen.getByLabelText( /Enable Speculative Loading/i )
+		).toBeInTheDocument();
+		expect(
+			screen.queryByLabelText( /Speculation Mode/i )
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByLabelText( /Eagerness/i )
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'reveals speculation mode and eagerness when speculative loading is enabled', () => {
+		render( <PreloadSettings /> );
+
+		fireEvent.click(
+			screen.getByLabelText( /Enable Speculative Loading/i )
+		);
+
+		expect(
+			screen.getByLabelText( /Speculation Mode/i )
+		).toBeInTheDocument();
+		expect( screen.getByLabelText( /Eagerness/i ) ).toBeInTheDocument();
+	} );
+
+	it( 'submits speculation settings in the payload', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render( <PreloadSettings /> );
+
+		fireEvent.click(
+			screen.getByLabelText( /Enable Speculative Loading/i )
+		);
+
+		const modeSelect = screen.getByLabelText( /Speculation Mode/i );
+		fireEvent.change( modeSelect, { target: { value: 'prefetch' } } );
+
+		const eagernessSelect = screen.getByLabelText( /Eagerness/i );
+		fireEvent.change( eagernessSelect, {
+			target: { value: 'eager' },
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Settings/i } )
+		);
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'preload_settings',
+				settings: expect.objectContaining( {
+					enableSpeculationRules: true,
+					speculationMode: 'prefetch',
+					speculationEagerness: 'eager',
+				} ),
+			} );
+		} );
+	} );
 } );

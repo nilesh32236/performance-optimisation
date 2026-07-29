@@ -9,6 +9,7 @@ import {
 	faHourglassStart,
 	faLink,
 	faFont,
+	faRocket,
 } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
@@ -25,6 +26,9 @@ const PreloadSettings = ( { options = {} } ) => {
 		preloadFontsUrls: '',
 		preloadCSS: false,
 		preloadCSSUrls: '',
+		enableSpeculationRules: false,
+		speculationMode: 'prerender',
+		speculationEagerness: 'moderate',
 		...options,
 	};
 
@@ -377,6 +381,102 @@ const PreloadSettings = ( { options = {} } ) => {
 								</div>
 							) }
 						</div>
+					</div>
+				</FeatureCard>
+
+				<FeatureCard
+					title={ __(
+						'Speculative Loading',
+						'performance-optimisation'
+					) }
+					icon={ <FontAwesomeIcon icon={ faRocket } /> }
+				>
+					<div className="wppo-field-group">
+						<SwitchField
+							label={ __(
+								'Enable Speculative Loading',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'When enabled, browsers may prerender or prefetch linked pages before navigation for near-instant load times.',
+								'performance-optimisation'
+							) }
+							name="enableSpeculationRules"
+							checked={ settings.enableSpeculationRules }
+							onChange={ handleChange( setSettings ) }
+						/>
+						{ settings.enableSpeculationRules && (
+							<>
+								<div className="wppo-field">
+									<label
+										className="wppo-field-label"
+										htmlFor="speculationMode"
+									>
+										{ __(
+											'Speculation Mode',
+											'performance-optimisation'
+										) }
+									</label>
+									<select
+										className="wppo-select"
+										id="speculationMode"
+										name="speculationMode"
+										value={ settings.speculationMode }
+										onChange={ handleChange( setSettings ) }
+									>
+										<option value="prefetch">
+											{ __(
+												'Prefetch (faster navigation, lower resource usage)',
+												'performance-optimisation'
+											) }
+										</option>
+										<option value="prerender">
+											{ __(
+												'Prerender (instant navigation, higher resource usage)',
+												'performance-optimisation'
+											) }
+										</option>
+									</select>
+								</div>
+								<div className="wppo-field">
+									<label
+										className="wppo-field-label"
+										htmlFor="speculationEagerness"
+									>
+										{ __(
+											'Eagerness',
+											'performance-optimisation'
+										) }
+									</label>
+									<select
+										className="wppo-select"
+										id="speculationEagerness"
+										name="speculationEagerness"
+										value={ settings.speculationEagerness }
+										onChange={ handleChange( setSettings ) }
+									>
+										<option value="conservative">
+											{ __(
+												'Conservative (only on hover/touch)',
+												'performance-optimisation'
+											) }
+										</option>
+										<option value="moderate">
+											{ __(
+												'Moderate (on hover + nearby links)',
+												'performance-optimisation'
+											) }
+										</option>
+										<option value="eager">
+											{ __(
+												'Eager (immediately on page load)',
+												'performance-optimisation'
+											) }
+										</option>
+									</select>
+								</div>
+							</>
+						) }
 					</div>
 				</FeatureCard>
 			</form>
