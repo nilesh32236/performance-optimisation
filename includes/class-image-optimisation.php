@@ -848,8 +848,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					// Skip base64 images to avoid rewriting them.
 					if ( ! preg_match( '#^data:image/#i', $original_src_decoded ) ) {
-						if ( $use_native_lazy ) {
-							// Native lazy loading: add loading="lazy" and decoding="async" instead of data-src swapping.
+						if ( $use_native_lazy || 'lazy' === $tags->get_attribute( 'loading' ) ) {
+							// Native lazy loading or pre-existing core loading="lazy": preserve loading="lazy" and decoding="async" instead of data-src swapping.
 							if ( null === $tags->get_attribute( 'loading' ) ) {
 								$tags->set_attribute( 'loading', 'lazy' );
 							}
@@ -985,7 +985,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						return $img_tag;
 					}
 
-					if ( $use_native_lazy ) {
+					if ( $use_native_lazy || 1 === preg_match( '/\bloading=["\']lazy["\']/i', $img_tag ) ) {
 						if ( false === stripos( $img_tag, 'loading=' ) ) {
 							$img_tag = preg_replace( '#<img\b#i', '<img loading="lazy"', $img_tag );
 						}
