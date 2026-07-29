@@ -99,7 +99,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 					} );
 					dispatched = true;
 				}
-			} catch ( _err ) {
+			} catch {
 				dispatched = false;
 			}
 		}
@@ -159,7 +159,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			let decodedPath;
 			try {
 				decodedPath = decodeURIComponent( path );
-			} catch ( _e ) {
+			} catch {
 				decodedPath = '';
 			}
 			if (

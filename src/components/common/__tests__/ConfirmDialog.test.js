@@ -103,6 +103,11 @@ describe( 'ConfirmDialog', () => {
 			code: 'Tab',
 			shiftKey: true,
 		} );
+
+		expect(
+			screen.getByRole( 'button', { name: 'Cancel' } )
+		).toBeInTheDocument();
+		expect( onCancel ).not.toHaveBeenCalled();
 	} );
 
 	it( 'handles tab key logic with no shift correctly', async () => {
@@ -124,6 +129,9 @@ describe( 'ConfirmDialog', () => {
 			code: 'Tab',
 			shiftKey: false,
 		} );
+
+		expect( screen.getByRole( 'dialog' ) ).toBeInTheDocument();
+		expect( onCancel ).not.toHaveBeenCalled();
 	} );
 
 	it( 'renders correctly when isOpen is true', () => {

@@ -15,8 +15,9 @@
 	"devDependencies": {
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/react": "^16.3.2",
+		"@wordpress/components": "^29.0.0",
 		"@wordpress/i18n": "^6.20.0",
-		"@wordpress/scripts": "^30.7.0"
+		"@wordpress/scripts": "^33.0.0"
 	},
 	"dependencies": {
 		"@fortawesome/free-solid-svg-icons": "^6.7.1",

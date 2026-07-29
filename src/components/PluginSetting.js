@@ -288,7 +288,7 @@ const PluginSetting = ( { options } ) => {
 							setIsImporting( false );
 						}
 					} );
-			} catch ( _error ) {
+			} catch {
 				if ( cancelledRef.current ) {
 					return;
 				}
