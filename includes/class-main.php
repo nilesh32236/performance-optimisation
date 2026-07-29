@@ -178,6 +178,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-abilities.php';
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
@@ -303,6 +304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			new Metabox();
 			new Cron();
 			new Asset_Manager();
+			new Abilities();
 
 			// Register Action Scheduler callback for background image processing.
 			add_action( 'wppo_convert_image_background', array( $this, 'process_background_image' ), 10, 1 );
