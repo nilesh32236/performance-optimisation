@@ -262,10 +262,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			if ( ! empty( $this->options['image_optimisation']['disableCoreAutoSizes'] ) && function_exists( 'wp_img_tag_add_auto_sizes' ) ) {
-				add_filter( 'wp_img_tag_add_auto_sizes', '__return_false' );
-			}
-
 			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
 
 			new Metabox();
