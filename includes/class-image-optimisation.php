@@ -158,7 +158,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Post-processes the serialized buffer to inject SVG placeholders into lazy-loaded images.
+		 * Post-processes the serialized buffer to inject SVG base64 placeholders into lazy-loaded images
+		 * that have data-src but no src attribute. Called after the WP_HTML_Tag_Processor pass.
 		 *
 		 * @since 2.5.0
 		 *
@@ -245,49 +246,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified buffer.
 		 */
 		private function process_picture_blocks_processor( string $buffer, int $img_counter, int $exclude_img_count, array $exclude_imgs ): string {
-			$max_iterations = 100;
-			$iteration      = 0;
-
-			while ( $iteration < $max_iterations ) {
-				++$iteration;
-				$pic_processor = new \WP_HTML_Processor( $buffer );
-				$found         = false;
-
-				if ( ! $pic_processor->next_tag( array( 'tag_name' => 'PICTURE' ) ) ) {
-					break;
-				}
-
-				$found      = true;
-				$pic_marker = 'wppo_pic_' . uniqid( '', true );
-				$pic_processor->set_attribute( 'data-wppo-pic-marker', $pic_marker );
-
-				$marked_buffer = $pic_processor->get_updated_html();
-
-				$pic_pattern = '/<picture\b[^>]*?data-wppo-pic-marker="' . preg_quote( $pic_marker, '/' ) . '"[^>]*>.*?<\/picture>/is';
-				if ( preg_match( $pic_pattern, $marked_buffer, $pic_match ) ) {
-					$full_picture  = $pic_match[0];
-					$clean_picture = str_replace( ' data-wppo-pic-marker="' . $pic_marker . '"', '', $full_picture );
-
-					preg_match( '#<picture\b[^>]*>.*?</picture>#is', $clean_picture, $pic_matches );
-					if ( ! empty( $pic_matches ) ) {
-						preg_match( '#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i', $clean_picture, $img_matches );
-						if ( ! empty( $img_matches ) ) {
-							++$img_counter;
-							if ( $exclude_img_count >= $img_counter ) {
-								$exclude_imgs[] = $img_matches[2];
-							}
-							$processed = $this->process_picture_tag( $pic_matches, $img_matches[0], $img_matches[2], $exclude_imgs );
-							$buffer    = str_replace( $full_picture, $processed, $buffer );
+			return preg_replace_callback(
+				'#<picture\b[^>]*>.*?</picture>#is',
+				function ( $matches ) use ( $img_counter, $exclude_img_count, $exclude_imgs ) {
+					preg_match( '#<img\b[^>]*?(?:data-)?src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches );
+					if ( ! empty( $img_matches ) ) {
+						++$img_counter;
+						if ( $exclude_img_count >= $img_counter ) {
+							$exclude_imgs[] = $img_matches[1];
 						}
+						return $this->process_picture_tag( $matches, $img_matches[0], $img_matches[1], $exclude_imgs );
 					}
-				}
-
-				if ( ! $found ) {
-					break;
-				}
-			}
-
-			return $buffer;
+					return $matches[0];
+				},
+				$buffer
+			);
 		}
 
 		/**
@@ -304,14 +277,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function process_picture_blocks_regex( string $buffer, int $img_counter, int $exclude_img_count, array $exclude_imgs ): string {
 			return preg_replace_callback(
 				'#<picture\b[^>]*>.*?</picture>#is',
-				function ( $matches ) use ( &$img_counter, $exclude_img_count, &$exclude_imgs ) {
-					preg_match( '#<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches );
+				function ( $matches ) use ( $img_counter, $exclude_img_count, $exclude_imgs ) {
+					preg_match( '#<img\b[^>]*?(?:data-)?src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches );
 					if ( ! empty( $img_matches ) ) {
 						++$img_counter;
 						if ( $exclude_img_count >= $img_counter ) {
-							$exclude_imgs[] = $img_matches[2];
+							$exclude_imgs[] = $img_matches[1];
 						}
-						return $this->process_picture_tag( $matches, $img_matches[0], $img_matches[2], $exclude_imgs );
+						return $this->process_picture_tag( $matches, $img_matches[0], $img_matches[1], $exclude_imgs );
 					}
 					return $matches[0];
 				},
