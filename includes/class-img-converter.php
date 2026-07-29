@@ -101,7 +101,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			$this->format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
 
-			// If WP 6.7+ natively generates next-gen formats, skip plugin's own WebP conversion.
+			// If WP 6.7+ natively generates next-gen formats, skip plugin's own conversion.
 			if ( self::core_handles_next_gen() ) {
 				if ( 'webp' === $this->format ) {
 					$this->format = 'none';
@@ -159,13 +159,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// Resolve default quality using core API when available (WP 6.7+).
 			if ( -1 === $quality && function_exists( 'wp_image_quality' ) ) {
-				$mime = 'image/webp';
-				if ( 'avif' === $format ) {
-					$mime = 'image/avif';
-				} elseif ( 'both' === $format ) {
-					$mime = 'image/avif';
+				if ( 'both' === $format ) {
+					$avif_quality = (int) wp_image_quality( 'image/avif' );
+					$webp_quality = (int) wp_image_quality( 'image/webp' );
+				} else {
+					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
+					$quality = (int) wp_image_quality( $mime );
 				}
-				$quality = (int) wp_image_quality( $mime );
 			}
 			if ( -1 === $quality ) {
 				$quality = 82;
@@ -273,7 +273,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								$avif_path = $this->get_img_path( $source_image, 'avif' );
 								Util::prepare_cache_dir( dirname( $avif_path ) );
 
-								if ( imageavif( $image, $avif_path, $quality ) ) {
+								if ( imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
 									$this->update_conversion_status( $source_image, 'completed', 'avif' );
 								} else {
 									$this->update_conversion_status( $source_image, 'failed', $format );
@@ -322,12 +322,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 							// If transparent, use lossless compression for WebP to retain transparency.
 							if ( $has_transparency ) {
-								$imagick->setImageCompressionQuality( $quality );
+								$imagick->setImageCompressionQuality( $webp_quality ?? $quality );
 								$imagick->setImageAlphaChannel( \Imagick::ALPHACHANNEL_ACTIVATE );
 								$imagick->setOption( 'webp:lossless', 'true' );
 							} else {
 								// For non-transparent images, use lossy compression.
-								$imagick->setImageCompressionQuality( $quality );
+								$imagick->setImageCompressionQuality( $webp_quality ?? $quality );
 								$imagick->setOption( 'webp:lossless', 'false' );
 							}
 
@@ -361,7 +361,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					$webp_path = $this->get_img_path( $source_image, 'webp' );
 
 					if ( ! file_exists( $webp_path ) ) {
-						if ( ! function_exists( 'imagewebp' ) || ! Util::prepare_cache_dir( dirname( $webp_path ) ) || ! imagewebp( $image, $webp_path, $quality ) ) {
+						if ( ! function_exists( 'imagewebp' ) || ! Util::prepare_cache_dir( dirname( $webp_path ) ) || ! imagewebp( $image, $webp_path, $webp_quality ?? $quality ) ) {
 							$success = false;
 							$this->update_conversion_status( $source_image, 'failed', 'webp' );
 						} else {
@@ -377,7 +377,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 					if ( ! file_exists( $avif_path ) ) {
 						Util::prepare_cache_dir( dirname( $avif_path ) );
-						if ( ! function_exists( 'imageavif' ) || ! imageavif( $image, $avif_path, $quality ) ) {
+						if ( ! function_exists( 'imageavif' ) || ! imageavif( $image, $avif_path, $avif_quality ?? $quality ) ) {
 							$success = false;
 							$this->update_conversion_status( $source_image, 'failed', 'avif' );
 						} else {
