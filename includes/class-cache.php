@@ -452,21 +452,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Process the buffer by minifying it and saving cache files.
-		 *
-		 * @param string $buffer The content to be processed, potentially containing HTML.
-		 * @param string $file_path The path to the file being processed.
-		 * @return string The processed and minified buffer content.
-		 *
-		 * @since 1.0.0
-		 */
-		private function process_buffer( $buffer, $file_path ) {
-			$buffer = $this->process_buffer_only( $buffer );
-			$this->save_cache_files( $buffer, $file_path );
-			return $buffer;
-		}
-
-		/**
 		 * Rewrite local asset URLs in HTML to use the configured CDN for wp-content and wp-includes resources.
 		 *
 		 * Scans img, script, link, source, and video tags and replaces attribute values that start with the site URL
