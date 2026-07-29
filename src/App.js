@@ -1,4 +1,11 @@
-import { useState, useEffect, useRef, useMemo } from '@wordpress/element';
+import {
+	useState,
+	useEffect,
+	useRef,
+	useMemo,
+	lazy,
+	Suspense,
+} from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faTachometerAlt,
@@ -11,18 +18,62 @@ import {
 	faTimes,
 	faServer,
 	faBolt,
+	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
-import FileOptimization from './components/FileOptimization';
-import PreloadSettings from './components/PreloadSettings';
-import ImageOptimization from './components/ImageOptimization';
-import PluginSettings from './components/PluginSetting';
-import Dashboard from './components/Dashboard';
-import DatabaseCleanup from './components/DatabaseCleanup';
-import ObjectCache from './components/ObjectCache';
 import { fetchRecentActivities, fetchServerRules } from './lib/apiRequest';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 import { __ } from '@wordpress/i18n';
+
+const Dashboard = lazy( () =>
+	import( /* webpackChunkName: "tab-dashboard" */ './components/Dashboard' )
+);
+const FileOptimization = lazy( () =>
+	import(
+		/* webpackChunkName: "tab-file-optimization" */ './components/FileOptimization'
+	)
+);
+const PreloadSettings = lazy( () =>
+	import(
+		/* webpackChunkName: "tab-preload-settings" */ './components/PreloadSettings'
+	)
+);
+const ImageOptimization = lazy( () =>
+	import(
+		/* webpackChunkName: "tab-image-optimization" */ './components/ImageOptimization'
+	)
+);
+const DatabaseCleanup = lazy( () =>
+	import(
+		/* webpackChunkName: "tab-database-cleanup" */ './components/DatabaseCleanup'
+	)
+);
+const ObjectCache = lazy( () =>
+	import(
+		/* webpackChunkName: "tab-object-cache" */ './components/ObjectCache'
+	)
+);
+const PluginSettings = lazy( () =>
+	import(
+		/* webpackChunkName: "tab-plugin-setting" */ './components/PluginSetting'
+	)
+);
+
+const TabFallback = () => (
+	<div
+		className="wppo-loading-placeholder"
+		style={ {
+			minHeight: '200px',
+			display: 'flex',
+			alignItems: 'center',
+			justifyContent: 'center',
+			gap: '8px',
+		} }
+	>
+		<FontAwesomeIcon icon={ faSpinner } spin />
+		<span>{ __( 'Loading…', 'performance-optimisation' ) }</span>
+	</div>
+);
 
 const SIDEBAR_BREAKPOINT = 992;
 
@@ -114,7 +165,13 @@ const App = () => {
 			tools: <PluginSettings options={ settings } />,
 		};
 
-		return components[ activeTab ] || components.dashboard;
+		const activeComponent = components[ activeTab ] || components.dashboard;
+
+		return (
+			<Suspense fallback={ <TabFallback /> }>
+				{ activeComponent }
+			</Suspense>
+		);
 	};
 
 	const toggleMobileMenu = () =>
