@@ -1122,9 +1122,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed <picture> or <img> HTML fragment (or the original fragment if unchanged).
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
+			$should_exclude = false;
+			foreach ( $exclude_imgs as $exclude_img ) {
+				if ( false !== strpos( $original_src, $exclude_img ) ) {
+					$should_exclude = true;
+					break;
+				}
+			}
+
 			if ( class_exists( 'WP_HTML_Processor' ) ) {
 				$wpp = new \WP_HTML_Processor( $matches[0] );
-				if ( null === $wpp->get_last_error() && preg_match( '#<picture\b[^>]*>.*?</picture>#is', $matches[0] ) && $wpp->next_tag( array( 'tag_name' => 'picture' ) ) ) {
+				if ( null === $wpp->get_last_error() && $wpp->next_tag( array( 'tag_name' => 'picture' ) ) ) {
 					$depth = $wpp->get_current_depth();
 
 					// First pass: collect srcset/sizes from inner <img>.
@@ -1146,15 +1154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					// Second pass: modify <source> attributes.
 					$wpp = new \WP_HTML_Processor( $matches[0] );
 					$wpp->next_tag( array( 'tag_name' => 'picture' ) );
-					$depth          = $wpp->get_current_depth();
-					$should_exclude = false;
-
-					foreach ( $exclude_imgs as $exclude_img ) {
-						if ( false !== strpos( $original_src, $exclude_img ) ) {
-							$should_exclude = true;
-							break;
-						}
-					}
+					$depth = $wpp->get_current_depth();
 
 					while ( $wpp->next_tag() ) {
 						if ( $wpp->get_current_depth() <= $depth ) {
@@ -1186,8 +1186,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								if ( $tags_write->next_tag( array( 'tag_name' => 'img' ) ) && null === $tags_write->get_attribute( 'src' ) ) {
 									$svg_src = $this->generate_svg_base64( $img_tag );
 									if ( ! empty( $svg_src ) ) {
-										$tags_write->set_attribute( 'src', $svg_src );
-										return str_replace( $img_tag, $tags_write->get_updated_html(), $updated_html );
+										$updated_tags = new \WP_HTML_Tag_Processor( $updated_html );
+										if ( $updated_tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+											$updated_tags->set_attribute( 'src', $svg_src );
+											return $updated_tags->get_updated_html();
+										}
 									}
 								}
 							}
@@ -1202,7 +1205,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 						}
 						$processed_img = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
-						return str_replace( $img_tag, $processed_img, $updated_html );
+						return preg_replace_callback(
+							'#<img\b[^>]*>#i',
+							function () use ( $processed_img ) {
+								return $processed_img;
+							},
+							$updated_html,
+							1
+						);
 					}
 					return $updated_html;
 				}
@@ -1219,18 +1229,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$srcset = $tags->get_attribute( 'data-srcset' ) ?? $tags->get_attribute( 'srcset' );
 							$sizes  = $tags->get_attribute( 'data-sizes' ) ?? $tags->get_attribute( 'sizes' );
 
-							$is_lazy        = null !== $tags->get_attribute( 'data-src' );
-							$srcset_attr    = $is_lazy ? 'data-srcset' : 'srcset';
-							$sizes_attr     = $is_lazy ? 'data-sizes' : 'sizes';
-							$source_tag     = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-							$should_exclude = false;
-
-							foreach ( $exclude_imgs as $exclude_img ) {
-								if ( false !== strpos( $original_src, $exclude_img ) ) {
-									$should_exclude = true;
-									break;
-								}
-							}
+							$is_lazy     = null !== $tags->get_attribute( 'data-src' );
+							$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
+							$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
+							$source_tag  = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
 
 							if ( ! $should_exclude ) {
 								if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
@@ -1308,18 +1310,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$sizes = $sizes_matches[1];
 						}
 
-						$is_lazy        = (bool) strpos( $img_tag, 'data-src' );
-						$srcset_attr    = $is_lazy ? 'data-srcset' : 'srcset';
-						$sizes_attr     = $is_lazy ? 'data-sizes' : 'sizes';
-						$source_tag     = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-						$should_exclude = false;
-
-						foreach ( $exclude_imgs as $exclude_img ) {
-							if ( false !== strpos( $original_src, $exclude_img ) ) {
-								$should_exclude = true;
-								break;
-							}
-						}
+						$is_lazy     = (bool) strpos( $img_tag, 'data-src' );
+						$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
+						$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
+						$source_tag  = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
 
 						if ( ! $should_exclude ) {
 							if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
