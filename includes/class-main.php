@@ -1171,24 +1171,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return true;
 			}
 
+			$file_size = filesize( $file_path );
+			if ( false === $file_size ) {
+				return true;
+			}
+
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fopen
 			$handle = fopen( $file_path, 'r' );
 			if ( ! $handle ) {
 				return true;
 			}
 
-			$line_count = 0;
+			$line_count  = 0;
+			$total_chars = 0;
+			$max_lines   = 50;
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
-			while ( false !== fgets( $handle ) ) {
+			$line = fgets( $handle );
+			while ( false !== $line ) {
 				++$line_count;
-				if ( $line_count > 10 ) {
+				$total_chars += strlen( $line );
+				if ( $line_count >= $max_lines ) {
 					break;
 				}
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
+				$line = fgets( $handle );
 			}
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 			fclose( $handle );
 
-			$is_minified = 10 >= $line_count;
+			$avg_line_length = $total_chars / max( 1, $line_count );
+			$threshold       = 'css' === $type ? 500 : 1000;
+
+			$is_minified = $line_count <= 1
+				|| ( $line_count <= 3 && $file_size > 1000 )
+				|| $avg_line_length > $threshold;
+
 			wp_cache_set( $cache_key, (int) $is_minified, $cache_group, HOUR_IN_SECONDS );
 
 			return $is_minified;
