@@ -46,6 +46,8 @@ const FileOptimization = ( {
 		removeCssJsHandle: '',
 		enableServerRules: false,
 		cdnURL: '',
+		removeUnusedCSS: false,
+		excludeUnusedCSS: '',
 		disableEmojis: false,
 		disableEmbeds: false,
 		disableDashicons: false,
@@ -60,6 +62,46 @@ const FileOptimization = ( {
 		message: '',
 		success: false,
 	} );
+
+	const handleRegenerateUsedCSS = async () => {
+		setIsLoading( true );
+		setNotification( { message: '', success: false } );
+		try {
+			const res = await apiCall( 'used_css_regenerate' );
+			if ( res.success ) {
+				setNotification( {
+					message:
+						res.message ||
+						__(
+							'Used CSS regeneration queued.',
+							'performance-optimisation'
+						),
+					success: true,
+				} );
+			} else {
+				setNotification( {
+					message:
+						res.message ||
+						__(
+							'Failed to regenerate used CSS.',
+							'performance-optimisation'
+						),
+					success: false,
+				} );
+			}
+		} catch ( err ) {
+			console.error( 'Failed regenerating used CSS', err );
+			setNotification( {
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				success: false,
+			} );
+		} finally {
+			setIsLoading( false );
+		}
+	};
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
@@ -293,6 +335,64 @@ const FileOptimization = ( {
 												setSettings
 											) }
 										/>
+									</div>
+								) }
+								<Tooltip
+									content={ __(
+										'Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly.',
+										'performance-optimisation'
+									) }
+								>
+									<SwitchField
+										label={ __(
+											'Remove Unused CSS',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Scan pages and remove CSS rules that are not used. Reduces file size by 30–80% and helps pass PageSpeed audits.',
+											'performance-optimisation'
+										) }
+										name="removeUnusedCSS"
+										checked={ settings.removeUnusedCSS }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</Tooltip>
+								{ settings.removeUnusedCSS && (
+									<div className="wppo-field">
+										<label
+											className="wppo-field-label"
+											htmlFor="excludeUnusedCSS"
+										>
+											{ __(
+												'Safelist Selectors',
+												'performance-optimisation'
+											) }
+										</label>
+										<textarea
+											className="wppo-textarea"
+											id="excludeUnusedCSS"
+											name="excludeUnusedCSS"
+											rows="4"
+											placeholder={ __(
+												'Selectors to always keep (one per line, e.g. .my-dynamic-class)',
+												'performance-optimisation'
+											) }
+											value={ settings.excludeUnusedCSS }
+											onChange={ handleChange(
+												setSettings
+											) }
+										/>
+										<button
+											className="wppo-button wppo-button-secondary wppo-mt-12"
+											onClick={ handleRegenerateUsedCSS }
+											type="button"
+											disabled={ isLoading }
+										>
+											{ __(
+												'Regenerate Used CSS',
+												'performance-optimisation'
+											) }
+										</button>
 									</div>
 								) }
 								{ settings.minifyCSS && (

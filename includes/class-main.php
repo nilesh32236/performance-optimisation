@@ -117,6 +117,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'file_optimisation'  => array(
 						'enableServerRules' => false,
 						'cdnURL'            => '',
+						'removeUnusedCSS'   => false,
+						'excludeUnusedCSS'  => '',
 					),
 					'preload_settings'   => array(
 						'enableSpeculationRules' => false,
@@ -178,6 +180,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-used-css.php';
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
@@ -309,6 +312,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Phase 2 — Register Action Scheduler callback for background PageSpeed scans.
 			add_action( 'wppo_pagespeed_scan', array( 'PerformanceOptimise\Inc\Pagespeed', 'run_scan' ), 10, 1 );
+
+			// Register Action Scheduler callback for background used-CSS generation.
+			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 1 );
 
 			// Clear all cache on structural changes that invalidate every cached page.
 			add_action( 'update_option_permalink_structure', array( __CLASS__, 'clear_all_cache' ) );

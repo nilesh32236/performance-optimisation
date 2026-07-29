@@ -201,6 +201,79 @@ describe( 'FileOptimization Component', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'renders Remove Unused CSS switch in assets tab', () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		expect( screen.getByText( 'Remove Unused CSS' ) ).toBeInTheDocument();
+	} );
+
+	it( 'toggling Remove Unused CSS shows safelist textarea and regenerate button', () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
+		fireEvent.click( switchField );
+		expect( screen.getByText( 'Safelist Selectors' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Regenerate Used CSS' ) ).toBeInTheDocument();
+	} );
+
+	it( 'submit includes removeUnusedCSS and excludeUnusedCSS in settings payload', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render(
+			<FileOptimization
+				options={ {
+					removeUnusedCSS: true,
+					excludeUnusedCSS: '.my-class',
+				} }
+				serverRules={ {} }
+			/>
+		);
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						removeUnusedCSS: true,
+						excludeUnusedCSS: '.my-class',
+					} ),
+				} )
+			);
+		} );
+	} );
+
+	it( 'regenerate button calls used_css_regenerate API', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Used CSS regeneration queued.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
+		fireEvent.click( switchField );
+
+		const regenerateButton = screen.getByText( 'Regenerate Used CSS' );
+		fireEvent.click( regenerateButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'used_css_regenerate' );
+		} );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Used CSS regeneration queued.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders server rules correctly without double-encoding', () => {
 		render(
 			<FileOptimization

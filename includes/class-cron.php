@@ -50,6 +50,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
 
 			add_action( 'wppo_database_cleanup_cron', array( $this, 'database_cleanup_cron' ) );
+
+			add_action( 'wppo_used_css_cron', array( $this, 'used_css_cron' ) );
 		}
 
 		/**
@@ -88,6 +90,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			if ( ! wp_next_scheduled( 'wppo_database_cleanup_cron' ) ) {
 				wp_schedule_event( time(), 'daily', 'wppo_database_cleanup_cron' );
+			}
+
+			$options = get_option( 'wppo_settings', array() );
+			if ( ! empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
+				if ( ! wp_next_scheduled( 'wppo_used_css_cron' ) ) {
+					wp_schedule_event( time(), 'every_5_hours', 'wppo_used_css_cron' );
+				}
 			}
 		}
 
@@ -202,12 +211,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
+		/**
+		 * Callback for used-CSS background regeneration cron.
+		 *
+		 * @return void
+		 * @since 1.9.0
+		 */
+		public function used_css_cron() {
+			if ( get_transient( 'wppo_used_css_lock' ) ) {
+				return;
+			}
+			set_transient( 'wppo_used_css_lock', 1, 20 * MINUTE_IN_SECONDS );
+
+			try {
+				$options = get_option( 'wppo_settings', array() );
+				if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
+					return;
+				}
+
+				$used_css = new Used_CSS( $options );
+				$used_css->regenerate_all();
+			} finally {
+				delete_transient( 'wppo_used_css_lock' );
+			}
+		}
+
+		/**
+		 * Clear all scheduled cron jobs.
+		 *
+		 * @return void
+		 * @since 1.0.0
+		 */
 		public static function clear_cron_jobs(): void {
 			wp_unschedule_hook( 'wppo_generate_static_page' );
 			wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 			wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
 			delete_option( 'wppo_preload_cron_offset' );
 			delete_transient( 'wppo_preload_cron_lock' );
+			wp_clear_scheduled_hook( 'wppo_used_css_cron' );
+			delete_transient( 'wppo_used_css_lock' );
 		}
 
 		/**
