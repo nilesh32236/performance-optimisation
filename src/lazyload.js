@@ -362,6 +362,37 @@ const loadImages = () => {
 									el.classList.add( 'wppo-lqip-active' );
 								}
 
+								// Clean up placeholder data attributes after load.
+								// Register handler BEFORE setting src to avoid missing cached-image load events.
+								const onImgLoad = () => {
+									el.removeEventListener( 'load', onImgLoad );
+									if (
+										el.hasAttribute(
+											'data-wppo-dominant-color'
+										)
+									) {
+										el.style.transition =
+											'background-color 0.4s ease-out';
+										el.style.backgroundColor =
+											'transparent';
+										el.removeAttribute(
+											'data-wppo-dominant-color'
+										);
+									}
+									if (
+										el.classList.contains(
+											'wppo-lqip-active'
+										)
+									) {
+										el.classList.remove(
+											'wppo-lqip-active'
+										);
+										el.classList.add( 'wppo-lqip-loaded' );
+										el.removeAttribute( 'data-wppo-lqip' );
+									}
+								};
+								el.addEventListener( 'load', onImgLoad );
+
 								if ( el.hasAttribute( 'data-sizes' ) ) {
 									el.sizes = el.getAttribute( 'data-sizes' );
 									el.removeAttribute( 'data-sizes' );
@@ -377,45 +408,6 @@ const loadImages = () => {
 										el.getAttribute( 'data-srcset' );
 									el.removeAttribute( 'data-srcset' );
 								}
-
-								// Clean up placeholder data attributes after load.
-								el.addEventListener(
-									'load',
-									function onImgLoad() {
-										el.removeEventListener(
-											'load',
-											onImgLoad
-										);
-										if (
-											el.hasAttribute(
-												'data-wppo-dominant-color'
-											)
-										) {
-											el.style.transition =
-												'background-color 0.4s ease-out';
-											el.style.backgroundColor =
-												'transparent';
-											el.removeAttribute(
-												'data-wppo-dominant-color'
-											);
-										}
-										if (
-											el.classList.contains(
-												'wppo-lqip-active'
-											)
-										) {
-											el.classList.remove(
-												'wppo-lqip-active'
-											);
-											el.classList.add(
-												'wppo-lqip-loaded'
-											);
-											el.removeAttribute(
-												'data-wppo-lqip'
-											);
-										}
-									}
-								);
 							} else if ( el.tagName === 'IFRAME' ) {
 								if ( el.hasAttribute( 'data-src' ) ) {
 									const iframeSrc =
@@ -576,22 +568,12 @@ const loadImages = () => {
 								el.classList.add( 'wppo-lqip-active' );
 							}
 
-							if ( el.hasAttribute( 'data-sizes' ) ) {
-								el.sizes = el.getAttribute( 'data-sizes' );
-								el.removeAttribute( 'data-sizes' );
-							}
-							if ( el.hasAttribute( 'data-src' ) ) {
-								el.src = el.getAttribute( 'data-src' );
-								el.removeAttribute( 'data-src' );
-							}
-							if ( el.hasAttribute( 'data-srcset' ) ) {
-								el.srcset = el.getAttribute( 'data-srcset' );
-								el.removeAttribute( 'data-srcset' );
-							}
-
-							// Smooth transition on image load for fallback path.
-							el.addEventListener( 'load', function onImgLoad() {
-								el.removeEventListener( 'load', onImgLoad );
+							// Register handler BEFORE setting src to avoid missing cached-image load events.
+							const onImgLoadFallback = () => {
+								el.removeEventListener(
+									'load',
+									onImgLoadFallback
+								);
 								if (
 									el.hasAttribute(
 										'data-wppo-dominant-color'
@@ -611,7 +593,21 @@ const loadImages = () => {
 									el.classList.add( 'wppo-lqip-loaded' );
 									el.removeAttribute( 'data-wppo-lqip' );
 								}
-							} );
+							};
+							el.addEventListener( 'load', onImgLoadFallback );
+
+							if ( el.hasAttribute( 'data-sizes' ) ) {
+								el.sizes = el.getAttribute( 'data-sizes' );
+								el.removeAttribute( 'data-sizes' );
+							}
+							if ( el.hasAttribute( 'data-src' ) ) {
+								el.src = el.getAttribute( 'data-src' );
+								el.removeAttribute( 'data-src' );
+							}
+							if ( el.hasAttribute( 'data-srcset' ) ) {
+								el.srcset = el.getAttribute( 'data-srcset' );
+								el.removeAttribute( 'data-srcset' );
+							}
 						}
 					}
 				} );

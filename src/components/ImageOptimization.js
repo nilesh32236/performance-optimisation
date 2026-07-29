@@ -233,10 +233,12 @@ const ImageOptimization = ( { options = {} } ) => {
 										className="wppo-field-label"
 										htmlFor="placeholderType"
 									>
-										{ __(
-											'Placeholder Type',
-											'performance-optimisation'
-										) }
+										{ wppoSettings?.translations
+											?.placeholderType ||
+											__(
+												'Placeholder Type',
+												'performance-optimisation'
+											) }
 									</label>
 									<select
 										className="wppo-select"
@@ -246,72 +248,94 @@ const ImageOptimization = ( { options = {} } ) => {
 										onChange={ handleChange( setSettings ) }
 									>
 										<option value="none">
-											{ __(
-												'None',
-												'performance-optimisation'
-											) }
+											{ wppoSettings?.translations
+												?.placeholderNone ||
+												__(
+													'None',
+													'performance-optimisation'
+												) }
 										</option>
 										<option value="svg">
-											{ __(
-												'SVG Placeholder (Lightweight)',
-												'performance-optimisation'
-											) }
+											{ wppoSettings?.translations
+												?.placeholderSvg ||
+												__(
+													'SVG Placeholder (Lightweight)',
+													'performance-optimisation'
+												) }
 										</option>
 										<option value="dominant_color">
-											{ __(
-												'Dominant Color (Extracted from Image)',
-												'performance-optimisation'
-											) }
+											{ wppoSettings?.translations
+												?.placeholderDominantColor ||
+												__(
+													'Dominant Color (Extracted from Image)',
+													'performance-optimisation'
+												) }
 										</option>
 										<option value="lqip">
-											{ __(
-												'LQIP (Blur Preview)',
-												'performance-optimisation'
-											) }
+											{ wppoSettings?.translations
+												?.placeholderLqip ||
+												__(
+													'LQIP (Blur Preview)',
+													'performance-optimisation'
+												) }
 										</option>
 									</select>
 									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 										<strong>None:</strong>{ ' ' }
-										{ __(
-											'The src attribute is removed until the image is in view.',
-											'performance-optimisation'
-										) }
-										<br />
-										<strong>
-											{ __(
-												'SVG',
+										{ wppoSettings?.translations
+											?.placeholderNoneDesc ||
+											__(
+												'The src attribute is removed until the image is in view.',
 												'performance-optimisation'
 											) }
-											:
-										</strong>{ ' ' }
-										{ __(
-											'Lightweight inline SVG while the real image loads. Prevents layout shift.',
-											'performance-optimisation'
-										) }
 										<br />
 										<strong>
-											{ __(
-												'Dominant Color',
-												'performance-optimisation'
-											) }
+											{ wppoSettings?.translations
+												?.placeholderSvgLabel ||
+												__(
+													'SVG',
+													'performance-optimisation'
+												) }
 											:
 										</strong>{ ' ' }
-										{ __(
-											'Extracted during image conversion. Smooth background-color fade transition.',
-											'performance-optimisation'
-										) }
+										{ wppoSettings?.translations
+											?.placeholderSvgDesc ||
+											__(
+												'Lightweight inline SVG while the real image loads. Prevents layout shift.',
+												'performance-optimisation'
+											) }
 										<br />
 										<strong>
-											{ __(
-												'LQIP',
-												'performance-optimisation'
-											) }
+											{ wppoSettings?.translations
+												?.placeholderDominantColorLabel ||
+												__(
+													'Dominant Color',
+													'performance-optimisation'
+												) }
 											:
 										</strong>{ ' ' }
-										{ __(
-											'20×20 blurred preview. Images must be re-optimized for LQIP to take effect.',
-											'performance-optimisation'
-										) }
+										{ wppoSettings?.translations
+											?.placeholderDominantColorDesc ||
+											__(
+												'Extracted during image conversion. Smooth background-color fade transition.',
+												'performance-optimisation'
+											) }
+										<br />
+										<strong>
+											{ wppoSettings?.translations
+												?.placeholderLqipLabel ||
+												__(
+													'LQIP',
+													'performance-optimisation'
+												) }
+											:
+										</strong>{ ' ' }
+										{ wppoSettings?.translations
+											?.placeholderLqipDesc ||
+											__(
+												'20×20 blurred preview. Images must be re-optimized for LQIP to take effect.',
+												'performance-optimisation'
+											) }
 									</p>
 								</div>
 							</div>

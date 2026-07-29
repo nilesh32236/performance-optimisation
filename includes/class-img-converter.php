@@ -382,6 +382,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 									imagedestroy( $gif_gd );
 								}
 							} catch ( \Exception $e ) {
+								Log::add( __( 'Failed to extract placeholder data from GIF image.', 'performance-optimisation' ) );
 								if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
 									// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 									error_log( 'WPPO: Failed to extract placeholder data from GIF: ' . $e->getMessage() );
@@ -436,8 +437,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					}
 				}
 
-				// Extract placeholder data (dominant color + LQIP) after successful conversion.
-				if ( $success && null !== $image && $image instanceof \GdImage ) {
+				// Extract placeholder data (dominant color + LQIP) whenever the source image
+				// was successfully decoded, independent of individual WebP/AVIF encode outcomes.
+				if ( null !== $image && $image instanceof \GdImage ) {
 					$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
 					$dominant_color = $this->extract_dominant_color( $image );
 					$lqip           = $this->generate_lqip( $image );
@@ -587,7 +589,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			imagecopyresampled( $thumb, $image, 0, 0, 0, 0, $thumb_width, $thumb_height, $orig_width, $orig_height );
 
-			ob_start();
+			if ( ! ob_start() ) {
+				// phpcs:ignore
+				imagedestroy( $thumb );
+				return '';
+			}
 			$success = imagejpeg( $thumb, null, 40 );
 			$data    = ob_get_clean();
 

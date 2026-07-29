@@ -184,7 +184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $buffer;
 			}
 
-			return preg_replace_callback(
+			$result = preg_replace_callback(
 				'#<img\b[^>]*\sdata-src=["\']([^"\']+)["\'][^>]*>#i',
 				function ( $matches ) {
 					$img_tag = $matches[0];
@@ -198,12 +198,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
 							$extra_attrs .= ' ' . $attr_name . '="' . esc_attr( $attr_value ) . '"';
 						}
-						return preg_replace( '#<img\b#i', '<img src="' . esc_attr( $placeholder['src'] ) . '"' . $extra_attrs, $img_tag, 1 );
+						$replaced = preg_replace( '#<img\b#i', '<img src="' . esc_attr( $placeholder['src'] ) . '"' . $extra_attrs, $img_tag, 1 );
+						return null !== $replaced ? $replaced : $img_tag;
 					}
 					return $img_tag;
 				},
 				$buffer
 			);
+			return null !== $result ? $result : $buffer;
 		}
 
 		/**
