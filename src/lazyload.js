@@ -443,6 +443,12 @@ const loadImages = () => {
 							) {
 								startSafetyScan();
 							}
+							if (
+								node.matches( '.wppo-video-placeholder' ) ||
+								node.querySelector( '.wppo-video-placeholder' )
+							) {
+								initVideoPlaceholders();
+							}
 						}
 					} );
 				} );
@@ -553,8 +559,120 @@ const loadImages = () => {
 	}
 };
 
+/**
+ * Whether the global video-placeholder image error handler has been registered.
+ * Prevents duplicate listeners when initVideoPlaceholders runs multiple times.
+ * @type {boolean}
+ */
+let videoPlaceholderErrorHandlerAdded = false;
+
+/**
+ * Initialise video placeholder click-to-load handlers.
+ *
+ * Attaches click event listeners to `.wppo-video-placeholder`
+ * elements. On activation, injects the actual YouTube iframe with autoplay
+ * within the existing placeholder container.
+ *
+ * @since 2.5.0
+ */
+const initVideoPlaceholders = () => {
+	if ( ! videoPlaceholderErrorHandlerAdded ) {
+		document.addEventListener(
+			'error',
+			( e ) => {
+				if (
+					e.target.tagName === 'IMG' &&
+					e.target.hasAttribute( 'data-wppo-fallback' )
+				) {
+					e.target.src =
+						e.target.getAttribute( 'data-wppo-fallback' );
+					e.target.removeAttribute( 'data-wppo-fallback' );
+				}
+			},
+			true
+		);
+		videoPlaceholderErrorHandlerAdded = true;
+	}
+
+	document.querySelectorAll( '.wppo-video-placeholder' ).forEach( ( el ) => {
+		if ( el.dataset.wppoInit ) {
+			return;
+		}
+		el.dataset.wppoInit = '1';
+
+		const loadVideo = () => {
+			const src = el.getAttribute( 'data-wppo-video-src' );
+			if ( ! src || el.dataset.wppoLoaded ) {
+				return;
+			}
+			el.dataset.wppoLoaded = '1';
+
+			// Hide play button, show loading state
+			const playBtn = el.querySelector( '.wppo-video-play-btn' );
+			if ( playBtn ) {
+				playBtn.style.display = 'none';
+			}
+			el.classList.add( 'wppo-video-loading' );
+
+			const separator = src.indexOf( '?' ) !== -1 ? '&' : '?';
+			const iframe = document.createElement( 'iframe' );
+			iframe.src = src + separator + 'autoplay=1&enablejsapi=1';
+			iframe.allow = 'autoplay; fullscreen';
+			iframe.allowFullscreen = true;
+			iframe.loading = 'lazy';
+			iframe.title = 'YouTube video player';
+			iframe.style.cssText =
+				'position:absolute;inset:0;width:100%;height:100%;border:0;';
+
+			// Restore original iframe attributes (sandbox, referrerpolicy, id, etc.)
+			const attrsJson = el.getAttribute( 'data-wppo-iframe-attrs' );
+			if ( attrsJson ) {
+				try {
+					const attrs = JSON.parse( attrsJson );
+					Object.entries( attrs ).forEach( ( [ k, v ] ) => {
+						if (
+							! [ 'src', 'width', 'height', 'style' ].includes(
+								k
+							)
+						) {
+							iframe.setAttribute( k, v );
+						}
+					} );
+				} catch ( _err ) {} // eslint-disable-line no-unused-vars
+			}
+
+			// On load, remove thumbnail and show iframe
+			el.appendChild( iframe );
+
+			const onLoad = () => {
+				const picture = el.querySelector( 'picture' );
+				if ( picture ) {
+					picture.remove();
+				}
+				iframe.style.opacity = '1';
+				el.classList.remove( 'wppo-video-loading' );
+			};
+
+			iframe.addEventListener( 'load', onLoad );
+
+			// Fallback: show iframe even if load event never fires
+			setTimeout( () => {
+				if ( el.contains( iframe ) && iframe.style.opacity !== '1' ) {
+					onLoad();
+				}
+			}, 30000 );
+		};
+
+		el.addEventListener( 'click', loadVideo );
+	} );
+};
+
 if ( document.readyState === 'loading' ) {
-	document.addEventListener( 'DOMContentLoaded', loadImages );
+	document.addEventListener( 'DOMContentLoaded', () => {
+		loadImages();
+		initVideoPlaceholders();
+	} );
 } else {
 	loadImages();
+	initVideoPlaceholders();
 }

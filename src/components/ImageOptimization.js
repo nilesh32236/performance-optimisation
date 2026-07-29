@@ -25,6 +25,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		excludeImages: '',
 
 		lazyLoadVideos: false,
+		enableVideoPlaceholder: false,
 		excludeVideos: '',
 		convertImg: false,
 		conversionFormat: 'webp',
@@ -277,6 +278,32 @@ const ImageOptimization = ( { options = {} } ) => {
 							checked={ settings.lazyLoadVideos }
 							onChange={ handleChange( setSettings ) }
 						/>
+
+						{ settings.lazyLoadVideos && (
+							<div className="wppo-field-nest">
+								<SwitchField
+									label={
+										wppoSettings?.translations
+											?.videoPlaceholder ||
+										__(
+											'Video Placeholder',
+											'performance-optimisation'
+										)
+									}
+									description={
+										wppoSettings?.translations
+											?.videoPlaceholderDesc ||
+										__(
+											'Replace YouTube embeds with lightweight thumbnail previews. The actual video player loads only when the user clicks the play button, saving up to 800KB per embed.',
+											'performance-optimisation'
+										)
+									}
+									name="enableVideoPlaceholder"
+									checked={ settings.enableVideoPlaceholder }
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
+						) }
 
 						<div className="wppo-field">
 							<label

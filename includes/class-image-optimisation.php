@@ -112,7 +112,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$this->exclude_post_type_imgs  = Util::process_urls( $this->options['image_optimisation']['excludePostTypeImgUrl'] ?? array() );
 			$this->exclude_sizes           = array_map( 'absint', array_map( 'trim', explode( ',', ( $this->options['image_optimisation']['excludeSize'] ?? '' ) ) ) );
 			$this->exclude_lazy_imgs       = Util::process_urls( $this->options['image_optimisation']['excludeImages'] ?? array() );
-			$this->exclude_lazy_videos     = Util::process_urls( $this->options['image_optimisation']['excludeVideos'] ?? '' );
+			$this->exclude_lazy_videos     = Util::process_urls( $this->options['image_optimisation']['excludeVideos'] ?? array() );
 
 			$this->setup_hooks();
 		}
@@ -1061,6 +1061,97 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Extract the YouTube video ID from an iframe src URL.
+		 *
+		 * @since 2.5.0
+		 *
+		 * @param string $src The iframe src URL.
+		 * @return string The video ID, or empty string if not a YouTube embed.
+		 */
+		private function get_youtube_video_id( string $src ): string {
+			if ( preg_match( '#(?:youtube(?:-nocookie)?\.com/embed/|youtu\.be/)([a-zA-Z0-9_-]{11})#i', $src, $m ) ) {
+				return $m[1];
+			}
+			return '';
+		}
+
+		/**
+		 * Generate a lightweight video placeholder HTML for a YouTube iframe.
+		 *
+		 * Replaces the YouTube embed iframe with a static thumbnail and play button.
+		 * The actual iframe is loaded only on user click via JavaScript.
+		 *
+		 * @since 2.5.0
+		 *
+		 * @param string $iframe_tag   The original <iframe> tag HTML.
+		 * @param string $original_src The original src attribute value.
+		 * @param string $video_id     Optional pre-extracted YouTube video ID.
+		 * @return string The placeholder HTML or the original iframe tag if excluded.
+		 */
+		private function generate_video_placeholder( string $iframe_tag, string $original_src, string $video_id = '' ): string {
+			if ( ! empty( $this->exclude_lazy_videos ) ) {
+				foreach ( $this->exclude_lazy_videos as $exclude_video ) {
+					if ( false !== strpos( $original_src, $exclude_video ) ) {
+						return $iframe_tag;
+					}
+				}
+			}
+
+			$allowed = apply_filters( 'wppo_video_placeholder_allowed', true, $original_src, $iframe_tag );
+			if ( ! $allowed ) {
+				return $iframe_tag;
+			}
+
+			if ( empty( $video_id ) ) {
+				$video_id = $this->get_youtube_video_id( $original_src );
+			}
+
+			if ( empty( $video_id ) ) {
+				return $iframe_tag;
+			}
+
+			$video_type             = false !== strpos( $original_src, 'youtube-nocookie.com' ) ? 'youtube-nocookie' : 'youtube';
+			$thumbnail_url          = 'https://img.youtube.com/vi/' . $video_id . '/maxresdefault.jpg';
+			$fallback_thumbnail_url = 'https://img.youtube.com/vi/' . $video_id . '/hqdefault.jpg';
+			$noscript_iframe        = '<noscript>' . $iframe_tag . '</noscript>';
+
+			$play_button = '<button type="button" class="wppo-video-play-btn" aria-label="' . esc_attr__( 'Play video', 'performance-optimisation' ) . '">
+				<svg aria-hidden="true" focusable="false" width="68" height="48" viewBox="0 0 68 48">
+					<path class="wppo-play-btn-bg" d="M66.52,7.74c-0.78-2.93-2.49-5.41-5.42-6.19C55.79,.13,34,0,34,0S12.21,.13,6.9,1.55 C3.97,2.33,2.27,4.81,1.48,7.74C0.06,13.05,0,24,0,24s0.06,10.95,1.48,16.26c0.78,2.93,2.49,5.41,5.42,6.19 C12.21,47.87,34,48,34,48s21.79-.13,27.1-1.55c2.93-.78,4.64-3.26,5.42-6.19C67.94,34.95,68,24,68,24S67.94,13.05,66.52,7.74z" fill="#f00"></path>
+					<path d="M 45,24 27,14 27,34" fill="#fff"></path>
+				</svg>
+			</button>';
+
+			$play_button = apply_filters( 'wppo_video_play_button_html', $play_button, $video_id, $video_type );
+
+			$attrs_to_store = array( 'id', 'class', 'width', 'height', 'sandbox', 'referrerpolicy', 'title', 'style', 'name', 'frameborder', 'allow', 'allowfullscreen' );
+			$stored_attrs   = array();
+
+			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				$tags = new \WP_HTML_Tag_Processor( $iframe_tag );
+				if ( $tags->next_tag( array( 'tag_name' => 'iframe' ) ) ) {
+					foreach ( $attrs_to_store as $attr ) {
+						$val = $tags->get_attribute( $attr );
+						if ( null !== $val ) {
+							$stored_attrs[ $attr ] = $val;
+						}
+					}
+				}
+			}
+			$attrs_json = ! empty( $stored_attrs ) ? wp_json_encode( $stored_attrs ) : '';
+
+			$placeholder_html = '<div class="wppo-video-placeholder" data-wppo-video-src="' . esc_url( $original_src ) . '" data-wppo-video-type="' . esc_attr( $video_type ) . '"' . ( $attrs_json ? ' data-wppo-iframe-attrs="' . esc_attr( $attrs_json ) . '"' : '' ) . '>
+				' . $noscript_iframe . '
+				<picture>
+					<img src="' . esc_url( $thumbnail_url ) . '" alt="' . esc_attr__( 'Video thumbnail', 'performance-optimisation' ) . '" loading="lazy" data-wppo-fallback="' . esc_url( $fallback_thumbnail_url ) . '">
+				</picture>
+				' . $play_button . '
+			</div>';
+
+			return apply_filters( 'wppo_video_placeholder_html', $placeholder_html, $video_id, $video_type, $thumbnail_url );
+		}
+
+		/**
 		 * Prepare an <iframe> tag for lazy loading and exclusion-aware optimization.
 		 *
 		 * If the iframe's source matches any exclusion substring, the tag is returned unchanged.
@@ -1361,6 +1452,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Transforms <picture>, <img>, and <iframe> elements in the provided HTML to enable lazy loading and delayed loading based on the image_optimisation options.
 		 *
 		 * Applies exclusions derived from the options (including preload-selected images and the first N images specified by `excludeFirstImages`) and rewrites matched tags to use data-* attributes and lazy classes when appropriate.
+		 * YouTube embed iframes are replaced with lightweight video placeholders when the feature is enabled.
 		 *
 		 * @since 1.0.0
 		 *
@@ -1372,6 +1464,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$exclude_img_count  = $image_optimisation['excludeFirstImages'] ?? 0;
 			$exclude_imgs       = array();
 
+			$enable_video_placeholder = ! empty( $image_optimisation['enableVideoPlaceholder'] );
+			$lazy_load_videos_active  = ! empty( $image_optimisation['lazyLoadVideos'] );
+
+			if ( $enable_video_placeholder && $lazy_load_videos_active ) {
+				$buffer = preg_replace_callback(
+					'#<iframe\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>\s*</iframe>#is',
+					function ( $matches ) {
+						$video_id = $this->get_youtube_video_id( $matches[2] );
+						if ( $video_id ) {
+							return $this->generate_video_placeholder( $matches[0], $matches[2], $video_id );
+						}
+						return $matches[0];
+					},
+					$buffer
+				);
+			}
+
+			$noscript_tokens = array();
+			$buffer          = preg_replace_callback(
+				'#<noscript>.*?</noscript>#is',
+				function ( $m ) use ( &$noscript_tokens ) {
+					$token                     = "\x00WPPO_NOSCRIPT_" . count( $noscript_tokens ) . "\x00";
+					$noscript_tokens[ $token ] = $m[0];
+					return $token;
+				},
+				$buffer
+			);
+
 			if ( isset( $image_optimisation['lazyLoadImages'] ) && (bool) $image_optimisation['lazyLoadImages'] ) {
 				$exclude_imgs = $this->exclude_lazy_imgs;
 
@@ -1380,7 +1500,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				$img_counter = 0;
 
-				return preg_replace_callback(
+				$buffer = preg_replace_callback(
 					'#<picture\b[^>]*>.*?</picture>|<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>|<iframe\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#is',
 					function ( $matches ) use ( &$img_counter, $exclude_img_count, &$exclude_imgs ) {
 						if ( 5 === count( $matches ) ) {
@@ -1409,6 +1529,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				);
 			}
 
+			$buffer = strtr( $buffer, $noscript_tokens );
 			return $buffer;
 		}
 
