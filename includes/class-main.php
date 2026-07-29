@@ -584,6 +584,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( is_user_logged_in() || is_admin() ) {
 				return $filtered_output;
 			}
+
+			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
+				$filtered_output = $this->google_fonts->process_buffer( $filtered_output );
+			}
+
 			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
 			return $used_css->process_buffer( $filtered_output );
 		}
@@ -612,6 +617,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( empty( $buffer ) ) {
 				return $buffer;
 			}
+
+			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
+				$buffer = $this->google_fonts->process_buffer( $buffer );
+			}
+
 			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
 			return $used_css->process_buffer( $buffer );
 		}

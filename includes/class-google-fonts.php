@@ -42,14 +42,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		private const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 		/**
-		 * Google Fonts CSS2 API endpoint.
-		 *
-		 * @var string
-		 * @since 2.7.0
-		 */
-		private const FONTS_API = 'https://fonts.googleapis.com/css2';
-
-		/**
 		 * Plugin settings.
 		 *
 		 * @var array
@@ -295,6 +287,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			);
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+				if ( file_exists( $tmp ) ) {
+					wp_delete_file( $tmp );
+				}
+				return false;
+			}
+
+			if ( ! file_exists( $tmp ) || 0 === filesize( $tmp ) ) {
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}
