@@ -354,8 +354,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function on_settings_update( $old_value, $value ) {
 			// Only clear cache when tabs that affect HTML output change.
-			$cache_relevant_tabs  = array( 'cache_settings', 'file_optimisation', 'image_optimisation', 'preload_settings' );
-			$admin_only_tabs      = array( 'database_cleanup', 'object_cache', 'performance_audit', 'core_tweaks' );
+			$cache_relevant_tabs  = array( 'cache_settings', 'file_optimisation', 'image_optimisation', 'preload_settings', 'core_tweaks' );
+			$admin_only_tabs      = array( 'database_cleanup', 'object_cache', 'performance_audit' );
 			$should_clear         = false;
 			$should_runtime_flush = false;
 
