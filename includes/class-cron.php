@@ -106,7 +106,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		public function ccss_regeneration_cron() {
 			$options = get_option( 'wppo_settings', array() );
 			if ( ! empty( $options['file_optimisation']['criticalCSS'] ) ) {
-				Critical_CSS::regenerate_all();
+				if ( class_exists( '\PerformanceOptimise\Inc\Critical_CSS' ) ) {
+					\PerformanceOptimise\Inc\Critical_CSS::regenerate_all();
+				}
 			}
 		}
 

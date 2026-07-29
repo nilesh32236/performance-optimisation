@@ -36,6 +36,9 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
 
 	const handleRegenerate = async () => {
+		if ( typeof onRegenerate !== 'function' ) {
+			return;
+		}
 		setIsRegenerating( true );
 		try {
 			await onRegenerate();

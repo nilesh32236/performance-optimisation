@@ -127,16 +127,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
-		 * Get the CCSS directory URL.
-		 *
-		 * @return string
-		 * @since 2.0.0
-		 */
-		private static function get_ccss_url(): string {
-			return WP_CONTENT_URL . self::CCSS_DIR;
-		}
-
-		/**
 		 * Generate a unique template hash for a template slug + stylesheet.
 		 *
 		 * @param string $template Optional template slug. Defaults to current template via get_current_template_slug().
@@ -166,6 +156,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return 'single';
 			}
 			if ( is_page() ) {
+				$template = get_page_template_slug();
+				if ( ! empty( $template ) ) {
+					return $template;
+				}
 				return 'page';
 			}
 			if ( is_archive() || is_search() || is_404() ) {
@@ -295,7 +289,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						)
 					);
 					if ( ! empty( $archives ) ) {
-						setup_postdata( $archives[0] );
+						$post = get_post( $archives[0] );
+						if ( ! $post ) {
+							return false;
+						}
+						setup_postdata( $post );
 						$year  = get_the_time( 'Y' );
 						$month = get_the_time( 'm' );
 						wp_reset_postdata();
@@ -336,6 +334,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function generate( string $url ): string|false {
+			if ( ! class_exists( '\DOMDocument' ) || ! class_exists( '\DOMXPath' ) ) {
+				return false;
+			}
+
+			if ( ! defined( 'WPPO_GENERATING_CCSS' ) ) {
+				define( 'WPPO_GENERATING_CCSS', true );
+			}
+
 			$response = wp_remote_get(
 				$url,
 				array(
@@ -355,7 +361,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			libxml_use_internal_errors( true );
 			$dom = new \DOMDocument();
-			$dom->loadHTML( '<?xml encoding="UTF-8">' . $html );
+			$dom->loadHTML( '<?xml encoding="UTF-8"?>' . $html );
 			libxml_clear_errors();
 
 			$xpath = new \DOMXPath( $dom );
@@ -418,7 +424,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			try {
 				$minifier = new CSSMinifier( $critical );
 				$critical = $minifier->minify();
-			} catch ( \Exception $e ) {
+			} catch ( \Throwable $e ) {
 				// Fall back to unminified if minification fails — $critical stays as-is.
 				unset( $e );
 			}
@@ -448,6 +454,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			);
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+				return '';
+			}
+
+			$content_type = wp_remote_retrieve_header( $response, 'content-type' );
+			if ( $content_type && false === strpos( $content_type, 'text/css' ) && false === strpos( $url, '.css' ) ) {
 				return '';
 			}
 
@@ -558,7 +569,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$critical_parts = array();
 
 			// Extract @font-face blocks.
-			preg_match_all( '/@font-face\s*\{[^}]+\}/is', $css, $font_faces );
+			preg_match_all( '/@font-face\s*\{(?:[^{}]|\{[^{}]*\})*\}/is', $css, $font_faces );
 			if ( ! empty( $font_faces[0] ) ) {
 				$critical_parts[] = implode( "\n", $font_faces[0] );
 			}
@@ -570,13 +581,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			// Extract CSS custom properties from :root.
-			preg_match( '/:root\s*\{([^}]*)\}/i', $css, $root_match );
+			preg_match( '/:root\s*\{(?:[^{}]|\{[^{}]*\})*\}/i', $css, $root_match );
 			if ( ! empty( $root_match[0] ) ) {
 				$critical_parts[] = $root_match[0];
 			}
 
 			// Also extract variables from html selector.
-			preg_match( '/html\s*\{([^}]*)\}/i', $css, $html_match );
+			preg_match( '/html\s*\{(?:[^{}]|\{[^{}]*\})*\}/i', $css, $html_match );
 			if ( ! empty( $html_match[0] ) ) {
 				if ( false !== strpos( $html_match[1], '--' ) ) {
 					$critical_parts[] = $html_match[0];
@@ -594,11 +605,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
-			// Extract @supports, @layer, @container blocks.
+			// Extract @supports, @layer, @container blocks with above-fold filtering.
 			preg_match_all( '/@(?:supports|layer|container)\s+[^{]+\{(?:[^{}]|\{[^{}]*\})*\}/is', $css, $at_rules );
 			if ( ! empty( $at_rules[0] ) ) {
 				foreach ( $at_rules[0] as $at_block ) {
-					$critical_parts[] = $at_block;
+					$filtered = self::filter_media_query_rules( $at_block );
+					if ( ! empty( $filtered ) ) {
+						$critical_parts[] = $filtered;
+					}
 				}
 			}
 
@@ -621,14 +635,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function parse_regular_rules( string $css, array &$critical_parts ): void {
-			$length   = strlen( $css );
-			$depth    = 0;
-			$buffer   = '';
-			$selector = '';
-			$in_rule  = false;
+			$length      = strlen( $css );
+			$depth       = 0;
+			$buffer      = '';
+			$selector    = '';
+			$in_rule     = false;
+			$in_string   = false;
+			$string_char = '';
 
 			for ( $i = 0; $i < $length; ++$i ) {
 				$char = $css[ $i ];
+
+				// Track string context to avoid counting braces inside strings.
+				if ( $in_string ) {
+					$buffer .= $char;
+					if ( $char === $string_char && '\\' !== ( $css[ $i - 1 ] ?? '' ) ) {
+						$in_string = false;
+					}
+					continue;
+				}
+				if ( "'" === $char || '"' === $char ) {
+					$in_string   = true;
+					$string_char = $char;
+					$buffer     .= $char;
+					continue;
+				}
 
 				if ( '{' === $char ) {
 					if ( 0 === $depth && ! $in_rule ) {
@@ -847,12 +878,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			$filesystem = Util::init_filesystem();
-			if ( $filesystem ) {
-				$filesystem->put_contents( self::get_ccss_file( $template_hash ), $critical_css, FS_CHMOD_FILE );
-			} else {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-				file_put_contents( self::get_ccss_file( $template_hash ), $critical_css );
+			if ( ! $filesystem ) {
+				set_transient( 'wppo_ccss_status_' . $template_hash, 'failed', DAY_IN_SECONDS );
+				return false;
 			}
+			$filesystem->put_contents( self::get_ccss_file( $template_hash ), $critical_css, FS_CHMOD_FILE );
 
 			if ( file_exists( self::get_ccss_file( $template_hash ) ) ) {
 				set_transient( 'wppo_ccss_status_' . $template_hash, 'ready', WEEK_IN_SECONDS );
@@ -874,7 +904,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function inline_ccss(): void {
-			if ( is_user_logged_in() || is_admin() ) {
+			if ( is_user_logged_in() || is_admin() || defined( 'WPPO_GENERATING_CCSS' ) ) {
 				return;
 			}
 
@@ -885,11 +915,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( file_exists( $file ) ) {
 				$content = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 				if ( ! empty( $content ) ) {
+					$max_size = apply_filters( 'wppo_ccss_max_size', 51200 );
+					if ( strlen( $content ) > $max_size ) {
+						// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						error_log( sprintf( 'WPPO Critical CSS exceeded %d bytes for template %s.', $max_size, $template_hash ) );
+						return;
+					}
+					$content = wp_strip_all_tags( $content );
 					echo '<style id="wppo-critical-css">' . "\n";
-					echo $content . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content generated by plugin from its own cache.
+					echo $content . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- sanitized with wp_strip_all_tags above.
 					echo '</style>' . "\n";
 				}
 			} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
+				$status = get_transient( 'wppo_ccss_status_' . $template_hash );
+				if ( 'pending' === $status ) {
+					return;
+				}
+				set_transient( 'wppo_ccss_status_' . $template_hash, 'pending', HOUR_IN_SECONDS );
 				$hook = 'wppo_generate_ccss';
 				if ( ! as_next_scheduled_action( $hook, array( 'template_hash' => $template_hash ), 'performance_optimisation' ) ) {
 					as_enqueue_async_action(
@@ -897,7 +939,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						array( 'template_hash' => $template_hash ),
 						'performance_optimisation'
 					);
-					set_transient( 'wppo_ccss_status_' . $template_hash, 'pending', HOUR_IN_SECONDS );
 				}
 			}
 		}
@@ -1036,6 +1077,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
 				if ( function_exists( 'as_enqueue_async_action' ) ) {
+					set_transient( 'wppo_ccss_status_' . $hash, 'pending', HOUR_IN_SECONDS );
 					$hook = 'wppo_generate_ccss';
 					if ( ! as_next_scheduled_action( $hook, array( 'template_hash' => $hash ), 'performance_optimisation' ) ) {
 						as_enqueue_async_action(
@@ -1045,8 +1087,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						);
 						++$queued;
 					}
+				} else {
+					set_transient( 'wppo_ccss_status_' . $hash, 'failed', HOUR_IN_SECONDS );
 				}
-				set_transient( 'wppo_ccss_status_' . $hash, 'pending', HOUR_IN_SECONDS );
 			}
 
 			Log::add(

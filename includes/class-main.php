@@ -309,7 +309,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Critical CSS hooks.
 			if ( ! empty( $this->options['file_optimisation']['criticalCSS'] ) ) {
 				add_action( 'wp_head', array( 'PerformanceOptimise\Inc\Critical_CSS', 'inline_ccss' ), 0 );
-				add_filter( 'style_loader_tag', array( 'PerformanceOptimise\Inc\Critical_CSS', 'defer_stylesheets' ), 10, 3 );
+				add_filter( 'style_loader_tag', array( 'PerformanceOptimise\Inc\Critical_CSS', 'defer_stylesheets' ), 9, 3 );
 				add_action( 'wppo_generate_ccss', array( 'PerformanceOptimise\Inc\Critical_CSS', 'background_generate' ), 10, 1 );
 			}
 

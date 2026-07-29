@@ -333,6 +333,14 @@ const App = () => {
 		};
 		fetchRules();
 
+		const settings = wppoSettings?.settings ?? {};
+		const shouldFetchCcss =
+			settings?.file_optimisation?.criticalCSS &&
+			activeTab === 'fileOptimization';
+		if ( ! shouldFetchCcss ) {
+			return;
+		}
+
 		const fetchCcssStatus = async () => {
 			if ( hasFetchedCcss.current && 0 === ccssRefreshTrigger ) {
 				return;
@@ -364,6 +372,11 @@ const App = () => {
 		rulesRetryTrigger,
 		ccssRefreshTrigger,
 	] );
+
+	// Reset CCSS fetch when switching to fileOptimization tab.
+	useEffect( () => {
+		hasFetchedCcss.current = false;
+	}, [ activeTab ] );
 
 	useEffect( () => {
 		setTransition( true );
