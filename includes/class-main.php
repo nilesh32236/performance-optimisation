@@ -234,6 +234,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
+
+			// Invalidate DB cleanup counts when posts are added or removed (for public post types).
+			if ( is_admin() ) {
+				add_action( 'save_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
+				add_action( 'deleted_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
+			}
 			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
 				if ( ! $this->cache ) {
 					$this->cache = new Cache( $this->options );
@@ -617,16 +623,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$this->add_available_post_types_to_options();
 
-			$cache_size = get_transient( 'wppo_cache_size' );
-			if ( false === $cache_size ) {
-				$cache_size = Cache::get_cache_size();
-				set_transient( 'wppo_cache_size', $cache_size, 15 * MINUTE_IN_SECONDS );
+			$cache_salt_key = 'wppo_cache_last_cleared';
+
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				$cache_size = wp_cache_get_salted( 'wppo_cache_size', 'wppo', $cache_salt_key );
+				if ( false === $cache_size ) {
+					$cache_size = Cache::get_cache_size();
+					wp_cache_set_salted( 'wppo_cache_size', $cache_size, 'wppo', $cache_salt_key );
+				}
+			} else {
+				$cache_size = get_transient( 'wppo_cache_size' );
+				if ( false === $cache_size ) {
+					$cache_size = Cache::get_cache_size();
+					set_transient( 'wppo_cache_size', $cache_size, 15 * MINUTE_IN_SECONDS );
+				}
 			}
 
-			$total_js_css = get_transient( 'wppo_total_js_css' );
-			if ( false === $total_js_css ) {
-				$total_js_css = Util::get_js_css_minified_file();
-				set_transient( 'wppo_total_js_css', $total_js_css, 15 * MINUTE_IN_SECONDS );
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				$total_js_css = wp_cache_get_salted( 'wppo_total_js_css', 'wppo', $cache_salt_key );
+				if ( false === $total_js_css ) {
+					$total_js_css = Util::get_js_css_minified_file();
+					wp_cache_set_salted( 'wppo_total_js_css', $total_js_css, 'wppo', $cache_salt_key );
+				}
+			} else {
+				$total_js_css = get_transient( 'wppo_total_js_css' );
+				if ( false === $total_js_css ) {
+					$total_js_css = Util::get_js_css_minified_file();
+					set_transient( 'wppo_total_js_css', $total_js_css, 15 * MINUTE_IN_SECONDS );
+				}
 			}
 
 			// Clone options and redact sensitive keys before exposing to the client.
