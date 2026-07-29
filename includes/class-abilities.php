@@ -114,7 +114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					),
 				),
 				array(
-					'id'   => 'performance-optimisation/image-optimization',
+					'id'   => 'performance-optimisation/image-optimisation',
 					'args' => array_merge(
 						$base_args,
 						array(
@@ -136,7 +136,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					),
 				),
 				array(
-					'id'   => 'performance-optimisation/js-optimization',
+					'id'   => 'performance-optimisation/js-optimisation',
 					'args' => array_merge(
 						$base_args,
 						array(
@@ -188,57 +188,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * @return true
 		 */
 		public static function can_cache_management(): bool {
-			return true;
+			$options = get_option( 'wppo_settings', array() );
+			return ! empty( $options['cache']['enableCache'] );
 		}
 
 		/**
 		 * Execute callback: Image Optimization.
 		 *
 		 * @since 2.0.0
-		 * @return true
+		 * @return bool
 		 */
 		public static function can_image_optimization(): bool {
-			return true;
+			$options = get_option( 'wppo_settings', array() );
+			return ! empty( $options['image_optimisation']['convertImg'] );
 		}
 
 		/**
 		 * Execute callback: CSS Minification.
 		 *
 		 * @since 2.0.0
-		 * @return true
+		 * @return bool
 		 */
 		public static function can_css_minification(): bool {
-			return true;
+			$options = get_option( 'wppo_settings', array() );
+			return ! empty( $options['file_optimisation']['minifyCSS'] );
 		}
 
 		/**
 		 * Execute callback: JS Optimization.
 		 *
 		 * @since 2.0.0
-		 * @return true
+		 * @return bool
 		 */
 		public static function can_js_optimization(): bool {
-			return true;
+			$options = get_option( 'wppo_settings', array() );
+			return ! empty( $options['file_optimisation']['minifyJS'] ) || ! empty( $options['file_optimisation']['deferJS'] ) || ! empty( $options['file_optimisation']['delayJS'] );
 		}
 
 		/**
 		 * Execute callback: Database Cleanup.
 		 *
 		 * @since 2.0.0
-		 * @return true
+		 * @return bool
 		 */
 		public static function can_database_cleanup(): bool {
-			return true;
+			$options = get_option( 'wppo_settings', array() );
+			return ! empty( $options['database_cleanup'] );
 		}
 
 		/**
 		 * Execute callback: Redis Object Cache.
 		 *
 		 * @since 2.0.0
-		 * @return true
+		 * @return bool
 		 */
 		public static function can_redis_object_cache(): bool {
-			return true;
+			return wp_using_ext_object_cache();
 		}
 	}
 }
