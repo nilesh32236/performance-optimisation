@@ -630,11 +630,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 */
 		private function maybe_apply_used_css( string $buffer ): string {
-			$file_opts = $this->options['file_optimisation'] ?? array();
-			if ( empty( $file_opts['removeUnusedCSS'] ) ) {
-				return $buffer;
-			}
-
 			$used_css = new Used_CSS( $this->options );
 			return $used_css->process_buffer( $buffer );
 		}
@@ -775,7 +770,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$used_css_path  = $this->get_file_path( $path, 'used-css' );
 			$this->delete_cache_files( $html_file_path );
 			$this->delete_cache_files( $css_file_path );
-			$this->delete_used_css_file( $used_css_path );
+			$this->delete_cache_files( $used_css_path );
 
 			// Smart Purging: Always clear the home page and blog archive.
 			$home_path = wp_make_link_relative( home_url( '/' ) );
@@ -949,7 +944,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$cache_dir = "{$this->cache_root_dir}/{$this->domain}";
 			$res1      = true;
 			$res2      = true;
-			$res3      = true;
 
 			$fs = $this->get_filesystem();
 
@@ -963,15 +957,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$res2 = $fs->delete( $min_dir, true );
 			}
 
-			$ccss_dir = "{$this->cache_root_dir}/ccss";
+			Used_CSS::delete_all_used_css();
 
-			if ( $fs && $fs->is_dir( $ccss_dir ) ) {
-				$fs->delete( $ccss_dir, true );
-			}
-
-			$res3 = Used_CSS::delete_all_used_css();
-
-			return $res1 && $res2 && $res3;
+			return $res1 && $res2;
 		}
 
 		/**

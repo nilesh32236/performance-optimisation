@@ -296,7 +296,10 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
-	it( 'regenerate button calls used_css_regenerate API', async () => {
+	it( 'regenerate button calls used_css_regenerate API after saving settings', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+		} );
 		apiCall.mockResolvedValueOnce( {
 			success: true,
 			message: 'Used CSS regeneration queued.',
@@ -311,8 +314,18 @@ describe( 'FileOptimization Component', () => {
 		fireEvent.click( regenerateButton );
 
 		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith( 'used_css_regenerate' );
+			expect( apiCall ).toHaveBeenCalledTimes( 2 );
 		} );
+
+		expect( apiCall.mock.calls[ 0 ][ 0 ] ).toBe( 'update_settings' );
+		expect( apiCall.mock.calls[ 0 ][ 1 ].tab ).toBe(
+			'file_optimisation'
+		);
+		expect( apiCall.mock.calls[ 0 ][ 1 ].settings.removeUnusedCSS ).toBe(
+			true
+		);
+
+		expect( apiCall.mock.calls[ 1 ][ 0 ] ).toBe( 'used_css_regenerate' );
 
 		await waitFor( () => {
 			expect(

@@ -74,7 +74,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (18 endpoints). All require `manage_options` capability + `X-WP-Nonce`.
+Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (20 endpoints). All require `manage_options` capability + `X-WP-Nonce`.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -95,6 +95,9 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (1
 | `pagespeed_results` | GET | PageSpeed results |
 | `suggestions` | GET | Performance suggestions |
 | `server_rules` | GET | Apache/Nginx rules text |
+| `used_css_regenerate` | POST | Regenerate used CSS for a post or all posts |
+| `regenerate_ccss` | POST | Regenerate critical CSS |
+| `ccss_status` | GET | Critical CSS generation status |
 
 ### PHP backend
 25 files in `includes/`. Key classes:

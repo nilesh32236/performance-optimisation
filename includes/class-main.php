@@ -327,6 +327,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Register Action Scheduler callback for background used-CSS generation.
 			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 1 );
 
+			// Queue used-CSS regeneration when post content changes.
+			add_action( 'save_post', array( $this, 'on_save_post_queue_used_css' ), 10, 3 );
+
 			// Clear all cache on structural changes that invalidate every cached page.
 			add_action( 'update_option_permalink_structure', array( __CLASS__, 'clear_all_cache' ) );
 			add_action( 'switch_theme', array( __CLASS__, 'clear_all_cache' ) );
@@ -497,6 +500,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( $this->cache ) {
 				$this->cache->invalidate_dynamic_static_html( $post_id );
+			}
+		}
+
+		/**
+		 * Queue used-CSS generation when post content is saved.
+		 *
+		 * Skips revisions and autosaves, and checks the removeUnusedCSS setting
+		 * before enqueueing. Uses as_has_scheduled_action() to prevent duplicate jobs.
+		 *
+		 * @param int      $post_id Post ID.
+		 * @param \WP_Post $post    Post object.
+		 * @param bool     $update  Whether this is an existing post being updated.
+		 * @return void
+		 * @since 2.6.0
+		 */
+		public function on_save_post_queue_used_css( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+				return;
+			}
+
+			$options = get_option( 'wppo_settings', array() );
+			if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
+				return;
+			}
+
+			if ( ! function_exists( 'as_has_scheduled_action' ) || ! function_exists( 'as_enqueue_async_action' ) ) {
+				return;
+			}
+
+			if ( ! as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+				as_enqueue_async_action(
+					'wppo_used_css_generate',
+					array( 'post_id' => $post_id ),
+					'performance_optimisation'
+				);
 			}
 		}
 

@@ -146,10 +146,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			$host = explode( ':', $domain, 2 )[0];
-			if ( ! preg_match( '/^[a-z0-9\.\-]+$/i', $host ) ) {
-				$host = str_replace( array( '..', '/', '\\' ), '', $host );
-			}
-			$this->domain = $host;
+
+			$valid_domain = ! (
+				strpos( $host, '..' ) !== false ||
+				strpos( $host, '/' ) !== false ||
+				strpos( $host, '\\' ) !== false ||
+				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
+			);
+
+			$this->domain = $valid_domain ? $host : '';
 
 			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_ROOT_DIR );
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_ROOT_DIR;
@@ -222,7 +227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 						$used['attrs'][ $attr_name ] = true;
 
 						if ( 'href' === $attr_name || 'src' === $attr_name ) {
-							$ext = strtolower( pathinfo( wp_parse_url( (string) $val, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+							$ext = strtolower( pathinfo( (string) wp_parse_url( (string) $val, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
 							if ( $ext && in_array( $ext, array( 'css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'eot' ), true ) ) {
 								$used['attrs'][ '.' . $ext ] = true;
 							}
@@ -255,7 +260,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// string contents (e.g. content: "/* not a comment */") correctly.
 			// CSS values containing "/*" inside strings would be incorrectly
 			// truncated. This is a known v1 limitation.
-			$css = preg_replace( '/\/\*.*?\*\//s', '', $css );
+			$stripped = preg_replace( '/\/\*.*?\*\//s', '', $css );
+			if ( null !== $stripped ) {
+				$css = $stripped;
+			}
 
 			$rules = array();
 
@@ -550,11 +558,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				// Strip pseudo-classes/elements using a depth-tracking parser
 				// that handles nested parentheses like :not(.a:not(.b)).
 				$stripped = '';
-				$depth    = 0;
 				$len      = strlen( $simple );
 				for ( $i = 0; $i < $len; ++$i ) {
 					$ch = $simple[ $i ];
-					if ( 0 === $depth && ':' === $ch ) {
+					if ( ':' === $ch ) {
 						// Skip everything until the next non-nested separator.
 						$paren_depth = 0;
 						++$i;
@@ -642,18 +649,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 
 				if ( 'media' === $rule['type'] || 'supports' === $rule['type'] ) {
-					$kept_children = array();
-					foreach ( $rule['children'] as $child ) {
-						if ( $this->is_rule_used( $child, $used ) ) {
-							$kept_children[] = $child['original'];
-						}
-					}
-
-					if ( ! empty( $kept_children ) ) {
+					$purged_children = $this->purge_css( $rule['children'], $used );
+					if ( '' !== $purged_children ) {
 						$output .= $rule['at_rule'] . '{' . "\n";
-						foreach ( $kept_children as $child_css ) {
-							$output .= $child_css . "\n";
-						}
+						$output .= $purged_children . "\n";
 						$output .= '}' . "\n";
 					}
 					continue;
@@ -725,8 +724,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		public function get_used_css_path( string $url = '' ): string {
-			$path = $this->get_url_path( $url );
-			return "{$this->cache_root_dir}/{$this->domain}/{$path}/" . self::USED_CSS_FILENAME;
+			$path        = $this->get_url_path( $url );
+			$path_suffix = '' !== $path ? "/{$path}" : '';
+			return "{$this->cache_root_dir}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
 		}
 
 		/**
@@ -737,8 +737,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		public function get_used_css_url( string $url = '' ): string {
-			$path = $this->get_url_path( $url );
-			return "{$this->cache_root_url}/{$this->domain}/{$path}/" . self::USED_CSS_FILENAME;
+			$path        = $this->get_url_path( $url );
+			$path_suffix = '' !== $path ? "/{$path}" : '';
+			return "{$this->cache_root_url}/{$this->domain}{$path_suffix}/" . self::USED_CSS_FILENAME;
 		}
 
 		/**
@@ -796,7 +797,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$fs->delete( $tmp_path );
 				return false;
 			}
-			return $fs->move( $tmp_path, $file_path );
+			$moved = $fs->move( $tmp_path, $file_path, true );
+			if ( ! $moved ) {
+				$fs->delete( $tmp_path );
+				return false;
+			}
+			return true;
 		}
 
 		/**
@@ -841,10 +847,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			$success = true;
-			$dirs    = $fs->dirlist( $root );
-			if ( ! $dirs ) {
-				return true;
-			}
 
 			// Use a recursive iterator to find all used-css.css files at any depth.
 			$iterator = new \RecursiveIteratorIterator(
@@ -897,6 +899,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 
 				foreach ( $post_ids as $post_id ) {
+					if ( as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+						continue;
+					}
 					as_enqueue_async_action(
 						'wppo_used_css_generate',
 						array( 'post_id' => $post_id ),
@@ -946,6 +951,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			);
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					$error_msg = is_wp_error( $response ) ? $response->get_error_message() : 'HTTP status ' . wp_remote_retrieve_response_code( $response );
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO used-CSS generation failed for post ' . (int) $post_id . ': ' . sanitize_text_field( $error_msg ) );
+				}
 				return;
 			}
 
@@ -1105,11 +1115,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 			}
 
-			// Remove original <link> tags.
-			foreach ( $removal_urls as $url => $true ) {
-				$quoted_src = preg_quote( $url, '/' );
-				$buffer     = preg_replace(
-					'/<link[^>]*rel=[\'"]stylesheet[\'"][^>]*href=[\'"]' . $quoted_src . '(?:\?[^\'"]*)?[\'"][^>]*\/?>\s*/i',
+			// Remove original <link> tags via single-pass alternation regex.
+			if ( ! empty( $removal_urls ) ) {
+				$quoted_srcs = array();
+				foreach ( $removal_urls as $url => $_ ) {
+					$quoted_srcs[] = preg_quote( $url, '/' );
+				}
+				$buffer = preg_replace(
+					'/<link[^>]*rel=[\'"]stylesheet[\'"][^>]*href=[\'"](' . implode( '|', $quoted_srcs ) . ')(?:\?[^\'"]*)?[\'"][^>]*\/?>\s*/i',
 					'',
 					$buffer
 				);
@@ -1168,14 +1181,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			// Cache-read shortcut: if used-CSS exists and source files are not newer, inject directly.
 			if ( file_exists( $used_css_path ) ) {
-				$ver          = filemtime( $used_css_path );
-				$used_css_url = $used_css_url . '?ver=' . $ver;
+				$used_css_mtime = filemtime( $used_css_path );
+				$fresh          = true;
 
-				$handles = array();
 				if ( $wp_styles && ! empty( $wp_styles->queue ) ) {
-					$handles = $wp_styles->queue;
+					foreach ( $wp_styles->queue as $handle ) {
+						if ( isset( $wp_styles->registered[ $handle ] ) ) {
+							$src = $wp_styles->registered[ $handle ]->src;
+							if ( ! empty( $src ) ) {
+								$local_path = Util::get_local_path( $src );
+								if ( '' !== $local_path && file_exists( $local_path ) && filemtime( $local_path ) > $used_css_mtime ) {
+									$fresh = false;
+									break;
+								}
+							}
+						}
+					}
 				}
-				return $this->inject_used_css( $buffer, $used_css_url, $handles );
+
+				if ( $fresh ) {
+					$used_css_url = $used_css_url . '?ver=' . $used_css_mtime;
+
+					$handles = array();
+					if ( $wp_styles && ! empty( $wp_styles->queue ) ) {
+						$handles = $wp_styles->queue;
+					}
+					return $this->inject_used_css( $buffer, $used_css_url, $handles );
+				}
 			}
 
 			$css_assets = $this->get_all_css_assets();

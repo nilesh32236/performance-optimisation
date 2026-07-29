@@ -126,7 +126,19 @@ const FileOptimization = ( {
 
 	const handleRegenerateUsedCSS = async () => {
 		await withNotification(
-			apiCall( 'used_css_regenerate' ),
+			( async () => {
+				const saveRes = await apiCall( 'update_settings', {
+					tab: 'file_optimisation',
+					settings: {
+						...settings,
+						excludeDelayJS: settings.delayJSList,
+					},
+				} );
+				if ( ! saveRes.success ) {
+					throw new Error( saveRes.message );
+				}
+				return await apiCall( 'used_css_regenerate' );
+			} )(),
 			__( 'Used CSS regeneration queued.', 'performance-optimisation' ),
 			__( 'Failed to regenerate used CSS.', 'performance-optimisation' )
 		);

@@ -224,13 +224,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		}
 
 		/**
-		 * Clear scheduled cron jobs.
-		 *
-		 * Unschedules all page processing cron jobs and clears the main hook.
-		 *
-		 * @since 1.0.0
-		 */
-		/**
 		 * Callback for used-CSS background regeneration cron.
 		 *
 		 * @return void
