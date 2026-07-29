@@ -358,14 +358,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function start_output_buffer(): void {
-			_doing_it_wrong(
-				__METHOD__,
-				esc_html__(
-					'The legacy template_redirect output buffer path is deprecated. Use the WP 6.9+ wp_template_enhancement_output_buffer hooks instead.',
-					'performance-optimisation'
-				),
-				'2.4.0'
-			);
+			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && is_admin() ) {
+				_doing_it_wrong(
+					__METHOD__,
+					esc_html__(
+						'The legacy template_redirect output buffer path is deprecated. Use the WP 6.9+ wp_template_enhancement_output_buffer hooks instead.',
+						'performance-optimisation'
+					),
+					'2.4.0'
+				);
+			}
 
 			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
 				return;
@@ -615,7 +617,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			$this->prepare_cache_dir();
 			$gzip_file_path = $file_path . '.gz';
 
 			$fs = $this->get_filesystem();
