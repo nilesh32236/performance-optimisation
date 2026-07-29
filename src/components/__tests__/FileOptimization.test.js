@@ -655,4 +655,104 @@ describe( 'FileOptimization Component', () => {
 			);
 		} );
 	} );
+
+	it( 'renders delay JS strategy selector when delayJS is enabled', () => {
+		render(
+			<FileOptimization
+				options={ { delayJS: true } }
+				serverRules={ {} }
+			/>
+		);
+
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+		fireEvent.click( scriptsTab );
+
+		expect(
+			screen.getByLabelText( 'Default Load Strategy' )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( 'Scripts to Load When Idle' )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( 'Scripts to Load in Viewport' )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( 'Script Priority' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'defaults strategy to interaction when not configured', () => {
+		render(
+			<FileOptimization
+				options={ { delayJS: true } }
+				serverRules={ {} }
+			/>
+		);
+
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+		fireEvent.click( scriptsTab );
+
+		expect( screen.getByLabelText( 'Default Load Strategy' ) ).toHaveValue(
+			'interaction'
+		);
+	} );
+
+	it( 'submits delay JS strategy settings correctly', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render(
+			<FileOptimization
+				options={ {
+					delayJS: true,
+					delayJSDefaultStrategy: 'idle',
+					delayJSIdleList: 'jquery-core',
+					delayJSViewportList: 'analytics',
+					delayJSPriority: 'jquery-core:high',
+				} }
+				serverRules={ {} }
+			/>
+		);
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						delayJSDefaultStrategy: 'idle',
+						delayJSIdleList: 'jquery-core',
+						delayJSViewportList: 'analytics',
+						delayJSPriority: 'jquery-core:high',
+					} ),
+				} )
+			);
+		} );
+	} );
+
+	it( 'shows idle timeout input when idle strategy is selected', () => {
+		render(
+			<FileOptimization
+				options={ {
+					delayJS: true,
+					delayJSDefaultStrategy: 'idle',
+				} }
+				serverRules={ {} }
+			/>
+		);
+
+		const scriptsTab = screen.getByRole( 'tab', { name: /Scripts/i } );
+		fireEvent.click( scriptsTab );
+
+		expect(
+			screen.getByLabelText( 'Idle Timeout (ms)' )
+		).toBeInTheDocument();
+	} );
 } );

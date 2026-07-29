@@ -107,12 +107,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 
 			$disabled_scripts = get_post_meta( $post->ID, '_wppo_disabled_scripts', true );
 			$disabled_styles  = get_post_meta( $post->ID, '_wppo_disabled_styles', true );
+			$delay_strategies = get_post_meta( $post->ID, '_wppo_delay_strategies', true );
+			$delay_priorities = get_post_meta( $post->ID, '_wppo_delay_priorities', true );
 
 			if ( ! is_array( $disabled_scripts ) ) {
 				$disabled_scripts = array();
 			}
 			if ( ! is_array( $disabled_styles ) ) {
 				$disabled_styles = array();
+			}
+			if ( ! is_array( $delay_strategies ) ) {
+				$delay_strategies = array();
+			}
+			if ( ! is_array( $delay_priorities ) ) {
+				$delay_priorities = array();
 			}
 
 			$assets        = Asset_Manager::get_page_assets( $post->ID );
@@ -157,6 +165,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									<th style="width: 30px;"><?php esc_html_e( 'Disable', 'performance-optimisation' ); ?></th>
 									<th><?php esc_html_e( 'Handle', 'performance-optimisation' ); ?></th>
 									<th><?php esc_html_e( 'Source', 'performance-optimisation' ); ?></th>
+									<th style="width: 130px;"><?php esc_html_e( 'Delay Strategy', 'performance-optimisation' ); ?></th>
+									<th style="width: 90px;"><?php esc_html_e( 'Priority', 'performance-optimisation' ); ?></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -164,6 +174,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 									<?php
 									$is_protected = in_array( $script['handle'], $protected_js, true );
 									$is_disabled  = in_array( $script['handle'], $disabled_scripts, true );
+									$strategy     = $delay_strategies[ $script['handle'] ] ?? '';
+									$priority     = $delay_priorities[ $script['handle'] ] ?? '';
 									?>
 									<tr<?php echo $is_protected ? ' style="opacity: 0.5;"' : ''; ?>>
 										<td>
@@ -183,6 +195,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 										</td>
 										<td>
 											<small><?php echo esc_html( $script['src'] ); ?></small>
+										</td>
+										<td>
+											<select
+												name="wppo_delay_strategies[<?php echo esc_attr( $script['handle'] ); ?>]"
+												style="width: 100%;"
+												<?php disabled( $is_protected ); ?>
+											>
+												<option value="" <?php selected( $strategy, '' ); ?>>
+													<?php esc_html_e( 'Inherit', 'performance-optimisation' ); ?>
+												</option>
+												<option value="interaction" <?php selected( $strategy, 'interaction' ); ?>>
+													<?php esc_html_e( 'Interaction', 'performance-optimisation' ); ?>
+												</option>
+												<option value="idle" <?php selected( $strategy, 'idle' ); ?>>
+													<?php esc_html_e( 'Idle', 'performance-optimisation' ); ?>
+												</option>
+												<option value="viewport" <?php selected( $strategy, 'viewport' ); ?>>
+													<?php esc_html_e( 'Viewport', 'performance-optimisation' ); ?>
+												</option>
+											</select>
+										</td>
+										<td>
+											<select
+												name="wppo_delay_priorities[<?php echo esc_attr( $script['handle'] ); ?>]"
+												style="width: 100%;"
+												<?php disabled( $is_protected ); ?>
+											>
+												<option value="" <?php selected( $priority, '' ); ?>>
+													<?php esc_html_e( 'Inherit', 'performance-optimisation' ); ?>
+												</option>
+												<option value="high" <?php selected( $priority, 'high' ); ?>>
+													<?php esc_html_e( 'High', 'performance-optimisation' ); ?>
+												</option>
+												<option value="normal" <?php selected( $priority, 'normal' ); ?>>
+													<?php esc_html_e( 'Normal', 'performance-optimisation' ); ?>
+												</option>
+												<option value="low" <?php selected( $priority, 'low' ); ?>>
+													<?php esc_html_e( 'Low', 'performance-optimisation' ); ?>
+												</option>
+											</select>
 										</td>
 									</tr>
 								<?php endforeach; ?>
@@ -326,6 +378,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				$disabled_styles = array_intersect( $submitted, $valid_styles );
 			}
 			update_post_meta( $post_id, '_wppo_disabled_styles', $disabled_styles );
+
+			// Process per-page delay strategies.
+			$saved_strategies = array();
+			$raw_strategies   = isset( $_POST['wppo_delay_strategies'] ) && is_array( $_POST['wppo_delay_strategies'] ) ? wp_unslash( $_POST['wppo_delay_strategies'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			if ( ! empty( $raw_strategies ) ) {
+				$allowed_strategies = array( '', 'interaction', 'idle', 'viewport' );
+				foreach ( $raw_strategies as $handle => $strategy ) {
+					$clean_handle   = sanitize_text_field( $handle );
+					$clean_strategy = sanitize_text_field( $strategy );
+					if ( in_array( $clean_handle, $valid_scripts, true ) && in_array( $clean_strategy, $allowed_strategies, true ) && '' !== $clean_strategy ) {
+						$saved_strategies[ $clean_handle ] = $clean_strategy;
+					}
+				}
+			}
+			update_post_meta( $post_id, '_wppo_delay_strategies', $saved_strategies );
+
+			// Process per-page delay priorities.
+			$saved_priorities = array();
+			$raw_priorities   = isset( $_POST['wppo_delay_priorities'] ) && is_array( $_POST['wppo_delay_priorities'] ) ? wp_unslash( $_POST['wppo_delay_priorities'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			if ( ! empty( $raw_priorities ) ) {
+				$allowed_priorities = array( '', 'high', 'normal', 'low' );
+				foreach ( $raw_priorities as $handle => $priority ) {
+					$clean_handle   = sanitize_text_field( $handle );
+					$clean_priority = sanitize_text_field( $priority );
+					if ( in_array( $clean_handle, $valid_scripts, true ) && in_array( $clean_priority, $allowed_priorities, true ) && '' !== $clean_priority ) {
+						$saved_priorities[ $clean_handle ] = $clean_priority;
+					}
+				}
+			}
+			update_post_meta( $post_id, '_wppo_delay_priorities', $saved_priorities );
 		}
 	}
 }

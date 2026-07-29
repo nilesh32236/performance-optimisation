@@ -65,6 +65,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private array $exclude_delay_js;
 
 		/**
+		 * Handles/URLs to load via requestIdleCallback.
+		 *
+		 * @since 3.8.0
+		 * @var array
+		 */
+		private array $delay_js_idle_list = array();
+
+		/**
+		 * Handles/URLs to load when in viewport.
+		 *
+		 * @since 3.8.0
+		 * @var array
+		 */
+		private array $delay_js_viewport_list = array();
+
+		/**
+		 * Default delay strategy.
+		 *
+		 * @since 3.8.0
+		 * @var string
+		 */
+		private string $delay_js_default_strategy = 'interaction';
+
+		/**
+		 * Priority map handle=>level.
+		 *
+		 * @since 3.8.0
+		 * @var array
+		 */
+		private array $delay_js_priority = array();
+
+		/**
 		 * Constructor to initialize HTML minification.
 		 *
 		 * @param string $html The HTML content to minify.
@@ -81,6 +113,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() )
 			);
 			$this->exclude_delay_js = array_values( array_filter( $this->exclude_delay_js, 'strlen' ) );
+
+			// Cache delay JS strategy lists.
+			$this->delay_js_idle_list        = (array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() );
+			$this->delay_js_viewport_list    = (array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() );
+			$this->delay_js_default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
+				? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
+				: 'interaction';
+
+			// Parse priority map.
+			$this->delay_js_priority = array();
+			$priority_raw            = Util::process_urls( $this->options['file_optimisation']['delayJSPriority'] ?? array() );
+			foreach ( $priority_raw as $line ) {
+				$parts = explode( ':', $line, 2 );
+				if ( count( $parts ) === 2 ) {
+					$handle = trim( $parts[0] );
+					$level  = strtolower( trim( $parts[1] ) );
+					if ( in_array( $level, array( 'high', 'normal', 'low' ), true ) ) {
+						$this->delay_js_priority[ $handle ] = $level;
+					}
+				}
+			}
 
 			$this->minified_html = $this->minify_html( $html );
 		}
@@ -361,6 +414,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 						// If the 'type' attribute doesn't exist, add a new one.
 						$attributes .= ' type="wppo/javascript" wppo-type="text/javascript"';
 					}
+
+					// Add strategy and priority data attributes for inline scripts.
+					$strategy = $this->get_delay_strategy_for_inline( $attributes, $content );
+					if ( 'interaction' !== $strategy ) {
+						$attributes .= ' data-wppo-delay-strategy="' . esc_attr( $strategy ) . '"';
+					}
+					$priority = $this->get_delay_priority_for_inline( $attributes, $content );
+					if ( 'normal' !== $priority ) {
+						$attributes .= ' data-wppo-delay-priority="' . esc_attr( $priority ) . '"';
+					}
 				}
 			}
 
@@ -389,6 +452,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private function preserve_json_ld( string $content, string $attributes ): string {
 			// Pass through JSON-LD as-is; decode+re-encode cycle alters structured data.
 			return '<script' . $attributes . '>' . $content . '</script>';
+		}
+
+		/**
+		 * Determine delay strategy for an inline script.
+		 *
+		 * @since 3.8.0
+		 *
+		 * @param string $attributes Script tag attributes string.
+		 * @param string $content    Inline script content.
+		 * @return string Strategy: 'interaction', 'idle', or 'viewport'.
+		 */
+		private function get_delay_strategy_for_inline( string $attributes, string $content ): string {
+			$search_in = $attributes . ' ' . $content;
+			foreach ( $this->delay_js_idle_list as $pattern ) {
+				if ( false !== strpos( $search_in, $pattern ) ) {
+					return 'idle';
+				}
+			}
+			foreach ( $this->delay_js_viewport_list as $pattern ) {
+				if ( false !== strpos( $search_in, $pattern ) ) {
+					return 'viewport';
+				}
+			}
+			return $this->delay_js_default_strategy;
+		}
+
+		/**
+		 * Determine delay priority for an inline script.
+		 *
+		 * @since 3.8.0
+		 *
+		 * @param string $attributes Script tag attributes string.
+		 * @param string $content    Inline script content.
+		 * @return string Priority: 'high', 'normal', or 'low'.
+		 */
+		private function get_delay_priority_for_inline( string $attributes, string $content ): string {
+			$search_in = $attributes . ' ' . $content;
+			foreach ( $this->delay_js_priority as $pattern => $level ) {
+				if ( false !== strpos( $search_in, $pattern ) ) {
+					return $level;
+				}
+			}
+			return 'normal';
 		}
 
 		/**

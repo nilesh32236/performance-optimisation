@@ -153,13 +153,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 			$styles  = array();
 
 			if ( $wp_scripts instanceof \WP_Scripts ) {
+				$per_page_strategies = get_post_meta( $post_id, '_wppo_delay_strategies', true );
+				$per_page_priorities = get_post_meta( $post_id, '_wppo_delay_priorities', true );
+
+				if ( ! is_array( $per_page_strategies ) ) {
+					$per_page_strategies = array();
+				}
+				if ( ! is_array( $per_page_priorities ) ) {
+					$per_page_priorities = array();
+				}
+
 				foreach ( $wp_scripts->done as $handle ) {
 					if ( isset( $wp_scripts->registered[ $handle ] ) ) {
 						$registered = $wp_scripts->registered[ $handle ];
 						$scripts[]  = array(
-							'handle' => $handle,
-							'src'    => $registered->src ? $registered->src : '',
-							'deps'   => $registered->deps,
+							'handle'         => $handle,
+							'src'            => $registered->src ? $registered->src : '',
+							'deps'           => $registered->deps,
+							'delay_strategy' => $per_page_strategies[ $handle ] ?? null,
+							'delay_priority' => $per_page_priorities[ $handle ] ?? null,
 						);
 					}
 				}
