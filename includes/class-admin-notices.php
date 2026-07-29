@@ -65,10 +65,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$key = sanitize_key( wp_unslash( $_GET['wppo_dismiss'] ) );
 
-			if ( 'welcome' === $key ) {
-				delete_transient( 'wppo_show_welcome_notice' );
-			}
-
 			if ( 'activation' === $key ) {
 				delete_transient( 'wppo_activation_notices' );
 			}
@@ -95,33 +91,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				return;
 			}
 
-			$this->maybe_welcome_notice();
 			$this->maybe_activation_notices();
 			$this->maybe_competing_plugins_notice();
 			$this->maybe_review_notice();
-		}
-
-		/**
-		 * Welcome / onboarding after activation.
-		 *
-		 * @return void
-		 */
-		private function maybe_welcome_notice(): void {
-			if ( ! get_transient( 'wppo_show_welcome_notice' ) ) {
-				return;
-			}
-
-			$dismiss = wp_nonce_url(
-				add_query_arg( 'wppo_dismiss', 'welcome' ),
-				'wppo_dismiss_notice',
-				'_wpnonce'
-			);
-
-			echo '<div class="notice notice-success"><p>';
-			echo esc_html__( 'Performance Optimisation is active. Advanced options like Defer/Delay JavaScript are off by default — enable them only after testing. Open the settings page to review safe defaults.', 'performance-optimisation' );
-			echo ' <a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Open settings', 'performance-optimisation' ) . '</a>';
-			echo ' &mdash; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
-			echo '</p></div>';
 		}
 
 		/**

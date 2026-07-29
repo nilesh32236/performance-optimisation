@@ -189,7 +189,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 */
 		public static function can_cache_management(): bool {
 			$options = get_option( 'wppo_settings', array() );
-			return ! empty( $options['cache']['enableCache'] );
+			return ! empty( $options['cache_settings']['enableCache'] );
 		}
 
 		/**

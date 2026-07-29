@@ -15,6 +15,7 @@ import SuggestionsPanel from './SuggestionsPanel';
 import SystemInfo from './SystemInfo';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
+import WelcomePanel from './WelcomePanel';
 import { __ } from '@wordpress/i18n';
 
 /**
@@ -397,6 +398,8 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					/>
 				}
 			/>
+
+			<WelcomePanel />
 
 			{ /* Quick-stat overview strip */ }
 			<div className="wppo-stats-grid">
