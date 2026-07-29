@@ -1281,6 +1281,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function regenerate_ccss( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$options = get_option( 'wppo_settings', array() );
+			if ( empty( $options['file_optimisation']['criticalCSS'] ) ) {
+				return $this->send_response( array(), false, 400, __( 'Critical CSS is disabled.', 'performance-optimisation' ) );
+			}
+
 			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
 			$queued = Critical_CSS::regenerate_all();
 

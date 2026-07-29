@@ -950,6 +950,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( $fs && $fs->is_dir( $ccss_dir ) ) {
 				$fs->delete( $ccss_dir, true );
 			}
+			// Clear all CCSS status transients to prevent stale UI state.
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			global $wpdb;
+			$wpdb->query(
+				$wpdb->prepare(
+					"DELETE FROM $wpdb->options WHERE option_name LIKE %s",
+					$wpdb->esc_like( '_transient_wppo_ccss_status_' ) . '%'
+				)
+			);
+			$wpdb->query(
+				$wpdb->prepare(
+					"DELETE FROM $wpdb->options WHERE option_name LIKE %s",
+					$wpdb->esc_like( '_transient_timeout_wppo_ccss_status_' ) . '%'
+				)
+			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		}
 
 		/**

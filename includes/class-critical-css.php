@@ -95,12 +95,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		);
 
 		/**
-		 * CSS handles to skip during deferral.
+		 * CSS items to skip during deferral and generation.
+		 *
+		 * Used for both exact handle matching and URL substring matching.
 		 *
 		 * @var string[]
 		 * @since 2.0.0
 		 */
-		private const SKIP_DEFER_HANDLES = array(
+		private const SKIP_DEFER_ITEMS = array(
 			'wppo-combine-css',
 			'dashicons',
 			'admin-bar',
@@ -392,7 +394,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 
 					$skip = false;
-					foreach ( self::SKIP_DEFER_HANDLES as $handle ) {
+					foreach ( self::SKIP_DEFER_ITEMS as $handle ) {
 						if ( false !== strpos( $href, $handle ) ) {
 							$skip = true;
 							break;
@@ -521,7 +523,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return $scheme . '://' . $host . $port . $import_url;
 			}
 
-			return $scheme . '://' . $host . $port . $base_dir . '/' . $import_url;
+			$resolved = $scheme . '://' . $host . $port . $base_dir . '/' . $import_url;
+
+			// Normalize .. path segments.
+			$path = wp_parse_url( $resolved, PHP_URL_PATH );
+			if ( $path && false !== strpos( $path, '..' ) ) {
+				$parts = explode( '/', $path );
+				$stack = array();
+				foreach ( $parts as $part ) {
+					if ( '..' === $part ) {
+						array_pop( $stack );
+					} elseif ( '' !== $part && '.' !== $part ) {
+						$stack[] = $part;
+					}
+				}
+				$normalized_path = '/' . implode( '/', $stack );
+				$resolved        = str_replace( $path, $normalized_path, $resolved );
+			}
+
+			return $resolved;
 		}
 
 		/**
@@ -536,17 +556,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		private static function resolve_inline_imports( string $content, string $page_url ): string {
-			preg_match_all( '/@import\s+(?:url\([\'"]?|[\'"])([^\'";)]+)(?:[\'"]?\))?[\'"]?\s*;/i', $content, $imports );
-			if ( empty( $imports[1] ) ) {
+			preg_match_all( '/@import\s+(?:url\([\'"]?|[\'"])([^\'";)]+)(?:[\'"]?\))?[\'"]?\s*;/i', $content, $imports, PREG_OFFSET_CAPTURE );
+			if ( empty( $imports[0] ) ) {
 				return $content;
 			}
-			foreach ( $imports[1] as $import_url ) {
-				$resolved = self::resolve_import_url( trim( $import_url ), $page_url );
+			// Process in reverse order to preserve offsets.
+			$replacements = array();
+			foreach ( $imports[1] as $i => $match ) {
+				$import_url = trim( $match[0] );
+				$resolved   = self::resolve_import_url( $import_url, $page_url );
 				if ( '' !== $resolved ) {
 					$imported = self::fetch_stylesheet_with_imports( $resolved );
 					if ( '' !== $imported ) {
-						$content .= "\n" . $imported;
+						$replacements[ $imports[0][ $i ][1] ] = array(
+							'length'  => strlen( $imports[0][ $i ][0] ),
+							'content' => $imported,
+						);
 					}
+				}
+			}
+			if ( ! empty( $replacements ) ) {
+				krsort( $replacements );
+				foreach ( $replacements as $offset => $replacement ) {
+					$content = substr_replace( $content, $replacement['content'], $offset, $replacement['length'] );
 				}
 			}
 			return $content;
@@ -594,8 +626,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
-			// Extract media queries for mobile-first approach (max-width queries).
-			preg_match_all( '/@media\s*\(max-width:[^}]+\{(?:[^{}]|\{[^{}]*\})*\}/is', $css, $mobile_queries );
+			// Extract media queries for both mobile-first and desktop viewports.
+			preg_match_all( '/@media\s*\((?:max-width|min-width):[^}]+\{(?:[^{}]|\{[^{}]*\})*\}/is', $css, $mobile_queries );
 			if ( ! empty( $mobile_queries[0] ) ) {
 				foreach ( $mobile_queries[0] as $mq ) {
 					$filtered = self::filter_media_query_rules( $mq );
