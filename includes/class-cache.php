@@ -945,6 +945,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *              does not support flush_group or the function is unavailable.
 		 */
 		public static function flush_group( string $group ): bool {
+			// WP 6.1+: use wp_cache_supports() to check capability.
+			if ( function_exists( 'wp_cache_supports' ) ) {
+				if ( ! wp_cache_supports( 'flush_group' ) ) {
+					return false;
+				}
+
+				return wp_cache_flush_group( $group );
+			}
+
+			// Legacy fallback for WP < 6.1.
 			if ( function_exists( 'wp_cache_flush_group' ) ) {
 				global $wp_object_cache;
 
