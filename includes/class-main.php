@@ -354,8 +354,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public static function on_settings_update( $old_value, $value ) {
 			// Only clear cache when tabs that affect HTML output change.
-			$cache_relevant_tabs = array( 'cache_settings', 'file_optimisation', 'image_optimisation', 'preload_settings' );
-			$should_clear        = false;
+			$cache_relevant_tabs  = array( 'cache_settings', 'file_optimisation', 'image_optimisation', 'preload_settings', 'core_tweaks' );
+			$admin_only_tabs      = array( 'database_cleanup', 'object_cache', 'performance_audit' );
+			$should_clear         = false;
+			$should_runtime_flush = false;
+
 			foreach ( $cache_relevant_tabs as $tab ) {
 				$old_tab = isset( $old_value[ $tab ] ) ? $old_value[ $tab ] : null;
 				$new_tab = isset( $value[ $tab ] ) ? $value[ $tab ] : null;
@@ -365,8 +368,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
+			if ( ! $should_clear ) {
+				foreach ( $admin_only_tabs as $tab ) {
+					$old_tab = isset( $old_value[ $tab ] ) ? $old_value[ $tab ] : null;
+					$new_tab = isset( $value[ $tab ] ) ? $value[ $tab ] : null;
+					if ( $old_tab !== $new_tab ) {
+						$should_runtime_flush = true;
+						break;
+					}
+				}
+			}
+
 			if ( $should_clear ) {
 				self::clear_all_cache();
+			} elseif ( $should_runtime_flush ) {
+				Cache::flush_runtime();
+			}
+
+			// Bump image info salt when image settings change.
+			$old_img = $old_value['image_optimisation'] ?? array();
+			$new_img = $value['image_optimisation'] ?? array();
+			if ( $old_img !== $new_img ) {
+				Img_Converter::invalidate_img_info_cache();
+			}
+
+			// Bump audit salt when performance audit settings change.
+			$old_audit = $old_value['performance_audit'] ?? array();
+			$new_audit = $value['performance_audit'] ?? array();
+			if ( $old_audit !== $new_audit ) {
+				Telemetry::invalidate_audit_cache();
 			}
 
 			// Handle .htaccess rules update.
