@@ -209,7 +209,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $this->options['cache']['enableCache'] ) ) {
 				$this->cache = new Cache( $this->options );
 				$this->cache->set_image_optimisation( $this->image_optimisation );
-				add_action( 'template_redirect', array( $this->cache, 'generate_dynamic_static_html' ) );
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
+					add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this->cache, 'stash_cache' ) );
+				} else {
+					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
+				}
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
 			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
