@@ -928,6 +928,9 @@ if ( ! function_exists( 'wp_cache_supports' ) ) {
 	function wp_cache_supports( $feature ) {
 		switch ( $feature ) {
 			case 'flush_group':
+			case 'get_multiple':
+			case 'set_multiple':
+			case 'delete_multiple':
 				return true;
 			default:
 				return false;
