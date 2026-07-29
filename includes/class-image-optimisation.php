@@ -1122,6 +1122,102 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed <picture> or <img> HTML fragment (or the original fragment if unchanged).
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
+			$should_exclude = false;
+			foreach ( $exclude_imgs as $exclude_img ) {
+				if ( false !== strpos( $original_src, $exclude_img ) ) {
+					$should_exclude = true;
+					break;
+				}
+			}
+
+			if ( class_exists( 'WP_HTML_Processor' ) ) {
+				$wpp = new \WP_HTML_Processor( $matches[0] );
+				if ( null === $wpp->get_last_error() && $wpp->next_tag( array( 'tag_name' => 'picture' ) ) ) {
+					$depth = $wpp->get_current_depth();
+
+					// First pass: collect srcset/sizes from inner <img>.
+					$inner_img_srcset = null;
+					$inner_img_sizes  = null;
+					$inner_img_lazy   = false;
+
+					while ( $wpp->next_tag() ) {
+						if ( $wpp->get_current_depth() <= $depth ) {
+							break;
+						}
+						if ( 'IMG' === $wpp->get_tag() && ! $wpp->is_tag_closer() ) {
+							$inner_img_srcset = $wpp->get_attribute( 'data-srcset' ) ?? $wpp->get_attribute( 'srcset' );
+							$inner_img_sizes  = $wpp->get_attribute( 'data-sizes' ) ?? $wpp->get_attribute( 'sizes' );
+							$inner_img_lazy   = null !== $wpp->get_attribute( 'data-src' );
+						}
+					}
+
+					// Second pass: modify <source> attributes.
+					$wpp = new \WP_HTML_Processor( $matches[0] );
+					$wpp->next_tag( array( 'tag_name' => 'picture' ) );
+					$depth = $wpp->get_current_depth();
+
+					while ( $wpp->next_tag() ) {
+						if ( $wpp->get_current_depth() <= $depth ) {
+							break;
+						}
+						if ( 'SOURCE' === $wpp->get_tag() && ! $wpp->is_tag_closer() ) {
+							$wpp->set_attribute( 'type', Util::get_image_mime_type( $original_src ) );
+							if ( ! $should_exclude ) {
+								if ( $inner_img_srcset ) {
+									$wpp->set_attribute( $inner_img_lazy ? 'data-srcset' : 'srcset', $inner_img_srcset );
+								}
+								if ( $inner_img_sizes ) {
+									$wpp->set_attribute( $inner_img_lazy ? 'data-sizes' : 'sizes', $inner_img_sizes );
+								}
+							}
+						}
+					}
+
+					// Process the <img> inside the picture.
+					$updated_html = $wpp->get_updated_html();
+
+					if ( preg_match( '#<img\b[^>]*>#i', $matches[0], $img_matches ) ) {
+						$img_tag    = $img_matches[0];
+						$tags_check = new \WP_HTML_Tag_Processor( $img_tag );
+
+						if ( $tags_check->next_tag( array( 'tag_name' => 'img' ) ) && null !== $tags_check->get_attribute( 'data-src' ) ) {
+							if ( isset( $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) && (bool) $this->options['image_optimisation']['replacePlaceholderWithSVG'] ) {
+								$tags_write = new \WP_HTML_Tag_Processor( $img_tag );
+								if ( $tags_write->next_tag( array( 'tag_name' => 'img' ) ) && null === $tags_write->get_attribute( 'src' ) ) {
+									$svg_src = $this->generate_svg_base64( $img_tag );
+									if ( ! empty( $svg_src ) ) {
+										$updated_tags = new \WP_HTML_Tag_Processor( $updated_html );
+										if ( $updated_tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+											$updated_tags->set_attribute( 'src', $svg_src );
+											return $updated_tags->get_updated_html();
+										}
+									}
+								}
+							}
+							return $updated_html;
+						}
+
+						$tags_src = new \WP_HTML_Tag_Processor( $img_tag );
+						if ( $tags_src->next_tag( array( 'tag_name' => 'img' ) ) ) {
+							$src_val = $tags_src->get_attribute( 'src' );
+							if ( $src_val ) {
+								$original_src = $src_val;
+							}
+						}
+						$processed_img = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
+						return preg_replace_callback(
+							'#<img\b[^>]*>#i',
+							function () use ( $processed_img ) {
+								return $processed_img;
+							},
+							$updated_html,
+							1
+						);
+					}
+					return $updated_html;
+				}
+				// Fall through to WP_HTML_Tag_Processor on bail or non-picture case.
+			}
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				if ( ! preg_match( '#<picture\b[^>]*>.*?</picture>#is', $matches[0] ) ) {
 
@@ -1133,18 +1229,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$srcset = $tags->get_attribute( 'data-srcset' ) ?? $tags->get_attribute( 'srcset' );
 							$sizes  = $tags->get_attribute( 'data-sizes' ) ?? $tags->get_attribute( 'sizes' );
 
-							$is_lazy        = null !== $tags->get_attribute( 'data-src' );
-							$srcset_attr    = $is_lazy ? 'data-srcset' : 'srcset';
-							$sizes_attr     = $is_lazy ? 'data-sizes' : 'sizes';
-							$source_tag     = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-							$should_exclude = false;
-
-							foreach ( $exclude_imgs as $exclude_img ) {
-								if ( false !== strpos( $original_src, $exclude_img ) ) {
-									$should_exclude = true;
-									break;
-								}
-							}
+							$is_lazy     = null !== $tags->get_attribute( 'data-src' );
+							$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
+							$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
+							$source_tag  = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
 
 							if ( ! $should_exclude ) {
 								if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
@@ -1222,18 +1310,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$sizes = $sizes_matches[1];
 						}
 
-						$is_lazy        = (bool) strpos( $img_tag, 'data-src' );
-						$srcset_attr    = $is_lazy ? 'data-srcset' : 'srcset';
-						$sizes_attr     = $is_lazy ? 'data-sizes' : 'sizes';
-						$source_tag     = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
-						$should_exclude = false;
-
-						foreach ( $exclude_imgs as $exclude_img ) {
-							if ( false !== strpos( $original_src, $exclude_img ) ) {
-								$should_exclude = true;
-								break;
-							}
-						}
+						$is_lazy     = (bool) strpos( $img_tag, 'data-src' );
+						$srcset_attr = $is_lazy ? 'data-srcset' : 'srcset';
+						$sizes_attr  = $is_lazy ? 'data-sizes' : 'sizes';
+						$source_tag  = '<source type="' . Util::get_image_mime_type( $original_src ) . '"';
 
 						if ( ! $should_exclude ) {
 							if ( ! empty( $srcset ) || ! empty( $sizes ) ) {
@@ -1383,6 +1463,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$exclude_videos = $this->exclude_lazy_videos;
 
+			if ( class_exists( 'WP_HTML_Processor' ) ) {
+				$all_processed = true;
+				$wpp_result    = preg_replace_callback(
+					'#<video\b([^>]*)>(.*?)</video>#is',
+					function ( $matches ) use ( $exclude_videos, &$all_processed ) {
+						$full_tag   = $matches[0];
+						$attributes = $matches[1];
+						$inner_html = $matches[2];
+
+						// Check exclusions.
+						foreach ( $exclude_videos as $exclude ) {
+							if ( false !== strpos( $attributes, $exclude ) || false !== strpos( $inner_html, $exclude ) ) {
+								return $full_tag;
+							}
+						}
+
+						$p = new \WP_HTML_Processor( $full_tag );
+						if ( null === $p->get_last_error() && $p->next_tag( array( 'tag_name' => 'video' ) ) ) {
+							$src = $p->get_attribute( 'src' );
+							if ( $src ) {
+								$p->set_attribute( 'data-src', $src );
+								$p->remove_attribute( 'src' );
+							}
+							if ( null !== $p->get_attribute( 'autoplay' ) ) {
+								$p->remove_attribute( 'autoplay' );
+								$p->set_attribute( 'data-wppo-autoplay', '1' );
+							}
+							$p->set_attribute( 'preload', 'none' );
+							$p->add_class( 'wppo-lazy-video' );
+
+							while ( $p->next_tag( array( 'tag_name' => 'source' ) ) ) {
+								$src = $p->get_attribute( 'src' );
+								if ( $src ) {
+									$p->set_attribute( 'data-src', $src );
+									$p->remove_attribute( 'src' );
+								}
+							}
+							return $p->get_updated_html();
+						}
+
+						$all_processed = false;
+						return $full_tag;
+					},
+					$buffer
+				);
+
+				if ( $all_processed ) {
+					return $wpp_result;
+				}
+				// Partial bail — use partially-processed buffer as input to TagProcessor fallback.
+				$buffer = $wpp_result;
+			}
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				return preg_replace_callback(
 					'#<video\b([^>]*)>(.*?)</video>#is',
