@@ -23,6 +23,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		wrapInPicture: true,
 		excludeFirstImages: 0,
 		excludeImages: '',
+		disableCoreAutoSizes: false,
 		lazyLoadVideos: false,
 		excludeVideos: '',
 		convertImg: false,
@@ -253,6 +254,20 @@ const ImageOptimization = ( { options = {} } ) => {
 							) }
 							name="wrapInPicture"
 							checked={ settings.wrapInPicture }
+							onChange={ handleChange( setSettings ) }
+						/>
+
+						<SwitchField
+							label={ __(
+								'Disable Core Auto Sizes',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Disable WordPress 6.7.1\'s automatic addition of sizes="auto" to lazy-loaded images. Enable this if your theme has CSS conflicts (e.g. width: fit-content) that break with sizes=auto.',
+								'performance-optimisation'
+							) }
+							name="disableCoreAutoSizes"
+							checked={ settings.disableCoreAutoSizes }
 							onChange={ handleChange( setSettings ) }
 						/>
 					</div>
