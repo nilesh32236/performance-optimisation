@@ -12,7 +12,7 @@ Speed up WordPress with page caching, JS/CSS minify, lazy load, WebP/AVIF images
 
 == Description ==
 
-**Performance Optimisation** is a free, all-in-one speed plugin that makes your WordPress site faster — without the complexity. Page caching, file minification, image optimization, lazy loading, database cleanup, and Redis object cache — all from one clean dashboard.
+**Performance Optimisation** is a free, all-in-one speed plugin that makes your WordPress site faster — without the complexity. Fully compatible with popular themes and page builders (Elementor, Divi, Astra, GeneratePress, Kadence, WooCommerce, Yoast SEO, Rank Math). Page caching, file minification, image optimization, lazy loading, database cleanup, and Redis object cache — all from one clean dashboard.
 
 = Why choose Performance Optimisation? =
 
@@ -236,7 +236,10 @@ Yes. Features like lazy loading (improves LCP and CLS), minification (reduces re
 Yes. The plugin works on any standard WordPress hosting — shared hosting, VPS, dedicated servers, and managed WordPress hosts. Redis Object Cache requires Redis to be installed on your server, but all other features work everywhere.
 
 = Is this compatible with page builders like Elementor or Divi? =
-Yes. The plugin works with all major page builders. If you experience any layout issues after enabling minification, you can exclude specific files using the built-in exclusion rules.
+Yes. The plugin works with all major page builders including Elementor, Divi, Beaver Builder, and WPBakery. If you experience any layout issues after enabling minification, you can exclude specific files using the built-in exclusion rules.
+
+= Is this plugin compatible with popular themes, WooCommerce, and SEO plugins? =
+Yes. It is fully tested and compatible with major themes (Astra, GeneratePress, Kadence, OceanWP, Blocksy, Twenty Twenty-Four), e-commerce (WooCommerce), and SEO plugins (Yoast SEO, Rank Math, All in One SEO, SEOPress). WooCommerce cart, checkout, and account pages are automatically excluded from full-page caching. If minification or deferral affects specific scripts or style handles, you can add them to the exclusion rules in the File Optimization tab.
 
 = How do I convert images to WebP or AVIF? =
 Go to the **Image Optimization** tab, enable image conversion, and choose your format (WebP, AVIF, or both). Click **Optimize Now** to start converting your existing images. New uploads are converted automatically in the background.
