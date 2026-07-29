@@ -115,11 +115,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'wppo_settings',
 				array(
 					'file_optimisation'  => array(
-						'enableServerRules' => false,
-						'cdnURL'            => '',
-						'removeUnusedCSS'   => false,
-						'excludeUnusedCSS'  => '',
-						'criticalCSS'       => false,
+						'enableServerRules'      => false,
+						'cdnURL'                 => '',
+						'removeUnusedCSS'        => false,
+						'excludeUnusedCSS'       => '',
+						'criticalCSS'            => false,
+						'hostGoogleFontsLocally' => false,
 					),
 					'preload_settings'   => array(
 						'enableSpeculationRules' => false,
@@ -184,6 +185,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-used-css.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-abilities.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-google-fonts.php';
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
@@ -289,6 +291,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
+			}
+
+			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
+				$google_fonts = new Google_Fonts( $this->options );
+				add_filter( 'style_loader_tag', array( $google_fonts, 'process_style_tag' ), 9, 3 );
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
@@ -459,6 +466,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						}
 					);
 				}
+			}
+
+			// Clear Google Fonts cache when the setting toggles.
+			$old_gf = $old_value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			$new_gf = $value['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			if ( $old_gf !== $new_gf ) {
+				Google_Fonts::clear_font_cache();
 			}
 		}
 

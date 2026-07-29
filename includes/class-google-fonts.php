@@ -1,0 +1,342 @@
+<?php
+/**
+ * Google Fonts Local Hosting class.
+ *
+ * Detects Google Fonts loaded from fonts.googleapis.com, downloads the CSS
+ * and font files (woff2), and serves them locally to eliminate external
+ * DNS lookups, improve GDPR compliance, and apply font-display: swap.
+ *
+ * @package PerformanceOptimise\Inc
+ * @since   2.7.0
+ */
+
+namespace PerformanceOptimise\Inc;
+
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
+
+if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
+
+	/**
+	 * Class Google_Fonts
+	 *
+	 * @since 2.7.0
+	 */
+	class Google_Fonts {
+
+		/**
+		 * Font cache subdirectory under WP_CONTENT_DIR /cache/wppo/.
+		 *
+		 * @var string
+		 * @since 2.7.0
+		 */
+		private const FONTS_CACHE_DIR = '/cache/wppo/fonts';
+
+		/**
+		 * Chrome 120+ user-agent to request woff2 format from Google Fonts API.
+		 *
+		 * @var string
+		 * @since 2.7.0
+		 */
+		private const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+		/**
+		 * Google Fonts CSS2 API endpoint.
+		 *
+		 * @var string
+		 * @since 2.7.0
+		 */
+		private const FONTS_API = 'https://fonts.googleapis.com/css2';
+
+		/**
+		 * Plugin settings.
+		 *
+		 * @var array
+		 * @since 2.7.0
+		 */
+		private array $options;
+
+		/**
+		 * Font cache directory path.
+		 *
+		 * @var string
+		 * @since 2.7.0
+		 */
+		private string $font_cache_dir;
+
+		/**
+		 * Font cache directory URL.
+		 *
+		 * @var string
+		 * @since 2.7.0
+		 */
+		private string $font_cache_url;
+
+		/**
+		 * Constructor.
+		 *
+		 * @param array $options Plugin settings array.
+		 * @since 2.7.0
+		 */
+		public function __construct( array $options ) {
+			$this->options        = $options;
+			$this->font_cache_dir = wp_normalize_path( WP_CONTENT_DIR . self::FONTS_CACHE_DIR );
+			$this->font_cache_url = content_url( self::FONTS_CACHE_DIR );
+		}
+
+		/**
+		 * Process a stylesheet <link> tag to replace Google Fonts URL with local cache.
+		 *
+		 * Hooked to style_loader_tag filter (priority 9, before minify_css at 10).
+		 *
+		 * @param string $tag    The link tag HTML.
+		 * @param string $handle The stylesheet handle.
+		 * @param string $href   The stylesheet URL.
+		 * @return string Modified link tag with local URL or original tag.
+		 * @since 2.7.0
+		 */
+		public function process_style_tag( $tag, $handle, $href ) {
+			if ( is_user_logged_in() ) {
+				return $tag;
+			}
+
+			$enabled = $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			if ( empty( $enabled ) ) {
+				return $tag;
+			}
+
+			if ( false === strpos( $href, 'fonts.googleapis.com' ) ) {
+				return $tag;
+			}
+
+			$local_url = $this->download_and_rewrite( $href );
+			if ( '' === $local_url ) {
+				return $tag;
+			}
+
+			return str_replace( $href, $local_url, $tag );
+		}
+
+		/**
+		 * Process HTML buffer to intercept @import and inline <link> Google Fonts references.
+		 *
+		 * Catches patterns that bypass style_loader_tag, such as @import in CSS
+		 * or inline <link> tags added via wp_head or theme templates.
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The modified HTML buffer.
+		 * @since 2.7.0
+		 */
+		public function process_buffer( $buffer ) {
+			$enabled = $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false;
+			if ( empty( $enabled ) ) {
+				return $buffer;
+			}
+
+			// Replace <link> tags with Google Fonts URLs.
+			$buffer = preg_replace_callback(
+				'#<link\b[^>]*\bhref\s*=\s*["\']([^"\']*fonts\.googleapis\.com[^"\']*)["\'][^>]*>#is',
+				function ( $matches ) {
+					$local_url = $this->download_and_rewrite( $matches[1] );
+					if ( '' !== $local_url ) {
+						return str_replace( $matches[1], $local_url, $matches[0] );
+					}
+					return $matches[0];
+				},
+				$buffer
+			);
+
+			// Replace @import url(...) and @import '...' with Google Fonts URLs.
+			$buffer = preg_replace_callback(
+				'#@import\s+(?:url\(\s*["\']?|["\'])([^"\';)]*fonts\.googleapis\.com[^"\';)]*)(?:["\']?\)\s*|["\'])\s*;#is',
+				function ( $matches ) {
+					$local_url = $this->download_and_rewrite( $matches[1] );
+					if ( '' !== $local_url ) {
+						return str_replace( $matches[1], $local_url, $matches[0] );
+					}
+					return $matches[0];
+				},
+				$buffer
+			);
+
+			return $buffer;
+		}
+
+		/**
+		 * Download Google Fonts CSS, fetch font files, rewrite URLs, and cache locally.
+		 *
+		 * @param string $url The Google Fonts CSS URL.
+		 * @return string Local CSS URL on success, empty string on failure.
+		 * @since 2.7.0
+		 */
+		public function download_and_rewrite( $url ) {
+			$url = $this->normalize_google_fonts_url( $url );
+			if ( '' === $url ) {
+				return '';
+			}
+
+			$key      = md5( $url );
+			$css_file = $this->font_cache_dir . '/css/' . $key . '.css';
+			$css_url  = $this->font_cache_url . '/css/' . $key . '.css';
+
+			// Return cached CSS if it exists.
+			if ( file_exists( $css_file ) ) {
+				return $css_url;
+			}
+
+			// Fetch CSS from Google Fonts API.
+			$response = wp_remote_get(
+				$url,
+				array(
+					'timeout'    => 20,
+					'user-agent' => self::CHROME_UA,
+				)
+			);
+
+			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+				return '';
+			}
+
+			$css = wp_remote_retrieve_body( $response );
+			if ( empty( $css ) ) {
+				return '';
+			}
+
+			// Ensure cache directories exist.
+			Util::prepare_cache_dir( $this->font_cache_dir . '/css' );
+			Util::prepare_cache_dir( $this->font_cache_dir . '/files' );
+
+			// Extract and download font file URLs from @font-face src declarations.
+			$css = preg_replace_callback(
+				'#(url\()\s*(["\']?)(https://fonts\.gstatic\.com[^"\')]+)\2\s*\)#i',
+				function ( $matches ) {
+					$file_url = $matches[3];
+					$hash     = md5( $file_url );
+					$local    = $this->font_cache_dir . '/files/' . $hash . '.woff2';
+
+					if ( ! file_exists( $local ) ) {
+						$this->download_font_file( $file_url, $local );
+					}
+
+					return 'url(' . $this->font_cache_url . '/files/' . $hash . '.woff2)';
+				},
+				$css
+			);
+
+			if ( null === $css ) {
+				return '';
+			}
+
+			// Inject font-display: swap.
+			$css = Minify\CSS::inject_font_display_swap( $css );
+
+			// Save the rewritten CSS.
+			$filesystem = Util::init_filesystem();
+			if ( $filesystem ) {
+				$filesystem->put_contents( $css_file, $css, FS_CHMOD_FILE );
+			} else {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+				file_put_contents( $css_file, $css );
+			}
+
+			if ( file_exists( $css_file ) ) {
+				return $css_url;
+			}
+
+			return '';
+		}
+
+		/**
+		 * Normalize a Google Fonts URL — convert v1 API (css?) to v2 (css2?) format.
+		 *
+		 * @param string $url The raw URL.
+		 * @return string Normalized URL or empty string if not a Google Fonts URL.
+		 * @since 2.7.0
+		 */
+		private function normalize_google_fonts_url( $url ) {
+			if ( false === strpos( $url, 'fonts.googleapis.com' ) ) {
+				return '';
+			}
+
+			// Already css2 format.
+			if ( false !== strpos( $url, '/css2' ) ) {
+				return $url;
+			}
+
+			// Convert v1 css?family=... to css2?family=... preserving query params.
+			$parsed = wp_parse_url( $url );
+			if ( false === $parsed ) {
+				return $url;
+			}
+
+			$path   = $parsed['path'] ?? '';
+			$query  = $parsed['query'] ?? '';
+			$scheme = $parsed['scheme'] ?? 'https';
+			$host   = $parsed['host'] ?? 'fonts.googleapis.com';
+			$path   = '/css2';
+
+			$query_params = array();
+			parse_str( $query, $query_params );
+
+			// Rename 'family' to 'family' (it's the same in v2, but v2 uses ?family=).
+			// Google's css2 API uses the same 'family' parameter.
+			if ( ! empty( $query_params ) ) {
+				return $scheme . '://' . $host . $path . '?' . http_build_query( $query_params, '', '&', PHP_QUERY_RFC3986 );
+			}
+
+			return $url;
+		}
+
+		/**
+		 * Download a single font file from Google's CDN.
+		 *
+		 * @param string $url   The font file URL.
+		 * @param string $dest  Local destination path.
+		 * @return bool True on success, false on failure.
+		 * @since 2.7.0
+		 */
+		private function download_font_file( $url, $dest ) {
+			$response = wp_remote_get(
+				$url,
+				array(
+					'timeout'    => 30,
+					'user-agent' => self::CHROME_UA,
+					'stream'     => true,
+					'filename'   => $dest,
+				)
+			);
+
+			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+				// Clean up partial download.
+				if ( file_exists( $dest ) ) {
+					wp_delete_file( $dest );
+				}
+				return false;
+			}
+
+			return file_exists( $dest );
+		}
+
+		/**
+		 * Clear the entire Google Fonts cache directory.
+		 *
+		 * @return void
+		 * @since 2.7.0
+		 */
+		public static function clear_font_cache() {
+			$font_cache_dir = wp_normalize_path( WP_CONTENT_DIR . self::FONTS_CACHE_DIR );
+
+			$filesystem = Util::init_filesystem();
+			if ( $filesystem && $filesystem->is_dir( $font_cache_dir ) ) {
+				$filesystem->delete( $font_cache_dir, true );
+			}
+
+			// Recreate empty directory structure.
+			Util::prepare_cache_dir( $font_cache_dir . '/css' );
+			Util::prepare_cache_dir( $font_cache_dir . '/files' );
+
+			Log::add( 'Google Fonts cache cleared' );
+		}
+	}
+}

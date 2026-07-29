@@ -15,6 +15,7 @@ namespace PerformanceOptimise\Inc;
 
 use PerformanceOptimise\Inc\Minify;
 use PerformanceOptimise\Inc\Minify\CSS;
+use PerformanceOptimise\Inc\Google_Fonts;
 use MatthiasMullie\Minify\CSS as CSSMinifier;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -399,6 +400,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
 			$buffer = $image_optimisation->add_delay_load_img( $buffer );
 			$buffer = $image_optimisation->lazy_load_videos( $buffer );
+
+			// Host Google Fonts locally via buffer-level interception.
+			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
+				$buffer = ( new Google_Fonts( $this->options ) )->process_buffer( $buffer );
+			}
 
 			$file_opts         = $this->options['file_optimisation'] ?? array();
 			$needs_minify_pass = ! empty( $file_opts['minifyHTML'] )
@@ -958,6 +964,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			Used_CSS::delete_all_used_css();
+			Google_Fonts::clear_font_cache();
 
 			return $res1 && $res2;
 		}
