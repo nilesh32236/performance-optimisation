@@ -410,11 +410,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$buffer = $this->minify_buffer( $buffer );
 			}
 
+				// Apply used-CSS before CDN so href matching works.
+			$buffer = $this->maybe_apply_used_css( $buffer );
+
 			// Apply CDN rewriting.
 			$buffer = $this->maybe_apply_cdn( $buffer );
-
-			// Apply used-CSS (remove unused CSS rules).
-			$buffer = $this->maybe_apply_used_css( $buffer );
 
 			return $buffer;
 		}

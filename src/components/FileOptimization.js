@@ -67,6 +67,7 @@ const FileOptimization = ( {
 		message: '',
 		success: false,
 	} );
+	const notificationTimer = useRef( null );
 
 	const withNotification = async (
 		apiCallPromise,
@@ -75,6 +76,12 @@ const FileOptimization = ( {
 	) => {
 		setIsLoading( true );
 		setNotification( { message: '', success: false } );
+
+		// Clear any existing auto-dismiss timer to avoid stale timeout hazard.
+		if ( notificationTimer.current ) {
+			clearTimeout( notificationTimer.current );
+		}
+
 		try {
 			const res = await apiCallPromise;
 			if ( res.success ) {
@@ -99,7 +106,7 @@ const FileOptimization = ( {
 			} );
 		} finally {
 			setIsLoading( false );
-			setTimeout(
+			notificationTimer.current = setTimeout(
 				() => setNotification( { message: '', success: false } ),
 				3000
 			);
@@ -118,7 +125,7 @@ const FileOptimization = ( {
 	};
 
 	const handleRegenerateUsedCSS = async () => {
-		withNotification(
+		await withNotification(
 			apiCall( 'used_css_regenerate' ),
 			__( 'Used CSS regeneration queued.', 'performance-optimisation' ),
 			__( 'Failed to regenerate used CSS.', 'performance-optimisation' )
@@ -129,7 +136,7 @@ const FileOptimization = ( {
 		if ( e ) {
 			e.preventDefault();
 		}
-		withNotification(
+		await withNotification(
 			apiCall( 'update_settings', {
 				tab: 'file_optimisation',
 				settings: {

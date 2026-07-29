@@ -249,6 +249,53 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	it( 'end-to-end: toggle Remove Unused CSS, type safelist, submit includes both', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		// Initially the safelist textarea and regenerate button should be hidden.
+		expect(
+			screen.queryByText( 'Safelist Selectors' )
+		).not.toBeInTheDocument();
+
+		// Toggle Remove Unused CSS on.
+		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
+		fireEvent.click( switchField );
+
+		// Now safelist and regenerate button should appear.
+		expect( screen.getByText( 'Safelist Selectors' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'Regenerate Used CSS' ) ).toBeInTheDocument();
+
+		// Type into the safelist textarea.
+		const textarea = screen.getByLabelText( 'Safelist Selectors' );
+		fireEvent.change( textarea, {
+			target: { value: '.my-safelist\n.another-rule' },
+		} );
+
+		// Submit the form.
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'file_optimisation',
+					settings: expect.objectContaining( {
+						removeUnusedCSS: true,
+						excludeUnusedCSS: '.my-safelist\n.another-rule',
+					} ),
+				} )
+			);
+		} );
+	} );
+
 	it( 'regenerate button calls used_css_regenerate API', async () => {
 		apiCall.mockResolvedValueOnce( {
 			success: true,
