@@ -926,6 +926,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *              does not support flush_group or the function is unavailable.
 		 */
 		public static function flush_group( string $group ): bool {
+			if ( function_exists( 'wp_cache_supports' ) && wp_cache_supports( 'flush_group' ) ) {
+				return wp_cache_flush_group( $group );
+			}
+
 			if ( function_exists( 'wp_cache_flush_group' ) ) {
 				global $wp_object_cache;
 

@@ -934,4 +934,8 @@ if ( ! function_exists( 'wp_cache_add_salt' ) ) {
 			$wp_object_cache->add_salt( $salt );
 		}
 	}
+
+	if ( function_exists( 'wp_cache_supports' ) ) {
+		wp_cache_supports( 'flush_group', true );
+	}
 }
