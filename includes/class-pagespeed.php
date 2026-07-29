@@ -264,7 +264,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return string Transient key.
 		 */
 		public static function get_transient_key( string $url, string $strategy ): string {
-			return 'wppo_pagespeed_' . md5( esc_url_raw( $url ) ) . '_' . sanitize_key( $strategy );
+			return Util::transient_key( 'wppo_pagespeed_' . md5( esc_url_raw( $url ) ) . '_' . sanitize_key( $strategy ) );
 		}
 
 		/**

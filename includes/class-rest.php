@@ -1248,7 +1248,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
 
-			$transient_key = 'wppo_audit_' . md5( $url );
+			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
 			$telemetry     = get_transient( $transient_key );
 
 			if ( false === $telemetry ) {

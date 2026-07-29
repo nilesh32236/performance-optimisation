@@ -195,7 +195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 
 			if ( $has_changed ) {
 				// Store for 24 hours, keyed by post ID.
-				set_transient( self::TRANSIENT_PREFIX . $post_id, $assets, DAY_IN_SECONDS );
+				set_transient( Util::transient_key( self::TRANSIENT_PREFIX . $post_id ), $assets, DAY_IN_SECONDS );
 			}
 		}
 
@@ -207,7 +207,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @return array|false The captured assets array, or false if not found.
 		 */
 		public static function get_page_assets( $post_id ) {
-			return get_transient( self::TRANSIENT_PREFIX . $post_id );
+			return get_transient( Util::transient_key( self::TRANSIENT_PREFIX . $post_id ) );
 		}
 
 		/**

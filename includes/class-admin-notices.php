@@ -66,7 +66,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 			$key = sanitize_key( wp_unslash( $_GET['wppo_dismiss'] ) );
 
 			if ( 'activation' === $key ) {
-				delete_transient( 'wppo_activation_notices' );
+				delete_transient( Util::transient_key( 'wppo_activation_notices' ) );
 			}
 
 			if ( 'review_done' === $key ) {
@@ -102,7 +102,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		 * @return void
 		 */
 		private function maybe_activation_notices(): void {
-			$notices = get_transient( 'wppo_activation_notices' );
+			$notices = get_transient( Util::transient_key( 'wppo_activation_notices' ) );
 
 			if ( ! is_array( $notices ) || empty( $notices ) ) {
 				return;

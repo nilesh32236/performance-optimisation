@@ -175,6 +175,15 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 - All REST endpoints require `manage_options` + `X-WP-Nonce`
 - Settings stored as serialized array in single `wppo_settings` option
 
+## Multisite compatibility
+
+- **Transient key isolation**: All plugin transient keys are prefixed with `{blog_id}_` on multisite networks via `Util::transient_key()` to prevent collisions when a shared object cache backend (Redis, Memcached) is present.
+- **Static HTML cache**: Uses domain-based directory structure (`{domain}/{path}/index.html`) — inherently multisite-safe.
+- **Redis drop-in** (`templates/object-cache.php`): Uses `get_current_blog_id()` for key namespacing via `blog_prefix`.
+- **Options** (`wppo_settings`, `wppo_img_info`, etc.): WordPress `get_option`/`update_option` is inherently site-specific in multisite.
+- **Database queries**: Use `$wpdb->posts` (etc.), which are multisite-safe via table prefix.
+- **Uninstall**: Inline blog-ID prefixing for transient deletion when iterating sites with `switch_to_blog()`.
+
 ## Build
 
 - No custom Webpack config — uses `@wordpress/scripts` defaults

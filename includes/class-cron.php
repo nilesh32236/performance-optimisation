@@ -141,10 +141,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 */
 		private function schedule_page_cron_jobs(): void {
 			// Transient-based lock to prevent concurrent workers from duplicating or skipping work.
-			if ( get_transient( 'wppo_preload_cron_lock' ) ) {
+			if ( get_transient( Util::transient_key( 'wppo_preload_cron_lock' ) ) ) {
 				return;
 			}
-			set_transient( 'wppo_preload_cron_lock', 1, 20 * MINUTE_IN_SECONDS );
+			set_transient( Util::transient_key( 'wppo_preload_cron_lock' ), 1, 20 * MINUTE_IN_SECONDS );
 
 			try {
 				// Persist iteration offset across runs.
@@ -219,7 +219,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					wp_schedule_single_event( time() + 60, 'wppo_page_cron_batch' );
 				}
 			} finally {
-				delete_transient( 'wppo_preload_cron_lock' );
+				delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
 			}
 		}
 
@@ -230,10 +230,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.9.0
 		 */
 		public function used_css_cron() {
-			if ( get_transient( 'wppo_used_css_lock' ) ) {
+			if ( get_transient( Util::transient_key( 'wppo_used_css_lock' ) ) ) {
 				return;
 			}
-			set_transient( 'wppo_used_css_lock', 1, 20 * MINUTE_IN_SECONDS );
+			set_transient( Util::transient_key( 'wppo_used_css_lock' ), 1, 20 * MINUTE_IN_SECONDS );
 
 			try {
 				$options = get_option( 'wppo_settings', array() );
@@ -244,7 +244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$used_css = new Used_CSS( $options );
 				$used_css->regenerate_all();
 			} finally {
-				delete_transient( 'wppo_used_css_lock' );
+				delete_transient( Util::transient_key( 'wppo_used_css_lock' ) );
 			}
 		}
 
@@ -259,9 +259,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 			wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
 			delete_option( 'wppo_preload_cron_offset' );
-			delete_transient( 'wppo_preload_cron_lock' );
+			delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
 			wp_clear_scheduled_hook( 'wppo_used_css_cron' );
-			delete_transient( 'wppo_used_css_lock' );
+			delete_transient( Util::transient_key( 'wppo_used_css_lock' ) );
 			wp_clear_scheduled_hook( 'wppo_ccss_regeneration' );
 			wp_clear_scheduled_hook( 'wppo_generate_ccss' );
 		}
@@ -353,10 +353,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		public function img_convert_cron() {
-			if ( get_transient( 'wppo_img_convert_lock' ) ) {
+			if ( get_transient( Util::transient_key( 'wppo_img_convert_lock' ) ) ) {
 				return;
 			}
-			set_transient( 'wppo_img_convert_lock', true, 5 * MINUTE_IN_SECONDS );
+			set_transient( Util::transient_key( 'wppo_img_convert_lock' ), true, 5 * MINUTE_IN_SECONDS );
 
 			try {
 				$options       = get_option( 'wppo_settings', array() );
@@ -402,7 +402,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					}
 				}
 			} finally {
-				delete_transient( 'wppo_img_convert_lock' );
+				delete_transient( Util::transient_key( 'wppo_img_convert_lock' ) );
 			}
 		}
 
@@ -442,14 +442,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			if ( $should_run ) {
 				// Use transient-based lock as primary mechanism (works without persistent object cache).
-				if ( get_transient( 'wppo_db_cleanup_lock' ) ) {
+				if ( get_transient( Util::transient_key( 'wppo_db_cleanup_lock' ) ) ) {
 					return;
 				}
-				set_transient( 'wppo_db_cleanup_lock', 1, 5 * MINUTE_IN_SECONDS );
+				set_transient( Util::transient_key( 'wppo_db_cleanup_lock' ), 1, 5 * MINUTE_IN_SECONDS );
 				try {
 					Database_Cleanup::auto_clean( $settings );
 				} finally {
-					delete_transient( 'wppo_db_cleanup_lock' );
+					delete_transient( Util::transient_key( 'wppo_db_cleanup_lock' ) );
 				}
 				update_option( 'wppo_last_db_cleanup', $now, false );
 			}

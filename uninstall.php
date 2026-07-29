@@ -78,11 +78,12 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_user_meta_by_key( 'wppo_welcome_dismissed' );
 
 		// Delete transients.
-		delete_transient( 'wppo_activation_notices' );
-		delete_transient( 'wppo_show_welcome_notice' );
-		delete_transient( 'wppo_cache_size' );
-		delete_transient( 'wppo_total_js_css' );
-		delete_transient( 'wppo_wp_cache_fix_checked' );
+		$transient_prefix = is_multisite() ? get_current_blog_id() . '_' : '';
+		delete_transient( $transient_prefix . 'wppo_activation_notices' );
+		delete_transient( $transient_prefix . 'wppo_show_welcome_notice' );
+		delete_transient( $transient_prefix . 'wppo_cache_size' );
+		delete_transient( $transient_prefix . 'wppo_total_js_css' );
+		delete_transient( $transient_prefix . 'wppo_wp_cache_fix_checked' );
 	}
 }
 

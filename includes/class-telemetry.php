@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return array|\WP_Error   Associative array of metrics, or WP_Error on failure.
 		 */
 		public static function scan( string $url, string $scan_type = 'manual', bool $force = false ): array|\WP_Error {
-			$cache_key  = 'wppo_audit_' . md5( $url );
+			$cache_key  = Util::transient_key( 'wppo_audit_' . md5( $url ) );
 			$has_salted = function_exists( 'wp_cache_get_salted' );
 
 			if ( $has_salted ) {
