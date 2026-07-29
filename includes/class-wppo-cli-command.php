@@ -278,10 +278,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$format = $assoc_args['format'] ?? 'json';
 
 				if ( 'yaml' === $format ) {
-					if ( function_exists( 'yaml_emit' ) ) {
+					if ( class_exists( 'Spyc' ) ) {
+						WP_CLI::log( \Spyc::YAMLDump( $data, 2, 0 ) );
+					} elseif ( function_exists( 'yaml_emit' ) ) {
 						WP_CLI::log( yaml_emit( $data ) );
 					} else {
-						WP_CLI::warning( __( 'PHP yaml extension is not installed; falling back to JSON format.', 'performance-optimisation' ) );
+						WP_CLI::warning( __( 'YAML dumper not available; falling back to JSON format.', 'performance-optimisation' ) );
 						WP_CLI::log( (string) wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
 					}
 				} else {
@@ -309,6 +311,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				}
 
 				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
+
+				$known_tabs = array( 'file_optimisation', 'preload_settings', 'image_optimisation', 'database_cleanup', 'object_cache', 'performance_audit', 'cache_settings', 'core_tweaks' );
+				if ( ! in_array( $tab, $known_tabs, true ) ) {
+					/* translators: %s: Settings tab name */
+					WP_CLI::warning( sprintf( __( 'Unrecognized settings tab "%s". Settings will be saved but the plugin may not read them.', 'performance-optimisation' ), $tab ) );
+				}
 
 				if ( ! isset( $options[ $tab ] ) || ! is_array( $options[ $tab ] ) ) {
 					$options[ $tab ] = array();
