@@ -1124,10 +1124,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			$play_button = apply_filters( 'wppo_video_play_button_html', $play_button, $video_id, $video_type );
 
-			$placeholder_html = '<div class="wppo-video-placeholder" data-video-src="' . esc_url( $original_src ) . '" data-video-type="' . esc_attr( $video_type ) . '">
+			$attrs_to_store = array( 'id', 'class', 'width', 'height', 'sandbox', 'referrerpolicy', 'title', 'style', 'name', 'frameborder', 'allow', 'allowfullscreen' );
+			$stored_attrs   = array();
+
+			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				$tags = new \WP_HTML_Tag_Processor( $iframe_tag );
+				if ( $tags->next_tag( array( 'tag_name' => 'iframe' ) ) ) {
+					foreach ( $attrs_to_store as $attr ) {
+						$val = $tags->get_attribute( $attr );
+						if ( null !== $val ) {
+							$stored_attrs[ $attr ] = $val;
+						}
+					}
+				}
+			}
+			$attrs_json = ! empty( $stored_attrs ) ? wp_json_encode( $stored_attrs ) : '';
+
+			$placeholder_html = '<div class="wppo-video-placeholder" data-wppo-video-src="' . esc_url( $original_src ) . '" data-wppo-video-type="' . esc_attr( $video_type ) . '"' . ( $attrs_json ? ' data-wppo-iframe-attrs="' . esc_attr( $attrs_json ) . '"' : '' ) . '>
 				' . $noscript_iframe . '
 				<picture>
-					<img src="' . esc_url( $thumbnail_url ) . '" alt="' . esc_attr__( 'Video thumbnail', 'performance-optimisation' ) . '" loading="lazy" data-fallback="' . esc_url( $fallback_thumbnail_url ) . '">
+					<img src="' . esc_url( $thumbnail_url ) . '" alt="' . esc_attr__( 'Video thumbnail', 'performance-optimisation' ) . '" loading="lazy" data-wppo-fallback="' . esc_url( $fallback_thumbnail_url ) . '">
 				</picture>
 				' . $play_button . '
 			</div>';

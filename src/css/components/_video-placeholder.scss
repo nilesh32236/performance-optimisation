@@ -18,6 +18,15 @@
 		display: block;
 		width: 100%;
 	}
+
+	&.wppo-video-loading {
+		cursor: default;
+
+		picture {
+			opacity: 0.5;
+			transition: opacity 0.3s ease;
+		}
+	}
 }
 
 .wppo-video-play-btn {
