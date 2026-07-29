@@ -3,7 +3,7 @@ Contributors: nilesh912
 Tags: cache, performance, speed, pagespeed, minify
 Requires at least: 6.2
 Requires PHP: 8.2
-Tested up to: 6.8
+Tested up to: 7.0
 Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -176,7 +176,8 @@ After activation, you can manage the following from the settings tabs:
 * Improvement: Better form inputs, loading indicators, and keyboard navigation.
 * Improvement: Faster database operations for image processing.
 * Security: Fixed several file path security issues.
-* Compatibility: Tested up to WordPress 6.9.
+ * Compatibility: Tested up to WordPress 6.9.
+ * Compatibility: Tested up to WordPress 7.0.
 
 = 1.1.4 (2026-04-08) =
 * Security: Fixed path traversal vulnerability in the Image Optimisation REST endpoint.
