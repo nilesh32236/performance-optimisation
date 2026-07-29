@@ -117,6 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'file_optimisation'  => array(
 						'enableServerRules' => false,
 						'cdnURL'            => '',
+						'criticalCSS'       => false,
 					),
 					'preload_settings'   => array(
 						'enableSpeculationRules' => false,
@@ -178,6 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
+			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
@@ -303,6 +305,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			new Metabox();
 			new Cron();
 			new Asset_Manager();
+
+			// Critical CSS hooks.
+			if ( ! empty( $this->options['file_optimisation']['criticalCSS'] ) ) {
+				add_action( 'wp_head', array( 'PerformanceOptimise\Inc\Critical_CSS', 'inline_ccss' ), 0 );
+				add_filter( 'style_loader_tag', array( 'PerformanceOptimise\Inc\Critical_CSS', 'defer_stylesheets' ), 10, 3 );
+				add_action( 'wppo_generate_ccss', array( 'PerformanceOptimise\Inc\Critical_CSS', 'background_generate' ), 10, 1 );
+			}
 
 			// Register Action Scheduler callback for background image processing.
 			add_action( 'wppo_convert_image_background', array( $this, 'process_background_image' ), 10, 1 );

@@ -50,6 +50,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
 
 			add_action( 'wppo_database_cleanup_cron', array( $this, 'database_cleanup_cron' ) );
+
+			add_action( 'wppo_ccss_regeneration', array( $this, 'ccss_regeneration_cron' ) );
 		}
 
 		/**
@@ -88,6 +90,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			if ( ! wp_next_scheduled( 'wppo_database_cleanup_cron' ) ) {
 				wp_schedule_event( time(), 'daily', 'wppo_database_cleanup_cron' );
+			}
+
+			if ( ! wp_next_scheduled( 'wppo_ccss_regeneration' ) ) {
+				wp_schedule_event( time(), 'daily', 'wppo_ccss_regeneration' );
+			}
+		}
+
+		/**
+		 * Callback for CCSS daily regeneration cron.
+		 *
+		 * @return void
+		 * @since 2.0.0
+		 */
+		public function ccss_regeneration_cron() {
+			$options = get_option( 'wppo_settings', array() );
+			if ( ! empty( $options['file_optimisation']['criticalCSS'] ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
+				Critical_CSS::regenerate_all();
 			}
 		}
 
@@ -208,6 +228,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
 			delete_option( 'wppo_preload_cron_offset' );
 			delete_transient( 'wppo_preload_cron_lock' );
+			wp_clear_scheduled_hook( 'wppo_ccss_regeneration' );
+			wp_clear_scheduled_hook( 'wppo_generate_ccss' );
 		}
 
 		/**

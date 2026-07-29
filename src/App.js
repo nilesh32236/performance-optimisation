@@ -20,7 +20,11 @@ import {
 	faBolt,
 	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
-import { fetchRecentActivities, fetchServerRules } from './lib/apiRequest';
+import {
+	apiCall,
+	fetchRecentActivities,
+	fetchServerRules,
+} from './lib/apiRequest';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 import { __ } from '@wordpress/i18n';
@@ -85,8 +89,11 @@ const App = () => {
 	const [ serverRules, setServerRules ] = useState( null );
 	const [ serverRulesError, setServerRulesError ] = useState( false );
 	const [ rulesRetryTrigger, setRulesRetryTrigger ] = useState( 0 );
+	const [ ccssStatus, setCcssStatus ] = useState( {} );
+	const [ ccssRefreshTrigger, setCcssRefreshTrigger ] = useState( 0 );
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedRules = useRef( false );
+	const hasFetchedCcss = useRef( false );
 
 	const sidebarRef = useRef( null );
 	const toggleBtnRef = useRef( null );
@@ -146,11 +153,16 @@ const App = () => {
 					options={ settings.file_optimisation }
 					serverRules={ serverRules }
 					serverRulesError={ serverRulesError }
+					ccssStatus={ ccssStatus }
 					onRetryServerRules={ () => {
 						hasFetchedRules.current = false;
 						setServerRulesError( false );
 						setServerRules( null );
 						setRulesRetryTrigger( ( c ) => c + 1 );
+					} }
+					onCcssRefresh={ () => {
+						hasFetchedCcss.current = false;
+						setCcssRefreshTrigger( ( c ) => c + 1 );
 					} }
 				/>
 			),
@@ -321,10 +333,37 @@ const App = () => {
 		};
 		fetchRules();
 
+		const fetchCcssStatus = async () => {
+			if ( hasFetchedCcss.current && 0 === ccssRefreshTrigger ) {
+				return;
+			}
+			hasFetchedCcss.current = true;
+			try {
+				const res = await apiCall(
+					'ccss_status',
+					{},
+					'GET',
+					abortController.signal
+				);
+				if ( ! abortController.signal.aborted && res.success ) {
+					setCcssStatus( res.data );
+				}
+			} catch {
+				// Silently fail - CCSS status is non-critical.
+			}
+		};
+		fetchCcssStatus();
+
 		return () => {
 			abortController.abort();
 		};
-	}, [ activeTab, recentActivities.length, serverRules, rulesRetryTrigger ] );
+	}, [
+		activeTab,
+		recentActivities.length,
+		serverRules,
+		rulesRetryTrigger,
+		ccssRefreshTrigger,
+	] );
 
 	useEffect( () => {
 		setTransition( true );

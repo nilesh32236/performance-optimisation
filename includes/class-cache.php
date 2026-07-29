@@ -923,7 +923,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$res2 = $fs->delete( $min_dir, true );
 			}
 
+			$ccss_dir = "{$this->cache_root_dir}/ccss";
+
+			if ( $fs && $fs->is_dir( $ccss_dir ) ) {
+				$fs->delete( $ccss_dir, true );
+			}
+
 			return $res1 && $res2;
+		}
+
+		/**
+		 * Clear all CCSS files.
+		 *
+		 * @return void
+		 * @since 2.0.0
+		 */
+		public static function clear_ccss(): void {
+			$instance = new self();
+			$fs       = $instance->get_filesystem();
+			$ccss_dir = "{$instance->cache_root_dir}/ccss";
+			if ( $fs && $fs->is_dir( $ccss_dir ) ) {
+				$fs->delete( $ccss_dir, true );
+			}
 		}
 
 		/**

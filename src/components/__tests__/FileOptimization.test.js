@@ -220,4 +220,33 @@ describe( 'FileOptimization Component', () => {
 			screen.getByText( 'server { listen 80; }' )
 		).toBeInTheDocument();
 	} );
+
+	it( 'renders Critical CSS switch in the assets tab', () => {
+		render(
+			<FileOptimization
+				options={ { criticalCSS: false } }
+				serverRules={ {} }
+			/>
+		);
+
+		expect( screen.getByLabelText( /Critical CSS/i ) ).toBeInTheDocument();
+		expect( screen.getByLabelText( /Critical CSS/i ) ).not.toBeChecked();
+	} );
+
+	it( 'shows CriticalCssPanel when Critical CSS is enabled', () => {
+		render(
+			<FileOptimization
+				options={ { criticalCSS: true } }
+				serverRules={ {} }
+				ccssStatus={ {} }
+			/>
+		);
+
+		expect(
+			screen.getByText( /Critical CSS Status/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole( 'button', { name: /Regenerate All/i } )
+		).toBeInTheDocument();
+	} );
 } );

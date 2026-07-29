@@ -181,6 +181,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'regenerate_ccss'         => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'regenerate_ccss' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'ccss_status'             => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_ccss_status' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
 		}
 
@@ -1259,6 +1271,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'apache'      => Server_Rules::get_apache_rules(),
 				)
 			);
+		}
+
+		/**
+		 * Regenerate critical CSS for all templates.
+		 *
+		 * @param \WP_REST_Request $_request The request object.
+		 * @since 2.0.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function regenerate_ccss( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
+			$queued = Critical_CSS::regenerate_all();
+
+			return $this->send_response(
+				array( 'queued' => $queued ),
+				true,
+				200,
+				sprintf(
+					/* translators: %d: Number of regeneration jobs queued */
+					__( 'Critical CSS regeneration: %d jobs queued.', 'performance-optimisation' ),
+					$queued
+				)
+			);
+		}
+
+		/**
+		 * Get critical CSS status per template.
+		 *
+		 * @param \WP_REST_Request $_request The request object.
+		 * @since 2.0.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_ccss_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
+			$status = Critical_CSS::get_status_all();
+
+			return $this->send_response( $status );
 		}
 
 		/**
