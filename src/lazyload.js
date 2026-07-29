@@ -553,8 +553,58 @@ const loadImages = () => {
 	}
 };
 
+/**
+ * Initialise video placeholder click-to-load handlers.
+ *
+ * Attaches click and keyboard event listeners to `.wppo-video-placeholder`
+ * elements. On activation, injects the actual YouTube iframe with autoplay
+ * and replaces the placeholder.
+ *
+ * @since 2.5.0
+ */
+const initVideoPlaceholders = () => {
+	document.querySelectorAll( '.wppo-video-placeholder' ).forEach( ( el ) => {
+		if ( el.dataset.wppoInit ) {
+			return;
+		}
+		el.dataset.wppoInit = '1';
+
+		const loadVideo = () => {
+			const src = el.getAttribute( 'data-video-src' );
+			if ( ! src ) {
+				return;
+			}
+
+			const separator = src.indexOf( '?' ) !== -1 ? '&' : '?';
+			const iframe = document.createElement( 'iframe' );
+			iframe.src = src + separator + 'autoplay=1&enablejsapi=1';
+			iframe.allow = 'autoplay; fullscreen';
+			iframe.allowFullscreen = true;
+			iframe.loading = 'lazy';
+			iframe.setAttribute(
+				'aria-label',
+				el.getAttribute( 'aria-label' ) || ''
+			);
+
+			el.parentNode.replaceChild( iframe, el );
+		};
+
+		el.addEventListener( 'click', loadVideo );
+		el.addEventListener( 'keydown', ( e ) => {
+			if ( e.key === 'Enter' || e.key === ' ' ) {
+				e.preventDefault();
+				loadVideo();
+			}
+		} );
+	} );
+};
+
 if ( document.readyState === 'loading' ) {
-	document.addEventListener( 'DOMContentLoaded', loadImages );
+	document.addEventListener( 'DOMContentLoaded', () => {
+		loadImages();
+		initVideoPlaceholders();
+	} );
 } else {
 	loadImages();
+	initVideoPlaceholders();
 }

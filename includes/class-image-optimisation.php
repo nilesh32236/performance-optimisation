@@ -1061,6 +1061,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Check if an iframe src URL is a YouTube embed.
+		 *
+		 * @since 2.5.0
+		 *
+		 * @param string $src The iframe src URL.
+		 * @return bool True if the URL is a YouTube embed.
+		 */
+		private function is_youtube_iframe( string $src ): bool {
+			return (bool) preg_match( '#(?:youtube(?:-nocookie)?\.com/embed/|youtu\.be/)([a-zA-Z0-9_-]{11})#i', $src );
+		}
+
+		/**
+		 * Generate a lightweight video placeholder HTML for a YouTube iframe.
+		 *
+		 * Replaces the YouTube embed iframe with a static thumbnail and play button.
+		 * The actual iframe is loaded only on user click via JavaScript.
+		 *
+		 * @since 2.5.0
+		 *
+		 * @param string $iframe_tag  The original <iframe> tag HTML.
+		 * @param string $original_src The original src attribute value.
+		 * @return string The placeholder HTML or the original iframe tag if excluded.
+		 */
+		private function generate_video_placeholder( string $iframe_tag, string $original_src ): string {
+			if ( ! empty( $this->exclude_lazy_videos ) ) {
+				foreach ( $this->exclude_lazy_videos as $exclude_video ) {
+					if ( false !== strpos( $original_src, $exclude_video ) ) {
+						return $iframe_tag;
+					}
+				}
+			}
+
+			$allowed = apply_filters( 'wppo_video_placeholder_allowed', true, $original_src, $iframe_tag );
+			if ( ! $allowed ) {
+				return $iframe_tag;
+			}
+
+			preg_match( '#(?:youtube(?:-nocookie)?\.com/embed/|youtu\.be/)([a-zA-Z0-9_-]{11})#i', $original_src, $matches );
+			$video_id = $matches[1] ?? '';
+
+			if ( empty( $video_id ) ) {
+				return $iframe_tag;
+			}
+
+			$video_type             = false !== strpos( $original_src, 'youtube-nocookie.com' ) ? 'youtube-nocookie' : 'youtube';
+			$thumbnail_url          = 'https://img.youtube.com/vi/' . $video_id . '/maxresdefault.jpg';
+			$fallback_thumbnail_url = 'https://img.youtube.com/vi/' . $video_id . '/hqdefault.jpg';
+			$noscript_iframe        = '<noscript>' . $iframe_tag . '</noscript>';
+
+			$play_button = '<button type="button" class="wppo-video-play-btn" aria-label="' . esc_attr__( 'Play video', 'performance-optimisation' ) . '">
+				<svg aria-hidden="true" focusable="false" width="68" height="48" viewBox="0 0 68 48">
+					<path class="wppo-play-btn-bg" d="M66.52,7.74c-0.78-2.93-2.49-5.41-5.42-6.19C55.79,.13,34,0,34,0S12.21,.13,6.9,1.55 C3.97,2.33,2.27,4.81,1.48,7.74C0.06,13.05,0,24,0,24s0.06,10.95,1.48,16.26c0.78,2.93,2.49,5.41,5.42,6.19 C12.21,47.87,34,48,34,48s21.79-.13,27.1-1.55c2.93-.78,4.64-3.26,5.42-6.19C67.94,34.95,68,24,68,24S67.94,13.05,66.52,7.74z" fill="#f00"></path>
+					<path d="M 45,24 27,14 27,34" fill="#fff"></path>
+				</svg>
+			</button>';
+
+			$play_button = apply_filters( 'wppo_video_play_button_html', $play_button, $video_id, $video_type );
+
+			$placeholder_html = '<div class="wppo-video-placeholder" data-video-src="' . esc_url( $original_src ) . '" data-video-type="' . esc_attr( $video_type ) . '" role="button" tabindex="0" aria-label="' . esc_attr__( 'Play video', 'performance-optimisation' ) . '">
+				' . $noscript_iframe . '
+				<picture>
+					<img src="' . esc_url( $thumbnail_url ) . '" alt="' . esc_attr__( 'Video thumbnail', 'performance-optimisation' ) . '" loading="lazy" onerror="this.onerror=null;this.src=\'' . esc_url( $fallback_thumbnail_url ) . '\';">
+				</picture>
+				' . $play_button . '
+			</div>';
+
+			return apply_filters( 'wppo_video_placeholder_html', $placeholder_html, $video_id, $video_type, $thumbnail_url );
+		}
+
+		/**
 		 * Prepare an <iframe> tag for lazy loading and exclusion-aware optimization.
 		 *
 		 * If the iframe's source matches any exclusion substring, the tag is returned unchanged.
@@ -1361,6 +1431,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Transforms <picture>, <img>, and <iframe> elements in the provided HTML to enable lazy loading and delayed loading based on the image_optimisation options.
 		 *
 		 * Applies exclusions derived from the options (including preload-selected images and the first N images specified by `excludeFirstImages`) and rewrites matched tags to use data-* attributes and lazy classes when appropriate.
+		 * YouTube embed iframes are replaced with lightweight video placeholders when the feature is enabled.
 		 *
 		 * @since 1.0.0
 		 *
@@ -1371,6 +1442,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
 			$exclude_img_count  = $image_optimisation['excludeFirstImages'] ?? 0;
 			$exclude_imgs       = array();
+
+			$enable_video_placeholder = ! empty( $image_optimisation['enableVideoPlaceholder'] );
+			$lazy_load_videos_active  = ! empty( $image_optimisation['lazyLoadVideos'] );
+
+			if ( $enable_video_placeholder && $lazy_load_videos_active ) {
+				$buffer = preg_replace_callback(
+					'#<iframe\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#is',
+					function ( $matches ) {
+						if ( $this->is_youtube_iframe( $matches[2] ) ) {
+							return $this->generate_video_placeholder( $matches[0], $matches[2] );
+						}
+						return $matches[0];
+					},
+					$buffer
+				);
+			}
 
 			if ( isset( $image_optimisation['lazyLoadImages'] ) && (bool) $image_optimisation['lazyLoadImages'] ) {
 				$exclude_imgs = $this->exclude_lazy_imgs;
