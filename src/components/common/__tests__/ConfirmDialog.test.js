@@ -84,29 +84,25 @@ describe( 'ConfirmDialog', () => {
 		const first = focusableElements[ 0 ];
 		const last = focusableElements[ focusableElements.length - 1 ];
 
-		// Mock activeElement on document
-		Object.defineProperty( document, 'activeElement', {
-			value: last,
-			writable: true,
-		} );
+		// Focus the last element, then Tab should wrap to first
+		last.focus();
+		expect( document.activeElement ).toBe( last );
 
-		// Simulate Tab keypress on dialog when activeElement is last
 		fireEvent.keyDown( dialog, { key: 'Tab', code: 'Tab' } );
 
-		// Simulate Shift+Tab on dialog when activeElement is first
-		Object.defineProperty( document, 'activeElement', {
-			value: first,
-			writable: true,
-		} );
+		expect( document.activeElement ).toBe( first );
+
+		// Focus the first element, then Shift+Tab should wrap to last
+		first.focus();
+		expect( document.activeElement ).toBe( first );
+
 		fireEvent.keyDown( dialog, {
 			key: 'Tab',
 			code: 'Tab',
 			shiftKey: true,
 		} );
 
-		expect(
-			screen.getByRole( 'button', { name: 'Cancel' } )
-		).toBeInTheDocument();
+		expect( document.activeElement ).toBe( last );
 		expect( onCancel ).not.toHaveBeenCalled();
 	} );
 
@@ -123,6 +119,14 @@ describe( 'ConfirmDialog', () => {
 		);
 
 		const dialog = screen.getByRole( 'dialog' );
+		const first = dialog.querySelectorAll(
+			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+		)[ 0 ];
+
+		// Focus the first element; Tab from first (not last)
+		// should not trigger wrap-around, focus stays on next element
+		first.focus();
+		expect( document.activeElement ).toBe( first );
 
 		fireEvent.keyDown( dialog, {
 			key: 'Tab',
@@ -130,7 +134,6 @@ describe( 'ConfirmDialog', () => {
 			shiftKey: false,
 		} );
 
-		expect( screen.getByRole( 'dialog' ) ).toBeInTheDocument();
 		expect( onCancel ).not.toHaveBeenCalled();
 	} );
 

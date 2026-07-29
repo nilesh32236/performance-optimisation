@@ -3,13 +3,21 @@ const wpPlugin = require( '@wordpress/eslint-plugin' );
 const config = [
 	...wpPlugin.configs.recommended,
 
-	...wpPlugin.configs[ 'test-unit' ].map( ( c ) => ( {
+	...wpPlugin.configs?.[ 'test-unit' ]?.map( ( c ) => ( {
 		...c,
 		files: [ '**/@(test|__tests__)/**/*.js', '**/?(*.)test.js' ],
-	} ) ),
+	} ) ) ?? [],
+
+	{
+		files: [ '**/@(test|__tests__)/**/*.js', '**/?(*.)test.js' ],
+		rules: {
+			'no-console': [ 'error', { allow: [ 'error', 'warn' ] } ],
+		},
+	},
 
 	{
 		files: [ '**/*.js' ],
+		ignores: [ '**/@(test|__tests__)/**/*.js', '**/?(*.)test.js' ],
 		languageOptions: {
 			globals: {
 				wppoSettings: 'readonly',
@@ -20,6 +28,7 @@ const config = [
 				FileReader: 'readonly',
 				IntersectionObserver: 'readonly',
 				MutationObserver: 'readonly',
+				HTMLImageElement: 'readonly',
 			},
 		},
 		rules: {
