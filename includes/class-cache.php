@@ -645,6 +645,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
+			if ( 'html' === $type ) {
+				$current_url = home_url( $this->request_uri );
+				$buffer      = apply_filters( 'wppo_cache_page_html', $buffer, $current_url );
+			}
+
 			$gzip_file_path = $file_path . '.gz';
 
 			$fs = $this->get_filesystem();
@@ -850,6 +855,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.1.1
 		 */
 		public static function clear_cache( $url_path = null ): bool {
+			$type = $url_path ? 'single_page' : 'all';
+			do_action( 'wppo_before_cache_clear', $type, $url_path );
+
 			$instance = new self();
 
 			if ( ! $instance->get_filesystem() ) {
@@ -885,6 +893,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					delete_transient( 'wppo_cache_size' );
 					delete_transient( 'wppo_total_js_css' );
 				}
+				do_action( 'wppo_after_cache_clear', $type, $url_path );
 			}
 
 			return $result;
