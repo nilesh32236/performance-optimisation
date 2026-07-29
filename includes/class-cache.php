@@ -349,7 +349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Generate dynamic static HTML.
+		 * Start output buffer for static HTML cache (WP < 6.9 fallback).
 		 *
 		 * Creates a static HTML version of the page if not logged in and not a 404 page.
 		 *
@@ -357,7 +357,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
-		public function generate_dynamic_static_html(): void {
+		public function start_output_buffer(): void {
 			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
 				return;
 			}
@@ -370,21 +370,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			ob_start(
 				function ( $buffer ) use ( $file_path ) {
-					return $this->process_buffer( $buffer, $file_path );
+					$buffer = $this->process_buffer_only( $buffer );
+					$this->save_cache_files( $buffer, $file_path );
+					return $buffer;
 				}
 			);
 		}
 
 		/**
-		 * Process the buffer by minifying it and saving cache files.
+		 * Process the buffer (image optimisation, minification, CDN rewrite) without saving.
 		 *
-		 * @param string $buffer The content to be processed, potentially containing HTML.
-		 * @param string $file_path The path to the file being processed.
-		 * @return string The processed and minified buffer content.
+		 * @param string $buffer The content to be processed.
+		 * @return string The processed buffer content.
 		 *
-		 * @since 1.0.0
+		 * @since 2.3.0
 		 */
-		private function process_buffer( $buffer, $file_path ) {
+		private function process_buffer_only( $buffer ) {
 			$image_optimisation = $this->image_optimisation ? $this->image_optimisation : new Image_Optimisation( $this->options );
 
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
@@ -404,9 +405,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// Apply CDN rewriting.
 			$buffer = $this->maybe_apply_cdn( $buffer );
 
-			$this->save_cache_files( $buffer, $file_path );
-
 			return $buffer;
+		}
+
+		/**
+		 * Filter callback for wp_template_enhancement_output_buffer (WP 6.9+).
+		 *
+		 * Processes the output buffer without saving to cache.
+		 *
+		 * @param string $filtered_output The filtered output from previous callbacks.
+		 * @param string $output          The raw output buffer content.
+		 * @return string The processed output buffer.
+		 *
+		 * @since 2.3.0
+		 */
+		public function process_buffer_for_cache( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
+				return $filtered_output;
+			}
+
+			return $this->process_buffer_only( $filtered_output );
+		}
+
+		/**
+		 * Action callback for wp_finalized_template_enhancement_output_buffer (WP 6.9+).
+		 *
+		 * Stashes the processed output to the static cache files.
+		 *
+		 * @param string $output The finalized output buffer content.
+		 * @return void
+		 *
+		 * @since 2.3.0
+		 */
+		public function stash_cache( $output ) {
+			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
+				return;
+			}
+
+			$file_path = $this->get_cache_file_path();
+
+			if ( ! $this->get_filesystem() || ! $this->prepare_cache_dir() ) {
+				return;
+			}
+
+			$this->save_cache_files( $output, $file_path );
 		}
 
 		/**
@@ -884,7 +926,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *              does not support flush_group or the function is unavailable.
 		 */
 		public static function flush_group( string $group ): bool {
-			if ( function_exists( 'wp_cache_flush_group' ) && wp_cache_supports( 'flush_group' ) ) {
+			if ( function_exists( 'wp_cache_flush_group' ) ) {
 				global $wp_object_cache;
 
 				if ( isset( $wp_object_cache ) && method_exists( $wp_object_cache, 'flush_group' ) ) {
