@@ -20,3 +20,8 @@
 **Bug/Gap:** [PerformanceAudit.js lacked test coverage for important flows including error boundaries, suggestion handling, specific API fields like Advanced Timings and caching states]
 **Root Cause:** [New component implementation had initial tests that did not simulate complex state permutations based on runPerformanceScan mock responses]
 **Test Added:** [Added multiple new test blocks in PerformanceAudit.test.js mapping out positive outputs, parsing of specific edge cases, developer mode toggle visibility changes and gracefully handling fallback mechanisms for suggestion timeouts and scanning failures]
+
+## 2026-07-29 - Wrap jest advanceTimersByTime in act
+**Bug/Gap:** Tests simulating auto-dismissing notifications or long-running timers fail or warn if state updates occur outside of the React update cycle.
+**Root Cause:** Using `jest.advanceTimersByTime()` synchronously triggers `setTimeout` callbacks that call state setters like `setNotification`, throwing `act()` warnings or ReferenceErrors if `act` isn't imported from `@testing-library/react`.
+**Test Added:** Ensured `act` is explicitly imported and wraps all `jest.advanceTimersByTime()` calls when verifying timeout-driven state changes in components.

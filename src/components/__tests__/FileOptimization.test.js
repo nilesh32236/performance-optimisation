@@ -1,4 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	waitFor,
+	fireEvent,
+	act,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -337,6 +343,33 @@ describe( 'FileOptimization Component', () => {
 		} );
 	} );
 
+	it( 'does not call used_css_regenerate if saving settings fails', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: false,
+			message: 'Settings save failed.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const switchField = screen.getByLabelText( /Remove Unused CSS/i );
+		fireEvent.click( switchField );
+
+		const regenerateButton = screen.getByText( 'Regenerate Used CSS' );
+		fireEvent.click( regenerateButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledTimes( 1 );
+		} );
+
+		expect( apiCall.mock.calls[ 0 ][ 0 ] ).toBe( 'update_settings' );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Settings save failed.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders server rules correctly without double-encoding', () => {
 		render(
 			<FileOptimization
@@ -405,6 +438,127 @@ describe( 'FileOptimization Component', () => {
 		expect(
 			screen.getByText( /Critical CSS Status/i )
 		).toBeInTheDocument();
+	} );
+
+	it( 'clears notification automatically after 3 seconds', async () => {
+		jest.useFakeTimers();
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Settings updated successfully.' )
+			).toBeInTheDocument();
+		} );
+
+		act( () => {
+			jest.advanceTimersByTime( 3000 );
+		} );
+
+		await waitFor( () => {
+			expect(
+				screen.queryByText( 'Settings updated successfully.' )
+			).not.toBeInTheDocument();
+		} );
+		jest.useRealTimers();
+	} );
+
+	it( 'clears existing timeout when a new notification is triggered', async () => {
+		jest.useFakeTimers();
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'First update.',
+		} );
+
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const submitButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect( screen.getByText( 'First update.' ) ).toBeInTheDocument();
+		} );
+
+		// Setup second API call
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Second update.',
+		} );
+
+		// Advance time partially
+		act( () => {
+			jest.advanceTimersByTime( 1500 );
+		} );
+
+		// Trigger second call
+		fireEvent.click( submitButton );
+
+		await waitFor( () => {
+			expect( screen.getByText( 'Second update.' ) ).toBeInTheDocument();
+		} );
+
+		// Advance remaining time for the first timer (1500ms). The notification should STILL be "Second update"
+		// because the first timer was cleared.
+		act( () => {
+			jest.advanceTimersByTime( 1500 );
+		} );
+
+		expect( screen.getByText( 'Second update.' ) ).toBeInTheDocument();
+
+		// Now advance the remaining 1500ms to finish the second timer.
+		act( () => {
+			jest.advanceTimersByTime( 1500 );
+		} );
+
+		await waitFor( () => {
+			expect(
+				screen.queryByText( 'Second update.' )
+			).not.toBeInTheDocument();
+		} );
+
+		jest.useRealTimers();
+	} );
+
+	it( 'logs error to console when handleRegenerateCss fails', async () => {
+		const mockError = new Error( 'CCSS Generation Failed' );
+		apiCall.mockRejectedValueOnce( mockError );
+
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		render(
+			<FileOptimization
+				options={ { criticalCSS: true } }
+				serverRules={ {} }
+				ccssStatus={ {} }
+			/>
+		);
+
+		const regenerateButton = screen.getByRole( 'button', {
+			name: /Regenerate All/i,
+		} );
+		fireEvent.click( regenerateButton );
+
+		await waitFor( () => {
+			expect( consoleSpy ).toHaveBeenCalledWith(
+				'Failed to regenerate CCSS',
+				mockError
+			);
+		} );
+
+		consoleSpy.mockRestore();
 	} );
 
 	it( 'calls apiCall when Regenerate All is clicked', async () => {
