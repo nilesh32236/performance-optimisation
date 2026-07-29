@@ -136,7 +136,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'speculationMode'        => 'prerender',
 						'speculationEagerness'   => 'moderate',
 					),
-					'image_optimisation' => array(),
+					'image_optimisation' => array(
+						'placeholderType' => 'svg',
+					),
 					'performance_audit'  => array(
 						'pagespeed_api_key' => '',
 						'high_value_urls'   => array(),

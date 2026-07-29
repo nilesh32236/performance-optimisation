@@ -11,4 +11,9 @@
 	<arg name="extensions" value="php" />
 
 	<config name="testVersion" value="8.2-" />
+
+	<!-- False positive: stride/step variable used in nested loops -->
+	<rule ref="Generic.CodeAnalysis.JumbledIncrementer">
+		<exclude-pattern>includes/class-img-converter\.php</exclude-pattern>
+	</rule>
 </ruleset>

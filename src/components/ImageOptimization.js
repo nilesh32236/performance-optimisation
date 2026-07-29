@@ -30,7 +30,9 @@ const ImageOptimization = ( { options = {} } ) => {
 		convertImg: false,
 		conversionFormat: 'webp',
 		excludeConvertImages: '',
-		replacePlaceholderWithSVG: false,
+		placeholderType:
+			options.placeholderType ||
+			( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
 		preloadFrontPageImages: false,
 		preloadFrontPageImagesUrls: '',
 		preloadPostTypeImage: false,
@@ -226,21 +228,72 @@ const ImageOptimization = ( { options = {} } ) => {
 									checked={ settings.lazyLoadNative }
 									onChange={ handleChange( setSettings ) }
 								/>
-								<SwitchField
-									label={ __(
-										'SVG Placeholders',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Replace the image src with a lightweight inline SVG blur placeholder while the real image loads. Prevents layout shift and gives a smooth loading experience.',
-										'performance-optimisation'
-									) }
-									name="replacePlaceholderWithSVG"
-									checked={
-										settings.replacePlaceholderWithSVG
-									}
-									onChange={ handleChange( setSettings ) }
-								/>
+								<div className="wppo-field">
+									<label
+										className="wppo-field-label"
+										htmlFor="placeholderType"
+									>
+										{ __(
+											'Placeholder Type',
+											'performance-optimisation'
+										) }
+									</label>
+									<select
+										className="wppo-select"
+										id="placeholderType"
+										name="placeholderType"
+										value={ settings.placeholderType }
+										onChange={ handleChange( setSettings ) }
+									>
+										<option value="none">
+											{ __(
+												'None',
+												'performance-optimisation'
+											) }
+										</option>
+										<option value="svg">
+											{ __(
+												'SVG Placeholder (Lightweight)',
+												'performance-optimisation'
+											) }
+										</option>
+										<option value="dominant_color">
+											{ __(
+												'Dominant Color (Extracted from Image)',
+												'performance-optimisation'
+											) }
+										</option>
+										<option value="lqip">
+											{ __(
+												'LQIP (Blur Preview)',
+												'performance-optimisation'
+											) }
+										</option>
+									</select>
+									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+										{ settings.placeholderType === 'lqip' &&
+											__(
+												'Images must be re-optimized for LQIP to take effect.',
+												'performance-optimisation'
+											) }
+										{ settings.placeholderType ===
+											'dominant_color' &&
+											__(
+												'Dominant color is extracted during image conversion.',
+												'performance-optimisation'
+											) }
+										{ settings.placeholderType === 'svg' &&
+											__(
+												'Replaces the image src with a lightweight inline SVG while the real image loads. Prevents layout shift.',
+												'performance-optimisation'
+											) }
+										{ settings.placeholderType === 'none' &&
+											__(
+												'No placeholder will be used. The src attribute is removed until the image is in view.',
+												'performance-optimisation'
+											) }
+									</p>
+								</div>
 							</div>
 						) }
 

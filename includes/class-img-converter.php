@@ -409,6 +409,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					}
 				}
 
+				// Extract placeholder data (dominant color + LQIP) after successful conversion.
+				if ( $success && null !== $image && $image instanceof \GdImage ) {
+					$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
+					$dominant_color = $this->extract_dominant_color( $image );
+					$lqip           = $this->generate_lqip( $image );
+					$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+				}
+
 				if ( null !== $image && ( is_resource( $image ) || $image instanceof \GdImage ) ) {
 					// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- imagedestroy() is still the correct way to free GD resources in PHP 8.x
 					imagedestroy( $image );
@@ -460,6 +468,133 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return $truecolor;
 			}
 			return $image;
+		}
+
+		/**
+		 * Extract dominant color from a GD image resource.
+		 *
+		 * Samples pixels at a reduced stride to compute the average color.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param \GdImage $image The GD image resource.
+		 * @return string Hex color string (e.g. '#aabbcc').
+		 */
+		private function extract_dominant_color( $image ): string {
+			if ( ! $image instanceof \GdImage ) {
+				return '#cfd4db';
+			}
+
+			$width       = imagesx( $image );
+			$height      = imagesy( $image );
+			$sample_rate = max( 1, (int) ( min( $width, $height ) / 20 ) );
+			$total_r     = 0;
+			$total_g     = 0;
+			$total_b     = 0;
+			$pixel_count = 0;
+
+			for ( $y = 0; $y < $height; $y += $sample_rate ) {
+				for ( $x = 0; $x < $width; $x += $sample_rate ) {
+					$rgb = imagecolorat( $image, $x, $y );
+					if ( false !== $rgb ) {
+						$total_r += ( $rgb >> 16 ) & 0xFF;
+						$total_g += ( $rgb >> 8 ) & 0xFF;
+						$total_b += $rgb & 0xFF;
+						++$pixel_count;
+					}
+				}
+			}
+
+			if ( 0 === $pixel_count ) {
+				return '#cfd4db';
+			}
+
+			$avg_r = round( $total_r / $pixel_count );
+			$avg_g = round( $total_g / $pixel_count );
+			$avg_b = round( $total_b / $pixel_count );
+
+			return sprintf( '#%02x%02x%02x', $avg_r, $avg_g, $avg_b );
+		}
+
+		/**
+		 * Generate a Low-Quality Image Placeholder (LQIP) from a GD image resource.
+		 *
+		 * Creates a 20x20 JPEG thumbnail and returns it as a base64 data URI.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param \GdImage $image The GD image resource.
+		 * @return string Base64-encoded data URI, or empty string on failure.
+		 */
+		private function generate_lqip( $image ): string {
+			if ( ! $image instanceof \GdImage || ! function_exists( 'imagecreatetruecolor' ) || ! function_exists( 'imagecopyresampled' ) || ! function_exists( 'imagejpeg' ) ) {
+				return '';
+			}
+
+			$orig_width  = imagesx( $image );
+			$orig_height = imagesy( $image );
+
+			if ( false === $orig_width || false === $orig_height || $orig_width < 1 || $orig_height < 1 ) {
+				return '';
+			}
+
+			$thumb_width  = 20;
+			$thumb_height = (int) round( $orig_height * ( $thumb_width / $orig_width ) );
+			if ( $thumb_height < 1 ) {
+				$thumb_height = 1;
+			}
+
+			$thumb = imagecreatetruecolor( $thumb_width, $thumb_height );
+			if ( false === $thumb ) {
+				return '';
+			}
+
+			imagecopyresampled( $thumb, $image, 0, 0, 0, 0, $thumb_width, $thumb_height, $orig_width, $orig_height );
+
+			ob_start();
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			$success = @imagejpeg( $thumb, null, 40 );
+			$data    = ob_get_clean();
+
+			// phpcs:ignore
+			imagedestroy( $thumb );
+
+			if ( ! $success || false === $data ) {
+				return '';
+			}
+
+			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode
+			return 'data:image/jpeg;base64,' . base64_encode( $data );
+		}
+
+		/**
+		 * Store dominant color and LQIP data for an image atomically.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param string $rel_path       The relative image path (ABSPATH-stripped).
+		 * @param string $dominant_color Hex color string.
+		 * @param string $lqip           LQIP data URI (empty string if not generated).
+		 * @return void
+		 */
+		private function store_placeholder_data( string $rel_path, string $dominant_color, string $lqip ): void {
+			self::update_img_info_atomic(
+				function ( $img_info ) use ( $rel_path, $dominant_color, $lqip ) {
+					if ( ! isset( $img_info['dominant_color'] ) || ! is_array( $img_info['dominant_color'] ) ) {
+						$img_info['dominant_color'] = array();
+					}
+					if ( ! isset( $img_info['lqip'] ) || ! is_array( $img_info['lqip'] ) ) {
+						$img_info['lqip'] = array();
+					}
+
+					$img_info['dominant_color'][ $rel_path ] = $dominant_color;
+					if ( ! empty( $lqip ) ) {
+						$img_info['lqip'][ $rel_path ] = $lqip;
+					}
+
+					return $img_info;
+				}
+			);
 		}
 
 		/**
