@@ -927,6 +927,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( $fs && $fs->is_dir( $ccss_dir ) ) {
 				$fs->delete( $ccss_dir, true );
+				// Clear CCSS status transients to prevent stale UI state.
+				if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+					$templates = array( 'index', 'home', 'single', 'page', 'archive' );
+					foreach ( $templates as $template ) {
+						$hash = md5( $template . '-' . get_stylesheet() );
+						delete_transient( 'wppo_ccss_status_' . $hash );
+					}
+				}
 			}
 
 			return $res1 && $res2;
@@ -939,6 +947,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function clear_ccss(): void {
+			if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+				PerformanceOptimise\Inc\Critical_CSS::clear_all();
+				return;
+			}
 			$instance = new self();
 			$fs       = $instance->get_filesystem();
 			$ccss_dir = "{$instance->cache_root_dir}/ccss";
