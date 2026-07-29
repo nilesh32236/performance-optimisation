@@ -1179,12 +1179,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			// Also check via URL pattern matching against the handle text (handles often contain the handle name).
 			foreach ( $this->delay_js_idle_list as $pattern ) {
-				if ( false !== strpos( $handle, $pattern ) || false !== strpos( $pattern, $handle ) ) {
+				if ( false !== strpos( $handle, $pattern ) ) {
 					return 'idle';
 				}
 			}
 			foreach ( $this->delay_js_viewport_list as $pattern ) {
-				if ( false !== strpos( $handle, $pattern ) || false !== strpos( $pattern, $handle ) ) {
+				if ( false !== strpos( $handle, $pattern ) ) {
 					return 'viewport';
 				}
 			}
@@ -1205,7 +1205,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			// Check partial matches.
 			foreach ( $this->delay_js_priority as $pattern => $level ) {
-				if ( false !== strpos( $handle, $pattern ) || false !== strpos( $pattern, $handle ) ) {
+				if ( false !== strpos( $handle, $pattern ) ) {
 					return $level;
 				}
 			}
@@ -1243,11 +1243,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							$this->delay_js_idle_list     = array_diff( $this->delay_js_idle_list, array( $handle ) );
 							$this->delay_js_viewport_list = array_diff( $this->delay_js_viewport_list, array( $handle ) );
 						} elseif ( 'idle' === $strategy ) {
-							$this->delay_js_idle_list[]   = $handle;
+							if ( ! in_array( $handle, $this->delay_js_idle_list, true ) ) {
+								$this->delay_js_idle_list[] = $handle;
+							}
 							$this->delay_js_viewport_list = array_diff( $this->delay_js_viewport_list, array( $handle ) );
 						} elseif ( 'viewport' === $strategy ) {
-							$this->delay_js_viewport_list[] = $handle;
-							$this->delay_js_idle_list       = array_diff( $this->delay_js_idle_list, array( $handle ) );
+							if ( ! in_array( $handle, $this->delay_js_viewport_list, true ) ) {
+								$this->delay_js_viewport_list[] = $handle;
+							}
+							$this->delay_js_idle_list = array_diff( $this->delay_js_idle_list, array( $handle ) );
 						}
 					}
 				}

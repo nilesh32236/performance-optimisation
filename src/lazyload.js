@@ -149,9 +149,14 @@ async function loadScriptsByPriority( scripts ) {
 	} );
 
 	for ( const level of [ 'high', 'normal', 'low' ] ) {
-		for ( const script of groups[ level ] ) {
-			await loadScript( script );
-		}
+		const results = await Promise.allSettled(
+			groups[ level ].map( ( script ) => loadScript( script ) )
+		);
+		results
+			.filter( ( r ) => r.status === 'rejected' )
+			.forEach( ( r ) =>
+				console.error( 'Error loading script:', r.reason )
+			);
 	}
 }
 
@@ -215,12 +220,16 @@ async function loadScripts() {
  *
  * @since 3.8.0
  */
-const loadIdleScripts = () => {
+const loadIdleScripts = async () => {
 	const idleScripts = document.querySelectorAll(
 		'script[data-wppo-delay-strategy="idle"]'
 	);
 	if ( idleScripts.length > 0 ) {
-		loadScriptsByPriority( idleScripts );
+		try {
+			await loadScriptsByPriority( idleScripts );
+		} catch ( err ) {
+			console.error( 'Error loading idle script:', err );
+		}
 	}
 };
 
@@ -246,13 +255,19 @@ const observeViewportScripts = () => {
 
 	const observer = new IntersectionObserver(
 		( entries ) => {
+			const toLoad = [];
 			entries.forEach( ( entry ) => {
 				if ( entry.isIntersecting ) {
 					const script = entry.target;
 					observer.unobserve( script );
-					loadScript( script );
+					toLoad.push( script );
 				}
 			} );
+			if ( toLoad.length > 0 ) {
+				loadScriptsByPriority( toLoad ).catch( ( err ) =>
+					console.error( 'Error loading viewport scripts:', err )
+				);
+			}
 		},
 		{ rootMargin: '200px' }
 	);
@@ -265,14 +280,17 @@ const observeViewportScripts = () => {
  *
  * Scripts with no explicit strategy attribute default to 'interaction'.
  *
+ * @param {NodeList|HTMLScriptElement[]} [scripts] Optional script list to check. Defaults to querying the DOM.
  * @since 3.8.0
  * @return {boolean} Whether any delayed scripts use the 'interaction' strategy.
  */
-const hasInteractionScripts = () => {
-	const allDelayed = document.querySelectorAll(
-		'script[type="wppo/javascript"], script[wppo-src]'
-	);
-	return Array.from( allDelayed ).some( ( script ) => {
+const hasInteractionScripts = ( scripts ) => {
+	const list =
+		scripts ||
+		document.querySelectorAll(
+			'script[type="wppo/javascript"], script[wppo-src]'
+		);
+	return Array.from( list ).some( ( script ) => {
 		const strategy =
 			script.getAttribute( 'data-wppo-delay-strategy' ) ||
 			delayConfig.defaultStrategy;
@@ -296,7 +314,12 @@ if ( idleScripts.length > 0 ) {
 		} );
 	} else {
 		// Fallback: load after a short delay.
-		setTimeout( loadIdleScripts, delayConfig.idleTimeout );
+		// requestIdleCallback's timeout is a deadline (max wait), while setTimeout is a minimum delay.
+		// Use a shorter explicit delay to avoid excessive waiting when rIC is unavailable.
+		setTimeout(
+			loadIdleScripts,
+			Math.min( 2000, delayConfig.idleTimeout )
+		);
 	}
 }
 
@@ -304,7 +327,7 @@ if ( idleScripts.length > 0 ) {
 observeViewportScripts();
 
 // Only register interaction event listeners if there are scripts using interaction strategy.
-if ( delayedScripts.length > 0 && hasInteractionScripts() ) {
+if ( delayedScripts.length > 0 && hasInteractionScripts( delayedScripts ) ) {
 	const triggerEvents = [
 		'mouseenter',
 		'mousedown',
@@ -323,16 +346,9 @@ if ( delayedScripts.length > 0 && hasInteractionScripts() ) {
 	triggerEvents.forEach( ( event ) =>
 		document.addEventListener( event, loadHandler, { once: true } )
 	);
-} else if ( delayedScripts.length > 0 ) {
-	// All scripts are idle or viewport — no interaction listener needed.
-	// But still load any interaction-default scripts immediately if no idle/viewport strategies matched.
-	if (
-		! hasInteractionScripts() &&
-		! document.querySelector( 'script[data-wppo-delay-strategy]' )
-	) {
-		// Scripts with no strategy attribute default to interaction if none have strategies.
-		loadScripts();
-	}
+} else if ( document.querySelector( 'script[data-wppo-delay-strategy]' ) ) {
+	// No interaction scripts — but some scripts have explicit non-interaction strategies.
+	// The page will rely on idle/viewport loading. Nothing to do here.
 }
 
 /**

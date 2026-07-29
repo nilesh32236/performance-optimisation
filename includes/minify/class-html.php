@@ -114,9 +114,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			);
 			$this->exclude_delay_js = array_values( array_filter( $this->exclude_delay_js, 'strlen' ) );
 
-			// Cache delay JS strategy lists.
-			$this->delay_js_idle_list        = (array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() );
-			$this->delay_js_viewport_list    = (array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() );
+			// Cache delay JS strategy lists, filtering empty strings to avoid strpos('', $x) matching everything.
+			$this->delay_js_idle_list        = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() ), 'strlen' ) );
+			$this->delay_js_viewport_list    = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() ), 'strlen' ) );
 			$this->delay_js_default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 				? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 				: 'interaction';

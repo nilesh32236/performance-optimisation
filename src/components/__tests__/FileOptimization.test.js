@@ -731,6 +731,7 @@ describe( 'FileOptimization Component', () => {
 						delayJSIdleList: 'jquery-core',
 						delayJSViewportList: 'analytics',
 						delayJSPriority: 'jquery-core:high',
+						delayJSIdleTimeout: 3000,
 					} ),
 				} )
 			);

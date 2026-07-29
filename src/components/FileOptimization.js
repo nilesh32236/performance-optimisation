@@ -44,7 +44,6 @@ const FileOptimization = ( {
 		excludeDeferJS: '',
 		delayJS: false,
 		excludeDelayJS: '',
-		delayJSList: options.excludeDelayJS || '',
 		delayJSDefaultStrategy: options.delayJSDefaultStrategy || 'interaction',
 		delayJSIdleList: options.delayJSIdleList || '',
 		delayJSViewportList: options.delayJSViewportList || '',
@@ -137,7 +136,6 @@ const FileOptimization = ( {
 					tab: 'file_optimisation',
 					settings: {
 						...settings,
-						excludeDelayJS: settings.delayJSList,
 						delayJSDefaultStrategy: settings.delayJSDefaultStrategy,
 						delayJSIdleList: settings.delayJSIdleList,
 						delayJSViewportList: settings.delayJSViewportList,
@@ -164,7 +162,6 @@ const FileOptimization = ( {
 				tab: 'file_optimisation',
 				settings: {
 					...settings,
-					excludeDelayJS: settings.delayJSList,
 					delayJSDefaultStrategy: settings.delayJSDefaultStrategy,
 					delayJSIdleList: settings.delayJSIdleList,
 					delayJSViewportList: settings.delayJSViewportList,
@@ -638,7 +635,7 @@ const FileOptimization = ( {
 										<div className="wppo-field wppo-mt-20">
 											<label
 												className="wppo-field-label"
-												htmlFor="delayJSList"
+												htmlFor="excludeDelayJS"
 											>
 												{ __(
 													'Scripts to Delay',
@@ -647,14 +644,16 @@ const FileOptimization = ( {
 											</label>
 											<textarea
 												className="wppo-textarea"
-												id="delayJSList"
-												name="delayJSList"
+												id="excludeDelayJS"
+												name="excludeDelayJS"
 												rows="3"
 												placeholder={ __(
 													'Partial URLs or keywords',
 													'performance-optimisation'
 												) }
-												value={ settings.delayJSList }
+												value={
+													settings.excludeDelayJS
+												}
 												onChange={ handleChange(
 													setSettings
 												) }
