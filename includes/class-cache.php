@@ -410,6 +410,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$buffer = $this->minify_buffer( $buffer );
 			}
 
+				// Apply used-CSS before CDN so href matching works.
+			$buffer = $this->maybe_apply_used_css( $buffer );
+
 			// Apply CDN rewriting.
 			$buffer = $this->maybe_apply_cdn( $buffer );
 
@@ -619,6 +622,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Apply used-CSS to the buffer if the setting is enabled.
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The processed buffer.
+		 *
+		 * @since 1.9.0
+		 */
+		private function maybe_apply_used_css( string $buffer ): string {
+			$used_css = new Used_CSS( $this->options );
+			return $used_css->process_buffer( $buffer );
+		}
+
+		/**
 		 * Prepare the cache directory for storing files.
 		 *
 		 * @return bool True if successful, false otherwise.
@@ -751,8 +767,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$html_file_path = $this->get_file_path( $path, 'html' );
 			$css_file_path  = $this->get_file_path( $path, 'css' );
+			$used_css_path  = $this->get_file_path( $path, 'used-css' );
 			$this->delete_cache_files( $html_file_path );
 			$this->delete_cache_files( $css_file_path );
+			$this->delete_cache_files( $used_css_path );
 
 			// Smart Purging: Always clear the home page and blog archive.
 			$home_path = wp_make_link_relative( home_url( '/' ) );
@@ -822,7 +840,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return ''; // Return empty string to prevent deletion or creation outside cache root.
 			}
 
-			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? "index.{$type}" : "{$url_path}/index.{$type}" );
+			$filename = 'used-css' === $type ? 'used-css.css' : "index.{$type}";
+
+			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $url_path ? $filename : "{$url_path}/{$filename}" );
+		}
+
+		/**
+		 * Delete used-CSS file for a specific file path.
+		 *
+		 * @param string $file_path The used-css file path.
+		 * @return bool True if successful (or not exists), false otherwise.
+		 *
+		 * @since 1.9.0
+		 */
+		private function delete_used_css_file( string $file_path ): bool {
+			return $this->delete_cache_files( $file_path );
 		}
 
 		/**
@@ -873,14 +905,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$html_file_path = $instance->get_file_path( $url_path, 'html' );
 				$css_file_path  = $instance->get_file_path( $url_path, 'css' );
+				$used_css_path  = $instance->get_file_path( $url_path, 'used-css' );
 
-				if ( empty( $html_file_path ) || empty( $css_file_path ) ) {
+				if ( empty( $html_file_path ) || empty( $css_file_path ) || empty( $used_css_path ) ) {
 					return false;
 				}
 
 				$res_html = $instance->delete_cache_files( $html_file_path );
 				$res_css  = $instance->delete_cache_files( $css_file_path );
-				$result   = $res_html && $res_css;
+				$res_used = $instance->delete_used_css_file( $used_css_path );
+				$result   = $res_html && $res_css && $res_used;
 			} else {
 				$result = $instance->delete_all_cache_files();
 			}
@@ -923,11 +957,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$res2 = $fs->delete( $min_dir, true );
 			}
 
-			$ccss_dir = "{$this->cache_root_dir}/ccss";
-
-			if ( $fs && $fs->is_dir( $ccss_dir ) ) {
-				$fs->delete( $ccss_dir, true );
-			}
+			Used_CSS::delete_all_used_css();
 
 			return $res1 && $res2;
 		}

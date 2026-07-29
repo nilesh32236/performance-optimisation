@@ -181,6 +181,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'used_css_regenerate'     => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'used_css_regenerate' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'regenerate_ccss'         => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'regenerate_ccss' ),
@@ -1251,6 +1257,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$suggestions = Suggestion_Engine::from_telemetry( $telemetry );
 
 			return $this->send_response( array( 'suggestions' => $suggestions ) );
+		}
+
+		/**
+		 * Regenerate used-CSS for all pages or a single post.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 1.9.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function used_css_regenerate( \WP_REST_Request $request ): \WP_REST_Response {
+			$params  = $request->get_params();
+			$post_id = isset( $params['post_id'] ) ? absint( $params['post_id'] ) : 0;
+
+			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+				return $this->send_response( null, false, 500, __( 'Action Scheduler is not available.', 'performance-optimisation' ) );
+			}
+
+			if ( $post_id ) {
+				as_enqueue_async_action(
+					'wppo_used_css_generate',
+					array( 'post_id' => $post_id ),
+					'performance_optimisation'
+				);
+				return $this->send_response(
+					array(
+						'mode'    => 'single',
+						'post_id' => $post_id,
+					),
+					true,
+					202,
+					__( 'Used CSS regeneration queued.', 'performance-optimisation' )
+				);
+			}
+
+			$used_css = new Used_CSS();
+			$queued   = $used_css->regenerate_all();
+
+			return $this->send_response(
+				array(
+					'mode'   => 'background',
+					'queued' => $queued,
+				),
+				true,
+				202,
+				sprintf(
+					/* translators: %d: Number of queued jobs */
+					__( 'Queued %d used-CSS regeneration jobs.', 'performance-optimisation' ),
+					$queued
+				)
+			);
 		}
 
 		/**

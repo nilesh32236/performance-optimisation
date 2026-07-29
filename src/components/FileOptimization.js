@@ -1,5 +1,5 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useRef } from '@wordpress/element';
+import { useState, useRef, useEffect } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -51,6 +51,8 @@ const FileOptimization = ( {
 		enableServerRules: false,
 		criticalCSS: false,
 		cdnURL: '',
+		removeUnusedCSS: false,
+		excludeUnusedCSS: '',
 		disableEmojis: false,
 		disableEmbeds: false,
 		disableDashicons: false,
@@ -65,6 +67,51 @@ const FileOptimization = ( {
 		message: '',
 		success: false,
 	} );
+	const notificationTimer = useRef( null );
+
+	const withNotification = async (
+		apiCallPromise,
+		successMessage,
+		errorMessage
+	) => {
+		setIsLoading( true );
+		setNotification( { message: '', success: false } );
+
+		// Clear any existing auto-dismiss timer to avoid stale timeout hazard.
+		if ( notificationTimer.current ) {
+			clearTimeout( notificationTimer.current );
+		}
+
+		try {
+			const res = await apiCallPromise;
+			if ( res.success ) {
+				setNotification( {
+					message: res.message || successMessage,
+					success: true,
+				} );
+			} else {
+				setNotification( {
+					message: res.message || errorMessage,
+					success: false,
+				} );
+			}
+		} catch ( err ) {
+			console.error( errorMessage, err );
+			setNotification( {
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				success: false,
+			} );
+		} finally {
+			setIsLoading( false );
+			notificationTimer.current = setTimeout( () => {
+				setNotification( { message: '', success: false } );
+				notificationTimer.current = null;
+			}, 3000 );
+		}
+	};
 
 	const handleRegenerateCss = async () => {
 		try {
@@ -77,54 +124,41 @@ const FileOptimization = ( {
 		}
 	};
 
+	const handleRegenerateUsedCSS = async () => {
+		await withNotification(
+			( async () => {
+				const saveRes = await apiCall( 'update_settings', {
+					tab: 'file_optimisation',
+					settings: {
+						...settings,
+						excludeDelayJS: settings.delayJSList,
+					},
+				} );
+				if ( ! saveRes.success ) {
+					return saveRes;
+				}
+				return await apiCall( 'used_css_regenerate' );
+			} )(),
+			__( 'Used CSS regeneration queued.', 'performance-optimisation' ),
+			__( 'Failed to regenerate used CSS.', 'performance-optimisation' )
+		);
+	};
+
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
-		setIsLoading( true );
-		setNotification( { message: '', success: false } );
-		try {
-			const res = await apiCall( 'update_settings', {
+		await withNotification(
+			apiCall( 'update_settings', {
 				tab: 'file_optimisation',
 				settings: {
 					...settings,
 					excludeDelayJS: settings.delayJSList,
 				},
-			} );
-
-			if ( res.success ) {
-				setNotification( {
-					message:
-						res.message ||
-						__(
-							'Settings updated successfully.',
-							'performance-optimisation'
-						),
-					success: true,
-				} );
-			} else {
-				setNotification( {
-					message:
-						res.message ||
-						__(
-							'Failed to update settings.',
-							'performance-optimisation'
-						),
-					success: false,
-				} );
-			}
-		} catch ( err ) {
-			console.error( 'Failed updating file optimisation settings', err );
-			setNotification( {
-				message: __(
-					'An unexpected error occurred.',
-					'performance-optimisation'
-				),
-				success: false,
-			} );
-		} finally {
-			setIsLoading( false );
-		}
+			} ),
+			__( 'Settings updated successfully.', 'performance-optimisation' ),
+			__( 'Failed to update settings.', 'performance-optimisation' )
+		);
 	};
 
 	const subTabs = [
@@ -174,6 +208,15 @@ const FileOptimization = ( {
 			nextButton.focus();
 		}
 	};
+
+	useEffect( () => {
+		return () => {
+			if ( notificationTimer.current ) {
+				clearTimeout( notificationTimer.current );
+				notificationTimer.current = null;
+			}
+		};
+	}, [] );
 
 	return (
 		<div className="wppo-dashboard-view">
@@ -309,6 +352,64 @@ const FileOptimization = ( {
 												setSettings
 											) }
 										/>
+									</div>
+								) }
+								<Tooltip
+									content={ __(
+										'Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly.',
+										'performance-optimisation'
+									) }
+								>
+									<SwitchField
+										label={ __(
+											'Remove Unused CSS',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Scan pages and remove CSS rules that are not used. Reduces file size by 30–80% and helps pass PageSpeed audits.',
+											'performance-optimisation'
+										) }
+										name="removeUnusedCSS"
+										checked={ settings.removeUnusedCSS }
+										onChange={ handleChange( setSettings ) }
+									/>
+								</Tooltip>
+								{ settings.removeUnusedCSS && (
+									<div className="wppo-field">
+										<label
+											className="wppo-field-label"
+											htmlFor="excludeUnusedCSS"
+										>
+											{ __(
+												'Safelist Selectors',
+												'performance-optimisation'
+											) }
+										</label>
+										<textarea
+											className="wppo-textarea"
+											id="excludeUnusedCSS"
+											name="excludeUnusedCSS"
+											rows="4"
+											placeholder={ __(
+												'Selectors to always keep (one per line, e.g. .my-dynamic-class)',
+												'performance-optimisation'
+											) }
+											value={ settings.excludeUnusedCSS }
+											onChange={ handleChange(
+												setSettings
+											) }
+										/>
+										<button
+											className="wppo-button wppo-button-secondary wppo-mt-12"
+											onClick={ handleRegenerateUsedCSS }
+											type="button"
+											disabled={ isLoading }
+										>
+											{ __(
+												'Regenerate Used CSS',
+												'performance-optimisation'
+											) }
+										</button>
 									</div>
 								) }
 								{ settings.minifyCSS && (

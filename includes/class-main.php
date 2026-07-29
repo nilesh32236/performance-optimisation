@@ -117,6 +117,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'file_optimisation'  => array(
 						'enableServerRules' => false,
 						'cdnURL'            => '',
+						'removeUnusedCSS'   => false,
+						'excludeUnusedCSS'  => '',
 						'criticalCSS'       => false,
 					),
 					'preload_settings'   => array(
@@ -179,11 +181,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
-<<<<<<< HEAD
+			require_once WPPO_PLUGIN_PATH . 'includes/class-used-css.php';
 			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
-=======
 			require_once WPPO_PLUGIN_PATH . 'includes/class-abilities.php';
->>>>>>> origin/master
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
@@ -244,6 +244,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				}
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
+			}
+
+			// Standalone used-CSS output buffer when page cache is disabled.
+			if ( empty( $this->options['cache']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+					// WP 6.9+ template enhancement output buffer.
+					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
+				} else {
+					add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
+				}
 			}
 
 			// Invalidate DB cleanup counts when posts are added or removed (for public post types).
@@ -323,6 +333,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Phase 2 — Register Action Scheduler callback for background PageSpeed scans.
 			add_action( 'wppo_pagespeed_scan', array( 'PerformanceOptimise\Inc\Pagespeed', 'run_scan' ), 10, 1 );
+
+			// Register Action Scheduler callback for background used-CSS generation.
+			add_action( 'wppo_used_css_generate', array( 'PerformanceOptimise\Inc\Used_CSS', 'process_background' ), 10, 1 );
+
+			// Queue used-CSS regeneration when post content changes.
+			add_action( 'save_post', array( $this, 'on_save_post_queue_used_css' ), 10, 3 );
 
 			// Clear all cache on structural changes that invalidate every cached page.
 			add_action( 'update_option_permalink_structure', array( __CLASS__, 'clear_all_cache' ) );
@@ -495,6 +511,85 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( $this->cache ) {
 				$this->cache->invalidate_dynamic_static_html( $post_id );
 			}
+		}
+
+		/**
+		 * Queue used-CSS generation when post content is saved.
+		 *
+		 * Skips revisions and autosaves, and checks the removeUnusedCSS setting
+		 * before enqueueing. Uses as_has_scheduled_action() to prevent duplicate jobs.
+		 *
+		 * @param int      $post_id Post ID.
+		 * @param \WP_Post $post    Post object.
+		 * @param bool     $update  Whether this is an existing post being updated.
+		 * @return void
+		 * @since 2.6.0
+		 */
+		public function on_save_post_queue_used_css( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
+				return;
+			}
+
+			$options = get_option( 'wppo_settings', array() );
+			if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
+				return;
+			}
+
+			if ( ! function_exists( 'as_has_scheduled_action' ) || ! function_exists( 'as_enqueue_async_action' ) ) {
+				return;
+			}
+
+			if ( ! as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+				as_enqueue_async_action(
+					'wppo_used_css_generate',
+					array( 'post_id' => $post_id ),
+					'performance_optimisation'
+				);
+			}
+		}
+
+		/**
+		 * Process used-CSS when cache is disabled.
+		 *
+		 * @param string $filtered_output The filtered output from previous callbacks.
+		 * @param string $output          The raw output buffer content.
+		 * @return string The processed output.
+		 * @since 2.6.0
+		 */
+		public function process_used_css_only( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( is_user_logged_in() || is_admin() ) {
+				return $filtered_output;
+			}
+			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
+			return $used_css->process_buffer( $filtered_output );
+		}
+
+		/**
+		 * Start output buffer for used-CSS (legacy path, WP &lt; 6.9).
+		 *
+		 * @return void
+		 * @since 2.6.0
+		 */
+		public function start_used_css_buffer() {
+			if ( is_user_logged_in() || is_admin() ) {
+				return;
+			}
+			ob_start( array( $this, 'process_used_css_capture' ) );
+		}
+
+		/**
+		 * Capture and process buffer for used-CSS.
+		 *
+		 * @param string $buffer The output buffer content.
+		 * @return string The processed buffer.
+		 * @since 2.6.0
+		 */
+		public function process_used_css_capture( $buffer ) {
+			if ( empty( $buffer ) ) {
+				return $buffer;
+			}
+			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
+			return $used_css->process_buffer( $buffer );
 		}
 
 		/**
