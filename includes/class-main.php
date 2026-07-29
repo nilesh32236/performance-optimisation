@@ -223,8 +223,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Invalidate DB cleanup counts when posts are added or removed (for public post types).
-			add_action( 'save_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
-			add_action( 'deleted_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
+			if ( is_admin() ) {
+				add_action( 'save_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
+				add_action( 'deleted_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
+			}
 			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
 				if ( ! $this->cache ) {
 					$this->cache = new Cache( $this->options );

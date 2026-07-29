@@ -31,6 +31,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 	class Database_Cleanup {
 
 		/**
+		 * Option key used for the DB cleanup counts cache salt.
+		 *
+		 * @since 2.5.0
+		 * @var string
+		 */
+		private const SALT_KEY = 'wppo_db_cleanup_salt';
+
+		/**
 		 * Delete all post revisions from the database.
 		 *
 		 * @since 1.1.0
@@ -658,10 +666,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return array<string,int> Associative array mapping cleanup type to its current count.
 		 */
 		public static function get_counts() {
-			$salt_key = 'wppo_db_cleanup_salt';
+			$has_salted = function_exists( 'wp_cache_get_salted' );
 
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
-				$cached = wp_cache_get_salted( 'wppo_db_cleanup_counts', 'wppo', $salt_key );
+			if ( $has_salted ) {
+				$cached = wp_cache_get_salted( 'wppo_db_cleanup_counts', 'wppo', self::SALT_KEY );
 				if ( false !== $cached ) {
 					return $cached;
 				}
@@ -714,8 +722,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			);
 			// phpcs:enable
 
-			if ( function_exists( 'wp_cache_set_salted' ) ) {
-				wp_cache_set_salted( 'wppo_db_cleanup_counts', $counts, 'wppo', $salt_key );
+			if ( $has_salted ) {
+				wp_cache_set_salted( 'wppo_db_cleanup_counts', $counts, 'wppo', self::SALT_KEY );
 			} else {
 				set_transient( 'wppo_db_cleanup_counts', $counts, 5 * MINUTE_IN_SECONDS );
 			}
@@ -746,10 +754,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return void
 		 */
 		public static function invalidate_counts_cache(): void {
-			$salt_key = 'wppo_db_cleanup_salt';
 			if ( function_exists( 'wp_cache_get_salted' ) ) {
-				$salt = (int) get_option( $salt_key, 0 ) + 1;
-				update_option( $salt_key, $salt, false );
+				update_option( self::SALT_KEY, time(), false );
 			} else {
 				delete_transient( 'wppo_db_cleanup_counts' );
 			}
@@ -759,11 +765,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Callback for save_post/deleted_post to invalidate DB cleanup counts for public post types.
 		 *
 		 * @param int           $post_id Post ID.
-		 * @param \WP_Post|null $post    Post object (provided by deleted_post).
+		 * @param \WP_Post|null $post    Post object.
 		 * @since 2.5.0
 		 * @return void
 		 */
-		public static function on_post_change( $post_id, $post = null ): void {
+		public static function on_post_change( $post_id, ?\WP_Post $post = null ): void {
 			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
 				return;
 			}

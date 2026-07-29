@@ -804,14 +804,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.1.1
 		 */
 		public static function clear_cache( $url_path = null ): bool {
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
-				$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
-				update_option( 'wppo_cache_last_cleared', $salt, false );
-			} else {
-				delete_transient( 'wppo_cache_size' );
-				delete_transient( 'wppo_total_js_css' );
-			}
-
 			$instance = new self();
 
 			if ( ! $instance->get_filesystem() ) {
@@ -834,10 +826,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$res_html = $instance->delete_cache_files( $html_file_path );
 				$res_css  = $instance->delete_cache_files( $css_file_path );
-				return $res_html && $res_css;
+				$result   = $res_html && $res_css;
+			} else {
+				$result = $instance->delete_all_cache_files();
 			}
 
-			return $instance->delete_all_cache_files();
+			if ( $result ) {
+				if ( function_exists( 'wp_cache_get_salted' ) ) {
+					$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
+					update_option( 'wppo_cache_last_cleared', $salt, false );
+				} else {
+					delete_transient( 'wppo_cache_size' );
+					delete_transient( 'wppo_total_js_css' );
+				}
+			}
+
+			return $result;
 		}
 
 		/**
