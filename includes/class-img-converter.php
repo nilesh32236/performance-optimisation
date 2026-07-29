@@ -51,6 +51,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		private static $img_info_persisted = false;
 
 		/**
+		 * Option key used for the image info cache salt.
+		 *
+		 * @since 2.6.0
+		 * @var string
+		 */
+		private const SALT_KEY = 'wppo_img_info_salt';
+
+		/**
 		 * Configuration options for image optimization.
 		 *
 		 * @var array
@@ -106,7 +114,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				if ( 'webp' === $this->format ) {
 					$this->format = 'none';
 				} elseif ( 'both' === $this->format ) {
-					$this->format = 'avif';
+					$this->format = self::core_handles_both_next_gen() ? 'none' : 'avif';
 				}
 			}
 		}
@@ -120,6 +128,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		public static function core_handles_next_gen(): bool {
 			return function_exists( 'wp_image_quality' );
+		}
+
+		/**
+		 * Check if WordPress core (7.1+) natively handles both WebP and AVIF generation.
+		 *
+		 * @since 2.2.0
+		 *
+		 * @return bool True if core can generate both WebP and AVIF natively.
+		 */
+		public static function core_handles_both_next_gen(): bool {
+			return function_exists( 'wp_image_quality' )
+				&& null !== wp_image_quality( 'image/webp' )
+				&& null !== wp_image_quality( 'image/avif' );
 		}
 
 		/**
@@ -825,7 +846,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return self::$deferred_img_info;
 			}
 
+			$has_salted = function_exists( 'wp_cache_get_salted' );
+
+			if ( $has_salted ) {
+				$cached = wp_cache_get_salted( 'wppo_img_info', 'wppo', self::SALT_KEY );
+				if ( false !== $cached ) {
+					self::$deferred_img_info = $cached;
+					return self::$deferred_img_info;
+				}
+			}
+
 			self::$deferred_img_info = get_option( 'wppo_img_info', array() );
+
+			if ( $has_salted ) {
+				wp_cache_set_salted( 'wppo_img_info', self::$deferred_img_info, 'wppo', self::SALT_KEY );
+			}
+
 			return self::$deferred_img_info;
 		}
 
@@ -839,6 +875,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			self::$deferred_img_info = $img_info;
 			update_option( 'wppo_img_info', $img_info, false );
 			self::$img_info_persisted = true;
+			self::invalidate_img_info_cache();
 		}
 
 		/**
@@ -855,6 +892,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					// commit_img_info()'s live re-read cannot merge old entries back in.
 					update_option( 'wppo_img_info', $img_info, false );
 					self::$img_info_persisted = true;
+					self::invalidate_img_info_cache();
 					return $img_info;
 				}
 			);
@@ -930,11 +968,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 				update_option( 'wppo_img_info', self::$deferred_img_info, false );
 				self::$img_info_persisted = true;
+				self::invalidate_img_info_cache();
 
 				if ( $lock_acquired ) {
 					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 					$wpdb->query( "SELECT RELEASE_LOCK('wppo_img_info_lock')" );
 				}
+			}
+		}
+
+		/**
+		 * Invalidate the image info cache by bumping the salt.
+		 *
+		 * @since 2.6.0
+		 * @return void
+		 */
+		public static function invalidate_img_info_cache(): void {
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				update_option( self::SALT_KEY, time(), false );
 			}
 		}
 

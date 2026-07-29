@@ -31,6 +31,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 	class Telemetry {
 
 		/**
+		 * Option key used for the audit cache salt.
+		 *
+		 * @since 2.6.0
+		 * @var string
+		 */
+		private const AUDIT_SALT_KEY = 'wppo_audit_salt';
+
+		/**
 		 * Scan a URL and return all performance metrics.
 		 *
 		 * Checks the transient cache first. On a cache miss, fetches the page,
@@ -44,8 +52,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @return array|\WP_Error   Associative array of metrics, or WP_Error on failure.
 		 */
 		public static function scan( string $url, string $scan_type = 'manual', bool $force = false ): array|\WP_Error {
-			$transient_key = 'wppo_audit_' . md5( $url );
-			$cached        = get_transient( $transient_key );
+			$cache_key  = 'wppo_audit_' . md5( $url );
+			$has_salted = function_exists( 'wp_cache_get_salted' );
+
+			if ( $has_salted ) {
+				$cached = wp_cache_get_salted( $cache_key, 'wppo', self::AUDIT_SALT_KEY );
+			} else {
+				$cached = get_transient( $cache_key );
+			}
 
 			if ( ! $force && false !== $cached ) {
 				$cached['is_cached'] = true;
@@ -223,8 +237,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				'is_cached'                 => false,
 			);
 
-			set_transient( $transient_key, $result, HOUR_IN_SECONDS );
-			self::register_transient_key( $transient_key );
+			if ( $has_salted ) {
+				wp_cache_set_salted( $cache_key, $result, 'wppo', self::AUDIT_SALT_KEY, HOUR_IN_SECONDS );
+			} else {
+				set_transient( $cache_key, $result, HOUR_IN_SECONDS );
+				self::register_transient_key( $cache_key );
+			}
 
 			return $result;
 		}
@@ -663,6 +681,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			}
 
 			return true;
+		}
+
+		/**
+		 * Invalidate the audit cache salt so future scans bypass stale cached data.
+		 *
+		 * Should be called when performance audit settings change or when
+		 * a fresh scan should be forced next request.
+		 *
+		 * @since 2.6.0
+		 * @return void
+		 */
+		public static function invalidate_audit_cache(): void {
+			if ( function_exists( 'wp_cache_get_salted' ) ) {
+				update_option( self::AUDIT_SALT_KEY, time(), false );
+			}
 		}
 
 		/**

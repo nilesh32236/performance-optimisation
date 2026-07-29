@@ -27,6 +27,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 	class Log {
 
 		/**
+		 * Option key used for the activity log cache salt.
+		 *
+		 * @since 2.6.0
+		 * @var string
+		 */
+		private const SALT_KEY = 'wppo_activity_log_salt';
+
+		/**
 		 * Private constructor to prevent direct instantiation.
 		 *
 		 * @since 2.0.0
@@ -59,28 +67,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			/* phpcs:enable */
 
 			if ( $result ) {
-				self::bump_cache_version();
+				if ( function_exists( 'wp_cache_get_salted' ) ) {
+					update_option( self::SALT_KEY, time(), false );
+				} else {
+					update_option( 'wppo_activity_cache_version', (int) get_option( 'wppo_activity_cache_version', 0 ) + 1, false );
+				}
 			}
-		}
-
-		/**
-		 * Bump the cache version to invalidate all cached activity log queries.
-		 *
-		 * @since 1.0.0
-		 */
-		private static function bump_cache_version() {
-			$version = (int) get_option( 'wppo_activity_cache_version', 0 );
-			update_option( 'wppo_activity_cache_version', $version + 1, false );
-		}
-
-		/**
-		 * Get the current cache version.
-		 *
-		 * @since 1.0.0
-		 * @return int Current cache version.
-		 */
-		private static function get_cache_version() {
-			return (int) get_option( 'wppo_activity_cache_version', 0 );
 		}
 
 		/**
@@ -101,11 +93,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 			// Calculate offset for pagination.
 			$offset = ( $page - 1 ) * $per_page;
 
-			// Cache key with versioning to support per-page invalidation.
-			$cache_key = 'wppo_activity_logs_v' . self::get_cache_version() . '_page_' . $page . '_per_page_' . $per_page;
+			// Cache key with salt-based invalidation (WP 6.9+) or versioned fallback.
+			$has_salted = function_exists( 'wp_cache_get_salted' );
 
-			// Attempt to fetch cached data.
-			$data = wp_cache_get( $cache_key, 'wppo_activity_logs' );
+			if ( $has_salted ) {
+				$cache_key = "wppo_activity_logs_{$page}_{$per_page}";
+				$data      = wp_cache_get_salted( $cache_key, 'wppo', self::SALT_KEY );
+			} else {
+				$cache_key = 'wppo_activity_logs_v' . (int) get_option( 'wppo_activity_cache_version', 0 ) . '_page_' . $page . '_per_page_' . $per_page;
+				$data      = wp_cache_get( $cache_key, 'wppo_activity_logs' );
+			}
 
 			if ( false === $data ) {
 				/* phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery */
@@ -140,7 +137,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 				);
 
 				// Store data in cache.
-				wp_cache_set( $cache_key, $data, 'wppo_activity_logs', HOUR_IN_SECONDS );
+				if ( $has_salted ) {
+					wp_cache_set_salted( $cache_key, $data, 'wppo', self::SALT_KEY, HOUR_IN_SECONDS );
+				} else {
+					wp_cache_set( $cache_key, $data, 'wppo_activity_logs', HOUR_IN_SECONDS );
+				}
 			}
 
 			return $data;
