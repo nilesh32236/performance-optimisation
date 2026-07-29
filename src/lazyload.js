@@ -269,11 +269,11 @@ const observeElement = ( el ) => {
 		el.hasAttribute( 'data-src' )
 	) {
 		const src = el.getAttribute( 'data-src' );
+		el.setAttribute( 'loading', 'lazy' );
 		if ( src ) {
 			el.src = src;
 		}
 		el.removeAttribute( 'data-src' );
-		el.setAttribute( 'loading', 'lazy' );
 		observedElements.add( el );
 		return;
 	}
@@ -293,7 +293,7 @@ const observeElement = ( el ) => {
 /**
  * Initialise lazy-loading for images, iframes, and videos.
  *
- * Uses IntersectionObserver with a 600px root margin. Falls back to
+ * Uses IntersectionObserver with a 200px root margin. Falls back to
  * scroll-based detection when the Observer API is unavailable. Also
  * sets up a MutationObserver and a periodic safety scan for dynamically
  * added elements.
@@ -306,11 +306,11 @@ const loadImages = () => {
 	if ( USE_NATIVE_LAZY ) {
 		document.querySelectorAll( 'iframe[data-src]' ).forEach( ( iframe ) => {
 			const src = iframe.getAttribute( 'data-src' );
+			iframe.setAttribute( 'loading', 'lazy' );
 			if ( src ) {
 				iframe.src = src;
 			}
 			iframe.removeAttribute( 'data-src' );
-			iframe.setAttribute( 'loading', 'lazy' );
 		} );
 	}
 
