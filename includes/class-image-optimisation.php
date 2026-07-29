@@ -1031,13 +1031,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							if ( 'none' !== $this->get_placeholder_type() ) {
 								$placeholder = $this->get_placeholder_src_for_image( $img_tag, $original_src_decoded );
 								if ( ! empty( $placeholder['src'] ) ) {
-									$img_tag = preg_replace(
+									$serialized = $tags->get_updated_html();
+									$img_tag    = preg_replace(
 										'#(?<!data-)src=(["\'])[^"\']*\1#i',
 										'src="' . $placeholder['src'] . '"',
-										$tags->get_updated_html(),
+										$serialized,
 										1
 									);
-									$tags    = new \WP_HTML_Tag_Processor( $img_tag );
+									// Guard against null return from preg_replace (PCRE engine failure).
+									if ( null === $img_tag ) {
+										$img_tag = $serialized;
+									}
+									$tags = new \WP_HTML_Tag_Processor( $img_tag );
 									$tags->next_tag( array( 'tag_name' => 'img' ) );
 									// Add extra placeholder data attributes.
 									foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
@@ -1167,19 +1172,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							$img_tag = preg_replace( '#<img\b#i', '<img decoding="async"', $img_tag );
 						}
 					} else {
-						$img_tag = preg_replace_callback(
+						$replaced_tag = preg_replace_callback(
 							'#src=["\']([^"\']+)["\']#i',
 							function () use ( $original_src_decoded ) {
 								return 'data-src="' . esc_attr( $original_src_decoded ) . '"';
 							},
 							$img_tag
 						);
+						// Guard against null return from preg_replace_callback (PCRE engine failure).
+						if ( null !== $replaced_tag ) {
+							$img_tag = $replaced_tag;
+						}
 
 						// Replace with placeholder if the option is enabled.
 						if ( 'none' !== $this->get_placeholder_type() ) {
 							$placeholder = $this->get_placeholder_src_for_image( $img_tag, $original_src_decoded );
 							if ( ! empty( $placeholder['src'] ) ) {
-								$img_tag = preg_replace_callback(
+								$replaced_placeholder = preg_replace_callback(
 									'#<img\b([^>]*)#i',
 									function ( $matches ) use ( $placeholder ) {
 										$extra_attrs = '';
@@ -1190,6 +1199,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 									},
 									$img_tag
 								);
+								if ( null !== $replaced_placeholder ) {
+									$img_tag = $replaced_placeholder;
+								}
 							}
 						}
 
@@ -1913,14 +1925,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 			$rel_path = $path_cache[ $data_src ];
 
+			// Load placeholder data from the shared wppo_img_info option.
+			if ( null === $placeholder_cache ) {
+				$placeholder_cache = Img_Converter::get_placeholder_info();
+			}
+
 			if ( 'svg' === $placeholder_type ) {
 				$result['src'] = $this->generate_svg_base64( $img_tag );
 				return $result;
-			}
-
-			// Load only the lightweight placeholder option instead of the full wppo_img_info.
-			if ( null === $placeholder_cache ) {
-				$placeholder_cache = Img_Converter::get_placeholder_info();
 			}
 
 			if ( 'dominant_color' === $placeholder_type ) {

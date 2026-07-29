@@ -12,10 +12,5 @@
 
 	<config name="testVersion" value="8.2-" />
 
-	<!-- False positive: $sample_rate is used as a read-only step value in
-	both the outer ($y) and inner ($x) for-loop increment expressions, but
-	the sniff does not distinguish between read and write in increments. -->
-	<rule ref="Generic.CodeAnalysis.JumbledIncrementer">
-		<exclude-pattern>includes/class-img-converter\.php</exclude-pattern>
-	</rule>
+
 </ruleset>

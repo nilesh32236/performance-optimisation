@@ -318,6 +318,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 							$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
 						}
 
+						// When $image is null (format is 'webp' and didn't enter the AVIF branch),
+						// create a temporary GD resource just for placeholder extraction.
+						if ( null === $image && ! $this->is_animated_webp( $source_image ) && function_exists( 'imagecreatefromwebp' ) ) {
+							$webp_gd = imagecreatefromwebp( $source_image );
+							if ( $webp_gd instanceof \GdImage ) {
+								$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $source_image ) );
+								$dominant_color = $this->extract_dominant_color( $webp_gd );
+								$lqip           = $this->generate_lqip( $webp_gd );
+								$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+								// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated
+								imagedestroy( $webp_gd );
+							}
+						}
+
 						return true;
 					case IMAGETYPE_GIF:
 						if ( ! extension_loaded( 'imagick' ) ) {
@@ -525,7 +539,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$total_b     = 0;
 			$pixel_count = 0;
 
+			// phpcs:ignore Generic.CodeAnalysis.JumbledIncrementer -- $sample_rate is a read-only step value, not a loop incrementer variable.
 			for ( $y = 0; $y < $height; $y += $sample_rate ) {
+				// phpcs:ignore Generic.CodeAnalysis.JumbledIncrementer
 				for ( $x = 0; $x < $width; $x += $sample_rate ) {
 					$rgb = imagecolorat( $image, $x, $y );
 					if ( false !== $rgb ) {
@@ -616,10 +632,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
-		 * Store dominant color and LQIP data for an image atomically.
-		 *
-		 * Writes to both wppo_img_info (for backward compat) and wppo_placeholder_info
-		 * (for lightweight front-end lookups).
+		 * Store dominant color and LQIP data for an image atomically via the
+		 * existing deferred-commit pattern (wppo_img_info).
 		 *
 		 * @since 3.0.0
 		 *
@@ -646,65 +660,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					return $img_info;
 				}
 			);
-
-			// Also immediately persist to the lightweight placeholder-only option so front-end
-			// lookups in get_placeholder_src_for_image() don't need to load the full wppo_img_info.
-			self::update_placeholder_option( $rel_path, $dominant_color, $lqip );
 		}
 
 		/**
-		 * Immediately persist placeholder data to the lightweight placeholder-only option.
-		 *
-		 * @since 3.0.0
-		 *
-		 * @param string $rel_path       The relative image path.
-		 * @param string $dominant_color Hex color string.
-		 * @param string $lqip           LQIP data URI.
-		 * @return void
-		 */
-		private static function update_placeholder_option( string $rel_path, string $dominant_color, string $lqip ): void {
-			$info = get_option( 'wppo_placeholder_info', array() );
-			if ( ! is_array( $info ) ) {
-				$info = array();
-			}
-			if ( ! isset( $info['dominant_color'] ) || ! is_array( $info['dominant_color'] ) ) {
-				$info['dominant_color'] = array();
-			}
-			if ( ! isset( $info['lqip'] ) || ! is_array( $info['lqip'] ) ) {
-				$info['lqip'] = array();
-			}
-			$info['dominant_color'][ $rel_path ] = $dominant_color;
-			if ( ! empty( $lqip ) ) {
-				$info['lqip'][ $rel_path ] = $lqip;
-			}
-			update_option( 'wppo_placeholder_info', $info, false );
-		}
-
-		/**
-		 * Get placeholder-only data (dominant_color, lqip) without loading the full wppo_img_info.
+		 * Get placeholder data (dominant_color, lqip) from the shared wppo_img_info option.
 		 *
 		 * @since 3.0.0
 		 *
 		 * @return array{dominant_color: array<string, string>, lqip: array<string, string>}
 		 */
 		public static function get_placeholder_info(): array {
-			$info = get_option( 'wppo_placeholder_info', array() );
-			if ( ! is_array( $info ) ) {
-				return array(
-					'dominant_color' => array(),
-					'lqip'           => array(),
-				);
-			}
-			$info['dominant_color'] = $info['dominant_color'] ?? array();
-			$info['lqip']           = $info['lqip'] ?? array();
-			return $info;
+			$info = self::get_img_info();
+			return array(
+				'dominant_color' => $info['dominant_color'] ?? array(),
+				'lqip'           => $info['lqip'] ?? array(),
+			);
 		}
 
 		/**
 		 * Clean up placeholder data (dominant_color, lqip) when an attachment is deleted.
 		 *
 		 * Removes entries for the main file AND all registered resized versions
-		 * from both wppo_img_info and wppo_placeholder_info options.
+		 * from wppo_img_info.
 		 *
 		 * @since 3.0.0
 		 *
@@ -733,8 +710,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 			}
 
-			// Clean from wppo_img_info.
-			$img_info = get_option( 'wppo_img_info', array() );
+			// Read the latest state via get_img_info() which may include
+			// deferred-but-not-yet-committed entries from the current request.
+			$img_info = self::get_img_info();
 			$changed  = false;
 			foreach ( array( 'dominant_color', 'lqip' ) as $key ) {
 				foreach ( $rel_paths as $rel ) {
@@ -745,25 +723,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 			}
 			if ( $changed ) {
-				update_option( 'wppo_img_info', $img_info, false );
-				self::invalidate_img_info_cache();
-			}
-
-			// Clean from wppo_placeholder_info.
-			$placeholder_info    = get_option( 'wppo_placeholder_info', array() );
-			$placeholder_changed = false;
-			if ( is_array( $placeholder_info ) ) {
-				foreach ( array( 'dominant_color', 'lqip' ) as $key ) {
-					foreach ( $rel_paths as $rel ) {
-						if ( isset( $placeholder_info[ $key ][ $rel ] ) ) {
-							unset( $placeholder_info[ $key ][ $rel ] );
-							$placeholder_changed = true;
-						}
-					}
-				}
-				if ( $placeholder_changed ) {
-					update_option( 'wppo_placeholder_info', $placeholder_info, false );
-				}
+				self::set_img_info( $img_info );
 			}
 		}
 

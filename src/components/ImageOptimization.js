@@ -30,9 +30,6 @@ const ImageOptimization = ( { options = {} } ) => {
 		convertImg: false,
 		conversionFormat: 'webp',
 		excludeConvertImages: '',
-		placeholderType:
-			options.placeholderType ||
-			( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
 		preloadFrontPageImages: false,
 		preloadFrontPageImagesUrls: '',
 		preloadPostTypeImage: false,
@@ -42,6 +39,9 @@ const ImageOptimization = ( { options = {} } ) => {
 		maxWidthImgSize: 0,
 		excludeSize: '',
 		...options,
+		placeholderType:
+			options.placeholderType ||
+			( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
 	};
 
 	const [ settings, setSettings ] = useState( defaultSettings );
