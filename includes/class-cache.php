@@ -950,8 +950,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
 					update_option( 'wppo_cache_last_cleared', $salt, false );
 				} else {
-					delete_transient( 'wppo_cache_size' );
-					delete_transient( 'wppo_total_js_css' );
+					delete_transient( Util::transient_key( 'wppo_cache_size' ) );
+					delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
 				}
 				do_action( 'wppo_after_cache_clear', $type, $url_path );
 			}

@@ -217,7 +217,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						'label'  => $label,
 					);
 				} else {
-					$cache_status      = get_transient( 'wppo_ccss_status_' . $hash );
+					$cache_status      = get_transient( Util::transient_key( 'wppo_ccss_status_' . $hash ) );
 					$statuses[ $hash ] = array(
 						'status' => $cache_status ? $cache_status : 'none',
 						'label'  => $label,
@@ -760,19 +760,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static function generate_and_store( string $template_hash, string $template ): bool {
 			$url = self::get_sample_url( $template );
 			if ( ! $url ) {
-				set_transient( 'wppo_ccss_status_' . $template_hash, 'failed', DAY_IN_SECONDS );
+				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 				return false;
 			}
 
 			$critical_css = self::generate( $url );
 			if ( false === $critical_css ) {
-				set_transient( 'wppo_ccss_status_' . $template_hash, 'failed', DAY_IN_SECONDS );
+				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 				return false;
 			}
 
 			$dir = self::get_ccss_dir();
 			if ( ! wp_mkdir_p( $dir ) ) {
-				set_transient( 'wppo_ccss_status_' . $template_hash, 'failed', DAY_IN_SECONDS );
+				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 				return false;
 			}
 
@@ -785,11 +785,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			if ( file_exists( self::get_ccss_file( $template_hash ) ) ) {
-				set_transient( 'wppo_ccss_status_' . $template_hash, 'ready', WEEK_IN_SECONDS );
+				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'ready', WEEK_IN_SECONDS );
 				return true;
 			}
 
-			set_transient( 'wppo_ccss_status_' . $template_hash, 'failed', DAY_IN_SECONDS );
+			set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 			return false;
 		}
 
@@ -827,7 +827,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						array( 'template_hash' => $template_hash ),
 						'performance_optimisation'
 					);
-					set_transient( 'wppo_ccss_status_' . $template_hash, 'pending', HOUR_IN_SECONDS );
+					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'pending', HOUR_IN_SECONDS );
 				}
 			}
 		}
@@ -899,7 +899,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			if ( empty( $found_template ) ) {
-				set_transient( 'wppo_ccss_status_' . $template_hash, 'failed', DAY_IN_SECONDS );
+				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 				return;
 			}
 
@@ -949,7 +949,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						++$queued;
 					}
 				}
-				set_transient( 'wppo_ccss_status_' . $hash, 'pending', HOUR_IN_SECONDS );
+				set_transient( Util::transient_key( 'wppo_ccss_status_' . $hash ), 'pending', HOUR_IN_SECONDS );
 			}
 
 			Log::add(
@@ -983,7 +983,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$templates = self::get_templates();
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
-				delete_transient( 'wppo_ccss_status_' . $hash );
+				delete_transient( Util::transient_key( 'wppo_ccss_status_' . $hash ) );
 			}
 		}
 	}

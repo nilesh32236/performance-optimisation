@@ -381,7 +381,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Only run this check once per hour to avoid constant I/O.
-			if ( get_transient( 'wppo_wp_cache_fix_checked' ) ) {
+			if ( get_transient( Util::transient_key( 'wppo_wp_cache_fix_checked' ) ) ) {
 				return;
 			}
 
@@ -389,14 +389,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$notices = Activate::add_wp_cache_constant();
 
 			// Always throttle for 1 hour to avoid constant I/O on failure.
-			set_transient( 'wppo_wp_cache_fix_checked', 1, HOUR_IN_SECONDS );
+			set_transient( Util::transient_key( 'wppo_wp_cache_fix_checked' ), 1, HOUR_IN_SECONDS );
 
 			if ( ! empty( $notices ) ) {
 				// Failure — merge notice keys into existing transient to notify user immediately.
-				$existing_notices = get_transient( 'wppo_activation_notices' );
+				$existing_notices = get_transient( Util::transient_key( 'wppo_activation_notices' ) );
 				$existing_notices = is_array( $existing_notices ) ? $existing_notices : array();
 				$new_notices      = array_unique( array_merge( $existing_notices, (array) $notices ) );
-				set_transient( 'wppo_activation_notices', $new_notices, 30 );
+				set_transient( Util::transient_key( 'wppo_activation_notices' ), $new_notices, 30 );
 			}
 		}
 
@@ -780,10 +780,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					wp_cache_set_salted( 'wppo_cache_size', $cache_size, 'wppo', $cache_salt_key );
 				}
 			} else {
-				$cache_size = get_transient( 'wppo_cache_size' );
+				$cache_size = get_transient( Util::transient_key( 'wppo_cache_size' ) );
 				if ( false === $cache_size ) {
 					$cache_size = Cache::get_cache_size();
-					set_transient( 'wppo_cache_size', $cache_size, 15 * MINUTE_IN_SECONDS );
+					set_transient( Util::transient_key( 'wppo_cache_size' ), $cache_size, 15 * MINUTE_IN_SECONDS );
 				}
 			}
 
@@ -794,10 +794,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					wp_cache_set_salted( 'wppo_total_js_css', $total_js_css, 'wppo', $cache_salt_key );
 				}
 			} else {
-				$total_js_css = get_transient( 'wppo_total_js_css' );
+				$total_js_css = get_transient( Util::transient_key( 'wppo_total_js_css' ) );
 				if ( false === $total_js_css ) {
 					$total_js_css = Util::get_js_css_minified_file();
-					set_transient( 'wppo_total_js_css', $total_js_css, 15 * MINUTE_IN_SECONDS );
+					set_transient( Util::transient_key( 'wppo_total_js_css' ), $total_js_css, 15 * MINUTE_IN_SECONDS );
 				}
 			}
 

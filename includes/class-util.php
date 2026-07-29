@@ -265,5 +265,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			return array_values( array_filter( array_unique( array_map( 'trim', explode( "\n", (string) $urls ) ) ) ) );
 		}
+
+		/**
+		 * Qualify a transient key with the current blog ID on multisite.
+		 *
+		 * Prevents transient key collisions when a shared object cache backend
+		 * (Redis, Memcached) is present. On single-site installs the key is
+		 * returned unchanged.
+		 *
+		 * @param string $key The bare transient key.
+		 * @return string Blog-ID-prefixed key on multisite, or the original key.
+		 * @since 2.6.0
+		 */
+		public static function transient_key( string $key ): string {
+			return is_multisite() ? (string) get_current_blog_id() . '_' . $key : $key;
+		}
 	}
 }

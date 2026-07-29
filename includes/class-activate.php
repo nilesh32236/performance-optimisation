@@ -53,9 +53,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			}
 
 			if ( ! empty( $notices ) ) {
-				set_transient( 'wppo_activation_notices', array_unique( $notices ), WEEK_IN_SECONDS );
+				set_transient( Util::transient_key( 'wppo_activation_notices' ), array_unique( $notices ), WEEK_IN_SECONDS );
 			} else {
-				delete_transient( 'wppo_activation_notices' );
+				delete_transient( Util::transient_key( 'wppo_activation_notices' ) );
 			}
 
 			if ( ! get_option( 'wppo_activation_time' ) ) {
@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				$rules_updated = Htaccess_Handler::update_rules( true );
 				if ( ! $rules_updated ) {
 					$notices[] = __( 'Failed to update .htaccess rules during activation.', 'performance-optimisation' );
-					set_transient( 'wppo_activation_notices', array_unique( $notices ), WEEK_IN_SECONDS );
+					set_transient( Util::transient_key( 'wppo_activation_notices' ), array_unique( $notices ), WEEK_IN_SECONDS );
 				}
 			}
 
