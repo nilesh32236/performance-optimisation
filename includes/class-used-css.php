@@ -481,12 +481,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$simple_selectors = $this->extract_simple_selectors( $selector );
 
 			foreach ( $simple_selectors as $simple ) {
-				if ( $this->matches_simple_selector( $simple, $used ) ) {
-					return true;
+				if ( ! $this->matches_simple_selector( $simple, $used ) ) {
+					return false;
 				}
 			}
 
-			return false;
+			return ! empty( $simple_selectors );
 		}
 
 		/**
@@ -517,7 +517,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				} elseif ( 0 === $depth && preg_match( '/^[\s>+~]$/', $ch ) ) {
 					$trimmed = trim( $current );
 					if ( '' !== $trimmed ) {
-						$parts[] = $trimmed;
+						$sub_parts = preg_split( '/(?=[.#\[])/', $trimmed );
+						foreach ( $sub_parts as $sub ) {
+							$sub = trim( $sub );
+							if ( '' !== $sub ) {
+								$parts[] = $sub;
+							}
+						}
 					}
 					$current = '';
 				} else {
@@ -527,7 +533,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$trimmed = trim( $current );
 			if ( '' !== $trimmed ) {
-				$parts[] = $trimmed;
+				$sub_parts = preg_split( '/(?=[.#\[])/', $trimmed );
+				foreach ( $sub_parts as $sub ) {
+					$sub = trim( $sub );
+					if ( '' !== $sub ) {
+						$parts[] = $sub;
+					}
+				}
 			}
 
 			return $parts;
@@ -846,17 +858,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return true;
 			}
 
-			$success = true;
-
-			// Use a recursive iterator to find all used-css.css files at any depth.
-			$iterator = new \RecursiveIteratorIterator(
-				new \RecursiveDirectoryIterator( $root, \FilesystemIterator::SKIP_DOTS )
-			);
-
-			foreach ( $iterator as $file ) {
-				if ( $file->isFile() && self::USED_CSS_FILENAME === $file->getFilename() ) {
-					if ( ! $fs->delete( $file->getPathname() ) ) {
-						$success = false;
+			$success   = true;
+			$dir_queue = array( $root );
+			while ( ! empty( $dir_queue ) ) {
+				$current = array_shift( $dir_queue );
+				$entries = $fs->dirlist( $current );
+				if ( ! is_array( $entries ) ) {
+					continue;
+				}
+				foreach ( $entries as $name => $entry ) {
+					$full_path = trailingslashit( $current ) . $name;
+					if ( ! empty( $entry['type'] ) && 'd' === $entry['type'] ) {
+						$dir_queue[] = $full_path;
+					} elseif ( self::USED_CSS_FILENAME === $name ) {
+						if ( ! $fs->delete( $full_path ) ) {
+							$success = false;
+						}
 					}
 				}
 			}
@@ -1024,7 +1041,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				}
 			}
 
-			$response = wp_remote_get( $url, array( 'timeout' => 15 ) );
+			$response = wp_safe_remote_get( $url, array( 'timeout' => 15 ) );
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				return false;
 			}
@@ -1136,10 +1153,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$noscript_fallback = '';
 			foreach ( $handles as $handle ) {
 				if ( isset( $wp_styles->registered[ $handle ] ) ) {
-					$original_url = $wp_styles->registered[ $handle ]->src;
+					$original_url   = $wp_styles->registered[ $handle ]->src;
+					$original_media = $wp_styles->registered[ $handle ]->args;
 					if ( ! empty( $original_url ) ) {
+						$media_attr = ! empty( $original_media ) ? $original_media : 'all';
 						// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet
-						$noscript_fallback .= '<link rel="stylesheet" href="' . esc_url( $original_url ) . '" media="all">' . "\n";
+						$noscript_fallback .= '<link rel="stylesheet" href="' . esc_url( $original_url ) . '" media="' . esc_attr( $media_attr ) . '">' . "\n";
 					}
 				}
 			}
@@ -1204,7 +1223,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 					$handles = array();
 					if ( $wp_styles && ! empty( $wp_styles->queue ) ) {
-						$handles = $wp_styles->queue;
+						foreach ( $wp_styles->queue as $handle ) {
+							if ( isset( $wp_styles->registered[ $handle ] ) && ! empty( $wp_styles->registered[ $handle ]->src ) ) {
+								$handles[] = $handle;
+							}
+						}
 					}
 					return $this->inject_used_css( $buffer, $used_css_url, $handles );
 				}
@@ -1228,10 +1251,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$ver          = filemtime( $used_css_path );
 			$used_css_url = $used_css_url . '?ver=' . $ver;
 
-			$handles = array();
-			if ( $wp_styles && ! empty( $wp_styles->queue ) ) {
-				$handles = $wp_styles->queue;
-			}
+			$handles = array_keys( $css_assets );
 			return $this->inject_used_css( $buffer, $used_css_url, $handles );
 		}
 	}

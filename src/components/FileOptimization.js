@@ -1,5 +1,5 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useRef } from '@wordpress/element';
+import { useState, useRef, useEffect } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -106,10 +106,10 @@ const FileOptimization = ( {
 			} );
 		} finally {
 			setIsLoading( false );
-			notificationTimer.current = setTimeout(
-				() => setNotification( { message: '', success: false } ),
-				3000
-			);
+			notificationTimer.current = setTimeout( () => {
+				setNotification( { message: '', success: false } );
+				notificationTimer.current = null;
+			}, 3000 );
 		}
 	};
 
@@ -135,7 +135,7 @@ const FileOptimization = ( {
 					},
 				} );
 				if ( ! saveRes.success ) {
-					throw new Error( saveRes.message );
+					return saveRes;
 				}
 				return await apiCall( 'used_css_regenerate' );
 			} )(),
@@ -208,6 +208,15 @@ const FileOptimization = ( {
 			nextButton.focus();
 		}
 	};
+
+	useEffect( () => {
+		return () => {
+			if ( notificationTimer.current ) {
+				clearTimeout( notificationTimer.current );
+				notificationTimer.current = null;
+			}
+		};
+	}, [] );
 
 	return (
 		<div className="wppo-dashboard-view">

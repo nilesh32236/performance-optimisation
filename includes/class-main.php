@@ -246,6 +246,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
 
+			// Standalone used-CSS output buffer when page cache is disabled.
+			if ( empty( $this->options['cache']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+					// WP 6.9+ template enhancement output buffer.
+					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
+				} else {
+					add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
+				}
+			}
+
 			// Invalidate DB cleanup counts when posts are added or removed (for public post types).
 			if ( is_admin() ) {
 				add_action( 'save_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
@@ -536,6 +546,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'performance_optimisation'
 				);
 			}
+		}
+
+		/**
+		 * Process used-CSS when cache is disabled.
+		 *
+		 * @param string $filtered_output The filtered output from previous callbacks.
+		 * @param string $output          The raw output buffer content.
+		 * @return string The processed output.
+		 * @since 2.6.0
+		 */
+		public function process_used_css_only( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( is_user_logged_in() || is_admin() ) {
+				return $filtered_output;
+			}
+			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
+			return $used_css->process_buffer( $filtered_output );
+		}
+
+		/**
+		 * Start output buffer for used-CSS (legacy path, WP &lt; 6.9).
+		 *
+		 * @return void
+		 * @since 2.6.0
+		 */
+		public function start_used_css_buffer() {
+			if ( is_user_logged_in() || is_admin() ) {
+				return;
+			}
+			ob_start( array( $this, 'process_used_css_capture' ) );
+		}
+
+		/**
+		 * Capture and process buffer for used-CSS.
+		 *
+		 * @param string $buffer The output buffer content.
+		 * @return string The processed buffer.
+		 * @since 2.6.0
+		 */
+		public function process_used_css_capture( $buffer ) {
+			if ( empty( $buffer ) ) {
+				return $buffer;
+			}
+			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
+			return $used_css->process_buffer( $buffer );
 		}
 
 		/**

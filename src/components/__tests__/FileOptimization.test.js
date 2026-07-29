@@ -13,7 +13,12 @@ import { apiCall } from '../../lib/apiRequest';
 
 describe( 'FileOptimization Component', () => {
 	beforeEach( () => {
-		global.wppoSettings = { translations: {} };
+		global.wppoSettings = {
+			apiUrl: 'https://example.com/wp-json/performance-optimisation/v1/',
+			nonce: 'test-nonce',
+			settings: {},
+			translations: {},
+		};
 		jest.clearAllMocks();
 	} );
 
@@ -318,9 +323,7 @@ describe( 'FileOptimization Component', () => {
 		} );
 
 		expect( apiCall.mock.calls[ 0 ][ 0 ] ).toBe( 'update_settings' );
-		expect( apiCall.mock.calls[ 0 ][ 1 ].tab ).toBe(
-			'file_optimisation'
-		);
+		expect( apiCall.mock.calls[ 0 ][ 1 ].tab ).toBe( 'file_optimisation' );
 		expect( apiCall.mock.calls[ 0 ][ 1 ].settings.removeUnusedCSS ).toBe(
 			true
 		);
