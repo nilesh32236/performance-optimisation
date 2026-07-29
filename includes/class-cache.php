@@ -974,5 +974,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			return false;
 		}
+
+		/**
+		 * Flush runtime (in-memory) cache via wp_cache_flush_runtime().
+		 *
+		 * Avoids unnecessary persistent cache (Redis/Memcached) flushes when only
+		 * in-memory cached data has changed (e.g. admin UI settings).
+		 *
+		 * @since 2.1.0
+		 *
+		 * @return bool True if the flush succeeded, false if the function is
+		 *              unavailable (WP < 6.0).
+		 */
+		public static function flush_runtime(): bool {
+			if ( function_exists( 'wp_cache_flush_runtime' ) ) {
+				return wp_cache_flush_runtime();
+			}
+			return false;
+		}
 	}
 }
