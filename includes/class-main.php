@@ -64,6 +64,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private array $exclude_delay_js = array();
 
 		/**
+		 * Associative array of deferred script handles (keyed by handle for O(1) lookups).
+		 *
+		 * @var   array<string, bool>
+		 * @since 2.4.0
+		 */
+		private array $deferred_handles = array();
+
+		/**
 		 * Cache instance for static HTML cache operations.
 		 *
 		 * @var   Cache|null
@@ -203,6 +211,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$has_defer_js = ! empty( $this->options['file_optimisation']['deferJS'] );
 			if ( $has_delay_js || ( $has_defer_js && ! function_exists( 'wp_script_add_data' ) ) ) {
 				add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
+			}
+			if ( $has_defer_js ) {
+				add_filter( 'script_loader_tag', array( $this, 'add_fetchpriority_to_deferred' ), 11, 2 );
 			}
 			add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
@@ -850,6 +861,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			foreach ( $wp_scripts->queue as $handle ) {
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
 					wp_script_add_data( $handle, 'strategy', 'defer' );
+					$this->deferred_handles[ $handle ] = true;
+					wp_script_add_data( $handle, 'fetchpriority', 'low' );
 				}
 			}
 		}
@@ -870,6 +883,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
 				if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
+					$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 					$tag = str_replace( ' src', ' wppo-src', $tag );
 					$tag = preg_replace(
 						'/type=("|\')text\/javascript("|\')/',
@@ -879,6 +893,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
+			return $tag;
+		}
+
+		/**
+		 * Adds fetchpriority="low" to rendered script tags for deferred handles.
+		 *
+		 * @since 2.4.0
+		 *
+		 * @param  string $tag    The script tag HTML.
+		 * @param  string $handle The script's registered handle.
+		 * @return string Modified script tag with fetchpriority="low".
+		 */
+		public function add_fetchpriority_to_deferred( $tag, $handle ): string {
+			if ( isset( $this->deferred_handles[ $handle ] ) && false === strpos( $tag, 'fetchpriority=' ) ) {
+				$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
+			}
 			return $tag;
 		}
 
