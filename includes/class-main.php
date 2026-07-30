@@ -198,6 +198,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'enableSpeculationRules' => false,
 						'speculationMode'        => 'prerender',
 						'speculationEagerness'   => 'moderate',
+						'speculationExcludeUrls' => '',
 					),
 					'image_optimisation' => array(
 						'placeholderType' => 'svg',
@@ -1462,10 +1463,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			add_filter(
 				'wp_speculation_rules_href_exclude_paths',
-				function ( $exclude_paths ) {
+				function ( $exclude_paths ) use ( $preload_settings ) {
 					$exclude_paths[] = '/wp-login.php';
 					$exclude_paths[] = '/wp-admin/*';
 					$exclude_paths[] = '/wp-json/*';
+
+					$custom_excludes = ! empty( $preload_settings['speculationExcludeUrls'] )
+						? Util::process_urls( $preload_settings['speculationExcludeUrls'] )
+						: array();
+					foreach ( $custom_excludes as $exclude ) {
+						$exclude_paths[] = $exclude;
+					}
+
+					if ( function_exists( 'wc_get_checkout_url' ) ) {
+						$checkout_url = wc_get_checkout_url();
+						if ( $checkout_url ) {
+							$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
+							if ( $path ) {
+								$exclude_paths[] = trailingslashit( $path ) . '*';
+							}
+						}
+
+						$cart_url = wc_get_cart_url();
+						if ( $cart_url ) {
+							$path = wp_parse_url( $cart_url, PHP_URL_PATH );
+							if ( $path ) {
+								$exclude_paths[] = trailingslashit( $path ) . '*';
+							}
+						}
+
+						$myaccount_page_id = wc_get_page_id( 'myaccount' );
+						if ( $myaccount_page_id ) {
+							$myaccount_url = get_permalink( $myaccount_page_id );
+							if ( $myaccount_url ) {
+								$path = wp_parse_url( $myaccount_url, PHP_URL_PATH );
+								if ( $path ) {
+									$exclude_paths[] = trailingslashit( $path ) . '*';
+								}
+							}
+						}
+					}
+
 					return $exclude_paths;
 				}
 			);
