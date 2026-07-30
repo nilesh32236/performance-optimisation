@@ -269,12 +269,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Get the current front-end URL including scheme and host.
 		 *
+		 * Returns a normalized URL without query string, consistent with
+		 * the normalization used in store_lcp_image_url(). The returned
+		 * URL is untrailingslashed and passed through esc_url_raw().
+		 *
 		 * @since 2.13.0
 		 * @return string Current URL.
 		 */
 		public static function get_current_url(): string {
 			global $wp;
-			return home_url( add_query_arg( array(), $wp->request ) );
+			$url = home_url( add_query_arg( array(), $wp->request ) );
+			return untrailingslashit( esc_url_raw( $url ) );
 		}
 
 		/**

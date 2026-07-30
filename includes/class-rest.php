@@ -1229,26 +1229,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			// Retroactively store LCP image URL from cached results (plugin upgrade path).
+			// store_lcp_image_url() handles deduplication internally.
 			if ( ! empty( $results['lcp_image_url'] ) ) {
-				$existing_stored = false;
-				$norm_url        = untrailingslashit( esc_url_raw( $url ) );
-				$norm_home       = untrailingslashit( home_url( '/' ) );
-
-				if ( $norm_url === $norm_home ) {
-					$existing_stored = ! empty( get_option( 'wppo_front_page_lcp', '' ) );
-				} else {
-					$post_id = url_to_postid( $url );
-					if ( $post_id > 0 ) {
-						$existing_stored = ! empty( get_post_meta( $post_id, '_wppo_lcp_image_url', true ) );
-					} else {
-						$transient_key_store = \PerformanceOptimise\Inc\Util::transient_key( 'wppo_lcp_url_' . md5( $norm_url ) );
-						$existing_stored     = ! empty( get_transient( $transient_key_store ) );
-					}
-				}
-
-				if ( ! $existing_stored ) {
-					\PerformanceOptimise\Inc\Pagespeed::store_lcp_image_url( $url, $results );
-				}
+				\PerformanceOptimise\Inc\Pagespeed::store_lcp_image_url( $url, $results, $strategy );
 			}
 
 			// Append Suggestion_Engine output so the React UI gets everything in one call.

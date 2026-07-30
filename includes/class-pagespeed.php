@@ -205,7 +205,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			set_transient( $transient_key, $prepared, self::TRANSIENT_TTL );
 			Telemetry::register_transient_key( $transient_key );
 
-			self::store_lcp_image_url( $url, $prepared );
+			self::store_lcp_image_url( $url, $prepared, $strategy );
 
 			Log::add(
 				sprintf(
@@ -341,6 +341,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				'uses-text-compression',
 				'server-response-time',
 				'largest-contentful-paint-element',
+				'prioritize-lcp-image',
 			);
 
 			$diagnostics = array();
@@ -427,31 +428,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * Store the LCP image URL per page so it can be used for auto-preloading.
 		 *
 		 * Persists the URL as:
-		 * - Post meta for singular posts (by matching URL to a post ID)
-		 * - Site option for the front page
-		 * - Transient keyed by URL hash for all other pages
+		 * - Post meta for singular posts (by matching URL to a post ID), keyed by strategy
+		 * - Site option for the front page, keyed by strategy
+		 * - Transient keyed by strategy + URL hash for all other pages
 		 *
 		 * Does nothing if no LCP image URL was detected.
 		 *
 		 * @since 2.13.0
 		 * @param string $url      The scanned URL.
 		 * @param array  $prepared The prepared PageSpeed result array.
+		 * @param string $strategy The scan strategy ('mobile' or 'desktop').
 		 * @return void
 		 */
-		public static function store_lcp_image_url( string $url, array $prepared ): void {
+		public static function store_lcp_image_url( string $url, array $prepared, string $strategy = 'mobile' ): void {
 			$lcp_url = $prepared['lcp_image_url'] ?? null;
 			if ( empty( $lcp_url ) ) {
 				return;
 			}
 
-			$normalised_scan_url = untrailingslashit( esc_url_raw( $url ) );
+			$strategy_suffix     = sanitize_key( $strategy );
+			$normalised_scan_url = untrailingslashit( esc_url_raw( add_query_arg( array(), $url ) ) );
 			$normalised_home     = untrailingslashit( home_url( '/' ) );
 
 			// Case 1: Front page.
 			if ( $normalised_scan_url === $normalised_home ) {
-				$existing = get_option( 'wppo_front_page_lcp', '' );
+				$option_name = 'wppo_front_page_lcp_' . $strategy_suffix;
+				$existing    = get_option( $option_name, '' );
 				if ( $existing !== $lcp_url ) {
-					update_option( 'wppo_front_page_lcp', $lcp_url, false );
+					update_option( $option_name, $lcp_url, false );
 				}
 				return;
 			}
@@ -459,13 +463,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			// Case 2: Singular post — try to resolve URL to post ID.
 			$post_id = url_to_postid( $url );
 			if ( $post_id > 0 ) {
-				update_post_meta( $post_id, '_wppo_lcp_image_url', $lcp_url );
+				update_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy_suffix, $lcp_url );
 				return;
 			}
 
-			// Case 3: Arbitrary URL — store in transient keyed by URL hash.
-			$transient_key = Util::transient_key( 'wppo_lcp_url_' . md5( $normalised_scan_url ) );
-			set_transient( $transient_key, $lcp_url, 7 * DAY_IN_SECONDS );
+			// Case 3: Arbitrary URL — store in transient keyed by strategy + URL hash.
+			$transient_key = Util::transient_key( 'wppo_lcp_url_' . $strategy_suffix . '_' . md5( $normalised_scan_url ) );
+			set_transient( $transient_key, $lcp_url, DAY_IN_SECONDS );
 		}
 	}
 }
