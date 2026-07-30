@@ -211,11 +211,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$total   = 0;
 
 				foreach ( $results as $key => $val ) {
-					if ( ! is_wp_error( $val ) ) {
-						$count  = (int) $val;
-						$total += $count;
-						WP_CLI::log( sprintf( ' - %s: %d cleaned', $key, $count ) );
+					if ( is_wp_error( $val ) ) {
+						WP_CLI::warning( sprintf( ' - %s: %s', $key, $val->get_error_message() ) );
+						continue;
 					}
+					$count  = (int) $val;
+					$total += $count;
+					WP_CLI::log( sprintf( ' - %s: %d cleaned', $key, $count ) );
 				}
 
 				/* translators: %d: Total items removed */
@@ -262,6 +264,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				return;
 			}
 
+			if ( false === $cleaned_count ) {
+				/* translators: %s: Cleanup type */
+				WP_CLI::error( sprintf( __( 'Database cleanup failed for type "%s".', 'performance-optimisation' ), $type ) );
+				return;
+			}
+
 			/* translators: 1: Cleanup type, 2: Number of items removed */
 			Log::add( sprintf( __( 'Database cleanup (%1$s via WP-CLI): %2$d items removed', 'performance-optimisation' ), $type, (int) $cleaned_count ) );
 			/* translators: 1: Cleanup type, 2: Number of items removed */
@@ -302,6 +310,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				$img_converter     = new Img_Converter( $options );
 				$img_info          = Img_Converter::get_img_info();
 				$conversion_format = $format ? $format : ( $options['image_optimisation']['conversionFormat'] ?? 'webp' );
+				$batch_size        = $options['image_optimisation']['batch'] ?? 50;
 
 				$formats_to_process = array();
 				if ( 'both' === $conversion_format ) {
@@ -317,7 +326,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				foreach ( $formats_to_process as $fmt ) {
 					$images         = $img_info['pending'][ $fmt ] ?? array();
 					$total_pending += count( $images );
+					$counter        = 0;
 					foreach ( $images as $img ) {
+						if ( $counter >= $batch_size ) {
+							break;
+						}
+						++$counter;
 						$source_path = wp_normalize_path( ABSPATH . $img );
 						$resolved    = realpath( $source_path );
 						if ( false === $resolved || 0 !== strpos( wp_normalize_path( $resolved ), $normalized_abspath ) ) {
@@ -727,6 +741,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			if ( 'scan' === $action ) {
 				$job_id = Pagespeed::queue_scan( $url, $strategy );
+				if ( $job_id <= 0 ) {
+					WP_CLI::error( __( 'Failed to queue PageSpeed scan. Action Scheduler may be unavailable.', 'performance-optimisation' ) );
+					return;
+				}
 				/* translators: %s: Scanned URL */
 				Log::add( sprintf( __( 'PageSpeed scan queued via WP-CLI for %s', 'performance-optimisation' ), $url ) );
 				/* translators: %d: Job ID */

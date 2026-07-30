@@ -1136,8 +1136,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$total_size            = $instance->calculate_directory_size( $cache_dir );
 			$stats['size']         = size_format( $total_size );
-			$items                 = $instance->filesystem->dirlist( $cache_dir, false );
-			$stats['cached_pages'] = is_array( $items ) ? count( $items ) : 0;
+			$stats['cached_pages'] = $instance->count_cached_pages( $cache_dir );
 			$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 
 			return $stats;
@@ -1168,6 +1167,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			return $total_size;
+		}
+
+		/**
+		 * Recursively count cached pages by counting index.html files in the cache directory.
+		 *
+		 * @param string $directory The directory to scan.
+		 * @return int Number of index.html files found.
+		 *
+		 * @since 2.14.0
+		 */
+		private function count_cached_pages( string $directory ): int {
+			$fs    = $this->get_filesystem();
+			$files = $fs->dirlist( $directory );
+			if ( ! $files ) {
+				return 0;
+			}
+			$count = 0;
+			foreach ( $files as $file ) {
+				if ( 'd' === $file['type'] ) {
+					$count += $this->count_cached_pages( trailingslashit( $directory ) . $file['name'] );
+				} elseif ( 'index.html' === $file['name'] ) {
+					++$count;
+				}
+			}
+			return $count;
 		}
 
 		/**
