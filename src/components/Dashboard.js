@@ -9,6 +9,9 @@ import { apiCall } from '../lib/apiRequest';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
+import FeatureCard from './common/FeatureCard';
+import SwitchField from './common/SwitchField';
+import CheckboxOption from './common/CheckboxOption';
 import PerformanceAudit from './PerformanceAudit';
 import PageSpeedPanel from './PageSpeedPanel';
 import SuggestionsPanel from './SuggestionsPanel';
@@ -82,6 +85,19 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			db_counts: true,
 		},
 	} );
+
+	// Logged-in user cache settings.
+	const cacheSettings = wppoSettings?.settings?.cache_settings || {};
+	const userRoles = wppoSettings?.userRoles || {};
+	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
+		!! cacheSettings.enableLoggedInCache
+	);
+	const [ loggedInCacheRoles, setLoggedInCacheRoles ] = useState(
+		Array.isArray( cacheSettings.loggedInCacheRoles )
+			? cacheSettings.loggedInCacheRoles
+			: []
+	);
+	const [ savingLoggedInCache, setSavingLoggedInCache ] = useState( false );
 
 	const [ bgProcessing, setBgProcessing ] = useState( false );
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
@@ -357,6 +373,52 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			.finally( () => handleLoading( 'remove_images', false ) );
 	}, [ handleLoading ] );
 
+	const saveLoggedInCacheSettings = useCallback( () => {
+		setSavingLoggedInCache( true );
+		apiCall( 'update_settings', {
+			tab: 'cache_settings',
+			settings: {
+				enableLoggedInCache: loggedInCacheEnabled,
+				loggedInCacheRoles,
+			},
+		} )
+			.then( ( response ) => {
+				if ( response.success && response.data ) {
+					setAnnouncement(
+						__(
+							'Logged-in cache settings saved.',
+							'performance-optimisation'
+						)
+					);
+					if ( response.data.cache_settings ) {
+						wppoSettings.settings.cache_settings =
+							response.data.cache_settings;
+					}
+				}
+			} )
+			.catch( () =>
+				setAnnouncement(
+					__(
+						'Failed to save logged-in cache settings.',
+						'performance-optimisation'
+					)
+				)
+			)
+			.finally( () => setSavingLoggedInCache( false ) );
+	}, [ loggedInCacheEnabled, loggedInCacheRoles ] );
+
+	const handleLoggedInCacheToggle = useCallback( ( e ) => {
+		setLoggedInCacheEnabled( e.target.checked );
+	}, [] );
+
+	const handleRoleCheckbox = useCallback( ( e ) => {
+		const role = e.target.name;
+		const checked = e.target.checked;
+		setLoggedInCacheRoles( ( prev ) =>
+			checked ? [ ...prev, role ] : prev.filter( ( r ) => r !== role )
+		);
+	}, [] );
+
 	const totalWebP = ( completed.webp || 0 ) + ( pending.webp || 0 );
 	const totalAvif = ( completed.avif || 0 ) + ( pending.avif || 0 );
 	const totalOptimizedPercent =
@@ -476,6 +538,70 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					</button>
 				</div>
 			</div>
+
+			{ /* Logged-in user cache settings */ }
+			<FeatureCard
+				title={ __(
+					'Cache for Logged-in Users',
+					'performance-optimisation'
+				) }
+				icon={ <i className="fas fa-user-check"></i> }
+			>
+				<SwitchField
+					label={ __( 'Enable', 'performance-optimisation' ) }
+					description={ __(
+						'Serve cached pages to logged-in users based on their role(s). The admin bar and user-specific content are preserved per role group.',
+						'performance-optimisation'
+					) }
+					name="enableLoggedInCache"
+					checked={ loggedInCacheEnabled }
+					onChange={ handleLoggedInCacheToggle }
+				/>
+				{ loggedInCacheEnabled && (
+					<div className="wppo-logged-in-cache-roles">
+						<p className="wppo-text-muted">
+							{ __(
+								'Select which user roles should receive cached pages:',
+								'performance-optimisation'
+							) }
+						</p>
+						{ Object.entries( userRoles ).map(
+							( [ slug, name ] ) => (
+								<CheckboxOption
+									key={ slug }
+									label={ name }
+									name={ slug }
+									checked={ loggedInCacheRoles.includes(
+										slug
+									) }
+									onChange={ handleRoleCheckbox }
+								/>
+							)
+						) }
+						<p className="wppo-text-muted wppo-mt-10">
+							{ __(
+								'When no roles are selected, caching applies to all logged-in users.',
+								'performance-optimisation'
+							) }
+						</p>
+					</div>
+				) }
+				<div className="wppo-feature-card__footer">
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--primary"
+						onClick={ saveLoggedInCacheSettings }
+						isLoading={ savingLoggedInCache }
+						label={ __(
+							'Save Settings',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Saving…',
+							'performance-optimisation'
+						) }
+					/>
+				</div>
+			</FeatureCard>
 
 			{ /* Phase 1 — Performance Audit & System Info (v1.5.0) */ }
 			<div className="wppo-stacked-cards">

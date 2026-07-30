@@ -90,7 +90,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 */
 		public function process_style_tag( $tag, $handle, $href ) {
 			if ( is_user_logged_in() ) {
-				return $tag;
+				$logged_in_cache_enabled = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
+				if ( ! $logged_in_cache_enabled ) {
+					return $tag;
+				}
 			}
 
 			$enabled = $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false;

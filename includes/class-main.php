@@ -162,7 +162,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options = get_option(
 				'wppo_settings',
 				array(
-					'cache_settings'     => array(),
+					'cache_settings'     => array(
+						'enableLoggedInCache' => false,
+						'loggedInCacheRoles'  => array(),
+					),
 					'file_optimisation'  => array(
 						'enableServerRules'      => false,
 						'cdnURL'                 => '',
@@ -207,6 +210,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$file_optimisation_opts = $this->options['file_optimisation'] ?? array();
 			new Core_Tweaks( $file_optimisation_opts );
+		}
+
+		/**
+		 * Whether front-end optimisations (lazy load, defer, delay, minify, used CSS)
+		 * should be applied for the current logged-in user.
+		 *
+		 * When enableLoggedInCache is on, optimisations run even for logged-in users
+		 * so the cached page includes all improvements.
+		 *
+		 * @since 2.8.0
+		 * @return bool True if optimisations may run for the current user.
+		 */
+		private function should_optimise_for_logged_in(): bool {
+			if ( ! is_user_logged_in() ) {
+				return true;
+			}
+			return ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
+		}
+
+		/**
+		 * Get editable role names keyed by slug for the JS role selector.
+		 *
+		 * @since 2.8.0
+		 * @return array<string, string>
+		 */
+		private function get_editable_role_names(): array {
+			if ( ! function_exists( 'get_editable_roles' ) ) {
+				return array();
+			}
+			$roles = get_editable_roles();
+			$names = array();
+			foreach ( $roles as $slug => $role ) {
+				$names[ $slug ] = $role['name'] ?? $slug;
+			}
+			return $names;
+		}
+
+		/**
+		 * Set a wppo_role_hash cookie for the current logged-in user so the
+		 * advanced-cache.php drop-in can serve role-specific cache variants.
+		 *
+		 * @since 2.8.0
+		 * @return void
+		 */
+		public function set_role_hash_cookie(): void {
+			if ( is_user_logged_in() ) {
+				$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
+				if ( $enable ) {
+					$user = wp_get_current_user();
+					if ( ! empty( $user->roles ) ) {
+						$roles = $user->roles;
+						sort( $roles );
+						$hash = substr( md5( implode( ',', $roles ) ), 0, 12 );
+						if ( ! isset( $_COOKIE['wppo_role_hash'] ) || $_COOKIE['wppo_role_hash'] !== $hash ) {
+							setcookie( 'wppo_role_hash', $hash, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+						}
+					}
+				}
+			}
 		}
 
 		/**
@@ -275,6 +337,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_menu', array( $this, 'init_menu' ) );
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
+			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'add_defer_strategy' ), 1000 );
 			$has_delay_js = ! empty( $this->options['file_optimisation']['delayJS'] );
@@ -665,7 +728,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.6.0
 		 */
 		public function process_used_css_only( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			if ( is_user_logged_in() || is_admin() ) {
+			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
 				return $filtered_output;
 			}
 
@@ -684,7 +747,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 2.6.0
 		 */
 		public function start_used_css_buffer() {
-			if ( is_user_logged_in() || is_admin() ) {
+			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
 				return;
 			}
 			ob_start( array( $this, 'process_used_css_capture' ) );
@@ -915,6 +978,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					),
 					// Frontend theme colors for accent syncing.
 					'themeColors'       => $this->get_frontend_theme_colors(),
+					// Editable user roles for the logged-in cache role selector.
+					'userRoles'         => $this->get_editable_role_names(),
 				),
 			);
 
@@ -931,7 +996,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->enqueue_admin_bar_script();
 			}
 
-			if ( ! is_user_logged_in() ) {
+			if ( $this->should_optimise_for_logged_in() ) {
 				$lazy_load_images         = isset( $this->options['image_optimisation']['lazyLoadImages'] ) && (bool) $this->options['image_optimisation']['lazyLoadImages'];
 				$lazy_load_videos         = isset( $this->options['image_optimisation']['lazyLoadVideos'] ) && (bool) $this->options['image_optimisation']['lazyLoadVideos'];
 				$enable_video_placeholder = ! empty( $this->options['image_optimisation']['enableVideoPlaceholder'] ) && $lazy_load_videos;
@@ -1089,7 +1154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public function add_defer_strategy(): void {
-			if ( is_user_logged_in() ) {
+			if ( ! $this->should_optimise_for_logged_in() ) {
 				return;
 			}
 
@@ -1121,7 +1186,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified script tag with defer attribute.
 		 */
 		public function add_defer_attribute( $tag, $handle ): string {
-			if ( is_user_logged_in() ) {
+			if ( ! $this->should_optimise_for_logged_in() ) {
 				return $tag;
 			}
 
@@ -1422,9 +1487,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified link tag with minified CSS.
 		 */
 		public function minify_css( $tag, $handle, $href ) {
-			// Early return for logged-in users, empty URLs, or excluded handles
+			// Early return for logged-in users (when optimisation not enabled), empty URLs, or excluded handles
 			// to avoid the expensive Util::get_local_path() computation.
-			if ( is_user_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) ) {
+			if ( ! $this->should_optimise_for_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) ) {
 				return $tag;
 			}
 
@@ -1470,9 +1535,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified script tag with minified JavaScript.
 		 */
 		public function minify_js( $tag, $handle, $src ) {
-			// Early return for logged-in users, empty URLs, or excluded handles
+			// Early return for logged-in users (when optimisation not enabled), empty URLs, or excluded handles
 			// to avoid the expensive Util::get_local_path() computation.
-			if ( is_user_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) ) {
+			if ( ! $this->should_optimise_for_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) ) {
 				return $tag;
 			}
 

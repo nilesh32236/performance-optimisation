@@ -120,6 +120,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private $google_fonts;
 
 		/**
+		 * Role hash for the current request, set during buffer processing.
+		 *
+		 * @var string
+		 * @since 2.8.0
+		 */
+		private string $current_role_hash = '';
+
+		/**
 		 * Constructor to initialize cache settings and configurations.
 		 *
 		 * @param array $options Plugin options (optional). When empty, loaded from DB.
@@ -177,6 +185,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Check whether page caching is allowed for the current (possibly logged-in) user.
+		 *
+		 * - Not logged in: always allowed.
+		 * - Logged in + setting off: not allowed (preserves legacy skip-for-all-logged-in).
+		 * - Logged in + setting on + no roles selected: allowed for all logged-in.
+		 * - Logged in + setting on + roles selected: only if current user has an allowed role.
+		 *
+		 * @since 2.8.0
+		 * @return bool True if the current user may receive a cached page.
+		 */
+		private function is_cache_allowed_for_current_user(): bool {
+			if ( ! is_user_logged_in() ) {
+				return true;
+			}
+
+			$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
+			if ( ! $enable ) {
+				return false;
+			}
+
+			$allowed_roles = $this->options['cache_settings']['loggedInCacheRoles'] ?? array();
+			if ( ! is_array( $allowed_roles ) || empty( $allowed_roles ) ) {
+				return true;
+			}
+
+			$user = wp_get_current_user();
+			if ( empty( $user->roles ) ) {
+				return false;
+			}
+
+			foreach ( $user->roles as $role ) {
+				if ( in_array( $role, $allowed_roles, true ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * Compute a stable 12-char hex hash of the current user's sorted roles.
+		 * Returns empty string for visitors (no role to hash).
+		 *
+		 * @since 2.8.0
+		 * @return string Role hash or empty string.
+		 */
+		private function get_logged_in_role_hash(): string {
+			if ( ! is_user_logged_in() ) {
+				return '';
+			}
+
+			$user = wp_get_current_user();
+			if ( empty( $user->roles ) ) {
+				return '';
+			}
+
+			$roles = $user->roles;
+			sort( $roles );
+			return substr( md5( implode( ',', $roles ) ), 0, 12 );
+		}
+
+		/**
 		 * Set the Image_Optimisation instance to reuse instead of creating a new one.
 		 *
 		 * @param Image_Optimisation $image_optimisation The existing instance.
@@ -219,7 +288,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function combine_css() {
-			if ( is_user_logged_in() || is_404() || $this->is_not_cacheable() ) {
+			if ( ! $this->is_cache_allowed_for_current_user() || is_404() || $this->is_not_cacheable() ) {
 				return;
 			}
 
@@ -390,11 +459,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				);
 			}
 
-			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
+			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
 			}
 
-			$file_path = $this->get_cache_file_path();
+			$role_hash = $this->get_logged_in_role_hash();
+			$file_path = $this->get_cache_file_path( 'html', $role_hash );
 
 			ob_start(
 				function ( $buffer ) use ( $file_path ) {
@@ -457,9 +527,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.3.0
 		 */
 		public function process_buffer_for_cache( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
+			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return $filtered_output;
 			}
+
+			$this->current_role_hash = $this->get_logged_in_role_hash();
 
 			return $this->process_buffer_only( $filtered_output );
 		}
@@ -475,11 +547,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.3.0
 		 */
 		public function stash_cache( $output ) {
-			if ( is_user_logged_in() || $this->is_not_cacheable() ) {
+			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
 			}
 
-			$file_path = $this->get_cache_file_path();
+			$role_hash = ! empty( $this->current_role_hash ) ? $this->current_role_hash : $this->get_logged_in_role_hash();
+			$file_path = $this->get_cache_file_path( 'html', $role_hash );
 
 			$this->save_processed_buffer( $output, $file_path );
 		}
@@ -626,13 +699,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Get the cache file path based on the URL path.
 		 *
-		 * @param string $type The file type (default: 'html').
+		 * @param string $type      The file type (default: 'html').
+		 * @param string $role_hash Optional role hash for logged-in user cache variant.
 		 * @return string The cache file path.
 		 *
 		 * @since 1.0.0
 		 */
-		private function get_cache_file_path( $type = 'html' ): string {
-			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index.{$type}" : "{$this->url_path}/index.{$type}" );
+		private function get_cache_file_path( $type = 'html', string $role_hash = '' ): string {
+			$suffix = $role_hash ? "-{$role_hash}" : '';
+			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
 		}
 
 		/**
@@ -795,18 +870,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$css_file_path  = $this->get_file_path( $path, 'css' );
 			$used_css_path  = $this->get_file_path( $path, 'used-css' );
 			$this->delete_cache_files( $html_file_path );
+			$this->delete_role_variant_files( dirname( $html_file_path ) );
 			$this->delete_cache_files( $css_file_path );
 			$this->delete_cache_files( $used_css_path );
 
 			// Smart Purging: Always clear the home page and blog archive.
 			$home_path = wp_make_link_relative( home_url( '/' ) );
 			$this->delete_cache_files( $this->get_file_path( $home_path, 'html' ) );
+			$this->delete_role_variant_files( dirname( $this->get_file_path( $home_path, 'html' ) ) );
 
 			if ( 'page' === get_option( 'show_on_front' ) ) {
 				$posts_page_id = get_option( 'page_for_posts' );
 				if ( $posts_page_id ) {
 					$posts_path = wp_make_link_relative( get_permalink( $posts_page_id ) );
 					$this->delete_cache_files( $this->get_file_path( $posts_path, 'html' ) );
+					$this->delete_role_variant_files( dirname( $this->get_file_path( $posts_path, 'html' ) ) );
 				}
 			}
 
@@ -818,6 +896,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( ! empty( $archive_link ) && ! is_wp_error( $archive_link ) ) {
 					$archive_path = wp_make_link_relative( $archive_link );
 					$this->delete_cache_files( $this->get_file_path( $archive_path, 'html' ) );
+					$this->delete_role_variant_files( dirname( $this->get_file_path( $archive_path, 'html' ) ) );
 				}
 
 				$taxonomy_names = get_object_taxonomies( $post_type, 'names' );
@@ -838,6 +917,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 								if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
 									$term_path = wp_make_link_relative( $term_link );
 									$this->delete_cache_files( $this->get_file_path( $term_path, 'html' ) );
+									$this->delete_role_variant_files( dirname( $this->get_file_path( $term_path, 'html' ) ) );
 								}
 							}
 						}
@@ -905,6 +985,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Delete all index-{hash}.html role-variant cache files in a directory.
+		 *
+		 * @param string $dir Directory to scan.
+		 * @return void
+		 * @since 2.8.0
+		 */
+		private function delete_role_variant_files( string $dir ): void {
+			$fs = $this->get_filesystem();
+			if ( ! $fs || ! $fs->is_dir( $dir ) ) {
+				return;
+			}
+
+			$files = $fs->dirlist( $dir );
+			if ( ! $files ) {
+				return;
+			}
+
+			foreach ( $files as $file ) {
+				if ( preg_match( '/^index-[a-f0-9]{12}\.html(\.gz)?$/i', $file['name'] ) ) {
+					$file_path = trailingslashit( $dir ) . $file['name'];
+					$fs->delete( $file_path );
+				}
+			}
+		}
+
+		/**
 		 * Clear the cache for a specific page or all pages.
 		 *
 		 * @param string|null $url_path The URL path of the page for which to clear the cache. If null, all cache will be cleared.
@@ -938,6 +1044,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 
 				$res_html = $instance->delete_cache_files( $html_file_path );
+				$instance->delete_role_variant_files( dirname( $html_file_path ) );
 				$res_css  = $instance->delete_cache_files( $css_file_path );
 				$res_used = $instance->delete_used_css_file( $used_css_path );
 				$result   = $res_html && $res_css && $res_used;

@@ -804,8 +804,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function inline_ccss(): void {
-			if ( is_user_logged_in() || is_admin() ) {
+			if ( is_admin() ) {
 				return;
+			}
+			if ( is_user_logged_in() ) {
+				$options = get_option( 'wppo_settings', array() );
+				$enabled = ! empty( $options['cache_settings']['enableLoggedInCache'] ?? false );
+				if ( ! $enabled ) {
+					return;
+				}
 			}
 
 			$template_slug = self::get_current_template_slug();
@@ -844,8 +851,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since 2.0.0
 		 */
 		public static function defer_stylesheets( string $tag, string $handle, string $href ): string {
-			if ( is_user_logged_in() || is_admin() ) {
+			if ( is_admin() ) {
 				return $tag;
+			}
+			if ( is_user_logged_in() ) {
+				$options = get_option( 'wppo_settings', array() );
+				$enabled = ! empty( $options['cache_settings']['enableLoggedInCache'] ?? false );
+				if ( ! $enabled ) {
+					return $tag;
+				}
 			}
 
 			foreach ( self::SKIP_DEFER_HANDLES as $skip ) {
