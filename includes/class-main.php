@@ -223,31 +223,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool True if optimisations may run for the current user.
 		 */
 		private function should_optimise_for_logged_in(): bool {
-			if ( ! is_user_logged_in() ) {
-				return true;
-			}
-
-			$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
-			if ( ! $enable ) {
-				return false;
-			}
-
-			$allowed_roles = $this->options['cache_settings']['loggedInCacheRoles'] ?? array();
-			if ( ! is_array( $allowed_roles ) || empty( $allowed_roles ) ) {
-				return true;
-			}
-
-			$user = wp_get_current_user();
-			if ( empty( $user->roles ) ) {
-				return false;
-			}
-
-			foreach ( $user->roles as $role ) {
-				if ( in_array( $role, $allowed_roles, true ) ) {
-					return true;
-				}
-			}
-			return false;
+			return Util::is_cache_eligible_for_current_user(
+				$this->options['cache_settings'] ?? array()
+			);
 		}
 
 		/**

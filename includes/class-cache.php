@@ -196,31 +196,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True if the current user may receive a cached page.
 		 */
 		private function is_cache_allowed_for_current_user(): bool {
-			if ( ! is_user_logged_in() ) {
-				return true;
-			}
-
-			$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
-			if ( ! $enable ) {
-				return false;
-			}
-
-			$user = wp_get_current_user();
-			if ( empty( $user->roles ) ) {
-				return false;
-			}
-
-			$allowed_roles = $this->options['cache_settings']['loggedInCacheRoles'] ?? array();
-			if ( ! is_array( $allowed_roles ) || empty( $allowed_roles ) ) {
-				return true;
-			}
-
-			foreach ( $user->roles as $role ) {
-				if ( in_array( $role, $allowed_roles, true ) ) {
-					return true;
-				}
-			}
-			return false;
+			return Util::is_cache_eligible_for_current_user(
+				$this->options['cache_settings'] ?? array()
+			);
 		}
 
 		/**
@@ -996,16 +974,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			$processed = 0;
-			$max       = 500;
 			foreach ( $files as $file ) {
-				if ( $processed >= $max ) {
-					break;
-				}
 				if ( preg_match( '/^index-[a-f0-9]{12}\.html(\.gz)?$/', $file['name'] ) ) {
 					$file_path = trailingslashit( $dir ) . $file['name'];
 					$fs->delete( $file_path );
-					++$processed;
 				}
 			}
 		}

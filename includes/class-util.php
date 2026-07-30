@@ -302,5 +302,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			sort( $roles );
 			return substr( md5( implode( ',', $roles ) . wp_salt() ), 0, 12 );
 		}
+
+		/**
+		 * Whether the current user is eligible for logged-in caching based on
+		 * the cache settings (enableLoggedInCache + loggedInCacheRoles).
+		 *
+		 * Non-logged-in visitors always return true (they always get cached).
+		 *
+		 * @since 2.8.0
+		 * @param array $cache_settings The cache_settings sub-array from wppo_settings.
+		 * @return bool True if the current user may receive cached pages / optimisations.
+		 */
+		public static function is_cache_eligible_for_current_user( array $cache_settings ): bool {
+			if ( ! is_user_logged_in() ) {
+				return true;
+			}
+
+			$enable = ! empty( $cache_settings['enableLoggedInCache'] ?? false );
+			if ( ! $enable ) {
+				return false;
+			}
+
+			$user = wp_get_current_user();
+			if ( empty( $user->roles ) ) {
+				return false;
+			}
+
+			$allowed_roles = $cache_settings['loggedInCacheRoles'] ?? array();
+			if ( ! is_array( $allowed_roles ) || empty( $allowed_roles ) ) {
+				return true;
+			}
+
+			foreach ( $user->roles as $role ) {
+				if ( in_array( $role, $allowed_roles, true ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
 	}
 }

@@ -92,11 +92,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			if ( is_admin() ) {
 				return $tag;
 			}
-			if ( is_user_logged_in() ) {
-				$logged_in_cache_enabled = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
-				if ( ! $logged_in_cache_enabled ) {
-					return $tag;
-				}
+			if ( ! Util::is_cache_eligible_for_current_user(
+				$this->options['cache_settings'] ?? array()
+			) ) {
+				return $tag;
 			}
 
 			$enabled = $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false;
