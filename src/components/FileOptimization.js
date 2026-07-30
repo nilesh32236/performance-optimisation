@@ -64,6 +64,9 @@ const FileOptimization = ( {
 		disableXMLRPC: false,
 		blockAssetsOnDemand: false,
 		heartbeatControl: 'default',
+		minifyInlineCSS: false,
+		minifyInlineJS: false,
+		removeHTMLComments: true,
 		...options,
 	};
 
@@ -506,6 +509,45 @@ const FileOptimization = ( {
 								) }
 								name="minifyHTML"
 								checked={ settings.minifyHTML }
+								onChange={ handleChange( setSettings ) }
+							/>
+							<SwitchField
+								label={ __(
+									'Remove HTML Comments',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Strip HTML comments from the output (except IE conditional comments).',
+									'performance-optimisation'
+								) }
+								name="removeHTMLComments"
+								checked={ settings.removeHTMLComments }
+								onChange={ handleChange( setSettings ) }
+							/>
+							<SwitchField
+								label={ __(
+									'Minify Inline CSS',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Minify CSS within <style> tags using the PHP minifier.',
+									'performance-optimisation'
+								) }
+								name="minifyInlineCSS"
+								checked={ settings.minifyInlineCSS }
+								onChange={ handleChange( setSettings ) }
+							/>
+							<SwitchField
+								label={ __(
+									'Minify Inline JavaScript',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Minify JavaScript within <script> tags using the PHP minifier.',
+									'performance-optimisation'
+								) }
+								name="minifyInlineJS"
+								checked={ settings.minifyInlineJS }
 								onChange={ handleChange( setSettings ) }
 							/>
 						</FeatureCard>
