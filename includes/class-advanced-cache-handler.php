@@ -138,7 +138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
-			'if ( preg_match( \'#^(?:/)?(?:cart|checkout|my-account)(?:/|$)\#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
+			'if ( preg_match( \'#^/(?:cart|checkout|my-account)(?:/|$)\#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
@@ -166,27 +166,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	return false;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
-			'if ( ! is_user_logged_in_without_wp( $site_url ) &&' . PHP_EOL .
-			'	( empty( $_SERVER[\'QUERY_STRING\'] ) )' . PHP_EOL .
-			') {' . PHP_EOL .
-			'	header( \'X-Content-Type-Options: nosniff\' );' . PHP_EOL .
-			'	header( \'X-Frame-Options: SAMEORIGIN\' );' . PHP_EOL .
-			'	header( \'Referrer-Policy: strict-origin-when-cross-origin\' );' . PHP_EOL .
+			'function wppo_serve_cache_file( $file_path, $gzip_file_path ) {' . PHP_EOL .
 			'	if ( file_exists( $gzip_file_path ) ) {' . PHP_EOL .
 			'		$last_modified_time = filemtime( $gzip_file_path );' . PHP_EOL .
 			'		$etag               = md5_file( $gzip_file_path );' . PHP_EOL .
 			'		header( \'Last-Modified: \' . gmdate( \'D, d M Y H:i:s\', $last_modified_time ) . \' GMT\' );' . PHP_EOL .
 			'		header( \'ETag: "\' . $etag . \'"\' );' . PHP_EOL .
 			'		header( \'Content-Type: text/html\' );' . PHP_EOL .
-			'		header( \'Content-Encoding: gzip\' );' . PHP_EOL . PHP_EOL .
-
+			'		header( \'Content-Encoding: gzip\' );' . PHP_EOL .
+			'		header( \'X-Content-Type-Options: nosniff\' );' . PHP_EOL .
+			'		header( \'X-Frame-Options: SAMEORIGIN\' );' . PHP_EOL .
+			'		header( \'Referrer-Policy: strict-origin-when-cross-origin\' );' . PHP_EOL . PHP_EOL .
 			'		if ( ( isset( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) && strtotime( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) >= $last_modified_time ) ||' . PHP_EOL .
 			'		( isset( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) && trim( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) === $etag ) ) {' . PHP_EOL .
 			'			header( \'HTTP/1.1 304 Not Modified\' );' . PHP_EOL .
 			'			header( \'Connection: close\' );' . PHP_EOL .
 			'			exit;' . PHP_EOL .
 			'		}' . PHP_EOL . PHP_EOL .
-
 			'		readfile( $gzip_file_path );' . PHP_EOL .
 			'		exit;' . PHP_EOL .
 			'	} elseif ( file_exists( $file_path ) ) {' . PHP_EOL .
@@ -198,16 +194,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'		header( \'X-Content-Type-Options: nosniff\' );' . PHP_EOL .
 			'		header( \'X-Frame-Options: SAMEORIGIN\' );' . PHP_EOL .
 			'		header( \'Referrer-Policy: strict-origin-when-cross-origin\' );' . PHP_EOL . PHP_EOL .
-
 			'		if ( ( isset( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) && strtotime( $_SERVER[\'HTTP_IF_MODIFIED_SINCE\'] ) >= $last_modified_time ) ||' . PHP_EOL .
 			'		( isset( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) && trim( $_SERVER[\'HTTP_IF_NONE_MATCH\'] ) === $etag ) ) {' . PHP_EOL .
 			'			header( \'HTTP/1.1 304 Not Modified\' );' . PHP_EOL .
 			'			header( \'Connection: close\' );' . PHP_EOL .
 			'			exit;' . PHP_EOL .
 			'		}' . PHP_EOL . PHP_EOL .
-
 			'		readfile( $file_path );' . PHP_EOL .
 			'		exit;' . PHP_EOL .
+			'	}' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+			'$is_logged_in = is_user_logged_in_without_wp( $site_url );' . PHP_EOL .
+			'$has_query    = ! empty( $_SERVER[\'QUERY_STRING\'] );' . PHP_EOL . PHP_EOL .
+			'if ( ! $is_logged_in && ! $has_query ) {' . PHP_EOL .
+			'	wppo_serve_cache_file( $file_path, $gzip_file_path );' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+			'if ( $is_logged_in && ! $has_query ) {' . PHP_EOL .
+			'	$role_hash = isset( $_COOKIE[\'wppo_role_hash\'] ) ? preg_replace( \'/[^a-f0-9]/\', \'\', $_COOKIE[\'wppo_role_hash\'] ) : \'\';' . PHP_EOL .
+			'	if ( \'\' !== $role_hash ) {' . PHP_EOL .
+			'		$role_file_path = preg_replace( \'/index\\.html$/\', \'index-\' . $role_hash . \'.html\', $file_path );' . PHP_EOL .
+			'		$role_gzip_path = $role_file_path . \'.gz\';' . PHP_EOL .
+			'		wppo_serve_cache_file( $role_file_path, $role_gzip_path );' . PHP_EOL .
 			'	}' . PHP_EOL .
 			'}' . PHP_EOL;
 

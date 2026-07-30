@@ -89,7 +89,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @since 2.7.0
 		 */
 		public function process_style_tag( $tag, $handle, $href ) {
-			if ( is_user_logged_in() ) {
+			if ( is_admin() ) {
+				return $tag;
+			}
+			if ( ! Util::is_cache_eligible_for_current_user(
+				$this->options['cache_settings'] ?? array()
+			) ) {
 				return $tag;
 			}
 
