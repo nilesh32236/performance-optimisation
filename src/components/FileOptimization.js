@@ -62,6 +62,7 @@ const FileOptimization = ( {
 		disableEmbeds: false,
 		disableDashicons: false,
 		disableXMLRPC: false,
+		blockAssetsOnDemand: false,
 		heartbeatControl: 'default',
 		...options,
 	};
@@ -1251,6 +1252,19 @@ const FileOptimization = ( {
 									) }
 									name="disableXMLRPC"
 									checked={ settings.disableXMLRPC }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Load Block Assets On Demand',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Only load block CSS and JavaScript when blocks are actually used on the page. Requires WordPress 6.8 or later.',
+										'performance-optimisation'
+									) }
+									name="blockAssetsOnDemand"
+									checked={ settings.blockAssetsOnDemand }
 									onChange={ handleChange( setSettings ) }
 								/>
 							</div>

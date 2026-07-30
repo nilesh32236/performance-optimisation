@@ -173,6 +173,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'excludeUnusedCSS'       => '',
 						'criticalCSS'            => false,
 						'hostGoogleFontsLocally' => false,
+						'blockAssetsOnDemand'    => false,
 						'delayJSDefaultStrategy' => 'interaction',
 						'delayJSIdleList'        => '',
 						'delayJSViewportList'    => '',
@@ -431,6 +432,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
 				add_filter( 'style_loader_tag', array( $this->google_fonts, 'process_style_tag' ), 9, 3 );
+			}
+
+			if ( ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+				add_filter( 'should_load_block_assets_on_demand', '__return_true' );
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
