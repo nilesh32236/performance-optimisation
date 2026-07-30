@@ -211,7 +211,9 @@ describe( 'DatabaseCleanup Component', () => {
 			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
 		} );
 
-		const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
 
 		// API throws an error
 		apiCall.mockRejectedValueOnce( new Error( 'API Exception' ) );
@@ -245,7 +247,9 @@ describe( 'DatabaseCleanup Component', () => {
 			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
 		} );
 
-		const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
 
 		// API throws an error
 		apiCall.mockRejectedValueOnce( {} );
