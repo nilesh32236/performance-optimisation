@@ -38,6 +38,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		excludePostTypeImgUrl: '',
 		maxWidthImgSize: 0,
 		excludeSize: '',
+		autoPreloadLCP: false,
 		...options,
 		placeholderType:
 			options.placeholderType ||
@@ -587,6 +588,21 @@ const ImageOptimization = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faCloudUploadAlt } /> }
 				>
 					<div className="wppo-stacked-cards">
+						<div>
+							<SwitchField
+								label={ __(
+									'Auto-preload LCP Image',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Automatically detect and preload the Largest Contentful Paint (LCP) image from PageSpeed scan data. Requires a configured PageSpeed API key. Falls back to featured image when no PageSpeed data is available.',
+									'performance-optimisation'
+								) }
+								name="autoPreloadLCP"
+								checked={ settings.autoPreloadLCP }
+								onChange={ handleChange( setSettings ) }
+							/>
+						</div>
 						<div>
 							<SwitchField
 								label={ __(

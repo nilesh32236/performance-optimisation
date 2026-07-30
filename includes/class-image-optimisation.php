@@ -657,9 +657,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			return array_merge(
 				$this->get_front_page_preload_data( $image_optimisation ),
+				$this->get_auto_lcp_preload_data(),
 				$this->get_meta_preload_data(),
 				$this->get_post_type_preload_data( $image_optimisation )
 			);
+		}
+
+		/**
+		 * Retrieves auto-detected LCP image preload data from PageSpeed scan results.
+		 *
+		 * Checks the current page's stored LCP image URL (from PageSpeed scan) and
+		 * returns a preload item if found. The toggle autoPreloadLCP must be enabled.
+		 *
+		 * Checks mobile strategy first, then desktop, to support responsive sites
+		 * that serve different images per viewport.
+		 *
+		 * @since 2.13.0
+		 * @return array List of preload items (zero or one item).
+		 */
+		private function get_auto_lcp_preload_data(): array {
+			$image_optimisation = $this->options['image_optimisation'] ?? array();
+			if ( empty( $image_optimisation['autoPreloadLCP'] ) ) {
+				return array();
+			}
+
+			$lcp_url    = '';
+			$strategies = array( 'mobile', 'desktop' );
+
+			// Priority 1: Singular post — check post meta (mobile first, then desktop).
+			if ( is_singular() ) {
+				$post_id = get_the_ID();
+				foreach ( $strategies as $strategy ) {
+					$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
+					if ( ! empty( $meta_lcp ) ) {
+						$lcp_url = $meta_lcp;
+						break;
+					}
+				}
+			}
+
+			// Priority 2: Front page — check option (mobile first, then desktop).
+			if ( empty( $lcp_url ) && is_front_page() ) {
+				foreach ( $strategies as $strategy ) {
+					$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
+					if ( ! empty( $front_lcp ) ) {
+						$lcp_url = $front_lcp;
+						break;
+					}
+				}
+			}
+
+			// Priority 3: Check transient keyed by strategy + current URL hash.
+			if ( empty( $lcp_url ) ) {
+				$current_url = untrailingslashit( esc_url_raw( Util::get_current_url() ) );
+				foreach ( $strategies as $strategy ) {
+					$transient = get_transient( Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $current_url ) ) );
+					if ( ! empty( $transient ) ) {
+						$lcp_url = $transient;
+						break;
+					}
+				}
+			}
+
+			if ( empty( $lcp_url ) ) {
+				return array();
+			}
+
+			return array( $this->prepare_preload_item( $lcp_url ) );
 		}
 
 		/**

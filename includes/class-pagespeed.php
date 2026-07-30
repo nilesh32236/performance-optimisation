@@ -205,6 +205,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			set_transient( $transient_key, $prepared, self::TRANSIENT_TTL );
 			Telemetry::register_transient_key( $transient_key );
 
+			self::store_lcp_image_url( $url, $prepared, $strategy );
+
 			Log::add(
 				sprintf(
 					/* translators: %1$s is the URL, %2$s is the strategy (mobile/desktop), %3$d is the performance score. */
@@ -339,6 +341,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				'uses-text-compression',
 				'server-response-time',
 				'largest-contentful-paint-element',
+				'prioritize-lcp-image',
 			);
 
 			$diagnostics = array();
@@ -354,13 +357,119 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				);
 			}
 
-			return array(
-				'scores'      => $scores,
-				'vitals'      => $vitals,
-				'diagnostics' => $diagnostics,
-				'strategy'    => sanitize_text_field( $lighthouse['configSettings']['formFactor'] ?? 'unknown' ),
-				'fetched_at'  => current_time( 'mysql', true ),
+			$return = array(
+				'scores'        => $scores,
+				'vitals'        => $vitals,
+				'diagnostics'   => $diagnostics,
+				'strategy'      => sanitize_text_field( $lighthouse['configSettings']['formFactor'] ?? 'unknown' ),
+				'fetched_at'    => current_time( 'mysql', true ),
+				'lcp_image_url' => null,
 			);
+
+			// Try prioritise-lcp-image audit first (structured, more reliable),
+			// fall back to largest-contentful-paint-element snippet parsing.
+			$lcp = self::extract_lcp_image_url( $diagnostics );
+			if ( null !== $lcp ) {
+				$return['lcp_image_url'] = $lcp;
+			}
+
+			return $return;
+		}
+
+		/**
+		 * Extract the LCP image URL from PageSpeed diagnostic audit data.
+		 *
+		 * Tries the newer "prioritize-lcp-image" audit's structured URL first,
+		 * then falls back to parsing the "largest-contentful-paint-element" audit's
+		 * node.snippet for an <img> src attribute.
+		 *
+		 * Returns null when no image URL can be identified (text LCP, background-image, etc.).
+		 *
+		 * @since 2.13.0
+		 * @param array $diagnostics The prepared diagnostics array.
+		 * @return string|null The image URL, or null if not found.
+		 */
+		private static function extract_lcp_image_url( array $diagnostics ): ?string {
+			// Priority 1: "prioritize-lcp-image" audit has structured URL.
+			$plcp = $diagnostics['prioritize-lcp-image']['details']['items'][0] ?? null;
+			if ( is_array( $plcp ) && ! empty( $plcp['url'] ) ) {
+				return esc_url_raw( $plcp['url'] );
+			}
+
+			// Priority 2: "largest-contentful-paint-element" audit snippet parsing.
+			$lcp_element = $diagnostics['largest-contentful-paint-element']['details']['items'][0] ?? null;
+			if ( ! is_array( $lcp_element ) ) {
+				return null;
+			}
+
+			// Check for structured url first.
+			if ( ! empty( $lcp_element['url'] ) ) {
+				return esc_url_raw( $lcp_element['url'] );
+			}
+
+			// Fall back to regex on the node.snippet.
+			$snippet = $lcp_element['node']['snippet'] ?? '';
+			if ( empty( $snippet ) ) {
+				$snippet = $lcp_element['snippet'] ?? '';
+			}
+			if ( empty( $snippet ) ) {
+				return null;
+			}
+
+			if ( preg_match( '/<img\s[^>]*src=[\"\']([^\"\']+)[\"\']/i', $snippet, $m ) ) {
+				$url = esc_url_raw( $m[1] );
+				return ! empty( $url ) ? $url : null;
+			}
+
+			return null;
+		}
+
+		/**
+		 * Store the LCP image URL per page so it can be used for auto-preloading.
+		 *
+		 * Persists the URL as:
+		 * - Post meta for singular posts (by matching URL to a post ID), keyed by strategy
+		 * - Site option for the front page, keyed by strategy
+		 * - Transient keyed by strategy + URL hash for all other pages
+		 *
+		 * Does nothing if no LCP image URL was detected.
+		 *
+		 * @since 2.13.0
+		 * @param string $url      The scanned URL.
+		 * @param array  $prepared The prepared PageSpeed result array.
+		 * @param string $strategy The scan strategy ('mobile' or 'desktop').
+		 * @return void
+		 */
+		public static function store_lcp_image_url( string $url, array $prepared, string $strategy = 'mobile' ): void {
+			$lcp_url = $prepared['lcp_image_url'] ?? null;
+			if ( empty( $lcp_url ) ) {
+				return;
+			}
+
+			$strategy_suffix     = sanitize_key( $strategy );
+			$normalised_scan_url = untrailingslashit( esc_url_raw( add_query_arg( array(), $url ) ) );
+			$normalised_home     = untrailingslashit( home_url( '/' ) );
+
+			// Case 1: Front page.
+			if ( $normalised_scan_url === $normalised_home ) {
+				$option_name = 'wppo_front_page_lcp_' . $strategy_suffix;
+				$existing    = get_option( $option_name, '' );
+				if ( $existing !== $lcp_url ) {
+					update_option( $option_name, $lcp_url, false );
+				}
+				return;
+			}
+
+			// Case 2: Singular post — try to resolve URL to post ID.
+			$post_id = url_to_postid( $url );
+			if ( $post_id > 0 ) {
+				update_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy_suffix, $lcp_url );
+				return;
+			}
+
+			// Case 3: Arbitrary URL — store in transient keyed by strategy + URL hash.
+			$transient_key = Util::transient_key( 'wppo_lcp_url_' . $strategy_suffix . '_' . md5( $normalised_scan_url ) );
+			set_transient( $transient_key, $lcp_url, DAY_IN_SECONDS );
 		}
 	}
 }

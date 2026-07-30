@@ -202,6 +202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					),
 					'image_optimisation' => array(
 						'placeholderType' => 'svg',
+						'autoPreloadLCP'  => false,
 					),
 					'performance_audit'  => array(
 						'pagespeed_api_key' => '',

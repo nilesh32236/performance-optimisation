@@ -1228,6 +1228,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				);
 			}
 
+			// Retroactively store LCP image URL from cached results (plugin upgrade path).
+			// store_lcp_image_url() handles deduplication internally.
+			if ( ! empty( $results['lcp_image_url'] ) ) {
+				\PerformanceOptimise\Inc\Pagespeed::store_lcp_image_url( $url, $results, $strategy );
+			}
+
 			// Append Suggestion_Engine output so the React UI gets everything in one call.
 			$results['suggestions'] = Suggestion_Engine::from_pagespeed( $results );
 
