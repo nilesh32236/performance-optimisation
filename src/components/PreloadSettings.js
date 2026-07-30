@@ -491,8 +491,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										id="speculationExcludeUrls"
 										name="speculationExcludeUrls"
 										rows="3"
-										placeholder="/checkout/*
-/cart/*"
+										placeholder="/my-plugin/*\n/excluded-path/*"
 										value={
 											settings.speculationExcludeUrls
 										}
