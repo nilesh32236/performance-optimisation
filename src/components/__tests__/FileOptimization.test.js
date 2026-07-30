@@ -756,4 +756,43 @@ describe( 'FileOptimization Component', () => {
 			screen.getByLabelText( 'Idle Timeout (ms)' )
 		).toBeInTheDocument();
 	} );
+
+	it( 'toggles Remove HTML Comments switch', () => {
+		render(
+			<FileOptimization
+				options={ { removeHTMLComments: true } }
+				serverRules={ {} }
+			/>
+		);
+		const switchEl = screen.getByLabelText( /Remove HTML Comments/i );
+		expect( switchEl ).toBeChecked();
+		fireEvent.click( switchEl );
+		expect( switchEl ).not.toBeChecked();
+	} );
+
+	it( 'toggles Minify Inline CSS switch', () => {
+		render(
+			<FileOptimization
+				options={ { minifyInlineCSS: false } }
+				serverRules={ {} }
+			/>
+		);
+		const switchEl = screen.getByLabelText( /Minify Inline CSS/i );
+		expect( switchEl ).not.toBeChecked();
+		fireEvent.click( switchEl );
+		expect( switchEl ).toBeChecked();
+	} );
+
+	it( 'toggles Minify Inline JavaScript switch', () => {
+		render(
+			<FileOptimization
+				options={ { minifyInlineJS: false } }
+				serverRules={ {} }
+			/>
+		);
+		const switchEl = screen.getByLabelText( /Minify Inline JavaScript/i );
+		expect( switchEl ).not.toBeChecked();
+		fireEvent.click( switchEl );
+		expect( switchEl ).toBeChecked();
+	} );
 } );

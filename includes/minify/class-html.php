@@ -165,9 +165,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 			}
 
+			$remove_comments = ! empty( $this->options['file_optimisation']['removeHTMLComments'] );
+
 			$this->html_min
 			->doOptimizeViaHtmlDomParser( true )
-			->doRemoveComments( true )
+			->doRemoveComments( $remove_comments )
 			->doSumUpWhitespace( true )
 			->doRemoveWhitespaceAroundTags( true )
 			->doOptimizeAttributes( true )
