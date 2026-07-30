@@ -205,14 +205,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return false;
 			}
 
-			$allowed_roles = $this->options['cache_settings']['loggedInCacheRoles'] ?? array();
-			if ( ! is_array( $allowed_roles ) || empty( $allowed_roles ) ) {
-				return true;
-			}
-
 			$user = wp_get_current_user();
 			if ( empty( $user->roles ) ) {
 				return false;
+			}
+
+			$allowed_roles = $this->options['cache_settings']['loggedInCacheRoles'] ?? array();
+			if ( ! is_array( $allowed_roles ) || empty( $allowed_roles ) ) {
+				return true;
 			}
 
 			foreach ( $user->roles as $role ) {

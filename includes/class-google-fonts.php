@@ -89,6 +89,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @since 2.7.0
 		 */
 		public function process_style_tag( $tag, $handle, $href ) {
+			if ( is_admin() ) {
+				return $tag;
+			}
 			if ( is_user_logged_in() ) {
 				$logged_in_cache_enabled = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
 				if ( ! $logged_in_cache_enabled ) {

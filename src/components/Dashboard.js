@@ -390,10 +390,6 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							'performance-optimisation'
 						)
 					);
-					if ( response.data.cache_settings ) {
-						wppoSettings.settings.cache_settings =
-							response.data.cache_settings;
-					}
 				}
 			} )
 			.catch( () =>

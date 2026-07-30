@@ -226,7 +226,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! is_user_logged_in() ) {
 				return true;
 			}
-			return ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
+
+			$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
+			if ( ! $enable ) {
+				return false;
+			}
+
+			$allowed_roles = $this->options['cache_settings']['loggedInCacheRoles'] ?? array();
+			if ( ! is_array( $allowed_roles ) || empty( $allowed_roles ) ) {
+				return true;
+			}
+
+			$user = wp_get_current_user();
+			if ( empty( $user->roles ) ) {
+				return false;
+			}
+
+			foreach ( $user->roles as $role ) {
+				if ( in_array( $role, $allowed_roles, true ) ) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		/**
