@@ -267,6 +267,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Get the current front-end URL including scheme and host.
+		 *
+		 * @since 2.13.0
+		 * @return string Current URL.
+		 */
+		public static function get_current_url(): string {
+			global $wp;
+			return home_url( add_query_arg( array(), $wp->request ) );
+		}
+
+		/**
 		 * Qualify a transient key with the current blog ID on multisite.
 		 *
 		 * Prevents transient key collisions when a shared object cache backend
