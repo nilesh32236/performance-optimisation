@@ -115,6 +115,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 			$site_url    = home_url();
 			$cookie_hash = defined( 'COOKIEHASH' ) ? COOKIEHASH : md5( $site_url );
+			$wp_salt     = defined( 'NONCE_KEY' ) ? NONCE_KEY : wp_salt();
 
 			$handler_code = '<?php' . PHP_EOL .
 			'// ' . self::DROPIN_MARKER . PHP_EOL .
@@ -138,7 +139,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
-			'if ( preg_match( \'#^(?:/)?(?:cart|checkout|my-account)(?:/|$)\#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
+			'if ( preg_match( \'#^/(?:cart|checkout|my-account)(?:/|$)\#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
@@ -209,6 +210,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'if ( ! $is_logged_in && ! $has_query ) {' . PHP_EOL .
 			'	wppo_serve_cache_file( $file_path, $gzip_file_path );' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
+			'$wppo_salt    = \'' . $wp_salt . '\';' . PHP_EOL . PHP_EOL .
 			'if ( $is_logged_in && ! $has_query ) {' . PHP_EOL .
 			'	$role_hash = isset( $_COOKIE[\'wppo_role_hash\'] ) ? preg_replace( \'/[^a-f0-9]/\', \'\', $_COOKIE[\'wppo_role_hash\'] ) : \'\';' . PHP_EOL .
 			'	if ( \'\' !== $role_hash ) {' . PHP_EOL .

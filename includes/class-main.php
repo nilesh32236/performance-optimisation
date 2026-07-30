@@ -255,19 +255,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public function set_role_hash_cookie(): void {
+			if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+				return;
+			}
 			if ( is_user_logged_in() ) {
 				$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
 				if ( $enable ) {
 					$user = wp_get_current_user();
-					if ( ! empty( $user->roles ) ) {
-						$roles = $user->roles;
-						sort( $roles );
-						$hash = substr( md5( implode( ',', $roles ) ), 0, 12 );
-						if ( ! isset( $_COOKIE['wppo_role_hash'] ) || $_COOKIE['wppo_role_hash'] !== $hash ) {
-							setcookie( 'wppo_role_hash', $hash, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
-						}
+					$hash = Util::get_role_hash( $user );
+					if ( '' !== $hash && ( ! isset( $_COOKIE['wppo_role_hash'] ) || $_COOKIE['wppo_role_hash'] !== $hash ) ) {
+						setcookie( 'wppo_role_hash', $hash, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 					}
 				}
+			}
+		}
+
+		/**
+		 * Clear the wppo_role_hash cookie on logout.
+		 *
+		 * @since 2.8.0
+		 * @return void
+		 */
+		public function clear_role_hash_cookie(): void {
+			if ( isset( $_COOKIE['wppo_role_hash'] ) ) {
+				setcookie( 'wppo_role_hash', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
 			}
 		}
 
@@ -338,6 +349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
+			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'add_defer_strategy' ), 1000 );
 			$has_delay_js = ! empty( $this->options['file_optimisation']['delayJS'] );

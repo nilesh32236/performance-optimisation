@@ -236,13 +236,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$user = wp_get_current_user();
-			if ( empty( $user->roles ) ) {
-				return '';
-			}
-
-			$roles = $user->roles;
-			sort( $roles );
-			return substr( md5( implode( ',', $roles ) ), 0, 12 );
+			return Util::get_role_hash( $user );
 		}
 
 		/**
@@ -683,7 +677,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( function_exists( 'is_account_page' ) && is_account_page() ) {
 				return true;
 			}
-			if ( preg_match( '#^(?:/)?(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path ) ) {
+			if ( preg_match( '#^/(?:cart|checkout|my-account)(?:/|$)#i', '/' . $local_url_path ) ) {
 				return true;
 			}
 
@@ -1002,10 +996,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
+			$processed = 0;
+			$max       = 500;
 			foreach ( $files as $file ) {
-				if ( preg_match( '/^index-[a-f0-9]{12}\.html(\.gz)?$/i', $file['name'] ) ) {
+				if ( $processed >= $max ) {
+					break;
+				}
+				if ( preg_match( '/^index-[a-f0-9]{12}\.html(\.gz)?$/', $file['name'] ) ) {
 					$file_path = trailingslashit( $dir ) . $file['name'];
 					$fs->delete( $file_path );
+					++$processed;
 				}
 			}
 		}

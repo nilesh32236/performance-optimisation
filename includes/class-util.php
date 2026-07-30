@@ -280,5 +280,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function transient_key( string $key ): string {
 			return is_multisite() ? (string) get_current_blog_id() . '_' . $key : $key;
 		}
+
+		/**
+		 * Compute a stable 12-char hex hash of a user's sorted roles, salted
+		 * with the site's secret to prevent cookie forgery.
+		 *
+		 * Used by the caching layer to generate role-specific cache variants for
+		 * logged-in users. The same salt is embedded in the advanced-cache.php
+		 * drop-in at generation time so the early-boot serving code can compute
+		 * an identical hash.
+		 *
+		 * @since 2.8.0
+		 * @param \WP_User $user The user whose roles to hash.
+		 * @return string 12-char hex hash, or empty string if the user has no roles.
+		 */
+		public static function get_role_hash( \WP_User $user ): string {
+			if ( empty( $user->roles ) ) {
+				return '';
+			}
+			$roles = $user->roles;
+			sort( $roles );
+			return substr( md5( implode( ',', $roles ) . wp_salt() ), 0, 12 );
+		}
 	}
 }
