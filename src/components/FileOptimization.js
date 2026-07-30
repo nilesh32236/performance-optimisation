@@ -44,7 +44,11 @@ const FileOptimization = ( {
 		excludeDeferJS: '',
 		delayJS: false,
 		excludeDelayJS: '',
-		delayJSList: options.excludeDelayJS || '',
+		delayJSDefaultStrategy: options.delayJSDefaultStrategy || 'interaction',
+		delayJSIdleList: options.delayJSIdleList || '',
+		delayJSViewportList: options.delayJSViewportList || '',
+		delayJSPriority: options.delayJSPriority || '',
+		delayJSIdleTimeout: options.delayJSIdleTimeout || 3000,
 		removeWooCSSJS: false,
 		excludeUrlToKeepJSCSS: '',
 		removeCssJsHandle: '',
@@ -132,7 +136,11 @@ const FileOptimization = ( {
 					tab: 'file_optimisation',
 					settings: {
 						...settings,
-						excludeDelayJS: settings.delayJSList,
+						delayJSDefaultStrategy: settings.delayJSDefaultStrategy,
+						delayJSIdleList: settings.delayJSIdleList,
+						delayJSViewportList: settings.delayJSViewportList,
+						delayJSPriority: settings.delayJSPriority,
+						delayJSIdleTimeout: settings.delayJSIdleTimeout,
 					},
 				} );
 				if ( ! saveRes.success ) {
@@ -154,7 +162,11 @@ const FileOptimization = ( {
 				tab: 'file_optimisation',
 				settings: {
 					...settings,
-					excludeDelayJS: settings.delayJSList,
+					delayJSDefaultStrategy: settings.delayJSDefaultStrategy,
+					delayJSIdleList: settings.delayJSIdleList,
+					delayJSViewportList: settings.delayJSViewportList,
+					delayJSPriority: settings.delayJSPriority,
+					delayJSIdleTimeout: settings.delayJSIdleTimeout,
 				},
 			} ),
 			__( 'Settings updated successfully.', 'performance-optimisation' ),
@@ -573,7 +585,7 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 									description={ __(
-										'Delay all scripts until the user interacts (keyboard/mouse). Reduces initial CPU usage but may break immediate functionality — test carefully.',
+										'Delay all scripts until the user interacts (keyboard/mouse) or load during idle/viewport. Reduces initial CPU usage but may break immediate functionality — test carefully.',
 										'performance-optimisation'
 									) }
 									name="delayJS"
@@ -619,31 +631,223 @@ const FileOptimization = ( {
 									</div>
 								) }
 								{ settings.delayJS && (
-									<div className="wppo-field wppo-mt-20">
-										<label
-											className="wppo-field-label"
-											htmlFor="delayJSList"
-										>
-											{ __(
-												'Scripts to Delay',
-												'performance-optimisation'
-											) }
-										</label>
-										<textarea
-											className="wppo-textarea"
-											id="delayJSList"
-											name="delayJSList"
-											rows="3"
-											placeholder={ __(
-												'Partial URLs or keywords',
-												'performance-optimisation'
-											) }
-											value={ settings.delayJSList }
-											onChange={ handleChange(
-												setSettings
-											) }
-										/>
-										<div className="wppo-notice wppo-notice--warning wppo-mt-12">
+									<>
+										<div className="wppo-field wppo-mt-20">
+											<label
+												className="wppo-field-label"
+												htmlFor="excludeDelayJS"
+											>
+												{ __(
+													'Scripts to Delay',
+													'performance-optimisation'
+												) }
+											</label>
+											<textarea
+												className="wppo-textarea"
+												id="excludeDelayJS"
+												name="excludeDelayJS"
+												rows="3"
+												placeholder={ __(
+													'Partial URLs or keywords',
+													'performance-optimisation'
+												) }
+												value={
+													settings.excludeDelayJS
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+											/>
+										</div>
+
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="delayJSDefaultStrategy"
+											>
+												{ __(
+													'Default Load Strategy',
+													'performance-optimisation'
+												) }
+											</label>
+											<select
+												className="wppo-select"
+												id="delayJSDefaultStrategy"
+												name="delayJSDefaultStrategy"
+												value={
+													settings.delayJSDefaultStrategy
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+											>
+												<option value="interaction">
+													{ __(
+														'Interaction (load on user interaction)',
+														'performance-optimisation'
+													) }
+												</option>
+												<option value="idle">
+													{ __(
+														'Idle (load during browser idle)',
+														'performance-optimisation'
+													) }
+												</option>
+												<option value="viewport">
+													{ __(
+														'Viewport (load when near viewport)',
+														'performance-optimisation'
+													) }
+												</option>
+											</select>
+											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+												{ __(
+													'Default strategy for delayed scripts that are not in a specific list below.',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
+
+										{ ( settings.delayJSDefaultStrategy ===
+											'idle' ||
+											settings.delayJSIdleList ) && (
+											<div className="wppo-field wppo-mt-16">
+												<label
+													className="wppo-field-label"
+													htmlFor="delayJSIdleTimeout"
+												>
+													{ __(
+														'Idle Timeout (ms)',
+														'performance-optimisation'
+													) }
+												</label>
+												<input
+													className="wppo-input"
+													type="number"
+													id="delayJSIdleTimeout"
+													name="delayJSIdleTimeout"
+													min="500"
+													max="30000"
+													step="100"
+													value={
+														settings.delayJSIdleTimeout
+													}
+													onChange={ handleChange(
+														setSettings
+													) }
+												/>
+												<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+													{ __(
+														'Maximum time (ms) to wait before loading idle scripts (default: 3000).',
+														'performance-optimisation'
+													) }
+												</p>
+											</div>
+										) }
+
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="delayJSIdleList"
+											>
+												{ __(
+													'Scripts to Load When Idle',
+													'performance-optimisation'
+												) }
+											</label>
+											<textarea
+												className="wppo-textarea"
+												id="delayJSIdleList"
+												name="delayJSIdleList"
+												rows="3"
+												placeholder={ __(
+													'Handles or partial URLs (one per line)',
+													'performance-optimisation'
+												) }
+												value={
+													settings.delayJSIdleList
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+											/>
+											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+												{ __(
+													'These scripts load via requestIdleCallback during browser idle time.',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
+
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="delayJSViewportList"
+											>
+												{ __(
+													'Scripts to Load in Viewport',
+													'performance-optimisation'
+												) }
+											</label>
+											<textarea
+												className="wppo-textarea"
+												id="delayJSViewportList"
+												name="delayJSViewportList"
+												rows="3"
+												placeholder={ __(
+													'Handles or partial URLs (one per line)',
+													'performance-optimisation'
+												) }
+												value={
+													settings.delayJSViewportList
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+											/>
+											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+												{ __(
+													'These scripts load when their position enters the viewport.',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
+
+										<div className="wppo-field wppo-mt-16">
+											<label
+												className="wppo-field-label"
+												htmlFor="delayJSPriority"
+											>
+												{ __(
+													'Script Priority',
+													'performance-optimisation'
+												) }
+											</label>
+											<textarea
+												className="wppo-textarea"
+												id="delayJSPriority"
+												name="delayJSPriority"
+												rows="3"
+												placeholder={ __(
+													'handle:high, other:low (one per line)',
+													'performance-optimisation'
+												) }
+												value={
+													settings.delayJSPriority
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+											/>
+											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+												{ __(
+													'Syntax: handle:priority (high, normal, low). High-priority scripts load first.',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
+
+										<div className="wppo-notice wppo-notice--warning wppo-mt-16">
 											<FontAwesomeIcon
 												icon={ faExclamationTriangle }
 											/>
@@ -654,7 +858,7 @@ const FileOptimization = ( {
 												) }
 											</span>
 										</div>
-									</div>
+									</>
 								) }
 							</FeatureCard>
 						) }

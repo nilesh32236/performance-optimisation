@@ -64,6 +64,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private array $exclude_delay_js = array();
 
 		/**
+		 * Default delay strategy: 'interaction', 'idle', or 'viewport'.
+		 *
+		 * @var   string
+		 * @since 3.8.0
+		 */
+		private string $delay_js_default_strategy = 'interaction';
+
+		/**
+		 * List of script handles/URLs to load via requestIdleCallback.
+		 *
+		 * @var   array
+		 * @since 3.8.0
+		 */
+		private array $delay_js_idle_list = array();
+
+		/**
+		 * List of script handles/URLs to load when in viewport.
+		 *
+		 * @var   array
+		 * @since 3.8.0
+		 */
+		private array $delay_js_viewport_list = array();
+
+		/**
+		 * Map of script handles/URLs to priority ('high', 'normal', 'low').
+		 *
+		 * @var   array<string, string>
+		 * @since 3.8.0
+		 */
+		private array $delay_js_priority = array();
+
+		/**
+		 * Idle callback timeout in milliseconds (default 3000).
+		 *
+		 * @var   int
+		 * @since 3.8.0
+		 */
+		private int $delay_js_idle_timeout = 3000;
+
+		/**
 		 * Associative array of deferred script handles (keyed by handle for O(1) lookups).
 		 *
 		 * @var   array<string, bool>
@@ -130,6 +170,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'excludeUnusedCSS'       => '',
 						'criticalCSS'            => false,
 						'hostGoogleFontsLocally' => false,
+						'delayJSDefaultStrategy' => 'interaction',
+						'delayJSIdleList'        => '',
+						'delayJSViewportList'    => '',
+						'delayJSPriority'        => '',
+						'delayJSIdleTimeout'     => 3000,
 					),
 					'preload_settings'   => array(
 						'enableSpeculationRules' => false,
@@ -240,6 +285,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( $has_defer_js ) {
 				add_filter( 'script_loader_tag', array( $this, 'add_fetchpriority_to_deferred' ), 11, 2 );
 			}
+			if ( $has_delay_js ) {
+				add_action( 'wp', array( $this, 'apply_per_page_delay_config' ) );
+			}
 			add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
 			if ( ! empty( $this->options['file_optimisation']['removeWooCSSJS'] ) ) {
@@ -331,6 +379,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->exclude_delay_js = $exclude_js;
 				}
 				$this->exclude_delay_js = apply_filters( 'wppo_exclude_delay_js', $this->exclude_delay_js );
+
+				// Parse delay strategy lists.
+				$file_opt = $this->options['file_optimisation'];
+
+				$this->delay_js_default_strategy = ! empty( $file_opt['delayJSDefaultStrategy'] )
+					? sanitize_text_field( $file_opt['delayJSDefaultStrategy'] )
+					: 'interaction';
+
+				if ( ! empty( $file_opt['delayJSIdleList'] ) ) {
+					$this->delay_js_idle_list = (array) Util::process_urls( $file_opt['delayJSIdleList'] );
+				}
+
+				if ( ! empty( $file_opt['delayJSViewportList'] ) ) {
+					$this->delay_js_viewport_list = (array) Util::process_urls( $file_opt['delayJSViewportList'] );
+				}
+
+				if ( ! empty( $file_opt['delayJSPriority'] ) ) {
+					$priority_lines = Util::process_urls( $file_opt['delayJSPriority'] );
+					foreach ( $priority_lines as $line ) {
+						$parts = explode( ':', $line, 2 );
+						if ( count( $parts ) === 2 ) {
+							$handle = trim( $parts[0] );
+							$level  = strtolower( trim( $parts[1] ) );
+							if ( in_array( $level, array( 'high', 'normal', 'low' ), true ) ) {
+								$this->delay_js_priority[ $handle ] = $level;
+							}
+						}
+					}
+				}
+
+				$this->delay_js_idle_timeout = ! empty( $file_opt['delayJSIdleTimeout'] )
+					? absint( $file_opt['delayJSIdleTimeout'] )
+					: 3000;
 			}
 
 			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
@@ -870,6 +951,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					if ( $use_native_lazy ) {
 						wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
 					}
+
+					if ( $delay_js ) {
+						$idle_timeout     = ! empty( $this->options['file_optimisation']['delayJSIdleTimeout'] )
+							? absint( $this->options['file_optimisation']['delayJSIdleTimeout'] )
+							: 3000;
+						$default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
+							? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
+							: 'interaction';
+						$delay_config     = wp_json_encode(
+							array(
+								'idleTimeout'     => $idle_timeout,
+								'defaultStrategy' => $default_strategy,
+							)
+						);
+						wp_add_inline_script( 'wppo-lazyload', 'window.wppoDelayConfig=' . $delay_config . ';', 'before' );
+					}
 				}
 			}
 		}
@@ -1037,10 +1134,136 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'type="wppo/javascript" wppo-type="text/javascript"',
 						$tag
 					) ?? $tag;
+
+					// Determine delay strategy for this handle.
+					$strategy = $this->get_delay_strategy_for_handle( $handle );
+					if ( 'interaction' !== $strategy ) {
+						$tag = str_replace(
+							'<script ',
+							'<script data-wppo-delay-strategy="' . esc_attr( $strategy ) . '" ',
+							$tag
+						);
+					}
+
+					// Determine priority for this handle.
+					$priority = $this->get_delay_priority_for_handle( $handle );
+					if ( 'normal' !== $priority ) {
+						$tag = str_replace(
+							'<script ',
+							'<script data-wppo-delay-priority="' . esc_attr( $priority ) . '" ',
+							$tag
+						);
+					}
 				}
 			}
 
 			return $tag;
+		}
+
+		/**
+		 * Get the delay strategy for a given script handle.
+		 *
+		 * Checks idle list, viewport list, and then falls back to default strategy.
+		 *
+		 * @since 3.8.0
+		 *
+		 * @param string $handle The script handle.
+		 * @return string The strategy: 'interaction', 'idle', or 'viewport'.
+		 */
+		private function get_delay_strategy_for_handle( string $handle ): string {
+			if ( in_array( $handle, $this->delay_js_idle_list, true ) ) {
+				return 'idle';
+			}
+			if ( in_array( $handle, $this->delay_js_viewport_list, true ) ) {
+				return 'viewport';
+			}
+			// Also check via URL pattern matching against the handle text (handles often contain the handle name).
+			foreach ( $this->delay_js_idle_list as $pattern ) {
+				if ( false !== strpos( $handle, $pattern ) ) {
+					return 'idle';
+				}
+			}
+			foreach ( $this->delay_js_viewport_list as $pattern ) {
+				if ( false !== strpos( $handle, $pattern ) ) {
+					return 'viewport';
+				}
+			}
+			return $this->delay_js_default_strategy;
+		}
+
+		/**
+		 * Get the delay priority for a given script handle.
+		 *
+		 * @since 3.8.0
+		 *
+		 * @param string $handle The script handle.
+		 * @return string The priority: 'high', 'normal', or 'low'.
+		 */
+		private function get_delay_priority_for_handle( string $handle ): string {
+			if ( isset( $this->delay_js_priority[ $handle ] ) ) {
+				return $this->delay_js_priority[ $handle ];
+			}
+			// Check partial matches.
+			foreach ( $this->delay_js_priority as $pattern => $level ) {
+				if ( false !== strpos( $handle, $pattern ) ) {
+					return $level;
+				}
+			}
+			return 'normal';
+		}
+
+		/**
+		 * Apply per-page delay configuration overrides from the Asset Manager metabox.
+		 *
+		 * Runs at `wp` hook to merge per-page strategy/priority overrides into the
+		 * global delay lists before the `script_loader_tag` filter fires.
+		 *
+		 * @since 3.8.0
+		 *
+		 * @return void
+		 */
+		public function apply_per_page_delay_config(): void {
+			if ( ! is_singular() ) {
+				return;
+			}
+
+			$post_id = get_the_ID();
+			if ( ! $post_id ) {
+				return;
+			}
+
+			$delay_strategies = get_post_meta( $post_id, '_wppo_delay_strategies', true );
+			$delay_priorities = get_post_meta( $post_id, '_wppo_delay_priorities', true );
+
+			if ( is_array( $delay_strategies ) ) {
+				foreach ( $delay_strategies as $handle => $strategy ) {
+					if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
+						if ( 'interaction' === $strategy ) {
+							// Remove from other lists to make it interaction.
+							$this->delay_js_idle_list     = array_diff( $this->delay_js_idle_list, array( $handle ) );
+							$this->delay_js_viewport_list = array_diff( $this->delay_js_viewport_list, array( $handle ) );
+						} elseif ( 'idle' === $strategy ) {
+							if ( ! in_array( $handle, $this->delay_js_idle_list, true ) ) {
+								$this->delay_js_idle_list[] = $handle;
+							}
+							$this->delay_js_viewport_list = array_diff( $this->delay_js_viewport_list, array( $handle ) );
+						} elseif ( 'viewport' === $strategy ) {
+							if ( ! in_array( $handle, $this->delay_js_viewport_list, true ) ) {
+								$this->delay_js_viewport_list[] = $handle;
+							}
+							$this->delay_js_idle_list = array_diff( $this->delay_js_idle_list, array( $handle ) );
+						}
+					}
+				}
+			}
+
+			if ( is_array( $delay_priorities ) ) {
+				foreach ( $delay_priorities as $handle => $priority ) {
+					if ( in_array( $priority, array( 'high', 'normal', 'low' ), true ) ) {
+						$this->delay_js_priority[ $handle ] = $priority;
+					}
+				}
+			}
 		}
 
 		/**

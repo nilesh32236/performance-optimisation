@@ -1,10 +1,4 @@
 /**
- * Whether a deferred script load is currently in progress.
- * @type {boolean}
- */
-let scriptLoading = false;
-
-/**
  * Cached promise for the in-progress or completed deferred script load.
  * @type {Promise<void>|null}
  */
@@ -127,6 +121,46 @@ const loadScript = ( script ) => {
 };
 
 /**
+ * Delay JS configuration from PHP.
+ * @type {{ idleTimeout: number, defaultStrategy: string }}
+ */
+const delayConfig = window.wppoDelayConfig || {
+	idleTimeout: 3000,
+	defaultStrategy: 'interaction',
+};
+
+/**
+ * Load scripts grouped by priority (high → normal → low).
+ *
+ * @since 3.8.0
+ * @param {NodeList|HTMLScriptElement[]} scripts The scripts to load.
+ * @return {Promise<void>} Resolves when all scripts have been loaded.
+ */
+async function loadScriptsByPriority( scripts ) {
+	const groups = { high: [], normal: [], low: [] };
+	Array.from( scripts ).forEach( ( script ) => {
+		const priority =
+			script.getAttribute( 'data-wppo-delay-priority' ) || 'normal';
+		if ( groups[ priority ] ) {
+			groups[ priority ].push( script );
+		} else {
+			groups.normal.push( script );
+		}
+	} );
+
+	for ( const level of [ 'high', 'normal', 'low' ] ) {
+		const results = await Promise.allSettled(
+			groups[ level ].map( ( script ) => loadScript( script ) )
+		);
+		results
+			.filter( ( r ) => r.status === 'rejected' )
+			.forEach( ( r ) =>
+				console.error( 'Error loading script:', r.reason )
+			);
+	}
+}
+
+/**
  * Load all deferred scripts queued in the DOM.
  *
  * Once all scripts are loaded, dispatches DOMContentLoaded,
@@ -141,8 +175,6 @@ async function loadScripts() {
 	}
 
 	scriptLoadPromise = ( async () => {
-		scriptLoading = true;
-
 		const inlineScripts = Array.from(
 			document.querySelectorAll(
 				'script[type="wppo/javascript"], script[wppo-src]'
@@ -150,13 +182,9 @@ async function loadScripts() {
 		);
 
 		try {
-			for ( const script of inlineScripts ) {
-				await loadScript( script );
-			}
+			await loadScriptsByPriority( inlineScripts );
 		} catch ( err ) {
 			console.error( 'Error loading script:', err );
-		} finally {
-			scriptLoading = false;
 		}
 
 		if ( document.readyState === 'loading' ) {
@@ -187,7 +215,119 @@ async function loadScripts() {
 	return scriptLoadPromise;
 }
 
-if ( ! scriptLoading ) {
+/**
+ * Load scripts with 'idle' strategy using requestIdleCallback.
+ *
+ * @since 3.8.0
+ */
+const loadIdleScripts = async () => {
+	const idleScripts = document.querySelectorAll(
+		'script[data-wppo-delay-strategy="idle"]'
+	);
+	if ( idleScripts.length > 0 ) {
+		try {
+			await loadScriptsByPriority( idleScripts );
+		} catch ( err ) {
+			console.error( 'Error loading idle script:', err );
+		}
+	}
+};
+
+/**
+ * Observe viewport-strategy scripts with IntersectionObserver.
+ *
+ * Falls back to immediate loading when the Observer API is unavailable.
+ *
+ * @since 3.8.0
+ */
+const observeViewportScripts = () => {
+	const viewportScripts = document.querySelectorAll(
+		'script[data-wppo-delay-strategy="viewport"]'
+	);
+	if ( viewportScripts.length === 0 ) {
+		return;
+	}
+
+	if ( ! ( 'IntersectionObserver' in window ) ) {
+		loadScriptsByPriority( viewportScripts );
+		return;
+	}
+
+	const observer = new IntersectionObserver(
+		( entries ) => {
+			const toLoad = [];
+			entries.forEach( ( entry ) => {
+				if ( entry.isIntersecting ) {
+					const script = entry.target;
+					observer.unobserve( script );
+					toLoad.push( script );
+				}
+			} );
+			if ( toLoad.length > 0 ) {
+				loadScriptsByPriority( toLoad ).catch( ( err ) =>
+					console.error( 'Error loading viewport scripts:', err )
+				);
+			}
+		},
+		{ rootMargin: '200px' }
+	);
+
+	viewportScripts.forEach( ( script ) => observer.observe( script ) );
+};
+
+/**
+ * Check if there are any scripts that use 'interaction' as their strategy.
+ *
+ * Scripts with no explicit strategy attribute default to 'interaction'.
+ *
+ * @param {NodeList|HTMLScriptElement[]} [scripts] Optional script list to check. Defaults to querying the DOM.
+ * @since 3.8.0
+ * @return {boolean} Whether any delayed scripts use the 'interaction' strategy.
+ */
+const hasInteractionScripts = ( scripts ) => {
+	const list =
+		scripts ||
+		document.querySelectorAll(
+			'script[type="wppo/javascript"], script[wppo-src]'
+		);
+	return Array.from( list ).some( ( script ) => {
+		const strategy =
+			script.getAttribute( 'data-wppo-delay-strategy' ) ||
+			delayConfig.defaultStrategy;
+		return strategy === 'interaction';
+	} );
+};
+
+// Initialize delay JS strategies.
+const delayedScripts = document.querySelectorAll(
+	'script[type="wppo/javascript"], script[wppo-src]'
+);
+
+// Schedule idle scripts via requestIdleCallback.
+const idleScripts = document.querySelectorAll(
+	'script[data-wppo-delay-strategy="idle"]'
+);
+if ( idleScripts.length > 0 ) {
+	if ( 'requestIdleCallback' in window ) {
+		window.requestIdleCallback( loadIdleScripts, {
+			timeout: delayConfig.idleTimeout,
+		} );
+	} else {
+		// Fallback: load after a short delay.
+		// requestIdleCallback's timeout is a deadline (max wait), while setTimeout is a minimum delay.
+		// Use a shorter explicit delay to avoid excessive waiting when rIC is unavailable.
+		setTimeout(
+			loadIdleScripts,
+			Math.min( 2000, delayConfig.idleTimeout )
+		);
+	}
+}
+
+// Observe viewport scripts.
+observeViewportScripts();
+
+// Only register interaction event listeners if there are scripts using interaction strategy.
+if ( delayedScripts.length > 0 && hasInteractionScripts( delayedScripts ) ) {
 	const triggerEvents = [
 		'mouseenter',
 		'mousedown',
@@ -206,6 +346,9 @@ if ( ! scriptLoading ) {
 	triggerEvents.forEach( ( event ) =>
 		document.addEventListener( event, loadHandler, { once: true } )
 	);
+} else if ( document.querySelector( 'script[data-wppo-delay-strategy]' ) ) {
+	// No interaction scripts — but some scripts have explicit non-interaction strategies.
+	// The page will rely on idle/viewport loading. Nothing to do here.
 }
 
 /**
