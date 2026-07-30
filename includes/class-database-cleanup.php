@@ -31,6 +31,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 	class Database_Cleanup {
 
 		/**
+		 * Maps cleanup type keys to their affected WordPress table identifiers.
+		 *
+		 * Keys correspond to cleanup types; values are unprefixed table identifiers
+		 * passed to `$wpdb->{table}` for dynamic table name resolution.
+		 *
+		 * @since 4.0.0
+		 * @var array<string, array<string>>
+		 */
+		public const TABLE_MAP = array(
+			'revisions'          => array( 'posts', 'postmeta' ),
+			'auto_drafts'        => array( 'posts', 'postmeta' ),
+			'trashed_posts'      => array( 'posts', 'postmeta' ),
+			'spam_comments'      => array( 'comments', 'commentmeta' ),
+			'trashed_comments'   => array( 'comments', 'commentmeta' ),
+			'expired_transients' => array( 'options' ),
+			'orphan_postmeta'    => array( 'postmeta' ),
+		);
+
+		/**
+		 * Maps cleanup method names to their cleanup type keys for TABLE_MAP lookup.
+		 *
+		 * @since 4.0.0
+		 * @var array<string, string>
+		 */
+		private const METHOD_TO_TYPE = array(
+			'clean_revisions_advanced' => 'revisions',
+			'clean_auto_drafts'        => 'auto_drafts',
+			'clean_trashed_posts'      => 'trashed_posts',
+			'clean_spam_comments'      => 'spam_comments',
+			'clean_trashed_comments'   => 'trashed_comments',
+			'clean_expired_transients' => 'expired_transients',
+			'clean_orphan_postmeta'    => 'orphan_postmeta',
+		);
+
+		/**
 		 * Option key used for the DB cleanup counts cache salt.
 		 *
 		 * @since 2.5.0
@@ -587,8 +622,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'orphan_postmeta'    => 'clean_orphan_postmeta',
 			);
 
-			$results       = array();
-			$total_deleted = 0;
+			$results         = array();
+			$total_deleted   = 0;
+			$affected_tables = array();
 
 			foreach ( $methods as $key => $method ) {
 				if ( 'revisions' === $key ) {
@@ -597,12 +633,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$res = self::invoke_cleanup_method( $method );
 				}
 				$results[ $key ] = $res;
-				if ( ! is_wp_error( $res ) && false !== $res ) {
+				if ( ! is_wp_error( $res ) && false !== $res && (int) $res > 0 ) {
 					$total_deleted += (int) $res;
+					if ( isset( self::TABLE_MAP[ $key ] ) ) {
+						$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $key ] );
+					}
 				}
 			}
 
 			do_action( 'wppo_database_cleanup_completed', 'all', $total_deleted, $results );
+
+			self::maybe_optimize_tables( $affected_tables, true );
 
 			return $results;
 		}
@@ -634,7 +675,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'clean_orphan_postmeta',
 			);
 
-			$failures = array();
+			$failures        = array();
+			$affected_tables = array();
 
 			foreach ( $methods as $method ) {
 				if ( 'clean_revisions_advanced' === $method ) {
@@ -657,8 +699,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					// Translators: %s is the cleanup type label.
 					Log::add( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
 					$failures[] = $method;
+				} elseif ( $result > 0 ) {
+					$type = self::METHOD_TO_TYPE[ $method ] ?? '';
+					if ( isset( self::TABLE_MAP[ $type ] ) ) {
+						$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $type ] );
+					}
 				}
 			}
+
+			$optimize_enabled = ! empty( $settings['dbOptimize'] );
+			self::maybe_optimize_tables( $affected_tables, $optimize_enabled );
 
 			return $failures;
 		}
@@ -784,6 +834,113 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$post_type = $post ? $post->post_type : get_post_type( $post_id );
 			if ( $post_type && is_post_type_viewable( $post_type ) ) {
 				self::invalidate_counts_cache();
+			}
+		}
+
+		/**
+		 * Get the size (data + index) of a database table in bytes.
+		 *
+		 * Queries `information_schema.TABLES` to determine the total size.
+		 *
+		 * @since 4.0.0
+		 *
+		 * @param string $table Full table name (including prefix).
+		 * @return int Table size in bytes, or 0 if unknown.
+		 */
+		private static function get_table_size( string $table ): int {
+			global $wpdb;
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$size = $wpdb->get_var(
+				$wpdb->prepare(
+					'SELECT ( data_length + index_length ) FROM information_schema.TABLES WHERE table_schema = %s AND table_name = %s',
+					DB_NAME,
+					$table
+				)
+			);
+
+			return $size ? (int) $size : 0;
+		}
+
+		/**
+		 * Run OPTIMIZE TABLE on a given table to reclaim disk space and rebuild indexes.
+		 *
+		 * Skips tables larger than 1 GB to avoid long table locks.
+		 * Logs the result via {@see Log::add()}.
+		 *
+		 * @since 4.0.0
+		 *
+		 * @param string $table Unprefixed table identifier (e.g. 'posts', 'postmeta').
+		 * @return bool True on success, false on failure or if skipped.
+		 */
+		public static function optimize_table( string $table ): bool {
+			global $wpdb;
+
+			$full_table_name = $wpdb->{$table}; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase
+
+			if ( empty( $full_table_name ) ) {
+				return false;
+			}
+
+			// Skip tables larger than 1 GB to avoid long locks.
+			$size = self::get_table_size( $full_table_name );
+			if ( $size > 1073741824 ) {
+				Log::add(
+					sprintf(
+						/* translators: %s: Table name */
+						__( 'Skipped OPTIMIZE TABLE for %s — table exceeds 1 GB.', 'performance-optimisation' ),
+						$full_table_name
+					)
+				);
+				return false;
+			}
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$result = $wpdb->query( "OPTIMIZE TABLE {$full_table_name}" );
+
+			if ( false === $result ) {
+				Log::add(
+					sprintf(
+						/* translators: %s: Table name */
+						__( 'OPTIMIZE TABLE failed for %s.', 'performance-optimisation' ),
+						$full_table_name
+					)
+				);
+				return false;
+			}
+
+			Log::add(
+				sprintf(
+					/* translators: %1$s: Table name, %2$d: Table size in bytes */
+					__( 'Optimized table %1$s (size: %2$d bytes).', 'performance-optimisation' ),
+					$full_table_name,
+					$size
+				)
+			);
+
+			return true;
+		}
+
+		/**
+		 * Conditionally optimize a list of unique database tables.
+		 *
+		 * Deduplicates table names and calls {@see optimize_table()} for each.
+		 *
+		 * @since 4.0.0
+		 *
+		 * @param array<string> $table_names Unprefixed table identifiers (e.g. 'posts', 'commentmeta').
+		 * @param bool          $enabled     Whether optimization is enabled.
+		 * @return void
+		 */
+		public static function maybe_optimize_tables( array $table_names, bool $enabled ): void {
+			if ( ! $enabled || empty( $table_names ) ) {
+				return;
+			}
+
+			$unique_tables = array_unique( $table_names );
+
+			foreach ( $unique_tables as $table ) {
+				self::optimize_table( $table );
 			}
 		}
 	}

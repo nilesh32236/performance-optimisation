@@ -416,6 +416,90 @@ describe( 'DatabaseCleanup Component', () => {
 		} );
 	} );
 
+	it( 'renders optimize tables toggle with default on', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		expect(
+			screen.getByText( 'Optimize tables after cleanup' )
+		).toBeInTheDocument();
+
+		const toggle = screen.getByRole( 'checkbox', {
+			name: /Optimize tables after cleanup/i,
+		} );
+		expect( toggle ).toBeChecked();
+	} );
+
+	it( 'toggles optimize tables setting', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		const toggle = screen.getByRole( 'checkbox', {
+			name: /Optimize tables after cleanup/i,
+		} );
+		expect( toggle ).toBeChecked();
+
+		fireEvent.click( toggle );
+
+		expect( toggle ).not.toBeChecked();
+	} );
+
+	it( 'saves optimize tables setting with settings', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: { revisions: 10 },
+		} );
+
+		render( <DatabaseCleanup /> );
+
+		await waitFor( () => {
+			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
+		} );
+
+		const toggle = screen.getByRole( 'checkbox', {
+			name: /Optimize tables after cleanup/i,
+		} );
+
+		fireEvent.click( toggle );
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+		} );
+
+		const saveButton = screen.getByRole( 'button', {
+			name: /Save Settings/i,
+		} );
+		fireEvent.click( saveButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'database_cleanup',
+					settings: expect.objectContaining( {
+						dbOptimize: false,
+					} ),
+				} )
+			);
+		} );
+	} );
+
 	it( 'shows error when cleanup api fails', async () => {
 		apiCall.mockResolvedValueOnce( {
 			success: true,
