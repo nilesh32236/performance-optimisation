@@ -37,8 +37,8 @@ if ( ! defined( 'WPPO_VERSION' ) ) {
 	define( 'WPPO_VERSION', '1.8.0' );
 }
 
-// Include the main class file.
-require_once WPPO_PLUGIN_PATH . 'includes/class-main.php';
+// Load Composer autoloader.
+require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
 
 // Initialize the main class.
 new Main();
@@ -51,7 +51,6 @@ if ( ! function_exists( 'wppo_activate' ) ) {
 	 * Includes the activation class and runs the activation process.
 	 */
 	function wppo_activate(): void {
-		require_once WPPO_PLUGIN_PATH . 'includes/class-activate.php';
 		Activate::init();
 	}
 }
@@ -65,7 +64,6 @@ if ( ! function_exists( 'wppo_deactivate' ) ) {
 	 * Includes the deactivation class and runs the deactivation process.
 	 */
 	function wppo_deactivate(): void {
-		require_once WPPO_PLUGIN_PATH . 'includes/class-deactivate.php';
 		Deactivate::init();
 	}
 }

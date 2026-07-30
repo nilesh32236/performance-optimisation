@@ -114,7 +114,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		public function ccss_regeneration_cron() {
 			$options = get_option( 'wppo_settings', array() );
 			if ( ! empty( $options['file_optimisation']['criticalCSS'] ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
 				Critical_CSS::regenerate_all();
 			}
 		}
