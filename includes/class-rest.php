@@ -809,6 +809,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				)
 			);
 
+			// Optimize affected tables after successful individual cleanup.
+			if ( (int) $result > 0 && isset( Database_Cleanup::TABLE_MAP[ $type ] ) ) {
+				Database_Cleanup::maybe_optimize_tables(
+					Database_Cleanup::TABLE_MAP[ $type ],
+					true
+				);
+			}
+
 			return $this->send_response(
 				array(
 					'type'    => $type,

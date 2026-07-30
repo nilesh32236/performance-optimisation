@@ -12,6 +12,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
+import SwitchField from './common/SwitchField';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 
@@ -79,6 +80,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		dbSchedule: 'none',
 		dbRevMaxAge: 30,
 		dbRevKeepLatest: 5,
+		dbOptimize: true,
 		...options,
 	};
 
@@ -384,6 +386,19 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								</p>
 							</div>
 						</div>
+						<SwitchField
+							label={ __(
+								'Optimize tables after cleanup',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Automatically run OPTIMIZE TABLE on affected tables after cleanup to reclaim disk space and rebuild indexes.',
+								'performance-optimisation'
+							) }
+							name="dbOptimize"
+							checked={ settings.dbOptimize }
+							onChange={ handleChange( setSettings ) }
+						/>
 					</div>
 				</FeatureCard>
 
