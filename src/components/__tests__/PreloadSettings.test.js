@@ -262,6 +262,56 @@ describe( 'PreloadSettings Component', () => {
 					enableSpeculationRules: true,
 					speculationMode: 'prefetch',
 					speculationEagerness: 'eager',
+					speculationExcludeUrls: '',
+				} ),
+			} );
+		} );
+	} );
+
+	it( 'renders exclude URLs textarea when speculative loading is enabled', () => {
+		render( <PreloadSettings /> );
+
+		expect(
+			screen.queryByLabelText( /Exclude URLs from Speculation/i )
+		).not.toBeInTheDocument();
+
+		fireEvent.click(
+			screen.getByLabelText( /Enable Speculative Loading/i )
+		);
+
+		expect(
+			screen.getByLabelText( /Exclude URLs from Speculation/i )
+		).toBeInTheDocument();
+	} );
+
+	it( 'submits exclude URLs with speculation settings', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render( <PreloadSettings /> );
+
+		fireEvent.click(
+			screen.getByLabelText( /Enable Speculative Loading/i )
+		);
+
+		const excludeInput = screen.getByLabelText(
+			/Exclude URLs from Speculation/i
+		);
+		fireEvent.change( excludeInput, {
+			target: { value: '/checkout/*\n/cart/*' },
+		} );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Settings/i } )
+		);
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'preload_settings',
+				settings: expect.objectContaining( {
+					speculationExcludeUrls: '/checkout/*\n/cart/*',
 				} ),
 			} );
 		} );

@@ -29,6 +29,7 @@ const PreloadSettings = ( { options = {} } ) => {
 		enableSpeculationRules: false,
 		speculationMode: 'prerender',
 		speculationEagerness: 'moderate',
+		speculationExcludeUrls: '',
 		...options,
 	};
 
@@ -474,6 +475,38 @@ const PreloadSettings = ( { options = {} } ) => {
 											) }
 										</option>
 									</select>
+								</div>
+								<div className="wppo-field">
+									<label
+										className="wppo-field-label"
+										htmlFor="speculationExcludeUrls"
+									>
+										{ __(
+											'Exclude URLs from Speculation',
+											'performance-optimisation'
+										) }
+									</label>
+									<textarea
+										className="wppo-textarea"
+										id="speculationExcludeUrls"
+										name="speculationExcludeUrls"
+										rows="3"
+										placeholder="/my-plugin/*\n/excluded-path/*"
+										value={
+											settings.speculationExcludeUrls
+										}
+										onChange={ handleChange( setSettings ) }
+										aria-describedby="speculationExcludeUrls-desc"
+									/>
+									<p
+										id="speculationExcludeUrls-desc"
+										className="wppo-text-muted wppo-mt-10 wppo-text-small"
+									>
+										{ __(
+											'Add URL patterns to exclude from speculative loading. Supports wildcard (*) patterns. WooCommerce cart, checkout, and account pages are excluded automatically.',
+											'performance-optimisation'
+										) }
+									</p>
 								</div>
 							</>
 						) }

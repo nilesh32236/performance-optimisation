@@ -198,6 +198,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'enableSpeculationRules' => false,
 						'speculationMode'        => 'prerender',
 						'speculationEagerness'   => 'moderate',
+						'speculationExcludeUrls' => '',
 					),
 					'image_optimisation' => array(
 						'placeholderType' => 'svg',
@@ -1462,10 +1463,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			add_filter(
 				'wp_speculation_rules_href_exclude_paths',
-				function ( $exclude_paths ) {
+				function ( $exclude_paths ) use ( $preload_settings ) {
 					$exclude_paths[] = '/wp-login.php';
 					$exclude_paths[] = '/wp-admin/*';
 					$exclude_paths[] = '/wp-json/*';
+
+					$custom_excludes = ! empty( $preload_settings['speculationExcludeUrls'] )
+						? Util::process_urls( $preload_settings['speculationExcludeUrls'] )
+						: array();
+					foreach ( $custom_excludes as $exclude ) {
+						$exclude_paths[] = $exclude;
+					}
+
+					$woocommerce_excludes = array();
+
+					if ( function_exists( 'wc_get_checkout_url' ) ) {
+						$checkout_url = wc_get_checkout_url();
+						if ( $checkout_url ) {
+							$path = wp_parse_url( $checkout_url, PHP_URL_PATH );
+							if ( $path && '/' !== $path ) {
+								$woocommerce_excludes[] = trailingslashit( $path ) . '*';
+							}
+						}
+
+						$cart_url = wc_get_cart_url();
+						if ( $cart_url ) {
+							$path = wp_parse_url( $cart_url, PHP_URL_PATH );
+							if ( $path && '/' !== $path ) {
+								$woocommerce_excludes[] = trailingslashit( $path ) . '*';
+							}
+						}
+
+						$myaccount_url = wc_get_page_permalink( 'myaccount' );
+						if ( $myaccount_url ) {
+							$path = wp_parse_url( $myaccount_url, PHP_URL_PATH );
+							if ( $path && '/' !== $path ) {
+								$woocommerce_excludes[] = trailingslashit( $path ) . '*';
+							}
+						}
+					}
+
+					foreach ( $woocommerce_excludes as $exclude ) {
+						if ( ! in_array( $exclude, $custom_excludes, true ) ) {
+							$exclude_paths[] = $exclude;
+						}
+					}
+
 					return $exclude_paths;
 				}
 			);
