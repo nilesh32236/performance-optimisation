@@ -56,6 +56,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		}
 
 		/**
+		 * Trigger the cache preload directly (not via cron hook).
+		 *
+		 * Wraps the private schedule_page_cron_jobs() for WP-CLI invocation.
+		 *
+		 * @since 2.14.0
+		 */
+		public static function trigger_preload(): void {
+			$instance = new self();
+			$instance->schedule_page_cron_jobs();
+		}
+
+		/**
 		 * Add a custom cron interval.
 		 *
 		 * Adds a custom cron schedule that runs every 5 hours.

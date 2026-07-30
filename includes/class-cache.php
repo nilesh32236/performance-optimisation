@@ -1031,6 +1031,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					delete_transient( Util::transient_key( 'wppo_cache_size' ) );
 					delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
 				}
+				update_option( 'wppo_cache_last_cleared_time', current_time( 'mysql' ), false );
 				do_action( 'wppo_after_cache_clear', $type, $url_path );
 			}
 
@@ -1103,6 +1104,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$total_size = $instance->calculate_directory_size( $cache_dir );
 			return size_format( $total_size );
+		}
+
+		/**
+		 * Get detailed cache statistics.
+		 *
+		 * Returns size, cached page count, last-cleared timestamp, and cache directory path.
+		 *
+		 * @since 2.14.0
+		 * @return array{size: string, cached_pages: int, last_cleared: string, cache_dir: string}
+		 */
+		public static function get_cache_stats(): array {
+			$instance = new self();
+			$stats    = array(
+				'size'         => __( 'N/A', 'performance-optimisation' ),
+				'cached_pages' => 0,
+				'last_cleared' => '',
+				'cache_dir'    => '',
+			);
+
+			if ( ! $instance->get_filesystem() ) {
+				return $stats;
+			}
+
+			$cache_dir          = "{$instance->cache_root_dir}/{$instance->domain}";
+			$stats['cache_dir'] = $cache_dir;
+
+			if ( ! $instance->filesystem->is_dir( $cache_dir ) ) {
+				return $stats;
+			}
+
+			$total_size            = $instance->calculate_directory_size( $cache_dir );
+			$stats['size']         = size_format( $total_size );
+			$items                 = $instance->filesystem->dirlist( $cache_dir, false );
+			$stats['cached_pages'] = is_array( $items ) ? count( $items ) : 0;
+			$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
+
+			return $stats;
 		}
 
 		/**
