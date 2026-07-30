@@ -450,6 +450,139 @@ describe( 'API Request library', () => {
 			expect( global.fetch ).toHaveBeenCalledTimes( 3 );
 			expect( result ).toEqual( successData );
 		} );
+
+		it( 'should refresh nonce and retry on rest_cookie_nonce_invalid', async () => {
+			const freshNonce = 'freshnonce789';
+			const successData = { success: true, data: { done: true } };
+
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( {
+					code: 'rest_cookie_nonce_invalid',
+					message: 'Cookie nonce invalid',
+				} ),
+			} );
+
+			global.fetch.mockResolvedValueOnce( {
+				ok: true,
+				json: jest.fn().mockResolvedValueOnce( {
+					success: true,
+					data: { nonce: freshNonce },
+				} ),
+			} );
+
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( successData ),
+			} );
+
+			const result = await apiCall( 'some_action', {} );
+
+			expect( global.fetch ).toHaveBeenCalledTimes( 3 );
+			expect( result ).toEqual( successData );
+		} );
+	} );
+
+	describe( 'apiCall with GET method', () => {
+		it( 'should not include Content-Type header for GET requests', async () => {
+			const mockData = { success: true, data: { value: 1 } };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const result = await apiCall( 'system_info', {}, 'GET' );
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				'http://test.com/wp-json/wppo/v1/system_info',
+				{
+					method: 'GET',
+					headers: {
+						'X-WP-Nonce': 'testnonce',
+					},
+				}
+			);
+			expect( result ).toEqual( mockData );
+		} );
+	} );
+
+	describe( 'apiCall with AbortSignal', () => {
+		it( 'should pass AbortSignal through to fetch', async () => {
+			const mockData = { success: true };
+			const abortController = new AbortController();
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			const result = await apiCall(
+				'some_action',
+				{},
+				'POST',
+				abortController.signal
+			);
+
+			expect( global.fetch ).toHaveBeenCalledWith(
+				expect.any( String ),
+				expect.objectContaining( {
+					signal: abortController.signal,
+				} )
+			);
+			expect( result ).toEqual( mockData );
+		} );
+
+		it( 'should abort the request when signal is aborted before response', async () => {
+			const abortController = new AbortController();
+			abortController.abort();
+
+			global.fetch.mockImplementationOnce( ( url, options ) => {
+				if ( options.signal?.aborted ) {
+					return Promise.reject(
+						new DOMException(
+							'The operation was aborted',
+							'AbortError'
+						)
+					);
+				}
+				return Promise.resolve( {
+					json: jest.fn().mockResolvedValue( { success: true } ),
+				} );
+			} );
+
+			await expect(
+				apiCall( 'some_action', {}, 'POST', abortController.signal )
+			).rejects.toThrow( 'The operation was aborted' );
+		} );
+	} );
+
+	describe( 'update_settings mutation', () => {
+		it( 'should update global wppoSettings.settings on successful update_settings', async () => {
+			const mockData = {
+				success: true,
+				data: { tab1: { setting: 'value' } },
+			};
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( mockData ),
+			} );
+
+			await apiCall( 'update_settings', { tab: 'tab1', settings: {} } );
+
+			expect( global.wppoSettings.settings ).toEqual( {
+				tab1: { setting: 'value' },
+			} );
+		} );
+
+		it( 'should not mutate global settings on failed update_settings', async () => {
+			global.wppoSettings.settings = { existing: 'value' };
+			global.fetch.mockResolvedValueOnce( {
+				json: jest.fn().mockResolvedValueOnce( {
+					success: false,
+					data: null,
+				} ),
+			} );
+
+			await apiCall( 'update_settings', { tab: 'tab1', settings: {} } );
+
+			expect( global.wppoSettings.settings ).toEqual( {
+				existing: 'value',
+			} );
+		} );
 	} );
 
 	describe( 'fetchSuggestions', () => {

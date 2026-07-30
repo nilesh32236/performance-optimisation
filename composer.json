@@ -31,7 +31,9 @@
         "wp-coding-standards/wpcs": "^3.3",
         "phpcsstandards/phpcsextra": "^1.5",
         "phpcsstandards/phpcsutils": "^1.2",
-        "phpcompatibility/php-compatibility": "^9.3"
+        "phpcompatibility/php-compatibility": "^9.3",
+        "phpunit/phpunit": "^11.0",
+        "brain/monkey": "^2.6"
     },
     "config": {
         "allow-plugins": {
@@ -44,6 +46,8 @@
         "lint:fix": "phpcbf",
         "makepot": "wp i18n make-pot . languages/performance-optimisation.pot --slug=performance-optimisation --ignore-domain",
         "release": "composer install --no-dev --optimize-autoloader --ignore-platform-reqs",
-        "dev-setup": "composer install --ignore-platform-reqs"
+        "dev-setup": "composer install --ignore-platform-reqs",
+        "test": "phpunit",
+        "test:coverage": "phpunit --coverage-text"
     }
 }

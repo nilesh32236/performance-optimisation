@@ -26,10 +26,10 @@ Object.defineProperty( window, 'matchMedia', {
 	} ) ),
 } );
 
+/* eslint-disable @wordpress/no-unused-vars-before-return, import/no-extraneous-dependencies */
 jest.mock(
 	'@wordpress/components',
 	() => {
-		// eslint-disable-next-line @wordpress/no-unused-vars-before-return, import/no-extraneous-dependencies
 		const React = require( 'react' );
 		return {
 			ToggleControl: ( { checked, onChange, label, disabled } ) => (
@@ -45,3 +45,4 @@ jest.mock(
 	},
 	{ virtual: true }
 );
+/* eslint-enable @wordpress/no-unused-vars-before-return, import/no-extraneous-dependencies */

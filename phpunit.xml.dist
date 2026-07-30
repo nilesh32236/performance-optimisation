@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="tests/php/bootstrap.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache">
+    <testsuites>
+        <testsuite name="Performance Optimisation PHP Tests">
+            <directory>tests/php</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <const name="ABSPATH" value="/tmp/wordpress/"/>
+        <const name="WP_CONTENT_DIR" value="/tmp/wordpress/wp-content"/>
+        <const name="WP_CONTENT_URL" value="http://example.com/wp-content"/>
+    </php>
+</phpunit>
