@@ -363,7 +363,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! empty( $combined_css ) ) {
 				$combined_css = preg_replace( '/font-display\s*:\s*block\s*;?/', 'font-display: swap;', $combined_css );
 
-				require_once WPPO_PLUGIN_PATH . 'includes/minify/class-css.php';
 				$combined_css = Minify\CSS::inject_font_display_swap( $combined_css );
 
 				$css_minifier  = new CSSMinifier( $combined_css );

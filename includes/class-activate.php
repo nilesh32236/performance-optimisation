@@ -33,12 +33,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function init(): void {
-			require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-advanced-cache-handler.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
-
 			$notices = array();
 
 			if ( Advanced_Cache_Handler::foreign_dropin_present() ) {

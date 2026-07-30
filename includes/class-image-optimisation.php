@@ -457,7 +457,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		private function get_img_converter() {
 			if ( null === $this->img_converter ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
 				$this->img_converter = new Img_Converter( $this->options );
 			}
 			return $this->img_converter;

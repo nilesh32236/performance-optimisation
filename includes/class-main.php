@@ -310,44 +310,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
 			}
-			require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-util.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/minify/class-html.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/minify/class-css.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/minify/class-js.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-metabox.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-image-optimisation.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-img-converter.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-cron.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-rest.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-asset-manager.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-core-tweaks.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-used-css.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-abilities.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-google-fonts.php';
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-wppo-cli-command.php';
 				\WP_CLI::add_command( 'wppo', 'PerformanceOptimise\Inc\WPPO_CLI_Command' );
-			}
-
-			// Phase 1 & 2 — Diagnostics & PageSpeed (v1.5.0-1.6.0).
-			// Load on admin, AJAX, Cron, or REST API requests.
-			if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
-				require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
-				require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
-				require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
-				require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
-
-				if ( defined( 'WP_ADMIN' ) ) {
-					require_once WPPO_PLUGIN_PATH . 'includes/class-admin-notices.php';
-				}
 			}
 		}
 
@@ -562,7 +527,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			require_once WPPO_PLUGIN_PATH . 'includes/class-activate.php';
 			$notices = Activate::add_wp_cache_constant();
 
 			// Always throttle for 1 hour to avoid constant I/O on failure.

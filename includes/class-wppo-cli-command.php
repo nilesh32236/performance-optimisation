@@ -75,9 +75,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				return;
 			}
 
-			require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-cache.php';
-
 			$page = $assoc_args['page'] ?? null;
 
 			if ( $page ) {
@@ -151,9 +148,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			}
 
 			$type = $assoc_args['type'] ?? 'all';
-
-			require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-database-cleanup.php';
 
 			if ( 'all' === $type ) {
 				$results = Database_Cleanup::clean_all();
@@ -310,8 +304,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					return;
 				}
 
-				require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-
 				$known_tabs = array( 'file_optimisation', 'preload_settings', 'image_optimisation', 'database_cleanup', 'object_cache', 'performance_audit', 'cache_settings', 'core_tweaks' );
 				if ( ! in_array( $tab, $known_tabs, true ) ) {
 					/* translators: %s: Settings tab name */
@@ -363,9 +355,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				WP_CLI::error( sprintf( __( 'Invalid object-cache action "%s". Did you mean "wp wppo object-cache flush"?', 'performance-optimisation' ), $action ) );
 				return;
 			}
-
-			require_once WPPO_PLUGIN_PATH . 'includes/class-log.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-object-cache.php';
 
 			$manager = new Object_Cache();
 			$success = $manager->flush();

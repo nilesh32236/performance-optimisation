@@ -1074,7 +1074,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_system_info( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			require_once WPPO_PLUGIN_PATH . 'includes/class-system-info.php';
 			return $this->send_response( System_Info::get_all() );
 		}
 
@@ -1089,7 +1088,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function run_performance_scan( \WP_REST_Request $request ): \WP_REST_Response {
-			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
 			$params = $request->get_params();
 			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
 
@@ -1138,8 +1136,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function queue_pagespeed_scan( \WP_REST_Request $request ): \WP_REST_Response {
-			require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
 			$params   = $request->get_params();
 			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
 			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : 'mobile';
@@ -1200,8 +1196,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_pagespeed_results( \WP_REST_Request $request ): \WP_REST_Response {
-			require_once WPPO_PLUGIN_PATH . 'includes/class-pagespeed.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
 			$params   = $request->get_params();
 			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
 			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : 'mobile';
@@ -1243,8 +1237,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_suggestions( \WP_REST_Request $request ): \WP_REST_Response {
-			require_once WPPO_PLUGIN_PATH . 'includes/class-telemetry.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-suggestion-engine.php';
 			$params = $request->get_params();
 			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
 
@@ -1323,9 +1315,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_server_rules( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
-			require_once WPPO_PLUGIN_PATH . 'includes/class-htaccess-handler.php';
-
 			return $this->send_response(
 				array(
 					'server_type' => Server_Rules::get_server_type(),
@@ -1343,7 +1332,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function regenerate_ccss( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
 			$queued = Critical_CSS::regenerate_all();
 
 			return $this->send_response(
@@ -1366,7 +1354,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_ccss_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			require_once WPPO_PLUGIN_PATH . 'includes/class-critical-css.php';
 			$status = Critical_CSS::get_status_all();
 
 			return $this->send_response( $status );
