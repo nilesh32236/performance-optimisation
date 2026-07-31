@@ -1553,8 +1553,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cached_file  = $css_minifier->minify();
 
 			if ( $cached_file ) {
+				static $content_url_base = array();
+				$blog_id                 = get_current_blog_id();
+
+				if ( ! isset( $content_url_base[ $blog_id ] ) ) {
+					$content_url_base[ $blog_id ] = content_url( 'cache/wppo/min/css/' );
+				}
+
 				$file_version = filemtime( Util::get_local_path( $cached_file ) );
-				$new_href     = content_url( 'cache/wppo/min/css/' . basename( $cached_file ) ) . '?ver=' . $file_version;
+				$new_href     = $content_url_base[ $blog_id ] . basename( $cached_file ) . '?ver=' . $file_version;
 				$new_tag      = str_replace( $href, $new_href, $tag );
 				return $new_tag;
 			}
@@ -1601,9 +1608,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cached_file = $js_minifier->minify();
 
 			if ( $cached_file ) {
+				static $content_url_base = array();
+				$blog_id                 = get_current_blog_id();
+
+				if ( ! isset( $content_url_base[ $blog_id ] ) ) {
+					$content_url_base[ $blog_id ] = content_url( 'cache/wppo/min/js/' );
+				}
+
 				$file_version = filemtime( Util::get_local_path( $cached_file ) );
 
-				$new_src = content_url( 'cache/wppo/min/js/' . basename( $cached_file ) ) . '?ver=' . $file_version;
+				$new_src = $content_url_base[ $blog_id ] . basename( $cached_file ) . '?ver=' . $file_version;
 				$new_tag = str_replace( $src, $new_src, $tag );
 				return $new_tag;
 			}
