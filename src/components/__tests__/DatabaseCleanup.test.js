@@ -200,6 +200,9 @@ describe( 'DatabaseCleanup Component', () => {
 	} );
 
 	it( 'shows fallback error when cleanup API throws an exception', async () => {
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
 		apiCall.mockResolvedValueOnce( {
 			success: true,
 			data: { revisions: 10 },
@@ -227,9 +230,13 @@ describe( 'DatabaseCleanup Component', () => {
 				screen.getByText( 'Error executing cleanup.' )
 			).toBeInTheDocument();
 		} );
+		consoleSpy.mockRestore();
 	} );
 
 	it( 'shows empty error message fallback when cleanup API throws an exception without message', async () => {
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
 		apiCall.mockResolvedValueOnce( {
 			success: true,
 			data: { revisions: 10 },
@@ -257,6 +264,7 @@ describe( 'DatabaseCleanup Component', () => {
 				screen.getByText( 'Error executing cleanup.' )
 			).toBeInTheDocument();
 		} );
+		consoleSpy.mockRestore();
 	} );
 
 	it( 'dismisses notification when dismiss button is clicked', async () => {
