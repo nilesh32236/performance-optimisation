@@ -228,17 +228,15 @@ final class Arrays
                 continue;
             }
 
-            // Skip over any parenthesized/bracketed expression (potential keyed list or callback in array format).
-            if (isset($tokens[$doubleArrow]['parenthesis_closer'])) {
+            // Skip over potentially keyed long lists.
+            if ($tokens[$doubleArrow]['code'] === \T_LIST
+                && isset($tokens[$doubleArrow]['parenthesis_closer'])
+            ) {
                 $doubleArrow = $tokens[$doubleArrow]['parenthesis_closer'];
                 continue;
             }
 
-            if (isset($tokens[$doubleArrow]['bracket_closer'])) {
-                $doubleArrow = $tokens[$doubleArrow]['bracket_closer'];
-                continue;
-            }
-
+            // Start of nested long/short array.
             break;
         } while ($doubleArrow < $end);
 

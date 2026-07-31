@@ -280,7 +280,10 @@ describe( 'DatabaseCleanup Component', () => {
 				).toBeInTheDocument();
 			} );
 
-			expect( consoleSpy ).toHaveBeenCalled();
+			expect( consoleSpy ).toHaveBeenCalledWith(
+				'Database cleanup error:',
+				{}
+			);
 		} finally {
 			consoleSpy.mockRestore();
 		}
@@ -377,19 +380,23 @@ describe( 'DatabaseCleanup Component', () => {
 		const consoleSpy = jest
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );
-		apiCall.mockRejectedValueOnce( new Error( 'Fetch Error' ) );
-		render( <DatabaseCleanup /> );
 
-		// Notification doesn't show for counts error but it logs to console, so we can check if data defaults to 0
-		await waitFor( () => {
-			expect( screen.getAllByText( '0' )[ 0 ] ).toBeInTheDocument();
-		} );
+		try {
+			apiCall.mockRejectedValueOnce( new Error( 'Fetch Error' ) );
+			render( <DatabaseCleanup /> );
 
-		expect( consoleSpy ).toHaveBeenCalledWith(
-			'Error fetching database cleanup counts:',
-			expect.any( Error )
-		);
-		consoleSpy.mockRestore();
+			// Notification doesn't show for counts error but it logs to console, so we can check if data defaults to 0
+			await waitFor( () => {
+				expect( screen.getAllByText( '0' )[ 0 ] ).toBeInTheDocument();
+			} );
+
+			expect( consoleSpy ).toHaveBeenCalledWith(
+				'Error fetching database cleanup counts:',
+				expect.any( Error )
+			);
+		} finally {
+			consoleSpy.mockRestore();
+		}
 	} );
 
 	it( 'opens confirm dialog and calls cleanup api successfully', async () => {

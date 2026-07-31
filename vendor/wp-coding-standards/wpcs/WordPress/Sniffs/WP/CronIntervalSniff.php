@@ -291,7 +291,7 @@ final class CronIntervalSniff extends Sniff {
 		for ( $ptr = 0; $ptr < $this->phpcsFile->numTokens; $ptr++ ) {
 			if ( \T_FUNCTION === $this->tokens[ $ptr ]['code'] ) {
 				$foundName = FunctionDeclarations::getName( $this->phpcsFile, $ptr );
-				if ( strcasecmp( $foundName, $functionName ) === 0 ) {
+				if ( $foundName === $functionName ) {
 					$functionPtr = $ptr;
 					break;
 				} elseif ( isset( $this->tokens[ $ptr ]['scope_closer'] ) ) {

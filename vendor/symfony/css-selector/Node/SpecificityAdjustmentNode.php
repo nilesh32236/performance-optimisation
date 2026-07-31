@@ -40,7 +40,7 @@ class SpecificityAdjustmentNode extends AbstractNode
     public function __toString(): string
     {
         $selectorArguments = array_map(
-            static fn ($n) => ltrim((string) $n, '*'),
+            fn ($n) => ltrim((string) $n, '*'),
             $this->arguments,
         );
 
