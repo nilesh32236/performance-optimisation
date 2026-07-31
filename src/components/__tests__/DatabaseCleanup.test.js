@@ -215,24 +215,33 @@ describe( 'DatabaseCleanup Component', () => {
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );
 
-		// API throws an error
-		apiCall.mockRejectedValueOnce( new Error( 'API Exception' ) );
+		try {
+			// API throws an error
+			apiCall.mockRejectedValueOnce( new Error( 'API Exception' ) );
 
-		const cleanButtons = screen.getAllByRole( 'button', {
-			name: /Clean/i,
-		} );
-		fireEvent.click( cleanButtons[ 0 ] );
+			const cleanButtons = screen.getAllByRole( 'button', {
+				name: /Clean/i,
+			} );
+			fireEvent.click( cleanButtons[ 0 ] );
 
-		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
-		fireEvent.click( confirmButton );
+			const confirmButton = screen.getByRole( 'button', {
+				name: 'Delete',
+			} );
+			fireEvent.click( confirmButton );
 
-		await waitFor( () => {
-			expect(
-				screen.getByText( 'Error executing cleanup.' )
-			).toBeInTheDocument();
-		} );
+			await waitFor( () => {
+				expect(
+					screen.getByText( 'Error executing cleanup.' )
+				).toBeInTheDocument();
+			} );
 
-		consoleSpy.mockRestore();
+			expect( consoleSpy ).toHaveBeenCalledWith(
+				'Database cleanup error:',
+				expect.any( Error )
+			);
+		} finally {
+			consoleSpy.mockRestore();
+		}
 	} );
 
 	it( 'shows empty error message fallback when cleanup API throws an exception without message', async () => {
@@ -251,24 +260,30 @@ describe( 'DatabaseCleanup Component', () => {
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );
 
-		// API throws an error
-		apiCall.mockRejectedValueOnce( {} );
+		try {
+			// API throws an error
+			apiCall.mockRejectedValueOnce( {} );
 
-		const cleanButtons = screen.getAllByRole( 'button', {
-			name: /Clean/i,
-		} );
-		fireEvent.click( cleanButtons[ 0 ] );
+			const cleanButtons = screen.getAllByRole( 'button', {
+				name: /Clean/i,
+			} );
+			fireEvent.click( cleanButtons[ 0 ] );
 
-		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
-		fireEvent.click( confirmButton );
+			const confirmButton = screen.getByRole( 'button', {
+				name: 'Delete',
+			} );
+			fireEvent.click( confirmButton );
 
-		await waitFor( () => {
-			expect(
-				screen.getByText( 'Error executing cleanup.' )
-			).toBeInTheDocument();
-		} );
+			await waitFor( () => {
+				expect(
+					screen.getByText( 'Error executing cleanup.' )
+				).toBeInTheDocument();
+			} );
 
-		consoleSpy.mockRestore();
+			expect( consoleSpy ).toHaveBeenCalled();
+		} finally {
+			consoleSpy.mockRestore();
+		}
 	} );
 
 	it( 'dismisses notification when dismiss button is clicked', async () => {
