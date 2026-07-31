@@ -417,7 +417,7 @@ const FileOptimization = ( {
 											) }
 										/>
 										<button
-											className="wppo-button wppo-button--secondary wppo-mt-12"
+											className="wppo-button wppo-button-secondary wppo-mt-12"
 											onClick={ handleRegenerateUsedCSS }
 											type="button"
 											disabled={ isLoading }
