@@ -51,6 +51,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		private static $img_info_persisted = false;
 
 		/**
+		 * Cached client-side media processing state, keyed by blog ID.
+		 *
+		 * Prevents repeated core-option reads on frontend hot paths.
+		 *
+		 * @var array<int, bool>|null
+		 * @since 1.9.0
+		 */
+		private static $client_side_processing_state = null;
+
+		/**
 		 * Option key used for the image info cache salt.
 		 *
 		 * @since 2.6.0
@@ -892,20 +902,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		public function convert_image_to_next_gen_format( $metadata, $attachment_id ) {
 
-			// Skip server-side conversion for uploads when WP 7.1+ client-side
-			// media processing handles it in-browser. Batch conversion of
-			// existing media library items remains unaffected.
-			if ( function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled() ) {
-				// Sub-sizes are generated client-side, but placeholder data is
-				// still extracted server-side from the uploaded original. Only
-				// decode when the configured placeholder type actually consumes
-				// dominant-color/LQIP data, to avoid needless GD work.
-				$placeholder_type = $this->options['image_optimisation']['placeholderType'] ?? 'svg';
-				if ( ! in_array( $placeholder_type, array( 'dominant_color', 'lqip' ), true ) ) {
-					return $metadata;
-				}
-
-				$this->store_placeholder_data_for_upload( (int) $attachment_id );
+			// Skip server-side conversion when WP 7.1+ client-side media
+			// processing handles sub-sizes in-browser, or when WP 6.7+ core
+			// natively generates next-gen formats (get_format() returns 'none').
+			// In both cases placeholder data (dominant color/LQIP) is still
+			// extracted server-side from the uploaded original so frontend
+			// lookups keep working. Batch conversion of existing media library
+			// items remains unaffected.
+			if ( $this->is_client_side_media_processing() || ( self::core_handles_next_gen() && 'none' === $this->format ) ) {
+				$this->maybe_extract_placeholder_for_upload( $metadata, (int) $attachment_id );
 				return $metadata;
 			}
 
@@ -963,20 +968,74 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Whether WP 7.1+ client-side media processing is enabled.
+		 *
+		 * The result is cached per blog ID to avoid re-reading the core option
+		 * on every rendered image (frontend hot path).
+		 *
+		 * @since 1.9.0
+		 *
+		 * @return bool True if client-side media processing is enabled.
+		 */
+		private function is_client_side_media_processing(): bool {
+			$blog_id = get_current_blog_id();
+
+			if ( ! is_array( self::$client_side_processing_state ) || ! isset( self::$client_side_processing_state[ $blog_id ] ) ) {
+				self::$client_side_processing_state[ $blog_id ] = function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled();
+			}
+
+			return self::$client_side_processing_state[ $blog_id ];
+		}
+
+		/**
+		 * Extract placeholder data for a new upload when server-side conversion
+		 * is skipped (WP 7.1+ client-side processing, or WP 6.7+ core-native
+		 * next-gen generation).
+		 *
+		 * Gated on the configured placeholder type actually consuming
+		 * dominant-color/LQIP data, and on the image not being excluded from
+		 * conversion, to avoid needless file reads and GD decodes.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param array $metadata      The attachment metadata.
+		 * @param int   $attachment_id The attachment ID.
+		 * @return void
+		 */
+		private function maybe_extract_placeholder_for_upload( array $metadata, int $attachment_id ): void {
+			$placeholder_type = $this->options['image_optimisation']['placeholderType'] ?? 'svg';
+			if ( ! in_array( $placeholder_type, array( 'dominant_color', 'lqip' ), true ) ) {
+				return;
+			}
+
+			$img_url = wp_get_attachment_url( $attachment_id );
+			if ( ! empty( $this->exclude_imgs ) ) {
+				foreach ( $this->exclude_imgs as $exclude_img ) {
+					if ( false !== strpos( $img_url, $exclude_img ) ) {
+						return;
+					}
+				}
+			}
+
+			$this->store_placeholder_data_for_upload( $metadata, $attachment_id );
+		}
+
+		/**
 		 * Store dominant-color and LQIP placeholder data for a new upload when
-		 * WP 7.1+ client-side media processing generates sub-sizes in-browser
-		 * and server-side conversion is therefore skipped.
+		 * server-side conversion is skipped (WP 7.1+ client-side media
+		 * processing, or WP 6.7+ core-native next-gen generation).
 		 *
 		 * Uses a single lightweight GD decode of the uploaded original, mirroring
 		 * the placeholder extraction done on the server-side conversion path.
 		 * Uploads GD cannot decode (e.g. HEIC/HEIF) are skipped silently.
 		 *
-		 * @since 4.0.0
+		 * @since 1.9.0
 		 *
-		 * @param int $attachment_id The attachment ID.
+		 * @param array $metadata      The attachment metadata.
+		 * @param int   $attachment_id The attachment ID.
 		 * @return void
 		 */
-		private function store_placeholder_data_for_upload( int $attachment_id ): void {
+		private function store_placeholder_data_for_upload( array $metadata, int $attachment_id ): void {
 			$file = get_attached_file( $attachment_id );
 
 			if ( ! $file || ! file_exists( $file ) || ! is_readable( $file ) || ! function_exists( 'imagecreatefromstring' ) ) {
@@ -1015,8 +1074,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return;
 			}
 
-			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-			$image = @imagecreatefromstring( file_get_contents( $file ) );
+			// Guard against a TOCTOU race where the file disappears between the
+			// checks above and the read; a missing file yields a false contents
+			// value that imagecreatefromstring() rejects with a TypeError.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
+			$contents = @file_get_contents( $file );
+			if ( false === $contents ) {
+				return;
+			}
+
+			try {
+				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				$image = @imagecreatefromstring( $contents );
+			} catch ( \Throwable $e ) {
+				return;
+			}
 
 			if ( ! $image instanceof \GdImage ) {
 				return;
@@ -1025,7 +1097,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
 			$dominant_color = $this->extract_dominant_color( $image );
 			$lqip           = $this->generate_lqip( $image );
+
 			$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+
+			// Frontend placeholder lookups key on the resolved path of the
+			// actually-rendered img URL, which is usually a sub-size. Store the
+			// same values under every registered sub-size rel_path (sub-size
+			// files live alongside the original in the uploads dir) so renders
+			// at any size hit the cache, mirroring the server-side per-size
+			// coverage from convert_image().
+			if ( ! empty( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
+				$dir = dirname( $file );
+				foreach ( $metadata['sizes'] as $size_data ) {
+					if ( ! empty( $size_data['file'] ) && file_exists( $dir . '/' . $size_data['file'] ) ) {
+						$size_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $dir . '/' . $size_data['file'] ) );
+						$this->store_placeholder_data( $size_rel, $dominant_color, $lqip );
+					}
+				}
+			}
 
 			// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- imagedestroy() is still the correct way to free GD resources in PHP 8.x
 			imagedestroy( $image );
@@ -1043,11 +1132,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return $image;
 			}
 
-			// Under WP 7.1+ client-side media processing, uploads are intentionally
-			// never queued for server-side conversion — don't re-queue missing
-			// conversions on every frontend view.
-			$client_side_processing = function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled();
-
 			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
 
 			// Check if the browser supports WebP.
@@ -1063,7 +1147,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					if ( file_exists( $avif_path ) ) {
 						$image[0] = $this->get_img_url( $image[0], 'avif' );
 						return $image;
-					} elseif ( ! $client_side_processing ) {
+					} elseif ( ! $this->should_suppress_re_queueing() ) {
 						self::add_img_into_queue( $img_path, 'avif' );
 					}
 				}
@@ -1076,13 +1160,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					if ( file_exists( $webp_path ) ) {
 						$image[0] = $this->get_img_url( $image[0] );
 						return $image;
-					} elseif ( ! $client_side_processing ) {
+					} elseif ( ! $this->should_suppress_re_queueing() ) {
 						self::add_img_into_queue( $img_path );
 					}
 				}
 			}
 
 			return $image;
+		}
+
+		/**
+		 * Whether re-queueing of missing conversions should be suppressed on the
+		 * frontend hot path.
+		 *
+		 * Under WP 7.1+ client-side media processing, uploads are intentionally
+		 * never queued for server-side conversion, so a missing converted file is
+		 * not a gap — it would just pollute the pending list and trigger duplicate
+		 * hourly-cron work on every view. The suppression is additionally gated on
+		 * core handling both next-gen formats natively: when core cannot produce
+		 * one of the formats (e.g. AVIF via GD), a browser lacking wasm-vips
+		 * support silently falls back to server-side processing and the plugin
+		 * must still queue conversions or AVIF delivery is stranded.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @return bool True when re-queueing should be suppressed.
+		 */
+		private function should_suppress_re_queueing(): bool {
+			return $this->is_client_side_media_processing() && self::core_handles_both_next_gen();
 		}
 
 		/**
