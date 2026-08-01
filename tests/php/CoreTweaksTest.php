@@ -21,6 +21,7 @@ class CoreTweaksTest extends \PHPUnit\Framework\TestCase {
 	 */
 	protected function setUp(): void {
 		parent::setUp();
+		\Brain\Monkey\setUp();
 		Functions\when( 'apply_filters' )->returnArg( 2 );
 	}
 
@@ -35,6 +36,10 @@ class CoreTweaksTest extends \PHPUnit\Framework\TestCase {
 
 		$result = $core_tweaks->disable_emojis_remove_dns_prefetch( 'string', 'dns-prefetch' );
 		$this->assertSame( 'string', $result );
+
+		$object = new stdClass();
+		$result = $core_tweaks->disable_emojis_remove_dns_prefetch( $object, 'dns-prefetch' );
+		$this->assertSame( $object, $result );
 	}
 
 	/**

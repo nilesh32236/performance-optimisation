@@ -91,9 +91,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Remove emoji CDN hostname from DNS prefetching hints.
 		 *
-		 * @param array  $urls          URLs to print for resource hints.
+		 * @param mixed  $urls          URLs to print for resource hints.
 		 * @param string $relation_type The relation type the URLs are printed for.
-		 * @return array Difference betwen the two arrays.
+		 * @return mixed Difference between the two arrays, or the original value when not an array.
 		 */
 		public function disable_emojis_remove_dns_prefetch( $urls, $relation_type ) {
 			if ( 'dns-prefetch' === $relation_type && is_array( $urls ) ) {
