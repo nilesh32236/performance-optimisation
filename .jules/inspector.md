@@ -31,3 +31,7 @@
 **Bug/Gap:** Tests triggering expected API failures were writing ugly `console.error` logs to the test runner output, confusing developers.
 **Root Cause:** The `DatabaseCleanup` component logs caught errors when the API fails using `console.error()`, which Jest mirrors directly to the CLI unless mocked.
 **Test Added:** Mocked `console.error` locally using `jest.spyOn(console, 'error').mockImplementation(() => {});` specifically for the exact test cases where errors are simulated, and correctly restored the mock via `consoleSpy.mockRestore();`.
+## 2026-08-01 - Test Timeout Issue with Async Polling Timers
+**Bug/Gap:** Tests validating recursive async polling behavior (like checking `getPagespeedResults` periodically using `setTimeout`) would either hang or fail to match expected DOM changes when using `jest.runAllTimers()`.
+**Root Cause:** `jest.runAllTimers()` advances all timers but does not wait for async promises to resolve between timer ticks. Since the polling logic awaits `getPagespeedResults` before queuing the next `setTimeout`, advancing all timers synchronously misses the intermediate Promise resolutions and the subsequent timers are never scheduled.
+**Test Added:** Fixed by swapping `jest.runAllTimers()` with controlled `jest.advanceTimersByTime(interval)` enclosed in `act()`, and appending empty `await act( async () => {} )` steps to force Jest to flush microtasks (resolved promises) between time advancements.

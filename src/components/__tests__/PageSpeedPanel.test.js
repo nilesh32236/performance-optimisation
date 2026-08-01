@@ -277,18 +277,146 @@ describe( 'PageSpeedPanel Component', () => {
 		// response and schedules a 2nd poll), flush microtasks so the
 		// async continuation runs, then fire the 2nd poll (gets the
 		// failure response and calls setError).
+		// Let the effect execute
 		await act( async () => {
 			jest.runAllTimers();
 		} );
 		await act( async () => {} );
+
+		// Run a second time to resolve polling promise
 		await act( async () => {
 			jest.runAllTimers();
+		} );
+		await act( async () => {} );
+		// 1st timer tick calls poll() which gets status 'not_ready' (if mocked) or the result.
+		// In this test, we mocked the 1st getPagespeedResults to return the actual mockResult immediately.
+		// However, handleScan polls recursively.
+		// Since we mocked getPagespeedResults to resolve immediately, the first timer
+		// tick will process the mockResult. However, getPagespeedResults is called inside the poll async function.
+		// We need to resolve all promises before running timers.
+		await act( async () => {
+			jest.advanceTimersByTime( 5000 );
 		} );
 		await act( async () => {} );
 
 		await waitFor( () => {
 			expect( screen.getByText( 'Scan job failed' ) ).toBeInTheDocument();
 		} );
+	} );
+
+	it( 'displays error when polling throws an exception', async () => {
+		queuePagespeedScan.mockResolvedValueOnce( {
+			success: true,
+			data: { job_id: 123 },
+		} );
+
+		render( <PageSpeedPanel url={ defaultUrl } /> );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run PageSpeed Scan/i } )
+		);
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /PageSpeed scan is running/i )
+			).toBeInTheDocument();
+		} );
+
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		getPagespeedResults.mockRejectedValueOnce( new Error( 'Network issue' ) );
+
+		await act( async () => {
+			jest.runAllTimers();
+		} );
+		await act( async () => {} );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'PageSpeed scan failed.' )
+			).toBeInTheDocument();
+		} );
+
+		consoleSpy.mockRestore();
+	} );
+
+	it( 'displays scan results and calls onSuggestionsReady on success', async () => {
+		queuePagespeedScan.mockResolvedValueOnce( {
+			success: true,
+			data: { job_id: 123 },
+		} );
+
+		const mockSuggestions = [ { id: 's1', message: 'Optimize images' } ];
+		const mockResult = {
+			scores: {
+				performance: 95,
+				accessibility: 60,
+				best_practices: 30,
+				seo: null,
+			},
+			vitals: {
+				fcp: { display_value: '1.2 s', score: 0.95 },
+				lcp: { display_value: '2.8 s', score: 0.6 },
+				tbt: { display_value: '600 ms', score: 0.2 },
+				cls: { display_value: '0.1', score: null },
+			},
+			strategy: 'mobile',
+			fetched_at: '2024-08-01 12:00:00',
+			suggestions: mockSuggestions,
+		};
+
+		getPagespeedResults.mockResolvedValueOnce( {
+			success: true,
+			data: mockResult,
+		} );
+
+		const mockOnSuggestionsReady = jest.fn();
+
+		render(
+			<PageSpeedPanel
+				url={ defaultUrl }
+				onSuggestionsReady={ mockOnSuggestionsReady }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run PageSpeed Scan/i } )
+		);
+
+		// Let the queue promise resolve, triggering pollForResults
+		await act( async () => {} );
+
+		// Advance time so pollRef.current fires (5000ms delay)
+		await act( async () => {
+			jest.advanceTimersByTime( 5000 );
+		} );
+
+		// Let the poll promise resolve
+		await act( async () => {} );
+
+		await waitFor( () => {
+			expect( screen.getByText( '95' ) ).toBeInTheDocument();
+			expect( screen.getByText( '60' ) ).toBeInTheDocument();
+			expect( screen.getByText( '30' ) ).toBeInTheDocument();
+			expect( screen.getByText( 'Performance' ) ).toBeInTheDocument();
+
+			expect( screen.getByText( '1.2 s' ) ).toBeInTheDocument();
+			expect( screen.getByText( '2.8 s' ) ).toBeInTheDocument();
+			expect( screen.getByText( '600 ms' ) ).toBeInTheDocument();
+			expect( screen.getByText( 'First Contentful Paint' ) ).toBeInTheDocument();
+
+			expect( mockOnSuggestionsReady ).toHaveBeenCalledWith( mockSuggestions );
+		} );
+	} );
+
+	it( 'does not start scan if url is empty', async () => {
+		render( <PageSpeedPanel url="" /> );
+		const scanBtn = screen.getByRole( 'button', {
+			name: /Run PageSpeed Scan/i,
+		} );
+		fireEvent.click( scanBtn );
+
+		expect( queuePagespeedScan ).not.toHaveBeenCalled();
 	} );
 
 	it( 'cleans up on unmount', () => {
