@@ -415,7 +415,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_filter( 'style_loader_tag', array( $this->google_fonts, 'process_style_tag' ), 9, 3 );
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+			if ( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) ) {
+				// WP 6.9+: classic themes load separate core block assets on demand by default.
+				// The toggle becomes an opt-out — when disabled, fall back to combined loading.
+				if ( empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+					add_filter( 'should_load_separate_core_block_assets', '__return_false', 10 );
+				}
+			} elseif ( ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+				// Pre-6.9 cores: opt-in to loading block assets on demand.
 				add_filter( 'should_load_block_assets_on_demand', '__return_true' );
 			}
 
