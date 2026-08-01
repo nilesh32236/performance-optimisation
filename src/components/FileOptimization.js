@@ -62,6 +62,9 @@ const FileOptimization = ( {
 		disableEmbeds: false,
 		disableDashicons: false,
 		disableXMLRPC: false,
+		// Mirrors the pre-6.9 PHP default. PHP always emits the key on WP 6.9+ (where
+		// core loads block assets on demand by default), so this fallback is only used
+		// on older cores and never contradicts the backend default.
 		blockAssetsOnDemand: false,
 		heartbeatControl: 'default',
 		minifyInlineCSS: false,
@@ -1297,14 +1300,22 @@ const FileOptimization = ( {
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
-									label={ __(
-										'Load Block Assets On Demand',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Only load block CSS and JavaScript when blocks are actually used on the page. On WordPress 6.9+, classic themes load block assets on demand by default, so this toggle acts as an opt-out — disable it to force the combined wp-block-library stylesheet. Requires WordPress 6.8 or later.',
-										'performance-optimisation'
-									) }
+									label={
+										wppoSettings?.translations
+											?.blockAssetsOnDemand ||
+										__(
+											'Load Block Assets On Demand',
+											'performance-optimisation'
+										)
+									}
+									description={
+										wppoSettings?.translations
+											?.blockAssetsOnDemandDesc ||
+										__(
+											'Only load block CSS and JavaScript when blocks are actually used on the page. On WordPress 6.9+, classic themes load block assets on demand by default, so this toggle acts as an opt-out — disable it to force the combined wp-block-library stylesheet. Requires WordPress 6.8 or later.',
+											'performance-optimisation'
+										)
+									}
 									name="blockAssetsOnDemand"
 									checked={ settings.blockAssetsOnDemand }
 									onChange={ handleChange( setSettings ) }
