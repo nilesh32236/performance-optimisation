@@ -328,6 +328,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private function setup_hooks(): void {
 			add_action( 'admin_menu', array( $this, 'init_menu' ) );
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
+			add_action( 'admin_init', array( $this, 'maybe_run_version_upgrade' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
@@ -540,6 +541,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$new_notices      = array_unique( array_merge( $existing_notices, (array) $notices ) );
 				set_transient( Util::transient_key( 'wppo_activation_notices' ), $new_notices, 30 );
 			}
+		}
+
+		/**
+		 * Run one-time upgrade routines when the plugin version changes.
+		 *
+		 * Regenerates the advanced-cache.php drop-in so it honours the
+		 * DONOTCACHEPAGE no-cache marker, then clears the full cache once to
+		 * remove any pre-existing stale pages the old drop-in would keep serving.
+		 *
+		 * @return void
+		 * @since 1.9.0
+		 */
+		public function maybe_run_version_upgrade(): void {
+			$installed_version = get_option( 'wppo_version', '' );
+
+			if ( version_compare( (string) $installed_version, WPPO_VERSION, '>=' ) ) {
+				return;
+			}
+
+			Advanced_Cache_Handler::create();
+
+			Cache::clear_cache();
+
+			update_option( 'wppo_version', WPPO_VERSION, false );
 		}
 
 		/**

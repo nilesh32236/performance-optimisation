@@ -128,6 +128,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private string $current_role_hash = '';
 
 		/**
+		 * Whether the DONOTCACHEPAGE marker has been written for this request.
+		 *
+		 * Ensures the marker write and stale-file purge happen at most once per request.
+		 *
+		 * @var bool
+		 * @since 1.9.0
+		 */
+		private bool $no_cache_marker_written = false;
+
+		/**
 		 * Constructor to initialize cache settings and configurations.
 		 *
 		 * @param array $options Plugin options (optional). When empty, loaded from DB.
@@ -618,6 +628,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 
 		/**
+		 * Write the DONOTCACHEPAGE marker and purge stale static files for the current URL.
+		 *
+		 * Runs at most once per request. The marker is read by the advanced-cache.php
+		 * drop-in (which boots before WordPress) so pages opted out via the
+		 * DONOTCACHEPAGE constant are never served from the static cache.
+		 *
+		 * @return void
+		 * @since 1.9.0
+		 */
+		private function maybe_mark_page_not_cacheable(): void {
+			if ( $this->no_cache_marker_written ) {
+				return;
+			}
+			$this->no_cache_marker_written = true;
+
+			$html_file_path = $this->get_cache_file_path( 'html' );
+			$marker_path    = trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache';
+
+			$fs = $this->get_filesystem();
+			if ( ! $fs ) {
+				return;
+			}
+
+			$fs->put_contents( $marker_path, (string) time(), FS_CHMOD_FILE );
+
+			// Purge any pre-existing static files for this URL so the marker takes effect immediately.
+			$this->delete_cache_files( $html_file_path );
+			$this->delete_role_variant_files( dirname( $html_file_path ) );
+		}
+
+		/**
 		 * Check if the page is not cacheable.
 		 *
 		 * @return bool
@@ -626,6 +667,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function is_not_cacheable(): bool {
 			if ( empty( $this->domain ) ) {
+				return true;
+			}
+
+			// Core, WooCommerce, and third-party plugins signal dynamic pages via DONOTCACHEPAGE.
+			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+				$this->maybe_mark_page_not_cacheable();
 				return true;
 			}
 
@@ -778,6 +825,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function maybe_store_cache() {
+			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+				$this->maybe_mark_page_not_cacheable();
+				return false;
+			}
+
 			if ( empty( $this->domain ) || strpos( $this->url_path, '..' ) !== false ) {
 				// Prevent empty domain caching which could occur after traversal sanitation.
 				return false;
@@ -844,6 +896,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->delete_role_variant_files( dirname( $html_file_path ) );
 			$this->delete_cache_files( $css_file_path );
 			$this->delete_cache_files( $used_css_path );
+			$this->delete_cache_files( trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache' );
 
 			// Smart Purging: Always clear the home page and blog archive.
 			$home_path = wp_make_link_relative( home_url( '/' ) );
@@ -1016,6 +1069,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$res_html = $instance->delete_cache_files( $html_file_path );
 				$instance->delete_role_variant_files( dirname( $html_file_path ) );
+				$instance->delete_cache_files( trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache' );
 				$res_css  = $instance->delete_cache_files( $css_file_path );
 				$res_used = $instance->delete_used_css_file( $used_css_path );
 				$result   = $res_html && $res_css && $res_used;

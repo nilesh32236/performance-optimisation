@@ -152,6 +152,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$file_path      = rtrim( $file_path, \'/\' );' . PHP_EOL .
 			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL . PHP_EOL .
 
+			'$no_cache_marker = dirname( $file_path ) . \'/.wppo-no-cache\';' . PHP_EOL .
+			'if ( file_exists( $no_cache_marker ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
+
 			'function is_user_logged_in_without_wp( $site_url ) {' . PHP_EOL .
 			'	$logged_in_cookie = \'wordpress_logged_in_\' . \'' . $cookie_hash . '\';' . PHP_EOL .
 			'	$cookie_prefix = \'wp-wpml_\';' . PHP_EOL .
