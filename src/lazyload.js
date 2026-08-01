@@ -26,6 +26,29 @@ const NATIVE_LAZY_SUPPORTED = 'loading' in HTMLImageElement.prototype;
 const USE_NATIVE_LAZY = useNativeLazy && NATIVE_LAZY_SUPPORTED;
 
 /**
+ * Whether the browser supports sizes="auto" (Enhanced Responsive Images).
+ *
+ * Browsers that support the feature apply size containment to [sizes="auto"]
+ * images via their UA stylesheet, so a probe of the computed `contain` value
+ * distinguishes supporting engines (Chromium 126+/Firefox 150+) from those
+ * that ignore the `auto` keyword (e.g. Safari). Non-supporting browsers report
+ * `contain: none`, so a bare `sizes="auto"` is never emitted for them.
+ * @type {boolean}
+ */
+const AUTO_SIZES_SUPPORTED = ( () => {
+	try {
+		const probe = document.createElement( 'img' );
+		probe.setAttribute( 'sizes', 'auto' );
+		probe.style.display = 'none';
+		document.documentElement.appendChild( probe );
+		const supported = 'size' === window.getComputedStyle( probe ).contain;
+		probe.remove();
+		return supported;
+	} catch ( _e ) {} // eslint-disable-line no-unused-vars
+	return false;
+} )();
+
+/**
  * Selector for all lazy-loadable elements.
  * In full native mode, only videos need JS-based lazy loading.
  * @type {string}
@@ -414,6 +437,33 @@ const makePlaceholderLoadHandler = ( el ) => {
 };
 
 /**
+ * Restore the `sizes` value stashed in `data-sizes`.
+ *
+ * Called before `src`/`srcset` are restored so the correct source-size hint
+ * is active when the browser picks a candidate. Values like
+ * `auto, (max-width: 650px) 100vw, 650px` pass through unchanged in every
+ * browser (non-supporting engines simply ignore the `auto` keyword). A bare
+ * `auto` value is only applied in browsers that support auto-sizes; elsewhere
+ * the attribute is dropped so the default sizing behaviour applies.
+ *
+ * @since 1.8.0
+ * @param {HTMLElement} el The element to restore.
+ * @return {void}
+ */
+const restoreSizes = ( el ) => {
+	if ( ! el.hasAttribute( 'data-sizes' ) ) {
+		return;
+	}
+	const sizes = el.getAttribute( 'data-sizes' );
+	if ( sizes === 'auto' && ! AUTO_SIZES_SUPPORTED ) {
+		el.removeAttribute( 'data-sizes' );
+		return;
+	}
+	el.sizes = sizes;
+	el.removeAttribute( 'data-sizes' );
+};
+
+/**
  * Check if all lazy-loadable elements have been processed, and clean up observers if so.
  */
 const checkCleanup = () => {
@@ -520,11 +570,7 @@ const loadImages = () => {
 									const sources =
 										parent.querySelectorAll( 'source' );
 									sources.forEach( ( s ) => {
-										if ( s.hasAttribute( 'data-sizes' ) ) {
-											s.sizes =
-												s.getAttribute( 'data-sizes' );
-											s.removeAttribute( 'data-sizes' );
-										}
+										restoreSizes( s );
 										if ( s.hasAttribute( 'data-srcset' ) ) {
 											s.srcset =
 												s.getAttribute( 'data-srcset' );
@@ -541,10 +587,8 @@ const loadImages = () => {
 									makePlaceholderLoadHandler( el );
 								el.addEventListener( 'load', onImgLoad );
 
-								if ( el.hasAttribute( 'data-sizes' ) ) {
-									el.sizes = el.getAttribute( 'data-sizes' );
-									el.removeAttribute( 'data-sizes' );
-								}
+								// Restore sizes before src/srcset so the hint is active when the browser selects a candidate.
+								restoreSizes( el );
 
 								if ( el.hasAttribute( 'data-src' ) ) {
 									el.src = el.getAttribute( 'data-src' );
@@ -710,10 +754,9 @@ const loadImages = () => {
 								makePlaceholderLoadHandler( el );
 							el.addEventListener( 'load', onImgLoadFallback );
 
-							if ( el.hasAttribute( 'data-sizes' ) ) {
-								el.sizes = el.getAttribute( 'data-sizes' );
-								el.removeAttribute( 'data-sizes' );
-							}
+							// Restore sizes before src/srcset so the hint is active when the browser selects a candidate.
+							restoreSizes( el );
+
 							if ( el.hasAttribute( 'data-src' ) ) {
 								el.src = el.getAttribute( 'data-src' );
 								el.removeAttribute( 'data-src' );
