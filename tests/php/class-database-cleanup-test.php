@@ -50,8 +50,7 @@ class DatabaseCleanupTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'wp_unslash' )->returnArg();
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$wpdb->get_col = function ( $query ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		$wpdb->get_col = function ( $query ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return array();
 		};
 
