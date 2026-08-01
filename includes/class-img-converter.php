@@ -897,7 +897,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// existing media library items remains unaffected.
 			if ( function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled() ) {
 				// Sub-sizes are generated client-side, but placeholder data is
-				// still extracted server-side from the uploaded original.
+				// still extracted server-side from the uploaded original. Only
+				// decode when the configured placeholder type actually consumes
+				// dominant-color/LQIP data, to avoid needless GD work.
+				$placeholder_type = $this->options['image_optimisation']['placeholderType'] ?? 'svg';
+				if ( ! in_array( $placeholder_type, array( 'dominant_color', 'lqip' ), true ) ) {
+					return $metadata;
+				}
+
 				$this->store_placeholder_data_for_upload( (int) $attachment_id );
 				return $metadata;
 			}
@@ -983,6 +990,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			}
 
 			if ( $this->is_animated_webp( $file ) ) {
+				return;
+			}
+
+			// Security Fix: Prevent Dimension memory crash limits. Same guard as
+			// convert_image(): getimagesize() parses headers without decoding
+			// pixel data, so a small but highly-compressed file cannot turn into
+			// a multi-gigabyte bitmap during the upload request.
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			$image_info = @getimagesize( $file );
+
+			if ( empty( $image_info ) ) {
+				return;
+			}
+
+			$max_dims = apply_filters(
+				'wppo_max_dimensions',
+				array(
+					'width'  => 5000,
+					'height' => 5000,
+				)
+			);
+			if ( $image_info[0] > $max_dims['width'] || $image_info[1] > $max_dims['height'] ) {
 				return;
 			}
 

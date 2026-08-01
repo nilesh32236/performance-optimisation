@@ -138,7 +138,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// Skip the conversion hook when core handles all formats (get_format() returns 'none').
 				$should_hook_conversion = 'none' !== $img_converter->get_format();
 
-				if ( $should_hook_conversion ) {
+				// Under WP 7.1+ client-side media processing, still register the metadata
+				// filter so placeholder data is extracted for new uploads even when
+				// server-side conversion is skipped (get_format() returns 'none').
+				$is_client_side_processing = function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled();
+
+				if ( $should_hook_conversion || $is_client_side_processing ) {
 					add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
 				}
 				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ) );
