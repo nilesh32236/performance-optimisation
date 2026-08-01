@@ -202,16 +202,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$html          = $content_array[0];
 			$scripts       = $content_array[1];
 
-			if ( isset( $this->options['file_optimisation']['minifyInlineCSS'] ) && (bool) $this->options['file_optimisation']['minifyInlineCSS'] ) {
+			if ( ! empty( $this->options['file_optimisation']['minifyInlineCSS'] ) ) {
 				$html = $this->minify_inline_css( $html );
 			}
 
-			if ( ( isset( $this->options['file_optimisation']['minifyInlineJS'] ) && (bool) $this->options['file_optimisation']['minifyInlineJS'] ) ||
-			( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) ) {
+			if ( ! empty( $this->options['file_optimisation']['minifyInlineJS'] ) || ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 				$html = $this->minify_inline_js( $html );
 			}
 
-			if ( isset( $this->options['file_optimisation']['minifyHTML'] ) && (bool) $this->options['file_optimisation']['minifyHTML'] ) {
+			if ( ! empty( $this->options['file_optimisation']['minifyHTML'] ) ) {
 				try {
 					$html = $this->html_min->minify( $html );
 				} catch ( \Exception $e ) {
@@ -387,7 +386,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				return '<script' . $attributes . '>' . $content . '</script>';
 			}
 
-			if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
+			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 
 				$should_exclude = false;
 				if ( ! empty( $this->exclude_delay_js ) ) {
@@ -429,7 +428,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				}
 			}
 
-			if ( isset( $this->options['file_optimisation']['minifyInlineJS'] ) && (bool) $this->options['file_optimisation']['minifyInlineJS'] ) {
+			if ( ! empty( $this->options['file_optimisation']['minifyInlineJS'] ) ) {
 				try {
 					$js_minifier = new JSMinifier( $content );
 					return '<script' . $attributes . '>' . $js_minifier->minify() . '</script>';

@@ -132,7 +132,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @since 1.0.0
 		 */
 		private function setup_hooks() {
-			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
+			if ( ! empty( $this->options['image_optimisation']['convertImg'] ) ) {
 				$img_converter = $this->get_img_converter();
 
 				// Skip the conversion hook when core handles all formats (get_format() returns 'none').
@@ -321,7 +321,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string Modified HTML content buffer.
 		 */
 		public function maybe_serve_next_gen_images( $buffer ) {
-			if ( isset( $this->options['image_optimisation']['convertImg'] ) && (bool) $this->options['image_optimisation']['convertImg'] ) {
+			if ( ! empty( $this->options['image_optimisation']['convertImg'] ) ) {
 				$conversion_format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
 
 				$exclude_imgs = $this->exclude_convert_imgs;
@@ -1747,7 +1747,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$buffer
 			);
 
-			if ( isset( $image_optimisation['lazyLoadImages'] ) && (bool) $image_optimisation['lazyLoadImages'] ) {
+			if ( ! empty( $image_optimisation['lazyLoadImages'] ) ) {
 				$exclude_imgs = $this->exclude_lazy_imgs;
 
 				$preload_img_urls = $this->get_preload_images_urls();
