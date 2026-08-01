@@ -628,11 +628,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 
 		/**
-		 * Write the DONOTCACHEPAGE marker and purge stale static files for the current URL.
+		 * Record the DONOTCACHEPAGE decision on disk and purge stale static files for the current URL.
 		 *
-		 * Runs at most once per request. The marker is read by the advanced-cache.php
-		 * drop-in (which boots before WordPress) so pages opted out via the
-		 * DONOTCACHEPAGE constant are never served from the static cache.
+		 * Writes a `.wppo-no-cache` marker file next to the cached HTML so the
+		 * advanced-cache.php drop-in (which boots before WordPress) can skip serving
+		 * a stale static copy. Runs at most once per request. Best-effort: this only
+		 * engages for pages that are actually rendered by WordPress at least once
+		 * after the constant is set — a page that is already cached and never re-
+		 * rendered stays stale until a cache clear, post invalidation, or the
+		 * one-time version-upgrade purge removes it.
 		 *
 		 * @return void
 		 * @since 1.9.0
@@ -651,7 +655,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			$fs->put_contents( $marker_path, (string) time(), FS_CHMOD_FILE );
+			// Marker already on disk — write and purge already ran previously.
+			if ( $fs->exists( $marker_path ) ) {
+				return;
+			}
+
+			if ( ! $this->prepare_cache_dir() ) {
+				return;
+			}
+
+			$written = $fs->put_contents( $marker_path, (string) time(), FS_CHMOD_FILE );
+			if ( ! $written ) {
+				return;
+			}
 
 			// Purge any pre-existing static files for this URL so the marker takes effect immediately.
 			$this->delete_cache_files( $html_file_path );
@@ -660,6 +676,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 		/**
 		 * Check if the page is not cacheable.
+		 *
+		 * Note: for pages opted out via the DONOTCACHEPAGE constant this also records
+		 * the decision on disk (see maybe_mark_page_not_cacheable()). This coupling is
+		 * intentional: every render of an opted-out page runs through this predicate
+		 * before any buffer/storage path can react, so it is the only reliable place
+		 * to write the marker the drop-in checks. Such pages also skip output-buffer
+		 * optimisations, matching how every other non-cacheable page behaves.
 		 *
 		 * @return bool
 		 *
@@ -776,7 +799,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function save_cache_files( $buffer, $file_path, $type = 'html' ): void {
 
-			if ( ! $this->maybe_store_cache() && 'html' === $type ) {
+			// Only evaluate the storage decision for HTML writes so the DONOTCACHEPAGE
+			// side effects never fire for CSS/JS file saves.
+			if ( 'html' === $type && ! $this->maybe_store_cache() ) {
 				return;
 			}
 
@@ -798,6 +823,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( false !== $gzip_output ) {
 					$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
 				}
+			}
+
+			// A cacheable page was just written: clear any stale DONOTCACHEPAGE marker
+			// so static caching resumes automatically once a plugin stops setting the
+			// constant (self-healing). A later request that sets the constant again
+			// re-creates the marker and purges these files.
+			if ( 'html' === $type ) {
+				$this->delete_cache_files( trailingslashit( dirname( $file_path ) ) . '.wppo-no-cache' );
 			}
 		}
 
@@ -896,19 +929,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->delete_role_variant_files( dirname( $html_file_path ) );
 			$this->delete_cache_files( $css_file_path );
 			$this->delete_cache_files( $used_css_path );
-			$this->delete_cache_files( trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache' );
+			$this->delete_no_cache_marker( $html_file_path );
 
 			// Smart Purging: Always clear the home page and blog archive.
 			$home_path = wp_make_link_relative( home_url( '/' ) );
-			$this->delete_cache_files( $this->get_file_path( $home_path, 'html' ) );
-			$this->delete_role_variant_files( dirname( $this->get_file_path( $home_path, 'html' ) ) );
+			$home_html = $this->get_file_path( $home_path, 'html' );
+			$this->delete_cache_files( $home_html );
+			$this->delete_role_variant_files( dirname( $home_html ) );
+			$this->delete_no_cache_marker( $home_html );
 
 			if ( 'page' === get_option( 'show_on_front' ) ) {
 				$posts_page_id = get_option( 'page_for_posts' );
 				if ( $posts_page_id ) {
 					$posts_path = wp_make_link_relative( get_permalink( $posts_page_id ) );
-					$this->delete_cache_files( $this->get_file_path( $posts_path, 'html' ) );
-					$this->delete_role_variant_files( dirname( $this->get_file_path( $posts_path, 'html' ) ) );
+					$posts_html = $this->get_file_path( $posts_path, 'html' );
+					$this->delete_cache_files( $posts_html );
+					$this->delete_role_variant_files( dirname( $posts_html ) );
+					$this->delete_no_cache_marker( $posts_html );
 				}
 			}
 
@@ -919,8 +956,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$archive_link = get_post_type_archive_link( $post_type );
 				if ( ! empty( $archive_link ) && ! is_wp_error( $archive_link ) ) {
 					$archive_path = wp_make_link_relative( $archive_link );
-					$this->delete_cache_files( $this->get_file_path( $archive_path, 'html' ) );
-					$this->delete_role_variant_files( dirname( $this->get_file_path( $archive_path, 'html' ) ) );
+					$archive_html = $this->get_file_path( $archive_path, 'html' );
+					$this->delete_cache_files( $archive_html );
+					$this->delete_role_variant_files( dirname( $archive_html ) );
+					$this->delete_no_cache_marker( $archive_html );
 				}
 
 				$taxonomy_names = get_object_taxonomies( $post_type, 'names' );
@@ -940,8 +979,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 								$term_link = get_term_link( $term );
 								if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
 									$term_path = wp_make_link_relative( $term_link );
-									$this->delete_cache_files( $this->get_file_path( $term_path, 'html' ) );
-									$this->delete_role_variant_files( dirname( $this->get_file_path( $term_path, 'html' ) ) );
+									$term_html = $this->get_file_path( $term_path, 'html' );
+									$this->delete_cache_files( $term_html );
+									$this->delete_role_variant_files( dirname( $term_html ) );
+									$this->delete_no_cache_marker( $term_html );
 								}
 							}
 						}
@@ -985,6 +1026,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function delete_used_css_file( string $file_path ): bool {
 			return $this->delete_cache_files( $file_path );
+		}
+
+		/**
+		 * Delete the DONOTCACHEPAGE marker that lives beside a cached HTML file.
+		 *
+		 * @param string $html_file_path The HTML cache file path whose directory holds the marker.
+		 * @return void
+		 *
+		 * @since 1.9.0
+		 */
+		private function delete_no_cache_marker( string $html_file_path ): void {
+			$this->delete_cache_files( trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache' );
 		}
 
 		/**
@@ -1069,7 +1122,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$res_html = $instance->delete_cache_files( $html_file_path );
 				$instance->delete_role_variant_files( dirname( $html_file_path ) );
-				$instance->delete_cache_files( trailingslashit( dirname( $html_file_path ) ) . '.wppo-no-cache' );
+				$instance->delete_no_cache_marker( $html_file_path );
 				$res_css  = $instance->delete_cache_files( $css_file_path );
 				$res_used = $instance->delete_used_css_file( $used_css_path );
 				$result   = $res_html && $res_css && $res_used;
