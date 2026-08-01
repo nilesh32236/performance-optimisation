@@ -149,4 +149,201 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			}
 		}
 	}
+
+	/**
+	 * Test that clearing all cache succeeds even when the cache directory does
+	 * not exist yet (fresh install with no cached pages generated).
+	 *
+	 * An empty path has no traversal risk, so it must skip the realpath()-based
+	 * validation that returns false for a non-existent cache directory.
+	 *
+	 * @return void
+	 */
+	public function test_clear_cache_all_when_cache_dir_missing_returns_success(): void {
+		$_SERVER['HTTP_HOST']   = 'example.com';
+		$_SERVER['REQUEST_URI'] = '/';
+
+		// Simulate a fresh install where the cache directory has never been created.
+		$cache_dir_reflection = new \ReflectionProperty( Rest::class, 'cache_dir' );
+		$cache_dir_reflection->setValue( $this->rest, '/tmp/wppo-does-not-exist/cache/wppo/' );
+
+		$GLOBALS['wp_filesystem'] = new WPPO_Filesystem_Mock();
+
+		// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
+		$GLOBALS['wpdb'] = new WPPO_WPDB_Mock();
+		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
+
+		Functions\stubs(
+			array(
+				'wp_parse_url',
+				'get_option',
+				'do_action',
+				'WP_Filesystem',
+				'delete_transient',
+				'update_option',
+				'current_time',
+				'is_multisite',
+				'get_current_blog_id',
+				'wp_kses_post',
+				'__',
+			)
+		);
+		Functions\when( 'wp_parse_url' )->justReturn( '/' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'do_action' )->justReturn( null );
+		Functions\when( 'WP_Filesystem' )->justReturn( true );
+		Functions\when( 'delete_transient' )->justReturn( null );
+		Functions\when( 'update_option' )->justReturn( true );
+		Functions\when( 'current_time' )->justReturn( '2026-01-01 00:00:00' );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'wp_kses_post' )->returnArg();
+		Functions\when( '__' )->returnArg( 1 );
+
+		$request = new WP_REST_Request(
+			array(
+				'action' => 'clear_cache',
+				'path'   => '',
+			)
+		);
+
+		$response = $this->rest->clear_cache( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertTrue( $response->get_data()['success'] );
+	}
 }
+
+// phpcs:disable Generic.Files.OneObjectStructurePerFile
+// WP core is not loaded in the unit test environment, so minimal stand-ins
+// are required to invoke the REST handler methods.
+
+if ( ! class_exists( 'WP_REST_Request' ) ) {
+	/**
+	 * Minimal WP_REST_Request stand-in for unit tests.
+	 *
+	 * @package PerformanceOptimise\Tests
+	 */
+	class WP_REST_Request {
+		/**
+		 * Request parameters.
+		 *
+		 * @var array
+		 */
+		private $params;
+
+		/**
+		 * Constructor.
+		 *
+		 * @param array $params Request parameters.
+		 */
+		public function __construct( $params = array() ) {
+			$this->params = $params;
+		}
+
+		/**
+		 * Get the request parameters.
+		 *
+		 * @return array Request parameters.
+		 */
+		public function get_params() {
+			return $this->params;
+		}
+	}
+}
+
+if ( ! class_exists( 'WP_REST_Response' ) ) {
+	/**
+	 * Minimal WP_REST_Response stand-in for unit tests.
+	 *
+	 * @package PerformanceOptimise\Tests
+	 */
+	class WP_REST_Response {
+		/**
+		 * Response data.
+		 *
+		 * @var array
+		 */
+		private $data;
+
+		/**
+		 * HTTP status code.
+		 *
+		 * @var int
+		 */
+		private $status;
+
+		/**
+		 * Constructor.
+		 *
+		 * @param array $data   Response data.
+		 * @param int   $status HTTP status code.
+		 */
+		public function __construct( $data = array(), $status = 200 ) {
+			$this->data   = $data;
+			$this->status = $status;
+		}
+
+		/**
+		 * Get the response data.
+		 *
+		 * @return array Response data.
+		 */
+		public function get_data() {
+			return $this->data;
+		}
+
+		/**
+		 * Get the HTTP status code.
+		 *
+		 * @return int HTTP status code.
+		 */
+		public function get_status() {
+			return $this->status;
+		}
+	}
+}
+
+/**
+ * Minimal filesystem mock that reports the cache directories as missing.
+ *
+ * @package PerformanceOptimise\Tests
+ */
+class WPPO_Filesystem_Mock {
+	/**
+	 * Whether a directory exists.
+	 *
+	 * @param string $dir Directory path.
+	 * @return bool Always false to simulate a fresh install without a cache dir.
+	 */
+	public function is_dir( $dir ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		return false;
+	}
+}
+
+/**
+ * Minimal WPDB mock for activity log inserts.
+ *
+ * @package PerformanceOptimise\Tests
+ */
+class WPPO_WPDB_Mock {
+	/**
+	 * Database table prefix.
+	 *
+	 * @var string
+	 */
+	public $prefix = 'wp_';
+
+	/**
+	 * Mock insert that always succeeds.
+	 *
+	 * @param string $table   Table name.
+	 * @param array  $data    Data to insert.
+	 * @param array  $formats Format placeholders.
+	 * @return int Mock inserted row id.
+	 */
+	public function insert( $table, $data, $formats = array() ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		return 1;
+	}
+}
+// phpcs:enable Generic.Files.OneObjectStructurePerFile

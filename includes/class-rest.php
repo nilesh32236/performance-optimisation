@@ -302,15 +302,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$path = wp_normalize_path( $path );
 
 			// Reject paths with directory traversal or outside the cache directory.
-			$real_path            = realpath( $this->cache_dir . $path );
-			$normalized_cache_dir = wp_normalize_path( $this->cache_dir );
-			$normalized_real_path = false !== $real_path ? wp_normalize_path( $real_path ) : '';
+			// Empty path (clear all) has no traversal risk; realpath() returns false
+			// when the cache directory does not exist yet, so it must not be validated.
+			if ( '' !== $path ) {
+				$real_path            = realpath( $this->cache_dir . $path );
+				$normalized_cache_dir = wp_normalize_path( $this->cache_dir );
+				$normalized_real_path = false !== $real_path ? wp_normalize_path( $real_path ) : '';
 
-			$is_exact_match = ( $normalized_real_path === $normalized_cache_dir );
-			$is_under_dir   = ( 0 === strpos( $normalized_real_path, trailingslashit( $normalized_cache_dir ) ) );
+				$is_exact_match = ( $normalized_real_path === $normalized_cache_dir );
+				$is_under_dir   = ( 0 === strpos( $normalized_real_path, trailingslashit( $normalized_cache_dir ) ) );
 
-			if ( false === $real_path || ( ! $is_exact_match && ! $is_under_dir ) ) {
-				return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+				if ( false === $real_path || ( ! $is_exact_match && ! $is_under_dir ) ) {
+					return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+				}
 			}
 
 			if ( 'clear_single_page_cache' === $action ) {
