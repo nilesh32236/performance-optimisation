@@ -993,10 +993,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( $this->should_optimise_for_logged_in() ) {
-				$lazy_load_images         = isset( $this->options['image_optimisation']['lazyLoadImages'] ) && (bool) $this->options['image_optimisation']['lazyLoadImages'];
-				$lazy_load_videos         = isset( $this->options['image_optimisation']['lazyLoadVideos'] ) && (bool) $this->options['image_optimisation']['lazyLoadVideos'];
+				$lazy_load_images         = ! empty( $this->options['image_optimisation']['lazyLoadImages'] );
+				$lazy_load_videos         = ! empty( $this->options['image_optimisation']['lazyLoadVideos'] );
 				$enable_video_placeholder = ! empty( $this->options['image_optimisation']['enableVideoPlaceholder'] ) && $lazy_load_videos;
-				$delay_js                 = isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'];
+				$delay_js                 = ! empty( $this->options['file_optimisation']['delayJS'] );
 				$use_native_lazy          = ! empty( $this->options['image_optimisation']['lazyLoadNative'] );
 
 				// When native lazy loading is active, images use native loading="lazy" but iframes may still need JS restoration.
@@ -1186,7 +1186,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			if ( isset( $this->options['file_optimisation']['delayJS'] ) && (bool) $this->options['file_optimisation']['delayJS'] ) {
+			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
 				if ( ! in_array( $handle, $this->exclude_delay_js, true ) ) {
 					$tag = str_replace( '<script ', '<script fetchpriority="low" ', $tag );
 					$tag = str_replace( ' src', ' wppo-src', $tag );
