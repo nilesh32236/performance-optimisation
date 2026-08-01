@@ -86,6 +86,9 @@ After activation, you can manage the following from the settings tabs:
 
 == Changelog ==
 
+= 1.8.1 (2026-08-01) =
+* New: Inline the combined/minified CSS via WordPress core's `wp_maybe_inline_styles()` when the file is within the `styles_inline_size_limit` budget, eliminating a render-blocking stylesheet round-trip on first load. Use the `wppo_inline_combined_css` filter (return falsy) to disable inlining, e.g. when serving the combined file from a CDN.
+
 = 1.8.0 (2026-07-28) =
 * New: WordPress 6.9+ object cache key salt support for cache key space invalidation.
 * New: Lazy loading and HTML Tag Processor support for `iframe` elements.

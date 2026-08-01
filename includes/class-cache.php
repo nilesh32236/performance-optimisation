@@ -256,10 +256,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Combines all enqueued CSS files into a single file.
 		 *
-		 * The combined file is registered with `path` data so WordPress core can
-		 * inline it via `wp_maybe_inline_styles()` (up to the
-		 * `styles_inline_size_limit` budget) on the first, uncached visit, while
-		 * the external file remains as the repeat-visit cacheable asset.
+		 * When the combined file is within core's `styles_inline_size_limit`
+		 * budget (20KB on WP < 6.9, 40KB on WP 6.9+), the handle is registered
+		 * with `path` data so `wp_maybe_inline_styles()` renders it as an inline
+		 * <style> tag. Because this plugin's static HTML cache persists the fully
+		 * rendered page, the inline <style> is baked into every cached page and
+		 * served to ALL visitors; the external file is retained only when
+		 * inlining is ineligible (used-CSS active, oversized, or opted out via the
+		 * `wppo_inline_combined_css` filter). Note that inlined CSS bypasses the
+		 * CDN: `maybe_apply_cdn()` only rewrites <link>/<img> tags, not <style>
+		 * content.
 		 *
 		 * @return void
 		 * @since 1.0.0
@@ -305,7 +311,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$version = $cache_mtime;
 					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 
-					if ( $this->should_inline_combined_css() ) {
+					if ( $this->should_inline_combined_css() && file_exists( $css_file_path ) && is_readable( $css_file_path ) ) {
 						$wp_styles->add_data( 'wppo-combine-css', 'path', $css_file_path );
 					}
 					return;
@@ -386,15 +392,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$version = $fs->mtime( $css_file_path );
 				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 
-				$should_inline = $this->should_inline_combined_css();
+				$should_inline = $this->should_inline_combined_css() && file_exists( $css_file_path ) && is_readable( $css_file_path );
 				if ( $should_inline ) {
 					$wp_styles->add_data( 'wppo-combine-css', 'path', $css_file_path );
 				}
 
-				// Suppress the preload when the file fits within core's inline size
-				// budget (and is otherwise eligible), so we do not fetch a resource
-				// that will be inlined rather than rendered as a <link>.
-				if ( ! $should_inline || $fs->size( $css_file_path ) > (int) apply_filters( 'styles_inline_size_limit', 40000 ) ) {
+				// Only suppress the preload when the combined handle is the sole
+				// queued style carrying `path` data. Core's wp_maybe_inline_styles()
+				// applies the styles_inline_size_limit budget cumulatively across
+				// all inlinable styles (smallest first), so other path-registered
+				// styles could consume the budget before the combined file is
+				// reached. A redundant preload is harmless, whereas a missing
+				// preload on a stylesheet core will not inline is a regression.
+				$only_path_style = true;
+				foreach ( $wp_styles->queue as $queued_handle ) {
+					if ( 'wppo-combine-css' !== $queued_handle && $wp_styles->get_data( $queued_handle, 'path' ) ) {
+						$only_path_style = false;
+						break;
+					}
+				}
+
+				if ( ! $should_inline || ! $only_path_style || (int) $fs->size( $css_file_path ) > $this->styles_inline_size_limit() ) {
 					$css_url_with_version = $css_url . "?ver=$version";
 					echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
 				}
@@ -415,7 +433,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * full (unpurged) CSS instead.
 		 *
 		 * @return bool True if the combined handle should be registered for inlining.
-		 * @since 4.1.0
+		 * @since 1.8.0
 		 */
 		private function should_inline_combined_css(): bool {
 			if ( ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
@@ -427,6 +445,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			return (bool) apply_filters( 'wppo_inline_combined_css', true );
+		}
+
+		/**
+		 * Resolve the `styles_inline_size_limit` budget core applies when inlining.
+		 *
+		 * Mirrors core's default — 20KB on WP 6.2-6.8, 40KB since WP 6.9 — so the
+		 * preload-suppression decision matches what `wp_maybe_inline_styles()`
+		 * will actually inline. Operators can override via the core filter.
+		 *
+		 * @return int The inline size limit in bytes.
+		 * @since 1.8.0
+		 */
+		private function styles_inline_size_limit(): int {
+			return (int) apply_filters(
+				'styles_inline_size_limit',
+				version_compare( (string) get_bloginfo( 'version' ), '6.9', '>=' ) ? 40000 : 20000
+			);
 		}
 
 		/**

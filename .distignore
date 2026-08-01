@@ -10,6 +10,18 @@
 /vendor/phpcsstandards/
 /vendor/bin/
 /vendor/matthiasmullie/minify/bin/
+/vendor/phpcompatibility/
+/vendor/antecedent/
+/vendor/brain/
+/vendor/hamcrest/
+/vendor/mockery/
+/vendor/myclabs/
+/vendor/nikic/
+/vendor/phar-io/
+/vendor/phpunit/
+/vendor/sebastian/
+/vendor/staabm/
+/vendor/theseer/
 /package.json
 /package-lock.json
 /composer.json
@@ -42,4 +54,3 @@
 /AGENTS.md
 /test-lab/
 /reports/
-/vendor/phpcompatibility/
