@@ -194,9 +194,7 @@ describe( 'PageSpeedPanel Component', () => {
 		queuePagespeedScan.mockRejectedValueOnce(
 			new Error( 'Network error' )
 		);
-		const consoleSpy = jest
-			.spyOn( console, 'error' )
-			.mockImplementation( () => {} );
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
 
 		render( <PageSpeedPanel url={ defaultUrl } /> );
 		fireEvent.click(
@@ -309,9 +307,7 @@ describe( 'PageSpeedPanel Component', () => {
 			).toBeInTheDocument();
 		} );
 
-		const consoleSpy = jest
-			.spyOn( console, 'error' )
-			.mockImplementation( () => {} );
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
 
 		getPagespeedResults.mockRejectedValueOnce(
 			new Error( 'Network issue' )
@@ -327,7 +323,6 @@ describe( 'PageSpeedPanel Component', () => {
 				screen.getByText( 'PageSpeed scan failed.' )
 			).toBeInTheDocument();
 		} );
-
 	} );
 
 	it( 'displays scan results and calls onSuggestionsReady on success', async () => {
