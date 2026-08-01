@@ -1302,7 +1302,7 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 									description={ __(
-										'Only load block CSS and JavaScript when blocks are actually used on the page. Requires WordPress 6.8 or later.',
+										'Only load block CSS and JavaScript when blocks are actually used on the page. On WordPress 6.9+, classic themes load block assets on demand by default, so this toggle acts as an opt-out — disable it to force the combined wp-block-library stylesheet. Requires WordPress 6.8 or later.',
 										'performance-optimisation'
 									) }
 									name="blockAssetsOnDemand"

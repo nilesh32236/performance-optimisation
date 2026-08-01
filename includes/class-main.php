@@ -418,7 +418,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) ) {
 				// WP 6.9+: classic themes load separate core block assets on demand by default.
 				// The toggle becomes an opt-out — when disabled, fall back to combined loading.
-				if ( empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+				// Priority contract: core registers `should_load_separate_core_block_assets` →
+				// `__return_true` at priority 0, so our priority-10 `__return_false` runs after
+				// it and `apply_filters()` resolves to `false` for classic themes. For block
+				// themes core registers `__return_true` later (via `_add_default_theme_supports()`
+				// on `after_setup_theme`), so we explicitly skip them here to keep core's
+				// separate-assets default by intent rather than by filter-ordering coincidence.
+				if ( empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) && ! wp_is_block_theme() ) {
 					add_filter( 'should_load_separate_core_block_assets', '__return_false', 10 );
 				}
 			} elseif ( ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
