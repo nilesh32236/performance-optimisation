@@ -96,7 +96,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 * @return array Difference betwen the two arrays.
 		 */
 		public function disable_emojis_remove_dns_prefetch( $urls, $relation_type ) {
-			if ( 'dns-prefetch' === $relation_type ) {
+			if ( 'dns-prefetch' === $relation_type && is_array( $urls ) ) {
 				$emoji_svg_url = apply_filters( 'emoji_svg_url', 'https://s.w.org/images/core/emoji/15.0.3/svg/' );
 				$urls          = array_diff( $urls, array( $emoji_svg_url ) );
 			}
