@@ -329,6 +329,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_menu', array( $this, 'init_menu' ) );
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
 			add_action( 'admin_init', array( $this, 'maybe_run_upgrades' ) );
+			add_action( 'wppo_run_upgrades', array( 'PerformanceOptimise\Inc\Activate', 'maybe_run_upgrades' ) );
+			add_action( 'upgrader_process_complete', array( $this, 'maybe_schedule_upgrade_routine' ), 10, 2 );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
@@ -548,7 +550,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Routine plugin updates never fire register_activation_hook, so this is
 		 * triggered on admin_init. Activate::maybe_run_upgrades() exits early once
-		 * the stored plugin version matches the current constant.
+		 * the stored plugin version has reached the migration floor.
 		 *
 		 * @return void
 		 * @since 1.8.1
@@ -559,6 +561,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			Activate::maybe_run_upgrades();
+		}
+
+		/**
+		 * Schedule the upgrade routine in the background after a plugin update.
+		 *
+		 * Fires on upgrader_process_complete when this plugin was updated, giving
+		 * sites updated via WP-CLI, background auto-updates, or managed-hosting
+		 * pipelines a reliable trigger that does not depend on an admin visit.
+		 *
+		 * @param object $upgrader   The upgrader instance (unused).
+		 * @param array  $hook_extra Extra arguments passed to the hook.
+		 * @return void
+		 * @since 1.8.1
+		 */
+		public function maybe_schedule_upgrade_routine( $upgrader, $hook_extra ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( empty( $hook_extra ) || ! is_array( $hook_extra ) ) {
+				return;
+			}
+
+			$plugin_file = 'performance-optimisation/performance-optimisation.php';
+
+			if ( ! empty( $hook_extra['plugin'] ) && $plugin_file === $hook_extra['plugin'] ) {
+				Activate::schedule_upgrade_routine();
+				return;
+			}
+
+			if ( ! empty( $hook_extra['plugins'] ) && is_array( $hook_extra['plugins'] ) && in_array( $plugin_file, $hook_extra['plugins'], true ) ) {
+				Activate::schedule_upgrade_routine();
+			}
 		}
 
 		/**

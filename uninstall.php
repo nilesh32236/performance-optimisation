@@ -34,6 +34,7 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_option( 'wppo_transient_index' );
 		delete_option( 'wppo_preload_cron_offset' );
 		delete_option( 'wppo_last_db_cleanup' );
+		delete_option( 'wppo_version' );
 
 		// Delete post meta using the meta API to respect hooks.
 		delete_post_meta_by_key( '_wppo_preload_image_url' );

@@ -43,3 +43,20 @@
 /test-lab/
 /reports/
 /vendor/phpcompatibility/
+# Dev-only Composer packages — must never ship in the release ZIP.
+/vendor/antecedent/
+/vendor/bin/
+/vendor/brain/
+/vendor/dealerdirect/
+/vendor/hamcrest/
+/vendor/mockery/
+/vendor/myclabs/
+/vendor/nikic/
+/vendor/phar-io/
+/vendor/phpunit/
+/vendor/sebastian/
+/vendor/squizlabs/
+/vendor/staabm/
+/vendor/theseer/
+/vendor/wp-coding-standards/
+/vendor/phpcsstandards/

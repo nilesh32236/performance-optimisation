@@ -28,7 +28,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 	define( 'WPPO_PLUGIN_URL', 'http://example.com/wp-content/plugins/performance-optimisation/' );
 }
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.8.0' );
+	define( 'WPPO_VERSION', '1.8.1' );
 }
 if ( ! defined( 'DAY_IN_SECONDS' ) ) {
 	define( 'DAY_IN_SECONDS', 86400 );
