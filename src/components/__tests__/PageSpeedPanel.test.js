@@ -53,6 +53,7 @@ describe( 'PageSpeedPanel Component', () => {
 
 	afterEach( () => {
 		jest.useRealTimers();
+		jest.restoreAllMocks();
 	} );
 
 	it( 'renders the scan button', () => {
@@ -207,7 +208,6 @@ describe( 'PageSpeedPanel Component', () => {
 				screen.getByText( 'PageSpeed scan failed.' )
 			).toBeInTheDocument();
 		} );
-		consoleSpy.mockRestore();
 	} );
 
 	it( 'shows timeout error after max poll attempts', async () => {
@@ -277,23 +277,11 @@ describe( 'PageSpeedPanel Component', () => {
 		// response and schedules a 2nd poll), flush microtasks so the
 		// async continuation runs, then fire the 2nd poll (gets the
 		// failure response and calls setError).
-		// Let the effect execute
 		await act( async () => {
-			jest.runAllTimers();
+			jest.advanceTimersByTime( 5000 );
 		} );
 		await act( async () => {} );
 
-		// Run a second time to resolve polling promise
-		await act( async () => {
-			jest.runAllTimers();
-		} );
-		await act( async () => {} );
-		// 1st timer tick calls poll() which gets status 'not_ready' (if mocked) or the result.
-		// In this test, we mocked the 1st getPagespeedResults to return the actual mockResult immediately.
-		// However, handleScan polls recursively.
-		// Since we mocked getPagespeedResults to resolve immediately, the first timer
-		// tick will process the mockResult. However, getPagespeedResults is called inside the poll async function.
-		// We need to resolve all promises before running timers.
 		await act( async () => {
 			jest.advanceTimersByTime( 5000 );
 		} );
@@ -325,7 +313,9 @@ describe( 'PageSpeedPanel Component', () => {
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );
 
-		getPagespeedResults.mockRejectedValueOnce( new Error( 'Network issue' ) );
+		getPagespeedResults.mockRejectedValueOnce(
+			new Error( 'Network issue' )
+		);
 
 		await act( async () => {
 			jest.runAllTimers();
@@ -338,7 +328,6 @@ describe( 'PageSpeedPanel Component', () => {
 			).toBeInTheDocument();
 		} );
 
-		consoleSpy.mockRestore();
 	} );
 
 	it( 'displays scan results and calls onSuggestionsReady on success', async () => {
@@ -403,9 +392,13 @@ describe( 'PageSpeedPanel Component', () => {
 			expect( screen.getByText( '1.2 s' ) ).toBeInTheDocument();
 			expect( screen.getByText( '2.8 s' ) ).toBeInTheDocument();
 			expect( screen.getByText( '600 ms' ) ).toBeInTheDocument();
-			expect( screen.getByText( 'First Contentful Paint' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'First Contentful Paint' )
+			).toBeInTheDocument();
 
-			expect( mockOnSuggestionsReady ).toHaveBeenCalledWith( mockSuggestions );
+			expect( mockOnSuggestionsReady ).toHaveBeenCalledWith(
+				mockSuggestions
+			);
 		} );
 	} );
 
