@@ -314,7 +314,7 @@ describe( 'PageSpeedPanel Component', () => {
 		);
 
 		await act( async () => {
-			jest.runAllTimers();
+			jest.advanceTimersByTime( 5000 );
 		} );
 		await act( async () => {} );
 
@@ -394,6 +394,69 @@ describe( 'PageSpeedPanel Component', () => {
 			expect( mockOnSuggestionsReady ).toHaveBeenCalledWith(
 				mockSuggestions
 			);
+		} );
+	} );
+
+	it( 'displays scan results and does not call onSuggestionsReady if suggestions are falsy', async () => {
+		queuePagespeedScan.mockResolvedValueOnce( {
+			success: true,
+			data: { job_id: 123 },
+		} );
+
+		const mockResult = {
+			scores: { performance: 90 },
+			vitals: {},
+			strategy: 'mobile',
+			fetched_at: '2024-08-01 12:00:00',
+			suggestions: null,
+		};
+
+		// First poll: not ready
+		getPagespeedResults.mockResolvedValueOnce( {
+			success: true,
+			data: { status: 'not_ready' },
+		} );
+
+		// Second poll: ready, without suggestions
+		getPagespeedResults.mockResolvedValueOnce( {
+			success: true,
+			data: mockResult,
+		} );
+
+		const mockOnSuggestionsReady = jest.fn();
+
+		render(
+			<PageSpeedPanel
+				url={ defaultUrl }
+				onSuggestionsReady={ mockOnSuggestionsReady }
+			/>
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run PageSpeed Scan/i } )
+		);
+
+		// Resolve queue
+		await act( async () => {} );
+
+		// Advance first 5s (triggers first poll, not ready)
+		await act( async () => {
+			jest.advanceTimersByTime( 5000 );
+		} );
+		await act( async () => {} );
+
+		// Expect results not to be rendered yet
+		expect( screen.queryByText( '90' ) ).not.toBeInTheDocument();
+
+		// Advance second 5s (triggers second poll, ready)
+		await act( async () => {
+			jest.advanceTimersByTime( 5000 );
+		} );
+		await act( async () => {} );
+
+		await waitFor( () => {
+			expect( screen.getByText( '90' ) ).toBeInTheDocument();
+			expect( mockOnSuggestionsReady ).not.toHaveBeenCalled();
 		} );
 	} );
 
