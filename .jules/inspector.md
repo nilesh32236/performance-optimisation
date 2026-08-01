@@ -25,3 +25,9 @@
 **Bug/Gap:** Tests simulating auto-dismissing notifications or long-running timers fail or warn if state updates occur outside of the React update cycle.
 **Root Cause:** Using `jest.advanceTimersByTime()` synchronously triggers `setTimeout` callbacks that call state setters like `setNotification`, throwing `act()` warnings or ReferenceErrors if `act` isn't imported from `@testing-library/react`.
 **Test Added:** Ensured `act` is explicitly imported and wraps all `jest.advanceTimersByTime()` calls when verifying timeout-driven state changes in components.
+
+## 2026-07-30 - Silence console errors for expected errors during test suite runs
+
+**Bug/Gap:** Tests triggering expected API failures were writing ugly `console.error` logs to the test runner output, confusing developers.
+**Root Cause:** The `DatabaseCleanup` component logs caught errors when the API fails using `console.error()`, which Jest mirrors directly to the CLI unless mocked.
+**Test Added:** Mocked `console.error` locally using `jest.spyOn(console, 'error').mockImplementation(() => {});` specifically for the exact test cases where errors are simulated, and correctly restored the mock via `consoleSpy.mockRestore();`.
