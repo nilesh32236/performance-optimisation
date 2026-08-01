@@ -896,6 +896,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// media processing handles it in-browser. Batch conversion of
 			// existing media library items remains unaffected.
 			if ( function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled() ) {
+				// Sub-sizes are generated client-side, but placeholder data is
+				// still extracted server-side from the uploaded original.
+				$this->store_placeholder_data_for_upload( (int) $attachment_id );
 				return $metadata;
 			}
 
@@ -953,6 +956,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Store dominant-color and LQIP placeholder data for a new upload when
+		 * WP 7.1+ client-side media processing generates sub-sizes in-browser
+		 * and server-side conversion is therefore skipped.
+		 *
+		 * Uses a single lightweight GD decode of the uploaded original, mirroring
+		 * the placeholder extraction done on the server-side conversion path.
+		 * Uploads GD cannot decode (e.g. HEIC/HEIF) are skipped silently.
+		 *
+		 * @since 4.0.0
+		 *
+		 * @param int $attachment_id The attachment ID.
+		 * @return void
+		 */
+		private function store_placeholder_data_for_upload( int $attachment_id ): void {
+			$file = get_attached_file( $attachment_id );
+
+			if ( ! $file || ! file_exists( $file ) || ! is_readable( $file ) || ! function_exists( 'imagecreatefromstring' ) ) {
+				return;
+			}
+
+			// Security Fix: Prevent File Size & Memory Bomb DoS (same limit as convert_image()).
+			$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
+			if ( filesize( $file ) > $max_bytes ) {
+				return;
+			}
+
+			if ( $this->is_animated_webp( $file ) ) {
+				return;
+			}
+
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+			$image = @imagecreatefromstring( file_get_contents( $file ) );
+
+			if ( ! $image instanceof \GdImage ) {
+				return;
+			}
+
+			$rel_path       = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+			$dominant_color = $this->extract_dominant_color( $image );
+			$lqip           = $this->generate_lqip( $image );
+			$this->store_placeholder_data( $rel_path, $dominant_color, $lqip );
+
+			// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- imagedestroy() is still the correct way to free GD resources in PHP 8.x
+			imagedestroy( $image );
+		}
+
+		/**
 		 * Serve WebP or AVIF images if supported by the browser.
 		 *
 		 * @param array $image The image source array.
@@ -963,6 +1013,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! isset( $_SERVER['HTTP_ACCEPT'] ) || empty( $image[0] ) ) {
 				return $image;
 			}
+
+			// Under WP 7.1+ client-side media processing, uploads are intentionally
+			// never queued for server-side conversion — don't re-queue missing
+			// conversions on every frontend view.
+			$client_side_processing = function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled();
 
 			$http_accept = sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) );
 
@@ -979,7 +1034,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					if ( file_exists( $avif_path ) ) {
 						$image[0] = $this->get_img_url( $image[0], 'avif' );
 						return $image;
-					} else {
+					} elseif ( ! $client_side_processing ) {
 						self::add_img_into_queue( $img_path, 'avif' );
 					}
 				}
@@ -992,7 +1047,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 					if ( file_exists( $webp_path ) ) {
 						$image[0] = $this->get_img_url( $image[0] );
 						return $image;
-					} else {
+					} elseif ( ! $client_side_processing ) {
 						self::add_img_into_queue( $img_path );
 					}
 				}
