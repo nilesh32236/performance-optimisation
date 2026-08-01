@@ -2,14 +2,17 @@
 /**
  * PHPUnit bootstrap for Performance Optimisation plugin.
  *
+ * Uses BrainMonkey to mock WordPress functions for unit testing
+ * PHP classes in isolation.
+ *
  * @package PerformanceOptimise\Tests
  */
+
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 use function Brain\Monkey\setUp;
 use function Brain\Monkey\tearDown;
 use function Brain\Monkey\Functions\stubs;
-
-require_once __DIR__ . '/../../vendor/autoload.php';
 
 // Define WP constants used by plugin classes.
 if ( ! defined( 'ABSPATH' ) ) {

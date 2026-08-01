@@ -211,37 +211,22 @@ describe( 'DatabaseCleanup Component', () => {
 			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
 		} );
 
-		const consoleSpy = jest
-			.spyOn( console, 'error' )
-			.mockImplementation( () => {} );
+		// API throws an error
+		apiCall.mockRejectedValueOnce( new Error( 'API Exception' ) );
 
-		try {
-			// API throws an error
-			apiCall.mockRejectedValueOnce( new Error( 'API Exception' ) );
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
 
-			const cleanButtons = screen.getAllByRole( 'button', {
-				name: /Clean/i,
-			} );
-			fireEvent.click( cleanButtons[ 0 ] );
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
 
-			const confirmButton = screen.getByRole( 'button', {
-				name: 'Delete',
-			} );
-			fireEvent.click( confirmButton );
-
-			await waitFor( () => {
-				expect(
-					screen.getByText( 'Error executing cleanup.' )
-				).toBeInTheDocument();
-			} );
-
-			expect( consoleSpy ).toHaveBeenCalledWith(
-				'Database cleanup error:',
-				expect.any( Error )
-			);
-		} finally {
-			consoleSpy.mockRestore();
-		}
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Error executing cleanup.' )
+			).toBeInTheDocument();
+		} );
 	} );
 
 	it( 'shows empty error message fallback when cleanup API throws an exception without message', async () => {
@@ -256,37 +241,22 @@ describe( 'DatabaseCleanup Component', () => {
 			expect( screen.getAllByText( '10' )[ 0 ] ).toBeInTheDocument();
 		} );
 
-		const consoleSpy = jest
-			.spyOn( console, 'error' )
-			.mockImplementation( () => {} );
+		// API throws an error
+		apiCall.mockRejectedValueOnce( {} );
 
-		try {
-			// API throws an error
-			apiCall.mockRejectedValueOnce( {} );
+		const cleanButtons = screen.getAllByRole( 'button', {
+			name: /Clean/i,
+		} );
+		fireEvent.click( cleanButtons[ 0 ] );
 
-			const cleanButtons = screen.getAllByRole( 'button', {
-				name: /Clean/i,
-			} );
-			fireEvent.click( cleanButtons[ 0 ] );
+		const confirmButton = screen.getByRole( 'button', { name: 'Delete' } );
+		fireEvent.click( confirmButton );
 
-			const confirmButton = screen.getByRole( 'button', {
-				name: 'Delete',
-			} );
-			fireEvent.click( confirmButton );
-
-			await waitFor( () => {
-				expect(
-					screen.getByText( 'Error executing cleanup.' )
-				).toBeInTheDocument();
-			} );
-
-			expect( consoleSpy ).toHaveBeenCalledWith(
-				'Database cleanup error:',
-				{}
-			);
-		} finally {
-			consoleSpy.mockRestore();
-		}
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Error executing cleanup.' )
+			).toBeInTheDocument();
+		} );
 	} );
 
 	it( 'dismisses notification when dismiss button is clicked', async () => {
@@ -380,23 +350,19 @@ describe( 'DatabaseCleanup Component', () => {
 		const consoleSpy = jest
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );
+		apiCall.mockRejectedValueOnce( new Error( 'Fetch Error' ) );
+		render( <DatabaseCleanup /> );
 
-		try {
-			apiCall.mockRejectedValueOnce( new Error( 'Fetch Error' ) );
-			render( <DatabaseCleanup /> );
+		// Notification doesn't show for counts error but it logs to console, so we can check if data defaults to 0
+		await waitFor( () => {
+			expect( screen.getAllByText( '0' )[ 0 ] ).toBeInTheDocument();
+		} );
 
-			// Notification doesn't show for counts error but it logs to console, so we can check if data defaults to 0
-			await waitFor( () => {
-				expect( screen.getAllByText( '0' )[ 0 ] ).toBeInTheDocument();
-			} );
-
-			expect( consoleSpy ).toHaveBeenCalledWith(
-				'Error fetching database cleanup counts:',
-				expect.any( Error )
-			);
-		} finally {
-			consoleSpy.mockRestore();
-		}
+		expect( consoleSpy ).toHaveBeenCalledWith(
+			'Error fetching database cleanup counts:',
+			expect.any( Error )
+		);
+		consoleSpy.mockRestore();
 	} );
 
 	it( 'opens confirm dialog and calls cleanup api successfully', async () => {

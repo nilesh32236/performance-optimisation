@@ -9,6 +9,7 @@ return array(
     'voku\\helper\\' => array($vendorDir . '/voku/simple_html_dom/src/voku/helper'),
     'voku\\' => array($vendorDir . '/voku/html-min/src/voku'),
     'Symfony\\Component\\CssSelector\\' => array($vendorDir . '/symfony/css-selector'),
+    'PHPCSStandards\\Composer\\Plugin\\Installers\\PHPCodeSniffer\\' => array($vendorDir . '/dealerdirect/phpcodesniffer-composer-installer/src'),
     'MatthiasMullie\\PathConverter\\' => array($vendorDir . '/matthiasmullie/path-converter/src'),
     'MatthiasMullie\\Minify\\' => array($vendorDir . '/matthiasmullie/minify/src'),
 );
