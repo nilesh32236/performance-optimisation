@@ -256,6 +256,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Combines all enqueued CSS files into a single file.
 		 *
+		 * The combined file is registered with `path` data so WordPress core can
+		 * inline it via `wp_maybe_inline_styles()` (up to the
+		 * `styles_inline_size_limit` budget) on the first, uncached visit, while
+		 * the external file remains as the repeat-visit cacheable asset.
+		 *
 		 * @return void
 		 * @since 1.0.0
 		 */
@@ -299,6 +304,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$css_url = $this->get_cache_file_url( 'css' );
 					$version = $cache_mtime;
 					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
+
+					if ( $this->should_inline_combined_css() ) {
+						$wp_styles->add_data( 'wppo-combine-css', 'path', $css_file_path );
+					}
 					return;
 				}
 			}
@@ -377,9 +386,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$version = $fs->mtime( $css_file_path );
 				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 
-				$css_url_with_version = $css_url . "?ver=$version";
-				echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
+				$should_inline = $this->should_inline_combined_css();
+				if ( $should_inline ) {
+					$wp_styles->add_data( 'wppo-combine-css', 'path', $css_file_path );
+				}
+
+				// Suppress the preload when the file fits within core's inline size
+				// budget (and is otherwise eligible), so we do not fetch a resource
+				// that will be inlined rather than rendered as a <link>.
+				if ( ! $should_inline || $fs->size( $css_file_path ) > (int) apply_filters( 'styles_inline_size_limit', 40000 ) ) {
+					$css_url_with_version = $css_url . "?ver=$version";
+					echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
+				}
 			}
+		}
+
+		/**
+		 * Determine whether the combined CSS handle is eligible for core inlining.
+		 *
+		 * WordPress core's `wp_maybe_inline_styles()` inlines stylesheets that are
+		 * registered with `path` data and whose file size is within the
+		 * `styles_inline_size_limit` budget (40KB since WP 6.9, 20KB before). Core
+		 * enforces that size budget itself, so this helper only gates eligibility.
+		 *
+		 * Inlining is disabled while `removeUnusedCSS` is active because used-CSS
+		 * reads the combined stylesheet via its `src`; once core inlines a handle
+		 * it clears `src`, which would silently skip the combined file and ship the
+		 * full (unpurged) CSS instead.
+		 *
+		 * @return bool True if the combined handle should be registered for inlining.
+		 * @since 4.1.0
+		 */
+		private function should_inline_combined_css(): bool {
+			if ( ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
+				return false;
+			}
+
+			if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
+				return false;
+			}
+
+			return (bool) apply_filters( 'wppo_inline_combined_css', true );
 		}
 
 		/**
