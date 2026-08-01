@@ -1229,6 +1229,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Evict legacy WP 6.9 pre-salt query-group cache keys once.
+		 *
+		 * Core's 6.9+ single-key-per-group cache leaves unsalted post-queries /
+		 * term-queries / comment-queries / user-queries / site-queries / network-queries
+		 * keys behind once wp_cache_add_salt() has been called. A full wp_cache_flush()
+		 * is the only reliable eviction (flush_group() patterns are salt-prefixed and
+		 * miss the legacy unsalted keys). No-op on cores without object caching.
+		 *
+		 * @since 1.8.1
+		 * @return bool True if a flush was attempted and not rejected, false if the
+		 *              cache API is unavailable.
+		 */
+		public static function flush_legacy_query_cache_keys(): bool {
+			if ( function_exists( 'wp_cache_flush' ) ) {
+				return wp_cache_flush();
+			}
+			return false;
+		}
+
+		/**
 		 * Flush runtime (in-memory) cache via wp_cache_flush_runtime().
 		 *
 		 * Avoids unnecessary persistent cache (Redis/Memcached) flushes when only

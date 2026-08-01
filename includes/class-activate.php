@@ -25,6 +25,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 	class Activate {
 
 		/**
+		 * Option key storing the plugin version whose upgrade routines have run.
+		 *
+		 * @var string
+		 * @since 1.8.1
+		 */
+		private const VERSION_OPTION = 'wppo_version';
+
+		/**
 		 * Initializes the activation process.
 		 *
 		 * Includes required files and triggers necessary modifications.
@@ -69,6 +77,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			self::create_activity_log_table();
 			Img_Converter::migrate_img_info_autoload();
+			self::maybe_run_upgrades();
+		}
+
+		/**
+		 * Runs one-time upgrade routines when the plugin version changes.
+		 *
+		 * Compares the stored plugin version option against the current constant and
+		 * executes version-specific migrations once. On fresh activation the option
+		 * is absent, so migrations run immediately. On routine plugin updates the
+		 * activation hook does not fire, so Main hooks this into admin_init. The
+		 * stored version is only updated after all migrations complete.
+		 *
+		 * @return void
+		 * @since 1.8.1
+		 */
+		public static function maybe_run_upgrades(): void {
+			$stored_version = get_option( self::VERSION_OPTION, '' );
+
+			if ( WPPO_VERSION === $stored_version ) {
+				return;
+			}
+
+			// One-time eviction of legacy WP 6.9 pre-salt query-group cache keys.
+			Cache::flush_legacy_query_cache_keys();
+
+			Log::add( __( 'Plugin upgraded — legacy cache keys flushed.', 'performance-optimisation' ) );
+
+			update_option( self::VERSION_OPTION, WPPO_VERSION, false );
 		}
 
 		/**

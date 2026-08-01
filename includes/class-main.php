@@ -328,6 +328,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private function setup_hooks(): void {
 			add_action( 'admin_menu', array( $this, 'init_menu' ) );
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
+			add_action( 'admin_init', array( $this, 'maybe_run_upgrades' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
@@ -540,6 +541,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$new_notices      = array_unique( array_merge( $existing_notices, (array) $notices ) );
 				set_transient( Util::transient_key( 'wppo_activation_notices' ), $new_notices, 30 );
 			}
+		}
+
+		/**
+		 * Runs one-time upgrade routines after a plugin update.
+		 *
+		 * Routine plugin updates never fire register_activation_hook, so this is
+		 * triggered on admin_init. Activate::maybe_run_upgrades() exits early once
+		 * the stored plugin version matches the current constant.
+		 *
+		 * @return void
+		 * @since 1.8.1
+		 */
+		public function maybe_run_upgrades(): void {
+			if ( ! current_user_can( 'manage_options' ) ) {
+				return;
+			}
+
+			Activate::maybe_run_upgrades();
 		}
 
 		/**
