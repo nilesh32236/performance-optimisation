@@ -58,6 +58,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 *     @type array $wp_constants Key WordPress constants.
 		 *     @type array $server       Server environment details.
 		 *     @type array $cache        Cache status details.
+		 *     @type array $infrastructure Infrastructure details.
+		 *     @type array $opcache      Opcode cache details.
 		 * }
 		 */
 		public static function get_all(): array {
@@ -69,6 +71,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'server'         => self::get_server(),
 				'cache'          => self::get_cache(),
 				'infrastructure' => self::get_infrastructure(),
+				'opcache'        => self::get_opcache(),
 			);
 		}
 
@@ -246,6 +249,83 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 					'label'      => __( 'PageSpeed Insights API', 'performance-optimisation' ),
 				),
 			);
+		}
+
+		/**
+		 * Get PHP opcode cache environment details.
+		 *
+		 * Mirrors WordPress core's Site Health server info (added in WP 7.0),
+		 * adapted to the class's null-safe, scalar-only conventions. Field
+		 * keys vary by PHP version/host, so each one is guarded with isset().
+		 *
+		 * @since  1.8.0
+		 * @return array {
+		 *     @type string $status           'Enabled' or 'Disabled'.
+		 *     @type string $detail           'not available' when the cache is unusable.
+		 *     @type string $memory_usage     Used of total memory, e.g. '100 MB of 256 MB'.
+		 *     @type string $interned_strings Interned strings usage as a percentage.
+		 *     @type string $hit_rate         Cache hit rate percentage.
+		 *     @type string $cache_full       'Yes' or 'No'.
+		 * }
+		 */
+		public static function get_opcache(): array {
+			if ( ! function_exists( 'opcache_get_status' ) ) {
+				return array(
+					'status' => esc_html__( 'Disabled', 'performance-optimisation' ),
+					'detail' => 'not available',
+				);
+			}
+
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- Warning emitted when opcache.restrict_api blocks access.
+			$opcache = opcache_get_status( false );
+
+			if ( false === $opcache ) {
+				return array(
+					'status' => esc_html__( 'Disabled by configuration', 'performance-optimisation' ),
+					'detail' => 'not available',
+				);
+			}
+
+			$info = array(
+				'status'     => ! empty( $opcache['opcache_enabled'] )
+					? esc_html__( 'Enabled', 'performance-optimisation' )
+					: esc_html__( 'Disabled', 'performance-optimisation' ),
+				'cache_full' => ! empty( $opcache['cache_full'] )
+					? esc_html__( 'Yes', 'performance-optimisation' )
+					: esc_html__( 'No', 'performance-optimisation' ),
+			);
+
+			if ( isset( $opcache['memory_usage']['used_memory'], $opcache['memory_usage']['free_memory'] ) ) {
+				$info['memory_usage'] = sprintf(
+					/* translators: 1: Used memory, 2: Total memory */
+					esc_html__( '%1$s of %2$s', 'performance-optimisation' ),
+					size_format( $opcache['memory_usage']['used_memory'] ),
+					size_format( $opcache['memory_usage']['free_memory'] + $opcache['memory_usage']['used_memory'] )
+				);
+			}
+
+			if (
+				isset( $opcache['interned_strings_usage']['used_memory'], $opcache['interned_strings_usage']['buffer_size'] )
+				&& 0 !== $opcache['interned_strings_usage']['buffer_size']
+			) {
+				$info['interned_strings'] = sprintf(
+					/* translators: 1: Percentage used, 2: Total memory, 3: Free memory */
+					esc_html__( '%1$s%% of %2$s (%3$s free)', 'performance-optimisation' ),
+					number_format_i18n( ( $opcache['interned_strings_usage']['used_memory'] / $opcache['interned_strings_usage']['buffer_size'] ) * 100, 2 ),
+					size_format( $opcache['interned_strings_usage']['buffer_size'] ),
+					size_format( isset( $opcache['interned_strings_usage']['free_memory'] ) ? $opcache['interned_strings_usage']['free_memory'] : 0 )
+				);
+			}
+
+			if ( isset( $opcache['opcache_statistics']['opcache_hit_rate'] ) ) {
+				$info['hit_rate'] = sprintf(
+					/* translators: %s: Hit rate percentage */
+					esc_html__( '%s%%', 'performance-optimisation' ),
+					number_format_i18n( $opcache['opcache_statistics']['opcache_hit_rate'], 2 )
+				);
+			}
+
+			return $info;
 		}
 
 		/**

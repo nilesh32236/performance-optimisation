@@ -238,6 +238,30 @@ const SystemInfo = () => {
 						} }
 					/>
 					<InfoTable
+						title="OPCache"
+						data={ info.opcache }
+						labels={ {
+							status: __( 'Status', 'performance-optimisation' ),
+							memory_usage: __(
+								'Memory Usage',
+								'performance-optimisation'
+							),
+							interned_strings: __(
+								'Interned Strings',
+								'performance-optimisation'
+							),
+							hit_rate: __(
+								'Hit Rate',
+								'performance-optimisation'
+							),
+							cache_full: __(
+								'Cache Full',
+								'performance-optimisation'
+							),
+							detail: __( 'Detail', 'performance-optimisation' ),
+						} }
+					/>
+					<InfoTable
 						title={ __(
 							'Infrastructure',
 							'performance-optimisation'
