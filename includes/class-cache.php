@@ -310,8 +310,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$combined_css = '';
 
+			// On WP 6.9+ with separate (on-demand) core block assets active, never
+			// fold the combined wp-block-library stylesheet into the minified file —
+			// doing so would force the monolith back into the head. Belt-and-suspenders:
+			// wp-block-library is normally not in the queue on 6.9 anyway.
+			$separate_block_assets = function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets();
+
 			foreach ( $styles as $handle ) {
 				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
+
+				if ( $separate_block_assets && 'wp-block-library' === $handle ) {
 					continue;
 				}
 				$style_data = $wp_styles->registered[ $handle ];

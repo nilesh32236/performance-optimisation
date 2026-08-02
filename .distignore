@@ -21,6 +21,7 @@
 /phpcs.xml
 /psalm.xml
 /tests/
+/patchwork.json
 /bin/
 /scripts/
 /test_*.js

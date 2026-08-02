@@ -174,6 +174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'criticalCSS'            => false,
 						'hostGoogleFontsLocally' => false,
 						'blockAssetsOnDemand'    => false,
+						'loadAllCoreBlockAssets' => false,
 						'delayJSDefaultStrategy' => 'interaction',
 						'delayJSIdleList'        => '',
 						'delayJSViewportList'    => '',
@@ -415,7 +416,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_filter( 'style_loader_tag', array( $this->google_fonts, 'process_style_tag' ), 9, 3 );
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+			// Load the combined wp-block-library stylesheet instead of separate
+			// on-demand block assets. This is the WP 6.9+ pre-init opt-out for
+			// classic themes that depend on styles enqueued by shortcodes or
+			// widgets while content renders. setup_hooks() runs at plugin load
+			// (before init), so this overrides core's priority-0 __return_true
+			// added by wp_load_classic_theme_block_styles_on_demand().
+			$load_all_core_block_assets = ! empty( $this->options['file_optimisation']['loadAllCoreBlockAssets'] );
+			$is_69_optout_active        = $load_all_core_block_assets && function_exists( 'wp_load_classic_theme_block_styles_on_demand' );
+
+			if ( $is_69_optout_active ) {
+				add_filter( 'should_load_separate_core_block_assets', '__return_false' );
+			}
+
+			// WP 6.8 on-demand block assets filter (the WP 6.9 default for classic
+			// themes). Suppressed only when the combined-library opt-out above is
+			// actually active (WP 6.9+), so the two settings cannot conflict
+			// (opt-out wins) while 6.8 sites keep their existing behavior.
+			if ( ! $is_69_optout_active && ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
 				add_filter( 'should_load_block_assets_on_demand', '__return_true' );
 			}
 
