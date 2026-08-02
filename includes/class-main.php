@@ -375,10 +375,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Server-Timing response header for live front-end renders (WP 6.9+). Independent of enableCache.
-			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' )
-				&& ! empty( $this->options['performance_audit']['server_timing_enabled'] ?? false ) ) {
+			// Note: registering this action forces the template-enhancement output buffer on for live renders,
+			// which disables response streaming while the header is enabled. The header is only emitted on
+			// cache-miss generation passes; cached responses served by advanced-cache.php never boot WordPress.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $this->server_timing_enabled() ) {
 				add_action( 'template_redirect', array( $this, 'capture_template_start' ), 0 );
-				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0 );
+				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 0 );
 			}
 
 			// Standalone used-CSS output buffer when page cache is disabled.
@@ -753,13 +755,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether the Server-Timing debug header is enabled.
+		 *
+		 * Reads the performance_audit.server_timing_enabled setting (default off).
+		 * Operators may override it via the wppo_server_timing_enabled filter, e.g. to
+		 * restrict emission to logged-in administrators with manage_options capability.
+		 *
+		 * @since  1.9.0
+		 * @return bool True when Server-Timing telemetry is active.
+		 */
+		public function server_timing_enabled(): bool {
+			$enabled = ! empty( $this->options['performance_audit']['server_timing_enabled'] ?? false );
+			return (bool) apply_filters( 'wppo_server_timing_enabled', $enabled );
+		}
+
+		/**
 		 * Capture the template render start time for Server-Timing telemetry.
 		 *
 		 * @return void
 		 * @since 1.9.0
 		 */
 		public function capture_template_start(): void {
-			if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			if ( ! $this->server_timing_enabled() || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 				return;
 			}
 			$this->server_timing_template_start = microtime( true );
@@ -771,12 +788,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Runs on wp_finalized_template_enhancement_output_buffer, the last hook
 		 * before the response is sent, so header() is still valid.
 		 *
-		 * @param string $output The finalized template output.
 		 * @return void
 		 * @since 1.9.0
 		 */
-		public function emit_server_timing_header( $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+		public function emit_server_timing_header(): void {
+			if ( ! $this->server_timing_enabled() || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 				return;
 			}
 			if ( headers_sent() ) {
@@ -790,10 +806,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$now     = microtime( true );
 			$timings = array();
-			$elapsed = ( $now - $start ) * 1000;
-			if ( $elapsed > 0 ) {
-				$timings[] = 'wp-before-template;dur=' . round( $elapsed, 2 );
+
+			// wp-before-template: request bootstrap to template start. Measured from the
+			// captured template-start marker so it is disjoint from wp-template below.
+			if ( $this->server_timing_template_start > $start ) {
+				$timings[] = 'wp-before-template;dur=' . round( ( $this->server_timing_template_start - $start ) * 1000, 2 );
 			}
+
+			// wp-template: template render duration.
 			if ( $this->server_timing_template_start > 0 ) {
 				$render = ( $now - $this->server_timing_template_start ) * 1000;
 				if ( $render > 0 ) {
@@ -802,7 +822,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( ! empty( $timings ) ) {
-				header( 'Server-Timing: ' . implode( ', ', $timings ) );
+				// Append rather than replace so coexisting Server-Timing entries are preserved.
+				header( 'Server-Timing: ' . implode( ', ', $timings ), false );
 			}
 		}
 
