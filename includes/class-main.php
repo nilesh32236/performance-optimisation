@@ -382,8 +382,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
 				} else {
-					// Legacy path: outermost buffer (priority 5) so its callback runs last on the finalized HTML.
-					add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 5 );
+					// Legacy path: priority 20 runs AFTER the cache buffer (default priority 10),
+					// so its inner callback runs first on the raw buffer and the cache callback
+					// then stores the LCP-enhanced HTML — mirroring the 6.9+ flow.
+					add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 20 );
 				}
 			}
 
@@ -764,15 +766,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Start output buffer for LCP image prioritization (legacy path, WP &lt; 6.9).
 		 *
-		 * Registers at priority 5, before the cache and used-CSS buffers (priority 10),
-		 * so its outermost buffer callback runs last on the finalized HTML. The callback
-		 * no-ops when the feature is disabled or the buffer is empty.
+		 * Registers at priority 20, after the cache and used-CSS buffers (default
+		 * priority 10), so its inner buffer callback runs first on the raw buffer
+		 * and the cache callback then stores the LCP-enhanced HTML. The callback
+		 * no-ops when the feature is disabled, the buffer is empty, the request is
+		 * non-HTML (feeds, robots, AJAX, REST), or the user is not eligible.
 		 *
 		 * @return void
 		 * @since 2.15.0
 		 */
 		public function start_lcp_priority_buffer() {
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
+				return;
+			}
+			if ( is_feed() || is_robots() || is_trackback() || is_preview() || is_embed() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 				return;
 			}
 			ob_start( array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ) );
