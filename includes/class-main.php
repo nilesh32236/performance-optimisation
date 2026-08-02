@@ -408,6 +408,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
 				}
 
+				if ( function_exists( 'wp_maybe_inline_styles' ) ) {
+					// WP 6.3+: rewrite styles at enqueue time and register 'path' data so
+					// core can inline minified files up to the inline-size limit.
+					add_action( 'wp_enqueue_scripts', array( $this, 'minify_queued_styles' ), PHP_INT_MAX - 1 );
+				}
+
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 			}
 
@@ -1515,6 +1521,99 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Rewrites enqueued styles to their minified versions at enqueue time and
+		 * registers the on-disk path so core can inline them.
+		 *
+		 * WordPress 6.3+ inlines any stylesheet that exposes `path` data and fits
+		 * within the `styles_inline_size_limit` budget (20KB before 6.9, 40KB on
+		 * 6.9+). This runs on `wp_enqueue_scripts` (before core's inline pass at
+		 * `wp_head` priority 1) so minified files can opt in to inlining. Falls
+		 * back to the `style_loader_tag` rewriting in {@see minify_css()} on
+		 * older WordPress versions.
+		 *
+		 * @since 3.9.0
+		 * @return void
+		 */
+		public function minify_queued_styles(): void {
+			if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
+				return;
+			}
+
+			if ( ! $this->should_optimise_for_logged_in() ) {
+				return;
+			}
+
+			// The combine feature owns the whole pipeline; let it handle these handles.
+			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
+				return;
+			}
+
+			global $wp_styles;
+
+			if ( ! is_object( $wp_styles ) ) {
+				return;
+			}
+
+			foreach ( $wp_styles->queue as $handle ) {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
+
+				if ( in_array( $handle, $this->exclude_css, true ) ) {
+					continue;
+				}
+
+				$style_data = $wp_styles->registered[ $handle ];
+
+				// Only external, 'all'-media stylesheets can be rewritten to a file.
+				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
+					continue;
+				}
+
+				$src = $style_data->src;
+				if ( empty( $src ) ) {
+					continue;
+				}
+
+				$local_path = Util::get_local_path( $src );
+				if ( empty( $local_path ) ) {
+					continue;
+				}
+
+				if ( apply_filters( 'wppo_exclude_minification', false, $local_path, $handle, 'css' ) ) {
+					continue;
+				}
+
+				// Early return if the URL already indicates a minified file.
+				if ( $this->is_minified_asset_name( $src, 'css' ) ) {
+					continue;
+				}
+
+				if ( $this->is_css_minified( $local_path ) ) {
+					continue;
+				}
+
+				$css_minifier = new Minify\CSS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css' ) );
+				$cached_url   = $css_minifier->minify();
+
+				if ( empty( $cached_url ) ) {
+					continue;
+				}
+
+				$cached_file = $css_minifier->get_cache_file_path();
+				if ( empty( $cached_file ) || ! file_exists( $cached_file ) ) {
+					continue;
+				}
+
+				$wp_styles->registered[ $handle ]->src = $cached_url;
+				$wp_styles->registered[ $handle ]->ver = (int) filemtime( $cached_file );
+
+				// Opt the minified file in to core's inline pass (WP 6.3+).
+				wp_style_add_data( $handle, 'path', $cached_file );
+			}
+		}
+
+		/**
 		 * Rewrites CSS link tags to use minified versions if they exist.
 		 *
 		 * @since 1.0.0
@@ -1528,6 +1627,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Early return for logged-in users (when optimisation not enabled), empty URLs, or excluded handles
 			// to avoid the expensive Util::get_local_path() computation.
 			if ( ! $this->should_optimise_for_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) ) {
+				return $tag;
+			}
+
+			// Handles already rewritten at enqueue time carry 'path' data for core
+			// inlining (WP 6.3+). Never re-emit or re-minify them here.
+			global $wp_styles;
+			if ( isset( $wp_styles ) && ! empty( $wp_styles->get_data( $handle, 'path' ) ) ) {
 				return $tag;
 			}
 

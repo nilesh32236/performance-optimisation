@@ -20,6 +20,7 @@
 /.nvmrc
 /phpcs.xml
 /psalm.xml
+/patchwork.json
 /tests/
 /bin/
 /scripts/

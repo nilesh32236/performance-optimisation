@@ -299,6 +299,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$css_url = $this->get_cache_file_url( 'css' );
 					$version = $cache_mtime;
 					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
+					$this->register_combine_css_path( $css_file_path );
 					return;
 				}
 			}
@@ -315,6 +316,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					continue;
 				}
 				$style_data = $wp_styles->registered[ $handle ];
+
+				// Skip styles core will inline itself (registered with 'path' data and
+				// small enough to fit the inline budget). Leaving them enqueued lets
+				// core inline them at their own queue position; pulling them into the
+				// combined file would duplicate their rules and inflate its size.
+				if ( $this->core_will_inline( $handle ) ) {
+					continue;
+				}
 
 				if ( ! empty( $exclude_combine_css ) ) {
 					if ( in_array( $handle, $exclude_combine_css, true ) ) {
@@ -376,10 +385,95 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$version = $fs->mtime( $css_file_path );
 				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
+				$this->register_combine_css_path( $css_file_path );
 
-				$css_url_with_version = $css_url . "?ver=$version";
-				echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
+				// Only preload when core will not inline the combined file; preloading
+				// a stylesheet core already inlines is a wasted request.
+				if ( ! $this->will_combine_css_inline( $css_file_path ) ) {
+					$css_url_with_version = $css_url . "?ver=$version";
+					echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
+				}
 			}
+		}
+
+		/**
+		 * Whether a queued style will be inlined by core instead of combined.
+		 *
+		 * Core (WP 6.3+) inlines any enqueued stylesheet that carries `path` data
+		 * and fits within the `styles_inline_size_limit` budget. Such styles must
+		 * be left in the queue for core to inline at their own position rather than
+		 * pulled into the combined file (which would duplicate their rules).
+		 *
+		 * @since 3.9.0
+		 *
+		 * @param string $handle The registered style handle.
+		 * @return bool True if core will inline the style, false otherwise.
+		 */
+		private function core_will_inline( $handle ): bool {
+			if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
+				return false;
+			}
+
+			global $wp_styles;
+			if ( ! isset( $wp_styles->registered[ $handle ] ) || empty( $wp_styles->registered[ $handle ]->src ) ) {
+				return false;
+			}
+
+			$path = $wp_styles->get_data( $handle, 'path' );
+			if ( empty( $path ) ) {
+				return false;
+			}
+
+			$size = is_file( $path ) ? (int) filesize( $path ) : 0;
+			if ( $size <= 0 ) {
+				return false;
+			}
+
+			return $size <= $this->get_styles_inline_limit();
+		}
+
+		/**
+		 * Registers the combined CSS file with `path` data for core's inline pass.
+		 *
+		 * @since 3.9.0
+		 *
+		 * @param string $css_file_path Absolute path to the combined CSS file.
+		 * @return void
+		 */
+		private function register_combine_css_path( $css_file_path ): void {
+			if ( ! function_exists( 'wp_maybe_inline_styles' ) || empty( $css_file_path ) || ! is_file( $css_file_path ) ) {
+				return;
+			}
+
+			wp_style_add_data( 'wppo-combine-css', 'path', $css_file_path );
+		}
+
+		/**
+		 * Whether the combined CSS file will be inlined by core.
+		 *
+		 * @since 3.9.0
+		 *
+		 * @param string $css_file_path Absolute path to the combined CSS file.
+		 * @return bool True if core will inline the combined file, false otherwise.
+		 */
+		private function will_combine_css_inline( $css_file_path ): bool {
+			if ( ! function_exists( 'wp_maybe_inline_styles' ) || empty( $css_file_path ) ) {
+				return false;
+			}
+
+			$size = is_file( $css_file_path ) ? (int) filesize( $css_file_path ) : 0;
+			return $size > 0 && $size <= $this->get_styles_inline_limit();
+		}
+
+		/**
+		 * Reads the core `styles_inline_size_limit` budget (default 40KB on 6.9+).
+		 *
+		 * @since 3.9.0
+		 *
+		 * @return int The inline size limit in bytes.
+		 */
+		private function get_styles_inline_limit(): int {
+			return (int) apply_filters( 'styles_inline_size_limit', 40000 );
 		}
 
 		/**
