@@ -669,9 +669,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Checks the current page's stored LCP image URL (from PageSpeed scan) and
 		 * returns a preload item if found. The toggle autoPreloadLCP must be enabled.
 		 *
-		 * Checks mobile strategy first, then desktop, to support responsive sites
-		 * that serve different images per viewport.
-		 *
 		 * @since 2.13.0
 		 * @return array List of preload items (zero or one item).
 		 */
@@ -681,7 +678,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return array();
 			}
 
-			$lcp_url    = '';
+			$lcp_url = $this->get_current_lcp_url();
+			if ( empty( $lcp_url ) ) {
+				return array();
+			}
+
+			return array( $this->prepare_preload_item( $lcp_url ) );
+		}
+
+		/**
+		 * Resolves the currently-detected LCP image URL for the current page.
+		 *
+		 * Checks mobile strategy first, then desktop, to support responsive sites
+		 * that serve different images per viewport. Data sources (in order):
+		 *
+		 * 1. Singular post meta (`_wppo_lcp_image_url_{strategy}`).
+		 * 2. Front-page option (`wppo_front_page_lcp_{strategy}`).
+		 * 3. Transient keyed by strategy + current URL hash (`wppo_lcp_url_{strategy}_{md5}`).
+		 *
+		 * @since 2.15.0
+		 * @return string The LCP image URL, or empty string when none is stored.
+		 */
+		private function get_current_lcp_url(): string {
 			$strategies = array( 'mobile', 'desktop' );
 
 			// Priority 1: Singular post — check post meta (mobile first, then desktop).
@@ -690,40 +708,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				foreach ( $strategies as $strategy ) {
 					$meta_lcp = get_post_meta( $post_id, '_wppo_lcp_image_url_' . $strategy, true );
 					if ( ! empty( $meta_lcp ) ) {
-						$lcp_url = $meta_lcp;
-						break;
+						return $meta_lcp;
 					}
 				}
 			}
 
 			// Priority 2: Front page — check option (mobile first, then desktop).
-			if ( empty( $lcp_url ) && is_front_page() ) {
+			if ( is_front_page() ) {
 				foreach ( $strategies as $strategy ) {
 					$front_lcp = get_option( 'wppo_front_page_lcp_' . $strategy, '' );
 					if ( ! empty( $front_lcp ) ) {
-						$lcp_url = $front_lcp;
-						break;
+						return $front_lcp;
 					}
 				}
 			}
 
 			// Priority 3: Check transient keyed by strategy + current URL hash.
-			if ( empty( $lcp_url ) ) {
-				$current_url = untrailingslashit( esc_url_raw( Util::get_current_url() ) );
-				foreach ( $strategies as $strategy ) {
-					$transient = get_transient( Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $current_url ) ) );
-					if ( ! empty( $transient ) ) {
-						$lcp_url = $transient;
-						break;
-					}
+			$current_url = untrailingslashit( esc_url_raw( Util::get_current_url() ) );
+			foreach ( $strategies as $strategy ) {
+				$transient = get_transient( Util::transient_key( 'wppo_lcp_url_' . $strategy . '_' . md5( $current_url ) ) );
+				if ( ! empty( $transient ) ) {
+					return $transient;
 				}
 			}
 
-			if ( empty( $lcp_url ) ) {
-				return array();
-			}
-
-			return array( $this->prepare_preload_item( $lcp_url ) );
+			return '';
 		}
 
 		/**
@@ -1701,6 +1710,168 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 				return $matches[0];
 			}
+		}
+
+		/**
+		 * Post-render LCP image prioritization (optional enhancement).
+		 *
+		 * When the "prioritizeLCPImages" toggle is enabled, this filter callback
+		 * runs on the finalized HTML (WP 6.9+ template-enhancement output buffer,
+		 * or the legacy outermost output buffer on older WP) and:
+		 *
+		 * 1. Removes `loading="lazy"` from the first N images (matching the
+		 *    `excludeFirstImages` heuristic) so above-the-fold images load eagerly.
+		 * 2. Sets `fetchpriority="high"` on the detected LCP <img> unless the
+		 *    attribute already exists, preserving core's own loading-optimization
+		 *    decisions and the plugin's existing excludeFirstImages handling.
+		 *
+		 * Uses `WP_HTML_Processor::serialize_token()` (public since WP 6.9) when
+		 * available, falling back to `WP_HTML_Tag_Processor` on older versions.
+		 *
+		 * @since 2.15.0
+		 *
+		 * @param string $filtered_output The filtered output from previous callbacks.
+		 * @param string $output          The raw output buffer content (unused; present
+		 *                                for parity with the 6.9 filter signature and
+		 *                                safe when used as an ob_start callback).
+		 * @return string The processed buffer.
+		 */
+		public function prioritize_lcp_in_buffer( $filtered_output, $output = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			$image_optimisation = $this->options['image_optimisation'] ?? array();
+			if ( empty( $image_optimisation['prioritizeLCPImages'] ) ) {
+				return $filtered_output;
+			}
+			if ( is_admin() || empty( $filtered_output ) || ! is_string( $filtered_output ) ) {
+				return $filtered_output;
+			}
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return $filtered_output;
+			}
+
+			// Pass A: un-lazy-load the first N above-the-fold images.
+			$buffer = $this->unlazyload_first_images( $filtered_output, $image_optimisation );
+
+			// Pass B: stamp fetchpriority="high" on the detected LCP image.
+			$buffer = $this->prioritize_lcp_image( $buffer );
+
+			return $buffer;
+		}
+
+		/**
+		 * Remove loading="lazy" from the first N images in the buffer.
+		 *
+		 * Mirrors the excludeFirstImages heuristic used by add_delay_load_img() so
+		 * the same count semantics apply to the finalized HTML. Only the `loading`
+		 * attribute is stripped; JS-lazy images keep their data-* attributes.
+		 *
+		 * @since 2.15.0
+		 *
+		 * @param string $buffer             The HTML buffer.
+		 * @param array  $image_optimisation Image optimization settings.
+		 * @return string The buffer with loading="lazy" removed from the first N images.
+		 */
+		private function unlazyload_first_images( string $buffer, array $image_optimisation ): string {
+			$exclude_img_count = (int) ( $image_optimisation['excludeFirstImages'] ?? 0 );
+			if ( $exclude_img_count <= 0 ) {
+				return $buffer;
+			}
+
+			$tags        = new \WP_HTML_Tag_Processor( $buffer );
+			$img_counter = 0;
+
+			while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+				if ( null === $tags->get_attribute( 'src' ) && null === $tags->get_attribute( 'data-src' ) ) {
+					continue;
+				}
+
+				++$img_counter;
+				if ( $exclude_img_count >= $img_counter && 'lazy' === $tags->get_attribute( 'loading' ) ) {
+					$tags->remove_attribute( 'loading' );
+				}
+			}
+
+			return $tags->get_updated_html();
+		}
+
+		/**
+		 * Set fetchpriority="high" on the detected LCP image.
+		 *
+		 * Resolves the current LCP URL via get_current_lcp_url() and stamps
+		 * `fetchpriority="high"` on the matching <img> only when no fetchpriority
+		 * attribute already exists, so core's wp_get_loading_optimization_attributes()
+		 * output and the plugin's existing excludeFirstImages high-priority assignment
+		 * are never double-applied.
+		 *
+		 * @since 2.15.0
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The buffer with fetchpriority="high" on the LCP image.
+		 */
+		private function prioritize_lcp_image( string $buffer ): string {
+			$lcp_url = $this->get_current_lcp_url();
+			if ( empty( $lcp_url ) ) {
+				return $buffer;
+			}
+
+			// WP 6.9+: stream tokens with WP_HTML_Processor and rebuild via serialize_token().
+			if ( method_exists( 'WP_HTML_Processor', 'serialize_token' ) && version_compare( get_bloginfo( 'version' ), '6.9', '>=' ) ) {
+				$processor = \WP_HTML_Processor::create_full_parser( $buffer );
+				if ( null !== $processor ) {
+					$new_html = '';
+					while ( $processor->next_token() ) {
+						if (
+							'#tag' === $processor->get_token_type() &&
+							'IMG' === $processor->get_tag() &&
+							! $processor->is_tag_closer() &&
+							$this->tag_matches_lcp_url( $processor, $lcp_url ) &&
+							null === $processor->get_attribute( 'fetchpriority' )
+						) {
+							$processor->set_attribute( 'fetchpriority', 'high' );
+						}
+						$new_html .= $processor->serialize_token();
+					}
+
+					// Parser bailed on unsupported markup; leave the buffer unchanged.
+					if ( null === $processor->get_last_error() ) {
+						return $new_html;
+					}
+				}
+			}
+
+			// Fallback: WP_HTML_Tag_Processor on all supported versions.
+			$tags = new \WP_HTML_Tag_Processor( $buffer );
+			while ( $tags->next_tag( array( 'tag_name' => 'img' ) ) ) {
+				if ( $this->tag_matches_lcp_url( $tags, $lcp_url ) ) {
+					if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+						$tags->set_attribute( 'fetchpriority', 'high' );
+					}
+					break;
+				}
+			}
+
+			return $tags->get_updated_html();
+		}
+
+		/**
+		 * Whether the matched image tag references the given LCP URL.
+		 *
+		 * Checks src, data-src (JS-lazy placeholder), and srcset attributes.
+		 *
+		 * @since 2.15.0
+		 *
+		 * @param \WP_HTML_Tag_Processor $tags    The tag processor matched on an <img>.
+		 * @param string                 $lcp_url The detected LCP image URL.
+		 * @return bool True if the image references the LCP URL.
+		 */
+		private function tag_matches_lcp_url( $tags, string $lcp_url ): bool {
+			foreach ( array( 'src', 'data-src', 'srcset' ) as $attribute ) {
+				$value = $tags->get_attribute( $attribute );
+				if ( is_string( $value ) && false !== strpos( $value, $lcp_url ) ) {
+					return true;
+				}
+			}
+
+			return false;
 		}
 
 		/**

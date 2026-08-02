@@ -201,8 +201,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'speculationExcludeUrls' => '',
 					),
 					'image_optimisation' => array(
-						'placeholderType' => 'svg',
-						'autoPreloadLCP'  => false,
+						'placeholderType'     => 'svg',
+						'autoPreloadLCP'      => false,
+						'prioritizeLCPImages' => false,
 					),
 					'performance_audit'  => array(
 						'pagespeed_api_key' => '',
@@ -372,6 +373,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
 				} else {
 					add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
+				}
+			}
+
+			// Optional LCP image prioritization on the finalized HTML (default off).
+			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
+					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
+				} else {
+					// Legacy path: outermost buffer (priority 5) so its callback runs last on the finalized HTML.
+					add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 5 );
 				}
 			}
 
@@ -747,6 +759,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 			ob_start( array( $this, 'process_used_css_capture' ) );
+		}
+
+		/**
+		 * Start output buffer for LCP image prioritization (legacy path, WP &lt; 6.9).
+		 *
+		 * Registers at priority 5, before the cache and used-CSS buffers (priority 10),
+		 * so its outermost buffer callback runs last on the finalized HTML. The callback
+		 * no-ops when the feature is disabled or the buffer is empty.
+		 *
+		 * @return void
+		 * @since 2.15.0
+		 */
+		public function start_lcp_priority_buffer() {
+			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
+				return;
+			}
+			ob_start( array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ) );
 		}
 
 		/**

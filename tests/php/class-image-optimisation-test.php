@@ -122,5 +122,108 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( method_exists( Image_Optimisation::class, 'lazy_load_videos' ) );
 		$this->assertTrue( method_exists( Image_Optimisation::class, 'preload_images' ) );
 		$this->assertTrue( method_exists( Image_Optimisation::class, 'update_image_urls' ) );
+		$this->assertTrue( method_exists( Image_Optimisation::class, 'prioritize_lcp_in_buffer' ) );
+	}
+
+	/**
+	 * Test that prioritize_lcp_in_buffer leaves the buffer unchanged when the toggle is off.
+	 */
+	public function test_prioritize_lcp_in_buffer_noop_when_disabled(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$html   = '<img src="hero.jpg" loading="lazy" />';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+		$this->assertSame( $html, $result );
+	}
+
+	/**
+	 * Test that prioritize_lcp_in_buffer gracefully no-ops when the HTML API is unavailable.
+	 */
+	public function test_prioritize_lcp_in_buffer_graceful_without_html_api(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_admin' )->justReturn( false );
+
+		$options = $this->default_options;
+		$options['image_optimisation']['prioritizeLCPImages'] = true;
+
+		$image_opt = new Image_Optimisation( $options );
+
+		$html   = '<img src="hero.jpg" loading="lazy" />';
+		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
+		$this->assertSame( $html, $result );
+	}
+
+	/**
+	 * Test that get_current_lcp_url resolves the LCP URL from singular post meta.
+	 */
+	public function test_get_current_lcp_url_from_post_meta(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_singular' )->justReturn( true );
+		Functions\when( 'get_the_ID' )->justReturn( 42 );
+		Functions\when( 'is_front_page' )->justReturn( false );
+
+		Functions\expect( 'get_post_meta' )
+			->once()
+			->with( 42, '_wppo_lcp_image_url_mobile', true )
+			->andReturn( 'https://example.com/wp-content/uploads/hero.jpg' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 'https://example.com/wp-content/uploads/hero.jpg', $reflection->invoke( $image_opt ) );
+	}
+
+	/**
+	 * Test that get_current_lcp_url falls back to the front-page option.
+	 */
+	public function test_get_current_lcp_url_from_front_page_option(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_singular' )->justReturn( false );
+		Functions\when( 'is_front_page' )->justReturn( true );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+
+		Functions\expect( 'get_option' )
+			->once()
+			->with( 'wppo_front_page_lcp_mobile', '' )
+			->andReturn( 'https://example.com/wp-content/uploads/front.jpg' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 'https://example.com/wp-content/uploads/front.jpg', $reflection->invoke( $image_opt ) );
+	}
+
+	/**
+	 * Test that get_current_lcp_url returns an empty string when no LCP data is stored.
+	 */
+	public function test_get_current_lcp_url_returns_empty_when_absent(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'is_singular' )->justReturn( false );
+		Functions\when( 'is_front_page' )->justReturn( false );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'get_option' )->justReturn( '' );
+		Functions\when( 'get_transient' )->justReturn( '' );
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'add_query_arg' )->justReturn( 'http://example.com/sample-page/' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com/sample-page/' );
+
+		global $wp;
+		$wp          = new \stdClass();
+		$wp->request = 'sample-page';
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'get_current_lcp_url' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( '', $reflection->invoke( $image_opt ) );
 	}
 }
