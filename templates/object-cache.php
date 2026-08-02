@@ -920,9 +920,11 @@ if ( ! function_exists( 'wp_cache_get_salted' ) ) {
 	/**
 	 * Retrieves salted data from the cache (WP 6.9+ native override).
 	 *
-	 * The salt is embedded into the Redis key so stale salts become
-	 * unreachable keys instead of requiring core's wrapper-array salt
-	 * comparison round trip.
+	 * Uses the same wrapper-at-stable-key format as WP core's
+	 * cache-compat.php: the salt is stored alongside the data in a wrapper
+	 * array at the original cache key. Each write overwrites the same key,
+	 * so Redis memory stays bounded and a stale salt yields a miss rather
+	 * than leaving orphaned keys behind.
 	 *
 	 * @since 2.2.0
 	 *
@@ -933,14 +935,23 @@ if ( ! function_exists( 'wp_cache_get_salted' ) ) {
 	 */
 	function wp_cache_get_salted( $cache_key, $group, $salt ) {
 		global $wp_object_cache;
-		$salt = is_array( $salt ) ? implode( ':', $salt ) : $salt;
-		return $wp_object_cache->get( $cache_key . ':' . $salt, $group );
+		$salt  = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+		$cache = $wp_object_cache->get( $cache_key, $group );
+		if ( ! is_array( $cache ) || ! isset( $cache['salt'], $cache['data'] ) || $salt !== $cache['salt'] ) {
+			return false;
+		}
+		return $cache['data'];
 	}
 }
 
 if ( ! function_exists( 'wp_cache_set_salted' ) ) {
 	/**
 	 * Stores salted data in the cache (WP 6.9+ native override).
+	 *
+	 * Stores the data wrapped in an array with its salt at the original cache
+	 * key, exactly as WP core's cache-compat.php does. The stable key means a
+	 * later write with a new salt overwrites the previous value and non-salted
+	 * wp_cache_delete() calls can still invalidate the entry.
 	 *
 	 * @since 2.2.0
 	 *
@@ -954,7 +965,15 @@ if ( ! function_exists( 'wp_cache_set_salted' ) ) {
 	function wp_cache_set_salted( $cache_key, $data, $group, $salt, $expire = 0 ) {
 		global $wp_object_cache;
 		$salt = is_array( $salt ) ? implode( ':', $salt ) : $salt;
-		return $wp_object_cache->set( $cache_key . ':' . $salt, $data, $group, (int) $expire );
+		return $wp_object_cache->set(
+			$cache_key,
+			array(
+				'data' => $data,
+				'salt' => $salt,
+			),
+			$group,
+			(int) $expire
+		);
 	}
 }
 
@@ -971,19 +990,22 @@ if ( ! function_exists( 'wp_cache_get_multiple_salted' ) ) {
 	 */
 	function wp_cache_get_multiple_salted( $cache_keys, $group, $salt ) {
 		global $wp_object_cache;
-		$salt = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+		$salt  = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+		$cache = $wp_object_cache->get_multiple( $cache_keys, $group );
 
-		$salted_keys = array();
-		foreach ( $cache_keys as $cache_key ) {
-			$salted_keys[] = $cache_key . ':' . $salt;
+		foreach ( $cache as $key => $value ) {
+			if ( ! is_array( $value ) ) {
+				$cache[ $key ] = false;
+				continue;
+			}
+			if ( ! isset( $value['salt'], $value['data'] ) || $salt !== $value['salt'] ) {
+				$cache[ $key ] = false;
+				continue;
+			}
+			$cache[ $key ] = $value['data'];
 		}
 
-		$values  = $wp_object_cache->get_multiple( $salted_keys, $group );
-		$results = array();
-		foreach ( $cache_keys as $i => $cache_key ) {
-			$results[ $cache_key ] = $values[ $salted_keys[ $i ] ] ?? false;
-		}
-		return $results;
+		return $cache;
 	}
 }
 
@@ -1001,19 +1023,15 @@ if ( ! function_exists( 'wp_cache_set_multiple_salted' ) ) {
 	 */
 	function wp_cache_set_multiple_salted( $data, $group, $salt, $expire = 0 ) {
 		global $wp_object_cache;
-		$salt = is_array( $salt ) ? implode( ':', $salt ) : $salt;
-
-		$salted_data = array();
-		foreach ( $data as $cache_key => $value ) {
-			$salted_data[ $cache_key . ':' . $salt ] = $value;
+		$salt      = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+		$new_cache = array();
+		foreach ( $data as $key => $value ) {
+			$new_cache[ $key ] = array(
+				'data' => $value,
+				'salt' => $salt,
+			);
 		}
-
-		$results = $wp_object_cache->set_multiple( $salted_data, $group, (int) $expire );
-		$out     = array();
-		foreach ( $data as $cache_key => $value ) {
-			$out[ $cache_key ] = $results[ $cache_key . ':' . $salt ] ?? false;
-		}
-		return $out;
+		return $wp_object_cache->set_multiple( $new_cache, $group, (int) $expire );
 	}
 }
 
