@@ -335,7 +335,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'wp_enqueue_scripts', array( $this, 'add_defer_strategy' ), 1000 );
 			$has_delay_js = ! empty( $this->options['file_optimisation']['delayJS'] );
 			$has_defer_js = ! empty( $this->options['file_optimisation']['deferJS'] );
-			if ( $has_delay_js || ( $has_defer_js && ! function_exists( 'wp_script_add_data' ) ) ) {
+			$is_wp68_plus = version_compare( get_bloginfo( 'version' ), '6.8', '>=' );
+			$is_wp69_plus = version_compare( get_bloginfo( 'version' ), '6.9', '>=' );
+			// WP 6.8+ always provides wp_script_add_data; keep the script_loader_tag fallback
+			// for older core and for the delay-JS rewriting path.
+			// TODO: remove when minimum supported WP is raised to 6.8.
+			if ( $has_delay_js || ( $has_defer_js && ! function_exists( 'wp_script_add_data' ) && ! $is_wp68_plus ) ) {
 				add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
 			}
 			if ( $has_defer_js ) {
@@ -354,12 +359,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->cache = new Cache( $this->options );
 				$this->cache->set_image_optimisation( $this->image_optimisation );
 				$this->cache->set_google_fonts( $this->google_fonts );
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
 					add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this->cache, 'stash_cache' ) );
 				} else {
 					// Legacy path (deprecated) — earmarked for removal when WP 6.9+ becomes the minimum supported version.
+					// TODO: remove when minimum supported WP is raised to 6.9.
 					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				}
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
@@ -367,10 +373,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Standalone used-CSS output buffer when page cache is disabled.
 			if ( empty( $this->options['cache_settings']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
 				} else {
+					// Legacy path (deprecated) — earmarked for removal when WP 6.9+ becomes the minimum supported version.
+					// TODO: remove when minimum supported WP is raised to 6.9.
 					add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
 				}
 			}
