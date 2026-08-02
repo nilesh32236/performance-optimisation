@@ -916,6 +916,107 @@ function wp_cache_delete_multiple( $keys, $group = '' ) {
 	return $wp_object_cache->delete_multiple( $keys, $group );
 }
 
+if ( ! function_exists( 'wp_cache_get_salted' ) ) {
+	/**
+	 * Retrieves salted data from the cache (WP 6.9+ native override).
+	 *
+	 * The salt is embedded into the Redis key so stale salts become
+	 * unreachable keys instead of requiring core's wrapper-array salt
+	 * comparison round trip.
+	 *
+	 * @since 2.2.0
+	 *
+	 * @param string          $cache_key The cache key used for storage and retrieval.
+	 * @param string          $group     The cache group used for organizing data.
+	 * @param string|string[] $salt      The salt indicating when the cache group was last updated.
+	 * @return mixed|false The cached data, or false if not found or outdated.
+	 */
+	function wp_cache_get_salted( $cache_key, $group, $salt ) {
+		global $wp_object_cache;
+		$salt = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+		return $wp_object_cache->get( $cache_key . ':' . $salt, $group );
+	}
+}
+
+if ( ! function_exists( 'wp_cache_set_salted' ) ) {
+	/**
+	 * Stores salted data in the cache (WP 6.9+ native override).
+	 *
+	 * @since 2.2.0
+	 *
+	 * @param string          $cache_key The cache key under which to store the data.
+	 * @param mixed           $data      The data to be cached.
+	 * @param string          $group     The cache group to which the data belongs.
+	 * @param string|string[] $salt      The salt indicating when the cache group was last updated.
+	 * @param int             $expire    When to expire the cache contents, in seconds.
+	 * @return bool True on success, false on failure.
+	 */
+	function wp_cache_set_salted( $cache_key, $data, $group, $salt, $expire = 0 ) {
+		global $wp_object_cache;
+		$salt = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+		return $wp_object_cache->set( $cache_key . ':' . $salt, $data, $group, (int) $expire );
+	}
+}
+
+if ( ! function_exists( 'wp_cache_get_multiple_salted' ) ) {
+	/**
+	 * Retrieves multiple salted items from the cache (WP 6.9+ native override).
+	 *
+	 * @since 2.2.0
+	 *
+	 * @param string[]        $cache_keys Array of cache keys to retrieve.
+	 * @param string          $group      The group of the cache to check.
+	 * @param string|string[] $salt       The salt indicating when the cache group was last updated.
+	 * @return array Associative array of cache values, keyed by cache key; false when missing or outdated.
+	 */
+	function wp_cache_get_multiple_salted( $cache_keys, $group, $salt ) {
+		global $wp_object_cache;
+		$salt = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+
+		$salted_keys = array();
+		foreach ( $cache_keys as $cache_key ) {
+			$salted_keys[] = $cache_key . ':' . $salt;
+		}
+
+		$values  = $wp_object_cache->get_multiple( $salted_keys, $group );
+		$results = array();
+		foreach ( $cache_keys as $i => $cache_key ) {
+			$results[ $cache_key ] = $values[ $salted_keys[ $i ] ] ?? false;
+		}
+		return $results;
+	}
+}
+
+if ( ! function_exists( 'wp_cache_set_multiple_salted' ) ) {
+	/**
+	 * Stores multiple salted items in the cache (WP 6.9+ native override).
+	 *
+	 * @since 2.2.0
+	 *
+	 * @param mixed[]         $data   Associative array of keys and values to store.
+	 * @param string          $group  The group to which the cached data belongs.
+	 * @param string|string[] $salt   The salt indicating when the cache group was last updated.
+	 * @param int             $expire When to expire the cache contents, in seconds.
+	 * @return bool[] Array of return values keyed by cache key.
+	 */
+	function wp_cache_set_multiple_salted( $data, $group, $salt, $expire = 0 ) {
+		global $wp_object_cache;
+		$salt = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+
+		$salted_data = array();
+		foreach ( $data as $cache_key => $value ) {
+			$salted_data[ $cache_key . ':' . $salt ] = $value;
+		}
+
+		$results = $wp_object_cache->set_multiple( $salted_data, $group, (int) $expire );
+		$out     = array();
+		foreach ( $data as $cache_key => $value ) {
+			$out[ $cache_key ] = $results[ $cache_key . ':' . $salt ] ?? false;
+		}
+		return $out;
+	}
+}
+
 if ( ! function_exists( 'wp_cache_supports' ) ) {
 	/**
 	 * Determines whether the object cache implementation supports a particular feature.
