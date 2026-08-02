@@ -152,6 +152,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private $options;
 
 		/**
+		 * Timestamp (microtime) when the front-end template render started.
+		 *
+		 * @var   float
+		 * @since 1.9.0
+		 */
+		private float $server_timing_template_start = 0.0;
+
+		/**
 		 * Constructor.
 		 *
 		 * Initializes the class by including necessary files and setting up hooks.
@@ -205,9 +213,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'autoPreloadLCP'  => false,
 					),
 					'performance_audit'  => array(
-						'pagespeed_api_key' => '',
-						'high_value_urls'   => array(),
-						'auto_fix_enabled'  => false,
+						'pagespeed_api_key'     => '',
+						'high_value_urls'       => array(),
+						'auto_fix_enabled'      => false,
+						'server_timing_enabled' => false,
 					),
 				)
 			);
@@ -363,6 +372,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				}
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
+			}
+
+			// Server-Timing response header for live front-end renders (WP 6.9+). Independent of enableCache.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' )
+				&& ! empty( $this->options['performance_audit']['server_timing_enabled'] ?? false ) ) {
+				add_action( 'template_redirect', array( $this, 'capture_template_start' ), 0 );
+				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0 );
 			}
 
 			// Standalone used-CSS output buffer when page cache is disabled.
@@ -734,6 +750,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$used_css = new \PerformanceOptimise\Inc\Used_CSS( $this->options );
 			return $used_css->process_buffer( $filtered_output );
+		}
+
+		/**
+		 * Capture the template render start time for Server-Timing telemetry.
+		 *
+		 * @return void
+		 * @since 1.9.0
+		 */
+		public function capture_template_start(): void {
+			if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+				return;
+			}
+			$this->server_timing_template_start = microtime( true );
+		}
+
+		/**
+		 * Emit a Server-Timing response header on live front-end renders (WP 6.9+).
+		 *
+		 * Runs on wp_finalized_template_enhancement_output_buffer, the last hook
+		 * before the response is sent, so header() is still valid.
+		 *
+		 * @param string $output The finalized template output.
+		 * @return void
+		 * @since 1.9.0
+		 */
+		public function emit_server_timing_header( $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+				return;
+			}
+			if ( headers_sent() ) {
+				return;
+			}
+
+			$start = System_Info::get_request_start_microtime();
+			if ( null === $start ) {
+				return;
+			}
+
+			$now     = microtime( true );
+			$timings = array();
+			$elapsed = ( $now - $start ) * 1000;
+			if ( $elapsed > 0 ) {
+				$timings[] = 'wp-before-template;dur=' . round( $elapsed, 2 );
+			}
+			if ( $this->server_timing_template_start > 0 ) {
+				$render = ( $now - $this->server_timing_template_start ) * 1000;
+				if ( $render > 0 ) {
+					$timings[] = 'wp-template;dur=' . round( $render, 2 );
+				}
+			}
+
+			if ( ! empty( $timings ) ) {
+				header( 'Server-Timing: ' . implode( ', ', $timings ) );
+			}
 		}
 
 		/**
