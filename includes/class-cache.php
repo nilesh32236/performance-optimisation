@@ -420,17 +420,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		public function start_output_buffer(): void {
 			// TODO: remove when minimum supported WP is raised to 6.9.
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && is_admin() ) {
-				_doing_it_wrong(
-					__METHOD__,
-					esc_html__(
-						'The legacy template_redirect output buffer path is deprecated on WP 6.9+. Use the wp_template_enhancement_output_buffer hooks instead.',
-						'performance-optimisation'
-					),
-					'2.4.0'
-				);
-			}
-
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
 			}

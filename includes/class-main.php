@@ -332,22 +332,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
-			add_action( 'wp_enqueue_scripts', array( $this, 'add_defer_strategy' ), 1000 );
 			$has_delay_js = ! empty( $this->options['file_optimisation']['delayJS'] );
 			$has_defer_js = ! empty( $this->options['file_optimisation']['deferJS'] );
-			$is_wp68_plus = version_compare( get_bloginfo( 'version' ), '6.8', '>=' );
-			$is_wp69_plus = version_compare( get_bloginfo( 'version' ), '6.9', '>=' );
-			// WP 6.8+ always provides wp_script_add_data; keep the script_loader_tag fallback
-			// for older core and for the delay-JS rewriting path.
-			// TODO: remove when minimum supported WP is raised to 6.8.
-			if ( $has_delay_js || ( $has_defer_js && ! function_exists( 'wp_script_add_data' ) && ! $is_wp68_plus ) ) {
-				add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
-			}
-			if ( $has_defer_js ) {
-				add_filter( 'script_loader_tag', array( $this, 'add_fetchpriority_to_deferred' ), 11, 2 );
-			}
+			$wp_version   = (string) get_bloginfo( 'version' );
+			// The native 'strategy' script data added via wp_script_add_data() is only
+			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
+			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
+			// TODO: remove the legacy fallback when minimum supported WP is raised to 6.3.
+			$is_wp63_plus = version_compare( $wp_version, '6.3-alpha', '>=' );
+			// Pre-release-inclusive floor: '6.9-alpha' also matches alpha/beta/RC builds
+			// of 6.9 which already ship the template-enhancement buffer functions.
+			// TODO: remove the legacy buffer paths when minimum supported WP is raised to 6.9.
+			$is_wp69_plus = version_compare( $wp_version, '6.9-alpha', '>=' );
+
+			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
+			// on every supported version, so it is always registered when delay JS is on.
 			if ( $has_delay_js ) {
+				add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
 				add_action( 'wp', array( $this, 'apply_per_page_delay_config' ) );
+			}
+
+			// Defer JS: use the native strategy on WP 6.3+, the script_loader_tag
+			// fallback on older core.
+			if ( $has_defer_js ) {
+				if ( $is_wp63_plus ) {
+					add_action( 'wp_enqueue_scripts', array( $this, 'add_defer_strategy' ), 1000 );
+				} else {
+					add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute_legacy' ), 10, 2 );
+				}
+				add_filter( 'script_loader_tag', array( $this, 'add_fetchpriority_to_deferred' ), 11, 2 );
 			}
 			add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
@@ -1227,6 +1240,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			return $tag;
+		}
+
+		/**
+		 * Adds the defer attribute to script tags on WordPress &lt; 6.3.
+		 *
+		 * WordPress 6.3+ natively honours the 'strategy' script data added via
+		 * wp_script_add_data(), so this legacy fallback is only registered on older
+		 * core (WP 6.2) where the native strategy is silently ignored.
+		 *
+		 * @since 1.8.0
+		 *
+		 * @param  string $tag    The script tag HTML.
+		 * @param  string $handle The script's registered handle.
+		 * @return string Modified script tag with the defer attribute.
+		 */
+		public function add_defer_attribute_legacy( $tag, $handle ): string {
+			if ( ! $this->should_optimise_for_logged_in() ) {
+				return $tag;
+			}
+
+			if ( in_array( $handle, $this->exclude_defer_js, true ) ) {
+				return $tag;
+			}
+
+			if ( false !== strpos( $tag, ' defer' ) || false !== strpos( $tag, 'type="module"' ) ) {
+				return $tag;
+			}
+
+			$this->deferred_handles[ $handle ] = true;
+
+			return str_replace( ' src', ' defer src', $tag );
 		}
 
 		/**
