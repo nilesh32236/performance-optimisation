@@ -422,10 +422,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// widgets while content renders. setup_hooks() runs at plugin load
 			// (before init), so this overrides core's priority-0 __return_true
 			// added by wp_load_classic_theme_block_styles_on_demand().
+			//
+			// The opt-out is gated to classic themes only: block themes already
+			// load the combined library via theme support and keep core's
+			// separate-assets default untouched.
 			$load_all_core_block_assets = ! empty( $this->options['file_optimisation']['loadAllCoreBlockAssets'] );
 			$is_69_optout_active        = $load_all_core_block_assets && function_exists( 'wp_load_classic_theme_block_styles_on_demand' );
 
-			if ( $is_69_optout_active ) {
+			if ( $is_69_optout_active && ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) ) {
 				add_filter( 'should_load_separate_core_block_assets', '__return_false' );
 			}
 
@@ -979,6 +983,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'nonce'             => wp_create_nonce( 'wp_rest' ),
 					'nonce_refresh'     => wp_create_nonce( 'wppo_nonce_refresh' ),
 					'version'           => WPPO_VERSION,
+					'wpVersion'         => get_bloginfo( 'version' ),
+					'isBlockTheme'      => function_exists( 'wp_is_block_theme' ) && wp_is_block_theme(),
 					'settings'          => $safe_options,
 					'show_welcome'      => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
 					'image_info'        => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),

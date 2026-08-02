@@ -24,9 +24,10 @@ class MainBlockAssetsTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * @param array $file_overrides file_optimisation option overrides.
 	 * @param bool  $wp_69          Whether to simulate WP 6.9+ (wp_load_classic_theme_block_styles_on_demand exists).
+	 * @param bool  $is_block_theme Whether the active theme is a block theme.
 	 * @return void
 	 */
-	private function stub_main_construction( array $file_overrides, bool $wp_69 = false ): void {
+	private function stub_main_construction( array $file_overrides, bool $wp_69 = false, bool $is_block_theme = false ): void {
 		Functions\stubs(
 			array(
 				'WP_Filesystem'       => false,
@@ -48,15 +49,24 @@ class MainBlockAssetsTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_normalize_path' )->returnArg();
 		Functions\when( 'content_url' )->returnArg();
 		Functions\when( 'trailingslashit' )->returnArg();
+		Functions\when( 'wp_is_block_theme' )->justReturn( $is_block_theme );
+
+		// Only the target function_exists probes are faked; everything else is
+		// delegated to the real function_exists so the rest of the Main
+		// constructor keeps running on its real branch (e.g. the 6.9+
+		// template-enhancement output buffer when enableCache is on).
 		Functions\when( 'function_exists' )->alias(
 			static function ( $function_name ) use ( $wp_69 ) {
-				if ( 'WP_Filesystem' === $function_name ) {
+				if ( 'WP_Filesystem' === $function_name || 'wp_is_block_theme' === $function_name ) {
 					return true;
 				}
 				if ( $wp_69 && 'wp_load_classic_theme_block_styles_on_demand' === $function_name ) {
 					return true;
 				}
-				return false;
+				if ( $wp_69 && 'wp_should_output_buffer_template_for_enhancement' === $function_name ) {
+					return true;
+				}
+				return \function_exists( $function_name );
 			}
 		);
 	}
@@ -124,6 +134,23 @@ class MainBlockAssetsTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_optout_inert_on_wp_68(): void {
 		$this->stub_main_construction( array( 'loadAllCoreBlockAssets' => true ), false );
+		new Main();
+
+		$this->assertFalse(
+			Filters\has( 'should_load_separate_core_block_assets', '__return_false' )
+		);
+		$this->assertFalse(
+			Filters\has( 'should_load_block_assets_on_demand', '__return_true' )
+		);
+	}
+
+	/**
+	 * Test that the 6.9 opt-out is not registered on block themes: block themes
+	 * already load the combined library via theme support and must keep core's
+	 * separate-assets default untouched.
+	 */
+	public function test_optout_not_registered_on_block_theme(): void {
+		$this->stub_main_construction( array( 'loadAllCoreBlockAssets' => true ), true, true );
 		new Main();
 
 		$this->assertFalse(

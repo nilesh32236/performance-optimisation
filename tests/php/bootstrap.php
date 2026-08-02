@@ -9,6 +9,24 @@ use function Brain\Monkey\setUp;
 use function Brain\Monkey\tearDown;
 use function Brain\Monkey\Functions\stubs;
 
+// Patchwork reads its patchwork.json configuration from the process working
+// directory at init (first Brain\Monkey\setUp() call). Normalize to the
+// project root so the suite is deterministic regardless of where PHPUnit is
+// launched from (repo root, tests/php/, an IDE, or CI), and fail loudly if the
+// required configuration file is missing anywhere.
+$project_root = dirname( __DIR__ );
+$patchwork_path = getcwd() . '/patchwork.json';
+if ( file_exists( $patchwork_path ) ) {
+	$project_root = getcwd();
+} elseif ( file_exists( $project_root . '/patchwork.json' ) ) {
+	chdir( $project_root );
+} else {
+	trigger_error(
+		'patchwork.json not found in the project root. Run PHPUnit from the plugin root, or re-add the file before running the suite.',
+		E_USER_ERROR
+	);
+}
+
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 // Define WP constants used by plugin classes.
