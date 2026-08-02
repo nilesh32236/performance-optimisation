@@ -1,10 +1,12 @@
 <?php
 /**
- * Tests for WP 6.3+ core inline-CSS (`path` data) integration.
+ * Tests for WP core inline-CSS (`path` data) integration.
  *
  * Covers the enqueue-time minified-CSS rewrite (`minify_queued_styles`), the
  * `style_loader_tag` guard for already-processed handles, and the combined-CSS
- * `path` registration / double-inlining guards.
+ * `path` registration / double-inlining guards. The `path`-data inline
+ * mechanism exists since WP 5.8 (`wp_maybe_inline_styles()` /
+ * `styles_inline_size_limit`); only the default budget changed in 6.9.
  *
  * @package PerformanceOptimise\Tests
  */
@@ -53,6 +55,11 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
 		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'wp_normalize_path' )->alias(
+			static function ( $path ) {
+				return str_replace( '\\', '/', (string) $path );
+			}
+		);
 	}
 
 	/**
@@ -196,11 +203,12 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that minify_css leaves a path-data handle untouched (no double re-emit).
+	 * Test that minify_css leaves a handle carrying the plugin's own path data
+	 * untouched (no double re-emit).
 	 */
-	public function test_minify_css_returns_tag_when_handle_has_path_data(): void {
+	public function test_minify_css_returns_tag_when_handle_has_plugin_path_data(): void {
 		global $wp_styles;
-		$wp_styles = $this->make_wp_styles( array(), array(), $this->small_css_file );
+		$wp_styles = $this->make_wp_styles( array(), array(), '/tmp/wordpress/wp-content/cache/wppo/min/css/abc123.css' );
 
 		$main   = $this->make_main();
 		$rel    = 'stylesheet';
@@ -230,6 +238,60 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		$result = $main->minify_css( $tag, 'foo', 'https://cdn.example.com/foo.css' );
 
 		$this->assertSame( $tag, $result );
+	}
+
+	/**
+	 * Test that path data registered by core or a third party (outside the
+	 * plugin's min cache directory) is not exempted from legacy minification.
+	 */
+	public function test_minify_css_minifies_third_party_path_data_handle(): void {
+		global $wp_styles;
+		$wp_styles = $this->make_wp_styles( array(), array(), '/var/www/themes/foo/style.css' );
+
+		Functions\when( 'wp_parse_url' )->alias(
+			static function ( $url, $component = -1 ) {
+				$url  = (string) $url;
+				$path = ( 'http://example.com' === $url ) ? '/' : ( parse_url( $url, PHP_URL_PATH ) ?: '/' );
+				if ( -1 === $component ) {
+					return array( 'path' => $path );
+				}
+				return PHP_URL_PATH === $component ? $path : null;
+			}
+		);
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'wp_cache_get' )->justReturn( false );
+		Functions\when( 'wp_cache_set' )->justReturn( true );
+		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'content_url' )->justReturn( 'http://example.com/wp-content' );
+
+		// A real, non-minified local stylesheet so Util::get_local_path() and
+		// is_css_minified() can operate on it.
+		$source_dir  = '/tmp/wordpress/wp-content/themes/t';
+		$source_file = $source_dir . '/style.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $source_file, "body {\n\tcolor: red;\n}\n\nh1 {\n\tcolor: blue;\n}\n" );
+
+		$cached_file = '/tmp/wordpress/wp-content/cache/wppo/min/css/' . md5( 'third-party' ) . '.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $cached_file, 'body{color:red}' );
+		$cached_url = 'http://example.com/wp-content/cache/wppo/min/css/' . basename( $cached_file );
+
+		$minifier = \Mockery::mock( 'overload:PerformanceOptimise\Inc\Minify\CSS' );
+		$minifier->shouldReceive( 'minify' )->once()->andReturn( $cached_url );
+
+		$main   = $this->make_main();
+		$tag    = '<link rel="stylesheet" id="foo-css" href="http://example.com/wp-content/themes/t/style.css" />';
+		$result = $main->minify_css( $tag, 'foo', 'http://example.com/wp-content/themes/t/style.css' );
+
+		$this->assertStringContainsString( basename( $cached_file ), $result );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+		unlink( $source_file );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+		unlink( $cached_file );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.directory_delete_rmdir
+		@rmdir( $source_dir );
 	}
 
 	/**
@@ -333,6 +395,19 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	public function test_will_combine_css_inline_true_for_small_file(): void {
 		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
 
+		global $wp_styles;
+		$wp_styles = $this->make_wp_styles(
+			array(
+				'wppo-combine-css' => (object) array(
+					'src'   => 'http://example.com/wp-content/cache/wppo/example.com/index.css',
+					'args'  => 'all',
+					'extra' => array(),
+				),
+			),
+			array( 'wppo-combine-css' ),
+			$this->small_css_file
+		);
+
 		$cache = $this->make_cache();
 		$this->assertTrue( $this->invoke_private( $cache, 'will_combine_css_inline', array( $this->small_css_file ) ) );
 	}
@@ -343,7 +418,149 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	public function test_will_combine_css_inline_false_for_large_file(): void {
 		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
 
+		global $wp_styles;
+		$wp_styles = $this->make_wp_styles(
+			array(
+				'wppo-combine-css' => (object) array(
+					'src'   => 'http://example.com/wp-content/cache/wppo/example.com/index.css',
+					'args'  => 'all',
+					'extra' => array(),
+				),
+			),
+			array( 'wppo-combine-css' ),
+			$this->large_css_file
+		);
+
 		$cache = $this->make_cache();
 		$this->assertFalse( $this->invoke_private( $cache, 'will_combine_css_inline', array( $this->large_css_file ) ) );
+	}
+
+	/**
+	 * Test that get_styles_inline_limit returns a version-aware default.
+	 */
+	public function test_get_styles_inline_limit_is_version_aware(): void {
+		$cache = $this->make_cache();
+
+		$GLOBALS['wp_version'] = '6.8';
+		$this->assertSame( 20000, $this->invoke_private( $cache, 'get_styles_inline_limit' ) );
+
+		$GLOBALS['wp_version'] = '6.9';
+		$this->assertSame( 40000, $this->invoke_private( $cache, 'get_styles_inline_limit' ) );
+
+		// Without a known $wp_version the newest default is used.
+		unset( $GLOBALS['wp_version'] );
+		$this->assertSame( 40000, $this->invoke_private( $cache, 'get_styles_inline_limit' ) );
+	}
+
+	/**
+	 * Test that core_will_inline honours core's cumulative, smallest-first budget.
+	 */
+	public function test_core_will_inline_respects_cumulative_budget(): void {
+		Functions\when( 'function_exists' )->justReturn( true );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		$medium_a = tempnam( sys_get_temp_dir(), 'wppo-meda-' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		$medium_b = tempnam( sys_get_temp_dir(), 'wppo-medb-' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $medium_a, str_repeat( 'a', 25000 ) );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $medium_b, str_repeat( 'b', 25000 ) );
+
+		$paths = array(
+			'a' => $medium_a,
+			'b' => $medium_b,
+		);
+
+		global $wp_styles;
+		$wp_styles             = \Mockery::mock();
+		$wp_styles->registered = array(
+			'a' => (object) array( 'src' => 'http://example.com/a.css' ),
+			'b' => (object) array( 'src' => 'http://example.com/b.css' ),
+		);
+		$wp_styles->queue      = array( 'a', 'b' );
+		$wp_styles->shouldReceive( 'get_data' )->with( \Mockery::any(), 'path' )->andReturnUsing(
+			static function ( $handle ) use ( $paths ) {
+				return $paths[ $handle ] ?? null;
+			}
+		);
+
+		$cache = $this->make_cache();
+
+		// A alone fits the 40KB budget...
+		$this->assertTrue( $this->invoke_private( $cache, 'core_will_inline', array( 'a' ) ) );
+		// ...but A + B exceeds it, so B is not inlined despite fitting individually.
+		$this->assertFalse( $this->invoke_private( $cache, 'core_will_inline', array( 'b' ) ) );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+		unlink( $medium_a );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+		unlink( $medium_b );
+	}
+
+	/**
+	 * Test that minify_queued_styles rewrites a style to its minified file and
+	 * registers core `path` data for inlining.
+	 */
+	public function test_minify_queued_styles_rewrites_style_and_registers_path(): void {
+		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
+
+		Functions\when( 'wp_parse_url' )->alias(
+			static function ( $url, $component = -1 ) {
+				$url  = (string) $url;
+				$path = ( 'http://example.com' === $url ) ? '/' : ( parse_url( $url, PHP_URL_PATH ) ?: '/' );
+				if ( -1 === $component ) {
+					return array( 'path' => $path );
+				}
+				return PHP_URL_PATH === $component ? $path : null;
+			}
+		);
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'wp_cache_get' )->justReturn( false );
+		Functions\when( 'wp_cache_set' )->justReturn( true );
+
+		// A real, non-minified local stylesheet that passes all eligibility checks.
+		$source_dir  = '/tmp/wordpress/wp-content/themes/t';
+		$source_file = $source_dir . '/style.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $source_file, "body {\n\tcolor: red;\n}\n\nh1 {\n\tcolor: blue;\n}\n" );
+
+		$cached_file = '/tmp/wordpress/wp-content/cache/wppo/min/css/' . md5( 'happy-path' ) . '.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $cached_file, 'body{color:red}' );
+		$cached_url = 'http://example.com/wp-content/cache/wppo/min/css/' . basename( $cached_file );
+
+		$minifier = \Mockery::mock( 'overload:PerformanceOptimise\Inc\Minify\CSS' );
+		$minifier->shouldReceive( 'minify' )->once()->andReturn( $cached_url );
+		$minifier->shouldReceive( 'get_cache_file_path' )->once()->andReturn( $cached_file );
+
+		Functions\expect( 'wp_style_add_data' )->once()->with( 'foo', 'path', $cached_file )->andReturn( true );
+
+		global $wp_styles;
+		$wp_styles = $this->make_wp_styles(
+			array(
+				'foo' => (object) array(
+					'src'   => 'http://example.com/wp-content/themes/t/style.css',
+					'args'  => 'all',
+					'extra' => array(),
+				),
+			),
+			array( 'foo' ),
+			false
+		);
+
+		$main = $this->make_main();
+		$main->minify_queued_styles();
+
+		$this->assertSame( $cached_url, $wp_styles->registered['foo']->src );
+		$this->assertSame( (int) filemtime( $cached_file ), $wp_styles->registered['foo']->ver );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+		unlink( $source_file );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+		unlink( $cached_file );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.directory_delete_rmdir
+		@rmdir( $source_dir );
 	}
 }
