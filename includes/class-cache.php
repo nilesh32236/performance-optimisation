@@ -281,6 +281,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$exclude_combine_css = Util::process_urls( $this->options['file_optimisation']['excludeCombineCSS'] );
 			}
 
+			// On WP 6.9+ with separate (on-demand) core block assets active, never
+			// fold the combined wp-block-library stylesheet into the minified file —
+			// doing so would force the monolith back into the head. Belt-and-suspenders:
+			// wp-block-library is normally not in the queue on 6.9 anyway.
+			$separate_block_assets = function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets();
+
+			// The effective separate-assets state is baked into the combined-CSS
+			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
+			// assets on by default for classic themes) cannot keep serving a stale
+			// combined monolith built while wp-block-library was still in the queue.
+			$css_variant   = $separate_block_assets ? 'separate' : '';
+
 			// The set of handles this request would pull into the combined file. The
 			// same skip rules are applied below during generation so the two branches
 			// stay consistent about which styles belong in the file.
@@ -288,7 +300,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Reuse cached CSS only if it is still fresh (no source file is newer and
 			// the set of combined handles is unchanged).
-			$css_file_path = $this->get_cache_file_path( 'css' );
+			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
 
 			if ( $fs->exists( $css_file_path ) ) {
 				$cache_mtime  = (int) $fs->mtime( $css_file_path );
@@ -302,6 +314,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					// Styles core inlines are not part of the combined file, so their
 					// mtime must not force a regeneration.
 					if ( $this->core_will_inline( $handle ) ) {
+						continue;
+					}
+
+					if ( $separate_block_assets && 'wp-block-library' === $handle ) {
 						continue;
 					}
 
@@ -321,7 +337,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 
 				if ( ! $source_newer ) {
-					$css_url = $this->get_cache_file_url( 'css' );
+					$css_url = $this->get_cache_file_url( 'css', $css_variant );
 					$version = $cache_mtime;
 					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 					$this->register_combine_css_path( $css_file_path );
@@ -342,6 +358,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// core inline them at their own queue position; pulling them into the
 				// combined file would duplicate their rules and inflate its size.
 				if ( $this->core_will_inline( $handle ) ) {
+					continue;
+				}
+
+				if ( $separate_block_assets && 'wp-block-library' === $handle ) {
 					continue;
 				}
 
@@ -396,12 +416,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$css_minifier  = new CSSMinifier( $combined_css );
 				$combined_css  = $css_minifier->minify();
-				$css_file_path = $this->get_cache_file_path( 'css' );
+				$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
 
 				$this->prepare_cache_dir();
 				$this->save_cache_files( $combined_css, $css_file_path, 'css' );
 
-				$css_url = $this->get_cache_file_url( 'css' );
+				$css_url = $this->get_cache_file_url( 'css', $css_variant );
 
 				$version = $fs->mtime( $css_file_path );
 				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
@@ -921,26 +941,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Get the cache file path based on the URL path.
 		 *
 		 * @param string $type      The file type (default: 'html').
-		 * @param string $role_hash Optional role hash for logged-in user cache variant.
+		 * @param string $type       The file type (default: 'html').
+		 * @param string $role_hash  Optional role hash for logged-in user cache variant.
+		 * @param string $variant    Optional variant suffix (e.g. combined-CSS state) baked into the file name.
 		 * @return string The cache file path.
 		 *
 		 * @since 1.0.0
 		 */
-		private function get_cache_file_path( $type = 'html', string $role_hash = '' ): string {
+		private function get_cache_file_path( $type = 'html', string $role_hash = '', string $variant = '' ): string {
 			$suffix = $role_hash ? "-{$role_hash}" : '';
+			if ( $variant ) {
+				$suffix .= "-{$variant}";
+			}
 			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
 		}
 
 		/**
 		 * Get the cache file URL based on the URL path.
 		 *
-		 * @param string $type The file type (default: 'html').
+		 * @param string $type    The file type (default: 'html').
+		 * @param string $variant Optional variant suffix baked into the file name.
 		 * @return string The cache file URL.
 		 *
 		 * @since 1.0.0
 		 */
-		public function get_cache_file_url( $type = 'html' ): string {
-			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index.{$type}" : "{$this->url_path}/index.{$type}" );
+		public function get_cache_file_url( $type = 'html', string $variant = '' ): string {
+			$suffix = $variant ? "-{$variant}" : '';
+			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
 		}
 
 		/**
