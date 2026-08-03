@@ -152,6 +152,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private $options;
 
 		/**
+		 * Timestamp (microtime) when the front-end template render started.
+		 *
+		 * @var   float
+		 * @since 1.9.0
+		 */
+		private float $server_timing_template_start = 0.0;
+
+		/**
 		 * Constructor.
 		 *
 		 * Initializes the class by including necessary files and setting up hooks.
@@ -173,7 +181,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'excludeUnusedCSS'       => '',
 						'criticalCSS'            => false,
 						'hostGoogleFontsLocally' => false,
-						'blockAssetsOnDemand'    => false,
+						// On WP 6.9+ classic themes load core block assets on demand by default, so
+						// the toggle defaults to ON there and only acts as an opt-out. Pre-6.9 cores
+						// keep the legacy opt-in default (OFF).
+						'blockAssetsOnDemand'    => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+						'loadAllCoreBlockAssets' => false,
 						'delayJSDefaultStrategy' => 'interaction',
 						'delayJSIdleList'        => '',
 						'delayJSViewportList'    => '',
@@ -201,16 +213,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'speculationExcludeUrls' => '',
 					),
 					'image_optimisation' => array(
-						'placeholderType' => 'svg',
-						'autoPreloadLCP'  => false,
+						'placeholderType'     => 'svg',
+						'autoPreloadLCP'      => false,
+						'prioritizeLCPImages' => false,
 					),
 					'performance_audit'  => array(
-						'pagespeed_api_key' => '',
-						'high_value_urls'   => array(),
-						'auto_fix_enabled'  => false,
+						'pagespeed_api_key'     => '',
+						'high_value_urls'       => array(),
+						'auto_fix_enabled'      => false,
+						'server_timing_enabled' => false,
 					),
 				)
 			);
+
+			// WP 6.9+ loads core block assets on demand in classic themes by default. Existing
+			// installs whose stored settings predate the `blockAssetsOnDemand` key inherit that
+			// default in-memory here (no database write on front-end requests); the persisted
+			// value is backfilled once by maybe_migrate_block_assets_setting() on admin_init.
+			if ( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) ) {
+				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+					$this->options['file_optimisation'] = array();
+				}
+				if ( ! isset( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+					$this->options['file_optimisation']['blockAssetsOnDemand'] = true;
+				}
+			}
 
 			$this->includes();
 			$this->image_optimisation = new Image_Optimisation( $this->options );
@@ -328,23 +355,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private function setup_hooks(): void {
 			add_action( 'admin_menu', array( $this, 'init_menu' ) );
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
+			add_action( 'admin_init', array( $this, 'maybe_run_upgrades' ) );
+			add_action( 'wppo_run_upgrades', array( 'PerformanceOptimisation\Inc\Activate', 'maybe_run_upgrades' ) );
+			add_action( 'upgrader_process_complete', array( $this, 'maybe_schedule_upgrade_routine' ), 10, 2 );
 			add_action( 'admin_init', array( $this, 'maybe_run_version_upgrade' ) );
 			add_action( 'upgrader_process_complete', array( $this, 'maybe_run_version_upgrade' ), 10, 0 );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
-			add_action( 'wp_enqueue_scripts', array( $this, 'add_defer_strategy' ), 1000 );
 			$has_delay_js = ! empty( $this->options['file_optimisation']['delayJS'] );
 			$has_defer_js = ! empty( $this->options['file_optimisation']['deferJS'] );
-			if ( $has_delay_js || ( $has_defer_js && ! function_exists( 'wp_script_add_data' ) ) ) {
-				add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
-			}
-			if ( $has_defer_js ) {
-				add_filter( 'script_loader_tag', array( $this, 'add_fetchpriority_to_deferred' ), 11, 2 );
-			}
+			$wp_version   = (string) get_bloginfo( 'version' );
+			// The native 'strategy' script data added via wp_script_add_data() is only
+			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
+			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
+			// TODO: remove the legacy fallback when minimum supported WP is raised to 6.3.
+			$is_wp63_plus = version_compare( $wp_version, '6.3-alpha', '>=' );
+			// Pre-release-inclusive floor: '6.9-alpha' also matches alpha/beta/RC builds
+			// of 6.9 which already ship the template-enhancement buffer functions.
+			// TODO: remove the legacy buffer paths when minimum supported WP is raised to 6.9.
+			$is_wp69_plus = version_compare( $wp_version, '6.9-alpha', '>=' );
+
+			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
+			// on every supported version, so it is always registered when delay JS is on.
 			if ( $has_delay_js ) {
+				add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute' ), 10, 2 );
 				add_action( 'wp', array( $this, 'apply_per_page_delay_config' ) );
+			}
+
+			// Defer JS: use the native strategy on WP 6.3+, the script_loader_tag
+			// fallback on older core.
+			if ( $has_defer_js ) {
+				if ( $is_wp63_plus ) {
+					add_action( 'wp_enqueue_scripts', array( $this, 'add_defer_strategy' ), 1000 );
+				} else {
+					add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute_legacy' ), 10, 2 );
+				}
+				// Native fetchpriority rendering arrived in WP 6.9 (Trac #61734); the
+				// regex-based script_loader_tag fallback only runs on older cores.
+				if ( ! $is_wp69_plus ) {
+					add_filter( 'script_loader_tag', array( $this, 'add_fetchpriority_to_deferred' ), 11, 2 );
+				}
 			}
 			add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
@@ -356,24 +409,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$this->cache = new Cache( $this->options );
 				$this->cache->set_image_optimisation( $this->image_optimisation );
 				$this->cache->set_google_fonts( $this->google_fonts );
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
 					add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this->cache, 'stash_cache' ) );
 				} else {
 					// Legacy path (deprecated) — earmarked for removal when WP 6.9+ becomes the minimum supported version.
+					// TODO: remove when minimum supported WP is raised to 6.9.
 					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				}
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
 
+			// Server-Timing response header for live front-end renders (WP 6.9+). Independent of enableCache.
+			// Note: registering this action forces the template-enhancement output buffer on for live renders,
+			// which disables response streaming while the header is enabled. The header is only emitted on
+			// cache-miss generation passes; cached responses served by advanced-cache.php never boot WordPress.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $this->server_timing_enabled() ) {
+				add_action( 'template_redirect', array( $this, 'capture_template_start' ), 0 );
+				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 0 );
+			}
+
 			// Standalone used-CSS output buffer when page cache is disabled.
 			if ( empty( $this->options['cache_settings']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
-				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
 				} else {
+					// Legacy path (deprecated) — earmarked for removal when WP 6.9+ becomes the minimum supported version.
+					// TODO: remove when minimum supported WP is raised to 6.9.
 					add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
+				}
+			}
+
+			// Optional LCP image prioritization on the finalized HTML (default off).
+			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) ) {
+				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
+					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
+					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
+				} else {
+					// Legacy path: priority 20 runs AFTER the cache buffer (default priority 10),
+					// so its inner callback runs first on the raw buffer and the cache callback
+					// then stores the LCP-enhanced HTML — mirroring the 6.9+ flow.
+					add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 20 );
 				}
 			}
 
@@ -410,6 +488,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
 				}
 
+				if ( function_exists( 'wp_maybe_inline_styles' ) ) {
+					// The inline-styles mechanism (`wp_maybe_inline_styles()` /
+					// `styles_inline_size_limit`) exists since WP 5.8; only the default
+					// budget changed in 6.9. Rewrite styles at enqueue time and register
+					// 'path' data so core can inline minified files within the budget.
+					add_action( 'wp_enqueue_scripts', array( $this, 'minify_queued_styles' ), PHP_INT_MAX - 1 );
+				}
+
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 			}
 
@@ -417,9 +503,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_filter( 'style_loader_tag', array( $this->google_fonts, 'process_style_tag' ), 9, 3 );
 			}
 
-			if ( ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
-				add_filter( 'should_load_block_assets_on_demand', '__return_true' );
-			}
+			$this->register_block_assets_filters( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) );
 
 			if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
 				$exclude_js = array( 'wppo-lazyload' );
@@ -514,6 +598,112 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Register filters that control when core block assets load.
+		 *
+		 * On WP 6.9+ classic themes load separate core block assets on demand by default
+		 * (`wp_load_classic_theme_block_styles_on_demand()` registers
+		 * `should_load_separate_core_block_assets` → `__return_true` at priority 0), so the
+		 * toggle becomes an opt-out: when disabled we register
+		 * `should_load_separate_core_block_assets` → `__return_false` at priority 10, which
+		 * runs after core's priority-0 callback so `apply_filters()` resolves to `false` for
+		 * classic themes. Block themes are skipped because core registers `__return_true`
+		 * later (via `_add_default_theme_supports()` on `after_setup_theme`) and should keep
+		 * the separate-assets default by intent rather than by filter-ordering coincidence.
+		 * On pre-6.9 cores the toggle stays an opt-in via the legacy
+		 * `should_load_block_assets_on_demand` filter.
+		 *
+		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
+		 *                                                        (core loads separate core
+		 *                                                        block assets on demand).
+		 * @return void
+		 */
+		private function register_block_assets_filters( bool $loads_separate_core_block_assets_on_demand ): void {
+			if ( $loads_separate_core_block_assets_on_demand ) {
+				// WP 6.9+ classic themes load separate core block assets on demand by
+				// default. The combined wp-block-library stylesheet is only restored
+				// when the user explicitly opts out: blockAssetsOnDemand OFF (the
+				// version-aware toggle acts as an opt-out on 6.9+), or the
+				// loadAllCoreBlockAssets toggle is enabled. Block themes are always
+				// skipped so they keep core's separate-assets default by intent.
+				$opt_out_combined = empty( $this->options['file_optimisation']['blockAssetsOnDemand'] )
+					|| ! empty( $this->options['file_optimisation']['loadAllCoreBlockAssets'] );
+
+				if ( $opt_out_combined && ! wp_is_block_theme() ) {
+					add_filter( 'should_load_separate_core_block_assets', '__return_false', 10 );
+				}
+			} elseif ( ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+				// Pre-6.9 cores: opt-in to loading block assets on demand.
+				add_filter( 'should_load_block_assets_on_demand', '__return_true' );
+			}
+		}
+
+		/**
+		 * One-time upgrade for the block-assets toggle on WP 6.9+.
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end request never
+		 * triggers a settings write. See {@see migrate_block_assets_setting()} for the logic.
+		 *
+		 * @return void
+		 */
+		public function maybe_migrate_block_assets_setting(): void {
+			$this->migrate_block_assets_setting( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) );
+		}
+
+		/**
+		 * One-time upgrade core for the block-assets toggle on WP 6.9+.
+		 *
+		 * WP 6.9+ loads core block assets on demand in classic themes by default, but older
+		 * installs may store a `wppo_settings` array that predates the `blockAssetsOnDemand`
+		 * key (the pre-6.9 default was OFF). Without an upgrade those installs would silently
+		 * register the opt-out (forcing the combined `wp-block-library` stylesheet) once they
+		 * reach WP 6.9+.
+		 *
+		 * Only installs that never configured the toggle (key absent) are defaulted to `true`
+		 * so they inherit core's new default; any stored explicit value (true or false) is
+		 * preserved verbatim, and fresh installs with no stored option are skipped because the
+		 * constructor defaults already match. The one-time marker keeps later explicit user
+		 * choices intact.
+		 *
+		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
+		 *                                                        (core loads separate core
+		 *                                                        block assets on demand).
+		 * @return void
+		 */
+		private function migrate_block_assets_setting( bool $loads_separate_core_block_assets_on_demand ): void {
+			if ( ! $loads_separate_core_block_assets_on_demand ) {
+				return;
+			}
+
+			if ( get_option( 'wppo_block_assets_migrated' ) ) {
+				return;
+			}
+
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				// Fresh install (or no stored settings): constructor defaults already match
+				// WP 6.9+ behavior, so there is nothing to migrate.
+				update_option( 'wppo_block_assets_migrated', 1 );
+				return;
+			}
+
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+
+			if ( ! array_key_exists( 'blockAssetsOnDemand', $file ) ) {
+				$stored['file_optimisation'] = $file + array( 'blockAssetsOnDemand' => true );
+				update_option( 'wppo_settings', $stored );
+
+				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+					$this->options['file_optimisation'] = array();
+				}
+				$this->options['file_optimisation']['blockAssetsOnDemand'] = true;
+
+				Log::add( __( 'Enabled on-demand block asset loading to match the WordPress 6.9 default.', 'performance-optimisation' ) );
+			}
+
+			update_option( 'wppo_block_assets_migrated', 1 );
+		}
+
+		/**
 		 * Automatically try to fix WP_CACHE if it is missing or disabled.
 		 *
 		 * Runs on admin_init.
@@ -541,6 +731,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$existing_notices = is_array( $existing_notices ) ? $existing_notices : array();
 				$new_notices      = array_unique( array_merge( $existing_notices, (array) $notices ) );
 				set_transient( Util::transient_key( 'wppo_activation_notices' ), $new_notices, 30 );
+			}
+		}
+
+		/**
+		/**
+		 * Runs one-time upgrade routines after a plugin update.
+		 *
+		 * Routine plugin updates never fire register_activation_hook, so this is
+		 * triggered on admin_init. Activate::maybe_run_upgrades() exits early once
+		 * the stored plugin version has reached the migration floor.
+		 *
+		 * @return void
+		 * @since 1.8.1
+		 */
+		public function maybe_run_upgrades(): void {
+			if ( ! current_user_can( 'manage_options' ) ) {
+				return;
+			}
+
+			Activate::maybe_run_upgrades();
+		}
+
+		/**
+		 * Schedule the upgrade routine in the background after a plugin update.
+		 *
+		 * Fires on upgrader_process_complete when this plugin was updated, giving
+		 * sites updated via WP-CLI, background auto-updates, or managed-hosting
+		 * pipelines a reliable trigger that does not depend on an admin visit.
+		 *
+		 * @param object $upgrader   The upgrader instance (unused).
+		 * @param array  $hook_extra Extra arguments passed to the hook.
+		 * @return void
+		 * @since 1.8.1
+		 */
+		public function maybe_schedule_upgrade_routine( $upgrader, $hook_extra ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( empty( $hook_extra ) || ! is_array( $hook_extra ) ) {
+				return;
+			}
+
+			$plugin_file = 'performance-optimisation/performance-optimisation.php';
+
+			if ( ! empty( $hook_extra['plugin'] ) && $plugin_file === $hook_extra['plugin'] ) {
+				Activate::schedule_upgrade_routine();
+				return;
+			}
+
+			if ( ! empty( $hook_extra['plugins'] ) && is_array( $hook_extra['plugins'] ) && in_array( $plugin_file, $hook_extra['plugins'], true ) ) {
+				Activate::schedule_upgrade_routine();
 			}
 		}
 
@@ -779,6 +1017,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Whether the Server-Timing debug header is enabled.
+		 *
+		 * Reads the performance_audit.server_timing_enabled setting (default off).
+		 * Operators may override it via the wppo_server_timing_enabled filter, e.g. to
+		 * restrict emission to logged-in administrators with manage_options capability.
+		 *
+		 * @since  1.9.0
+		 * @return bool True when Server-Timing telemetry is active.
+		 */
+		public function server_timing_enabled(): bool {
+			$enabled = ! empty( $this->options['performance_audit']['server_timing_enabled'] ?? false );
+			return (bool) apply_filters( 'wppo_server_timing_enabled', $enabled );
+		}
+
+		/**
+		 * Capture the template render start time for Server-Timing telemetry.
+		 *
+		 * @return void
+		 * @since 1.9.0
+		 */
+		public function capture_template_start(): void {
+			if ( ! $this->server_timing_enabled() || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+				return;
+			}
+			$this->server_timing_template_start = microtime( true );
+		}
+
+		/**
+		 * Emit a Server-Timing response header on live front-end renders (WP 6.9+).
+		 *
+		 * Runs on wp_finalized_template_enhancement_output_buffer, the last hook
+		 * before the response is sent, so header() is still valid.
+		 *
+		 * @return void
+		 * @since 1.9.0
+		 */
+		public function emit_server_timing_header(): void {
+			if ( ! $this->server_timing_enabled() || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+				return;
+			}
+			if ( headers_sent() ) {
+				return;
+			}
+
+			$start = System_Info::get_request_start_microtime();
+			if ( null === $start ) {
+				return;
+			}
+
+			$now     = microtime( true );
+			$timings = array();
+
+			// wp-before-template: request bootstrap to template start. Measured from the
+			// captured template-start marker so it is disjoint from wp-template below.
+			if ( $this->server_timing_template_start > $start ) {
+				$timings[] = 'wp-before-template;dur=' . round( ( $this->server_timing_template_start - $start ) * 1000, 2 );
+			}
+
+			// wp-template: template render duration.
+			if ( $this->server_timing_template_start > 0 ) {
+				$render = ( $now - $this->server_timing_template_start ) * 1000;
+				if ( $render > 0 ) {
+					$timings[] = 'wp-template;dur=' . round( $render, 2 );
+				}
+			}
+
+			if ( ! empty( $timings ) ) {
+				// Append rather than replace so coexisting Server-Timing entries are preserved.
+				header( 'Server-Timing: ' . implode( ', ', $timings ), false );
+			}
+		}
+
+		/**
 		 * Start output buffer for used-CSS (legacy path, WP &lt; 6.9).
 		 *
 		 * @return void
@@ -789,6 +1100,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 			ob_start( array( $this, 'process_used_css_capture' ) );
+		}
+
+		/**
+		 * Start output buffer for LCP image prioritization (legacy path, WP &lt; 6.9).
+		 *
+		 * Registers at priority 20, after the cache and used-CSS buffers (default
+		 * priority 10), so its inner buffer callback runs first on the raw buffer
+		 * and the cache callback then stores the LCP-enhanced HTML. The callback
+		 * no-ops when the feature is disabled, the buffer is empty, the request is
+		 * non-HTML (feeds, robots, AJAX, REST), or the user is not eligible.
+		 *
+		 * @return void
+		 * @since 2.15.0
+		 */
+		public function start_lcp_priority_buffer() {
+			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
+				return;
+			}
+			if ( is_feed() || is_robots() || is_trackback() || is_preview() || is_embed() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+				return;
+			}
+			ob_start( array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ) );
 		}
 
 		/**
@@ -1003,6 +1336,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'nonce'             => wp_create_nonce( 'wp_rest' ),
 					'nonce_refresh'     => wp_create_nonce( 'wppo_nonce_refresh' ),
 					'version'           => WPPO_VERSION,
+					'wpVersion'         => get_bloginfo( 'version' ),
+					'isBlockTheme'      => function_exists( 'wp_is_block_theme' ) && wp_is_block_theme(),
 					'settings'          => $safe_options,
 					'show_welcome'      => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
 					'image_info'        => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
@@ -1045,14 +1380,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$needs_script = ( ! $use_native_lazy && $lazy_load_images ) || $lazy_load_videos || $enable_video_placeholder || $delay_js;
 
 				if ( $needs_script ) {
-					$lazy_args = array(
-						'in_footer'     => true,
-						'fetchpriority' => 'low',
-					);
-					wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
+					// Shared runtime config for the lazyload bundle. Exported to the frontend
+					// via the script-module data filter on WP 6.5+, or as classic inline
+					// scripts on older versions (see the fallback below).
+					$lazy_config = array();
 
 					if ( $use_native_lazy ) {
-						wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
+						$lazy_config['nativeLazy'] = true;
 					}
 
 					if ( $delay_js ) {
@@ -1062,13 +1396,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 							? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 							: 'interaction';
-						$delay_config     = wp_json_encode(
-							array(
-								'idleTimeout'     => $idle_timeout,
-								'defaultStrategy' => $default_strategy,
-							)
+
+						$lazy_config['delayConfig'] = array(
+							'idleTimeout'     => $idle_timeout,
+							'defaultStrategy' => $default_strategy,
 						);
-						wp_add_inline_script( 'wppo-lazyload', 'window.wppoDelayConfig=' . $delay_config . ';', 'before' );
+					}
+
+					$lazy_args = array(
+						'in_footer'     => true,
+						'fetchpriority' => 'low',
+					);
+
+					if ( function_exists( 'wp_enqueue_script_module' ) ) {
+						// WP 6.5+: load lazyload as a native script module. Modules are always
+						// deferred (non-render-blocking); the in_footer/fetchpriority args are
+						// honoured from WP 6.9 and harmlessly ignored on earlier 6.x releases.
+						wp_enqueue_script_module( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
+						add_filter(
+							'script_module_data_wppo-lazyload',
+							static function ( array $data ) use ( $lazy_config ) {
+								return array_merge( $data, $lazy_config );
+							}
+						);
+					} else {
+						// WP < 6.5 fallback: classic script enqueued with inline config injection.
+						wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
+
+						if ( $use_native_lazy ) {
+							wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
+						}
+
+						if ( $delay_js ) {
+							$delay_config = wp_json_encode( $lazy_config['delayConfig'] );
+							wp_add_inline_script( 'wppo-lazyload', 'window.wppoDelayConfig=' . $delay_config . ';', 'before' );
+						}
 					}
 				}
 			}
@@ -1264,6 +1626,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Adds the defer attribute to script tags on WordPress &lt; 6.3.
+		 *
+		 * WordPress 6.3+ natively honours the 'strategy' script data added via
+		 * wp_script_add_data(), so this legacy fallback is only registered on older
+		 * core (WP 6.2) where the native strategy is silently ignored.
+		 *
+		 * @since 1.8.0
+		 *
+		 * @param  string $tag    The script tag HTML.
+		 * @param  string $handle The script's registered handle.
+		 * @return string Modified script tag with the defer attribute.
+		 */
+		public function add_defer_attribute_legacy( $tag, $handle ): string {
+			if ( ! $this->should_optimise_for_logged_in() ) {
+				return $tag;
+			}
+
+			if ( in_array( $handle, $this->exclude_defer_js, true ) ) {
+				return $tag;
+			}
+
+			if ( false !== strpos( $tag, ' defer' ) || false !== strpos( $tag, 'type="module"' ) ) {
+				return $tag;
+			}
+
+			$this->deferred_handles[ $handle ] = true;
+
+			return str_replace( ' src', ' defer src', $tag );
+		}
+
+		/**
 		 * Get the delay strategy for a given script handle.
 		 *
 		 * Checks idle list, viewport list, and then falls back to default strategy.
@@ -1371,6 +1764,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 		/**
 		 * Adds fetchpriority="low" to rendered script tags for deferred handles.
+		 *
+		 * Pre-6.9 fallback only: on WP 6.9+ the native fetchpriority arg passed via
+		 * wp_script_add_data() in add_defer_strategy() is rendered by core.
 		 *
 		 * @since 2.4.0
 		 *
@@ -1557,6 +1953,120 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Rewrites enqueued styles to their minified versions at enqueue time and
+		 * registers the on-disk path so core can inline them.
+		 *
+		 * The inline-styles `path` data mechanism exists since WordPress 5.8
+		 * (`wp_maybe_inline_styles()` / the `styles_inline_size_limit` filter; the
+		 * default budget was raised from 20KB to 40KB in 6.9). This runs on
+		 * `wp_enqueue_scripts` (before core's inline pass at `wp_head` priority 1)
+		 * so minified files can opt in to inlining. Falls back to the
+		 * `style_loader_tag` rewriting in {@see minify_css()} on older WordPress
+		 * versions.
+		 *
+		 * @since 1.9.0
+		 * @return void
+		 */
+		public function minify_queued_styles(): void {
+			if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
+				return;
+			}
+
+			if ( ! $this->should_optimise_for_logged_in() ) {
+				return;
+			}
+
+			// The combine feature owns the whole pipeline; let it handle these handles.
+			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
+				return;
+			}
+
+			global $wp_styles;
+
+			if ( ! is_object( $wp_styles ) ) {
+				return;
+			}
+
+			foreach ( $wp_styles->queue as $handle ) {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
+
+				$style_data = $wp_styles->registered[ $handle ];
+
+				// Only external, 'all'-media stylesheets can be rewritten to a file.
+				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
+					continue;
+				}
+
+				$local_path = $this->get_minifiable_css_path( $handle, $style_data->src );
+				if ( false === $local_path ) {
+					continue;
+				}
+
+				$css_minifier = new Minify\CSS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css' ) );
+				$cached_url   = $css_minifier->minify();
+
+				if ( empty( $cached_url ) ) {
+					continue;
+				}
+
+				$cached_file = $css_minifier->get_cache_file_path();
+				if ( empty( $cached_file ) || ! file_exists( $cached_file ) ) {
+					continue;
+				}
+
+				$wp_styles->registered[ $handle ]->src = $cached_url;
+				$wp_styles->registered[ $handle ]->ver = (int) filemtime( $cached_file );
+
+				// Opt the minified file in to core's inline pass.
+				wp_style_add_data( $handle, 'path', $cached_file );
+			}
+		}
+
+		/**
+		 * Returns the local path of a style eligible for CSS minification.
+		 *
+		 * Shared by the enqueue-time rewrite ({@see minify_queued_styles()}) and the
+		 * legacy `style_loader_tag` path ({@see minify_css()}) so the eligibility
+		 * decision cannot drift between the two. The 'all'-media check only matters
+		 * at enqueue time and stays in {@see minify_queued_styles()}; the tag-time
+		 * path rewrites every media type as before.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param string $handle Style handle.
+		 * @param string $src    Style source URL.
+		 * @return string|false The local file path if the style should be minified,
+		 *                      false otherwise.
+		 */
+		private function get_minifiable_css_path( $handle, $src ) {
+			if ( empty( $src ) || in_array( $handle, $this->exclude_css, true ) ) {
+				return false;
+			}
+
+			$local_path = Util::get_local_path( $src );
+			if ( empty( $local_path ) ) {
+				return false;
+			}
+
+			if ( apply_filters( 'wppo_exclude_minification', false, $local_path, $handle, 'css' ) ) {
+				return false;
+			}
+
+			// Early return if the URL already indicates a minified file.
+			if ( $this->is_minified_asset_name( $src, 'css' ) ) {
+				return false;
+			}
+
+			if ( $this->is_css_minified( $local_path ) ) {
+				return false;
+			}
+
+			return $local_path;
+		}
+
+		/**
 		 * Rewrites CSS link tags to use minified versions if they exist.
 		 *
 		 * @since 1.0.0
@@ -1567,27 +2077,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified link tag with minified CSS.
 		 */
 		public function minify_css( $tag, $handle, $href ) {
-			// Early return for logged-in users (when optimisation not enabled), empty URLs, or excluded handles
-			// to avoid the expensive Util::get_local_path() computation.
-			if ( ! $this->should_optimise_for_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) ) {
+			// Early return for logged-in users (when optimisation not enabled) to avoid
+			// the expensive Util::get_local_path() computation.
+			if ( ! $this->should_optimise_for_logged_in() ) {
 				return $tag;
 			}
 
-			$local_path = Util::get_local_path( $href );
-			if ( empty( $local_path ) ) {
-				return $tag;
+			// Handles already rewritten at enqueue time carry 'path' data pointing at
+			// the plugin's own min cache. Only those are exempt — path data registered
+			// by core or third parties must still fall through to legacy minification.
+			global $wp_styles;
+			if ( isset( $wp_styles ) ) {
+				$path_data = $wp_styles->get_data( $handle, 'path' );
+				$min_dir   = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
+				if ( ! empty( $path_data ) && 0 === strpos( wp_normalize_path( $path_data ), $min_dir ) ) {
+					return $tag;
+				}
 			}
 
-			if ( apply_filters( 'wppo_exclude_minification', false, $local_path, $handle, 'css' ) ) {
-				return $tag;
-			}
-
-			// Early return if the URL already indicates a minified file.
-			if ( $this->is_minified_asset_name( $href, 'css' ) ) {
-				return $tag;
-			}
-
-			if ( $this->is_css_minified( $local_path ) ) {
+			$local_path = $this->get_minifiable_css_path( $handle, $href );
+			if ( false === $local_path ) {
 				return $tag;
 			}
 
