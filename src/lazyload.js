@@ -5,12 +5,35 @@
 let scriptLoadPromise = null;
 
 /**
+ * Read the runtime config exported by PHP through the WordPress
+ * `script_module_data_wppo-lazyload` filter (WP 6.5+). The data is printed as a
+ * `<script type="application/json" id="wp-script-module-data-wppo-lazyload">`
+ * tag before the module itself, so it is always available on load.
+ *
+ * @return {Object} Parsed module data, or an empty object when absent/invalid.
+ */
+const readModuleData = () => {
+	const el = document.getElementById( 'wp-script-module-data-wppo-lazyload' );
+	if ( ! el || ! el.textContent ) {
+		return {};
+	}
+	try {
+		return JSON.parse( el.textContent );
+	} catch ( _err ) {} // eslint-disable-line no-unused-vars
+	return {};
+};
+
+const moduleData = readModuleData();
+
+/**
  * Whether native lazy loading is active (loading="lazy" on img/iframe instead of IntersectionObserver).
- * Set by PHP via wp_add_inline_script before the lazyload script.
+ * Provided by PHP via the script-module data filter (WP 6.5+) or via
+ * wp_add_inline_script on the classic-script fallback path (WP < 6.5).
  * @type {boolean}
  */
 const useNativeLazy =
-	typeof window.wppoNativeLazy !== 'undefined' && window.wppoNativeLazy;
+	( typeof window.wppoNativeLazy !== 'undefined' && window.wppoNativeLazy ) ||
+	!! moduleData.nativeLazy;
 
 /**
  * Whether the browser supports native loading="lazy" for images and iframes.
@@ -145,12 +168,15 @@ const loadScript = ( script ) => {
 
 /**
  * Delay JS configuration from PHP.
+ * Read from the script-module data filter (WP 6.5+) or the classic
+ * `window.wppoDelayConfig` global (WP < 6.5), with sensible defaults.
  * @type {{ idleTimeout: number, defaultStrategy: string }}
  */
-const delayConfig = window.wppoDelayConfig || {
-	idleTimeout: 3000,
-	defaultStrategy: 'interaction',
-};
+const delayConfig = window.wppoDelayConfig ||
+	moduleData.delayConfig || {
+		idleTimeout: 3000,
+		defaultStrategy: 'interaction',
+	};
 
 /**
  * Load scripts grouped by priority (high → normal → low).

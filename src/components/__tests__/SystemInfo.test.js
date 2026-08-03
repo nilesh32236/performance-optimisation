@@ -64,6 +64,36 @@ describe( 'SystemInfo Component', () => {
 		} );
 	} );
 
+	it( 'renders OPCache table when opcache data is present', async () => {
+		fetchSystemInfo.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				opcache: {
+					status: 'Enabled',
+					memory_usage: '100 MB of 200 MB',
+					interned_strings: '50.00% of 8 MB (4 MB free)',
+					hit_rate: '99.50%',
+					cache_full: 'No',
+				},
+			},
+		} );
+		render( <SystemInfo /> );
+
+		const loadButton = screen.getByRole( 'button', {
+			name: /load system info/i,
+		} );
+		fireEvent.click( loadButton );
+
+		await waitFor( () => {
+			expect( screen.getByText( 'OPCache' ) ).toBeInTheDocument();
+			expect( screen.getByText( 'Enabled' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( '50.00% of 8 MB (4 MB free)' )
+			).toBeInTheDocument();
+			expect( screen.getByText( '99.50%' ) ).toBeInTheDocument();
+		} );
+	} );
+
 	it( 'renders trigger button and then loads system info', async () => {
 		fetchSystemInfo.mockResolvedValueOnce( {
 			success: true,

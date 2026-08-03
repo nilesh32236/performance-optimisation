@@ -132,10 +132,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		/**
 		 * Gets the cache file path for the minified CSS.
 		 *
+		 * Public so callers (e.g. core inline-styles registration) can access the
+		 * on-disk path of the minified file after {@see Minify\CSS::minify()}.
+		 *
 		 * @return string The full path to the cache file.
 		 * @since 1.0.0
 		 */
-		private function get_cache_file_path(): string {
+		public function get_cache_file_path(): string {
 			$filename = md5( $this->file_path ) . '.css';
 			return "{$this->cache_dir}/{$filename}";
 		}

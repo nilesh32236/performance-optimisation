@@ -574,6 +574,96 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		} );
 	} );
 
+	describe( 'config resolution (script-module data)', () => {
+		const injectModuleData = ( data ) => {
+			const existing = document.getElementById(
+				'wp-script-module-data-wppo-lazyload'
+			);
+			if ( existing ) {
+				existing.remove();
+			}
+			const el = document.createElement( 'script' );
+			el.type = 'application/json';
+			el.id = 'wp-script-module-data-wppo-lazyload';
+			el.textContent = JSON.stringify( data );
+			document.head.appendChild( el );
+		};
+
+		const readModuleData = () => {
+			const node = document.getElementById(
+				'wp-script-module-data-wppo-lazyload'
+			);
+			if ( ! node || ! node.textContent ) {
+				return {};
+			}
+			try {
+				return JSON.parse( node.textContent );
+			} catch ( _err ) {} // eslint-disable-line no-unused-vars
+			return {};
+		};
+
+		it( 'reads nativeLazy from module data when the global is absent', () => {
+			injectModuleData( { nativeLazy: true } );
+			delete global.wppoNativeLazy;
+
+			const moduleData = readModuleData();
+			const useNativeLazy =
+				( typeof global.wppoNativeLazy !== 'undefined' &&
+					global.wppoNativeLazy ) ||
+				!! moduleData.nativeLazy;
+
+			expect( useNativeLazy ).toBe( true );
+		} );
+
+		it( 'reads delayConfig from module data when the global is absent', () => {
+			injectModuleData( {
+				delayConfig: {
+					idleTimeout: 5000,
+					defaultStrategy: 'idle',
+				},
+			} );
+			delete global.wppoDelayConfig;
+
+			const moduleData = readModuleData();
+			const delayConfig = global.wppoDelayConfig ||
+				moduleData.delayConfig || {
+					idleTimeout: 3000,
+					defaultStrategy: 'interaction',
+				};
+
+			expect( delayConfig.idleTimeout ).toBe( 5000 );
+			expect( delayConfig.defaultStrategy ).toBe( 'idle' );
+		} );
+
+		it( 'prefers the legacy globals over module data', () => {
+			injectModuleData( { nativeLazy: false } );
+			global.wppoNativeLazy = true;
+
+			const moduleData = readModuleData();
+			const useNativeLazy =
+				( typeof global.wppoNativeLazy !== 'undefined' &&
+					global.wppoNativeLazy ) ||
+				!! moduleData.nativeLazy;
+
+			expect( useNativeLazy ).toBe( true );
+		} );
+
+		it( 'returns defaults when neither globals nor module data are present', () => {
+			delete global.wppoNativeLazy;
+			delete global.wppoDelayConfig;
+
+			const moduleData = readModuleData();
+			const delayConfig = global.wppoDelayConfig ||
+				moduleData.delayConfig || {
+					idleTimeout: 3000,
+					defaultStrategy: 'interaction',
+				};
+
+			expect( delayConfig.idleTimeout ).toBe( 3000 );
+			expect( delayConfig.defaultStrategy ).toBe( 'interaction' );
+		} );
+	} );
+
 	describe( 'loadScripts()', () => {
 		it( 'dispatches DOMContentLoaded event after loading scripts', async () => {
 			const listener = jest.fn();

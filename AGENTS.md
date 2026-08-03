@@ -22,6 +22,7 @@ npm run start                # dev watch mode
 | `npm run lint:js:fix` | Auto-fix JS lint |
 | `composer lint` | PHPCS (WordPress standard, config in `phpcs.xml`) |
 | `composer lint:fix` | PHPCBF auto-fix |
+| `composer test` | PHPUnit unit tests via Brain Monkey (`phpunit.xml.dist`, `tests/php/`) |
 | `composer makepot` | Generate `.pot` translation file (PHP + JS `@wordpress/i18n` strings) |
 | `composer release` | `composer install --no-dev --optimize-autoloader` |
 
@@ -153,7 +154,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
   - `jest.mock('../../lib/apiRequest', () => ({ apiCall: jest.fn() }))` (preferred for components)
   - `global.fetch = jest.fn()` (used in apiRequest.test.js)
   - `jest.spyOn(console, 'error').mockImplementation(() => {})` + `.mockRestore()` for sad paths
-- **No PHP unit tests** exist — only WPCS linting + `parallel-lint` in CI
+- **PHP unit tests** (`tests/php/`, run via `composer test`): PHPUnit + Brain Monkey. Bootstrap defines WP constants and a `WPPO_Test_Bootstrap` trait. Test files must be named `*Test.php` (matching their class name) or PHPUnit will not discover them. Use `Brain\Monkey\Functions\when()` for WP function stubs, `Brain\Monkey\Filters\has()` / `expectAdded()` for filter assertions, and `ReflectionMethod`/`ReflectionProperty` (with `setAccessible`) to test private methods. Requires dev deps (`composer dev-setup`).
 - **No pre-commit hooks** — all quality checks run in CI only
 
 ## JS conventions
@@ -174,6 +175,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 - No WP-CLI commands registered
 - All REST endpoints require `manage_options` + `X-WP-Nonce`
 - Settings stored as serialized array in single `wppo_settings` option
+- **Filters**: `wppo_inline_combined_css` (return falsy to disable inlining of the combined/minified CSS via core `wp_maybe_inline_styles()` — e.g. when using a CDN for the combined file)
 
 ## Multisite compatibility
 
