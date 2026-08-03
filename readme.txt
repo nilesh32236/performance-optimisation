@@ -86,6 +86,10 @@ After activation, you can manage the following from the settings tabs:
 
 == Changelog ==
 
+= 1.8.1 (2026-08-01) =
+* New: WordPress 6.9+ compatibility for block asset loading — classic themes now load separate core block styles on demand by default (matching WordPress core). The "Load Block Assets On Demand" toggle acts as an opt-out on 6.9+: disable it to force the combined `wp-block-library` stylesheet.
+* Improvement: Existing installs are migrated once to the WordPress 6.9+ on-demand default without overwriting explicit user settings.
+
 = 1.8.0 (2026-07-28) =
 * New: WordPress 6.9+ object cache key salt support for cache key space invalidation.
 * New: Lazy loading and HTML Tag Processor support for `iframe` elements.
