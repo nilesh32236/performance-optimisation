@@ -34,7 +34,6 @@
 /psalm.xml
 /patchwork.json
 /tests/
-/patchwork.json
 /bin/
 /scripts/
 /test_*.js
@@ -56,3 +55,4 @@
 /AGENTS.md
 /test-lab/
 /reports/
+/review-output.jsonl

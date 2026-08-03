@@ -62,6 +62,9 @@ const FileOptimization = ( {
 		disableEmbeds: false,
 		disableDashicons: false,
 		disableXMLRPC: false,
+		// Mirrors the pre-6.9 PHP default. PHP always emits the key on WP 6.9+ (where
+		// core loads block assets on demand by default), so this fallback is only used
+		// on older cores and never contradicts the backend default.
 		blockAssetsOnDemand: false,
 		loadAllCoreBlockAssets: false,
 		heartbeatControl: 'default',

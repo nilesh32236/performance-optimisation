@@ -181,7 +181,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'excludeUnusedCSS'       => '',
 						'criticalCSS'            => false,
 						'hostGoogleFontsLocally' => false,
-						'blockAssetsOnDemand'    => false,
+						// On WP 6.9+ classic themes load core block assets on demand by default, so
+						// the toggle defaults to ON there and only acts as an opt-out. Pre-6.9 cores
+						// keep the legacy opt-in default (OFF).
+						'blockAssetsOnDemand'    => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
 						'loadAllCoreBlockAssets' => false,
 						'delayJSDefaultStrategy' => 'interaction',
 						'delayJSIdleList'        => '',
@@ -222,6 +225,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					),
 				)
 			);
+
+			// WP 6.9+ loads core block assets on demand in classic themes by default. Existing
+			// installs whose stored settings predate the `blockAssetsOnDemand` key inherit that
+			// default in-memory here (no database write on front-end requests); the persisted
+			// value is backfilled once by maybe_migrate_block_assets_setting() on admin_init.
+			if ( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) ) {
+				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+					$this->options['file_optimisation'] = array();
+				}
+				if ( ! isset( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+					$this->options['file_optimisation']['blockAssetsOnDemand'] = true;
+				}
+			}
 
 			$this->includes();
 			$this->image_optimisation = new Image_Optimisation( $this->options );
@@ -339,6 +355,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private function setup_hooks(): void {
 			add_action( 'admin_menu', array( $this, 'init_menu' ) );
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
+			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
@@ -477,30 +494,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_filter( 'style_loader_tag', array( $this->google_fonts, 'process_style_tag' ), 9, 3 );
 			}
 
-			// Load the combined wp-block-library stylesheet instead of separate
-			// on-demand block assets. This is the WP 6.9+ pre-init opt-out for
-			// classic themes that depend on styles enqueued by shortcodes or
-			// widgets while content renders. setup_hooks() runs at plugin load
-			// (before init), so this overrides core's priority-0 __return_true
-			// added by wp_load_classic_theme_block_styles_on_demand().
-			//
-			// The opt-out is gated to classic themes only: block themes already
-			// load the combined library via theme support and keep core's
-			// separate-assets default untouched.
-			$load_all_core_block_assets = ! empty( $this->options['file_optimisation']['loadAllCoreBlockAssets'] );
-			$is_69_optout_active        = $load_all_core_block_assets && function_exists( 'wp_load_classic_theme_block_styles_on_demand' );
-
-			if ( $is_69_optout_active && ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) ) {
-				add_filter( 'should_load_separate_core_block_assets', '__return_false' );
-			}
-
-			// WP 6.8 on-demand block assets filter (the WP 6.9 default for classic
-			// themes). Suppressed only when the combined-library opt-out above is
-			// actually active (WP 6.9+), so the two settings cannot conflict
-			// (opt-out wins) while 6.8 sites keep their existing behavior.
-			if ( ! $is_69_optout_active && ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
-				add_filter( 'should_load_block_assets_on_demand', '__return_true' );
-			}
+			$this->register_block_assets_filters( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) );
 
 			if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
 				$exclude_js = array( 'wppo-lazyload' );
@@ -592,6 +586,112 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 
 			add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
+		}
+
+		/**
+		 * Register filters that control when core block assets load.
+		 *
+		 * On WP 6.9+ classic themes load separate core block assets on demand by default
+		 * (`wp_load_classic_theme_block_styles_on_demand()` registers
+		 * `should_load_separate_core_block_assets` → `__return_true` at priority 0), so the
+		 * toggle becomes an opt-out: when disabled we register
+		 * `should_load_separate_core_block_assets` → `__return_false` at priority 10, which
+		 * runs after core's priority-0 callback so `apply_filters()` resolves to `false` for
+		 * classic themes. Block themes are skipped because core registers `__return_true`
+		 * later (via `_add_default_theme_supports()` on `after_setup_theme`) and should keep
+		 * the separate-assets default by intent rather than by filter-ordering coincidence.
+		 * On pre-6.9 cores the toggle stays an opt-in via the legacy
+		 * `should_load_block_assets_on_demand` filter.
+		 *
+		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
+		 *                                                        (core loads separate core
+		 *                                                        block assets on demand).
+		 * @return void
+		 */
+		private function register_block_assets_filters( bool $loads_separate_core_block_assets_on_demand ): void {
+			if ( $loads_separate_core_block_assets_on_demand ) {
+				// WP 6.9+ classic themes load separate core block assets on demand by
+				// default. The combined wp-block-library stylesheet is only restored
+				// when the user explicitly opts out: blockAssetsOnDemand OFF (the
+				// version-aware toggle acts as an opt-out on 6.9+), or the
+				// loadAllCoreBlockAssets toggle is enabled. Block themes are always
+				// skipped so they keep core's separate-assets default by intent.
+				$opt_out_combined = empty( $this->options['file_optimisation']['blockAssetsOnDemand'] )
+					|| ! empty( $this->options['file_optimisation']['loadAllCoreBlockAssets'] );
+
+				if ( $opt_out_combined && ! wp_is_block_theme() ) {
+					add_filter( 'should_load_separate_core_block_assets', '__return_false', 10 );
+				}
+			} elseif ( ! empty( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
+				// Pre-6.9 cores: opt-in to loading block assets on demand.
+				add_filter( 'should_load_block_assets_on_demand', '__return_true' );
+			}
+		}
+
+		/**
+		 * One-time upgrade for the block-assets toggle on WP 6.9+.
+		 *
+		 * Runs on `admin_init` (not the constructor) so a cacheable front-end request never
+		 * triggers a settings write. See {@see migrate_block_assets_setting()} for the logic.
+		 *
+		 * @return void
+		 */
+		public function maybe_migrate_block_assets_setting(): void {
+			$this->migrate_block_assets_setting( function_exists( 'wp_load_classic_theme_block_styles_on_demand' ) );
+		}
+
+		/**
+		 * One-time upgrade core for the block-assets toggle on WP 6.9+.
+		 *
+		 * WP 6.9+ loads core block assets on demand in classic themes by default, but older
+		 * installs may store a `wppo_settings` array that predates the `blockAssetsOnDemand`
+		 * key (the pre-6.9 default was OFF). Without an upgrade those installs would silently
+		 * register the opt-out (forcing the combined `wp-block-library` stylesheet) once they
+		 * reach WP 6.9+.
+		 *
+		 * Only installs that never configured the toggle (key absent) are defaulted to `true`
+		 * so they inherit core's new default; any stored explicit value (true or false) is
+		 * preserved verbatim, and fresh installs with no stored option are skipped because the
+		 * constructor defaults already match. The one-time marker keeps later explicit user
+		 * choices intact.
+		 *
+		 * @param bool $loads_separate_core_block_assets_on_demand Whether WP 6.9+ is active
+		 *                                                        (core loads separate core
+		 *                                                        block assets on demand).
+		 * @return void
+		 */
+		private function migrate_block_assets_setting( bool $loads_separate_core_block_assets_on_demand ): void {
+			if ( ! $loads_separate_core_block_assets_on_demand ) {
+				return;
+			}
+
+			if ( get_option( 'wppo_block_assets_migrated' ) ) {
+				return;
+			}
+
+			$stored = get_option( 'wppo_settings' );
+			if ( ! is_array( $stored ) ) {
+				// Fresh install (or no stored settings): constructor defaults already match
+				// WP 6.9+ behavior, so there is nothing to migrate.
+				update_option( 'wppo_block_assets_migrated', 1 );
+				return;
+			}
+
+			$file = isset( $stored['file_optimisation'] ) && is_array( $stored['file_optimisation'] ) ? $stored['file_optimisation'] : array();
+
+			if ( ! array_key_exists( 'blockAssetsOnDemand', $file ) ) {
+				$stored['file_optimisation'] = $file + array( 'blockAssetsOnDemand' => true );
+				update_option( 'wppo_settings', $stored );
+
+				if ( ! isset( $this->options['file_optimisation'] ) || ! is_array( $this->options['file_optimisation'] ) ) {
+					$this->options['file_optimisation'] = array();
+				}
+				$this->options['file_optimisation']['blockAssetsOnDemand'] = true;
+
+				Log::add( __( 'Enabled on-demand block asset loading to match the WordPress 6.9 default.', 'performance-optimisation' ) );
+			}
+
+			update_option( 'wppo_block_assets_migrated', 1 );
 		}
 
 		/**
