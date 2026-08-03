@@ -384,6 +384,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$sanitized_settings['pagespeed_api_key'] = $options['performance_audit']['pagespeed_api_key'];
 			}
 
+			// Preserve the server_timing_enabled flag when the request omits it (no UI toggle exists yet).
+			if ( 'performance_audit' === $tab && ! isset( $params['settings']['server_timing_enabled'] ) && isset( $options['performance_audit']['server_timing_enabled'] ) ) {
+				$sanitized_settings['server_timing_enabled'] = $options['performance_audit']['server_timing_enabled'];
+			}
+
 			$options[ $tab ] = $sanitized_settings;
 
 			update_option( 'wppo_settings', $options );

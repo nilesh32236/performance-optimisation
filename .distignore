@@ -8,6 +8,18 @@
 /vendor/wp-coding-standards/
 /vendor/dealerdirect/
 /vendor/phpcsstandards/
+/vendor/phpcompatibility/
+/vendor/phpunit/
+/vendor/sebastian/
+/vendor/brain/
+/vendor/mockery/
+/vendor/hamcrest/
+/vendor/antecedent/
+/vendor/myclabs/
+/vendor/nikic/
+/vendor/phar-io/
+/vendor/staabm/
+/vendor/theseer/
 /vendor/bin/
 /vendor/matthiasmullie/minify/bin/
 /package.json
@@ -20,6 +32,7 @@
 /.nvmrc
 /phpcs.xml
 /psalm.xml
+/patchwork.json
 /tests/
 /patchwork.json
 /bin/
@@ -43,4 +56,3 @@
 /AGENTS.md
 /test-lab/
 /reports/
-/vendor/phpcompatibility/

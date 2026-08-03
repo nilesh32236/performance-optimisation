@@ -46,7 +46,7 @@
 	}
 
 	&:focus-visible {
-		outline: 3px solid var(--wppo-primary, #007cba);
+		outline: 3px solid var(--wppo-primary, #2271b1);
 		outline-offset: 4px;
 		border-radius: 2px;
 	}
@@ -57,5 +57,5 @@
 }
 
 .wppo-video-play-btn:hover .wppo-play-btn-bg {
-	fill: #cc0000;
+	fill: var(--wppo-primary-hover);
 }
