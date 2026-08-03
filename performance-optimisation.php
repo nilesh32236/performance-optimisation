@@ -5,7 +5,7 @@
  * Requires at least: 6.2
  * Requires PHP:      8.2
  * Tested up to:      7.0
- * Version:           1.8.1
+ * Version:           1.9.0
  * Author:            Nilesh kanzariya
  * Author URI:        https://github.com/nilesh32236
  * License:           GPL-2.0-or-later
@@ -34,7 +34,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 }
 
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.8.1' );
+	define( 'WPPO_VERSION', '1.9.0' );
 }
 
 // Load Composer autoloader.

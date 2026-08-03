@@ -144,6 +144,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$color = imagecolorallocate( $image, 120, 180, 240 );
 		imagefill( $image, 0, 0, $color );
 		imagepng( $image, $path );
+		// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated -- imagedestroy() is still the correct way to free GD resources in PHP 8.x
 		imagedestroy( $image );
 
 		return $path;

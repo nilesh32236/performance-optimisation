@@ -356,8 +356,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_menu', array( $this, 'init_menu' ) );
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
 			add_action( 'admin_init', array( $this, 'maybe_run_upgrades' ) );
-			add_action( 'wppo_run_upgrades', array( 'PerformanceOptimise\Inc\Activate', 'maybe_run_upgrades' ) );
+			add_action( 'wppo_run_upgrades', array( 'PerformanceOptimisation\Inc\Activate', 'maybe_run_upgrades' ) );
 			add_action( 'upgrader_process_complete', array( $this, 'maybe_schedule_upgrade_routine' ), 10, 2 );
+			add_action( 'admin_init', array( $this, 'maybe_run_version_upgrade' ) );
+			add_action( 'upgrader_process_complete', array( $this, 'maybe_run_version_upgrade' ), 10, 0 );
 			add_action( 'admin_init', array( $this, 'maybe_migrate_block_assets_setting' ) );
 			add_action( 'admin_enqueue_scripts', array( $this, 'admin_enqueue_scripts' ) );
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
@@ -733,6 +735,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		/**
 		 * Runs one-time upgrade routines after a plugin update.
 		 *
 		 * Routine plugin updates never fire register_activation_hook, so this is
@@ -777,6 +780,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $hook_extra['plugins'] ) && is_array( $hook_extra['plugins'] ) && in_array( $plugin_file, $hook_extra['plugins'], true ) ) {
 				Activate::schedule_upgrade_routine();
 			}
+		}
+
+		/**
+		 * Run one-time upgrade routines when the plugin version changes.
+		 *
+		 * Regenerates the advanced-cache.php drop-in so it honours the
+		 * DONOTCACHEPAGE no-cache marker, then clears the full cache once to
+		 * remove any pre-existing stale pages the old drop-in would keep serving.
+		 * Runs on admin_init and upgrader_process_complete (covering admin-initiated
+		 * and CLI updates); the one-time wppo_version gate keeps it idempotent.
+		 *
+		 * @return void
+		 * @since 1.9.0
+		 */
+		public function maybe_run_version_upgrade(): void {
+			// Only administrators may trigger the destructive upgrade routine.
+			if ( ! current_user_can( 'manage_options' ) ) {
+				return;
+			}
+
+			$installed_version = get_option( 'wppo_version', '' );
+
+			if ( version_compare( (string) $installed_version, WPPO_VERSION, '>=' ) ) {
+				return;
+			}
+
+			// Regenerate the drop-in so it honours the DONOTCACHEPAGE marker. On a
+			// transient filesystem failure leave wppo_version unchanged so a later
+			// request retries instead of skipping the migration forever.
+			if ( ! Advanced_Cache_Handler::create() ) {
+				return;
+			}
+
+			// Only clear the full cache once our own marker-aware drop-in is actually
+			// in place; a foreign drop-in is left untouched and cannot serve markers.
+			if ( ! Advanced_Cache_Handler::foreign_dropin_present() ) {
+				Cache::clear_cache();
+			}
+
+			update_option( 'wppo_version', WPPO_VERSION, false );
 		}
 
 		/**
