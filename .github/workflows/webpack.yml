@@ -52,6 +52,31 @@ jobs:
           path: build/
           retention-days: 7
 
+  js-react19:
+    name: JS Tests & Build (React 19)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Force React 19 (WP 7.1 readiness)
+        run: npm install --save-dev --legacy-peer-deps @wordpress/element@7.0.0 react@^19 react-dom@^19 @testing-library/react@^16 @testing-library/dom @fortawesome/fontawesome-svg-core
+
+      - name: JS Tests (React 19)
+        run: npm test
+
+      - name: Build (React 19)
+        run: npm run build
+
   php-syntax:
     name: PHP Syntax Check (8.2–8.5)
     runs-on: ubuntu-latest
