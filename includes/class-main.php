@@ -1003,14 +1003,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$needs_script = ( ! $use_native_lazy && $lazy_load_images ) || $lazy_load_videos || $enable_video_placeholder || $delay_js;
 
 				if ( $needs_script ) {
-					$lazy_args = array(
-						'in_footer'     => true,
-						'fetchpriority' => 'low',
-					);
-					wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
+					// Shared runtime config for the lazyload bundle. Exported to the frontend
+					// via the script-module data filter on WP 6.5+, or as classic inline
+					// scripts on older versions (see the fallback below).
+					$lazy_config = array();
 
 					if ( $use_native_lazy ) {
-						wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
+						$lazy_config['nativeLazy'] = true;
 					}
 
 					if ( $delay_js ) {
@@ -1020,13 +1019,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 							? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 							: 'interaction';
-						$delay_config     = wp_json_encode(
-							array(
-								'idleTimeout'     => $idle_timeout,
-								'defaultStrategy' => $default_strategy,
-							)
+
+						$lazy_config['delayConfig'] = array(
+							'idleTimeout'     => $idle_timeout,
+							'defaultStrategy' => $default_strategy,
 						);
-						wp_add_inline_script( 'wppo-lazyload', 'window.wppoDelayConfig=' . $delay_config . ';', 'before' );
+					}
+
+					$lazy_args = array(
+						'in_footer'     => true,
+						'fetchpriority' => 'low',
+					);
+
+					if ( function_exists( 'wp_enqueue_script_module' ) ) {
+						// WP 6.5+: load lazyload as a native script module. Modules are always
+						// deferred (non-render-blocking); the in_footer/fetchpriority args are
+						// honoured from WP 6.9 and harmlessly ignored on earlier 6.x releases.
+						wp_enqueue_script_module( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
+						add_filter(
+							'script_module_data_wppo-lazyload',
+							static function ( array $data ) use ( $lazy_config ) {
+								return array_merge( $data, $lazy_config );
+							}
+						);
+					} else {
+						// WP < 6.5 fallback: classic script enqueued with inline config injection.
+						wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
+
+						if ( $use_native_lazy ) {
+							wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
+						}
+
+						if ( $delay_js ) {
+							$delay_config = wp_json_encode( $lazy_config['delayConfig'] );
+							wp_add_inline_script( 'wppo-lazyload', 'window.wppoDelayConfig=' . $delay_config . ';', 'before' );
+						}
 					}
 				}
 			}
