@@ -30,7 +30,6 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 				'wp_unslash',
 				'get_option',
 				'trailingslashit',
-				'idn_to_ascii',
 			)
 		);
 		Functions\when( 'wp_normalize_path' )->returnArg();
@@ -98,10 +97,10 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that rewrite_cdn_urls method exists.
+	 * Test that maybe_apply_cdn method exists.
 	 */
-	public function test_rewrite_cdn_urls_method_exists(): void {
-		$this->assertTrue( method_exists( Cache::class, 'rewrite_cdn_urls' ) );
+	public function test_maybe_apply_cdn_method_exists(): void {
+		$this->assertTrue( method_exists( Cache::class, 'maybe_apply_cdn' ) );
 	}
 
 	/**

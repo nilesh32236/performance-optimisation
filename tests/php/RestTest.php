@@ -36,7 +36,6 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 				'sanitize_text_field',
 				'wp_unslash',
 				'trailingslashit',
-				'register_rest_route',
 			)
 		);
 		Functions\when( 'wp_normalize_path' )->returnArg();
@@ -61,9 +60,12 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		Functions\expect( 'register_rest_route' )
 			->atLeast()
 			->once()
-			->with( 'performance-optimisation/v1', \Brain\Monkey\Anything(), \Brain\Monkey\Anything() );
+			->with( 'performance-optimisation/v1', \Mockery::any(), \Mockery::any() );
 
 		$this->rest->register_routes();
+
+		// The call-count expectation above is verified by Mockery on teardown.
+		$this->addToAssertionCount( 1 );
 	}
 
 	/**
