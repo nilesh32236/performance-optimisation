@@ -138,7 +138,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				// Skip the conversion hook when core handles all formats (get_format() returns 'none').
 				$should_hook_conversion = 'none' !== $img_converter->get_format();
 
-				if ( $should_hook_conversion ) {
+				// Still register the metadata filter so placeholder data (dominant
+				// color/LQIP) is extracted for new uploads whenever server-side
+				// conversion is skipped by design:
+				// - WP 7.1+ client-side media processing (get_format() -> 'none'), or
+				// - WP 6.7+ core-native next-gen generation (get_format() -> 'none').
+				$core_handles_next_gen = $img_converter::core_handles_next_gen();
+
+				if ( $should_hook_conversion || $core_handles_next_gen ) {
 					add_filter( 'wp_generate_attachment_metadata', array( $img_converter, 'convert_image_to_next_gen_format' ), 10, 2 );
 				}
 				add_filter( 'wp_get_attachment_image_src', array( $img_converter, 'maybe_serve_next_gen_image' ) );
