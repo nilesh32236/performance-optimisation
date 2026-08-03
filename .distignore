@@ -16,10 +16,10 @@
 /vendor/hamcrest/
 /vendor/antecedent/
 /vendor/myclabs/
+/vendor/nikic/
 /vendor/phar-io/
 /vendor/staabm/
 /vendor/theseer/
-/vendor/nikic/
 /vendor/bin/
 /vendor/matthiasmullie/minify/bin/
 /package.json
@@ -32,6 +32,7 @@
 /.nvmrc
 /phpcs.xml
 /psalm.xml
+/patchwork.json
 /tests/
 /bin/
 /scripts/
