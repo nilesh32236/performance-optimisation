@@ -55,6 +55,8 @@ jobs:
           npm run lint:js > /tmp/lint-js.log 2>&1 || { echo "JS_LINT=failed" >> $GITHUB_ENV; FAILED=1; }
           echo "composer lint..."
           composer lint > /tmp/lint-php.log 2>&1 || { echo "PHP_LINT=failed" >> $GITHUB_ENV; FAILED=1; }
+          echo "composer test..."
+          composer test > /tmp/test-php.log 2>&1 || { echo "PHP_TESTS=failed" >> $GITHUB_ENV; FAILED=1; }
           echo "npm test..."
           npm test > /tmp/test.log 2>&1 || { echo "JS_TESTS=failed" >> $GITHUB_ENV; FAILED=1; }
           echo "npm run build..."
@@ -73,6 +75,7 @@ jobs:
           ISSUE_TITLE="[Audit] Daily verification failed — $(date -u '+%Y-%m-%d')"
           JS_LINT_VAL="${{ env.JS_LINT == 'failed' && '❌' || '✅' }}"
           PHP_LINT_VAL="${{ env.PHP_LINT == 'failed' && '❌' || '✅' }}"
+          PHP_TESTS_VAL="${{ env.PHP_TESTS == 'failed' && '❌' || '✅' }}"
           JS_TESTS_VAL="${{ env.JS_TESTS == 'failed' && '❌' || '✅' }}"
           BUILD_VAL="${{ env.BUILD == 'failed' && '❌' || '✅' }}"
           BODY="## Daily Verification Failed
@@ -83,6 +86,7 @@ jobs:
           |-------|--------|
           | JS Lint (npm run lint:js) | ${JS_LINT_VAL} |
           | PHP Lint (composer lint) | ${PHP_LINT_VAL} |
+          | PHP Tests (composer test) | ${PHP_TESTS_VAL} |
           | JS Tests (npm test) | ${JS_TESTS_VAL} |
           | Build (npm run build) | ${BUILD_VAL} |
 
@@ -99,6 +103,14 @@ jobs:
 
           \`\`\`
           $(cat /tmp/lint-php.log 2>/dev/null | tail -100)
+          \`\`\`
+          </details>
+
+          <details>
+          <summary>PHP Test Output</summary>
+
+          \`\`\`
+          $(cat /tmp/test-php.log 2>/dev/null | tail -100)
           \`\`\`
           </details>
 
