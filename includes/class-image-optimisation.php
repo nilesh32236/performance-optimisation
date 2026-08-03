@@ -261,6 +261,66 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Post-processes lazy-loaded images and <picture> sources to enable auto-sizes (WP 6.7+).
+		 *
+		 * Runs after post_process_img_dimensions() so width/height are guaranteed to be
+		 * present. For each lazy tag carrying a srcset the stored `data-sizes` value is
+		 * upgraded so supporting browsers can derive the source size from the rendered layout:
+		 *  - values that already include `auto` are left untouched,
+		 *  - static values get `auto, ` prepended as a progressive enhancement,
+		 *  - images without any `data-sizes` (but with srcset + width + height) get a bare `auto`.
+		 *
+		 * @since 1.8.0
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The modified buffer.
+		 */
+		private function post_process_auto_sizes( string $buffer ): string {
+			if ( ! $this->is_auto_sizes_available() ) {
+				return $buffer;
+			}
+
+			return preg_replace_callback(
+				'#<(img|source)\b[^>]*\s(?:data-src|data-srcset)=["\'][^"\']+["\'][^>]*>#i',
+				function ( $matches ) {
+					$tag        = $matches[0];
+					$is_img     = 'img' === strtolower( $matches[1] );
+					$has_srcset = (bool) preg_match( '#\b(?:data-)?srcset=["\']#i', $tag );
+
+					if ( ! $has_srcset ) {
+						return $tag;
+					}
+
+					// Auto-sizes needs explicit dimensions on <img> to prevent CLS;
+					// <picture> <source> elements carry no width/height attributes.
+					if ( $is_img ) {
+						$has_width  = (bool) preg_match( '/\bwidth=["\']\d+["\']/i', $tag );
+						$has_height = (bool) preg_match( '/\bheight=["\']\d+["\']/i', $tag );
+						if ( ! $has_width || ! $has_height ) {
+							return $tag;
+						}
+					}
+
+					if ( preg_match( '#\bdata-sizes=["\']([^"\']*)["\']#i', $tag, $sizes_matches ) ) {
+						$current = $sizes_matches[1];
+						if ( $this->sizes_attribute_includes_auto( $current ) ) {
+							return $tag;
+						}
+						$data_sizes = 'auto, ' . $current;
+						return preg_replace( '#\bdata-sizes=["\']([^"\']*)["\']#i', 'data-sizes="' . esc_attr( $data_sizes ) . '"', $tag, 1 );
+					}
+
+					if ( ! $is_img ) {
+						return $tag;
+					}
+
+					return preg_replace( '/<img\b/i', '<img data-sizes="auto"', $tag, 1 );
+				},
+				$buffer
+			);
+		}
+
+		/**
 		 * Processes <picture> blocks using WP_HTML_Processor for reliable block extraction with depth tracking.
 		 *
 		 * @since 2.5.0
@@ -981,6 +1041,80 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether the current WordPress version supports auto-sizes for lazy-loaded images.
+		 *
+		 * Enhanced Responsive Images (Core ticket #61847) shipped in WordPress 6.7 and is
+		 * gated on the presence of wp_img_tag_add_auto_sizes() / wp_sizes_attribute_includes_valid_auto().
+		 *
+		 * @since 1.8.0
+		 * @return bool True when auto-sizes is available.
+		 */
+		private function is_auto_sizes_available(): bool {
+			return function_exists( 'wp_sizes_attribute_includes_valid_auto' )
+				|| function_exists( 'wp_img_tag_add_auto_sizes' );
+		}
+
+		/**
+		 * Whether a `sizes` value already includes the `auto` keyword.
+		 *
+		 * Uses the Core helper (WP 6.7+) when available and falls back to a regex
+		 * mirroring its "auto first in the list" behaviour.
+		 *
+		 * @since 1.8.0
+		 *
+		 * @param string $sizes The `sizes` attribute value.
+		 * @return bool True when the value already starts with `auto`.
+		 */
+		private function sizes_attribute_includes_auto( string $sizes ): bool {
+			if ( function_exists( 'wp_sizes_attribute_includes_valid_auto' ) ) {
+				return wp_sizes_attribute_includes_valid_auto( $sizes );
+			}
+			return (bool) preg_match( '/^\s*auto\b/i', $sizes );
+		}
+
+		/**
+		 * Whether an <img> tag qualifies for the auto-sizes enhancement.
+		 *
+		 * Auto-sizes requires a srcset (so the browser has candidates to choose from)
+		 * and explicit dimensions (so layout is stable and CLS is prevented).
+		 *
+		 * @since 1.8.0
+		 *
+		 * @param \WP_HTML_Tag_Processor $tags The tag processor instance.
+		 * @return bool True when the tag supports auto-sizes.
+		 */
+		private function tag_supports_auto_sizes( $tags ): bool {
+			return ( null !== $tags->get_attribute( 'srcset' ) || null !== $tags->get_attribute( 'data-srcset' ) )
+				&& null !== $tags->get_attribute( 'width' )
+				&& null !== $tags->get_attribute( 'height' );
+		}
+
+		/**
+		 * Prepares the value stored in `data-sizes` so auto-sizes can be restored.
+		 *
+		 * When the current WP version supports auto-sizes and the image qualifies
+		 * (srcset + width + height), any static `sizes` value is prefixed with
+		 * `auto, ` as a progressive enhancement; values that already include a valid
+		 * `auto` keyword (Core's "auto, …" output) are preserved verbatim. Otherwise
+		 * the value is returned unchanged so pre-6.7 behaviour is untouched.
+		 *
+		 * @since 1.8.0
+		 *
+		 * @param string                 $sizes The original `sizes` attribute value.
+		 * @param \WP_HTML_Tag_Processor $tags  The tag processor instance used for the srcset/width/height checks.
+		 * @return string The value to store in `data-sizes`.
+		 */
+		private function prepare_auto_sizes_value( string $sizes, $tags ): string {
+			if ( ! $this->is_auto_sizes_available() || ! $this->tag_supports_auto_sizes( $tags ) ) {
+				return $sizes;
+			}
+			if ( $this->sizes_attribute_includes_auto( $sizes ) ) {
+				return $sizes;
+			}
+			return 'auto, ' . $sizes;
+		}
+
+		/**
 		 * Sets loading optimization attributes (fetchpriority, decoding) on a tag processor.
 		 *
 		 * Uses wp_get_loading_optimization_attributes() (WP 6.7+) when available,
@@ -1034,6 +1168,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				}
 				if ( isset( $loading_attrs['decoding'] ) && null === $tags->get_attribute( 'decoding' ) ) {
 					$tags->set_attribute( 'decoding', $loading_attrs['decoding'] );
+				}
+				// Belt-and-braces: propagate a `sizes` key if a filter returned one,
+				// but only for lazy images and never overriding an explicit value.
+				if ( isset( $loading_attrs['sizes'] ) && 'lazy' === $tags->get_attribute( 'loading' ) && null === $tags->get_attribute( 'sizes' ) ) {
+					$tags->set_attribute( 'sizes', $loading_attrs['sizes'] );
 				}
 			}
 			if ( isset( $defaults['fetchpriority'] ) && null === $tags->get_attribute( 'fetchpriority' ) ) {
@@ -1144,10 +1283,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$tags->remove_attribute( 'srcset' );
 							}
 
-							// Replace 'sizes' with 'data-sizes'.
+							// Replace 'sizes' with 'data-sizes' (auto-aware when supported).
 							$sizes = $tags->get_attribute( 'sizes' );
 							if ( $sizes ) {
-								$tags->set_attribute( 'data-sizes', $sizes );
+								$tags->set_attribute( 'data-sizes', $this->prepare_auto_sizes_value( $sizes, $tags ) );
 								$tags->remove_attribute( 'sizes' );
 							}
 						}
@@ -1295,9 +1434,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 						// Replace 'sizes' with 'data-sizes' if 'sizes' is present.
 						if ( preg_match( '#\bsizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
+							$data_sizes = $sizes_matches[1];
+							if ( $this->is_auto_sizes_available() && ! $this->sizes_attribute_includes_auto( $data_sizes ) ) {
+								$has_srcset = (bool) preg_match( '#\b(?:data-)?srcset=["\']#i', $img_tag );
+								$has_width  = (bool) preg_match( '/\bwidth=["\']\d+["\']/i', $img_tag );
+								$has_height = (bool) preg_match( '/\bheight=["\']\d+["\']/i', $img_tag );
+								if ( $has_srcset && $has_width && $has_height ) {
+									$data_sizes = 'auto, ' . $data_sizes;
+								}
+							}
 							$img_tag = preg_replace(
 								'#\bsizes=["\']([^"\']+)["\']#i',
-								'data-sizes="' . esc_attr( $sizes_matches[1] ) . '"',
+								'data-sizes="' . esc_attr( $data_sizes ) . '"',
 								$img_tag
 							);
 						}
@@ -2089,7 +2237,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 								$sizes = $wppo_tags->get_attribute( 'sizes' );
 								if ( $sizes ) {
-									$wppo_tags->set_attribute( 'data-sizes', $sizes );
+									$wppo_tags->set_attribute( 'data-sizes', $this->prepare_auto_sizes_value( $sizes, $wppo_tags ) );
 									$wppo_tags->remove_attribute( 'sizes' );
 								}
 							}
@@ -2126,6 +2274,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					$buffer = $this->post_process_placeholders( $buffer, $enable_placeholder );
 					$buffer = $this->post_process_img_dimensions( $buffer );
+					$buffer = $this->post_process_auto_sizes( $buffer );
 
 					if ( class_exists( 'WP_HTML_Processor' ) ) {
 						$buffer = $this->process_picture_blocks_processor( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
@@ -2160,6 +2309,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						},
 						$buffer
 					);
+					if ( null !== $buffer ) {
+						$buffer = $this->post_process_auto_sizes( $buffer );
+					}
 				}
 			}
 

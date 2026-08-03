@@ -410,6 +410,73 @@ describe( 'Lazy Load (lazyload.js)', () => {
 		} );
 	} );
 
+	describe( 'restoreSizes()', () => {
+		const restoreSizesImpl = ( el, AUTO_SIZES_SUPPORTED ) => {
+			if ( ! el.hasAttribute( 'data-sizes' ) ) {
+				return;
+			}
+			const sizes = el.getAttribute( 'data-sizes' );
+			if ( sizes === 'auto' && ! AUTO_SIZES_SUPPORTED ) {
+				el.removeAttribute( 'data-sizes' );
+				return;
+			}
+			el.sizes = sizes;
+			el.removeAttribute( 'data-sizes' );
+		};
+
+		it( 'restores a static data-sizes value verbatim', () => {
+			const img = document.createElement( 'img' );
+			img.setAttribute( 'data-sizes', '(max-width: 650px) 100vw, 650px' );
+
+			restoreSizesImpl( img, false );
+
+			expect( img.sizes ).toBe( '(max-width: 650px) 100vw, 650px' );
+			expect( img.hasAttribute( 'data-sizes' ) ).toBe( false );
+		} );
+
+		it( 'keeps an auto-prefixed fallback value in non-supporting browsers', () => {
+			const img = document.createElement( 'img' );
+			img.setAttribute(
+				'data-sizes',
+				'auto, (max-width: 650px) 100vw, 650px'
+			);
+
+			restoreSizesImpl( img, false );
+
+			expect( img.sizes ).toBe( 'auto, (max-width: 650px) 100vw, 650px' );
+			expect( img.hasAttribute( 'data-sizes' ) ).toBe( false );
+		} );
+
+		it( 'omits a bare auto value when auto-sizes is unsupported', () => {
+			const img = document.createElement( 'img' );
+			img.setAttribute( 'data-sizes', 'auto' );
+
+			restoreSizesImpl( img, false );
+
+			expect( img.sizes ).toBe( '' );
+			expect( img.hasAttribute( 'data-sizes' ) ).toBe( false );
+		} );
+
+		it( 'applies a bare auto value when auto-sizes is supported', () => {
+			const img = document.createElement( 'img' );
+			img.setAttribute( 'data-sizes', 'auto' );
+
+			restoreSizesImpl( img, true );
+
+			expect( img.sizes ).toBe( 'auto' );
+			expect( img.hasAttribute( 'data-sizes' ) ).toBe( false );
+		} );
+
+		it( 'does nothing when data-sizes is absent', () => {
+			const img = document.createElement( 'img' );
+
+			restoreSizesImpl( img, false );
+
+			expect( img.sizes ).toBe( '' );
+			expect( img.hasAttribute( 'data-sizes' ) ).toBe( false );
+		} );
+	} );
+
 	describe( 'initVideoPlaceholders()', () => {
 		it( 'registers error handler for fallback images', () => {
 			const img = document.createElement( 'img' );
