@@ -249,6 +249,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		}
 
 		/**
+		 * Get the request start time from REQUEST_TIME_FLOAT, or null if unavailable.
+		 *
+		 * @since  1.9.0
+		 * @return float|null Request start timestamp in Unix seconds, or null.
+		 */
+		public static function get_request_start_microtime(): ?float {
+			if ( ! isset( $_SERVER['REQUEST_TIME_FLOAT'] ) ) {
+				return null;
+			}
+			$value = (float) $_SERVER['REQUEST_TIME_FLOAT']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.InputNotValidated
+			return $value > 0.0 ? $value : null;
+		}
+
+		/**
 		 * Get WooCommerce high-value URL presets.
 		 *
 		 * Returns checkout and cart URLs when WooCommerce is active.

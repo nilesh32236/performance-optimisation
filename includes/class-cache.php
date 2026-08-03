@@ -276,8 +276,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
-			// Reuse cached CSS only if it is still fresh (no source file is newer).
-			$css_file_path = $this->get_cache_file_path( 'css' );
+			$exclude_combine_css = array();
+			if ( ! empty( $this->options['file_optimisation']['excludeCombineCSS'] ) ) {
+				$exclude_combine_css = Util::process_urls( $this->options['file_optimisation']['excludeCombineCSS'] );
+			}
+
+			// On WP 6.9+ with separate (on-demand) core block assets active, never
+			// fold the combined wp-block-library stylesheet into the minified file —
+			// doing so would force the monolith back into the head. Belt-and-suspenders:
+			// wp-block-library is normally not in the queue on 6.9 anyway.
+			$separate_block_assets = function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets();
+
+			// The effective separate-assets state is baked into the combined-CSS
+			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
+			// assets on by default for classic themes) cannot keep serving a stale
+			// combined monolith built while wp-block-library was still in the queue.
+			$css_variant = $separate_block_assets ? 'separate' : '';
+
+			// The set of handles this request would pull into the combined file. The
+			// same skip rules are applied below during generation so the two branches
+			// stay consistent about which styles belong in the file.
+			$eligible_handles = $this->get_combined_handles( $styles, $exclude_combine_css );
+
+			// Reuse cached CSS only if it is still fresh (no source file is newer and
+			// the set of combined handles is unchanged).
+			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
 
 			if ( $fs->exists( $css_file_path ) ) {
 				$cache_mtime  = (int) $fs->mtime( $css_file_path );
@@ -287,6 +310,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
 						continue;
 					}
+
+					// Styles core inlines are not part of the combined file, so their
+					// mtime must not force a regeneration.
+					if ( $this->core_will_inline( $handle ) ) {
+						continue;
+					}
+
+					if ( $separate_block_assets && 'wp-block-library' === $handle ) {
+						continue;
+					}
+
 					$src      = $wp_styles->registered[ $handle ]->src;
 					$src_path = Util::get_local_path( (string) $src );
 					if ( '' !== $src_path && $fs->exists( $src_path ) && $fs->mtime( $src_path ) > $cache_mtime ) {
@@ -295,17 +329,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					}
 				}
 
+				// A combined file built before this inline-CSS support may embed styles
+				// that core now inlines, or the set of handles may have changed; such a
+				// file would duplicate inlined rules, so regenerate instead of reusing.
+				if ( ! $source_newer && ! $this->combined_handles_match( $css_file_path, $eligible_handles ) ) {
+					$source_newer = true;
+				}
+
 				if ( ! $source_newer ) {
-					$css_url = $this->get_cache_file_url( 'css' );
+					$css_url = $this->get_cache_file_url( 'css', $css_variant );
 					$version = $cache_mtime;
 					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
+					$this->register_combine_css_path( $css_file_path );
 					return;
 				}
-			}
-
-			$exclude_combine_css = array();
-			if ( ! empty( $this->options['file_optimisation']['excludeCombineCSS'] ) ) {
-				$exclude_combine_css = Util::process_urls( $this->options['file_optimisation']['excludeCombineCSS'] );
 			}
 
 			$combined_css = '';
@@ -315,6 +352,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					continue;
 				}
 				$style_data = $wp_styles->registered[ $handle ];
+
+				// Skip styles core will inline itself (registered with 'path' data and
+				// small enough to fit the inline budget). Leaving them enqueued lets
+				// core inline them at their own queue position; pulling them into the
+				// combined file would duplicate their rules and inflate its size.
+				if ( $this->core_will_inline( $handle ) ) {
+					continue;
+				}
+
+				if ( $separate_block_assets && 'wp-block-library' === $handle ) {
+					continue;
+				}
 
 				if ( ! empty( $exclude_combine_css ) ) {
 					if ( in_array( $handle, $exclude_combine_css, true ) ) {
@@ -367,19 +416,250 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$css_minifier  = new CSSMinifier( $combined_css );
 				$combined_css  = $css_minifier->minify();
-				$css_file_path = $this->get_cache_file_path( 'css' );
+				$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
 
 				$this->prepare_cache_dir();
 				$this->save_cache_files( $combined_css, $css_file_path, 'css' );
 
-				$css_url = $this->get_cache_file_url( 'css' );
+				$css_url = $this->get_cache_file_url( 'css', $css_variant );
 
 				$version = $fs->mtime( $css_file_path );
 				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
+				$this->register_combine_css_path( $css_file_path );
+				$this->write_combined_handles( $css_file_path, $eligible_handles );
 
-				$css_url_with_version = $css_url . "?ver=$version";
-				echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
+				// Only preload when core will not inline the combined file; preloading
+				// a stylesheet core already inlines is a wasted request.
+				if ( ! $this->will_combine_css_inline( $css_file_path ) ) {
+					$css_url_with_version = $css_url . "?ver=$version";
+					echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
+				}
 			}
+		}
+
+		/**
+		 * Computes the set of handles that belong in the combined CSS file.
+		 *
+		 * Mirrors the skip rules applied in {@see combine_css()} generation: styles
+		 * core inlines itself, handles excluded from combining, and non-'all' media
+		 * styles stay out of the combined file. Used both to build the file and to
+		 * detect when a previously cached file is stale.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param array $styles             The enqueued style handles.
+		 * @param array $exclude_combine_css Handles/URL fragments excluded from combining.
+		 * @return array The handles that would be combined.
+		 */
+		private function get_combined_handles( $styles, $exclude_combine_css ): array {
+			global $wp_styles;
+
+			$handles = array();
+			foreach ( $styles as $handle ) {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
+				$style_data = $wp_styles->registered[ $handle ];
+
+				if ( $this->core_will_inline( $handle ) ) {
+					continue;
+				}
+
+				if ( ! empty( $exclude_combine_css ) ) {
+					if ( in_array( $handle, $exclude_combine_css, true ) ) {
+						continue;
+					}
+
+					$should_exclude = false;
+					foreach ( $exclude_combine_css as $exclude_css ) {
+						if ( false !== strpos( $style_data->src, $exclude_css ) ) {
+							$should_exclude = true;
+						}
+					}
+
+					if ( $should_exclude ) {
+						continue;
+					}
+				}
+
+				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
+					continue;
+				}
+
+				$handles[] = $handle;
+			}
+
+			return $handles;
+		}
+
+		/**
+		 * Whether a cached combined file was generated from the same handle set.
+		 *
+		 * A missing sidecar (e.g. a combined file built before this inline-CSS
+		 * support shipped) is treated as a mismatch so stale files regenerate.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param string $css_file_path  Absolute path to the combined CSS file.
+		 * @param array  $eligible_handles The handles expected in the combined file.
+		 * @return bool True if the cached file matches the current handle set.
+		 */
+		private function combined_handles_match( $css_file_path, array $eligible_handles ): bool {
+			$fs     = $this->get_filesystem();
+			$handle = $css_file_path . '.handles';
+
+			if ( ! $fs || ! $fs->exists( $handle ) ) {
+				return false;
+			}
+
+			$contents = $fs->get_contents( $handle );
+			if ( false === $contents ) {
+				return false;
+			}
+
+			$stored = json_decode( $contents, true );
+			return is_array( $stored ) && $stored === $eligible_handles;
+		}
+
+		/**
+		 * Persists the set of combined handles next to the combined CSS file.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param string $css_file_path  Absolute path to the combined CSS file.
+		 * @param array  $eligible_handles The handles combined into the file.
+		 * @return void
+		 */
+		private function write_combined_handles( $css_file_path, array $eligible_handles ): void {
+			$fs = $this->get_filesystem();
+			if ( ! $fs ) {
+				return;
+			}
+
+			$handle_path = $css_file_path . '.handles';
+			$fs->put_contents( $handle_path, wp_json_encode( $eligible_handles ), FS_CHMOD_FILE );
+		}
+
+		/**
+		 * Whether a queued style will be inlined by core instead of combined.
+		 *
+		 * Core (WP 5.8+) inlines any enqueued stylesheet that carries `path` data
+		 * and fits within the `styles_inline_size_limit` budget (20KB default before
+		 * WP 6.9, 40KB on 6.9+). Such styles must be left in the queue for core to
+		 * inline at their own position rather than pulled into the combined file
+		 * (which would duplicate their rules).
+		 *
+		 * Core applies the budget cumulatively: path-data styles are sorted
+		 * smallest-first and inlined greedily until the running total exceeds the
+		 * limit, so a style that individually fits can still be served externally on
+		 * style-heavy pages. This helper replicates that accounting.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param string $handle The registered style handle.
+		 * @return bool True if core will inline the style, false otherwise.
+		 */
+		private function core_will_inline( $handle ): bool {
+			if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
+				return false;
+			}
+
+			global $wp_styles;
+			if ( ! isset( $wp_styles->registered[ $handle ] ) || empty( $wp_styles->registered[ $handle ]->src ) ) {
+				return false;
+			}
+
+			$limit = $this->get_styles_inline_limit();
+
+			// Gather every queued path-data style with a usable file size, matching
+			// core's wp_maybe_inline_styles() candidate collection.
+			$paths = array();
+			foreach ( $wp_styles->queue as $queued_handle ) {
+				$path = $wp_styles->get_data( $queued_handle, 'path' );
+				if ( empty( $path ) || ! is_file( $path ) ) {
+					continue;
+				}
+				$size = (int) filesize( $path );
+				if ( $size <= 0 ) {
+					continue;
+				}
+				$paths[ $queued_handle ] = $size;
+			}
+
+			// Replicate core's greedy smallest-first cumulative budget.
+			asort( $paths );
+
+			$total = 0;
+			foreach ( $paths as $queued_handle => $size ) {
+				if ( $total + $size > $limit ) {
+					return false;
+				}
+				$total += $size;
+				if ( $queued_handle === $handle ) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/**
+		 * Registers the combined CSS file with `path` data for core's inline pass.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param string $css_file_path Absolute path to the combined CSS file.
+		 * @return void
+		 */
+		private function register_combine_css_path( $css_file_path ): void {
+			if ( ! function_exists( 'wp_maybe_inline_styles' ) || empty( $css_file_path ) || ! is_file( $css_file_path ) ) {
+				return;
+			}
+
+			wp_style_add_data( 'wppo-combine-css', 'path', $css_file_path );
+		}
+
+		/**
+		 * Whether the combined CSS file will be inlined by core.
+		 *
+		 * Delegates to {@see core_will_inline()} so the cumulative, smallest-first
+		 * budget core applies across all queued path-data styles is honoured for the
+		 * combined file as well. The combined handle must carry `path` data (set by
+		 * {@see register_combine_css_path()} before this is called).
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param string $css_file_path Absolute path to the combined CSS file.
+		 * @return bool True if core will inline the combined file, false otherwise.
+		 */
+		private function will_combine_css_inline( $css_file_path ): bool {
+			if ( empty( $css_file_path ) ) {
+				return false;
+			}
+
+			// core_will_inline() performs the function_exists() gate itself.
+			return $this->core_will_inline( 'wppo-combine-css' );
+		}
+
+		/**
+		 * Reads the core `styles_inline_size_limit` budget.
+		 *
+		 * Core's default is version-dependent: 20KB before WP 6.9, 40KB on 6.9+.
+		 * Site-level overrides through the `styles_inline_size_limit` filter always
+		 * win. `$GLOBALS['wp_version']` may be absent in some contexts, in which
+		 * case the newest default is used.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @return int The inline size limit in bytes.
+		 */
+		private function get_styles_inline_limit(): int {
+			$default = 40000;
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9', '<' ) ) {
+				$default = 20000;
+			}
+
+			return (int) apply_filters( 'styles_inline_size_limit', $default );
 		}
 
 		/**
@@ -419,17 +699,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function start_output_buffer(): void {
-			if ( defined( 'WP_DEBUG' ) && WP_DEBUG && is_admin() ) {
-				_doing_it_wrong(
-					__METHOD__,
-					esc_html__(
-						'The legacy template_redirect output buffer path is deprecated. Use the WP 6.9+ wp_template_enhancement_output_buffer hooks instead.',
-						'performance-optimisation'
-					),
-					'2.4.0'
-				);
-			}
-
+			// TODO: remove when minimum supported WP is raised to 6.9.
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
 			}
@@ -670,27 +940,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Get the cache file path based on the URL path.
 		 *
-		 * @param string $type      The file type (default: 'html').
-		 * @param string $role_hash Optional role hash for logged-in user cache variant.
+		 * @param string $type       The file type (default: 'html').
+		 * @param string $role_hash  Optional role hash for logged-in user cache variant.
+		 * @param string $variant    Optional variant suffix (e.g. combined-CSS state) baked into the file name.
 		 * @return string The cache file path.
 		 *
 		 * @since 1.0.0
 		 */
-		private function get_cache_file_path( $type = 'html', string $role_hash = '' ): string {
+		private function get_cache_file_path( $type = 'html', string $role_hash = '', string $variant = '' ): string {
 			$suffix = $role_hash ? "-{$role_hash}" : '';
+			if ( $variant ) {
+				$suffix .= "-{$variant}";
+			}
 			return "{$this->cache_root_dir}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
 		}
 
 		/**
 		 * Get the cache file URL based on the URL path.
 		 *
-		 * @param string $type The file type (default: 'html').
+		 * @param string $type    The file type (default: 'html').
+		 * @param string $variant Optional variant suffix baked into the file name.
 		 * @return string The cache file URL.
 		 *
 		 * @since 1.0.0
 		 */
-		public function get_cache_file_url( $type = 'html' ): string {
-			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index.{$type}" : "{$this->url_path}/index.{$type}" );
+		public function get_cache_file_url( $type = 'html', string $variant = '' ): string {
+			$suffix = $variant ? "-{$variant}" : '';
+			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
 		}
 
 		/**
@@ -1223,6 +1499,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( isset( $wp_object_cache ) && method_exists( $wp_object_cache, 'flush_group' ) ) {
 					return wp_cache_flush_group( $group );
 				}
+			}
+
+			return false;
+		}
+
+		/**
+		 * Evict legacy WP 6.9 pre-salt query-group cache keys.
+		 *
+		 * Core's 6.9+ single-key-per-group cache leaves unsalted post-queries /
+		 * term-queries / comment-queries / user-queries / site-queries / network-queries
+		 * keys behind once wp_cache_add_salt() has been called. A full wp_cache_flush()
+		 * is the only reliable eviction (flush_group() patterns are salt-prefixed and
+		 * miss the legacy unsalted keys). On cores without a persistent object cache
+		 * this only flushes the in-memory cache and is harmless.
+		 *
+		 * @since 1.8.1
+		 * @return bool True if the flush ran (or nothing needed evicting on cores
+		 *              without the WP 6.9+ salt API), false if the cache API is
+		 *              unavailable.
+		 */
+		public static function flush_legacy_query_cache_keys(): bool {
+			// The stale unsalted key layout only exists where core can salt the
+			// cache (WP 6.9+). On older cores every key is unsalted and current,
+			// so there is nothing stale to evict.
+			if ( ! function_exists( 'wp_cache_get_salted' ) ) {
+				return true;
+			}
+
+			if ( function_exists( 'wp_cache_flush' ) ) {
+				return wp_cache_flush();
 			}
 
 			return false;
