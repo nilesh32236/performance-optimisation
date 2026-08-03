@@ -461,6 +461,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
 				}
 
+				if ( function_exists( 'wp_maybe_inline_styles' ) ) {
+					// The inline-styles mechanism (`wp_maybe_inline_styles()` /
+					// `styles_inline_size_limit`) exists since WP 5.8; only the default
+					// budget changed in 6.9. Rewrite styles at enqueue time and register
+					// 'path' data so core can inline minified files within the budget.
+					add_action( 'wp_enqueue_scripts', array( $this, 'minify_queued_styles' ), PHP_INT_MAX - 1 );
+				}
+
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
 			}
 
@@ -1721,6 +1729,120 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Rewrites enqueued styles to their minified versions at enqueue time and
+		 * registers the on-disk path so core can inline them.
+		 *
+		 * The inline-styles `path` data mechanism exists since WordPress 5.8
+		 * (`wp_maybe_inline_styles()` / the `styles_inline_size_limit` filter; the
+		 * default budget was raised from 20KB to 40KB in 6.9). This runs on
+		 * `wp_enqueue_scripts` (before core's inline pass at `wp_head` priority 1)
+		 * so minified files can opt in to inlining. Falls back to the
+		 * `style_loader_tag` rewriting in {@see minify_css()} on older WordPress
+		 * versions.
+		 *
+		 * @since 1.9.0
+		 * @return void
+		 */
+		public function minify_queued_styles(): void {
+			if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
+				return;
+			}
+
+			if ( ! $this->should_optimise_for_logged_in() ) {
+				return;
+			}
+
+			// The combine feature owns the whole pipeline; let it handle these handles.
+			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
+				return;
+			}
+
+			global $wp_styles;
+
+			if ( ! is_object( $wp_styles ) ) {
+				return;
+			}
+
+			foreach ( $wp_styles->queue as $handle ) {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
+
+				$style_data = $wp_styles->registered[ $handle ];
+
+				// Only external, 'all'-media stylesheets can be rewritten to a file.
+				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
+					continue;
+				}
+
+				$local_path = $this->get_minifiable_css_path( $handle, $style_data->src );
+				if ( false === $local_path ) {
+					continue;
+				}
+
+				$css_minifier = new Minify\CSS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css' ) );
+				$cached_url   = $css_minifier->minify();
+
+				if ( empty( $cached_url ) ) {
+					continue;
+				}
+
+				$cached_file = $css_minifier->get_cache_file_path();
+				if ( empty( $cached_file ) || ! file_exists( $cached_file ) ) {
+					continue;
+				}
+
+				$wp_styles->registered[ $handle ]->src = $cached_url;
+				$wp_styles->registered[ $handle ]->ver = (int) filemtime( $cached_file );
+
+				// Opt the minified file in to core's inline pass.
+				wp_style_add_data( $handle, 'path', $cached_file );
+			}
+		}
+
+		/**
+		 * Returns the local path of a style eligible for CSS minification.
+		 *
+		 * Shared by the enqueue-time rewrite ({@see minify_queued_styles()}) and the
+		 * legacy `style_loader_tag` path ({@see minify_css()}) so the eligibility
+		 * decision cannot drift between the two. The 'all'-media check only matters
+		 * at enqueue time and stays in {@see minify_queued_styles()}; the tag-time
+		 * path rewrites every media type as before.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param string $handle Style handle.
+		 * @param string $src    Style source URL.
+		 * @return string|false The local file path if the style should be minified,
+		 *                      false otherwise.
+		 */
+		private function get_minifiable_css_path( $handle, $src ) {
+			if ( empty( $src ) || in_array( $handle, $this->exclude_css, true ) ) {
+				return false;
+			}
+
+			$local_path = Util::get_local_path( $src );
+			if ( empty( $local_path ) ) {
+				return false;
+			}
+
+			if ( apply_filters( 'wppo_exclude_minification', false, $local_path, $handle, 'css' ) ) {
+				return false;
+			}
+
+			// Early return if the URL already indicates a minified file.
+			if ( $this->is_minified_asset_name( $src, 'css' ) ) {
+				return false;
+			}
+
+			if ( $this->is_css_minified( $local_path ) ) {
+				return false;
+			}
+
+			return $local_path;
+		}
+
+		/**
 		 * Rewrites CSS link tags to use minified versions if they exist.
 		 *
 		 * @since 1.0.0
@@ -1731,27 +1853,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified link tag with minified CSS.
 		 */
 		public function minify_css( $tag, $handle, $href ) {
-			// Early return for logged-in users (when optimisation not enabled), empty URLs, or excluded handles
-			// to avoid the expensive Util::get_local_path() computation.
-			if ( ! $this->should_optimise_for_logged_in() || empty( $href ) || in_array( $handle, $this->exclude_css, true ) ) {
+			// Early return for logged-in users (when optimisation not enabled) to avoid
+			// the expensive Util::get_local_path() computation.
+			if ( ! $this->should_optimise_for_logged_in() ) {
 				return $tag;
 			}
 
-			$local_path = Util::get_local_path( $href );
-			if ( empty( $local_path ) ) {
-				return $tag;
+			// Handles already rewritten at enqueue time carry 'path' data pointing at
+			// the plugin's own min cache. Only those are exempt — path data registered
+			// by core or third parties must still fall through to legacy minification.
+			global $wp_styles;
+			if ( isset( $wp_styles ) ) {
+				$path_data = $wp_styles->get_data( $handle, 'path' );
+				$min_dir   = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
+				if ( ! empty( $path_data ) && 0 === strpos( wp_normalize_path( $path_data ), $min_dir ) ) {
+					return $tag;
+				}
 			}
 
-			if ( apply_filters( 'wppo_exclude_minification', false, $local_path, $handle, 'css' ) ) {
-				return $tag;
-			}
-
-			// Early return if the URL already indicates a minified file.
-			if ( $this->is_minified_asset_name( $href, 'css' ) ) {
-				return $tag;
-			}
-
-			if ( $this->is_css_minified( $local_path ) ) {
+			$local_path = $this->get_minifiable_css_path( $handle, $href );
+			if ( false === $local_path ) {
 				return $tag;
 			}
 
