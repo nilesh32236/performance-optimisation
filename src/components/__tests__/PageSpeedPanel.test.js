@@ -53,6 +53,7 @@ describe( 'PageSpeedPanel Component', () => {
 
 	afterEach( () => {
 		jest.useRealTimers();
+		jest.restoreAllMocks();
 	} );
 
 	it( 'renders the scan button', () => {
@@ -193,9 +194,7 @@ describe( 'PageSpeedPanel Component', () => {
 		queuePagespeedScan.mockRejectedValueOnce(
 			new Error( 'Network error' )
 		);
-		const consoleSpy = jest
-			.spyOn( console, 'error' )
-			.mockImplementation( () => {} );
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
 
 		render( <PageSpeedPanel url={ defaultUrl } /> );
 		fireEvent.click(
@@ -207,7 +206,6 @@ describe( 'PageSpeedPanel Component', () => {
 				screen.getByText( 'PageSpeed scan failed.' )
 			).toBeInTheDocument();
 		} );
-		consoleSpy.mockRestore();
 	} );
 
 	it( 'shows timeout error after max poll attempts', async () => {
@@ -278,17 +276,198 @@ describe( 'PageSpeedPanel Component', () => {
 		// async continuation runs, then fire the 2nd poll (gets the
 		// failure response and calls setError).
 		await act( async () => {
-			jest.runAllTimers();
+			jest.advanceTimersByTime( 5000 );
 		} );
 		await act( async () => {} );
+
 		await act( async () => {
-			jest.runAllTimers();
+			jest.advanceTimersByTime( 5000 );
 		} );
 		await act( async () => {} );
 
 		await waitFor( () => {
 			expect( screen.getByText( 'Scan job failed' ) ).toBeInTheDocument();
 		} );
+	} );
+
+	it( 'displays error when polling throws an exception', async () => {
+		queuePagespeedScan.mockResolvedValueOnce( {
+			success: true,
+			data: { job_id: 123 },
+		} );
+
+		render( <PageSpeedPanel url={ defaultUrl } /> );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run PageSpeed Scan/i } )
+		);
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( /PageSpeed scan is running/i )
+			).toBeInTheDocument();
+		} );
+
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+
+		getPagespeedResults.mockRejectedValueOnce(
+			new Error( 'Network issue' )
+		);
+
+		await act( async () => {
+			jest.advanceTimersByTime( 5000 );
+		} );
+		await act( async () => {} );
+
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'PageSpeed scan failed.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'displays scan results and calls onSuggestionsReady on success', async () => {
+		queuePagespeedScan.mockResolvedValueOnce( {
+			success: true,
+			data: { job_id: 123 },
+		} );
+
+		const mockSuggestions = [ { id: 's1', message: 'Optimize images' } ];
+		const mockResult = {
+			scores: {
+				performance: 95,
+				accessibility: 60,
+				best_practices: 30,
+				seo: null,
+			},
+			vitals: {
+				fcp: { display_value: '1.2 s', score: 0.95 },
+				lcp: { display_value: '2.8 s', score: 0.6 },
+				tbt: { display_value: '600 ms', score: 0.2 },
+				cls: { display_value: '0.1', score: null },
+			},
+			strategy: 'mobile',
+			fetched_at: '2024-08-01 12:00:00',
+			suggestions: mockSuggestions,
+		};
+
+		getPagespeedResults.mockResolvedValueOnce( {
+			success: true,
+			data: mockResult,
+		} );
+
+		const mockOnSuggestionsReady = jest.fn();
+
+		render(
+			<PageSpeedPanel
+				url={ defaultUrl }
+				onSuggestionsReady={ mockOnSuggestionsReady }
+			/>
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run PageSpeed Scan/i } )
+		);
+
+		// Let the queue promise resolve, triggering pollForResults
+		await act( async () => {} );
+
+		// Advance time so pollRef.current fires (5000ms delay)
+		await act( async () => {
+			jest.advanceTimersByTime( 5000 );
+		} );
+
+		// Let the poll promise resolve
+		await act( async () => {} );
+
+		await waitFor( () => {
+			expect( screen.getByText( '95' ) ).toBeInTheDocument();
+			expect( screen.getByText( '60' ) ).toBeInTheDocument();
+			expect( screen.getByText( '30' ) ).toBeInTheDocument();
+			expect( screen.getByText( 'Performance' ) ).toBeInTheDocument();
+
+			expect( screen.getByText( '1.2 s' ) ).toBeInTheDocument();
+			expect( screen.getByText( '2.8 s' ) ).toBeInTheDocument();
+			expect( screen.getByText( '600 ms' ) ).toBeInTheDocument();
+			expect(
+				screen.getByText( 'First Contentful Paint' )
+			).toBeInTheDocument();
+
+			expect( mockOnSuggestionsReady ).toHaveBeenCalledWith(
+				mockSuggestions
+			);
+		} );
+	} );
+
+	it( 'displays scan results and does not call onSuggestionsReady if suggestions are falsy', async () => {
+		queuePagespeedScan.mockResolvedValueOnce( {
+			success: true,
+			data: { job_id: 123 },
+		} );
+
+		const mockResult = {
+			scores: { performance: 90 },
+			vitals: {},
+			strategy: 'mobile',
+			fetched_at: '2024-08-01 12:00:00',
+			suggestions: null,
+		};
+
+		// First poll: not ready
+		getPagespeedResults.mockResolvedValueOnce( {
+			success: true,
+			data: { status: 'not_ready' },
+		} );
+
+		// Second poll: ready, without suggestions
+		getPagespeedResults.mockResolvedValueOnce( {
+			success: true,
+			data: mockResult,
+		} );
+
+		const mockOnSuggestionsReady = jest.fn();
+
+		render(
+			<PageSpeedPanel
+				url={ defaultUrl }
+				onSuggestionsReady={ mockOnSuggestionsReady }
+			/>
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Run PageSpeed Scan/i } )
+		);
+
+		// Resolve queue
+		await act( async () => {} );
+
+		// Advance first 5s (triggers first poll, not ready)
+		await act( async () => {
+			jest.advanceTimersByTime( 5000 );
+		} );
+		await act( async () => {} );
+
+		// Expect results not to be rendered yet
+		expect( screen.queryByText( '90' ) ).not.toBeInTheDocument();
+
+		// Advance second 5s (triggers second poll, ready)
+		await act( async () => {
+			jest.advanceTimersByTime( 5000 );
+		} );
+		await act( async () => {} );
+
+		await waitFor( () => {
+			expect( screen.getByText( '90' ) ).toBeInTheDocument();
+			expect( mockOnSuggestionsReady ).not.toHaveBeenCalled();
+		} );
+	} );
+
+	it( 'does not start scan if url is empty', async () => {
+		render( <PageSpeedPanel url="" /> );
+		const scanBtn = screen.getByRole( 'button', {
+			name: /Run PageSpeed Scan/i,
+		} );
+		fireEvent.click( scanBtn );
+
+		expect( queuePagespeedScan ).not.toHaveBeenCalled();
 	} );
 
 	it( 'cleans up on unmount', () => {

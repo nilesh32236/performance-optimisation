@@ -7,3 +7,4 @@ test-lab/
 *.log
 coverage/
 *.orig
+.phpunit.cache/
