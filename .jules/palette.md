@@ -18,3 +18,6 @@
 
 **Learning:** When listing an array of features with individual "Action" buttons (e.g., Clean Database items), replacing button text with loading ellipses ("...") inside a standard `<button>` element breaks the layout bounds, introduces jarring UI shifts, and fails to announce state changes to screen readers properly. Additionally, replacing the original native `.wppo-button` classes entirely can break visual alignment.
 **Action:** When refactoring granular action buttons to show loading states, replace the generic `<button>` with `<LoadingSubmitButton>`. Critically, preserve the original visual classes (e.g., `className="wppo-button wppo-button--secondary"`) and pass `isLoading={loadingState}` so that the component internally manages the loading spinner and accessible `aria-live` region while maintaining exact physical button dimensions.
+## 2026-08-03 - Replaced Hardcoded Color with CSS Variable
+**Learning:** The video placeholder play button hover state used a hardcoded YouTube red color (`#cc0000`), which failed to adapt to the user's active WordPress admin theme. Also, its outline fallback used an outdated WP blue (`#007cba`).
+**Action:** Replaced `#cc0000` with `var(--wppo-primary-hover)` and updated the outline fallback to `#2271b1` in `_video-placeholder.scss` to ensure consistent theme adaptation across the UI.
