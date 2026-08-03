@@ -192,6 +192,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return 'image/svg+xml';
 				case 'avif':
 					return 'image/avif';
+				case 'heic':
+					return 'image/heic';
+				case 'heif':
+					return 'image/heif';
 				default:
 					return '';
 			}

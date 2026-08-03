@@ -88,6 +88,8 @@ After activation, you can manage the following from the settings tabs:
 
 = 1.8.1 (2026-08-01) =
 * New: Inline the combined/minified CSS via WordPress core's `wp_maybe_inline_styles()` when the file is within the `styles_inline_size_limit` budget, eliminating a render-blocking stylesheet round-trip on first load. Use the `wppo_inline_combined_css` filter (return falsy) to disable inlining, e.g. when serving the combined file from a CDN.
+* New: WordPress 6.9+ compatibility for block asset loading — classic themes now load separate core block styles on demand by default (matching WordPress core). The "Load Block Assets On Demand" toggle acts as an opt-out on 6.9+: disable it to force the combined `wp-block-library` stylesheet.
+* Improvement: Existing installs are migrated once to the WordPress 6.9+ on-demand default without overwriting explicit user settings.
 
 = 1.8.0 (2026-07-28) =
 * New: WordPress 6.9+ object cache key salt support for cache key space invalidation.

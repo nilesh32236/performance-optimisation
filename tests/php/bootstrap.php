@@ -9,6 +9,25 @@ use function Brain\Monkey\setUp;
 use function Brain\Monkey\tearDown;
 use function Brain\Monkey\Functions\stubs;
 
+// Patchwork reads its patchwork.json configuration from the process working
+// directory at init (first Brain\Monkey\setUp() call). Normalize to the
+// project root so the suite is deterministic regardless of where PHPUnit is
+// launched from (repo root, tests/php/, an IDE, or CI), and fail loudly if the
+// required configuration file is missing anywhere.
+$project_root   = dirname( __DIR__ );
+$patchwork_path = getcwd() . '/patchwork.json';
+if ( file_exists( $patchwork_path ) ) {
+	$project_root = getcwd();
+} elseif ( file_exists( $project_root . '/patchwork.json' ) ) {
+	chdir( $project_root );
+} else {
+	// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_trigger_error -- Bootstrap fails loudly when patchwork.json is missing.
+	trigger_error(
+		'patchwork.json not found in the project root. Run PHPUnit from the plugin root, or re-add the file before running the suite.',
+		E_USER_ERROR
+	);
+}
+
 require_once __DIR__ . '/../../vendor/autoload.php';
 
 // Define WP constants used by plugin classes.
@@ -28,7 +47,7 @@ if ( ! defined( 'WPPO_PLUGIN_URL' ) ) {
 	define( 'WPPO_PLUGIN_URL', 'http://example.com/wp-content/plugins/performance-optimisation/' );
 }
 if ( ! defined( 'WPPO_VERSION' ) ) {
-	define( 'WPPO_VERSION', '1.8.0' );
+	define( 'WPPO_VERSION', '1.8.1' );
 }
 if ( ! defined( 'DAY_IN_SECONDS' ) ) {
 	define( 'DAY_IN_SECONDS', 86400 );

@@ -2,6 +2,12 @@
 
 All notable changes to the Performance Optimisation plugin will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **Block Asset Loading on WordPress 6.9+:** The "Load Block Assets On Demand" toggle now matches WordPress 6.9's new default for classic themes, which load separate core block styles on demand. On 6.9+ the toggle acts as an **opt-out**: disabling it forces the combined `wp-block-library` stylesheet (a semantic inversion of the pre-6.9 opt-in behavior). The setting default is version-aware (`ON` on 6.9+, `OFF` before), and existing installs that never configured the toggle are migrated to the new default once — stored explicit values are never overwritten.
+
 ## [1.8.1] - 2026-07-29
 
 ### Changed

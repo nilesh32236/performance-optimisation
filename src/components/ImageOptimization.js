@@ -39,6 +39,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		maxWidthImgSize: 0,
 		excludeSize: '',
 		autoPreloadLCP: false,
+		prioritizeLCPImages: false,
 		...options,
 		placeholderType:
 			options.placeholderType ||
@@ -600,6 +601,21 @@ const ImageOptimization = ( { options = {} } ) => {
 								) }
 								name="autoPreloadLCP"
 								checked={ settings.autoPreloadLCP }
+								onChange={ handleChange( setSettings ) }
+							/>
+						</div>
+						<div>
+							<SwitchField
+								label={ __(
+									'Prioritize LCP Images in Final HTML',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Remove loading="lazy" from the first N images and set fetchpriority="high" on the detected LCP image in the finalized page HTML. Requires WordPress 6.9+ for full effect; falls back gracefully on older versions.',
+									'performance-optimisation'
+								) }
+								name="prioritizeLCPImages"
+								checked={ settings.prioritizeLCPImages }
 								onChange={ handleChange( setSettings ) }
 							/>
 						</div>
