@@ -388,7 +388,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} else {
 					add_filter( 'script_loader_tag', array( $this, 'add_defer_attribute_legacy' ), 10, 2 );
 				}
-				add_filter( 'script_loader_tag', array( $this, 'add_fetchpriority_to_deferred' ), 11, 2 );
+				// Native fetchpriority rendering arrived in WP 6.9 (Trac #61734); the
+				// regex-based script_loader_tag fallback only runs on older cores.
+				if ( ! $is_wp69_plus ) {
+					add_filter( 'script_loader_tag', array( $this, 'add_fetchpriority_to_deferred' ), 11, 2 );
+				}
 			}
 			add_action( 'admin_bar_menu', array( $this, 'add_setting_to_admin_bar' ), 100 );
 
@@ -1667,6 +1671,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 		/**
 		 * Adds fetchpriority="low" to rendered script tags for deferred handles.
+		 *
+		 * Pre-6.9 fallback only: on WP 6.9+ the native fetchpriority arg passed via
+		 * wp_script_add_data() in add_defer_strategy() is rendered by core.
 		 *
 		 * @since 2.4.0
 		 *
