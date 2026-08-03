@@ -250,8 +250,9 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( $url, $component = -1 ) {
-				$url  = (string) $url;
-				$path = ( 'http://example.com' === $url ) ? '/' : ( parse_url( $url, PHP_URL_PATH ) ?: '/' );
+				$url = (string) $url;
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Alias emulating wp_parse_url() in tests.
+				$path = ( 'http://example.com' === $url ) ? '/' : ( parse_url( $url, PHP_URL_PATH ) ? parse_url( $url, PHP_URL_PATH ) : '/' );
 				if ( -1 === $component ) {
 					return array( 'path' => $path );
 				}
@@ -280,7 +281,8 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		$minifier = \Mockery::mock( 'overload:PerformanceOptimise\Inc\Minify\CSS' );
 		$minifier->shouldReceive( 'minify' )->once()->andReturn( $cached_url );
 
-		$main   = $this->make_main();
+		$main = $this->make_main();
+		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Static fixture HTML for minify_css() tests.
 		$tag    = '<link rel="stylesheet" id="foo-css" href="http://example.com/wp-content/themes/t/style.css" />';
 		$result = $main->minify_css( $tag, 'foo', 'http://example.com/wp-content/themes/t/style.css' );
 
@@ -290,7 +292,7 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		unlink( $source_file );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 		unlink( $cached_file );
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.directory_delete_rmdir
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir,WordPress.PHP.NoSilencedErrors.Discouraged -- Cleanup of temp test fixture dir.
 		@rmdir( $source_dir );
 	}
 
@@ -507,8 +509,9 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( $url, $component = -1 ) {
-				$url  = (string) $url;
-				$path = ( 'http://example.com' === $url ) ? '/' : ( parse_url( $url, PHP_URL_PATH ) ?: '/' );
+				$url = (string) $url;
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Alias emulating wp_parse_url() in tests.
+				$path = ( 'http://example.com' === $url ) ? '/' : ( parse_url( $url, PHP_URL_PATH ) ? parse_url( $url, PHP_URL_PATH ) : '/' );
 				if ( -1 === $component ) {
 					return array( 'path' => $path );
 				}
@@ -560,7 +563,7 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		unlink( $source_file );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 		unlink( $cached_file );
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.directory_delete_rmdir
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir,WordPress.PHP.NoSilencedErrors.Discouraged -- Cleanup of temp test fixture dir.
 		@rmdir( $source_dir );
 	}
 }

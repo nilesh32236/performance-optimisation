@@ -34,6 +34,7 @@
 /psalm.xml
 /patchwork.json
 /tests/
+/patchwork.json
 /bin/
 /scripts/
 /test_*.js
