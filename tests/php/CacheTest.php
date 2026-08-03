@@ -117,29 +117,29 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public static function data_provider_should_inline_combined_css(): array {
 		return array(
-			'removeUnusedCSS enabled disables inlining'     => array(
-				'options'  => array( 'file_optimisation' => array( 'removeUnusedCSS' => true ) ),
+			'removeUnusedCSS enabled disables inlining' => array(
+				'options'   => array( 'file_optimisation' => array( 'removeUnusedCSS' => true ) ),
 				'inline_fn' => true,
-				'filter'   => null,
-				'expected' => false,
+				'filter'    => null,
+				'expected'  => false,
 			),
 			'core inline function missing disables inlining' => array(
-				'options'  => array( 'file_optimisation' => array() ),
+				'options'   => array( 'file_optimisation' => array() ),
 				'inline_fn' => false,
-				'filter'   => null,
-				'expected' => false,
+				'filter'    => null,
+				'expected'  => false,
 			),
-			'opt-out filter disables inlining'              => array(
-				'options'  => array( 'file_optimisation' => array() ),
+			'opt-out filter disables inlining'          => array(
+				'options'   => array( 'file_optimisation' => array() ),
 				'inline_fn' => true,
-				'filter'   => false,
-				'expected' => false,
+				'filter'    => false,
+				'expected'  => false,
 			),
-			'default enables inlining'                      => array(
-				'options'  => array( 'file_optimisation' => array() ),
+			'default enables inlining'                  => array(
+				'options'   => array( 'file_optimisation' => array() ),
 				'inline_fn' => true,
-				'filter'   => true,
-				'expected' => true,
+				'filter'    => true,
+				'expected'  => true,
 			),
 		);
 	}
@@ -149,10 +149,10 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * @dataProvider data_provider_should_inline_combined_css
 	 *
-	 * @param array      $options   Plugin options to construct Cache with.
-	 * @param bool       $inline_fn Whether wp_maybe_inline_styles should exist.
-	 * @param bool|null  $filter    Value the wppo_inline_combined_css filter returns (null = default true).
-	 * @param bool       $expected  Expected result of the helper.
+	 * @param array     $options   Plugin options to construct Cache with.
+	 * @param bool      $inline_fn Whether wp_maybe_inline_styles should exist.
+	 * @param bool|null $filter    Value the wppo_inline_combined_css filter returns (null = default true).
+	 * @param bool      $expected  Expected result of the helper.
 	 */
 	public function test_should_inline_combined_css( array $options, bool $inline_fn, ?bool $filter, bool $expected ): void {
 		$_SERVER['HTTP_HOST']   = 'example.com';
@@ -196,10 +196,10 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public static function data_provider_styles_inline_size_limit(): array {
 		return array(
-			'WP 6.8 defaults to 20KB'     => array( '6.8', false, 20000 ),
-			'WP 6.9 defaults to 40KB'     => array( '6.9', false, 40000 ),
-			'WP 7.0 defaults to 40KB'     => array( '7.0', false, 40000 ),
-			'filter override wins'        => array( '7.0', true, 50000 ),
+			'WP 6.8 defaults to 20KB' => array( '6.8', false, 20000 ),
+			'WP 6.9 defaults to 40KB' => array( '6.9', false, 40000 ),
+			'WP 7.0 defaults to 40KB' => array( '7.0', false, 40000 ),
+			'filter override wins'    => array( '7.0', true, 50000 ),
 		);
 	}
 
