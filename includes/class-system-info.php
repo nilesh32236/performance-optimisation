@@ -252,6 +252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		}
 
 		/**
+		/**
 		 * Get PHP opcode cache environment details.
 		 *
 		 * Mirrors WordPress core's Site Health server info (added in WP 7.0),
@@ -326,6 +327,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			return $info;
+		}
+
+		/**
+		 * Get the request start time from REQUEST_TIME_FLOAT, or null if unavailable.
+		 *
+		 * @since  1.9.0
+		 * @return float|null Request start timestamp in Unix seconds, or null.
+		 */
+		public static function get_request_start_microtime(): ?float {
+			if ( ! isset( $_SERVER['REQUEST_TIME_FLOAT'] ) ) {
+				return null;
+			}
+			$value = (float) $_SERVER['REQUEST_TIME_FLOAT']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.InputNotValidated
+			return $value > 0.0 ? $value : null;
 		}
 
 		/**

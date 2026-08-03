@@ -1133,6 +1133,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			// Remove original <link> tags via single-pass alternation regex.
+			// Note: On WP 6.9+, small block styles inlined as <style id="wp-block-*-inline-css">
+			// blocks (added when a block renders) are intentionally left in place; only
+			// <link> tags are stripped. This is a pre-existing limitation, not a regression.
 			if ( ! empty( $removal_urls ) ) {
 				$quoted_srcs = array();
 				foreach ( $removal_urls as $url => $_ ) {

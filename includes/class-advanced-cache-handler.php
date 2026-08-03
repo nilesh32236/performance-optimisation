@@ -97,20 +97,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		 * Creates the advanced-cache.php file.
 		 *
 		 * Generates the file to serve cached content, including gzip versions, and ensures required directories exist.
+		 * The generated drop-in honours the per-page `.wppo-no-cache` marker that the
+		 * Cache class writes for DONOTCACHEPAGE pages. This is a best-effort serve-time
+		 * check: a page that is already cached when a plugin first sets the constant is
+		 * served from the stale file before WordPress boots (so the marker is never
+		 * written) until a cache clear, post invalidation, or the one-time version
+		 * upgrade purge removes it.
 		 *
-		 * @return void
+		 * @return bool True when the drop-in is left in a correct state (regenerated,
+		 *              already ours, or a foreign drop-in left untouched), false on
+		 *              filesystem failure.
 		 * @since 1.0.0
 		 */
-		public static function create(): void {
+		public static function create(): bool {
 
 			global $wp_filesystem;
 
 			if ( self::foreign_dropin_present() ) {
-				return;
+				// Another plugin owns the drop-in; leave it alone. Not a failure.
+				return true;
 			}
 
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
-				return;
+				return false;
 			}
 
 			$site_url    = home_url();
@@ -151,6 +160,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$file_path      = preg_replace( \'#/+#\', \'/\', $file_path );' . PHP_EOL .
 			'$file_path      = rtrim( $file_path, \'/\' );' . PHP_EOL .
 			'$gzip_file_path = $file_path . \'.gz\';' . PHP_EOL . PHP_EOL .
+
+			'$no_cache_marker = dirname( $file_path ) . \'/.wppo-no-cache\';' . PHP_EOL .
+			'if ( file_exists( $no_cache_marker ) ) {' . PHP_EOL .
+			'	return;' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
 
 			'function is_user_logged_in_without_wp( $site_url ) {' . PHP_EOL .
 			'	$logged_in_cookie = \'wordpress_logged_in_\' . \'' . $cookie_hash . '\';' . PHP_EOL .
@@ -219,7 +233,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'}' . PHP_EOL;
 
 			// Write the handler file in the wp-content directory as advanced-cache.php.
-			$create_file = $wp_filesystem->put_contents( wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' ), $handler_code, FS_CHMOD_FILE );
+			return (bool) $wp_filesystem->put_contents( wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' ), $handler_code, FS_CHMOD_FILE );
 		}
 
 		/**

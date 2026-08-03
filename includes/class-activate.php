@@ -25,6 +25,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 	class Activate {
 
 		/**
+		 * Option key storing the plugin version whose upgrade routines have run.
+		 *
+		 * @var string
+		 * @since 1.8.1
+		 */
+		private const VERSION_OPTION = 'wppo_version';
+
+		/**
+		 * Version floor for the one-time legacy cache-key eviction.
+		 *
+		 * The legacy unsalted query-group keys (#489) can only exist once and were
+		 * introduced before this release. Gating the flush on a fixed floor (rather
+		 * than WPPO_VERSION) ensures future version bumps never re-run the eviction.
+		 *
+		 * @var string
+		 * @since 1.8.1
+		 */
+		private const LEGACY_FLUSH_FLOOR = '1.8.1';
+
+		/**
 		 * Initializes the activation process.
 		 *
 		 * Includes required files and triggers necessary modifications.
@@ -52,9 +72,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				delete_transient( Util::transient_key( 'wppo_activation_notices' ) );
 			}
 
-			if ( ! get_option( 'wppo_activation_time' ) ) {
+			$has_activation_time = (bool) get_option( 'wppo_activation_time' );
+			if ( ! $has_activation_time ) {
 				update_option( 'wppo_activation_time', time() );
 			}
+
+			// Record the current version so fresh installs skip the one-time
+			// version-upgrade routine (drop-in regeneration + full cache clear).
+			update_option( 'wppo_version', WPPO_VERSION, false );
 
 			$options             = get_option( 'wppo_settings', array() );
 			$enable_server_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
@@ -69,6 +94,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 
 			self::create_activity_log_table();
 			Img_Converter::migrate_img_info_autoload();
+			self::maybe_run_upgrades( ! $has_activation_time );
+		}
+
+		/**
+		 * Runs one-time upgrade routines when the plugin version changes.
+		 *
+		 * Compares the stored plugin version option against a fixed version floor
+		 * and executes version-specific migrations once. On fresh activation the
+		 * activation hook fires and $is_fresh_install is true, so the version is
+		 * recorded without evicting a shared object cache that can hold no legacy
+		 * keys. On routine plugin updates the activation hook does not fire, so
+		 * Main hooks this into admin_init and a background cron event. The stored
+		 * version is only rolled forward once a migration completes successfully.
+		 *
+		 * @param bool $is_fresh_install True when running from a brand-new
+		 *                               activation (no prior install on this site).
+		 * @return void
+		 * @since 1.8.1
+		 */
+		public static function maybe_run_upgrades( bool $is_fresh_install = false ): void {
+			$stored_version = get_option( self::VERSION_OPTION, '' );
+
+			// Brand-new install: no legacy keys can exist yet, so record the
+			// version and skip the pointless full flush and log entry.
+			if ( $is_fresh_install ) {
+				update_option( self::VERSION_OPTION, WPPO_VERSION, false );
+				return;
+			}
+
+			// One-time eviction: legacy unsalted keys can only exist once, on
+			// installs that predate the release shipping this fix. Gate on a fixed
+			// version floor so future version bumps never re-flush the shared cache.
+			if ( version_compare( $stored_version, self::LEGACY_FLUSH_FLOOR, '>=' ) ) {
+				return;
+			}
+
+			$flushed = Cache::flush_legacy_query_cache_keys();
+
+			if ( ! $flushed ) {
+				Log::add( __( 'Plugin upgrade: cache flush failed; will retry later.', 'performance-optimisation' ) );
+				self::schedule_upgrade_routine( HOUR_IN_SECONDS );
+				return;
+			}
+
+			Log::add( __( 'Plugin upgraded — legacy cache keys flushed.', 'performance-optimisation' ) );
+			update_option( self::VERSION_OPTION, WPPO_VERSION, false );
+		}
+
+		/**
+		 * Schedules the upgrade routine to run in the background via WP-Cron.
+		 *
+		 * Provides a reliable trigger for sites updated through WP-CLI, background
+		 * auto-updates, or managed-hosting pipelines where no admin visit ever
+		 * fires admin_init.
+		 *
+		 * @param int $delay Delay in seconds before the event runs.
+		 * @return void
+		 * @since 1.8.1
+		 */
+		public static function schedule_upgrade_routine( int $delay = MINUTE_IN_SECONDS ): void {
+			if ( ! wp_next_scheduled( 'wppo_run_upgrades' ) ) {
+				wp_schedule_single_event( time() + $delay, 'wppo_run_upgrades' );
+			}
 		}
 
 		/**
