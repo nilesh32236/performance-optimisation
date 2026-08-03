@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-08-01T08:31:15+00:00\n"
+"POT-Creation-Date: 2026-08-03T11:23:19+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -17,9 +17,9 @@ msgstr ""
 #: performance-optimisation.php
 #: includes/class-abilities.php:53
 #: includes/class-admin-notices.php:144
-#: includes/class-main.php:853
-#: includes/class-main.php:854
-#: includes/class-main.php:1179
+#: includes/class-main.php:1060
+#: includes/class-main.php:1061
+#: includes/class-main.php:1415
 #: build/index.js:1
 #: src/App.js:382
 msgid "Performance Optimisation"
@@ -57,7 +57,7 @@ msgstr ""
 #: build/tab-dashboard.js:1
 #: build/tab-image-optimization.js:1
 #: src/App.js:121
-#: src/components/ImageOptimization.js:115
+#: src/components/ImageOptimization.js:116
 #: src/components/ImageOptimizationCard.js:32
 msgid "Image Optimization"
 msgstr ""
@@ -160,23 +160,19 @@ msgstr ""
 msgid "Not now"
 msgstr ""
 
-#: includes/class-cache.php:425
-msgid "The legacy template_redirect output buffer path is deprecated. Use the WP 6.9+ wp_template_enhancement_output_buffer hooks instead."
-msgstr ""
-
-#: includes/class-cache.php:1096
+#: includes/class-cache.php:1372
 #: includes/class-object-cache.php:299
 #: includes/class-object-cache.php:334
-#: includes/class-rest.php:602
+#: includes/class-rest.php:611
 #: includes/class-wppo-cli-command.php:447
 msgid "Unable to initialize filesystem."
 msgstr ""
 
-#: includes/class-cache.php:1102
+#: includes/class-cache.php:1378
 msgid "Cache directory does not exist."
 msgstr ""
 
-#: includes/class-cache.php:1120
+#: includes/class-cache.php:1396
 #: build/tab-dashboard.js:2
 #: build/tab-object-cache.js:1
 #: src/components/Dashboard.js:526
@@ -220,7 +216,7 @@ msgstr ""
 #. translators: %d: Number of jobs queued
 #. translators: %d: Number of regeneration jobs queued
 #: includes/class-critical-css.php:972
-#: includes/class-rest.php:1357
+#: includes/class-rest.php:1366
 #, php-format
 msgid "Critical CSS regeneration: %d jobs queued."
 msgstr ""
@@ -274,7 +270,7 @@ msgid "Auto cleanup failed: %s"
 msgstr ""
 
 #: includes/class-database-cleanup.php:802
-#: includes/class-rest.php:800
+#: includes/class-rest.php:809
 msgid "Database cleanup failed."
 msgstr ""
 
@@ -300,11 +296,11 @@ msgstr ""
 msgid "Plugin deactivated"
 msgstr ""
 
-#: includes/class-image-optimisation.php:1371
+#: includes/class-image-optimisation.php:1380
 msgid "Play video"
 msgstr ""
 
-#: includes/class-image-optimisation.php:1399
+#: includes/class-image-optimisation.php:1408
 msgid "Video thumbnail"
 msgstr ""
 
@@ -316,23 +312,27 @@ msgstr ""
 msgid "Image conversion failed."
 msgstr ""
 
-#: includes/class-main.php:689
+#: includes/class-main.php:691
+msgid "Enabled on-demand block asset loading to match the WordPress 6.9 default."
+msgstr ""
+
+#: includes/class-main.php:801
 msgid "Performance Optimization: Failed to update .htaccess rules. Please check file permissions."
 msgstr ""
 
-#: includes/class-main.php:1183
+#: includes/class-main.php:1419
 msgid "Go to Performance Optimisation Setting"
 msgstr ""
 
-#: includes/class-main.php:1193
+#: includes/class-main.php:1429
 msgid "Clear All Cache"
 msgstr ""
 
-#: includes/class-main.php:1205
+#: includes/class-main.php:1441
 msgid "Clear This Page Cache"
 msgstr ""
 
-#: includes/class-main.php:1208
+#: includes/class-main.php:1444
 msgid "Clear cache for this specific page or post"
 msgstr ""
 
@@ -364,7 +364,7 @@ msgstr ""
 
 #: includes/class-metabox.php:161
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:189
+#: src/components/FileOptimization.js:193
 msgid "Scripts"
 msgstr ""
 
@@ -450,8 +450,8 @@ msgid "Ping returned false"
 msgstr ""
 
 #: includes/class-object-cache.php:233
-#: includes/class-rest.php:944
-#: includes/class-rest.php:956
+#: includes/class-rest.php:953
+#: includes/class-rest.php:965
 #: includes/redis-connect-helper.php:85
 msgid "Redis connection failed."
 msgstr ""
@@ -553,228 +553,228 @@ msgstr ""
 msgid "Flushed cache group: %s"
 msgstr ""
 
-#: includes/class-rest.php:313
+#: includes/class-rest.php:316
 msgid "Invalid path provided."
 msgstr ""
 
-#: includes/class-rest.php:319
+#: includes/class-rest.php:323
 msgid "Failed to clear cache: Invalid path."
 msgstr ""
 
 #. translators: %s: The URL of the page
-#: includes/class-rest.php:324
+#: includes/class-rest.php:328
 #, php-format
 msgid "Clear cache of <a href=\"%1$s\">%2$s</a>"
 msgstr ""
 
-#: includes/class-rest.php:331
+#: includes/class-rest.php:335
 msgid "Clear all cache"
 msgstr ""
 
-#: includes/class-rest.php:360
+#: includes/class-rest.php:364
 msgid "Invalid settings tab."
 msgstr ""
 
-#: includes/class-rest.php:444
+#: includes/class-rest.php:453
 msgid "Activities fetched successfully."
 msgstr ""
 
-#: includes/class-rest.php:474
-#: includes/class-rest.php:478
+#: includes/class-rest.php:483
+#: includes/class-rest.php:487
 msgid "No pending images to optimize."
 msgstr ""
 
-#: includes/class-rest.php:492
+#: includes/class-rest.php:501
 msgid "Invalid image path provided."
 msgstr ""
 
 #. translators: %d: Number of image jobs queued
-#: includes/class-rest.php:540
+#: includes/class-rest.php:549
 #, php-format
 msgid "Scheduled %d image optimization jobs for background processing on "
 msgstr ""
 
 #. translators: %d: Number of jobs
-#: includes/class-rest.php:551
+#: includes/class-rest.php:560
 #, php-format
 msgid "%d images queued for background optimization."
 msgstr ""
 
-#: includes/class-rest.php:590
+#: includes/class-rest.php:599
 #: build/tab-dashboard.js:2
 #: src/components/Dashboard.js:311
 msgid "Images optimized successfully."
 msgstr ""
 
-#: includes/class-rest.php:608
+#: includes/class-rest.php:617
 msgid "Optimized images folder does not exist."
 msgstr ""
 
-#: includes/class-rest.php:612
+#: includes/class-rest.php:621
 msgid "Failed to delete the optimized images folder."
 msgstr ""
 
-#: includes/class-rest.php:618
+#: includes/class-rest.php:627
 msgid "Optimized images folder deleted successfully."
 msgstr ""
 
-#: includes/class-rest.php:632
+#: includes/class-rest.php:641
 msgid "Invalid payload."
 msgstr ""
 
-#: includes/class-rest.php:636
-#: includes/class-rest.php:984
+#: includes/class-rest.php:645
+#: includes/class-rest.php:993
 msgid "Invalid action."
 msgstr ""
 
-#: includes/class-rest.php:640
+#: includes/class-rest.php:649
 msgid "Settings are missing or invalid."
 msgstr ""
 
-#: includes/class-rest.php:657
+#: includes/class-rest.php:666
 msgid "Invalid setting key detected."
 msgstr ""
 
-#: includes/class-rest.php:687
+#: includes/class-rest.php:696
 msgid "No changes detected, settings are already up-to-date"
 msgstr ""
 
-#: includes/class-rest.php:691
+#: includes/class-rest.php:700
 msgid "Failed to update settings"
 msgstr ""
 
-#: includes/class-rest.php:702
+#: includes/class-rest.php:711
 msgid "Settings updated successfully"
 msgstr ""
 
-#: includes/class-rest.php:729
-#: includes/class-rest.php:790
+#: includes/class-rest.php:738
+#: includes/class-rest.php:799
 msgid "Invalid cleanup type."
 msgstr ""
 
 #. translators: %s: Cleanup type
-#: includes/class-rest.php:741
+#: includes/class-rest.php:750
 #, php-format
 msgid "Failed to clean %s."
 msgstr ""
 
 #. translators: %d: Number of items cleaned
-#: includes/class-rest.php:752
+#: includes/class-rest.php:761
 #, php-format
 msgid "Database cleanup (all): %d items removed on "
 msgstr ""
 
-#: includes/class-rest.php:765
+#: includes/class-rest.php:774
 msgid "Partial or total failure during database cleanup."
 msgstr ""
 
 #. translators: %1$s: Cleanup type, %2$d: Number of items
-#: includes/class-rest.php:806
+#: includes/class-rest.php:815
 #, php-format
 msgid "Database cleanup (%1$s): %2$d items removed on "
 msgstr ""
 
-#: includes/class-rest.php:852
+#: includes/class-rest.php:861
 msgid "Post ID is required."
 msgstr ""
 
-#: includes/class-rest.php:865
+#: includes/class-rest.php:874
 msgid "No assets captured yet. Visit the page on the frontend first."
 msgstr ""
 
-#: includes/class-rest.php:943
+#: includes/class-rest.php:952
 msgid "Redis connection ping failed."
 msgstr ""
 
-#: includes/class-rest.php:955
+#: includes/class-rest.php:964
 msgid "Redis connection enable failed."
 msgstr ""
 
-#: includes/class-rest.php:959
+#: includes/class-rest.php:968
 msgid "Object Cache enabled."
 msgstr ""
 
-#: includes/class-rest.php:960
+#: includes/class-rest.php:969
 msgid "Object Cache enabled successfully."
 msgstr ""
 
-#: includes/class-rest.php:967
+#: includes/class-rest.php:976
 msgid "Redis connection disable failed."
 msgstr ""
 
-#: includes/class-rest.php:968
+#: includes/class-rest.php:977
 msgid "Failed to disable object cache."
 msgstr ""
 
-#: includes/class-rest.php:971
-#: includes/class-rest.php:972
+#: includes/class-rest.php:980
+#: includes/class-rest.php:981
 msgid "Object Cache disabled."
 msgstr ""
 
-#: includes/class-rest.php:978
-#: includes/class-rest.php:979
+#: includes/class-rest.php:987
+#: includes/class-rest.php:988
 msgid "Object Cache flushed."
 msgstr ""
 
-#: includes/class-rest.php:981
+#: includes/class-rest.php:990
 msgid "Failed to flush object cache."
 msgstr ""
 
-#: includes/class-rest.php:1063
+#: includes/class-rest.php:1072
 msgid "Unauthorized."
 msgstr ""
 
-#: includes/class-rest.php:1067
+#: includes/class-rest.php:1076
 msgid "Nonce verification failed."
 msgstr ""
 
-#: includes/class-rest.php:1103
-#: includes/class-rest.php:1152
+#: includes/class-rest.php:1112
+#: includes/class-rest.php:1161
 msgid "A valid URL is required."
 msgstr ""
 
-#: includes/class-rest.php:1109
-#: includes/class-rest.php:1116
-#: includes/class-rest.php:1159
+#: includes/class-rest.php:1118
+#: includes/class-rest.php:1125
+#: includes/class-rest.php:1168
 msgid "A valid, allowed URL is required."
 msgstr ""
 
-#: includes/class-rest.php:1122
-#: includes/class-rest.php:1165
+#: includes/class-rest.php:1131
+#: includes/class-rest.php:1174
 #: includes/class-telemetry.php:82
 msgid "You can only scan URLs belonging to this website."
 msgstr ""
 
-#: includes/class-rest.php:1129
+#: includes/class-rest.php:1138
 msgid "Performance scan failed."
 msgstr ""
 
-#: includes/class-rest.php:1170
+#: includes/class-rest.php:1179
 msgid "PageSpeed cannot scan local or non-public URLs."
 msgstr ""
 
-#: includes/class-rest.php:1179
-#: includes/class-rest.php:1286
+#: includes/class-rest.php:1188
+#: includes/class-rest.php:1295
 msgid "Action Scheduler is not available."
 msgstr ""
 
-#: includes/class-rest.php:1227
+#: includes/class-rest.php:1236
 msgid "PageSpeed scan failed. Please check your API key and try again."
 msgstr ""
 
-#: includes/class-rest.php:1265
+#: includes/class-rest.php:1274
 msgid "No cached scan found for this URL. Run a scan first."
 msgstr ""
 
-#: includes/class-rest.php:1302
+#: includes/class-rest.php:1311
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:155
+#: src/components/FileOptimization.js:159
 msgid "Used CSS regeneration queued."
 msgstr ""
 
 #. translators: %d: Number of queued jobs
 #. translators: %d: Number of jobs
-#: includes/class-rest.php:1318
+#: includes/class-rest.php:1327
 #: includes/class-used-css.php:938
 #, php-format
 msgid "Queued %d used-CSS regeneration jobs."
@@ -815,10 +815,10 @@ msgstr ""
 msgid "PageSpeed Insights API"
 msgstr ""
 
-#: includes/class-system-info.php:305
+#: includes/class-system-info.php:319
 #: build/tab-dashboard.js:1
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:254
+#: src/components/ImageOptimization.js:255
 #: src/components/PerformanceAudit.js:508
 #: src/components/SuggestionsPanel.js:90
 #: src/components/SuggestionsPanel.js:97
@@ -1198,7 +1198,7 @@ msgstr ""
 #: build/index.js:1
 #: build/tab-file-optimization.js:1
 #: src/App.js:111
-#: src/components/FileOptimization.js:241
+#: src/components/FileOptimization.js:245
 msgid "File Optimization"
 msgstr ""
 
@@ -1989,8 +1989,8 @@ msgstr ""
 #: build/tab-preload-settings.js:1
 #: src/components/Dashboard.js:590
 #: src/components/DatabaseCleanup.js:228
-#: src/components/FileOptimization.js:251
-#: src/components/ImageOptimization.js:125
+#: src/components/FileOptimization.js:255
+#: src/components/ImageOptimization.js:126
 #: src/components/PluginSetting.js:547
 #: src/components/PreloadSettings.js:104
 msgid "Save Settings"
@@ -2090,7 +2090,7 @@ msgstr ""
 #: build/tab-image-optimization.js:1
 #: build/tab-object-cache.js:1
 #: src/components/DatabaseCleanup.js:142
-#: src/components/ImageOptimization.js:84
+#: src/components/ImageOptimization.js:85
 #: src/components/ObjectCache.js:86
 msgid "Settings saved successfully."
 msgstr ""
@@ -2099,8 +2099,8 @@ msgstr ""
 #: build/tab-image-optimization.js:1
 #: build/tab-object-cache.js:1
 #: src/components/DatabaseCleanup.js:150
-#: src/components/ImageOptimization.js:94
-#: src/components/ImageOptimization.js:105
+#: src/components/ImageOptimization.js:95
+#: src/components/ImageOptimization.js:106
 #: src/components/ObjectCache.js:96
 #: src/components/ObjectCache.js:105
 msgid "Error saving settings."
@@ -2109,7 +2109,7 @@ msgstr ""
 #: build/tab-database-cleanup.js:1
 #: build/tab-image-optimization.js:1
 #: src/components/DatabaseCleanup.js:255
-#: src/components/ImageOptimization.js:153
+#: src/components/ImageOptimization.js:154
 msgid "Dismiss"
 msgstr ""
 
@@ -2294,728 +2294,748 @@ msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: build/tab-preload-settings.js:1
-#: src/components/FileOptimization.js:110
+#: src/components/FileOptimization.js:114
 #: src/components/PreloadSettings.js:80
 msgid "An unexpected error occurred."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:184
+#: src/components/FileOptimization.js:188
 msgid "Assets"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:194
+#: src/components/FileOptimization.js:198
 msgid "E-Commerce"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:199
+#: src/components/FileOptimization.js:203
 msgid "Network"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:204
+#: src/components/FileOptimization.js:208
 msgid "Core"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:242
+#: src/components/FileOptimization.js:246
 msgid "Fine-tune how your site delivers CSS, JS, and HTML for maximum performance."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: build/tab-preload-settings.js:1
-#: src/components/FileOptimization.js:176
+#: src/components/FileOptimization.js:180
 #: src/components/PreloadSettings.js:60
 msgid "Settings updated successfully."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: build/tab-preload-settings.js:1
-#: src/components/FileOptimization.js:177
+#: src/components/FileOptimization.js:181
 #: src/components/PreloadSettings.js:70
 msgid "Failed to update settings."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:314
+#: src/components/FileOptimization.js:318
 msgid "CSS Optimization"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:322
+#: src/components/FileOptimization.js:326
 msgid "Minify CSS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:326
+#: src/components/FileOptimization.js:330
 msgid "Remove whitespace and comments from stylesheets to reduce file size."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:335
+#: src/components/FileOptimization.js:339
 msgid "Combine CSS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:339
+#: src/components/FileOptimization.js:343
 msgid "Merge all CSS files into a single file to reduce the number of HTTP requests."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:353
+#: src/components/FileOptimization.js:357
 msgid "Exclude CSS from Combining"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:363
-#: src/components/FileOptimization.js:614
-#: src/components/FileOptimization.js:665
+#: src/components/FileOptimization.js:367
+#: src/components/FileOptimization.js:618
+#: src/components/FileOptimization.js:669
 msgid "Handles or partial URLs"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:375
+#: src/components/FileOptimization.js:379
 msgid "Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:381
+#: src/components/FileOptimization.js:385
 msgid "Remove Unused CSS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:385
+#: src/components/FileOptimization.js:389
 msgid "Scan pages and remove CSS rules that are not used. Reduces file size by 30–80% and helps pass PageSpeed audits."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:400
+#: src/components/FileOptimization.js:404
 msgid "Safelist Selectors"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:410
+#: src/components/FileOptimization.js:414
 msgid "Selectors to always keep (one per line, e.g. .my-dynamic-class)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:156
+#: src/components/FileOptimization.js:160
 msgid "Failed to regenerate used CSS."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:425
+#: src/components/FileOptimization.js:429
 msgid "Regenerate Used CSS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:438
+#: src/components/FileOptimization.js:442
 msgid "Exclude CSS from Minification"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:448
-#: src/components/FileOptimization.js:806
-#: src/components/FileOptimization.js:840
+#: src/components/FileOptimization.js:452
+#: src/components/FileOptimization.js:810
+#: src/components/FileOptimization.js:844
 msgid "Handles or partial URLs (one per line)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:460
+#: src/components/FileOptimization.js:464
 msgid "Critical CSS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:464
+#: src/components/FileOptimization.js:468
 msgid "Generate and inline above-the-fold CSS, then defer full stylesheets. Improves FCP and LCP by eliminating render-blocking CSS."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:479
+#: src/components/FileOptimization.js:483
 msgid "Host Google Fonts Locally"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:483
+#: src/components/FileOptimization.js:487
 msgid "Automatically detect Google Fonts and serve them from your own server. Eliminates external DNS lookups, improves GDPR compliance, and applies font-display: swap."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:495
+#: src/components/FileOptimization.js:499
 msgid "HTML Optimization"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:502
+#: src/components/FileOptimization.js:506
 msgid "Minify HTML"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:506
+#: src/components/FileOptimization.js:510
 msgid "Compress the HTML output of your website by removing unnecessary whitespace and comments."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:515
+#: src/components/FileOptimization.js:519
 msgid "Remove HTML Comments"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:519
+#: src/components/FileOptimization.js:523
 msgid "Strip HTML comments from the output (except IE conditional comments)."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:528
+#: src/components/FileOptimization.js:532
 msgid "Minify Inline CSS"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:532
+#: src/components/FileOptimization.js:536
 msgid "Minify CSS within <style> tags using the PHP minifier."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:541
+#: src/components/FileOptimization.js:545
 msgid "Minify Inline JavaScript"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:545
+#: src/components/FileOptimization.js:549
 msgid "Minify JavaScript within <script> tags using the PHP minifier."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:565
+#: src/components/FileOptimization.js:569
 msgid "JavaScript Loading"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:573
+#: src/components/FileOptimization.js:577
 msgid "Minify JavaScript"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:577
+#: src/components/FileOptimization.js:581
 msgid "Compress JS files by removing whitespace and comments to reduce execution time."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:586
+#: src/components/FileOptimization.js:590
 msgid "Defer JavaScript"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:590
+#: src/components/FileOptimization.js:594
 msgid "Load scripts after the page renders to prevent render-blocking and improve page speed."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:604
+#: src/components/FileOptimization.js:608
 msgid "Exclude JS from Deferring"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:626
+#: src/components/FileOptimization.js:630
 msgid "Delay JavaScript Execution"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:630
+#: src/components/FileOptimization.js:634
 msgid "Delay all scripts until the user interacts (keyboard/mouse) or load during idle/viewport. Reduces initial CPU usage but may break immediate functionality — test carefully."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:643
+#: src/components/FileOptimization.js:647
 msgid "Script Rules"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:655
+#: src/components/FileOptimization.js:659
 msgid "Exclude JS from Minification"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:683
+#: src/components/FileOptimization.js:687
 msgid "Scripts to Delay"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:693
+#: src/components/FileOptimization.js:697
 msgid "Partial URLs or keywords"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:711
+#: src/components/FileOptimization.js:715
 msgid "Default Load Strategy"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:728
+#: src/components/FileOptimization.js:732
 msgid "Interaction (load on user interaction)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:734
+#: src/components/FileOptimization.js:738
 msgid "Idle (load during browser idle)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:740
+#: src/components/FileOptimization.js:744
 msgid "Viewport (load when near viewport)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:747
+#: src/components/FileOptimization.js:751
 msgid "Default strategy for delayed scripts that are not in a specific list below."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:762
+#: src/components/FileOptimization.js:766
 msgid "Idle Timeout (ms)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:783
+#: src/components/FileOptimization.js:787
 msgid "Maximum time (ms) to wait before loading idle scripts (default: 3000)."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:796
+#: src/components/FileOptimization.js:800
 msgid "Scripts to Load When Idle"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:818
+#: src/components/FileOptimization.js:822
 msgid "These scripts load via requestIdleCallback during browser idle time."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:830
+#: src/components/FileOptimization.js:834
 msgid "Scripts to Load in Viewport"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:852
+#: src/components/FileOptimization.js:856
 msgid "These scripts load when their position enters the viewport."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:864
+#: src/components/FileOptimization.js:868
 msgid "Script Priority"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:874
+#: src/components/FileOptimization.js:878
 msgid "handle:high, other:low (one per line)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:886
+#: src/components/FileOptimization.js:890
 msgid "Syntax: handle:priority (high, normal, low). High-priority scripts load first."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:898
+#: src/components/FileOptimization.js:902
 msgid "Delaying scripts can break immediate functionality. Test carefully."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:919
+#: src/components/FileOptimization.js:923
 msgid "WooCommerce Core"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:927
+#: src/components/FileOptimization.js:931
 msgid "Optimize WooCommerce Assets"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:931
+#: src/components/FileOptimization.js:935
 msgid "Disable WooCommerce scripts and styles on non-ecommerce pages (e.g. blog, about). This reduces page weight but may break cart widgets on custom pages — verify your checkout flow after enabling."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:947
+#: src/components/FileOptimization.js:951
 msgid "This may break carts on custom pages. Verify your checkout flow."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:959
+#: src/components/FileOptimization.js:963
 msgid "Keep Assets on these URLs"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:969
+#: src/components/FileOptimization.js:973
 msgid "e.g. shop/.* (regex supported)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:986
+#: src/components/FileOptimization.js:990
 msgid "Remove specific CSS/JS handles"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:996
+#: src/components/FileOptimization.js:1000
 msgid "Handles (one per line)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1024
+#: src/components/FileOptimization.js:1028
 msgid "Server Rules"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1034
+#: src/components/FileOptimization.js:1038
 msgid "Unable to load server configuration. Check your server setup."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: build/tab-plugin-setting.js:1
-#: src/components/FileOptimization.js:1044
+#: src/components/FileOptimization.js:1048
 #: src/components/PluginSetting.js:423
 msgid "Retry"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1059
+#: src/components/FileOptimization.js:1063
 msgid "Loading server configuration…"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1072
+#: src/components/FileOptimization.js:1076
 msgid "Server rules require Apache."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1080
+#: src/components/FileOptimization.js:1084
 msgid "Enable Server Rules (.htaccess)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1084
+#: src/components/FileOptimization.js:1088
 msgid "Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1114
+#: src/components/FileOptimization.js:1118
 msgid "This modifies your .htaccess. Ensure you have FTP access for recovery."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1131
+#: src/components/FileOptimization.js:1135
 msgid "Nginx Detected:"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1136
+#: src/components/FileOptimization.js:1140
 msgid "Server rules cannot be applied automatically on Nginx. Please copy the rules below into your server configuration."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1143
+#: src/components/FileOptimization.js:1147
 msgid "Nginx Configuration"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1154
+#: src/components/FileOptimization.js:1158
 msgid "Add these rules inside your"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1162
+#: src/components/FileOptimization.js:1166
 msgid "block, then restart Nginx."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1179
+#: src/components/FileOptimization.js:1183
 msgid "Unrecognised server software. Automatic rules are only available for Apache (.htaccess)."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1192
+#: src/components/FileOptimization.js:1196
 msgid "CDN Settings"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1203
+#: src/components/FileOptimization.js:1207
 msgid "CDN Hostname"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1222
+#: src/components/FileOptimization.js:1226
 msgid "Enter your CDN hostname. All static asset URLs (JS, CSS, images) will be rewritten to load from this domain, reducing latency for global visitors."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1240
+#: src/components/FileOptimization.js:1244
 msgid "Cleanup Core Bloat"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1248
+#: src/components/FileOptimization.js:1252
 msgid "Disable Emojis"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1252
+#: src/components/FileOptimization.js:1256
 msgid "Remove the WordPress emoji script and stylesheet. Saves ~10 KB per page if you don't use emojis in your content."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1261
+#: src/components/FileOptimization.js:1265
 msgid "Disable Embeds"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1265
+#: src/components/FileOptimization.js:1269
 msgid "Remove the oEmbed script that allows embedding external content. Saves ~1 HTTP request if you do not embed tweets, YouTube videos, etc."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1274
+#: src/components/FileOptimization.js:1278
 msgid "Disable Dashicons (Frontend)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1278
+#: src/components/FileOptimization.js:1282
 msgid "Prevent the WordPress admin icon font from loading on the frontend for logged-out users. Only disable if your theme does not use Dashicons."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1287
+#: src/components/FileOptimization.js:1291
 msgid "Disable XML-RPC"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1291
+#: src/components/FileOptimization.js:1295
 msgid "Block the XML-RPC endpoint (xmlrpc.php). Reduces attack surface and server load. Only disable if you do not use Jetpack, mobile apps, or remote publishing."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1300
+#: src/components/FileOptimization.js:1304
 msgid "Load Block Assets On Demand"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1304
-msgid "Only load block CSS and JavaScript when blocks are actually used on the page. On WordPress 6.9+, classic themes load block assets on demand by default, so this toggle acts as an opt-out — disable it to force the combined wp-block-library stylesheet. Requires WordPress 6.8 or later."
+#: src/components/FileOptimization.js:1308
+msgid "Only load block CSS and JavaScript when blocks are actually used on the page. On WordPress 6.8 you must enable this toggle; on WordPress 6.9 and later classic themes load block assets on demand by default."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1316
+#: src/components/FileOptimization.js:1317
+msgid "Load Combined Core Block Styles"
+msgstr ""
+
+#: build/tab-file-optimization.js:1
+#: src/components/FileOptimization.js:1321
+msgid "Load the combined core block stylesheet (wp-block-library) for compatibility with shortcodes or widgets that enqueue styles while content renders. Overrides on-demand block assets. Requires WordPress 6.9+."
+msgstr ""
+
+#: build/tab-file-optimization.js:1
+#: src/components/FileOptimization.js:1333
 msgid "Heartbeat Control"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1327
+#: src/components/FileOptimization.js:1344
 msgid "API Frequency"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1341
+#: src/components/FileOptimization.js:1358
 msgid "Default Mode"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1347
+#: src/components/FileOptimization.js:1364
 msgid "Reduce Frequency (60s)"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1353
+#: src/components/FileOptimization.js:1370
 msgid "Disable on Frontend"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1359
+#: src/components/FileOptimization.js:1376
 msgid "Disable Everywhere"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
-#: src/components/FileOptimization.js:1369
+#: src/components/FileOptimization.js:1386
 msgid "Restricting the Heartbeat API reduces server CPU usage by limiting polling."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:116
+#: src/components/ImageOptimization.js:117
 msgid "Optimize media delivery with advanced lazy loading, next-gen formats, and preloading rules."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:165
+#: src/components/ImageOptimization.js:166
 msgid "Lazy Loading"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:170
+#: src/components/ImageOptimization.js:171
 msgid "Enable Lazy Load"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:174
+#: src/components/ImageOptimization.js:175
 msgid "Images below the fold are loaded only when the user scrolls near them. Reduces initial page weight and improves Largest Contentful Paint (LCP) for above-the-fold content."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:215
+#: src/components/ImageOptimization.js:216
 msgid "Use Native Lazy Loading"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:223
+#: src/components/ImageOptimization.js:224
 msgid "Use the browser's native loading=\"lazy\" attribute instead of JavaScript-based IntersectionObserver. Supported in modern browsers and reduces JS overhead."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:239
+#: src/components/ImageOptimization.js:240
 msgid "Placeholder Type"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:262
+#: src/components/ImageOptimization.js:263
 msgid "SVG Placeholder (Lightweight)"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:270
+#: src/components/ImageOptimization.js:271
 msgid "Dominant Color (Extracted from Image)"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:278
+#: src/components/ImageOptimization.js:279
 msgid "LQIP (Blur Preview)"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:288
+#: src/components/ImageOptimization.js:289
 msgid "The src attribute is removed until the image is in view."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:296
+#: src/components/ImageOptimization.js:297
 msgid "SVG"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:304
+#: src/components/ImageOptimization.js:305
 msgid "Lightweight inline SVG while the real image loads. Prevents layout shift."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:312
+#: src/components/ImageOptimization.js:313
 msgid "Dominant Color"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:320
+#: src/components/ImageOptimization.js:321
 msgid "Extracted during image conversion. Smooth background-color fade transition."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:328
+#: src/components/ImageOptimization.js:329
 msgid "LQIP"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:336
+#: src/components/ImageOptimization.js:337
 msgid "20×20 blurred preview. Images must be re-optimized for LQIP to take effect."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:346
+#: src/components/ImageOptimization.js:347
 msgid "Wrap in Picture Tag"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:350
+#: src/components/ImageOptimization.js:351
 msgid "Wrap <img> elements in a <picture> element to enable serving next-gen formats (WebP/AVIF) with a fallback for older browsers. Required for format conversion to work."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:362
+#: src/components/ImageOptimization.js:363
 msgid "Video & Media"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:367
+#: src/components/ImageOptimization.js:368
 msgid "Video Lazy Loading"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:371
+#: src/components/ImageOptimization.js:372
 msgid "Defer loading of <iframe> and <video> embeds until they enter the viewport. Significantly reduces initial page load time for pages with embedded YouTube, Vimeo, or other media."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:386
+#: src/components/ImageOptimization.js:387
 msgid "Video Placeholder"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:394
+#: src/components/ImageOptimization.js:395
 msgid "Replace YouTube embeds with lightweight thumbnail previews. The actual video player loads only when the user clicks the play button, saving up to 800KB per embed."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:435
+#: src/components/ImageOptimization.js:436
 msgid "Next-Gen Conversion"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:443
+#: src/components/ImageOptimization.js:444
 msgid "Auto Convert Formats"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:447
+#: src/components/ImageOptimization.js:448
 msgid "Automatically convert uploaded JPEG/PNG images to modern formats (WebP or AVIF). Modern formats are 25–50 percent smaller than JPEG at the same quality, directly improving page speed scores."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:520
+#: src/components/ImageOptimization.js:521
 msgid "Responsive Limits"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:584
+#: src/components/ImageOptimization.js:585
 msgid "Advanced Preloading"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:593
+#: src/components/ImageOptimization.js:594
 msgid "Auto-preload LCP Image"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:597
+#: src/components/ImageOptimization.js:598
 msgid "Automatically detect and preload the Largest Contentful Paint (LCP) image from PageSpeed scan data. Requires a configured PageSpeed API key. Falls back to featured image when no PageSpeed data is available."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:608
+#: src/components/ImageOptimization.js:609
+msgid "Prioritize LCP Images in Final HTML"
+msgstr ""
+
+#: build/tab-image-optimization.js:1
+#: src/components/ImageOptimization.js:613
+msgid "Remove loading=\"lazy\" from the first N images and set fetchpriority=\"high\" on the detected LCP image in the finalized page HTML. Requires WordPress 6.9+ for full effect; falls back gracefully on older versions."
+msgstr ""
+
+#: build/tab-image-optimization.js:1
+#: src/components/ImageOptimization.js:624
 msgid "Preload Front Page Images"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:612
+#: src/components/ImageOptimization.js:628
 msgid "Inject <link rel=\"preload\"> hints for critical images on your homepage. Tells the browser to fetch these images at the highest priority, improving LCP scores for your most visited page."
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:626
+#: src/components/ImageOptimization.js:642
 msgid "Frontpage Image URLs to Preload"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:656
+#: src/components/ImageOptimization.js:672
 msgid "Preload Featured Images"
 msgstr ""
 
 #: build/tab-image-optimization.js:1
-#: src/components/ImageOptimization.js:660
+#: src/components/ImageOptimization.js:676
 msgid "Automatically add preload hints for the featured image of posts and pages. Select which post types to apply this to below. Improves LCP for archive and single post pages."
 msgstr ""
 
