@@ -175,6 +175,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 - No WP-CLI commands registered
 - All REST endpoints require `manage_options` + `X-WP-Nonce`
 - Settings stored as serialized array in single `wppo_settings` option
+- **Filters**: `wppo_inline_combined_css` (return falsy to disable inlining of the combined/minified CSS via core `wp_maybe_inline_styles()` — e.g. when using a CDN for the combined file)
 
 ## Multisite compatibility
 

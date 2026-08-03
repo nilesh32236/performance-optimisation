@@ -616,6 +616,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
+			// Inlining is disabled while removeUnusedCSS is active because used-CSS
+			// reads the combined stylesheet via its `src`; once core inlines a handle
+			// it clears `src`, which would silently skip the combined file and ship the
+			// full (unpurged) CSS instead.
+			if ( ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
+				return;
+			}
+
+			// Site operators can opt out of inlining entirely (e.g. when serving the
+			// combined file from a CDN, since inlined CSS bypasses the CDN).
+			if ( ! apply_filters( 'wppo_inline_combined_css', true ) ) {
+				return;
+			}
+
 			wp_style_add_data( 'wppo-combine-css', 'path', $css_file_path );
 		}
 
