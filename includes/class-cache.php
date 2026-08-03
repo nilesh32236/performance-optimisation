@@ -291,7 +291,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
 			// assets on by default for classic themes) cannot keep serving a stale
 			// combined monolith built while wp-block-library was still in the queue.
-			$css_variant   = $separate_block_assets ? 'separate' : '';
+			$css_variant = $separate_block_assets ? 'separate' : '';
 
 			// The set of handles this request would pull into the combined file. The
 			// same skip rules are applied below during generation so the two branches
@@ -940,7 +940,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Get the cache file path based on the URL path.
 		 *
-		 * @param string $type      The file type (default: 'html').
 		 * @param string $type       The file type (default: 'html').
 		 * @param string $role_hash  Optional role hash for logged-in user cache variant.
 		 * @param string $variant    Optional variant suffix (e.g. combined-CSS state) baked into the file name.
