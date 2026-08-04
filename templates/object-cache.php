@@ -1045,11 +1045,25 @@ if ( ! function_exists( 'wp_cache_supports' ) ) {
 	 * @return bool True if the feature is supported, false otherwise.
 	 */
 	function wp_cache_supports( $feature ) {
+		/*
+		 * Keep this list in sync with core's wp_cache_supports() in wp-includes/cache.php.
+		 * Re-diff the claim list against core each release and claim a new feature only
+		 * when the drop-in actually implements it. The compatible feature list here is
+		 * core's authoritative list (add_multiple, set_multiple, get_multiple,
+		 * delete_multiple, flush_runtime, flush_group) minus flush_runtime:
+		 *
+		 *  - add_multiple is served by core's cache-compat.php fallback, which loops
+		 *    wp_cache_add() per key, so it is genuinely supported.
+		 *  - flush_runtime is intentionally NOT claimed: this drop-in has no runtime-only
+		 *    flush, so core's compat wp_cache_flush_runtime() would delegate to a full
+		 *    persistent Redis flush, which is not what a runtime-only caller expects.
+		 */
 		switch ( $feature ) {
-			case 'flush_group':
-			case 'get_multiple':
+			case 'add_multiple':
 			case 'set_multiple':
+			case 'get_multiple':
 			case 'delete_multiple':
+			case 'flush_group':
 				return true;
 			default:
 				return false;

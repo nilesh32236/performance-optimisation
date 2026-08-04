@@ -274,6 +274,39 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that wp_cache_supports() claims every feature the drop-in implements.
+	 *
+	 * The list mirrors core's wp_cache_supports() minus flush_runtime. add_multiple is
+	 * served by core's cache-compat.php fallback (loops wp_cache_add() per key), so it is
+	 * genuinely supported by this drop-in.
+	 */
+	public function test_wp_cache_supports_claims_implemented_features(): void {
+		$this->assertTrue( wp_cache_supports( 'add_multiple' ) );
+		$this->assertTrue( wp_cache_supports( 'set_multiple' ) );
+		$this->assertTrue( wp_cache_supports( 'get_multiple' ) );
+		$this->assertTrue( wp_cache_supports( 'delete_multiple' ) );
+		$this->assertTrue( wp_cache_supports( 'flush_group' ) );
+	}
+
+	/**
+	 * Test that wp_cache_supports() does NOT claim flush_runtime.
+	 *
+	 * The drop-in has no runtime-only flush, so claiming it would make core's compat
+	 * wp_cache_flush_runtime() delegate to a full persistent Redis flush instead of a
+	 * cheap in-memory-only invalidation.
+	 */
+	public function test_wp_cache_supports_does_not_claim_flush_runtime(): void {
+		$this->assertFalse( wp_cache_supports( 'flush_runtime' ) );
+	}
+
+	/**
+	 * Test that wp_cache_supports() returns false for unknown features.
+	 */
+	public function test_wp_cache_supports_returns_false_for_unknown_features(): void {
+		$this->assertFalse( wp_cache_supports( 'not_a_real_feature' ) );
+	}
+
+	/**
 	 * Test that a differently ordered array salt produces a different normalized salt.
 	 */
 	public function test_array_salt_order_changes_normalized_salt(): void {
