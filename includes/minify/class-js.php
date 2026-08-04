@@ -87,10 +87,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
 			$content_dir_normalized = wp_normalize_path( WP_CONTENT_DIR );
 			$cache_inside           = ( 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
+
+			static $cache_url = array();
+			$blog_id = get_current_blog_id();
+
+			if ( ! isset( $cache_url[ $blog_id ] ) ) {
+				$cache_url[ $blog_id ] = array();
+			}
+
 			if ( ! $cache_inside ) {
-				$this->cache_url = content_url( '/' );
+				if ( ! isset( $cache_url[ $blog_id ]['root'] ) ) {
+					$cache_url[ $blog_id ]['root'] = content_url( '/' );
+				}
+				$this->cache_url = $cache_url[ $blog_id ]['root'];
 			} else {
-				$this->cache_url = content_url( str_replace( $content_dir_normalized, '', $cache_dir_normalized ) );
+				$path = str_replace( $content_dir_normalized, '', $cache_dir_normalized );
+				if ( ! isset( $cache_url[ $blog_id ][ $path ] ) ) {
+					$cache_url[ $blog_id ][ $path ] = content_url( $path );
+				}
+				$this->cache_url = $cache_url[ $blog_id ][ $path ];
 			}
 			$this->filesystem = Util::init_filesystem();
 		}
