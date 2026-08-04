@@ -204,6 +204,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Generates a preload link tag for resources.
 		 *
+		 * Preconnect and dns-prefetch links now flow through core's
+		 * `wp_resource_hints()` (see Main::add_resource_hints()); this helper
+		 * remains for `rel="preload"` links that need `as`/`type`/`media`
+		 * control.
+		 *
 		 * @param string $href The resource URL.
 		 * @param string $rel The relationship attribute.
 		 * @param string $resource_type The type of the resource (optional).
