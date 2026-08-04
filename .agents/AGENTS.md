@@ -38,11 +38,11 @@ npm run build           # wp-scripts build
 
 ## Vendor Directory
 
-`vendor/` is **tracked in git**. Before committing, ALWAYS run:
-```bash
-composer release    # strips dev deps, optimizes autoloader
-git add vendor/     # include production-only vendor
-```
+`vendor/` is **ignored in git** (`/.gitignore`). Never stage or commit it. It is installed on demand:
+- **Locally**: `composer dev-setup` (dev deps) or `composer release` (production-only)
+- **In CI/release**: `release.yml` and `scripts/build-release.sh` run `composer install --no-dev --optimize-autoloader` before packaging, so the shipped build always contains production deps (`voku/html-min`, `matthiasmullie/minify`, `woocommerce/action-scheduler`)
+
+`composer.lock` **is tracked** to keep installs reproducible.
 
 ## Build Output
 

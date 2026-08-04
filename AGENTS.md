@@ -30,14 +30,12 @@ npm run start                # dev watch mode
 
 ## Vendor directory
 
-`vendor/` is **tracked in git** — do not gitignore it. Before pushing:
+`vendor/` is **ignored in git** (`/.gitignore`). It is installed on demand:
 
-```sh
-composer release    # strips dev dependencies, optimizes autoloader
-git add vendor/     # include the production-only vendor in your commit
-```
+- **Locally**: `composer dev-setup` (dev deps) or `composer release` (production-only).
+- **In CI/release**: `release.yml` and `scripts/build-release.sh` run `composer install --no-dev --optimize-autoloader` before packaging, so the shipped ZIP/SVN build always contains the production dependencies (`voku/html-min`, `matthiasmullie/minify`, `woocommerce/action-scheduler`).
 
-This ensures the plugin ships with only production dependencies (`voku/html-min`, `matthiasmullie/minify`, `woocommerce/action-scheduler`). If you need dev deps locally, run `composer dev-setup` after.
+`composer.lock` **is tracked** so installs are reproducible. After changing `composer.json`/`composer.lock`, run `composer dev-setup` locally to verify the lock file resolves.
 
 ## Architecture
 

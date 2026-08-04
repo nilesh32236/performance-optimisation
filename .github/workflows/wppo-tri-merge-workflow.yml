@@ -261,12 +261,10 @@ jobs:
             git commit -m "chore: bump version to ${NEXT_VERSION}" || true
           fi
 
-          composer install --no-dev --optimize-autoloader --ignore-platform-reqs
-
           npm ci || npm install
           npm run build
 
-          git add vendor/ build/ -A 2>/dev/null || true
+          git add build/ -A 2>/dev/null || true
           git commit -m "chore: prepare release ${NEXT_VERSION}" || true
 
       - name: Create release tag

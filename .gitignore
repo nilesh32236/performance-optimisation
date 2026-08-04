@@ -1,4 +1,5 @@
 node_modules/
+/vendor/
 .opencode/
 .DS_Store
 reports/
