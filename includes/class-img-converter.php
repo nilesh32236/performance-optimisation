@@ -170,19 +170,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Prefers wp_get_image_encode_quality() (WP 7.1+), which resolves quality
 		 * the same way WP_Image_Editor::set_quality() does — honoring the
 		 * size-aware wp_editor_set_quality filter and the legacy jpeg_quality
-		 * filter. Falls back to wp_image_quality() (WP 6.7+) and finally to the
-		 * plugin default. Passes an empty size array because convert_image()
-		 * operates on a filesystem path without dimension/size context.
+		 * filter. Passing null as the core default lets WordPress compute its
+		 * own per-format baseline (86 for WebP, 82 for other formats), matching
+		 * WP_Image_Editor::get_default_quality(). Falls back to
+		 * wp_image_quality() (WP 6.7+) and finally to the plugin default.
 		 *
 		 * @since 3.1.0
 		 *
-		 * @param string $mime_type      The output MIME type ('image/webp', 'image/avif').
+		 * @param string $mime_type       The output MIME type ('image/webp', 'image/avif').
+		 * @param array  $size            Optional image dimensions ('width'/'height') for size-aware filters.
 		 * @param int    $default_quality Fallback quality (1-100) when no core helper exists.
 		 * @return int The resolved encode quality (1-100).
 		 */
-		private static function resolve_encode_quality( string $mime_type, int $default_quality = 82 ): int {
+		private static function resolve_encode_quality( string $mime_type, array $size = array(), int $default_quality = 82 ): int {
 			if ( function_exists( 'wp_get_image_encode_quality' ) ) {
-				return (int) wp_get_image_encode_quality( $mime_type, array(), $default_quality );
+				return (int) wp_get_image_encode_quality( $mime_type, $size, null );
 			}
 			if ( function_exists( 'wp_image_quality' ) ) {
 				return (int) wp_image_quality( $mime_type );
@@ -212,25 +214,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( in_array( $format, array( 'webp', 'both' ), true ) && self::core_handles_next_gen() ) {
 				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
-			}
-
-			// Resolve default quality via the core API when available.
-			// WP 7.1+ exposes wp_get_image_encode_quality(), which resolves the
-			// effective encode quality per MIME type (honoring the size-aware
-			// wp_editor_set_quality and jpeg_quality filters). WP 6.2-7.0 falls
-			// back to the existing wp_image_quality() path, then to the plugin
-			// default.
-			if ( -1 === $quality ) {
-				if ( 'both' === $format ) {
-					$avif_quality = self::resolve_encode_quality( 'image/avif' );
-					$webp_quality = self::resolve_encode_quality( 'image/webp' );
-				} else {
-					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
-					$quality = self::resolve_encode_quality( $mime );
-				}
-			}
-			if ( -1 === $quality ) {
-				$quality = 82;
 			}
 
 			if ( ! function_exists( 'imagecreatefromjpeg' ) || ! function_exists( 'imagecreatefrompng' ) ) {
@@ -278,6 +261,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
+			}
+
+			// Resolve the default encode quality now that the source dimensions
+			// are known. WP 7.1+ exposes wp_get_image_encode_quality(), which
+			// resolves the effective quality per MIME type and size (honoring
+			// the size-aware wp_editor_set_quality and legacy jpeg_quality
+			// filters). WP 6.7-7.0 falls back to wp_image_quality();
+			// WP < 6.7 falls back to the plugin default (82).
+			$size = array(
+				'width'  => $image_info[0],
+				'height' => $image_info[1],
+			);
+
+			if ( -1 === $quality ) {
+				if ( 'both' === $format ) {
+					$avif_quality = self::resolve_encode_quality( 'image/avif', $size );
+					$webp_quality = self::resolve_encode_quality( 'image/webp', $size );
+				} else {
+					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
+					$quality = self::resolve_encode_quality( $mime, $size );
+				}
+			}
+			if ( -1 === $quality ) {
+				$quality = 82;
 			}
 
 			$image_type = $image_info[2];

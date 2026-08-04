@@ -172,6 +172,44 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Set up the plugin's wppo output directory and a real-filesystem
+	 * stand-in so Util::prepare_cache_dir() can write converted files.
+	 *
+	 * @return void
+	 */
+	private function prepare_wppo_output_dir(): void {
+		$out_dir = rtrim( WP_CONTENT_DIR, '/' ) . '/wppo/uploads/2026/08';
+		if ( ! is_dir( $out_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixtures use native filesystem.
+			mkdir( $out_dir, 0755, true );
+		}
+		$GLOBALS['wp_filesystem'] = new class() {
+			/**
+			 * Whether the path is a directory.
+			 *
+			 * @param string $path Path to check.
+			 * @return bool
+			 */
+			public function is_dir( $path ) {
+				return is_dir( $path );
+			}
+
+			/**
+			 * Create a directory.
+			 *
+			 * @param string $path  Path to create.
+			 * @param int    $chmod Permissions.
+			 * @return bool
+			 */
+			public function mkdir( $path, $chmod = 0755 ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test filesystem stand-in.
+				return is_dir( $path ) || mkdir( $path, $chmod, true );
+			}
+		};
+		Functions\when( 'WP_Filesystem' )->justReturn( true );
+	}
+
+	/**
 	 * Test that placeholder data is stored for the full-size original AND each
 	 * registered sub-size when client-side media processing is enabled.
 	 */
@@ -316,35 +354,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		// Util::prepare_cache_dir() writes into the plugin's wppo directory and
 		// relies on WP_Filesystem; provide a real-filesystem stand-in.
-		$out_dir = rtrim( WP_CONTENT_DIR, '/' ) . '/wppo/uploads/2026/08';
-		if ( ! is_dir( $out_dir ) ) {
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixtures use native filesystem.
-			mkdir( $out_dir, 0755, true );
-		}
-		$GLOBALS['wp_filesystem'] = new class() {
-			/**
-			 * Whether the path is a directory.
-			 *
-			 * @param string $path Path to check.
-			 * @return bool
-			 */
-			public function is_dir( $path ) {
-				return is_dir( $path );
-			}
-
-			/**
-			 * Create a directory.
-			 *
-			 * @param string $path  Path to create.
-			 * @param int    $chmod Permissions.
-			 * @return bool
-			 */
-			public function mkdir( $path, $chmod = 0755 ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test filesystem stand-in.
-				return is_dir( $path ) || mkdir( $path, $chmod, true );
-			}
-		};
-		Functions\when( 'WP_Filesystem' )->justReturn( true );
+		$this->prepare_wppo_output_dir();
 
 		$captured = null;
 		Functions\when( 'wp_get_image_encode_quality' )->alias(
@@ -358,7 +368,17 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$result    = $converter->convert_image( $file, 'avif' );
 
 		$this->assertTrue( $result );
-		$this->assertSame( array( 'image/avif', array(), 82 ), $captured );
+		$this->assertSame(
+			array(
+				'image/avif',
+				array(
+					'width'  => 64,
+					'height' => 48,
+				),
+				null,
+			),
+			$captured
+		);
 
 		$info     = Img_Converter::get_img_info();
 		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
@@ -366,8 +386,72 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that convert_image() resolves the encode quality via
+	 * wp_get_image_encode_quality() (WP 7.1+) on the WebP path, which only
+	 * requires GD WebP support.
+	 *
+	 * The AVIF end-to-end test above skips when GD lacks libavif, so this
+	 * test keeps end-to-end coverage in CI environments without AVIF.
+	 * function_exists() is patched so core_handles_next_gen() reports no
+	 * native next-gen support, which stops the WebP path from short-circuiting
+	 * to 'skipped'.
+	 */
+	public function test_convert_image_webp_uses_wp_get_image_encode_quality(): void {
+		if ( ! function_exists( 'imagewebp' ) ) {
+			$this->markTestSkipped( 'GD WebP support is required.' );
+		}
+
+		$file = $this->create_sample_png( 'quality-webp.png' );
+
+		// Util::prepare_cache_dir() writes into the plugin's wppo directory and
+		// relies on WP_Filesystem; provide a real-filesystem stand-in.
+		$this->prepare_wppo_output_dir();
+
+		// Make core_handles_next_gen() report false so the WebP path does not
+		// short-circuit to 'skipped'. The WP 7.1+ helper itself is left intact.
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) {
+				if ( 'wp_image_quality' === $function_name ) {
+					return false;
+				}
+				return \function_exists( $function_name );
+			}
+		);
+
+		$captured = null;
+		Functions\when( 'wp_get_image_encode_quality' )->alias(
+			static function ( $mime, $size, $default_quality ) use ( &$captured ) {
+				$captured = array( $mime, $size, $default_quality );
+				return 75;
+			}
+		);
+
+		$converter = $this->make_converter( array( 'conversionFormat' => 'webp' ) );
+		$result    = $converter->convert_image( $file, 'webp' );
+
+		$this->assertTrue( $result );
+		$this->assertSame(
+			array(
+				'image/webp',
+				array(
+					'width'  => 64,
+					'height' => 48,
+				),
+				null,
+			),
+			$captured
+		);
+
+		$info     = Img_Converter::get_img_info();
+		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+		$this->assertContains( $full_rel, $info['completed']['webp'] ?? array() );
+	}
+
+	/**
 	 * Test that resolve_encode_quality() resolves a distinct quality per output
-	 * MIME type when wp_get_image_encode_quality() (WP 7.1+) is available.
+	 * MIME type when wp_get_image_encode_quality() (WP 7.1+) is available,
+	 * passing null as the core default so WordPress computes its own
+	 * per-format baseline (86 for WebP, 82 for other formats).
 	 *
 	 * This mirrors the 'both' conversion path, which resolves avif and webp
 	 * quality independently via two helper calls.
@@ -385,11 +469,28 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$method->setAccessible( true );
 
 		$this->assertSame( 75, $method->invoke( null, 'image/webp' ) );
-		$this->assertSame( 60, $method->invoke( null, 'image/avif' ) );
+		$this->assertSame(
+			60,
+			$method->invoke(
+				null,
+				'image/avif',
+				array(
+					'width'  => 800,
+					'height' => 600,
+				)
+			)
+		);
 		$this->assertSame(
 			array(
-				array( 'image/webp', array(), 82 ),
-				array( 'image/avif', array(), 82 ),
+				array( 'image/webp', array(), null ),
+				array(
+					'image/avif',
+					array(
+						'width'  => 800,
+						'height' => 600,
+					),
+					null,
+				),
 			),
 			$calls
 		);
