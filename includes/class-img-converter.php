@@ -182,7 +182,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		private function resolve_encode_quality( string $mime, int $fallback, array $size = array() ): int {
 			if ( function_exists( 'wp_get_image_encode_quality' ) ) {
-				return (int) wp_get_image_encode_quality( $mime, $size, $fallback );
+				$quality = wp_get_image_encode_quality( $mime, $size, $fallback );
+				// Guard against a null/zero result (unsupported MIME or
+				// unexpected core behavior) before casting, mirroring the flat
+				// branch below — otherwise (int) null would encode at quality 0.
+				return ( null !== $quality && $quality > 0 ) ? (int) $quality : $fallback;
 			}
 
 			if ( function_exists( 'wp_image_quality' ) ) {
@@ -682,17 +686,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				imagedestroy( $thumb );
 				return '';
 			}
+			// LQIP thumbnails are intentionally low-quality placeholders: a fixed
+			// quality keeps the inline base64 payload small. Do NOT route this
+			// through core quality resolution (wp_get_image_encode_quality() /
+			// wp_image_quality()), which would encode the ~20px placeholder at
+			// full JPEG quality (~82) and roughly double every data URI.
 			$success = imagejpeg(
 				$thumb,
 				null,
-				$this->resolve_encode_quality(
-					'image/jpeg',
-					40,
-					array(
-						'width'  => $thumb_width,
-						'height' => $thumb_height,
-					)
-				)
+				40
 			);
 			$data    = ob_get_clean();
 

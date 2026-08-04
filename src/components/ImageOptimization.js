@@ -16,6 +16,24 @@ import {
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 
+const CLIENT_SIDE_MIME_OPTIONS = [
+	{ value: 'image/jpeg', label: 'JPEG' },
+	{ value: 'image/png', label: 'PNG' },
+	{ value: 'image/gif', label: 'GIF' },
+	{ value: 'image/webp', label: 'WebP' },
+	{ value: 'image/avif', label: 'AVIF' },
+	{ value: 'image/heic', label: 'HEIC' },
+	{ value: 'image/heif', label: 'HEIF' },
+];
+
+const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
+	'image/jpeg',
+	'image/png',
+	'image/gif',
+	'image/webp',
+	'image/avif',
+];
+
 const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
@@ -41,13 +59,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		autoPreloadLCP: false,
 		prioritizeLCPImages: false,
 		clientSideMimeTypeOverride: false,
-		clientSideMimeTypes: [
-			'image/jpeg',
-			'image/png',
-			'image/gif',
-			'image/webp',
-			'image/avif',
-		],
+		clientSideMimeTypes: DEFAULT_CLIENT_SIDE_MIME_TYPES,
 		...options,
 		placeholderType:
 			options.placeholderType ||
@@ -73,24 +85,6 @@ const ImageOptimization = ( { options = {} } ) => {
 			return { ...prev, selectedPostType: newSelected };
 		} );
 	};
-
-	const CLIENT_SIDE_MIME_OPTIONS = [
-		{ value: 'image/jpeg', label: 'JPEG' },
-		{ value: 'image/png', label: 'PNG' },
-		{ value: 'image/gif', label: 'GIF' },
-		{ value: 'image/webp', label: 'WebP' },
-		{ value: 'image/avif', label: 'AVIF' },
-		{ value: 'image/heic', label: 'HEIC' },
-		{ value: 'image/heif', label: 'HEIF' },
-	];
-
-	const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
-		'image/jpeg',
-		'image/png',
-		'image/gif',
-		'image/webp',
-		'image/avif',
-	];
 
 	const toggleClientSideMimeTypeOverride = ( event ) => {
 		const enabled = event.target.checked;
@@ -592,41 +586,50 @@ const ImageOptimization = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 									</span>
-									<div className="wppo-post-types-grid--chips">
-										{ CLIENT_SIDE_MIME_OPTIONS.map(
-											( option ) => (
-												<label
-													key={ option.value }
-													htmlFor={ `client-mime-${ option.value }` }
-													className={ `wppo-post-type-chip ${
-														settings.clientSideMimeTypes.includes(
-															option.value
-														)
-															? 'wppo-post-type-chip--active'
-															: ''
-													}` }
-												>
-													<input
-														type="checkbox"
-														id={ `client-mime-${ option.value }` }
-														className="screen-reader-text"
-														checked={ settings.clientSideMimeTypes.includes(
-															option.value
-														) }
-														onChange={ () =>
-															toggleClientSideMimeType(
-																option.value
-															)
-														}
-													/>
-													{ option.label }
-												</label>
-											)
-										) }
-									</div>
+									{ ( () => {
+										const mimeList = Array.isArray(
+											settings.clientSideMimeTypes
+										)
+											? settings.clientSideMimeTypes
+											: [];
+										return (
+											<div className="wppo-post-types-grid--chips">
+												{ CLIENT_SIDE_MIME_OPTIONS.map(
+													( option ) => (
+														<label
+															key={ option.value }
+															htmlFor={ `client-mime-${ option.value }` }
+															className={ `wppo-post-type-chip ${
+																mimeList.includes(
+																	option.value
+																)
+																	? 'wppo-post-type-chip--active'
+																	: ''
+															}` }
+														>
+															<input
+																type="checkbox"
+																id={ `client-mime-${ option.value }` }
+																className="screen-reader-text"
+																checked={ mimeList.includes(
+																	option.value
+																) }
+																onChange={ () =>
+																	toggleClientSideMimeType(
+																		option.value
+																	)
+																}
+															/>
+															{ option.label }
+														</label>
+													)
+												) }
+											</div>
+										);
+									} )() }
 									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 										{ __(
-											'Unchecking a format makes the browser skip it during upload, falling back to server-side processing. Formats core cannot process are ignored.',
+											'Unchecking a format makes the browser skip it during upload, falling back to server-side processing. Unchecking every format disables browser-side processing. Formats core cannot process are ignored.',
 											'performance-optimisation'
 										) }
 									</p>

@@ -398,6 +398,26 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that resolve_encode_quality() guards a null result from the WP 7.1+
+	 * size-aware helper and returns the supplied fallback instead of casting
+	 * null to 0 (which would encode at quality 0).
+	 *
+	 * Runs after test_resolve_encode_quality_uses_size_aware_core_helper() so
+	 * the WP 7.1 helper is already defined in-process (Brain Monkey keeps
+	 * mocked function definitions alive for the duration of a test class).
+	 */
+	public function test_resolve_encode_quality_guards_null_size_aware_result(): void {
+		Functions\when( 'wp_get_image_encode_quality' )->justReturn( null );
+
+		$converter  = $this->make_converter();
+		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 82, $reflection->invoke( $converter, 'image/avif', 82 ) );
+		$this->assertSame( 40, $reflection->invoke( $converter, 'image/jpeg', 40 ) );
+	}
+
+	/**
 	 * Test that get_source_image_dimensions() parses the -WxH sub-size suffix
 	 * and returns an empty array for full-size originals.
 	 */

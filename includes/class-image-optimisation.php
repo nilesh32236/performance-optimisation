@@ -167,10 +167,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		/**
 		 * Replace the MIME types handled by WP 7.1+ client-side media processing.
 		 *
-		 * When the admin has enabled the "client-side MIME types" override, the
-		 * stored list becomes the complete set of formats the in-browser Web
-		 * Worker should process. An empty or non-array stored value leaves
-		 * core's default list untouched (graceful degradation).
+		 * This filter is only registered when the override toggle is enabled.
+		 * The stored selection becomes the set of formats the in-browser Web
+		 * Worker should process, intersected with the formats core reports it
+		 * can support so an unsupported selection (e.g. HEIC on a build without
+		 * a decoder) can never shadow core's authoritative list. A non-array
+		 * stored value leaves core's default list untouched (graceful
+		 * degradation); an enabled override with an empty selection returns an
+		 * empty list, which disables browser-side processing entirely.
 		 *
 		 * @since 4.1.0
 		 *
@@ -180,7 +184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		public function filter_client_side_supported_mime_types( $supported_mime_types ) {
 			$mime_types = $this->options['image_optimisation']['clientSideMimeTypes'] ?? array();
 
-			if ( ! is_array( $mime_types ) || empty( $mime_types ) ) {
+			if ( ! is_array( $mime_types ) ) {
 				return $supported_mime_types;
 			}
 
@@ -188,7 +192,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$mime_types = array_filter( $mime_types );
 			$mime_types = array_values( array_unique( $mime_types ) );
 
-			return $mime_types;
+			$mime_types = array_intersect( $mime_types, array_map( 'sanitize_text_field', (array) $supported_mime_types ) );
+
+			return array_values( $mime_types );
 		}
 
 		/**
