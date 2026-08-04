@@ -382,4 +382,39 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 1, substr_count( $result, 'fetchpriority="high"' ) );
 	}
+
+	/**
+	 * Test that the client-side MIME override replaces core's default list.
+	 */
+	public function test_client_side_mime_override_replaces_default_list(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$options = $this->default_options;
+		$options['image_optimisation']['clientSideMimeTypeOverride'] = true;
+		$options['image_optimisation']['clientSideMimeTypes']        = array( 'image/jpeg', 'image/webp', 'image/avif', 'image/jpeg' );
+
+		$image_opt = new Image_Optimisation( $options );
+
+		$core = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
+		$this->assertSame( array( 'image/jpeg', 'image/webp', 'image/avif' ), $image_opt->filter_client_side_supported_mime_types( $core ) );
+	}
+
+	/**
+	 * Test that an empty or non-array client-side MIME setting keeps core's
+	 * default list untouched (graceful degradation).
+	 */
+	public function test_client_side_mime_override_empty_keeps_core_list(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$options = $this->default_options;
+		$options['image_optimisation']['clientSideMimeTypeOverride'] = true;
+		$options['image_optimisation']['clientSideMimeTypes']        = array();
+
+		$image_opt = new Image_Optimisation( $options );
+
+		$core = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
+		$this->assertSame( $core, $image_opt->filter_client_side_supported_mime_types( $core ) );
+	}
 }

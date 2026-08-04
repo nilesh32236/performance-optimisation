@@ -328,4 +328,94 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'image/heic', Util::get_image_mime_type( 'http://example.com/uploads/photo.heic' ) );
 		$this->assertSame( 'image/heif', Util::get_image_mime_type( 'http://example.com/uploads/photo.heif' ) );
 	}
+
+	/**
+	 * Test that resolve_encode_quality() falls back to the flat
+	 * wp_image_quality() API on WP 6.7-7.0 when the 7.1 helper is absent.
+	 *
+	 * Runs before test_resolve_encode_quality_uses_size_aware_core_helper()
+	 * so the WP 7.1 helper is not defined in-process yet (Brain Monkey keeps
+	 * mocked function definitions alive for the duration of a test class).
+	 */
+	public function test_resolve_encode_quality_falls_back_to_flat_core_quality(): void {
+		Functions\when( 'wp_image_quality' )->justReturn( 75 );
+
+		$converter  = $this->make_converter();
+		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 75, $reflection->invoke( $converter, 'image/avif', 82 ) );
+	}
+
+	/**
+	 * Test that resolve_encode_quality() returns the supplied default when no
+	 * core quality API provides a value (older cores, or null quality).
+	 */
+	public function test_resolve_encode_quality_falls_back_to_default(): void {
+		// wp_image_quality() returns null (setUp) and wp_get_image_encode_quality()
+		// is not defined, so the fallback default must be used.
+		$converter  = $this->make_converter();
+		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 82, $reflection->invoke( $converter, 'image/avif', 82 ) );
+		$this->assertSame( 40, $reflection->invoke( $converter, 'image/jpeg', 40 ) );
+	}
+
+	/**
+	 * Test that resolve_encode_quality() prefers the WP 7.1+ size-aware
+	 * helper and forwards the source dimensions.
+	 */
+	public function test_resolve_encode_quality_uses_size_aware_core_helper(): void {
+		Functions\expect( 'wp_get_image_encode_quality' )
+			->once()
+			->with(
+				'image/webp',
+				array(
+					'width'  => 300,
+					'height' => 200,
+				),
+				82
+			)
+			->andReturn( 65 );
+
+		$converter  = $this->make_converter();
+		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame(
+			65,
+			$reflection->invoke(
+				$converter,
+				'image/webp',
+				82,
+				array(
+					'width'  => 300,
+					'height' => 200,
+				)
+			)
+		);
+	}
+
+	/**
+	 * Test that get_source_image_dimensions() parses the -WxH sub-size suffix
+	 * and returns an empty array for full-size originals.
+	 */
+	public function test_get_source_image_dimensions_parses_size_suffix(): void {
+		$converter  = $this->make_converter();
+		$reflection = new ReflectionMethod( Img_Converter::class, 'get_source_image_dimensions' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame(
+			array(
+				'width'  => 300,
+				'height' => 200,
+			),
+			$reflection->invoke( $converter, '/srv/wp-content/uploads/2026/08/sample-300x200.jpg' )
+		);
+		$this->assertSame(
+			array(),
+			$reflection->invoke( $converter, '/srv/wp-content/uploads/2026/08/sample.jpg' )
+		);
+	}
 }

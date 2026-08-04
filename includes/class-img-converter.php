@@ -165,6 +165,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Resolve the encode quality for an output MIME type.
+		 *
+		 * Prefers WordPress 7.1+'s size-aware `wp_get_image_encode_quality()`
+		 * (which honors the `wp_editor_set_quality` / `jpeg_quality` filters
+		 * against the source dimensions), falls back to the flat
+		 * `wp_image_quality()` API on WP 6.7-7.0, and finally to the supplied
+		 * fallback on older cores or when core reports no registered quality.
+		 *
+		 * @since 4.1.0
+		 *
+		 * @param string $mime     The output MIME type (e.g. 'image/webp').
+		 * @param int    $fallback Fallback quality (1-100) used when no core API provides a value.
+		 * @param array  $size     Optional dimensions of the source image ('width'/'height').
+		 * @return int The encode quality to use (1-100).
+		 */
+		private function resolve_encode_quality( string $mime, int $fallback, array $size = array() ): int {
+			if ( function_exists( 'wp_get_image_encode_quality' ) ) {
+				return (int) wp_get_image_encode_quality( $mime, $size, $fallback );
+			}
+
+			if ( function_exists( 'wp_image_quality' ) ) {
+				$quality = wp_image_quality( $mime );
+				if ( null !== $quality ) {
+					return (int) $quality;
+				}
+			}
+
+			return $fallback;
+		}
+
+		/**
+		 * Infer the dimensions of a source image from its file name.
+		 *
+		 * Core-generated sub-sizes use a `-{width}x{height}` suffix (e.g.
+		 * `sample-300x200.jpg`); the original/full-size file has no suffix.
+		 * Used to feed `wp_get_image_encode_quality()` so per-size quality
+		 * tuning matches what core would apply.
+		 *
+		 * @since 4.1.0
+		 *
+		 * @param string $source_image Filesystem path to the source image.
+		 * @return array The dimensions array ('width'/'height'), empty for full-size originals.
+		 */
+		private function get_source_image_dimensions( string $source_image ): array {
+			if ( 1 === preg_match( '/-(\d+)x(\d+)(?:\.[a-z0-9]+)?$/i', basename( $source_image ), $matches ) ) {
+				return array(
+					'width'  => (int) $matches[1],
+					'height' => (int) $matches[2],
+				);
+			}
+
+			return array();
+		}
+
+		/**
 		 * Convert a source image into WebP and/or AVIF and record conversion status.
 		 *
 		 * Attempts to create converted files for the requested format(s) and updates the plugin's conversion status store (`wppo_img_info`) to reflect `pending`, `completed`, or `failed` outcomes.
@@ -188,14 +243,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
-			// Resolve default quality using core API when available (WP 6.7+).
-			if ( -1 === $quality && function_exists( 'wp_image_quality' ) ) {
+			/*
+			 * Resolve default quality using core APIs when available:
+			 * - WP 7.1+: wp_get_image_encode_quality() (size-aware, honors the
+			 *   wp_editor_set_quality/jpeg_quality filters per registered size).
+			 * - WP 6.7-7.0: wp_image_quality() (flat per-MIME quality).
+			 */
+			if ( -1 === $quality ) {
+				$size = $this->get_source_image_dimensions( $source_image );
+
 				if ( 'both' === $format ) {
-					$avif_quality = (int) wp_image_quality( 'image/avif' );
-					$webp_quality = (int) wp_image_quality( 'image/webp' );
+					$avif_quality = $this->resolve_encode_quality( 'image/avif', 82, $size );
+					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
 				} else {
 					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
-					$quality = (int) wp_image_quality( $mime );
+					$quality = $this->resolve_encode_quality( $mime, 82, $size );
 				}
 			}
 			if ( -1 === $quality ) {
@@ -620,7 +682,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				imagedestroy( $thumb );
 				return '';
 			}
-			$success = imagejpeg( $thumb, null, 40 );
+			$success = imagejpeg(
+				$thumb,
+				null,
+				$this->resolve_encode_quality(
+					'image/jpeg',
+					40,
+					array(
+						'width'  => $thumb_width,
+						'height' => $thumb_height,
+					)
+				)
+			);
 			$data    = ob_get_clean();
 
 			if ( ! $success || false === $data ) {

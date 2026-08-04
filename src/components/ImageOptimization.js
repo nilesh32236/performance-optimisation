@@ -40,6 +40,14 @@ const ImageOptimization = ( { options = {} } ) => {
 		excludeSize: '',
 		autoPreloadLCP: false,
 		prioritizeLCPImages: false,
+		clientSideMimeTypeOverride: false,
+		clientSideMimeTypes: [
+			'image/jpeg',
+			'image/png',
+			'image/gif',
+			'image/webp',
+			'image/avif',
+		],
 		...options,
 		placeholderType:
 			options.placeholderType ||
@@ -63,6 +71,53 @@ const ImageOptimization = ( { options = {} } ) => {
 				? prev.selectedPostType.filter( ( t ) => t !== type )
 				: [ ...prev.selectedPostType, type ];
 			return { ...prev, selectedPostType: newSelected };
+		} );
+	};
+
+	const CLIENT_SIDE_MIME_OPTIONS = [
+		{ value: 'image/jpeg', label: 'JPEG' },
+		{ value: 'image/png', label: 'PNG' },
+		{ value: 'image/gif', label: 'GIF' },
+		{ value: 'image/webp', label: 'WebP' },
+		{ value: 'image/avif', label: 'AVIF' },
+		{ value: 'image/heic', label: 'HEIC' },
+		{ value: 'image/heif', label: 'HEIF' },
+	];
+
+	const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
+		'image/jpeg',
+		'image/png',
+		'image/gif',
+		'image/webp',
+		'image/avif',
+	];
+
+	const toggleClientSideMimeTypeOverride = ( event ) => {
+		const enabled = event.target.checked;
+		setSettings( ( prev ) => {
+			const hasSelection =
+				Array.isArray( prev.clientSideMimeTypes ) &&
+				prev.clientSideMimeTypes.length > 0;
+			return {
+				...prev,
+				clientSideMimeTypeOverride: enabled,
+				clientSideMimeTypes:
+					enabled && ! hasSelection
+						? DEFAULT_CLIENT_SIDE_MIME_TYPES
+						: prev.clientSideMimeTypes,
+			};
+		} );
+	};
+
+	const toggleClientSideMimeType = ( mime ) => {
+		setSettings( ( prev ) => {
+			const current = Array.isArray( prev.clientSideMimeTypes )
+				? prev.clientSideMimeTypes
+				: [];
+			const next = current.includes( mime )
+				? current.filter( ( m ) => m !== mime )
+				: [ ...current, mime ];
+			return { ...prev, clientSideMimeTypes: next };
 		} );
 	};
 
@@ -514,6 +569,70 @@ const ImageOptimization = ( { options = {} } ) => {
 								</div>
 							</div>
 						) }
+
+						<div className="wppo-field wppo-field--spaced">
+							<SwitchField
+								label={ __(
+									'Override Client-Side MIME Types',
+									'performance-optimisation'
+								) }
+								description={ __(
+									'Control which image formats WordPress 7.1+ client-side media processing handles in the browser. Disable AVIF to avoid duplicating this plugin’s AVIF output, or add HEIC/HEIF for direct browser conversion. Only applies on WordPress 7.1+; older versions are unaffected.',
+									'performance-optimisation'
+								) }
+								name="clientSideMimeTypeOverride"
+								checked={ settings.clientSideMimeTypeOverride }
+								onChange={ toggleClientSideMimeTypeOverride }
+							/>
+							{ settings.clientSideMimeTypeOverride && (
+								<div className="wppo-mt-12">
+									<span className="wppo-field-label">
+										{ __(
+											'Formats to process in the browser',
+											'performance-optimisation'
+										) }
+									</span>
+									<div className="wppo-post-types-grid--chips">
+										{ CLIENT_SIDE_MIME_OPTIONS.map(
+											( option ) => (
+												<label
+													key={ option.value }
+													htmlFor={ `client-mime-${ option.value }` }
+													className={ `wppo-post-type-chip ${
+														settings.clientSideMimeTypes.includes(
+															option.value
+														)
+															? 'wppo-post-type-chip--active'
+															: ''
+													}` }
+												>
+													<input
+														type="checkbox"
+														id={ `client-mime-${ option.value }` }
+														className="screen-reader-text"
+														checked={ settings.clientSideMimeTypes.includes(
+															option.value
+														) }
+														onChange={ () =>
+															toggleClientSideMimeType(
+																option.value
+															)
+														}
+													/>
+													{ option.label }
+												</label>
+											)
+										) }
+									</div>
+									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+										{ __(
+											'Unchecking a format makes the browser skip it during upload, falling back to server-side processing. Formats core cannot process are ignored.',
+											'performance-optimisation'
+										) }
+									</p>
+								</div>
+							) }
+						</div>
 					</div>
 				</FeatureCard>
 
