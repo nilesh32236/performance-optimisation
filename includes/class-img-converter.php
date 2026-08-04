@@ -165,6 +165,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Resolve the effective image encode quality for an output MIME type.
+		 *
+		 * Prefers wp_get_image_encode_quality() (WP 7.1+), which resolves quality
+		 * the same way WP_Image_Editor::set_quality() does — honoring the
+		 * size-aware wp_editor_set_quality filter and the legacy jpeg_quality
+		 * filter. Falls back to wp_image_quality() (WP 6.7+) and finally to the
+		 * plugin default. Passes an empty size array because convert_image()
+		 * operates on a filesystem path without dimension/size context.
+		 *
+		 * @since 3.1.0
+		 *
+		 * @param string $mime_type      The output MIME type ('image/webp', 'image/avif').
+		 * @param int    $default_quality Fallback quality (1-100) when no core helper exists.
+		 * @return int The resolved encode quality (1-100).
+		 */
+		private static function resolve_encode_quality( string $mime_type, int $default_quality = 82 ): int {
+			if ( function_exists( 'wp_get_image_encode_quality' ) ) {
+				return (int) wp_get_image_encode_quality( $mime_type, array(), $default_quality );
+			}
+			if ( function_exists( 'wp_image_quality' ) ) {
+				return (int) wp_image_quality( $mime_type );
+			}
+			return $default_quality;
+		}
+
+		/**
 		 * Convert a source image into WebP and/or AVIF and record conversion status.
 		 *
 		 * Attempts to create converted files for the requested format(s) and updates the plugin's conversion status store (`wppo_img_info`) to reflect `pending`, `completed`, or `failed` outcomes.
@@ -188,14 +214,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
-			// Resolve default quality using core API when available (WP 6.7+).
-			if ( -1 === $quality && function_exists( 'wp_image_quality' ) ) {
+			// Resolve default quality via the core API when available.
+			// WP 7.1+ exposes wp_get_image_encode_quality(), which resolves the
+			// effective encode quality per MIME type (honoring the size-aware
+			// wp_editor_set_quality and jpeg_quality filters). WP 6.2-7.0 falls
+			// back to the existing wp_image_quality() path, then to the plugin
+			// default.
+			if ( -1 === $quality ) {
 				if ( 'both' === $format ) {
-					$avif_quality = (int) wp_image_quality( 'image/avif' );
-					$webp_quality = (int) wp_image_quality( 'image/webp' );
+					$avif_quality = self::resolve_encode_quality( 'image/avif' );
+					$webp_quality = self::resolve_encode_quality( 'image/webp' );
 				} else {
 					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
-					$quality = (int) wp_image_quality( $mime );
+					$quality = self::resolve_encode_quality( $mime );
 				}
 			}
 			if ( -1 === $quality ) {
