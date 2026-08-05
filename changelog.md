@@ -4,9 +4,27 @@ All notable changes to the Performance Optimisation plugin will be documented in
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-08-05
+
+### Added
+
+- **WordPress 7.1+ Client-Side Media Processing Toggle:** Added admin option and `filter_client_side_supported_mime_types` filter callback to control in-browser Web Worker image processing formats, safely intersected with core capabilities.
+- **Inline Combined CSS:** Support for inlining combined stylesheets via WordPress core's `wp_maybe_inline_styles()` when within the inline size budget, plus `wppo_inline_combined_css` filter for CDN opt-out.
+
+### Performance
+
+- **Centralized `content_url()` Static Caching:** Asset minification loops now reuse static `content_url()` lookups via `Util::cached_content_url()`. Keys static cache per blog ID (`get_current_blog_id()`) for multisite safety under `switch_to_blog()` and gates caching with `has_filter('content_url')`.
+
 ### Changed
 
-- **Block Asset Loading on WordPress 6.9+:** The "Load Block Assets On Demand" toggle now matches WordPress 6.9's new default for classic themes, which load separate core block styles on demand. On 6.9+ the toggle acts as an **opt-out**: disabling it forces the combined `wp-block-library` stylesheet (a semantic inversion of the pre-6.9 opt-in behavior). The setting default is version-aware (`ON` on 6.9+, `OFF` before), and existing installs that never configured the toggle are migrated to the new default once — stored explicit values are never overwritten.
+- **Resource Hints Migration:** Preconnect and DNS-prefetch emission now leverage core's `wp_resource_hints` filter API. Added automatic scheme-less bare-hostname (`example.com`) normalization to protocol-relative (`//example.com`) form so origins survive core's host guard, while retaining `crossorigin="anonymous"` attributes.
+- **Image Conversion Quality:** Integrated WordPress 7.1+ size-aware `wp_get_image_encode_quality()` and WP 6.7–7.0 `wp_image_quality()` for WebP/AVIF conversions while maintaining fixed low-quality (40) for LQIP placeholders.
+- **Block Asset Loading on WordPress 6.9+:** The "Load Block Assets On Demand" toggle now matches WordPress 6.9's default for classic themes, which load separate core block styles on demand.
+
+### Multisite & Safety
+
+- **Transient Key Isolation:** All transient keys are qualified with `{blog_id}_` on multisite networks via `Util::transient_key()` to prevent collisions on shared object cache backends (Redis, Memcached).
+- **React UI Safety:** Added `Array.isArray()` defensive checks for stored options in React admin SPA components and single-sourced `DEFAULT_CLIENT_SIDE_MIME_TYPES` constants.
 
 ## [1.8.1] - 2026-07-29
 

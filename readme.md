@@ -24,13 +24,13 @@ Most performance plugins either do too little or overwhelm you with dozens of co
 
 ---
 
-## What's New in v1.8.0
+## What's New in v1.9.0
 
-- **WordPress 6.9+ Object Cache Salt Support:** Added object cache key salt prefixing for cache key space invalidation.
-- **WP_HTML_Tag_Processor Integration:** Replaced fragile regex HTML manipulation with WordPress core `WP_HTML_Tag_Processor` API (WP 6.2+) for robust `<img>` and `<iframe>` attribute modifications.
-- **Minification & Utility Performance:** Pre-cached delayJS exclusion patterns and blog-specific home URL path resolution in worker loops.
-- **Enhanced Accessibility:** Added `aria-describedby` associations and keyboard focus trap management.
-- **React ErrorBoundary Integration:** Protected SPA rendering with React ErrorBoundary component.
+- **Centralized `content_url()` Static Caching:** High-frequency asset minification loops now reuse static `content_url()` lookups via `Util::cached_content_url()`, keyed per site per request (`get_current_blog_id()`) for multisite safety under `switch_to_blog()`.
+- **WordPress 7.1+ Client-Side Media Processing Control:** Added `filter_client_side_supported_mime_types` setting to let site admins select in-browser Web Worker supported image formats, safely intersected with core capabilities.
+- **Size-Aware Image Quality & LQIP Isolation:** Integrated WP 7.1+ `wp_get_image_encode_quality()` and WP 6.7–7.0 `wp_image_quality()` for full WebP/AVIF conversions while preserving fixed low-quality (40) for LQIP placeholders.
+- **Core Resource Hints Migration:** Preconnect and DNS-prefetch link emission now leverage core's `wp_resource_hints` filter with automatic bare-hostname (`example.com` -> `//example.com`) normalization and `crossorigin` attribute preservation.
+- **Inline Combined CSS & Block Styles:** Combined CSS stylesheets can be inlined via `wp_maybe_inline_styles()`, and classic themes now load separate block styles on demand by default on WP 6.9+.
 
 ---
 
