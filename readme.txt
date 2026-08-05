@@ -4,7 +4,7 @@ Tags: cache, performance, speed, pagespeed, minify
 Requires at least: 6.2
 Requires PHP: 8.2
 Tested up to: 7.0
-Stable tag: 1.8.0
+Stable tag: 1.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -85,6 +85,13 @@ After activation, you can manage the following from the settings tabs:
 7. **Tools**: One-click import/export for deploying your performance configuration across multiple sites.
 
 == Changelog ==
+
+= 1.9.0 (2026-08-05) =
+* Performance: Centralized `content_url()` static caching in asset minification loops via `Util::cached_content_url()`.
+* New: Added WordPress 7.1+ client-side supported MIME types toggle with array safety guards.
+* Improvement: Aligned image conversion quality with size-aware `wp_get_image_encode_quality()` while maintaining fixed LQIP placeholder quality (40) isolation.
+* Improvement: Migrated preconnect and DNS prefetch emission to core `wp_resource_hints` with bare-hostname (`//example.com`) normalization.
+* Multisite: Enhanced transient key isolation and Redis object cache drop-in blog-prefix handling.
 
 = 1.8.1 (2026-08-01) =
 * New: Inline the combined/minified CSS via WordPress core's `wp_maybe_inline_styles()` when the file is within the `styles_inline_size_limit` budget, eliminating a render-blocking stylesheet round-trip on first load. Use the `wppo_inline_combined_css` filter (return falsy) to disable inlining, e.g. when serving the combined file from a CDN.
