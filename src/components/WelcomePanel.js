@@ -162,20 +162,39 @@ const WelcomePanel = () => {
 									<LoadingSubmitButton
 										type="button"
 										className="wppo-button wppo-button--primary"
-										isLoading={ activatingStep === step.key }
-										aria-label={ sprintf(
-											/* translators: %s: feature name */
-											__(
-												'Enable %s',
-												'performance-optimisation'
-											),
-											step.label
-										) }
+										isLoading={
+											activatingStep === step.key
+										}
+										aria-label={
+											activatingStep === step.key
+												? sprintf(
+														/* translators: %s: feature name */
+														__(
+															'Enabling %s…',
+															'performance-optimisation'
+														),
+														step.label
+												  )
+												: sprintf(
+														/* translators: %s: feature name */
+														__(
+															'Enable %s',
+															'performance-optimisation'
+														),
+														step.label
+												  )
+										}
 										onClick={ () =>
 											handleStepAction( step )
 										}
-										label={ __( 'Enable', 'performance-optimisation' ) }
-										loadingLabel={ __( 'Enabling…', 'performance-optimisation' ) }
+										label={ __(
+											'Enable',
+											'performance-optimisation'
+										) }
+										loadingLabel={ __(
+											'Enabling…',
+											'performance-optimisation'
+										) }
 									/>
 								) }
 							</div>
