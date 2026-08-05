@@ -79,24 +79,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 			$content_dir_normalized = wp_normalize_path( WP_CONTENT_DIR );
 			$cache_inside           = ( 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
 
-			static $cache_url = array();
-			$blog_id = get_current_blog_id();
-
-			if ( ! isset( $cache_url[ $blog_id ] ) ) {
-				$cache_url[ $blog_id ] = array();
-			}
-
 			if ( ! $cache_inside ) {
-				if ( ! isset( $cache_url[ $blog_id ]['root'] ) ) {
-					$cache_url[ $blog_id ]['root'] = content_url( '/' );
-				}
-				$this->cache_url = $cache_url[ $blog_id ]['root'];
+				$this->cache_url = Util::cached_content_url( '/' );
 			} else {
-				$path = str_replace( $content_dir_normalized, '', $cache_dir_normalized );
-				if ( ! isset( $cache_url[ $blog_id ][ $path ] ) ) {
-					$cache_url[ $blog_id ][ $path ] = content_url( $path );
-				}
-				$this->cache_url = $cache_url[ $blog_id ][ $path ];
+				$path            = str_replace( $content_dir_normalized, '', $cache_dir_normalized );
+				$this->cache_url = Util::cached_content_url( $path );
 			}
 			$this->filesystem = Util::init_filesystem();
 		}
@@ -193,18 +180,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 			if ( 0 === strpos( $css_dir, $content_dir ) ) {
 				$relative_path = str_replace( $content_dir, '', $css_dir );
-
-				static $content_url_cache = array();
-				$blog_id = get_current_blog_id();
-
-				if ( ! isset( $content_url_cache[ $blog_id ] ) ) {
-					$content_url_cache[ $blog_id ] = array();
-				}
-				if ( ! isset( $content_url_cache[ $blog_id ][ $relative_path ] ) ) {
-					$content_url_cache[ $blog_id ][ $relative_path ] = content_url( $relative_path );
-				}
-
-				$css_dir_url   = $content_url_cache[ $blog_id ][ $relative_path ];
+				$css_dir_url   = Util::cached_content_url( $relative_path );
 			} elseif ( 0 === strpos( $css_dir, $abs_path ) ) {
 				$relative_path = str_replace( $abs_path, '', $css_dir );
 				$css_dir_url   = site_url( $relative_path );
