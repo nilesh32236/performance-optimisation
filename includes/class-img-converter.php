@@ -165,29 +165,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
-		/**
 		 * Resolve the encode quality for an output MIME type.
 		 *
 		 * Prefers WordPress 7.1+'s size-aware `wp_get_image_encode_quality()`
 		 * (which honors the `wp_editor_set_quality` / `jpeg_quality` filters
 		 * against the source dimensions), falls back to the flat
-		 * `wp_image_quality()` API on WP 6.7-7.0, and finally to the supplied
-		 * fallback on older cores or when core reports no registered quality.
+		 * `wp_image_quality()` API on WP 6.7-7.0, and finally to the plugin
+		 * default (82) or the supplied fallback on older cores or when core
+		 * reports no registered quality.
 		 *
 		 * @since 4.1.0
 		 *
-		 * @param string $mime     The output MIME type (e.g. 'image/webp').
-		 * @param int    $fallback Fallback quality (1-100) used when no core API provides a value.
-		 * @param array  $size     Optional dimensions of the source image ('width'/'height').
+		 * @param string   $mime     The output MIME type (e.g. 'image/webp').
+		 * @param int|null $fallback Fallback quality (1-100), or null to let
+		 *                           WordPress compute its own per-format baseline
+		 *                           on WP 7.1+ (the plugin default of 82 is used
+		 *                           when no core API provides a value).
+		 * @param array    $size     Optional dimensions of the source image ('width'/'height').
 		 * @return int The encode quality to use (1-100).
 		 */
-		private function resolve_encode_quality( string $mime, int $fallback, array $size = array() ): int {
+		private function resolve_encode_quality( string $mime, ?int $fallback = null, array $size = array() ): int {
 			if ( function_exists( 'wp_get_image_encode_quality' ) ) {
 				$quality = wp_get_image_encode_quality( $mime, $size, $fallback );
 				// Guard against a null/zero result (unsupported MIME or
 				// unexpected core behavior) before casting, mirroring the flat
 				// branch below — otherwise (int) null would encode at quality 0.
-				return ( null !== $quality && $quality > 0 ) ? (int) $quality : $fallback;
+				if ( null !== $quality && $quality > 0 ) {
+					return (int) $quality;
+				}
+
+				return null !== $fallback ? $fallback : 82;
 			}
 
 			if ( function_exists( 'wp_image_quality' ) ) {
@@ -197,7 +204,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 			}
 
-			return $fallback;
+			return null !== $fallback ? $fallback : 82;
 		}
 
 		/**
@@ -248,26 +255,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
-			/*
-			 * Resolve default quality using core APIs when available:
-			 * - WP 7.1+: wp_get_image_encode_quality() (size-aware, honors the
-			 *   wp_editor_set_quality/jpeg_quality filters per registered size).
-			 * - WP 6.7-7.0: wp_image_quality() (flat per-MIME quality).
-			 */
-			if ( -1 === $quality ) {
-				$size = $this->get_source_image_dimensions( $source_image );
-
-				if ( 'both' === $format ) {
-					$avif_quality = $this->resolve_encode_quality( 'image/avif', 82, $size );
-					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
-				} else {
-					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
-					$quality = $this->resolve_encode_quality( $mime, 82, $size );
-				}
-			}
-			if ( -1 === $quality ) {
-				$quality = 82;
-			}
 			if ( ! function_exists( 'imagecreatefromjpeg' ) || ! function_exists( 'imagecreatefrompng' ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
@@ -328,11 +315,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			if ( -1 === $quality ) {
 				if ( 'both' === $format ) {
-					$avif_quality = self::resolve_encode_quality( 'image/avif', $size );
-					$webp_quality = self::resolve_encode_quality( 'image/webp', $size );
+					$avif_quality = $this->resolve_encode_quality( 'image/avif', null, $size );
+					$webp_quality = $this->resolve_encode_quality( 'image/webp', null, $size );
 				} else {
 					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
-					$quality = self::resolve_encode_quality( $mime, $size );
+					$quality = $this->resolve_encode_quality( $mime, null, $size );
 				}
 			}
 			if ( -1 === $quality ) {

@@ -87,12 +87,19 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		// wp_image_quality() is mocked in every test because Patchwork-defined
 		// functions cannot be undefined between tests; returning null keeps
 		// core_handles_next_gen()/core_handles_both_next_gen() in a known state.
+		// Tests that need a specific flat quality override it with when().
 		Functions\when( 'wp_image_quality' )->justReturn( null );
-		// wp_get_image_encode_quality() (WP 7.1+) is also stubbed in every test
-		// for the same reason. The plugin default (82) keeps every existing
-		// assertion deterministic while simulating the WP 7.1+ runtime; tests
-		// that need a specific value override it with when()/expect().
-		Functions\when( 'wp_get_image_encode_quality' )->justReturn( 82 );
+		// Reset function_exists() to its real passthrough behavior on every
+		// test so a function_exists() patch made by one test cannot leak into
+		// the next. The WP 7.1+ helper (wp_get_image_encode_quality) is
+		// intentionally NOT stubbed here: once Brain Monkey defines a mocked
+		// function it cannot be undefined between tests, so its "presence" is
+		// controlled per-test via the function_exists() alias below.
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) {
+				return \function_exists( $function_name );
+			}
+		);
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( string $url, $component = -1 ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Used to emulate wp_parse_url() in tests.
@@ -169,6 +176,24 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		}
 
 		return new Img_Converter( $options );
+	}
+
+	/**
+	 * Stub function_exists() so the given functions report as absent,
+	 * delegating every other check to the real function_exists().
+	 *
+	 * @param array $absent Function names to report as absent.
+	 * @return void
+	 */
+	private function set_function_exists_absent( array $absent ): void {
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) use ( $absent ) {
+				if ( in_array( $function_name, $absent, true ) ) {
+					return false;
+				}
+				return \function_exists( $function_name );
+			}
+		);
 	}
 
 	/**
@@ -467,13 +492,15 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 		$method = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
 		$method->setAccessible( true );
+		$converter = $this->make_converter();
 
-		$this->assertSame( 75, $method->invoke( null, 'image/webp' ) );
+		$this->assertSame( 75, $method->invoke( $converter, 'image/webp' ) );
 		$this->assertSame(
 			60,
 			$method->invoke(
-				null,
+				$converter,
 				'image/avif',
+				null,
 				array(
 					'width'  => 800,
 					'height' => 600,
@@ -501,21 +528,15 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * (WP 6.7-7.0) when the WP 7.1+ helper is unavailable.
 	 */
 	public function test_resolve_encode_quality_falls_back_to_wp_image_quality(): void {
-		Functions\when( 'function_exists' )->alias(
-			static function ( $function_name ) {
-				if ( 'wp_get_image_encode_quality' === $function_name ) {
-					return false;
-				}
-				return \function_exists( $function_name );
-			}
-		);
+		$this->set_function_exists_absent( array( 'wp_get_image_encode_quality' ) );
 		Functions\when( 'wp_image_quality' )->justReturn( 82 );
 
 		$method = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
 		$method->setAccessible( true );
+		$converter = $this->make_converter();
 
-		$this->assertSame( 82, $method->invoke( null, 'image/webp' ) );
-		$this->assertSame( 82, $method->invoke( null, 'image/avif' ) );
+		$this->assertSame( 82, $method->invoke( $converter, 'image/webp' ) );
+		$this->assertSame( 82, $method->invoke( $converter, 'image/avif' ) );
 	}
 
 	/**
@@ -559,11 +580,12 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * Test that resolve_encode_quality() falls back to the flat
 	 * wp_image_quality() API on WP 6.7-7.0 when the 7.1 helper is absent.
 	 *
-	 * Runs before test_resolve_encode_quality_uses_size_aware_core_helper()
-	 * so the WP 7.1 helper is not defined in-process yet (Brain Monkey keeps
-	 * mocked function definitions alive for the duration of a test class).
+	 * Earlier tests mock wp_get_image_encode_quality(), and Brain Monkey keeps
+	 * mocked function definitions alive for the duration of a test class, so
+	 * its "presence" is controlled here via the function_exists() alias.
 	 */
 	public function test_resolve_encode_quality_falls_back_to_flat_core_quality(): void {
+		$this->set_function_exists_absent( array( 'wp_get_image_encode_quality' ) );
 		Functions\when( 'wp_image_quality' )->justReturn( 75 );
 
 		$converter  = $this->make_converter();
@@ -578,8 +600,11 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * core quality API provides a value (older cores, or null quality).
 	 */
 	public function test_resolve_encode_quality_falls_back_to_default(): void {
-		// wp_image_quality() returns null (setUp) and wp_get_image_encode_quality()
-		// is not defined, so the fallback default must be used.
+		// The WP 7.1 helper is forced absent via function_exists() so the flat
+		// branch is exercised; wp_image_quality() returns null (setUp), so the
+		// supplied fallback default must be used.
+		$this->set_function_exists_absent( array( 'wp_get_image_encode_quality' ) );
+
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
 		$reflection->setAccessible( true );
@@ -590,20 +615,16 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Test that resolve_encode_quality() prefers the WP 7.1+ size-aware
-	 * helper and forwards the source dimensions.
+	 * helper and forwards the source dimensions and default to it.
 	 */
 	public function test_resolve_encode_quality_uses_size_aware_core_helper(): void {
-		Functions\expect( 'wp_get_image_encode_quality' )
-			->once()
-			->with(
-				'image/webp',
-				array(
-					'width'  => 300,
-					'height' => 200,
-				),
-				82
-			)
-			->andReturn( 65 );
+		$called = null;
+		Functions\when( 'wp_get_image_encode_quality' )->alias(
+			static function ( $mime, $size, $default_quality ) use ( &$called ) {
+				$called = array( $mime, $size, $default_quality );
+				return 65;
+			}
+		);
 
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
@@ -621,16 +642,23 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 				)
 			)
 		);
+		$this->assertSame(
+			array(
+				'image/webp',
+				array(
+					'width'  => 300,
+					'height' => 200,
+				),
+				82,
+			),
+			$called
+		);
 	}
 
 	/**
 	 * Test that resolve_encode_quality() guards a null result from the WP 7.1+
 	 * size-aware helper and returns the supplied fallback instead of casting
 	 * null to 0 (which would encode at quality 0).
-	 *
-	 * Runs after test_resolve_encode_quality_uses_size_aware_core_helper() so
-	 * the WP 7.1 helper is already defined in-process (Brain Monkey keeps
-	 * mocked function definitions alive for the duration of a test class).
 	 */
 	public function test_resolve_encode_quality_guards_null_size_aware_result(): void {
 		Functions\when( 'wp_get_image_encode_quality' )->justReturn( null );
