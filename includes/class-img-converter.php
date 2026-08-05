@@ -165,31 +165,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
-		 * Resolve the effective image encode quality for an output MIME type.
+		/**
+		 * Resolve the encode quality for an output MIME type.
 		 *
-		 * Prefers wp_get_image_encode_quality() (WP 7.1+), which resolves quality
-		 * the same way WP_Image_Editor::set_quality() does — honoring the
-		 * size-aware wp_editor_set_quality filter and the legacy jpeg_quality
-		 * filter. Passing null as the core default lets WordPress compute its
-		 * own per-format baseline (86 for WebP, 82 for other formats), matching
-		 * WP_Image_Editor::get_default_quality(). Falls back to
-		 * wp_image_quality() (WP 6.7+) and finally to the plugin default.
+		 * Prefers WordPress 7.1+'s size-aware `wp_get_image_encode_quality()`
+		 * (which honors the `wp_editor_set_quality` / `jpeg_quality` filters
+		 * against the source dimensions), falls back to the flat
+		 * `wp_image_quality()` API on WP 6.7-7.0, and finally to the supplied
+		 * fallback on older cores or when core reports no registered quality.
 		 *
-		 * @since 3.1.0
+		 * @since 4.1.0
 		 *
-		 * @param string $mime_type       The output MIME type ('image/webp', 'image/avif').
-		 * @param array  $size            Optional image dimensions ('width'/'height') for size-aware filters.
-		 * @param int    $default_quality Fallback quality (1-100) when no core helper exists.
-		 * @return int The resolved encode quality (1-100).
+		 * @param string $mime     The output MIME type (e.g. 'image/webp').
+		 * @param int    $fallback Fallback quality (1-100) used when no core API provides a value.
+		 * @param array  $size     Optional dimensions of the source image ('width'/'height').
+		 * @return int The encode quality to use (1-100).
 		 */
-		private static function resolve_encode_quality( string $mime_type, array $size = array(), int $default_quality = 82 ): int {
+		private function resolve_encode_quality( string $mime, int $fallback, array $size = array() ): int {
 			if ( function_exists( 'wp_get_image_encode_quality' ) ) {
-				return (int) wp_get_image_encode_quality( $mime_type, $size, null );
+				$quality = wp_get_image_encode_quality( $mime, $size, $fallback );
+				// Guard against a null/zero result (unsupported MIME or
+				// unexpected core behavior) before casting, mirroring the flat
+				// branch below — otherwise (int) null would encode at quality 0.
+				return ( null !== $quality && $quality > 0 ) ? (int) $quality : $fallback;
 			}
+
 			if ( function_exists( 'wp_image_quality' ) ) {
-				return (int) wp_image_quality( $mime_type );
+				$quality = wp_image_quality( $mime );
+				if ( null !== $quality ) {
+					return (int) $quality;
+				}
 			}
-			return $default_quality;
+
+			return $fallback;
+		}
+
+		/**
+		 * Infer the dimensions of a source image from its file name.
+		 *
+		 * Core-generated sub-sizes use a `-{width}x{height}` suffix (e.g.
+		 * `sample-300x200.jpg`); the original/full-size file has no suffix.
+		 * Used to feed `wp_get_image_encode_quality()` so per-size quality
+		 * tuning matches what core would apply.
+		 *
+		 * @since 4.1.0
+		 *
+		 * @param string $source_image Filesystem path to the source image.
+		 * @return array The dimensions array ('width'/'height'), empty for full-size originals.
+		 */
+		private function get_source_image_dimensions( string $source_image ): array {
+			if ( 1 === preg_match( '/-(\d+)x(\d+)(?:\.[a-z0-9]+)?$/i', basename( $source_image ), $matches ) ) {
+				return array(
+					'width'  => (int) $matches[1],
+					'height' => (int) $matches[2],
+				);
+			}
+
+			return array();
 		}
 
 		/**
@@ -216,6 +248,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
+			/*
+			 * Resolve default quality using core APIs when available:
+			 * - WP 7.1+: wp_get_image_encode_quality() (size-aware, honors the
+			 *   wp_editor_set_quality/jpeg_quality filters per registered size).
+			 * - WP 6.7-7.0: wp_image_quality() (flat per-MIME quality).
+			 */
+			if ( -1 === $quality ) {
+				$size = $this->get_source_image_dimensions( $source_image );
+
+				if ( 'both' === $format ) {
+					$avif_quality = $this->resolve_encode_quality( 'image/avif', 82, $size );
+					$webp_quality = $this->resolve_encode_quality( 'image/webp', 82, $size );
+				} else {
+					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
+					$quality = $this->resolve_encode_quality( $mime, 82, $size );
+				}
+			}
+			if ( -1 === $quality ) {
+				$quality = 82;
+			}
 			if ( ! function_exists( 'imagecreatefromjpeg' ) || ! function_exists( 'imagecreatefrompng' ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
@@ -658,7 +710,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				imagedestroy( $thumb );
 				return '';
 			}
-			$success = imagejpeg( $thumb, null, 40 );
+			// LQIP thumbnails are intentionally low-quality placeholders: a fixed
+			// quality keeps the inline base64 payload small. Do NOT route this
+			// through core quality resolution (wp_get_image_encode_quality() /
+			// wp_image_quality()), which would encode the ~20px placeholder at
+			// full JPEG quality (~82) and roughly double every data URI.
+			$success = imagejpeg(
+				$thumb,
+				null,
+				40
+			);
 			$data    = ob_get_clean();
 
 			if ( ! $success || false === $data ) {

@@ -31,4 +31,16 @@ describe( 'ImageOptimization Component', () => {
 		fireEvent.click( toggle );
 		expect( toggle ).toBeChecked();
 	} );
+
+	it( 'reveals client-side MIME type chips when the override toggle is enabled', () => {
+		render( <ImageOptimization /> );
+		const toggle = screen.getByLabelText(
+			/Override Client-Side MIME Types/i
+		);
+		expect( toggle ).not.toBeChecked();
+		fireEvent.click( toggle );
+		expect( toggle ).toBeChecked();
+		expect( screen.getByText( 'AVIF' ) ).toBeInTheDocument();
+		expect( screen.getByText( 'HEIC' ) ).toBeInTheDocument();
+	} );
 } );

@@ -382,4 +382,78 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 1, substr_count( $result, 'fetchpriority="high"' ) );
 	}
+
+	/**
+	 * Test that the client-side MIME override replaces core's default list,
+	 * intersecting away any format core does not support client-side.
+	 */
+	public function test_client_side_mime_override_replaces_default_list(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$options = $this->default_options;
+		$options['image_optimisation']['clientSideMimeTypeOverride'] = true;
+		$options['image_optimisation']['clientSideMimeTypes']        = array( 'image/jpeg', 'image/webp', 'image/avif', 'image/jpeg' );
+
+		$image_opt = new Image_Optimisation( $options );
+
+		$core = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
+		$this->assertSame( array( 'image/jpeg', 'image/webp', 'image/avif' ), $image_opt->filter_client_side_supported_mime_types( $core ) );
+	}
+
+	/**
+	 * Test that a selection containing formats core cannot process client-side
+	 * is intersected down to core's authoritative list.
+	 */
+	public function test_client_side_mime_override_strips_unsupported_formats(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$options = $this->default_options;
+		$options['image_optimisation']['clientSideMimeTypeOverride'] = true;
+		$options['image_optimisation']['clientSideMimeTypes']        = array( 'image/heic', 'image/heif', 'image/webp' );
+
+		$image_opt = new Image_Optimisation( $options );
+
+		// Core does not support HEIC/HEIF client-side, so only WebP survives.
+		$core = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
+		$this->assertSame( array( 'image/webp' ), $image_opt->filter_client_side_supported_mime_types( $core ) );
+	}
+
+	/**
+	 * Test that an enabled override with an empty selection returns an empty
+	 * list, which disables browser-side processing entirely (as the UI copy
+	 * states that unchecking every format disables client-side processing).
+	 */
+	public function test_client_side_mime_override_empty_disables_processing(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$options = $this->default_options;
+		$options['image_optimisation']['clientSideMimeTypeOverride'] = true;
+		$options['image_optimisation']['clientSideMimeTypes']        = array();
+
+		$image_opt = new Image_Optimisation( $options );
+
+		$core = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
+		$this->assertSame( array(), $image_opt->filter_client_side_supported_mime_types( $core ) );
+	}
+
+	/**
+	 * Test that a non-array client-side MIME setting (corrupted storage) keeps
+	 * core's default list untouched (graceful degradation).
+	 */
+	public function test_client_side_mime_override_non_array_keeps_core_list(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$options = $this->default_options;
+		$options['image_optimisation']['clientSideMimeTypeOverride'] = true;
+		$options['image_optimisation']['clientSideMimeTypes']        = 'image/jpeg';
+
+		$image_opt = new Image_Optimisation( $options );
+
+		$core = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
+		$this->assertSame( $core, $image_opt->filter_client_side_supported_mime_types( $core ) );
+	}
 }

@@ -213,9 +213,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'speculationExcludeUrls' => '',
 					),
 					'image_optimisation' => array(
-						'placeholderType'     => 'svg',
-						'autoPreloadLCP'      => false,
-						'prioritizeLCPImages' => false,
+						'placeholderType'            => 'svg',
+						'autoPreloadLCP'             => false,
+						'prioritizeLCPImages'        => false,
+						'clientSideMimeTypeOverride' => false,
+						'clientSideMimeTypes'        => array(),
 					),
 					'performance_audit'  => array(
 						'pagespeed_api_key'     => '',
