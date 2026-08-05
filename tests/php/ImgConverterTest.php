@@ -71,6 +71,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 				'path_is_absolute',
 				'wp_parse_url',
 				'wp_image_quality',
+				'wp_get_image_encode_quality',
 			)
 		);
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
@@ -87,6 +88,11 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		// functions cannot be undefined between tests; returning null keeps
 		// core_handles_next_gen()/core_handles_both_next_gen() in a known state.
 		Functions\when( 'wp_image_quality' )->justReturn( null );
+		// wp_get_image_encode_quality() (WP 7.1+) is also stubbed in every test
+		// for the same reason. The plugin default (82) keeps every existing
+		// assertion deterministic while simulating the WP 7.1+ runtime; tests
+		// that need a specific value override it with when()/expect().
+		Functions\when( 'wp_get_image_encode_quality' )->justReturn( 82 );
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( string $url, $component = -1 ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Used to emulate wp_parse_url() in tests.
@@ -163,6 +169,44 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		}
 
 		return new Img_Converter( $options );
+	}
+
+	/**
+	 * Set up the plugin's wppo output directory and a real-filesystem
+	 * stand-in so Util::prepare_cache_dir() can write converted files.
+	 *
+	 * @return void
+	 */
+	private function prepare_wppo_output_dir(): void {
+		$out_dir = rtrim( WP_CONTENT_DIR, '/' ) . '/wppo/uploads/2026/08';
+		if ( ! is_dir( $out_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixtures use native filesystem.
+			mkdir( $out_dir, 0755, true );
+		}
+		$GLOBALS['wp_filesystem'] = new class() {
+			/**
+			 * Whether the path is a directory.
+			 *
+			 * @param string $path Path to check.
+			 * @return bool
+			 */
+			public function is_dir( $path ) {
+				return is_dir( $path );
+			}
+
+			/**
+			 * Create a directory.
+			 *
+			 * @param string $path  Path to create.
+			 * @param int    $chmod Permissions.
+			 * @return bool
+			 */
+			public function mkdir( $path, $chmod = 0755 ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test filesystem stand-in.
+				return is_dir( $path ) || mkdir( $path, $chmod, true );
+			}
+		};
+		Functions\when( 'WP_Filesystem' )->justReturn( true );
 	}
 
 	/**
@@ -290,6 +334,188 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'http://example.com/wp-content/uploads/2026/08/serve2.jpg', $result[0] );
 		$info = Img_Converter::get_img_info();
 		$this->assertNotEmpty( $info['pending']['avif'] ?? array() );
+	}
+
+	/**
+	 * Test that convert_image() resolves the encode quality via
+	 * wp_get_image_encode_quality() (WP 7.1+) with the expected
+	 * MIME/size/default arguments and uses its return value for the encode.
+	 *
+	 * The 'avif' format is used because in this harness wp_image_quality() is
+	 * always stubbed, so core_handles_next_gen() is true and 'webp'/'both'
+	 * short-circuit to 'skipped' before quality resolution is reached.
+	 */
+	public function test_convert_image_uses_wp_get_image_encode_quality(): void {
+		if ( ! function_exists( 'imageavif' ) ) {
+			$this->markTestSkipped( 'GD AVIF support is required.' );
+		}
+
+		$file = $this->create_sample_png( 'quality.png' );
+
+		// Util::prepare_cache_dir() writes into the plugin's wppo directory and
+		// relies on WP_Filesystem; provide a real-filesystem stand-in.
+		$this->prepare_wppo_output_dir();
+
+		$captured = null;
+		Functions\when( 'wp_get_image_encode_quality' )->alias(
+			static function ( $mime, $size, $default_quality ) use ( &$captured ) {
+				$captured = array( $mime, $size, $default_quality );
+				return 60;
+			}
+		);
+
+		$converter = $this->make_converter( array( 'conversionFormat' => 'avif' ) );
+		$result    = $converter->convert_image( $file, 'avif' );
+
+		$this->assertTrue( $result );
+		$this->assertSame(
+			array(
+				'image/avif',
+				array(
+					'width'  => 64,
+					'height' => 48,
+				),
+				null,
+			),
+			$captured
+		);
+
+		$info     = Img_Converter::get_img_info();
+		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+		$this->assertContains( $full_rel, $info['completed']['avif'] ?? array() );
+	}
+
+	/**
+	 * Test that convert_image() resolves the encode quality via
+	 * wp_get_image_encode_quality() (WP 7.1+) on the WebP path, which only
+	 * requires GD WebP support.
+	 *
+	 * The AVIF end-to-end test above skips when GD lacks libavif, so this
+	 * test keeps end-to-end coverage in CI environments without AVIF.
+	 * function_exists() is patched so core_handles_next_gen() reports no
+	 * native next-gen support, which stops the WebP path from short-circuiting
+	 * to 'skipped'.
+	 */
+	public function test_convert_image_webp_uses_wp_get_image_encode_quality(): void {
+		if ( ! function_exists( 'imagewebp' ) ) {
+			$this->markTestSkipped( 'GD WebP support is required.' );
+		}
+
+		$file = $this->create_sample_png( 'quality-webp.png' );
+
+		// Util::prepare_cache_dir() writes into the plugin's wppo directory and
+		// relies on WP_Filesystem; provide a real-filesystem stand-in.
+		$this->prepare_wppo_output_dir();
+
+		// Make core_handles_next_gen() report false so the WebP path does not
+		// short-circuit to 'skipped'. The WP 7.1+ helper itself is left intact.
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) {
+				if ( 'wp_image_quality' === $function_name ) {
+					return false;
+				}
+				return \function_exists( $function_name );
+			}
+		);
+
+		$captured = null;
+		Functions\when( 'wp_get_image_encode_quality' )->alias(
+			static function ( $mime, $size, $default_quality ) use ( &$captured ) {
+				$captured = array( $mime, $size, $default_quality );
+				return 75;
+			}
+		);
+
+		$converter = $this->make_converter( array( 'conversionFormat' => 'webp' ) );
+		$result    = $converter->convert_image( $file, 'webp' );
+
+		$this->assertTrue( $result );
+		$this->assertSame(
+			array(
+				'image/webp',
+				array(
+					'width'  => 64,
+					'height' => 48,
+				),
+				null,
+			),
+			$captured
+		);
+
+		$info     = Img_Converter::get_img_info();
+		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+		$this->assertContains( $full_rel, $info['completed']['webp'] ?? array() );
+	}
+
+	/**
+	 * Test that resolve_encode_quality() resolves a distinct quality per output
+	 * MIME type when wp_get_image_encode_quality() (WP 7.1+) is available,
+	 * passing null as the core default so WordPress computes its own
+	 * per-format baseline (86 for WebP, 82 for other formats).
+	 *
+	 * This mirrors the 'both' conversion path, which resolves avif and webp
+	 * quality independently via two helper calls.
+	 */
+	public function test_resolve_encode_quality_resolves_per_format_quality(): void {
+		$calls = array();
+		Functions\when( 'wp_get_image_encode_quality' )->alias(
+			static function ( $mime, $size, $default_quality ) use ( &$calls ) {
+				$calls[] = array( $mime, $size, $default_quality );
+				return 'image/avif' === $mime ? 60 : 75;
+			}
+		);
+
+		$method = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
+		$method->setAccessible( true );
+
+		$this->assertSame( 75, $method->invoke( null, 'image/webp' ) );
+		$this->assertSame(
+			60,
+			$method->invoke(
+				null,
+				'image/avif',
+				array(
+					'width'  => 800,
+					'height' => 600,
+				)
+			)
+		);
+		$this->assertSame(
+			array(
+				array( 'image/webp', array(), null ),
+				array(
+					'image/avif',
+					array(
+						'width'  => 800,
+						'height' => 600,
+					),
+					null,
+				),
+			),
+			$calls
+		);
+	}
+
+	/**
+	 * Test that resolve_encode_quality() falls back to wp_image_quality()
+	 * (WP 6.7-7.0) when the WP 7.1+ helper is unavailable.
+	 */
+	public function test_resolve_encode_quality_falls_back_to_wp_image_quality(): void {
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) {
+				if ( 'wp_get_image_encode_quality' === $function_name ) {
+					return false;
+				}
+				return \function_exists( $function_name );
+			}
+		);
+		Functions\when( 'wp_image_quality' )->justReturn( 82 );
+
+		$method = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
+		$method->setAccessible( true );
+
+		$this->assertSame( 82, $method->invoke( null, 'image/webp' ) );
+		$this->assertSame( 82, $method->invoke( null, 'image/avif' ) );
 	}
 
 	/**

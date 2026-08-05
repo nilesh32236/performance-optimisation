@@ -165,6 +165,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		/**
 		 * Resolve the encode quality for an output MIME type.
 		 *
 		 * Prefers WordPress 7.1+'s size-aware `wp_get_image_encode_quality()`
@@ -267,7 +268,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( -1 === $quality ) {
 				$quality = 82;
 			}
-
 			if ( ! function_exists( 'imagecreatefromjpeg' ) || ! function_exists( 'imagecreatefrompng' ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
@@ -313,6 +313,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
+			}
+
+			// Resolve the default encode quality now that the source dimensions
+			// are known. WP 7.1+ exposes wp_get_image_encode_quality(), which
+			// resolves the effective quality per MIME type and size (honoring
+			// the size-aware wp_editor_set_quality and legacy jpeg_quality
+			// filters). WP 6.7-7.0 falls back to wp_image_quality();
+			// WP < 6.7 falls back to the plugin default (82).
+			$size = array(
+				'width'  => $image_info[0],
+				'height' => $image_info[1],
+			);
+
+			if ( -1 === $quality ) {
+				if ( 'both' === $format ) {
+					$avif_quality = self::resolve_encode_quality( 'image/avif', $size );
+					$webp_quality = self::resolve_encode_quality( 'image/webp', $size );
+				} else {
+					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
+					$quality = self::resolve_encode_quality( $mime, $size );
+				}
+			}
+			if ( -1 === $quality ) {
+				$quality = 82;
 			}
 
 			$image_type = $image_info[2];

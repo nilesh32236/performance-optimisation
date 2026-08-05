@@ -564,6 +564,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			add_action( 'wp_head', array( $this, 'add_preload_prefetch_preconnect' ), 1 );
 			add_action( 'wp_head', array( $this, 'add_speculation_rules' ), 0 );
+			add_filter( 'wp_resource_hints', array( $this, 'add_resource_hints' ), 10, 2 );
 
 			new Metabox();
 			new Cron();
@@ -1792,24 +1793,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$preload_settings = $this->options['preload_settings'] ?? array();
 
-			// Preconnect origins.
-			if ( ! empty( $preload_settings['preconnect'] ) && ! empty( $preload_settings['preconnectOrigins'] ) ) {
-				$preconnect_origins = Util::process_urls( $preload_settings['preconnectOrigins'] );
-
-				foreach ( $preconnect_origins as $origin ) {
-					Util::generate_preload_link( $origin, 'preconnect', '', true );
-				}
-			}
-
-			// Prefetch DNS origins.
-			if ( ! empty( $preload_settings['prefetchDNS'] ) && ! empty( $preload_settings['dnsPrefetchOrigins'] ) ) {
-				$dns_prefetch_origins = Util::process_urls( $preload_settings['dnsPrefetchOrigins'] );
-
-				foreach ( $dns_prefetch_origins as $origin ) {
-					Util::generate_preload_link( $origin, 'dns-prefetch' );
-				}
-			}
-
 			// Preload fonts.
 			if ( ! empty( $preload_settings['preloadFonts'] ) && ! empty( $preload_settings['preloadFontsUrls'] ) ) {
 				$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
@@ -1846,6 +1829,67 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$this->image_optimisation->preload_images();
+		}
+
+		/**
+		 * Adds preconnect/dns-prefetch origins via core's resource hints API.
+		 *
+		 * Core's wp_resource_hints() batches, deduplicates, and normalizes
+		 * preconnect/dns-prefetch hints, and exposes them through the
+		 * `wp_resource_hints` filter for interoperability with other plugins.
+		 * Font/CSS/image preload links stay on the raw echo path in
+		 * add_preload_prefetch_preconnect() where `as`/`type`/`media` control
+		 * is needed.
+		 *
+		 * Core normalizes preconnect hints to scheme+host and dns-prefetch
+		 * hints to protocol-relative `//host`, and emits them on `wp_head` at
+		 * priority 2, so they render after the plugin's priority-1 preload
+		 * links (browser hint order is not significant).
+		 *
+		 * @since 2.13.1
+		 *
+		 * @param array  $urls          URLs to print for resource hints.
+		 * @param string $relation_type The relation type (e.g. 'preconnect', 'dns-prefetch').
+		 * @return array Filtered URLs.
+		 */
+		public function add_resource_hints( $urls, $relation_type ) {
+			$preload_settings = $this->options['preload_settings'] ?? array();
+
+			if ( 'preconnect' === $relation_type ) {
+				if ( ! empty( $preload_settings['preconnect'] ) && ! empty( $preload_settings['preconnectOrigins'] ) ) {
+					$preconnect_origins = Util::process_urls( $preload_settings['preconnectOrigins'] );
+
+					// Preserve the crossorigin="anonymous" attribute the legacy echo
+					// path emitted. Core renders array hints with their attributes
+					// intact (single-quoted, href-first ordering) but normalizes the
+					// href to scheme+host, so the output is functionally equivalent
+					// rather than byte-identical.
+					foreach ( $preconnect_origins as $origin ) {
+						$urls[] = array(
+							'href'        => $origin,
+							'crossorigin' => 'anonymous',
+						);
+					}
+				}
+			} elseif ( 'dns-prefetch' === $relation_type ) {
+				if ( ! empty( $preload_settings['prefetchDNS'] ) && ! empty( $preload_settings['dnsPrefetchOrigins'] ) ) {
+					// The settings UI documents bare hostnames (e.g. "example.com").
+					// Core's host guard drops URLs with no parseable host, so normalize
+					// scheme-less origins to protocol-relative form before returning.
+					$dns_origins = array_map(
+						static function ( $origin ) {
+							$has_prefix = preg_match( '#^(?:[a-z][a-z0-9+.-]*:)?//#i', $origin );
+
+							return $has_prefix ? $origin : '//' . $origin;
+						},
+						Util::process_urls( $preload_settings['dnsPrefetchOrigins'] )
+					);
+
+					$urls = array_merge( $urls, $dns_origins );
+				}
+			}
+
+			return $urls;
 		}
 
 		/**
