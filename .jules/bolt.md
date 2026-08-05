@@ -69,4 +69,14 @@
 
 **Action:** When WordPress core utility functions that return static paths/URLs are needed inside parsing loops, cache their results in PHP `static` variables so they are computed only once per request and reused across all subsequent loop iterations.
 
-**Exception (multisite):** In WordPress multisite, contexts can switch (e.g., via `switch_to_blog()`). When caching WP core function results, key the static cache by `get_current_blog_id()` to ensure lookups resolve correctly when the active site context changes within a single request.## 2026-07-31 - Cache content_url in Asset Minification Loops\n\n**Learning:** Executing WordPress core functions like `content_url()` repeatedly inside high-frequency execution paths (like when rewriting URLs for CSS and JS tags during minification) can add redundant performance overhead because it executes WP hooks for every replaced asset.\n**Action:** Declare a PHP static array keyed by `get_current_blog_id()` to execute `content_url()` once per site per request and reuse the cached URL prefix during minification processes.
+**Exception (multisite):** In WordPress multisite, contexts can switch (e.g., via `switch_to_blog()`). When caching WP core function results, key the static cache by `get_current_blog_id()` to ensure lookups resolve correctly when the active site context changes within a single request.
+
+## 2026-07-31 - Cache content_url in Asset Minification Loops
+
+**Learning:** Executing WordPress core functions like `content_url()` repeatedly inside high-frequency execution paths (like when rewriting URLs for CSS and JS tags during minification) can add redundant performance overhead. Note that WP core itself already caches the filtered base URL in an internal static var, so the `content_url` filter runs at most once per request regardless of call count; the per-call cost is only cheap path string substitution.
+**Action:** Declare a PHP static array keyed by `get_current_blog_id()` to resolve `content_url()` once per site per path and reuse the cached URL prefix during minification. Gate the cache with `has_filter( 'content_url' )` so context-dependent filtered output is never cached, mirroring the `class-main.php` convention; the measurable gain is minimal but the code stays consistent with the existing base-URL cache pattern.
+
+## 2026-08-04 - Centralize content_url caching into Util::cached_content_url
+
+**Learning:** The blog-ID-keyed `content_url()` cache introduced on 2026-07-31 was duplicated across the CSS and JS minifier constructors and `update_image_paths()`, and it lacked the `has_filter( 'content_url' )` guard already used in `class-main.php`. WP core already caches the filtered base URL statically, so the per-call win is marginal and the duplication was pure maintainability debt.
+**Action:** Extract a single shared helper `Util::cached_content_url( $path )` that keys a static array by `get_current_blog_id()` and only caches when no `content_url` filter is registered (matching the `class-main.php` convention), then use it from every minifier call site.

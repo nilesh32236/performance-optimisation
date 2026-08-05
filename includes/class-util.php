@@ -292,6 +292,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Get a content URL, cached per site per request.
+		 *
+		 * Centralizes the blog-ID-keyed static caching pattern used by the asset
+		 * minifiers. Mirrors the convention in `class-main.php`: when a
+		 * `content_url` filter is registered the result is not cached (the filter
+		 * may return context-dependent output), otherwise the base URL is resolved
+		 * once per site per request and reused across all call sites.
+		 *
+		 * @param string $path Path relative to the content directory.
+		 * @return string The content URL for the given path.
+		 * @since 2.14.0
+		 */
+		public static function cached_content_url( $path ) {
+			if ( false !== has_filter( 'content_url' ) ) {
+				return content_url( $path );
+			}
+
+			static $cache = array();
+			$blog_id      = get_current_blog_id();
+
+			if ( ! isset( $cache[ $blog_id ] ) ) {
+				$cache[ $blog_id ] = array();
+			}
+			if ( ! isset( $cache[ $blog_id ][ $path ] ) ) {
+				$cache[ $blog_id ][ $path ] = content_url( $path );
+			}
+
+			return $cache[ $blog_id ][ $path ];
+		}
+
+		/**
 		 * Qualify a transient key with the current blog ID on multisite.
 		 *
 		 * Prevents transient key collisions when a shared object cache backend

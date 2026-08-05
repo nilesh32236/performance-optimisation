@@ -78,10 +78,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
 			$content_dir_normalized = wp_normalize_path( WP_CONTENT_DIR );
 			$cache_inside           = ( 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
+
 			if ( ! $cache_inside ) {
-				$this->cache_url = content_url( '/' );
+				$this->cache_url = Util::cached_content_url( '/' );
 			} else {
-				$this->cache_url = content_url( str_replace( $content_dir_normalized, '', $cache_dir_normalized ) );
+				$path            = str_replace( $content_dir_normalized, '', $cache_dir_normalized );
+				$this->cache_url = Util::cached_content_url( $path );
 			}
 			$this->filesystem = Util::init_filesystem();
 		}
@@ -178,7 +180,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 			if ( 0 === strpos( $css_dir, $content_dir ) ) {
 				$relative_path = str_replace( $content_dir, '', $css_dir );
-				$css_dir_url   = content_url( $relative_path );
+				$css_dir_url   = Util::cached_content_url( $relative_path );
 			} elseif ( 0 === strpos( $css_dir, $abs_path ) ) {
 				$relative_path = str_replace( $abs_path, '', $css_dir );
 				$css_dir_url   = site_url( $relative_path );
