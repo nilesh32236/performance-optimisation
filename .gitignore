@@ -8,3 +8,4 @@ test-lab/
 coverage/
 *.orig
 .phpunit.cache/
+review-output.jsonl
