@@ -86,6 +86,17 @@ After activation, you can manage the following from the settings tabs:
 
 == Changelog ==
 
+= 1.9.0 (2026-08-05) =
+* Performance: Centralized `content_url()` static caching across asset minification loops via `Util::cached_content_url()`. Keys static cache per site per request (`get_current_blog_id()`) for multisite safety under `switch_to_blog()` and gates caching with `has_filter('content_url')`.
+* New: Added WordPress 7.1+ client-side media processing toggle (`filter_client_side_supported_mime_types`). Admin setting enables selecting in-browser Web Worker supported MIME types, intersected with core's reported capabilities to prevent unsupported formats from shadowing core defaults.
+* Image Optimization: Integrated WordPress 7.1+ size-aware `wp_get_image_encode_quality()` and WP 6.7–7.0 `wp_image_quality()` for WebP/AVIF image conversion.
+* Image Optimization: Preserved fixed quality (40) for LQIP (`generate_lqip()`) image placeholders to keep inline base64 data URIs small and prevent payload inflation on WP 6.7–7.0.
+* Preload & Hints: Migrated preconnect and DNS-prefetch emission to core's `wp_resource_hints` filter API. Added automatic scheme-less bare-hostname (`example.com`) normalization to protocol-relative (`//example.com`) form so origins survive core's host guard, while retaining `crossorigin="anonymous"` attributes for preconnect hints.
+* Inline CSS: Inlines combined/minified CSS stylesheets via WordPress core's `wp_maybe_inline_styles()` when within the `styles_inline_size_limit` budget. Added `wppo_inline_combined_css` filter for CDN opt-out.
+* Block Assets: WordPress 6.9+ compatibility for block asset loading — classic themes now load separate core block styles on demand by default.
+* Multisite & Object Cache: Added transient key isolation on multisite networks using `{blog_id}_` prefix via `Util::transient_key()`. Updated Redis Object Cache drop-in with WP 6.9+ key salt support.
+* UI & Safety: Added `Array.isArray()` defensive guards for stored options in React admin SPA components and single-sourced `DEFAULT_CLIENT_SIDE_MIME_TYPES` constants.
+
 = 1.8.1 (2026-08-01) =
 * New: Inline the combined/minified CSS via WordPress core's `wp_maybe_inline_styles()` when the file is within the `styles_inline_size_limit` budget, eliminating a render-blocking stylesheet round-trip on first load. Use the `wppo_inline_combined_css` filter (return falsy) to disable inlining, e.g. when serving the combined file from a CDN.
 * New: WordPress 6.9+ compatibility for block asset loading — classic themes now load separate core block styles on demand by default (matching WordPress core). The "Load Block Assets On Demand" toggle acts as an opt-out on 6.9+: disable it to force the combined `wp-block-library` stylesheet.
