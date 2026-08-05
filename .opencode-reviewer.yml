@@ -18,7 +18,7 @@ project:
     - "SCSS uses .wppo- prefix and BEM-like naming — no inline styles, no Tailwind"
     - "All REST endpoints require manage_options capability + X-WP-Nonce header"
     - "console.log is an ESLint error — use console.error or console.warn only"
-    - "Build output (build/) and vendor/ are both committed to git"
+    - "Build output (build/) is committed to git; vendor/ is ignored (installed via composer in CI)"
   commandReference:
     "npm run lint:js": "ESLint via @wordpress/scripts — must pass before any commit"
     "composer lint": "PHPCS with WordPress standard (phpcs.xml) — must pass before any commit"
