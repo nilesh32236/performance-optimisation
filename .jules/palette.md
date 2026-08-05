@@ -21,3 +21,7 @@
 ## 2026-08-03 - Replaced Hardcoded Color with CSS Variable
 **Learning:** The video placeholder play button hover state used a hardcoded YouTube red color (`#cc0000`), which failed to adapt to the user's active WordPress admin theme. Also, its outline fallback used an outdated WP blue (`#007cba`).
 **Action:** Replaced `#cc0000` with `var(--wppo-primary-hover)` and updated the outline fallback to `#2271b1` in `_video-placeholder.scss` to ensure consistent theme adaptation across the UI.
+
+## 2026-08-05 - Accessible Loading States for Async Actions in Welcome Panel
+**Learning:** Replacing action triggers (like standard `<button>` elements) with simple text updates (e.g. `Enabling...`) without proper ARIA attributes fails to maintain an accessible, visually consistent loading state during asynchronous operations.
+**Action:** When refactoring async action buttons, always use the `<LoadingSubmitButton>` component to provide an accessible `aria-live` region and a visual spinner, preserving the physical button dimensions and layout.
