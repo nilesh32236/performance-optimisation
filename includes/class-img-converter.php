@@ -903,9 +903,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 				if ( empty( $local_path ) ) {
 					// If Util::get_local_path failed, manually resolve if it's a URL.
-					static $home_url    = array();
-					$content_url_base   = untrailingslashit( Util::cached_content_url( '' ) );
-					$blog_id            = get_current_blog_id();
+					static $home_url  = array();
+					$content_url_base = untrailingslashit( Util::cached_content_url( '' ) );
+					$blog_id          = get_current_blog_id();
 
 					if ( ! isset( $home_url[ $blog_id ] ) ) {
 						$home_url[ $blog_id ] = untrailingslashit( home_url() );

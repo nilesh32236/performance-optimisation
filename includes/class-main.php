@@ -2150,7 +2150,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cached_file  = $css_minifier->minify();
 
 			if ( $cached_file ) {
-				$basename = basename( $cached_file );
+				$basename    = basename( $cached_file );
 				$content_url = Util::cached_content_url( 'cache/wppo/min/css/' . $basename );
 
 				$file_version = filemtime( Util::get_local_path( $cached_file ) );
@@ -2201,7 +2201,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cached_file = $js_minifier->minify();
 
 			if ( $cached_file ) {
-				$basename = basename( $cached_file );
+				$basename    = basename( $cached_file );
 				$content_url = Util::cached_content_url( 'cache/wppo/min/js/' . $basename );
 
 				$file_version = filemtime( Util::get_local_path( $cached_file ) );
