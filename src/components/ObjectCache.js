@@ -1,4 +1,4 @@
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useId } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -19,6 +19,7 @@ import SwitchField from './common/SwitchField';
 import { __ } from '@wordpress/i18n';
 
 const ObjectCache = ( { options = {} } ) => {
+	const hitRatioLabelId = useId();
 	const defaultSettings = {
 		mode: 'standalone',
 		host: '127.0.0.1',
@@ -316,7 +317,7 @@ const ObjectCache = ( { options = {} } ) => {
 					<div className="wppo-stat-item">
 						<span
 							className="wppo-stat-label"
-							id="wppo-object-cache-hit-ratio-label"
+							id={ hitRatioLabelId }
 						>
 							{ __( 'Hit Ratio', 'performance-optimisation' ) }
 						</span>
@@ -324,10 +325,10 @@ const ObjectCache = ( { options = {} } ) => {
 						<div
 							className="wppo-progress-bar"
 							role="progressbar"
-							aria-labelledby="wppo-object-cache-hit-ratio-label"
+							aria-labelledby={ hitRatioLabelId }
 							aria-valuemin="0"
 							aria-valuemax="100"
-							aria-valuenow={ hitRatio }
+							aria-valuenow={ hitRatio === 0 ? 0 : parseFloat( hitRatio ) }
 							aria-valuetext={ `${ hitRatio }%` }
 						>
 							<div
