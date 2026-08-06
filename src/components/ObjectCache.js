@@ -328,9 +328,7 @@ const ObjectCache = ( { options = {} } ) => {
 							aria-labelledby={ hitRatioLabelId }
 							aria-valuemin="0"
 							aria-valuemax="100"
-							aria-valuenow={
-								hitRatio === 0 ? 0 : parseFloat( hitRatio )
-							}
+							aria-valuenow={ parseFloat( hitRatio ) }
 							aria-valuetext={ `${ hitRatio }%` }
 						>
 							<div
