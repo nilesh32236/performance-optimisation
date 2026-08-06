@@ -1,5 +1,6 @@
 import { render, screen, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
+// eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
 import ObjectCache from '../ObjectCache';
 import { apiCall } from '../../lib/apiRequest';
@@ -19,14 +20,14 @@ describe( 'ObjectCache Component', () => {
 			},
 		};
 
-        apiCall.mockResolvedValue( {
-            success: true,
-            data: mockOptions.cache_status,
-        } );
+		apiCall.mockResolvedValue( {
+			success: true,
+			data: mockOptions.cache_status,
+		} );
 
 		await act( async () => {
-		    render( <ObjectCache options={ mockOptions } /> );
-        } );
+			render( <ObjectCache options={ mockOptions } /> );
+		} );
 
 		const hitRatioProgress = await screen.findByRole( 'progressbar', {
 			name: /Hit Ratio/i,
