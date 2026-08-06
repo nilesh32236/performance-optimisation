@@ -314,11 +314,21 @@ const ObjectCache = ( { options = {} } ) => {
 						</span>
 					</div>
 					<div className="wppo-stat-item">
-						<span className="wppo-stat-label">
+						<span
+							className="wppo-stat-label"
+							id="wppo-object-cache-hit-ratio-label"
+						>
 							{ __( 'Hit Ratio', 'performance-optimisation' ) }
 						</span>
 						<span className="wppo-stat-value">{ hitRatio }%</span>
-						<div className="wppo-progress-bar">
+						<div
+							className="wppo-progress-bar"
+							role="progressbar"
+							aria-labelledby="wppo-object-cache-hit-ratio-label"
+							aria-valuemin="0"
+							aria-valuemax="100"
+							aria-valuenow={ Math.round( hitRatio ) }
+						>
 							<div
 								className="wppo-progress-bar__fill"
 								style={ { width: `${ hitRatio }%` } }
