@@ -25,6 +25,7 @@
 ## 2026-08-05 - Accessible Loading States for Async Actions in Welcome Panel
 **Learning:** Replacing action triggers (like standard `<button>` elements) with simple text updates (e.g. `Enabling...`) without proper ARIA attributes fails to maintain an accessible, visually consistent loading state during asynchronous operations.
 **Action:** When refactoring async action buttons, always use the `<LoadingSubmitButton>` component to provide an accessible `aria-live` region and a visual spinner, preserving the physical button dimensions and layout.
+
 ## 2026-08-06 - Progress Bar Accessibility
 **Learning:** The Hit Ratio progress bar in the ObjectCache component lacked proper ARIA attributes, making it inaccessible to screen readers. Users navigating with assistive technology could not perceive the visual progress representation.
 **Action:** Added `role="progressbar"`, `aria-labelledby`, `aria-valuemin="0"`, `aria-valuemax="100"`, and `aria-valuenow` to the progress bar container in `ObjectCache.js` to ensure screen readers announce its state properly. Also assigned a unique ID to the label element.

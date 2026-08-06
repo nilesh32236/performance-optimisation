@@ -327,7 +327,8 @@ const ObjectCache = ( { options = {} } ) => {
 							aria-labelledby="wppo-object-cache-hit-ratio-label"
 							aria-valuemin="0"
 							aria-valuemax="100"
-							aria-valuenow={ Math.round( hitRatio ) }
+							aria-valuenow={ hitRatio }
+							aria-valuetext={ `${ hitRatio }%` }
 						>
 							<div
 								className="wppo-progress-bar__fill"
