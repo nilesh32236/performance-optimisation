@@ -1201,6 +1201,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private function add_available_post_types_to_options() {
 			$post_types = get_post_types( array( 'public' => true ), 'names' );
 
+			if ( ! is_array( $post_types ) ) {
+				$post_types = array();
+			}
+
 			$excluded            = array( 'attachment' );
 			$filtered_post_types = array_keys( array_diff( $post_types, $excluded ) );
 
