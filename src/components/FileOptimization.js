@@ -127,14 +127,23 @@ const FileOptimization = ( {
 	};
 
 	const handleRegenerateCss = async () => {
-		try {
-			await apiCall( 'regenerate_ccss' );
-			if ( onCcssRefresh ) {
-				onCcssRefresh();
-			}
-		} catch ( err ) {
-			console.error( 'Failed to regenerate CCSS', err );
-		}
+		await withNotification(
+			( async () => {
+				const res = await apiCall( 'regenerate_ccss' );
+				if ( res?.success && onCcssRefresh ) {
+					onCcssRefresh();
+				}
+				return res;
+			} )(),
+			__(
+				'Critical CSS regeneration queued.',
+				'performance-optimisation'
+			),
+			__(
+				'Failed to regenerate critical CSS.',
+				'performance-optimisation'
+			)
+		);
 	};
 
 	const handleRegenerateUsedCSS = async () => {

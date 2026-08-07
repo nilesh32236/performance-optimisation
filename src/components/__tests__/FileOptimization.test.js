@@ -530,7 +530,7 @@ describe( 'FileOptimization Component', () => {
 		jest.useRealTimers();
 	} );
 
-	it( 'logs error to console when handleRegenerateCss fails', async () => {
+	it( 'shows an error notice when handleRegenerateCss fails', async () => {
 		const mockError = new Error( 'CCSS Generation Failed' );
 		apiCall.mockRejectedValueOnce( mockError );
 
@@ -553,12 +553,50 @@ describe( 'FileOptimization Component', () => {
 
 		await waitFor( () => {
 			expect( consoleSpy ).toHaveBeenCalledWith(
-				'Failed to regenerate CCSS',
+				'Failed to regenerate critical CSS.',
 				mockError
 			);
 		} );
 
+		expect(
+			screen.getByText( 'An unexpected error occurred.' )
+		).toBeInTheDocument();
+
 		consoleSpy.mockRestore();
+	} );
+
+	it( 'shows queued message and refreshes CCSS on success', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Critical CSS regeneration: 2 jobs queued.',
+		} );
+		const onCcssRefresh = jest.fn();
+
+		render(
+			<FileOptimization
+				options={ { criticalCSS: true } }
+				serverRules={ {} }
+				ccssStatus={ { test_hash: { status: 'none', label: 'Test' } } }
+				onCcssRefresh={ onCcssRefresh }
+			/>
+		);
+
+		const regenerateButton = screen.getByRole( 'button', {
+			name: /Regenerate All/i,
+		} );
+		fireEvent.click( regenerateButton );
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith( 'regenerate_ccss' );
+		} );
+
+		expect( apiCall ).toHaveBeenCalledTimes( 1 );
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Critical CSS regeneration: 2 jobs queued.' )
+			).toBeInTheDocument();
+		} );
+		expect( onCcssRefresh ).toHaveBeenCalledTimes( 1 );
 	} );
 
 	it( 'calls apiCall when Regenerate All is clicked', async () => {
