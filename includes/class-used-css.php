@@ -1126,7 +1126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 					if ( ! empty( $local_path ) ) {
 						$min_file = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css/' . basename( $local_path ) );
 						if ( file_exists( $min_file ) ) {
-							$removal_urls[ content_url( 'cache/wppo/min/css/' . basename( $min_file ) ) ] = true;
+							$removal_urls[ Util::cached_content_url( 'cache/wppo/min/css/' . basename( $min_file ) ) ] = true;
 						}
 					}
 				}
