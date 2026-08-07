@@ -473,32 +473,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		}
 
 		/**
-		 * Measure Time to First Byte (TTFB) in milliseconds via GET request.
-		 *
-		 * Performs a full GET as a more representative TTFB fallback (some servers
-		 * bypass full PHP execution for HEAD requests).
-		 *
-		 * @since  1.5.0
-		 * @param  string $url The URL to measure.
-		 * @return float TTFB in milliseconds, rounded to 2 decimal places.
-		 */
-		private static function measure_ttfb( string $url ): float {
-			$start = microtime( true );
-			wp_remote_get(
-				$url,
-				array(
-					'timeout'   => 10,
-					'sslverify' => (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url ),
-				)
-			);
-			// TTFB is essentially the time until we start receiving the response body,
-			// which wp_remote_get returns after the whole body is fetched, but for a
-			// basic fallback, timing the full GET is more representative of rendering
-			// path than timing a HEAD request which often bypasses full PHP execution.
-			return round( ( microtime( true ) - $start ) * 1000, 2 );
-		}
-
-		/**
 		 * Check whether the URL uses HTTPS.
 		 *
 		 * Returns a locale-independent boolean string so frontend comparisons
