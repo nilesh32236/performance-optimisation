@@ -568,22 +568,24 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'post_process_img_dimensions' );
 		$reflection->setAccessible( true );
 
-		$result = $reflection->invoke( $image_opt, $buffer );
+		try {
+			$result = $reflection->invoke( $image_opt, $buffer );
 
-		foreach ( $temp_files as $f ) {
-			if ( file_exists( $f ) ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Cleanup of temp fixture files.
-				unlink( $f );
+			// 100 initial reads + 1 for the 101st image. The refreshed first key
+			// must remain cached (a FIFO eviction would evict it and re-read it,
+			// bumping the count to 102).
+			$this->assertSame( 101, $getimagesize_calls );
+			$this->assertStringContainsString( 'width="100"', $result );
+		} finally {
+			foreach ( $temp_files as $f ) {
+				if ( file_exists( $f ) ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Cleanup of temp fixture files.
+					unlink( $f );
+				}
 			}
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Cleanup of temp fixture dir.
+			@rmdir( $upload_dir );
 		}
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Cleanup of temp fixture dir.
-		@rmdir( $upload_dir );
-
-		// 100 initial reads + 1 for the 101st image. The refreshed first key
-		// must remain cached (a FIFO eviction would evict it and re-read it,
-		// bumping the count to 102).
-		$this->assertSame( 101, $getimagesize_calls );
-		$this->assertStringContainsString( 'width="100"', $result );
 	}
 
 	/**

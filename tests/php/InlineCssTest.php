@@ -91,6 +91,28 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 			unlink( $this->large_css_file );
 		}
+
+		// Safety net: remove any left-over fixture files/dirs created by the
+		// minify-path tests if an assertion failed before their inline cleanup.
+		$source_dir = '/tmp/wordpress/wp-content/themes/t';
+		if ( file_exists( $source_dir . '/style.css' ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+			unlink( $source_dir . '/style.css' );
+		}
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Cleanup of temp fixture dir.
+		@rmdir( $source_dir );
+
+		$cache_dir = '/tmp/wordpress/wp-content/cache/wppo/min/css';
+		if ( is_dir( $cache_dir ) ) {
+			$cached_files = glob( $cache_dir . '/*.css' );
+			foreach ( $cached_files ? $cached_files : array() as $cached ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+				unlink( $cached );
+			}
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Cleanup of temp fixture dir.
+			@rmdir( $cache_dir );
+		}
+
 		\Brain\Monkey\tearDown();
 		parent::tearDown();
 	}
@@ -295,6 +317,8 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		file_put_contents( $source_file, "body {\n\tcolor: red;\n}\n\nh1 {\n\tcolor: blue;\n}\n" );
 
 		$cached_file = '/tmp/wordpress/wp-content/cache/wppo/min/css/' . md5( 'third-party' ) . '.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture directory.
+		mkdir( dirname( $cached_file ), 0777, true );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		file_put_contents( $cached_file, 'body{color:red}' );
 		$cached_url = 'http://example.com/wp-content/cache/wppo/min/css/' . basename( $cached_file );
@@ -551,6 +575,8 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		file_put_contents( $source_file, "body {\n\tcolor: red;\n}\n\nh1 {\n\tcolor: blue;\n}\n" );
 
 		$cached_file = '/tmp/wordpress/wp-content/cache/wppo/min/css/' . md5( 'happy-path' ) . '.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture directory.
+		mkdir( dirname( $cached_file ), 0777, true );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		file_put_contents( $cached_file, 'body{color:red}' );
 		$cached_url = 'http://example.com/wp-content/cache/wppo/min/css/' . basename( $cached_file );

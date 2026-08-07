@@ -165,7 +165,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
-		/**
 		 * Resolve the encode quality for an output MIME type.
 		 *
 		 * Prefers WordPress 7.1+'s size-aware `wp_get_image_encode_quality()`
@@ -173,6 +172,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * against the source dimensions), falls back to the flat
 		 * `wp_image_quality()` API on WP 6.7-7.0, and finally to the supplied
 		 * fallback on older cores or when core reports no registered quality.
+		 *
+		 * A null or zero value returned by either core helper is treated as
+		 * "no registered quality" and causes resolution to continue down the
+		 * chain (flat helper, then the plugin fallback) rather than encoding at
+		 * quality 0. This means an invalid result from the size-aware helper can
+		 * be satisfied by a valid flat `wp_image_quality()` value before the
+		 * plugin fallback is reached.
 		 *
 		 * @since 4.1.0
 		 *

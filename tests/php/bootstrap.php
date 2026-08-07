@@ -73,6 +73,49 @@ if ( ! isset( $GLOBALS['wp_object_cache'] ) ) {
 		public function set( $key, $data, $group = 'default', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			return true;
 		}
+
+		/**
+		 * Mimics WP_Object_Cache::add() — already-present semantics.
+		 *
+		 * @param int|string $key    Cache key.
+		 * @param mixed      $data   Cache data.
+		 * @param string     $group  Cache group.
+		 * @param int        $expire Expiration in seconds.
+		 * @return true
+		 */
+		public function add( $key, $data, $group = 'default', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			return true;
+		}
+
+		/**
+		 * Mimics WP_Object_Cache::delete() accepting any delete.
+		 *
+		 * @param int|string $key   Cache key.
+		 * @param string     $group Cache group.
+		 * @return true
+		 */
+		public function delete( $key, $group = 'default' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			return true;
+		}
+
+		/**
+		 * Mimics WP_Object_Cache::flush() as a no-op.
+		 *
+		 * @return true
+		 */
+		public function flush() {
+			return true;
+		}
+
+		/**
+		 * Mimics WP_Object_Cache::add_salt() as a no-op.
+		 *
+		 * @param string $salt Salt value.
+		 * @return true
+		 */
+		public function add_salt( $salt ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return true;
+		}
 	};
 }
 // phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
@@ -176,7 +219,11 @@ trait WPPO_Test_Bootstrap {
 		\Brain\Monkey\Functions\when( 'WP_Filesystem' )->justReturn( false );
 		\Brain\Monkey\Functions\when( 'sanitize_text_field' )->returnArg();
 		\Brain\Monkey\Functions\when( 'wp_unslash' )->returnArg();
-		\Brain\Monkey\Functions\when( 'content_url' )->returnArg();
+		\Brain\Monkey\Functions\when( 'content_url' )->alias(
+			static function ( $path = '' ) {
+				return 'http://example.com/wp-content' . (string) $path;
+			}
+		);
 		\Brain\Monkey\Functions\when( 'trailingslashit' )->returnArg();
 		\Brain\Monkey\Functions\when( 'wp_maybe_inline_styles' )->justReturn( '' );
 		\Brain\Monkey\Functions\when( 'get_bloginfo' )->justReturn( '6.8' );

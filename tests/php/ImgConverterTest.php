@@ -646,6 +646,26 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that resolve_encode_quality() guards a zero result from the flat
+	 * wp_image_quality() helper and returns the supplied fallback instead of
+	 * encoding at quality 0.
+	 *
+	 * This is the headline regression guard for the PR: a core helper that
+	 * returns 0 (not null) must not be cast to a quality of 0.
+	 */
+	public function test_resolve_encode_quality_guards_zero_flat_quality(): void {
+		Functions\when( 'wp_get_image_encode_quality' )->justReturn( null );
+		Functions\when( 'wp_image_quality' )->justReturn( 0 );
+
+		$converter  = $this->make_converter();
+		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
+		$reflection->setAccessible( true );
+
+		$this->assertSame( 82, $reflection->invoke( $converter, 'image/avif', 82 ) );
+		$this->assertSame( 40, $reflection->invoke( $converter, 'image/jpeg', 40 ) );
+	}
+
+	/**
 	 * Test that get_source_image_dimensions() parses the -WxH sub-size suffix
 	 * and returns an empty array for full-size originals.
 	 */
