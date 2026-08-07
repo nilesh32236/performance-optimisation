@@ -66,7 +66,9 @@ App.js
 └── PluginSetting.js (activity log, PageSpeed API key, export/import)
 ```
 
-Common components in `src/components/common/`: `Tooltip`, `SwitchField`, `CheckboxOption`, `ConfirmDialog`, `LoadingSubmitButton`, `FeatureCard`, `FeatureHeader`, `StatusBadge`, `MetricCard`.
+Common components in `src/components/common/`: `Tooltip`, `SwitchField`, `CheckboxOption`, `ConfirmDialog`, `LoadingSubmitButton`, `FeatureCard`, `FeatureHeader`, `StatusBadge`, `MetricCard`, `NoticeBanner`.
+
+**Shared feedback pattern**: Components that talk to the REST API use the `useNotice()` hook (`src/lib/useNotice.js`) + `NoticeBanner` (`src/components/common/NoticeBanner.js`) instead of per-component notification state. `useNotice()` returns `{ notice, notify, dismiss }`; `notify( { type, message, durationMs? } )` (types: `error` | `success` | `warning` | `info`). The hook owns the auto-dismiss timer (cleared on re-notify, dismiss, and unmount). Render `{ notice && <NoticeBanner type={ notice.type } message={ notice.message } /> }`, passing `onDismiss={ dismiss }` when a dismiss button is wanted. `NoticeBanner` renders `.wppo-notice wppo-notice--{type}` with `role="alert"` and `aria-live` (assertive for errors, polite otherwise).
 
 Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — IntersectionObserver + MutationObserver for images/iframes/videos, deferred script loading on user interaction.
 
