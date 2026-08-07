@@ -364,21 +364,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			}
 
 			// Process and whitelist disabled scripts and styles.
-			$raw_scripts = isset( $_POST['wppo_disabled_scripts'] ) && is_array( $_POST['wppo_disabled_scripts'] ) ? wp_unslash( $_POST['wppo_disabled_scripts'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			$raw_styles  = isset( $_POST['wppo_disabled_styles'] ) && is_array( $_POST['wppo_disabled_styles'] ) ? wp_unslash( $_POST['wppo_disabled_styles'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$raw_scripts = $this->get_raw_post_array( 'wppo_disabled_scripts' );
+			$raw_styles  = $this->get_raw_post_array( 'wppo_disabled_styles' );
 
 			update_post_meta( $post_id, '_wppo_disabled_scripts', $this->process_disabled_assets( $raw_scripts, $valid_scripts ) );
 			update_post_meta( $post_id, '_wppo_disabled_styles', $this->process_disabled_assets( $raw_styles, $valid_styles ) );
 
 			// Process per-page delay strategies.
-			$raw_strategies     = isset( $_POST['wppo_delay_strategies'] ) && is_array( $_POST['wppo_delay_strategies'] ) ? wp_unslash( $_POST['wppo_delay_strategies'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$raw_strategies     = $this->get_raw_post_array( 'wppo_delay_strategies' );
 			$allowed_strategies = array( '', 'interaction', 'idle', 'viewport' );
 			update_post_meta( $post_id, '_wppo_delay_strategies', $this->process_delay_setting( $raw_strategies, $valid_scripts, $allowed_strategies ) );
 
 			// Process per-page delay priorities.
-			$raw_priorities     = isset( $_POST['wppo_delay_priorities'] ) && is_array( $_POST['wppo_delay_priorities'] ) ? wp_unslash( $_POST['wppo_delay_priorities'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$raw_priorities     = $this->get_raw_post_array( 'wppo_delay_priorities' );
 			$allowed_priorities = array( '', 'high', 'normal', 'low' );
 			update_post_meta( $post_id, '_wppo_delay_priorities', $this->process_delay_setting( $raw_priorities, $valid_scripts, $allowed_priorities ) );
+		}
+
+		/**
+		 * Safely retrieves an unslashed array from $_POST if it exists and is an array.
+		 *
+		 * @param string $key The $_POST key to check.
+		 * @return array The raw unslashed array, or an empty array if invalid.
+		 * @since NEXT
+		 */
+		private function get_raw_post_array( string $key ): array {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			return isset( $_POST[ $key ] ) && is_array( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : array();
 		}
 
 		/**
