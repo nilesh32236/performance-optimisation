@@ -146,7 +146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'css' => 0,
 				);
 			}
-			$minify_dir = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
+			$minify_dir = self::min_cache_dir();
 
 			$total_js  = 0;
 			$total_css = 0;
@@ -299,6 +299,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			global $wp;
 			$url = home_url( add_query_arg( array(), $wp->request ) );
 			return untrailingslashit( esc_url_raw( $url ) );
+		}
+
+		/**
+		 * Base (shared) minify cache directory.
+		 *
+		 * Minified JS/CSS files are namespaced per site (see {@see min_cache_dir()}),
+		 * so this returns the shared root. Used for the plugin-owned path-data
+		 * prefix check and one-time cleanup of pre-namespacing directories.
+		 *
+		 * @return string Normalized absolute path to the shared min cache root.
+		 * @since 2.15.0
+		 */
+		public static function min_cache_base_dir(): string {
+			return wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
+		}
+
+		/**
+		 * Get the current site's blog-scoped minify cache directory.
+		 *
+		 * Mirrors the blog-ID isolation conventions used by {@see transient_key()}
+		 * and {@see cached_content_url()}: on multisite each site's minified
+		 * JS/CSS files live under `cache/wppo/min/{blog_id}/{css,js}` so a cache
+		 * clear scoped to one site cannot invalidate another site's assets (whose
+		 * min files may embed site-specific `content_url()` URLs).
+		 *
+		 * @param string $subdir Optional 'css' or 'js' subdirectory.
+		 * @return string Normalized absolute path to the site-scoped min cache dir.
+		 * @since 2.15.0
+		 */
+		public static function min_cache_dir( string $subdir = '' ): string {
+			$dir = self::min_cache_base_dir() . '/' . get_current_blog_id();
+			if ( '' !== $subdir ) {
+				$dir .= '/' . $subdir;
+			}
+			return wp_normalize_path( $dir );
+		}
+
+		/**
+		 * Get the content URL for a file in the current site's min cache dir.
+		 *
+		 * @param string $subdir   Optional 'css' or 'js' subdirectory.
+		 * @param string $filename Optional file name appended to the URL.
+		 * @return string The blog-scoped content URL.
+		 * @since 2.15.0
+		 */
+		public static function min_cache_url( string $subdir = '', string $filename = '' ): string {
+			$path = 'cache/wppo/min/' . get_current_blog_id();
+			if ( '' !== $subdir ) {
+				$path .= '/' . $subdir;
+			}
+			if ( '' !== $filename ) {
+				$path .= '/' . $filename;
+			}
+			return self::cached_content_url( $path );
 		}
 
 		/**

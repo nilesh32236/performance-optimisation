@@ -470,6 +470,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->cache->set_google_fonts( $this->google_fonts );
 				}
 				add_action( 'wp_enqueue_scripts', array( $this->cache, 'combine_css' ), PHP_INT_MAX );
+				// Emit the combined-CSS preload after combine_css() has populated it,
+				// before core prints the stylesheet <link> at wp_head priority 8.
+				add_action( 'wp_head', array( $this->cache, 'maybe_preload_combine_css' ), 1 );
 			}
 
 			$rest = new Rest();
@@ -2088,7 +2091,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					continue;
 				}
 
-				$css_minifier = new Minify\CSS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css' ) );
+				$css_minifier = new Minify\CSS( $local_path, Util::min_cache_dir( 'css' ) );
 				$cached_url   = $css_minifier->minify();
 
 				if ( empty( $cached_url ) ) {
@@ -2173,7 +2176,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			global $wp_styles;
 			if ( isset( $wp_styles ) ) {
 				$path_data = $wp_styles->get_data( $handle, 'path' );
-				$min_dir   = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
+				$min_dir   = Util::min_cache_base_dir();
 				if ( ! empty( $path_data ) && 0 === strpos( wp_normalize_path( $path_data ), $min_dir ) ) {
 					return $tag;
 				}
@@ -2184,12 +2187,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			$css_minifier = new Minify\CSS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css' ) );
+			$css_minifier = new Minify\CSS( $local_path, Util::min_cache_dir( 'css' ) );
 			$cached_file  = $css_minifier->minify();
 
 			if ( $cached_file ) {
 				$basename    = basename( $cached_file );
-				$content_url = Util::cached_content_url( 'cache/wppo/min/css/' . $basename );
+				$content_url = Util::min_cache_url( 'css', $basename );
 
 				$file_version = filemtime( Util::get_local_path( $cached_file ) );
 				$new_href     = $content_url . '?ver=' . $file_version;
@@ -2235,12 +2238,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $tag;
 			}
 
-			$js_minifier = new Minify\JS( $local_path, wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/js' ) );
+			$js_minifier = new Minify\JS( $local_path, Util::min_cache_dir( 'js' ) );
 			$cached_file = $js_minifier->minify();
 
 			if ( $cached_file ) {
 				$basename    = basename( $cached_file );
-				$content_url = Util::cached_content_url( 'cache/wppo/min/js/' . $basename );
+				$content_url = Util::min_cache_url( 'js', $basename );
 
 				$file_version = filemtime( Util::get_local_path( $cached_file ) );
 

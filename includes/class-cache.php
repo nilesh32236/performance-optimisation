@@ -138,6 +138,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private bool $no_cache_marker_written = false;
 
 		/**
+		 * Preload URL of the combined stylesheet, set during {@see combine_css()}
+		 * and emitted on `wp_head` by {@see maybe_preload_combine_css()}.
+		 *
+		 * @var string
+		 * @since 2.15.0
+		 */
+		private string $combine_css_preload_url = '';
+
+		/**
 		 * Constructor to initialize cache settings and configurations.
 		 *
 		 * @param array $options Plugin options (optional). When empty, loaded from DB.
@@ -351,6 +360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$version = $cache_mtime;
 					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 					$this->register_combine_css_path( $css_file_path );
+					$this->set_combine_css_preload( $css_url, $version, $css_file_path );
 					return;
 				}
 			}
@@ -438,13 +448,49 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$this->register_combine_css_path( $css_file_path );
 				$this->write_combined_handles( $css_file_path, $eligible_handles );
 
-				// Only preload when core will not inline the combined file; preloading
-				// a stylesheet core already inlines is a wasted request.
-				if ( ! $this->will_combine_css_inline( $css_file_path ) ) {
-					$css_url_with_version = $css_url . "?ver=$version";
-					echo '<link rel="preload" as="style" href="' . esc_url( $css_url_with_version ) . '">';
-				}
+				$this->set_combine_css_preload( $css_url, $version, $css_file_path );
 			}
+		}
+
+		/**
+		 * Record the combined-CSS preload URL for emission on `wp_head`.
+		 *
+		 * Shared by the cached-file and fresh-generation branches of
+		 * {@see combine_css()} so the resource hint is emitted for every request
+		 * that enqueues the combined stylesheet, not only on regeneration.
+		 * Preloading a stylesheet core is about to inline is a wasted request, so
+		 * the URL is skipped in that case.
+		 *
+		 * @param string $css_url       URL of the combined stylesheet.
+		 * @param int|string $version   Cache-busting version suffix.
+		 * @param string $css_file_path Absolute path to the combined CSS file.
+		 * @return void
+		 * @since 2.15.0
+		 */
+		private function set_combine_css_preload( $css_url, $version, $css_file_path ): void {
+			if ( $this->will_combine_css_inline( $css_file_path ) ) {
+				return;
+			}
+			$this->combine_css_preload_url = $css_url . '?ver=' . $version;
+		}
+
+		/**
+		 * Emit the combined-CSS `rel="preload"` resource hint on `wp_head`.
+		 *
+		 * Core's `wp_resource_hints()` does not emit `preload` relations, so the
+		 * hint is printed directly via {@see Util::generate_preload_link()} at
+		 * `wp_head` priority 1 — after `wp_enqueue_scripts` has populated the URL
+		 * and before core prints the stylesheet `<link>` at priority 8.
+		 *
+		 * @return void
+		 * @since 2.15.0
+		 */
+		public function maybe_preload_combine_css(): void {
+			if ( '' === $this->combine_css_preload_url ) {
+				return;
+			}
+			Util::generate_preload_link( $this->combine_css_preload_url, 'preload', 'style' );
+			$this->combine_css_preload_url = '';
 		}
 
 		/**
@@ -1453,10 +1499,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$res1 = $fs->delete( $cache_dir, true );
 			}
 
-			$min_dir = "{$this->cache_root_dir}/min";
+			// Minified JS/CSS files are blog-scoped so a network-wide clear cannot
+			// wipe other sites' assets (whose min files may embed site-specific URLs).
+			$min_dir = Util::min_cache_dir();
 
 			if ( $fs && $fs->is_dir( $min_dir ) ) {
 				$res2 = $fs->delete( $min_dir, true );
+			}
+
+			// One-time idempotent cleanup of the pre-namespacing shared directories;
+			// harmless on later clears and never touches other sites' scoped dirs.
+			$legacy_min_dirs = array(
+				Util::min_cache_base_dir() . '/css',
+				Util::min_cache_base_dir() . '/js',
+			);
+
+			foreach ( $legacy_min_dirs as $legacy_min_dir ) {
+				if ( $fs && $fs->is_dir( $legacy_min_dir ) ) {
+					$fs->delete( $legacy_min_dir, true );
+				}
 			}
 
 			Used_CSS::delete_all_used_css();

@@ -1124,9 +1124,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				if ( ! empty( $file_opts['minifyCSS'] ) ) {
 					$local_path = Util::get_local_path( $src );
 					if ( ! empty( $local_path ) ) {
-						$min_file = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min/css/' . basename( $local_path ) );
+						$min_file = Util::min_cache_dir( 'css' ) . '/' . basename( $local_path );
 						if ( file_exists( $min_file ) ) {
-							$removal_urls[ Util::cached_content_url( 'cache/wppo/min/css/' . basename( $min_file ) ) ] = true;
+							$removal_urls[ Util::min_cache_url( 'css', basename( $min_file ) ) ] = true;
 						}
 					}
 				}
