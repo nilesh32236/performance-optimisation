@@ -416,6 +416,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			foreach ( $settings as $key => $value ) {
 				$safe_key = preg_replace( '/[^a-zA-Z0-9_\-]/', '', $key );
 
+				// Skip keys that become empty after sanitization so that
+				// settings are never stored under an empty-string key.
+				if ( '' === $safe_key ) {
+					continue;
+				}
+
 				if ( is_array( $value ) ) {
 					$sanitized[ $safe_key ] = $this->sanitize_settings_recursively( $value );
 				} elseif ( is_bool( $value ) ) {
