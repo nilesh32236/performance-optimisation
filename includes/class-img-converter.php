@@ -184,15 +184,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		private function resolve_encode_quality( string $mime, int $fallback, array $size = array() ): int {
 			if ( function_exists( 'wp_get_image_encode_quality' ) ) {
 				$quality = wp_get_image_encode_quality( $mime, $size, $fallback );
-				// Guard against a null/zero result (unsupported MIME or
-				// unexpected core behavior) before casting, mirroring the flat
-				// branch below — otherwise (int) null would encode at quality 0.
-				return ( null !== $quality && $quality > 0 ) ? (int) $quality : $fallback;
+				if ( null !== $quality && $quality > 0 ) {
+					return (int) $quality;
+				}
 			}
 
 			if ( function_exists( 'wp_image_quality' ) ) {
 				$quality = wp_image_quality( $mime );
-				if ( null !== $quality ) {
+				if ( null !== $quality && $quality > 0 ) {
 					return (int) $quality;
 				}
 			}

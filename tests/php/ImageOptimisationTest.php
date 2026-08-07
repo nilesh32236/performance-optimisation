@@ -527,9 +527,23 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_img_size_cache_refreshes_lru_order(): void {
 		$this->stub_local_path_resolution();
-		Functions\when( 'file_exists' )->justReturn( true );
-		Functions\when( 'is_readable' )->justReturn( true );
-		Functions\when( 'is_file' )->justReturn( true );
+
+		// post_process_img_dimensions() guards on file_exists()/is_file() with
+		// the real filesystem (those functions are no longer Patchwork
+		// redefinable), so create the resolved files under ABSPATH that
+		// Util::get_local_path() maps each lru-N.jpg URL to.
+		$upload_dir = '/tmp/wordpress/wp-content/uploads';
+		if ( ! is_dir( $upload_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir
+			mkdir( $upload_dir, 0777, true );
+		}
+
+		$temp_files = array();
+		for ( $i = 0; $i <= 100; $i++ ) {
+			$temp_files[ $i ] = $upload_dir . '/lru-' . $i . '.jpg';
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+			file_put_contents( $temp_files[ $i ], 'not-a-real-jpeg' );
+		}
 
 		$getimagesize_calls = 0;
 		Functions\when( 'getimagesize' )->alias(
@@ -555,6 +569,15 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$reflection->setAccessible( true );
 
 		$result = $reflection->invoke( $image_opt, $buffer );
+
+		foreach ( $temp_files as $f ) {
+			if ( file_exists( $f ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Cleanup of temp fixture files.
+				unlink( $f );
+			}
+		}
+		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_system_operations_rmdir -- Cleanup of temp fixture dir.
+		@rmdir( $upload_dir );
 
 		// 100 initial reads + 1 for the 101st image. The refreshed first key
 		// must remain cached (a FIFO eviction would evict it and re-read it,

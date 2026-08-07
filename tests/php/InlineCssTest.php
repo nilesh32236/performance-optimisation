@@ -42,6 +42,7 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 */
 	protected function setUp(): void {
 		parent::setUp();
+		\Brain\Monkey\setUp();
 
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		$this->small_css_file = tempnam( sys_get_temp_dir(), 'wppo-small-' );
@@ -53,13 +54,29 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		file_put_contents( $this->large_css_file, str_repeat( 'a', 50000 ) );
 
-		Functions\when( 'is_user_logged_in' )->justReturn( false );
-		Functions\when( 'apply_filters' )->returnArg( 2 );
+		// Register common stubs first so per-test when() calls just reconfigure.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'wp_normalize_path' )->alias(
 			static function ( $path ) {
-				return str_replace( '\\', '/', (string) $path );
+				$path = str_replace( '\\', '/', (string) $path );
+				$path = preg_replace( '|(?<=.)/+|', '/', $path );
+				if ( str_starts_with( $path, '//' ) ) {
+					$path = '/' . ltrim( $path, '/' );
+				}
+				return $path;
 			}
 		);
+		Functions\when( 'WP_Filesystem' )->justReturn( false );
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'content_url' )->returnArg();
+		Functions\when( 'trailingslashit' )->returnArg();
+
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
 	}
 
 	/**
@@ -74,6 +91,7 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 			unlink( $this->large_css_file );
 		}
+		\Brain\Monkey\tearDown();
 		parent::tearDown();
 	}
 
@@ -261,15 +279,18 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
-		Functions\when( 'wp_cache_get' )->justReturn( false );
-		Functions\when( 'wp_cache_set' )->justReturn( true );
-		Functions\when( 'has_filter' )->justReturn( true );
-		Functions\when( 'content_url' )->justReturn( 'http://example.com/wp-content' );
+		Functions\when( 'content_url' )->alias(
+			static function ( $path = '' ) {
+				return 'http://example.com/wp-content' . (string) $path;
+			}
+		);
 
 		// A real, non-minified local stylesheet so Util::get_local_path() and
 		// is_css_minified() can operate on it.
 		$source_dir  = '/tmp/wordpress/wp-content/themes/t';
 		$source_file = $source_dir . '/style.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture directory.
+		mkdir( $source_dir, 0777, true );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		file_put_contents( $source_file, "body {\n\tcolor: red;\n}\n\nh1 {\n\tcolor: blue;\n}\n" );
 
@@ -300,8 +321,8 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * Test that register_combine_css_path registers path data on the combined handle.
 	 */
 	public function test_register_combine_css_path_adds_path_data(): void {
-		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
 		Functions\expect( 'wp_style_add_data' )->once()->with( 'wppo-combine-css', 'path', $this->small_css_file );
+		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
 
 		$cache = $this->make_cache();
 		$this->invoke_private( $cache, 'register_combine_css_path', array( $this->small_css_file ) );
@@ -313,8 +334,8 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * Test that register_combine_css_path is skipped when the file is missing.
 	 */
 	public function test_register_combine_css_path_skips_missing_file(): void {
-		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
 		Functions\expect( 'wp_style_add_data' )->never();
+		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
 
 		$cache = $this->make_cache();
 		$this->invoke_private( $cache, 'register_combine_css_path', array( '/tmp/does-not-exist.css' ) );
@@ -505,7 +526,7 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * registers core `path` data for inlining.
 	 */
 	public function test_minify_queued_styles_rewrites_style_and_registers_path(): void {
-		Functions\expect( 'function_exists' )->with( 'wp_maybe_inline_styles' )->once()->andReturnTrue();
+		Functions\when( 'wp_maybe_inline_styles' )->justReturn( '' );
 
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( $url, $component = -1 ) {
@@ -520,12 +541,12 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
-		Functions\when( 'wp_cache_get' )->justReturn( false );
-		Functions\when( 'wp_cache_set' )->justReturn( true );
 
 		// A real, non-minified local stylesheet that passes all eligibility checks.
 		$source_dir  = '/tmp/wordpress/wp-content/themes/t';
 		$source_file = $source_dir . '/style.css';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture directory.
+		mkdir( $source_dir, 0777, true );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		file_put_contents( $source_file, "body {\n\tcolor: red;\n}\n\nh1 {\n\tcolor: blue;\n}\n" );
 

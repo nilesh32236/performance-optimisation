@@ -371,11 +371,8 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame(
 			array(
 				'image/avif',
-				array(
-					'width'  => 64,
-					'height' => 48,
-				),
-				null,
+				array(),
+				82,
 			),
 			$captured
 		);
@@ -411,10 +408,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		// short-circuit to 'skipped'. The WP 7.1+ helper itself is left intact.
 		Functions\when( 'function_exists' )->alias(
 			static function ( $function_name ) {
-				if ( 'wp_image_quality' === $function_name ) {
-					return false;
-				}
-				return \function_exists( $function_name );
+				return 'wp_image_quality' !== $function_name;
 			}
 		);
 
@@ -433,11 +427,8 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame(
 			array(
 				'image/webp',
-				array(
-					'width'  => 64,
-					'height' => 48,
-				),
-				null,
+				array(),
+				82,
 			),
 			$captured
 		);
@@ -468,12 +459,15 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$method = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
 		$method->setAccessible( true );
 
-		$this->assertSame( 75, $method->invoke( null, 'image/webp' ) );
+		$converter = $this->make_converter();
+
+		$this->assertSame( 75, $method->invoke( $converter, 'image/webp', 82 ) );
 		$this->assertSame(
 			60,
 			$method->invoke(
-				null,
+				$converter,
 				'image/avif',
+				82,
 				array(
 					'width'  => 800,
 					'height' => 600,
@@ -482,14 +476,14 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		);
 		$this->assertSame(
 			array(
-				array( 'image/webp', array(), null ),
+				array( 'image/webp', array(), 82 ),
 				array(
 					'image/avif',
 					array(
 						'width'  => 800,
 						'height' => 600,
 					),
-					null,
+					82,
 				),
 			),
 			$calls
@@ -503,10 +497,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	public function test_resolve_encode_quality_falls_back_to_wp_image_quality(): void {
 		Functions\when( 'function_exists' )->alias(
 			static function ( $function_name ) {
-				if ( 'wp_get_image_encode_quality' === $function_name ) {
-					return false;
-				}
-				return \function_exists( $function_name );
+				return 'wp_get_image_encode_quality' !== $function_name;
 			}
 		);
 		Functions\when( 'wp_image_quality' )->justReturn( 82 );
@@ -514,8 +505,10 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$method = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
 		$method->setAccessible( true );
 
-		$this->assertSame( 82, $method->invoke( null, 'image/webp' ) );
-		$this->assertSame( 82, $method->invoke( null, 'image/avif' ) );
+		$converter = $this->make_converter();
+
+		$this->assertSame( 82, $method->invoke( $converter, 'image/webp', 40 ) );
+		$this->assertSame( 82, $method->invoke( $converter, 'image/avif', 40 ) );
 	}
 
 	/**
@@ -595,17 +588,13 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * helper and forwards the source dimensions.
 	 */
 	public function test_resolve_encode_quality_uses_size_aware_core_helper(): void {
-		Functions\expect( 'wp_get_image_encode_quality' )
-			->once()
-			->with(
-				'image/webp',
-				array(
-					'width'  => 300,
-					'height' => 200,
-				),
-				82
-			)
-			->andReturn( 65 );
+		$captured = null;
+		Functions\when( 'wp_get_image_encode_quality' )->alias(
+			static function ( $mime, $size, $default_quality ) use ( &$captured ) {
+				$captured = array( $mime, $size, $default_quality );
+				return 65;
+			}
+		);
 
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
@@ -622,6 +611,17 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 					'height' => 200,
 				)
 			)
+		);
+		$this->assertSame(
+			array(
+				'image/webp',
+				array(
+					'width'  => 300,
+					'height' => 200,
+				),
+				82,
+			),
+			$captured
 		);
 	}
 
