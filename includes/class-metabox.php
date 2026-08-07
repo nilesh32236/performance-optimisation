@@ -363,51 +363,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				}
 			}
 
-			// Process and whitelist disabled scripts.
-			$disabled_scripts = array();
-			if ( isset( $_POST['wppo_disabled_scripts'] ) && is_array( $_POST['wppo_disabled_scripts'] ) ) {
-				$submitted        = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_scripts'] ) );
-				$disabled_scripts = array_intersect( $submitted, $valid_scripts );
-			}
-			update_post_meta( $post_id, '_wppo_disabled_scripts', $disabled_scripts );
+			// Process and whitelist disabled scripts and styles.
+			$raw_scripts = $this->get_raw_post_array( 'wppo_disabled_scripts' );
+			$raw_styles  = $this->get_raw_post_array( 'wppo_disabled_styles' );
 
-			// Process and whitelist disabled styles.
-			$disabled_styles = array();
-			if ( isset( $_POST['wppo_disabled_styles'] ) && is_array( $_POST['wppo_disabled_styles'] ) ) {
-				$submitted       = array_map( 'sanitize_text_field', wp_unslash( $_POST['wppo_disabled_styles'] ) );
-				$disabled_styles = array_intersect( $submitted, $valid_styles );
-			}
-			update_post_meta( $post_id, '_wppo_disabled_styles', $disabled_styles );
+			update_post_meta( $post_id, '_wppo_disabled_scripts', $this->process_disabled_assets( $raw_scripts, $valid_scripts ) );
+			update_post_meta( $post_id, '_wppo_disabled_styles', $this->process_disabled_assets( $raw_styles, $valid_styles ) );
 
 			// Process per-page delay strategies.
-			$saved_strategies = array();
-			$raw_strategies   = isset( $_POST['wppo_delay_strategies'] ) && is_array( $_POST['wppo_delay_strategies'] ) ? wp_unslash( $_POST['wppo_delay_strategies'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			if ( ! empty( $raw_strategies ) ) {
-				$allowed_strategies = array( '', 'interaction', 'idle', 'viewport' );
-				foreach ( $raw_strategies as $handle => $strategy ) {
-					$clean_handle   = sanitize_text_field( $handle );
-					$clean_strategy = sanitize_text_field( $strategy );
-					if ( in_array( $clean_handle, $valid_scripts, true ) && in_array( $clean_strategy, $allowed_strategies, true ) && '' !== $clean_strategy ) {
-						$saved_strategies[ $clean_handle ] = $clean_strategy;
-					}
-				}
-			}
-			update_post_meta( $post_id, '_wppo_delay_strategies', $saved_strategies );
+			$raw_strategies     = $this->get_raw_post_array( 'wppo_delay_strategies' );
+			$allowed_strategies = array( '', 'interaction', 'idle', 'viewport' );
+			update_post_meta( $post_id, '_wppo_delay_strategies', $this->process_delay_setting( $raw_strategies, $valid_scripts, $allowed_strategies ) );
 
 			// Process per-page delay priorities.
-			$saved_priorities = array();
-			$raw_priorities   = isset( $_POST['wppo_delay_priorities'] ) && is_array( $_POST['wppo_delay_priorities'] ) ? wp_unslash( $_POST['wppo_delay_priorities'] ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			if ( ! empty( $raw_priorities ) ) {
-				$allowed_priorities = array( '', 'high', 'normal', 'low' );
-				foreach ( $raw_priorities as $handle => $priority ) {
-					$clean_handle   = sanitize_text_field( $handle );
-					$clean_priority = sanitize_text_field( $priority );
-					if ( in_array( $clean_handle, $valid_scripts, true ) && in_array( $clean_priority, $allowed_priorities, true ) && '' !== $clean_priority ) {
-						$saved_priorities[ $clean_handle ] = $clean_priority;
-					}
+			$raw_priorities     = $this->get_raw_post_array( 'wppo_delay_priorities' );
+			$allowed_priorities = array( '', 'high', 'normal', 'low' );
+			update_post_meta( $post_id, '_wppo_delay_priorities', $this->process_delay_setting( $raw_priorities, $valid_scripts, $allowed_priorities ) );
+		}
+
+		/**
+		 * Safely retrieves an unslashed array from $_POST if it exists and is an array.
+		 *
+		 * @param string $key The $_POST key to check.
+		 * @return array The raw unslashed array, or an empty array if invalid.
+		 * @since NEXT
+		 */
+		private function get_raw_post_array( string $key ): array {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			return isset( $_POST[ $key ] ) && is_array( $_POST[ $key ] ) ? wp_unslash( $_POST[ $key ] ) : array();
+		}
+
+		/**
+		 * Helper method to process disabled assets.
+		 *
+		 * @param array $raw_data      Raw input array from $_POST.
+		 * @param array $valid_handles Array of valid handles for the page.
+		 * @return array Sanitized and whitelisted array of disabled handles.
+		 * @since NEXT
+		 */
+		private function process_disabled_assets( array $raw_data, array $valid_handles ): array {
+			if ( empty( $raw_data ) ) {
+				return array();
+			}
+			$submitted = array_map( 'sanitize_text_field', $raw_data );
+			return array_intersect( $submitted, $valid_handles );
+		}
+
+		/**
+		 * Helper method to process associative delay settings (strategies, priorities).
+		 *
+		 * @param array $raw_data       Raw input associative array from $_POST.
+		 * @param array $valid_handles  Array of valid script handles for the page.
+		 * @param array $allowed_values Array of valid values for the setting.
+		 * @return array Sanitized and whitelisted associative array.
+		 * @since NEXT
+		 */
+		private function process_delay_setting( array $raw_data, array $valid_handles, array $allowed_values ): array {
+			if ( empty( $raw_data ) ) {
+				return array();
+			}
+
+			$saved_settings = array();
+			foreach ( $raw_data as $handle => $value ) {
+				$clean_handle = sanitize_text_field( $handle );
+				$clean_value  = sanitize_text_field( $value );
+
+				if ( in_array( $clean_handle, $valid_handles, true ) && in_array( $clean_value, $allowed_values, true ) && '' !== $clean_value ) {
+					$saved_settings[ $clean_handle ] = $clean_value;
 				}
 			}
-			update_post_meta( $post_id, '_wppo_delay_priorities', $saved_priorities );
+
+			return $saved_settings;
 		}
 	}
 }
