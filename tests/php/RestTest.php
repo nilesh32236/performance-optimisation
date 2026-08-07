@@ -139,6 +139,33 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that sanitize_settings_recursively skips keys that become empty
+	 * after sanitization (e.g. keys made only of non a-zA-Z0-9_- characters
+	 * or empty keys) so they are never stored under an empty-string key.
+	 */
+	public function test_sanitize_settings_recursively_skips_empty_keys(): void {
+		$reflection = new ReflectionMethod( $this->rest, 'sanitize_settings_recursively' );
+		$reflection->setAccessible( true );
+
+		$result = $reflection->invoke(
+			$this->rest,
+			array(
+				'@@@'        => 'x',
+				'normal_key' => 'value',
+				'nested'     => array(
+					'!!' => 'y',
+				),
+			)
+		);
+
+		$this->assertArrayNotHasKey( '', $result, 'Empty-string key must not be present at the top level' );
+		$this->assertArrayNotHasKey( '', $result['nested'], 'Empty-string key must not be present in nested arrays' );
+		$this->assertArrayHasKey( 'normal_key', $result );
+		$this->assertSame( 'value', $result['normal_key'] );
+		$this->assertSame( array(), $result['nested'] );
+	}
+
+	/**
 	 * Test that each route has a permission callback.
 	 */
 	public function test_each_route_has_permission_callback(): void {
