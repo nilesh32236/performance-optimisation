@@ -13,7 +13,7 @@
 namespace PerformanceOptimise\Inc;
 
 if ( ! defined( 'ABSPATH' ) ) {
-	die();
+	exit;
 }
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
