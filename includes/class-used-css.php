@@ -154,7 +154,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				! preg_match( '/^[a-z0-9\.\-]+$/i', $host )
 			);
 
-			$this->domain = $valid_domain ? $host : '';
+			$this->domain = $valid_domain ? strtolower( $host ) : '';
 
 			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_ROOT_DIR );
 			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_ROOT_DIR;
