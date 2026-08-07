@@ -527,6 +527,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} else {
 					$this->exclude_delay_js = $exclude_js;
 				}
+
+				// When both defer JS and delay JS are active, deferred handles must not
+				// be delay-rewritten (wppo-src / wppo/javascript) — otherwise delay JS
+				// overrides the native defer strategy on WP 6.3+ and corrupts script
+				// attributes. Merge the defer exclusions so add_defer_attribute() and
+				// apply_per_page_delay_config() skip deferred scripts entirely.
+				if ( ! empty( $this->options['file_optimisation']['deferJS'] ) ) {
+					$this->exclude_delay_js = array_merge( $this->exclude_delay_js, $this->exclude_defer_js );
+				}
+
 				$this->exclude_delay_js = apply_filters( 'wppo_exclude_delay_js', $this->exclude_delay_js );
 
 				// Parse delay strategy lists.
