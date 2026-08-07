@@ -118,8 +118,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 			}
 
-			// Return the full local path.
-			return wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) );
+			// Build the full local path and verify it stays within ABSPATH.
+			$normalized_abspath = wp_normalize_path( ABSPATH );
+			$full_path          = wp_normalize_path( ABSPATH . ltrim( $relative_path, '/' ) );
+
+			// Enforce ABSPATH prefix bounds. normalized_abspath ends with a '/', so a
+			// 0-offset prefix match guarantees the path is a descendant of ABSPATH
+			// (a sibling directory such as "/path/abspath2" cannot prefix-match).
+			if ( 0 !== strpos( $full_path, $normalized_abspath ) ) {
+				return '';
+			}
+
+			return $full_path;
 		}
 
 		/**
