@@ -30,11 +30,101 @@ if ( file_exists( $patchwork_path ) ) {
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
+// Load the object-cache drop-in template early so wp_cache_set() and friends
+// are declared as real PHP functions BEFORE any Brain Monkey test can
+// eval-declare stub versions of them. Otherwise the first test that calls
+// Functions\when('wp_cache_set') eval-declares the function, preventing
+// object-cache.php from loading later (ObjectCacheTest::setUp()).
+// Patchwork can safely redefine() real PHP functions; it cannot un-eval them.
+if ( ! function_exists( 'wp_cache_set' ) ) {
+	require_once __DIR__ . '/../../templates/object-cache.php';
+}
+
+// Provide a default in-memory object cache so the real salted cache helpers
+// (which read $GLOBALS['wp_object_cache']) do not fatal when tests touch the
+// plugin's cache-backed code paths. ObjectCacheTest replaces this with its own
+// richer stub in setUp(); every other test gets a miss-on-read store.
+// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
+if ( ! isset( $GLOBALS['wp_object_cache'] ) ) {
+	$GLOBALS['wp_object_cache'] = new class() {
+		/**
+		 * Mimics WP_Object_Cache::get() returning a cache miss.
+		 *
+		 * @param int|string $key   Cache key.
+		 * @param string     $group Cache group.
+		 * @param bool       $force Whether to force.
+		 * @param bool|null  $found Whether the value was found.
+		 * @return false
+		 */
+		public function get( $key, $group = 'default', $force = false, &$found = null ) {
+			$found = false;
+			return false;
+		}
+
+		/**
+		 * Mimics WP_Object_Cache::set() accepting any write.
+		 *
+		 * @param int|string $key    Cache key.
+		 * @param mixed      $data   Cache data.
+		 * @param string     $group  Cache group.
+		 * @param int        $expire Expiration in seconds.
+		 * @return true
+		 */
+		public function set( $key, $data, $group = 'default', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			return true;
+		}
+
+		/**
+		 * Mimics WP_Object_Cache::add() — already-present semantics.
+		 *
+		 * @param int|string $key    Cache key.
+		 * @param mixed      $data   Cache data.
+		 * @param string     $group  Cache group.
+		 * @param int        $expire Expiration in seconds.
+		 * @return true
+		 */
+		public function add( $key, $data, $group = 'default', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			return true;
+		}
+
+		/**
+		 * Mimics WP_Object_Cache::delete() accepting any delete.
+		 *
+		 * @param int|string $key   Cache key.
+		 * @param string     $group Cache group.
+		 * @return true
+		 */
+		public function delete( $key, $group = 'default' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			return true;
+		}
+
+		/**
+		 * Mimics WP_Object_Cache::flush() as a no-op.
+		 *
+		 * @return true
+		 */
+		public function flush() {
+			return true;
+		}
+
+		/**
+		 * Mimics WP_Object_Cache::add_salt() as a no-op.
+		 *
+		 * @param string $salt Salt value.
+		 * @return true
+		 */
+		public function add_salt( $salt ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return true;
+		}
+	};
+}
+// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
+
 // Suppress Patchwork internal redefinition warnings on PHP 8.5 during shutdown.
 // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Suppress Patchwork warnings on PHP 8.5
 set_error_handler(
 	static function ( $errno, $errstr ) {
-		if ( ( E_USER_WARNING === $errno || E_WARNING === $errno ) && str_contains( $errstr, 'Patchwork\Redefinitions' ) ) {
+		if ( str_contains( $errstr, 'Patchwork\Redefinitions' ) ) {
 			return true;
 		}
 		return false;
@@ -102,6 +192,41 @@ trait WPPO_Test_Bootstrap {
 	protected function setUp(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		parent::setUp();
 		\Brain\Monkey\setUp();
+
+		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
+		// PHP fatal errors when multiple test classes share one process.
+		// Brain Monkey eval-declares a PHP function on first when()/stubs()
+		// and that declaration persists for the whole process lifetime even
+		// after tearDown()/restoreAll().  By registering them here on every
+		// setUp() we guarantee the stub is created by the Brain Monkey session
+		// that owns this test, so any subsequent when() call in the test body
+		// just *reconfigures* the existing stub rather than re-declaring it.
+		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		\Brain\Monkey\Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		// phpcs:enable WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		\Brain\Monkey\Functions\when( 'wp_normalize_path' )->alias(
+			static function ( $path ) {
+				$path = str_replace( '\\', '/', (string) $path );
+				$path = preg_replace( '|(?<=.)/+|', '/', $path );
+				if ( str_starts_with( $path, '//' ) ) {
+					$path = '/' . ltrim( $path, '/' );
+				}
+				return $path;
+			}
+		);
+		\Brain\Monkey\Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		\Brain\Monkey\Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		\Brain\Monkey\Functions\when( 'WP_Filesystem' )->justReturn( false );
+		\Brain\Monkey\Functions\when( 'sanitize_text_field' )->returnArg();
+		\Brain\Monkey\Functions\when( 'wp_unslash' )->returnArg();
+		\Brain\Monkey\Functions\when( 'content_url' )->alias(
+			static function ( $path = '' ) {
+				return 'http://example.com/wp-content' . (string) $path;
+			}
+		);
+		\Brain\Monkey\Functions\when( 'trailingslashit' )->returnArg();
+		\Brain\Monkey\Functions\when( 'wp_maybe_inline_styles' )->justReturn( '' );
+		\Brain\Monkey\Functions\when( 'get_bloginfo' )->justReturn( '6.8' );
 	}
 
 	/**

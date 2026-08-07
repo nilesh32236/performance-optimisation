@@ -145,8 +145,6 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	 * @param bool      $expected Whether wp_style_add_data is expected to be called.
 	 */
 	public function test_register_combine_css_path_respects_inline_guards( array $options, ?bool $filter, bool $expected ): void {
-		require_once __DIR__ . '/stubs/minify-css-functions.php';
-
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		$temp_file = tempnam( sys_get_temp_dir(), 'wppo-combine-' );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
@@ -266,8 +264,6 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	 * current blog and never deletes the shared min root.
 	 */
 	public function test_delete_all_cache_files_scopes_min_dir_to_current_blog(): void {
-		require_once __DIR__ . '/stubs/minify-css-functions.php';
-
 		$deleted = array();
 		$fs      = \Mockery::mock();
 		$fs->shouldReceive( 'is_dir' )->andReturn( true );
