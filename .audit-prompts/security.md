@@ -26,7 +26,7 @@ You are auditing a WordPress performance plugin for security vulnerabilities. Fo
 - PageSpeed API key not exposed in JS globals accessible to non-admins
 
 ### REST API Security
-- All 16 REST endpoints require `manage_options` + nonce — verify none are missing
+- All 21 REST endpoints require `manage_options` + nonce — verify none are missing
 - Rate limiting or throttle protection for resource-intensive endpoints (image conversion, PageSpeed scan)
 - No unauthenticated endpoints that trigger heavy background jobs
 

@@ -115,6 +115,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'import_settings',
 			'database_cleanup',
 			'database_cleanup_counts',
+			'get_page_assets',
+			'image_job_status',
 			'object_cache',
 			'system_info',
 			'performance_scan',
@@ -127,6 +129,9 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'ccss_status',
 			'dismiss_welcome',
 		);
+
+		// Keep in sync with the AGENTS.md endpoint count (21).
+		$this->assertCount( 21, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
