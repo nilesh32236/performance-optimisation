@@ -1,7 +1,8 @@
-import { useState, useEffect } from '@wordpress/element';
+import { useState } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -9,12 +10,10 @@ import {
 	faEye,
 	faMagic,
 	faCloudUploadAlt,
-	faCheckCircle,
-	faExclamationTriangle,
-	faTimes,
 } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
+import NoticeBanner from './common/NoticeBanner';
 
 const CLIENT_SIDE_MIME_OPTIONS = [
 	{ value: 'image/jpeg', label: 'JPEG' },
@@ -68,14 +67,7 @@ const ImageOptimization = ( { options = {} } ) => {
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
-	const [ notification, setNotification ] = useState( null );
-
-	useEffect( () => {
-		if ( notification ) {
-			const timer = setTimeout( () => setNotification( null ), 5000 );
-			return () => clearTimeout( timer );
-		}
-	}, [ notification ] );
+	const { notice, notify, dismiss } = useNotice();
 
 	const togglePostType = ( type ) => {
 		setSettings( ( prev ) => {
@@ -127,7 +119,7 @@ const ImageOptimization = ( { options = {} } ) => {
 			} );
 
 			if ( res.success ) {
-				setNotification( {
+				notify( {
 					type: 'success',
 					message:
 						res.message ||
@@ -135,9 +127,10 @@ const ImageOptimization = ( { options = {} } ) => {
 							'Settings saved successfully.',
 							'performance-optimisation'
 						),
+					durationMs: 5000,
 				} );
 			} else {
-				setNotification( {
+				notify( {
 					type: 'error',
 					message:
 						res.message ||
@@ -145,14 +138,16 @@ const ImageOptimization = ( { options = {} } ) => {
 							'Error saving settings.',
 							'performance-optimisation'
 						),
+					durationMs: 5000,
 				} );
 			}
 		} catch ( error ) {
-			setNotification( {
+			notify( {
 				type: 'error',
 				message:
 					error.message ||
 					__( 'Error saving settings.', 'performance-optimisation' ),
+				durationMs: 5000,
 			} );
 		} finally {
 			setIsLoading( false );
@@ -180,34 +175,12 @@ const ImageOptimization = ( { options = {} } ) => {
 				}
 			/>
 
-			{ notification && (
-				<div
-					className={ `wppo-notice wppo-notice--${ notification.type }` }
-					role="alert"
-					aria-live="polite"
-				>
-					<div className="wppo-notice__content">
-						<FontAwesomeIcon
-							icon={
-								notification.type === 'success'
-									? faCheckCircle
-									: faExclamationTriangle
-							}
-						/>
-						<span>{ notification.message }</span>
-					</div>
-					<button
-						className="wppo-notice__dismiss"
-						type="button"
-						onClick={ () => setNotification( null ) }
-						aria-label={ __(
-							'Dismiss',
-							'performance-optimisation'
-						) }
-					>
-						<FontAwesomeIcon icon={ faTimes } />
-					</button>
-				</div>
+			{ notice && (
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
 			) }
 
 			<div className="wppo-stacked-cards">

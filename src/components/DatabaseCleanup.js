@@ -2,19 +2,15 @@ import { __, _n, sprintf } from '@wordpress/i18n';
 import { useState, useEffect, useCallback } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import useNotice from '../lib/useNotice';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-	faCheckCircle,
-	faExclamationTriangle,
-	faDatabase,
-	faCalendarAlt,
-	faTimes,
-} from '@fortawesome/free-solid-svg-icons';
+import { faDatabase, faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
+import NoticeBanner from './common/NoticeBanner';
 
 const CLEANUP_TYPES = [
 	{
@@ -89,7 +85,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 	const [ counts, setCounts ] = useState( {} );
 	const [ loading, setLoading ] = useState( {} );
 	const [ loadingCounts, setLoadingCounts ] = useState( true );
-	const [ notification, setNotification ] = useState( null );
+	const { notice, notify, dismiss } = useNotice();
 	const [ confirmDialog, setConfirmDialog ] = useState( {
 		isOpen: false,
 		type: null,
@@ -118,15 +114,6 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		fetchCounts();
 	}, [ fetchCounts ] );
 
-	useEffect( () => {
-		if ( notification ) {
-			const timer = setTimeout( () => {
-				setNotification( null );
-			}, 5000 );
-			return () => clearTimeout( timer );
-		}
-	}, [ notification ] );
-
 	const onSubmitSettings = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
@@ -137,20 +124,22 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				tab: 'database_cleanup',
 				settings,
 			} );
-			setNotification( {
+			notify( {
 				type: 'success',
 				message: __(
 					'Settings saved successfully.',
 					'performance-optimisation'
 				),
+				durationMs: 5000,
 			} );
 		} catch {
-			setNotification( {
+			notify( {
 				type: 'error',
 				message: __(
 					'Error saving settings.',
 					'performance-optimisation'
 				),
+				durationMs: 5000,
 			} );
 		} finally {
 			setIsSaving( false );
@@ -162,7 +151,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		try {
 			const response = await apiCall( 'database_cleanup', { type } );
 			if ( response.success ) {
-				setNotification( {
+				notify( {
 					type: 'success',
 					message: sprintf(
 						// translators: %d is the number of items removed during cleanup.
@@ -174,6 +163,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 						),
 						response.data?.deleted ?? 0
 					),
+					durationMs: 5000,
 				} );
 				fetchCounts();
 			} else {
@@ -188,19 +178,24 @@ const DatabaseCleanup = ( { options = {} } ) => {
 						' ' +
 						Object.keys( failures ).join( ', ' );
 				}
-				setNotification( { type: 'error', message: errorMsg } );
+				notify( {
+					type: 'error',
+					message: errorMsg,
+					durationMs: 5000,
+				} );
 				if ( response.data?.deleted > 0 ) {
 					fetchCounts();
 				}
 			}
 		} catch ( error ) {
 			console.error( 'Database cleanup error:', error );
-			setNotification( {
+			notify( {
 				type: 'error',
 				message: __(
 					'Error executing cleanup.',
 					'performance-optimisation'
 				),
+				durationMs: 5000,
 			} );
 		} finally {
 			setLoading( ( prev ) => ( { ...prev, [ type ]: false } ) );
@@ -233,33 +228,12 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				}
 			/>
 
-			{ notification && (
-				<div
-					className={ `wppo-notice wppo-notice--${ notification.type }` }
-					role="alert"
-					aria-live="polite"
-				>
-					<div className="wppo-notice__content">
-						<FontAwesomeIcon
-							icon={
-								notification.type === 'success'
-									? faCheckCircle
-									: faExclamationTriangle
-							}
-						/>
-						<span>{ notification.message }</span>
-					</div>
-					<button
-						className="wppo-notice__dismiss"
-						onClick={ () => setNotification( null ) }
-						aria-label={ __(
-							'Dismiss',
-							'performance-optimisation'
-						) }
-					>
-						<FontAwesomeIcon icon={ faTimes } />
-					</button>
-				</div>
+			{ notice && (
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
 			) }
 
 			<div className="wppo-stacked-cards">

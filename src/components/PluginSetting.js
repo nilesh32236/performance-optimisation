@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from '@wordpress/element';
 import { apiCall, fetchRecentActivities } from '../lib/apiRequest';
+import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -13,6 +14,7 @@ import {
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
+import NoticeBanner from './common/NoticeBanner';
 
 import { __ } from '@wordpress/i18n';
 
@@ -47,10 +49,11 @@ const validateImportData = ( data ) => {
 const PluginSetting = ( { options } ) => {
 	const [ selectedFile, setSelectedFile ] = useState( null );
 	const [ isImporting, setIsImporting ] = useState( false );
-	const [ notification, setNotification ] = useState( {
-		message: '',
-		success: false,
-	} );
+	const {
+		notice: importNotice,
+		notify: notifyImport,
+		dismiss: dismissImport,
+	} = useNotice();
 	const [ confirmImport, setConfirmImport ] = useState( false );
 	const fileInputRef = useRef( null );
 	const cancelledRef = useRef( false );
@@ -70,14 +73,15 @@ const PluginSetting = ( { options } ) => {
 
 	const [ newApiKey, setNewApiKey ] = useState( '' );
 	const [ savingApiKey, setSavingApiKey ] = useState( false );
-	const [ apiKeyNotification, setApiKeyNotification ] = useState( {
-		message: '',
-		success: false,
-	} );
+	const {
+		notice: apiKeyNotice,
+		notify: notifyApiKey,
+		dismiss: dismissApiKey,
+	} = useNotice();
 
 	const saveApiKey = async () => {
 		setSavingApiKey( true );
-		setApiKeyNotification( { message: '', success: false } );
+		dismissApiKey();
 		try {
 			const currentSettings =
 				wppoSettings?.settings?.performance_audit ?? {};
@@ -90,28 +94,28 @@ const PluginSetting = ( { options } ) => {
 			} );
 			if ( response.success ) {
 				setNewApiKey( '' );
-				setApiKeyNotification( {
+				notifyApiKey( {
+					type: 'success',
 					message: __( 'API key saved.', 'performance-optimisation' ),
-					success: true,
 				} );
 			} else {
-				setApiKeyNotification( {
+				notifyApiKey( {
+					type: 'error',
 					message:
 						response.message ||
 						__(
 							'Failed to save API key.',
 							'performance-optimisation'
 						),
-					success: false,
 				} );
 			}
 		} catch ( err ) {
-			setApiKeyNotification( {
+			notifyApiKey( {
+				type: 'error',
 				message: __(
 					'Error saving API key.',
 					'performance-optimisation'
 				),
-				success: false,
 			} );
 			console.error( 'Save API key error:', err );
 		} finally {
@@ -175,7 +179,7 @@ const PluginSetting = ( { options } ) => {
 	const handleFileSelection = ( event ) => {
 		const file = event.target.files[ 0 ];
 		setSelectedFile( file || null );
-		setNotification( { message: '', success: false } );
+		dismissImport();
 	};
 
 	const resetFileInput = () => {
@@ -187,12 +191,12 @@ const PluginSetting = ( { options } ) => {
 
 	const importSettings = () => {
 		if ( ! selectedFile ) {
-			setNotification( {
+			notifyImport( {
+				type: 'error',
 				message: __(
 					'Please select a file first.',
 					'performance-optimisation'
 				),
-				success: false,
 			} );
 			return;
 		}
@@ -205,9 +209,9 @@ const PluginSetting = ( { options } ) => {
 			if ( cancelledRef.current ) {
 				return;
 			}
-			setNotification( {
+			notifyImport( {
+				type: 'error',
 				message: __( 'Error reading file', 'performance-optimisation' ),
-				success: false,
 			} );
 			setIsImporting( false );
 			resetFileInput();
@@ -217,9 +221,9 @@ const PluginSetting = ( { options } ) => {
 			if ( cancelledRef.current ) {
 				return;
 			}
-			setNotification( {
+			notifyImport( {
+				type: 'error',
 				message: __( 'Error reading file', 'performance-optimisation' ),
-				success: false,
 			} );
 			setIsImporting( false );
 			resetFileInput();
@@ -233,12 +237,12 @@ const PluginSetting = ( { options } ) => {
 				const fileData = JSON.parse( e.target.result );
 
 				if ( ! validateImportData( fileData ) ) {
-					setNotification( {
+					notifyImport( {
+						type: 'error',
 						message: __(
 							'Invalid settings file. The file must contain valid plugin settings.',
 							'performance-optimisation'
 						),
-						success: false,
 					} );
 					setIsImporting( false );
 					resetFileInput();
@@ -253,7 +257,8 @@ const PluginSetting = ( { options } ) => {
 						if ( cancelledRef.current ) {
 							return;
 						}
-						setNotification( {
+						notifyImport( {
+							type: data.success ? 'success' : 'error',
 							message:
 								data.message ||
 								( data.success
@@ -265,7 +270,6 @@ const PluginSetting = ( { options } ) => {
 											'Import failed',
 											'performance-optimisation'
 									  ) ),
-							success: data.success,
 						} );
 						if ( data.success ) {
 							resetFileInput();
@@ -275,12 +279,12 @@ const PluginSetting = ( { options } ) => {
 						if ( cancelledRef.current ) {
 							return;
 						}
-						setNotification( {
+						notifyImport( {
+							type: 'error',
 							message: __(
 								'Error reading file',
 								'performance-optimisation'
 							),
-							success: false,
 						} );
 					} )
 					.finally( () => {
@@ -292,12 +296,12 @@ const PluginSetting = ( { options } ) => {
 				if ( cancelledRef.current ) {
 					return;
 				}
-				setNotification( {
+				notifyImport( {
+					type: 'error',
 					message: __(
 						'Invalid file format. Please select a valid JSON file.',
 						'performance-optimisation'
 					),
-					success: false,
 				} );
 				setIsImporting( false );
 			}
@@ -315,23 +319,11 @@ const PluginSetting = ( { options } ) => {
 				) }
 			/>
 
-			{ notification.message && (
-				<div
-					className={ `wppo-notice wppo-notice--${
-						notification.success ? 'success' : 'error'
-					}` }
-					role="alert"
-					aria-live="polite"
-				>
-					<FontAwesomeIcon
-						icon={
-							notification.success
-								? faCheckCircle
-								: faExclamationCircle
-						}
-					/>
-					<span>{ notification.message }</span>
-				</div>
+			{ importNotice && (
+				<NoticeBanner
+					type={ importNotice.type }
+					message={ importNotice.message }
+				/>
 			) }
 
 			<div className="wppo-stacked-cards">
@@ -493,25 +485,12 @@ const PluginSetting = ( { options } ) => {
 							  ) }
 					</div>
 
-					{ apiKeyNotification.message && (
-						<div
-							className={ `wppo-notice wppo-notice--${
-								apiKeyNotification.success ? 'success' : 'error'
-							}` }
-							style={ { marginBottom: '16px' } }
-							role="alert"
-							aria-live="polite"
-						>
-							<FontAwesomeIcon
-								icon={
-									apiKeyNotification.success
-										? faCheckCircle
-										: faExclamationCircle
-								}
-								style={ { marginRight: '8px' } }
-							/>
-							{ apiKeyNotification.message }
-						</div>
+					{ apiKeyNotice && (
+						<NoticeBanner
+							type={ apiKeyNotice.type }
+							message={ apiKeyNotice.message }
+							className="wppo-mb-16"
+						/>
 					) }
 
 					<div className="wppo-field">

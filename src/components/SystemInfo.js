@@ -10,8 +10,10 @@
 
 import { useState, memo } from '@wordpress/element';
 import { fetchSystemInfo } from '../lib/apiRequest';
+import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import NoticeBanner from './common/NoticeBanner';
 
 import { __ } from '@wordpress/i18n';
 
@@ -68,11 +70,11 @@ const SystemInfo = () => {
 	const [ info, setInfo ] = useState( null );
 	const [ loading, setLoading ] = useState( false );
 	const [ loaded, setLoaded ] = useState( false );
-	const [ error, setError ] = useState( null );
+	const { notice, notify, dismiss } = useNotice();
 
 	const handleLoad = async () => {
 		setLoading( true );
-		setError( null );
+		dismiss();
 
 		try {
 			const response = await fetchSystemInfo();
@@ -80,21 +82,24 @@ const SystemInfo = () => {
 				setInfo( response.data );
 				setLoaded( true );
 			} else {
-				setError(
-					response.message ||
+				notify( {
+					type: 'error',
+					message:
+						response.message ||
 						__(
 							'Failed to fetch system info. Please try again.',
 							'performance-optimisation'
-						)
-				);
+						),
+				} );
 			}
 		} catch ( err ) {
-			setError(
-				__(
+			notify( {
+				type: 'error',
+				message: __(
 					'Failed to fetch system info. Please try again.',
 					'performance-optimisation'
-				)
-			);
+				),
+			} );
 			console.error( 'System info fetch error:', err );
 		} finally {
 			setLoading( false );
@@ -109,7 +114,7 @@ const SystemInfo = () => {
 					loaded ? 'wppo-sysinfo-trigger--compact' : ''
 				}` }
 			>
-				{ ! loaded && ! error && (
+				{ ! loaded && ! notice && (
 					<p className="wppo-sysinfo-trigger__desc">
 						{ __(
 							'View PHP, database, WordPress, and server environment details.',
@@ -138,14 +143,8 @@ const SystemInfo = () => {
 			</div>
 
 			{ /* Error state */ }
-			{ error && (
-				<div
-					className="wppo-notice wppo-notice--error"
-					role="alert"
-					aria-live="assertive"
-				>
-					{ error }
-				</div>
+			{ notice && (
+				<NoticeBanner type={ notice.type } message={ notice.message } />
 			) }
 
 			{ /* Results — two-column grid of tables */ }
