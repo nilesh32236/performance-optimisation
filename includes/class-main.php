@@ -265,7 +265,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * When enableLoggedInCache is on, optimisations run even for logged-in users
 		 * so the cached page includes all improvements.
 		 *
-		 * @since 2.8.0
+		 * @since 1.9.0
 		 * @return bool True if optimisations may run for the current user.
 		 */
 		private function should_optimise_for_logged_in(): bool {
@@ -277,7 +277,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Get editable role names keyed by slug for the JS role selector.
 		 *
-		 * @since 2.8.0
+		 * @since 1.9.0
 		 * @return array<string, string>
 		 */
 		private function get_editable_role_names(): array {
@@ -296,7 +296,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Set a wppo_role_hash cookie for the current logged-in user so the
 		 * advanced-cache.php drop-in can serve role-specific cache variants.
 		 *
-		 * @since 2.8.0
+		 * @since 1.9.0
 		 * @return void
 		 */
 		public function set_role_hash_cookie(): void {
@@ -318,7 +318,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Clear the wppo_role_hash cookie on logout.
 		 *
-		 * @since 2.8.0
+		 * @since 1.9.0
 		 * @return void
 		 */
 		public function clear_role_hash_cookie(): void {
@@ -757,7 +757,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * the stored plugin version has reached the migration floor.
 		 *
 		 * @return void
-		 * @since 1.8.1
+		 * @since 1.9.0
 		 */
 		public function maybe_run_upgrades(): void {
 			if ( ! current_user_can( 'manage_options' ) ) {
@@ -777,7 +777,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param object $upgrader   The upgrader instance (unused).
 		 * @param array  $hook_extra Extra arguments passed to the hook.
 		 * @return void
-		 * @since 1.8.1
+		 * @since 1.9.0
 		 */
 		public function maybe_schedule_upgrade_routine( $upgrader, $hook_extra ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			if ( empty( $hook_extra ) || ! is_array( $hook_extra ) ) {
@@ -984,7 +984,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param \WP_Post $post    Post object.
 		 * @param bool     $update  Whether this is an existing post being updated.
 		 * @return void
-		 * @since 2.6.0
+		 * @since 1.9.0
 		 */
 		public function on_save_post_queue_used_css( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
@@ -1015,7 +1015,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param string $filtered_output The filtered output from previous callbacks.
 		 * @param string $output          The raw output buffer content.
 		 * @return string The processed output.
-		 * @since 2.6.0
+		 * @since 1.9.0
 		 */
 		public function process_used_css_only( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
@@ -1107,7 +1107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Start output buffer for used-CSS (legacy path, WP &lt; 6.9).
 		 *
 		 * @return void
-		 * @since 2.6.0
+		 * @since 1.9.0
 		 */
 		public function start_used_css_buffer() {
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
@@ -1126,7 +1126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * non-HTML (feeds, robots, AJAX, REST), or the user is not eligible.
 		 *
 		 * @return void
-		 * @since 2.15.0
+		 * @since 1.9.0
 		 */
 		public function start_lcp_priority_buffer() {
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
@@ -1143,7 +1143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * @param string $buffer The output buffer content.
 		 * @return string The processed buffer.
-		 * @since 2.6.0
+		 * @since 1.9.0
 		 */
 		public function process_used_css_capture( $buffer ) {
 			if ( empty( $buffer ) ) {
@@ -1650,7 +1650,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * wp_script_add_data(), so this legacy fallback is only registered on older
 		 * core (WP 6.2) where the native strategy is silently ignored.
 		 *
-		 * @since 1.8.0
+		 * @since 1.9.0
 		 *
 		 * @param  string $tag    The script tag HTML.
 		 * @param  string $handle The script's registered handle.
@@ -1684,7 +1684,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * URL metacharacters are escaped via preg_quote() so the pattern is matched
 		 * literally. Empty patterns are ignored so regex construction stays valid.
 		 *
-		 * @since 3.8.0
+		 * @since 1.9.0
 		 *
 		 * @param string $handle  The script handle.
 		 * @param string $pattern The configured pattern (handle or URL).
@@ -1702,7 +1702,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Checks idle list, viewport list, and then falls back to default strategy.
 		 *
-		 * @since 3.8.0
+		 * @since 1.9.0
 		 *
 		 * @param string $handle The script handle.
 		 * @return string The strategy: 'interaction', 'idle', or 'viewport'.
@@ -1731,7 +1731,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Get the delay priority for a given script handle.
 		 *
-		 * @since 3.8.0
+		 * @since 1.9.0
 		 *
 		 * @param string $handle The script handle.
 		 * @return string The priority: 'high', 'normal', or 'low'.
@@ -1755,7 +1755,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Runs at `wp` hook to merge per-page strategy/priority overrides into the
 		 * global delay lists before the `script_loader_tag` filter fires.
 		 *
-		 * @since 3.8.0
+		 * @since 1.9.0
 		 *
 		 * @return void
 		 */
@@ -1809,7 +1809,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Pre-6.9 fallback only: on WP 6.9+ the native fetchpriority arg passed via
 		 * wp_script_add_data() in add_defer_strategy() is rendered by core.
 		 *
-		 * @since 2.4.0
+		 * @since 1.9.0
 		 *
 		 * @param  string $tag    The script tag HTML.
 		 * @param  string $handle The script's registered handle.
@@ -1884,7 +1884,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * priority 2, so they render after the plugin's priority-1 preload
 		 * links (browser hint order is not significant).
 		 *
-		 * @since 2.13.1
+		 * @since 1.9.0
 		 *
 		 * @param array  $urls          URLs to print for resource hints.
 		 * @param string $relation_type The relation type (e.g. 'preconnect', 'dns-prefetch').
@@ -1936,7 +1936,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Enhances eagerness when static cache is active and excludes sensitive/dynamic paths
 		 * (login, admin, REST API) from all speculation.
 		 *
-		 * @since 2.2.0
+		 * @since 1.9.0
 		 *
 		 * @return void
 		 */
@@ -2384,7 +2384,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Shared between admin and frontend to ensure consistent wppoObject data.
 		 *
-		 * @since 2.5.0
+		 * @since 1.9.0
 		 *
 		 * @return void
 		 */
