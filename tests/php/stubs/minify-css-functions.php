@@ -12,7 +12,7 @@
  * @package PerformanceOptimise\Tests
  */
 
-// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound, WordPress.WP.GlobalVariablesOverride.Prohibited
+// phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound, WordPress.WP.GlobalVariablesOverride.Prohibited, WordPress.NamingConventions.ValidFunctionName.FunctionNameInvalid, Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 
 if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
 	/**

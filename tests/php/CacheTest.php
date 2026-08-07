@@ -118,19 +118,19 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	public static function data_provider_register_combine_css_path(): array {
 		return array(
 			'removeUnusedCSS enabled disables inlining' => array(
-				'options'   => array( 'file_optimisation' => array( 'removeUnusedCSS' => true ) ),
-				'filter'    => null,
-				'expected'  => false,
+				'options'  => array( 'file_optimisation' => array( 'removeUnusedCSS' => true ) ),
+				'filter'   => null,
+				'expected' => false,
 			),
 			'opt-out filter disables inlining'          => array(
-				'options'   => array( 'file_optimisation' => array() ),
-				'filter'    => false,
-				'expected'  => false,
+				'options'  => array( 'file_optimisation' => array() ),
+				'filter'   => false,
+				'expected' => false,
 			),
 			'default enables inlining'                  => array(
-				'options'   => array( 'file_optimisation' => array() ),
-				'filter'    => true,
-				'expected'  => true,
+				'options'  => array( 'file_optimisation' => array() ),
+				'filter'   => true,
+				'expected' => true,
 			),
 		);
 	}
@@ -185,11 +185,11 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public static function data_provider_get_styles_inline_limit(): array {
 		return array(
-			'WP 6.8 defaults to 20KB'     => array( '6.8', false, 20000 ),
-			'WP 6.9 defaults to 40KB'     => array( '6.9', false, 40000 ),
-			'WP 7.0 defaults to 40KB'     => array( '7.0', false, 40000 ),
+			'WP 6.8 defaults to 20KB'          => array( '6.8', false, 20000 ),
+			'WP 6.9 defaults to 40KB'          => array( '6.9', false, 40000 ),
+			'WP 7.0 defaults to 40KB'          => array( '7.0', false, 40000 ),
 			'unknown version defaults to 40KB' => array( '', false, 40000 ),
-			'filter override wins'        => array( '7.0', true, 50000 ),
+			'filter override wins'             => array( '7.0', true, 50000 ),
 		);
 	}
 
@@ -272,7 +272,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		$fs      = \Mockery::mock();
 		$fs->shouldReceive( 'is_dir' )->andReturn( true );
 		$fs->shouldReceive( 'delete' )->andReturnUsing(
-			static function ( $path, $recursive = true ) use ( &$deleted ) {
+			static function ( $path ) use ( &$deleted ) {
 				$deleted[] = $path;
 				return true;
 			}
