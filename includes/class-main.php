@@ -1481,9 +1481,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Safely retrieve and sanitize the current URL.
 				$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 				$base_path   = wp_parse_url( home_url(), PHP_URL_PATH ) ?? '';
-				$parsed_uri  = ( '' !== $base_path && 0 === strpos( $request_uri, $base_path ) )
-					? substr( $request_uri, strlen( $base_path ) )
-					: $request_uri;
+				$parsed_uri  = $request_uri;
+
+				if ( '' !== $base_path && '/' !== $base_path && 0 === strpos( $request_uri, $base_path ) ) {
+					// Only strip the base path when it forms a real path boundary
+					// (followed by '/', '?', or the end of the URI). This prevents
+					// /blogger from being mangled when the install base is /blog.
+					$next_char = substr( $request_uri, strlen( $base_path ), 1 );
+					if ( '' === $next_char || '/' === $next_char || '?' === $next_char ) {
+						$parsed_uri = substr( $request_uri, strlen( $base_path ) );
+					}
+				}
 				$current_url = home_url( sanitize_text_field( $parsed_uri ) );
 
 				foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {

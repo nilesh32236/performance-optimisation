@@ -122,8 +122,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				return false;
 			}
 
-			$site_url         = home_url();
-			$site_url_escaped = str_replace( "'", "\'", $site_url );
+			$site_url = home_url();
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export -- var_export produces a correctly escaped single-quoted PHP literal for the generated drop-in.
+			$site_url_escaped = var_export( $site_url, true );
 			$cookie_hash      = defined( 'COOKIEHASH' ) ? COOKIEHASH : md5( $site_url );
 
 			$handler_code = '<?php' . PHP_EOL .
@@ -132,7 +133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	exit;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
-			'$site_url       = \'' . $site_url_escaped . '\';' . PHP_EOL .
+			'$site_url       = ' . $site_url_escaped . ';' . PHP_EOL .
 			'$root_directory = $_SERVER[\'DOCUMENT_ROOT\'];' . PHP_EOL .
 			'$raw_domain    = isset( $_SERVER[\'HTTP_HOST\'] ) ? (string) $_SERVER[\'HTTP_HOST\'] : \'\';' . PHP_EOL .
 			'$site_domain   = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $raw_domain ) );' . PHP_EOL .
