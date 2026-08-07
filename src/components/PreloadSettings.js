@@ -2,6 +2,7 @@ import { __ } from '@wordpress/i18n';
 import { useState } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import useNotice from '../lib/useNotification';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -13,6 +14,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
+import NoticeBanner from './common/NoticeBanner';
 
 const PreloadSettings = ( { options = {} } ) => {
 	const defaultSettings = {
@@ -35,17 +37,13 @@ const PreloadSettings = ( { options = {} } ) => {
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
-	const [ notification, setNotification ] = useState( {
-		message: '',
-		success: false,
-	} );
+	const { notice, notify, dismiss } = useNotice();
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
 		setIsLoading( true );
-		setNotification( { message: '', success: false } );
 
 		try {
 			const res = await apiCall( 'update_settings', {
@@ -54,34 +52,34 @@ const PreloadSettings = ( { options = {} } ) => {
 			} );
 
 			if ( res.success ) {
-				setNotification( {
+				notify( {
+					type: 'success',
 					message:
 						res.message ||
 						__(
 							'Settings updated successfully.',
 							'performance-optimisation'
 						),
-					success: true,
 				} );
 			} else {
-				setNotification( {
+				notify( {
+					type: 'error',
 					message:
 						res.message ||
 						__(
 							'Failed to update settings.',
 							'performance-optimisation'
 						),
-					success: false,
 				} );
 			}
 		} catch ( err ) {
 			console.error( 'Failed updating preload settings', err );
-			setNotification( {
+			notify( {
+				type: 'error',
 				message: __(
 					'An unexpected error occurred.',
 					'performance-optimisation'
 				),
-				success: false,
 			} );
 		} finally {
 			setIsLoading( false );
@@ -108,15 +106,13 @@ const PreloadSettings = ( { options = {} } ) => {
 					/>
 				}
 			>
-				{ notification.message && (
-					<div
-						className={ `wppo-notice wppo-notice--${
-							notification.success ? 'success' : 'error'
-						} wppo-mb-20` }
-						role="alert"
-					>
-						<span>{ notification.message }</span>
-					</div>
+				{ notice && (
+					<NoticeBanner
+						type={ notice.type }
+						message={ notice.message }
+						onDismiss={ dismiss }
+						className="wppo-mb-20"
+					/>
 				) }
 			</FeatureHeader>
 

@@ -1,6 +1,7 @@
 import { useState, useEffect, useId } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import useNotice from '../lib/useNotification';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faBroom,
@@ -15,6 +16,7 @@ import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
+import NoticeBanner from './common/NoticeBanner';
 
 import { __ } from '@wordpress/i18n';
 
@@ -45,7 +47,11 @@ const ObjectCache = ( { options = {} } ) => {
 		statusLoaded: false,
 		supported_compressors: { none: true },
 	} );
-	const [ actionMsg, setActionMsg ] = useState( null );
+	const {
+		notice: actionMsg,
+		notify: setActionMsg,
+		dismiss: dismissActionMsg,
+	} = useNotice();
 
 	useEffect( () => {
 		fetchStatus();
@@ -61,7 +67,7 @@ const ObjectCache = ( { options = {} } ) => {
 			console.error( 'Error fetching cache status', error );
 			setActionMsg( {
 				type: 'error',
-				text: __(
+				message: __(
 					'Failed to check cache status.',
 					'performance-optimisation'
 				),
@@ -74,7 +80,7 @@ const ObjectCache = ( { options = {} } ) => {
 			e.preventDefault();
 		}
 		setIsLoading( true );
-		setActionMsg( null );
+		dismissActionMsg();
 
 		try {
 			const res = await apiCall( 'update_settings', {
@@ -84,7 +90,7 @@ const ObjectCache = ( { options = {} } ) => {
 			if ( res.success ) {
 				setActionMsg( {
 					type: 'success',
-					text: __(
+					message: __(
 						'Settings saved successfully.',
 						'performance-optimisation'
 					),
@@ -92,7 +98,7 @@ const ObjectCache = ( { options = {} } ) => {
 			} else {
 				setActionMsg( {
 					type: 'error',
-					text:
+					message:
 						res.message ||
 						__(
 							'Error saving settings.',
@@ -103,7 +109,7 @@ const ObjectCache = ( { options = {} } ) => {
 		} catch ( err ) {
 			setActionMsg( {
 				type: 'error',
-				text: __(
+				message: __(
 					'Error saving settings.',
 					'performance-optimisation'
 				),
@@ -116,7 +122,7 @@ const ObjectCache = ( { options = {} } ) => {
 
 	const handleAction = async ( action ) => {
 		setIsActionLoading( true );
-		setActionMsg( null );
+		dismissActionMsg();
 		try {
 			const credentialsRequired = [
 				'enable',
@@ -135,7 +141,7 @@ const ObjectCache = ( { options = {} } ) => {
 			if ( ! res?.success ) {
 				setActionMsg( {
 					type: 'error',
-					text:
+					message:
 						res?.message ||
 						__( 'Action failed.', 'performance-optimisation' ),
 				} );
@@ -147,7 +153,7 @@ const ObjectCache = ( { options = {} } ) => {
 			}
 			setActionMsg( {
 				type: 'success',
-				text:
+				message:
 					res.message ||
 					__( 'Action successful.', 'performance-optimisation' ),
 			} );
@@ -243,19 +249,10 @@ const ObjectCache = ( { options = {} } ) => {
 			/>
 
 			{ actionMsg && (
-				<div
-					className={ `wppo-notice wppo-notice--${ actionMsg.type }` }
-					role="alert"
-				>
-					<FontAwesomeIcon
-						icon={
-							actionMsg.type === 'success'
-								? faCheckCircle
-								: faExclamationCircle
-						}
-					/>
-					<span>{ actionMsg.text }</span>
-				</div>
+				<NoticeBanner
+					type={ actionMsg.type }
+					message={ actionMsg.message }
+				/>
 			) }
 
 			<div className="wppo-notices-container">

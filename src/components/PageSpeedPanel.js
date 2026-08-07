@@ -24,8 +24,10 @@ import {
 	faDesktop,
 } from '@fortawesome/free-solid-svg-icons';
 import { queuePagespeedScan, getPagespeedResults } from '../lib/apiRequest';
+import useNotice from '../lib/useNotification';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
+import NoticeBanner from './common/NoticeBanner';
 
 import { __ } from '@wordpress/i18n';
 
@@ -114,7 +116,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	const [ scanning, setScanning ] = useState( false );
 	const [ pending, setPending ] = useState( false );
 	const [ result, setResult ] = useState( null );
-	const [ error, setError ] = useState( null );
+	const { notice, notify, dismiss } = useNotice();
 	const [ strategy, setStrategy ] = useState( 'mobile' );
 	const pollRef = useRef( null );
 	const pollCountRef = useRef( 0 );
@@ -153,12 +155,13 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					stopPolling();
 					setPending( false );
 					setScanning( false );
-					setError(
-						__(
+					notify( {
+						type: 'error',
+						message: __(
 							'PageSpeed scan timed out. Please try again.',
 							'performance-optimisation'
-						)
-					);
+						),
+					} );
 					return;
 				}
 
@@ -172,13 +175,15 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						stopPolling();
 						setPending( false );
 						setScanning( false );
-						setError(
-							response.message ||
+						notify( {
+							type: 'error',
+							message:
+								response.message ||
 								__(
 									'PageSpeed scan failed. Please try again.',
 									'performance-optimisation'
-								)
-						);
+								),
+						} );
 						return;
 					}
 
@@ -209,18 +214,19 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					stopPolling();
 					setPending( false );
 					setScanning( false );
-					setError(
-						__(
+					notify( {
+						type: 'error',
+						message: __(
 							'PageSpeed scan failed.',
 							'performance-optimisation'
-						)
-					);
+						),
+					} );
 					console.error( 'PageSpeed poll error:', err );
 				}
 			};
 			pollRef.current = setTimeout( poll, POLL_INTERVAL_MS );
 		},
-		[ stopPolling, onSuggestionsReady ]
+		[ stopPolling, onSuggestionsReady, notify ]
 	);
 
 	const handleScan = useCallback( async () => {
@@ -233,7 +239,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 		setScanning( true );
 		setPending( false );
 		setResult( null );
-		setError( null );
+		dismiss();
 
 		try {
 			const response = await queuePagespeedScan( url, strategy );
@@ -241,13 +247,15 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			if ( ! response.success ) {
 				setScanning( false );
 				submittingRef.current = false;
-				setError(
-					response.message ||
+				notify( {
+					type: 'error',
+					message:
+						response.message ||
 						__(
 							'PageSpeed scan failed. Please try again.',
 							'performance-optimisation'
-						)
-				);
+						),
+				} );
 				return;
 			}
 
@@ -258,12 +266,25 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 		} catch ( err ) {
 			setScanning( false );
 			submittingRef.current = false;
-			setError(
-				__( 'PageSpeed scan failed.', 'performance-optimisation' )
-			);
+			notify( {
+				type: 'error',
+				message: __(
+					'PageSpeed scan failed.',
+					'performance-optimisation'
+				),
+			} );
 			console.error( 'PageSpeed scan error:', err );
 		}
-	}, [ url, strategy, stopPolling, pollForResults, scanning, pending ] );
+	}, [
+		url,
+		strategy,
+		stopPolling,
+		pollForResults,
+		scanning,
+		pending,
+		dismiss,
+		notify,
+	] );
 
 	const vitalsLabels = {
 		fcp: __( 'First Contentful Paint', 'performance-optimisation' ),
@@ -379,14 +400,8 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 			) }
 
 			{ /* Error notice */ }
-			{ error && (
-				<div
-					className="wppo-notice wppo-notice--error"
-					role="alert"
-					aria-live="assertive"
-				>
-					{ error }
-				</div>
+			{ notice && (
+				<NoticeBanner type="error" message={ notice.message } />
 			) }
 
 			{ /* Results */ }

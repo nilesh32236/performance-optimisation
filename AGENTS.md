@@ -53,6 +53,12 @@ npm run start                # dev watch mode
 - `apiCall('update_settings')` mutates `wppoSettings.settings` globally on success
 - API calls use `src/lib/apiRequest.js` (centralized `apiCall()` function)
 
+**Notification/error feedback** — use the shared pattern instead of hand-rolling per-component state:
+- `useNotice()` hook in `src/lib/useNotification.js` returns `{ notice, notify, dismiss }`. `notice` is `{ type, message }` (type ∈ `success|error|warning|info`) or `null`. `notify( { type, message, durationMs } )` sets it and optionally auto-dismisses after `durationMs` (falls back to the hook's `autoDismissMs` option, `0` = no auto-dismiss). The pending timer is cleared on `dismiss()` and on unmount.
+- `NoticeBanner` presentational component in `src/components/common/NoticeBanner.js` renders the `.wppo-notice wppo-notice--{type}` markup (reuses `_notices.scss`), sets `role="alert"` + `aria-live` (`assertive` for `error`, `polite` otherwise), and renders a dismiss button when `onDismiss` is passed.
+- Example: `const { notice, notify, dismiss } = useNotice( { autoDismissMs: 3000 } );` then render `{ notice && <NoticeBanner type={ notice.type } message={ notice.message } onDismiss={ dismiss } /> }`.
+- `Dashboard.js`'s SR-only `announcement` live region is intentionally separate; do not convert it.
+
 ### Component tree
 
 ```

@@ -18,10 +18,12 @@ import {
 	faLightbulb,
 } from '@fortawesome/free-solid-svg-icons';
 import { runPerformanceScan, fetchSuggestions } from '../lib/apiRequest';
+import useNotice from '../lib/useNotification';
 import FeatureCard from './common/FeatureCard';
 import StatusBadge from './common/StatusBadge';
 import Tooltip from './common/Tooltip';
 import SwitchField from './common/SwitchField';
+import NoticeBanner from './common/NoticeBanner';
 
 import { __ } from '@wordpress/i18n';
 
@@ -217,7 +219,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 	const [ url, setUrl ] = useState( homeUrl );
 	const [ scanning, setScanning ] = useState( false );
 	const [ result, setResult ] = useState( null );
-	const [ error, setError ] = useState( null );
+	const { notice, notify, dismiss } = useNotice();
 	const [ devMode, setDevMode ] = useState( false );
 	const submittingRef = useRef( false );
 	const abortControllerRef = useRef( null );
@@ -243,7 +245,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 			e.preventDefault();
 		}
 		setScanning( true );
-		setError( null );
+		dismiss();
 		setResult( null );
 
 		if ( abortControllerRef.current ) {
@@ -266,24 +268,27 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 					onUrlChange( url );
 				}
 			} else {
-				setError(
-					response.message ||
+				notify( {
+					type: 'error',
+					message:
+						response.message ||
 						__(
 							'Scan failed. Please try again.',
 							'performance-optimisation'
-						)
-				);
+						),
+				} );
 			}
 		} catch ( err ) {
 			if ( abortController.signal.aborted ) {
 				return;
 			}
-			setError(
-				__(
+			notify( {
+				type: 'error',
+				message: __(
 					'Scan failed. Please try again.',
 					'performance-optimisation'
-				)
-			);
+				),
+			} );
 			console.error( 'Performance scan error:', err );
 		} finally {
 			submittingRef.current = false;
@@ -377,8 +382,8 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 				</div>
 			</form>
 
-			{ error && (
-				<div className="wppo-notice wppo-notice--error">{ error }</div>
+			{ notice && (
+				<NoticeBanner type="error" message={ notice.message } />
 			) }
 
 			{ result && (

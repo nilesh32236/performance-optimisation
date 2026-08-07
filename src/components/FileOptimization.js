@@ -1,7 +1,8 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useRef, useEffect } from '@wordpress/element';
+import { useState, useRef } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import useNotice from '../lib/useNotification';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faCode,
@@ -10,7 +11,6 @@ import {
 	faServer,
 	faShieldAlt,
 	faExclamationTriangle,
-	faCheckCircle,
 	faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
 import Tooltip from './common/Tooltip';
@@ -18,6 +18,7 @@ import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
+import NoticeBanner from './common/NoticeBanner';
 
 import CriticalCssPanel from './CriticalCssPanel';
 
@@ -76,11 +77,7 @@ const FileOptimization = ( {
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
-	const [ notification, setNotification ] = useState( {
-		message: '',
-		success: false,
-	} );
-	const notificationTimer = useRef( null );
+	const { notice, notify, dismiss } = useNotice( { autoDismissMs: 3000 } );
 
 	const withNotification = async (
 		apiCallPromise,
@@ -88,41 +85,31 @@ const FileOptimization = ( {
 		errorMessage
 	) => {
 		setIsLoading( true );
-		setNotification( { message: '', success: false } );
-
-		// Clear any existing auto-dismiss timer to avoid stale timeout hazard.
-		if ( notificationTimer.current ) {
-			clearTimeout( notificationTimer.current );
-		}
 
 		try {
 			const res = await apiCallPromise;
 			if ( res.success ) {
-				setNotification( {
+				notify( {
+					type: 'success',
 					message: res.message || successMessage,
-					success: true,
 				} );
 			} else {
-				setNotification( {
+				notify( {
+					type: 'error',
 					message: res.message || errorMessage,
-					success: false,
 				} );
 			}
 		} catch ( err ) {
 			console.error( errorMessage, err );
-			setNotification( {
+			notify( {
+				type: 'error',
 				message: __(
 					'An unexpected error occurred.',
 					'performance-optimisation'
 				),
-				success: false,
 			} );
 		} finally {
 			setIsLoading( false );
-			notificationTimer.current = setTimeout( () => {
-				setNotification( { message: '', success: false } );
-				notificationTimer.current = null;
-			}, 3000 );
 		}
 	};
 
@@ -239,15 +226,6 @@ const FileOptimization = ( {
 		}
 	};
 
-	useEffect( () => {
-		return () => {
-			if ( notificationTimer.current ) {
-				clearTimeout( notificationTimer.current );
-				notificationTimer.current = null;
-			}
-		};
-	}, [] );
-
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
@@ -268,23 +246,13 @@ const FileOptimization = ( {
 					/>
 				}
 			>
-				{ notification.message && (
-					<div
-						className={ `wppo-notice wppo-notice--${
-							notification.success ? 'success' : 'error'
-						} wppo-mb-20` }
-						role="alert"
-						aria-live="polite"
-					>
-						<FontAwesomeIcon
-							icon={
-								notification.success
-									? faCheckCircle
-									: faExclamationTriangle
-							}
-						/>
-						<span>{ notification.message }</span>
-					</div>
+				{ notice && (
+					<NoticeBanner
+						type={ notice.type }
+						message={ notice.message }
+						onDismiss={ dismiss }
+						className="wppo-mb-20"
+					/>
 				) }
 
 				<div className="wppo-sub-tabs" role="tablist">
