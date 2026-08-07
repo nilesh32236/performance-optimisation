@@ -2257,6 +2257,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return true;
 			}
 
+			// Acquire a shared read lock to avoid reading a partially-written file.
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_flock
+			if ( ! flock( $handle, LOCK_SH ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
+				fclose( $handle );
+				return true;
+			}
+
 			$line_count  = 0;
 			$total_chars = 0;
 			$max_lines   = 50;
@@ -2271,6 +2279,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fgets
 				$line = fgets( $handle );
 			}
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_flock
+			flock( $handle, LOCK_UN );
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 			fclose( $handle );
 
