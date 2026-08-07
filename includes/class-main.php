@@ -373,11 +373,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// The native 'strategy' script data added via wp_script_add_data() is only
 			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
 			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
-			// TODO: remove the legacy fallback when minimum supported WP is raised to 6.3.
+			// TODO(#553): remove the legacy fallback when minimum supported WP is raised to 6.3.
 			$is_wp63_plus = version_compare( $wp_version, '6.3-alpha', '>=' );
 			// Pre-release-inclusive floor: '6.9-alpha' also matches alpha/beta/RC builds
 			// of 6.9 which already ship the template-enhancement buffer functions.
-			// TODO: remove the legacy buffer paths when minimum supported WP is raised to 6.9.
+			// TODO(#553): remove the legacy buffer paths when minimum supported WP is raised to 6.9.
 			$is_wp69_plus = version_compare( $wp_version, '6.9-alpha', '>=' );
 
 			// Delay JS: the script_loader_tag filter performs the wppo-src/type rewriting
@@ -417,7 +417,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this->cache, 'stash_cache' ) );
 				} else {
 					// Legacy path (deprecated) — earmarked for removal when WP 6.9+ becomes the minimum supported version.
-					// TODO: remove when minimum supported WP is raised to 6.9.
+					// TODO(#553): remove when minimum supported WP is raised to 6.9.
 					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				}
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
@@ -439,7 +439,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
 				} else {
 					// Legacy path (deprecated) — earmarked for removal when WP 6.9+ becomes the minimum supported version.
-					// TODO: remove when minimum supported WP is raised to 6.9.
+					// TODO(#553): remove when minimum supported WP is raised to 6.9.
 					add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
 				}
 			}
@@ -453,6 +453,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// Legacy path: priority 20 runs AFTER the cache buffer (default priority 10),
 					// so its inner callback runs first on the raw buffer and the cache callback
 					// then stores the LCP-enhanced HTML — mirroring the 6.9+ flow.
+					// TODO(#553): remove the legacy LCP buffer path when minimum supported WP is raised to 6.9.
 					add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 20 );
 				}
 			}
