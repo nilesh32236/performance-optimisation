@@ -130,8 +130,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'dismiss_welcome',
 		);
 
-		// Keep in sync with AGENTS.md endpoint count (21).
-		$this->assertCount( 21, $routes );
+		// Keep in sync with the AGENTS.md endpoint count (21).
+		$this->assertCount( 21, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
