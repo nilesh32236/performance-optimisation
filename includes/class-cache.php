@@ -19,7 +19,7 @@ use PerformanceOptimise\Inc\Google_Fonts;
 use MatthiasMullie\Minify\CSS as CSSMinifier;
 
 if ( ! defined( 'ABSPATH' ) ) {
-	die();
+	exit;
 }
 
 if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
