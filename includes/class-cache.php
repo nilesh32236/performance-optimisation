@@ -202,7 +202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * - Logged in + setting on + no roles selected: allowed for all logged-in.
 		 * - Logged in + setting on + roles selected: only if current user has an allowed role.
 		 *
-		 * @since 2.8.0
+		 * @since 1.9.0
 		 * @return bool True if the current user may receive a cached page.
 		 */
 		private function is_cache_allowed_for_current_user(): bool {
@@ -215,7 +215,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Compute a stable 12-char hex hash of the current user's sorted roles.
 		 * Returns empty string for visitors (no role to hash).
 		 *
-		 * @since 2.8.0
+		 * @since 1.9.0
 		 * @return string Role hash or empty string.
 		 */
 		private function get_logged_in_role_hash(): string {
@@ -1356,7 +1356,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param string $dir Directory to scan.
 		 * @return void
-		 * @since 2.8.0
+		 * @since 1.9.0
 		 */
 		private function delete_role_variant_files( string $dir ): void {
 			$fs = $this->get_filesystem();
@@ -1468,7 +1468,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Clear all CCSS files.
 		 *
 		 * @return void
-		 * @since 2.0.0
+		 * @since 1.9.0
 		 */
 		public static function clear_ccss(): void {
 			$instance = new self();
@@ -1572,7 +1572,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $directory The directory to scan.
 		 * @return int Number of index.html files found.
 		 *
-		 * @since 2.14.0
+		 * @since 1.9.0
 		 */
 		private function count_cached_pages( string $directory ): int {
 			$fs    = $this->get_filesystem();
@@ -1635,7 +1635,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * miss the legacy unsalted keys). On cores without a persistent object cache
 		 * this only flushes the in-memory cache and is harmless.
 		 *
-		 * @since 1.8.1
+		 * @since 1.9.0
 		 * @return bool True if the flush ran (or nothing needed evicting on cores
 		 *              without the WP 6.9+ salt API), false if the cache API is
 		 *              unavailable.
@@ -1661,7 +1661,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Avoids unnecessary persistent cache (Redis/Memcached) flushes when only
 		 * in-memory cached data has changed (e.g. admin UI settings).
 		 *
-		 * @since 2.1.0
+		 * @since 1.9.0
 		 *
 		 * @return bool True if the flush succeeded, false if the function is
 		 *              unavailable (WP < 6.0).

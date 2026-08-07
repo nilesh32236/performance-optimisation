@@ -83,6 +83,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			return array(
 				'<IfModule mod_deflate.c>',
 				'    # Compress HTML, CSS, JavaScript, Text, XML, and Fonts',
+'    # NOTE: WOFF2 is omitted intentionally — WOFF2 files are already pre-compressed (Brotli)',
+'    # at the binary level, so DEFLATE would add no benefit (and can bloat output).',
 				'    AddOutputFilterByType DEFLATE text/plain',
 				'    AddOutputFilterByType DEFLATE text/html',
 				'    AddOutputFilterByType DEFLATE text/xml',

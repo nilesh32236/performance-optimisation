@@ -406,5 +406,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			return false;
 		}
+
+		/**
+		 * Whether the current WordPress version supports auto-sizes for lazy-loaded images.
+		 *
+		 * Enhanced Responsive Images (Core ticket #61847) shipped in WordPress 6.7 and is
+		 * gated on the presence of wp_img_tag_add_auto_sizes() / wp_sizes_attribute_includes_valid_auto().
+		 *
+		 * @since 1.9.0
+		 * @return bool True when auto-sizes is available.
+		 */
+		public static function is_auto_sizes_available(): bool {
+			return function_exists( 'wp_sizes_attribute_includes_valid_auto' )
+				|| function_exists( 'wp_img_tag_add_auto_sizes' );
+		}
 	}
 }

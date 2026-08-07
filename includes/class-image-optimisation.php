@@ -340,7 +340,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified buffer.
 		 */
 		private function post_process_auto_sizes( string $buffer ): string {
-			if ( ! $this->is_auto_sizes_available() ) {
+			if ( ! Util::is_auto_sizes_available() ) {
 				return $buffer;
 			}
 
@@ -1105,20 +1105,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
-		 * Whether the current WordPress version supports auto-sizes for lazy-loaded images.
-		 *
-		 * Enhanced Responsive Images (Core ticket #61847) shipped in WordPress 6.7 and is
-		 * gated on the presence of wp_img_tag_add_auto_sizes() / wp_sizes_attribute_includes_valid_auto().
-		 *
-		 * @since 1.8.0
-		 * @return bool True when auto-sizes is available.
-		 */
-		private function is_auto_sizes_available(): bool {
-			return function_exists( 'wp_sizes_attribute_includes_valid_auto' )
-				|| function_exists( 'wp_img_tag_add_auto_sizes' );
-		}
-
-		/**
 		 * Whether a `sizes` value already includes the `auto` keyword.
 		 *
 		 * Uses the Core helper (WP 6.7+) when available and falls back to a regex
@@ -1169,7 +1155,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The value to store in `data-sizes`.
 		 */
 		private function prepare_auto_sizes_value( string $sizes, $tags ): string {
-			if ( ! $this->is_auto_sizes_available() || ! $this->tag_supports_auto_sizes( $tags ) ) {
+			if ( ! Util::is_auto_sizes_available() || ! $this->tag_supports_auto_sizes( $tags ) ) {
 				return $sizes;
 			}
 			if ( $this->sizes_attribute_includes_auto( $sizes ) ) {
@@ -1502,7 +1488,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						// Replace 'sizes' with 'data-sizes' if 'sizes' is present.
 						if ( preg_match( '#\bsizes=["\']([^"\']+)["\']#i', $img_tag, $sizes_matches ) ) {
 							$data_sizes = $sizes_matches[1];
-							if ( $this->is_auto_sizes_available() && ! $this->sizes_attribute_includes_auto( $data_sizes ) ) {
+							if ( Util::is_auto_sizes_available() && ! $this->sizes_attribute_includes_auto( $data_sizes ) ) {
 								$has_srcset = (bool) preg_match( '#\b(?:data-)?srcset=["\']#i', $img_tag );
 								$has_width  = (bool) preg_match( '/\bwidth=["\']\d+["\']/i', $img_tag );
 								$has_height = (bool) preg_match( '/\bheight=["\']\d+["\']/i', $img_tag );
