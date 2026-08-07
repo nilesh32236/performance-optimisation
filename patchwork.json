@@ -1,6 +1,10 @@
 {
     "redefinable-internals": [
         "function_exists",
-        "idn_to_ascii"
+        "idn_to_ascii",
+        "file_exists",
+        "is_readable",
+        "is_file",
+        "getimagesize"
     ]
 }
