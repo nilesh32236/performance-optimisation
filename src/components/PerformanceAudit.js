@@ -472,7 +472,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 							{ /* Optimizations Section */ }
 							<AuditSection
 								title={ __(
-									'Optimizations',
+									'Optimisations',
 									'performance-optimisation'
 								) }
 								icon={ faCogs }

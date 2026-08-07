@@ -16,7 +16,7 @@ describe( 'RecentActivityCard Component', () => {
 			<RecentActivityCard activities={ [] } onNavigate={ onNavigate } />
 		);
 		expect(
-			screen.getByText( /Recent Optimization Activity/i )
+			screen.getByText( /Recent Optimisation Activity/i )
 		).toBeInTheDocument();
 	} );
 
@@ -25,7 +25,7 @@ describe( 'RecentActivityCard Component', () => {
 			<RecentActivityCard activities={ [] } onNavigate={ onNavigate } />
 		);
 		expect(
-			screen.getByText( /No optimization activity recorded yet/i )
+			screen.getByText( /No optimisation activity recorded yet/i )
 		).toBeInTheDocument();
 	} );
 

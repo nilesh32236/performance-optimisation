@@ -310,7 +310,7 @@ const PluginSetting = ( { options } ) => {
 			<FeatureHeader
 				title={ __( 'Tools', 'performance-optimisation' ) }
 				description={ __(
-					'Manage your plugin configuration, view the full optimization activity log, and import or export settings.',
+					'Manage your plugin configuration, view the full optimisation activity log, and import or export settings.',
 					'performance-optimisation'
 				) }
 			/>
@@ -338,7 +338,7 @@ const PluginSetting = ( { options } ) => {
 				{ /* Activity Log */ }
 				<FeatureCard
 					title={ __(
-						'Optimization Activity Log',
+						'Optimisation Activity Log',
 						'performance-optimisation'
 					) }
 					icon={ <FontAwesomeIcon icon={ faHistory } /> }
@@ -384,7 +384,7 @@ const PluginSetting = ( { options } ) => {
 						<div className="wppo-log-trigger">
 							<p className="wppo-text-muted">
 								{ __(
-									'A full timestamped record of every cache clear, image optimization, database cleanup, and settings change performed by the plugin.',
+									'A full timestamped record of every cache clear, image optimisation, database cleanup, and settings change performed by the plugin.',
 									'performance-optimisation'
 								) }
 							</p>

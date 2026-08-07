@@ -898,7 +898,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					add_action(
 						'admin_notices',
 						function () {
-							echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Performance Optimization: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
+							echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
 						}
 					);
 				}

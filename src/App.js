@@ -108,7 +108,7 @@ const App = () => {
 			{
 				name: 'fileOptimization',
 				icon: faFileCode,
-				label: __( 'File Optimization', 'performance-optimisation' ),
+				label: __( 'File Optimisation', 'performance-optimisation' ),
 			},
 			{
 				name: 'preload',
@@ -118,7 +118,7 @@ const App = () => {
 			{
 				name: 'imageOptimization',
 				icon: faImages,
-				label: __( 'Image Optimization', 'performance-optimisation' ),
+				label: __( 'Image Optimisation', 'performance-optimisation' ),
 			},
 			{
 				name: 'databaseCleanup',

@@ -36,7 +36,7 @@ describe( 'FileOptimization Component', () => {
 		expect(
 			screen.getByRole( 'tab', { name: /Scripts/i } )
 		).toBeInTheDocument();
-		expect( screen.getByText( 'CSS Optimization' ) ).toBeInTheDocument(); // Within assets tab
+		expect( screen.getByText( 'CSS Optimisation' ) ).toBeInTheDocument(); // Within assets tab
 	} );
 
 	it( 'updates form state when switch is toggled', () => {

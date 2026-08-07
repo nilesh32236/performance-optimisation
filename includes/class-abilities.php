@@ -118,7 +118,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					'args' => array_merge(
 						$base_args,
 						array(
-							'label'            => __( 'Image Optimization', 'performance-optimisation' ),
+							'label'            => __( 'Image Optimisation', 'performance-optimisation' ),
 							'description'      => __( 'WebP/AVIF conversion, lazy loading, responsive images.', 'performance-optimisation' ),
 							'execute_callback' => array( __CLASS__, 'can_image_optimization' ),
 						)
@@ -140,7 +140,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					'args' => array_merge(
 						$base_args,
 						array(
-							'label'            => __( 'JS Optimization', 'performance-optimisation' ),
+							'label'            => __( 'JS Optimisation', 'performance-optimisation' ),
 							'description'      => __( 'Minify, defer, and delay JavaScript.', 'performance-optimisation' ),
 							'execute_callback' => array( __CLASS__, 'can_js_optimization' ),
 						)

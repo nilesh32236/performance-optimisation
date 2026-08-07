@@ -162,7 +162,7 @@ const ImageOptimization = ( { options = {} } ) => {
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
-				title={ __( 'Image Optimization', 'performance-optimisation' ) }
+				title={ __( 'Image Optimisation', 'performance-optimisation' ) }
 				description={ __(
 					'Optimize media delivery with advanced lazy loading, next-gen formats, and preloading rules.',
 					'performance-optimisation'

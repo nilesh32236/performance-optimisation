@@ -187,7 +187,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					setBgProcessing( false );
 					setAnnouncement(
 						__(
-							'Image optimization completed.',
+							'Image optimisation completed.',
 							'performance-optimisation'
 						)
 					);
@@ -290,7 +290,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					setBgJobsQueued( response.data.jobs_queued || 0 );
 					setAnnouncement(
 						__(
-							'Image optimization started in background.',
+							'Image optimisation started in background.',
 							'performance-optimisation'
 						)
 					);
@@ -324,7 +324,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			.catch( () =>
 				setAnnouncement(
 					__(
-						'Image optimization failed.',
+						'Image optimisation failed.',
 						'performance-optimisation'
 					)
 				)
@@ -436,7 +436,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			<FeatureHeader
 				title={ __( 'System Health', 'performance-optimisation' ) }
 				description={ __(
-					'Real-time performance overview and quick optimization actions.',
+					'Real-time performance overview and quick optimisation actions.',
 					'performance-optimisation'
 				) }
 				status={ <></> }
