@@ -387,7 +387,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @param array $raw_data      Raw input array from $_POST.
 		 * @param array $valid_handles Array of valid handles for the page.
 		 * @return array Sanitized and whitelisted array of disabled handles.
-		 * @since 2.15.0
+		 * @since NEXT
 		 */
 		private function process_disabled_assets( array $raw_data, array $valid_handles ): array {
 			if ( empty( $raw_data ) ) {
@@ -404,7 +404,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @param array $valid_handles  Array of valid script handles for the page.
 		 * @param array $allowed_values Array of valid values for the setting.
 		 * @return array Sanitized and whitelisted associative array.
-		 * @since 2.15.0
+		 * @since NEXT
 		 */
 		private function process_delay_setting( array $raw_data, array $valid_handles, array $allowed_values ): array {
 			if ( empty( $raw_data ) ) {
