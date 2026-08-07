@@ -462,7 +462,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * the URL is skipped in that case.
 		 *
 		 * @param string     $css_url       URL of the combined stylesheet.
-		 * @param int|string $version   Cache-busting version suffix.
+		 * @param int|string $version       Cache-busting version suffix.
 		 * @param string     $css_file_path Absolute path to the combined CSS file.
 		 * @return void
 		 * @since 2.15.0

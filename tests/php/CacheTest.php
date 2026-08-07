@@ -268,7 +268,7 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		$fs      = \Mockery::mock();
 		$fs->shouldReceive( 'is_dir' )->andReturn( true );
 		$fs->shouldReceive( 'delete' )->andReturnUsing(
-			static function ( $path, $recursive = true ) use ( &$deleted ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			static function ( $path ) use ( &$deleted ) {
 				$deleted[] = $path;
 				return true;
 			}
