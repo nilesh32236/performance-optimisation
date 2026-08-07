@@ -34,7 +34,7 @@ npm run build           # wp-scripts build
 | `.distignore` | WordPress.org SVN exclusion rules |
 | `scripts/build-release.sh` | Builds release ZIP |
 | `includes/class-main.php` | Main orchestrator class |
-| `includes/class-rest.php` | 16 REST API endpoints |
+| `includes/class-rest.php` | 21 REST API endpoints |
 
 ## Vendor Directory
 
