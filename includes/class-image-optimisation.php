@@ -34,6 +34,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private const MAX_PRELOAD_WIDTH = 1478;
 
 		/**
+		 * Maximum dimension (px) for the generated SVG placeholder.
+		 *
+		 * Guards against malformed or extreme width/height attributes so
+		 * placeholders cannot bloat memory or break layout.
+		 *
+		 * @since 1.9.1
+		 */
+		private const SVG_PLACEHOLDER_MAX_DIMENSION = 4096;
+
+		/**
+		 * Maximum number of entries retained in the per-request image-size cache.
+		 *
+		 * @since 1.9.1
+		 */
+		private const IMG_SIZE_CACHE_LIMIT = 100;
+
+		/**
 		 * Configuration options for image optimization.
 		 *
 		 * @var array
@@ -278,13 +295,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						$local_path = Util::get_local_path( $data_src );
 						if ( ! empty( $local_path ) && file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
 							static $img_size_cache = array();
-							if ( ! isset( $img_size_cache[ $local_path ] ) ) {
-								if ( count( $img_size_cache ) >= 100 ) {
+							if ( isset( $img_size_cache[ $local_path ] ) ) {
+								$size = $img_size_cache[ $local_path ];
+								unset( $img_size_cache[ $local_path ] );
+								$img_size_cache[ $local_path ] = $size;
+							} else {
+								if ( count( $img_size_cache ) >= self::IMG_SIZE_CACHE_LIMIT ) {
 									array_shift( $img_size_cache );
 								}
 								$img_size_cache[ $local_path ] = getimagesize( $local_path );
+								$size                          = $img_size_cache[ $local_path ];
 							}
-							$size = $img_size_cache[ $local_path ];
 							if ( is_array( $size ) ) {
 								if ( ! $has_width ) {
 									$img_tag = preg_replace( '/<img\b/i', '<img width="' . (int) $size[0] . '"', $img_tag, 1 );
@@ -1345,14 +1366,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( ! empty( $local_path ) && file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
 						static $img_size_cache = array();
 
-						if ( ! isset( $img_size_cache[ $local_path ] ) ) {
-							if ( count( $img_size_cache ) >= 100 ) {
+						if ( isset( $img_size_cache[ $local_path ] ) ) {
+							$size = $img_size_cache[ $local_path ];
+							unset( $img_size_cache[ $local_path ] );
+							$img_size_cache[ $local_path ] = $size;
+						} else {
+							if ( count( $img_size_cache ) >= self::IMG_SIZE_CACHE_LIMIT ) {
 								array_shift( $img_size_cache );
 							}
 							$img_size_cache[ $local_path ] = getimagesize( $local_path );
+							$size                          = $img_size_cache[ $local_path ];
 						}
-
-						$size = $img_size_cache[ $local_path ];
 
 						if ( is_array( $size ) ) {
 							if ( ! $has_width ) {
@@ -2386,8 +2410,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			preg_match( '/\bwidth=["\']?(\d+)["\']?/i', $img_attributes, $width_matches );
 			preg_match( '/\bheight=["\']?(\d+)["\']?/i', $img_attributes, $height_matches );
 
-			$width  = isset( $width_matches[1] ) ? absint( $width_matches[1] ) : 100;
-			$height = isset( $height_matches[1] ) ? absint( $height_matches[1] ) : 100;
+			$width  = isset( $width_matches[1] ) ? min( absint( $width_matches[1] ), self::SVG_PLACEHOLDER_MAX_DIMENSION ) : 100;
+			$height = isset( $height_matches[1] ) ? min( absint( $height_matches[1] ), self::SVG_PLACEHOLDER_MAX_DIMENSION ) : 100;
 
 			$svg_content = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '"><rect width="100%" height="100%" fill="' . esc_attr( $color ) . '" /></svg>';
 

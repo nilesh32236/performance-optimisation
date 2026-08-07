@@ -456,4 +456,132 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$core = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
 		$this->assertSame( $core, $image_opt->filter_client_side_supported_mime_types( $core ) );
 	}
+
+	/**
+	 * Test that generate_svg_base64 caps extreme width/height attributes at the
+	 * placeholder maximum to avoid memory bloat and layout breakage.
+	 */
+	public function test_generate_svg_base64_caps_extreme_dimensions(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'esc_attr' )->returnArg();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'generate_svg_base64' );
+		$reflection->setAccessible( true );
+
+		$result = $reflection->invoke( $image_opt, '<img width="999999" height="500000" />' );
+		// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- Decoding the SVG fixture for assertions.
+		$decoded = base64_decode( str_replace( 'data:image/svg+xml;base64,', '', $result ), true );
+		// phpcs:enable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
+		$decoded = false === $decoded ? '' : $decoded;
+
+		$this->assertStringContainsString( 'width="4096"', $decoded );
+		$this->assertStringContainsString( 'height="4096"', $decoded );
+		$this->assertStringContainsString( 'viewBox="0 0 4096 4096"', $decoded );
+	}
+
+	/**
+	 * Test that generate_svg_base64 preserves legitimate width/height attributes
+	 * unchanged (no regression on normal image sizes).
+	 */
+	public function test_generate_svg_base64_preserves_normal_dimensions(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'esc_attr' )->returnArg();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'generate_svg_base64' );
+		$reflection->setAccessible( true );
+
+		$result = $reflection->invoke( $image_opt, '<img width="800" height="600" />' );
+		// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode -- Decoding the SVG fixture for assertions.
+		$decoded = base64_decode( str_replace( 'data:image/svg+xml;base64,', '', $result ), true );
+		// phpcs:enable WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_decode
+		$decoded = false === $decoded ? '' : $decoded;
+
+		$this->assertStringContainsString( 'width="800"', $decoded );
+		$this->assertStringContainsString( 'height="600"', $decoded );
+		$this->assertStringContainsString( 'viewBox="0 0 800 600"', $decoded );
+	}
+
+	/**
+	 * Test that the img_size_cache in post_process_img_dimensions refreshes key
+	 * recency on cache hits so eviction follows true LRU order instead of FIFO.
+	 *
+	 * Uses a unique upload path per invocation to isolate from other tests that
+	 * share the process-wide static cache.
+	 */
+	public function test_img_size_cache_refreshes_lru_order(): void {
+		Functions\when( 'wp_normalize_path' )->alias(
+			static function ( $path ) {
+				return str_replace( '\\', '/', $path );
+			}
+		);
+		Functions\when( 'wp_parse_url' )->alias(
+			static function ( $url, $component = -1 ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Emulates wp_parse_url() in tests.
+				$parts = parse_url( $url );
+				if ( false === $parts ) {
+					return false;
+				}
+				if ( -1 !== $component ) {
+					return $parts[ $component ] ?? null;
+				}
+				return $parts;
+			}
+		);
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'file_exists' )->justReturn( true );
+		Functions\when( 'is_readable' )->justReturn( true );
+		Functions\when( 'is_file' )->justReturn( true );
+
+		$getimagesize_calls = 0;
+		Functions\when( 'getimagesize' )->alias(
+			static function () use ( &$getimagesize_calls ) {
+				++$getimagesize_calls;
+				return array(
+					100,
+					100,
+					2,
+					'width="100" height="100"',
+					'bits'     => 8,
+					'channels' => 3,
+					'mime'     => 'image/jpeg',
+				);
+			}
+		);
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'post_process_img_dimensions' );
+		$reflection->setAccessible( true );
+
+		$img_url = static function ( int $index ): string {
+			return 'http://example.com/wp-content/uploads/lru-isolation-' . $index . '.jpg';
+		};
+
+		// Build a single buffer so all images flow through one processing pass
+		// (the static img_size_cache lives inside the preg_replace_callback closure
+		// and only persists within a single buffer).
+		$buffer = '';
+		for ( $i = 1; $i <= 100; $i++ ) {
+			$buffer .= '<img data-src="' . $img_url( $i ) . '" alt="img ' . $i . '" />';
+		}
+		// Re-access image #1 (cache hit) before inserting a 101st image.
+		$buffer .= '<img data-src="' . $img_url( 1 ) . '" alt="img 1 re-access" />';
+		// Insert image #101: eviction must drop the least-recently-used key
+		// (image #2, since #1 was just refreshed) rather than the oldest insert.
+		$buffer .= '<img data-src="' . $img_url( 101 ) . '" alt="img 101" />';
+		// Re-access image #1 again: under true LRU it survived eviction.
+		$buffer .= '<img data-src="' . $img_url( 1 ) . '" alt="img 1 again" />';
+
+		$reflection->invoke( $image_opt, $buffer );
+
+		// 100 misses for the initial images + 1 miss for #101 = 101 getimagesize()
+		// calls. If image #1 were evicted (FIFO behaviour), the final re-access
+		// would trigger a second read and the count would reach 102.
+		$this->assertSame( 101, $getimagesize_calls );
+	}
 }
