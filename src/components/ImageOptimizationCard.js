@@ -29,7 +29,7 @@ const ImageOptimizationCard = ( {
 
 	return (
 		<FeatureCard
-			title={ __( 'Image Optimization', 'performance-optimisation' ) }
+			title={ __( 'Image Optimisation', 'performance-optimisation' ) }
 			icon={ <FontAwesomeIcon icon={ faImages } /> }
 			footer={
 				<>
@@ -134,7 +134,7 @@ const ImageOptimizationCard = ( {
 					<FontAwesomeIcon icon={ faSpinner } spin />
 					<span>
 						{ __(
-							'Currently processing background optimization jobs',
+							'Currently processing background optimisation jobs',
 							'performance-optimisation'
 						) }{ ' ' }
 						( { bgJobsQueued }{ ' ' }

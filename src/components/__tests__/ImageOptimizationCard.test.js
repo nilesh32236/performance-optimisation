@@ -19,7 +19,7 @@ describe( 'ImageOptimizationCard Component', () => {
 				onRemove={ onRemove }
 			/>
 		);
-		expect( screen.getByText( /Image Optimization/i ) ).toBeInTheDocument();
+		expect( screen.getByText( /Image Optimisation/i ) ).toBeInTheDocument();
 	} );
 
 	it( 'renders WebP progress bar with correct percentage', () => {
@@ -169,7 +169,7 @@ describe( 'ImageOptimizationCard Component', () => {
 			/>
 		);
 		expect(
-			screen.getByText( /background optimization jobs/i )
+			screen.getByText( /background optimisation jobs/i )
 		).toBeInTheDocument();
 	} );
 

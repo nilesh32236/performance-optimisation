@@ -18,7 +18,7 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 	return (
 		<FeatureCard
 			title={ __(
-				'Recent Optimization Activity',
+				'Recent Optimisation Activity',
 				'performance-optimisation'
 			) }
 			icon={ <FontAwesomeIcon icon={ faHistory } /> }
@@ -28,7 +28,7 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 					className="wppo-button wppo-button--secondary"
 					onClick={ () => onNavigate( 'tools' ) }
 					aria-label={ __(
-						'View Full Optimization Activity Log',
+						'View Full Optimisation Activity Log',
 						'performance-optimisation'
 					) }
 				>
@@ -60,7 +60,7 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 				) : (
 					<div className="wppo-empty-state">
 						{ __(
-							'No optimization activity recorded yet.',
+							'No optimisation activity recorded yet.',
 							'performance-optimisation'
 						) }
 					</div>

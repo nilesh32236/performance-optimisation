@@ -242,7 +242,7 @@ const FileOptimization = ( {
 	return (
 		<div className="wppo-dashboard-view">
 			<FeatureHeader
-				title={ __( 'File Optimization', 'performance-optimisation' ) }
+				title={ __( 'File Optimisation', 'performance-optimisation' ) }
 				description={ __(
 					'Fine-tune how your site delivers CSS, JS, and HTML for maximum performance.',
 					'performance-optimisation'
@@ -316,7 +316,7 @@ const FileOptimization = ( {
 					>
 						<FeatureCard
 							title={ __(
-								'CSS Optimization',
+								'CSS Optimisation',
 								'performance-optimisation'
 							) }
 							icon={ <FontAwesomeIcon icon={ faCode } /> }
@@ -497,7 +497,7 @@ const FileOptimization = ( {
 
 						<FeatureCard
 							title={ __(
-								'HTML Optimization',
+								'HTML Optimisation',
 								'performance-optimisation'
 							) }
 							icon={ <FontAwesomeIcon icon={ faCode } /> }
@@ -1086,7 +1086,7 @@ const FileOptimization = ( {
 													'performance-optimisation'
 												) }
 												description={ __(
-													'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong.',
+													'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimisation. Requires Apache. Ensure you have FTP access for recovery if something goes wrong.',
 													'performance-optimisation'
 												) }
 												name="enableServerRules"

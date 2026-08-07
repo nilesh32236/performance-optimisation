@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-08-05T06:42:15+00:00\n"
+"POT-Creation-Date: 2026-08-07T06:35:40+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 
@@ -59,7 +59,7 @@ msgstr ""
 #: src/App.js:121
 #: src/components/ImageOptimization.js:165
 #: src/components/ImageOptimizationCard.js:32
-msgid "Image Optimization"
+msgid "Image Optimisation"
 msgstr ""
 
 #: includes/class-abilities.php:122
@@ -75,7 +75,7 @@ msgid "Combine and minify CSS files."
 msgstr ""
 
 #: includes/class-abilities.php:143
-msgid "JS Optimization"
+msgid "JS Optimisation"
 msgstr ""
 
 #: includes/class-abilities.php:144
@@ -181,10 +181,10 @@ msgid "Cache directory does not exist."
 msgstr ""
 
 #: includes/class-cache.php:1517
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: build/tab-object-cache.js:1
 #: src/components/Dashboard.js:526
-#: src/components/ObjectCache.js:353
+#: src/components/ObjectCache.js:365
 msgid "N/A"
 msgstr ""
 
@@ -325,7 +325,7 @@ msgid "Enabled on-demand block asset loading to match the WordPress 6.9 default.
 msgstr ""
 
 #: includes/class-main.php:901
-msgid "Performance Optimization: Failed to update .htaccess rules. Please check file permissions."
+msgid "Performance Optimisation: Failed to update .htaccess rules. Please check file permissions."
 msgstr ""
 
 #: includes/class-main.php:1519
@@ -379,7 +379,7 @@ msgstr ""
 #: includes/class-metabox.php:165
 #: includes/class-metabox.php:250
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:207
+#: src/components/ObjectCache.js:208
 msgid "Disable"
 msgstr ""
 
@@ -609,7 +609,7 @@ msgid "%d images queued for background optimization."
 msgstr ""
 
 #: includes/class-rest.php:599
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:311
 msgid "Images optimized successfully."
 msgstr ""
@@ -1234,7 +1234,7 @@ msgstr ""
 #: build/tab-file-optimization.js:1
 #: src/App.js:111
 #: src/components/FileOptimization.js:245
-msgid "File Optimization"
+msgid "File Optimisation"
 msgstr ""
 
 #: build/index.js:1
@@ -1251,7 +1251,7 @@ msgstr ""
 #: build/tab-dashboard.js:1
 #: build/tab-object-cache.js:1
 #: src/App.js:131
-#: src/components/ObjectCache.js:173
+#: src/components/ObjectCache.js:174
 #: src/components/SystemInfo.js:228
 msgid "Object Cache"
 msgstr ""
@@ -1407,7 +1407,7 @@ msgstr ""
 
 #: build/tab-dashboard.js:1
 #: src/components/PerformanceAudit.js:474
-msgid "Optimizations"
+msgid "Optimisations"
 msgstr ""
 
 #: build/tab-dashboard.js:1
@@ -1721,7 +1721,7 @@ msgstr ""
 
 #: build/tab-dashboard.js:1
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:305
+#: src/components/ObjectCache.js:306
 #: src/components/SystemInfo.js:245
 msgid "Memory Usage"
 msgstr ""
@@ -1803,7 +1803,7 @@ msgstr ""
 
 #: build/tab-dashboard.js:1
 #: src/components/ImageOptimizationCard.js:136
-msgid "Currently processing background optimization jobs"
+msgid "Currently processing background optimisation jobs"
 msgstr ""
 
 #: build/tab-dashboard.js:1
@@ -1813,12 +1813,12 @@ msgstr ""
 
 #: build/tab-dashboard.js:1
 #: src/components/RecentActivityCard.js:20
-msgid "Recent Optimization Activity"
+msgid "Recent Optimisation Activity"
 msgstr ""
 
 #: build/tab-dashboard.js:1
 #: src/components/RecentActivityCard.js:30
-msgid "View Full Optimization Activity Log"
+msgid "View Full Optimisation Activity Log"
 msgstr ""
 
 #: build/tab-dashboard.js:1
@@ -1833,218 +1833,225 @@ msgstr ""
 
 #: build/tab-dashboard.js:1
 #: src/components/RecentActivityCard.js:62
-msgid "No optimization activity recorded yet."
-msgstr ""
-
-#: build/tab-dashboard.js:1
-#: src/components/WelcomePanel.js:10
-msgid "Enable Page Caching"
+msgid "No optimisation activity recorded yet."
 msgstr ""
 
 #: build/tab-dashboard.js:1
 #: src/components/WelcomePanel.js:11
+msgid "Enable Page Caching"
+msgstr ""
+
+#: build/tab-dashboard.js:1
+#: src/components/WelcomePanel.js:12
 msgid "Speed up your site with static HTML page caching — the single biggest performance win."
 msgstr ""
 
 #: build/tab-dashboard.js:1
-#: src/components/WelcomePanel.js:25
+#: src/components/WelcomePanel.js:26
 msgid "Enable JS / CSS Minification"
 msgstr ""
 
 #: build/tab-dashboard.js:1
-#: src/components/WelcomePanel.js:26
+#: src/components/WelcomePanel.js:27
 msgid "Reduce file sizes by removing whitespace and comments from your CSS and JavaScript."
 msgstr ""
 
 #: build/tab-dashboard.js:1
-#: src/components/WelcomePanel.js:41
+#: src/components/WelcomePanel.js:42
 msgid "Enable Lazy Loading"
 msgstr ""
 
 #: build/tab-dashboard.js:1
-#: src/components/WelcomePanel.js:42
+#: src/components/WelcomePanel.js:43
 msgid "Defer off-screen images and videos so they only load when visitors scroll to them."
 msgstr ""
 
 #: build/tab-dashboard.js:1
-#: src/components/WelcomePanel.js:93
+#: src/components/WelcomePanel.js:94
 msgid "Welcome to Performance Optimisation"
 msgstr ""
 
 #: build/tab-dashboard.js:1
-#: src/components/WelcomePanel.js:103
+#: src/components/WelcomePanel.js:104
 msgid "Got it"
 msgstr ""
 
 #: build/tab-dashboard.js:1
-#: src/components/WelcomePanel.js:108
+#: src/components/WelcomePanel.js:109
 msgid "Get started in 3 quick steps. Each toggle below activates a key performance feature — no page reload needed."
 msgstr ""
 
 #: build/tab-dashboard.js:1
-#: src/components/WelcomePanel.js:155
+#: src/components/WelcomePanel.js:156
 msgid "Active"
 msgstr ""
 
 #. translators: %s: feature name
 #: build/tab-dashboard.js:2
-#: src/components/WelcomePanel.js:167
+#: src/components/WelcomePanel.js:172
+#, js-format
+msgid "Enabling %s…"
+msgstr ""
+
+#. translators: %s: feature name
+#: build/tab-dashboard.js:3
+#: src/components/WelcomePanel.js:180
 #, js-format
 msgid "Enable %s"
 msgstr ""
 
-#: build/tab-dashboard.js:2
-#: src/components/WelcomePanel.js:178
-msgid "Enabling…"
-msgstr ""
-
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:547
-#: src/components/WelcomePanel.js:182
+#: src/components/WelcomePanel.js:190
 msgid "Enable"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
+#: src/components/WelcomePanel.js:194
+msgid "Enabling…"
+msgstr ""
+
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:139
 msgid "Failed to load database counts."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:189
-msgid "Image optimization completed."
+msgid "Image optimisation completed."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:205
 msgid "Status check stopped after repeated failures."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:213
 msgid "Status check failed. Retrying…"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:249
 msgid "Cache cleared successfully."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:263
 msgid "Failed to clear cache."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:292
-msgid "Image optimization started in background."
+msgid "Image optimisation started in background."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:326
-msgid "Image optimization failed."
+msgid "Image optimisation failed."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:358
 msgid "Optimized images removed."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:367
 msgid "Failed to remove optimized images."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:388
 msgid "Logged-in cache settings saved."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:397
 msgid "Failed to save logged-in cache settings."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:437
 msgid "System Health"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:438
-msgid "Real-time performance overview and quick optimization actions."
+msgid "Real-time performance overview and quick optimisation actions."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:448
 msgid "Purge All Cache"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:452
 msgid "Purging…"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:467
 msgid "Cache Size"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:476
 msgid "Manage Cache →"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:482
 msgid "Optimized Files"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:496
 msgid "View Settings →"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:502
 msgid "DB Overhead"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:511
 msgid "Clean Now →"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:517
 msgid "Images Optimized"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:533
 msgid "View Images →"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:540
 msgid "Cache for Logged-in Users"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:548
 msgid "Serve cached pages to logged-in users based on their role(s). The admin bar and user-specific content are preserved per role group."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:559
 msgid "Select which user roles should receive cached pages:"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:578
 msgid "When no roles are selected, caching applies to all logged-in users."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: build/tab-database-cleanup.js:1
 #: build/tab-file-optimization.js:1
 #: build/tab-image-optimization.js:1
@@ -2059,38 +2066,38 @@ msgstr ""
 msgid "Save Settings"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: build/tab-plugin-setting.js:1
 #: src/components/Dashboard.js:594
 #: src/components/PluginSetting.js:551
 msgid "Saving…"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:654
 msgid "Remove Optimized Images"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: src/components/Dashboard.js:658
 msgid "This will delete all optimized WebP and AVIF copies. Original images will not be affected."
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: build/tab-database-cleanup.js:4
 #: src/components/Dashboard.js:662
 #: src/components/DatabaseCleanup.js:541
 msgid "Delete"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: build/tab-database-cleanup.js:4
 #: build/tab-plugin-setting.js:1
 #: src/components/common/ConfirmDialog.js:143
 msgid "Cancel"
 msgstr ""
 
-#: build/tab-dashboard.js:2
+#: build/tab-dashboard.js:3
 #: build/tab-database-cleanup.js:4
 #: build/tab-plugin-setting.js:1
 #: src/components/common/ConfirmDialog.js:156
@@ -2154,7 +2161,7 @@ msgstr ""
 #: build/tab-object-cache.js:1
 #: src/components/DatabaseCleanup.js:142
 #: src/components/ImageOptimization.js:134
-#: src/components/ObjectCache.js:86
+#: src/components/ObjectCache.js:87
 msgid "Settings saved successfully."
 msgstr ""
 
@@ -2164,8 +2171,8 @@ msgstr ""
 #: src/components/DatabaseCleanup.js:150
 #: src/components/ImageOptimization.js:144
 #: src/components/ImageOptimization.js:155
-#: src/components/ObjectCache.js:96
-#: src/components/ObjectCache.js:105
+#: src/components/ObjectCache.js:97
+#: src/components/ObjectCache.js:106
 msgid "Error saving settings."
 msgstr ""
 
@@ -2258,7 +2265,7 @@ msgstr ""
 
 #: build/tab-database-cleanup.js:1
 #: src/components/DatabaseCleanup.js:438
-msgid "Total Optimization Opportunities"
+msgid "Total Optimisation Opportunities"
 msgstr ""
 
 #: build/tab-database-cleanup.js:1
@@ -2403,7 +2410,7 @@ msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: src/components/FileOptimization.js:318
-msgid "CSS Optimization"
+msgid "CSS Optimisation"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
@@ -2507,7 +2514,7 @@ msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: src/components/FileOptimization.js:499
-msgid "HTML Optimization"
+msgid "HTML Optimisation"
 msgstr ""
 
 #: build/tab-file-optimization.js:1
@@ -2759,7 +2766,7 @@ msgstr ""
 
 #: build/tab-file-optimization.js:1
 #: src/components/FileOptimization.js:1088
-msgid "Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimization. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
+msgid "Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimisation. Requires Apache. Ensure you have FTP access for recovery if something goes wrong."
 msgstr ""
 
 #: build/tab-file-optimization.js:1
@@ -3123,224 +3130,224 @@ msgid "Automatically add preload hints for the featured image of posts and pages
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:63
+#: src/components/ObjectCache.js:64
 msgid "Failed to check cache status."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:139
+#: src/components/ObjectCache.js:140
 msgid "Action failed."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:151
+#: src/components/ObjectCache.js:152
 msgid "Action successful."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:174
+#: src/components/ObjectCache.js:175
 msgid "Enterprise-grade Redis object caching with Sentinel and Cluster support."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:191
+#: src/components/ObjectCache.js:192
 msgid "Flush Cache"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:232
+#: src/components/ObjectCache.js:233
 msgid "Enable Object Cache"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:266
+#: src/components/ObjectCache.js:267
 msgid "Extension Missing"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:272
+#: src/components/ObjectCache.js:273
 msgid "The PhpRedis extension is not installed. Native performance will be limited."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:285
+#: src/components/ObjectCache.js:286
 msgid "Conflict Detected"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:291
+#: src/components/ObjectCache.js:292
 msgid "Another object cache plugin is currently active. Please disable it to avoid site crashes."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:311
+#: src/components/ObjectCache.js:312
 msgid "Peak:"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:318
+#: src/components/ObjectCache.js:322
 msgid "Hit Ratio"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:330
+#: src/components/ObjectCache.js:342
 msgid "Active Clients"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:339
+#: src/components/ObjectCache.js:351
 msgid "Total:"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:346
+#: src/components/ObjectCache.js:358
 msgid "Redis Version"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:356
+#: src/components/ObjectCache.js:368
 msgid "Uptime:"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:371
+#: src/components/ObjectCache.js:383
 msgid "Connection Settings"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:380
+#: src/components/ObjectCache.js:392
 msgid "Deployment Mode"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:393
+#: src/components/ObjectCache.js:405
 msgid "Standalone (Single Node)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:399
+#: src/components/ObjectCache.js:411
 msgid "Redis Sentinel (HA)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:405
+#: src/components/ObjectCache.js:417
 msgid "Redis Cluster"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:420
+#: src/components/ObjectCache.js:432
 msgid "Host"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:439
+#: src/components/ObjectCache.js:451
 msgid "Port"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:460
+#: src/components/ObjectCache.js:472
 msgid "Server Nodes"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:470
+#: src/components/ObjectCache.js:482
 msgid "host:port (one per line)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:486
+#: src/components/ObjectCache.js:498
 msgid "Sentinel Master Name"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:508
+#: src/components/ObjectCache.js:520
 msgid "Auth Password"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:518
+#: src/components/ObjectCache.js:530
 msgid "Optional"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:531
+#: src/components/ObjectCache.js:543
 msgid "Database ID"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:559
+#: src/components/ObjectCache.js:571
 msgid "Test Connection"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:570
+#: src/components/ObjectCache.js:582
 msgid "Save Changes"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:580
+#: src/components/ObjectCache.js:592
 msgid "Enterprise Performance"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:592
+#: src/components/ObjectCache.js:604
 msgid "Memory Compression"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:606
+#: src/components/ObjectCache.js:618
 msgid "None (Fastest)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:618
+#: src/components/ObjectCache.js:630
 msgid "LZF"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:621
-#: src/components/ObjectCache.js:637
-#: src/components/ObjectCache.js:656
+#: src/components/ObjectCache.js:633
+#: src/components/ObjectCache.js:649
+#: src/components/ObjectCache.js:668
 msgid "(Disabled)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:634
+#: src/components/ObjectCache.js:646
 msgid "ZSTD"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:641
+#: src/components/ObjectCache.js:653
 msgid "(Recommended)"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:653
+#: src/components/ObjectCache.js:665
 msgid "LZ4"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:671
+#: src/components/ObjectCache.js:683
 msgid "Reduces memory footprint for enterprise caches."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:679
+#: src/components/ObjectCache.js:691
 msgid "Persistent Connections"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:683
+#: src/components/ObjectCache.js:695
 msgid "Keep connections alive between PHP requests."
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:693
+#: src/components/ObjectCache.js:705
 msgid "TLS / SSL Encryption"
 msgstr ""
 
 #: build/tab-object-cache.js:1
-#: src/components/ObjectCache.js:697
+#: src/components/ObjectCache.js:709
 msgid "Encrypt traffic between WordPress and Redis."
 msgstr ""
 
@@ -3351,12 +3358,12 @@ msgstr ""
 
 #: build/tab-plugin-setting.js:1
 #: src/components/PluginSetting.js:312
-msgid "Manage your plugin configuration, view the full optimization activity log, and import or export settings."
+msgid "Manage your plugin configuration, view the full optimisation activity log, and import or export settings."
 msgstr ""
 
 #: build/tab-plugin-setting.js:1
 #: src/components/PluginSetting.js:340
-msgid "Optimization Activity Log"
+msgid "Optimisation Activity Log"
 msgstr ""
 
 #: build/tab-plugin-setting.js:1
@@ -3371,7 +3378,7 @@ msgstr ""
 
 #: build/tab-plugin-setting.js:1
 #: src/components/PluginSetting.js:386
-msgid "A full timestamped record of every cache clear, image optimization, database cleanup, and settings change performed by the plugin."
+msgid "A full timestamped record of every cache clear, image optimisation, database cleanup, and settings change performed by the plugin."
 msgstr ""
 
 #: build/tab-plugin-setting.js:1

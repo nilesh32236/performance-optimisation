@@ -436,7 +436,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 						</span>
 						<span className="wppo-stat-hero__label">
 							{ __(
-								'Total Optimization Opportunities',
+								'Total Optimisation Opportunities',
 								'performance-optimisation'
 							) }
 						</span>
