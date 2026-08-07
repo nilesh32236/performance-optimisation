@@ -723,7 +723,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function start_output_buffer(): void {
-			// TODO: remove when minimum supported WP is raised to 6.9.
+			// TODO(#553): remove when minimum supported WP is raised to 6.9.
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
 			}
