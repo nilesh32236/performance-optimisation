@@ -167,7 +167,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! $valid_domain ) {
 				$domain = '';
 			} else {
-				$domain = $host;
+				$domain = strtolower( $host );
 			}
 
 			$this->domain = $domain;
