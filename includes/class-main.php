@@ -1671,6 +1671,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Check whether a script handle matches a delay pattern using word boundaries.
+		 *
+		 * The pattern (a handle or URL) is matched literally between `\b` word
+		 * boundaries, preventing partial-word substring false positives such as
+		 * `slide` matching the unrelated handle `slider-custom`, while preserving
+		 * dash-delimited prefix matches users rely on (`jquery` → `jquery-core`).
+		 * URL metacharacters are escaped via preg_quote() so the pattern is matched
+		 * literally. Empty patterns are ignored so regex construction stays valid.
+		 *
+		 * @since 3.8.0
+		 *
+		 * @param string $handle  The script handle.
+		 * @param string $pattern The configured pattern (handle or URL).
+		 * @return bool True if the handle matches the pattern.
+		 */
+		private function matches_delay_pattern( string $handle, string $pattern ): bool {
+			if ( '' === $pattern ) {
+				return false;
+			}
+			return (bool) preg_match( '/\b' . preg_quote( $pattern, '/' ) . '\b/', $handle );
+		}
+
+		/**
 		 * Get the delay strategy for a given script handle.
 		 *
 		 * Checks idle list, viewport list, and then falls back to default strategy.
@@ -1689,12 +1712,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			// Also check via URL pattern matching against the handle text (handles often contain the handle name).
 			foreach ( $this->delay_js_idle_list as $pattern ) {
-				if ( false !== strpos( $handle, $pattern ) ) {
+				if ( $this->matches_delay_pattern( $handle, $pattern ) ) {
 					return 'idle';
 				}
 			}
 			foreach ( $this->delay_js_viewport_list as $pattern ) {
-				if ( false !== strpos( $handle, $pattern ) ) {
+				if ( $this->matches_delay_pattern( $handle, $pattern ) ) {
 					return 'viewport';
 				}
 			}
@@ -1715,7 +1738,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			// Check partial matches.
 			foreach ( $this->delay_js_priority as $pattern => $level ) {
-				if ( false !== strpos( $handle, $pattern ) ) {
+				if ( $this->matches_delay_pattern( $handle, $pattern ) ) {
 					return $level;
 				}
 			}
