@@ -36,6 +36,16 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_option( 'wppo_last_db_cleanup' );
 		delete_option( 'wppo_version' );
 		delete_option( 'wppo_block_assets_migrated' );
+		delete_option( 'wppo_cache_last_cleared' );
+		delete_option( 'wppo_cache_last_cleared_time' );
+		delete_option( 'wppo_activation_time' );
+		delete_option( 'wppo_activity_cache_version' );
+		delete_option( 'wppo_audit_salt' );
+		delete_option( 'wppo_db_cleanup_salt' );
+		delete_option( 'wppo_activity_log_salt' );
+		delete_option( 'wppo_img_info_salt' );
+		delete_option( 'wppo_review_dismissed' );
+		delete_option( 'wppo_review_snoozed_until' );
 
 		// Delete post meta using the meta API to respect hooks.
 		delete_post_meta_by_key( '_wppo_preload_image_url' );
