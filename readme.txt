@@ -278,6 +278,9 @@ Yes. Performance Optimisation is 100% free and open source. There is no premium 
 
 == Upgrade Notice ==
 
+= 1.9.0 (2026-08-05) =
+Major feature and compatibility release introducing WP 7.1+ client-side media processing control, size-aware image encoding quality, content_url() static caching, core resource hints API migration, and inline CSS budget support.
+
 = 1.8.0 (2026-07-28) =
 Feature and performance release introducing WordPress 6.9+ object cache salt support, iframe lazy loading, delayJS parsing optimizations, and accessibility enhancements.
 

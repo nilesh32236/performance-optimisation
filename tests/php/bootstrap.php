@@ -30,6 +30,17 @@ if ( file_exists( $patchwork_path ) ) {
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
+// Suppress Patchwork internal redefinition warnings on PHP 8.5 during shutdown.
+// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Suppress Patchwork warnings on PHP 8.5
+set_error_handler(
+	static function ( $errno, $errstr ) {
+		if ( ( E_USER_WARNING === $errno || E_WARNING === $errno ) && str_contains( $errstr, 'Patchwork\Redefinitions' ) ) {
+			return true;
+		}
+		return false;
+	}
+);
+
 // Define WP constants used by plugin classes.
 if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', '/tmp/wordpress/' );

@@ -564,6 +564,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * mocked function definitions alive for the duration of a test class).
 	 */
 	public function test_resolve_encode_quality_falls_back_to_flat_core_quality(): void {
+		Functions\when( 'wp_get_image_encode_quality' )->justReturn( null );
 		Functions\when( 'wp_image_quality' )->justReturn( 75 );
 
 		$converter  = $this->make_converter();
@@ -578,8 +579,9 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	 * core quality API provides a value (older cores, or null quality).
 	 */
 	public function test_resolve_encode_quality_falls_back_to_default(): void {
-		// wp_image_quality() returns null (setUp) and wp_get_image_encode_quality()
-		// is not defined, so the fallback default must be used.
+		Functions\when( 'wp_get_image_encode_quality' )->justReturn( null );
+		Functions\when( 'wp_image_quality' )->justReturn( null );
+
 		$converter  = $this->make_converter();
 		$reflection = new ReflectionMethod( Img_Converter::class, 'resolve_encode_quality' );
 		$reflection->setAccessible( true );

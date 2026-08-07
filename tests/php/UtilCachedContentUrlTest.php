@@ -110,15 +110,15 @@ class UtilCachedContentUrlTest extends \PHPUnit\Framework\TestCase {
 			}
 		);
 
-		$first = Util::cached_content_url( '/themes/a/' );
+		$first = Util::cached_content_url( '/themes/blog-switch/' );
 
 		$blog_id = 2;
-		$second  = Util::cached_content_url( '/themes/a/' );
+		$second  = Util::cached_content_url( '/themes/blog-switch/' );
 		$this->assertNotSame( $first, $second );
 		$this->assertSame( 2, $calls );
 
 		$blog_id = 1;
-		$this->assertSame( $first, Util::cached_content_url( '/themes/a/' ) );
+		$this->assertSame( $first, Util::cached_content_url( '/themes/blog-switch/' ) );
 		$this->assertSame( 2, $calls );
 	}
 }
