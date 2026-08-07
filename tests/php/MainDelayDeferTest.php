@@ -80,6 +80,110 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Invoke a private method on a Main instance.
+	 *
+	 * @param Main   $main Main instance.
+	 * @param string $name Method name.
+	 * @param mixed  ...$args Method arguments.
+	 * @return mixed Method return value.
+	 */
+	private function invoke_private_method( Main $main, string $name, ...$args ) {
+		$reflection = new \ReflectionMethod( Main::class, $name );
+		$reflection->setAccessible( true );
+		return $reflection->invoke( $main, ...$args );
+	}
+
+	/**
+	 * Test that get_delay_strategy_for_handle() uses word-boundary matching so a
+	 * short pattern like `slide` no longer matches unrelated handles such as
+	 * `slider-custom`, while exact and dash-delimited prefix matches still work.
+	 */
+	public function test_delay_strategy_ignores_partial_word_pattern_matches(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'         => true,
+				'delayJSIdleList' => "slide\nhttps://cdn.example.com/analytics.js",
+			)
+		);
+
+		$main = new Main();
+
+		$default = $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' );
+
+		// Pattern 'slide' must not partial-match 'slider-custom' / 'slider'.
+		$this->assertSame( $default, $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'slider-custom' ) );
+		$this->assertSame( $default, $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'slider' ) );
+
+		// Exact and dash-delimited matches still resolve.
+		$this->assertSame( 'idle', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'slide' ) );
+		$this->assertSame( 'idle', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'slide-custom' ) );
+		$this->assertSame( 'idle', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'https://cdn.example.com/analytics.js' ) );
+	}
+
+	/**
+	 * Test that word-boundary matching still preserves dash-delimited prefix
+	 * matches (jquery → jquery-core) and whole-handle matches (slider → slider-custom).
+	 */
+	public function test_delay_strategy_preserves_dash_prefix_matches(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'         => true,
+				'delayJSIdleList' => "jquery\nslider",
+			)
+		);
+
+		$main = new Main();
+
+		$this->assertSame( 'idle', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'jquery-core' ) );
+		$this->assertSame( 'idle', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'slider-custom' ) );
+	}
+
+	/**
+	 * Test that viewport strategy matching also uses word boundaries and does not
+	 * match partial words inside unrelated handles.
+	 */
+	public function test_delay_viewport_strategy_uses_word_boundary_matching(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'             => true,
+				'delayJSViewportList' => 'slide',
+			)
+		);
+
+		$main = new Main();
+
+		$default = $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'totally-unrelated-handle' );
+
+		$this->assertSame( $default, $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'slider-custom' ) );
+		$this->assertSame( 'viewport', $this->invoke_private_method( $main, 'get_delay_strategy_for_handle', 'slide' ) );
+	}
+
+	/**
+	 * Test that get_delay_priority_for_handle() uses word-boundary matching so a
+	 * short pattern like `slide` no longer assigns its priority to unrelated
+	 * handles, while exact handles (including metacharacter patterns) still resolve.
+	 *
+	 * Note: full URL patterns (e.g. `https://cdn.example.com/analytics.js:low`)
+	 * cannot be used as priority keys because the priority option parser splits on
+	 * the first colon (`https:`), a pre-existing limitation outside this issue.
+	 */
+	public function test_delay_priority_uses_word_boundary_matching(): void {
+		$this->stub_main_construction(
+			array(
+				'delayJS'         => true,
+				'delayJSPriority' => "slide:high\nanalytics.js:low",
+			)
+		);
+
+		$main = new Main();
+
+		$this->assertSame( 'normal', $this->invoke_private_method( $main, 'get_delay_priority_for_handle', 'slider-custom' ) );
+		$this->assertSame( 'high', $this->invoke_private_method( $main, 'get_delay_priority_for_handle', 'slide' ) );
+		$this->assertSame( 'low', $this->invoke_private_method( $main, 'get_delay_priority_for_handle', 'analytics.js' ) );
+		$this->assertSame( 'normal', $this->invoke_private_method( $main, 'get_delay_priority_for_handle', 'analytics.min.js' ) );
+	}
+
+	/**
 	 * Test that deferred handles (default + user-configured) are merged into the
 	 * delay-JS exclusion list when both defer and delay JS are active.
 	 */
