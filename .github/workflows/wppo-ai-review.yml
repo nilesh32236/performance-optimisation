@@ -87,7 +87,8 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Ensure required labels exist
         env:
@@ -188,7 +189,8 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -277,7 +279,8 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
