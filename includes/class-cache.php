@@ -1611,7 +1611,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function calculate_directory_size( string $directory ): int {
 			$total_size = 0;
 			$fs         = $this->get_filesystem();
-			$files      = $fs->dirlist( $directory );
+
+			if ( ! $fs ) {
+				return $total_size;
+			}
+
+			$files = $fs->dirlist( $directory );
 
 			if ( ! $files ) {
 				return $total_size;
@@ -1636,7 +1641,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.9.0
 		 */
 		private function count_cached_pages( string $directory ): int {
-			$fs    = $this->get_filesystem();
+			$fs = $this->get_filesystem();
+
+			if ( ! $fs ) {
+				return 0;
+			}
+
 			$files = $fs->dirlist( $directory );
 			if ( ! $files ) {
 				return 0;
