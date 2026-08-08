@@ -121,7 +121,7 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: fix
-          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
@@ -213,7 +213,7 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: review
-          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
@@ -303,7 +303,7 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: fix
-          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
