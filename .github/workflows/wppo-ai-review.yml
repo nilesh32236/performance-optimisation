@@ -188,6 +188,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -277,6 +278,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
