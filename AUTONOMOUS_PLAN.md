@@ -3,7 +3,8 @@
 Status legend: `[PENDING]` `[IN PROGRESS]` `[COMPLETED]`
 
 Baseline: 214 PHP tests / 464 assertions, 296 JS tests / 30 suites, PHPCS clean, lint clean,
-build success (measured 2026-08-10 after prior audit).
+build success (measured 2026-08-10 after prior audit). Current: 235 PHP tests / 509 assertions,
+303 JS tests / 31 suites.
 
 ---
 
@@ -62,13 +63,23 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
 - Verification: `phpunit` OK (227 tests), `phpcs` clean, JS PreloadSettings 11/11, `npm run
   lint:js` clean, `npm run build` success.
 
-### GAP-M4 `[PENDING]` — RUM-style Web Vitals trend monitoring
-- **Competitors:** WP Rocket Insights, FlyingPress CrUX.
-- **Gap:** We have one-shot PageSpeed scans but no scheduled re-scan + trend history.
-- **Fix:** Add a `performance_audit` setting `autoRescan` (daily/weekly) and a lightweight
-  `wppo_web_vitals_trends` option storing last N results per strategy for a trend chart in the
-  React Dashboard. Reuse existing `Pagespeed` class + `class-cron.php` daily hook.
-- **Effort:** Medium-high. **Value:** High (differentiator).
+### GAP-M4 `[COMPLETED]` — RUM-style Web Vitals trend monitoring
+- Added `performance_audit.auto_rescan` setting (`''` disabled / `daily` / `weekly`, default `''`).
+- `Pagespeed::record_trend()` snapshots performance + core vitals into the `wppo_web_vitals_trends`
+  option on every successful scan, capped at `TREND_LIMIT` (30) per URL+strategy; `get_trends()`
+  reads it back.
+- New daily cron event `wppo_web_vitals_rescan` → `Cron::web_vitals_rescan_cron()` queues scans for
+  home + high-value URLs on mobile+desktop, gated by `auto_rescan`; weekly mode throttles via
+  `wppo_web_vitals_last_rescan` timestamp.
+- REST: new GET `web_vitals_trends` endpoint (optional url/strategy filters) + `auto_rescan`
+  preservation in `update_settings`.
+- React: `autoRescan` select in PluginSetting.js, new `WebVitalsTrends` component (inline SVG
+  sparkline, no chart lib) rendered in Dashboard under PageSpeedPanel; `fetchWebVitalsTrends()`
+  API wrapper.
+- Tests: `tests/php/PagespeedTrendsTest.php` (4), `tests/php/CronWebVitalsRescanTest.php` (4),
+  RestTest endpoint count 22, JS WebVitalsTrends (3) + PluginSetting auto-rescan (1).
+- Verification: `phpunit` OK (235 tests), `phpcs` clean, JS 31 suites / 303 tests, `npm run
+  lint:js` clean, `npm run build` success.
 
 ---
 

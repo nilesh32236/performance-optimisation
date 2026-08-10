@@ -142,6 +142,40 @@ describe( 'PluginSetting', () => {
 		);
 	} );
 
+	it( 'saves the auto-rescan frequency and passes it to update_settings', async () => {
+		global.wppoSettings = {
+			performance_audit: {
+				pagespeedApiKeyConfigured: true,
+				autoRescan: '',
+			},
+			settings: { performance_audit: {} },
+		};
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Auto-rescan frequency saved.',
+		} );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		const select = screen.getByLabelText( 'Auto PageSpeed Re-scan' );
+		expect( select ).toBeEnabled();
+		fireEvent.change( select, { target: { value: 'weekly' } } );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Auto-rescan/i } )
+		);
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Auto-rescan frequency saved.' )
+			).toBeInTheDocument()
+		);
+
+		expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+			tab: 'performance_audit',
+			settings: { auto_rescan: 'weekly' },
+		} );
+	} );
+
 	it( 'exports settings with the API key redacted', async () => {
 		const options = {
 			performance_audit: { pagespeed_api_key: 'SECRET-KEY' },

@@ -52,6 +52,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			add_action( 'wppo_database_cleanup_cron', array( $this, 'database_cleanup_cron' ) );
 
+			add_action( 'wppo_web_vitals_rescan', array( $this, 'web_vitals_rescan_cron' ) );
+
 			add_action( 'wppo_used_css_cron', array( $this, 'used_css_cron' ) );
 			add_action( 'wppo_ccss_regeneration', array( $this, 'ccss_regeneration_cron' ) );
 		}
@@ -106,6 +108,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				wp_schedule_event( time(), 'daily', 'wppo_database_cleanup_cron' );
 			}
 
+			if ( ! wp_next_scheduled( 'wppo_web_vitals_rescan' ) ) {
+				wp_schedule_event( time(), 'daily', 'wppo_web_vitals_rescan' );
+			}
+
 			$options = get_option( 'wppo_settings', array() );
 			if ( ! empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 				if ( ! wp_next_scheduled( 'wppo_used_css_cron' ) ) {
@@ -129,6 +135,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( ! empty( $options['file_optimisation']['criticalCSS'] ) ) {
 				Critical_CSS::regenerate_all();
 			}
+		}
+
+		/**
+		 * Callback for the daily Web Vitals auto-rescan cron.
+		 *
+		 * Queues PageSpeed scans for the home URL and any configured high-value
+		 * URLs on both mobile and desktop strategies, gated by the
+		 * performance_audit.auto_rescan setting ('daily' or 'weekly'). Weekly mode
+		 * throttles itself by checking the last-run timestamp.
+		 *
+		 * @return void
+		 * @since 2.14.0
+		 */
+		public function web_vitals_rescan_cron(): void {
+			$options = get_option( 'wppo_settings', array() );
+			$audit   = isset( $options['performance_audit'] ) && is_array( $options['performance_audit'] ) ? $options['performance_audit'] : array();
+
+			$frequency = isset( $audit['auto_rescan'] ) ? sanitize_text_field( $audit['auto_rescan'] ) : '';
+			if ( ! in_array( $frequency, array( 'daily', 'weekly' ), true ) ) {
+				return;
+			}
+
+			if ( 'weekly' === $frequency ) {
+				$last_run = (int) get_option( 'wppo_web_vitals_last_rescan', 0 );
+				if ( ( time() - $last_run ) < WEEK_IN_SECONDS ) {
+					return;
+				}
+			}
+
+			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+				return;
+			}
+
+			$urls = array( home_url( '/' ) );
+
+			if ( ! empty( $audit['high_value_urls'] ) && is_array( $audit['high_value_urls'] ) ) {
+				foreach ( $audit['high_value_urls'] as $high_url ) {
+					$clean = esc_url_raw( (string) $high_url );
+					if ( ! empty( $clean ) && ! in_array( $clean, $urls, true ) ) {
+						$urls[] = $clean;
+					}
+				}
+			}
+
+			foreach ( $urls as $scan_url ) {
+				foreach ( array( 'mobile', 'desktop' ) as $scan_strategy ) {
+					Pagespeed::queue_scan( $scan_url, $scan_strategy );
+				}
+			}
+
+			update_option( 'wppo_web_vitals_last_rescan', time(), false );
 		}
 
 		/**

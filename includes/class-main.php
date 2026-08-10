@@ -226,6 +226,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'high_value_urls'       => array(),
 						'auto_fix_enabled'      => false,
 						'server_timing_enabled' => false,
+						'auto_rescan'           => '',
 					),
 				)
 			);
@@ -1375,6 +1376,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
 						'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
 						'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
+						'autoRescan'                => $this->options['performance_audit']['auto_rescan'] ?? '',
 					),
 					// Frontend theme colors for accent syncing.
 					'themeColors'       => $this->get_frontend_theme_colors(),

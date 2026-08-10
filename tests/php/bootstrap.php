@@ -162,6 +162,9 @@ if ( ! defined( 'YEAR_IN_SECONDS' ) ) {
 if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
 	define( 'MINUTE_IN_SECONDS', 60 );
 }
+if ( ! defined( 'WEEK_IN_SECONDS' ) ) {
+	define( 'WEEK_IN_SECONDS', 604800 );
+}
 
 // WordPress $wpdb result constants used by plugin DB code paths.
 if ( ! defined( 'ARRAY_A' ) ) {

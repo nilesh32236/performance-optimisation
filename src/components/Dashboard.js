@@ -14,6 +14,7 @@ import SwitchField from './common/SwitchField';
 import CheckboxOption from './common/CheckboxOption';
 import PerformanceAudit from './PerformanceAudit';
 import PageSpeedPanel from './PageSpeedPanel';
+import WebVitalsTrends from './WebVitalsTrends';
 import SuggestionsPanel from './SuggestionsPanel';
 import SystemInfo from './SystemInfo';
 import ImageOptimizationCard from './ImageOptimizationCard';
@@ -619,6 +620,9 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					url={ auditUrl }
 					onSuggestionsReady={ setPagespeedSuggestions }
 				/>
+
+				{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
+				<WebVitalsTrends url={ auditUrl } />
 
 				<SystemInfo />
 			</div>

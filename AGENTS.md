@@ -75,7 +75,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (21 endpoints). All require `manage_options` capability + `X-WP-Nonce`.
+Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (22 endpoints). All require `manage_options` capability + `X-WP-Nonce`.
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -94,6 +94,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 | `performance_scan` | POST | Local telemetry scan |
 | `pagespeed_scan` | POST | Queue Google PageSpeed scan |
 | `pagespeed_results` | GET | PageSpeed results |
+| `web_vitals_trends` | GET | Stored Web Vitals trend history |
 | `suggestions` | GET | Performance suggestions |
 | `server_rules` | GET | Apache/Nginx rules text |
 | `used_css_regenerate` | POST | Regenerate used CSS for a post or all posts |
@@ -115,7 +116,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 | `class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily) |
 | `class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
-| `class-rest.php` | All 21 REST API endpoints |
+| `class-rest.php` | All 22 REST API endpoints |
 | `class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
 | `class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
 | `class-telemetry.php` | Local cURL-based performance scanner |
@@ -134,6 +135,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 ### Background jobs
 - **Image conversion**: Action Scheduler (`wppo_convert_image_background`) + hourly cron (`wppo_img_conversation`)
 - **PageSpeed scans**: Action Scheduler (`wppo_pagespeed_scan`)
+- **Web Vitals auto-rescan**: daily cron (`wppo_web_vitals_rescan`), gates on `performance_audit.auto_rescan` (`daily`/`weekly`), queues home + high-value URLs for both strategies, stores history in `wppo_web_vitals_trends` option (capped at 30/URL+strategy)
 - **Cache preload**: 5-hourly cron, processes 200 posts per batch, random delay 0-1800s per page
 - **DB cleanup**: Daily/Weekly/Monthly based on settings
 

@@ -174,6 +174,28 @@ export const getPagespeedResults = ( url, strategy = 'mobile' ) => {
 };
 
 /**
+ * Retrieve the stored Web Vitals trend history.
+ *
+ * Optionally scopes to a URL and strategy via query params.
+ *
+ * @since 2.14.0
+ * @param {string} url      The scanned URL.
+ * @param {string} strategy 'mobile', 'desktop' or ''.
+ * @return {Promise<Object>} Resolved trends data.
+ */
+export const fetchWebVitalsTrends = ( url = '', strategy = '' ) => {
+	const params = new URLSearchParams();
+	if ( url ) {
+		params.set( 'url', url );
+	}
+	if ( strategy ) {
+		params.set( 'strategy', strategy );
+	}
+	const qs = params.toString();
+	return apiCall( `web_vitals_trends${ qs ? `?${ qs }` : '' }`, {}, 'GET' );
+};
+
+/**
  * Retrieve Suggestion_Engine output for a cached telemetry scan.
  *
  * @since 1.6.0

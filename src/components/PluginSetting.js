@@ -79,6 +79,60 @@ const PluginSetting = ( { options } ) => {
 		dismiss: dismissApiKey,
 	} = useNotice();
 
+	// Phase 2 — auto PageSpeed re-scan frequency state.
+	const [ autoRescan, setAutoRescan ] = useState(
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings.performance_audit?.autoRescan ?? ''
+			: ''
+	);
+	const [ savingAutoRescan, setSavingAutoRescan ] = useState( false );
+
+	const saveAutoRescan = async () => {
+		setSavingAutoRescan( true );
+		dismissApiKey();
+		try {
+			const currentSettings =
+				wppoSettings?.settings?.performance_audit ?? {};
+			const response = await apiCall( 'update_settings', {
+				tab: 'performance_audit',
+				settings: {
+					...currentSettings,
+					auto_rescan: autoRescan,
+				},
+			} );
+			if ( response.success ) {
+				notifyApiKey( {
+					type: 'success',
+					message: __(
+						'Auto-rescan frequency saved.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifyApiKey( {
+					type: 'error',
+					message:
+						response.message ||
+						__(
+							'Failed to save auto-rescan frequency.',
+							'performance-optimisation'
+						),
+				} );
+			}
+		} catch ( err ) {
+			notifyApiKey( {
+				type: 'error',
+				message: __(
+					'Error saving auto-rescan frequency.',
+					'performance-optimisation'
+				),
+			} );
+			console.error( 'Save auto-rescan error:', err );
+		} finally {
+			setSavingAutoRescan( false );
+		}
+	};
+
 	const saveApiKey = async () => {
 		setSavingApiKey( true );
 		dismissApiKey();
@@ -525,6 +579,68 @@ const PluginSetting = ( { options } ) => {
 						isLoading={ savingApiKey }
 						label={ __(
 							'Save Settings',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Saving…',
+							'performance-optimisation'
+						) }
+					/>
+
+					<hr
+						className="wppo-divider"
+						style={ { margin: '20px 0' } }
+					/>
+
+					<div className="wppo-field">
+						<label
+							className="wppo-field-label"
+							htmlFor="auto-rescan-frequency"
+						>
+							{ __(
+								'Auto PageSpeed Re-scan',
+								'performance-optimisation'
+							) }
+						</label>
+						<p
+							id="auto-rescan-desc"
+							className="wppo-text-muted wppo-text-small"
+							style={ { marginBottom: '8px' } }
+						>
+							{ __(
+								'Automatically re-run PageSpeed scans on your homepage and high-value URLs to build Web Vitals trend history. Requires a configured API key.',
+								'performance-optimisation'
+							) }
+						</p>
+						<select
+							id="auto-rescan-frequency"
+							className="wppo-select"
+							value={ autoRescan }
+							onChange={ ( e ) =>
+								setAutoRescan( e.target.value )
+							}
+							disabled={ ! apiKeyConfigured }
+							aria-describedby="auto-rescan-desc"
+						>
+							<option value="">
+								{ __( 'Disabled', 'performance-optimisation' ) }
+							</option>
+							<option value="daily">
+								{ __( 'Daily', 'performance-optimisation' ) }
+							</option>
+							<option value="weekly">
+								{ __( 'Weekly', 'performance-optimisation' ) }
+							</option>
+						</select>
+					</div>
+
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--secondary wppo-mt-16"
+						onClick={ saveAutoRescan }
+						isLoading={ savingAutoRescan }
+						disabled={ ! apiKeyConfigured }
+						label={ __(
+							'Save Auto-rescan',
 							'performance-optimisation'
 						) }
 						loadingLabel={ __(

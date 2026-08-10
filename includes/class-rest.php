@@ -169,6 +169,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'web_vitals_trends'       => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_web_vitals_trends' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'suggestions'             => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_suggestions' ),
@@ -387,6 +393,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Preserve the server_timing_enabled flag when the request omits it (no UI toggle exists yet).
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['server_timing_enabled'] ) && isset( $options['performance_audit']['server_timing_enabled'] ) ) {
 				$sanitized_settings['server_timing_enabled'] = $options['performance_audit']['server_timing_enabled'];
+			}
+
+			// Preserve the auto_rescan frequency when the request omits it.
+			if ( 'performance_audit' === $tab && ! isset( $params['settings']['auto_rescan'] ) && isset( $options['performance_audit']['auto_rescan'] ) ) {
+				$sanitized_settings['auto_rescan'] = $options['performance_audit']['auto_rescan'];
 			}
 
 			$options[ $tab ] = $sanitized_settings;
@@ -1255,6 +1266,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$results['suggestions'] = Suggestion_Engine::from_pagespeed( $results );
 
 			return $this->send_response( $results );
+		}
+
+		/**
+		 * Returns the stored Web Vitals trend history.
+		 *
+		 * Optionally filters by url and strategy via GET params. Returns the raw
+		 * trend option data so the React Dashboard can render trend charts.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 2.14.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_web_vitals_trends( \WP_REST_Request $request ): \WP_REST_Response {
+			$params   = $request->get_params();
+			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : '';
+			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : '';
+
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop', '' ), true ) ) {
+				$strategy = '';
+			}
+
+			$trends = Pagespeed::get_trends();
+
+			// Filter to one URL when requested.
+			if ( ! empty( $url ) ) {
+				$key    = md5( $url );
+				$trends = array_filter(
+					$trends,
+					static function ( $k ) use ( $key, $strategy ) {
+						if ( 0 !== strpos( $k, $key . '_' ) ) {
+							return false;
+						}
+						if ( ! empty( $strategy ) && false === strpos( $k, '_' . $strategy ) ) {
+							return false;
+						}
+						return true;
+					},
+					ARRAY_FILTER_USE_KEY
+				);
+			}
+
+			return $this->send_response(
+				array(
+					'trends' => $trends,
+				)
+			);
 		}
 
 		/**

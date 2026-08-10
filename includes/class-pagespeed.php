@@ -64,6 +64,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		const TRANSIENT_TTL = DAY_IN_SECONDS;
 
 		/**
+		 * Option name holding historical PageSpeed results for trend charts.
+		 *
+		 * @since 2.14.0
+		 * @var string
+		 */
+		const TREND_OPTION = 'wppo_web_vitals_trends';
+
+		/**
+		 * Maximum number of historical results kept per URL + strategy.
+		 *
+		 * @since 2.14.0
+		 * @var int
+		 */
+		const TREND_LIMIT = 30;
+
+		/**
 		 * Queue a PageSpeed scan as an async background job.
 		 *
 		 * Called from the REST endpoint POST /pagespeed_scan.
@@ -205,6 +221,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			set_transient( $transient_key, $prepared, self::TRANSIENT_TTL );
 			Telemetry::register_transient_key( $transient_key );
 
+			self::record_trend( $url, $prepared, $strategy );
+
 			self::store_lcp_image_url( $url, $prepared, $strategy );
 
 			Log::add(
@@ -281,6 +299,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		private static function get_api_key(): string {
 			$options = get_option( 'wppo_settings', array() );
 			return (string) ( isset( $options['performance_audit']['pagespeed_api_key'] ) ? $options['performance_audit']['pagespeed_api_key'] : '' );
+		}
+
+		/**
+		 * Record a PageSpeed result into the Web Vitals trend history.
+		 *
+		 * Stores a compact snapshot (performance score + core vitals) keyed by
+		 * URL + strategy in a single site option, capped at TREND_LIMIT entries
+		 * per key so the option stays small and write-heavy updates are cheap.
+		 *
+		 * @since  2.14.0
+		 * @param  string $url      The scanned URL.
+		 * @param  array  $prepared The prepared PageSpeed result array.
+		 * @param  string $strategy Either 'mobile' or 'desktop'.
+		 * @return void
+		 */
+		public static function record_trend( string $url, array $prepared, string $strategy = 'mobile' ): void {
+			$key     = md5( esc_url_raw( $url ) ) . '_' . sanitize_key( $strategy );
+			$hist    = self::get_trends();
+			$current = isset( $hist[ $key ] ) && is_array( $hist[ $key ] ) ? $hist[ $key ] : array();
+
+			$current[] = array(
+				'fetched_at'  => isset( $prepared['fetched_at'] ) ? sanitize_text_field( $prepared['fetched_at'] ) : current_time( 'mysql', true ),
+				'performance' => (int) ( $prepared['scores']['performance'] ?? 0 ),
+				'lcp'         => isset( $prepared['vitals']['lcp']['value'] ) ? (float) $prepared['vitals']['lcp']['value'] : null,
+				'cls'         => isset( $prepared['vitals']['cls']['value'] ) ? (float) $prepared['vitals']['cls']['value'] : null,
+				'tbt'         => isset( $prepared['vitals']['tbt']['value'] ) ? (float) $prepared['vitals']['tbt']['value'] : null,
+			);
+
+			if ( count( $current ) > self::TREND_LIMIT ) {
+				$current = array_slice( $current, -self::TREND_LIMIT );
+			}
+
+			$hist[ $key ] = $current;
+
+			update_option( self::TREND_OPTION, $hist, false );
+		}
+
+		/**
+		 * Retrieve the full Web Vitals trend history.
+		 *
+		 * @since  2.14.0
+		 * @return array Keyed by md5(url)_strategy, each value a list of snapshots.
+		 */
+		public static function get_trends(): array {
+			$trends = get_option( self::TREND_OPTION, array() );
+			return is_array( $trends ) ? $trends : array();
 		}
 
 		/**

@@ -828,3 +828,59 @@
 	padding-top: 20px;
 	border-top: 1px solid var(--wppo-border);
 }
+
+/* Web Vitals Trends (v2.14.0) */
+.wppo-divider {
+	border: 0;
+	border-top: 1px solid var(--wppo-border);
+	height: 0;
+}
+
+.wppo-trend-layout {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+
+	&__title {
+		display: flex;
+		align-items: center;
+		font-size: 0.8rem;
+		color: var(--wppo-text-muted);
+		word-break: break-all;
+	}
+}
+
+.wppo-trend-series {
+	&__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 8px;
+	}
+
+	&__label {
+		font-weight: 600;
+		color: var(--wppo-text-main);
+	}
+
+	&__latest {
+		font-size: 0.8rem;
+		color: var(--wppo-text-muted);
+
+		strong {
+			color: var(--wppo-success);
+		}
+	}
+}
+
+.wppo-trend-chart {
+	width: 100%;
+	height: auto;
+	background: var(--wppo-bg-card-surface);
+	border: 1px solid var(--wppo-border);
+	border-radius: var(--wppo-radius-sm);
+
+	&__line {
+		stroke: var(--wppo-primary);
+	}
+}

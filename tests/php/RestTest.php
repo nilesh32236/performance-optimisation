@@ -122,6 +122,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'performance_scan',
 			'pagespeed_scan',
 			'pagespeed_results',
+			'web_vitals_trends',
 			'suggestions',
 			'server_rules',
 			'used_css_regenerate',
@@ -130,8 +131,8 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'dismiss_welcome',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (21).
-		$this->assertCount( 21, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (22).
+		$this->assertCount( 22, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
