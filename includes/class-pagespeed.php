@@ -80,6 +80,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		const TREND_LIMIT = 30;
 
 		/**
+		 * Maximum number of URL + strategy keys retained across the whole trends map.
+		 *
+		 * Guards against unbounded option growth when many distinct URLs are
+		 * scanned over time. Older keys are pruned first.
+		 *
+		 * @since 2.14.0
+		 * @var int
+		 */
+		const TREND_MAX_KEYS = 20;
+
+		/**
 		 * Queue a PageSpeed scan as an async background job.
 		 *
 		 * Called from the REST endpoint POST /pagespeed_scan.
@@ -306,7 +317,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 *
 		 * Stores a compact snapshot (performance score + core vitals) keyed by
 		 * URL + strategy in a single site option, capped at TREND_LIMIT entries
-		 * per key so the option stays small and write-heavy updates are cheap.
+		 * per key. The read-append-write sequence is serialized with a shared
+		 * cache lock so concurrent async workers (e.g. mobile + desktop scans
+		 * running at the same time) cannot overwrite each other's snapshot.
 		 *
 		 * @since  2.14.0
 		 * @param  string $url      The scanned URL.
@@ -315,25 +328,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return void
 		 */
 		public static function record_trend( string $url, array $prepared, string $strategy = 'mobile' ): void {
-			$key     = md5( esc_url_raw( $url ) ) . '_' . sanitize_key( $strategy );
-			$hist    = self::get_trends();
-			$current = isset( $hist[ $key ] ) && is_array( $hist[ $key ] ) ? $hist[ $key ] : array();
+			$key = md5( esc_url_raw( $url ) ) . '_' . sanitize_key( $strategy );
 
-			$current[] = array(
-				'fetched_at'  => isset( $prepared['fetched_at'] ) ? sanitize_text_field( $prepared['fetched_at'] ) : current_time( 'mysql', true ),
-				'performance' => (int) ( $prepared['scores']['performance'] ?? 0 ),
-				'lcp'         => isset( $prepared['vitals']['lcp']['value'] ) ? (float) $prepared['vitals']['lcp']['value'] : null,
-				'cls'         => isset( $prepared['vitals']['cls']['value'] ) ? (float) $prepared['vitals']['cls']['value'] : null,
-				'tbt'         => isset( $prepared['vitals']['tbt']['value'] ) ? (float) $prepared['vitals']['tbt']['value'] : null,
-			);
-
-			if ( count( $current ) > self::TREND_LIMIT ) {
-				$current = array_slice( $current, -self::TREND_LIMIT );
+			// Serialize read-modify-write across async workers. wp_cache_add() is
+			// atomic when a shared object cache (e.g. the plugin's Redis drop-in)
+			// is present, so only one worker owns the write at a time.
+			$lock_key = self::TREND_OPTION . '_lock';
+			if ( ! wp_cache_add( $lock_key, 1, 'wppo', 30 ) ) {
+				return; // Another worker owns the write; skip to avoid a lost update.
 			}
 
-			$hist[ $key ] = $current;
+			try {
+				// Re-read fresh after acquiring the lock.
+				$hist = self::get_trends();
 
-			update_option( self::TREND_OPTION, $hist, false );
+				$current = isset( $hist[ $key ] ) && is_array( $hist[ $key ] ) ? $hist[ $key ] : array();
+
+				$current[] = array(
+					'fetched_at'  => isset( $prepared['fetched_at'] ) ? sanitize_text_field( $prepared['fetched_at'] ) : current_time( 'mysql', true ),
+					'performance' => (int) ( $prepared['scores']['performance'] ?? 0 ),
+					'lcp'         => isset( $prepared['vitals']['lcp']['value'] ) ? (float) $prepared['vitals']['lcp']['value'] : null,
+					'cls'         => isset( $prepared['vitals']['cls']['value'] ) ? (float) $prepared['vitals']['cls']['value'] : null,
+					'tbt'         => isset( $prepared['vitals']['tbt']['value'] ) ? (float) $prepared['vitals']['tbt']['value'] : null,
+				);
+
+				if ( count( $current ) > self::TREND_LIMIT ) {
+					$current = array_slice( $current, -self::TREND_LIMIT );
+				}
+
+				$hist[ $key ] = $current;
+
+				// Bound total storage, not just per-URL history.
+				$hist = self::prune_trends( $hist );
+
+				update_option( self::TREND_OPTION, $hist, false );
+			} finally {
+				wp_cache_delete( $lock_key, 'wppo' );
+			}
+		}
+
+		/**
+		 * Enforce a global cap on the number of URL + strategy keys.
+		 *
+		 * When the map grows past TREND_MAX_KEYS the oldest keys (ranked by the
+		 * timestamp of their most recent snapshot) are dropped, preserving recent
+		 * data while keeping the option bounded.
+		 *
+		 * @since  2.14.0
+		 * @param  array $hist The full trends map.
+		 * @return array The trimmed trends map.
+		 */
+		private static function prune_trends( array $hist ): array {
+			$keys = array_keys( $hist );
+			if ( count( $keys ) <= self::TREND_MAX_KEYS ) {
+				return $hist;
+			}
+
+			$rank = array();
+			foreach ( $hist as $trend_key => $snapshots ) {
+				$last = 0;
+				if ( is_array( $snapshots ) ) {
+					$last_snapshot = end( $snapshots );
+					if ( is_array( $last_snapshot ) && isset( $last_snapshot['fetched_at'] ) ) {
+						$last = (int) strtotime( (string) $last_snapshot['fetched_at'] );
+					}
+				}
+				$rank[ $trend_key ] = $last;
+			}
+			asort( $rank );
+
+			$total = count( $hist );
+			while ( $total > self::TREND_MAX_KEYS ) {
+				$oldest = key( $rank );
+				if ( null === $oldest ) {
+					break;
+				}
+				unset( $hist[ $oldest ], $rank[ $oldest ] );
+				--$total;
+			}
+
+			return $hist;
 		}
 
 		/**

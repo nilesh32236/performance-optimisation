@@ -632,7 +632,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 						"SELECT ID FROM $wpdb->posts
 						WHERE post_type = 'attachment'
 						AND post_parent = 0
-						AND post_status NOT IN ( 'inherit', 'auto-draft' )
+						AND post_status = 'inherit'
 						LIMIT %d",
 						$batch
 					)
@@ -647,34 +647,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					break;
 				}
 
-				// Delete associated meta for these attachments.
-				$placeholders = implode( ',', array_fill( 0, $ids_count, '%d' ) );
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$meta_deleted = $wpdb->query(
-					$wpdb->prepare(
-						"DELETE FROM $wpdb->postmeta WHERE post_id IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-						...$ids
-					)
-				);
-
-				if ( false === $meta_deleted ) {
-					return false;
+				// Use the WordPress API so physical files, intermediate sizes, backups
+				// and attachment deletion hooks are handled, not just the DB rows.
+				foreach ( $ids as $id ) {
+					if ( false !== wp_delete_attachment( (int) $id, true ) ) {
+						++$deleted;
+					}
 				}
-
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$posts_deleted = $wpdb->query(
-					$wpdb->prepare(
-						"DELETE FROM $wpdb->posts WHERE ID IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-						...$ids
-					)
-				);
-
-				if ( false === $posts_deleted ) {
-					return false;
-				}
-
-				$deleted += (int) $posts_deleted;
 			} while ( $ids_count === $batch );
 
 			return $deleted;
@@ -914,7 +893,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					"SELECT COUNT(*) FROM $wpdb->posts
 					WHERE post_type = 'attachment'
 					AND post_parent = 0
-					AND post_status NOT IN ( 'inherit', 'auto-draft' )"
+					AND post_status = 'inherit'"
 				),
 				'oembed_cache'       => (int) $wpdb->get_var(
 					$wpdb->prepare(

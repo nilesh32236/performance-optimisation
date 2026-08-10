@@ -140,6 +140,48 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that a strategy-only web_vitals_trends request filters by strategy
+	 * even when no url parameter is supplied.
+	 */
+	public function test_web_vitals_trends_filters_by_strategy_only(): void {
+		$trends = array(
+			md5( 'http://example.com/' ) . '_mobile'       => array(
+				array(
+					'fetched_at'  => '2026-08-01',
+					'performance' => 70,
+				),
+			),
+			md5( 'http://example.com/' ) . '_desktop'      => array(
+				array(
+					'fetched_at'  => '2026-08-01',
+					'performance' => 85,
+				),
+			),
+			md5( 'http://example.com/about/' ) . '_mobile' => array(
+				array(
+					'fetched_at'  => '2026-08-01',
+					'performance' => 60,
+				),
+			),
+		);
+
+		Functions\when( 'get_option' )->alias(
+			static function ( $name, $fallback = false ) use ( $trends ) {
+				return 'wppo_web_vitals_trends' === $name ? $trends : $fallback;
+			}
+		);
+
+		$request = new WP_REST_Request( array( 'strategy' => 'desktop' ) );
+
+		$response = $this->rest->get_web_vitals_trends( $request );
+
+		$data = $response->get_data()['data'];
+		$keys = array_keys( $data['trends'] );
+		$this->assertCount( 1, $keys );
+		$this->assertStringEndsWith( '_desktop', $keys[0] );
+	}
+
+	/**
 	 * Test that sanitize_settings_recursively skips keys that become empty
 	 * after sanitization (e.g. keys made only of non a-zA-Z0-9_- characters
 	 * or empty keys) so they are never stored under an empty-string key.

@@ -179,13 +179,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				}
 			}
 
+			$all_queued = true;
+
 			foreach ( $urls as $scan_url ) {
 				foreach ( array( 'mobile', 'desktop' ) as $scan_strategy ) {
-					Pagespeed::queue_scan( $scan_url, $scan_strategy );
+					// queue_scan() returns 0 when Action Scheduler cannot create the job.
+					if ( 0 === Pagespeed::queue_scan( $scan_url, $scan_strategy ) ) {
+						$all_queued = false;
+					}
 				}
 			}
 
-			update_option( 'wppo_web_vitals_last_rescan', time(), false );
+			// Only record a completed run when everything queued successfully, so a
+			// failed enqueue does not block retries for the full weekly window.
+			if ( $all_queued ) {
+				update_option( 'wppo_web_vitals_last_rescan', time(), false );
+			}
 		}
 
 		/**
@@ -332,6 +341,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 */
 		public static function clear_cron_jobs(): void {
 			wp_unschedule_hook( 'wppo_generate_static_page' );
+			wp_unschedule_hook( 'wppo_generate_static_url' );
 			wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 			wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
 			delete_option( 'wppo_preload_cron_offset' );
@@ -340,6 +350,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			delete_transient( Util::transient_key( 'wppo_used_css_lock' ) );
 			wp_clear_scheduled_hook( 'wppo_ccss_regeneration' );
 			wp_clear_scheduled_hook( 'wppo_generate_ccss' );
+			wp_clear_scheduled_hook( 'wppo_web_vitals_rescan' );
 		}
 
 		/**
@@ -411,6 +422,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			$to_fetch   = array( home_url( '/wp-sitemap.xml' ) );
 			$fetched    = array();
 
+			// Bound the whole discovery pass so a slow sitemap index cannot hold the
+			// cron request (or the follow-up preload batch) for minutes on end.
+			$deadline = microtime( true ) + 15;
+
 			while ( ! empty( $to_fetch ) && $urls_count < $cap ) {
 				$current = array_shift( $to_fetch );
 
@@ -419,7 +434,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				}
 				$fetched[ $current ] = true;
 
-				$response = wp_remote_get( $current, array( 'timeout' => 20 ) );
+				if ( microtime( true ) >= $deadline ) {
+					break;
+				}
+
+				$response = wp_remote_get( $current, array( 'timeout' => 5 ) );
 				if ( is_wp_error( $response ) ) {
 					continue;
 				}

@@ -88,4 +88,63 @@ class MainStripQueryStringsTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( '', $main->strip_static_query_strings( '', 'asset' ) );
 	}
+
+	/**
+	 * Test that a relative asset URL keeps its relative form while ver is removed.
+	 */
+	public function test_preserves_relative_url(): void {
+		$main = $this->make_main();
+
+		$result = $main->strip_static_query_strings(
+			'../js/app.js?ver=1.2',
+			'app'
+		);
+
+		$this->assertSame( '../js/app.js', $result );
+	}
+
+	/**
+	 * Test that a protocol-relative URL keeps its scheme-relative form.
+	 */
+	public function test_preserves_protocol_relative_url(): void {
+		$main = $this->make_main();
+
+		$result = $main->strip_static_query_strings(
+			'//cdn.example.com/app.js?ver=1.2',
+			'app'
+		);
+
+		$this->assertSame( '//cdn.example.com/app.js', $result );
+	}
+
+	/**
+	 * Test that a port and fragment survive while ver is removed.
+	 */
+	public function test_preserves_port_and_fragment(): void {
+		$main = $this->make_main();
+
+		$result = $main->strip_static_query_strings(
+			'https://example.com:8443/app.js?ver=1.2&locale=en#top',
+			'app'
+		);
+
+		$this->assertSame(
+			'https://example.com:8443/app.js?locale=en#top',
+			$result
+		);
+	}
+
+	/**
+	 * Test that a fragment is preserved when the ver arg is the only arg.
+	 */
+	public function test_preserves_fragment_when_only_ver_removed(): void {
+		$main = $this->make_main();
+
+		$result = $main->strip_static_query_strings(
+			'https://example.com/app.js?ver=1.2#section',
+			'app'
+		);
+
+		$this->assertSame( 'https://example.com/app.js#section', $result );
+	}
 }

@@ -1289,16 +1289,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			$trends = Pagespeed::get_trends();
 
-			// Filter to one URL when requested.
-			if ( ! empty( $url ) ) {
-				$key    = md5( $url );
-				$trends = array_filter(
+			// Filter when either url or strategy is provided.
+			if ( ! empty( $url ) || ! empty( $strategy ) ) {
+				$url_key = '' !== $url ? md5( $url ) : null;
+				$trends  = array_filter(
 					$trends,
-					static function ( $k ) use ( $key, $strategy ) {
-						if ( 0 !== strpos( $k, $key . '_' ) ) {
+					static function ( $k ) use ( $url_key, $strategy ) {
+						if ( null !== $url_key && 0 !== strpos( $k, $url_key . '_' ) ) {
 							return false;
 						}
-						if ( ! empty( $strategy ) && false === strpos( $k, '_' . $strategy ) ) {
+						if ( ! empty( $strategy ) && ! str_ends_with( $k, '_' . $strategy ) ) {
 							return false;
 						}
 						return true;

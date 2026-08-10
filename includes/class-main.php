@@ -2056,19 +2056,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			$parsed = wp_parse_url( $src );
-			if ( ! isset( $parsed['query'] ) || empty( $parsed['query'] ) ) {
+			if ( ! isset( $parsed['query'] ) || '' === $parsed['query'] ) {
 				return $src;
 			}
 
 			parse_str( $parsed['query'], $args );
+			if ( ! isset( $args['ver'] ) ) {
+				return $src;
+			}
 			unset( $args['ver'] );
 
-			if ( empty( $args ) ) {
-				// No remaining args: drop the '?' entirely.
-				return strtok( $src, '?' );
+			// Replace only the query portion inside the original string so relative
+			// and protocol-relative sources, ports and fragments stay intact.
+			$fragment = '';
+			$head     = $src;
+			$frag_pos = strpos( $src, '#' );
+			if ( false !== $frag_pos ) {
+				$fragment = substr( $src, $frag_pos );
+				$head     = substr( $src, 0, $frag_pos );
 			}
 
-			return $parsed['scheme'] . '://' . $parsed['host'] . ( isset( $parsed['path'] ) ? $parsed['path'] : '' ) . '?' . http_build_query( $args );
+			$query_pos = strpos( $head, '?' );
+			if ( false === $query_pos ) {
+				return $src;
+			}
+
+			$base        = substr( $head, 0, $query_pos );
+			$replacement = http_build_query( $args );
+
+			if ( '' === $replacement ) {
+				// No remaining args: drop the '?' entirely.
+				return $base . $fragment;
+			}
+
+			return $base . '?' . $replacement . $fragment;
 		}
 
 		/**

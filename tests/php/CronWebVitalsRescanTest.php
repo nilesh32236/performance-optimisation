@@ -158,4 +158,26 @@ class CronWebVitalsRescanTest extends \PHPUnit\Framework\TestCase {
 		$this->assertGreaterThanOrEqual( 2, $queued );
 		$this->assertArrayHasKey( 'wppo_web_vitals_last_rescan', $this->options );
 	}
+
+	/**
+	 * Test that a failed enqueue does not record a completed rescan.
+	 *
+	 * The queue_scan() method returns 0 when Action Scheduler cannot create a
+	 * job. The weekly gate must not treat a failed run as completed, otherwise
+	 * retries are blocked for the full window.
+	 */
+	public function test_rescan_does_not_record_run_when_enqueue_fails(): void {
+		$this->install_option_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'auto_rescan' => 'daily' ),
+		);
+
+		// Every enqueue fails.
+		Functions\when( 'as_enqueue_async_action' )->justReturn( 0 );
+
+		$cron = $this->make_cron();
+		$cron->web_vitals_rescan_cron();
+
+		$this->assertArrayNotHasKey( 'wppo_web_vitals_last_rescan', $this->options );
+	}
 }
