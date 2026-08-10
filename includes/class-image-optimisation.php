@@ -2155,12 +2155,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( 0 === strpos( $url, '/' ) || false === strpos( $url, '://' ) ) {
 				// Cache home_url() once per blog to prevent redundant core calls
 				// when normalizing multiple LCP candidate tags in the HTML buffer.
-				static $home_url = array();
-				$blog_id         = get_current_blog_id();
-				if ( ! isset( $home_url[ $blog_id ] ) ) {
-					$home_url[ $blog_id ] = untrailingslashit( home_url() );
+				// When a home_url filter is registered the result may be context-
+				// dependent, so caching is bypassed (mirrors Util::cached_content_url()).
+				if ( false === has_filter( 'home_url' ) ) {
+					static $home_url = array();
+					$blog_id         = get_current_blog_id();
+					if ( ! isset( $home_url[ $blog_id ] ) ) {
+						$home_url[ $blog_id ] = untrailingslashit( home_url() );
+					}
+					$url = $home_url[ $blog_id ] . '/' . ltrim( $url, '/' );
+				} else {
+					$url = untrailingslashit( home_url() ) . '/' . ltrim( $url, '/' );
 				}
-				$url = $home_url[ $blog_id ] . '/' . ltrim( $url, '/' );
 			}
 
 			$parts = wp_parse_url( $url );

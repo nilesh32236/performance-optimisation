@@ -1220,26 +1220,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						$request_uri = substr( $request_uri, strlen( $home_path ) );
 					}
 					$current_url = home_url( $request_uri );
-					$current_url = rtrim( $current_url, '/' );
 
-					foreach ( $exclude_urls as $exclude_url ) {
-						$exclude_url = rtrim( $exclude_url, '/' );
-
-						if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-							$exclude_url = home_url( $exclude_url );
-						}
-
-						if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-							$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-
-							if ( 0 === strpos( $current_url, $exclude_prefix ) ) {
-								return false;
-							}
-						}
-
-						if ( $current_url === $exclude_url ) {
-							return false;
-						}
+					if ( Util::is_url_excluded( $current_url, $exclude_urls ) ) {
+						return false;
 					}
 				}
 			}
