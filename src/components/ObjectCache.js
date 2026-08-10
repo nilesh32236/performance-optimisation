@@ -1,4 +1,4 @@
-import { useState, useEffect, useId } from '@wordpress/element';
+import { useState, useEffect, useId, useCallback } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -49,11 +49,7 @@ const ObjectCache = ( { options = {} } ) => {
 	} );
 	const { notice, notify, dismiss } = useNotice();
 
-	useEffect( () => {
-		fetchStatus();
-	}, [] );
-
-	const fetchStatus = async () => {
+	const fetchStatus = useCallback( async () => {
 		try {
 			const res = await apiCall( 'object_cache', { action: 'status' } );
 			if ( res.success ) {
@@ -69,7 +65,11 @@ const ObjectCache = ( { options = {} } ) => {
 				),
 			} );
 		}
-	};
+	}, [ notify ] );
+
+	useEffect( () => {
+		fetchStatus();
+	}, [ fetchStatus ] );
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
