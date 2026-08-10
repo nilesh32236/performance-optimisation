@@ -105,16 +105,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			// If home_url has a subdirectory path, remove it only from the start.
-			static $home_path = array();
-			$blog_id          = get_current_blog_id();
+			$home_path = wp_normalize_path( wp_parse_url( self::cached_home_url(), PHP_URL_PATH ) ?? '' );
 
-			if ( ! isset( $home_path[ $blog_id ] ) ) {
-				$home_path[ $blog_id ] = wp_normalize_path( wp_parse_url( home_url(), PHP_URL_PATH ) ?? '' );
-			}
-
-			if ( $home_path[ $blog_id ] && '/' !== $home_path[ $blog_id ] ) {
-				if ( 0 === strpos( $relative_path, $home_path[ $blog_id ] ) ) {
-					$relative_path = substr( $relative_path, strlen( $home_path[ $blog_id ] ) );
+			if ( $home_path && '/' !== $home_path ) {
+				if ( 0 === strpos( $relative_path, $home_path ) ) {
+					$relative_path = substr( $relative_path, strlen( $home_path ) );
 				}
 			}
 
@@ -303,15 +298,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function is_url_excluded( string $url, array $exclude_urls ): bool {
 			$url = rtrim( $url, '/' );
 
-			// Resolve the home base once per request (unless a home_url filter is
-			// active, in which case each resolution may legitimately differ).
-			static $home_base_cache = array();
-			$blog_id                = get_current_blog_id();
-
-			if ( ! isset( $home_base_cache[ $blog_id ] ) || has_filter( 'home_url' ) ) {
-				$home_base_cache[ $blog_id ] = untrailingslashit( home_url() );
-			}
-			$home_base = $home_base_cache[ $blog_id ];
+			// Resolve the home base once per request.
+			$home_base = self::cached_home_url();
 
 			foreach ( $exclude_urls as $exclude_url ) {
 				$exclude_url = rtrim( $exclude_url, '/' );
@@ -447,6 +435,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 
 			return $cache[ $blog_id ][ $path ];
+		}
+
+		/**
+		 * Get the home URL, cached per site per request.
+		 *
+		 * Centralizes the blog-ID-keyed static caching pattern used across the plugin.
+		 * When a `home_url` filter is registered the result is not cached (the filter
+		 * may return context-dependent output), otherwise the base URL is resolved
+		 * once per site per request and reused across all call sites.
+		 *
+		 * @return string The untrailingslashed home URL.
+		 * @since NEXT
+		 */
+		public static function cached_home_url(): string {
+			if ( false !== has_filter( 'home_url' ) ) {
+				return untrailingslashit( home_url() );
+			}
+
+			static $cache = array();
+			$blog_id      = get_current_blog_id();
+
+			if ( ! isset( $cache[ $blog_id ] ) ) {
+				$cache[ $blog_id ] = untrailingslashit( home_url() );
+			}
+
+			return $cache[ $blog_id ];
 		}
 
 		/**
