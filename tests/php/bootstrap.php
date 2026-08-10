@@ -173,6 +173,12 @@ if ( ! defined( 'ARRAY_N' ) ) {
 if ( ! defined( 'OBJECT' ) ) {
 	define( 'OBJECT', 'OBJECT' );
 }
+if ( ! defined( 'FS_CHMOD_FILE' ) ) {
+	define( 'FS_CHMOD_FILE', 0644 );
+}
+if ( ! defined( 'FS_CHMOD_DIR' ) ) {
+	define( 'FS_CHMOD_DIR', 0755 );
+}
 
 // Mock global $wpdb.
 // phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
@@ -238,6 +244,10 @@ trait WPPO_Test_Bootstrap {
 		\Brain\Monkey\Functions\when( 'trailingslashit' )->returnArg();
 		\Brain\Monkey\Functions\when( 'wp_maybe_inline_styles' )->justReturn( '' );
 		\Brain\Monkey\Functions\when( 'get_bloginfo' )->justReturn( '6.8' );
+		\Brain\Monkey\Functions\when( '__' )->returnArg( 1 );
+		\Brain\Monkey\Functions\when( 'esc_html__' )->returnArg( 1 );
+		\Brain\Monkey\Functions\when( 'esc_html' )->returnArg( 1 );
+		\Brain\Monkey\Functions\when( 'esc_url_raw' )->returnArg();
 	}
 
 	/**

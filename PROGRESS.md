@@ -42,3 +42,16 @@
 - Files modified: `tests/php/LogTest.php` (new), `tests/php/bootstrap.php`.
 - Verification: `phpunit` OK (180 tests, 400 assertions); `phpcs` clean.
 
+### AUDIT-0010b + AUDIT-0010c + AUDIT-0010d — PHP class tests (commit: pending)
+- Added `tests/php/AdvancedCacheHandlerTest.php` (11 tests): drop-in path, marker/legacy/foreign
+  detection, create/remove behavior.
+- Added `tests/php/ServerRulesTest.php` (9 tests): server-type detection, Nginx gzip/browser-
+  caching rules + filter, Apache proxy to Htaccess_Handler.
+- Added `tests/php/SystemInfoTest.php` (14 tests): all info groups, PHP/database/WordPress/server/
+  cache/infrastructure/opcache details, request microtime, WooCommerce presets.
+- Added `FS_CHMOD_FILE`/`FS_CHMOD_DIR` constants and pre-registered `__`/`esc_html__`/`esc_html`/
+  `esc_url_raw` stubs in `tests/php/bootstrap.php`.
+- Files modified: `tests/php/AdvancedCacheHandlerTest.php`, `tests/php/ServerRulesTest.php`,
+  `tests/php/SystemInfoTest.php` (all new), `tests/php/bootstrap.php`.
+- Verification: `phpunit` OK (214 tests, 464 assertions); `phpcs` clean.
+

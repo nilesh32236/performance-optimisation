@@ -113,6 +113,29 @@ Baseline diagnostics (Phase 1, run 2026-08-10):
   constants needed by namespaced DB code).
 - **Verification:** `phpunit` OK (180 tests), `phpcs` clean.
 
+### AUDIT-0010b `[COMPLETED]` — `Advanced_Cache_Handler` tests
+- **Files:** `tests/php/AdvancedCacheHandlerTest.php` (new, 11 tests).
+- **Coverage:** `get_dropin_path`, `is_our_dropin` (marker/legacy/foreign/missing),
+  `foreign_dropin_present`, `create` (writes marker / skips foreign), `remove` (deletes ours /
+  skips foreign).
+- **Also:** Defined `FS_CHMOD_FILE`/`FS_CHMOD_DIR` constants in the bootstrap.
+- **Verification:** `phpunit` OK (191 tests), `phpcs` clean.
+
+### AUDIT-0010c `[COMPLETED]` — `Server_Rules` tests
+- **Files:** `tests/php/ServerRulesTest.php` (new, 9 tests).
+- **Coverage:** `get_server_type` (apache/nginx/other), `get_nginx_rules` (gzip/browser-caching/
+  empty/filter), `get_apache_rules` (proxy to Htaccess_Handler, deflate+expires content).
+- **Verification:** `phpunit` OK (191 tests), `phpcs` clean.
+
+### AUDIT-0010d `[COMPLETED]` — `System_Info` tests
+- **Files:** `tests/php/SystemInfoTest.php` (new, 14 tests).
+- **Coverage:** `get_all` groups, `get_php`, `get_database` (with/without db_version),
+  `get_wordpress`, `get_wp_constants`, `get_server`, `get_cache`, `get_infrastructure`,
+  `get_opcache` (disabled), `get_request_start_microtime`, `get_woocommerce_presets`.
+- **Also:** Pre-registered `__`, `esc_html__`, `esc_html`, `esc_url_raw` in the bootstrap
+  (prevents Brain Monkey redeclare fatals across tests).
+- **Verification:** `phpunit` OK (214 tests), `phpcs` clean.
+
 ### AUDIT-0011 `[PENDING]` — Untested React components / libs
 - **Files lacking tests:**
   - `src/components/CriticalCssPanel.js` (ccss regenerate/status API flow).
