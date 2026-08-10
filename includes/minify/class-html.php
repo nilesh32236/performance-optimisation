@@ -160,7 +160,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			} else {
 				$base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'];
 
-				if ( isset( $parsed_url['port'] ) && ! empty( $parsed_url['port'] ) ) {
+				if ( ! empty( $parsed_url['port'] ) ) {
 					$base_url .= ( ':' . $parsed_url['port'] );
 				}
 			}
