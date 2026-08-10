@@ -58,6 +58,7 @@ const WelcomePanel = () => {
 		wppoSettings?.show_welcome ?? false
 	);
 	const [ activatingStep, setActivatingStep ] = useState( null );
+	const [ dismissing, setDismissing ] = useState( false );
 
 	if ( ! visible ) {
 		return null;
@@ -80,11 +81,14 @@ const WelcomePanel = () => {
 	};
 
 	const handleDismiss = async () => {
+		setDismissing( true );
 		try {
 			await apiCall( 'dismiss_welcome' );
 			setVisible( false );
 		} catch ( error ) {
 			console.error( 'Welcome dismiss failed:', error );
+		} finally {
+			setDismissing( false );
 		}
 	};
 
@@ -96,13 +100,17 @@ const WelcomePanel = () => {
 				'performance-optimisation'
 			) }
 			footer={
-				<button
+				<LoadingSubmitButton
 					type="button"
 					className="wppo-button wppo-button--secondary"
 					onClick={ handleDismiss }
-				>
-					{ __( 'Got it', 'performance-optimisation' ) }
-				</button>
+					isLoading={ dismissing }
+					label={ __( 'Got it', 'performance-optimisation' ) }
+					loadingLabel={ __(
+						'Dismissing…',
+						'performance-optimisation'
+					) }
+				/>
 			}
 		>
 			<p className="wppo-welcome-panel__intro">

@@ -92,7 +92,7 @@ jobs:
 
       - name: Ensure required labels exist
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh label create "autofix"                      --force --color "243cd4" --description "PR created by AI fix agent" 2>/dev/null || true
           gh label create "autofix:ready"                --force --color "0e8a16" --description "Approved by AI reviewer — ready to merge" 2>/dev/null || true
@@ -175,7 +175,7 @@ jobs:
       - name: Resolve PR ref
         id: resolve-ref
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
             PR_NUMBER="${{ github.event.issue.number }}"
@@ -265,7 +265,7 @@ jobs:
       - name: Resolve PR ref
         id: resolve-ref
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
             PR_NUMBER="${{ github.event.issue.number }}"
@@ -338,7 +338,7 @@ jobs:
     steps:
       - name: Squash merge PR
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           echo "Merging PR #${PR_NUMBER} (autofix:ready)..."
@@ -365,7 +365,7 @@ jobs:
     steps:
       - name: Post merge notification
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           PR_TITLE="${{ github.event.pull_request.title }}"
@@ -394,7 +394,7 @@ jobs:
 
       - name: Update labels
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           gh pr edit "$PR_NUMBER" \
