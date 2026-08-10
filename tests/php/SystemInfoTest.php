@@ -50,7 +50,7 @@ class SystemInfoTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertArrayHasKey( 'php', $info );
 		$this->assertArrayHasKey( 'database', $info );
-		$this->assertArrayHasKey( 'WordPress', $info );
+		$this->assertArrayHasKey( 'wordpress', $info );
 		$this->assertArrayHasKey( 'wp_constants', $info );
 		$this->assertArrayHasKey( 'server', $info );
 		$this->assertArrayHasKey( 'cache', $info );

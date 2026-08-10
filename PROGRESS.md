@@ -65,3 +65,8 @@
   `Dashboard.test.js`.
 - Verification: `npm test` OK (296 tests / 30 suites); `eslint` clean.
 
+### AUDIT-0010d fix (commit: pending)
+- Fixed `SystemInfoTest::test_get_all_returns_all_groups`: corrected assertion key typo
+  `'WordPress'` → `'wordpress'`.
+- Verification: `phpunit` OK (214 tests, 464 assertions).
+
