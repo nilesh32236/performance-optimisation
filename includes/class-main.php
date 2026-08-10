@@ -752,7 +752,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		/**
 		 * Runs one-time upgrade routines after a plugin update.
 		 *
 		 * Routine plugin updates never fire register_activation_hook, so this is

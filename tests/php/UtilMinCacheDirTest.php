@@ -19,8 +19,6 @@ class UtilMinCacheDirTest extends \PHPUnit\Framework\TestCase {
 
 	/**
 	 * Set up test environment.
-	 *
-	 * @before
 	 */
 	protected function setUp(): void {
 		parent::setUp();

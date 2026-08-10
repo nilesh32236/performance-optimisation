@@ -252,7 +252,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		}
 
 		/**
-		/**
 		 * Get PHP opcode cache environment details.
 		 *
 		 * Mirrors WordPress core's Site Health server info (added in WP 7.0),

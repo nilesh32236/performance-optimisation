@@ -7,6 +7,7 @@
 
 use PerformanceOptimise\Inc\Cache;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Tests for Cache class.
@@ -138,12 +139,11 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test the register_combine_css_path decision helper.
 	 *
-	 * @dataProvider data_provider_register_combine_css_path
-	 *
 	 * @param array     $options  Plugin options to construct Cache with.
 	 * @param bool|null $filter   Value the wppo_inline_combined_css filter returns (null = default true).
 	 * @param bool      $expected Whether wp_style_add_data is expected to be called.
 	 */
+	#[DataProvider( 'data_provider_register_combine_css_path' )]
 	public function test_register_combine_css_path_respects_inline_guards( array $options, ?bool $filter, bool $expected ): void {
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 		$temp_file = tempnam( sys_get_temp_dir(), 'wppo-combine-' );
@@ -194,12 +194,11 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test the get_styles_inline_limit helper mirrors core's budget.
 	 *
-	 * @dataProvider data_provider_get_styles_inline_limit
-	 *
 	 * @param string $wp_version The WP version in $GLOBALS['wp_version'] ('' = unset).
 	 * @param bool   $override   Whether a styles_inline_size_limit filter is active.
 	 * @param int    $expected   Expected inline size limit.
 	 */
+	#[DataProvider( 'data_provider_get_styles_inline_limit' )]
 	public function test_get_styles_inline_limit( string $wp_version, bool $override, int $expected ): void {
 		if ( $override ) {
 			Functions\when( 'apply_filters' )->justReturn( 50000 );
