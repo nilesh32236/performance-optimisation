@@ -136,7 +136,7 @@ Baseline diagnostics (Phase 1, run 2026-08-10):
   (prevents Brain Monkey redeclare fatals across tests).
 - **Verification:** `phpunit` OK (214 tests), `phpcs` clean.
 
-### AUDIT-0011 `[PENDING]` — Untested React components / libs
+### AUDIT-0011 `[IN PROGRESS]` — Untested React components / libs
 - **Files lacking tests:**
   - `src/components/CriticalCssPanel.js` (ccss regenerate/status API flow).
   - `src/components/Dashboard.js` (stats, polling, image optimize flow).
@@ -146,3 +146,29 @@ Baseline diagnostics (Phase 1, run 2026-08-10):
 - **Fix (priority order):** Add tests for `StatusBadge` + `MetricCard` + `FeatureCard`
   (AUDIT-0011a), `lib/util` (AUDIT-0011b), `CriticalCssPanel` (AUDIT-0011c), `PluginSetting`
   (AUDIT-0011d), `Dashboard` (AUDIT-0011e).
+
+### AUDIT-0011a+b `[COMPLETED]` — Common components + lib/util tests
+- **Files:** `src/components/common/__tests__/StatusBadge.test.js`, `MetricCard.test.js`,
+  `FeatureCard.test.js` (covers FeatureHeader too), `src/lib/__tests__/util.test.js`.
+- **Coverage:** StatusBadge variants + fallback; MetricCard label/value/unit/badge;
+  FeatureCard header/actions/footer/className; FeatureHeader title/status/actions/extra;
+  `handleChange` text/checkbox + preserves other keys.
+- **Verification:** `npm test` OK (276), `eslint` clean.
+
+### AUDIT-0011c `[COMPLETED]` — CriticalCssPanel tests
+- **Files:** `src/components/__tests__/CriticalCssPanel.test.js` (6 tests).
+- **Coverage:** empty state, ready label, truncated-hash fallback, unknown status, regenerate
+  click, rejected regenerate (no throw).
+- **Verification:** `npm test` OK (276), `eslint` clean.
+
+### AUDIT-0011d `[COMPLETED]` — PluginSetting tests
+- **Files:** `src/components/__tests__/PluginSetting.test.js` (8 tests).
+- **Coverage:** header/cards render, activity log load + error, API key save success/failure,
+  export redacts API key, invalid import rejected, valid import after confirmation.
+- **Verification:** `npm test` OK (276), `eslint` clean.
+
+### AUDIT-0011e `[COMPLETED]` — Dashboard tests
+- **Files:** `src/components/__tests__/Dashboard.test.js` (6 tests).
+- **Coverage:** stats render, clear cache success/failure, background image optimisation,
+  logged-in cache settings save, remove-images confirm flow.
+- **Verification:** `npm test` OK (296), `eslint` clean.

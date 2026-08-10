@@ -55,3 +55,13 @@
   `tests/php/SystemInfoTest.php` (all new), `tests/php/bootstrap.php`.
 - Verification: `phpunit` OK (214 tests, 464 assertions); `phpcs` clean.
 
+### AUDIT-0011a–e — JS component/lib tests (commits: f7507e50, pending)
+- Added common-component tests: `StatusBadge`, `MetricCard`, `FeatureCard` (+ FeatureHeader),
+  and `lib/util` (`handleChange`).
+- Added `CriticalCssPanel` tests (6), `PluginSetting` tests (8), `Dashboard` tests (6).
+- Files modified: `src/components/common/__tests__/StatusBadge.test.js`, `MetricCard.test.js`,
+  `FeatureCard.test.js`, `src/lib/__tests__/util.test.js`,
+  `src/components/__tests__/CriticalCssPanel.test.js`, `PluginSetting.test.js`,
+  `Dashboard.test.js`.
+- Verification: `npm test` OK (296 tests / 30 suites); `eslint` clean.
+
