@@ -289,9 +289,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * Check whether a URL matches any of the exclusion rules.
 		 *
 		 * Both the URL being checked and each exclusion rule are normalized with
-		 * a trailing-slash trim before matching. Root-relative rules are resolved
-		 * against {@see home_url()}. Rules containing a "(.*)" placeholder act as
-		 * prefix patterns; all other rules must match exactly.
+		 * a trailing-slash trim before matching. Schemes are normalized so that
+		 * `http://` and `https://` rules match interchangeably. Root-relative
+		 * rules are resolved against {@see home_url()}. Rules containing a
+		 * "(.*)" placeholder act as prefix patterns; all other rules must match
+		 * exactly. Empty and whitespace-only rules are ignored.
 		 *
 		 * @param string $url         The URL to check.
 		 * @param array  $exclude_urls List of exclusion rules.
@@ -301,25 +303,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function is_url_excluded( string $url, array $exclude_urls ): bool {
 			$url = rtrim( $url, '/' );
 
+			// Resolve the home base once per request (unless a home_url filter is
+			// active, in which case each resolution may legitimately differ).
+			static $home_base_cache = array();
+			$blog_id                = get_current_blog_id();
+
+			if ( ! isset( $home_base_cache[ $blog_id ] ) || has_filter( 'home_url' ) ) {
+				$home_base_cache[ $blog_id ] = untrailingslashit( home_url() );
+			}
+			$home_base = $home_base_cache[ $blog_id ];
+
 			foreach ( $exclude_urls as $exclude_url ) {
 				$exclude_url = rtrim( $exclude_url, '/' );
 
-				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-					$exclude_url = home_url( $exclude_url );
+				// Skip empty and whitespace-only rules.
+				if ( '' === $exclude_url ) {
+					continue;
 				}
 
-				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+					$exclude_url = $home_base . '/' . ltrim( $exclude_url, '/' );
+				}
+
+				// Normalize schemes so http and https rules match interchangeably.
+				$normalized_url  = preg_replace( '#^https?://#i', '', $url );
+				$normalized_rule = preg_replace( '#^https?://#i', '', $exclude_url );
+
+				if ( false !== strpos( $normalized_rule, '(.*)' ) ) {
 					// Normalize the prefix with a trailing slash so the base path
 					// itself (no trailing slash) and all descendants match, while
 					// similar-but-distinct paths (e.g. /cartoon) do not.
-					$exclude_prefix = rtrim( str_replace( '(.*)', '', $exclude_url ), '/' ) . '/';
+					$exclude_prefix = rtrim( str_replace( '(.*)', '', $normalized_rule ), '/' ) . '/';
 
-					if ( 0 === strpos( $url . '/', $exclude_prefix ) ) {
+					if ( 0 === strpos( $normalized_url . '/', $exclude_prefix ) ) {
 						return true;
 					}
 				}
 
-				if ( $url === $exclude_url ) {
+				if ( $normalized_url === $normalized_rule ) {
 					return true;
 				}
 			}
