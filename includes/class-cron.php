@@ -48,6 +48,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 
 			add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
+			add_action( 'wppo_generate_static_url', array( $this, 'process_url' ), 10, 1 );
 
 			add_action( 'wppo_database_cleanup_cron', array( $this, 'database_cleanup_cron' ) );
 
@@ -187,6 +188,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$preload      = $options['preload_settings'] ?? array();
 				$exclude_urls = Util::process_urls( $preload['excludePreloadCache'] ?? array() );
 
+				// Sitemap-aware preload: once per cycle (offset 0), warm URLs that
+				// live outside standard post queries (custom endpoints, archives).
+				if ( 0 === $paged_offset && ! empty( $preload['preloadSitemap'] ) ) {
+					$this->schedule_sitemap_url_jobs( $exclude_urls );
+				}
+
 				foreach ( $query_batch_posts as $page_id ) {
 					$page_url = get_permalink( $page_id );
 
@@ -208,6 +215,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				}
 			} finally {
 				delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
+			}
+		}
+
+		/**
+		 * Schedule single cron events for sitemap-discovered URLs.
+		 *
+		 * Skips URLs that match configured exclusion rules and URLs already
+		 * scheduled, and caps the number of events to avoid flooding cron.
+		 *
+		 * @since 2.17.0
+		 * @param array $exclude_urls Exclusion rules (processed URLs/patterns).
+		 * @return void
+		 */
+		private function schedule_sitemap_url_jobs( array $exclude_urls ): void {
+			$sitemap_urls = $this->get_sitemap_urls( 500 );
+
+			foreach ( $sitemap_urls as $url ) {
+				if ( Util::is_url_excluded( $url, $exclude_urls ) ) {
+					continue;
+				}
+
+				if ( ! wp_next_scheduled( 'wppo_generate_static_url', array( $url ) ) ) {
+					wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_url', array( $url ) );
+				}
 			}
 		}
 
@@ -267,6 +298,116 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$this->mark_page_as_processed( $page_id );
 				$this->load_page( $page_id );
 			}
+		}
+
+		/**
+		 * Generate a static cache file for an arbitrary URL.
+		 *
+		 * Used by sitemap-aware preloading for pages that are not tied to a post
+		 * ID (custom endpoints, third-party archives). Reuses the same remote
+		 * GET approach as {@see load_page()}.
+		 *
+		 * @since 2.17.0
+		 * @param string $url The URL to preload.
+		 * @return void
+		 */
+		public function process_url( $url ): void {
+			if ( ! is_string( $url ) || '' === trim( $url ) ) {
+				return;
+			}
+
+			$url = esc_url_raw( $url );
+			if ( '' === $url ) {
+				return;
+			}
+
+			$response = wp_remote_get( $url, array( 'timeout' => 30 ) );
+			if ( is_wp_error( $response ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO preload failed for URL ' . $url . ': ' . sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) ) );
+				}
+			} elseif ( wp_remote_retrieve_response_code( $response ) >= 400 ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO preload failed: HTTP status ' . (int) wp_remote_retrieve_response_code( $response ) . ' for ' . $url );
+				}
+			}
+		}
+
+		/**
+		 * Discover preloadable URLs from the site's sitemap.
+		 *
+		 * Prefers the core `wp-sitemap.xml` (WP 5.5+). Follows the sitemap index
+		 * to child sitemaps and collects up to the given cap of `<loc>` URLs that
+		 * belong to this site. Falls back to an empty list when the request fails
+		 * or the sitemap is unavailable, so preloading never breaks.
+		 *
+		 * @since 2.17.0
+		 * @param int $cap Maximum number of URLs to return.
+		 * @return string[] List of absolute sitemap URLs.
+		 */
+		private function get_sitemap_urls( int $cap = 500 ): array {
+			$urls       = array();
+			$urls_count = 0;
+			$home_host  = wp_parse_url( home_url(), PHP_URL_HOST );
+			$to_fetch   = array( home_url( '/wp-sitemap.xml' ) );
+			$fetched    = array();
+
+			while ( ! empty( $to_fetch ) && $urls_count < $cap ) {
+				$current = array_shift( $to_fetch );
+
+				if ( isset( $fetched[ $current ] ) ) {
+					continue;
+				}
+				$fetched[ $current ] = true;
+
+				$response = wp_remote_get( $current, array( 'timeout' => 20 ) );
+				if ( is_wp_error( $response ) ) {
+					continue;
+				}
+
+				$body = wp_remote_retrieve_body( $response );
+				if ( '' === $body ) {
+					continue;
+				}
+
+				$is_index = ( false !== strpos( $body, '<sitemapindex' ) );
+
+				if ( ! preg_match_all( '#<loc>\s*([^<]+?)\s*</loc>#i', $body, $matches ) ) {
+					continue;
+				}
+
+				$to_fetch_count = count( $to_fetch );
+
+				foreach ( $matches[1] as $loc ) {
+					$loc = esc_url_raw( trim( $loc ) );
+					if ( '' === $loc ) {
+						continue;
+					}
+
+					$loc_host = wp_parse_url( $loc, PHP_URL_HOST );
+					if ( $loc_host && $loc_host !== $home_host ) {
+						continue;
+					}
+
+					if ( $is_index ) {
+						if ( ! isset( $fetched[ $loc ] ) && $to_fetch_count < 50 ) {
+							$to_fetch[] = $loc;
+							++$to_fetch_count;
+						}
+						continue;
+					}
+
+					$urls[] = $loc;
+					++$urls_count;
+					if ( $urls_count >= $cap ) {
+						break 2;
+					}
+				}
+			}
+
+			return $urls;
 		}
 
 		/**

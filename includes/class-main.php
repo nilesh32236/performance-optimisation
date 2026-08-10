@@ -212,6 +212,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'speculationMode'        => 'prerender',
 						'speculationEagerness'   => 'moderate',
 						'speculationExcludeUrls' => '',
+						'preloadSitemap'         => false,
 					),
 					'image_optimisation' => array(
 						'placeholderType'            => 'svg',

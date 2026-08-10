@@ -47,14 +47,20 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
   `FileOptimization.test.js` (toggle render + submit payload).
 - Verification: `phpunit` OK (221 tests), `phpcs` clean, JS suite 36/36, eslint clean.
 
-### GAP-M3 `[PENDING]` — Sitemap-aware cache preloading
-- **Competitors:** WP Rocket, W3TC.
-- **Gap:** Preload discovers URLs only via `get_posts()`. Pages absent from post queries
-  (custom endpoints, third-party archives) are never warmed.
-- **Fix:** Extend `Cron::schedule_page_cron_jobs()` to also read a sitemap
-  (`wp-sitemap.xml` / plugin sitemaps) via `wp_remote_get` and schedule those URLs.
-  Must respect exclusion rules, dedupe with post URLs, and cap batch size.
-- **Effort:** Medium. **Value:** Medium-high.
+### GAP-M3 `[COMPLETED]` — Sitemap-aware cache preloading
+- Added `preloadSitemap` setting default false under `preload_settings` (class-main.php defaults)
+  and React `PreloadSettings.js` default + SwitchField toggle ("Preload from Sitemap").
+- `Cron::process_url()` (public) loads an arbitrary URL via `wp_remote_get`; scheduled on the new
+  `wppo_generate_static_url` cron event.
+- Private `Cron::get_sitemap_urls()` fetches `wp-sitemap.xml`, follows index child sitemaps,
+  filters off-site URLs via `wp_parse_url`, caps at 500 URLs / 50 to-fetch.
+- Private `Cron::schedule_sitemap_url_jobs()` skips excluded URLs (`Util::is_url_excluded()`),
+  dedupes via `wp_next_scheduled( 'wppo_generate_static_url', array( $url ) )`, schedules with a
+  0-1800s random delay; invoked from `schedule_page_cron_jobs()` at `paged_offset === 0`.
+- Tests: `tests/php/CronSitemapTest.php` (6 cases) incl. off-site filtering, empty-on-failure,
+  excluded-URL skip, and `process_url` request/empty-input behavior.
+- Verification: `phpunit` OK (227 tests), `phpcs` clean, JS PreloadSettings 11/11, `npm run
+  lint:js` clean, `npm run build` success.
 
 ### GAP-M4 `[PENDING]` — RUM-style Web Vitals trend monitoring
 - **Competitors:** WP Rocket Insights, FlyingPress CrUX.
@@ -89,6 +95,6 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
 1. MOD-1 verified (no-op).
 2. GAP-M1 (DB cleanup) — PHP + REST + React + tests.
 3. GAP-M2 (query strings) — PHP + settings + React + tests.
-4. GAP-M3 (sitemap preload) — PHP cron + tests.
+4. GAP-M3 (sitemap preload) — PHP cron + tests (+ React toggle).
 5. GAP-M4 (Web Vitals trends) — PHP cron + REST + React + tests.
 6. Full verification: `composer lint` → `composer test` → `npm run lint:js` → `npm test` → `npm run build`.
