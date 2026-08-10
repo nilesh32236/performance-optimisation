@@ -40,6 +40,7 @@ const FileOptimization = ( {
 		excludeCSS: '',
 		combineCSS: false,
 		excludeCombineCSS: '',
+		removeQueryStrings: false,
 		minifyHTML: false,
 		deferJS: false,
 		excludeDeferJS: '',
@@ -355,6 +356,19 @@ const FileOptimization = ( {
 										/>
 									</div>
 								) }
+								<SwitchField
+									label={ __(
+										'Remove Query Strings From Static Resources',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Strip ?ver= query strings from CSS and JavaScript URLs so proxies and CDNs can cache them more effectively.',
+										'performance-optimisation'
+									) }
+									name="removeQueryStrings"
+									checked={ settings.removeQueryStrings }
+									onChange={ handleChange( setSettings ) }
+								/>
 								<Tooltip
 									content={ __(
 										'Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly.',

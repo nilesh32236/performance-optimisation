@@ -205,6 +205,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'minifyInlineCSS'        => false,
 						'minifyInlineJS'         => false,
 						'removeHTMLComments'     => true,
+						'removeQueryStrings'     => false,
 					),
 					'preload_settings'   => array(
 						'enableSpeculationRules' => false,
@@ -503,6 +504,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
+			}
+
+			if ( ! empty( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
+				add_filter( 'script_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
+				add_filter( 'style_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
@@ -2025,6 +2031,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 				);
 			}
+		}
+
+		/**
+		 * Strips version query strings from enqueued static asset URLs.
+		 *
+		 * Removing `?ver=` from CSS/JS URLs lets proxies, CDNs, and browsers cache
+		 * the files more effectively. Cache-busting is retained where the plugin
+		 * rewrites URLs (minify/combine) because those already embed the file
+		 * modification time; this only affects URLs that still carry a `ver` arg.
+		 *
+		 * @since 2.17.0
+		 *
+		 * @param string $src    The asset source URL.
+		 * @param string $handle The script/style handle.
+		 * @return string The URL without its version query string.
+		 */
+		public function strip_static_query_strings( $src, $handle ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( empty( $src ) ) {
+				return $src;
+			}
+
+			$parsed = wp_parse_url( $src );
+			if ( ! isset( $parsed['query'] ) || empty( $parsed['query'] ) ) {
+				return $src;
+			}
+
+			parse_str( $parsed['query'], $args );
+			unset( $args['ver'] );
+
+			if ( empty( $args ) ) {
+				// No remaining args: drop the '?' entirely.
+				return strtok( $src, '?' );
+			}
+
+			return $parsed['scheme'] . '://' . $parsed['host'] . ( isset( $parsed['path'] ) ? $parsed['path'] : '' ) . '?' . http_build_query( $args );
 		}
 
 		/**

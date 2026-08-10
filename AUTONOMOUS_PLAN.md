@@ -37,13 +37,15 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
   expanded `test_table_map_is_correct` + `test_methods_exist`.
 - Verification: `phpunit` OK (217 tests), `phpcs` clean, JS DatabaseCleanup suite 17/17.
 
-### GAP-M2 `[PENDING]` — Remove query strings from static resources
-- **Competitors:** LiteSpeed, Perfmatters (table-stakes toggle).
-- **Gap:** No toggle strips `?ver=` from static asset URLs (improves proxy/CDN cacheability).
-- **Fix:** Add `removeQueryStrings` toggle under `file_optimisation`; a `clean_url` /
-  `style_loader_tag` / `script_loader_tag` filter strips `?ver=` when enabled. Must preserve
-  cache-busting via file mtime when static cache/minify rewrites URLs.
-- **Effort:** Low. **Value:** Medium-high.
+### GAP-M2 `[COMPLETED]` — Remove query strings from static resources
+- Added `removeQueryStrings` toggle under `file_optimisation` (default false) in `class-main.php`
+  defaults and the React `FileOptimization.js` settings + toggle UI.
+- Implemented `Main::strip_static_query_strings()` registered on `script_loader_src` /
+  `style_loader_src` filters; strips `ver` arg while preserving other query args, drops the
+  `?` entirely when nothing remains.
+- Tests: `tests/php/MainStripQueryStringsTest.php` (4 cases) + 2 JS tests in
+  `FileOptimization.test.js` (toggle render + submit payload).
+- Verification: `phpunit` OK (221 tests), `phpcs` clean, JS suite 36/36, eslint clean.
 
 ### GAP-M3 `[PENDING]` — Sitemap-aware cache preloading
 - **Competitors:** WP Rocket, W3TC.
