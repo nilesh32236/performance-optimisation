@@ -47,6 +47,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			'trashed_comments'   => array( 'comments', 'commentmeta' ),
 			'expired_transients' => array( 'options' ),
 			'orphan_postmeta'    => array( 'postmeta' ),
+			'unattached_media'   => array( 'posts', 'postmeta' ),
+			'oembed_cache'       => array( 'options' ),
 		);
 
 		/**
@@ -63,6 +65,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			'clean_trashed_comments'   => 'trashed_comments',
 			'clean_expired_transients' => 'expired_transients',
 			'clean_orphan_postmeta'    => 'orphan_postmeta',
+			'clean_unattached_media'   => 'unattached_media',
+			'clean_oembed_cache'       => 'oembed_cache',
 		);
 
 		/**
@@ -606,6 +610,133 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
+		 * Delete media attachments with no parent post.
+		 *
+		 * Removes orphaned attachment posts (and their postmeta) that are not
+		 * referenced by any post, page, or custom post type. Unattached media
+		 * accumulates quickly on busy sites and bloats the database.
+		 *
+		 * @since 2.17.0
+		 * @return int|false Number of attachments deleted, or false on error.
+		 */
+		public static function clean_unattached_media() {
+			global $wpdb;
+			$deleted = 0;
+			$batch   = 500;
+
+			do {
+				$wpdb->last_error = '';
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup.
+				$ids = $wpdb->get_col(
+					$wpdb->prepare(
+						"SELECT ID FROM $wpdb->posts
+						WHERE post_type = 'attachment'
+						AND post_parent = 0
+						AND post_status NOT IN ( 'inherit', 'auto-draft' )
+						LIMIT %d",
+						$batch
+					)
+				);
+
+				if ( ! empty( $wpdb->last_error ) ) {
+					return false;
+				}
+
+				$ids_count = is_array( $ids ) ? count( $ids ) : 0;
+				if ( 0 === $ids_count ) {
+					break;
+				}
+
+				// Delete associated meta for these attachments.
+				$placeholders = implode( ',', array_fill( 0, $ids_count, '%d' ) );
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$meta_deleted = $wpdb->query(
+					$wpdb->prepare(
+						"DELETE FROM $wpdb->postmeta WHERE post_id IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+						...$ids
+					)
+				);
+
+				if ( false === $meta_deleted ) {
+					return false;
+				}
+
+				$wpdb->last_error = '';
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$posts_deleted = $wpdb->query(
+					$wpdb->prepare(
+						"DELETE FROM $wpdb->posts WHERE ID IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+						...$ids
+					)
+				);
+
+				if ( false === $posts_deleted ) {
+					return false;
+				}
+
+				$deleted += (int) $posts_deleted;
+			} while ( $ids_count === $batch );
+
+			return $deleted;
+		}
+
+		/**
+		 * Delete cached oEmbed rows from the options table.
+		 *
+		 * WordPress stores oEmbed responses (Twitter, YouTube, Vimeo embeds) in
+		 * `wp_options` as `_oembed_*` rows. These accumulate for every unique
+		 * embed URL ever rendered and are never auto-cleaned by core.
+		 *
+		 * @since 2.17.0
+		 * @return int|false Number of rows deleted, or false on error.
+		 */
+		public static function clean_oembed_cache() {
+			global $wpdb;
+			$deleted = 0;
+			$batch   = 1000;
+
+			do {
+				$wpdb->last_error = '';
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Direct SQL is necessary for efficient bulk cleanup.
+				$ids = $wpdb->get_col(
+					$wpdb->prepare(
+						"SELECT option_name FROM $wpdb->options
+						WHERE option_name LIKE %s
+						LIMIT %d",
+						$wpdb->esc_like( '_oembed_' ) . '%',
+						$batch
+					)
+				);
+
+				if ( ! empty( $wpdb->last_error ) ) {
+					return false;
+				}
+
+				$ids_count = is_array( $ids ) ? count( $ids ) : 0;
+				if ( 0 === $ids_count ) {
+					break;
+				}
+
+				$placeholders = implode( ',', array_fill( 0, $ids_count, '%s' ) );
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$result = $wpdb->query(
+					$wpdb->prepare(
+						"DELETE FROM $wpdb->options WHERE option_name IN ($placeholders)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+						...$ids
+					)
+				);
+
+				if ( false === $result ) {
+					return false;
+				}
+
+				$deleted += (int) $result;
+			} while ( $ids_count === $batch );
+
+			return $deleted;
+		}
+
+		/**
 		 * Execute all defined database cleanup routines and collect their results.
 		 *
 		 * @since 1.1.0
@@ -620,6 +751,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				'trashed_comments'   => 'clean_trashed_comments',
 				'expired_transients' => 'clean_expired_transients',
 				'orphan_postmeta'    => 'clean_orphan_postmeta',
+				'unattached_media'   => 'clean_unattached_media',
+				'oembed_cache'       => 'clean_oembed_cache',
 			);
 
 			$results         = array();
@@ -776,6 +909,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					"SELECT COUNT(*) FROM $wpdb->postmeta pm
 					LEFT JOIN $wpdb->posts p ON p.ID = pm.post_id
 					WHERE p.ID IS NULL"
+				),
+				'unattached_media'   => (int) $wpdb->get_var(
+					"SELECT COUNT(*) FROM $wpdb->posts
+					WHERE post_type = 'attachment'
+					AND post_parent = 0
+					AND post_status NOT IN ( 'inherit', 'auto-draft' )"
+				),
+				'oembed_cache'       => (int) $wpdb->get_var(
+					$wpdb->prepare(
+						"SELECT COUNT(*) FROM $wpdb->options WHERE option_name LIKE %s",
+						$wpdb->esc_like( '_oembed_' ) . '%'
+					)
 				),
 			);
 			// phpcs:enable

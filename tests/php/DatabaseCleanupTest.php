@@ -28,6 +28,8 @@ class DatabaseCleanupTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayHasKey( 'trashed_comments', $map );
 		$this->assertArrayHasKey( 'expired_transients', $map );
 		$this->assertArrayHasKey( 'orphan_postmeta', $map );
+		$this->assertArrayHasKey( 'unattached_media', $map );
+		$this->assertArrayHasKey( 'oembed_cache', $map );
 		$this->assertSame( array( 'posts', 'postmeta' ), $map['revisions'] );
 		$this->assertSame( array( 'options' ), $map['expired_transients'] );
 	}
@@ -107,6 +109,61 @@ class DatabaseCleanupTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_trashed_comments' ) );
 		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_expired_transients' ) );
 		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_orphan_postmeta' ) );
+		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_unattached_media' ) );
+		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_oembed_cache' ) );
+	}
+
+	/**
+	 * Test that clean_unattached_media returns zero when none exist.
+	 */
+	public function test_clean_unattached_media_returns_zero_when_none_exist(): void {
+		$GLOBALS['wpdb'] = new WPPO_DB_Mock();
+
+		Functions\stubs(
+			array(
+				'wp_normalize_path',
+				'sanitize_text_field',
+				'wp_unslash',
+			)
+		);
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+
+		$result = Database_Cleanup::clean_unattached_media();
+		$this->assertSame( 0, $result );
+	}
+
+	/**
+	 * Test that clean_oembed_cache returns zero when none exist.
+	 */
+	public function test_clean_oembed_cache_returns_zero_when_none_exist(): void {
+		$GLOBALS['wpdb'] = new WPPO_DB_Mock();
+
+		Functions\stubs(
+			array(
+				'wp_normalize_path',
+				'sanitize_text_field',
+				'wp_unslash',
+			)
+		);
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+
+		$result = Database_Cleanup::clean_oembed_cache();
+		$this->assertSame( 0, $result );
+	}
+
+	/**
+	 * Test that TABLE_MAP contains the new cleanup types.
+	 */
+	public function test_table_map_contains_new_types(): void {
+		$map = Database_Cleanup::TABLE_MAP;
+		$this->assertArrayHasKey( 'unattached_media', $map );
+		$this->assertArrayHasKey( 'oembed_cache', $map );
+		$this->assertSame( array( 'posts', 'postmeta' ), $map['unattached_media'] );
+		$this->assertSame( array( 'options' ), $map['oembed_cache'] );
 	}
 }
 

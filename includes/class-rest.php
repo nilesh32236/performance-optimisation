@@ -738,7 +738,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			$type   = isset( $params['type'] ) ? sanitize_text_field( $params['type'] ) : '';
 
-			$valid_types = array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'all' );
+			$valid_types = array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'unattached_media', 'oembed_cache', 'all' );
 
 			if ( ! in_array( $type, $valid_types, true ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
@@ -797,6 +797,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'trashed_comments'   => 'clean_trashed_comments',
 				'expired_transients' => 'clean_expired_transients',
 				'orphan_postmeta'    => 'clean_orphan_postmeta',
+				'unattached_media'   => 'clean_unattached_media',
+				'oembed_cache'       => 'clean_oembed_cache',
 			);
 
 			$method = $method_map[ $type ] ?? null;
