@@ -91,7 +91,7 @@ Baseline diagnostics (Phase 1, run 2026-08-10):
   `my-account/(.*)`), plus the scheme-mismatch and empty-rule cases from AUDIT-0004.
 - **Verification:** 15/15 pass in the suite; full run OK (174 tests).
 
-### AUDIT-0010 `[IN PROGRESS]` — Untested PHP classes
+### AUDIT-0010 `[COMPLETED]` — Untested PHP classes
 - **Files lacking a dedicated `*Test.php`:**
   - `class-log.php` (activity log add/get + salt cache) — highest value, pure DB class.
   - `class-advanced-cache-handler.php` (drop-in create/detect/remove) — pure filesystem.
@@ -136,7 +136,7 @@ Baseline diagnostics (Phase 1, run 2026-08-10):
   (prevents Brain Monkey redeclare fatals across tests).
 - **Verification:** `phpunit` OK (214 tests), `phpcs` clean.
 
-### AUDIT-0011 `[IN PROGRESS]` — Untested React components / libs
+### AUDIT-0011 `[COMPLETED]` — Untested React components / libs
 - **Files lacking tests:**
   - `src/components/CriticalCssPanel.js` (ccss regenerate/status API flow).
   - `src/components/Dashboard.js` (stats, polling, image optimize flow).

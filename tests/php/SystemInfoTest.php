@@ -50,6 +50,7 @@ class SystemInfoTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertArrayHasKey( 'php', $info );
 		$this->assertArrayHasKey( 'database', $info );
+		// phpcs:ignore WordPress.WP.CapitalPDangit.MisspelledInText -- Lowercase data key mirrors get_all().
 		$this->assertArrayHasKey( 'wordpress', $info );
 		$this->assertArrayHasKey( 'wp_constants', $info );
 		$this->assertArrayHasKey( 'server', $info );
