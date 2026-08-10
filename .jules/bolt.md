@@ -80,3 +80,7 @@
 
 **Learning:** The blog-ID-keyed `content_url()` cache introduced on 2026-07-31 was duplicated across the CSS and JS minifier constructors and `update_image_paths()`, and it lacked the `has_filter( 'content_url' )` guard already used in `class-main.php`. WP core already caches the filtered base URL statically, so the per-call win is marginal and the duplication was pure maintainability debt.
 **Action:** Extract a single shared helper `Util::cached_content_url( $path )` that keys a static array by `get_current_blog_id()` and only caches when no `content_url` filter is registered (matching the `class-main.php` convention), then use it from every minifier call site.
+
+## 2026-08-05 - Avoid redundant core function calls in string manipulation
+**Learning:** Executing WordPress core functions like `home_url()` repeatedly within functions that normalize URLs dynamically (like `Image_Optimisation::normalize_image_url()`) incurs unnecessary hook resolution overhead when executed against a buffer containing many elements.
+**Action:** Always cache the results of expensive functions such as `home_url()` using `static` variables, keyed per `get_current_blog_id()` for multisite safety, when the value remains constant during a request and is repeatedly used for comparison or transformation.
