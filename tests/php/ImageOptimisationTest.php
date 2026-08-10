@@ -605,4 +605,60 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$core = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
 		$this->assertSame( $core, $image_opt->filter_client_side_supported_mime_types( $core ) );
 	}
+
+	/**
+	 * Stub the WP functions normalize_image_url() depends on and invoke it.
+	 *
+	 * @param int $blog_id Blog ID used to isolate the per-blog static cache.
+	 * @return array{0:string,1:int} [normalized_url, home_url call count].
+	 */
+	private function invoke_normalize_image_url( int $blog_id ): array {
+		Functions\when( 'untrailingslashit' )->returnArg();
+		Functions\when( 'get_current_blog_id' )->justReturn( $blog_id );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test alias for wp_parse_url.
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+
+		$calls = 0;
+		Functions\when( 'home_url' )->alias(
+			static function () use ( &$calls ) {
+				++$calls;
+				return 'http://example.com';
+			}
+		);
+
+		$image_opt  = new Image_Optimisation( $this->default_options );
+		$reflection = new \ReflectionMethod( Image_Optimisation::class, 'normalize_image_url' );
+		$reflection->setAccessible( true );
+
+		$url = $reflection->invoke( $image_opt, '/wp-content/uploads/a.jpg' );
+		$reflection->invoke( $image_opt, '/wp-content/uploads/b.jpg' );
+
+		return array( $url, $calls );
+	}
+
+	/**
+	 * Test that normalize_image_url resolves home_url() once per blog when no
+	 * home_url filter is registered (cached across calls).
+	 */
+	public function test_normalize_image_url_caches_home_url_when_no_filter(): void {
+		Functions\when( 'has_filter' )->justReturn( false );
+
+		list( $url, $calls ) = $this->invoke_normalize_image_url( 99 );
+
+		$this->assertSame( 'example.com/wp-content/uploads/a.jpg', $url );
+		$this->assertSame( 1, $calls );
+	}
+
+	/**
+	 * Test that normalize_image_url resolves home_url() on every call when a
+	 * home_url filter is registered (caching disabled).
+	 */
+	public function test_normalize_image_url_bypasses_cache_when_filter_registered(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+
+		list( $url, $calls ) = $this->invoke_normalize_image_url( 100 );
+
+		$this->assertSame( 'example.com/wp-content/uploads/a.jpg', $url );
+		$this->assertSame( 2, $calls );
+	}
 }

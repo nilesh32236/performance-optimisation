@@ -286,6 +286,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Check whether a URL matches any of the exclusion rules.
+		 *
+		 * Both the URL being checked and each exclusion rule are normalized with
+		 * a trailing-slash trim before matching. Root-relative rules are resolved
+		 * against {@see home_url()}. Rules containing a "(.*)" placeholder act as
+		 * prefix patterns; all other rules must match exactly.
+		 *
+		 * @param string $url         The URL to check.
+		 * @param array  $exclude_urls List of exclusion rules.
+		 * @return bool True when the URL matches any exclusion rule, false otherwise.
+		 * @since 2.16.0
+		 */
+		public static function is_url_excluded( string $url, array $exclude_urls ): bool {
+			$url = rtrim( $url, '/' );
+
+			foreach ( $exclude_urls as $exclude_url ) {
+				$exclude_url = rtrim( $exclude_url, '/' );
+
+				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+					$exclude_url = home_url( $exclude_url );
+				}
+
+				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+					// Normalize the prefix with a trailing slash so the base path
+					// itself (no trailing slash) and all descendants match, while
+					// similar-but-distinct paths (e.g. /cartoon) do not.
+					$exclude_prefix = rtrim( str_replace( '(.*)', '', $exclude_url ), '/' ) . '/';
+
+					if ( 0 === strpos( $url . '/', $exclude_prefix ) ) {
+						return true;
+					}
+				}
+
+				if ( $url === $exclude_url ) {
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		/**
 		 * Get the current front-end URL including scheme and host.
 		 *
 		 * Returns a normalized URL without query string, consistent with
