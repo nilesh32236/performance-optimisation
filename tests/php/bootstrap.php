@@ -163,6 +163,17 @@ if ( ! defined( 'MINUTE_IN_SECONDS' ) ) {
 	define( 'MINUTE_IN_SECONDS', 60 );
 }
 
+// WordPress $wpdb result constants used by plugin DB code paths.
+if ( ! defined( 'ARRAY_A' ) ) {
+	define( 'ARRAY_A', 'ARRAY_A' );
+}
+if ( ! defined( 'ARRAY_N' ) ) {
+	define( 'ARRAY_N', 'ARRAY_N' );
+}
+if ( ! defined( 'OBJECT' ) ) {
+	define( 'OBJECT', 'OBJECT' );
+}
+
 // Mock global $wpdb.
 // phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
 global $wpdb;

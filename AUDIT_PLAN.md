@@ -91,7 +91,7 @@ Baseline diagnostics (Phase 1, run 2026-08-10):
   `my-account/(.*)`), plus the scheme-mismatch and empty-rule cases from AUDIT-0004.
 - **Verification:** 15/15 pass in the suite; full run OK (174 tests).
 
-### AUDIT-0010 `[PENDING]` — Untested PHP classes
+### AUDIT-0010 `[IN PROGRESS]` — Untested PHP classes
 - **Files lacking a dedicated `*Test.php`:**
   - `class-log.php` (activity log add/get + salt cache) — highest value, pure DB class.
   - `class-advanced-cache-handler.php` (drop-in create/detect/remove) — pure filesystem.
@@ -104,6 +104,14 @@ Baseline diagnostics (Phase 1, run 2026-08-10):
     `class-activate.php`, `class-deactivate.php`, `class-wppo-cli-command.php`.
 - **Fix (priority order):** Add tests for `Log` (AUDIT-0010a), `Advanced_Cache_Handler`
   (AUDIT-0010b), `Server_Rules` (AUDIT-0010c), `System_Info` (AUDIT-0010d).
+
+### AUDIT-0010a `[COMPLETED]` — `Log` class tests
+- **Files:** `tests/php/LogTest.php` (new, 6 tests).
+- **Coverage:** `add()` insert + salt bump, failed-insert no-op, `get_recent_activities()`
+  paginated DB path, cached path, bounds clamping, versioned fallback cache path.
+- **Also:** Defined `ARRAY_A`/`ARRAY_N`/`OBJECT` constants in `tests/php/bootstrap.php` (WP
+  constants needed by namespaced DB code).
+- **Verification:** `phpunit` OK (180 tests), `phpcs` clean.
 
 ### AUDIT-0011 `[PENDING]` — Untested React components / libs
 - **Files lacking tests:**

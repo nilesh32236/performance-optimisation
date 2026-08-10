@@ -35,3 +35,10 @@
   `tests/php/UtilIsUrlExcludedTest.php`.
 - Verification: `phpunit` OK (174 tests, 384 assertions); `phpcs` clean.
 
+### AUDIT-0010a — Log class tests (commit: pending)
+- Added `tests/php/LogTest.php` (6 tests): insert + salt bump, failed-insert no-op, paginated
+  DB path, cached path, bounds clamping, versioned fallback cache path.
+- Added `ARRAY_A`/`ARRAY_N`/`OBJECT` constants to `tests/php/bootstrap.php`.
+- Files modified: `tests/php/LogTest.php` (new), `tests/php/bootstrap.php`.
+- Verification: `phpunit` OK (180 tests, 400 assertions); `phpcs` clean.
+
