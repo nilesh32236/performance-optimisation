@@ -908,21 +908,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 				if ( empty( $local_path ) ) {
 					// If Util::get_local_path failed, manually resolve if it's a URL.
-					static $home_url  = array();
+					$home_url         = Util::cached_home_url();
 					$content_url_base = untrailingslashit( Util::cached_content_url( '' ) );
-					$blog_id          = get_current_blog_id();
-
-					if ( ! isset( $home_url[ $blog_id ] ) ) {
-						$home_url[ $blog_id ] = untrailingslashit( home_url() );
-					}
 
 					$local_base = wp_normalize_path( ABSPATH );
 
 					if ( strpos( $source_image, $content_url_base ) === 0 ) {
 						$relative_path = substr( $source_image, strlen( $content_url_base ) );
 						$local_base    = wp_normalize_path( WP_CONTENT_DIR );
-					} elseif ( strpos( $source_image, $home_url[ $blog_id ] ) === 0 ) {
-						$relative_path = substr( $source_image, strlen( $home_url[ $blog_id ] ) );
+					} elseif ( strpos( $source_image, $home_url ) === 0 ) {
+						$relative_path = substr( $source_image, strlen( $home_url ) );
 					} else {
 						$relative_path = $source_image;
 					}
@@ -971,14 +966,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 */
 		public static function get_img_url( string $source_image, string $format = 'webp' ): string {
 
-			static $home_url = array();
-			$blog_id         = get_current_blog_id();
+			$home_url = untrailingslashit( Util::cached_home_url() );
 
-			if ( ! isset( $home_url[ $blog_id ] ) ) {
-				$home_url[ $blog_id ] = home_url();
-			}
-
-			if ( 0 === strpos( $source_image, $home_url[ $blog_id ] ) ) {
+			if ( 0 === strpos( $source_image, $home_url ) ) {
 				// Replace the extension only at the end of the file name.
 				$path_info     = pathinfo( $source_image );
 				$converted_img = $path_info['dirname'] . '/' . $path_info['filename'] . '.' . $format;

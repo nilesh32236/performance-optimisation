@@ -689,7 +689,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			// Cache home_url() once per blog for the request.
-			static $home_base = array();
+			$home_base = Util::cached_home_url();
 
 			// Protocol-relative URLs (e.g., //example.com/image.jpg).
 			if ( strpos( $url, '//' ) === 0 ) {
@@ -697,7 +697,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$blog_id       = get_current_blog_id();
 
 				if ( ! isset( $scheme[ $blog_id ] ) ) {
-					$scheme[ $blog_id ] = wp_parse_url( home_url(), PHP_URL_SCHEME );
+					$scheme[ $blog_id ] = wp_parse_url( $home_base, PHP_URL_SCHEME );
 					if ( empty( $scheme[ $blog_id ] ) ) {
 						$scheme[ $blog_id ] = is_ssl() ? 'https' : 'http';
 					}
@@ -707,12 +707,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			// Root-relative paths (e.g., /wp-content/uploads/image.jpg).
 			if ( strpos( $url, '/' ) === 0 ) {
-				$blog_id = get_current_blog_id();
-
-				if ( ! isset( $home_base[ $blog_id ] ) ) {
-					$home_base[ $blog_id ] = home_url();
-				}
-				return rtrim( $home_base[ $blog_id ], '/' ) . '/' . ltrim( $url, '/' );
+				return $home_base . '/' . ltrim( $url, '/' );
 			}
 
 			// True relative paths (e.g., images/photo.jpg or ../uploads/img.jpg).
@@ -728,10 +723,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					}
 				}
 				$absolute_path = $this->resolve_relative_path( $current_url_path[ $blog_id ], $url );
-				if ( ! isset( $home_base[ $blog_id ] ) ) {
-					$home_base[ $blog_id ] = home_url();
-				}
-				return rtrim( $home_base[ $blog_id ], '/' ) . '/' . ltrim( $absolute_path, '/' );
+				return $home_base . '/' . ltrim( $absolute_path, '/' );
 			}
 
 			return $url;
@@ -2153,20 +2145,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			// Root-relative or bare path — resolve against the site URL.
 			if ( 0 === strpos( $url, '/' ) || false === strpos( $url, '://' ) ) {
-				// Cache home_url() once per blog to prevent redundant core calls
-				// when normalizing multiple LCP candidate tags in the HTML buffer.
-				// When a home_url filter is registered the result may be context-
-				// dependent, so caching is bypassed (mirrors Util::cached_content_url()).
-				if ( false === has_filter( 'home_url' ) ) {
-					static $home_url = array();
-					$blog_id         = get_current_blog_id();
-					if ( ! isset( $home_url[ $blog_id ] ) ) {
-						$home_url[ $blog_id ] = untrailingslashit( home_url() );
-					}
-					$url = $home_url[ $blog_id ] . '/' . ltrim( $url, '/' );
-				} else {
-					$url = untrailingslashit( home_url() ) . '/' . ltrim( $url, '/' );
-				}
+				$url = Util::cached_home_url() . '/' . ltrim( $url, '/' );
 			}
 
 			$parts = wp_parse_url( $url );

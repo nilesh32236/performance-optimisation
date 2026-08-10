@@ -84,3 +84,8 @@
 ## 2026-08-05 - Avoid redundant core function calls in string manipulation
 **Learning:** Executing WordPress core functions like `home_url()` repeatedly within functions that normalize URLs dynamically (like `Image_Optimisation::normalize_image_url()`) incurs unnecessary hook resolution overhead when executed against a buffer containing many elements.
 **Action:** Always cache the results of expensive functions such as `home_url()` using `static` variables, keyed per `get_current_blog_id()` for multisite safety, when the value remains constant during a request and is repeatedly used for comparison or transformation.
+
+## 2026-08-05 - Centralize home_url caching into Util::cached_home_url
+
+**Learning:** The blog-ID-keyed `home_url()` caching pattern was scattered across multiple classes (`class-util.php`, `class-img-converter.php`, `class-image-optimisation.php`) often with duplicate inline static arrays. WordPress core does not statically cache `home_url()`, meaning redundant calls in loops can add minor overhead, but duplicating the boilerplate to bypass this is poor maintainability.
+**Action:** Extract a single shared helper `Util::cached_home_url()` that keys a static array by `get_current_blog_id()` and only caches when no `home_url` filter is registered, similar to `Util::cached_content_url()`, then use it from all relevant call sites.
