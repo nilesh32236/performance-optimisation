@@ -88,6 +88,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Ensure required labels exist
         env:
@@ -125,6 +126,7 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: 'opencode/deepseek-v4-flash-free'
+          enable_mcp: false
           max_fix_iterations: 1
           run_checks_after_fix: 'npm run lint:js'
           project_context: >
@@ -188,6 +190,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -277,6 +280,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
