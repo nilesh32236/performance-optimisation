@@ -187,33 +187,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$preload      = $options['preload_settings'] ?? array();
 				$exclude_urls = Util::process_urls( $preload['excludePreloadCache'] ?? array() );
 
-				foreach ( $query_batch_posts as $page_id ) {
-					$page_url       = get_permalink( $page_id );
-					$should_exclude = false;
-
-					foreach ( $exclude_urls as $exclude_url ) {
-						$exclude_url = rtrim( $exclude_url, '/' );
-
-						if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-							$exclude_url = home_url( $exclude_url );
-						}
-
-						if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-							$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-
-							if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
-								$should_exclude = true;
-								break;
-							}
-						}
-
-						if ( $page_url === $exclude_url ) {
-							$should_exclude = true;
-							break;
-						}
+				// Normalize exclude URLs once outside the loop for better performance and readability.
+				$normalized_excludes = array();
+				foreach ( $exclude_urls as $exclude_url ) {
+					$exclude_url = rtrim( $exclude_url, '/' );
+					if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+						$exclude_url = home_url( $exclude_url );
 					}
+					$normalized_excludes[] = $exclude_url;
+				}
 
-					if ( $should_exclude ) {
+				foreach ( $query_batch_posts as $page_id ) {
+					$page_url = get_permalink( $page_id );
+
+					if ( $this->is_url_excluded( $page_url, $normalized_excludes ) ) {
 						continue;
 					}
 
@@ -232,6 +219,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			} finally {
 				delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
 			}
+		}
+
+		/**
+		 * Check if a given URL matches any of the excluded patterns.
+		 *
+		 * @param string $page_url The URL to check.
+		 * @param array  $exclude_urls An array of normalized exclusion rules.
+		 * @return bool True if excluded, false otherwise.
+		 * @since NEXT
+		 */
+		private function is_url_excluded( string $page_url, array $exclude_urls ): bool {
+			foreach ( $exclude_urls as $exclude_url ) {
+				if ( false !== strpos( $exclude_url, '(.*)' ) ) {
+					$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
+
+					if ( 0 === strpos( $page_url, $exclude_prefix ) ) {
+						return true;
+					}
+				}
+
+				if ( $page_url === $exclude_url ) {
+					return true;
+				}
+			}
+
+			return false;
 		}
 
 		/**

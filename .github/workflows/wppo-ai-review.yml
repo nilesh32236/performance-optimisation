@@ -87,12 +87,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
       - name: Ensure required labels exist
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh label create "autofix"                      --force --color "243cd4" --description "PR created by AI fix agent" 2>/dev/null || true
           gh label create "autofix:ready"                --force --color "0e8a16" --description "Approved by AI reviewer — ready to merge" 2>/dev/null || true
@@ -121,11 +121,12 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: fix
-          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           model: 'opencode/deepseek-v4-flash-free'
+          enable_mcp: false
           max_fix_iterations: 1
           run_checks_after_fix: 'npm run lint:js'
           project_context: >
@@ -174,7 +175,7 @@ jobs:
       - name: Resolve PR ref
         id: resolve-ref
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
             PR_NUMBER="${{ github.event.issue.number }}"
@@ -188,7 +189,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
       - name: Setup PHP
@@ -212,7 +213,7 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: review
-          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
@@ -264,7 +265,7 @@ jobs:
       - name: Resolve PR ref
         id: resolve-ref
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "issue_comment" ] && [ -n "${{ github.event.issue.pull_request }}" ]; then
             PR_NUMBER="${{ github.event.issue.number }}"
@@ -278,7 +279,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ steps.resolve-ref.outputs.ref }}
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
       - name: Setup PHP
@@ -302,7 +303,7 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: fix
-          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
@@ -337,7 +338,7 @@ jobs:
     steps:
       - name: Squash merge PR
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           echo "Merging PR #${PR_NUMBER} (autofix:ready)..."
@@ -364,7 +365,7 @@ jobs:
     steps:
       - name: Post merge notification
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           PR_TITLE="${{ github.event.pull_request.title }}"
@@ -393,7 +394,7 @@ jobs:
 
       - name: Update labels
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ github.event.pull_request.number }}"
           gh pr edit "$PR_NUMBER" \
