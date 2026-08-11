@@ -79,6 +79,17 @@ class DatabaseCleanupTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the autoloadable values include the WP 6.6+ auto-on value.
+	 */
+	public function test_get_autoloadable_values_includes_auto_on(): void {
+		$values = Database_Cleanup::get_autoloadable_values();
+
+		$this->assertContains( 'yes', $values );
+		$this->assertContains( 'auto', $values );
+		$this->assertContains( 'auto-on', $values );
+	}
+
+	/**
 	 * Test that clean_revisions returns zero when no revisions exist.
 	 */
 	public function test_clean_revisions_returns_zero_when_no_revisions(): void {

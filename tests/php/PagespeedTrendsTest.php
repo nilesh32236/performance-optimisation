@@ -31,6 +31,8 @@ class PagespeedTrendsTest extends \PHPUnit\Framework\TestCase {
 			array(
 				'get_option',
 				'update_option',
+				'add_option',
+				'delete_option',
 				'sanitize_text_field',
 				'current_time',
 				'esc_url_raw',
@@ -48,6 +50,22 @@ class PagespeedTrendsTest extends \PHPUnit\Framework\TestCase {
 				return true;
 			}
 		);
+		// add_option() is atomic in the DB: only inserts when the key is absent.
+		Functions\when( 'add_option' )->alias(
+			function ( $name, $value, $deprecated = '', $autoload = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				if ( array_key_exists( $name, $this->options ) ) {
+					return false;
+				}
+				$this->options[ $name ] = $value;
+				return true;
+			}
+		);
+		Functions\when( 'delete_option' )->alias(
+			function ( $name ) {
+				unset( $this->options[ $name ] );
+				return true;
+			}
+		);
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'current_time' )->justReturn( '2026-08-10 12:00:00' );
 		Functions\when( 'esc_url_raw' )->returnArg();
@@ -56,95 +74,6 @@ class PagespeedTrendsTest extends \PHPUnit\Framework\TestCase {
 				return strtolower( preg_replace( '/[^a-z0-9_\-]/i', '', (string) $key ) );
 			}
 		);
-		// The wp_cache_add()/wp_cache_delete() functions are declared as real
-		// PHP functions by the object-cache drop-in loaded in bootstrap.php and
-		// route through $GLOBALS['wp_object_cache']. Install a pristine store so
-		// the lock is always available unless a test swaps it for a full one.
-		$this->install_object_cache();
-	}
-
-	/**
-	 * Install an in-memory object cache store whose add() can be forced to fail.
-	 *
-	 * The wp_cache_add()/wp_cache_delete() functions are declared as real
-	 * PHP functions by the object-cache drop-in loaded in bootstrap.php, so
-	 * Patchwork cannot redefine them. The lock behaviour is therefore
-	 * controlled through the underlying store instead.
-	 *
-	 * @param bool $lock_free Whether add() reports the lock as acquired.
-	 */
-	private function install_object_cache( bool $lock_free = true ): void {
-		global $wp_object_cache;
-
-		$acquired        = $lock_free;
-		$wp_object_cache = new class( $acquired ) {
-			/**
-			 * Lock-add result.
-			 *
-			 * @var bool
-			 */
-			private $lock_free;
-
-			/**
-			 * Constructor.
-			 *
-			 * @param bool $lock_free Whether add() succeeds.
-			 */
-			public function __construct( bool $lock_free ) {
-				$this->lock_free = $lock_free;
-			}
-
-			/**
-			 * Mimic WP_Object_Cache::add() with configurable lock result.
-			 *
-			 * @param int|string $key   Cache key.
-			 * @param mixed      $data  Cache data.
-			 * @param string     $group Cache group.
-			 * @param int        $expire Expiration in seconds.
-			 * @return bool
-			 */
-			public function add( $key, $data, $group = '', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				return $this->lock_free;
-			}
-
-			/**
-			 * Mimic WP_Object_Cache::delete() as a no-op.
-			 *
-			 * @param int|string $key   Cache key.
-			 * @param string     $group Cache group.
-			 * @return true
-			 */
-			public function delete( $key, $group = '' ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				return true;
-			}
-
-			/**
-			 * Mimic WP_Object_Cache::get() returning a cache miss.
-			 *
-			 * @param int|string $key   Cache key.
-			 * @param string     $group Cache group.
-			 * @param bool       $force Whether to force.
-			 * @param bool|null  $found Whether the value was found.
-			 * @return false
-			 */
-			public function get( $key, $group = '', $force = false, &$found = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-				$found = false;
-				return false;
-			}
-
-			/**
-			 * Mimic WP_Object_Cache::set() accepting any write.
-			 *
-			 * @param int|string $key    Cache key.
-			 * @param mixed      $data   Cache data.
-			 * @param string     $group  Cache group.
-			 * @param int        $expire Expiration in seconds.
-			 * @return true
-			 */
-			public function set( $key, $data, $group = '', $expire = 0 ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				return true;
-			}
-		};
 	}
 
 	/**
@@ -235,17 +164,16 @@ class PagespeedTrendsTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Test that a held lock causes record_trend to skip the write.
 	 *
-	 * Simulates a concurrent worker owning the shared cache lock so the
-	 * read-modify-write is not duplicated for the same run.
+	 * Simulates a concurrent worker owning the DB option lock (recently written),
+	 * so the read-modify-write is not duplicated for the same run.
 	 */
 	public function test_record_trend_skips_when_lock_held(): void {
 		$this->install_option_stubs();
 		$this->options[ Pagespeed::TREND_OPTION ] = array(
 			'existing_mobile' => array(),
 		);
-		// Simulate a concurrent worker already owning the shared cache lock:
-		// wp_cache_add() reports the lock as unavailable, so the write is skipped.
-		$this->install_object_cache( false );
+		// A recent lock timestamp makes add_option() fail and the lock non-stale.
+		$this->options[ Pagespeed::TREND_LOCK_OPTION ] = time();
 
 		Pagespeed::record_trend( 'http://example.com/', $this->prepared_result( 80 ), 'mobile' );
 
@@ -254,6 +182,21 @@ class PagespeedTrendsTest extends \PHPUnit\Framework\TestCase {
 			array( 'existing_mobile' => array() ),
 			$this->options[ Pagespeed::TREND_OPTION ]
 		);
+	}
+
+	/**
+	 * Test that a stale lock is stolen and the write proceeds.
+	 */
+	public function test_record_trend_steals_stale_lock(): void {
+		$this->install_option_stubs();
+		$this->options[ Pagespeed::TREND_OPTION ] = array();
+		// A lock older than TTL is considered abandoned and re-acquired.
+		$this->options[ Pagespeed::TREND_LOCK_OPTION ] = time() - Pagespeed::TREND_LOCK_TTL - 10;
+
+		Pagespeed::record_trend( 'http://example.com/', $this->prepared_result( 80 ), 'mobile' );
+
+		$this->assertArrayHasKey( Pagespeed::TREND_OPTION, $this->options );
+		$this->assertArrayNotHasKey( Pagespeed::TREND_LOCK_OPTION, $this->options );
 	}
 
 	/**

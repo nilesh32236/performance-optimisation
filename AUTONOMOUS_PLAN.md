@@ -13,6 +13,7 @@ build success (measured 2026-08-10 after prior audit). Current: 276 PHP tests / 
 Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Total Cache.
 
 ### Already covered (no action)
+
 - Static HTML cache + gzip variants, Redis object cache, image WebP/AVIF conversion.
 - Lazy loading (native + IntersectionObserver) for images/iframes/videos, YouTube thumbnail swap.
 - Minification (CSS/JS/HTML), defer/delay JS, preconnect/preload resource hints.
@@ -28,6 +29,7 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
 - Emoji/embed removal, Heartbeat control (core-tweaks).
 
 ### GAP-M1 `[COMPLETED]` — Granular database cleanup: orphaned media + oEmbed cache
+
 - Added `Database_Cleanup::clean_unattached_media()` (batch 500, deletes attachment posts +
   their postmeta) and `Database_Cleanup::clean_oembed_cache()` (batch 1000, `_oembed_*` rows).
 - Wired both into `TABLE_MAP`, `METHOD_TO_TYPE`, `clean_all()`, `get_counts()`.
@@ -39,6 +41,7 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
 - Verification: `phpunit` OK (217 tests), `phpcs` clean, JS DatabaseCleanup suite 17/17.
 
 ### GAP-M2 `[COMPLETED]` — Remove query strings from static resources
+
 - Added `removeQueryStrings` toggle under `file_optimisation` (default false) in `class-main.php`
   defaults and the React `FileOptimization.js` settings + toggle UI.
 - Implemented `Main::strip_static_query_strings()` registered on `script_loader_src` /
@@ -49,6 +52,7 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
 - Verification: `phpunit` OK (221 tests), `phpcs` clean, JS suite 36/36, eslint clean.
 
 ### GAP-M3 `[COMPLETED]` — Sitemap-aware cache preloading
+
 - Added `preloadSitemap` setting default false under `preload_settings` (class-main.php defaults)
   and React `PreloadSettings.js` default + SwitchField toggle ("Preload from Sitemap").
 - `Cron::process_url()` (public) loads an arbitrary URL via `wp_remote_get`; scheduled on the new
@@ -64,6 +68,7 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
   lint:js` clean, `npm run build` success.
 
 ### GAP-M4 `[COMPLETED]` — RUM-style Web Vitals trend monitoring
+
 - Added `performance_audit.auto_rescan` setting (`''` disabled / `daily` / `weekly`, default `''`).
 - `Pagespeed::record_trend()` snapshots performance + core vitals into the `wppo_web_vitals_trends`
   option on every successful scan, capped at `TREND_LIMIT` (30) per URL+strategy; `get_trends()`
@@ -91,6 +96,7 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
   lint:js` clean, `npm run build` success.
 
 ### GAP-M5 `[COMPLETED]` — Competitive hardening pass (2026-08-11)
+
 Deep competitor + WP core 6.7–7.1 research → `COMPETITIVE_GAP_ANALYSIS.md`. Implemented:
 - **Real-user Web Vitals (RUM)** — `class-rum.php` (public token+rate-limited beacon, per-day/per-path
   aggregates, `rum_collect`/`rum_data` endpoints), `src/rum.js` collector, Dashboard panel, Tools toggle.
@@ -118,11 +124,13 @@ Deep competitor + WP core 6.7–7.1 research → `COMPETITIVE_GAP_ANALYSIS.md`. 
 ## [MODERN_WP_API] — Core API adoption & graceful fallbacks
 
 ### MOD-1 `[COMPLETED - verified]` — WP_HTML_Tag_Processor usage
+
 - **Verified:** `class-telemetry.php`, `class-used-css.php`, `class-cache.php` (CDN rewrite),
   `class-image-optimisation.php` already gate on `class_exists( 'WP_HTML_Tag_Processor' )`
   with regex fallbacks. No action needed beyond spot-checking new code.
 
 ### MOD-2 `[COMPLETED]` — Modern enqueue `wp_script_add_data` / strategy support
+
 - **Audit:** `add_defer_strategy()` uses core `strategy` script data on WP 6.3+ with a
   `script_loader_tag` legacy fallback — already progressive.
 - **Verified:** `minify_js`/`minify_css` still rewrite correctly with `removeQueryStrings`
@@ -135,6 +143,7 @@ Deep competitor + WP core 6.7–7.1 research → `COMPETITIVE_GAP_ANALYSIS.md`. 
   combined URL, theme `.min.css` still stripped).
 
 ### MOD-3 `[COMPLETED]` — Version-gated core functions in new code
+
 - **Audited:** all GAP-M1..M4 additions. Every new feature uses `function_exists()` /
   `class_exists()` guards and mirrors the `version_compare( $wp_version, 'X', '>=' )` convention
   already used in `class-main.php` for WP 6.3/6.9 features. New: speculation rules (6.8+), salted
@@ -147,9 +156,10 @@ Deep competitor + WP core 6.7–7.1 research → `COMPETITIVE_GAP_ANALYSIS.md`. 
 ---
 
 ## Execution order
+
 1. MOD-1 verified (no-op).
 2. GAP-M1 (DB cleanup) — PHP + REST + React + tests.
 3. GAP-M2 (query strings) — PHP + settings + React + tests.
 4. GAP-M3 (sitemap preload) — PHP cron + tests (+ React toggle).
 5. GAP-M4 (Web Vitals trends) — PHP cron + REST + React + tests.
-6. Full verification: `composer lint` → `composer test` → `npm run lint:js` → `npm test` → `npm run build`.
+6. Full verification: `npm run lint:js` → `composer lint` → `npm test` → `npm run build`.

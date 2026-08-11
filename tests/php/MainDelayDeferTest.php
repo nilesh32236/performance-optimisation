@@ -360,6 +360,9 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 				return \function_exists( $function_name );
 			}
 		);
+		// Visitors (not logged in) are always eligible, so the logged-in gate
+		// passes in the happy-path tests; a dedicated test covers the gate.
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
 	}
 
 	/**
@@ -423,5 +426,30 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertContains( 'footer:interactive:true', $fake->calls );
 		$this->assertNotContains( 'footer:my-mod:true', $fake->calls );
+	}
+
+	/**
+	 * Test that the module pass is skipped for logged-in users who are not
+	 * eligible for cached/optimised output.
+	 */
+	public function test_apply_module_loading_strategies_skips_ineligible_logged_in(): void {
+		$main = $this->make_main(
+			array(
+				'cache_settings'    => array(
+					'enableLoggedInCache' => false,
+				),
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+		$fake = $this->make_fake_modules();
+		$this->stub_script_modules( $fake );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$main->apply_module_loading_strategies();
+
+		$this->assertSame( array(), $fake->calls );
 	}
 }

@@ -106,6 +106,7 @@ class CoreTweaksTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_disable_self_pingbacks_removes_home_urls(): void {
 		Functions\when( 'get_option' )->justReturn( 'http://example.com' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 
 		$core_tweaks = new Core_Tweaks();
 		$pung        = array(
@@ -116,5 +117,27 @@ class CoreTweaksTest extends \PHPUnit\Framework\TestCase {
 		$core_tweaks->disable_self_pingbacks( $pung );
 
 		$this->assertSame( array( 1 => 'http://other-site.example/x' ), $pung );
+	}
+
+	/**
+	 * Test that disable_self_pingbacks ignores similar-looking foreign hosts and
+	 * still catches same-host URLs with a different scheme.
+	 */
+	public function test_disable_self_pingbacks_is_host_aware(): void {
+		Functions\when( 'get_option' )->justReturn( 'http://example.com' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+
+		$core_tweaks = new Core_Tweaks();
+		$pung        = array(
+			'https://example.com/secure/post', // Same host, https — should be removed.
+			'http://example.com.evil/x',       // Lookalike host — must be kept.
+		);
+
+		$core_tweaks->disable_self_pingbacks( $pung );
+
+		$this->assertSame(
+			array( 1 => 'http://example.com.evil/x' ),
+			$pung
+		);
 	}
 }

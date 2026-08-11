@@ -1418,13 +1418,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( $this->should_optimise_for_logged_in() ) {
 				$lazy_load_images         = ! empty( $this->options['image_optimisation']['lazyLoadImages'] );
+				$lazy_load_backgrounds    = ! empty( $this->options['image_optimisation']['lazyLoadBackgroundImages'] );
 				$lazy_load_videos         = ! empty( $this->options['image_optimisation']['lazyLoadVideos'] );
 				$enable_video_placeholder = ! empty( $this->options['image_optimisation']['enableVideoPlaceholder'] ) && $lazy_load_videos;
 				$delay_js                 = ! empty( $this->options['file_optimisation']['delayJS'] );
 				$use_native_lazy          = ! empty( $this->options['image_optimisation']['lazyLoadNative'] );
 
 				// When native lazy loading is active, images use native loading="lazy" but iframes may still need JS restoration.
-				$needs_script = ( ! $use_native_lazy && $lazy_load_images ) || $lazy_load_videos || $enable_video_placeholder || $delay_js;
+				$needs_script = ( ! $use_native_lazy && $lazy_load_images ) || $lazy_load_backgrounds || $lazy_load_videos || $enable_video_placeholder || $delay_js;
 
 				if ( $needs_script ) {
 					// Shared runtime config for the lazyload bundle. Exported to the frontend
@@ -1496,6 +1497,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function apply_module_loading_strategies(): void {
 			if ( empty( $this->options['file_optimisation']['deferJS'] ) ) {
+				return;
+			}
+			if ( ! $this->should_optimise_for_logged_in() ) {
 				return;
 			}
 			if ( ! function_exists( 'wp_script_modules' ) ) {
@@ -2134,16 +2138,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// or combined assets). Those URLs are versioned with the file mtime at
 			// enqueue time, so stripping it would let browsers serve stale copies
 			// of regenerated files.
-			$asset_path = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
-			if ( false !== strpos( $asset_path, '/cache/wppo/' ) ) {
+			if ( $this->is_plugin_cache_url( $src ) ) {
 				return $src;
 			}
 
-			parse_str( $parsed['query'], $args );
-			if ( ! isset( $args['ver'] ) ) {
+			// Remove only the ver component(s) from the raw query, keeping every
+			// other part byte-for-byte identical: duplicate keys, percent-encoding
+			// and ordering survive (parse_str/http_build_query would collapse
+			// duplicates and re-encode values).
+			$kept      = array();
+			$found_ver = false;
+			foreach ( explode( '&', $parsed['query'] ) as $component ) {
+				$eq  = strpos( $component, '=' );
+				$key = false !== $eq ? substr( $component, 0, $eq ) : $component;
+				if ( 'ver' === rawurldecode( $key ) ) {
+					$found_ver = true;
+					continue;
+				}
+				$kept[] = $component;
+			}
+
+			if ( ! $found_ver ) {
 				return $src;
 			}
-			unset( $args['ver'] );
 
 			// Replace only the query portion inside the original string so relative
 			// and protocol-relative sources, ports and fragments stay intact.
@@ -2160,15 +2177,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $src;
 			}
 
-			$base        = substr( $head, 0, $query_pos );
-			$replacement = http_build_query( $args );
+			$base = substr( $head, 0, $query_pos );
 
-			if ( '' === $replacement ) {
+			if ( empty( $kept ) ) {
 				// No remaining args: drop the '?' entirely.
 				return $base . $fragment;
 			}
 
-			return $base . '?' . $replacement . $fragment;
+			return $base . '?' . implode( '&', $kept ) . $fragment;
+		}
+
+		/**
+		 * Whether a URL points at the plugin's own cache directories.
+		 *
+		 * Origin-aware so a third-party URL whose path merely contains
+		 * `/cache/wppo/` is not exempted. Relative and protocol-relative URLs
+		 * match on the content path prefix alone (no host to compare).
+		 *
+		 * @since 2.18.0
+		 *
+		 * @param string $src The asset source URL.
+		 * @return bool
+		 */
+		private function is_plugin_cache_url( string $src ): bool {
+			$content_url  = content_url( '/' );
+			$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
+			$prefix       = rtrim( $content_path, '/' ) . '/cache/wppo';
+
+			$parsed = wp_parse_url( $src );
+			$path   = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
+
+			if ( isset( $parsed['host'] ) ) {
+				$cache_host = wp_parse_url( $content_url, PHP_URL_HOST );
+				if ( null !== $cache_host && 0 !== strcasecmp( (string) $parsed['host'], (string) $cache_host ) ) {
+					return false;
+				}
+			}
+
+			return 0 === strpos( $path, $prefix );
 		}
 
 		/**

@@ -139,7 +139,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 - **Image conversion**: Action Scheduler (`wppo_convert_image_background`) + hourly cron (`wppo_img_conversation`)
 - **PageSpeed scans**: Action Scheduler (`wppo_pagespeed_scan`)
 - **Web Vitals auto-rescan**: daily cron (`wppo_web_vitals_rescan`), gates on `performance_audit.auto_rescan` (`daily`/`weekly`), queues home + high-value URLs for both strategies, stores history in `wppo_web_vitals_trends` option (capped at 30/URL+strategy)
-- **Cache preload**: 5-hourly cron, processes 200 posts per batch, random delay 0-1800s per page
+- **Cache preload**: 5-hourly cron, processes 200 posts per batch, random delay 0-1800s per page; when `preload_settings.preloadSitemap` is on, `wppo_generate_static_url` single events are scheduled per `wp-sitemap.xml` URL (index child sitemaps followed, off-site URLs filtered, 500-URL discovery cap, 15s wall-clock budget) via `Cron::get_sitemap_urls()` + `schedule_sitemap_url_jobs()`
 - **DB cleanup**: Daily/Weekly/Monthly based on settings
 
 ### Database

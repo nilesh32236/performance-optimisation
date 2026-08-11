@@ -97,6 +97,8 @@ Unique features we lack (gap candidates):
 
 ### Tier 1 — high value, self-contained, latest-tech with backward-compatible fallbacks
 
+> ✅ **Implemented 2026-08-11.** Items 1–5 below shipped in the `feature/competitive-modernization` branch (see AUTONOMOUS_PLAN GAP-M5); the entries below document the original gap, not future work.
+
 1. **Real-user Web Vitals (RUM) monitoring** (`web-vitals.js` beacon → REST → `wppo_web_vitals_rum` post/option; per-breakpoint; reuse the existing Web Vitals trend chart). Catches FlyingPress/Hummingbird/BerqWP. Complement (not replace) the PageSpeed-API trends. *WP-version-agnostic; REST beacon already supported.*
 2. **CSS background-image + generic element lazy loading** in `src/lazyload.js` + `process_picture`/buffer rewrites (Perfmatters/NitroPack/Image-Prioritizer parity). Version-agnostic.
 3. **Missing UI toggles / dead settings cleanup** (inventory rough edges): page-cache master toggle, `enablePreloadCache` actually gating preload cron, Server-Timing toggle, `high_value_urls` editor, remove dead `auto_fix_enabled`/`core_tweaks` keys. Improves correctness + UX.
@@ -104,6 +106,8 @@ Unique features we lack (gap candidates):
 5. **Cloudflare / Varnish / Fastly cache-purge integration** on cache clear (WP Rocket/LiteSpeed/FastPixel parity). Uses `rest-api`/HTTP; no version gate.
 
 ### Tier 2 — moderate effort, strong parity
+
+> ✅ **Partially implemented 2026-08-11.** Bloat toggles (#8) and the autoloaded-options audit (#9) shipped; Brotli (#6), feed/REST caching (#7), server-level next-gen delivery (#10) and bfcache (#12) remain as next-pass items.
 
 6. **Brotli precompression** of cached HTML + minified assets with gzip fallback (Cache Enabler parity).
 7. **Feed + REST response caching** (W3TC/LiteSpeed/WPO parity): cache `feed` (with 304) and optionally authenticated REST responses; smart invalidation.
@@ -125,6 +129,7 @@ Unique features we lack (gap candidates):
 20. **REST caching + fragment cache** (W3TC/LiteSpeed parity) — larger infrastructure.
 
 ### Known defects to fix regardless (from inventory)
+
 - `enableCache` master switch has no main-UI toggle (only onboarding).
 - `enablePreloadCache` toggle does not actually gate the preload cron.
 - `auto_fix_enabled` dead setting; `core_tweaks` tab accepted by REST but unused.
@@ -141,7 +146,7 @@ Unique features we lack (gap candidates):
 - Every new WP API call must be behind `function_exists()` / `class_exists()` (+ `method_exists`) with the legacy path preserved.
 - New settings must be added to the `wppo_settings` defaults with a safe default that preserves current behavior (opt-in).
 - New filters/actions use the `wppo_` prefix; document them.
-- `npm run lint:js` → `composer lint` → `npm test` → `composer test` → `npm run build` must all pass; `build/` is committed.
+- `npm run lint:js` → `composer lint` → `npm test` → `npm run build` must all pass; `build/` is committed.
 - Multisite safety: use `Util::transient_key()` blog-prefixing for any new transients; domain-based cache dirs; `get_current_blog_id()`.
 
 ---

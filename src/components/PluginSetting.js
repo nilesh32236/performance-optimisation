@@ -66,10 +66,11 @@ const PluginSetting = ( { options } ) => {
 
 	// Phase 2 — PageSpeed API key state.
 	// Security: use boolean flag only, do not expose the actual key to the client.
-	const apiKeyConfigured =
+	const [ apiKeyConfigured, setApiKeyConfigured ] = useState(
 		typeof wppoSettings !== 'undefined'
 			? wppoSettings.performance_audit?.pagespeedApiKeyConfigured ?? false
-			: false;
+			: false
+	);
 
 	const [ newApiKey, setNewApiKey ] = useState( '' );
 	const [ savingApiKey, setSavingApiKey ] = useState( false );
@@ -218,6 +219,7 @@ const PluginSetting = ( { options } ) => {
 			} );
 			if ( response.success ) {
 				setNewApiKey( '' );
+				setApiKeyConfigured( true );
 				notifyApiKey( {
 					type: 'success',
 					message: __( 'API key saved.', 'performance-optimisation' ),

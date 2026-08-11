@@ -100,4 +100,15 @@ describe( 'WebVitalsTrends Component', () => {
 			).toBeInTheDocument();
 		} );
 	} );
+
+	it( 'renders an explicit empty state without a URL', async () => {
+		render( <WebVitalsTrends url="" /> );
+
+		expect(
+			await screen.findByText(
+				'Enter a URL to view Web Vitals trend history.'
+			)
+		).toBeInTheDocument();
+		expect( fetchWebVitalsTrends ).not.toHaveBeenCalled();
+	} );
 } );

@@ -102,15 +102,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 			);
 
 			if ( is_wp_error( $response ) ) {
+				self::log_failure( 'cloudflare', $zone . ': ' . $response->get_error_message() );
 				return false;
 			}
 
 			$code = (int) wp_remote_retrieve_response_code( $response );
-			return $code >= 200 && $code < 300;
+			if ( $code < 200 || $code >= 300 ) {
+				self::log_failure( 'cloudflare', $zone . ' (HTTP ' . $code . ')' );
+				return false;
+			}
+			return true;
 		}
 
 		/**
-		 * Send PURGE requests to every configured Varnish endpoint.
+		 * Send PURGE requests to the configured Varnish endpoints.
+		 *
+		 * The number of endpoints is capped (default 20, filterable) and the
+		 * per-request timeout is short so an unreachable node cannot stall the
+		 * cache-clear request.
 		 *
 		 * @param array $cache cache_settings values.
 		 * @return bool
@@ -120,6 +129,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 			if ( empty( $urls ) ) {
 				return false;
 			}
+
+			$max_urls = max( 1, (int) apply_filters( 'wppo_varnish_purge_max_urls', 20 ) );
+			$urls     = array_slice( $urls, 0, $max_urls );
 
 			$ok = true;
 			foreach ( $urls as $url ) {
@@ -132,22 +144,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 					$clean,
 					array(
 						'method'  => 'PURGE',
-						'timeout' => 10,
+						'timeout' => 5,
 					)
 				);
 
 				if ( is_wp_error( $response ) ) {
+					self::log_failure( 'varnish', $clean );
 					$ok = false;
 					continue;
 				}
 
 				$code = (int) wp_remote_retrieve_response_code( $response );
 				if ( $code >= 400 ) {
+					self::log_failure( 'varnish', $clean . ' (HTTP ' . $code . ')' );
 					$ok = false;
 				}
 			}
 
 			return $ok;
+		}
+
+		/**
+		 * Surface a failed edge-cache purge through the plugin's debug log.
+		 *
+		 * @param string $service Provider name.
+		 * @param string $detail  Endpoint / reason.
+		 * @return void
+		 */
+		private static function log_failure( string $service, string $detail ): void {
+			do_action( 'wppo_debug_log', 'CDN purge failed [' . $service . ']: ' . $detail );
 		}
 	}
 }

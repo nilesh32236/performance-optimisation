@@ -44,6 +44,8 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 				'esc_url_raw',
 				'wp_remote_request',
 				'wp_remote_retrieve_response_code',
+				'apply_filters',
+				'do_action',
 			)
 		);
 		Functions\when( 'get_option' )->alias(
@@ -53,6 +55,8 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 		);
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'do_action' )->justReturn( null );
 		Functions\when( 'wp_remote_request' )->alias(
 			function ( $url, $args = array() ) {
 				$this->requests[] = array(
@@ -181,5 +185,61 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 			)
 		);
 		$this->assertFalse( CDN_Purger::is_configured() );
+	}
+
+	/**
+	 * Test that the Varnish purge URL count is capped and the timeout is short.
+	 */
+	public function test_purge_varnish_caps_url_count(): void {
+		$this->install_stubs();
+		$urls = array();
+		for ( $i = 1; $i <= 25; $i++ ) {
+			$urls[] = "http://127.0.0.1:808{$i}/purge";
+		}
+		$this->set_cache_settings(
+			array(
+				'cdnPurgeService'  => 'varnish',
+				'varnishPurgeUrls' => $urls,
+			)
+		);
+
+		CDN_Purger::purge_all();
+
+		$this->assertCount( 20, $this->requests );
+		$this->assertSame( 5, $this->requests[0]['args']['timeout'] );
+	}
+
+	/**
+	 * Test that a failed Varnish purge is surfaced through the debug log.
+	 */
+	public function test_purge_varnish_logs_failure(): void {
+		$this->install_stubs();
+		$this->set_cache_settings(
+			array(
+				'cdnPurgeService'  => 'varnish',
+				'varnishPurgeUrls' => array( 'http://127.0.0.1:9999/purge' ),
+			)
+		);
+
+		// Override the HTTP stub to fail for this test.
+		Functions\when( 'wp_remote_request' )->alias(
+			function () {
+				return array( 'response' => array( 'code' => 500 ) );
+			}
+		);
+		$logged = array();
+		Functions\when( 'do_action' )->alias(
+			function ( $hook, $message ) use ( &$logged ) {
+				if ( 'wppo_debug_log' === $hook ) {
+					$logged[] = $message;
+				}
+			}
+		);
+
+		$result = CDN_Purger::purge_all();
+
+		$this->assertFalse( $result );
+		$this->assertNotEmpty( $logged );
+		$this->assertStringContainsString( 'varnish', $logged[0] );
 	}
 }

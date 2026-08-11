@@ -195,4 +195,50 @@ class MainStripQueryStringsTest extends \PHPUnit\Framework\TestCase {
 			$result
 		);
 	}
+
+	/**
+	 * Test that a foreign host whose path merely contains /cache/wppo/ is still
+	 * stripped (the plugin-cache exemption must be origin-aware).
+	 */
+	public function test_strips_ver_on_foreign_host_with_cache_path(): void {
+		$main = $this->make_main();
+
+		$result = $main->strip_static_query_strings(
+			'https://evil.example.net/assets/cache/wppo/thing.css?ver=1.0',
+			'third-party'
+		);
+
+		$this->assertSame(
+			'https://evil.example.net/assets/cache/wppo/thing.css',
+			$result
+		);
+	}
+
+	/**
+	 * Test that duplicate query keys survive while ver is removed.
+	 */
+	public function test_preserves_duplicate_query_keys(): void {
+		$main = $this->make_main();
+
+		$result = $main->strip_static_query_strings(
+			'https://example.com/app.js?a=1&a=2&ver=3',
+			'app'
+		);
+
+		$this->assertSame( 'https://example.com/app.js?a=1&a=2', $result );
+	}
+
+	/**
+	 * Test that the original percent-encoding of remaining args is preserved.
+	 */
+	public function test_preserves_query_percent_encoding(): void {
+		$main = $this->make_main();
+
+		$result = $main->strip_static_query_strings(
+			'https://example.com/app.js?token=a%20b&ver=1',
+			'app'
+		);
+
+		$this->assertSame( 'https://example.com/app.js?token=a%20b', $result );
+	}
 }

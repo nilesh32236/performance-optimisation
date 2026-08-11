@@ -660,15 +660,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
-		 * Delete cached oEmbed rows from the options table.
+		 * Autoload values that count as "autoloaded" for the options audit.
 		 *
-		 * WordPress stores oEmbed responses (Twitter, YouTube, Vimeo embeds) in
-		 * `wp_options` as `_oembed_*` rows. These accumulate for every unique
-		 * embed URL ever rendered and are never auto-cleaned by core.
+		 * Uses the core API when available (WP 6.6+ introduced the `auto-on`
+		 * value) and falls back to the full historical list otherwise.
 		 *
-		 * @since 2.17.0
-		 * @return int|false Number of rows deleted, or false on error.
+		 * @since 2.18.0
+		 * @return string[]
 		 */
+		public static function get_autoloadable_values(): array {
+			if ( function_exists( 'wp_autoload_values_to_autoload' ) ) {
+				return (array) wp_autoload_values_to_autoload();
+			}
+			return array( 'yes', 'on', 'auto', 'auto-on' );
+		}
+
 		/**
 		 * List the largest autoloaded options, by stored byte size.
 		 *
@@ -683,9 +689,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public static function get_autoloaded_options( int $limit = 20 ): array {
 			global $wpdb;
 
+			$autoload_values = self::get_autoloadable_values();
+			$placeholders    = implode( ',', array_fill( 0, count( $autoload_values ), '%s' ) );
+
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
 			$rows = $wpdb->get_results(
-				"SELECT option_name, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ('yes','on','auto') ORDER BY opt_size DESC LIMIT " . (int) $limit,
+				$wpdb->prepare(
+					"SELECT option_name, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ($placeholders) ORDER BY opt_size DESC LIMIT " . (int) $limit, // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+					...$autoload_values
+				),
 				ARRAY_A
 			);
 

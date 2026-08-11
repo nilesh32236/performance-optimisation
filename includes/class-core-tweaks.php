@@ -270,7 +270,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 */
 		public function suppress_rest_header( $served, $result ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			if ( $result instanceof \WP_REST_Response ) {
-				$result->header_remove( 'Link' );
+				$result->remove_header( 'Link' );
 			}
 			return $served;
 		}
@@ -333,15 +333,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Prevent a post from pinging itself.
 		 *
+		 * Compares the parsed host + port (and home path boundary) instead of a
+		 * raw string prefix, so `https://example.com/…` matches a home of
+		 * `http://example.com` while `http://example.com.evil/` does not.
+		 *
 		 * @param array $pung Pung URLs.
 		 * @return void
 		 */
 		public function disable_self_pingbacks( &$pung ) {
-			$home = get_option( 'home' );
+			$home_parsed = wp_parse_url( (string) get_option( 'home' ) );
+			$home_host   = isset( $home_parsed['host'] ) ? strtolower( (string) $home_parsed['host'] ) : '';
+			$home_port   = isset( $home_parsed['port'] ) ? (int) $home_parsed['port'] : null;
+			$home_path   = isset( $home_parsed['path'] ) ? rtrim( (string) $home_parsed['path'], '/' ) : '';
+
 			foreach ( $pung as $key => $url ) {
-				if ( 0 === strpos( $url, $home ) ) {
-					unset( $pung[ $key ] );
+				$parsed = wp_parse_url( (string) $url );
+				$host   = isset( $parsed['host'] ) ? strtolower( (string) $parsed['host'] ) : '';
+				if ( '' === $home_host || '' === $host || $host !== $home_host ) {
+					continue;
 				}
+				$port = isset( $parsed['port'] ) ? (int) $parsed['port'] : null;
+				if ( $port !== $home_port ) {
+					continue;
+				}
+				$path = isset( $parsed['path'] ) ? (string) $parsed['path'] : '/';
+				if ( '' !== $home_path && '/' !== $home_path && 0 !== strpos( $path, $home_path ) ) {
+					continue;
+				}
+				unset( $pung[ $key ] );
 			}
 		}
 	}

@@ -144,6 +144,14 @@ const WebVitalsTrends = ( { url = '' } ) => {
 	const [ error, setError ] = useState( null );
 
 	const loadTrends = useCallback( async () => {
+		if ( ! url ) {
+			// Without a known URL the request would return every history and
+			// TrendSeries would mislabel them; show an explicit empty state.
+			setTrends( null );
+			setError( null );
+			setLoading( false );
+			return;
+		}
 		setLoading( true );
 		setError( null );
 		try {
@@ -198,16 +206,23 @@ const WebVitalsTrends = ( { url = '' } ) => {
 				</div>
 			) }
 
-			{ ! loading && ! error && (
+			{ ! loading && ! error && ! url && (
+				<p className="wppo-text-muted">
+					{ __(
+						'Enter a URL to view Web Vitals trend history.',
+						'performance-optimisation'
+					) }
+				</p>
+			) }
+
+			{ ! loading && ! error && url && (
 				<div className="wppo-trend-layout">
 					<div className="wppo-trend-layout__title">
 						<FontAwesomeIcon
 							icon={ faChartLine }
 							style={ { marginRight: '8px' } }
 						/>
-						{ url
-							? url
-							: __( 'Front page', 'performance-optimisation' ) }
+						{ url }
 					</div>
 					<TrendSeries strategy="mobile" trends={ trends ?? {} } />
 					<TrendSeries strategy="desktop" trends={ trends ?? {} } />

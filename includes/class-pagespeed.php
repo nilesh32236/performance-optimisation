@@ -91,6 +91,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		const TREND_MAX_KEYS = 20;
 
 		/**
+		 * Option used as the cross-request trend write lock.
+		 *
+		 * @var string
+		 */
+		const TREND_LOCK_OPTION = 'wppo_web_vitals_trends_lock';
+
+		/**
+		 * Seconds a trend lock may be held before it is considered stale.
+		 *
+		 * @var int
+		 */
+		const TREND_LOCK_TTL = 60;
+
+		/**
 		 * Queue a PageSpeed scan as an async background job.
 		 *
 		 * Called from the REST endpoint POST /pagespeed_scan.
@@ -330,11 +344,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		public static function record_trend( string $url, array $prepared, string $strategy = 'mobile' ): void {
 			$key = md5( esc_url_raw( $url ) ) . '_' . sanitize_key( $strategy );
 
-			// Serialize read-modify-write across async workers. wp_cache_add() is
-			// atomic when a shared object cache (e.g. the plugin's Redis drop-in)
-			// is present, so only one worker owns the write at a time.
-			$lock_key = self::TREND_OPTION . '_lock';
-			if ( ! wp_cache_add( $lock_key, 1, 'wppo', 30 ) ) {
+			// Serialize read-modify-write across async workers. add_option() is an
+			// atomic INSERT in the database, so it works even when the object cache
+			// is request-local (no shared Redis/Memcached); stale locks are stolen
+			// after a short timeout so a crashed worker cannot wedge the writer.
+			if ( ! self::acquire_trend_lock() ) {
 				return; // Another worker owns the write; skip to avoid a lost update.
 			}
 
@@ -363,8 +377,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 				update_option( self::TREND_OPTION, $hist, false );
 			} finally {
-				wp_cache_delete( $lock_key, 'wppo' );
+				self::release_trend_lock();
 			}
+		}
+
+		/**
+		 * Acquire the cross-request trend write lock.
+		 *
+		 * The add_option() call only inserts when the key is absent (atomic in
+		 * the DB), so a simultaneous worker cannot both hold the lock. Locks
+		 * older than TREND_LOCK_TTL are considered stale and stolen.
+		 *
+		 * @since 2.18.0
+		 * @return bool
+		 */
+		private static function acquire_trend_lock(): bool {
+			if ( add_option( self::TREND_LOCK_OPTION, time(), '', false ) ) {
+				return true;
+			}
+
+			$held_since = (int) get_option( self::TREND_LOCK_OPTION, 0 );
+			if ( $held_since > 0 && ( time() - $held_since ) > self::TREND_LOCK_TTL ) {
+				update_option( self::TREND_LOCK_OPTION, time(), false );
+				return true;
+			}
+
+			return false;
+		}
+
+		/**
+		 * Release the trend write lock.
+		 *
+		 * @since 2.18.0
+		 * @return void
+		 */
+		private static function release_trend_lock(): void {
+			delete_option( self::TREND_LOCK_OPTION );
 		}
 
 		/**
