@@ -4,7 +4,10 @@ jest.mock( '@wordpress/i18n', () => {
 		return count === 1 ? singular : plural;
 	};
 	const sprintf = ( format, ...args ) => {
-		return format.replace( /%[sd]/g, () => args.shift() );
+		let i = 0;
+		return format.replace( /%(?:(\d+)\$)?[sd]/g, ( match, index ) => {
+			return index ? args[ Number( index ) - 1 ] : args[ i++ ];
+		} );
 	};
 	return {
 		__: ( str ) => str,

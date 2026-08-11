@@ -352,4 +352,52 @@ describe( 'PreloadSettings Component', () => {
 			} );
 		} );
 	} );
+
+	it( 'shows the core default pinned note when a speculation override is set', () => {
+		global.wppoSettings = {
+			speculation_rules: {
+				eagerness_override: 'moderate',
+				mode_override: null,
+				static_cache_active: true,
+			},
+		};
+
+		render( <PreloadSettings /> );
+
+		expect(
+			screen.getByText(
+				/WordPress core.s speculation-rules default is pinned via WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS \(moderate\)/i
+			)
+		).toBeInTheDocument();
+
+		expect(
+			screen.queryByText( /While speculative loading is disabled here/i )
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'shows the conservative-default note when disabled and no override is set', () => {
+		global.wppoSettings = {};
+
+		render( <PreloadSettings /> );
+
+		expect(
+			screen.getByText(
+				/While speculative loading is disabled here, this plugin keeps WordPress.s conservative eagerness default/i
+			)
+		).toBeInTheDocument();
+	} );
+
+	it( 'does not show the conservative-default note once speculative loading is enabled', () => {
+		global.wppoSettings = {};
+
+		render( <PreloadSettings /> );
+
+		fireEvent.click(
+			screen.getByLabelText( /Enable Speculative Loading/i )
+		);
+
+		expect(
+			screen.queryByText( /While speculative loading is disabled here/i )
+		).not.toBeInTheDocument();
+	} );
 } );

@@ -259,11 +259,61 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that a single-page clear removes both the HTML and its gzip variant,
+	 * covering static pages that speculative prerendering may have requested and
+	 * cached (they are served from the same per-URL files).
+	 */
+	public function test_clear_cache_single_page_removes_html_and_gzip(): void {
+		$deleted = array();
+		$fs      = \Mockery::mock();
+		$fs->shouldReceive( 'exists' )->andReturn( true );
+		$fs->shouldReceive( 'delete' )->andReturnUsing(
+			static function ( $path ) use ( &$deleted ) {
+				$deleted[] = $path;
+				return true;
+			}
+		);
+		$fs->shouldReceive( 'is_dir' )->andReturn( false );
+		$fs->shouldReceive( 'dirlist' )->andReturn( array() );
+
+		global $wp_filesystem;
+		$wp_filesystem = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'get_option' )->justReturn( '' );
+
+		$cache = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
+
+		$root_prop = new \ReflectionProperty( Cache::class, 'cache_root_dir' );
+		$root_prop->setAccessible( true );
+		$root_prop->setValue( $cache, '/tmp/wordpress/wp-content/cache/wppo' );
+
+		$domain_prop = new \ReflectionProperty( Cache::class, 'domain' );
+		$domain_prop->setAccessible( true );
+		$domain_prop->setValue( $cache, 'example.com' );
+
+		$fs_prop = new \ReflectionProperty( Cache::class, 'filesystem' );
+		$fs_prop->setAccessible( true );
+		$fs_prop->setValue( $cache, $fs );
+
+		$initialized_prop = new \ReflectionProperty( Cache::class, 'fs_initialized' );
+		$initialized_prop->setAccessible( true );
+		$initialized_prop->setValue( $cache, true );
+
+		$method = new ReflectionMethod( Cache::class, 'delete_cache_files' );
+		$method->setAccessible( true );
+		$result = $method->invoke( $cache, '/tmp/wordpress/wp-content/cache/wppo/example.com/about/index.html' );
+
+		$this->assertTrue( $result );
+		$this->assertContains( '/tmp/wordpress/wp-content/cache/wppo/example.com/about/index.html', $deleted );
+		$this->assertContains( '/tmp/wordpress/wp-content/cache/wppo/example.com/about/index.html.gz', $deleted );
+	}
+
+	/**
 	 * Test that delete_all_cache_files scopes the min cache directory to the
 	 * current blog and never deletes the shared min root.
 	 */
-	public function test_delete_all_cache_files_scopes_min_dir_to_current_blog(): void {
-		$deleted = array();
+	public function test_delete_all_cache_files_scopes_min_dir_to_current_blog(): void {		$deleted = array();
 		$fs      = \Mockery::mock();
 		$fs->shouldReceive( 'is_dir' )->andReturn( true );
 		$fs->shouldReceive( 'delete' )->andReturnUsing(

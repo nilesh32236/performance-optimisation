@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { useState } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
@@ -39,6 +39,10 @@ const PreloadSettings = ( { options = {} } ) => {
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+
+	const speculationRules = wppoSettings?.speculation_rules || {};
+	const eagernessOverride = speculationRules.eagerness_override || null;
+	const modeOverride = speculationRules.mode_override || null;
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
@@ -416,6 +420,34 @@ const PreloadSettings = ( { options = {} } ) => {
 							checked={ settings.enableSpeculationRules }
 							onChange={ handleChange( setSettings ) }
 						/>
+						{ ( eagernessOverride || modeOverride ) && (
+							<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+								{ sprintf(
+									/* translators: %1$s: Comma-separated list of pinned WP_SPECULATIVE_LOADING_DEFAULT_* constants/environment variables. */
+									__(
+										'WordPress core\u2019s speculation-rules default is pinned via %1$s. This plugin respects that pinned default whenever speculative loading is disabled here.',
+										'performance-optimisation'
+									),
+									[
+										eagernessOverride &&
+											`WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS (${ eagernessOverride })`,
+										modeOverride &&
+											`WP_SPECULATIVE_LOADING_DEFAULT_MODE (${ modeOverride })`,
+									]
+										.filter( Boolean )
+										.join( ', ' )
+								) }
+							</p>
+						) }
+						{ ! eagernessOverride &&
+							! settings.enableSpeculationRules && (
+								<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+									{ __(
+										'While speculative loading is disabled here, this plugin keeps WordPress\u2019s conservative eagerness default. On WordPress 7.1+, core escalates that default to moderate when caching is detected; this plugin prevents that change so your preference is not overridden. To pin a different default, set the WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS constant or environment variable (for example, to "moderate").',
+										'performance-optimisation'
+									) }
+								</p>
+							) }
 						{ settings.enableSpeculationRules && (
 							<>
 								<div className="wppo-field">
