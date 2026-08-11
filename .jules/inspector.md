@@ -37,3 +37,9 @@
 **Bug/Gap:** Tests validating recursive async polling behavior (like checking `getPagespeedResults` periodically using `setTimeout`) would either hang or fail to match expected DOM changes when using `jest.runAllTimers()`.
 **Root Cause:** `jest.runAllTimers()` advances all timers but does not wait for async promises to resolve between timer ticks. Since the polling logic awaits `getPagespeedResults` before queuing the next `setTimeout`, advancing all timers synchronously misses the intermediate Promise resolutions and the subsequent timers are never scheduled.
 **Test Added:** Fixed by consistently using controlled `jest.advanceTimersByTime(interval)` enclosed in `act()` instead of `jest.runAllTimers()`, and appending empty `await act( async () => {} )` steps to force Jest to flush microtasks (resolved promises) between time advancements.
+
+## 2026-08-10 - Dashboard Test Act Warnings
+
+**Bug/Gap:** The `Dashboard` component tests log `act` warnings due to state updates happening in promises triggered during mount.
+**Root Cause:** The `fetchDbCounts` is triggered in a `useEffect` on mount, updating state asynchronously. Tests were verifying the initial render synchronously but not waiting for the async mount-time state updates to finish.
+**Test Added:** Extracted a shared `flushDashboardMount()` helper (waits for the `database_cleanup_counts` call and flushes the resolved promise inside `act()`) and called it after every `Dashboard` render so async state updates settle before assertions run.
