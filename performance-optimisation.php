@@ -4,7 +4,7 @@
  * Description:       Speed up WordPress with page caching, JS/CSS minify, lazy load, WebP/AVIF images, Redis object cache, and database cleanup. Simple and powerful.
  * Requires at least: 6.2
  * Requires PHP:      8.2
- * Tested up to:      7.0
+ * Tested up to:      7.1
  * Version:           1.9.0
  * Author:            Nilesh kanzariya
  * Author URI:        https://github.com/nilesh32236
