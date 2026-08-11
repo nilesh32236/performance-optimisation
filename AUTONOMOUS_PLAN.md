@@ -3,7 +3,7 @@
 Status legend: `[PENDING]` `[IN PROGRESS]` `[COMPLETED]`
 
 Baseline: 214 PHP tests / 464 assertions, 296 JS tests / 30 suites, PHPCS clean, lint clean,
-build success (measured 2026-08-10 after prior audit). Current: 235 PHP tests / 509 assertions,
+build success (measured 2026-08-10 after prior audit). Current: 246 PHP tests / 523 assertions,
 303 JS tests / 31 suites.
 
 ---
@@ -68,6 +68,13 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
 - `Pagespeed::record_trend()` snapshots performance + core vitals into the `wppo_web_vitals_trends`
   option on every successful scan, capped at `TREND_LIMIT` (30) per URL+strategy; `get_trends()`
   reads it back.
+- **Hardening (post-landing):** the read-append-write in `record_trend()` is serialized with a
+  shared `wp_cache_add()` lock so concurrent mobile+desktop async workers cannot overwrite each
+  other's snapshot; `prune_trends()` caps the whole map at `TREND_MAX_KEYS` (20) by dropping keys
+  ranked by most-recent snapshot. The rescan cron only records `wppo_web_vitals_last_rescan` when
+  every URL queued (`as_enqueue_async_action()` returning 0 skips), and `clear_cron_jobs()` now
+  clears the `wppo_web_vitals_rescan` hook. The REST `web_vitals_trends` endpoint filters by
+  strategy even without a `url`, using `str_ends_with()` so a strategy cannot match mid-URL.
 - New daily cron event `wppo_web_vitals_rescan` → `Cron::web_vitals_rescan_cron()` queues scans for
   home + high-value URLs on mobile+desktop, gated by `auto_rescan`; weekly mode throttles via
   `wppo_web_vitals_last_rescan` timestamp.
@@ -76,9 +83,11 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
 - React: `autoRescan` select in PluginSetting.js, new `WebVitalsTrends` component (inline SVG
   sparkline, no chart lib) rendered in Dashboard under PageSpeedPanel; `fetchWebVitalsTrends()`
   API wrapper.
-- Tests: `tests/php/PagespeedTrendsTest.php` (4), `tests/php/CronWebVitalsRescanTest.php` (4),
-  RestTest endpoint count 22, JS WebVitalsTrends (3) + PluginSetting auto-rescan (1).
-- Verification: `phpunit` OK (235 tests), `phpcs` clean, JS 31 suites / 303 tests, `npm run
+- Tests: `tests/php/PagespeedTrendsTest.php` (6, incl. lock-held skip + global retention via a
+  swapped object-cache store since Patchwork cannot redefine `wp_cache_*`),
+  `tests/php/CronWebVitalsRescanTest.php` (5, incl. enqueue-failure gate), RestTest endpoint
+  count 22 + strategy-only filter, JS WebVitalsTrends (3) + PluginSetting auto-rescan (1).
+- Verification: `phpunit` OK (246 tests), `phpcs` clean, JS 31 suites / 303 tests, `npm run
   lint:js` clean, `npm run build` success.
 
 ---
@@ -90,15 +99,27 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
   `class-image-optimisation.php` already gate on `class_exists( 'WP_HTML_Tag_Processor' )`
   with regex fallbacks. No action needed beyond spot-checking new code.
 
-### MOD-2 `[PENDING]` — Modern enqueue `wp_script_add_data` / strategy support
+### MOD-2 `[COMPLETED]` — Modern enqueue `wp_script_add_data` / strategy support
 - **Audit:** `add_defer_strategy()` uses core `strategy` script data on WP 6.3+ with a
-  `script_loader_tag` legacy fallback — already progressive. Verify `minify_js`/`minify_css`
-  paths still rewrite correctly when `removeQueryStrings` (GAP-M2) is active.
+  `script_loader_tag` legacy fallback — already progressive.
+- **Verified:** `minify_js`/`minify_css` still rewrite correctly with `removeQueryStrings`
+  (GAP-M2) active. The tag-time rewrites (`script_loader_tag`/`style_loader_tag`) run after the
+  `*_loader_src` strip, so their own `?ver=` survives. **Fix landed:** the enqueue-time paths
+  (queued-styles minify `ver = filemtime`, and `wppo-combine-css` version) print through
+  `style_loader_src`, so `strip_static_query_strings()` now returns early for URLs under the
+  plugin's own `/cache/wppo/` directories — preserving mtime cache-busting on regenerated
+  minified/combined files. Tests: 3 new cases in `MainStripQueryStringsTest.php` (min-cache URL,
+  combined URL, theme `.min.css` still stripped).
 
-### MOD-3 `[PENDING]` — Version-gated core functions in new code
-- Every new feature must use `function_exists()` / `class_exists()` guards and mirror the
-  `version_compare( $wp_version, 'X', '>=' )` convention already used in `class-main.php`
-  for WP 6.3/6.9 features. New: speculation rules (6.8+), salted cache (6.9+), native lazy.
+### MOD-3 `[COMPLETED]` — Version-gated core functions in new code
+- **Audited:** all GAP-M1..M4 additions. Every new feature uses `function_exists()` /
+  `class_exists()` guards and mirrors the `version_compare( $wp_version, 'X', '>=' )` convention
+  already used in `class-main.php` for WP 6.3/6.9 features. New: speculation rules (6.8+), salted
+  cache (6.9+), native lazy.
+- **Verified guards:** `queue_scan()` and `web_vitals_rescan_cron()` gate
+  `as_enqueue_async_action()` via `function_exists` (return 0 / skip when absent); REST endpoints
+  guard it the same way. `record_trend()`/`prune_trends()`/`strip_static_query_strings()`/sitemap
+  discovery/DB cleanup call only long-available core + PHP 8 functions (no version-gated calls).
 
 ---
 

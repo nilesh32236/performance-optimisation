@@ -147,4 +147,52 @@ class MainStripQueryStringsTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 'https://example.com/app.js#section', $result );
 	}
+
+	/**
+	 * Test that the ver arg on a minified cache URL is preserved.
+	 *
+	 * The queued-styles minify path versions its min-cache files with the file
+	 * mtime, so stripping it would let browsers keep serving stale minified
+	 * CSS/JS after regeneration.
+	 */
+	public function test_preserves_ver_on_min_cache_url(): void {
+		$main = $this->make_main();
+
+		$src = 'http://example.com/wp-content/cache/wppo/min/1/css/ab12cd34.css?ver=1234567890';
+
+		$this->assertSame( $src, $main->strip_static_query_strings( $src, 'wppo-css' ) );
+	}
+
+	/**
+	 * Test that the ver arg on a combined stylesheet URL is preserved.
+	 *
+	 * The combine path enqueues its cache file with the file mtime as the
+	 * version, and the printed href goes through the style_loader_src filter
+	 * just like any other style.
+	 */
+	public function test_preserves_ver_on_combined_cache_url(): void {
+		$main = $this->make_main();
+
+		$src = 'http://example.com/wp-content/cache/wppo/example.com/css/combined.css?ver=9876543210';
+
+		$this->assertSame( $src, $main->strip_static_query_strings( $src, 'wppo-combine-css' ) );
+	}
+
+	/**
+	 * Test that a third-party URL that merely references a wppo-cache-like path
+	 * is still stripped when the file is not served by the plugin.
+	 */
+	public function test_strips_ver_on_minified_theme_asset(): void {
+		$main = $this->make_main();
+
+		$result = $main->strip_static_query_strings(
+			'https://example.com/wp-content/themes/x/style.min.css?ver=6.8.1',
+			'theme-style'
+		);
+
+		$this->assertSame(
+			'https://example.com/wp-content/themes/x/style.min.css',
+			$result
+		);
+	}
 }

@@ -2042,7 +2042,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Removing `?ver=` from CSS/JS URLs lets proxies, CDNs, and browsers cache
 		 * the files more effectively. Cache-busting is retained where the plugin
 		 * rewrites URLs (minify/combine) because those already embed the file
-		 * modification time; this only affects URLs that still carry a `ver` arg.
+		 * modification time; this only affects URLs that still carry a `ver` arg
+		 * and are not served from the plugin's own `cache/wppo` directories.
 		 *
 		 * @since 2.17.0
 		 *
@@ -2057,6 +2058,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$parsed = wp_parse_url( $src );
 			if ( ! isset( $parsed['query'] ) || '' === $parsed['query'] ) {
+				return $src;
+			}
+
+			// Never strip the ver arg from the plugin's own cache files (minified
+			// or combined assets). Those URLs are versioned with the file mtime at
+			// enqueue time, so stripping it would let browsers serve stale copies
+			// of regenerated files.
+			$asset_path = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
+			if ( false !== strpos( $asset_path, '/cache/wppo/' ) ) {
 				return $src;
 			}
 
