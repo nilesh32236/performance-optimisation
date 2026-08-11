@@ -1,4 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	waitFor,
+	fireEvent,
+	act,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -89,6 +95,22 @@ jest.mock(
 import Dashboard from '../Dashboard';
 import { apiCall } from '../../lib/apiRequest';
 
+/**
+ * Wait for the mount-time database_cleanup_counts call to start AND for the
+ * resolved promise to be handled inside act(), so subsequent assertions never
+ * race the async state update (which otherwise emits act() warnings).
+ */
+const flushDashboardMount = async () => {
+	await waitFor( () => {
+		expect( apiCall ).toHaveBeenCalledWith(
+			'database_cleanup_counts',
+			{},
+			'GET'
+		);
+	} );
+	await act( async () => {} );
+};
+
 describe( 'Dashboard', () => {
 	beforeEach( () => {
 		global.wppoSettings = {
@@ -108,8 +130,10 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValue( { success: true, data: {} } );
 	} );
 
-	it( 'renders stats and the welcome panel', () => {
+	it( 'renders stats and the welcome panel', async () => {
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
 
 		expect( screen.getByTestId( 'welcome-panel' ) ).toBeInTheDocument();
 		expect( screen.getByText( 'Cache Size' ) ).toBeInTheDocument();
@@ -122,6 +146,8 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValueOnce( { success: true } );
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
 
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Purge All Cache/i } )
@@ -143,6 +169,8 @@ describe( 'Dashboard', () => {
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 
+		await flushDashboardMount();
+
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Purge All Cache/i } )
 		);
@@ -163,6 +191,8 @@ describe( 'Dashboard', () => {
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 
+		await flushDashboardMount();
+
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Optimize Images/i } )
 		);
@@ -179,6 +209,8 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
 
 		// Enable the toggle then save.
 		fireEvent.click( screen.getByLabelText( 'Enable' ) );
@@ -198,6 +230,8 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // save
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
 
 		fireEvent.click( screen.getByLabelText( 'Enable Page Cache' ) );
 		fireEvent.click(
@@ -221,6 +255,8 @@ describe( 'Dashboard', () => {
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 
+		await flushDashboardMount();
+
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Save Settings/i } )
 		);
@@ -238,6 +274,8 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // save
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
 
 		fireEvent.change( screen.getByLabelText( /CDN Purge Service/i ), {
 			target: { value: 'cloudflare' },
@@ -265,6 +303,8 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValueOnce( { success: true } );
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
 
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Remove Images/i } )
