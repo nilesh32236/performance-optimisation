@@ -241,8 +241,26 @@ This plugin has autonomous AI agent workflows. See `.agents/AGENTS.md` for agent
 | `GH_PAT` | Yes | GitHub Personal Access Token with `repo` + `workflow` scopes for cross-repo operations, merge, and tag push |
 | `CONTEXT7_API_KEY` | Yes | Upstash Context7 MCP key for querying latest WordPress/core developer documentation |
 | `GITHUB_TOKEN` | Auto | Built-in token (used as fallback when `GH_PAT` is unavailable) |
+| `OPENCODE_API_KEY` | Yes (for AI workflows) | OpenCode gateway key (OpenAI-compatible) for `opencode-go/*` models used by the AI review/audit/merge/monitor workflows |
 | `OPENAI_API_KEY` | No | OpenCode model fallback |
 | `ANTHROPIC_API_KEY` | No | OpenCode model fallback |
 | `GEMINI_API_KEY` | No | OpenCode model fallback |
 | `SVN_USERNAME` | Yes (exists) | WordPress.org SVN username for plugin deployment |
 | `SVN_PASSWORD` | Yes (exists) | WordPress.org SVN password for plugin deployment |
+
+## OpenCode model via GitHub variable
+
+The model used by the AI workflows is **not** a secret — it is read from the
+repo **variable** `OPENCODE_MODEL` (Settings → Secrets and variables → Actions →
+Variables). If unset, workflows fall back to `opencode-go/deepseek-v4-flash`.
+
+```yaml
+# Pattern used in .github/workflows:
+model: ${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}
+# and for the opencode CLI:
+opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}"
+```
+
+The `OPENCODE_API_KEY` secret is injected as both `OPENCODE_API_KEY` and
+`OPENAI_API_KEY` (the opencode gateway is OpenAI-compatible) for CLI steps, and
+as the action's `openai_api_key` input for `opencode-ai-reviewer`.

@@ -122,10 +122,10 @@ jobs:
         with:
           mode: fix
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          openai_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          model: 'opencode/deepseek-v4-flash-free'
+          model: ${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}
           enable_mcp: false
           max_fix_iterations: 1
           run_checks_after_fix: 'npm run lint:js'
@@ -214,10 +214,10 @@ jobs:
         with:
           mode: review
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          openai_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          model: 'opencode/deepseek-v4-flash-free'
+          model: ${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}
           max_files_per_batch: 3
           enable_mcp: false
           include_strengths: true
@@ -304,10 +304,10 @@ jobs:
         with:
           mode: fix
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          openai_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          model: 'opencode/deepseek-v4-flash-free'
+          model: ${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}
           max_fix_iterations: 3
           enable_mcp: false
           enable_fix: true
