@@ -3,7 +3,7 @@ Contributors: nilesh912
 Tags: cache, performance, speed, pagespeed, minify
 Requires at least: 6.2
 Requires PHP: 8.2
-Tested up to: 7.0
+Tested up to: 7.1
 Stable tag: 1.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -86,7 +86,7 @@ After activation, you can manage the following from the settings tabs:
 
 == Changelog ==
 
-= 1.9.0 (2026-08-05) =
+= 1.9.0 (2026-08-11) =
 * Performance: Centralized `content_url()` static caching across asset minification loops via `Util::cached_content_url()`. Keys static cache per site per request (`get_current_blog_id()`) for multisite safety under `switch_to_blog()` and gates caching with `has_filter('content_url')`.
 * New: Added WordPress 7.1+ client-side media processing toggle (`filter_client_side_supported_mime_types`). Admin setting enables selecting in-browser Web Worker supported MIME types, intersected with core's reported capabilities to prevent unsupported formats from shadowing core defaults.
 * Image Optimization: Integrated WordPress 7.1+ size-aware `wp_get_image_encode_quality()` and WP 6.7–7.0 `wp_image_quality()` for WebP/AVIF image conversion.
@@ -278,7 +278,7 @@ Yes. Performance Optimisation is 100% free and open source. There is no premium 
 
 == Upgrade Notice ==
 
-= 1.9.0 (2026-08-05) =
+= 1.9.0 (2026-08-11) =
 Major feature and compatibility release introducing WP 7.1+ client-side media processing control, size-aware image encoding quality, content_url() static caching, core resource hints API migration, and inline CSS budget support.
 
 = 1.8.0 (2026-07-28) =

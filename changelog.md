@@ -4,7 +4,7 @@ All notable changes to the Performance Optimisation plugin will be documented in
 
 ## [Unreleased]
 
-## [1.9.0] - 2026-08-05
+## [1.9.0] - 2026-08-11
 
 ### Added
 
@@ -20,6 +20,7 @@ All notable changes to the Performance Optimisation plugin will be documented in
 - **Resource Hints Migration:** Preconnect and DNS-prefetch emission now leverage core's `wp_resource_hints` filter API. Added automatic scheme-less bare-hostname (`example.com`) normalization to protocol-relative (`//example.com`) form so origins survive core's host guard, while retaining `crossorigin="anonymous"` attributes.
 - **Image Conversion Quality:** Integrated WordPress 7.1+ size-aware `wp_get_image_encode_quality()` and WP 6.7–7.0 `wp_image_quality()` for WebP/AVIF conversions while maintaining fixed low-quality (40) for LQIP placeholders.
 - **Block Asset Loading on WordPress 6.9+:** The "Load Block Assets On Demand" toggle now matches WordPress 6.9's default for classic themes, which load separate core block styles on demand.
+- **WordPress 7.1 Compatibility:** Updated "Tested up to" to WordPress 7.1.
 
 ### Multisite & Safety
 
