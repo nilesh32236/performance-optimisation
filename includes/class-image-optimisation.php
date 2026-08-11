@@ -1055,17 +1055,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( 0 === strpos( $img_url, 'mobile:' ) ) {
 				$img_url = trim( str_replace( 'mobile:', '', $img_url ) );
 				if ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = content_url( $img_url );
+						$img_url = Util::cached_content_url( ltrim( $img_url, '/' ) );
 				}
 				$media = '(max-width: 768px)';
 			} elseif ( 0 === strpos( $img_url, 'desktop:' ) ) {
 				$img_url = trim( str_replace( 'desktop:', '', $img_url ) );
 				if ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = content_url( $img_url );
+						$img_url = Util::cached_content_url( ltrim( $img_url, '/' ) );
 				}
 				$media = '(min-width: 768px)';
 			} elseif ( 0 !== strpos( $img_url, 'http' ) ) {
-					$img_url = content_url( $img_url );
+						$img_url = Util::cached_content_url( ltrim( $img_url, '/' ) );
 			}
 
 			return array(

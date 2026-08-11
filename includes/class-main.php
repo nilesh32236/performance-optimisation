@@ -1931,7 +1931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
 
 				foreach ( $preload_fonts_urls as $font_url ) {
-					$font_url       = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : content_url( $font_url );
+						$font_url   = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( ltrim( $font_url, '/' ) );
 					$font_extension = pathinfo( wp_parse_url( $font_url, PHP_URL_PATH ), PATHINFO_EXTENSION );
 					$font_type      = '';
 
@@ -1956,7 +1956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$preload_css_urls = Util::process_urls( $preload_settings['preloadCSSUrls'] );
 
 				foreach ( $preload_css_urls as $css_url ) {
-					$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : content_url( $css_url );
+						$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : Util::cached_content_url( ltrim( $css_url, '/' ) );
 					Util::generate_preload_link( $css_url, 'preload', 'style' );
 				}
 			}
@@ -2200,21 +2200,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool
 		 */
 		private function is_plugin_cache_url( string $src ): bool {
-			$content_url  = content_url( '/' );
-			$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
-			$prefix       = rtrim( $content_path, '/' ) . '/cache/wppo';
+			static $cache = array();
+			$blog_id      = get_current_blog_id();
+
+			if ( ! isset( $cache[ $blog_id ] ) ) {
+				$content_url  = content_url( '/' );
+				$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
+				$cache_host   = wp_parse_url( $content_url, PHP_URL_HOST );
+
+				$cache[ $blog_id ] = array(
+					'prefix' => rtrim( $content_path, '/' ) . '/cache/wppo',
+					'host'   => $cache_host,
+				);
+			}
 
 			$parsed = wp_parse_url( $src );
 			$path   = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
 
 			if ( isset( $parsed['host'] ) ) {
-				$cache_host = wp_parse_url( $content_url, PHP_URL_HOST );
-				if ( null !== $cache_host && 0 !== strcasecmp( (string) $parsed['host'], (string) $cache_host ) ) {
+				if ( null !== $cache[ $blog_id ]['host'] && 0 !== strcasecmp( (string) $parsed['host'], (string) $cache[ $blog_id ]['host'] ) ) {
 					return false;
 				}
 			}
 
-			return 0 === strpos( $path, $prefix );
+			return 0 === strpos( $path, $cache[ $blog_id ]['prefix'] );
 		}
 
 		/**
