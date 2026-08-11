@@ -64,6 +64,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		const TRANSIENT_TTL = DAY_IN_SECONDS;
 
 		/**
+		 * Option name holding historical PageSpeed results for trend charts.
+		 *
+		 * @since 2.14.0
+		 * @var string
+		 */
+		const TREND_OPTION = 'wppo_web_vitals_trends';
+
+		/**
+		 * Maximum number of historical results kept per URL + strategy.
+		 *
+		 * @since 2.14.0
+		 * @var int
+		 */
+		const TREND_LIMIT = 30;
+
+		/**
+		 * Maximum number of URL + strategy keys retained across the whole trends map.
+		 *
+		 * Guards against unbounded option growth when many distinct URLs are
+		 * scanned over time. Older keys are pruned first.
+		 *
+		 * @since 2.14.0
+		 * @var int
+		 */
+		const TREND_MAX_KEYS = 20;
+
+		/**
+		 * Option used as the cross-request trend write lock.
+		 *
+		 * @var string
+		 */
+		const TREND_LOCK_OPTION = 'wppo_web_vitals_trends_lock';
+
+		/**
+		 * Seconds a trend lock may be held before it is considered stale.
+		 *
+		 * @var int
+		 */
+		const TREND_LOCK_TTL = 60;
+
+		/**
 		 * Queue a PageSpeed scan as an async background job.
 		 *
 		 * Called from the REST endpoint POST /pagespeed_scan.
@@ -205,6 +246,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			set_transient( $transient_key, $prepared, self::TRANSIENT_TTL );
 			Telemetry::register_transient_key( $transient_key );
 
+			self::record_trend( $url, $prepared, $strategy );
+
 			self::store_lcp_image_url( $url, $prepared, $strategy );
 
 			Log::add(
@@ -281,6 +324,149 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		private static function get_api_key(): string {
 			$options = get_option( 'wppo_settings', array() );
 			return (string) ( isset( $options['performance_audit']['pagespeed_api_key'] ) ? $options['performance_audit']['pagespeed_api_key'] : '' );
+		}
+
+		/**
+		 * Record a PageSpeed result into the Web Vitals trend history.
+		 *
+		 * Stores a compact snapshot (performance score + core vitals) keyed by
+		 * URL + strategy in a single site option, capped at TREND_LIMIT entries
+		 * per key. The read-append-write sequence is serialized with a shared
+		 * cache lock so concurrent async workers (e.g. mobile + desktop scans
+		 * running at the same time) cannot overwrite each other's snapshot.
+		 *
+		 * @since  2.14.0
+		 * @param  string $url      The scanned URL.
+		 * @param  array  $prepared The prepared PageSpeed result array.
+		 * @param  string $strategy Either 'mobile' or 'desktop'.
+		 * @return void
+		 */
+		public static function record_trend( string $url, array $prepared, string $strategy = 'mobile' ): void {
+			$key = md5( esc_url_raw( $url ) ) . '_' . sanitize_key( $strategy );
+
+			// Serialize read-modify-write across async workers. add_option() is an
+			// atomic INSERT in the database, so it works even when the object cache
+			// is request-local (no shared Redis/Memcached); stale locks are stolen
+			// after a short timeout so a crashed worker cannot wedge the writer.
+			if ( ! self::acquire_trend_lock() ) {
+				return; // Another worker owns the write; skip to avoid a lost update.
+			}
+
+			try {
+				// Re-read fresh after acquiring the lock.
+				$hist = self::get_trends();
+
+				$current = isset( $hist[ $key ] ) && is_array( $hist[ $key ] ) ? $hist[ $key ] : array();
+
+				$current[] = array(
+					'fetched_at'  => isset( $prepared['fetched_at'] ) ? sanitize_text_field( $prepared['fetched_at'] ) : current_time( 'mysql', true ),
+					'performance' => (int) ( $prepared['scores']['performance'] ?? 0 ),
+					'lcp'         => isset( $prepared['vitals']['lcp']['value'] ) ? (float) $prepared['vitals']['lcp']['value'] : null,
+					'cls'         => isset( $prepared['vitals']['cls']['value'] ) ? (float) $prepared['vitals']['cls']['value'] : null,
+					'tbt'         => isset( $prepared['vitals']['tbt']['value'] ) ? (float) $prepared['vitals']['tbt']['value'] : null,
+				);
+
+				if ( count( $current ) > self::TREND_LIMIT ) {
+					$current = array_slice( $current, -self::TREND_LIMIT );
+				}
+
+				$hist[ $key ] = $current;
+
+				// Bound total storage, not just per-URL history.
+				$hist = self::prune_trends( $hist );
+
+				update_option( self::TREND_OPTION, $hist, false );
+			} finally {
+				self::release_trend_lock();
+			}
+		}
+
+		/**
+		 * Acquire the cross-request trend write lock.
+		 *
+		 * The add_option() call only inserts when the key is absent (atomic in
+		 * the DB), so a simultaneous worker cannot both hold the lock. Locks
+		 * older than TREND_LOCK_TTL are considered stale and stolen.
+		 *
+		 * @since 2.18.0
+		 * @return bool
+		 */
+		private static function acquire_trend_lock(): bool {
+			if ( add_option( self::TREND_LOCK_OPTION, time(), '', false ) ) {
+				return true;
+			}
+
+			$held_since = (int) get_option( self::TREND_LOCK_OPTION, 0 );
+			if ( $held_since > 0 && ( time() - $held_since ) > self::TREND_LOCK_TTL ) {
+				update_option( self::TREND_LOCK_OPTION, time(), false );
+				return true;
+			}
+
+			return false;
+		}
+
+		/**
+		 * Release the trend write lock.
+		 *
+		 * @since 2.18.0
+		 * @return void
+		 */
+		private static function release_trend_lock(): void {
+			delete_option( self::TREND_LOCK_OPTION );
+		}
+
+		/**
+		 * Enforce a global cap on the number of URL + strategy keys.
+		 *
+		 * When the map grows past TREND_MAX_KEYS the oldest keys (ranked by the
+		 * timestamp of their most recent snapshot) are dropped, preserving recent
+		 * data while keeping the option bounded.
+		 *
+		 * @since  2.14.0
+		 * @param  array $hist The full trends map.
+		 * @return array The trimmed trends map.
+		 */
+		private static function prune_trends( array $hist ): array {
+			$keys = array_keys( $hist );
+			if ( count( $keys ) <= self::TREND_MAX_KEYS ) {
+				return $hist;
+			}
+
+			$rank = array();
+			foreach ( $hist as $trend_key => $snapshots ) {
+				$last = 0;
+				if ( is_array( $snapshots ) ) {
+					$last_snapshot = end( $snapshots );
+					if ( is_array( $last_snapshot ) && isset( $last_snapshot['fetched_at'] ) ) {
+						$last = (int) strtotime( (string) $last_snapshot['fetched_at'] );
+					}
+				}
+				$rank[ $trend_key ] = $last;
+			}
+			asort( $rank );
+
+			$total = count( $hist );
+			while ( $total > self::TREND_MAX_KEYS ) {
+				$oldest = key( $rank );
+				if ( null === $oldest ) {
+					break;
+				}
+				unset( $hist[ $oldest ], $rank[ $oldest ] );
+				--$total;
+			}
+
+			return $hist;
+		}
+
+		/**
+		 * Retrieve the full Web Vitals trend history.
+		 *
+		 * @since  2.14.0
+		 * @return array Keyed by md5(url)_strategy, each value a list of snapshots.
+		 */
+		public static function get_trends(): array {
+			$trends = get_option( self::TREND_OPTION, array() );
+			return is_array( $trends ) ? $trends : array();
 		}
 
 		/**

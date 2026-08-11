@@ -44,6 +44,11 @@ describe( 'PreloadSettings Component', () => {
 				selector: 'input[type="checkbox"]',
 			} )
 		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Preload from Sitemap/i, {
+				selector: 'input[type="checkbox"]',
+			} )
+		).toBeInTheDocument();
 
 		// Conditional fields should not be visible initially
 		expect(
@@ -111,6 +116,37 @@ describe( 'PreloadSettings Component', () => {
 		expect(
 			screen.getByLabelText( /CSS URLs to Preload/i )
 		).toBeInTheDocument();
+	} );
+
+	it( 'includes preloadSitemap in the submitted payload when enabled', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render( <PreloadSettings /> );
+
+		fireEvent.click(
+			screen.getByLabelText( /Preload from Sitemap/i, {
+				selector: 'input[type="checkbox"]',
+			} )
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Settings/i } )
+		);
+
+		await waitFor( () => {
+			expect( apiCall ).toHaveBeenCalledWith(
+				'update_settings',
+				expect.objectContaining( {
+					tab: 'preload_settings',
+					settings: expect.objectContaining( {
+						preloadSitemap: true,
+					} ),
+				} )
+			);
+		} );
 	} );
 
 	it( 'submits the form successfully with correct payload', async () => {

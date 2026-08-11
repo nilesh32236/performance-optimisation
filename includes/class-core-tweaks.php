@@ -56,6 +56,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			if ( 'default' !== $heartbeat_control ) {
 				add_action( 'init', array( $this, 'control_heartbeat' ), 1 );
 			}
+
+			if ( ! empty( $this->settings['disableRestApiLinks'] ) ) {
+				add_action( 'wp_head', array( $this, 'remove_rest_api_links' ), 100 );
+				add_filter( 'rest_pre_serve_request', array( $this, 'suppress_rest_header' ), 10, 2 );
+			}
+
+			if ( ! empty( $this->settings['disableRssFeeds'] ) ) {
+				add_action( 'do_feed', array( $this, 'redirect_feed_to_home' ), 1 );
+				add_action( 'do_feed_rdf', array( $this, 'redirect_feed_to_home' ), 1 );
+				add_action( 'do_feed_rss', array( $this, 'redirect_feed_to_home' ), 1 );
+				add_action( 'do_feed_rss2', array( $this, 'redirect_feed_to_home' ), 1 );
+				add_action( 'do_feed_atom', array( $this, 'redirect_feed_to_home' ), 1 );
+				add_action( 'do_feed_rss2_comments', array( $this, 'redirect_feed_to_home' ), 1 );
+				add_action( 'do_feed_atom_comments', array( $this, 'redirect_feed_to_home' ), 1 );
+				add_action( 'wp_head', array( $this, 'remove_feed_links' ), 100 );
+			}
+
+			if ( ! empty( $this->settings['disableShortlinks'] ) ) {
+				remove_action( 'wp_head', 'wp_shortlink_wp_head' );
+				add_filter( 'after_setup_theme', array( $this, 'remove_shortlink_tag' ) );
+			}
+
+			if ( ! empty( $this->settings['disableGeneratorTag'] ) ) {
+				remove_action( 'wp_head', 'wp_generator' );
+				add_filter( 'the_generator', '__return_empty_string' );
+			}
+
+			if ( ! empty( $this->settings['disableJQueryMigrate'] ) ) {
+				add_action( 'wp_default_scripts', array( $this, 'remove_jquery_migrate' ) );
+			}
+
+			if ( ! empty( $this->settings['disablePasswordStrength'] ) ) {
+				add_action( 'wp_print_scripts', array( $this, 'remove_password_strength_scripts' ), 100 );
+			}
+
+			if ( ! empty( $this->settings['disableSelfPingbacks'] ) ) {
+				add_action( 'pre_ping', array( $this, 'disable_self_pingbacks' ) );
+			}
 		}
 
 		/**
@@ -211,6 +249,119 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		public function heartbeat_60s( $settings ) {
 			$settings['interval'] = 60;
 			return $settings;
+		}
+
+		/**
+		 * Remove REST API discovery links from the front end.
+		 *
+		 * @return void
+		 */
+		public function remove_rest_api_links() {
+			remove_action( 'wp_head', 'rest_output_link_wp_head' );
+			remove_action( 'wp_head', 'wp_oembed_add_discovery_links' );
+		}
+
+		/**
+		 * Suppress the X-WP-Total / Link REST response headers on served requests.
+		 *
+		 * @param bool              $served  Whether the request has already been served.
+		 * @param \WP_REST_Response $result Result object.
+		 * @return bool
+		 */
+		public function suppress_rest_header( $served, $result ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( $result instanceof \WP_REST_Response ) {
+				$result->remove_header( 'Link' );
+			}
+			return $served;
+		}
+
+		/**
+		 * Redirect feed requests to the site home page.
+		 *
+		 * @return void
+		 */
+		public function redirect_feed_to_home() {
+			wp_safe_redirect( home_url( '/' ), 301 );
+			exit;
+		}
+
+		/**
+		 * Remove feed discovery links from the front end.
+		 *
+		 * @return void
+		 */
+		public function remove_feed_links() {
+			remove_action( 'wp_head', 'feed_links', 2 );
+			remove_action( 'wp_head', 'feed_links_extra', 3 );
+		}
+
+		/**
+		 * Remove the rel=shortlink tag output.
+		 *
+		 * @return void
+		 */
+		public function remove_shortlink_tag() {
+			remove_action( 'wp_head', 'wp_shortlink_wp_head' );
+		}
+
+		/**
+		 * Drop the jquery-migrate dependency from the jQuery handles.
+		 *
+		 * @param \WP_Scripts $scripts Scripts registry.
+		 * @return void
+		 */
+		public function remove_jquery_migrate( $scripts ) {
+			if ( ! isset( $scripts->registered['jquery'] ) || empty( $scripts->registered['jquery']->deps ) ) {
+				return;
+			}
+			$scripts->registered['jquery']->deps = array_values(
+				array_diff( $scripts->registered['jquery']->deps, array( 'jquery-migrate' ) )
+			);
+		}
+
+		/**
+		 * Deregister the password strength meter script on the front end.
+		 *
+		 * @return void
+		 */
+		public function remove_password_strength_scripts() {
+			if ( ! is_admin() ) {
+				wp_deregister_script( 'password-strength-meter' );
+			}
+		}
+
+		/**
+		 * Prevent a post from pinging itself.
+		 *
+		 * Compares the parsed host + port (and home path boundary) instead of a
+		 * raw string prefix, so `https://example.com/…` matches a home of
+		 * `http://example.com` while `http://example.com.evil/` does not.
+		 *
+		 * @param array $pung Pung URLs.
+		 * @return void
+		 */
+		public function disable_self_pingbacks( &$pung ) {
+			$home_parsed = wp_parse_url( (string) get_option( 'home' ) );
+			$home_host   = isset( $home_parsed['host'] ) ? strtolower( (string) $home_parsed['host'] ) : '';
+			$home_port   = isset( $home_parsed['port'] ) ? (int) $home_parsed['port'] : null;
+			$home_path   = isset( $home_parsed['path'] ) ? rtrim( (string) $home_parsed['path'], '/' ) : '';
+
+			foreach ( $pung as $key => $url ) {
+				$parsed = wp_parse_url( (string) $url );
+				$host   = isset( $parsed['host'] ) ? strtolower( (string) $parsed['host'] ) : '';
+				if ( '' === $home_host || '' === $host || $host !== $home_host ) {
+					continue;
+				}
+				$port = isset( $parsed['port'] ) ? (int) $parsed['port'] : null;
+				if ( $port !== $home_port ) {
+					continue;
+				}
+				$path = isset( $parsed['path'] ) ? (string) $parsed['path'] : '/';
+				if ( '' !== $home_path && '/' !== $home_path && 0 !== strpos( $path, $home_path ) ) {
+					continue;
+				}
+				unset( $pung[ $key ] );
+			}
 		}
 	}
 }

@@ -14,8 +14,11 @@ import SwitchField from './common/SwitchField';
 import CheckboxOption from './common/CheckboxOption';
 import PerformanceAudit from './PerformanceAudit';
 import PageSpeedPanel from './PageSpeedPanel';
+import WebVitalsTrends from './WebVitalsTrends';
+import WebVitalsRum from './WebVitalsRum';
 import SuggestionsPanel from './SuggestionsPanel';
 import SystemInfo from './SystemInfo';
+import AutoloadedOptions from './AutoloadedOptions';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
@@ -89,6 +92,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	// Logged-in user cache settings.
 	const cacheSettings = wppoSettings?.settings?.cache_settings || {};
 	const userRoles = wppoSettings?.userRoles || {};
+	const [ pageCacheEnabled, setPageCacheEnabled ] = useState(
+		!! cacheSettings.enableCache
+	);
+	const [ savingPageCache, setSavingPageCache ] = useState( false );
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
 		!! cacheSettings.enableLoggedInCache
 	);
@@ -98,6 +105,20 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			: []
 	);
 	const [ savingLoggedInCache, setSavingLoggedInCache ] = useState( false );
+
+	// CDN cache purge (Cloudflare / Varnish).
+	const [ cdnPurgeService, setCdnPurgeService ] = useState(
+		cacheSettings.cdnPurgeService ?? 'none'
+	);
+	const [ cloudflareZoneId, setCloudflareZoneId ] = useState(
+		cacheSettings.cloudflareZoneId ?? ''
+	);
+	const [ varnishPurgeUrls, setVarnishPurgeUrls ] = useState(
+		Array.isArray( cacheSettings.varnishPurgeUrls )
+			? cacheSettings.varnishPurgeUrls.join( '\n' )
+			: ''
+	);
+	const [ savingCdnPurge, setSavingCdnPurge ] = useState( false );
 
 	const [ bgProcessing, setBgProcessing ] = useState( false );
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
@@ -373,11 +394,48 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			.finally( () => handleLoading( 'remove_images', false ) );
 	}, [ handleLoading ] );
 
-	const saveLoggedInCacheSettings = useCallback( () => {
-		setSavingLoggedInCache( true );
+	const savePageCacheSettings = useCallback( () => {
+		setSavingPageCache( true );
+		// Merge with the full stored cache_settings so saving one group never
+		// wipes keys saved by the other card (e.g. enableLoggedInCache).
+		const currentSettings = wppoSettings?.settings?.cache_settings ?? {};
 		apiCall( 'update_settings', {
 			tab: 'cache_settings',
 			settings: {
+				...currentSettings,
+				enableCache: pageCacheEnabled,
+			},
+		} )
+			.then( ( response ) => {
+				if ( response.success && response.data ) {
+					setAnnouncement(
+						__(
+							'Page cache settings saved.',
+							'performance-optimisation'
+						)
+					);
+				}
+			} )
+			.catch( () =>
+				setAnnouncement(
+					__(
+						'Failed to save page cache settings.',
+						'performance-optimisation'
+					)
+				)
+			)
+			.finally( () => setSavingPageCache( false ) );
+	}, [ pageCacheEnabled ] );
+
+	const saveLoggedInCacheSettings = useCallback( () => {
+		setSavingLoggedInCache( true );
+		// Merge with the full stored cache_settings so enabling/disabling the
+		// page-cache master toggle elsewhere is never clobbered here.
+		const currentSettings = wppoSettings?.settings?.cache_settings ?? {};
+		apiCall( 'update_settings', {
+			tab: 'cache_settings',
+			settings: {
+				...currentSettings,
 				enableLoggedInCache: loggedInCacheEnabled,
 				loggedInCacheRoles,
 			},
@@ -402,6 +460,43 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			)
 			.finally( () => setSavingLoggedInCache( false ) );
 	}, [ loggedInCacheEnabled, loggedInCacheRoles ] );
+
+	const saveCdnPurgeSettings = useCallback( () => {
+		setSavingCdnPurge( true );
+		const currentSettings = wppoSettings?.settings?.cache_settings ?? {};
+		const urls = varnishPurgeUrls
+			.split( '\n' )
+			.map( ( url ) => url.trim() )
+			.filter( Boolean );
+		apiCall( 'update_settings', {
+			tab: 'cache_settings',
+			settings: {
+				...currentSettings,
+				cdnPurgeService,
+				cloudflareZoneId,
+				varnishPurgeUrls: urls,
+			},
+		} )
+			.then( ( response ) => {
+				if ( response.success && response.data ) {
+					setAnnouncement(
+						__(
+							'CDN purge settings saved.',
+							'performance-optimisation'
+						)
+					);
+				}
+			} )
+			.catch( () =>
+				setAnnouncement(
+					__(
+						'Failed to save CDN purge settings.',
+						'performance-optimisation'
+					)
+				)
+			)
+			.finally( () => setSavingCdnPurge( false ) );
+	}, [ cdnPurgeService, cloudflareZoneId, varnishPurgeUrls ] );
 
 	const handleLoggedInCacheToggle = useCallback( ( e ) => {
 		setLoggedInCacheEnabled( e.target.checked );
@@ -535,6 +630,163 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				</div>
 			</div>
 
+			{ /* Page cache master toggle */ }
+			<FeatureCard
+				title={ __( 'Page Cache', 'performance-optimisation' ) }
+				icon={ <i className="fas fa-bolt"></i> }
+			>
+				<SwitchField
+					label={ __(
+						'Enable Page Cache',
+						'performance-optimisation'
+					) }
+					description={ __(
+						'Generate static HTML copies of your pages and serve them to visitors without running WordPress. Recommended for faster TTFB on non-logged-in traffic.',
+						'performance-optimisation'
+					) }
+					name="enableCache"
+					checked={ pageCacheEnabled }
+					onChange={ ( e ) =>
+						setPageCacheEnabled( e.target.checked )
+					}
+				/>
+				<div className="wppo-feature-card__footer">
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--primary"
+						onClick={ savePageCacheSettings }
+						isLoading={ savingPageCache }
+						label={ __(
+							'Save Page Cache Settings',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Saving…',
+							'performance-optimisation'
+						) }
+					/>
+				</div>
+			</FeatureCard>
+
+			{ /* CDN cache purge (Cloudflare / Varnish) */ }
+			<FeatureCard
+				title={ __( 'CDN Cache Purge', 'performance-optimisation' ) }
+				icon={ <i className="fas fa-globe"></i> }
+			>
+				<div className="wppo-field">
+					<label
+						className="wppo-field-label"
+						htmlFor="cdnPurgeService"
+					>
+						{ __(
+							'CDN Purge Service',
+							'performance-optimisation'
+						) }
+					</label>
+					<select
+						className="wppo-select"
+						id="cdnPurgeService"
+						name="cdnPurgeService"
+						value={ cdnPurgeService }
+						onChange={ ( e ) =>
+							setCdnPurgeService( e.target.value )
+						}
+					>
+						<option value="none">
+							{ __( 'None', 'performance-optimisation' ) }
+						</option>
+						<option value="cloudflare">
+							{ __( 'Cloudflare', 'performance-optimisation' ) }
+						</option>
+						<option value="varnish">
+							{ __( 'Varnish', 'performance-optimisation' ) }
+						</option>
+					</select>
+					<p className="wppo-text-muted wppo-text-small">
+						{ __(
+							'Purge the edge cache whenever the plugin cache is cleared.',
+							'performance-optimisation'
+						) }
+					</p>
+				</div>
+
+				{ cdnPurgeService === 'cloudflare' && (
+					<div className="wppo-field">
+						<label
+							className="wppo-field-label"
+							htmlFor="cloudflareZoneId"
+						>
+							{ __(
+								'Cloudflare Zone ID',
+								'performance-optimisation'
+							) }
+						</label>
+						<input
+							className="wppo-input"
+							id="cloudflareZoneId"
+							name="cloudflareZoneId"
+							type="text"
+							value={ cloudflareZoneId }
+							onChange={ ( e ) =>
+								setCloudflareZoneId( e.target.value )
+							}
+						/>
+						<p className="wppo-text-muted wppo-text-small">
+							{ __(
+								'Define WPPO_CLOUDFLARE_API_TOKEN in wp-config.php with an API token that has Zone > Cache Purge permission. The token is never stored in the database.',
+								'performance-optimisation'
+							) }
+						</p>
+					</div>
+				) }
+
+				{ cdnPurgeService === 'varnish' && (
+					<div className="wppo-field">
+						<label
+							className="wppo-field-label"
+							htmlFor="varnishPurgeUrls"
+						>
+							{ __(
+								'Varnish Purge Endpoints',
+								'performance-optimisation'
+							) }
+						</label>
+						<textarea
+							className="wppo-textarea"
+							id="varnishPurgeUrls"
+							name="varnishPurgeUrls"
+							rows={ 3 }
+							value={ varnishPurgeUrls }
+							onChange={ ( e ) =>
+								setVarnishPurgeUrls( e.target.value )
+							}
+							placeholder={ 'http://127.0.0.1:8081/purge' }
+						/>
+						<p className="wppo-text-muted wppo-text-small">
+							{ __(
+								'One URL per line. Each receives a PURGE request on cache clear.',
+								'performance-optimisation'
+							) }
+						</p>
+					</div>
+				) }
+
+				<div className="wppo-feature-card__footer">
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--primary"
+						onClick={ saveCdnPurgeSettings }
+						isLoading={ savingCdnPurge }
+						label={ __(
+							'Save CDN Purge',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Saving…',
+							'performance-optimisation'
+						) }
+					/>
+				</div>
+			</FeatureCard>
+
 			{ /* Logged-in user cache settings */ }
 			<FeatureCard
 				title={ __(
@@ -619,6 +871,15 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					url={ auditUrl }
 					onSuggestionsReady={ setPagespeedSuggestions }
 				/>
+
+				{ /* Phase 2 — Web Vitals trends (v2.14.0) */ }
+				<WebVitalsTrends url={ auditUrl } />
+
+				{ /* Phase 3 — Real-user Web Vitals (v2.18.0) */ }
+				<WebVitalsRum />
+
+				{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
+				<AutoloadedOptions />
 
 				<SystemInfo />
 			</div>

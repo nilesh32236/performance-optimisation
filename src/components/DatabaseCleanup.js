@@ -69,6 +69,22 @@ const CLEANUP_TYPES = [
 			'performance-optimisation'
 		),
 	},
+	{
+		key: 'unattached_media',
+		label: __( 'Unattached Media', 'performance-optimisation' ),
+		description: __(
+			'Media files uploaded to the library but not attached to any post.',
+			'performance-optimisation'
+		),
+	},
+	{
+		key: 'oembed_cache',
+		label: __( 'oEmbed Cache', 'performance-optimisation' ),
+		description: __(
+			'Stored embed responses from YouTube, Twitter, Vimeo and other providers.',
+			'performance-optimisation'
+		),
+	},
 ];
 
 const DatabaseCleanup = ( { options = {} } ) => {

@@ -169,6 +169,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'web_vitals_trends'       => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_web_vitals_trends' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 				'suggestions'             => array(
 					'methods'             => 'GET',
 					'callback'            => array( $this, 'get_suggestions' ),
@@ -205,7 +211,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+
+				// Real-user Web Vitals (v2.18.0). The beacon is intentionally public
+				// (anonymous visitors) so it is validated via token + rate limiting
+				// instead of the manage_options permission used by the admin routes.
+				'rum_collect'             => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'collect_rum' ),
+					'permission_callback' => '__return_true',
+					'schema'              => $schemas,
+				),
+				'rum_data'                => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_rum_data' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'autoloaded_options'      => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_autoloaded_options' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
+		}
+
+		/**
+		 * List the largest autoloaded options.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_autoloaded_options( \WP_REST_Request $request ): \WP_REST_Response {
+			$limit  = isset( $request->get_params()['limit'] ) ? absint( $request->get_params()['limit'] ) : 20;
+			$limit  = max( 1, min( 100, $limit ) );
+			$result = Database_Cleanup::get_autoloaded_options( $limit );
+
+			return $this->send_response( array( 'options' => $result ) );
+		}
+
+		/**
+		 * Handle a real-user Web Vitals beacon.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function collect_rum( \WP_REST_Request $request ): \WP_REST_Response {
+			$params = $request->get_json_params();
+			$result = RUM::collect( is_array( $params ) ? $params : array() );
+
+			if ( ! $result['ok'] ) {
+				return $this->send_response( null, false, $result['status'], $result['message'] );
+			}
+
+			return $this->send_response( array( 'success' => true ) );
+		}
+
+		/**
+		 * Retrieve aggregated real-user Web Vitals for the dashboard.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_rum_data( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return $this->send_response( RUM::get_data() );
 		}
 
 		/**
@@ -357,7 +426,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'database_cleanup',
 				'object_cache',
 				'performance_audit',
-				'core_tweaks',
 				'cache_settings',
 			);
 			if ( empty( $tab ) || ! in_array( $tab, $allowed_tabs, true ) ) {
@@ -387,6 +455,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Preserve the server_timing_enabled flag when the request omits it (no UI toggle exists yet).
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['server_timing_enabled'] ) && isset( $options['performance_audit']['server_timing_enabled'] ) ) {
 				$sanitized_settings['server_timing_enabled'] = $options['performance_audit']['server_timing_enabled'];
+			}
+
+			// Preserve the auto_rescan frequency when the request omits it.
+			if ( 'performance_audit' === $tab && ! isset( $params['settings']['auto_rescan'] ) && isset( $options['performance_audit']['auto_rescan'] ) ) {
+				$sanitized_settings['auto_rescan'] = $options['performance_audit']['auto_rescan'];
 			}
 
 			$options[ $tab ] = $sanitized_settings;
@@ -663,7 +736,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'database_cleanup',
 				'object_cache',
 				'performance_audit',
-				'core_tweaks',
 				'cache_settings',
 			);
 
@@ -738,7 +810,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			$type   = isset( $params['type'] ) ? sanitize_text_field( $params['type'] ) : '';
 
-			$valid_types = array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'all' );
+			$valid_types = array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'unattached_media', 'oembed_cache', 'all' );
 
 			if ( ! in_array( $type, $valid_types, true ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
@@ -797,6 +869,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'trashed_comments'   => 'clean_trashed_comments',
 				'expired_transients' => 'clean_expired_transients',
 				'orphan_postmeta'    => 'clean_orphan_postmeta',
+				'unattached_media'   => 'clean_unattached_media',
+				'oembed_cache'       => 'clean_oembed_cache',
 			);
 
 			$method = $method_map[ $type ] ?? null;
@@ -1253,6 +1327,52 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$results['suggestions'] = Suggestion_Engine::from_pagespeed( $results );
 
 			return $this->send_response( $results );
+		}
+
+		/**
+		 * Returns the stored Web Vitals trend history.
+		 *
+		 * Optionally filters by url and strategy via GET params. Returns the raw
+		 * trend option data so the React Dashboard can render trend charts.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @since 2.14.0
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_web_vitals_trends( \WP_REST_Request $request ): \WP_REST_Response {
+			$params   = $request->get_params();
+			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : '';
+			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : '';
+
+			if ( ! in_array( $strategy, array( 'mobile', 'desktop', '' ), true ) ) {
+				$strategy = '';
+			}
+
+			$trends = Pagespeed::get_trends();
+
+			// Filter when either url or strategy is provided.
+			if ( ! empty( $url ) || ! empty( $strategy ) ) {
+				$url_key = '' !== $url ? md5( $url ) : null;
+				$trends  = array_filter(
+					$trends,
+					static function ( $k ) use ( $url_key, $strategy ) {
+						if ( null !== $url_key && 0 !== strpos( $k, $url_key . '_' ) ) {
+							return false;
+						}
+						if ( ! empty( $strategy ) && ! str_ends_with( $k, '_' . $strategy ) ) {
+							return false;
+						}
+						return true;
+					},
+					ARRAY_FILTER_USE_KEY
+				);
+			}
+
+			return $this->send_response(
+				array(
+					'trends' => $trends,
+				)
+			);
 		}
 
 		/**

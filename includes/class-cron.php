@@ -48,8 +48,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			add_filter( 'cron_schedules', array( $this, 'add_custom_cron_interval' ) );
 
 			add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
+			add_action( 'wppo_generate_static_url', array( $this, 'process_url' ), 10, 1 );
 
 			add_action( 'wppo_database_cleanup_cron', array( $this, 'database_cleanup_cron' ) );
+
+			add_action( 'wppo_web_vitals_rescan', array( $this, 'web_vitals_rescan_cron' ) );
 
 			add_action( 'wppo_used_css_cron', array( $this, 'used_css_cron' ) );
 			add_action( 'wppo_ccss_regeneration', array( $this, 'ccss_regeneration_cron' ) );
@@ -93,8 +96,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		public function schedule_cron_jobs(): void {
-			if ( ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
-				wp_schedule_event( time(), 'every_5_hours', 'wppo_page_cron_hook' );
+			$options = get_option( 'wppo_settings', array() );
+
+			// The preload toggle is the source of truth: when it is off, clear any
+			// leftover per-page preload events instead of warming the cache anyway.
+			if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) ) {
+				if ( ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
+					wp_schedule_event( time(), 'every_5_hours', 'wppo_page_cron_hook' );
+				}
+			} else {
+				wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
+				wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
+				wp_clear_scheduled_hook( 'wppo_generate_static_page' );
+				wp_clear_scheduled_hook( 'wppo_generate_static_url' );
 			}
 
 			if ( ! wp_next_scheduled( 'wppo_img_conversion' ) ) {
@@ -105,7 +119,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				wp_schedule_event( time(), 'daily', 'wppo_database_cleanup_cron' );
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			if ( ! wp_next_scheduled( 'wppo_web_vitals_rescan' ) ) {
+				wp_schedule_event( time(), 'daily', 'wppo_web_vitals_rescan' );
+			}
+
 			if ( ! empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 				if ( ! wp_next_scheduled( 'wppo_used_css_cron' ) ) {
 					wp_schedule_event( time(), 'every_5_hours', 'wppo_used_css_cron' );
@@ -131,11 +148,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		}
 
 		/**
+		 * Callback for the daily Web Vitals auto-rescan cron.
+		 *
+		 * Queues PageSpeed scans for the home URL and any configured high-value
+		 * URLs on both mobile and desktop strategies, gated by the
+		 * performance_audit.auto_rescan setting ('daily' or 'weekly'). Weekly mode
+		 * throttles itself by checking the last-run timestamp.
+		 *
+		 * @return void
+		 * @since 2.14.0
+		 */
+		public function web_vitals_rescan_cron(): void {
+			$options = get_option( 'wppo_settings', array() );
+			$audit   = isset( $options['performance_audit'] ) && is_array( $options['performance_audit'] ) ? $options['performance_audit'] : array();
+
+			$frequency = isset( $audit['auto_rescan'] ) ? sanitize_text_field( $audit['auto_rescan'] ) : '';
+			if ( ! in_array( $frequency, array( 'daily', 'weekly' ), true ) ) {
+				return;
+			}
+
+			if ( 'weekly' === $frequency ) {
+				$last_run = (int) get_option( 'wppo_web_vitals_last_rescan', 0 );
+				if ( ( time() - $last_run ) < WEEK_IN_SECONDS ) {
+					return;
+				}
+			}
+
+			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+				return;
+			}
+
+			$urls = array( home_url( '/' ) );
+
+			if ( ! empty( $audit['high_value_urls'] ) && is_array( $audit['high_value_urls'] ) ) {
+				foreach ( $audit['high_value_urls'] as $high_url ) {
+					$clean = esc_url_raw( (string) $high_url );
+					if ( ! empty( $clean ) && ! in_array( $clean, $urls, true ) ) {
+						$urls[] = $clean;
+					}
+				}
+			}
+
+			$all_queued = true;
+
+			foreach ( $urls as $scan_url ) {
+				foreach ( array( 'mobile', 'desktop' ) as $scan_strategy ) {
+					// queue_scan() returns 0 when Action Scheduler cannot create the job.
+					if ( 0 === Pagespeed::queue_scan( $scan_url, $scan_strategy ) ) {
+						$all_queued = false;
+					}
+				}
+			}
+
+			// Only record a completed run when everything queued successfully, so a
+			// failed enqueue does not block retries for the full weekly window.
+			if ( $all_queued ) {
+				update_option( 'wppo_web_vitals_last_rescan', time(), false );
+			}
+		}
+
+		/**
 		 * Triggers scheduling of the next batch of per-page static-generation jobs.
 		 *
 		 * @since 1.0.0
 		 */
 		public function wppo_page_cron_callback(): void {
+			$options = get_option( 'wppo_settings', array() );
+			if ( empty( $options['preload_settings']['enablePreloadCache'] ) ) {
+				return;
+			}
 			$this->schedule_page_cron_jobs();
 		}
 
@@ -187,6 +268,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$preload      = $options['preload_settings'] ?? array();
 				$exclude_urls = Util::process_urls( $preload['excludePreloadCache'] ?? array() );
 
+				// Sitemap-aware preload: once per cycle (offset 0), warm URLs that
+				// live outside standard post queries (custom endpoints, archives).
+				if ( 0 === $paged_offset && ! empty( $preload['preloadSitemap'] ) ) {
+					$this->schedule_sitemap_url_jobs( $exclude_urls );
+				}
+
 				foreach ( $query_batch_posts as $page_id ) {
 					$page_url = get_permalink( $page_id );
 
@@ -208,6 +295,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				}
 			} finally {
 				delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
+			}
+		}
+
+		/**
+		 * Schedule single cron events for sitemap-discovered URLs.
+		 *
+		 * Skips URLs that match configured exclusion rules and URLs already
+		 * scheduled, and caps the number of events to avoid flooding cron.
+		 *
+		 * @since 2.17.0
+		 * @param array $exclude_urls Exclusion rules (processed URLs/patterns).
+		 * @return void
+		 */
+		private function schedule_sitemap_url_jobs( array $exclude_urls ): void {
+			$sitemap_urls = $this->get_sitemap_urls( 500 );
+
+			foreach ( $sitemap_urls as $url ) {
+				if ( Util::is_url_excluded( $url, $exclude_urls ) ) {
+					continue;
+				}
+
+				if ( ! wp_next_scheduled( 'wppo_generate_static_url', array( $url ) ) ) {
+					wp_schedule_single_event( time() + wp_rand( 0, 1800 ), 'wppo_generate_static_url', array( $url ) );
+				}
 			}
 		}
 
@@ -244,6 +355,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 */
 		public static function clear_cron_jobs(): void {
 			wp_unschedule_hook( 'wppo_generate_static_page' );
+			wp_unschedule_hook( 'wppo_generate_static_url' );
 			wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 			wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
 			delete_option( 'wppo_preload_cron_offset' );
@@ -252,6 +364,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			delete_transient( Util::transient_key( 'wppo_used_css_lock' ) );
 			wp_clear_scheduled_hook( 'wppo_ccss_regeneration' );
 			wp_clear_scheduled_hook( 'wppo_generate_ccss' );
+			wp_clear_scheduled_hook( 'wppo_web_vitals_rescan' );
 		}
 
 		/**
@@ -267,6 +380,124 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$this->mark_page_as_processed( $page_id );
 				$this->load_page( $page_id );
 			}
+		}
+
+		/**
+		 * Generate a static cache file for an arbitrary URL.
+		 *
+		 * Used by sitemap-aware preloading for pages that are not tied to a post
+		 * ID (custom endpoints, third-party archives). Reuses the same remote
+		 * GET approach as {@see load_page()}.
+		 *
+		 * @since 2.17.0
+		 * @param string $url The URL to preload.
+		 * @return void
+		 */
+		public function process_url( $url ): void {
+			if ( ! is_string( $url ) || '' === trim( $url ) ) {
+				return;
+			}
+
+			$url = esc_url_raw( $url );
+			if ( '' === $url ) {
+				return;
+			}
+
+			$response = wp_remote_get( $url, array( 'timeout' => 30 ) );
+			if ( is_wp_error( $response ) ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO preload failed for URL ' . $url . ': ' . sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) ) );
+				}
+			} elseif ( wp_remote_retrieve_response_code( $response ) >= 400 ) {
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO preload failed: HTTP status ' . (int) wp_remote_retrieve_response_code( $response ) . ' for ' . $url );
+				}
+			}
+		}
+
+		/**
+		 * Discover preloadable URLs from the site's sitemap.
+		 *
+		 * Prefers the core `wp-sitemap.xml` (WP 5.5+). Follows the sitemap index
+		 * to child sitemaps and collects up to the given cap of `<loc>` URLs that
+		 * belong to this site. Falls back to an empty list when the request fails
+		 * or the sitemap is unavailable, so preloading never breaks.
+		 *
+		 * @since 2.17.0
+		 * @param int $cap Maximum number of URLs to return.
+		 * @return string[] List of absolute sitemap URLs.
+		 */
+		private function get_sitemap_urls( int $cap = 500 ): array {
+			$urls       = array();
+			$urls_count = 0;
+			$home_host  = wp_parse_url( home_url(), PHP_URL_HOST );
+			$to_fetch   = array( home_url( '/wp-sitemap.xml' ) );
+			$fetched    = array();
+
+			// Bound the whole discovery pass so a slow sitemap index cannot hold the
+			// cron request (or the follow-up preload batch) for minutes on end.
+			$deadline = microtime( true ) + 15;
+
+			while ( ! empty( $to_fetch ) && $urls_count < $cap ) {
+				$current = array_shift( $to_fetch );
+
+				if ( isset( $fetched[ $current ] ) ) {
+					continue;
+				}
+				$fetched[ $current ] = true;
+
+				if ( microtime( true ) >= $deadline ) {
+					break;
+				}
+
+				$response = wp_remote_get( $current, array( 'timeout' => 5 ) );
+				if ( is_wp_error( $response ) ) {
+					continue;
+				}
+
+				$body = wp_remote_retrieve_body( $response );
+				if ( '' === $body ) {
+					continue;
+				}
+
+				$is_index = ( false !== strpos( $body, '<sitemapindex' ) );
+
+				if ( ! preg_match_all( '#<loc>\s*([^<]+?)\s*</loc>#i', $body, $matches ) ) {
+					continue;
+				}
+
+				$to_fetch_count = count( $to_fetch );
+
+				foreach ( $matches[1] as $loc ) {
+					$loc = esc_url_raw( trim( $loc ) );
+					if ( '' === $loc ) {
+						continue;
+					}
+
+					$loc_host = wp_parse_url( $loc, PHP_URL_HOST );
+					if ( $loc_host && $loc_host !== $home_host ) {
+						continue;
+					}
+
+					if ( $is_index ) {
+						if ( ! isset( $fetched[ $loc ] ) && $to_fetch_count < 50 ) {
+							$to_fetch[] = $loc;
+							++$to_fetch_count;
+						}
+						continue;
+					}
+
+					$urls[] = $loc;
+					++$urls_count;
+					if ( $urls_count >= $cap ) {
+						break 2;
+					}
+				}
+			}
+
+			return $urls;
 		}
 
 		/**

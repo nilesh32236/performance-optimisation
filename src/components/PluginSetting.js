@@ -66,10 +66,11 @@ const PluginSetting = ( { options } ) => {
 
 	// Phase 2 — PageSpeed API key state.
 	// Security: use boolean flag only, do not expose the actual key to the client.
-	const apiKeyConfigured =
+	const [ apiKeyConfigured, setApiKeyConfigured ] = useState(
 		typeof wppoSettings !== 'undefined'
 			? wppoSettings.performance_audit?.pagespeedApiKeyConfigured ?? false
-			: false;
+			: false
+	);
 
 	const [ newApiKey, setNewApiKey ] = useState( '' );
 	const [ savingApiKey, setSavingApiKey ] = useState( false );
@@ -78,6 +79,130 @@ const PluginSetting = ( { options } ) => {
 		notify: notifyApiKey,
 		dismiss: dismissApiKey,
 	} = useNotice();
+
+	// Phase 2 — auto PageSpeed re-scan frequency state.
+	const [ autoRescan, setAutoRescan ] = useState(
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings.performance_audit?.autoRescan ?? ''
+			: ''
+	);
+	const [ savingAutoRescan, setSavingAutoRescan ] = useState( false );
+
+	// Monitoring: Server-Timing header + high-value URLs for auto re-scan.
+	const storedAudit =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings?.settings?.performance_audit ?? {}
+			: {};
+	const [ serverTimingEnabled, setServerTimingEnabled ] = useState(
+		!! storedAudit.server_timing_enabled
+	);
+	const [ rumEnabled, setRumEnabled ] = useState(
+		!! storedAudit.rum_enabled
+	);
+	const [ highValueUrls, setHighValueUrls ] = useState(
+		Array.isArray( storedAudit.high_value_urls )
+			? storedAudit.high_value_urls.join( '\n' )
+			: ''
+	);
+	const [ savingMonitoring, setSavingMonitoring ] = useState( false );
+
+	const saveMonitoring = async () => {
+		setSavingMonitoring( true );
+		dismissApiKey();
+		try {
+			const currentSettings =
+				wppoSettings?.settings?.performance_audit ?? {};
+			const urls = highValueUrls
+				.split( '\n' )
+				.map( ( url ) => url.trim() )
+				.filter( Boolean );
+			const response = await apiCall( 'update_settings', {
+				tab: 'performance_audit',
+				settings: {
+					...currentSettings,
+					server_timing_enabled: serverTimingEnabled,
+					rum_enabled: rumEnabled,
+					high_value_urls: urls,
+				},
+			} );
+			if ( response.success ) {
+				notifyApiKey( {
+					type: 'success',
+					message: __(
+						'Monitoring settings saved.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifyApiKey( {
+					type: 'error',
+					message:
+						response.message ||
+						__(
+							'Failed to save monitoring settings.',
+							'performance-optimisation'
+						),
+				} );
+			}
+		} catch ( err ) {
+			notifyApiKey( {
+				type: 'error',
+				message: __(
+					'Error saving monitoring settings.',
+					'performance-optimisation'
+				),
+			} );
+			console.error( 'Save monitoring error:', err );
+		} finally {
+			setSavingMonitoring( false );
+		}
+	};
+
+	const saveAutoRescan = async () => {
+		setSavingAutoRescan( true );
+		dismissApiKey();
+		try {
+			const currentSettings =
+				wppoSettings?.settings?.performance_audit ?? {};
+			const response = await apiCall( 'update_settings', {
+				tab: 'performance_audit',
+				settings: {
+					...currentSettings,
+					auto_rescan: autoRescan,
+				},
+			} );
+			if ( response.success ) {
+				notifyApiKey( {
+					type: 'success',
+					message: __(
+						'Auto-rescan frequency saved.',
+						'performance-optimisation'
+					),
+				} );
+			} else {
+				notifyApiKey( {
+					type: 'error',
+					message:
+						response.message ||
+						__(
+							'Failed to save auto-rescan frequency.',
+							'performance-optimisation'
+						),
+				} );
+			}
+		} catch ( err ) {
+			notifyApiKey( {
+				type: 'error',
+				message: __(
+					'Error saving auto-rescan frequency.',
+					'performance-optimisation'
+				),
+			} );
+			console.error( 'Save auto-rescan error:', err );
+		} finally {
+			setSavingAutoRescan( false );
+		}
+	};
 
 	const saveApiKey = async () => {
 		setSavingApiKey( true );
@@ -94,6 +219,7 @@ const PluginSetting = ( { options } ) => {
 			} );
 			if ( response.success ) {
 				setNewApiKey( '' );
+				setApiKeyConfigured( true );
 				notifyApiKey( {
 					type: 'success',
 					message: __( 'API key saved.', 'performance-optimisation' ),
@@ -525,6 +651,170 @@ const PluginSetting = ( { options } ) => {
 						isLoading={ savingApiKey }
 						label={ __(
 							'Save Settings',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Saving…',
+							'performance-optimisation'
+						) }
+					/>
+
+					<hr
+						className="wppo-divider"
+						style={ { margin: '20px 0' } }
+					/>
+
+					<div className="wppo-field">
+						<label
+							className="wppo-field-label"
+							htmlFor="auto-rescan-frequency"
+						>
+							{ __(
+								'Auto PageSpeed Re-scan',
+								'performance-optimisation'
+							) }
+						</label>
+						<p
+							id="auto-rescan-desc"
+							className="wppo-text-muted wppo-text-small"
+							style={ { marginBottom: '8px' } }
+						>
+							{ __(
+								'Automatically re-run PageSpeed scans on your homepage and high-value URLs to build Web Vitals trend history. Requires a configured API key.',
+								'performance-optimisation'
+							) }
+						</p>
+						<select
+							id="auto-rescan-frequency"
+							className="wppo-select"
+							value={ autoRescan }
+							onChange={ ( e ) =>
+								setAutoRescan( e.target.value )
+							}
+							disabled={ ! apiKeyConfigured }
+							aria-describedby="auto-rescan-desc"
+						>
+							<option value="">
+								{ __( 'Disabled', 'performance-optimisation' ) }
+							</option>
+							<option value="daily">
+								{ __( 'Daily', 'performance-optimisation' ) }
+							</option>
+							<option value="weekly">
+								{ __( 'Weekly', 'performance-optimisation' ) }
+							</option>
+						</select>
+					</div>
+
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--secondary wppo-mt-16"
+						onClick={ saveAutoRescan }
+						isLoading={ savingAutoRescan }
+						disabled={ ! apiKeyConfigured }
+						label={ __(
+							'Save Auto-rescan',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Saving…',
+							'performance-optimisation'
+						) }
+					/>
+				</FeatureCard>
+
+				{ /* Monitoring: Server-Timing + high-value URLs */ }
+				<FeatureCard
+					title={ __( 'Monitoring', 'performance-optimisation' ) }
+					icon={ <i className="fas fa-tachometer-alt"></i> }
+				>
+					<label
+						htmlFor="wppo-server-timing"
+						className="wppo-checkbox-row"
+					>
+						<input
+							id="wppo-server-timing"
+							type="checkbox"
+							checked={ serverTimingEnabled }
+							onChange={ ( e ) =>
+								setServerTimingEnabled( e.target.checked )
+							}
+						/>
+						<span>
+							{ __(
+								'Enable Server-Timing Header',
+								'performance-optimisation'
+							) }
+						</span>
+					</label>
+					<p
+						className="wppo-text-muted wppo-text-small"
+						style={ { marginBottom: '16px' } }
+					>
+						{ __(
+							'Emit a Server-Timing header with template and database timings on front-end responses (WP 6.9+).',
+							'performance-optimisation'
+						) }
+					</p>
+					<label
+						htmlFor="wppo-rum-enabled"
+						className="wppo-checkbox-row"
+					>
+						<input
+							id="wppo-rum-enabled"
+							type="checkbox"
+							checked={ rumEnabled }
+							onChange={ ( e ) =>
+								setRumEnabled( e.target.checked )
+							}
+						/>
+						<span>
+							{ __(
+								'Collect Real-user Web Vitals',
+								'performance-optimisation'
+							) }
+						</span>
+					</label>
+					<p
+						className="wppo-text-muted wppo-text-small"
+						style={ { marginBottom: '16px' } }
+					>
+						{ __(
+							'Measure LCP, CLS, INP, FCP and TTFB from real visitors on the front end. Aggregated anonymously by day and page.',
+							'performance-optimisation'
+						) }
+					</p>
+					<label
+						htmlFor="wppo-high-value-urls"
+						className="wppo-field-label"
+					>
+						{ __( 'High-value URLs', 'performance-optimisation' ) }
+					</label>
+					<textarea
+						id="wppo-high-value-urls"
+						className="wppo-textarea"
+						rows={ 4 }
+						value={ highValueUrls }
+						onChange={ ( e ) => setHighValueUrls( e.target.value ) }
+						placeholder={
+							'http://example.com/about/\nhttp://example.com/contact/'
+						}
+						aria-describedby="wppo-high-value-urls-desc"
+					/>
+					<p
+						id="wppo-high-value-urls-desc"
+						className="wppo-text-muted wppo-text-small"
+					>
+						{ __(
+							'One URL per line. These pages are scanned by the auto PageSpeed re-scan alongside your homepage.',
+							'performance-optimisation'
+						) }
+					</p>
+					<LoadingSubmitButton
+						className="wppo-button wppo-button--secondary wppo-mt-16"
+						onClick={ saveMonitoring }
+						isLoading={ savingMonitoring }
+						label={ __(
+							'Save Monitoring',
 							'performance-optimisation'
 						) }
 						loadingLabel={ __(

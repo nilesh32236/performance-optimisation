@@ -175,42 +175,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'loggedInCacheRoles'  => array(),
 					),
 					'file_optimisation'  => array(
-						'enableServerRules'      => false,
-						'cdnURL'                 => '',
-						'removeUnusedCSS'        => false,
-						'excludeUnusedCSS'       => '',
-						'criticalCSS'            => false,
-						'hostGoogleFontsLocally' => false,
+						'enableServerRules'       => false,
+						'cdnURL'                  => '',
+						'removeUnusedCSS'         => false,
+						'excludeUnusedCSS'        => '',
+						'criticalCSS'             => false,
+						'hostGoogleFontsLocally'  => false,
 						// On WP 6.9+ classic themes load core block assets on demand by default, so
 						// the toggle defaults to ON there and only acts as an opt-out. Pre-6.9 cores
 						// keep the legacy opt-in default (OFF).
-						'blockAssetsOnDemand'    => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
-						'loadAllCoreBlockAssets' => false,
-						'delayJSDefaultStrategy' => 'interaction',
-						'delayJSIdleList'        => '',
-						'delayJSViewportList'    => '',
-						'delayJSPriority'        => '',
-						'delayJSIdleTimeout'     => 3000,
-						'minifyHTML'             => false,
-						'minifyJS'               => false,
-						'minifyCSS'              => false,
-						'deferJS'                => false,
-						'delayJS'                => false,
-						'combineCSS'             => false,
-						'excludeJS'              => '',
-						'excludeCSS'             => '',
-						'excludeDeferJS'         => '',
-						'excludeDelayJS'         => '',
-						'excludeCombineCSS'      => '',
-						'minifyInlineCSS'        => false,
-						'minifyInlineJS'         => false,
-						'removeHTMLComments'     => true,
+						'blockAssetsOnDemand'     => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+						'loadAllCoreBlockAssets'  => false,
+						'delayJSDefaultStrategy'  => 'interaction',
+						'delayJSIdleList'         => '',
+						'delayJSViewportList'     => '',
+						'delayJSPriority'         => '',
+						'delayJSIdleTimeout'      => 3000,
+						'minifyHTML'              => false,
+						'minifyJS'                => false,
+						'minifyCSS'               => false,
+						'deferJS'                 => false,
+						'delayJS'                 => false,
+						'combineCSS'              => false,
+						'excludeJS'               => '',
+						'excludeCSS'              => '',
+						'excludeDeferJS'          => '',
+						'excludeDelayJS'          => '',
+						'excludeCombineCSS'       => '',
+						'minifyInlineCSS'         => false,
+						'minifyInlineJS'          => false,
+						'removeHTMLComments'      => true,
+						'removeQueryStrings'      => false,
+						'disableRestApiLinks'     => false,
+						'disableRssFeeds'         => false,
+						'disableShortlinks'       => false,
+						'disableGeneratorTag'     => false,
+						'disableJQueryMigrate'    => false,
+						'disablePasswordStrength' => false,
+						'disableSelfPingbacks'    => false,
 					),
 					'preload_settings'   => array(
 						'enableSpeculationRules' => false,
 						'speculationMode'        => 'prerender',
 						'speculationEagerness'   => 'moderate',
 						'speculationExcludeUrls' => '',
+						'preloadSitemap'         => false,
 					),
 					'image_optimisation' => array(
 						'placeholderType'            => 'svg',
@@ -218,12 +227,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'prioritizeLCPImages'        => false,
 						'clientSideMimeTypeOverride' => false,
 						'clientSideMimeTypes'        => array(),
+						'lazyLoadBackgroundImages'   => false,
 					),
 					'performance_audit'  => array(
 						'pagespeed_api_key'     => '',
 						'high_value_urls'       => array(),
 						'auto_fix_enabled'      => false,
 						'server_timing_enabled' => false,
+						'auto_rescan'           => '',
+						'rum_enabled'           => false,
 					),
 				)
 			);
@@ -367,6 +379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
+			add_action( 'wp_enqueue_scripts', array( $this, 'apply_module_loading_strategies' ), 10000 );
 			$has_delay_js = ! empty( $this->options['file_optimisation']['delayJS'] );
 			$has_defer_js = ! empty( $this->options['file_optimisation']['deferJS'] );
 			$wp_version   = (string) get_bloginfo( 'version' );
@@ -478,6 +491,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$rest = new Rest();
 			add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
 
+			// Real-user Web Vitals: enqueue the beacon + bake its config into output
+			// (captured by the page cache so cached pages keep beaconing without WP).
+			add_action( 'wp_enqueue_scripts', array( 'PerformanceOptimise\Inc\RUM', 'maybe_enqueue_scripts' ), 5 );
+			add_action( 'wp_footer', array( 'PerformanceOptimise\Inc\RUM', 'print_config' ), 90 );
+
+			// Edge/CDN cache purge on full cache clear (Cloudflare / Varnish).
+			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\CDN_Purger', 'purge_all' ) );
+
 			if ( ! empty( $this->options['file_optimisation']['minifyJS'] ) ) {
 				if ( ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
 					$exclude_js = Util::process_urls( $this->options['file_optimisation']['excludeJS'] );
@@ -503,6 +524,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				add_filter( 'style_loader_tag', array( $this, 'minify_css' ), 10, 3 );
+			}
+
+			if ( ! empty( $this->options['file_optimisation']['removeQueryStrings'] ) ) {
+				add_filter( 'script_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
+				add_filter( 'style_loader_src', array( $this, 'strip_static_query_strings' ), 10, 2 );
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ) ) {
@@ -1368,6 +1394,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
 						'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
 						'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
+						'autoRescan'                => $this->options['performance_audit']['auto_rescan'] ?? '',
 					),
 					// Frontend theme colors for accent syncing.
 					'themeColors'       => $this->get_frontend_theme_colors(),
@@ -1391,13 +1418,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( $this->should_optimise_for_logged_in() ) {
 				$lazy_load_images         = ! empty( $this->options['image_optimisation']['lazyLoadImages'] );
+				$lazy_load_backgrounds    = ! empty( $this->options['image_optimisation']['lazyLoadBackgroundImages'] );
 				$lazy_load_videos         = ! empty( $this->options['image_optimisation']['lazyLoadVideos'] );
 				$enable_video_placeholder = ! empty( $this->options['image_optimisation']['enableVideoPlaceholder'] ) && $lazy_load_videos;
 				$delay_js                 = ! empty( $this->options['file_optimisation']['delayJS'] );
 				$use_native_lazy          = ! empty( $this->options['image_optimisation']['lazyLoadNative'] );
 
 				// When native lazy loading is active, images use native loading="lazy" but iframes may still need JS restoration.
-				$needs_script = ( ! $use_native_lazy && $lazy_load_images ) || $lazy_load_videos || $enable_video_placeholder || $delay_js;
+				$needs_script = ( ! $use_native_lazy && $lazy_load_images ) || $lazy_load_backgrounds || $lazy_load_videos || $enable_video_placeholder || $delay_js;
 
 				if ( $needs_script ) {
 					// Shared runtime config for the lazyload bundle. Exported to the frontend
@@ -1452,6 +1480,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							wp_add_inline_script( 'wppo-lazyload', 'window.wppoDelayConfig=' . $delay_config . ';', 'before' );
 						}
 					}
+				}
+			}
+		}
+
+		/**
+		 * Apply defer optimisations to script modules (WP 6.5+).
+		 *
+		 * Script modules are already deferred by the browser; the remaining wins
+		 * are printing them in the footer and lowering their fetch priority so
+		 * critical CSS/images win the network queue. Uses the core API when
+		 * available (WP 6.9+) and is a no-op on older core.
+		 *
+		 * @since 2.18.0
+		 * @return void
+		 */
+		public function apply_module_loading_strategies(): void {
+			if ( empty( $this->options['file_optimisation']['deferJS'] ) ) {
+				return;
+			}
+			if ( ! $this->should_optimise_for_logged_in() ) {
+				return;
+			}
+			if ( ! function_exists( 'wp_script_modules' ) ) {
+				return;
+			}
+
+			$modules = wp_script_modules();
+			if ( ! is_object( $modules ) ) {
+				return;
+			}
+
+			$excluded = Util::process_urls( (string) ( $this->options['file_optimisation']['excludeDeferJS'] ?? '' ) );
+
+			// Collect registered module ids, tolerating core version differences.
+			$ids = array();
+			if ( method_exists( $modules, 'get_print_queue' ) ) {
+				$ids = (array) $modules->get_print_queue();
+			}
+			if ( empty( $ids ) && isset( $modules->registered ) ) {
+				$ids = array_keys( (array) $modules->registered );
+			}
+			if ( empty( $ids ) && isset( $modules->all ) ) {
+				$ids = array_keys( (array) $modules->all );
+			}
+
+			foreach ( $ids as $id ) {
+				if ( in_array( (string) $id, $excluded, true ) ) {
+					continue;
+				}
+				if ( method_exists( $modules, 'set_in_footer' ) ) {
+					$modules->set_in_footer( (string) $id, true );
+				}
+				if ( method_exists( $modules, 'set_fetchpriority' ) ) {
+					$modules->set_fetchpriority( (string) $id, 'low' );
 				}
 			}
 		}
@@ -2025,6 +2107,114 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					}
 				);
 			}
+		}
+
+		/**
+		 * Strips version query strings from enqueued static asset URLs.
+		 *
+		 * Removing `?ver=` from CSS/JS URLs lets proxies, CDNs, and browsers cache
+		 * the files more effectively. Cache-busting is retained where the plugin
+		 * rewrites URLs (minify/combine) because those already embed the file
+		 * modification time; this only affects URLs that still carry a `ver` arg
+		 * and are not served from the plugin's own `cache/wppo` directories.
+		 *
+		 * @since 2.17.0
+		 *
+		 * @param string $src    The asset source URL.
+		 * @param string $handle The script/style handle.
+		 * @return string The URL without its version query string.
+		 */
+		public function strip_static_query_strings( $src, $handle ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( empty( $src ) ) {
+				return $src;
+			}
+
+			$parsed = wp_parse_url( $src );
+			if ( ! isset( $parsed['query'] ) || '' === $parsed['query'] ) {
+				return $src;
+			}
+
+			// Never strip the ver arg from the plugin's own cache files (minified
+			// or combined assets). Those URLs are versioned with the file mtime at
+			// enqueue time, so stripping it would let browsers serve stale copies
+			// of regenerated files.
+			if ( $this->is_plugin_cache_url( $src ) ) {
+				return $src;
+			}
+
+			// Remove only the ver component(s) from the raw query, keeping every
+			// other part byte-for-byte identical: duplicate keys, percent-encoding
+			// and ordering survive (parse_str/http_build_query would collapse
+			// duplicates and re-encode values).
+			$kept      = array();
+			$found_ver = false;
+			foreach ( explode( '&', $parsed['query'] ) as $component ) {
+				$eq  = strpos( $component, '=' );
+				$key = false !== $eq ? substr( $component, 0, $eq ) : $component;
+				if ( 'ver' === rawurldecode( $key ) ) {
+					$found_ver = true;
+					continue;
+				}
+				$kept[] = $component;
+			}
+
+			if ( ! $found_ver ) {
+				return $src;
+			}
+
+			// Replace only the query portion inside the original string so relative
+			// and protocol-relative sources, ports and fragments stay intact.
+			$fragment = '';
+			$head     = $src;
+			$frag_pos = strpos( $src, '#' );
+			if ( false !== $frag_pos ) {
+				$fragment = substr( $src, $frag_pos );
+				$head     = substr( $src, 0, $frag_pos );
+			}
+
+			$query_pos = strpos( $head, '?' );
+			if ( false === $query_pos ) {
+				return $src;
+			}
+
+			$base = substr( $head, 0, $query_pos );
+
+			if ( empty( $kept ) ) {
+				// No remaining args: drop the '?' entirely.
+				return $base . $fragment;
+			}
+
+			return $base . '?' . implode( '&', $kept ) . $fragment;
+		}
+
+		/**
+		 * Whether a URL points at the plugin's own cache directories.
+		 *
+		 * Origin-aware so a third-party URL whose path merely contains
+		 * `/cache/wppo/` is not exempted. Relative and protocol-relative URLs
+		 * match on the content path prefix alone (no host to compare).
+		 *
+		 * @since 2.18.0
+		 *
+		 * @param string $src The asset source URL.
+		 * @return bool
+		 */
+		private function is_plugin_cache_url( string $src ): bool {
+			$content_url  = content_url( '/' );
+			$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
+			$prefix       = rtrim( $content_path, '/' ) . '/cache/wppo';
+
+			$parsed = wp_parse_url( $src );
+			$path   = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
+
+			if ( isset( $parsed['host'] ) ) {
+				$cache_host = wp_parse_url( $content_url, PHP_URL_HOST );
+				if ( null !== $cache_host && 0 !== strcasecmp( (string) $parsed['host'], (string) $cache_host ) ) {
+					return false;
+				}
+			}
+
+			return 0 === strpos( $path, $prefix );
 		}
 
 		/**

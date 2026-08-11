@@ -10,6 +10,10 @@ Baseline diagnostics (Phase 1, run 2026-08-10):
 - `npm run build`: **success** (webpack 5.109.2).
 - Psalm: runs in CI only (Docker `psalm/psalm-security-scan`); not installed locally.
 
+Current verification (post-GAP/audit completion, 2026-08-11): `composer test` **246 / 523
+assertions**, `composer lint` **clean**, `npm test` **303 / 31 suites**, `npm run lint:js` **clean**,
+`npm run build` **success**.
+
 ---
 
 ## P0 — Critical & Breaking Issues

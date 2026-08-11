@@ -56,6 +56,12 @@ jobs:
 
       - name: Research latest WordPress features
         id: search
+        env:
+          # OpenCode gateway (opencode-go models) is OpenAI-compatible. The key
+          # is provided as a GitHub secret; the model comes from the repo
+          # variable OPENCODE_MODEL (falls back to the default below).
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
           cat << 'RESEARCH_PROMPT' > /tmp/research-prompt.txt
           RESEARCH OBJECTIVE:
@@ -129,7 +135,7 @@ jobs:
           Overall recommendation.
           RESEARCH_PROMPT
 
-          opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/research-prompt.txt || echo "::warning::OpenCode research exited with code $?"
+          opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}" < /tmp/research-prompt.txt || echo "::warning::OpenCode research exited with code $?"
 
           if [ -f /tmp/research-results.md ]; then
             cp /tmp/research-results.md /tmp/wp-research.md
@@ -238,6 +244,8 @@ jobs:
         id: create
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: |
           cat > /tmp/create-issues-prompt.md << 'PROMPT_HEADER'
           # Create GitHub Issues for WordPress Feature Monitor Findings
@@ -279,7 +287,7 @@ jobs:
           PROMPT_FOOTER
 
           # Allow OpenCode to use gh via bash tool — auto mode approves all permissions
-          opencode run --auto --model opencode/deepseek-v4-flash-free < /tmp/create-issues-prompt.md
+          opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}" < /tmp/create-issues-prompt.md
           echo "created=true" >> "$GITHUB_OUTPUT"
 
   # ── 3. SUMMARY ───────────────────────────────────────────────────────────────

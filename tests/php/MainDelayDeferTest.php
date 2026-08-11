@@ -257,8 +257,8 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that add_defer_attribute() leaves a deferred handle's tag untouched
-	 * when both defer and delay JS are active.
+	 * Test that add_defer_attribute leaves a deferred handle untouched when both
+	 * defer and delay JS are enabled.
 	 */
 	public function test_add_defer_attribute_skips_deferred_handle_when_both_enabled(): void {
 		$this->stub_main_construction(
@@ -276,5 +276,180 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 		$result = $main->add_defer_attribute( $tag, 'my-deferred-script' );
 
 		$this->assertSame( $tag, $result );
+	}
+
+	/**
+	 * Build a Main instance with given options without invoking the constructor.
+	 *
+	 * @param array $options wppo_settings options.
+	 * @return Main
+	 */
+	private function make_main( array $options ): Main {
+		$reflection = new \ReflectionClass( Main::class );
+		$main       = $reflection->newInstanceWithoutConstructor();
+
+		$prop = $reflection->getProperty( 'options' );
+		$prop->setAccessible( true );
+		$prop->setValue( $main, $options );
+
+		return $main;
+	}
+
+	/**
+	 * Build a fake WP_Script_Modules that records set_in_footer/set_fetchpriority.
+	 *
+	 * @return object
+	 */
+	private function make_fake_modules(): object {
+		return new class() {
+			/**
+			 * Registered modules (public property, mirrors core).
+			 *
+			 * @var array
+			 */
+			public $registered = array(
+				'interactive' => array(),
+				'my-mod'      => array(),
+			);
+
+			/**
+			 * Recorded calls.
+			 *
+			 * @var string[]
+			 */
+			public $calls = array();
+
+			/**
+			 * Record set_in_footer.
+			 *
+			 * @param string $id        Module id.
+			 * @param bool   $in_footer Whether in footer.
+			 * @return true
+			 */
+			public function set_in_footer( $id, $in_footer ) {
+				$this->calls[] = 'footer:' . $id . ':' . ( $in_footer ? 'true' : 'false' );
+				return true;
+			}
+
+			/**
+			 * Record set_fetchpriority.
+			 *
+			 * @param string $id       Module id.
+			 * @param string $priority Priority.
+			 * @return true
+			 */
+			public function set_fetchpriority( $id, $priority ) {
+				$this->calls[] = 'priority:' . $id . ':' . $priority;
+				return true;
+			}
+		};
+	}
+
+	/**
+	 * Stub wp_script_modules() + its function_exists probe.
+	 *
+	 * @param object $fake Fake modules instance.
+	 */
+	private function stub_script_modules( object $fake ): void {
+		Functions\when( 'wp_script_modules' )->justReturn( $fake );
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) use ( $fake ) {
+				if ( 'wp_script_modules' === $function_name ) {
+					return true;
+				}
+				return \function_exists( $function_name );
+			}
+		);
+		// Visitors (not logged in) are always eligible, so the logged-in gate
+		// passes in the happy-path tests; a dedicated test covers the gate.
+		Functions\when( 'is_user_logged_in' )->justReturn( false );
+	}
+
+	/**
+	 * Test that script modules get footer + low fetchpriority when defer is on.
+	 */
+	public function test_apply_module_loading_strategies_defers_modules(): void {
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+		$fake = $this->make_fake_modules();
+		$this->stub_script_modules( $fake );
+
+		$main->apply_module_loading_strategies();
+
+		$this->assertContains( 'footer:interactive:true', $fake->calls );
+		$this->assertContains( 'priority:interactive:low', $fake->calls );
+		$this->assertContains( 'footer:my-mod:true', $fake->calls );
+	}
+
+	/**
+	 * Test that the module pass is a no-op when defer JS is off.
+	 */
+	public function test_apply_module_loading_strategies_skips_when_defer_off(): void {
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => false,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+		$fake = $this->make_fake_modules();
+		$this->stub_script_modules( $fake );
+
+		$main->apply_module_loading_strategies();
+
+		$this->assertSame( array(), $fake->calls );
+	}
+
+	/**
+	 * Test that excluded module handles are not deferred.
+	 */
+	public function test_apply_module_loading_strategies_respects_exclusions(): void {
+		$main = $this->make_main(
+			array(
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => 'my-mod',
+				),
+			)
+		);
+		$fake = $this->make_fake_modules();
+		$this->stub_script_modules( $fake );
+
+		$main->apply_module_loading_strategies();
+
+		$this->assertContains( 'footer:interactive:true', $fake->calls );
+		$this->assertNotContains( 'footer:my-mod:true', $fake->calls );
+	}
+
+	/**
+	 * Test that the module pass is skipped for logged-in users who are not
+	 * eligible for cached/optimised output.
+	 */
+	public function test_apply_module_loading_strategies_skips_ineligible_logged_in(): void {
+		$main = $this->make_main(
+			array(
+				'cache_settings'    => array(
+					'enableLoggedInCache' => false,
+				),
+				'file_optimisation' => array(
+					'deferJS'        => true,
+					'excludeDeferJS' => '',
+				),
+			)
+		);
+		$fake = $this->make_fake_modules();
+		$this->stub_script_modules( $fake );
+		Functions\when( 'is_user_logged_in' )->justReturn( true );
+
+		$main->apply_module_loading_strategies();
+
+		$this->assertSame( array(), $fake->calls );
 	}
 }

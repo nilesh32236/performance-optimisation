@@ -28,8 +28,65 @@ class DatabaseCleanupTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayHasKey( 'trashed_comments', $map );
 		$this->assertArrayHasKey( 'expired_transients', $map );
 		$this->assertArrayHasKey( 'orphan_postmeta', $map );
+		$this->assertArrayHasKey( 'unattached_media', $map );
+		$this->assertArrayHasKey( 'oembed_cache', $map );
 		$this->assertSame( array( 'posts', 'postmeta' ), $map['revisions'] );
 		$this->assertSame( array( 'options' ), $map['expired_transients'] );
+	}
+
+	/**
+	 * Test that get_autoloaded_options returns rows ordered by size.
+	 */
+	public function test_get_autoloaded_options_returns_sorted_rows(): void {
+		$GLOBALS['wpdb'] = new class() extends WPPO_DB_Mock {
+			/**
+			 * Return sample autoloaded rows.
+			 *
+			 * @param string $query SQL query (unused).
+			 * @return array
+			 */
+			public function get_results( $query = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+				return array(
+					array(
+						'option_name' => 'small_option',
+						'opt_size'    => 10,
+					),
+					array(
+						'option_name' => 'big_option',
+						'opt_size'    => 5000,
+					),
+				);
+			}
+		};
+
+		$result = Database_Cleanup::get_autoloaded_options( 5 );
+
+		$this->assertSame( 'small_option', $result[0]['option_name'] );
+		$this->assertSame( 10, $result[0]['size'] );
+		$this->assertSame( 'big_option', $result[1]['option_name'] );
+		$this->assertSame( 5000, $result[1]['size'] );
+	}
+
+	/**
+	 * Test that get_autoloaded_options returns an empty array on no rows.
+	 */
+	public function test_get_autoloaded_options_empty_when_no_rows(): void {
+		$GLOBALS['wpdb'] = new WPPO_DB_Mock();
+
+		$result = Database_Cleanup::get_autoloaded_options();
+
+		$this->assertSame( array(), $result );
+	}
+
+	/**
+	 * Test that the autoloadable values include the WP 6.6+ auto-on value.
+	 */
+	public function test_get_autoloadable_values_includes_auto_on(): void {
+		$values = Database_Cleanup::get_autoloadable_values();
+
+		$this->assertContains( 'yes', $values );
+		$this->assertContains( 'auto', $values );
+		$this->assertContains( 'auto-on', $values );
 	}
 
 	/**
@@ -107,6 +164,61 @@ class DatabaseCleanupTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_trashed_comments' ) );
 		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_expired_transients' ) );
 		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_orphan_postmeta' ) );
+		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_unattached_media' ) );
+		$this->assertTrue( method_exists( Database_Cleanup::class, 'clean_oembed_cache' ) );
+	}
+
+	/**
+	 * Test that clean_unattached_media returns zero when none exist.
+	 */
+	public function test_clean_unattached_media_returns_zero_when_none_exist(): void {
+		$GLOBALS['wpdb'] = new WPPO_DB_Mock();
+
+		Functions\stubs(
+			array(
+				'wp_normalize_path',
+				'sanitize_text_field',
+				'wp_unslash',
+			)
+		);
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+
+		$result = Database_Cleanup::clean_unattached_media();
+		$this->assertSame( 0, $result );
+	}
+
+	/**
+	 * Test that clean_oembed_cache returns zero when none exist.
+	 */
+	public function test_clean_oembed_cache_returns_zero_when_none_exist(): void {
+		$GLOBALS['wpdb'] = new WPPO_DB_Mock();
+
+		Functions\stubs(
+			array(
+				'wp_normalize_path',
+				'sanitize_text_field',
+				'wp_unslash',
+			)
+		);
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'wp_unslash' )->returnArg();
+
+		$result = Database_Cleanup::clean_oembed_cache();
+		$this->assertSame( 0, $result );
+	}
+
+	/**
+	 * Test that TABLE_MAP contains the new cleanup types.
+	 */
+	public function test_table_map_contains_new_types(): void {
+		$map = Database_Cleanup::TABLE_MAP;
+		$this->assertArrayHasKey( 'unattached_media', $map );
+		$this->assertArrayHasKey( 'oembed_cache', $map );
+		$this->assertSame( array( 'posts', 'postmeta' ), $map['unattached_media'] );
+		$this->assertSame( array( 'options' ), $map['oembed_cache'] );
 	}
 }
 

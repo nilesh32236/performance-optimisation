@@ -20,6 +20,7 @@ const PreloadSettings = ( { options = {} } ) => {
 	const defaultSettings = {
 		enablePreloadCache: false,
 		excludePreloadCache: 'my-account/(.*)\ncart/(.*)\ncheckout/(.*)',
+		preloadSitemap: false,
 		preconnect: false,
 		preconnectOrigins: '',
 		prefetchDNS: false,
@@ -170,6 +171,19 @@ const PreloadSettings = ( { options = {} } ) => {
 								</p>
 							</div>
 						) }
+						<SwitchField
+							label={ __(
+								'Preload from Sitemap',
+								'performance-optimisation'
+							) }
+							description={ __(
+								'Also warm up URLs discovered in your sitemap, so pages outside standard post queries get cached too.',
+								'performance-optimisation'
+							) }
+							name="preloadSitemap"
+							checked={ settings.preloadSitemap }
+							onChange={ handleChange( setSettings ) }
+						/>
 					</div>
 				</FeatureCard>
 

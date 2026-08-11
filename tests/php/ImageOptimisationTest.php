@@ -661,4 +661,90 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'example.com/wp-content/uploads/a.jpg', $url );
 		$this->assertSame( 2, $calls );
 	}
+
+	/**
+	 * Test that an inline background-image is converted to a lazy data attribute.
+	 */
+	public function test_add_delay_load_backgrounds_rewrites_inline_background(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array( 'lazyLoadBackgroundImages' => true )
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$html = '<div class="hero" style="background-image:url(\'https://example.com/img.jpg\'); background-size:cover;">Hi</div>';
+		$out  = $image_opt->add_delay_load_backgrounds( $html );
+
+		$this->assertStringContainsString( 'wppo-lazy-bg', $out );
+		$this->assertStringContainsString( 'data-wppo-bg=', $out );
+		$this->assertStringNotContainsString( 'background-image', $out );
+		$this->assertStringContainsString( 'background-size:cover', $out );
+	}
+
+	/**
+	 * Test that the first N backgrounds are left untouched (hero heuristic).
+	 */
+	public function test_add_delay_load_backgrounds_respects_exclude_first(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array(
+				'lazyLoadBackgroundImages' => true,
+				'excludeFirstImages'       => 1,
+			)
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$html = '<div style="background-image:url(\'https://example.com/hero.jpg\');"></div>'
+			. '<div style="background-image:url(\'https://example.com/below.jpg\');"></div>';
+		$out  = $image_opt->add_delay_load_backgrounds( $html );
+
+		// The first (hero) background stays inline; the second is deferred.
+		$this->assertStringContainsString( 'background-image:url(\'https://example.com/hero.jpg\')', $out );
+		$this->assertStringContainsString( 'data-wppo-bg=', $out );
+		$this->assertStringContainsString( 'https://example.com/below.jpg', $out );
+	}
+
+	/**
+	 * Test that the background pass is a no-op when the setting is off.
+	 */
+	public function test_add_delay_load_backgrounds_skips_when_disabled(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$html = '<div style="background-image:url(\'https://example.com/img.jpg\');"></div>';
+		$out  = $image_opt->add_delay_load_backgrounds( $html );
+
+		$this->assertSame( $html, $out );
+	}
+
+	/**
+	 * Test that data: URI backgrounds are never deferred.
+	 */
+	public function test_add_delay_load_backgrounds_skips_data_uri(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array( 'lazyLoadBackgroundImages' => true )
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$html = '<div style="background-image:url(\'data:image/svg+xml;base64,PHN2Zz4=\');"></div>';
+		$out  = $image_opt->add_delay_load_backgrounds( $html );
+
+		$this->assertStringNotContainsString( 'wppo-lazy-bg', $out );
+		$this->assertStringContainsString( 'background-image:url', $out );
+	}
 }

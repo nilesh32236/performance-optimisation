@@ -37,6 +37,7 @@ const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
 		lazyLoadNative: false,
+		lazyLoadBackgroundImages: false,
 		wrapInPicture: true,
 		excludeFirstImages: 0,
 		excludeImages: '',
@@ -250,6 +251,21 @@ const ImageOptimization = ( { options = {} } ) => {
 									}
 									name="lazyLoadNative"
 									checked={ settings.lazyLoadNative }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Lazy-load CSS Background Images',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Defer inline background-image URLs (e.g. hero and section backgrounds) until they scroll near the viewport.',
+										'performance-optimisation'
+									) }
+									name="lazyLoadBackgroundImages"
+									checked={
+										settings.lazyLoadBackgroundImages
+									}
 									onChange={ handleChange( setSettings ) }
 								/>
 								<div className="wppo-field">

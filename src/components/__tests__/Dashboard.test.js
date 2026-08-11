@@ -1,4 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	waitFor,
+	fireEvent,
+	act,
+} from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -18,6 +24,10 @@ jest.mock( '../SuggestionsPanel', () => () => (
 	<div data-testid="suggestions-panel" />
 ) );
 jest.mock( '../SystemInfo', () => () => <div data-testid="system-info" /> );
+jest.mock( '../WebVitalsRum', () => () => <div data-testid="rum-panel" /> );
+jest.mock( '../AutoloadedOptions', () => () => (
+	<div data-testid="autoloaded-options" />
+) );
 jest.mock( '../ImageOptimizationCard', () => ( { onOptimize, onRemove } ) => (
 	<div data-testid="image-card">
 		<button onClick={ onOptimize }>Optimize Images</button>
@@ -39,17 +49,21 @@ jest.mock( '../common/FeatureCard', () => ( { children, footer } ) => (
 jest.mock( '../common/LoadingSubmitButton', () => ( { onClick, label } ) => (
 	<button onClick={ onClick }>{ label }</button>
 ) );
-jest.mock( '../common/SwitchField', () => ( { label, checked, onChange } ) => (
-	<label htmlFor="enableLoggedInCache">
-		<input
-			id="enableLoggedInCache"
-			type="checkbox"
-			checked={ checked }
-			onChange={ onChange }
-		/>
-		{ label }
-	</label>
-) );
+jest.mock(
+	'../common/SwitchField',
+	() =>
+		( { label, name, checked, onChange } ) => (
+			<label htmlFor={ name }>
+				<input
+					id={ name }
+					type="checkbox"
+					checked={ checked }
+					onChange={ onChange }
+				/>
+				{ label }
+			</label>
+		)
+);
 jest.mock(
 	'../common/CheckboxOption',
 	() =>
@@ -81,6 +95,22 @@ jest.mock(
 import Dashboard from '../Dashboard';
 import { apiCall } from '../../lib/apiRequest';
 
+/**
+ * Wait for the mount-time database_cleanup_counts call to start AND for the
+ * resolved promise to be handled inside act(), so subsequent assertions never
+ * race the async state update (which otherwise emits act() warnings).
+ */
+const flushDashboardMount = async () => {
+	await waitFor( () => {
+		expect( apiCall ).toHaveBeenCalledWith(
+			'database_cleanup_counts',
+			{},
+			'GET'
+		);
+	} );
+	await act( async () => {} );
+};
+
 describe( 'Dashboard', () => {
 	beforeEach( () => {
 		global.wppoSettings = {
@@ -100,8 +130,10 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValue( { success: true, data: {} } );
 	} );
 
-	it( 'renders stats and the welcome panel', () => {
+	it( 'renders stats and the welcome panel', async () => {
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
 
 		expect( screen.getByTestId( 'welcome-panel' ) ).toBeInTheDocument();
 		expect( screen.getByText( 'Cache Size' ) ).toBeInTheDocument();
@@ -114,6 +146,8 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValueOnce( { success: true } );
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
 
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Purge All Cache/i } )
@@ -135,6 +169,8 @@ describe( 'Dashboard', () => {
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 
+		await flushDashboardMount();
+
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Purge All Cache/i } )
 		);
@@ -155,6 +191,8 @@ describe( 'Dashboard', () => {
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 
+		await flushDashboardMount();
+
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Optimize Images/i } )
 		);
@@ -172,6 +210,8 @@ describe( 'Dashboard', () => {
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 
+		await flushDashboardMount();
+
 		// Enable the toggle then save.
 		fireEvent.click( screen.getByLabelText( 'Enable' ) );
 		fireEvent.click(
@@ -185,11 +225,86 @@ describe( 'Dashboard', () => {
 		);
 	} );
 
+	it( 'saves the page cache master toggle', async () => {
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // save
+
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fireEvent.click( screen.getByLabelText( 'Enable Page Cache' ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Page Cache Settings/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'cache_settings',
+				settings: expect.objectContaining( { enableCache: true } ),
+			} )
+		);
+	} );
+
+	it( 'preserves other cache settings when saving one group', async () => {
+		global.wppoSettings.settings.cache_settings = {
+			enableCache: true,
+		};
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // save
+
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Settings/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'cache_settings',
+				settings: expect.objectContaining( { enableCache: true } ),
+			} )
+		);
+	} );
+
+	it( 'saves CDN purge settings', async () => {
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // save
+
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
+
+		fireEvent.change( screen.getByLabelText( /CDN Purge Service/i ), {
+			target: { value: 'cloudflare' },
+		} );
+		fireEvent.change( screen.getByLabelText( /Cloudflare Zone ID/i ), {
+			target: { value: 'abc123' },
+		} );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save CDN Purge/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'cache_settings',
+				settings: expect.objectContaining( {
+					cdnPurgeService: 'cloudflare',
+					cloudflareZoneId: 'abc123',
+				} ),
+			} )
+		);
+	} );
+
 	it( 'removes optimized images after confirming the dialog', async () => {
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
 		apiCall.mockResolvedValueOnce( { success: true } );
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		await flushDashboardMount();
 
 		fireEvent.click(
 			screen.getByRole( 'button', { name: /Remove Images/i } )

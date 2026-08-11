@@ -799,6 +799,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
 			$buffer = $image_optimisation->add_delay_load_img( $buffer );
+			$buffer = $image_optimisation->add_delay_load_backgrounds( $buffer );
 			$buffer = $image_optimisation->lazy_load_videos( $buffer );
 
 			// Host Google Fonts locally via buffer-level interception.

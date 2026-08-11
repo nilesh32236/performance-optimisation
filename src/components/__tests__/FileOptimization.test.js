@@ -46,12 +46,56 @@ describe( 'FileOptimization Component', () => {
 				serverRules={ {} }
 			/>
 		);
-
 		const minifyCssSwitch = screen.getByLabelText( /Minify CSS/i );
 		expect( minifyCssSwitch ).not.toBeChecked();
 
 		fireEvent.click( minifyCssSwitch );
 		expect( minifyCssSwitch ).toBeChecked();
+	} );
+
+	it( 'renders and toggles the Remove Query Strings switch', () => {
+		render(
+			<FileOptimization
+				options={ { removeQueryStrings: false } }
+				serverRules={ {} }
+			/>
+		);
+
+		const toggle = screen.getByLabelText(
+			/Remove Query Strings From Static Resources/i
+		);
+		expect( toggle ).not.toBeChecked();
+
+		fireEvent.click( toggle );
+		expect( toggle ).toBeChecked();
+	} );
+
+	it( 'includes removeQueryStrings in the submitted settings payload', async () => {
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			message: 'Settings updated successfully.',
+		} );
+
+		render(
+			<FileOptimization
+				options={ { removeQueryStrings: true } }
+				serverRules={ {} }
+			/>
+		);
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Settings/i } )
+		);
+
+		expect( apiCall ).toHaveBeenCalledWith(
+			'update_settings',
+			expect.objectContaining( {
+				tab: 'file_optimisation',
+				settings: expect.objectContaining( {
+					removeQueryStrings: true,
+				} ),
+			} )
+		);
 	} );
 
 	it( 'submits settings successfully and displays success notification', async () => {
@@ -832,5 +876,25 @@ describe( 'FileOptimization Component', () => {
 		expect( switchEl ).not.toBeChecked();
 		fireEvent.click( switchEl );
 		expect( switchEl ).toBeChecked();
+	} );
+
+	it( 'renders the extended core-bloat toggles', () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const coreTab = screen.getByRole( 'tab', { name: /Core/i } );
+		fireEvent.click( coreTab );
+
+		expect(
+			screen.getByLabelText( /Remove REST API Links/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Disable RSS Feeds/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Remove Generator Meta Tag/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Remove jQuery Migrate/i )
+		).toBeInTheDocument();
 	} );
 } );
