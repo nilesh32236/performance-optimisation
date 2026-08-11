@@ -64,6 +64,13 @@ const FileOptimization = ( {
 		disableEmbeds: false,
 		disableDashicons: false,
 		disableXMLRPC: false,
+		disableRestApiLinks: false,
+		disableRssFeeds: false,
+		disableShortlinks: false,
+		disableGeneratorTag: false,
+		disableJQueryMigrate: false,
+		disablePasswordStrength: false,
+		disableSelfPingbacks: false,
 		// Mirrors the pre-6.9 PHP default. PHP always emits the key on WP 6.9+ (where
 		// core loads block assets on demand by default), so this fallback is only used
 		// on older cores and never contradicts the backend default.
@@ -1292,6 +1299,97 @@ const FileOptimization = ( {
 									) }
 									name="disableXMLRPC"
 									checked={ settings.disableXMLRPC }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Remove REST API Links',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove the REST API discovery link and oEmbed links from the front end. The REST API itself stays active.',
+										'performance-optimisation'
+									) }
+									name="disableRestApiLinks"
+									checked={ settings.disableRestApiLinks }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable RSS Feeds',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Redirect all feed requests to the home page and remove feed discovery links. Only for sites that do not use feeds.',
+										'performance-optimisation'
+									) }
+									name="disableRssFeeds"
+									checked={ settings.disableRssFeeds }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Remove Shortlinks',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove the rel=shortlink tag from page output.',
+										'performance-optimisation'
+									) }
+									name="disableShortlinks"
+									checked={ settings.disableShortlinks }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Remove Generator Meta Tag',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Hide the WordPress version meta generator tag.',
+										'performance-optimisation'
+									) }
+									name="disableGeneratorTag"
+									checked={ settings.disableGeneratorTag }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Remove jQuery Migrate',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Drop the jquery-migrate dependency to save a request. Only disable if your theme/plugins do not rely on deprecated jQuery APIs.',
+										'performance-optimisation'
+									) }
+									name="disableJQueryMigrate"
+									checked={ settings.disableJQueryMigrate }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Remove Password Strength Meter',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Prevent the password strength meter script from loading on the front end.',
+										'performance-optimisation'
+									) }
+									name="disablePasswordStrength"
+									checked={ settings.disablePasswordStrength }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable Self-pingbacks',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Stop posts from pinging themselves when linking to their own site.',
+										'performance-optimisation'
+									) }
+									name="disableSelfPingbacks"
+									checked={ settings.disableSelfPingbacks }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField

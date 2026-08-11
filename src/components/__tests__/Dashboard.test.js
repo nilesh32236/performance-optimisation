@@ -18,6 +18,10 @@ jest.mock( '../SuggestionsPanel', () => () => (
 	<div data-testid="suggestions-panel" />
 ) );
 jest.mock( '../SystemInfo', () => () => <div data-testid="system-info" /> );
+jest.mock( '../WebVitalsRum', () => () => <div data-testid="rum-panel" /> );
+jest.mock( '../AutoloadedOptions', () => () => (
+	<div data-testid="autoloaded-options" />
+) );
 jest.mock( '../ImageOptimizationCard', () => ( { onOptimize, onRemove } ) => (
 	<div data-testid="image-card">
 		<button onClick={ onOptimize }>Optimize Images</button>
@@ -39,17 +43,21 @@ jest.mock( '../common/FeatureCard', () => ( { children, footer } ) => (
 jest.mock( '../common/LoadingSubmitButton', () => ( { onClick, label } ) => (
 	<button onClick={ onClick }>{ label }</button>
 ) );
-jest.mock( '../common/SwitchField', () => ( { label, checked, onChange } ) => (
-	<label htmlFor="enableLoggedInCache">
-		<input
-			id="enableLoggedInCache"
-			type="checkbox"
-			checked={ checked }
-			onChange={ onChange }
-		/>
-		{ label }
-	</label>
-) );
+jest.mock(
+	'../common/SwitchField',
+	() =>
+		( { label, name, checked, onChange } ) => (
+			<label htmlFor={ name }>
+				<input
+					id={ name }
+					type="checkbox"
+					checked={ checked }
+					onChange={ onChange }
+				/>
+				{ label }
+			</label>
+		)
+);
 jest.mock(
 	'../common/CheckboxOption',
 	() =>
@@ -182,6 +190,73 @@ describe( 'Dashboard', () => {
 			expect(
 				screen.getByText( 'Logged-in cache settings saved.' )
 			).toBeInTheDocument()
+		);
+	} );
+
+	it( 'saves the page cache master toggle', async () => {
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // save
+
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		fireEvent.click( screen.getByLabelText( 'Enable Page Cache' ) );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Page Cache Settings/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'cache_settings',
+				settings: expect.objectContaining( { enableCache: true } ),
+			} )
+		);
+	} );
+
+	it( 'preserves other cache settings when saving one group', async () => {
+		global.wppoSettings.settings.cache_settings = {
+			enableCache: true,
+		};
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // save
+
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Settings/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'cache_settings',
+				settings: expect.objectContaining( { enableCache: true } ),
+			} )
+		);
+	} );
+
+	it( 'saves CDN purge settings', async () => {
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // save
+
+		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+		fireEvent.change( screen.getByLabelText( /CDN Purge Service/i ), {
+			target: { value: 'cloudflare' },
+		} );
+		fireEvent.change( screen.getByLabelText( /Cloudflare Zone ID/i ), {
+			target: { value: 'abc123' },
+		} );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save CDN Purge/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'cache_settings',
+				settings: expect.objectContaining( {
+					cdnPurgeService: 'cloudflare',
+					cloudflareZoneId: 'abc123',
+				} ),
+			} )
 		);
 	} );
 

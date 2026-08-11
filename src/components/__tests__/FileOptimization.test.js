@@ -877,4 +877,24 @@ describe( 'FileOptimization Component', () => {
 		fireEvent.click( switchEl );
 		expect( switchEl ).toBeChecked();
 	} );
+
+	it( 'renders the extended core-bloat toggles', () => {
+		render( <FileOptimization options={ {} } serverRules={ {} } /> );
+
+		const coreTab = screen.getByRole( 'tab', { name: /Core/i } );
+		fireEvent.click( coreTab );
+
+		expect(
+			screen.getByLabelText( /Remove REST API Links/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Disable RSS Feeds/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Remove Generator Meta Tag/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Remove jQuery Migrate/i )
+		).toBeInTheDocument();
+	} );
 } );

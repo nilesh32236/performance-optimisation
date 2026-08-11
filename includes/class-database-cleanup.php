@@ -669,6 +669,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @since 2.17.0
 		 * @return int|false Number of rows deleted, or false on error.
 		 */
+		/**
+		 * List the largest autoloaded options, by stored byte size.
+		 *
+		 * Mirrors the Performance Lab autoloaded-options health check so users can
+		 * identify option bloat that inflates every page load.
+		 *
+		 * @since 2.18.0
+		 *
+		 * @param int $limit Maximum number of options to return.
+		 * @return array<int, array{option_name:string,size:int}> Sorted by size.
+		 */
+		public static function get_autoloaded_options( int $limit = 20 ): array {
+			global $wpdb;
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read-only diagnostic query.
+			$rows = $wpdb->get_results(
+				"SELECT option_name, LENGTH(option_value) AS opt_size FROM {$wpdb->options} WHERE autoload IN ('yes','on','auto') ORDER BY opt_size DESC LIMIT " . (int) $limit,
+				ARRAY_A
+			);
+
+			if ( ! is_array( $rows ) ) {
+				return array();
+			}
+
+			$result = array();
+			foreach ( $rows as $row ) {
+				$name = isset( $row['option_name'] ) ? (string) $row['option_name'] : '';
+				if ( '' === $name ) {
+					continue;
+				}
+				$result[] = array(
+					'option_name' => $name,
+					'size'        => (int) ( $row['opt_size'] ?? 0 ),
+				);
+			}
+
+			return $result;
+		}
+
+		/**
+		 * Clean oEmbed cache.
+		 *
+		 * @return bool|int Number of deleted options or false on error.
+		 */
 		public static function clean_oembed_cache() {
 			global $wpdb;
 			$deleted = 0;
@@ -690,7 +734,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				if ( ! empty( $wpdb->last_error ) ) {
 					return false;
 				}
-
 				$ids_count = is_array( $ids ) ? count( $ids ) : 0;
 				if ( 0 === $ids_count ) {
 					break;

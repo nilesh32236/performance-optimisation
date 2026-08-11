@@ -96,8 +96,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		public function schedule_cron_jobs(): void {
-			if ( ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
-				wp_schedule_event( time(), 'every_5_hours', 'wppo_page_cron_hook' );
+			$options = get_option( 'wppo_settings', array() );
+
+			// The preload toggle is the source of truth: when it is off, clear any
+			// leftover per-page preload events instead of warming the cache anyway.
+			if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) ) {
+				if ( ! wp_next_scheduled( 'wppo_page_cron_hook' ) ) {
+					wp_schedule_event( time(), 'every_5_hours', 'wppo_page_cron_hook' );
+				}
+			} else {
+				wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
+				wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
+				wp_clear_scheduled_hook( 'wppo_generate_static_page' );
+				wp_clear_scheduled_hook( 'wppo_generate_static_url' );
 			}
 
 			if ( ! wp_next_scheduled( 'wppo_img_conversion' ) ) {
@@ -112,7 +123,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				wp_schedule_event( time(), 'daily', 'wppo_web_vitals_rescan' );
 			}
 
-			$options = get_option( 'wppo_settings', array() );
 			if ( ! empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 				if ( ! wp_next_scheduled( 'wppo_used_css_cron' ) ) {
 					wp_schedule_event( time(), 'every_5_hours', 'wppo_used_css_cron' );
@@ -203,6 +213,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		public function wppo_page_cron_callback(): void {
+			$options = get_option( 'wppo_settings', array() );
+			if ( empty( $options['preload_settings']['enablePreloadCache'] ) ) {
+				return;
+			}
 			$this->schedule_page_cron_jobs();
 		}
 

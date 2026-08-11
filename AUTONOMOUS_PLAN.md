@@ -3,8 +3,8 @@
 Status legend: `[PENDING]` `[IN PROGRESS]` `[COMPLETED]`
 
 Baseline: 214 PHP tests / 464 assertions, 296 JS tests / 30 suites, PHPCS clean, lint clean,
-build success (measured 2026-08-10 after prior audit). Current: 246 PHP tests / 523 assertions,
-303 JS tests / 31 suites.
+build success (measured 2026-08-10 after prior audit). Current: 276 PHP tests / 600 assertions,
+315 JS tests / 33 suites.
 
 ---
 
@@ -86,9 +86,32 @@ Benchmark targets: WP Rocket, FlyingPress, Perfmatters, LiteSpeed Cache, W3 Tota
 - Tests: `tests/php/PagespeedTrendsTest.php` (6, incl. lock-held skip + global retention via a
   swapped object-cache store since Patchwork cannot redefine `wp_cache_*`),
   `tests/php/CronWebVitalsRescanTest.php` (5, incl. enqueue-failure gate), RestTest endpoint
-  count 22 + strategy-only filter, JS WebVitalsTrends (3) + PluginSetting auto-rescan (1).
-- Verification: `phpunit` OK (246 tests), `phpcs` clean, JS 31 suites / 303 tests, `npm run
+  count 25 + strategy-only filter, JS WebVitalsTrends (3) + PluginSetting auto-rescan (1).
+- Verification: `phpunit` OK (276 tests), `phpcs` clean, JS 33 suites / 315 tests, `npm run
   lint:js` clean, `npm run build` success.
+
+### GAP-M5 `[COMPLETED]` — Competitive hardening pass (2026-08-11)
+Deep competitor + WP core 6.7–7.1 research → `COMPETITIVE_GAP_ANALYSIS.md`. Implemented:
+- **Real-user Web Vitals (RUM)** — `class-rum.php` (public token+rate-limited beacon, per-day/per-path
+  aggregates, `rum_collect`/`rum_data` endpoints), `src/rum.js` collector, Dashboard panel, Tools toggle.
+- **CSS background-image lazy loading** — `add_delay_load_backgrounds()` buffer pass + `lazyload.js`
+  observer + `lazyLoadBackgroundImages` toggle.
+- **Script-module defer** — `apply_module_loading_strategies()` sets footer + `fetchpriority=low` on
+  registered script modules (WP 6.9+), gated by deferJS.
+- **Cloudflare / Varnish purge** — `class-cdn-purger.php` hooks `wppo_after_cache_clear`; Cloudflare
+  bearer token via `WPPO_CLOUDFLARE_API_TOKEN` constant, Varnish PURGE endpoints.
+- **Core bloat toggles** — REST API links, RSS feeds, shortlinks, generator tag, jQuery Migrate,
+  password strength meter, self-pingbacks.
+- **Autoloaded-options audit** — `Database_Cleanup::get_autoloaded_options()` + `autoloaded_options`
+  endpoint + Dashboard card.
+- **UI/correctness fixes** — page-cache master toggle on Dashboard, `enablePreloadCache` now gates the
+  preload cron (`CronPreloadGatingTest`), Server-Timing + high-value-URLs + RUM toggles in Tools, dead
+  `core_tweaks` tab removed from REST whitelists, cache_settings saves merge (no more clobbering).
+- Tests: `RumTest` (8), `CDNPurgerTest` (5), `CronPreloadGatingTest` (3), core-tweak + background-lazy +
+  module-defer + autoloaded-option coverage added.
+- Verification: `phpunit` OK (276 tests), `phpcs` clean, JS 33 suites / 315 tests, `npm run
+  lint:js` clean, `npm run build` success. **Deferred:** Brotli precompression (Tier-2; touches the
+  advanced-cache drop-in), OD integration, per-page cache TTL — see `COMPETITIVE_GAP_ANALYSIS.md`.
 
 ---
 

@@ -939,12 +939,58 @@ const initVideoPlaceholders = () => {
 	} );
 };
 
+/**
+ * Restore lazy CSS background-images as elements approach the viewport.
+ *
+ * Elements rewritten by the buffer carry the `wppo-lazy-bg` class and a
+ * `data-wppo-bg` attribute holding the original background-image value. On
+ * intersection the value is applied back to the element's inline style.
+ *
+ * @since 2.18.0
+ */
+const loadBackgrounds = () => {
+	const elements = document.querySelectorAll( '.wppo-lazy-bg' );
+	if ( ! elements.length ) {
+		return;
+	}
+
+	const restoreBackground = ( el ) => {
+		const background = el.getAttribute( 'data-wppo-bg' );
+		if ( background ) {
+			el.style.backgroundImage = background;
+		}
+		el.classList.remove( 'wppo-lazy-bg' );
+		el.removeAttribute( 'data-wppo-bg' );
+	};
+
+	if ( ! ( 'IntersectionObserver' in window ) ) {
+		elements.forEach( restoreBackground );
+		return;
+	}
+
+	const backgroundObserver = new IntersectionObserver(
+		( entries ) => {
+			entries.forEach( ( entry ) => {
+				if ( entry.isIntersecting ) {
+					restoreBackground( entry.target );
+					backgroundObserver.unobserve( entry.target );
+				}
+			} );
+		},
+		{ rootMargin: '200px' }
+	);
+
+	elements.forEach( ( el ) => backgroundObserver.observe( el ) );
+};
+
 if ( document.readyState === 'loading' ) {
 	document.addEventListener( 'DOMContentLoaded', () => {
 		loadImages();
+		loadBackgrounds();
 		initVideoPlaceholders();
 	} );
 } else {
 	loadImages();
+	loadBackgrounds();
 	initVideoPlaceholders();
 }

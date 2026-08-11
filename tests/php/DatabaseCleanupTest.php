@@ -35,6 +35,50 @@ class DatabaseCleanupTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that get_autoloaded_options returns rows ordered by size.
+	 */
+	public function test_get_autoloaded_options_returns_sorted_rows(): void {
+		$GLOBALS['wpdb'] = new class() extends WPPO_DB_Mock {
+			/**
+			 * Return sample autoloaded rows.
+			 *
+			 * @param string $query SQL query (unused).
+			 * @return array
+			 */
+			public function get_results( $query = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+				return array(
+					array(
+						'option_name' => 'small_option',
+						'opt_size'    => 10,
+					),
+					array(
+						'option_name' => 'big_option',
+						'opt_size'    => 5000,
+					),
+				);
+			}
+		};
+
+		$result = Database_Cleanup::get_autoloaded_options( 5 );
+
+		$this->assertSame( 'small_option', $result[0]['option_name'] );
+		$this->assertSame( 10, $result[0]['size'] );
+		$this->assertSame( 'big_option', $result[1]['option_name'] );
+		$this->assertSame( 5000, $result[1]['size'] );
+	}
+
+	/**
+	 * Test that get_autoloaded_options returns an empty array on no rows.
+	 */
+	public function test_get_autoloaded_options_empty_when_no_rows(): void {
+		$GLOBALS['wpdb'] = new WPPO_DB_Mock();
+
+		$result = Database_Cleanup::get_autoloaded_options();
+
+		$this->assertSame( array(), $result );
+	}
+
+	/**
 	 * Test that clean_revisions returns zero when no revisions exist.
 	 */
 	public function test_clean_revisions_returns_zero_when_no_revisions(): void {

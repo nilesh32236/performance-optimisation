@@ -2487,6 +2487,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Defer inline CSS background-image URLs until the element is near the viewport.
+		 *
+		 * Moves the `background-image` declaration into a `data-wppo-bg` attribute and
+		 * tags the element with the `wppo-lazy-bg` class so the frontend runtime can
+		 * restore it on intersection. The first N backgrounds (hero heuristics) and
+		 * data: URIs are left untouched.
+		 *
+		 * @since 2.18.0
+		 *
+		 * @param string $buffer The HTML buffer.
+		 * @return string The processed buffer.
+		 */
+		public function add_delay_load_backgrounds( string $buffer ): string {
+			$image_optimisation = $this->options['image_optimisation'] ?? array();
+			if ( empty( $image_optimisation['lazyLoadBackgroundImages'] ) ) {
+				return $buffer;
+			}
+			if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
+				return $buffer;
+			}
+
+			$exclude_count = (int) ( $image_optimisation['excludeFirstImages'] ?? 0 );
+			$bg_counter    = 0;
+			$tags          = new \WP_HTML_Tag_Processor( $buffer );
+
+			while ( $tags->next_tag() ) {
+				$style = $tags->get_attribute( 'style' );
+				if ( null === $style || false === stripos( $style, 'background-image' ) ) {
+					continue;
+				}
+				if ( null !== $tags->get_attribute( 'data-wppo-bg' ) ) {
+					continue;
+				}
+				if ( ! preg_match( '#background-image\s*:\s*([^;]+)#i', $style, $matches ) ) {
+					continue;
+				}
+
+				$bg_value = trim( $matches[1] );
+				if ( '' === $bg_value || false !== stripos( $bg_value, 'data:' ) ) {
+					continue;
+				}
+
+				// Never defer the first N backgrounds (likely above-the-fold / hero).
+				++$bg_counter;
+				if ( $bg_counter <= $exclude_count ) {
+					continue;
+				}
+
+				$class = (string) $tags->get_attribute( 'class' );
+				if ( false === strpos( $class, 'wppo-lazy-bg' ) ) {
+					$tags->set_attribute( 'class', trim( $class . ' wppo-lazy-bg' ) );
+				}
+				$tags->set_attribute( 'data-wppo-bg', $bg_value );
+
+				// Drop the background-image declaration(s), keeping other style props.
+				$new_style = trim( preg_replace( '#background-image\s*:\s*[^;]+;?#i', '', $style ) );
+				if ( '' === $new_style ) {
+					$tags->remove_attribute( 'style' );
+				} else {
+					$tags->set_attribute( 'style', $new_style );
+				}
+			}
+
+			return $tags->get_updated_html();
+		}
+
+		/**
 		 * Rewrites <video> elements so their media sources are deferred and restored later for lazy loading.
 		 *
 		 * Skips videos whose attributes or inner markup match configured exclusion patterns. For processed videos:

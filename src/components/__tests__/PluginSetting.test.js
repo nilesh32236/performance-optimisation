@@ -176,6 +176,72 @@ describe( 'PluginSetting', () => {
 		} );
 	} );
 
+	it( 'saves server timing and high-value URLs', async () => {
+		global.wppoSettings = {
+			performance_audit: { pagespeedApiKeyConfigured: false },
+			settings: {
+				performance_audit: {
+					server_timing_enabled: false,
+					high_value_urls: [],
+				},
+			},
+		};
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		fireEvent.click(
+			screen.getByLabelText( 'Enable Server-Timing Header' )
+		);
+		fireEvent.change( screen.getByLabelText( 'High-value URLs' ), {
+			target: {
+				value: 'http://example.com/about/\nhttp://example.com/blog/',
+			},
+		} );
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Monitoring/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'performance_audit',
+				settings: expect.objectContaining( {
+					server_timing_enabled: true,
+					high_value_urls: [
+						'http://example.com/about/',
+						'http://example.com/blog/',
+					],
+				} ),
+			} )
+		);
+	} );
+
+	it( 'saves the real-user monitoring toggle', async () => {
+		global.wppoSettings = {
+			performance_audit: { pagespeedApiKeyConfigured: false },
+			settings: {
+				performance_audit: { rum_enabled: false },
+			},
+		};
+		apiCall.mockResolvedValueOnce( { success: true, data: {} } );
+
+		render( <PluginSetting options={ baseOptions } /> );
+
+		fireEvent.click(
+			screen.getByLabelText( 'Collect Real-user Web Vitals' )
+		);
+		fireEvent.click(
+			screen.getByRole( 'button', { name: /Save Monitoring/i } )
+		);
+
+		await waitFor( () =>
+			expect( apiCall ).toHaveBeenCalledWith( 'update_settings', {
+				tab: 'performance_audit',
+				settings: expect.objectContaining( { rum_enabled: true } ),
+			} )
+		);
+	} );
+
 	it( 'exports settings with the API key redacted', async () => {
 		const options = {
 			performance_audit: { pagespeed_api_key: 'SECRET-KEY' },

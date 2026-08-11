@@ -75,7 +75,7 @@ Frontend lazy loading: `src/lazyload.js` (vanilla JS, not React) — Intersectio
 Admin bar cache clearing: `src/main.js` — two buttons ("Clear All Cache", "Clear This Page") with automatic nonce refresh on 403.
 
 ### REST API
-Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (22 endpoints). All require `manage_options` capability + `X-WP-Nonce`.
+Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (25 endpoints). All require `manage_options` capability + `X-WP-Nonce` except `rum_collect` (public, token + IP rate-limited).
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -100,6 +100,9 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 | `used_css_regenerate` | POST | Regenerate used CSS for a post or all posts |
 | `regenerate_ccss` | POST | Regenerate critical CSS |
 | `ccss_status` | GET | Critical CSS generation status |
+| `rum_collect` | POST | Real-user Web Vitals beacon (public, token + IP rate-limited) |
+| `rum_data` | GET | Aggregated real-user Web Vitals |
+| `autoloaded_options` | GET | Largest autoloaded options (option-bloat audit) |
 
 ### PHP backend
 25 files in `includes/`. Key classes:
@@ -116,7 +119,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 | `class-cron.php` | WP-Cron: preload (5h), image conversion (hourly), DB cleanup (daily) |
 | `class-img-converter.php` | WebP/AVIF conversion (GD, Imagick), deferred option commits |
 | `class-image-optimisation.php` | Next-gen serving, lazy load, picture wrap, preload, video lazy |
-| `class-rest.php` | All 22 REST API endpoints |
+| `class-rest.php` | All 25 REST API endpoints |
 | `class-pagespeed.php` | Google PageSpeed Insights API + Action Scheduler job |
 | `class-suggestion-engine.php` | Performance suggestions from telemetry + PageSpeed |
 | `class-telemetry.php` | Local cURL-based performance scanner |

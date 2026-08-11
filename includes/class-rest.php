@@ -211,7 +211,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+
+				// Real-user Web Vitals (v2.18.0). The beacon is intentionally public
+				// (anonymous visitors) so it is validated via token + rate limiting
+				// instead of the manage_options permission used by the admin routes.
+				'rum_collect'             => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'collect_rum' ),
+					'permission_callback' => '__return_true',
+					'schema'              => $schemas,
+				),
+				'rum_data'                => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_rum_data' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'autoloaded_options'      => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_autoloaded_options' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
+		}
+
+		/**
+		 * List the largest autoloaded options.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_autoloaded_options( \WP_REST_Request $request ): \WP_REST_Response {
+			$limit  = isset( $request->get_params()['limit'] ) ? absint( $request->get_params()['limit'] ) : 20;
+			$limit  = max( 1, min( 100, $limit ) );
+			$result = Database_Cleanup::get_autoloaded_options( $limit );
+
+			return $this->send_response( array( 'options' => $result ) );
+		}
+
+		/**
+		 * Handle a real-user Web Vitals beacon.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function collect_rum( \WP_REST_Request $request ): \WP_REST_Response {
+			$params = $request->get_json_params();
+			$result = RUM::collect( is_array( $params ) ? $params : array() );
+
+			if ( ! $result['ok'] ) {
+				return $this->send_response( null, false, $result['status'], $result['message'] );
+			}
+
+			return $this->send_response( array( 'success' => true ) );
+		}
+
+		/**
+		 * Retrieve aggregated real-user Web Vitals for the dashboard.
+		 *
+		 * @param \WP_REST_Request $request The request object.
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function get_rum_data( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return $this->send_response( RUM::get_data() );
 		}
 
 		/**
@@ -363,7 +426,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'database_cleanup',
 				'object_cache',
 				'performance_audit',
-				'core_tweaks',
 				'cache_settings',
 			);
 			if ( empty( $tab ) || ! in_array( $tab, $allowed_tabs, true ) ) {
@@ -674,7 +736,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'database_cleanup',
 				'object_cache',
 				'performance_audit',
-				'core_tweaks',
 				'cache_settings',
 			);
 

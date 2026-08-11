@@ -175,37 +175,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'loggedInCacheRoles'  => array(),
 					),
 					'file_optimisation'  => array(
-						'enableServerRules'      => false,
-						'cdnURL'                 => '',
-						'removeUnusedCSS'        => false,
-						'excludeUnusedCSS'       => '',
-						'criticalCSS'            => false,
-						'hostGoogleFontsLocally' => false,
+						'enableServerRules'       => false,
+						'cdnURL'                  => '',
+						'removeUnusedCSS'         => false,
+						'excludeUnusedCSS'        => '',
+						'criticalCSS'             => false,
+						'hostGoogleFontsLocally'  => false,
 						// On WP 6.9+ classic themes load core block assets on demand by default, so
 						// the toggle defaults to ON there and only acts as an opt-out. Pre-6.9 cores
 						// keep the legacy opt-in default (OFF).
-						'blockAssetsOnDemand'    => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
-						'loadAllCoreBlockAssets' => false,
-						'delayJSDefaultStrategy' => 'interaction',
-						'delayJSIdleList'        => '',
-						'delayJSViewportList'    => '',
-						'delayJSPriority'        => '',
-						'delayJSIdleTimeout'     => 3000,
-						'minifyHTML'             => false,
-						'minifyJS'               => false,
-						'minifyCSS'              => false,
-						'deferJS'                => false,
-						'delayJS'                => false,
-						'combineCSS'             => false,
-						'excludeJS'              => '',
-						'excludeCSS'             => '',
-						'excludeDeferJS'         => '',
-						'excludeDelayJS'         => '',
-						'excludeCombineCSS'      => '',
-						'minifyInlineCSS'        => false,
-						'minifyInlineJS'         => false,
-						'removeHTMLComments'     => true,
-						'removeQueryStrings'     => false,
+						'blockAssetsOnDemand'     => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+						'loadAllCoreBlockAssets'  => false,
+						'delayJSDefaultStrategy'  => 'interaction',
+						'delayJSIdleList'         => '',
+						'delayJSViewportList'     => '',
+						'delayJSPriority'         => '',
+						'delayJSIdleTimeout'      => 3000,
+						'minifyHTML'              => false,
+						'minifyJS'                => false,
+						'minifyCSS'               => false,
+						'deferJS'                 => false,
+						'delayJS'                 => false,
+						'combineCSS'              => false,
+						'excludeJS'               => '',
+						'excludeCSS'              => '',
+						'excludeDeferJS'          => '',
+						'excludeDelayJS'          => '',
+						'excludeCombineCSS'       => '',
+						'minifyInlineCSS'         => false,
+						'minifyInlineJS'          => false,
+						'removeHTMLComments'      => true,
+						'removeQueryStrings'      => false,
+						'disableRestApiLinks'     => false,
+						'disableRssFeeds'         => false,
+						'disableShortlinks'       => false,
+						'disableGeneratorTag'     => false,
+						'disableJQueryMigrate'    => false,
+						'disablePasswordStrength' => false,
+						'disableSelfPingbacks'    => false,
 					),
 					'preload_settings'   => array(
 						'enableSpeculationRules' => false,
@@ -220,6 +227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'prioritizeLCPImages'        => false,
 						'clientSideMimeTypeOverride' => false,
 						'clientSideMimeTypes'        => array(),
+						'lazyLoadBackgroundImages'   => false,
 					),
 					'performance_audit'  => array(
 						'pagespeed_api_key'     => '',
@@ -227,6 +235,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'auto_fix_enabled'      => false,
 						'server_timing_enabled' => false,
 						'auto_rescan'           => '',
+						'rum_enabled'           => false,
 					),
 				)
 			);
@@ -370,6 +379,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'init', array( $this, 'set_role_hash_cookie' ) );
 			add_action( 'wp_logout', array( $this, 'clear_role_hash_cookie' ) );
 			add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
+			add_action( 'wp_enqueue_scripts', array( $this, 'apply_module_loading_strategies' ), 10000 );
 			$has_delay_js = ! empty( $this->options['file_optimisation']['delayJS'] );
 			$has_defer_js = ! empty( $this->options['file_optimisation']['deferJS'] );
 			$wp_version   = (string) get_bloginfo( 'version' );
@@ -480,6 +490,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$rest = new Rest();
 			add_action( 'rest_api_init', array( $rest, 'register_routes' ) );
+
+			// Real-user Web Vitals: enqueue the beacon + bake its config into output
+			// (captured by the page cache so cached pages keep beaconing without WP).
+			add_action( 'wp_enqueue_scripts', array( 'PerformanceOptimise\Inc\RUM', 'maybe_enqueue_scripts' ), 5 );
+			add_action( 'wp_footer', array( 'PerformanceOptimise\Inc\RUM', 'print_config' ), 90 );
+
+			// Edge/CDN cache purge on full cache clear (Cloudflare / Varnish).
+			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\CDN_Purger', 'purge_all' ) );
 
 			if ( ! empty( $this->options['file_optimisation']['minifyJS'] ) ) {
 				if ( ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {
@@ -1461,6 +1479,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							wp_add_inline_script( 'wppo-lazyload', 'window.wppoDelayConfig=' . $delay_config . ';', 'before' );
 						}
 					}
+				}
+			}
+		}
+
+		/**
+		 * Apply defer optimisations to script modules (WP 6.5+).
+		 *
+		 * Script modules are already deferred by the browser; the remaining wins
+		 * are printing them in the footer and lowering their fetch priority so
+		 * critical CSS/images win the network queue. Uses the core API when
+		 * available (WP 6.9+) and is a no-op on older core.
+		 *
+		 * @since 2.18.0
+		 * @return void
+		 */
+		public function apply_module_loading_strategies(): void {
+			if ( empty( $this->options['file_optimisation']['deferJS'] ) ) {
+				return;
+			}
+			if ( ! function_exists( 'wp_script_modules' ) ) {
+				return;
+			}
+
+			$modules = wp_script_modules();
+			if ( ! is_object( $modules ) ) {
+				return;
+			}
+
+			$excluded = Util::process_urls( (string) ( $this->options['file_optimisation']['excludeDeferJS'] ?? '' ) );
+
+			// Collect registered module ids, tolerating core version differences.
+			$ids = array();
+			if ( method_exists( $modules, 'get_print_queue' ) ) {
+				$ids = (array) $modules->get_print_queue();
+			}
+			if ( empty( $ids ) && isset( $modules->registered ) ) {
+				$ids = array_keys( (array) $modules->registered );
+			}
+			if ( empty( $ids ) && isset( $modules->all ) ) {
+				$ids = array_keys( (array) $modules->all );
+			}
+
+			foreach ( $ids as $id ) {
+				if ( in_array( (string) $id, $excluded, true ) ) {
+					continue;
+				}
+				if ( method_exists( $modules, 'set_in_footer' ) ) {
+					$modules->set_in_footer( (string) $id, true );
+				}
+				if ( method_exists( $modules, 'set_fetchpriority' ) ) {
+					$modules->set_fetchpriority( (string) $id, 'low' );
 				}
 			}
 		}

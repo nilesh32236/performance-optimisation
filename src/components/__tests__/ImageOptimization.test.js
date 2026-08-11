@@ -43,4 +43,17 @@ describe( 'ImageOptimization Component', () => {
 		expect( screen.getByText( 'AVIF' ) ).toBeInTheDocument();
 		expect( screen.getByText( 'HEIC' ) ).toBeInTheDocument();
 	} );
+
+	it( 'reveals the background-image lazy toggle when lazy load is enabled', () => {
+		render( <ImageOptimization /> );
+		expect(
+			screen.queryByLabelText( /Lazy-load CSS Background Images/i )
+		).not.toBeInTheDocument();
+
+		fireEvent.click( screen.getByLabelText( /Enable Lazy Load/i ) );
+
+		expect(
+			screen.getByLabelText( /Lazy-load CSS Background Images/i )
+		).toBeInTheDocument();
+	} );
 } );

@@ -36,12 +36,16 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 				'sanitize_text_field',
 				'wp_unslash',
 				'trailingslashit',
+				'__',
+				'esc_html__',
 			)
 		);
 		Functions\when( 'wp_normalize_path' )->returnArg();
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'trailingslashit' )->returnArg();
+		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'esc_html__' )->returnArg( 1 );
 
 		$this->rest = new Rest();
 	}
@@ -129,10 +133,13 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 			'regenerate_ccss',
 			'ccss_status',
 			'dismiss_welcome',
+			'rum_collect',
+			'rum_data',
+			'autoloaded_options',
 		);
 
-		// Keep in sync with the AGENTS.md endpoint count (22).
-		$this->assertCount( 22, $routes, 'REST route count drifted from the documented endpoint count' );
+		// Keep in sync with the AGENTS.md endpoint count (25).
+		$this->assertCount( 25, $routes, 'REST route count drifted from the documented endpoint count' );
 
 		foreach ( $expected as $route ) {
 			$this->assertArrayHasKey( $route, $routes, "Missing route: {$route}" );
@@ -182,6 +189,41 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the core_tweaks tab is rejected by update_settings.
+	 *
+	 * Core-tweak keys live under file_optimisation; accepting a separate
+	 * core_tweaks tab is dead config that nothing reads.
+	 */
+	public function test_update_settings_rejects_core_tweaks_tab(): void {
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'core_tweaks',
+				'settings' => array( 'disableEmojis' => true ),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 400, $response->get_status() );
+	}
+
+	/**
+	 * Test that a core_tweaks key is rejected by import_settings.
+	 */
+	public function test_import_settings_rejects_core_tweaks_key(): void {
+		$request = new WP_REST_Request(
+			array(
+				'action'   => 'import_settings',
+				'settings' => array( 'core_tweaks' => array( 'disableEmojis' => true ) ),
+			)
+		);
+
+		$response = $this->rest->import_settings( $request );
+
+		$this->assertSame( 400, $response->get_status() );
+	}
+
+	/**
 	 * Test that sanitize_settings_recursively skips keys that become empty
 	 * after sanitization (e.g. keys made only of non a-zA-Z0-9_- characters
 	 * or empty keys) so they are never stored under an empty-string key.
@@ -221,6 +263,11 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 				$configs = isset( $config[0] ) ? $config : array( $config );
 				foreach ( $configs as $cfg ) {
 					$this->assertArrayHasKey( 'permission_callback', $cfg, "Route {$route} missing permission_callback" );
+					if ( '__return_true' === $cfg['permission_callback'] ) {
+						// Public routes (e.g. the RUM beacon) intentionally bypass auth.
+						$this->addToAssertionCount( 1 );
+						continue;
+					}
 					$this->assertSame( array( $this->rest, 'permission_callback' ), $cfg['permission_callback'] );
 				}
 			}
@@ -324,6 +371,15 @@ if ( ! class_exists( 'WP_REST_Request' ) ) {
 		 * @return array Request parameters.
 		 */
 		public function get_params() {
+			return $this->params;
+		}
+
+		/**
+		 * Get the request JSON body parameters.
+		 *
+		 * @return array Request parameters.
+		 */
+		public function get_json_params() {
 			return $this->params;
 		}
 	}
