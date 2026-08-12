@@ -751,10 +751,14 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * out on the conservative side (true) rather than the old wrong prediction.
 	 */
 	public function test_core_will_inline_matches_core_when_path_peer_lacks_src(): void {
-		Functions\when( 'function_exists' )->justReturn( true );
+		// Stub the drift-log helper functions BEFORE stubbing `function_exists`.
+		// Brain Monkey only lazily eval-declares a stubbed function when
+		// function_exists() reports it missing; overriding function_exists first
+		// would skip the declaration and leave the namespaced call undefined.
 		Functions\when( '__' )->returnArg( 1 );
 		Functions\when( 'wp_kses_post' )->returnArg();
 		Functions\when( 'update_option' )->justReturn( true );
+		Functions\when( 'function_exists' )->justReturn( true );
 		$this->swap_wpdb_for_log();
 		$this->reset_inline_drift_logger_flag();
 		$GLOBALS['wp_version'] = '6.9';
@@ -853,15 +857,17 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * fallback: no `path` data on the combined file, preload kept, logged once.
 	 */
 	public function test_inline_budget_drift_degrades_to_safe_fallback(): void {
-		Functions\when( 'function_exists' )->justReturn( true );
+		// Stub the drift-log helper functions BEFORE stubbing `function_exists`.
+		// Brain Monkey only lazily eval-declares a stubbed function when
+		// function_exists() reports it missing; overriding function_exists first
+		// would skip the declaration and leave the namespaced call undefined.
 		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'wp_kses_post' )->returnArg();
 		Functions\when( 'update_option' )->justReturn( true );
+		Functions\when( 'function_exists' )->justReturn( true );
 		$wpdb = $this->swap_wpdb_for_log();
 		$this->reset_inline_drift_logger_flag();
 		$GLOBALS['wp_version'] = '6.9';
-
-		// The drift log fires exactly once on the first drifted handle.
-		Functions\when( 'wp_kses_post' )->returnArg();
 
 		$file_a = $this->make_temp_css( 8192 );
 		$file_b = $this->make_temp_css( 8192 );
