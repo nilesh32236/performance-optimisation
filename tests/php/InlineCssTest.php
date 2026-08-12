@@ -38,6 +38,20 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	private string $large_css_file;
 
 	/**
+	 * The bootstrap $wpdb object replaced by swap_wpdb_for_log(), if any.
+	 *
+	 * @var object|null
+	 */
+	private $original_wpdb = null;
+
+	/**
+	 * Value of Cache::$inline_drift_logged before a drift test resets it.
+	 *
+	 * @var bool|null
+	 */
+	private $original_drift_log = null;
+
+	/**
 	 * Set up test environment.
 	 */
 	protected function setUp(): void {
@@ -77,12 +91,24 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
 		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'has_filter' )->justReturn( false );
 	}
 
 	/**
 	 * Clean up after each test.
 	 */
 	protected function tearDown(): void {
+		if ( null !== $this->original_wpdb ) {
+			$GLOBALS['wpdb']     = $this->original_wpdb;
+			$this->original_wpdb = null;
+		}
+		if ( null !== $this->original_drift_log ) {
+			$prop = new \ReflectionProperty( Cache::class, 'inline_drift_logged' );
+			$prop->setAccessible( true );
+			$prop->setValue( null, $this->original_drift_log );
+			$this->original_drift_log = null;
+		}
+
 		if ( file_exists( $this->small_css_file ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 			unlink( $this->small_css_file );
@@ -237,11 +263,15 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * Reset the once-per-process inline-drift logger flag for a drift test.
 	 *
 	 * The flag is held in a private static, so reflection is required to make
-	 * drift-triggering tests order-independent and observe the log path.
+	 * drift-triggering tests order-independent and observe the log path. The
+	 * pre-test value is stashed so {@see tearDown()} can restore it.
 	 */
 	private function reset_inline_drift_logger_flag(): void {
 		$prop = new \ReflectionProperty( Cache::class, 'inline_drift_logged' );
 		$prop->setAccessible( true );
+		if ( null === $this->original_drift_log ) {
+			$this->original_drift_log = (bool) $prop->getValue( null );
+		}
 		$prop->setValue( null, false );
 	}
 
@@ -255,7 +285,10 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * @return object Minimal $wpdb stand-in with prefix + insert().
 	 */
 	private function swap_wpdb_for_log() {
-		$mock = new class() {
+		if ( null === $this->original_wpdb && isset( $GLOBALS['wpdb'] ) ) {
+			$this->original_wpdb = $GLOBALS['wpdb'];
+		}
+		$mock            = new class() {
 			/**
 			 * Database table prefix.
 			 *
@@ -279,7 +312,7 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 			 * @return int
 			 */
 			public function insert( $table, $data, $format = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
-				$this->inserts++;
+				++$this->inserts;
 				return 1;
 			}
 		};
@@ -654,10 +687,24 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * A style at or under the limit is inlined; a style one byte over is not.
 	 */
 	public function test_core_will_inline_budget_boundary_is_version_aware(): void {
+		Functions\when( 'function_exists' )->justReturn( true );
+
 		$cases = array(
-			'6.8' => array( 19000 => true, 20000 => true, 21000 => false ),
-			'6.9' => array( 39000 => true, 40000 => true, 41000 => false ),
-			'7.1' => array( 39000 => true, 40000 => true, 41000 => false ),
+			'6.8' => array(
+				19000 => true,
+				20000 => true,
+				21000 => false,
+			),
+			'6.9' => array(
+				39000 => true,
+				40000 => true,
+				41000 => false,
+			),
+			'7.1' => array(
+				39000 => true,
+				40000 => true,
+				41000 => false,
+			),
 		);
 
 		$files = array();
@@ -704,6 +751,7 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * out on the conservative side (true) rather than the old wrong prediction.
 	 */
 	public function test_core_will_inline_matches_core_when_path_peer_lacks_src(): void {
+		Functions\when( 'function_exists' )->justReturn( true );
 		Functions\when( '__' )->returnArg( 1 );
 		Functions\when( 'wp_kses_post' )->returnArg();
 		Functions\when( 'update_option' )->justReturn( true );
@@ -719,12 +767,22 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 			global $wp_styles;
 			$wp_styles = $this->make_wp_styles_with_paths(
 				array(
-					'a' => (object) array( 'src' => 'http://example.com/a.css', 'extra' => array() ),
+					'a' => (object) array(
+						'src'   => 'http://example.com/a.css',
+						'extra' => array(),
+					),
 					'b' => (object) array( 'extra' => array() ), // No src: core never inlines it.
-					'c' => (object) array( 'src' => 'http://example.com/c.css', 'extra' => array() ),
+					'c' => (object) array(
+						'src'   => 'http://example.com/c.css',
+						'extra' => array(),
+					),
 				),
 				array( 'a', 'b', 'c' ),
-				array( 'a' => $file_a, 'b' => $file_b, 'c' => $file_c )
+				array(
+					'a' => $file_a,
+					'b' => $file_b,
+					'c' => $file_c,
+				)
 			);
 
 			$cache = $this->make_cache();
@@ -749,6 +807,7 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * sibling can never push the target over the cumulative limit.
 	 */
 	public function test_core_will_inline_ignores_over_limit_path_peer(): void {
+		Functions\when( 'function_exists' )->justReturn( true );
 		$GLOBALS['wp_version'] = '6.9';
 
 		$file_foo  = $this->make_temp_css( 30000 );
@@ -758,11 +817,20 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 			global $wp_styles;
 			$wp_styles = $this->make_wp_styles_with_paths(
 				array(
-					'peer' => (object) array( 'src' => 'http://example.com/big.css', 'extra' => array() ),
-					'foo'  => (object) array( 'src' => 'http://example.com/foo.css', 'extra' => array() ),
+					'peer' => (object) array(
+						'src'   => 'http://example.com/big.css',
+						'extra' => array(),
+					),
+					'foo'  => (object) array(
+						'src'   => 'http://example.com/foo.css',
+						'extra' => array(),
+					),
 				),
 				array( 'peer', 'foo' ),
-				array( 'peer' => $file_peer, 'foo' => $file_foo )
+				array(
+					'peer' => $file_peer,
+					'foo'  => $file_foo,
+				)
 			);
 
 			$cache = $this->make_cache();
@@ -785,9 +853,10 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	 * fallback: no `path` data on the combined file, preload kept, logged once.
 	 */
 	public function test_inline_budget_drift_degrades_to_safe_fallback(): void {
+		Functions\when( 'function_exists' )->justReturn( true );
 		Functions\when( '__' )->returnArg( 1 );
 		Functions\when( 'update_option' )->justReturn( true );
-		$wpdb                 = $this->swap_wpdb_for_log();
+		$wpdb = $this->swap_wpdb_for_log();
 		$this->reset_inline_drift_logger_flag();
 		$GLOBALS['wp_version'] = '6.9';
 
@@ -802,12 +871,22 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 			global $wp_styles;
 			$wp_styles = $this->make_wp_styles_with_paths(
 				array(
-					'a' => (object) array( 'src' => 'http://example.com/a.css', 'extra' => array() ),
+					'a' => (object) array(
+						'src'   => 'http://example.com/a.css',
+						'extra' => array(),
+					),
 					'b' => (object) array( 'extra' => array() ), // No src: core ignores it.
-					'c' => (object) array( 'src' => 'http://example.com/c.css', 'extra' => array() ),
+					'c' => (object) array(
+						'src'   => 'http://example.com/c.css',
+						'extra' => array(),
+					),
 				),
 				array( 'a', 'b', 'c' ),
-				array( 'a' => $file_a, 'b' => $file_b, 'c' => $file_c )
+				array(
+					'a' => $file_a,
+					'b' => $file_b,
+					'c' => $file_c,
+				)
 			);
 
 			$cache = $this->make_cache();
@@ -816,7 +895,11 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 			// so the conservative true is returned (never a duplicating false)
 			// and the rate-limited drift notice is written to the activity log.
 			$this->assertTrue( $this->invoke_private( $cache, 'core_will_inline', array( 'c' ) ) );
-			$this->assertGreaterThan( 0, $wpdb->inserts, 'The drift log should have been written once' );
+
+			// A second drifting handle must reuse the cached size map and must not
+			// add another activity-log entry: the notice is once per process.
+			$this->assertTrue( $this->invoke_private( $cache, 'core_will_inline', array( 'c' ) ) );
+			$this->assertSame( 1, $wpdb->inserts, 'The drift log must be written exactly once per process' );
 
 			$drift_prop = new \ReflectionProperty( Cache::class, 'inline_drift_detected' );
 			$drift_prop->setAccessible( true );

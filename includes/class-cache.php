@@ -96,6 +96,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private static bool $inline_drift_logged = false;
 
 		/**
+		 * Cached handle => file-size map for the inline-budget simulation.
+		 *
+		 * Built lazily on the first {@see core_inline_budget_will_inline()} call of
+		 * the request so every simulation reuses a single `is_file()`/`filesize()`
+		 * pass over the queue instead of repeating it per handle (up to 6*n per
+		 * request via the freshness, generation, and combined-handle loops). The
+		 * map is reset whenever a style's `path` data changes, i.e. after
+		 * {@see register_combine_css_path()} registers the combined file.
+		 *
+		 * @var array<string,int>|null
+		 * @since 2.22.0
+		 */
+		private ?array $inline_size_map = null;
+
+		/**
 		 * The filesystem object used for file operations.
 		 *
 		 * @var object|null
@@ -645,7 +660,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			global $wp_styles;
-			if ( ! isset( $wp_styles->registered[ $handle ] ) || empty( $wp_styles->registered[ $handle ]->src ) ) {
+			if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+				return false;
+			}
+
+			// Since WP 6.3 core only inlines styles that carry a `src`; on 5.8-6.2
+			// any queued style with `path` data was a candidate, so a src-less
+			// handle can still be inlined there.
+			if ( $this->inline_candidates_require_src() && empty( $wp_styles->registered[ $handle ]->src ) ) {
 				return false;
 			}
 
@@ -680,11 +702,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * When `$core_faithful` is true the candidate set mirrors core's
 		 * `wp_maybe_inline_styles()`: a queued handle only counts when it carries
-		 * both path data and a `src`, and its file size is within the inline limit.
-		 * Styles over the budget are excluded up-front (equivalent to core's
-		 * ascending sort + `break` on first overflow). When false, the plugin's
-		 * legacy accounting is reproduced exactly (any path-data handle with a
-		 * usable file size counts, regardless of `src` or budget).
+		 * path data, its file size is within the inline limit, and (since WP 6.3)
+		 * it also has a `src`. Styles over the budget are excluded up-front
+		 * (equivalent to core's ascending sort + `break` on first overflow). When
+		 * false, the plugin's legacy accounting is reproduced exactly (any
+		 * path-data handle with a usable file size counts, regardless of `src` or
+		 * budget).
+		 *
+		 * The handle => size map is cached for the request (see
+		 * {@see $inline_size_map}) so repeated simulations pay the filesystem stat
+		 * cost once per queue snapshot instead of once per call.
 		 *
 		 * @since 2.22.0
 		 *
@@ -696,27 +723,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function core_inline_budget_will_inline( $handle, $limit, $core_faithful ): bool {
 			global $wp_styles;
 
-			$paths = array();
-			foreach ( $wp_styles->queue as $queued_handle ) {
-				$path = $wp_styles->get_data( $queued_handle, 'path' );
-				if ( empty( $path ) || ! is_file( $path ) ) {
-					continue;
+			if ( null === $this->inline_size_map ) {
+				$this->inline_size_map = array();
+				foreach ( $wp_styles->queue as $queued_handle ) {
+					$path = $wp_styles->get_data( $queued_handle, 'path' );
+					if ( empty( $path ) || ! is_file( $path ) ) {
+						continue;
+					}
+					$size = (int) filesize( $path );
+					if ( $size > 0 ) {
+						$this->inline_size_map[ $queued_handle ] = $size;
+					}
 				}
-				$size = (int) filesize( $path );
-				if ( $size <= 0 ) {
-					continue;
-				}
+			}
 
+			$paths = array();
+			foreach ( $this->inline_size_map as $queued_handle => $size ) {
 				if ( $core_faithful ) {
 					// Core skips handles that are not registered.
 					if ( ! isset( $wp_styles->registered[ $queued_handle ] ) ) {
 						continue;
 					}
 					$registered = $wp_styles->registered[ $queued_handle ];
-					// Core only considers a queued style a candidate when it has a
-					// `src` and fits within the inline budget.
-					$has_src = ! empty( $registered->src ) || ! empty( $registered->extra['src'] );
-					if ( ! $has_src || $size > $limit ) {
+					// Core only considers a queued style a candidate when it fits
+					// within the inline budget, and — since the `path && src` gate
+					// landed in 6.3 — carries a `src`. On 5.8-6.2 path data alone
+					// was sufficient, so a src-less handle still counts there.
+					if ( ( $this->inline_candidates_require_src() && empty( $registered->src ) ) || $size > $limit ) {
 						continue;
 					}
 				}
@@ -813,6 +846,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			wp_style_add_data( 'wppo-combine-css', 'path', $css_file_path );
+
+			// The combined handle now carries `path` data, so the size map cached
+			// for the inline-budget simulation is stale; rebuild it on the next call.
+			$this->inline_size_map = null;
 		}
 
 		/**
@@ -863,6 +900,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			return (int) apply_filters( 'styles_inline_size_limit', $default );
+		}
+
+		/**
+		 * Whether inline candidates must carry a `src` on this core version.
+		 *
+		 * WP 6.3 introduced the `path && src` gate in `wp_maybe_inline_styles()`;
+		 * before that (5.8-6.2) any queued style with `path` data was a candidate
+		 * regardless of `src`. An absent `$wp_version` assumes the newest behavior,
+		 * matching {@see get_styles_inline_limit()}.
+		 *
+		 * @since 2.22.0
+		 *
+		 * @return bool True when inline candidates must carry a `src`.
+		 */
+		private function inline_candidates_require_src(): bool {
+			return ! isset( $GLOBALS['wp_version'] ) || version_compare( $GLOBALS['wp_version'], '6.3', '>=' );
 		}
 
 		/**
