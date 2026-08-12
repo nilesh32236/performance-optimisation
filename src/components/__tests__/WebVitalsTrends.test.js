@@ -96,15 +96,17 @@ describe( 'WebVitalsTrends Component', () => {
 			.spyOn( console, 'error' )
 			.mockImplementation( () => {} );
 
-		render( <WebVitalsTrends url="https://example.com/" /> );
+		try {
+			render( <WebVitalsTrends url="https://example.com/" /> );
 
-		await waitFor( () => {
-			expect(
-				screen.getByText( /Failed to load trend data/i )
-			).toBeInTheDocument();
-		} );
-
-		consoleSpy.mockRestore();
+			await waitFor( () => {
+				expect(
+					screen.getByText( /Failed to load trend data/i )
+				).toBeInTheDocument();
+			} );
+		} finally {
+			consoleSpy.mockRestore();
+		}
 	} );
 
 	it( 'renders an explicit empty state without a URL', async () => {
