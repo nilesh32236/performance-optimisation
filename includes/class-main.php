@@ -2150,9 +2150,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Toggle off: preserve the pre-7.1 conservative default so core's
-			// cached-site escalation cannot override the plugin UI, unless the
-			// host explicitly pinned a different default.
+			// cached-site escalation (#64066) cannot override the plugin UI.
+			// Only pins when the plugin's own static cache is active — that is
+			// the caching solution core's detection heuristic would see, so a
+			// site where caching is detected elsewhere keeps core's behavior.
+			// A host that explicitly pinned a different default is left alone.
 			if (
+				! empty( $this->options['cache_settings']['enableCache'] ) &&
 				'auto' === ( $config['eagerness'] ?? 'auto' ) &&
 				null === $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' )
 			) {
@@ -2170,10 +2174,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * core function. Reads configuration only; never writes environment
 		 * variables or constants.
 		 *
+		 * Only treats the value as an override when it is one of the values core
+		 * accepts for that setting (mirroring the validation in core's
+		 * `wp_get_speculation_rules_configuration()`). An invalid or empty value
+		 * is treated as absent so the plugin's conservative pin still applies
+		 * instead of silently allowing core's cached-site escalation.
+		 *
 		 * @since 1.9.0
 		 *
 		 * @param string $name Override name, e.g. 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS'.
-		 * @return string|null The override value, or null when neither the constant nor the environment variable is set.
+		 * @return string|null The override value, or null when neither the constant nor the environment variable is set to a valid value.
 		 */
 		private function get_speculation_default_override( string $name ): ?string {
 			$value = null;
@@ -2189,6 +2199,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$const_value = constant( $name );
 				if ( is_string( $const_value ) ) {
 					$value = $const_value;
+				}
+			}
+
+			if ( ! is_string( $value ) || '' === $value ) {
+				return null;
+			}
+
+			if ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
+				if ( ! in_array( $value, array( 'prefetch', 'prerender' ), true ) ) {
+					return null;
+				}
+			} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name ) {
+				if ( ! in_array( $value, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+					return null;
 				}
 			}
 

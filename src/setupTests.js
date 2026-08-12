@@ -6,7 +6,12 @@ jest.mock( '@wordpress/i18n', () => {
 	const sprintf = ( format, ...args ) => {
 		let i = 0;
 		return format.replace( /%(?:(\d+)\$)?[sd]/g, ( match, index ) => {
-			return index ? args[ Number( index ) - 1 ] : args[ i++ ];
+			if ( index ) {
+				const positional = Number( index ) - 1;
+				i = Math.max( i, positional + 1 );
+				return args[ positional ];
+			}
+			return args[ i++ ];
 		} );
 	};
 	return {

@@ -375,8 +375,14 @@ describe( 'PreloadSettings Component', () => {
 		).not.toBeInTheDocument();
 	} );
 
-	it( 'shows the conservative-default note when disabled and no override is set', () => {
-		global.wppoSettings = {};
+	it( 'shows the conservative-default note when disabled, cache active, and no override is set', () => {
+		global.wppoSettings = {
+			speculation_rules: {
+				eagerness_override: null,
+				mode_override: null,
+				static_cache_active: true,
+			},
+		};
 
 		render( <PreloadSettings /> );
 
@@ -387,8 +393,33 @@ describe( 'PreloadSettings Component', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'hides the conservative-default note when no static cache is active', () => {
+		global.wppoSettings = {
+			speculation_rules: {
+				eagerness_override: null,
+				mode_override: null,
+				static_cache_active: false,
+			},
+		};
+
+		render( <PreloadSettings /> );
+
+		expect(
+			screen.queryByText( /While speculative loading is disabled here/i )
+		).not.toBeInTheDocument();
+		expect(
+			screen.queryByText( /speculation-rules default is pinned/i )
+		).not.toBeInTheDocument();
+	} );
+
 	it( 'does not show the conservative-default note once speculative loading is enabled', () => {
-		global.wppoSettings = {};
+		global.wppoSettings = {
+			speculation_rules: {
+				eagerness_override: null,
+				mode_override: null,
+				static_cache_active: true,
+			},
+		};
 
 		render( <PreloadSettings /> );
 

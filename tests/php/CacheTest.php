@@ -259,11 +259,11 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that a single-page clear removes both the HTML and its gzip variant,
+	 * Test that delete_cache_files() removes both the HTML and its gzip variant,
 	 * covering static pages that speculative prerendering may have requested and
 	 * cached (they are served from the same per-URL files).
 	 */
-	public function test_clear_cache_single_page_removes_html_and_gzip(): void {
+	public function test_delete_cache_files_removes_html_and_gzip(): void {
 		$deleted = array();
 		$fs      = \Mockery::mock();
 		$fs->shouldReceive( 'exists' )->andReturn( true );
