@@ -156,7 +156,7 @@ jobs:
       # which creates a branch → PR → review → fix loop automatically.
       - name: AI Codebase Audit
         id: ai-audit
-        uses: nilesh32236/opencode-ai-reviewer@v1.10.1
+        uses: nilesh32236/opencode-ai-reviewer@448a67ef7310fbe0528c1ef629ae1c943779faae # v1.10.1
         with:
           mode: audit
           github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}

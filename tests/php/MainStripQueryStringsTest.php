@@ -184,15 +184,37 @@ class MainStripQueryStringsTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * A registered content_url filter may return context-dependent output, so
 	 * is_plugin_cache_url() resolves content_url() on every call instead of
-	 * reusing cached host/path parts. The exemption must still hold there.
+	 * reusing cached host/path parts. The exemption must still hold there, and
+	 * the dynamically filtered base must be honored per invocation.
 	 */
 	public function test_preserves_ver_on_min_cache_url_with_content_url_filter(): void {
+		$base = 'http://example.com/wp-content';
 		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'content_url' )->alias(
+			static function ( $path = '' ) use ( &$base ) {
+				return $base . (string) $path;
+			}
+		);
 		$main = $this->make_main();
 
 		$src = 'http://example.com/wp-content/cache/wppo/min/1/css/ab12cd34.css?ver=1234567890';
 
 		$this->assertSame( $src, $main->strip_static_query_strings( $src, 'wppo-css' ) );
+
+		// The filtered base changes (e.g. a CDN base): the previously-plugin
+		// cache URL is now a foreign host, so its ver arg must be stripped.
+		$base = 'http://cdn.example.net/wp-content';
+
+		$this->assertSame(
+			'http://example.com/wp-content/cache/wppo/min/1/css/ab12cd34.css',
+			$main->strip_static_query_strings( $src, 'wppo-css' )
+		);
+
+		// A URL on the new filtered base is the plugin cache again and is
+		// preserved, proving the uncached branch never froze the old parts.
+		$cdn_src = 'http://cdn.example.net/wp-content/cache/wppo/min/1/css/ab12cd34.css?ver=1234567890';
+
+		$this->assertSame( $cdn_src, $main->strip_static_query_strings( $cdn_src, 'wppo-css' ) );
 	}
 
 	/**
@@ -201,7 +223,13 @@ class MainStripQueryStringsTest extends \PHPUnit\Framework\TestCase {
 	 * filter-bypass uncached branch).
 	 */
 	public function test_strips_foreign_host_with_content_url_filter(): void {
+		$base = 'http://example.com/wp-content';
 		Functions\when( 'has_filter' )->justReturn( true );
+		Functions\when( 'content_url' )->alias(
+			static function ( $path = '' ) use ( &$base ) {
+				return $base . (string) $path;
+			}
+		);
 		$main = $this->make_main();
 
 		$result = $main->strip_static_query_strings(
@@ -213,6 +241,75 @@ class MainStripQueryStringsTest extends \PHPUnit\Framework\TestCase {
 			'https://evil.example.net/assets/cache/wppo/thing.css',
 			$result
 		);
+	}
+
+	/**
+	 * Test that the cached branch resolves content_url() only once per blog
+	 * across many strip_static_query_strings() calls.
+	 *
+	 * Caching is the entire point of the is_plugin_cache_url() optimization, so
+	 * this guards against a regression back to per-call resolution. A unique
+	 * blog id isolates the static cache from other tests sharing the process.
+	 */
+	public function test_cached_branch_resolves_content_url_once(): void {
+		$calls = 0;
+		Functions\when( 'get_current_blog_id' )->justReturn( 9001 );
+		Functions\when( 'content_url' )->alias(
+			static function ( $path = '' ) use ( &$calls ) {
+				++$calls;
+				return 'http://example.com/wp-content' . (string) $path;
+			}
+		);
+		$main = $this->make_main();
+
+		$src = 'http://example.com/wp-content/cache/wppo/min/1/css/ab12cd34.css?ver=1234567890';
+
+		$main->strip_static_query_strings( $src, 'wppo-css' );
+		$main->strip_static_query_strings( $src, 'wppo-css' );
+		$main->strip_static_query_strings( $src, 'wppo-css' );
+
+		$this->assertSame( 1, $calls );
+	}
+
+	/**
+	 * Test that the parsed-parts cache is keyed per blog id so a multisite
+	 * switch_to_blog() cannot reuse another site's host/path metadata.
+	 *
+	 * Uses blog ids 10 and 20 (never used elsewhere in the suite) so the
+	 * blog-keyed static caches in Util::cached_content_url() and
+	 * is_plugin_cache_url() start cold for both sites.
+	 */
+	public function test_cache_is_keyed_per_blog(): void {
+		$blog_id = 10;
+		Functions\when( 'get_current_blog_id' )->alias(
+			static function () use ( &$blog_id ) {
+				return $blog_id;
+			}
+		);
+		Functions\when( 'content_url' )->alias(
+			static function ( $path = '' ) use ( &$blog_id ) {
+				return 'http://site-' . $blog_id . '.example/wp-content' . (string) $path;
+			}
+		);
+		$main = $this->make_main();
+
+		$src10 = 'http://site-10.example/wp-content/cache/wppo/min/1/css/a.css?ver=1';
+
+		// Blog 10: site-10.example is the plugin cache origin, so ver is kept.
+		$this->assertSame( $src10, $main->strip_static_query_strings( $src10, 'wppo-css' ) );
+
+		// Switch to blog 20: site-10.example is now a foreign host, so ver is
+		// stripped; blog 20's own cache URL is preserved.
+		$blog_id = 20;
+
+		$this->assertSame(
+			'http://site-10.example/wp-content/cache/wppo/min/1/css/a.css',
+			$main->strip_static_query_strings( $src10, 'wppo-css' )
+		);
+
+		$src20 = 'http://site-20.example/wp-content/cache/wppo/min/1/css/a.css?ver=1';
+
+		$this->assertSame( $src20, $main->strip_static_query_strings( $src20, 'wppo-css' ) );
 	}
 
 	/**
