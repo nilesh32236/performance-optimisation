@@ -88,7 +88,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Whether the budget-drift notice has been logged this PHP process.
 		 *
 		 * Rate-limits {@see log_inline_budget_drift()} to a single activity-log
-		 * entry regardless of how many handles drift during one request.
+		 * entry per request regardless of how many handles drift during one render.
+		 * A condition-keyed transient (see {@see log_inline_budget_drift()})
+		 * additionally throttles persistent drift across requests.
 		 *
 		 * @var bool
 		 * @since 2.22.0
@@ -96,7 +98,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private static bool $inline_drift_logged = false;
 
 		/**
-		 * Cached handle => file-size map for the inline-budget simulation.
+		 * Cached handle => file-size/readability map for the inline-budget simulation.
 		 *
 		 * Built lazily on the first {@see core_inline_budget_will_inline()} call of
 		 * the request so every simulation reuses a single `is_file()`/`filesize()`
@@ -105,7 +107,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * map is reset whenever a style's `path` data changes, i.e. after
 		 * {@see register_combine_css_path()} registers the combined file.
 		 *
-		 * @var array<string,int>|null
+		 * Each entry stores the file size alongside an `is_readable()` flag so the
+		 * core-faithful reference can mirror WP 7.0+ core, which skips unreadable
+		 * styles in its budget loop without charging their size.
+		 *
+		 * @var array<string,array{size:int,readable:bool}>|null
 		 * @since 2.22.0
 		 */
 		private ?array $inline_size_map = null;
@@ -704,12 +710,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * `wp_maybe_inline_styles()`: a queued handle only counts when it carries
 		 * path data, its file size is within the inline limit, and (since WP 6.3)
 		 * it also has a `src`. Styles over the budget are excluded up-front
-		 * (equivalent to core's ascending sort + `break` on first overflow). When
+		 * (equivalent to core's ascending sort + `break` on first overflow). On
+		 * WP 7.0+ unreadable styles are skipped inside the budget loop without
+		 * charging their size, which mirrors core's own `is_readable()` gate. When
 		 * false, the plugin's legacy accounting is reproduced exactly (any
-		 * path-data handle with a usable file size counts, regardless of `src` or
-		 * budget).
+		 * path-data handle with a usable file size counts, regardless of `src`,
+		 * readability, or budget).
 		 *
-		 * The handle => size map is cached for the request (see
+		 * The handle => size/readability map is cached for the request (see
 		 * {@see $inline_size_map}) so repeated simulations pay the filesystem stat
 		 * cost once per queue snapshot instead of once per call.
 		 *
@@ -732,42 +740,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					}
 					$size = (int) filesize( $path );
 					if ( $size > 0 ) {
-						$this->inline_size_map[ $queued_handle ] = $size;
+						$this->inline_size_map[ $queued_handle ] = array(
+							'size'     => $size,
+							'readable' => is_readable( $path ),
+						);
 					}
 				}
 			}
 
-			$paths = array();
-			foreach ( $this->inline_size_map as $queued_handle => $size ) {
+			$entries = array();
+			foreach ( $this->inline_size_map as $queued_handle => $entry ) {
 				if ( $core_faithful ) {
 					// Core skips handles that are not registered.
 					if ( ! isset( $wp_styles->registered[ $queued_handle ] ) ) {
 						continue;
 					}
 					$registered = $wp_styles->registered[ $queued_handle ];
-					// Core only considers a queued style a candidate when it fits
-					// within the inline budget, and — since the `path && src` gate
-					// landed in 6.3 — carries a `src`. On 5.8-6.2 path data alone
-					// was sufficient, so a src-less handle still counts there.
-					if ( ( $this->inline_candidates_require_src() && empty( $registered->src ) ) || $size > $limit ) {
+					// Core only considers a queued style a candidate when it carries
+					// a `src` (the `path && src` gate landed in 6.3) and is found on
+					// disk; on 5.8-6.2 path data alone was sufficient. Styles over
+					// the limit are excluded up-front — they sort last and would only
+					// ever trigger the loop's overflow `break`, which stops nothing
+					// that fits the budget.
+					if ( ( $this->inline_candidates_require_src() && empty( $registered->src ) ) || $entry['size'] > $limit ) {
 						continue;
 					}
 				}
 
-				$paths[ $queued_handle ] = $size;
+				$entries[ $queued_handle ] = $entry;
 			}
 
 			// Replicate core's greedy smallest-first cumulative budget. Core uses an
-			// unstable usort; the stable asort is retained here because the drift
+			// unstable usort; the stable uasort is retained here because the drift
 			// check + conservative downgrade neutralize the residual tie-order
 			// ambiguity.
-			asort( $paths );
+			uasort(
+				$entries,
+				static function ( $a, $b ) {
+					return $a['size'] <=> $b['size'];
+				}
+			);
 
 			$total = 0;
-			foreach ( $paths as $queued_handle => $size ) {
+			foreach ( $entries as $queued_handle => $entry ) {
+				$size = $entry['size'];
+
+				// Overflow check first, exactly as core orders it: an unreadable
+				// but in-budget file is skipped below without charging its size, but
+				// one that would push the running total over the limit still stops
+				// the pass.
 				if ( $total + $size > $limit ) {
 					return false;
 				}
+
+				// WP 7.0+ core skips unreadable styles in its budget loop without
+				// charging their size; earlier core versions charged them regardless.
+				if ( $core_faithful && $this->inline_candidates_require_readable() && ! $entry['readable'] ) {
+					continue;
+				}
+
 				$total += $size;
 				if ( $queued_handle === $handle ) {
 					return true;
@@ -781,8 +812,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Logs that the inline-CSS budget prediction drifted from core.
 		 *
 		 * Rate-limited to at most one activity-log entry per PHP process so a single
-		 * drifted request cannot flood the log. Cache and Log share the
-		 * `PerformanceOptimise\Inc` namespace, so no import is required.
+		 * drifted request cannot flood the log, and — because drift conditions are
+		 * deterministic and persistent (e.g. a queued path-data style without a
+		 * `src` on WP 6.3+, or an unreadable over-limit peer on WP 7.0+) — at most
+		 * one entry per rolling window per drift condition via a transient, so a
+		 * persistent drift cannot grow the log by one row per pageview. Cache and
+		 * Log share the `PerformanceOptimise\Inc` namespace, so no import is
+		 * required.
 		 *
 		 * @since 2.22.0
 		 *
@@ -799,6 +835,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! class_exists( Log::class ) ) {
 				return;
 			}
+
+			// The same drift condition is reproduced on every pageview, so a once
+			// per-process flag alone would still append one row per request. Key a
+			// transient by the condition (handle + core version) and skip repeats
+			// within the rolling window; a change in WP or an operator theme fix
+			// re-arms the notice.
+			$version = isset( $GLOBALS['wp_version'] ) ? $GLOBALS['wp_version'] : 'unknown';
+			$log_key = Util::transient_key( 'wppo_inline_drift_' . md5( $handle . '|' . $version ) );
+			if ( get_transient( $log_key ) ) {
+				return;
+			}
+			set_transient( $log_key, 1, DAY_IN_SECONDS );
 
 			Log::add(
 				sprintf(
@@ -916,6 +964,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function inline_candidates_require_src(): bool {
 			return ! isset( $GLOBALS['wp_version'] ) || version_compare( $GLOBALS['wp_version'], '6.3', '>=' );
+		}
+
+		/**
+		 * Whether inline candidates must be readable on this core version.
+		 *
+		 * WP 7.0 added a `_doing_it_wrong` notice and an unreadable-path skip
+		 * (`continue`) inside the budget loop of `wp_maybe_inline_styles()`, so an
+		 * unreadable stylesheet no longer consumes the inline budget. On earlier
+		 * versions its size was charged regardless of readability, matching the
+		 * plugin's legacy accounting. An absent `$wp_version` assumes the newest
+		 * behavior.
+		 *
+		 * @since 2.22.0
+		 *
+		 * @return bool True when the core-faithful pass must skip unreadable styles.
+		 */
+		private function inline_candidates_require_readable(): bool {
+			return ! isset( $GLOBALS['wp_version'] ) || version_compare( $GLOBALS['wp_version'], '7.0', '>=' );
 		}
 
 		/**
