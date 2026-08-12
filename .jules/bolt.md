@@ -89,3 +89,8 @@
 
 **Learning:** The blog-ID-keyed `home_url()` caching pattern was scattered across multiple classes (`class-util.php`, `class-img-converter.php`, `class-image-optimisation.php`) often with duplicate inline static arrays. WordPress core does not statically cache `home_url()`, meaning redundant calls in loops can add minor overhead, but duplicating the boilerplate to bypass this is poor maintainability.
 **Action:** Extract a single shared helper `Util::cached_home_url()` that keys a static array by `get_current_blog_id()` and only caches when no `home_url` filter is registered, similar to `Util::cached_content_url()`, then use it from all relevant call sites.
+
+## 2026-08-05 - Cache parsed URL parts in high-frequency hooks
+
+**Learning:** Functions that parse URLs and execute string replacements (like `wp_parse_url( content_url( '/' ), PHP_URL_PATH )`) inside high-frequency hooks like `script_loader_src` or `style_loader_src` (e.g. `strip_static_query_strings` checking `is_plugin_cache_url()`) can cause measurable overhead due to the volume of assets processed on every page load.
+**Action:** When no `content_url` filter is active, statically cache the parsed paths and hostnames in a PHP `static` array keyed by `get_current_blog_id()` instead of parsing the core `content_url()` repeatedly. When the filter is active, resolve the URL for each call so a context-dependent filtered base URL is never frozen.
