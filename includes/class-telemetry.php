@@ -33,7 +33,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		/**
 		 * Option key used for the audit cache salt.
 		 *
-		 * @since 2.6.0
+		 * @since NEXT
 		 * @var string
 		 */
 		private const AUDIT_SALT_KEY = 'wppo_audit_salt';
@@ -663,7 +663,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * Should be called when performance audit settings change or when
 		 * a fresh scan should be forced next request.
 		 *
-		 * @since 2.6.0
+		 * @since NEXT
 		 * @return void
 		 */
 		public static function invalidate_audit_cache(): void {

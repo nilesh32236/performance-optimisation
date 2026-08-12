@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Option key used for the image info cache salt.
 		 *
-		 * @since 2.6.0
+		 * @since NEXT
 		 * @var string
 		 */
 		private const SALT_KEY = 'wppo_img_info_salt';
@@ -132,7 +132,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Check if WordPress core (6.7+) natively handles next-gen format generation (WebP/AVIF).
 		 *
-		 * @since 2.1.0
+		 * @since NEXT
 		 *
 		 * @return bool True if core handles next-gen formats natively.
 		 */
@@ -143,7 +143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Check if WordPress core (7.1+) natively handles both WebP and AVIF generation.
 		 *
-		 * @since 2.2.0
+		 * @since NEXT
 		 *
 		 * @return bool True if core can generate both WebP and AVIF natively.
 		 */
@@ -156,7 +156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Get the current conversion format.
 		 *
-		 * @since 2.1.0
+		 * @since NEXT
 		 *
 		 * @return string The format ('webp', 'avif', 'both', or 'none').
 		 */
@@ -180,7 +180,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * be satisfied by a valid flat `wp_image_quality()` value before the
 		 * plugin fallback is reached.
 		 *
-		 * @since 4.1.0
+		 * @since NEXT
 		 *
 		 * @param string $mime     The output MIME type (e.g. 'image/webp').
 		 * @param int    $fallback Fallback quality (1-100) used when no core API provides a value.
@@ -213,7 +213,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Used to feed `wp_get_image_encode_quality()` so per-size quality
 		 * tuning matches what core would apply.
 		 *
-		 * @since 4.1.0
+		 * @since NEXT
 		 *
 		 * @param string $source_image Filesystem path to the source image.
 		 * @return array The dimensions array ('width'/'height'), empty for full-size originals.
@@ -623,7 +623,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * Samples pixels at a reduced stride to compute the average color.
 		 *
-		 * @since 3.0.0
+		 * @since NEXT
 		 *
 		 * @param \GdImage $image The GD image resource.
 		 * @return string Hex color string (e.g. '#aabbcc').
@@ -674,7 +674,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 *
 		 * Creates a 20x20 JPEG thumbnail and returns it as a base64 data URI.
 		 *
-		 * @since 3.0.0
+		 * @since NEXT
 		 *
 		 * @param \GdImage $image The GD image resource.
 		 * @return string Base64-encoded data URI, or empty string on failure.
@@ -749,7 +749,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Store dominant color and LQIP data for an image atomically via the
 		 * existing deferred-commit pattern (wppo_img_info).
 		 *
-		 * @since 3.0.0
+		 * @since NEXT
 		 *
 		 * @param string $rel_path       The relative image path (ABSPATH-stripped).
 		 * @param string $dominant_color Hex color string.
@@ -779,7 +779,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Get placeholder data (dominant_color, lqip) from the shared wppo_img_info option.
 		 *
-		 * @since 3.0.0
+		 * @since NEXT
 		 *
 		 * @return array{dominant_color: array<string, string>, lqip: array<string, string>}
 		 */
@@ -797,7 +797,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Removes entries for the main file AND all registered resized versions
 		 * from wppo_img_info.
 		 *
-		 * @since 3.0.0
+		 * @since NEXT
 		 *
 		 * @param int $post_id The attachment ID.
 		 * @return void
@@ -1535,7 +1535,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		/**
 		 * Invalidate the image info cache by bumping the salt.
 		 *
-		 * @since 2.6.0
+		 * @since NEXT
 		 * @return void
 		 */
 		public static function invalidate_img_info_cache(): void {

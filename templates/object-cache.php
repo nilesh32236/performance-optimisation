@@ -77,7 +77,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * Called by wp_cache_add_salt() (WP 6.9+) to invalidate all cached data
 		 * by changing the key space.
 		 *
-		 * @since 2.1.0
+		 * @since NEXT
 		 *
 		 * @param string $salt The salt string to add.
 		 * @return void
@@ -926,7 +926,7 @@ if ( ! function_exists( 'wp_cache_get_salted' ) ) {
 	 * so Redis memory stays bounded and a stale salt yields a miss rather
 	 * than leaving orphaned keys behind.
 	 *
-	 * @since 2.2.0
+	 * @since NEXT
 	 *
 	 * @param string          $cache_key The cache key used for storage and retrieval.
 	 * @param string          $group     The cache group used for organizing data.
@@ -953,7 +953,7 @@ if ( ! function_exists( 'wp_cache_set_salted' ) ) {
 	 * later write with a new salt overwrites the previous value and non-salted
 	 * wp_cache_delete() calls can still invalidate the entry.
 	 *
-	 * @since 2.2.0
+	 * @since NEXT
 	 *
 	 * @param string          $cache_key The cache key under which to store the data.
 	 * @param mixed           $data      The data to be cached.
@@ -981,7 +981,7 @@ if ( ! function_exists( 'wp_cache_get_multiple_salted' ) ) {
 	/**
 	 * Retrieves multiple salted items from the cache (WP 6.9+ native override).
 	 *
-	 * @since 2.2.0
+	 * @since NEXT
 	 *
 	 * @param string[]        $cache_keys Array of cache keys to retrieve.
 	 * @param string          $group      The group of the cache to check.
@@ -1013,7 +1013,7 @@ if ( ! function_exists( 'wp_cache_set_multiple_salted' ) ) {
 	/**
 	 * Stores multiple salted items in the cache (WP 6.9+ native override).
 	 *
-	 * @since 2.2.0
+	 * @since NEXT
 	 *
 	 * @param mixed[]         $data   Associative array of keys and values to store.
 	 * @param string          $group  The group to which the cached data belongs.
@@ -1039,7 +1039,7 @@ if ( ! function_exists( 'wp_cache_supports' ) ) {
 	/**
 	 * Determines whether the object cache implementation supports a particular feature.
 	 *
-	 * @since 2.1.0
+	 * @since NEXT
 	 *
 	 * @param string $feature The feature to check support for.
 	 * @return bool True if the feature is supported, false otherwise.
@@ -1078,7 +1078,7 @@ if ( ! function_exists( 'wp_cache_add_salt' ) ) {
 	 * Allows core to invalidate all cached data by changing the key space.
 	 * The drop-in must support this via WP_Object_Cache::add_salt().
 	 *
-	 * @since 2.1.0
+	 * @since NEXT
 	 *
 	 * @param string $salt The salt string to add.
 	 * @return void

@@ -293,7 +293,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $url         The URL to check.
 		 * @param array  $exclude_urls List of exclusion rules.
 		 * @return bool True when the URL matches any exclusion rule, false otherwise.
-		 * @since 2.16.0
+		 * @since NEXT
 		 */
 		public static function is_url_excluded( string $url, array $exclude_urls ): bool {
 			$url = rtrim( $url, '/' );
@@ -343,7 +343,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * the normalization used in store_lcp_image_url(). The returned
 		 * URL is untrailingslashed and passed through esc_url_raw().
 		 *
-		 * @since 2.13.0
+		 * @since NEXT
 		 * @return string Current URL.
 		 */
 		public static function get_current_url(): string {
@@ -360,7 +360,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * prefix check and one-time cleanup of pre-namespacing directories.
 		 *
 		 * @return string Normalized absolute path to the shared min cache root.
-		 * @since 2.15.0
+		 * @since NEXT
 		 */
 		public static function min_cache_base_dir(): string {
 			return wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/min' );
@@ -377,7 +377,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $subdir Optional 'css' or 'js' subdirectory.
 		 * @return string Normalized absolute path to the site-scoped min cache dir.
-		 * @since 2.15.0
+		 * @since NEXT
 		 */
 		public static function min_cache_dir( string $subdir = '' ): string {
 			$dir = self::min_cache_base_dir() . '/' . get_current_blog_id();
@@ -393,7 +393,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @param string $subdir   Optional 'css' or 'js' subdirectory.
 		 * @param string $filename Optional file name appended to the URL.
 		 * @return string The blog-scoped content URL.
-		 * @since 2.15.0
+		 * @since NEXT
 		 */
 		public static function min_cache_url( string $subdir = '', string $filename = '' ): string {
 			$path = 'cache/wppo/min/' . get_current_blog_id();
@@ -417,7 +417,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $path Path relative to the content directory.
 		 * @return string The content URL for the given path.
-		 * @since 2.14.0
+		 * @since NEXT
 		 */
 		public static function cached_content_url( $path ) {
 			if ( false !== has_filter( 'content_url' ) ) {
@@ -472,7 +472,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * @param string $key The bare transient key.
 		 * @return string Blog-ID-prefixed key on multisite, or the original key.
-		 * @since 2.6.0
+		 * @since NEXT
 		 */
 		public static function transient_key( string $key ): string {
 			return is_multisite() ? (string) get_current_blog_id() . '_' . $key : $key;
@@ -487,7 +487,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * drop-in at generation time so the early-boot serving code can compute
 		 * an identical hash.
 		 *
-		 * @since 2.8.0
+		 * @since NEXT
 		 * @param \WP_User $user The user whose roles to hash.
 		 * @return string 12-char hex hash, or empty string if the user has no roles.
 		 */
@@ -506,7 +506,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 *
 		 * Non-logged-in visitors always return true (they always get cached).
 		 *
-		 * @since 2.8.0
+		 * @since NEXT
 		 * @param array $cache_settings The cache_settings sub-array from wppo_settings.
 		 * @return bool True if the current user may receive cached pages / optimisations.
 		 */
