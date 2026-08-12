@@ -45,15 +45,21 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 	 * Clear any WP_SPECULATIVE_LOADING_DEFAULT_* environment variables set by a test.
 	 */
 	private function clear_override_env(): void {
-		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' );
-		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' );
+		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv
+		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv
 	}
 
+	/**
+	 * Clear overrides before each test so environment leaks cannot affect results.
+	 */
 	protected function setUp(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		parent::setUp();
 		$this->clear_override_env();
 	}
 
+	/**
+	 * Clear overrides after each test so environment leaks cannot affect other tests.
+	 */
 	protected function tearDown(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		$this->clear_override_env();
 		parent::tearDown();
@@ -115,7 +121,7 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 	 * pinned default instead of overriding it.
 	 */
 	public function test_toggle_off_respects_host_eagerness_override(): void {
-		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS=moderate' );
+		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS=moderate' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv
 		$main = $this->make_main( array() );
 
 		$result = $main->filter_speculation_rules_configuration(
@@ -135,7 +141,7 @@ class MainSpeculationRulesTest extends \PHPUnit\Framework\TestCase {
 	 * applied regardless of core defaults or host overrides.
 	 */
 	public function test_toggle_on_applies_user_configuration(): void {
-		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS=moderate' );
+		putenv( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS=moderate' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.runtime_configuration_putenv
 		$main = $this->make_main( array() );
 
 		$result = $main->filter_speculation_rules_configuration(

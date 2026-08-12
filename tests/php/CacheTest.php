@@ -313,7 +313,8 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 	 * Test that delete_all_cache_files scopes the min cache directory to the
 	 * current blog and never deletes the shared min root.
 	 */
-	public function test_delete_all_cache_files_scopes_min_dir_to_current_blog(): void {		$deleted = array();
+	public function test_delete_all_cache_files_scopes_min_dir_to_current_blog(): void {
+		$deleted = array();
 		$fs      = \Mockery::mock();
 		$fs->shouldReceive( 'is_dir' )->andReturn( true );
 		$fs->shouldReceive( 'delete' )->andReturnUsing(
