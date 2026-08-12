@@ -179,6 +179,43 @@ class MainStripQueryStringsTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the ver arg on a plugin cache URL is preserved even while a
+	 * content_url filter is registered (the filter-bypass uncached branch).
+	 *
+	 * A registered content_url filter may return context-dependent output, so
+	 * is_plugin_cache_url() resolves content_url() on every call instead of
+	 * reusing cached host/path parts. The exemption must still hold there.
+	 */
+	public function test_preserves_ver_on_min_cache_url_with_content_url_filter(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		$main = $this->make_main();
+
+		$src = 'http://example.com/wp-content/cache/wppo/min/1/css/ab12cd34.css?ver=1234567890';
+
+		$this->assertSame( $src, $main->strip_static_query_strings( $src, 'wppo-css' ) );
+	}
+
+	/**
+	 * Test that a foreign-host URL is still stripped while a content_url filter
+	 * is registered (the plugin-cache exemption stays origin-aware in the
+	 * filter-bypass uncached branch).
+	 */
+	public function test_strips_foreign_host_with_content_url_filter(): void {
+		Functions\when( 'has_filter' )->justReturn( true );
+		$main = $this->make_main();
+
+		$result = $main->strip_static_query_strings(
+			'https://evil.example.net/assets/cache/wppo/thing.css?ver=1.0',
+			'third-party'
+		);
+
+		$this->assertSame(
+			'https://evil.example.net/assets/cache/wppo/thing.css',
+			$result
+		);
+	}
+
+	/**
 	 * Test that a third-party URL that merely references a wppo-cache-like path
 	 * is still stripped when the file is not served by the plugin.
 	 */

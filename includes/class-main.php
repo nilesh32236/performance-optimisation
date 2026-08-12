@@ -1931,7 +1931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
 
 				foreach ( $preload_fonts_urls as $font_url ) {
-					$font_url       = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( ltrim( $font_url, '/' ) );
+					$font_url       = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( $font_url );
 					$font_extension = pathinfo( wp_parse_url( $font_url, PHP_URL_PATH ), PATHINFO_EXTENSION );
 					$font_type      = '';
 
@@ -1956,7 +1956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$preload_css_urls = Util::process_urls( $preload_settings['preloadCSSUrls'] );
 
 				foreach ( $preload_css_urls as $css_url ) {
-					$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : Util::cached_content_url( ltrim( $css_url, '/' ) );
+					$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : Util::cached_content_url( $css_url );
 					Util::generate_preload_link( $css_url, 'preload', 'style' );
 				}
 			}
@@ -2194,6 +2194,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `/cache/wppo/` is not exempted. Relative and protocol-relative URLs
 		 * match on the content path prefix alone (no host to compare).
 		 *
+		 * This runs on every enqueued JS/CSS file via `script_loader_src` /
+		 * `style_loader_src`, so the parsed `content_url()` host/path parts are
+		 * statically cached per blog. The cache is bypassed while a `content_url`
+		 * filter is registered (the filter may return context-dependent output),
+		 * so the caching benefit only applies to installs without such a filter.
+		 *
 		 * @since 2.18.0
 		 *
 		 * @param string $src The asset source URL.
@@ -2211,7 +2217,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$blog_id      = get_current_blog_id();
 
 			if ( ! isset( $cache[ $blog_id ] ) ) {
-				$content_url  = content_url( '/' );
+				// Resolve the base via the shared helper (which also centralizes the
+				// has_filter( 'content_url' ) bypass), then cache the parsed parts.
+				$content_url  = Util::cached_content_url( '/' );
 				$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
 				$cache_host   = wp_parse_url( $content_url, PHP_URL_HOST );
 
@@ -2245,7 +2253,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool
 		 */
 		private function is_plugin_cache_url_uncached( string $src ): bool {
-			$content_url  = content_url( '/' );
+			$content_url  = Util::cached_content_url( '/' );
 			$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
 			$prefix       = rtrim( $content_path, '/' ) . '/cache/wppo';
 
