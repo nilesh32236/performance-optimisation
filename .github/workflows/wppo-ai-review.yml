@@ -49,6 +49,11 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  workflows: write
+  # workflows: write is required so the fix agent can push changes that touch
+  # .github/workflows/*. GITHUB_TOKEN without this permission gets rejected with
+  # "refusing to allow a GitHub App to create or update workflow ... without
+  # workflows permission", which fails the whole autofix push.
 
 # Outer group: differ by actor so bot-generated events don't compete with
 # human-triggered reviews.  cancel-in-progress: false everywhere.
@@ -121,10 +126,12 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: fix
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          openai_api_key: ${{ secrets.OPENCODE_API_KEY }}
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          opencode_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          git_user_name: nilesh32236
+          git_user_email: nilesh32236@gmail.com
           model: ${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}
           enable_mcp: false
           max_fix_iterations: 1
@@ -213,10 +220,12 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: review
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          openai_api_key: ${{ secrets.OPENCODE_API_KEY }}
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          opencode_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          git_user_name: nilesh32236
+          git_user_email: nilesh32236@gmail.com
           model: ${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}
           max_files_per_batch: 3
           enable_mcp: false
@@ -234,7 +243,7 @@ jobs:
   # execution — no external triggers needed between iterations.
   #
   # The inner concurrency group is per-PR with cancel-in-progress: false so:
-  #   - A second labeling event queues rather than cancelling the running loop.
+  #   - A second labeling event queues rather than cancels the running loop.
   #   - Bot commit pushes (synchronize) that leak through are de-duplicated here.
   autofix:
     name: Autofix Review Loop
@@ -303,10 +312,12 @@ jobs:
         uses: nilesh32236/opencode-ai-reviewer@latest
         with:
           mode: fix
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          openai_api_key: ${{ secrets.OPENCODE_API_KEY }}
+          github_token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          opencode_api_key: ${{ secrets.OPENCODE_API_KEY }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          git_user_name: nilesh32236
+          git_user_email: nilesh32236@gmail.com
           model: ${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}
           max_fix_iterations: 3
           enable_mcp: false
