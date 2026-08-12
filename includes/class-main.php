@@ -1931,7 +1931,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$preload_fonts_urls = Util::process_urls( $preload_settings['preloadFontsUrls'] );
 
 				foreach ( $preload_fonts_urls as $font_url ) {
-						$font_url   = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( ltrim( $font_url, '/' ) );
+					$font_url       = preg_match( '/^https?:\/\//i', $font_url ) ? $font_url : Util::cached_content_url( ltrim( $font_url, '/' ) );
 					$font_extension = pathinfo( wp_parse_url( $font_url, PHP_URL_PATH ), PATHINFO_EXTENSION );
 					$font_type      = '';
 
@@ -1956,7 +1956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$preload_css_urls = Util::process_urls( $preload_settings['preloadCSSUrls'] );
 
 				foreach ( $preload_css_urls as $css_url ) {
-						$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : Util::cached_content_url( ltrim( $css_url, '/' ) );
+					$css_url = preg_match( '/^https?:\/\//i', $css_url ) ? $css_url : Util::cached_content_url( ltrim( $css_url, '/' ) );
 					Util::generate_preload_link( $css_url, 'preload', 'style' );
 				}
 			}
@@ -2200,6 +2200,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return bool
 		 */
 		private function is_plugin_cache_url( string $src ): bool {
+			// Skip caching while a content_url filter is registered: the filter may
+			// return context-dependent output, so the resolved host/prefix cannot be
+			// safely reused (same convention as Util::cached_content_url()).
+			if ( false !== has_filter( 'content_url' ) ) {
+				return $this->is_plugin_cache_url_uncached( $src );
+			}
+
 			static $cache = array();
 			$blog_id      = get_current_blog_id();
 
@@ -2224,6 +2231,35 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			return 0 === strpos( $path, $cache[ $blog_id ]['prefix'] );
+		}
+
+		/**
+		 * Filter-respecting variant of {@see is_plugin_cache_url()}.
+		 *
+		 * Resolves content_url() on every call so a registered `content_url` filter
+		 * is honored per invocation. Only used while such a filter is active.
+		 *
+		 * @since 2.18.0
+		 *
+		 * @param string $src The asset source URL.
+		 * @return bool
+		 */
+		private function is_plugin_cache_url_uncached( string $src ): bool {
+			$content_url  = content_url( '/' );
+			$content_path = (string) wp_parse_url( $content_url, PHP_URL_PATH );
+			$prefix       = rtrim( $content_path, '/' ) . '/cache/wppo';
+
+			$parsed = wp_parse_url( $src );
+			$path   = isset( $parsed['path'] ) ? (string) $parsed['path'] : '';
+
+			if ( isset( $parsed['host'] ) ) {
+				$cache_host = wp_parse_url( $content_url, PHP_URL_HOST );
+				if ( null !== $cache_host && 0 !== strcasecmp( (string) $parsed['host'], (string) $cache_host ) ) {
+					return false;
+				}
+			}
+
+			return 0 === strpos( $path, $prefix );
 		}
 
 		/**
