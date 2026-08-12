@@ -4,7 +4,15 @@ jest.mock( '@wordpress/i18n', () => {
 		return count === 1 ? singular : plural;
 	};
 	const sprintf = ( format, ...args ) => {
-		return format.replace( /%[sd]/g, () => args.shift() );
+		let i = 0;
+		return format.replace( /%(?:(\d+)\$)?[sd]/g, ( match, index ) => {
+			if ( index ) {
+				const positional = Number( index ) - 1;
+				i = Math.max( i, positional + 1 );
+				return args[ positional ];
+			}
+			return args[ i++ ];
+		} );
 	};
 	return {
 		__: ( str ) => str,

@@ -1400,6 +1400,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'themeColors'       => $this->get_frontend_theme_colors(),
 					// Editable user roles for the logged-in cache role selector.
 					'userRoles'         => $this->get_editable_role_names(),
+					// Read-only WP 7.1 speculation-rules default overrides so the
+					// Preload tab can surface the constant/env escape hatch (#65624)
+					// without ever writing it.
+					'speculation_rules' => array(
+						'mode_override'       => $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' ),
+						'eagerness_override'  => $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' ),
+						'static_cache_active' => ! empty( $this->options['cache_settings']['enableCache'] ),
+					),
 				),
 			);
 
@@ -2028,8 +2036,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Adds speculation rules for prefetching/prerendering via the WP 6.8+ Speculation Rules API.
 		 *
-		 * Enhances eagerness when static cache is active and excludes sensitive/dynamic paths
-		 * (login, admin, REST API) from all speculation.
+		 * Excludes sensitive/dynamic paths (login, admin, REST API) from all
+		 * speculation and pins an explicit configuration whenever the plugin owns
+		 * the speculation-rules decision: the user's chosen mode/eagerness when
+		 * the UI toggle is on, or the legacy `conservative` default when it is
+		 * off (so core's WP 7.1 cached-site escalation cannot change behavior
+		 * behind the user's back).
 		 *
 		 * @since 1.9.0
 		 *
@@ -2095,18 +2107,116 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			);
 
-			if ( $enable_speculation ) {
-				add_filter(
-					'wp_speculation_rules_configuration',
-					function ( $config ) use ( $preload_settings ) {
-						if ( is_array( $config ) ) {
-							$config['mode']      = $preload_settings['speculationMode'] ?? 'prerender';
-							$config['eagerness'] = $preload_settings['speculationEagerness'] ?? 'moderate';
-						}
-						return $config;
-					}
-				);
+			add_filter(
+				'wp_speculation_rules_configuration',
+				function ( $config ) use ( $preload_settings, $enable_speculation ) {
+					return $this->filter_speculation_rules_configuration( $config, $preload_settings, $enable_speculation );
+				}
+			);
+		}
+
+		/**
+		 * Applies the plugin's explicit speculation-rules configuration via the
+		 * `wp_speculation_rules_configuration` filter.
+		 *
+		 * WordPress 7.1 escalates the default eagerness from `conservative` to
+		 * `moderate` when it detects a caching solution (#64066). This plugin is
+		 * a caching solution, so that escalation could change speculative-loading
+		 * behavior behind the user's back. Whenever the plugin owns the
+		 * speculation-rules decision it therefore pins an explicit eagerness:
+		 * the user's chosen value when the UI toggle is on, or the legacy
+		 * `conservative` default when it is off. The explicit
+		 * `WP_SPECULATIVE_LOADING_DEFAULT_MODE` /
+		 * `WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS` constants or environment
+		 * variables introduced in WP 7.1 (#65624) are honored as-is, so hosts
+		 * can still pin a different default.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param array<string,string>|null $config            Filter value ('auto' defaults, or null when speculative loading is disabled for the request).
+		 * @param array                     $preload_settings  The plugin's preload_settings option value.
+		 * @param bool                      $enable_speculation Whether the plugin's speculation-rules UI toggle is on.
+		 * @return array<string,string>|null
+		 */
+		public function filter_speculation_rules_configuration( $config, array $preload_settings, bool $enable_speculation ) {
+			if ( ! is_array( $config ) ) {
+				return $config;
 			}
+
+			if ( $enable_speculation ) {
+				$config['mode']      = $preload_settings['speculationMode'] ?? 'prerender';
+				$config['eagerness'] = $preload_settings['speculationEagerness'] ?? 'moderate';
+				return $config;
+			}
+
+			// Toggle off: preserve the pre-7.1 conservative default so core's
+			// cached-site escalation (#64066) cannot override the plugin UI.
+			// Only pins when the plugin's own static cache is active — that is
+			// the caching solution core's detection heuristic would see, so a
+			// site where caching is detected elsewhere keeps core's behavior.
+			// A host that explicitly pinned a different default is left alone.
+			if (
+				! empty( $this->options['cache_settings']['enableCache'] ) &&
+				'auto' === ( $config['eagerness'] ?? 'auto' ) &&
+				null === $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' )
+			) {
+				$config['eagerness'] = 'conservative';
+			}
+
+			return $config;
+		}
+
+		/**
+		 * Read-only lookup of a WP 7.1 speculative-loading default override.
+		 *
+		 * Mirrors core's `wp_get_speculative_loading_override()` precedence
+		 * (constant over environment variable) without depending on that private
+		 * core function. Reads configuration only; never writes environment
+		 * variables or constants.
+		 *
+		 * Only treats the value as an override when it is one of the values core
+		 * accepts for that setting (mirroring the validation in core's
+		 * `wp_get_speculation_rules_configuration()`). An invalid or empty value
+		 * is treated as absent so the plugin's conservative pin still applies
+		 * instead of silently allowing core's cached-site escalation.
+		 *
+		 * @since 1.9.0
+		 *
+		 * @param string $name Override name, e.g. 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS'.
+		 * @return string|null The override value, or null when neither the constant nor the environment variable is set to a valid value.
+		 */
+		private function get_speculation_default_override( string $name ): ?string {
+			$value = null;
+
+			if ( function_exists( 'getenv' ) ) {
+				$env_value = getenv( $name );
+				if ( false !== $env_value ) {
+					$value = $env_value;
+				}
+			}
+
+			if ( defined( $name ) ) {
+				$const_value = constant( $name );
+				if ( is_string( $const_value ) ) {
+					$value = $const_value;
+				}
+			}
+
+			if ( ! is_string( $value ) || '' === $value ) {
+				return null;
+			}
+
+			if ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
+				if ( ! in_array( $value, array( 'prefetch', 'prerender' ), true ) ) {
+					return null;
+				}
+			} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name ) {
+				if ( ! in_array( $value, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+					return null;
+				}
+			}
+
+			return $value;
 		}
 
 		/**

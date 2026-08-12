@@ -1410,6 +1410,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Clear the cache for a specific page or all pages.
 		 *
+		 * Also flushes any static HTML pages that speculative prerendering
+		 * (speculation rules) may have requested and cached: such requests are
+		 * ordinary GETs that produce the same per-URL static files (plus their
+		 * `.gz` variants and role variants) served to every other visitor, so
+		 * the full clear below removes the whole domain directory and the
+		 * single-page clear removes the page's HTML, gzip, and role-variant
+		 * copies. A stale prerendered copy is therefore never served after
+		 * invalidation.
+		 *
 		 * @param string|null $url_path The URL path of the page for which to clear the cache. If null, all cache will be cleared.
 		 * @return bool True on success, false on failure.
 		 *
