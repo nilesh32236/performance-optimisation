@@ -72,6 +72,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private string $url_path;
 
 		/**
+		 * Whether the inline-CSS budget prediction drifted from core this request.
+		 *
+		 * Set when {@see core_will_inline()} finds its legacy accounting disagrees
+		 * with a core-faithful re-derivation, e.g. when a queued path-data style
+		 * lacks a `src` or exceeds the inline budget. Causes the combined file to be
+		 * served externally instead of inlined so core cannot double-inline it.
+		 *
+		 * @var bool
+		 * @since 2.22.0
+		 */
+		private bool $inline_drift_detected = false;
+
+		/**
+		 * Whether the budget-drift notice has been logged this PHP process.
+		 *
+		 * Rate-limits {@see log_inline_budget_drift()} to a single activity-log
+		 * entry regardless of how many handles drift during one request.
+		 *
+		 * @var bool
+		 * @since 2.22.0
+		 */
+		private static bool $inline_drift_logged = false;
+
+		/**
 		 * The filesystem object used for file operations.
 		 *
 		 * @var object|null
@@ -627,8 +651,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$limit = $this->get_styles_inline_limit();
 
-			// Gather every queued path-data style with a usable file size, matching
-			// core's wp_maybe_inline_styles() candidate collection.
+			// Prediction using the plugin's long-standing budget accounting.
+			$prediction = $this->core_inline_budget_will_inline( $handle, $limit, false );
+
+			// Re-derivation of core's own candidate collection and budget pass. Any
+			// divergence (a queued path-data style without a `src`, an over-budget
+			// sibling, or tie-order differences) means the prediction is unreliable,
+			// so the request degrades to the safe outcome below instead.
+			$reference = $this->core_inline_budget_will_inline( $handle, $limit, true );
+
+			if ( $prediction !== $reference ) {
+				$this->inline_drift_detected = true;
+				$this->log_inline_budget_drift( $handle, $limit );
+
+				// Conservative downgrade: assume core WILL inline the style. Leaving it
+				// out of the combined file is safe in every direction — either core
+				// inlines it (correct), or it is served as its own external <link>
+				// (a minor perf loss, never duplicated rules). Returning false here
+				// would risk pulling an inlined style into the combined file.
+				return true;
+			}
+
+			return $prediction;
+		}
+
+		/**
+		 * Simulates core's greedy smallest-first inline-CSS budget for a handle.
+		 *
+		 * When `$core_faithful` is true the candidate set mirrors core's
+		 * `wp_maybe_inline_styles()`: a queued handle only counts when it carries
+		 * both path data and a `src`, and its file size is within the inline limit.
+		 * Styles over the budget are excluded up-front (equivalent to core's
+		 * ascending sort + `break` on first overflow). When false, the plugin's
+		 * legacy accounting is reproduced exactly (any path-data handle with a
+		 * usable file size counts, regardless of `src` or budget).
+		 *
+		 * @since 2.22.0
+		 *
+		 * @param string $handle       The registered style handle.
+		 * @param int    $limit        The inline size limit in bytes.
+		 * @param bool   $core_faithful Whether to mirror core's candidate collection.
+		 * @return bool True if core's budget pass would inline the style.
+		 */
+		private function core_inline_budget_will_inline( $handle, $limit, $core_faithful ): bool {
+			global $wp_styles;
+
 			$paths = array();
 			foreach ( $wp_styles->queue as $queued_handle ) {
 				$path = $wp_styles->get_data( $queued_handle, 'path' );
@@ -639,10 +706,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( $size <= 0 ) {
 					continue;
 				}
+
+				if ( $core_faithful ) {
+					// Core skips handles that are not registered.
+					if ( ! isset( $wp_styles->registered[ $queued_handle ] ) ) {
+						continue;
+					}
+					$registered = $wp_styles->registered[ $queued_handle ];
+					// Core only considers a queued style a candidate when it has a
+					// `src` and fits within the inline budget.
+					$has_src = ! empty( $registered->src ) || ! empty( $registered->extra['src'] );
+					if ( ! $has_src || $size > $limit ) {
+						continue;
+					}
+				}
+
 				$paths[ $queued_handle ] = $size;
 			}
 
-			// Replicate core's greedy smallest-first cumulative budget.
+			// Replicate core's greedy smallest-first cumulative budget. Core uses an
+			// unstable usort; the stable asort is retained here because the drift
+			// check + conservative downgrade neutralize the residual tie-order
+			// ambiguity.
 			asort( $paths );
 
 			$total = 0;
@@ -657,6 +742,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			return false;
+		}
+
+		/**
+		 * Logs that the inline-CSS budget prediction drifted from core.
+		 *
+		 * Rate-limited to at most one activity-log entry per PHP process so a single
+		 * drifted request cannot flood the log. Cache and Log share the
+		 * `PerformanceOptimise\Inc` namespace, so no import is required.
+		 *
+		 * @since 2.22.0
+		 *
+		 * @param string $handle The handle whose prediction drifted.
+		 * @param int    $limit  The inline size limit in bytes.
+		 * @return void
+		 */
+		private function log_inline_budget_drift( $handle, $limit ): void {
+			if ( self::$inline_drift_logged ) {
+				return;
+			}
+			self::$inline_drift_logged = true;
+
+			if ( ! class_exists( Log::class ) ) {
+				return;
+			}
+
+			Log::add(
+				sprintf(
+					/* translators: %1$s: style handle, %2$d: inline size limit in bytes. */
+					__( 'Inline-CSS budget prediction drifted from core for %1$s (limit %2$d); degraded to safe fallback.', 'performance-optimisation' ),
+					$handle,
+					$limit
+				)
+			);
 		}
 
 		/**
@@ -686,6 +804,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
+			// When the inline-CSS budget prediction drifted from core this request,
+			// serve the combined file externally rather than register `path` data: a
+			// wrongly-registered file would either be unexpectedly inlined or left
+			// external despite the preload decision made earlier.
+			if ( $this->inline_drift_detected ) {
+				return;
+			}
+
 			wp_style_add_data( 'wppo-combine-css', 'path', $css_file_path );
 		}
 
@@ -704,6 +830,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function will_combine_css_inline( $css_file_path ): bool {
 			if ( empty( $css_file_path ) ) {
+				return false;
+			}
+
+			// When the budget prediction drifted this request the combined file is
+			// served externally (see register_combine_css_path()), so keep the
+			// preload hint for the now-external stylesheet instead of delegating.
+			if ( $this->inline_drift_detected ) {
 				return false;
 			}
 
