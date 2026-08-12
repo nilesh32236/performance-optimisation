@@ -63,7 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 *
 		 * Wraps the private schedule_page_cron_jobs() for WP-CLI invocation.
 		 *
-		 * @since 2.14.0
+		 * @since NEXT
 		 */
 		public static function trigger_preload(): void {
 			$instance = new self();
@@ -138,7 +138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Callback for CCSS daily regeneration cron.
 		 *
 		 * @return void
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public function ccss_regeneration_cron() {
 			$options = get_option( 'wppo_settings', array() );
@@ -156,7 +156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * throttles itself by checking the last-run timestamp.
 		 *
 		 * @return void
-		 * @since 2.14.0
+		 * @since NEXT
 		 */
 		public function web_vitals_rescan_cron(): void {
 			$options = get_option( 'wppo_settings', array() );
@@ -304,7 +304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * Skips URLs that match configured exclusion rules and URLs already
 		 * scheduled, and caps the number of events to avoid flooding cron.
 		 *
-		 * @since 2.17.0
+		 * @since NEXT
 		 * @param array $exclude_urls Exclusion rules (processed URLs/patterns).
 		 * @return void
 		 */
@@ -389,7 +389,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * ID (custom endpoints, third-party archives). Reuses the same remote
 		 * GET approach as {@see load_page()}.
 		 *
-		 * @since 2.17.0
+		 * @since NEXT
 		 * @param string $url The URL to preload.
 		 * @return void
 		 */
@@ -425,7 +425,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * belong to this site. Falls back to an empty list when the request fails
 		 * or the sitemap is unavailable, so preloading never breaks.
 		 *
-		 * @since 2.17.0
+		 * @since NEXT
 		 * @param int $cap Maximum number of URLs to return.
 		 * @return string[] List of absolute sitemap URLs.
 		 */

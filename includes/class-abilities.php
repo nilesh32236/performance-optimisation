@@ -6,7 +6,7 @@
  * and other plugins via the WordPress Abilities API.
  *
  * @package PerformanceOptimise\Inc
- * @since   2.0.0
+ * @since NEXT
  */
 
 namespace PerformanceOptimise\Inc;
@@ -22,14 +22,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 	 * Registers the plugin's performance capabilities with the WP 7.0 Abilities API
 	 * so that AI assistants and other plugins can discover WPPO's feature surface.
 	 *
-	 * @since 2.0.0
+	 * @since NEXT
 	 */
 	class Abilities {
 
 		/**
 		 * Register hooks for the Abilities API.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public function __construct() {
 			add_action( 'wp_abilities_api_categories_init', array( $this, 'register_categories' ) );
@@ -39,7 +39,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Register the performance-optimisation ability category.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return void
 		 */
 		public function register_categories(): void {
@@ -59,7 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Register all plugin abilities with the Abilities API.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return void
 		 */
 		public function register_abilities(): void {
@@ -77,7 +77,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Get the definitions for all registered abilities.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return array[] Array of ability definition arrays, each with 'id' and 'args'.
 		 */
 		private function get_ability_definitions(): array {
@@ -174,7 +174,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Permission callback for all abilities.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return bool Whether the current user can manage options.
 		 */
 		public static function permission_check(): bool {
@@ -184,7 +184,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Cache Management.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return true
 		 */
 		public static function can_cache_management(): bool {
@@ -195,7 +195,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Image Optimization.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return bool
 		 */
 		public static function can_image_optimization(): bool {
@@ -206,7 +206,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: CSS Minification.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return bool
 		 */
 		public static function can_css_minification(): bool {
@@ -217,7 +217,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: JS Optimization.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return bool
 		 */
 		public static function can_js_optimization(): bool {
@@ -228,7 +228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Database Cleanup.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return bool
 		 */
 		public static function can_database_cleanup(): bool {
@@ -239,7 +239,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		/**
 		 * Execute callback: Redis Object Cache.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return bool
 		 */
 		public static function can_redis_object_cache(): bool {

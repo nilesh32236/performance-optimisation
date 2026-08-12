@@ -66,7 +66,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Option name holding historical PageSpeed results for trend charts.
 		 *
-		 * @since 2.14.0
+		 * @since NEXT
 		 * @var string
 		 */
 		const TREND_OPTION = 'wppo_web_vitals_trends';
@@ -74,7 +74,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Maximum number of historical results kept per URL + strategy.
 		 *
-		 * @since 2.14.0
+		 * @since NEXT
 		 * @var int
 		 */
 		const TREND_LIMIT = 30;
@@ -85,7 +85,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * Guards against unbounded option growth when many distinct URLs are
 		 * scanned over time. Older keys are pruned first.
 		 *
-		 * @since 2.14.0
+		 * @since NEXT
 		 * @var int
 		 */
 		const TREND_MAX_KEYS = 20;
@@ -335,7 +335,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * cache lock so concurrent async workers (e.g. mobile + desktop scans
 		 * running at the same time) cannot overwrite each other's snapshot.
 		 *
-		 * @since  2.14.0
+		 * @since NEXT
 		 * @param  string $url      The scanned URL.
 		 * @param  array  $prepared The prepared PageSpeed result array.
 		 * @param  string $strategy Either 'mobile' or 'desktop'.
@@ -388,7 +388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * the DB), so a simultaneous worker cannot both hold the lock. Locks
 		 * older than TREND_LOCK_TTL are considered stale and stolen.
 		 *
-		 * @since 2.18.0
+		 * @since NEXT
 		 * @return bool
 		 */
 		private static function acquire_trend_lock(): bool {
@@ -408,7 +408,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Release the trend write lock.
 		 *
-		 * @since 2.18.0
+		 * @since NEXT
 		 * @return void
 		 */
 		private static function release_trend_lock(): void {
@@ -422,7 +422,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * timestamp of their most recent snapshot) are dropped, preserving recent
 		 * data while keeping the option bounded.
 		 *
-		 * @since  2.14.0
+		 * @since NEXT
 		 * @param  array $hist The full trends map.
 		 * @return array The trimmed trends map.
 		 */
@@ -461,7 +461,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		/**
 		 * Retrieve the full Web Vitals trend history.
 		 *
-		 * @since  2.14.0
+		 * @since NEXT
 		 * @return array Keyed by md5(url)_strategy, each value a list of snapshots.
 		 */
 		public static function get_trends(): array {
@@ -571,7 +571,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 *
 		 * Returns null when no image URL can be identified (text LCP, background-image, etc.).
 		 *
-		 * @since 2.13.0
+		 * @since NEXT
 		 * @param array $diagnostics The prepared diagnostics array.
 		 * @return string|null The image URL, or null if not found.
 		 */
@@ -620,7 +620,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 *
 		 * Does nothing if no LCP image URL was detected.
 		 *
-		 * @since 2.13.0
+		 * @since NEXT
 		 * @param string $url      The scanned URL.
 		 * @param array  $prepared The prepared PageSpeed result array.
 		 * @param string $strategy The scan strategy ('mobile' or 'desktop').

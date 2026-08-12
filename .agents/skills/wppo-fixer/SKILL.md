@@ -28,6 +28,7 @@ Use this skill when fixing issues found during code review or audit in the Perfo
 - Add capability checks: `current_user_can('manage_options')`
 - Fix class file naming: `class-{name}.php` (e.g., `class-cache.php`)
 - Use `wp_normalize_path()` for file paths
+- New functions, classes, and methods get `@since NEXT` (never a guessed version like `2.0.0` — the `NEXT` placeholder is replaced at release time)
 
 ### JavaScript Fixes
 - Replace `console.log` with `console.error` or `console.warn`
@@ -76,3 +77,4 @@ Before submitting any fix:
 - [ ] Backward compatibility is maintained
 - [ ] No new console.log statements
 - [ ] All text is translatable
+- [ ] Any new doc blocks use `@since NEXT` (never a guessed version like `2.0.0` or `3.8.0`)

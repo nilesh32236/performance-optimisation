@@ -67,7 +67,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Handles/URLs to load via requestIdleCallback.
 		 *
-		 * @since 3.8.0
+		 * @since NEXT
 		 * @var array
 		 */
 		private array $delay_js_idle_list = array();
@@ -75,7 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Handles/URLs to load when in viewport.
 		 *
-		 * @since 3.8.0
+		 * @since NEXT
 		 * @var array
 		 */
 		private array $delay_js_viewport_list = array();
@@ -83,7 +83,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Default delay strategy.
 		 *
-		 * @since 3.8.0
+		 * @since NEXT
 		 * @var string
 		 */
 		private string $delay_js_default_strategy = 'interaction';
@@ -91,7 +91,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Priority map handle=>level.
 		 *
-		 * @since 3.8.0
+		 * @since NEXT
 		 * @var array
 		 */
 		private array $delay_js_priority = array();
@@ -458,7 +458,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Determine delay strategy for an inline script.
 		 *
-		 * @since 3.8.0
+		 * @since NEXT
 		 *
 		 * @param string $attributes Script tag attributes string.
 		 * @param string $content    Inline script content.
@@ -482,7 +482,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		/**
 		 * Determine delay priority for an inline script.
 		 *
-		 * @since 3.8.0
+		 * @since NEXT
 		 *
 		 * @param string $attributes Script tag attributes string.
 		 * @param string $content    Inline script content.
