@@ -92,6 +92,8 @@ describe( 'WebVitalsTrends Component', () => {
 			new Error( 'Network error' )
 		);
 
+		const consoleSpy = jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+
 		render( <WebVitalsTrends url="https://example.com/" /> );
 
 		await waitFor( () => {
@@ -99,6 +101,8 @@ describe( 'WebVitalsTrends Component', () => {
 				screen.getByText( /Failed to load trend data/i )
 			).toBeInTheDocument();
 		} );
+
+		consoleSpy.mockRestore();
 	} );
 
 	it( 'renders an explicit empty state without a URL', async () => {
