@@ -1568,9 +1568,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( ! empty( $exclude_url_to_keep_js_css ) ) {
 				// Safely retrieve and sanitize the current URL.
-					$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-					$base_path   = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
-					$parsed_uri  = $request_uri;
+				$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+				$base_path   = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
+				$parsed_uri  = $request_uri;
 
 				if ( '' !== $base_path && '/' !== $base_path && 0 === strpos( $request_uri, $base_path ) ) {
 					// Only strip the base path when it forms a real path boundary
@@ -1581,7 +1581,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$parsed_uri = substr( $request_uri, strlen( $base_path ) );
 					}
 				}
-					$current_url = Util::cached_home_url() . '/' . ltrim( sanitize_text_field( $parsed_uri ), '/' );
+				$current_url = Util::cached_home_url() . '/' . ltrim( sanitize_text_field( $parsed_uri ), '/' );
 
 				if ( Util::is_url_excluded( $current_url, $exclude_url_to_keep_js_css ) ) {
 					return;
