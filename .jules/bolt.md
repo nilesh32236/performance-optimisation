@@ -94,3 +94,6 @@
 
 **Learning:** Functions that parse URLs and execute string replacements (like `wp_parse_url( content_url( '/' ), PHP_URL_PATH )`) inside high-frequency hooks like `script_loader_src` or `style_loader_src` (e.g. `strip_static_query_strings` checking `is_plugin_cache_url()`) can cause measurable overhead due to the volume of assets processed on every page load.
 **Action:** When no `content_url` filter is active, statically cache the parsed paths and hostnames in a PHP `static` array keyed by `get_current_blog_id()` instead of parsing the core `content_url()` repeatedly. When the filter is active, resolve the URL for each call so a context-dependent filtered base URL is never frozen.
+## 2026-08-05 - Avoid duplicating URL matching logic
+**Learning:** The URL exclusion matching logic used in `remove_woocommerce_scripts()` was highly redundant and manually re-implemented string checking logic already centralized in `Util::is_url_excluded()`.
+**Action:** Always prefer centralized utility functions (like `Util::is_url_excluded()`) over re-implementing matching logic for lists of URLs. This reduces potential bugs and ensures cacheable results like `Util::cached_home_url()` are utilized properly.
