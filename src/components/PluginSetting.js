@@ -738,6 +738,7 @@ const PluginSetting = ( { options } ) => {
 							onChange={ ( e ) =>
 								setServerTimingEnabled( e.target.checked )
 							}
+							aria-describedby="wppo-server-timing-desc"
 						/>
 						<span>
 							{ __(
@@ -747,6 +748,7 @@ const PluginSetting = ( { options } ) => {
 						</span>
 					</label>
 					<p
+						id="wppo-server-timing-desc"
 						className="wppo-text-muted wppo-text-small"
 						style={ { marginBottom: '16px' } }
 					>
@@ -766,6 +768,7 @@ const PluginSetting = ( { options } ) => {
 							onChange={ ( e ) =>
 								setRumEnabled( e.target.checked )
 							}
+							aria-describedby="wppo-rum-enabled-desc"
 						/>
 						<span>
 							{ __(
@@ -775,6 +778,7 @@ const PluginSetting = ( { options } ) => {
 						</span>
 					</label>
 					<p
+						id="wppo-rum-enabled-desc"
 						className="wppo-text-muted wppo-text-small"
 						style={ { marginBottom: '16px' } }
 					>
