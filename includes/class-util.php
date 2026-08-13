@@ -348,7 +348,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function get_current_url(): string {
 			global $wp;
-			$url = home_url( add_query_arg( array(), $wp->request ) );
+			$url = self::cached_home_url() . '/' . ltrim( add_query_arg( array(), $wp->request ), '/' );
 			return untrailingslashit( esc_url_raw( $url ) );
 		}
 

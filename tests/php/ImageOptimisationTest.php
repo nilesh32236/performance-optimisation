@@ -219,6 +219,8 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'add_query_arg' )->justReturn( 'http://example.com/sample-page/' );
 		Functions\when( 'home_url' )->justReturn( 'http://example.com/sample-page/' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'has_filter' )->justReturn( false );
 
 		global $wp;
 		$wp          = new \stdClass();

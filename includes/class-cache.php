@@ -889,7 +889,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $buffer;
 			}
 
-			$site_url = home_url();
+			$site_url = Util::cached_home_url();
 			$cdn_url  = rtrim( $cdn_url, '/' );
 
 			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
@@ -1143,7 +1143,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			if ( 'html' === $type ) {
-				$current_url = home_url( $this->request_uri );
+				$current_url = Util::cached_home_url() . $this->request_uri;
 				$buffer      = apply_filters( 'wppo_cache_page_html', $buffer, $current_url );
 			}
 
@@ -1216,11 +1216,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$exclude_urls = Util::process_urls( $this->options['preload_settings']['excludePreloadCache'] );
 
 					$request_uri = $this->request_uri;
-					$home_path   = wp_parse_url( home_url(), PHP_URL_PATH ) ?? '';
+					$home_path   = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
 					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
 						$request_uri = substr( $request_uri, strlen( $home_path ) );
 					}
-					$current_url = home_url( $request_uri );
+					$current_url = Util::cached_home_url() . $request_uri;
 
 					if ( Util::is_url_excluded( $current_url, $exclude_urls ) ) {
 						return false;
@@ -1252,7 +1252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->delete_no_cache_marker( $html_file_path );
 
 			// Smart Purging: Always clear the home page and blog archive.
-			$home_path = wp_make_link_relative( home_url( '/' ) );
+			$home_path = wp_make_link_relative( Util::cached_home_url() . '/' );
 			$home_html = $this->get_file_path( $home_path, 'html' );
 			$this->delete_cache_files( $home_html );
 			$this->delete_role_variant_files( dirname( $home_html ) );

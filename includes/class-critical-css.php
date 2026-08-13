@@ -263,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static function get_sample_url( string $template ): string|false {
 			switch ( $template ) {
 				case 'home':
-					return home_url( '/' );
+					return Util::cached_home_url() . '/';
 				case 'single':
 					$posts = get_posts(
 						array(
@@ -284,7 +284,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 							'fields'       => 'ids',
 						)
 					);
-					return ! empty( $pages ) ? get_permalink( $pages[0] ) : home_url( '/' );
+					return ! empty( $pages ) ? get_permalink( $pages[0] ) : Util::cached_home_url() . '/';
 				case 'archive':
 					$archives = get_posts(
 						array(
@@ -303,7 +303,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					}
 					return false;
 				default:
-					return home_url( '/' );
+					return Util::cached_home_url() . '/';
 			}
 		}
 

@@ -395,8 +395,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					sprintf(
 						/* translators: %s: The URL of the page */
 						__( 'Clear cache of <a href="%1$s">%2$s</a>', 'performance-optimisation' ),
-						esc_url( home_url( $path ) ),
-						esc_html( home_url( $path ) )
+						esc_url( Util::cached_home_url() . $path ),
+						esc_html( Util::cached_home_url() . $path )
 					)
 				);
 			} else {
@@ -1186,7 +1186,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function run_performance_scan( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
-			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
+			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url() . '/';
 
 			if ( empty( $url ) ) {
 				return $this->send_response( null, false, 400, __( 'A valid URL is required.', 'performance-optimisation' ) );
@@ -1206,7 +1206,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			// SSRF protection: validate that the URL belongs to this website.
-			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
 			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
 				return $this->send_response( null, false, 400, __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
 			}
@@ -1234,7 +1234,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function queue_pagespeed_scan( \WP_REST_Request $request ): \WP_REST_Response {
 			$params   = $request->get_params();
-			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
+			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url() . '/';
 			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : 'mobile';
 
 			if ( empty( $url ) ) {
@@ -1249,7 +1249,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			// Validate that the URL belongs to this website.
-			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
 			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
 				return $this->send_response( null, false, 400, __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
 			}
@@ -1294,7 +1294,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_pagespeed_results( \WP_REST_Request $request ): \WP_REST_Response {
 			$params   = $request->get_params();
-			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
+			$url      = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url() . '/';
 			$strategy = isset( $params['strategy'] ) ? sanitize_text_field( $params['strategy'] ) : 'mobile';
 
 			if ( ! in_array( $strategy, array( 'mobile', 'desktop' ), true ) ) {
@@ -1387,7 +1387,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		public function get_suggestions( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_params();
-			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : home_url( '/' );
+			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url() . '/';
 
 			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
 			$telemetry     = get_transient( $transient_key );

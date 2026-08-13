@@ -1197,7 +1197,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			global $wp_styles;
-			$current_url   = home_url( isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '' );
+			$current_url   = Util::cached_home_url() . ( isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '' );
 			$used_css_path = $this->get_used_css_path( $current_url );
 			$used_css_url  = $this->get_used_css_url( $current_url );
 
