@@ -40,18 +40,12 @@ class UtilCachedHomeUrlTest extends \PHPUnit\Framework\TestCase {
 				return 'http://example.com' . ( $path ? '/' . ltrim( $path, '/' ) : '' );
 			}
 		);
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'get_current_blog_id' )->justReturn( 9001 );
 		Functions\when( 'untrailingslashit' )->alias(
 			function ( $url ) {
 				return rtrim( $url, '/' );
 			}
 		);
-
-		// Reset static cache before test.
-		$reflection = new \ReflectionClass( Util::class );
-		$method     = $reflection->getMethod( 'cached_home_url' );
-		$method->setAccessible( true );
-		// Can't directly clear static scope, so we just assume it's fresh or rely on blog_id isolation.
 
 		$this->assertSame( 'http://example.com', Util::cached_home_url() );
 		$this->assertSame( 'http://example.com/test-path', Util::cached_home_url( '/test-path' ) );
@@ -69,7 +63,7 @@ class UtilCachedHomeUrlTest extends \PHPUnit\Framework\TestCase {
 				return 'http://filtered-example.com' . ( $path ? '/' . ltrim( $path, '/' ) : '' );
 			}
 		);
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'get_current_blog_id' )->justReturn( 9001 );
 		Functions\when( 'untrailingslashit' )->alias(
 			function ( $url ) {
 				return rtrim( $url, '/' );

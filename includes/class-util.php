@@ -451,7 +451,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function cached_home_url( string $path = '' ): string {
 			if ( false !== has_filter( 'home_url' ) ) {
-				return empty( $path ) ? untrailingslashit( home_url() ) : home_url( $path );
+				return '' === $path ? untrailingslashit( home_url() ) : untrailingslashit( home_url( $path ) );
 			}
 
 			static $cache = array();
@@ -461,7 +461,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$cache[ $blog_id ] = untrailingslashit( home_url() );
 			}
 
-			if ( empty( $path ) ) {
+			if ( '' === $path ) {
 				return $cache[ $blog_id ];
 			}
 
