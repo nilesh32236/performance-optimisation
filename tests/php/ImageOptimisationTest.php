@@ -42,7 +42,11 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
-		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'has_filter' )->alias(
+			function ( $tag ) {
+				return 'home_url' === $tag ? false : null;
+			}
+		);
 	}
 
 	/**

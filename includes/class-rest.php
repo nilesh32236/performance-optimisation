@@ -391,12 +391,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				if ( ! $cleared ) {
 					return $this->send_response( null, false, 400, __( 'Failed to clear cache: Invalid path.', 'performance-optimisation' ) );
 				}
+				$url = Util::cached_home_url( $path );
 				Log::add(
 					sprintf(
 						/* translators: %s: The URL of the page */
 						__( 'Clear cache of <a href="%1$s">%2$s</a>', 'performance-optimisation' ),
-						esc_url( Util::cached_home_url( $path ) ),
-						esc_html( Util::cached_home_url( $path ) )
+						esc_url( $url ),
+						esc_html( $url )
 					)
 				);
 			} else {
