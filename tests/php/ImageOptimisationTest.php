@@ -43,8 +43,11 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'has_filter' )->alias(
-			function ( $tag ) {
-				return 'home_url' === $tag ? false : null;
+			static function ( $hook_name ) {
+				if ( 'home_url' === $hook_name ) {
+					return false;
+				}
+				return ! empty( $GLOBALS['wp_filter'][ $hook_name ] );
 			}
 		);
 	}
