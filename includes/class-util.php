@@ -29,6 +29,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 	class Util {
 
 		/**
+		 * Static cache for resolved home URLs, keyed by blog ID.
+		 *
+		 * @var array<int, string>
+		 * @since NEXT
+		 */
+		private static array $home_url_cache = array();
+
+		/**
+		 * Resets the home_url static cache for testing isolation.
+		 *
+		 * @since NEXT
+		 */
+		public static function reset_cached_home_urls(): void {
+			self::$home_url_cache = array();
+		}
+
+		/**
 		 * Recursively creates cache directory if not exists.
 		 *
 		 * @param string $cache_dir Path to the cache directory.
@@ -348,7 +365,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function get_current_url(): string {
 			global $wp;
-			$url = self::cached_home_url( add_query_arg( array(), $wp->request ) );
+			$url = self::cached_home_url( (string) add_query_arg( array(), $wp->request ?? '' ) );
 			return untrailingslashit( esc_url_raw( $url ) );
 		}
 
@@ -451,21 +468,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function cached_home_url( string $path = '' ): string {
 			if ( false !== has_filter( 'home_url' ) ) {
-				return '' === $path ? untrailingslashit( home_url() ) : untrailingslashit( home_url( $path ) );
+				return '' === $path ? untrailingslashit( home_url() ) : home_url( $path );
 			}
 
-			static $cache = array();
-			$blog_id      = get_current_blog_id();
+			$blog_id = get_current_blog_id();
 
-			if ( ! isset( $cache[ $blog_id ] ) ) {
-				$cache[ $blog_id ] = untrailingslashit( home_url() );
+			if ( ! isset( self::$home_url_cache[ $blog_id ] ) ) {
+				self::$home_url_cache[ $blog_id ] = untrailingslashit( home_url() );
 			}
 
 			if ( '' === $path ) {
-				return $cache[ $blog_id ];
+				return self::$home_url_cache[ $blog_id ];
 			}
 
-			return $cache[ $blog_id ] . '/' . ltrim( $path, '/' );
+			return self::$home_url_cache[ $blog_id ] . '/' . ltrim( $path, '/' );
 		}
 
 		/**

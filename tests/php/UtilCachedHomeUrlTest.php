@@ -5,8 +5,6 @@
  * @package PerformanceOptimise\Tests\PHP
  */
 
-namespace PerformanceOptimise\Tests\PHP;
-
 use Brain\Monkey\Functions;
 use PerformanceOptimise\Inc\Util;
 
@@ -14,12 +12,15 @@ use PerformanceOptimise\Inc\Util;
  * Class UtilCachedHomeUrlTest
  */
 class UtilCachedHomeUrlTest extends \PHPUnit\Framework\TestCase {
+	use WPPO_Test_Bootstrap;
+
 	/**
 	 * Setup.
 	 */
 	protected function setUp(): void {
 		parent::setUp();
 		\Brain\Monkey\setUp();
+		Util::reset_cached_home_urls();
 	}
 
 	/**
@@ -35,8 +36,11 @@ class UtilCachedHomeUrlTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_cached_home_url_no_filter() {
 		Functions\when( 'has_filter' )->justReturn( false );
+
+		$home_url_count = 0;
 		Functions\when( 'home_url' )->alias(
-			function ( $path = '' ) {
+			function ( $path = '' ) use ( &$home_url_count ) {
+				$home_url_count++;
 				return 'http://example.com' . ( $path ? '/' . ltrim( $path, '/' ) : '' );
 			}
 		);
@@ -50,6 +54,10 @@ class UtilCachedHomeUrlTest extends \PHPUnit\Framework\TestCase {
 		$this->assertSame( 'http://example.com', Util::cached_home_url() );
 		$this->assertSame( 'http://example.com/test-path', Util::cached_home_url( '/test-path' ) );
 		$this->assertSame( 'http://example.com/test-path', Util::cached_home_url( 'test-path' ) );
+		$this->assertSame( 'http://example.com/', Util::cached_home_url( '/' ) );
+		$this->assertSame( 'http://example.com/trailing/', Util::cached_home_url( '/trailing/' ) );
+
+		$this->assertSame( 1, $home_url_count, 'home_url should be called exactly once per blog due to caching.' );
 	}
 
 	/**
@@ -72,5 +80,7 @@ class UtilCachedHomeUrlTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertSame( 'http://filtered-example.com', Util::cached_home_url() );
 		$this->assertSame( 'http://filtered-example.com/filtered-path', Util::cached_home_url( '/filtered-path' ) );
+		$this->assertSame( 'http://filtered-example.com/', Util::cached_home_url( '/' ) );
+		$this->assertSame( 'http://filtered-example.com/trailing/', Util::cached_home_url( '/trailing/' ) );
 	}
 }
