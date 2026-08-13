@@ -348,7 +348,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function get_current_url(): string {
 			global $wp;
-			$url = self::cached_home_url() . '/' . ltrim( add_query_arg( array(), $wp->request ), '/' );
+			$url = self::cached_home_url( add_query_arg( array(), $wp->request ) );
 			return untrailingslashit( esc_url_raw( $url ) );
 		}
 
@@ -445,12 +445,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * may return context-dependent output), otherwise the base URL is resolved
 		 * once per site per request and reused across all call sites.
 		 *
-		 * @return string The untrailingslashed home URL.
+		 * @param string $path Optional. Path relative to the home URL. Default empty.
+		 * @return string The untrailingslashed home URL, with path appended if provided.
 		 * @since NEXT
 		 */
-		public static function cached_home_url(): string {
+		public static function cached_home_url( string $path = '' ): string {
 			if ( false !== has_filter( 'home_url' ) ) {
-				return untrailingslashit( home_url() );
+				return empty( $path ) ? untrailingslashit( home_url() ) : home_url( $path );
 			}
 
 			static $cache = array();
@@ -460,7 +461,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				$cache[ $blog_id ] = untrailingslashit( home_url() );
 			}
 
-			return $cache[ $blog_id ];
+			if ( empty( $path ) ) {
+				return $cache[ $blog_id ];
+			}
+
+			return $cache[ $blog_id ] . '/' . ltrim( $path, '/' );
 		}
 
 		/**

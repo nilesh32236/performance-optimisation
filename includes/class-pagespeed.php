@@ -634,7 +634,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 
 			$strategy_suffix     = sanitize_key( $strategy );
 			$normalised_scan_url = untrailingslashit( esc_url_raw( add_query_arg( array(), $url ) ) );
-			$normalised_home     = untrailingslashit( Util::cached_home_url() . '/' );
+			$normalised_home     = untrailingslashit( Util::cached_home_url( '/' ) );
 
 			// Case 1: Front page.
 			if ( $normalised_scan_url === $normalised_home ) {
