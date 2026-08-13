@@ -95,9 +95,9 @@ describe( 'WebVitalsTrends Component', () => {
 			new Error( 'Network error' )
 		);
 
-		render( <WebVitalsTrends url="https://example.com/" /> );
-
 		try {
+			render( <WebVitalsTrends url="https://example.com/" /> );
+
 			await waitFor( () => {
 				expect(
 					screen.getByText( /Failed to load trend data/i )
