@@ -98,7 +98,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 		 * any replica.
 		 */
 		private function connect_redis() {
-			$config_file = WP_CONTENT_DIR . '/wppo-redis-config.php';
+			$config_file = ( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' ) . '/wppo-redis-config.php';
 			$config      = array();
 
 			if ( file_exists( $config_file ) ) {
@@ -126,7 +126,7 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 				 * available, mirroring core's default. Custom plugin directories
 				 * defined in wp-config.php are already defined by this point.
 				 */
-				$plugins_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : ( WP_CONTENT_DIR . '/plugins' );
+				$plugins_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : ( ( defined( 'WP_CONTENT_DIR' ) ? rtrim( WP_CONTENT_DIR, '/\\' ) : '' ) . '/plugins' );
 				$helper_file = $plugins_dir . '/performance-optimisation/includes/redis-connect-helper.php';
 				if ( file_exists( $helper_file ) ) {
 					require_once $helper_file;
