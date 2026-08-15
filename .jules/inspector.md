@@ -43,3 +43,8 @@
 **Bug/Gap:** The `Dashboard` component tests log `act` warnings due to state updates happening in promises triggered during mount.
 **Root Cause:** The `fetchDbCounts` is triggered in a `useEffect` on mount, updating state asynchronously. Tests were verifying the initial render synchronously but not waiting for the async mount-time state updates to finish.
 **Test Added:** Extracted a shared `flushDashboardMount()` helper (waits for the `database_cleanup_counts` call and flushes the resolved promise inside `act()`) and called it after every `Dashboard` render so async state updates settle before assertions run.
+
+## 2026-08-15 - Dashboard Image Optimization Polling Edge Cases
+**Bug/Gap:** The `Dashboard` component lacked test coverage for image optimization sad paths (synchronous failure, polling network failures) and canceling a previous poll timeout when a new optimization begins.
+**Root Cause:** The test suite only covered happy-path API responses for starting a background optimization and did not simulate API failures or repeated triggers.
+**Test Added:** Added tests covering synchronous `optimise_image` network failure, repeated `image_job_status` polling failures reaching the max retry limit, and triggering a new optimization while a poll timer is active to ensure `clearTimeout` is called.
