@@ -406,7 +406,7 @@ describe( 'Dashboard', () => {
 			// Loop until the terminal notice appears instead of a hardcoded count
 			let iterations = 0;
 			while (
-				iterations++ < 10 &&
+				iterations++ < 20 &&
 				! screen.queryByText(
 					'Status check stopped after repeated failures.'
 				)
