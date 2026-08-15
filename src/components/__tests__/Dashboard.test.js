@@ -311,7 +311,11 @@ describe( 'Dashboard', () => {
 			// Let's trigger a fresh optimization sync path.
 			apiCall.mockResolvedValueOnce( {
 				success: true,
-				data: { webp: 1, avif: 1 }, // Sync path clears timeout too
+				data: {
+					pending: { webp: 0, avif: 0 },
+					completed: { webp: 1, avif: 1 },
+					failed: { webp: 0, avif: 0 },
+				}, // Sync path clears timeout too
 			} );
 
 			fireEvent.click(
