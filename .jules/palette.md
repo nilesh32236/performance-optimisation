@@ -33,4 +33,4 @@
 
 ## 2026-08-07 - Non-existent CSS variable for success colors
 **Learning:** A hardcoded non-existent variable `var(--wppo-color-success)` was used instead of the correct `var(--wppo-success)` from `_variables.scss`, which means the color wasn't resolving to the defined design-system success color.
-**Action:** When using inline styles or SCSS for status colors in React components, always verify the exact CSS variable name (e.g., `var(--wppo-success)`) against `src/css/abstracts/_variables.scss` rather than guessing or hardcoding values, so the icon resolves to the intended design-system color instead of silently falling back to an unstyled value.
+**Action:** When using inline styles or SCSS for status colors in React components, always verify the exact CSS variable name (e.g., `var(--wppo-success)`) against `src/css/abstracts/_variables.scss` rather than guessing or hardcoding values, so the icon resolves to the intended design-system color instead of silently falling back to an unstyled value. You can check for occurrences using `grep -rn "var(--wppo-color-" src/`.
