@@ -24,9 +24,7 @@ jest.mock( '../SuggestionsPanel', () => () => (
 	<div data-testid="suggestions-panel" />
 ) );
 jest.mock( '../SystemInfo', () => () => <div data-testid="system-info" /> );
-jest.mock( '../WebVitalsTrends', () => () => (
-	<div data-testid="web-vitals-trends" />
-) );
+jest.mock( '../WebVitalsTrends', () => () => <div data-testid="web-vitals-trends" /> );
 jest.mock( '../WebVitalsRum', () => () => <div data-testid="rum-panel" /> );
 jest.mock( '../AutoloadedOptions', () => () => (
 	<div data-testid="autoloaded-options" />
@@ -185,6 +183,49 @@ describe( 'Dashboard', () => {
 		);
 	} );
 
+	it( 'starts a background image optimisation', async () => {
+		try {
+			jest.useFakeTimers();
+			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				data: { background: true, jobs_queued: 3 },
+			} );
+			apiCall.mockResolvedValueOnce( { // pollJobStatus
+				success: true,
+				data: { queued_jobs: 0, completed: {}, pending: {}, failed: {} },
+			} );
+
+			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+			await flushDashboardMount();
+
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
+			);
+
+			await waitFor( () =>
+				expect(
+					screen.getByText( 'Image optimisation started in background.' )
+				).toBeInTheDocument()
+			);
+
+			await act( async () => {
+				jest.advanceTimersByTime( 5000 );
+			} );
+			await act( async () => {} );
+
+			await waitFor( () => {
+				expect( apiCall ).toHaveBeenCalledWith( 'image_job_status', {}, 'GET' );
+				expect(
+					screen.getByText( 'Image optimisation completed.' )
+				).toBeInTheDocument();
+			} );
+		} finally {
+			jest.useRealTimers();
+		}
+	} );
+
 	it( 'fails a synchronous image optimisation', async () => {
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
 		apiCall.mockRejectedValueOnce( new Error( 'error' ) );
@@ -204,126 +245,74 @@ describe( 'Dashboard', () => {
 		);
 	} );
 
-	it( 'starts a background image optimisation', async () => {
-		jest.useFakeTimers();
-		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
-		apiCall.mockResolvedValueOnce( {
-			success: true,
-			data: { background: true, jobs_queued: 3 },
-		} );
-		apiCall.mockResolvedValueOnce( {
-			// pollJobStatus
-			success: true,
-			data: { queued_jobs: 0, completed: {}, pending: {}, failed: {} },
-		} );
+	it( 'cancels previous poll timeout when starting new background optimisation', async () => {
+		try {
+			jest.useFakeTimers();
+			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				data: { background: true, jobs_queued: 3 },
+			} );
 
-		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 
-		await flushDashboardMount();
+			await flushDashboardMount();
 
-		fireEvent.click(
-			screen.getByRole( 'button', { name: /Optimize Images/i } )
-		);
-
-		await waitFor( () =>
-			expect(
-				screen.getByText( 'Image optimisation started in background.' )
-			).toBeInTheDocument()
-		);
-
-		await act( async () => {
-			jest.advanceTimersByTime( 5000 );
-		} );
-		await act( async () => {} );
-
-		await waitFor( () => {
-			expect( apiCall ).toHaveBeenCalledWith(
-				'image_job_status',
-				{},
-				'GET'
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
 			);
-			expect(
-				screen.getByText( 'Image optimisation completed.' )
-			).toBeInTheDocument();
-		} );
-		jest.useRealTimers();
-	} );
 
-	it( 'fails a background image optimisation status check', async () => {
-		const consoleSpy = jest
-			.spyOn( console, 'error' )
-			.mockImplementation( () => {} );
-		jest.useFakeTimers();
-		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
-		apiCall.mockResolvedValueOnce( {
-			success: true,
-			data: { background: true, jobs_queued: 3 },
-		} );
-		apiCall.mockRejectedValue( new Error( 'network error' ) ); // pollJobStatus fail
+			await waitFor( () =>
+				expect(
+					screen.getByText( 'Image optimisation started in background.' )
+				).toBeInTheDocument()
+			);
 
-		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+			apiCall.mockResolvedValueOnce( { // Mock next job status instead to bypass 'bgProcessing' guard early
+				success: true,
+				data: { queued_jobs: 0, completed: {}, pending: {}, failed: {} },
+			} );
 
-		await flushDashboardMount();
-
-		fireEvent.click(
-			screen.getByRole( 'button', { name: /Optimize Images/i } )
-		);
-
-		await waitFor( () =>
-			expect(
-				screen.getByText( 'Image optimisation started in background.' )
-			).toBeInTheDocument()
-		);
-
-		for ( let i = 0; i < 5; i++ ) {
 			await act( async () => {
 				jest.advanceTimersByTime( 5000 );
 			} );
 			await act( async () => {} );
+
+			// Now that the job finished (queued_jobs: 0), it clears bgProcessing.
+			// Let's trigger a fresh optimization sync path.
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				data: { webp: 1, avif: 1 }, // Sync path clears timeout too
+			} );
+
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
+			);
+
+			await waitFor( () =>
+				expect(
+					screen.getByText( 'Images optimized successfully.' )
+				).toBeInTheDocument()
+			);
+
+			// The background timer should not fire anymore because the sync
+			// path cleared it. Wait 5s and make sure image_job_status
+			// is not called again.
+			apiCall.mockClear();
+
+			await act( async () => {
+				jest.advanceTimersByTime( 5000 );
+			} );
+			await act( async () => {} );
+
+			expect( apiCall ).not.toHaveBeenCalledWith(
+				'image_job_status',
+				{},
+				'GET'
+			);
+		} finally {
+			jest.useRealTimers();
 		}
-
-		await waitFor( () => {
-			expect(
-				screen.getByText(
-					'Status check stopped after repeated failures.'
-				)
-			).toBeInTheDocument();
-		} );
-		jest.useRealTimers();
-		consoleSpy.mockRestore();
-	} );
-
-	it( 'cancels previous poll timeout when starting new background optimisation', async () => {
-		jest.useFakeTimers();
-		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
-		apiCall.mockResolvedValueOnce( {
-			success: true,
-			data: { background: true, jobs_queued: 3 },
-		} );
-
-		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
-
-		await flushDashboardMount();
-
-		fireEvent.click(
-			screen.getByRole( 'button', { name: /Optimize Images/i } )
-		);
-
-		await waitFor( () =>
-			expect(
-				screen.getByText( 'Image optimisation started in background.' )
-			).toBeInTheDocument()
-		);
-
-		apiCall.mockResolvedValueOnce( {
-			success: true,
-			data: { webp: 1, avif: 1 }, // Sync path clears timeout too
-		} );
-
-		fireEvent.click(
-			screen.getByRole( 'button', { name: /Optimize Images/i } )
-		);
-		jest.useRealTimers();
 	} );
 
 	it( 'completes a synchronous image optimisation', async () => {
@@ -346,6 +335,49 @@ describe( 'Dashboard', () => {
 				screen.getByText( 'Images optimized successfully.' )
 			).toBeInTheDocument()
 		);
+	} );
+
+	it( 'fails a background image optimisation status check', async () => {
+		const consoleSpy = jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		try {
+			jest.useFakeTimers();
+			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				data: { background: true, jobs_queued: 3 },
+			} );
+			apiCall.mockRejectedValue( new Error( 'network error' ) ); // pollJobStatus fail
+
+			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+			await flushDashboardMount();
+
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
+			);
+
+			await waitFor( () =>
+				expect(
+					screen.getByText( 'Image optimisation started in background.' )
+				).toBeInTheDocument()
+			);
+
+			for ( let i = 0; i < 5; i++ ) {
+				await act( async () => {
+					jest.advanceTimersByTime( 5000 );
+				} );
+				await act( async () => {} );
+			}
+
+			await waitFor( () => {
+				expect(
+					screen.getByText( 'Status check stopped after repeated failures.' )
+				).toBeInTheDocument();
+			} );
+		} finally {
+			jest.useRealTimers();
+			consoleSpy.mockRestore();
+		}
 	} );
 
 	it( 'saves logged-in cache settings', async () => {
