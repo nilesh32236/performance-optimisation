@@ -241,25 +241,32 @@ describe( 'Dashboard', () => {
 	} );
 
 	it( 'fails a synchronous image optimisation', async () => {
-		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
-		apiCall.mockRejectedValueOnce( new Error( 'error' ) );
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+			apiCall.mockRejectedValueOnce( new Error( 'error' ) );
 
-		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 
 		await flushDashboardMount();
 
-		fireEvent.click(
-			screen.getByRole( 'button', { name: /Optimize Images/i } )
-		);
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
+			);
 
-		await waitFor( () =>
-			expect(
-				screen.getByText( 'Image optimisation failed.' )
-			).toBeInTheDocument()
-		);
+			await waitFor( () =>
+				expect(
+					screen.getByText( 'Image optimisation failed.' )
+				).toBeInTheDocument()
+			);
+		} finally {
+			consoleSpy.mockRestore();
+		}
 	} );
 
-	it( 'cancels previous poll timeout when starting new background optimisation', async () => {
+	it( 'does not poll image_job_status after a synchronous optimisation clears the poll state', async () => {
 		try {
 			jest.useFakeTimers();
 			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
@@ -341,7 +348,11 @@ describe( 'Dashboard', () => {
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
 		apiCall.mockResolvedValueOnce( {
 			success: true,
-			data: { webp: 1, avif: 1 },
+			data: {
+				pending: { webp: 0, avif: 0 },
+				completed: { webp: 1, avif: 1 },
+				failed: { webp: 0, avif: 0 }
+			},
 		} );
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
@@ -388,7 +399,8 @@ describe( 'Dashboard', () => {
 				).toBeInTheDocument()
 			);
 
-			for ( let i = 0; i < 5; i++ ) {
+			// Loop until the terminal notice appears instead of a hardcoded count
+			while ( ! screen.queryByText( 'Status check stopped after repeated failures.' ) ) {
 				await act( async () => {
 					jest.advanceTimersByTime( 5000 );
 				} );
