@@ -30,3 +30,7 @@
 
 **Learning:** The Hit Ratio progress bar in the ObjectCache component lacked proper ARIA attributes, making it inaccessible to screen readers. Users navigating with assistive technology could not perceive the visual progress representation.
 **Action:** Added `role="progressbar"`, `aria-labelledby`, `aria-valuemin="0"`, `aria-valuemax="100"`, and `aria-valuenow` to the progress bar container in `ObjectCache.js` to ensure screen readers announce its state properly. Also assigned a unique ID to the label element.
+
+## 2026-08-07 - Non-existent CSS variable for success colors
+**Learning:** A hardcoded non-existent variable `var(--wppo-color-success)` was used instead of the correct `var(--wppo-success)` from `_variables.scss`, which means the color wasn't being correctly applied in standard WP themes.
+**Action:** When using inline styles for status colors, always double-check against `_variables.scss` (e.g. `var(--wppo-success)`, `var(--wppo-error)`) instead of guessing the variable name.
