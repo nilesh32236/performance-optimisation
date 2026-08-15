@@ -250,7 +250,7 @@ describe( 'Dashboard', () => {
 
 			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
 
-		await flushDashboardMount();
+			await flushDashboardMount();
 
 			fireEvent.click(
 				screen.getByRole( 'button', { name: /Optimize Images/i } )
@@ -351,7 +351,7 @@ describe( 'Dashboard', () => {
 			data: {
 				pending: { webp: 0, avif: 0 },
 				completed: { webp: 1, avif: 1 },
-				failed: { webp: 0, avif: 0 }
+				failed: { webp: 0, avif: 0 },
 			},
 		} );
 
@@ -400,7 +400,11 @@ describe( 'Dashboard', () => {
 			);
 
 			// Loop until the terminal notice appears instead of a hardcoded count
-			while ( ! screen.queryByText( 'Status check stopped after repeated failures.' ) ) {
+			while (
+				! screen.queryByText(
+					'Status check stopped after repeated failures.'
+				)
+			) {
 				await act( async () => {
 					jest.advanceTimersByTime( 5000 );
 				} );
