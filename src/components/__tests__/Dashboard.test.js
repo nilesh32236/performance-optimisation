@@ -24,7 +24,9 @@ jest.mock( '../SuggestionsPanel', () => () => (
 	<div data-testid="suggestions-panel" />
 ) );
 jest.mock( '../SystemInfo', () => () => <div data-testid="system-info" /> );
-jest.mock( '../WebVitalsTrends', () => () => <div data-testid="web-vitals-trends" /> );
+jest.mock( '../WebVitalsTrends', () => () => (
+	<div data-testid="web-vitals-trends" />
+) );
 jest.mock( '../WebVitalsRum', () => () => <div data-testid="rum-panel" /> );
 jest.mock( '../AutoloadedOptions', () => () => (
 	<div data-testid="autoloaded-options" />
@@ -191,9 +193,15 @@ describe( 'Dashboard', () => {
 				success: true,
 				data: { background: true, jobs_queued: 3 },
 			} );
-			apiCall.mockResolvedValueOnce( { // pollJobStatus
+			apiCall.mockResolvedValueOnce( {
+				// pollJobStatus
 				success: true,
-				data: { queued_jobs: 0, completed: {}, pending: {}, failed: {} },
+				data: {
+					queued_jobs: 0,
+					completed: {},
+					pending: {},
+					failed: {},
+				},
 			} );
 
 			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
@@ -206,7 +214,9 @@ describe( 'Dashboard', () => {
 
 			await waitFor( () =>
 				expect(
-					screen.getByText( 'Image optimisation started in background.' )
+					screen.getByText(
+						'Image optimisation started in background.'
+					)
 				).toBeInTheDocument()
 			);
 
@@ -216,7 +226,11 @@ describe( 'Dashboard', () => {
 			await act( async () => {} );
 
 			await waitFor( () => {
-				expect( apiCall ).toHaveBeenCalledWith( 'image_job_status', {}, 'GET' );
+				expect( apiCall ).toHaveBeenCalledWith(
+					'image_job_status',
+					{},
+					'GET'
+				);
 				expect(
 					screen.getByText( 'Image optimisation completed.' )
 				).toBeInTheDocument();
@@ -264,13 +278,21 @@ describe( 'Dashboard', () => {
 
 			await waitFor( () =>
 				expect(
-					screen.getByText( 'Image optimisation started in background.' )
+					screen.getByText(
+						'Image optimisation started in background.'
+					)
 				).toBeInTheDocument()
 			);
 
-			apiCall.mockResolvedValueOnce( { // Mock next job status instead to bypass 'bgProcessing' guard early
+			apiCall.mockResolvedValueOnce( {
+				// Mock next job status instead to bypass 'bgProcessing' guard early
 				success: true,
-				data: { queued_jobs: 0, completed: {}, pending: {}, failed: {} },
+				data: {
+					queued_jobs: 0,
+					completed: {},
+					pending: {},
+					failed: {},
+				},
 			} );
 
 			await act( async () => {
@@ -338,7 +360,9 @@ describe( 'Dashboard', () => {
 	} );
 
 	it( 'fails a background image optimisation status check', async () => {
-		const consoleSpy = jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
 		try {
 			jest.useFakeTimers();
 			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
@@ -358,7 +382,9 @@ describe( 'Dashboard', () => {
 
 			await waitFor( () =>
 				expect(
-					screen.getByText( 'Image optimisation started in background.' )
+					screen.getByText(
+						'Image optimisation started in background.'
+					)
 				).toBeInTheDocument()
 			);
 
@@ -371,7 +397,9 @@ describe( 'Dashboard', () => {
 
 			await waitFor( () => {
 				expect(
-					screen.getByText( 'Status check stopped after repeated failures.' )
+					screen.getByText(
+						'Status check stopped after repeated failures.'
+					)
 				).toBeInTheDocument();
 			} );
 		} finally {
