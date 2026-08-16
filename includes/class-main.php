@@ -227,6 +227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'prioritizeLCPImages'        => false,
 						'clientSideMimeTypeOverride' => false,
 						'clientSideMimeTypes'        => array(),
+						'forceServerSideConversion'  => false,
 						'lazyLoadBackgroundImages'   => false,
 					),
 					'performance_audit'  => array(
@@ -1377,19 +1378,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'performance-optimisation-script',
 				'wppoSettings',
 				array(
-					'apiUrl'            => get_rest_url( null, 'performance-optimisation/v1/' ),
-					'ajaxUrl'           => admin_url( 'admin-ajax.php' ),
-					'nonce'             => wp_create_nonce( 'wp_rest' ),
-					'nonce_refresh'     => wp_create_nonce( 'wppo_nonce_refresh' ),
-					'version'           => WPPO_VERSION,
-					'wpVersion'         => get_bloginfo( 'version' ),
-					'isBlockTheme'      => function_exists( 'wp_is_block_theme' ) && wp_is_block_theme(),
-					'settings'          => $safe_options,
-					'show_welcome'      => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
-					'image_info'        => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
-					'cache_size'        => $cache_size,
-					'total_js_css'      => $total_js_css,
-					'performance_audit' => array(
+					'apiUrl'                               => get_rest_url( null, 'performance-optimisation/v1/' ),
+					'ajaxUrl'                              => admin_url( 'admin-ajax.php' ),
+					'nonce'                                => wp_create_nonce( 'wp_rest' ),
+					'nonce_refresh'                        => wp_create_nonce( 'wppo_nonce_refresh' ),
+					'version'                              => WPPO_VERSION,
+					'wpVersion'                            => get_bloginfo( 'version' ),
+					'isBlockTheme'                         => function_exists( 'wp_is_block_theme' ) && wp_is_block_theme(),
+					'settings'                             => $safe_options,
+					'show_welcome'                         => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
+					'image_info'                           => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
+					'cache_size'                           => $cache_size,
+					'total_js_css'                         => $total_js_css,
+					// Read-only WP 7.1+ client-side media processing state. Evaluated
+					// here (after Image_Optimisation has registered the opt-out filter)
+					// so it already reflects an enabled "Force Server-Side Conversion"
+					// toggle (false when core's in-browser processing is forced off).
+					'client_side_media_processing_enabled' => function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled(),
+					'performance_audit'                    => array(
 						'homeUrl'                   => home_url( '/' ),
 						'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
 						'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
@@ -1397,13 +1403,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'autoRescan'                => $this->options['performance_audit']['auto_rescan'] ?? '',
 					),
 					// Frontend theme colors for accent syncing.
-					'themeColors'       => $this->get_frontend_theme_colors(),
+					'themeColors'                          => $this->get_frontend_theme_colors(),
 					// Editable user roles for the logged-in cache role selector.
-					'userRoles'         => $this->get_editable_role_names(),
+					'userRoles'                            => $this->get_editable_role_names(),
 					// Read-only WP 7.1 speculation-rules default overrides so the
 					// Preload tab can surface the constant/env escape hatch (#65624)
 					// without ever writing it.
-					'speculation_rules' => array(
+					'speculation_rules'                    => array(
 						'mode_override'       => $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' ),
 						'eagerness_override'  => $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' ),
 						'static_cache_active' => ! empty( $this->options['cache_settings']['enableCache'] ),

@@ -6,6 +6,7 @@
  */
 
 use PerformanceOptimise\Inc\Image_Optimisation;
+use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 
 /**
@@ -437,6 +438,35 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$core = array( 'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/avif' );
 		$this->assertSame( array(), $image_opt->filter_client_side_supported_mime_types( $core ) );
+	}
+
+	/**
+	 * Test that enabling "Force Server-Side Conversion" registers the core
+	 * opt-out filter so WP 7.1+ client-side media processing is disabled.
+	 */
+	public function test_force_server_side_conversion_registers_opt_out_filter(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		$options = $this->default_options;
+		$options['image_optimisation']['forceServerSideConversion'] = true;
+
+		new Image_Optimisation( $options );
+
+		$this->assertTrue( Filters\has( 'wp_client_side_media_processing_enabled', '__return_false', 10 ) );
+	}
+
+	/**
+	 * Test that "Force Server-Side Conversion" being off (or absent) does not
+	 * register the core opt-out filter.
+	 */
+	public function test_force_server_side_conversion_off_registers_no_opt_out_filter(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		new Image_Optimisation( $this->default_options );
+
+		$this->assertFalse( Filters\has( 'wp_client_side_media_processing_enabled' ) );
 	}
 
 	/**
