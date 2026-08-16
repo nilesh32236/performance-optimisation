@@ -302,7 +302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$home_base = self::cached_home_url();
 
 			// Replace regex scheme removal with fast string operations and evaluate the base URL once.
-			$strip_scheme = static function ( $u ) {
+			$strip_scheme   = static function ( $u ) {
 				if ( 0 === stripos( $u, 'https://' ) ) {
 					return substr( $u, 8 );
 				}
