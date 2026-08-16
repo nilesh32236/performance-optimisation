@@ -279,6 +279,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function combine_css() {
+			// TODO(#624): when WP 7.2 removes script/style concatenation in favour
+			// of core preload emission, reassess whether this concat pipeline should
+			// be dropped / relegated to an opt-in legacy toggle in favour of core
+			// preloads (wp_resource_hints). No runtime change until the core API lands.
 			if ( ! $this->is_cache_allowed_for_current_user() || is_404() || $this->is_not_cacheable() ) {
 				return;
 			}
@@ -486,6 +490,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		public function maybe_preload_combine_css(): void {
+			// TODO(#624): once WP 7.2 removes concatenation in favour of preloads,
+			// reassess whether this plugin-emitted preload should defer to core
+			// preload emission (wp_resource_hints) instead. No runtime change.
 			if ( '' === $this->combine_css_preload_url ) {
 				return;
 			}
