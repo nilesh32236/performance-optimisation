@@ -72,6 +72,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 				'wp_parse_url',
 				'wp_image_quality',
 				'wp_get_image_encode_quality',
+				'wp_get_image_editor_output_format',
 			)
 		);
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
@@ -93,6 +94,11 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		// assertion deterministic while simulating the WP 7.1+ runtime; tests
 		// that need a specific value override it with when()/expect().
 		Functions\when( 'wp_get_image_encode_quality' )->justReturn( 82 );
+		// wp_get_image_editor_output_format() (WP 6.7+) is stubbed in every test
+		// for the same reason. Returning an empty mapping keeps every existing
+		// assertion deterministic while simulating the WP 6.7+ runtime; tests
+		// that need a specific mapping override it with when()/expect().
+		Functions\when( 'wp_get_image_editor_output_format' )->justReturn( array() );
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( string $url, $component = -1 ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Used to emulate wp_parse_url() in tests.
@@ -685,5 +691,131 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			array(),
 			$reflection->invoke( $converter, '/srv/wp-content/uploads/2026/08/sample.jpg' )
 		);
+	}
+
+	/**
+	 * Test that resolve_output_format() returns the requested format unchanged
+	 * when wp_get_image_editor_output_format() (WP 6.7+) is unavailable.
+	 */
+	public function test_resolve_output_format_falls_back_when_core_helper_absent(): void {
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) {
+				return 'wp_get_image_editor_output_format' !== $function_name;
+			}
+		);
+
+		$method = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
+		$method->setAccessible( true );
+		$converter = $this->make_converter();
+
+		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/sample.jpg', 'webp' ) );
+		$this->assertSame( 'avif', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/sample.jpg', 'avif' ) );
+		$this->assertSame( 'both', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/sample.jpg', 'both' ) );
+	}
+
+	/**
+	 * Test that resolve_output_format() maps core-chosen target MIME types to
+	 * plugin formats: image/webp -> webp, image/avif -> avif, and any legacy
+	 * target -> 'none' (core owns the output). Also verifies that a missing
+	 * mapping keeps the requested format unchanged.
+	 */
+	public function test_resolve_output_format_maps_core_targets(): void {
+		$mappings = array(
+			'image/jpeg' => 'image/webp',
+			'image/png'  => 'image/avif',
+			'image/heic' => 'image/jpeg',
+		);
+		Functions\when( 'wp_get_image_editor_output_format' )->alias(
+			static function ( $filename, $mime_type ) use ( $mappings ) {
+				return isset( $mappings[ $mime_type ] ) ? array( $mime_type => $mappings[ $mime_type ] ) : array();
+			}
+		);
+
+		$method = new ReflectionMethod( Img_Converter::class, 'resolve_output_format' );
+		$method->setAccessible( true );
+		$converter = $this->make_converter();
+
+		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.jpg', 'avif' ) );
+		$this->assertSame( 'avif', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.png', 'webp' ) );
+		$this->assertSame( 'none', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.heic', 'webp' ) );
+		$this->assertSame( 'webp', $method->invoke( $converter, '/srv/wp-content/uploads/2026/08/photo.gif', 'webp' ) );
+	}
+
+	/**
+	 * Test that convert_image() honors core's image_editor_output_format
+	 * mapping: when core maps the source MIME to WebP while the plugin was
+	 * requested to convert to AVIF, the method produces a WebP file, marks the
+	 * requested AVIF format skipped, and leaves no stale AVIF pending entry.
+	 *
+	 * Core `function_exists()` is patched so `core_handles_next_gen()` reports
+	 * no native next-gen support, which stops the resolved WebP path from
+	 * short-circuiting to 'skipped'.
+	 */
+	public function test_convert_image_honors_core_format_mapping_to_webp(): void {
+		if ( ! function_exists( 'imagewebp' ) ) {
+			$this->markTestSkipped( 'GD WebP support is required.' );
+		}
+
+		$file = $this->create_sample_png( 'mapped-webp.png' );
+
+		// Util::prepare_cache_dir() writes into the plugin's wppo directory and
+		// relies on WP_Filesystem; provide a real-filesystem stand-in.
+		$this->prepare_wppo_output_dir();
+
+		Functions\when( 'function_exists' )->alias(
+			static function ( $function_name ) {
+				return 'wp_image_quality' !== $function_name;
+			}
+		);
+
+		// Core maps the PNG source MIME to WebP (e.g. via image_editor_output_format).
+		Functions\when( 'wp_get_image_editor_output_format' )->alias(
+			static function ( $filename, $mime_type ) {
+				return 'image/png' === $mime_type ? array( 'image/png' => 'image/webp' ) : array();
+			}
+		);
+
+		$converter = $this->make_converter( array( 'conversionFormat' => 'avif' ) );
+		$result    = $converter->convert_image( $file, 'avif' );
+
+		$this->assertTrue( $result );
+
+		$webp_path = Img_Converter::get_img_path( $file, 'webp' );
+		$this->assertFileExists( $webp_path );
+
+		$info     = Img_Converter::get_img_info();
+		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+		$this->assertContains( $full_rel, $info['completed']['webp'] ?? array() );
+		$this->assertContains( $full_rel, $info['skipped']['avif'] ?? array() );
+		$this->assertNotContains( $full_rel, $info['pending']['avif'] ?? array() );
+	}
+
+	/**
+	 * Test that convert_image() returns false, marks the requested format
+	 * skipped, and writes no converted file when core maps the source MIME to a
+	 * non-next-gen format (core owns that output).
+	 */
+	public function test_convert_image_skips_when_core_maps_to_legacy_format(): void {
+		$file = $this->create_sample_png( 'mapped-legacy.png' );
+		$this->prepare_wppo_output_dir();
+
+		Functions\when( 'wp_get_image_editor_output_format' )->alias(
+			static function ( $filename, $mime_type ) {
+				return 'image/png' === $mime_type ? array( 'image/png' => 'image/jpeg' ) : array();
+			}
+		);
+
+		$converter = $this->make_converter( array( 'conversionFormat' => 'webp' ) );
+		$result    = $converter->convert_image( $file, 'webp' );
+
+		$this->assertFalse( $result );
+
+		$webp_path = Img_Converter::get_img_path( $file, 'webp' );
+		$this->assertFileDoesNotExist( $webp_path );
+
+		$info     = Img_Converter::get_img_info();
+		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+		$this->assertContains( $full_rel, $info['skipped']['webp'] ?? array() );
+		$this->assertNotContains( $full_rel, $info['pending']['webp'] ?? array() );
 	}
 }
