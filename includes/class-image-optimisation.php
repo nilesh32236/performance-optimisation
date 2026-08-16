@@ -2560,9 +2560,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * - moves `src` attributes to `data-src` (on <video> and inner <source> tags),
 		 * - removes `autoplay` and sets `data-wppo-autoplay="1"` when autoplay was present,
 		 * - ensures `preload="none"` is set,
-		 * - adds the `wppo-lazy-video` class.
+		 * - adds the `wppo-lazy-video` class,
+		 * - defers `poster` to `data-poster` for core's animated-GIF companion videos (WP 7.1+, the `autoplay` + `loop` + `muted` + `playsinline` + `poster` signature), which the client restores on intersect.
 		 *
 		 * @since 1.2.4
+		 * @since NEXT Defer companion-video `poster` frames to `data-poster`.
 		 *
 		 * @param string $buffer HTML markup to process.
 		 * @return string The HTML with video elements rewritten for lazy loading.
@@ -2599,10 +2601,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$p->set_attribute( 'data-src', $src );
 								$p->remove_attribute( 'src' );
 							}
+
+							// Detect core's animated-GIF companion videos (WP 7.1):
+							// autoplay + loop + muted + playsinline + a poster frame.
+							$is_companion_video = null !== $p->get_attribute( 'autoplay' )
+								&& null !== $p->get_attribute( 'loop' )
+								&& null !== $p->get_attribute( 'muted' )
+								&& null !== $p->get_attribute( 'playsinline' );
+
+							$poster = $p->get_attribute( 'poster' );
+
 							if ( null !== $p->get_attribute( 'autoplay' ) ) {
 								$p->remove_attribute( 'autoplay' );
 								$p->set_attribute( 'data-wppo-autoplay', '1' );
 							}
+
+							// Defer the poster so below-the-fold companion videos do not
+							// eagerly fetch the GIF/first-frame image.
+							if ( $is_companion_video && ! empty( $poster ) ) {
+								$p->set_attribute( 'data-poster', $poster );
+								$p->remove_attribute( 'poster' );
+							}
+
 							$p->set_attribute( 'preload', 'none' );
 							$p->add_class( 'wppo-lazy-video' );
 
@@ -2653,9 +2673,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$tags->remove_attribute( 'src' );
 							}
 
+							// Detect core's animated-GIF companion videos (WP 7.1).
+							$is_companion_video = null !== $tags->get_attribute( 'autoplay' )
+								&& null !== $tags->get_attribute( 'loop' )
+								&& null !== $tags->get_attribute( 'muted' )
+								&& null !== $tags->get_attribute( 'playsinline' );
+
+							$poster = $tags->get_attribute( 'poster' );
+
 							if ( $tags->get_attribute( 'autoplay' ) !== null ) {
 								$tags->remove_attribute( 'autoplay' );
 								$tags->set_attribute( 'data-wppo-autoplay', '1' );
+							}
+
+							// Defer the poster for companion videos (restored on intersect).
+							if ( $is_companion_video && ! empty( $poster ) ) {
+								$tags->set_attribute( 'data-poster', $poster );
+								$tags->remove_attribute( 'poster' );
 							}
 
 							$tags->set_attribute( 'preload', 'none' );
@@ -2705,6 +2739,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 						if ( $had_autoplay ) {
 							$attributes .= ' data-wppo-autoplay="1"';
+						}
+
+						// Defer poster for core's animated-GIF companion videos (WP 7.1):
+						// autoplay + loop + muted + playsinline + a poster frame.
+						if ( $had_autoplay
+							&& preg_match( '#\bloop\b#i', $attributes )
+							&& preg_match( '#\bmuted\b#i', $attributes )
+							&& preg_match( '#\bplaysinline\b#i', $attributes )
+							&& preg_match( '#\bposter=["\']([^"\']+)["\']#i', $attributes, $poster_matches )
+						) {
+							$attributes = preg_replace( '#\bposter=["\']([^"\']+)["\']#i', 'data-poster="$1"', $attributes );
 						}
 
 						// Add preload="none" if not already present.
