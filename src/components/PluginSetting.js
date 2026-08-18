@@ -729,7 +729,6 @@ const PluginSetting = ( { options } ) => {
 					icon={ <i className="fas fa-tachometer-alt"></i> }
 				>
 					<CheckboxOption
-						id="wppo-server-timing"
 						checked={ serverTimingEnabled }
 						onChange={ ( e ) =>
 							setServerTimingEnabled( e.target.checked )
@@ -744,7 +743,6 @@ const PluginSetting = ( { options } ) => {
 						) }
 					/>
 					<CheckboxOption
-						id="wppo-rum-enabled"
 						checked={ rumEnabled }
 						onChange={ ( e ) => setRumEnabled( e.target.checked ) }
 						label={ __(

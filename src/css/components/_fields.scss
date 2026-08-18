@@ -127,9 +127,6 @@
 	}
 
 	.wppo-option-description {
-		margin: 4px 0 0 24px;
-		font-size: 13px;
-		line-height: 1.4;
-		color: var(--wppo-text-muted);
+		margin: 4px 0 0 calc(var(--wppo-checkbox-size) + 8px);
 	}
 }
