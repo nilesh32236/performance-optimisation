@@ -118,10 +118,6 @@
 }
 
 .wppo-checkbox-option {
-	.wppo-option-label-text {
-		color: var(--wppo-text-main);
-	}
-
 	.wppo-option-description {
 		margin: 4px 0 0 var(--wppo-nest-indent);
 		font-size: 13px;
@@ -136,5 +132,6 @@
 	.wppo-option-label-text {
 		font-size: 14px;
 		font-weight: 600;
+		color: var(--wppo-text-main);
 	}
 }
