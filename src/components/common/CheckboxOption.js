@@ -29,6 +29,7 @@ export const CheckboxOption = ( {
 	onTextareaChange,
 	description,
 	children,
+	className = '',
 } ) => {
 	const uid = useId();
 	const id = idProp ?? ( description ? uid : undefined );
@@ -38,7 +39,7 @@ export const CheckboxOption = ( {
 		<div
 			className={ `wppo-checkbox-option ${
 				checked ? 'wppo-is-checked' : ''
-			}` }
+			} ${ className }`.trim() }
 		>
 			<label htmlFor={ id }>
 				<input

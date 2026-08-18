@@ -741,6 +741,7 @@ const PluginSetting = ( { options } ) => {
 							'Emit a Server-Timing header with template and database timings on front-end responses (WP 6.9+).',
 							'performance-optimisation'
 						) }
+						className="wppo-checkbox-option--spaced"
 					/>
 					<CheckboxOption
 						checked={ rumEnabled }
@@ -753,6 +754,7 @@ const PluginSetting = ( { options } ) => {
 							'Measure LCP, CLS, INP, FCP and TTFB from real visitors on the front end. Aggregated anonymously by day and page.',
 							'performance-optimisation'
 						) }
+						className="wppo-checkbox-option--spaced"
 					/>
 					<label
 						htmlFor="wppo-high-value-urls"
