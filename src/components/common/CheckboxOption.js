@@ -61,7 +61,10 @@ export const CheckboxOption = ( {
 			{ checked && ( textareaName || children ) && (
 				<div
 					className="wppo-nested-content"
-					style={ { marginTop: '20px', paddingLeft: 'var(--wppo-nest-indent)' } }
+					style={ {
+						marginTop: '20px',
+						paddingLeft: 'var(--wppo-nest-indent)',
+					} }
 				>
 					{ textareaName && (
 						<div className="wppo-field-group">
