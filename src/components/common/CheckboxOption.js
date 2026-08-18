@@ -16,6 +16,7 @@ import { useId } from '@wordpress/element';
  * @param {Function}             [props.onTextareaChange]    Change handler for the textarea.
  * @param {string}               [props.description]         Optional description text.
  * @param {import('react').Node} [props.children]            Additional child elements.
+ * @param {string}               [props.className]           Optional additional class names.
  */
 export const CheckboxOption = ( {
 	label,
