@@ -730,7 +730,6 @@ const PluginSetting = ( { options } ) => {
 				>
 					<CheckboxOption
 						id="wppo-server-timing"
-						name="serverTimingEnabled"
 						checked={ serverTimingEnabled }
 						onChange={ ( e ) =>
 							setServerTimingEnabled( e.target.checked )
@@ -746,7 +745,6 @@ const PluginSetting = ( { options } ) => {
 					/>
 					<CheckboxOption
 						id="wppo-rum-enabled"
-						name="rumEnabled"
 						checked={ rumEnabled }
 						onChange={ ( e ) => setRumEnabled( e.target.checked ) }
 						label={ __(
