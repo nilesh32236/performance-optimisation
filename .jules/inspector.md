@@ -43,6 +43,11 @@
 **Bug/Gap:** The `Dashboard` component tests log `act` warnings due to state updates happening in promises triggered during mount.
 **Root Cause:** The `fetchDbCounts` is triggered in a `useEffect` on mount, updating state asynchronously. Tests were verifying the initial render synchronously but not waiting for the async mount-time state updates to finish.
 **Test Added:** Extracted a shared `flushDashboardMount()` helper (waits for the `database_cleanup_counts` call and flushes the resolved promise inside `act()`) and called it after every `Dashboard` render so async state updates settle before assertions run.
+## 2026-08-12 - Silence Expected Error Output During Testing
+**Bug/Gap:** Tests triggering expected failures (e.g., mockRejectedValue) produced console.error output, which polluted test logs and could mask genuine issues. Dashboard tests attempting to render unmocked child components (`WebVitalsTrends`) similarly triggered network/promise errors during tests.
+**Root Cause:** The `console.error` in the catch block of `fetchWebVitalsTrends` was output during testing. In `Dashboard.test.js`, the unmocked child component `WebVitalsTrends` attempted to fetch data on mount, triggering an unhandled rejection when the API was unmocked in the parent context.
+**Test Added:** Added `consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {})` in the specific error case in `WebVitalsTrends.test.js` (with a restore) and added the missing `WebVitalsTrends` mock in `Dashboard.test.js` to silence all noise.
+
 ## 2026-08-18 - Missing Component Dependencies in Test Mocks
 **Bug/Gap:** Dashboard component tests failed with a TypeError because a child component (`WebVitalsTrends`) invoked a new API function (`fetchWebVitalsTrends`) that wasn't included in the parent test's API mock.
 **Root Cause:** When modifying child components to depend on new shared utilities, the parent component tests using strict object mocks for those utilities often fail because the new dependency isn't defined.
