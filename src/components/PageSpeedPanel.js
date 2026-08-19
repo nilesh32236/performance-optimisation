@@ -296,10 +296,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	};
 
 	const categoryLabels = {
-		performance: 'Performance',
-		accessibility: 'Accessibility',
-		best_practices: 'Best Practices',
-		seo: 'SEO',
+		performance: __( 'Performance', 'performance-optimisation' ),
+		accessibility: __( 'Accessibility', 'performance-optimisation' ),
+		best_practices: __( 'Best Practices', 'performance-optimisation' ),
+		seo: __( 'SEO', 'performance-optimisation' ),
 	};
 
 	return (

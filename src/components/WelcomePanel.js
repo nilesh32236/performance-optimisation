@@ -1,8 +1,10 @@
 import { useState } from '@wordpress/element';
 import { __, sprintf } from '@wordpress/i18n';
 import { apiCall } from '../lib/apiRequest';
+import useNotice from '../lib/useNotice';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import NoticeBanner from './common/NoticeBanner';
 
 const STEPS = [
 	{
@@ -59,6 +61,7 @@ const WelcomePanel = () => {
 	);
 	const [ activatingStep, setActivatingStep ] = useState( null );
 	const [ dismissing, setDismissing ] = useState( false );
+	const { notice, notify, dismiss } = useNotice();
 
 	if ( ! visible ) {
 		return null;
@@ -66,15 +69,38 @@ const WelcomePanel = () => {
 
 	const handleStepAction = async ( step ) => {
 		setActivatingStep( step.key );
+		dismiss();
 		try {
-			await apiCall( 'update_settings', {
+			const updateRes = await apiCall( 'update_settings', {
 				tab: step.settings.tab,
 				settings: step.settings.payload,
 			} );
-			await apiCall( 'dismiss_welcome' );
-			setVisible( false );
+			const dismissRes = await apiCall( 'dismiss_welcome' );
+			if ( updateRes.success && dismissRes.success ) {
+				setVisible( false );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						( ! updateRes.success && updateRes.message ) ||
+						( ! dismissRes.success && dismissRes.message ) ||
+						__(
+							'Failed to enable the feature.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+			}
 		} catch ( error ) {
 			console.error( 'Welcome panel action failed:', error );
+			notify( {
+				type: 'error',
+				message: __(
+					'Failed to enable the feature.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
 		} finally {
 			setActivatingStep( null );
 		}
@@ -82,11 +108,33 @@ const WelcomePanel = () => {
 
 	const handleDismiss = async () => {
 		setDismissing( true );
+		dismiss();
 		try {
-			await apiCall( 'dismiss_welcome' );
-			setVisible( false );
+			const res = await apiCall( 'dismiss_welcome' );
+			if ( res.success ) {
+				setVisible( false );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'Failed to dismiss the welcome panel.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+			}
 		} catch ( error ) {
 			console.error( 'Welcome dismiss failed:', error );
+			notify( {
+				type: 'error',
+				message: __(
+					'Failed to dismiss the welcome panel.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
 		} finally {
 			setDismissing( false );
 		}
@@ -113,6 +161,13 @@ const WelcomePanel = () => {
 				/>
 			}
 		>
+			{ notice && (
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
+			) }
 			<p className="wppo-welcome-panel__intro">
 				{ __(
 					'Get started in 3 quick steps. Each toggle below activates a key performance feature — no page reload needed.',

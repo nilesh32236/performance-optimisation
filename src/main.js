@@ -111,6 +111,7 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			noticeEl.textContent = message;
 			const dismissBtn = document.createElement( 'button' );
 			dismissBtn.className = 'notice-dismiss';
+			dismissBtn.setAttribute( 'aria-label', 'Dismiss' );
 			dismissBtn.addEventListener( 'click', () => noticeEl.remove() );
 			noticeEl.appendChild( dismissBtn );
 			const target =

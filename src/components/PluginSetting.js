@@ -16,7 +16,7 @@ import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import NoticeBanner from './common/NoticeBanner';
 
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 
 const ALLOWED_IMPORT_KEYS = [
 	'file_optimisation',
@@ -299,7 +299,9 @@ const PluginSetting = ( { options } ) => {
 		link.href = URL.createObjectURL( blob );
 		link.download = `plugin-settings_${ getTimestamp() }.json`;
 		link.click();
-		URL.revokeObjectURL( link.href );
+		// Defer revocation so the download can start before the object URL is
+		// released (Firefox can abort the save otherwise).
+		setTimeout( () => URL.revokeObjectURL( link.href ), 0 );
 	};
 
 	const handleFileSelection = ( event ) => {
@@ -477,7 +479,15 @@ const PluginSetting = ( { options } ) => {
 									) }
 								</button>
 								<span className="wppo-log-pagination__info">
-									Page { logPage } of { logTotalPages }
+									{ sprintf(
+										/* translators: 1: current page number, 2: total number of pages */
+										__(
+											'Page %1$s of %2$s',
+											'performance-optimisation'
+										),
+										logPage,
+										logTotalPages
+									) }
 								</span>
 								<button
 									type="button"
@@ -795,9 +805,16 @@ const PluginSetting = ( { options } ) => {
 						rows={ 4 }
 						value={ highValueUrls }
 						onChange={ ( e ) => setHighValueUrls( e.target.value ) }
-						placeholder={
-							'http://example.com/about/\nhttp://example.com/contact/'
-						}
+						placeholder={ [
+							__(
+								'http://example.com/about/',
+								'performance-optimisation'
+							),
+							__(
+								'http://example.com/contact/',
+								'performance-optimisation'
+							),
+						].join( '\n' ) }
 						aria-describedby="wppo-high-value-urls-desc"
 					/>
 					<p

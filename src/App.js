@@ -90,6 +90,7 @@ const App = () => {
 	const [ serverRulesError, setServerRulesError ] = useState( false );
 	const [ rulesRetryTrigger, setRulesRetryTrigger ] = useState( 0 );
 	const [ ccssStatus, setCcssStatus ] = useState( {} );
+	const [ ccssError, setCcssError ] = useState( false );
 	const [ ccssRefreshTrigger, setCcssRefreshTrigger ] = useState( 0 );
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedRules = useRef( false );
@@ -154,6 +155,7 @@ const App = () => {
 					serverRules={ serverRules }
 					serverRulesError={ serverRulesError }
 					ccssStatus={ ccssStatus }
+					ccssError={ ccssError }
 					onRetryServerRules={ () => {
 						hasFetchedRules.current = false;
 						setServerRulesError( false );
@@ -162,6 +164,12 @@ const App = () => {
 					} }
 					onCcssRefresh={ () => {
 						hasFetchedCcss.current = false;
+						setCcssError( false );
+						setCcssRefreshTrigger( ( c ) => c + 1 );
+					} }
+					onCcssRetry={ () => {
+						hasFetchedCcss.current = false;
+						setCcssError( false );
 						setCcssRefreshTrigger( ( c ) => c + 1 );
 					} }
 				/>
@@ -347,9 +355,22 @@ const App = () => {
 				);
 				if ( ! abortController.signal.aborted && res.success ) {
 					setCcssStatus( res.data );
+					setCcssError( false );
+				} else if ( ! abortController.signal.aborted ) {
+					hasFetchedCcss.current = false;
+					setCcssError( true );
 				}
 			} catch {
-				// Silently fail - CCSS status is non-critical.
+				if ( ! abortController.signal.aborted ) {
+					hasFetchedCcss.current = false;
+					setCcssError( true );
+				}
+			} finally {
+				// Reset the refresh trigger so the guard re-trues and the
+				// status is not re-fetched on every subsequent tab switch.
+				if ( ! abortController.signal.aborted ) {
+					setCcssRefreshTrigger( 0 );
+				}
 			}
 		};
 		fetchCcssStatus();
@@ -438,7 +459,12 @@ const App = () => {
 						</span>
 					</h3>
 				</div>
-				<nav aria-label="Main Navigation">
+				<nav
+					aria-label={ __(
+						'Main Navigation',
+						'performance-optimisation'
+					) }
+				>
 					<ul>
 						{ sidebarItems.map( ( item ) => (
 							<li key={ item.name }>
