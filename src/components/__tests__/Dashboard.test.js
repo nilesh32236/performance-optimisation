@@ -24,6 +24,9 @@ jest.mock( '../SuggestionsPanel', () => () => (
 	<div data-testid="suggestions-panel" />
 ) );
 jest.mock( '../SystemInfo', () => () => <div data-testid="system-info" /> );
+jest.mock( '../WebVitalsTrends', () => () => (
+	<div data-testid="web-vitals-trends" />
+) );
 jest.mock( '../WebVitalsRum', () => () => <div data-testid="rum-panel" /> );
 jest.mock( '../AutoloadedOptions', () => () => (
 	<div data-testid="autoloaded-options" />
