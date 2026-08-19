@@ -212,4 +212,39 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'protected', $output );
 		$this->assertStringNotContainsString( '<script', $output );
 	}
+
+	/**
+	 * Test that process_delay_setting correctly filters data using guard clauses.
+	 *
+	 * @since NEXT
+	 */
+	public function test_process_delay_setting_filters_correctly() {
+		\Brain\Monkey\Functions\when( 'add_action' )->justReturn();
+		\Brain\Monkey\Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$metabox = new \PerformanceOptimise\Inc\Metabox();
+
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'process_delay_setting' );
+		$method->setAccessible( true );
+
+		$raw_data = array(
+			'valid-handle'   => 'interaction',
+			'empty-value'    => '',
+			'invalid-handle' => 'viewport',
+			'invalid-value'  => 'unknown',
+		);
+		$valid_handles  = array( 'valid-handle', 'empty-value', 'invalid-value' );
+		$allowed_values = array( '', 'interaction', 'idle', 'viewport' );
+
+		$result = $method->invokeArgs( $metabox, array( $raw_data, $valid_handles, $allowed_values ) );
+
+		$this->assertIsArray( $result );
+		$this->assertArrayHasKey( 'valid-handle', $result );
+		$this->assertEquals( 'interaction', $result['valid-handle'] );
+
+		$this->assertArrayNotHasKey( 'empty-value', $result, 'Empty values should be skipped' );
+		$this->assertArrayNotHasKey( 'invalid-handle', $result, 'Handles not in valid_handles should be skipped' );
+		$this->assertArrayNotHasKey( 'invalid-value', $result, 'Values not in allowed_values should be skipped' );
+	}
 }
