@@ -332,13 +332,29 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Write a Redis config fixture into WP_CONTENT_DIR and return its path.
+	 * Write a Redis config fixture into WP_CONTENT_DIR and return its path
+	 * together with any directories that had to be created for it.
 	 *
-	 * @return string Absolute path to the freshly written config file.
+	 * Tracks every directory created by the recursive mkdir (including parents
+	 * such as the WP_CONTENT_DIR itself), in shallowest-first order, so tests
+	 * can remove them in reverse creation order for symmetric cleanup.
+	 *
+	 * @return array{file: string, created_dirs: string[]} Config file path and created directories.
 	 */
-	private function create_config_fixture(): string {
+	private function create_config_fixture(): array {
 		$config_file = WP_CONTENT_DIR . '/wppo-redis-config.php';
 		$config_dir  = dirname( $config_file );
+
+		$created_dirs = array();
+		$dir          = $config_dir;
+		while ( ! is_dir( $dir ) ) {
+			$created_dirs[] = $dir;
+			$parent         = dirname( $dir );
+			if ( $parent === $dir ) {
+				break;
+			}
+			$dir = $parent;
+		}
 
 		if ( ! is_dir( $config_dir ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture directory.
@@ -351,7 +367,10 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 			"<?php\nreturn array(\n\t'host' => '127.0.0.1',\n\t'port' => 6379,\n\t'mode' => 'standalone',\n);\n"
 		);
 
-		return $config_file;
+		return array(
+			'file'         => $config_file,
+			'created_dirs' => array_reverse( $created_dirs ),
+		);
 	}
 
 	/**
@@ -369,20 +388,18 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 	 *    WP_CONTENT_DIR, locates the helper there, loads it, and connects.
 	 */
 	#[RunInSeparateProcess]
-	#[PreserveGlobalState(false)]
+	#[PreserveGlobalState( false )]
 	public function test_connect_redis_no_fatal_when_wp_plugin_dir_undefined(): void {
 		$this->assertFalse( defined( 'WP_PLUGIN_DIR' ), 'Test precondition: WP_PLUGIN_DIR must be undefined at object cache boot.' );
 
-		$config_file = $this->create_config_fixture();
+		$config_fixture = $this->create_config_fixture();
+		$config_file    = $config_fixture['file'];
 		// phpcs:ignore WordPress.PHP.IniSet -- Suppress expected helper-missing error_log output in the test.
 		$old_error_log = ini_set( 'error_log', '/dev/null' );
 
-		$created_dirs = array();
-		// Track directories created for the config fixture.
-		$config_dir = dirname( $config_file );
-		if ( ! is_dir( $config_dir ) ) {
-			$created_dirs[] = $config_dir;
-		}
+		// Directories created for the config fixture (shallowest first, so the
+		// reverse-order cleanup below removes them deepest-first).
+		$created_dirs = $config_fixture['created_dirs'];
 		try {
 			// Scenario 1: no helper file at the derived path -> graceful in-memory fallback.
 			$instance = ( new \ReflectionClass( 'WP_Object_Cache' ) )->newInstanceWithoutConstructor();
