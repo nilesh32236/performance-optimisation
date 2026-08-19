@@ -40,6 +40,16 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 				'lazyLoadNative'  => false,
 			),
 		);
+
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook_name ) {
+				if ( 'home_url' === $hook_name ) {
+					return false;
+				}
+				return ! empty( $GLOBALS['wp_filter'][ $hook_name ] );
+			}
+		);
 	}
 
 	/**
@@ -107,7 +117,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
 		Functions\when( 'get_post_meta' )->justReturn( '' );
 		Functions\when( 'get_the_ID' )->justReturn( 0 );
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_option' )->justReturn( array() );
 
@@ -246,7 +255,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'untrailingslashit' )->returnArg();
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'is_multisite' )->justReturn( false );
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'add_query_arg' )->returnArg( 2 );
 		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
@@ -444,7 +452,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	 * Util::get_local_path().
 	 */
 	private function stub_local_path_resolution(): void {
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( $url, $component = -1 ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Emulates wp_parse_url() in tests.

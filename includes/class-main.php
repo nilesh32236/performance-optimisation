@@ -1390,7 +1390,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'cache_size'        => $cache_size,
 					'total_js_css'      => $total_js_css,
 					'performance_audit' => array(
-						'homeUrl'                   => home_url( '/' ),
+						'homeUrl'                   => Util::cached_home_url( '/' ),
 						'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
 						'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
 						'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
@@ -1581,7 +1581,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$parsed_uri = substr( $request_uri, strlen( $base_path ) );
 					}
 				}
-				$current_url = Util::cached_home_url() . '/' . ltrim( sanitize_text_field( $parsed_uri ), '/' );
+				$current_url = Util::cached_home_url( sanitize_text_field( $parsed_uri ) );
 
 				if ( Util::is_url_excluded( $current_url, $exclude_url_to_keep_js_css ) ) {
 					return;
