@@ -428,9 +428,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				$clean_handle = sanitize_text_field( $handle );
 				$clean_value  = sanitize_text_field( $value );
 
-				if ( in_array( $clean_handle, $valid_handles, true ) && in_array( $clean_value, $allowed_values, true ) && '' !== $clean_value ) {
-					$saved_settings[ $clean_handle ] = $clean_value;
+				if ( '' === $clean_value ) {
+					continue;
 				}
+
+				if ( ! in_array( $clean_handle, $valid_handles, true ) ) {
+					continue;
+				}
+
+				if ( ! in_array( $clean_value, $allowed_values, true ) ) {
+					continue;
+				}
+
+				$saved_settings[ $clean_handle ] = $clean_value;
 			}
 
 			return $saved_settings;

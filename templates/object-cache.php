@@ -118,7 +118,16 @@ if ( ! class_exists( 'WP_Object_Cache' ) ) {
 			$config['password'] = $password;
 
 			if ( ! function_exists( 'wppo_redis_connect' ) ) {
-				$helper_file = WP_PLUGIN_DIR . '/performance-optimisation/includes/redis-connect-helper.php';
+				/*
+				 * WP_PLUGIN_DIR is only defined by wp_plugin_directory_constants()
+				 * AFTER the object cache boots on WP 6.x/7.x (see wp-settings.php),
+				 * so referencing it here fatals on every request. Derive the plugins
+				 * directory from WP_CONTENT_DIR when the constant is not yet
+				 * available, mirroring core's default. Custom plugin directories
+				 * defined in wp-config.php are already defined by this point.
+				 */
+				$plugins_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : ( WP_CONTENT_DIR . '/plugins' );
+				$helper_file = $plugins_dir . '/performance-optimisation/includes/redis-connect-helper.php';
 				if ( file_exists( $helper_file ) ) {
 					require_once $helper_file;
 				}

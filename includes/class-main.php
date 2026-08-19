@@ -1583,22 +1583,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 				$current_url = Util::cached_home_url( sanitize_text_field( $parsed_uri ) );
 
-				foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {
-					if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-						$exclude_url = Util::cached_home_url( $exclude_url );
-					}
-
-					if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-						$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-
-						if ( 0 === strpos( untrailingslashit( $current_url ), untrailingslashit( $exclude_prefix ) ) ) {
-							return;
-						}
-					}
-
-					if ( untrailingslashit( $current_url ) === untrailingslashit( $exclude_url ) ) {
-						return;
-					}
+				if ( Util::is_url_excluded( $current_url, $exclude_url_to_keep_js_css ) ) {
+					return;
 				}
 			}
 
