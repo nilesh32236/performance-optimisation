@@ -27,8 +27,10 @@ const FileOptimization = ( {
 	serverRules = null,
 	serverRulesError = false,
 	ccssStatus = {},
+	ccssError = false,
 	onRetryServerRules,
 	onCcssRefresh,
+	onCcssRetry,
 } ) => {
 	const [ activeSubTab, setActiveSubTab ] = useState( 'assets' );
 	const tabRefs = useRef( {} );
@@ -475,10 +477,33 @@ const FileOptimization = ( {
 									onChange={ handleChange( setSettings ) }
 								/>
 								{ settings.criticalCSS && (
-									<CriticalCssPanel
-										status={ ccssStatus }
-										onRegenerate={ handleRegenerateCss }
-									/>
+									<>
+										{ ccssError && (
+											<div className="wppo-notice wppo-notice--error">
+												<span>
+													{ __(
+														'Unable to load Critical CSS status.',
+														'performance-optimisation'
+													) }
+												</span>
+												{ onCcssRetry && (
+													<button
+														className="wppo-button wppo-button--secondary"
+														onClick={ onCcssRetry }
+													>
+														{ __(
+															'Retry',
+															'performance-optimisation'
+														) }
+													</button>
+												) }
+											</div>
+										) }
+										<CriticalCssPanel
+											status={ ccssStatus }
+											onRegenerate={ handleRegenerateCss }
+										/>
+									</>
 								) }
 								<SwitchField
 									label={ __(

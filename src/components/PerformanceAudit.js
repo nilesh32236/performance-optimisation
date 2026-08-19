@@ -29,32 +29,85 @@ import { __ } from '@wordpress/i18n';
 
 /**
  * Metric definitions with descriptions for tooltips.
+ *
+ * Values are functions so they can be translated at render time.
  */
 const METRIC_INFO = {
-	load_time:
-		'The total time taken for the page to fully load in the browser.',
-	ttfb: 'Time to First Byte. The time it takes for the server to send the first byte of data.',
-	dns: 'The time taken to resolve the domain name to an IP address.',
-	connect: 'The time taken to establish a TCP connection with the server.',
-	ssl: 'The time taken to complete the SSL/TLS handshake for secure connections.',
-	page_size: 'The total weight of the page including CSS, JS, and Images.',
-	assets: 'The total number of external resources loaded by the page.',
-	compression:
-		'Whether the server uses Gzip or Brotli to compress text assets.',
-	cache_control:
-		'Whether the server instructs the browser to cache assets for a long duration.',
-	modern_images:
-		'The percentage of images on the page that use modern formats like WebP or AVIF.',
-	alt_text:
-		'Whether all images have descriptive alt attributes for accessibility.',
-	dom_size:
-		'The total number of HTML elements on the page. High numbers (> 1,500) can slow down rendering.',
-	unminified:
-		'The number of CSS and JS files that are not minified (lack .min in filename).',
-	third_party:
-		'The number of scripts loaded from external domains (e.g., Google, Facebook).',
-	server_wait:
-		'Server processing time. The time taken by the server to process the request before sending data.',
+	load_time: () =>
+		__(
+			'The total time taken for the page to fully load in the browser.',
+			'performance-optimisation'
+		),
+	ttfb: () =>
+		__(
+			'Time to First Byte. The time it takes for the server to send the first byte of data.',
+			'performance-optimisation'
+		),
+	dns: () =>
+		__(
+			'The time taken to resolve the domain name to an IP address.',
+			'performance-optimisation'
+		),
+	connect: () =>
+		__(
+			'The time taken to establish a TCP connection with the server.',
+			'performance-optimisation'
+		),
+	ssl: () =>
+		__(
+			'The time taken to complete the SSL/TLS handshake for secure connections.',
+			'performance-optimisation'
+		),
+	page_size: () =>
+		__(
+			'The total weight of the page including CSS, JS, and Images.',
+			'performance-optimisation'
+		),
+	assets: () =>
+		__(
+			'The total number of external resources loaded by the page.',
+			'performance-optimisation'
+		),
+	compression: () =>
+		__(
+			'Whether the server uses Gzip or Brotli to compress text assets.',
+			'performance-optimisation'
+		),
+	cache_control: () =>
+		__(
+			'Whether the server instructs the browser to cache assets for a long duration.',
+			'performance-optimisation'
+		),
+	modern_images: () =>
+		__(
+			'The percentage of images on the page that use modern formats like WebP or AVIF.',
+			'performance-optimisation'
+		),
+	alt_text: () =>
+		__(
+			'Whether all images have descriptive alt attributes for accessibility.',
+			'performance-optimisation'
+		),
+	dom_size: () =>
+		__(
+			'The total number of HTML elements on the page. High numbers (> 1,500) can slow down rendering.',
+			'performance-optimisation'
+		),
+	unminified: () =>
+		__(
+			'The number of CSS and JS files that are not minified (lack .min in filename).',
+			'performance-optimisation'
+		),
+	third_party: () =>
+		__(
+			'The number of scripts loaded from external domains (e.g., Google, Facebook).',
+			'performance-optimisation'
+		),
+	server_wait: () =>
+		__(
+			'Server processing time. The time taken by the server to process the request before sending data.',
+			'performance-optimisation'
+		),
 };
 
 /**
@@ -115,7 +168,9 @@ const ResultRow = ( { label, value, status, tooltipKey } ) => (
 	<tr className="wppo-audit-table__row">
 		<td className="wppo-audit-table__label">
 			{ label }
-			{ tooltipKey && <Tooltip content={ METRIC_INFO[ tooltipKey ] } /> }
+			{ tooltipKey && (
+				<Tooltip content={ METRIC_INFO[ tooltipKey ]?.() } />
+			) }
 		</td>
 		<td className="wppo-audit-table__value">{ value }</td>
 		<td className="wppo-audit-table__status">
@@ -155,7 +210,7 @@ const MetricOverview = ( { result } ) => (
 		<div className="wppo-audit-overview-card">
 			<div className="wppo-audit-overview-card__label">
 				{ __( 'Load Time', 'performance-optimisation' ) }
-				<Tooltip content={ METRIC_INFO.load_time } />
+				<Tooltip content={ METRIC_INFO.load_time() } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
 				{ result.load_time } s
@@ -169,7 +224,7 @@ const MetricOverview = ( { result } ) => (
 		<div className="wppo-audit-overview-card">
 			<div className="wppo-audit-overview-card__label">
 				{ __( 'TTFB', 'performance-optimisation' ) }
-				<Tooltip content={ METRIC_INFO.ttfb } />
+				<Tooltip content={ METRIC_INFO.ttfb() } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
 				{ result.ttfb } ms
@@ -183,7 +238,7 @@ const MetricOverview = ( { result } ) => (
 		<div className="wppo-audit-overview-card">
 			<div className="wppo-audit-overview-card__label">
 				{ __( 'Page Size', 'performance-optimisation' ) }
-				<Tooltip content={ METRIC_INFO.page_size } />
+				<Tooltip content={ METRIC_INFO.page_size() } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
 				{ formatBytes( result.total_size ) }
@@ -201,7 +256,7 @@ const MetricOverview = ( { result } ) => (
 		<div className="wppo-audit-overview-card">
 			<div className="wppo-audit-overview-card__label">
 				{ __( 'Total Assets', 'performance-optimisation' ) }
-				<Tooltip content={ METRIC_INFO.assets } />
+				<Tooltip content={ METRIC_INFO.assets() } />
 			</div>
 			<span className="wppo-audit-overview-card__value">
 				{ result.css_count + result.js_count + result.media_count }
@@ -257,8 +312,16 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 		let scanResult = null;
 
 		try {
-			const response = await runPerformanceScan( url, force );
-			if ( response.success && response.data ) {
+			const response = await runPerformanceScan(
+				url,
+				force,
+				abortController.signal
+			);
+			if (
+				! abortController.signal.aborted &&
+				response.success &&
+				response.data
+			) {
 				scanResult = response.data;
 				setResult( scanResult );
 
@@ -267,7 +330,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 				if ( onUrlChange ) {
 					onUrlChange( url );
 				}
-			} else {
+			} else if ( ! abortController.signal.aborted ) {
 				notify( {
 					type: 'error',
 					message:
@@ -768,8 +831,17 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 								style={ { marginRight: '8px' } }
 							/>
 							<span>
-								Enable <strong>Developer Details</strong> for
-								granular network timings and environment info.
+								{ __( 'Enable', 'performance-optimisation' ) }{ ' ' }
+								<strong>
+									{ __(
+										'Developer Details',
+										'performance-optimisation'
+									) }
+								</strong>
+								{ __(
+									'for granular network timings and environment info.',
+									'performance-optimisation'
+								) }
 							</span>
 						</div>
 					) }

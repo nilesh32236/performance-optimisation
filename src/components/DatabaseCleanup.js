@@ -118,13 +118,32 @@ const DatabaseCleanup = ( { options = {} } ) => {
 			);
 			if ( response.success && response.data ) {
 				setCounts( response.data );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						response.message ||
+						__(
+							'Failed to load counts.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
 			}
 		} catch ( error ) {
 			console.error( 'Error fetching database cleanup counts:', error );
+			notify( {
+				type: 'error',
+				message: __(
+					'Failed to load counts.',
+					'performance-optimisation'
+				),
+				durationMs: 5000,
+			} );
 		} finally {
 			setLoadingCounts( false );
 		}
-	}, [] );
+	}, [ notify ] );
 
 	useEffect( () => {
 		fetchCounts();

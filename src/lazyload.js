@@ -686,6 +686,12 @@ const loadImages = () => {
 				}, 10000 );
 			};
 
+			// Guard against re-entry: a re-executed module must not create a
+			// second MutationObserver on document.body.
+			if ( mutationObserver ) {
+				return;
+			}
+
 			mutationObserver = new MutationObserver( ( mutations ) => {
 				mutations.forEach( ( mutation ) => {
 					mutation.addedNodes.forEach( ( node ) => {
@@ -976,6 +982,9 @@ const loadBackgrounds = () => {
 					backgroundObserver.unobserve( entry.target );
 				}
 			} );
+			if ( ! document.querySelector( '.wppo-lazy-bg' ) ) {
+				backgroundObserver.disconnect();
+			}
 		},
 		{ rootMargin: '200px' }
 	);

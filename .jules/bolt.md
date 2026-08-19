@@ -94,3 +94,15 @@
 
 **Learning:** Functions that parse URLs and execute string replacements (like `wp_parse_url( content_url( '/' ), PHP_URL_PATH )`) inside high-frequency hooks like `script_loader_src` or `style_loader_src` (e.g. `strip_static_query_strings` checking `is_plugin_cache_url()`) can cause measurable overhead due to the volume of assets processed on every page load.
 **Action:** When no `content_url` filter is active, statically cache the parsed paths and hostnames in a PHP `static` array keyed by `get_current_blog_id()` instead of parsing the core `content_url()` repeatedly. When the filter is active, resolve the URL for each call so a context-dependent filtered base URL is never frozen.
+## 2026-08-13 - Update Cached Helper Method Parameters
+**Learning:** Replacing path-bearing `home_url($path)` calls with string concatenation like `Util::cached_home_url() . $path` breaks multi-lingual compatibility because it bypasses the core `home_url` filter which plugins like WPML/Polylang rely on to rewrite the path.
+**Action:** When optimizing WordPress URL functions that accept path arguments, do not replace them with a cached base URL followed by string concatenation. Ensure cached utility wrappers natively support path arguments (e.g., `Util::cached_home_url($path)`) and correctly forward them to the native WP function (to trigger filters) or safely append them internally when filters are inactive.
+
+## 2026-08-05 - Avoid duplicating URL matching logic
+**Learning:** The URL exclusion matching logic used in `remove_woocommerce_scripts()` was highly redundant and manually re-implemented string checking logic already centralized in `Util::is_url_excluded()`.
+**Action:** Always prefer centralized utility functions (like `Util::is_url_excluded()`) over re-implementing matching logic for lists of URLs. This reduces potential bugs and ensures cacheable results like `Util::cached_home_url()` are utilized properly.
+
+## 2026-08-16 - Replacing Regex in Loops with Native String Methods
+
+**Learning:** When normalizing URLs or performing string manipulation inside a loop (like iterating through `$exclude_urls` in `Util::is_url_excluded`), using `preg_replace()` for simple scheme stripping adds significant overhead, especially since the same target string may be redundantly normalized for every exclusion rule.
+**Action:** Replace `preg_replace( '#^https?://#i', '', $str )` with a faster native closure using `stripos()` and `substr()`. Additionally, hoist the normalization of any loop-invariant strings out of the `foreach` to execute exactly once.

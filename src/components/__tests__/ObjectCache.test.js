@@ -1,4 +1,4 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 // eslint-disable-next-line import/no-extraneous-dependencies -- React is required for JSX rendering in tests
 import React from 'react';
@@ -85,5 +85,38 @@ describe( 'ObjectCache Component', () => {
 		} );
 
 		expect( hitRatioProgress ).not.toBeInTheDocument();
+	} );
+
+	it( 'surfaces an error notice when an action request fails', async () => {
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		apiCall.mockResolvedValueOnce( {
+			success: true,
+			data: {
+				enabled: false,
+				redis_missing: false,
+				foreign_dropin: false,
+				redis_reachable: true,
+				supported_compressors: { none: true },
+			},
+		} );
+		apiCall.mockRejectedValueOnce( new Error( 'boom' ) );
+
+		await act( async () => {
+			render( <ObjectCache options={ {} } /> );
+		} );
+
+		const enableBtn = screen.getByRole( 'button', {
+			name: /Enable Object Cache/i,
+		} );
+		await act( async () => {
+			fireEvent.click( enableBtn );
+		} );
+
+		expect( screen.getByText( 'Action failed.' ) ).toBeInTheDocument();
+
+		errorSpy.mockRestore();
 	} );
 } );

@@ -6,6 +6,7 @@
  */
 
 use PerformanceOptimise\Inc\Image_Optimisation;
+use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 
 /**
@@ -39,6 +40,16 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 				'convertToAvif'   => false,
 				'lazyLoadNative'  => false,
 			),
+		);
+
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'has_filter' )->alias(
+			static function ( $hook_name ) {
+				if ( 'home_url' === $hook_name ) {
+					return false;
+				}
+				return ! empty( $GLOBALS['wp_filter'][ $hook_name ] );
+			}
 		);
 	}
 
@@ -107,7 +118,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
 		Functions\when( 'get_post_meta' )->justReturn( '' );
 		Functions\when( 'get_the_ID' )->justReturn( 0 );
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_option' )->justReturn( array() );
 
@@ -246,7 +256,6 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'untrailingslashit' )->returnArg();
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'is_multisite' )->justReturn( false );
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'add_query_arg' )->returnArg( 2 );
 		Functions\when( 'home_url' )->justReturn( 'https://example.com' );
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
@@ -440,11 +449,39 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that enabling "Force Server-Side Conversion" registers the core
+	 * opt-out filter so WP 7.1+ client-side media processing is disabled.
+	 */
+	public function test_force_server_side_conversion_registers_opt_out_filter(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		$options = $this->default_options;
+		$options['image_optimisation']['forceServerSideConversion'] = true;
+
+		new Image_Optimisation( $options );
+
+		$this->assertTrue( Filters\has( 'wp_client_side_media_processing_enabled', '__return_false', 10 ) );
+	}
+
+	/**
+	 * Test that "Force Server-Side Conversion" being off (or absent) does not
+	 * register the core opt-out filter.
+	 */
+	public function test_force_server_side_conversion_off_registers_no_opt_out_filter(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		new Image_Optimisation( $this->default_options );
+
+		$this->assertFalse( Filters\has( 'wp_client_side_media_processing_enabled' ) );
+	}
+
+	/**
 	 * Stub the WP functions used to resolve a URL to a local path via
 	 * Util::get_local_path().
 	 */
 	private function stub_local_path_resolution(): void {
-		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( $url, $component = -1 ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Emulates wp_parse_url() in tests.
@@ -746,5 +783,104 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringNotContainsString( 'wppo-lazy-bg', $out );
 		$this->assertStringContainsString( 'background-image:url', $out );
+	}
+
+	/**
+	 * Test that a core animated-GIF companion video (WP 7.1, <source> children)
+	 * has its sources deferred, autoplay removed, and poster moved to data-poster.
+	 */
+	public function test_lazy_load_videos_defers_companion_video_with_sources(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$html = '<video autoplay loop muted playsinline poster="https://example.com/gif.jpg">'
+			. '<source src="https://example.com/gif.mp4" type="video/mp4">'
+			. '<source src="https://example.com/gif.webm" type="video/webm">'
+			. '</video>';
+
+		$result = $image_opt->lazy_load_videos( $html );
+
+		$this->assertSame( 1, substr_count( $result, 'autoplay' ) );
+		$this->assertStringContainsString( 'data-wppo-autoplay="1"', $result );
+		$this->assertStringContainsString( 'preload="none"', $result );
+		$this->assertStringContainsString( 'wppo-lazy-video', $result );
+		$this->assertStringContainsString( 'loop', $result );
+		$this->assertStringContainsString( 'muted', $result );
+		$this->assertStringContainsString( 'playsinline', $result );
+		$this->assertStringContainsString( 'data-poster="https://example.com/gif.jpg"', $result );
+		$this->assertStringNotContainsString( ' poster="https://example.com/gif.jpg"', $result );
+		$this->assertStringContainsString( 'data-src="https://example.com/gif.mp4"', $result );
+		$this->assertStringContainsString( 'data-src="https://example.com/gif.webm"', $result );
+		$this->assertStringNotContainsString( ' src="https://example.com/gif.mp4"', $result );
+	}
+
+	/**
+	 * Test that a core animated-GIF companion video emitted with a plain src
+	 * (no <source> children) is also lazy-loaded and its poster deferred.
+	 */
+	public function test_lazy_load_videos_defers_companion_video_with_plain_src(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$html = '<video src="https://example.com/gif.mp4" autoplay loop muted playsinline poster="https://example.com/gif.jpg"></video>';
+
+		$result = $image_opt->lazy_load_videos( $html );
+
+		$this->assertStringContainsString( 'data-src="https://example.com/gif.mp4"', $result );
+		$this->assertStringNotContainsString( ' src="https://example.com/gif.mp4"', $result );
+		$this->assertSame( 1, substr_count( $result, 'autoplay' ) );
+		$this->assertStringContainsString( 'data-wppo-autoplay="1"', $result );
+		$this->assertStringContainsString( 'preload="none"', $result );
+		$this->assertStringContainsString( 'wppo-lazy-video', $result );
+		$this->assertStringContainsString( 'data-poster="https://example.com/gif.jpg"', $result );
+		$this->assertStringNotContainsString( ' poster="https://example.com/gif.jpg"', $result );
+	}
+
+	/**
+	 * Test that a companion video matching an exclusion rule is returned untouched.
+	 */
+	public function test_lazy_load_videos_skips_excluded_companion_video(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array( 'excludeVideos' => array( 'https://example.com/excluded.mp4' ) )
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$html = '<video autoplay loop muted playsinline poster="https://example.com/excluded.jpg">'
+			. '<source src="https://example.com/excluded.mp4" type="video/mp4">'
+			. '</video>';
+
+		$result = $image_opt->lazy_load_videos( $html );
+
+		$this->assertSame( $html, $result );
+	}
+
+	/**
+	 * Test that a regular user video without the companion-video signature keeps
+	 * its poster eager (only core's companion videos get poster deferral).
+	 */
+	public function test_lazy_load_videos_keeps_regular_video_poster_eager(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$html = '<video src="https://example.com/normal.mp4" controls poster="https://example.com/poster.jpg"></video>';
+
+		$result = $image_opt->lazy_load_videos( $html );
+
+		$this->assertStringContainsString( 'poster="https://example.com/poster.jpg"', $result );
+		$this->assertStringNotContainsString( 'data-poster', $result );
+		$this->assertStringContainsString( 'data-src="https://example.com/normal.mp4"', $result );
+		$this->assertStringContainsString( 'preload="none"', $result );
+		$this->assertStringContainsString( 'wppo-lazy-video', $result );
 	}
 }

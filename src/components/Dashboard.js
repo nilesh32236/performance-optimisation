@@ -6,12 +6,14 @@ import {
 	useMemo,
 } from '@wordpress/element';
 import { apiCall } from '../lib/apiRequest';
+import useNotice from '../lib/useNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import CheckboxOption from './common/CheckboxOption';
+import NoticeBanner from './common/NoticeBanner';
 import PerformanceAudit from './PerformanceAudit';
 import PageSpeedPanel from './PageSpeedPanel';
 import WebVitalsTrends from './WebVitalsTrends';
@@ -126,7 +128,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 	const pollRetryRef = useRef( 0 );
 	const submittingRef = useRef( false );
 	const [ confirmRemove, setConfirmRemove ] = useState( false );
-	const [ announcement, setAnnouncement ] = useState( '' );
+	const { notice, notify, dismiss } = useNotice();
 
 	const { imageInfo, loading, totalCacheSize, totalJs, totalCss, dbCounts } =
 		state;
@@ -156,16 +158,18 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			}
 		} catch ( error ) {
 			console.error( 'Error fetching db counts:', error );
-			setAnnouncement(
-				__(
+			notify( {
+				type: 'error',
+				message: __(
 					'Failed to load database counts.',
 					'performance-optimisation'
-				)
-			);
+				),
+				durationMs: 5000,
+			} );
 		} finally {
 			handleLoading( 'db_counts', false );
 		}
-	}, [ handleLoading, updateState ] );
+	}, [ handleLoading, updateState, notify ] );
 
 	useEffect( () => {
 		fetchDbCounts();
@@ -206,12 +210,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 				if ( queuedJobs === 0 ) {
 					setBgProcessing( false );
-					setAnnouncement(
-						__(
+					notify( {
+						type: 'success',
+						message: __(
 							'Image optimisation completed.',
 							'performance-optimisation'
-						)
-					);
+						),
+						durationMs: 5000,
+					} );
 					pollingRef.current = null;
 					return;
 				}
@@ -222,25 +228,29 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			if ( pollRetryRef.current >= 5 ) {
 				setBgProcessing( false );
 				pollingRef.current = null;
-				setAnnouncement(
-					__(
+				notify( {
+					type: 'error',
+					message: __(
 						'Status check stopped after repeated failures.',
 						'performance-optimisation'
-					)
-				);
+					),
+					durationMs: 5000,
+				} );
 				return;
 			}
-			setAnnouncement(
-				__(
+			notify( {
+				type: 'error',
+				message: __(
 					'Status check failed. Retrying…',
 					'performance-optimisation'
-				)
-			);
+				),
+				durationMs: 5000,
+			} );
 		}
 		if ( pollingRef.current === currentTimeout ) {
 			pollingRef.current = setTimeout( pollJobStatus, 5000 );
 		}
-	}, [ updateState ] );
+	}, [ updateState, notify ] );
 
 	useEffect( () => {
 		return () => {
@@ -250,15 +260,6 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		};
 	}, [] );
 
-	// Clear announcement after 5 seconds so the aria-live region stays fresh.
-	useEffect( () => {
-		if ( ! announcement ) {
-			return;
-		}
-		const timer = setTimeout( () => setAnnouncement( '' ), 5000 );
-		return () => clearTimeout( timer );
-	}, [ announcement ] );
-
 	const onClearCache = useCallback(
 		( e ) => {
 			e.preventDefault();
@@ -266,12 +267,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			apiCall( 'clear_cache', { action: 'clear_cache' } )
 				.then( ( data ) => {
 					if ( data.success ) {
-						setAnnouncement(
-							__(
+						notify( {
+							type: 'success',
+							message: __(
 								'Cache cleared successfully.',
 								'performance-optimisation'
-							)
-						);
+							),
+							durationMs: 5000,
+						} );
 						updateState( {
 							totalCacheSize: '0 B',
 							totalJs: 0,
@@ -280,16 +283,18 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					}
 				} )
 				.catch( () =>
-					setAnnouncement(
-						__(
+					notify( {
+						type: 'error',
+						message: __(
 							'Failed to clear cache.',
 							'performance-optimisation'
-						)
-					)
+						),
+						durationMs: 5000,
+					} )
 				)
 				.finally( () => handleLoading( 'clear_cache', false ) );
 		},
-		[ handleLoading, updateState ]
+		[ handleLoading, updateState, notify ]
 	);
 
 	const optimizeImages = useCallback( () => {
@@ -309,12 +314,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					// Background (Action Scheduler) path.
 					setBgProcessing( true );
 					setBgJobsQueued( response.data.jobs_queued || 0 );
-					setAnnouncement(
-						__(
+					notify( {
+						type: 'success',
+						message: __(
 							'Image optimisation started in background.',
 							'performance-optimisation'
-						)
-					);
+						),
+						durationMs: 5000,
+					} );
 					if ( pollingRef.current ) {
 						clearTimeout( pollingRef.current );
 					}
@@ -328,12 +335,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						updateState( {
 							imageInfo: normalizeImageInfo( response.data ),
 						} );
-						setAnnouncement(
-							__(
+						notify( {
+							type: 'success',
+							message: __(
 								'Images optimized successfully.',
 								'performance-optimisation'
-							)
-						);
+							),
+							durationMs: 5000,
+						} );
 					}
 
 					if ( pollingRef.current ) {
@@ -343,12 +352,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				}
 			} )
 			.catch( () =>
-				setAnnouncement(
-					__(
+				notify( {
+					type: 'error',
+					message: __(
 						'Image optimisation failed.',
 						'performance-optimisation'
-					)
-				)
+					),
+					durationMs: 5000,
+				} )
 			)
 			.finally( () => {
 				submittingRef.current = false;
@@ -358,6 +369,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		handleLoading,
 		pollJobStatus,
 		updateState,
+		notify,
 		bgProcessing,
 		loading.optimize_images,
 	] );
@@ -375,24 +387,28 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							failed: { webp: 0, avif: 0 },
 						},
 					} ) );
-					setAnnouncement(
-						__(
+					notify( {
+						type: 'success',
+						message: __(
 							'Optimized images removed.',
 							'performance-optimisation'
-						)
-					);
+						),
+						durationMs: 5000,
+					} );
 				}
 			} )
 			.catch( () =>
-				setAnnouncement(
-					__(
+				notify( {
+					type: 'error',
+					message: __(
 						'Failed to remove optimized images.',
 						'performance-optimisation'
-					)
-				)
+					),
+					durationMs: 5000,
+				} )
 			)
 			.finally( () => handleLoading( 'remove_images', false ) );
-	}, [ handleLoading ] );
+	}, [ handleLoading, notify ] );
 
 	const savePageCacheSettings = useCallback( () => {
 		setSavingPageCache( true );
@@ -408,24 +424,28 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		} )
 			.then( ( response ) => {
 				if ( response.success && response.data ) {
-					setAnnouncement(
-						__(
+					notify( {
+						type: 'success',
+						message: __(
 							'Page cache settings saved.',
 							'performance-optimisation'
-						)
-					);
+						),
+						durationMs: 5000,
+					} );
 				}
 			} )
 			.catch( () =>
-				setAnnouncement(
-					__(
+				notify( {
+					type: 'error',
+					message: __(
 						'Failed to save page cache settings.',
 						'performance-optimisation'
-					)
-				)
+					),
+					durationMs: 5000,
+				} )
 			)
 			.finally( () => setSavingPageCache( false ) );
-	}, [ pageCacheEnabled ] );
+	}, [ pageCacheEnabled, notify ] );
 
 	const saveLoggedInCacheSettings = useCallback( () => {
 		setSavingLoggedInCache( true );
@@ -442,24 +462,28 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		} )
 			.then( ( response ) => {
 				if ( response.success && response.data ) {
-					setAnnouncement(
-						__(
+					notify( {
+						type: 'success',
+						message: __(
 							'Logged-in cache settings saved.',
 							'performance-optimisation'
-						)
-					);
+						),
+						durationMs: 5000,
+					} );
 				}
 			} )
 			.catch( () =>
-				setAnnouncement(
-					__(
+				notify( {
+					type: 'error',
+					message: __(
 						'Failed to save logged-in cache settings.',
 						'performance-optimisation'
-					)
-				)
+					),
+					durationMs: 5000,
+				} )
 			)
 			.finally( () => setSavingLoggedInCache( false ) );
-	}, [ loggedInCacheEnabled, loggedInCacheRoles ] );
+	}, [ loggedInCacheEnabled, loggedInCacheRoles, notify ] );
 
 	const saveCdnPurgeSettings = useCallback( () => {
 		setSavingCdnPurge( true );
@@ -479,24 +503,28 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		} )
 			.then( ( response ) => {
 				if ( response.success && response.data ) {
-					setAnnouncement(
-						__(
+					notify( {
+						type: 'success',
+						message: __(
 							'CDN purge settings saved.',
 							'performance-optimisation'
-						)
-					);
+						),
+						durationMs: 5000,
+					} );
 				}
 			} )
 			.catch( () =>
-				setAnnouncement(
-					__(
+				notify( {
+					type: 'error',
+					message: __(
 						'Failed to save CDN purge settings.',
 						'performance-optimisation'
-					)
-				)
+					),
+					durationMs: 5000,
+				} )
 			)
 			.finally( () => setSavingCdnPurge( false ) );
-	}, [ cdnPurgeService, cloudflareZoneId, varnishPurgeUrls ] );
+	}, [ cdnPurgeService, cloudflareZoneId, varnishPurgeUrls, notify ] );
 
 	const handleLoggedInCacheToggle = useCallback( ( e ) => {
 		setLoggedInCacheEnabled( e.target.checked );
@@ -521,13 +549,13 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	return (
 		<div className="wppo-dashboard-view">
-			<div
-				aria-live="polite"
-				aria-atomic="true"
-				className="wppo-screen-reader-text"
-			>
-				{ announcement }
-			</div>
+			{ notice && (
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
+			) }
 			<FeatureHeader
 				title={ __( 'System Health', 'performance-optimisation' ) }
 				description={ __(
@@ -759,7 +787,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							onChange={ ( e ) =>
 								setVarnishPurgeUrls( e.target.value )
 							}
-							placeholder={ 'http://127.0.0.1:8081/purge' }
+							placeholder={ __(
+								'http://127.0.0.1:8081/purge',
+								'performance-optimisation'
+							) }
 						/>
 						<p className="wppo-text-muted wppo-text-small">
 							{ __(

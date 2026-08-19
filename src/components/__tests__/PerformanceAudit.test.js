@@ -274,7 +274,8 @@ describe( 'PerformanceAudit Component', () => {
 		} );
 		expect( runPerformanceScan ).toHaveBeenCalledWith(
 			'https://example.com',
-			true
+			true,
+			expect.any( AbortSignal )
 		);
 	} );
 

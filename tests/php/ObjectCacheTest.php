@@ -5,6 +5,9 @@
  * @package PerformanceOptimise\Tests
  */
 
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+
 /**
  * Tests for the salted cache functions in templates/object-cache.php.
  *
@@ -326,5 +329,121 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 				)
 			)
 		);
+	}
+
+	/**
+	 * Write a Redis config fixture into WP_CONTENT_DIR and return its path.
+	 *
+	 * @return string Absolute path to the freshly written config file.
+	 */
+	private function create_config_fixture(): string {
+		$config_file = WP_CONTENT_DIR . '/wppo-redis-config.php';
+		$config_dir  = dirname( $config_file );
+
+		if ( ! is_dir( $config_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture directory.
+			mkdir( $config_dir, 0777, true );
+		}
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture file.
+		file_put_contents(
+			$config_file,
+			"<?php\nreturn array(\n\t'host' => '127.0.0.1',\n\t'port' => 6379,\n\t'mode' => 'standalone',\n);\n"
+		);
+
+		return $config_file;
+	}
+
+	/**
+	 * Regression test for the WP_PLUGIN_DIR boot-order fatal (issue #612).
+	 *
+	 * WP 6.x/7.x boots the object cache (and therefore constructs this drop-in)
+	 * BEFORE wp_plugin_directory_constants() defines WP_PLUGIN_DIR, so referencing
+	 * the constant directly used to raise a fatal Error that took the whole site
+	 * down on every request. Two scenarios are exercised against a real config
+	 * file so connect_redis() proceeds past its early return:
+	 *
+	 * 1. Helper missing: the derived path does not exist, so the drop-in must
+	 *    degrade to the in-memory cache (redis_connected = false) without fataling.
+	 * 2. Helper present: the drop-in derives the plugins directory from
+	 *    WP_CONTENT_DIR, locates the helper there, loads it, and connects.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_connect_redis_no_fatal_when_wp_plugin_dir_undefined(): void {
+		$this->assertFalse( defined( 'WP_PLUGIN_DIR' ), 'Test precondition: WP_PLUGIN_DIR must be undefined at object cache boot.' );
+
+		$config_file = $this->create_config_fixture();
+		// phpcs:ignore WordPress.PHP.IniSet -- Suppress expected helper-missing error_log output in the test.
+		$old_error_log = ini_set( 'error_log', '/dev/null' );
+
+		$created_dirs = array();
+		// Track directories created for the config fixture.
+		$config_dir = dirname( $config_file );
+		if ( ! is_dir( $config_dir ) ) {
+			$created_dirs[] = $config_dir;
+		}
+		try {
+			// Scenario 1: no helper file at the derived path -> graceful in-memory fallback.
+			$instance = ( new \ReflectionClass( 'WP_Object_Cache' ) )->newInstanceWithoutConstructor();
+
+			$method = new \ReflectionMethod( 'WP_Object_Cache', 'connect_redis' );
+			$method->setAccessible( true );
+			$method->invoke( $instance );
+
+			$prop = new \ReflectionProperty( 'WP_Object_Cache', 'redis_connected' );
+			$prop->setAccessible( true );
+
+			$this->assertFalse( $prop->getValue( $instance ), 'Missing helper must degrade to the in-memory cache, not fatal.' );
+
+			// Scenario 2: helper found via the WP_CONTENT_DIR-derived plugins dir.
+			// A stand-in helper is used so no real Redis connection is attempted and
+			// no WP_Error (absent from this test env) is constructed.
+			$helper_dest = WP_CONTENT_DIR . '/plugins/performance-optimisation/includes/redis-connect-helper.php';
+			$helper_dir  = dirname( $helper_dest );
+			$helper_base = WP_CONTENT_DIR . '/plugins/performance-optimisation';
+			$plugins_dir = WP_CONTENT_DIR . '/plugins';
+			// Track every directory that will be created for the helper fixture.
+			foreach ( array( $plugins_dir, $helper_base, $helper_dir ) as $dir ) {
+				if ( ! is_dir( $dir ) ) {
+					$created_dirs[] = $dir;
+				}
+			}
+			if ( ! is_dir( $helper_dir ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture directory.
+				mkdir( $helper_dir, 0777, true );
+			}
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture file.
+			file_put_contents(
+				$helper_dest,
+				"<?php\nif ( ! function_exists( 'wppo_redis_connect' ) ) {\n\tfunction wppo_redis_connect( \$config ) {\n\t\treturn new \\stdClass();\n\t}\n}\nif ( ! function_exists( 'wppo_apply_redis_options' ) ) {\n\tfunction wppo_apply_redis_options( \$redis, \$config ) {}\n}\n"
+			);
+
+			\Brain\Monkey\Functions\when( 'is_wp_error' )->justReturn( false );
+
+			$instance2 = ( new \ReflectionClass( 'WP_Object_Cache' ) )->newInstanceWithoutConstructor();
+			$method->invoke( $instance2 );
+
+			$this->assertTrue( function_exists( 'wppo_redis_connect' ), 'Helper must be loaded from the WP_CONTENT_DIR-derived plugins directory.' );
+			$this->assertTrue( $prop->getValue( $instance2 ), 'Drop-in must connect once the helper is resolved.' );
+		} finally {
+			if ( false !== $old_error_log ) {
+				// phpcs:ignore WordPress.PHP.IniSet -- Restore the error_log ini value after the test.
+				ini_set( 'error_log', $old_error_log );
+			}
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( $config_file );
+			if ( isset( $helper_dest ) && file_exists( $helper_dest ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $helper_dest );
+			}
+			// Remove directories in reverse creation order.
+			foreach ( array_reverse( $created_dirs ) as $dir ) {
+				if ( is_dir( $dir ) ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir, WordPress.PHP.NoSilencedErrors.Discouraged -- Test fixture cleanup.
+					@rmdir( $dir );
+				}
+			}
+		}
 	}
 }

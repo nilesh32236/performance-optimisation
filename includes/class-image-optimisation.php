@@ -179,6 +179,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				&& ! empty( $this->options['image_optimisation']['clientSideMimeTypeOverride'] ) ) {
 				add_filter( 'client_side_supported_mime_types', array( $this, 'filter_client_side_supported_mime_types' ) );
 			}
+
+			// Allow the "Force Server-Side Conversion" toggle to opt out of WP 7.1+
+			// client-side media processing entirely. Core gates its own in-browser
+			// conversion on wp_is_client_side_media_processing_enabled(), so forcing
+			// this to false stops the browser worker AND lets the plugin's own
+			// GD/Imagick pipeline handle conversion without duplicate work. Registered
+			// only when the toggle is enabled and only on cores that support it.
+			if ( function_exists( 'wp_is_client_side_media_processing_enabled' )
+				&& ! empty( $this->options['image_optimisation']['forceServerSideConversion'] ) ) {
+				add_filter( 'wp_client_side_media_processing_enabled', '__return_false' );
+			}
 		}
 
 		/**
@@ -340,6 +351,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified buffer.
 		 */
 		private function post_process_auto_sizes( string $buffer ): string {
+			// TODO(#624): when core's Enhanced Responsive Images delivers accurate
+			// Gallery-block sizes and native <picture>/srcset handling, re-evaluate
+			// this sizes="auto" prefilling for redundancy with core. sizes_attribute_includes_auto()
+			// still delegates to wp_sizes_attribute_includes_valid_auto() when present. No runtime change.
 			if ( ! Util::is_auto_sizes_available() ) {
 				return $buffer;
 			}
@@ -1681,6 +1696,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed <picture> or <img> HTML fragment (or the original fragment if unchanged).
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
+			// TODO(#624): when core's Enhanced Responsive Images ships native
+			// <picture>/srcset handling and accurate Gallery-block sizes, reassess
+			// whether this <picture>-wrap remains necessary or should defer to core.
+			// No runtime change until the core API lands.
 			$should_exclude = false;
 			foreach ( $exclude_imgs as $exclude_img ) {
 				if ( false !== strpos( $original_src, $exclude_img ) ) {
@@ -2560,9 +2579,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * - moves `src` attributes to `data-src` (on <video> and inner <source> tags),
 		 * - removes `autoplay` and sets `data-wppo-autoplay="1"` when autoplay was present,
 		 * - ensures `preload="none"` is set,
-		 * - adds the `wppo-lazy-video` class.
+		 * - adds the `wppo-lazy-video` class,
+		 * - defers `poster` to `data-poster` for core's animated-GIF companion videos (WP 7.1+, the `autoplay` + `loop` + `muted` + `playsinline` + `poster` signature), which the client restores on intersect.
 		 *
 		 * @since 1.2.4
+		 * @since NEXT Defer companion-video `poster` frames to `data-poster`.
 		 *
 		 * @param string $buffer HTML markup to process.
 		 * @return string The HTML with video elements rewritten for lazy loading.
@@ -2599,10 +2620,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$p->set_attribute( 'data-src', $src );
 								$p->remove_attribute( 'src' );
 							}
+
+							// Detect core's animated-GIF companion videos (WP 7.1):
+							// autoplay + loop + muted + playsinline + a poster frame.
+							$is_companion_video = null !== $p->get_attribute( 'autoplay' )
+								&& null !== $p->get_attribute( 'loop' )
+								&& null !== $p->get_attribute( 'muted' )
+								&& null !== $p->get_attribute( 'playsinline' );
+
+							$poster = $p->get_attribute( 'poster' );
+
 							if ( null !== $p->get_attribute( 'autoplay' ) ) {
 								$p->remove_attribute( 'autoplay' );
 								$p->set_attribute( 'data-wppo-autoplay', '1' );
 							}
+
+							// Defer the poster so below-the-fold companion videos do not
+							// eagerly fetch the GIF/first-frame image.
+							if ( $is_companion_video && ! empty( $poster ) ) {
+								$p->set_attribute( 'data-poster', $poster );
+								$p->remove_attribute( 'poster' );
+							}
+
 							$p->set_attribute( 'preload', 'none' );
 							$p->add_class( 'wppo-lazy-video' );
 
@@ -2653,9 +2692,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								$tags->remove_attribute( 'src' );
 							}
 
+							// Detect core's animated-GIF companion videos (WP 7.1).
+							$is_companion_video = null !== $tags->get_attribute( 'autoplay' )
+								&& null !== $tags->get_attribute( 'loop' )
+								&& null !== $tags->get_attribute( 'muted' )
+								&& null !== $tags->get_attribute( 'playsinline' );
+
+							$poster = $tags->get_attribute( 'poster' );
+
 							if ( $tags->get_attribute( 'autoplay' ) !== null ) {
 								$tags->remove_attribute( 'autoplay' );
 								$tags->set_attribute( 'data-wppo-autoplay', '1' );
+							}
+
+							// Defer the poster for companion videos (restored on intersect).
+							if ( $is_companion_video && ! empty( $poster ) ) {
+								$tags->set_attribute( 'data-poster', $poster );
+								$tags->remove_attribute( 'poster' );
 							}
 
 							$tags->set_attribute( 'preload', 'none' );
@@ -2705,6 +2758,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 						if ( $had_autoplay ) {
 							$attributes .= ' data-wppo-autoplay="1"';
+						}
+
+						// Defer poster for core's animated-GIF companion videos (WP 7.1):
+						// autoplay + loop + muted + playsinline + a poster frame.
+						if ( $had_autoplay
+							&& preg_match( '#\bloop\b#i', $attributes )
+							&& preg_match( '#\bmuted\b#i', $attributes )
+							&& preg_match( '#\bplaysinline\b#i', $attributes )
+							&& preg_match( '#\bposter=["\']([^"\']+)["\']#i', $attributes, $poster_matches )
+						) {
+							$attributes = preg_replace( '#\bposter=["\']([^"\']+)["\']#i', 'data-poster="$1"', $attributes );
 						}
 
 						// Add preload="none" if not already present.

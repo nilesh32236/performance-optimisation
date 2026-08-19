@@ -206,6 +206,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Resolve the effective target format using core's centralized
+		 * `image_editor_output_format` mapping when available.
+		 *
+		 * WP 6.7+ exposes `wp_get_image_editor_output_format()`, which applies
+		 * the `image_editor_output_format` filter (e.g. HEIC -> JPEG, JPEG ->
+		 * WebP). When core maps the source MIME to a next-gen format, the
+		 * plugin converts to that format so both pipelines produce the same
+		 * output; when core maps it to a legacy format, core owns the
+		 * conversion and the plugin returns 'none' (skip). On older cores, or
+		 * when core provides no mapping for the source MIME, the requested
+		 * format is returned unchanged.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $source_image     Filesystem path to the source image.
+		 * @param string $requested_format The format requested by the plugin ('webp', 'avif', or 'both').
+		 * @return string The effective target format ('webp', 'avif', 'both', or 'none').
+		 */
+		private function resolve_output_format( string $source_image, string $requested_format ): string {
+			if ( ! function_exists( 'wp_get_image_editor_output_format' ) ) {
+				return $requested_format;
+			}
+
+			$source_mime = Util::get_image_mime_type( $source_image );
+			if ( empty( $source_mime ) ) {
+				return $requested_format;
+			}
+
+			$mapping = wp_get_image_editor_output_format( $source_image, $source_mime );
+			if ( ! is_array( $mapping ) || empty( $mapping[ $source_mime ] ) ) {
+				return $requested_format;
+			}
+
+			switch ( $mapping[ $source_mime ] ) {
+				case 'image/webp':
+					return 'webp';
+				case 'image/avif':
+					return 'avif';
+				default:
+					return 'none';
+			}
+		}
+
+		/**
 		 * Infer the dimensions of a source image from its file name.
 		 *
 		 * Core-generated sub-sizes use a `-{width}x{height}` suffix (e.g.
@@ -245,6 +289,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! in_array( $format, $this->available_format, true ) ) {
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
+			}
+
+			// Resolve the effective output format through core's centralized
+			// `image_editor_output_format` mapping (WP 6.7+) so the plugin's
+			// conversion matches core's choice instead of fighting it.
+			$requested_format = $format;
+			$format           = $this->resolve_output_format( $source_image, $format );
+
+			if ( 'none' === $format ) {
+				// Core maps this source to a non-next-gen output (e.g.
+				// HEIC -> JPEG); core owns the conversion, so skip the
+				// plugin's entirely and clean the pending queue.
+				if ( 'both' === $requested_format ) {
+					$this->update_conversion_status( $source_image, 'skipped', 'webp' );
+					$this->update_conversion_status( $source_image, 'skipped', 'avif' );
+				} else {
+					$this->update_conversion_status( $source_image, 'skipped', $requested_format );
+				}
+				return false;
+			}
+
+			if ( $format !== $requested_format ) {
+				// Core's mapping overrides the plugin's configured choice (e.g.
+				// requested 'avif', core maps the source MIME to WebP): clean
+				// the stale pending entry for the requested format before
+				// converting the effective one.
+				if ( 'both' === $requested_format ) {
+					$this->update_conversion_status( $source_image, 'skipped', 'webp' === $format ? 'avif' : 'webp' );
+				} else {
+					$this->update_conversion_status( $source_image, 'skipped', $requested_format );
+				}
 			}
 
 			// Skip WebP conversion when WP 6.7+ core handles it natively.
@@ -1064,6 +1139,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * The result is cached per blog ID to avoid re-reading the core option
 		 * on every rendered image (frontend hot path).
 		 *
+		 * When the "Force Server-Side Conversion" toggle is enabled, this returns
+		 * false even if core reports client-side processing is available, so the
+		 * plugin's own GD/Imagick pipeline is authoritative in every context
+		 * (upload metadata, serving, cron, REST) — not only on requests where
+		 * Image_Optimisation has already registered the core opt-out filter.
+		 *
 		 * @since 1.9.0
 		 *
 		 * @return bool True if client-side media processing is enabled.
@@ -1072,7 +1153,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$blog_id = get_current_blog_id();
 
 			if ( ! is_array( self::$client_side_processing_state ) || ! isset( self::$client_side_processing_state[ $blog_id ] ) ) {
-				self::$client_side_processing_state[ $blog_id ] = function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled();
+				$client_side_enabled = function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled();
+
+				if ( ! empty( $this->options['image_optimisation']['forceServerSideConversion'] ) ) {
+					$client_side_enabled = false;
+				}
+
+				self::$client_side_processing_state[ $blog_id ] = $client_side_enabled;
 			}
 
 			return self::$client_side_processing_state[ $blog_id ];
