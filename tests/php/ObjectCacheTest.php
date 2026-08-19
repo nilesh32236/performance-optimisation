@@ -5,6 +5,9 @@
  * @package PerformanceOptimise\Tests
  */
 
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+
 /**
  * Tests for the salted cache functions in templates/object-cache.php.
  *
@@ -365,6 +368,8 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 	 * 2. Helper present: the drop-in derives the plugins directory from
 	 *    WP_CONTENT_DIR, locates the helper there, loads it, and connects.
 	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState(false)]
 	public function test_connect_redis_no_fatal_when_wp_plugin_dir_undefined(): void {
 		$this->assertFalse( defined( 'WP_PLUGIN_DIR' ), 'Test precondition: WP_PLUGIN_DIR must be undefined at object cache boot.' );
 
@@ -372,6 +377,12 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 		// phpcs:ignore WordPress.PHP.IniSet -- Suppress expected helper-missing error_log output in the test.
 		$old_error_log = ini_set( 'error_log', '/dev/null' );
 
+		$created_dirs = array();
+		// Track directories created for the config fixture.
+		$config_dir = dirname( $config_file );
+		if ( ! is_dir( $config_dir ) ) {
+			$created_dirs[] = $config_dir;
+		}
 		try {
 			// Scenario 1: no helper file at the derived path -> graceful in-memory fallback.
 			$instance = ( new \ReflectionClass( 'WP_Object_Cache' ) )->newInstanceWithoutConstructor();
@@ -387,11 +398,17 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 
 			// Scenario 2: helper found via the WP_CONTENT_DIR-derived plugins dir.
 			// A stand-in helper is used so no real Redis connection is attempted and
-			// no WP_Error (absent from this test env) is constructed. The defined
-			// functions persist for the PHPUnit process, but nothing else in the
-			// suite invokes them.
+			// no WP_Error (absent from this test env) is constructed.
 			$helper_dest = WP_CONTENT_DIR . '/plugins/performance-optimisation/includes/redis-connect-helper.php';
 			$helper_dir  = dirname( $helper_dest );
+			$helper_base = WP_CONTENT_DIR . '/plugins/performance-optimisation';
+			$plugins_dir = WP_CONTENT_DIR . '/plugins';
+			// Track every directory that will be created for the helper fixture.
+			foreach ( array( $plugins_dir, $helper_base, $helper_dir ) as $dir ) {
+				if ( ! is_dir( $dir ) ) {
+					$created_dirs[] = $dir;
+				}
+			}
 			if ( ! is_dir( $helper_dir ) ) {
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture directory.
 				mkdir( $helper_dir, 0777, true );
@@ -416,11 +433,16 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 			}
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
 			unlink( $config_file );
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
-			unlink( $helper_dest ?? '' );
-			if ( isset( $helper_dir ) && is_dir( $helper_dir ) ) {
-				// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir, WordPress.PHP.NoSilencedErrors.Discouraged -- Test fixture cleanup.
-				@rmdir( $helper_dir );
+			if ( isset( $helper_dest ) && file_exists( $helper_dest ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+				unlink( $helper_dest );
+			}
+			// Remove directories in reverse creation order.
+			foreach ( array_reverse( $created_dirs ) as $dir ) {
+				if ( is_dir( $dir ) ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_rmdir, WordPress.PHP.NoSilencedErrors.Discouraged -- Test fixture cleanup.
+					@rmdir( $dir );
+				}
 			}
 		}
 	}
