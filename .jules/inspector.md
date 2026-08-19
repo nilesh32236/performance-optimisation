@@ -43,3 +43,7 @@
 **Bug/Gap:** The `Dashboard` component tests log `act` warnings due to state updates happening in promises triggered during mount.
 **Root Cause:** The `fetchDbCounts` is triggered in a `useEffect` on mount, updating state asynchronously. Tests were verifying the initial render synchronously but not waiting for the async mount-time state updates to finish.
 **Test Added:** Extracted a shared `flushDashboardMount()` helper (waits for the `database_cleanup_counts` call and flushes the resolved promise inside `act()`) and called it after every `Dashboard` render so async state updates settle before assertions run.
+## 2026-08-18 - Missing Component Dependencies in Test Mocks
+**Bug/Gap:** Dashboard component tests failed with a TypeError because a child component (`WebVitalsTrends`) invoked a new API function (`fetchWebVitalsTrends`) that wasn't included in the parent test's API mock.
+**Root Cause:** When modifying child components to depend on new shared utilities, the parent component tests using strict object mocks for those utilities often fail because the new dependency isn't defined.
+**Test Added:** Added the missing `fetchWebVitalsTrends: jest.fn()` to the `apiRequest` mock in `Dashboard.test.js` and provided a default resolved value before tests. Also wrapped async `fireEvent` clicks in `FileOptimization.test.js` in `await act( async () => {} )` to fix 'not wrapped in act' warnings.

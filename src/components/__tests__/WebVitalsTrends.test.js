@@ -92,13 +92,21 @@ describe( 'WebVitalsTrends Component', () => {
 			new Error( 'Network error' )
 		);
 
-		render( <WebVitalsTrends url="https://example.com/" /> );
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
 
-		await waitFor( () => {
-			expect(
-				screen.getByText( /Failed to load trend data/i )
-			).toBeInTheDocument();
-		} );
+		try {
+			render( <WebVitalsTrends url="https://example.com/" /> );
+
+			await waitFor( () => {
+				expect(
+					screen.getByText( /Failed to load trend data/i )
+				).toBeInTheDocument();
+			} );
+		} finally {
+			consoleSpy.mockRestore();
+		}
 	} );
 
 	it( 'renders an explicit empty state without a URL', async () => {
