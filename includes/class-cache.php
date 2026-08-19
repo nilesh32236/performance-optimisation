@@ -273,6 +273,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether WP 6.9+ core is loading separate (on-demand) core block assets.
+		 *
+		 * Single source of truth for the separate-assets state shared by the
+		 * combined-CSS cache filename variant and every combine/preload loop. The
+		 * 6.9+ gate keeps pre-6.9 cores (which have no such function) on the
+		 * legacy monolith path.
+		 *
+		 * @return bool True when core loads separate core block assets on demand.
+		 * @since NEXT
+		 */
+		private function block_assets_are_separate(): bool {
+			return function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets();
+		}
+
+		/**
+		 * Whether a style handle belongs to the core block-assets family.
+		 *
+		 * On WP 6.9+ with separate block assets active, the combined stylesheet
+		 * (`wp-block-library`) and every per-block stylesheet (`wp-block-cover`,
+		 * `wp-block-group`, …) are loaded on demand for the blocks actually present
+		 * on the page. Folding them into the combined file would re-monolithize what
+		 * core ships conditionally and make the combined file churn as the block set
+		 * changes across pages, so they are excluded from combining in that mode.
+		 *
+		 * @param string $handle                The registered style handle.
+		 * @param bool   $separate_block_assets Whether core loads separate block assets.
+		 * @return bool True if the handle is a core block asset under separate assets.
+		 * @since NEXT
+		 */
+		private function is_core_block_asset( $handle, bool $separate_block_assets ): bool {
+			return $separate_block_assets && str_starts_with( (string) $handle, 'wp-block-' );
+		}
+
+		/**
 		 * Combines all enqueued CSS files into a single file.
 		 *
 		 * @return void
@@ -305,10 +339,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			// On WP 6.9+ with separate (on-demand) core block assets active, never
-			// fold the combined wp-block-library stylesheet into the minified file —
-			// doing so would force the monolith back into the head. Belt-and-suspenders:
-			// wp-block-library is normally not in the queue on 6.9 anyway.
-			$separate_block_assets = function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets();
+			// fold any core block-asset stylesheet into the combined file — doing so
+			// would force the wp-block-library monolith (or per-block styles for
+			// blocks not even on the page) back into the head and fight core's
+			// conditional loading. Belt-and-suspenders: these handles are normally
+			// not in the queue on 6.9 anyway.
+			$separate_block_assets = $this->block_assets_are_separate();
 
 			// The effective separate-assets state is baked into the combined-CSS
 			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
@@ -340,7 +376,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						continue;
 					}
 
-					if ( $separate_block_assets && 'wp-block-library' === $handle ) {
+					if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
 						continue;
 					}
 
@@ -385,7 +421,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					continue;
 				}
 
-				if ( $separate_block_assets && 'wp-block-library' === $handle ) {
+				if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
 					continue;
 				}
 
@@ -504,9 +540,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Computes the set of handles that belong in the combined CSS file.
 		 *
 		 * Mirrors the skip rules applied in {@see combine_css()} generation: styles
-		 * core inlines itself, handles excluded from combining, and non-'all' media
-		 * styles stay out of the combined file. Used both to build the file and to
-		 * detect when a previously cached file is stale.
+		 * core inlines itself, core block-asset styles under the 6.9+ separate-assets
+		 * mode, handles excluded from combining, and non-'all' media styles stay out
+		 * of the combined file. Used both to build the file and to detect when a
+		 * previously cached file is stale.
 		 *
 		 * @since 1.9.0
 		 *
@@ -517,6 +554,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function get_combined_handles( $styles, $exclude_combine_css ): array {
 			global $wp_styles;
 
+			$separate_block_assets = $this->block_assets_are_separate();
+
 			$handles = array();
 			foreach ( $styles as $handle ) {
 				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
@@ -525,6 +564,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$style_data = $wp_styles->registered[ $handle ];
 
 				if ( $this->core_will_inline( $handle ) ) {
+					continue;
+				}
+
+				if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
 					continue;
 				}
 
