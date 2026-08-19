@@ -459,6 +459,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Optional LCP image prioritization on the finalized HTML (default off).
 			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) ) {
+				// TODO(#624): when core's Enhanced Responsive Images ships, reassess
+				// whether this buffer-level LCP prioritization / fetchpriority stamping
+				// can defer to core-provided attributes (wp_get_loading_optimization_attributes()
+				// output is already honoured). No runtime change until the core API lands.
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
 					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
@@ -477,6 +481,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'deleted_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
 			}
 			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
+				// TODO(#624): when WP 7.2 removes concatenation in favour of preloads,
+				// reassess whether combine_css() should defer to core preload emission
+				// or become an opt-in legacy toggle. No runtime change until then.
 				if ( ! $this->cache ) {
 					$this->cache = new Cache( $this->options );
 					$this->cache->set_image_optimisation( $this->image_optimisation );

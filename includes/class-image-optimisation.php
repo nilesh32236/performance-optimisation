@@ -351,6 +351,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified buffer.
 		 */
 		private function post_process_auto_sizes( string $buffer ): string {
+			// TODO(#624): when core's Enhanced Responsive Images delivers accurate
+			// Gallery-block sizes and native <picture>/srcset handling, re-evaluate
+			// this sizes="auto" prefilling for redundancy with core. sizes_attribute_includes_auto()
+			// still delegates to wp_sizes_attribute_includes_valid_auto() when present. No runtime change.
 			if ( ! Util::is_auto_sizes_available() ) {
 				return $buffer;
 			}
@@ -1692,6 +1696,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The processed <picture> or <img> HTML fragment (or the original fragment if unchanged).
 		 */
 		public function process_picture_tag( $matches, $img_tag, $original_src, $exclude_imgs ) {
+			// TODO(#624): when core's Enhanced Responsive Images ships native
+			// <picture>/srcset handling and accurate Gallery-block sizes, reassess
+			// whether this <picture>-wrap remains necessary or should defer to core.
+			// No runtime change until the core API lands.
 			$should_exclude = false;
 			foreach ( $exclude_imgs as $exclude_img ) {
 				if ( false !== strpos( $original_src, $exclude_img ) ) {
