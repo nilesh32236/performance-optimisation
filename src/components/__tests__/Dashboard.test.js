@@ -18,6 +18,9 @@ jest.mock( '../WelcomePanel', () => () => <div data-testid="welcome-panel" /> );
 jest.mock( '../PerformanceAudit', () => () => (
 	<div data-testid="performance-audit" />
 ) );
+jest.mock( '../WebVitalsTrends', () => () => (
+	<div data-testid="web-vitals-trends" />
+) );
 jest.mock( '../PageSpeedPanel', () => () => (
 	<div data-testid="pagespeed-panel" />
 ) );
