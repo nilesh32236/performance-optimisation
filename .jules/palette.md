@@ -31,6 +31,12 @@
 **Learning:** The Hit Ratio progress bar in the ObjectCache component lacked proper ARIA attributes, making it inaccessible to screen readers. Users navigating with assistive technology could not perceive the visual progress representation.
 **Action:** Added `role="progressbar"`, `aria-labelledby`, `aria-valuemin="0"`, `aria-valuemax="100"`, and `aria-valuenow` to the progress bar container in `ObjectCache.js` to ensure screen readers announce its state properly. Also assigned a unique ID to the label element.
 
+<<<<<<< HEAD
+## 2026-08-07 - Non-existent CSS variable for success colors
+**Learning:** A hardcoded non-existent variable `var(--wppo-color-success)` was used instead of the correct `var(--wppo-success)` from `_variables.scss`, which means the color wasn't resolving to the defined design-system success color.
+**Action:** When using inline styles or SCSS for status colors in React components, always verify the exact CSS variable name (e.g., `var(--wppo-success)`) against `src/css/abstracts/_variables.scss` rather than guessing or hardcoding values, so the icon resolves to the intended design-system color instead of silently falling back to an unstyled value. You can check for occurrences using `grep -rn "var(--wppo-color-" src/`.
+=======
 ## 2026-08-13 - Missing ARIA Describedby for Inputs
 **Learning:** Found checkboxes for complex features in `PluginSetting.js` (Server-Timing and RUM) that had helpful `<p>` descriptions following them, but were not programmatically linked, causing a poor screen reader experience where the description is not announced.
 **Action:** When auditing or building new forms, I must always look for unlinked description `<p>` elements and add an `id` to the `<p>` tag along with `aria-describedby="[id]"` on the corresponding `<input>` or `<textarea>`.
+>>>>>>> origin/master
