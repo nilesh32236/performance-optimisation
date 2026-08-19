@@ -25,6 +25,7 @@ Use this skill when reviewing pull requests or running codebase audits for the P
 - No `$_POST`/`$_GET` without validation
 - All REST endpoints require `manage_options` + `X-WP-Nonce`
 - Class naming matches file naming (`class-{name}.php`)
+- `@since` doc tags never use an unreleased version — flag any `@since` version greater than the latest released version (read from `performance-optimisation.php` `Version:` header) as an error; new code must use `@since NEXT`
 
 ### JavaScript/React
 - `@wordpress/scripts` lint rules (ESLint)

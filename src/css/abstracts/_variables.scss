@@ -20,6 +20,9 @@
 
 	/* Form controls */
 	--wppo-select-arrow: #64748b;
+	/* Base size of native WP admin checkboxes, used to derive description indents */
+	--wppo-checkbox-size: 16px;
+	--wppo-nest-indent: calc(var(--wppo-checkbox-size) + 8px);
 
 	/* Text */
 	--wppo-text-main: #0f172a;

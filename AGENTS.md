@@ -181,6 +181,7 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 - All REST endpoints require `manage_options` + `X-WP-Nonce`
 - Settings stored as serialized array in single `wppo_settings` option
 - **Filters**: `wppo_inline_combined_css` (return falsy to disable inlining of the combined/minified CSS via core `wp_maybe_inline_styles()` — e.g. when using a CDN for the combined file)
+- **Versioning / `@since` tags:** Never invent a version number. New functions, classes, and methods get `@since NEXT`. The `NEXT` placeholder is replaced with the real version at release time. Do not guess future versions like `2.0.0` or `3.8.0`.
 
 ## Multisite compatibility
 

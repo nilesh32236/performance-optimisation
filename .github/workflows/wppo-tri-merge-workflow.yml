@@ -263,6 +263,13 @@ jobs:
             git commit -m "chore: bump version to ${NEXT_VERSION}" || true
           fi
 
+          # Resolve @since NEXT placeholders to the real version before building.
+          if grep -rq '@since NEXT' includes templates; then
+            find includes templates -name '*.php' -exec sed -i "s/@since NEXT/@since ${NEXT_VERSION}/g" {} +
+            git add includes templates
+            git commit -m "chore: resolve @since NEXT to ${NEXT_VERSION}" || true
+          fi
+
           npm ci || npm install
           npm run build
 

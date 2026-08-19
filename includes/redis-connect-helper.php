@@ -92,7 +92,7 @@ if ( ! function_exists( 'wppo_redis_connect_cluster' ) ) {
 	 * Establishes a Redis Cluster connection.
 	 *
 	 * @param array $config Redis configuration.
-	 * @since 2.1.0
+	 * @since NEXT
 	 * @return \RedisCluster|\WP_Error A connected RedisCluster client or a WP_Error on failure.
 	 */
 	function wppo_redis_connect_cluster( $config ) {
@@ -140,7 +140,7 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 	 * Establishes a Redis Sentinel connection.
 	 *
 	 * @param array $config Redis configuration.
-	 * @since 2.1.0
+	 * @since NEXT
 	 * @return \Redis|\WP_Error A connected Redis client or a WP_Error on failure.
 	 */
 	function wppo_redis_connect_sentinel( $config ) {
@@ -231,7 +231,7 @@ if ( ! function_exists( 'wppo_redis_connect_standalone' ) ) {
 	 * Establishes a standalone Redis connection.
 	 *
 	 * @param array $config Redis configuration.
-	 * @since 2.1.0
+	 * @since NEXT
 	 * @return \Redis|\WP_Error A connected Redis client or a WP_Error on failure.
 	 */
 	function wppo_redis_connect_standalone( $config ) {
@@ -282,7 +282,7 @@ if ( ! function_exists( 'wppo_parse_redis_node' ) ) {
 	 * Handles standard "host:port" formats as well as IPv6 enclosed in brackets.
 	 *
 	 * @param string $node The node string to parse.
-	 * @since 2.1.0
+	 * @since NEXT
 	 * @return array Associative array containing 'host' and 'port'.
 	 */
 	function wppo_parse_redis_node( $node ) {

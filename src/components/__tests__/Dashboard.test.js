@@ -11,11 +11,15 @@ import React from 'react';
 
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
+	fetchWebVitalsTrends: jest.fn(),
 } ) );
 
 jest.mock( '../WelcomePanel', () => () => <div data-testid="welcome-panel" /> );
 jest.mock( '../PerformanceAudit', () => () => (
 	<div data-testid="performance-audit" />
+) );
+jest.mock( '../WebVitalsTrends', () => () => (
+	<div data-testid="web-vitals-trends" />
 ) );
 jest.mock( '../PageSpeedPanel', () => () => (
 	<div data-testid="pagespeed-panel" />
@@ -96,7 +100,7 @@ jest.mock(
 );
 
 import Dashboard from '../Dashboard';
-import { apiCall } from '../../lib/apiRequest';
+import { apiCall, fetchWebVitalsTrends } from '../../lib/apiRequest';
 
 /**
  * Wait for the mount-time database_cleanup_counts call to start AND for the
@@ -131,6 +135,7 @@ describe( 'Dashboard', () => {
 		// Persistent default so the mount-time database_cleanup_counts call
 		// always resolves; action-specific responses queue via mockResolvedValueOnce.
 		apiCall.mockResolvedValue( { success: true, data: {} } );
+		fetchWebVitalsTrends.mockResolvedValue( { success: true, data: {} } );
 	} );
 
 	it( 'renders stats and the welcome panel', async () => {
@@ -186,10 +191,177 @@ describe( 'Dashboard', () => {
 	} );
 
 	it( 'starts a background image optimisation', async () => {
+		try {
+			jest.useFakeTimers();
+			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				data: { background: true, jobs_queued: 3 },
+			} );
+			apiCall.mockResolvedValueOnce( {
+				// pollJobStatus
+				success: true,
+				data: {
+					queued_jobs: 0,
+					completed: {},
+					pending: {},
+					failed: {},
+				},
+			} );
+
+			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+			await flushDashboardMount();
+
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
+			);
+
+			await waitFor( () =>
+				expect(
+					screen.getByText(
+						'Image optimisation started in background.'
+					)
+				).toBeInTheDocument()
+			);
+
+			await act( async () => {
+				jest.advanceTimersByTime( 5000 );
+			} );
+			await act( async () => {} );
+
+			await waitFor( () => {
+				expect( apiCall ).toHaveBeenCalledWith(
+					'image_job_status',
+					{},
+					'GET'
+				);
+				expect(
+					screen.getByText( 'Image optimisation completed.' )
+				).toBeInTheDocument();
+			} );
+		} finally {
+			jest.useRealTimers();
+		}
+	} );
+
+	it( 'fails a synchronous image optimisation', async () => {
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+			apiCall.mockRejectedValueOnce( new Error( 'error' ) );
+
+			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+			await flushDashboardMount();
+
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
+			);
+
+			await waitFor( () =>
+				expect(
+					screen.getByText( 'Image optimisation failed.' )
+				).toBeInTheDocument()
+			);
+		} finally {
+			consoleSpy.mockRestore();
+		}
+	} );
+
+	it( 'does not poll image_job_status after a synchronous optimisation clears the poll state', async () => {
+		try {
+			jest.useFakeTimers();
+			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				data: { background: true, jobs_queued: 3 },
+			} );
+
+			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+			await flushDashboardMount();
+
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
+			);
+
+			await waitFor( () =>
+				expect(
+					screen.getByText(
+						'Image optimisation started in background.'
+					)
+				).toBeInTheDocument()
+			);
+
+			apiCall.mockResolvedValueOnce( {
+				// Mock next job status instead to bypass 'bgProcessing' guard early
+				success: true,
+				data: {
+					queued_jobs: 0,
+					completed: {},
+					pending: {},
+					failed: {},
+				},
+			} );
+
+			await act( async () => {
+				jest.advanceTimersByTime( 5000 );
+			} );
+			await act( async () => {} );
+
+			// Now that the job finished (queued_jobs: 0), it clears bgProcessing.
+			// Let's trigger a fresh optimization sync path.
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				data: {
+					pending: { webp: 0, avif: 0 },
+					completed: { webp: 1, avif: 1 },
+					failed: { webp: 0, avif: 0 },
+				}, // Sync path clears timeout too
+			} );
+
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
+			);
+
+			await waitFor( () =>
+				expect(
+					screen.getByText( 'Images optimized successfully.' )
+				).toBeInTheDocument()
+			);
+
+			// The background timer should not fire anymore because the sync
+			// path cleared it. Wait 5s and make sure image_job_status
+			// is not called again.
+			apiCall.mockClear();
+
+			await act( async () => {
+				jest.advanceTimersByTime( 5000 );
+			} );
+			await act( async () => {} );
+
+			expect( apiCall ).not.toHaveBeenCalledWith(
+				'image_job_status',
+				{},
+				'GET'
+			);
+		} finally {
+			jest.useRealTimers();
+		}
+	} );
+
+	it( 'completes a synchronous image optimisation', async () => {
 		apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
 		apiCall.mockResolvedValueOnce( {
 			success: true,
-			data: { background: true, jobs_queued: 3 },
+			data: {
+				pending: { webp: 0, avif: 0 },
+				completed: { webp: 1, avif: 1 },
+				failed: { webp: 0, avif: 0 },
+			},
 		} );
 
 		render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
@@ -202,9 +374,65 @@ describe( 'Dashboard', () => {
 
 		await waitFor( () =>
 			expect(
-				screen.getByText( 'Image optimisation started in background.' )
+				screen.getByText( 'Images optimized successfully.' )
 			).toBeInTheDocument()
 		);
+	} );
+
+	it( 'fails a background image optimisation status check', async () => {
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+		try {
+			jest.useFakeTimers();
+			apiCall.mockResolvedValueOnce( { success: true, data: {} } ); // mount db counts
+			apiCall.mockResolvedValueOnce( {
+				success: true,
+				data: { background: true, jobs_queued: 3 },
+			} );
+			apiCall.mockRejectedValue( new Error( 'network error' ) ); // pollJobStatus fail
+
+			render( <Dashboard activities={ [] } onNavigate={ jest.fn() } /> );
+
+			await flushDashboardMount();
+
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Optimize Images/i } )
+			);
+
+			await waitFor( () =>
+				expect(
+					screen.getByText(
+						'Image optimisation started in background.'
+					)
+				).toBeInTheDocument()
+			);
+
+			// Loop until the terminal notice appears instead of a hardcoded count
+			let iterations = 0;
+			while (
+				iterations++ < 20 &&
+				! screen.queryByText(
+					'Status check stopped after repeated failures.'
+				)
+			) {
+				await act( async () => {
+					jest.advanceTimersByTime( 5000 );
+				} );
+				await act( async () => {} );
+			}
+
+			await waitFor( () => {
+				expect(
+					screen.getByText(
+						'Status check stopped after repeated failures.'
+					)
+				).toBeInTheDocument();
+			} );
+		} finally {
+			jest.useRealTimers();
+			consoleSpy.mockRestore();
+		}
 	} );
 
 	it( 'saves logged-in cache settings', async () => {

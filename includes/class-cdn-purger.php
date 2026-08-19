@@ -17,7 +17,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 	 * the Redis password handling). Varnish is purged by sending PURGE requests
 	 * to the configured server URLs.
 	 *
-	 * @since 2.18.0
+	 * @since NEXT
 	 */
 	class CDN_Purger {
 

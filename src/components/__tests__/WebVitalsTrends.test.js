@@ -88,17 +88,15 @@ describe( 'WebVitalsTrends Component', () => {
 	} );
 
 	it( 'shows an error message when the request fails', async () => {
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
 		fetchWebVitalsTrends.mockRejectedValueOnce(
 			new Error( 'Network error' )
 		);
 
-		const consoleSpy = jest
-			.spyOn( console, 'error' )
-			.mockImplementation( () => {} );
-
 		try {
 			render( <WebVitalsTrends url="https://example.com/" /> );
-
 			await waitFor( () => {
 				expect(
 					screen.getByText( /Failed to load trend data/i )

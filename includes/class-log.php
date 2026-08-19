@@ -29,7 +29,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		/**
 		 * Option key used for the activity log cache salt.
 		 *
-		 * @since 2.6.0
+		 * @since NEXT
 		 * @var string
 		 */
 		private const SALT_KEY = 'wppo_activity_log_salt';
@@ -37,7 +37,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		/**
 		 * Private constructor to prevent direct instantiation.
 		 *
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private function __construct() {}
 
@@ -46,7 +46,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 		 *
 		 * @param string $activity The activity description to log.
 		 * @return void
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function add( $activity ): void {
 			global $wpdb;
