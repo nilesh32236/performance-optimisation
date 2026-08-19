@@ -736,7 +736,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 */
 		public function pagespeed( array $args, array $assoc_args ): void {
 			$action   = $args[0] ?? 'scan';
-			$url      = $assoc_args['url'] ?? home_url();
+			$url      = $assoc_args['url'] ?? Util::cached_home_url();
 			$strategy = $assoc_args['strategy'] ?? 'mobile';
 
 			if ( 'scan' === $action ) {

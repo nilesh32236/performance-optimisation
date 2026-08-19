@@ -463,7 +463,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 							icon={ faCheckCircle }
 							style={ {
 								marginRight: '6px',
-								color: 'var(--wppo-color-success)',
+								color: 'var(--wppo-success)',
 							} }
 						/>
 						{ ( result.strategy ?? strategy ).toLowerCase() ===
