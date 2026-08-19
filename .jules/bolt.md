@@ -94,3 +94,8 @@
 
 **Learning:** Functions that parse URLs and execute string replacements (like `wp_parse_url( content_url( '/' ), PHP_URL_PATH )`) inside high-frequency hooks like `script_loader_src` or `style_loader_src` (e.g. `strip_static_query_strings` checking `is_plugin_cache_url()`) can cause measurable overhead due to the volume of assets processed on every page load.
 **Action:** When no `content_url` filter is active, statically cache the parsed paths and hostnames in a PHP `static` array keyed by `get_current_blog_id()` instead of parsing the core `content_url()` repeatedly. When the filter is active, resolve the URL for each call so a context-dependent filtered base URL is never frozen.
+
+## 2026-08-16 - Replacing Regex in Loops with Native String Methods
+
+**Learning:** When normalizing URLs or performing string manipulation inside a loop (like iterating through `$exclude_urls` in `Util::is_url_excluded`), using `preg_replace()` for simple scheme stripping adds significant overhead, especially since the same target string may be redundantly normalized for every exclusion rule.
+**Action:** Replace `preg_replace( '#^https?://#i', '', $str )` with a faster native closure using `stripos()` and `substr()`. Additionally, hoist the normalization of any loop-invariant strings out of the `foreach` to execute exactly once.

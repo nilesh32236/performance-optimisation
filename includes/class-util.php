@@ -301,6 +301,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Resolve the home base once per request.
 			$home_base = self::cached_home_url();
 
+			// Replace regex scheme removal with fast string operations and evaluate the base URL once.
+			$strip_scheme   = static function ( $u ) {
+				if ( 0 === stripos( $u, 'https://' ) ) {
+					return substr( $u, 8 );
+				}
+				if ( 0 === stripos( $u, 'http://' ) ) {
+					return substr( $u, 7 );
+				}
+				return $u;
+			};
+			$normalized_url = $strip_scheme( $url );
+
 			foreach ( $exclude_urls as $exclude_url ) {
 				$exclude_url = rtrim( $exclude_url, '/' );
 
@@ -314,8 +326,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 
 				// Normalize schemes so http and https rules match interchangeably.
-				$normalized_url  = preg_replace( '#^https?://#i', '', $url );
-				$normalized_rule = preg_replace( '#^https?://#i', '', $exclude_url );
+				$normalized_rule = $strip_scheme( $exclude_url );
 
 				if ( false !== strpos( $normalized_rule, '(.*)' ) ) {
 					// Normalize the prefix with a trailing slash so the base path
