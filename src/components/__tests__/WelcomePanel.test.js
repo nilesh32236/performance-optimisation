@@ -72,4 +72,29 @@ describe( 'WelcomePanel', () => {
 			resolveApiCall( { success: true } );
 		} );
 	} );
+
+	it( 'does not dismiss the panel when the settings update fails', async () => {
+		apiCall.mockResolvedValue( {
+			success: false,
+			message: 'Settings failed',
+		} );
+
+		render( <WelcomePanel /> );
+		const cacheButton = screen.getByRole( 'button', {
+			name: 'Enable Enable Page Caching',
+		} );
+
+		await act( async () => {
+			fireEvent.click( cacheButton );
+		} );
+
+		// dismiss_welcome must not run after a failed activation.
+		expect( apiCall ).toHaveBeenCalledTimes( 1 );
+		expect( apiCall ).not.toHaveBeenCalledWith( 'dismiss_welcome' );
+		// Panel stays visible for retry and the failure is surfaced.
+		expect(
+			screen.getByText( 'Welcome to Performance Optimisation' )
+		).toBeInTheDocument();
+		expect( screen.getByText( 'Settings failed' ) ).toBeInTheDocument();
+	} );
 } );

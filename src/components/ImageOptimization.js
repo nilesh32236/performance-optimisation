@@ -1,5 +1,5 @@
 import { useState } from '@wordpress/element';
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -327,10 +327,9 @@ const ImageOptimization = ( { options = {} } ) => {
 									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 										<strong>
 											{ __(
-												'None',
+												'None:',
 												'performance-optimisation'
 											) }
-											:
 										</strong>{ ' ' }
 										{ wppoSettings?.translations
 											?.placeholderNoneDesc ||
@@ -718,22 +717,18 @@ const ImageOptimization = ( { options = {} } ) => {
 							<p
 								id="maxWidthImgSize-desc"
 								className="wppo-text-muted wppo-mt-10 wppo-text-small"
-							>
-								{ __(
-									'Images wider than this value will have a',
-									'performance-optimisation'
-								) }{ ' ' }
-								<code>max-width</code>{ ' ' }
-								{ __(
-									'style applied. Set to',
-									'performance-optimisation'
-								) }{ ' ' }
-								<code>0</code>{ ' ' }
-								{ __(
-									'to disable. Useful for preventing oversized images from breaking layouts on small screens.',
-									'performance-optimisation'
-								) }
-							</p>
+								dangerouslySetInnerHTML={ {
+									__html: sprintf(
+										/* translators: 1: max-width style name, 2: disable value */
+										__(
+											'Images wider than this value will have a %1$s style applied. Set to %2$s to disable. Useful for preventing oversized images from breaking layouts on small screens.',
+											'performance-optimisation'
+										),
+										'<code>max-width</code>',
+										'<code>0</code>'
+									),
+								} }
+							/>
 						</div>
 						<div className="wppo-field">
 							<label

@@ -140,6 +140,12 @@ const App = () => {
 		[]
 	);
 
+	const refreshCcss = () => {
+		hasFetchedCcss.current = false;
+		setCcssError( false );
+		setCcssRefreshTrigger( ( c ) => c + 1 );
+	};
+
 	const renderContent = () => {
 		const settings = wppoSettings?.settings ?? {};
 		const components = {
@@ -162,16 +168,8 @@ const App = () => {
 						setServerRules( null );
 						setRulesRetryTrigger( ( c ) => c + 1 );
 					} }
-					onCcssRefresh={ () => {
-						hasFetchedCcss.current = false;
-						setCcssError( false );
-						setCcssRefreshTrigger( ( c ) => c + 1 );
-					} }
-					onCcssRetry={ () => {
-						hasFetchedCcss.current = false;
-						setCcssError( false );
-						setCcssRefreshTrigger( ( c ) => c + 1 );
-					} }
+					onCcssRefresh={ refreshCcss }
+					onCcssRetry={ refreshCcss }
 				/>
 			),
 			preload: <PreloadSettings options={ settings.preload_settings } />,
@@ -346,6 +344,7 @@ const App = () => {
 				return;
 			}
 			hasFetchedCcss.current = true;
+			let fetchSucceeded = false;
 			try {
 				const res = await apiCall(
 					'ccss_status',
@@ -354,6 +353,7 @@ const App = () => {
 					abortController.signal
 				);
 				if ( ! abortController.signal.aborted && res.success ) {
+					fetchSucceeded = true;
 					setCcssStatus( res.data );
 					setCcssError( false );
 				} else if ( ! abortController.signal.aborted ) {
@@ -366,9 +366,11 @@ const App = () => {
 					setCcssError( true );
 				}
 			} finally {
-				// Reset the refresh trigger so the guard re-trues and the
-				// status is not re-fetched on every subsequent tab switch.
-				if ( ! abortController.signal.aborted ) {
+				// Reset the refresh trigger only on success so the guard
+				// re-trues and the status is not re-fetched on every
+				// subsequent tab switch. A failed retry leaves the trigger
+				// bumped so it does not auto re-fetch.
+				if ( ! abortController.signal.aborted && fetchSucceeded ) {
 					setCcssRefreshTrigger( 0 );
 				}
 			}

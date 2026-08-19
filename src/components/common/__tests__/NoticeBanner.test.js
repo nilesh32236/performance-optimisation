@@ -36,13 +36,13 @@ describe( 'NoticeBanner', () => {
 		).toBeInTheDocument();
 	} );
 
-	it( 'renders non-error notices with alert semantics and no aria-live', () => {
+	it( 'renders non-error notices with status semantics and no aria-live', () => {
 		const { container } = render(
 			<NoticeBanner message="Heads up." type="warning" />
 		);
 		const banner = container.querySelector( '.wppo-notice' );
 		expect( banner ).toHaveClass( 'wppo-notice--warning' );
-		expect( banner ).toHaveAttribute( 'role', 'alert' );
+		expect( banner ).toHaveAttribute( 'role', 'status' );
 		expect( banner ).not.toHaveAttribute( 'aria-live' );
 	} );
 

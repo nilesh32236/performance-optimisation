@@ -1,3 +1,5 @@
+import { __ } from '@wordpress/i18n';
+
 document.addEventListener( 'DOMContentLoaded', function () {
 	/**
 	 * Shared helper for POST JSON requests.
@@ -111,7 +113,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			noticeEl.textContent = message;
 			const dismissBtn = document.createElement( 'button' );
 			dismissBtn.className = 'notice-dismiss';
-			dismissBtn.setAttribute( 'aria-label', 'Dismiss' );
+			dismissBtn.setAttribute(
+				'aria-label',
+				__( 'Dismiss', 'performance-optimisation' )
+			);
 			dismissBtn.addEventListener( 'click', () => noticeEl.remove() );
 			noticeEl.appendChild( dismissBtn );
 			const target =

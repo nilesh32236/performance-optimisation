@@ -79,6 +79,12 @@ const ConfirmDialog = ( {
 
 	useEffect( () => {
 		if ( isOpen && confirmBtnRef.current ) {
+			// Capture the element that opened the dialog before focus moves
+			// into it, so focus can be restored when the dialog closes.
+			if ( ! previouslyFocusedRef.current ) {
+				previouslyFocusedRef.current =
+					dialogRef.current?.ownerDocument?.activeElement || null;
+			}
 			const cancelBtn = dialogRef.current?.querySelector(
 				'.wppo-dialog-cancel'
 			);
@@ -92,7 +98,6 @@ const ConfirmDialog = ( {
 		const currentDialog = dialogRef.current;
 		const doc = currentDialog?.ownerDocument || document;
 		if ( isOpen ) {
-			previouslyFocusedRef.current = doc.activeElement;
 			doc.addEventListener( 'keydown', handleKeyDown );
 			doc.body.style.overflow = 'hidden';
 		}

@@ -155,6 +155,15 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			);
 			if ( response.success && response.data ) {
 				updateState( { dbCounts: response.data } );
+			} else {
+				notify( {
+					type: 'error',
+					message: __(
+						'Failed to load database counts.',
+						'performance-optimisation'
+					),
+					durationMs: 5000,
+				} );
 			}
 		} catch ( error ) {
 			console.error( 'Error fetching db counts:', error );

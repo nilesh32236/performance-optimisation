@@ -75,22 +75,34 @@ const WelcomePanel = () => {
 				tab: step.settings.tab,
 				settings: step.settings.payload,
 			} );
-			const dismissRes = await apiCall( 'dismiss_welcome' );
-			if ( updateRes.success && dismissRes.success ) {
-				setVisible( false );
-			} else {
+			if ( ! updateRes.success ) {
 				notify( {
 					type: 'error',
 					message:
-						( ! updateRes.success && updateRes.message ) ||
-						( ! dismissRes.success && dismissRes.message ) ||
+						updateRes.message ||
 						__(
 							'Failed to enable the feature.',
 							'performance-optimisation'
 						),
 					durationMs: 5000,
 				} );
+				return;
 			}
+			const dismissRes = await apiCall( 'dismiss_welcome' );
+			if ( ! dismissRes.success ) {
+				notify( {
+					type: 'error',
+					message:
+						dismissRes.message ||
+						__(
+							'Failed to enable the feature.',
+							'performance-optimisation'
+						),
+					durationMs: 5000,
+				} );
+				return;
+			}
+			setVisible( false );
 		} catch ( error ) {
 			console.error( 'Welcome panel action failed:', error );
 			notify( {

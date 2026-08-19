@@ -229,10 +229,7 @@ const PreloadSettings = ( { options = {} } ) => {
 									id="preconnectOrigins"
 									name="preconnectOrigins"
 									rows="2"
-									placeholder={ __(
-										'https://fonts.googleapis.com',
-										'performance-optimisation'
-									) }
+									placeholder="https://fonts.googleapis.com"
 									value={ settings.preconnectOrigins }
 									onChange={ handleChange( setSettings ) }
 									aria-describedby="preconnectOrigins-desc"
@@ -278,10 +275,7 @@ const PreloadSettings = ( { options = {} } ) => {
 									id="dnsPrefetchOrigins"
 									name="dnsPrefetchOrigins"
 									rows="2"
-									placeholder={ __(
-										'example.com',
-										'performance-optimisation'
-									) }
+									placeholder="example.com"
 									value={ settings.dnsPrefetchOrigins }
 									onChange={ handleChange( setSettings ) }
 									aria-describedby="dnsPrefetchOrigins-desc"
@@ -339,10 +333,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										id="preloadFontsUrls"
 										name="preloadFontsUrls"
 										rows="3"
-										placeholder={ __(
-											'/wp-content/themes/my-theme/fonts/myfont.woff2',
-											'performance-optimisation'
-										) }
+										placeholder="/wp-content/themes/my-theme/fonts/myfont.woff2"
 										value={ settings.preloadFontsUrls }
 										onChange={ handleChange( setSettings ) }
 										aria-describedby="preloadFontsUrls-desc"
@@ -389,10 +380,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										id="preloadCSSUrls"
 										name="preloadCSSUrls"
 										rows="3"
-										placeholder={ __(
-											'/wp-content/themes/my-theme/style.css',
-											'performance-optimisation'
-										) }
+										placeholder="/wp-content/themes/my-theme/style.css"
 										value={ settings.preloadCSSUrls }
 										onChange={ handleChange( setSettings ) }
 										aria-describedby="preloadCSSUrls-desc"
@@ -549,16 +537,8 @@ const PreloadSettings = ( { options = {} } ) => {
 										id="speculationExcludeUrls"
 										name="speculationExcludeUrls"
 										rows="3"
-										placeholder={ [
-											__(
-												'/my-plugin/*',
-												'performance-optimisation'
-											),
-											__(
-												'/excluded-path/*',
-												'performance-optimisation'
-											),
-										].join( '\n' ) }
+										placeholder="/my-plugin/*
+/excluded-path/*"
 										value={
 											settings.speculationExcludeUrls
 										}

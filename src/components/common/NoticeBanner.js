@@ -2,8 +2,15 @@
  * Shared presentational notice banner.
  *
  * Renders the `.wppo-notice` markup used across the admin SPA with the
- * correct modifier class, icon, ARIA live region semantics and an optional
- * dismiss button. Pair with the `useNotice()` hook for state and timing.
+ * correct modifier class, icon and an optional dismiss button. Pair with
+ * the `useNotice()` hook for state and timing.
+ *
+ * ARIA semantics rely on role semantics only — no explicit `aria-live` is
+ * added (adding it alongside an implicit live region causes double
+ * announcements). `role="alert"` (implicit assertive live region) is used
+ * for errors; non-error notices use `role="status"` (implicit polite live
+ * region) so routine success/info/warning feedback does not interrupt
+ * screen readers.
  *
  * @since 1.10.0
  */
@@ -32,7 +39,7 @@ const NoticeBanner = ( {
 			className={ `wppo-notice wppo-notice--${ type }${
 				className ? ` ${ className }` : ''
 			}` }
-			role="alert"
+			role={ type === 'error' ? 'alert' : 'status' }
 		>
 			<div className="wppo-notice__content">
 				<FontAwesomeIcon icon={ icon } />

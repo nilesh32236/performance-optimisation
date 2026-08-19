@@ -479,7 +479,10 @@ const FileOptimization = ( {
 								{ settings.criticalCSS && (
 									<>
 										{ ccssError && (
-											<div className="wppo-notice wppo-notice--error">
+											<div
+												className="wppo-notice wppo-notice--error"
+												role="alert"
+											>
 												<span>
 													{ __(
 														'Unable to load Critical CSS status.',

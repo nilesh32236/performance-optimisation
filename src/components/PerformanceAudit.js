@@ -837,7 +837,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 										'Developer Details',
 										'performance-optimisation'
 									) }
-								</strong>
+								</strong>{ ' ' }
 								{ __(
 									'for granular network timings and environment info.',
 									'performance-optimisation'

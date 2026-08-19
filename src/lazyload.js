@@ -502,6 +502,7 @@ const checkCleanup = () => {
 		if ( mutationObserver ) {
 			mutationObserver.disconnect();
 			mutationObserver = null;
+			window.wppoMutationObserverActive = false;
 		}
 		if ( globalObserver ) {
 			globalObserver.disconnect();
@@ -687,10 +688,13 @@ const loadImages = () => {
 			};
 
 			// Guard against re-entry: a re-executed module must not create a
-			// second MutationObserver on document.body.
-			if ( mutationObserver ) {
+			// second MutationObserver on document.body. The flag lives on
+			// `window` so it survives module re-execution (module bindings
+			// are re-initialised to null), mirroring `window.wppoSafetyScanId`.
+			if ( window.wppoMutationObserverActive ) {
 				return;
 			}
+			window.wppoMutationObserverActive = true;
 
 			mutationObserver = new MutationObserver( ( mutations ) => {
 				mutations.forEach( ( mutation ) => {

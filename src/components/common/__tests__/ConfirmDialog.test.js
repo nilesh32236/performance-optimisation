@@ -65,6 +65,24 @@ describe( 'ConfirmDialog', () => {
 		document.body.removeChild( button );
 	} );
 
+	it( 'restores focus to the trigger element when closed', () => {
+		const trigger = document.createElement( 'button' );
+		trigger.id = 'trigger-button';
+		document.body.appendChild( trigger );
+		trigger.focus();
+
+		const { rerender } = render(
+			<ConfirmDialog { ...defaultProps } isOpen={ true } />
+		);
+		// Focus should move into the dialog while it is open.
+		expect( document.activeElement ).not.toBe( trigger );
+
+		rerender( <ConfirmDialog { ...defaultProps } isOpen={ false } /> );
+
+		expect( document.activeElement ).toBe( trigger );
+		document.body.removeChild( trigger );
+	} );
+
 	it( 'handles tabbing correctly to keep focus inside dialog', async () => {
 		const onCancel = jest.fn();
 		render(

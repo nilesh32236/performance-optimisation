@@ -778,16 +778,8 @@ const PluginSetting = ( { options } ) => {
 						rows={ 4 }
 						value={ highValueUrls }
 						onChange={ ( e ) => setHighValueUrls( e.target.value ) }
-						placeholder={ [
-							__(
-								'http://example.com/about/',
-								'performance-optimisation'
-							),
-							__(
-								'http://example.com/contact/',
-								'performance-optimisation'
-							),
-						].join( '\n' ) }
+						placeholder="http://example.com/about/
+http://example.com/contact/"
 						aria-describedby="wppo-high-value-urls-desc"
 					/>
 					<p
