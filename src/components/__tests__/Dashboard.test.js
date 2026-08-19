@@ -11,6 +11,7 @@ import React from 'react';
 
 jest.mock( '../../lib/apiRequest', () => ( {
 	apiCall: jest.fn(),
+	fetchWebVitalsTrends: jest.fn(),
 } ) );
 
 jest.mock( '../WelcomePanel', () => () => <div data-testid="welcome-panel" /> );
@@ -96,7 +97,7 @@ jest.mock(
 );
 
 import Dashboard from '../Dashboard';
-import { apiCall } from '../../lib/apiRequest';
+import { apiCall, fetchWebVitalsTrends } from '../../lib/apiRequest';
 
 /**
  * Wait for the mount-time database_cleanup_counts call to start AND for the
@@ -131,6 +132,7 @@ describe( 'Dashboard', () => {
 		// Persistent default so the mount-time database_cleanup_counts call
 		// always resolves; action-specific responses queue via mockResolvedValueOnce.
 		apiCall.mockResolvedValue( { success: true, data: {} } );
+		fetchWebVitalsTrends.mockResolvedValue( { success: true, data: {} } );
 	} );
 
 	it( 'renders stats and the welcome panel', async () => {

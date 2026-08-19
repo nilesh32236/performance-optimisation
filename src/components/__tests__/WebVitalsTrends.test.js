@@ -97,7 +97,6 @@ describe( 'WebVitalsTrends Component', () => {
 
 		try {
 			render( <WebVitalsTrends url="https://example.com/" /> );
-
 			await waitFor( () => {
 				expect(
 					screen.getByText( /Failed to load trend data/i )
