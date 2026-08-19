@@ -212,6 +212,7 @@ trait WPPO_Test_Bootstrap {
 	protected function setUp(): void { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
 		parent::setUp();
 		\Brain\Monkey\setUp();
+		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

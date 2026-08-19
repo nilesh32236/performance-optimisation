@@ -15,6 +15,7 @@ import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import NoticeBanner from './common/NoticeBanner';
+import CheckboxOption from './common/CheckboxOption';
 
 import { __, sprintf } from '@wordpress/i18n';
 
@@ -737,62 +738,34 @@ const PluginSetting = ( { options } ) => {
 					title={ __( 'Monitoring', 'performance-optimisation' ) }
 					icon={ <i className="fas fa-tachometer-alt"></i> }
 				>
-					<label
-						htmlFor="wppo-server-timing"
-						className="wppo-checkbox-row"
-					>
-						<input
-							id="wppo-server-timing"
-							type="checkbox"
-							checked={ serverTimingEnabled }
-							onChange={ ( e ) =>
-								setServerTimingEnabled( e.target.checked )
-							}
-						/>
-						<span>
-							{ __(
-								'Enable Server-Timing Header',
-								'performance-optimisation'
-							) }
-						</span>
-					</label>
-					<p
-						className="wppo-text-muted wppo-text-small"
-						style={ { marginBottom: '16px' } }
-					>
-						{ __(
+					<CheckboxOption
+						checked={ serverTimingEnabled }
+						onChange={ ( e ) =>
+							setServerTimingEnabled( e.target.checked )
+						}
+						label={ __(
+							'Enable Server-Timing Header',
+							'performance-optimisation'
+						) }
+						description={ __(
 							'Emit a Server-Timing header with template and database timings on front-end responses (WP 6.9+).',
 							'performance-optimisation'
 						) }
-					</p>
-					<label
-						htmlFor="wppo-rum-enabled"
-						className="wppo-checkbox-row"
-					>
-						<input
-							id="wppo-rum-enabled"
-							type="checkbox"
-							checked={ rumEnabled }
-							onChange={ ( e ) =>
-								setRumEnabled( e.target.checked )
-							}
-						/>
-						<span>
-							{ __(
-								'Collect Real-user Web Vitals',
-								'performance-optimisation'
-							) }
-						</span>
-					</label>
-					<p
-						className="wppo-text-muted wppo-text-small"
-						style={ { marginBottom: '16px' } }
-					>
-						{ __(
+						className="wppo-checkbox-option--spaced"
+					/>
+					<CheckboxOption
+						checked={ rumEnabled }
+						onChange={ ( e ) => setRumEnabled( e.target.checked ) }
+						label={ __(
+							'Collect Real-user Web Vitals',
+							'performance-optimisation'
+						) }
+						description={ __(
 							'Measure LCP, CLS, INP, FCP and TTFB from real visitors on the front end. Aggregated anonymously by day and page.',
 							'performance-optimisation'
 						) }
-					</p>
+						className="wppo-checkbox-option--spaced"
+					/>
 					<label
 						htmlFor="wppo-high-value-urls"
 						className="wppo-field-label"

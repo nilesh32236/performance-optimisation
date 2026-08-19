@@ -60,6 +60,7 @@ const ImageOptimization = ( { options = {} } ) => {
 		prioritizeLCPImages: false,
 		clientSideMimeTypeOverride: false,
 		clientSideMimeTypes: DEFAULT_CLIENT_SIDE_MIME_TYPES,
+		forceServerSideConversion: false,
 		...options,
 		placeholderType:
 			options.placeholderType ||
@@ -495,6 +496,18 @@ const ImageOptimization = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faMagic } /> }
 				>
 					<div className="wppo-field-group">
+						{ wppoSettings?.client_side_media_processing_enabled ===
+							true &&
+							! settings.forceServerSideConversion && (
+								<NoticeBanner
+									type="info"
+									message={ __(
+										'WordPress 7.1+ is handling image conversion in the browser (client-side media processing). New uploads skip this plugin\'s server-side WebP/AVIF conversion. Enable "Force Server-Side Conversion" below to use the plugin\'s own pipeline.',
+										'performance-optimisation'
+									) }
+									className="wppo-mb-20"
+								/>
+							) }
 						<SwitchField
 							label={ __(
 								'Auto Convert Formats',
@@ -655,6 +668,22 @@ const ImageOptimization = ( { options = {} } ) => {
 									</p>
 								</div>
 							) }
+						</div>
+
+						<div className="wppo-field wppo-field--spaced">
+							<SwitchField
+								label={ __(
+									'Force Server-Side Conversion',
+									'performance-optimisation'
+								) }
+								description={ __(
+									"Disable WordPress 7.1+ client-side (in-browser) media processing and use this plugin's own server-side WebP/AVIF conversion instead. Only applies on WordPress 7.1+; older versions are unaffected.",
+									'performance-optimisation'
+								) }
+								name="forceServerSideConversion"
+								checked={ settings.forceServerSideConversion }
+								onChange={ handleChange( setSettings ) }
+							/>
 						</div>
 					</div>
 				</FeatureCard>

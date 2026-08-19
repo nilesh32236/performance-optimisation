@@ -281,7 +281,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 * @return void
 		 */
 		public function redirect_feed_to_home() {
-			wp_safe_redirect( home_url( '/' ), 301 );
+			wp_safe_redirect( Util::cached_home_url( '/' ), 301 );
 			exit;
 		}
 
