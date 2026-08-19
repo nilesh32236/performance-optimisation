@@ -23,26 +23,27 @@ describe( 'NoticeBanner', () => {
 		).toBeInTheDocument();
 	} );
 
-	it( 'renders an error notice with assertive live region semantics', () => {
+	it( 'renders an error notice with alert semantics', () => {
 		const { container } = render(
 			<NoticeBanner message="Failed." type="error" />
 		);
 		const banner = container.querySelector( '.wppo-notice' );
 		expect( banner ).toHaveClass( 'wppo-notice--error' );
 		expect( banner ).toHaveAttribute( 'role', 'alert' );
-		expect( banner ).toHaveAttribute( 'aria-live', 'assertive' );
+		expect( banner ).not.toHaveAttribute( 'aria-live' );
 		expect(
 			banner.querySelector( 'svg[data-icon="triangle-exclamation"]' )
 		).toBeInTheDocument();
 	} );
 
-	it( 'renders non-error notices with polite live region semantics', () => {
+	it( 'renders non-error notices with alert semantics and no aria-live', () => {
 		const { container } = render(
 			<NoticeBanner message="Heads up." type="warning" />
 		);
 		const banner = container.querySelector( '.wppo-notice' );
 		expect( banner ).toHaveClass( 'wppo-notice--warning' );
-		expect( banner ).toHaveAttribute( 'aria-live', 'polite' );
+		expect( banner ).toHaveAttribute( 'role', 'alert' );
+		expect( banner ).not.toHaveAttribute( 'aria-live' );
 	} );
 
 	it( 'does not render a dismiss button without onDismiss', () => {

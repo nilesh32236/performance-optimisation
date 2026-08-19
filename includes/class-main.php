@@ -459,6 +459,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Optional LCP image prioritization on the finalized HTML (default off).
 			if ( ! empty( $this->options['image_optimisation']['prioritizeLCPImages'] ) ) {
+				// TODO(#624): when core's Enhanced Responsive Images ships, reassess
+				// whether this buffer-level LCP prioritization / fetchpriority stamping
+				// can defer to core-provided attributes (wp_get_loading_optimization_attributes()
+				// output is already honoured). No runtime change until the core API lands.
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
 					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
@@ -477,6 +481,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'deleted_post', array( 'PerformanceOptimise\Inc\Database_Cleanup', 'on_post_change' ), 10, 2 );
 			}
 			if ( ! empty( $this->options['file_optimisation']['combineCSS'] ) ) {
+				// TODO(#624): when WP 7.2 removes concatenation in favour of preloads,
+				// reassess whether combine_css() should defer to core preload emission
+				// or become an opt-in legacy toggle. No runtime change until then.
 				if ( ! $this->cache ) {
 					$this->cache = new Cache( $this->options );
 					$this->cache->set_image_optimisation( $this->image_optimisation );
@@ -1387,10 +1394,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'settings'          => $safe_options,
 					'show_welcome'      => ! (bool) get_user_meta( get_current_user_id(), 'wppo_welcome_dismissed', true ),
 					'image_info'        => $this->sanitize_image_info_for_client( get_option( 'wppo_img_info', array() ) ),
-					'cache_size'        => $cache_size,
-					'total_js_css'      => $total_js_css,
-					'performance_audit' => array(
-						'homeUrl'                   => home_url( '/' ),
+					'cache_size'                           => $cache_size,
+					'total_js_css'                         => $total_js_css,
+					// Read-only WP 7.1+ client-side media processing state. Evaluated
+					// here (after Image_Optimisation has registered the opt-out filter)
+					// so it already reflects an enabled "Force Server-Side Conversion"
+					// toggle (false when core's in-browser processing is forced off).
+					'client_side_media_processing_enabled' => function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled(),
+					'performance_audit'                    => array(
+						'homeUrl'                   => Util::cached_home_url( '/' ),
 						'pagespeedApiKeyConfigured' => ! empty( $this->options['performance_audit']['pagespeed_api_key'] ),
 						'highValueUrls'             => $this->options['performance_audit']['high_value_urls'] ?? array(), // Phase 3 will populate this.
 						'autoFixEnabled'            => (bool) ( $this->options['performance_audit']['auto_fix_enabled'] ?? false ),
@@ -1569,7 +1581,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! empty( $exclude_url_to_keep_js_css ) ) {
 				// Safely retrieve and sanitize the current URL.
 				$request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
-				$base_path   = wp_parse_url( home_url(), PHP_URL_PATH ) ?? '';
+				$base_path   = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
 				$parsed_uri  = $request_uri;
 
 				if ( '' !== $base_path && '/' !== $base_path && 0 === strpos( $request_uri, $base_path ) ) {
@@ -1581,24 +1593,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$parsed_uri = substr( $request_uri, strlen( $base_path ) );
 					}
 				}
-				$current_url = home_url( sanitize_text_field( $parsed_uri ) );
+				$current_url = Util::cached_home_url( sanitize_text_field( $parsed_uri ) );
 
-				foreach ( $exclude_url_to_keep_js_css as $exclude_url ) {
-					if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-						$exclude_url = home_url( $exclude_url );
-					}
-
-					if ( false !== strpos( $exclude_url, '(.*)' ) ) {
-						$exclude_prefix = str_replace( '(.*)', '', $exclude_url );
-
-						if ( 0 === strpos( untrailingslashit( $current_url ), untrailingslashit( $exclude_prefix ) ) ) {
-							return;
-						}
-					}
-
-					if ( untrailingslashit( $current_url ) === untrailingslashit( $exclude_url ) ) {
-						return;
-					}
+				if ( Util::is_url_excluded( $current_url, $exclude_url_to_keep_js_css ) ) {
+					return;
 				}
 			}
 

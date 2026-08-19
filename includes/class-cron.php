@@ -178,7 +178,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				return;
 			}
 
-			$urls = array( home_url( '/' ) );
+			$urls = array( Util::cached_home_url( '/' ) );
 
 			if ( ! empty( $audit['high_value_urls'] ) && is_array( $audit['high_value_urls'] ) ) {
 				foreach ( $audit['high_value_urls'] as $high_url ) {
@@ -432,8 +432,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		private function get_sitemap_urls( int $cap = 500 ): array {
 			$urls       = array();
 			$urls_count = 0;
-			$home_host  = wp_parse_url( home_url(), PHP_URL_HOST );
-			$to_fetch   = array( home_url( '/wp-sitemap.xml' ) );
+			$home_host  = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
+			$to_fetch   = array( Util::cached_home_url( '/wp-sitemap.xml' ) );
 			$fetched    = array();
 
 			// Bound the whole discovery pass so a slow sitemap index cannot hold the

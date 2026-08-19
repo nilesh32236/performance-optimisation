@@ -29,6 +29,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 	class Util {
 
 		/**
+		 * Static cache for resolved home URLs, keyed by blog ID.
+		 *
+		 * @var array<int, string>
+		 * @since NEXT
+		 */
+		private static array $home_url_cache = array();
+
+		/**
+		 * Resets the home_url static cache for testing isolation.
+		 *
+		 * @since NEXT
+		 */
+		public static function reset_cached_home_urls(): void {
+			self::$home_url_cache = array();
+		}
+
+		/**
 		 * Recursively creates cache directory if not exists.
 		 *
 		 * @param string $cache_dir Path to the cache directory.
@@ -301,6 +318,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Resolve the home base once per request.
 			$home_base = self::cached_home_url();
 
+			// Replace regex scheme removal with fast string operations and evaluate the base URL once.
+			$strip_scheme   = static function ( $u ) {
+				if ( 0 === stripos( $u, 'https://' ) ) {
+					return substr( $u, 8 );
+				}
+				if ( 0 === stripos( $u, 'http://' ) ) {
+					return substr( $u, 7 );
+				}
+				return $u;
+			};
+			$normalized_url = $strip_scheme( $url );
+
 			foreach ( $exclude_urls as $exclude_url ) {
 				$exclude_url = rtrim( $exclude_url, '/' );
 
@@ -314,8 +343,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 
 				// Normalize schemes so http and https rules match interchangeably.
-				$normalized_url  = preg_replace( '#^https?://#i', '', $url );
-				$normalized_rule = preg_replace( '#^https?://#i', '', $exclude_url );
+				$normalized_rule = $strip_scheme( $exclude_url );
 
 				if ( false !== strpos( $normalized_rule, '(.*)' ) ) {
 					// Normalize the prefix with a trailing slash so the base path
@@ -348,7 +376,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function get_current_url(): string {
 			global $wp;
-			$url = home_url( add_query_arg( array(), $wp->request ) );
+			$url = self::cached_home_url( (string) add_query_arg( array(), $wp->request ?? '' ) );
 			return untrailingslashit( esc_url_raw( $url ) );
 		}
 
@@ -445,22 +473,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * may return context-dependent output), otherwise the base URL is resolved
 		 * once per site per request and reused across all call sites.
 		 *
-		 * @return string The untrailingslashed home URL.
+		 * @param string $path Optional. Path relative to the home URL. Default empty.
+		 * @return string The untrailingslashed home URL, with path appended if provided.
 		 * @since NEXT
 		 */
-		public static function cached_home_url(): string {
+		public static function cached_home_url( string $path = '' ): string {
 			if ( false !== has_filter( 'home_url' ) ) {
-				return untrailingslashit( home_url() );
+				return '' === $path ? untrailingslashit( home_url() ) : home_url( $path );
 			}
 
-			static $cache = array();
-			$blog_id      = get_current_blog_id();
+			$blog_id = get_current_blog_id();
 
-			if ( ! isset( $cache[ $blog_id ] ) ) {
-				$cache[ $blog_id ] = untrailingslashit( home_url() );
+			if ( ! isset( self::$home_url_cache[ $blog_id ] ) ) {
+				self::$home_url_cache[ $blog_id ] = untrailingslashit( home_url() );
 			}
 
-			return $cache[ $blog_id ];
+			if ( '' === $path ) {
+				return self::$home_url_cache[ $blog_id ];
+			}
+
+			return self::$home_url_cache[ $blog_id ] . '/' . ltrim( $path, '/' );
 		}
 
 		/**

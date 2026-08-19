@@ -63,6 +63,7 @@ const ObjectCache = ( { options = {} } ) => {
 					'Failed to check cache status.',
 					'performance-optimisation'
 				),
+				durationMs: 5000,
 			} );
 		}
 	}, [ notify ] );
@@ -109,6 +110,7 @@ const ObjectCache = ( { options = {} } ) => {
 					'Error saving settings.',
 					'performance-optimisation'
 				),
+				durationMs: 5000,
 			} );
 			console.error( err );
 		} finally {
@@ -140,6 +142,7 @@ const ObjectCache = ( { options = {} } ) => {
 					message:
 						res?.message ||
 						__( 'Action failed.', 'performance-optimisation' ),
+					durationMs: 5000,
 				} );
 				return;
 			}
@@ -152,6 +155,14 @@ const ObjectCache = ( { options = {} } ) => {
 				message:
 					res.message ||
 					__( 'Action successful.', 'performance-optimisation' ),
+				durationMs: 5000,
+			} );
+		} catch ( err ) {
+			console.error( 'Object cache action failed:', err );
+			notify( {
+				type: 'error',
+				message: __( 'Action failed.', 'performance-optimisation' ),
+				durationMs: 5000,
 			} );
 		} finally {
 			setIsActionLoading( false );
@@ -245,7 +256,11 @@ const ObjectCache = ( { options = {} } ) => {
 			/>
 
 			{ notice && (
-				<NoticeBanner type={ notice.type } message={ notice.message } />
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
 			) }
 
 			<div className="wppo-notices-container">

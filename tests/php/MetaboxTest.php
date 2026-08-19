@@ -7,9 +7,11 @@
  * editor is always rendered in an iframe with its own `document`/`window`, so
  * any metabox JS reaching for the global `document`/`window` would target the
  * wrong document. These tests assert the rendered output contains no inline
- * script tags, i.e. no global document/window access is involved.
+ * script tags, no `addEventListener` bindings, and no `onclick` handlers, i.e.
+ * no global document/window access is involved.
  *
  * @package PerformanceOptimise\Tests
+ * @since NEXT
  */
 
 use PerformanceOptimise\Inc\Metabox;
@@ -137,6 +139,8 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'https://example.com/hero.jpg', $output );
 		$this->assertStringContainsString( 'wppo_preload_image_nonce', $output );
 		$this->assertStringNotContainsString( '<script', $output );
+		$this->assertStringNotContainsString( 'addEventListener', $output );
+		$this->assertStringNotContainsString( 'onclick=', $output );
 	}
 
 	/**
@@ -157,6 +161,8 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'Visit Page to Capture Assets', $output );
 		$this->assertStringContainsString( 'wppo_asset_manager_nonce', $output );
 		$this->assertStringNotContainsString( '<script', $output );
+		$this->assertStringNotContainsString( 'addEventListener', $output );
+		$this->assertStringNotContainsString( 'onclick=', $output );
 	}
 
 	/**
@@ -211,5 +217,40 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'high', $output );
 		$this->assertStringContainsString( 'protected', $output );
 		$this->assertStringNotContainsString( '<script', $output );
+		$this->assertStringNotContainsString( 'addEventListener', $output );
+		$this->assertStringNotContainsString( 'onclick=', $output );
+	}
+
+	/**
+	 * Test that process_delay_setting correctly filters data using guard clauses.
+	 *
+	 * @since NEXT
+	 */
+	public function test_process_delay_setting_filters_correctly(): void {
+		\Brain\Monkey\Functions\when( 'sanitize_text_field' )->returnArg();
+
+		$metabox = $this->make_metabox();
+
+		$reflection = new \ReflectionClass( $metabox );
+		$method     = $reflection->getMethod( 'process_delay_setting' );
+
+		$raw_data       = array(
+			'valid-handle'   => 'interaction',
+			'empty-value'    => '',
+			'invalid-handle' => 'viewport',
+			'invalid-value'  => 'unknown',
+		);
+		$valid_handles  = array( 'valid-handle', 'empty-value', 'invalid-value' );
+		$allowed_values = array( '', 'interaction', 'idle', 'viewport' );
+
+		$result = $method->invokeArgs( $metabox, array( $raw_data, $valid_handles, $allowed_values ) );
+
+		$this->assertIsArray( $result );
+		$this->assertArrayHasKey( 'valid-handle', $result );
+		$this->assertSame( 'interaction', $result['valid-handle'] );
+
+		$this->assertArrayNotHasKey( 'empty-value', $result, 'Empty values should be skipped' );
+		$this->assertArrayNotHasKey( 'invalid-handle', $result, 'Handles not in valid_handles should be skipped' );
+		$this->assertArrayNotHasKey( 'invalid-value', $result, 'Values not in allowed_values should be skipped' );
 	}
 }

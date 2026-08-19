@@ -58,4 +58,24 @@ describe( 'AutoloadedOptions', () => {
 			).toBeInTheDocument()
 		);
 	} );
+
+	it( 'renders a distinct failure message when the request fails', async () => {
+		apiCall.mockRejectedValue( new Error( 'boom' ) );
+		const errorSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
+
+		render( <AutoloadedOptions /> );
+
+		await waitFor( () =>
+			expect(
+				screen.getByText( 'Failed to load autoloaded options.' )
+			).toBeInTheDocument()
+		);
+		expect(
+			screen.queryByText( 'No autoloaded options found.' )
+		).not.toBeInTheDocument();
+
+		errorSpy.mockRestore();
+	} );
 } );

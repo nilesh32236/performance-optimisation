@@ -296,10 +296,10 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 	};
 
 	const categoryLabels = {
-		performance: 'Performance',
-		accessibility: 'Accessibility',
-		best_practices: 'Best Practices',
-		seo: 'SEO',
+		performance: __( 'Performance', 'performance-optimisation' ),
+		accessibility: __( 'Accessibility', 'performance-optimisation' ),
+		best_practices: __( 'Best Practices', 'performance-optimisation' ),
+		seo: __( 'SEO', 'performance-optimisation' ),
 	};
 
 	return (
@@ -463,7 +463,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 							icon={ faCheckCircle }
 							style={ {
 								marginRight: '6px',
-								color: 'var(--wppo-color-success)',
+								color: 'var(--wppo-success)',
 							} }
 						/>
 						{ ( result.strategy ?? strategy ).toLowerCase() ===
