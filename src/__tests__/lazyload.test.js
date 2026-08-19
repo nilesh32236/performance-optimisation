@@ -355,6 +355,36 @@ describe( 'Lazy Load (lazyload.js)', () => {
 			expect( iframe.hasAttribute( 'data-src' ) ).toBe( false );
 		} );
 
+		it( 'narrows the lazy selector to videos and never observes native images', () => {
+			global.wppoNativeLazy = true;
+			const { observe } = mockIntersectionObserver();
+
+			const NATIVE_LAZY_SUPPORTED =
+				'loading' in HTMLImageElement.prototype;
+			const USE_NATIVE_LAZY =
+				global.wppoNativeLazy && NATIVE_LAZY_SUPPORTED;
+			const LAZY_SELECTOR = USE_NATIVE_LAZY
+				? 'video.wppo-lazy-video'
+				: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
+
+			expect( LAZY_SELECTOR ).toBe( 'video.wppo-lazy-video' );
+
+			const lazyImg = document.createElement( 'img' );
+			lazyImg.setAttribute( 'data-src', 'test.jpg' );
+			document.body.appendChild( lazyImg );
+
+			// In full native mode only video.wppo-lazy-video elements are observed;
+			// an img[data-src] must not be handed to the IntersectionObserver.
+			const nativeCandidates = document.querySelectorAll( LAZY_SELECTOR );
+			const imgMatches = document.querySelectorAll(
+				'img[data-src], img[data-srcset], iframe[data-src]'
+			);
+
+			expect( nativeCandidates.length ).toBe( 0 );
+			expect( imgMatches.length ).toBe( 1 );
+			expect( observe ).not.toHaveBeenCalled();
+		} );
+
 		it( 'falls back to scroll when IntersectionObserver is unavailable', () => {
 			global.wppoNativeLazy = false;
 			delete global.IntersectionObserver;

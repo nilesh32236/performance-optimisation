@@ -1632,11 +1632,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Prepare an <iframe> tag for lazy loading and exclusion-aware optimization.
 		 *
 		 * If the iframe's source matches any exclusion substring, the tag is returned unchanged.
-		 * Otherwise the function moves `src` to `data-src`, removes the `src` attribute, and ensures
-		 * the `wppo-lazyload` class is present. Uses WP_HTML_Tag_Processor when available and
+		 * When native lazy loading is active (lazyLoadNative), the `src` attribute is preserved and
+		 * `loading="lazy"` is added so the browser handles deferral (matching how core's
+		 * wp_get_loading_optimization_attributes() treats images). Otherwise the function moves
+		 * `src` to `data-src`, removes the `src` attribute, and ensures the `wppo-lazyload` class is
+		 * present for the JS IntersectionObserver path. Uses WP_HTML_Tag_Processor when available and
 		 * falls back to regex-based attribute manipulation.
 		 *
 		 * @since 1.0.0
+		 * @since NEXT Native lazy-load path for iframes.
 		 *
 		 * @param string   $iframe_tag   The original `<iframe>` tag HTML.
 		 * @param string   $original_src The original `src` attribute value (absolute or relative URL).
@@ -1656,6 +1660,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			if ( ! $allowed ) {
 				return $iframe_tag;
 			}
+
+			$use_native_lazy = ! empty( $this->options['image_optimisation']['lazyLoadNative'] );
+
+			if ( $use_native_lazy ) {
+				// Native path: keep src, let the browser defer via loading="lazy".
+				if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
+					$tags = new \WP_HTML_Tag_Processor( $iframe_tag );
+					if ( $tags->next_tag( array( 'tag_name' => 'iframe' ) ) ) {
+						if ( null === $tags->get_attribute( 'loading' ) ) {
+							$tags->set_attribute( 'loading', 'lazy' );
+						}
+						$iframe_tag = $tags->get_updated_html();
+					}
+				} elseif ( false === stripos( $iframe_tag, 'loading=' ) ) {
+					$replaced = preg_replace( '#<iframe\b#i', '<iframe loading="lazy"', $iframe_tag );
+					// Guard against null return from preg_replace (PCRE engine failure).
+					if ( null !== $replaced ) {
+						$iframe_tag = $replaced;
+					}
+				}
+				return $iframe_tag;
+			}
+
 			if ( class_exists( 'WP_HTML_Tag_Processor' ) ) {
 				$tags = new \WP_HTML_Tag_Processor( $iframe_tag );
 				if ( $tags->next_tag( array( 'tag_name' => 'iframe' ) ) ) {
@@ -2325,6 +2352,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 							$allowed = apply_filters( 'wppo_lazyload_iframe_allowed', true, $src, '' );
 							if ( ! $allowed ) {
+								continue;
+							}
+
+							if ( $use_native_lazy ) {
+								// Native path: keep src, let the browser defer via loading="lazy".
+								if ( null === $wppo_tags->get_attribute( 'loading' ) ) {
+									$wppo_tags->set_attribute( 'loading', 'lazy' );
+								}
 								continue;
 							}
 

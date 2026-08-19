@@ -57,6 +57,25 @@ describe( 'ImageOptimization Component', () => {
 		).toBeInTheDocument();
 	} );
 
+	it( 'defaults the native lazy loading toggle to on', () => {
+		render( <ImageOptimization /> );
+		fireEvent.click( screen.getByLabelText( /Enable Lazy Load/i ) );
+
+		const toggle = screen.getByLabelText( /Use Native Lazy Loading/i );
+		expect( toggle ).toBeChecked();
+	} );
+
+	it( 'honours a stored lazyLoadNative=false override (legacy JS path)', () => {
+		render(
+			<ImageOptimization
+				options={ { lazyLoadNative: false, lazyLoadImages: true } }
+			/>
+		);
+
+		const toggle = screen.getByLabelText( /Use Native Lazy Loading/i );
+		expect( toggle ).not.toBeChecked();
+	} );
+
 	it( 'renders the client-side processing notice when WP 7.1+ media processing is active', () => {
 		global.wppoSettings.client_side_media_processing_enabled = true;
 
