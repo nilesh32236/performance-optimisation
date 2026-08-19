@@ -226,11 +226,6 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$reflection = new \ReflectionClass( $metabox );
 		$method     = $reflection->getMethod( 'process_delay_setting' );
 
-		// setAccessible(true) is deprecated in PHP 8.1.
-		if ( PHP_VERSION_ID < 80100 ) {
-			$method->setAccessible( true );
-		}
-
 		$raw_data       = array(
 			'valid-handle'   => 'interaction',
 			'empty-value'    => '',
