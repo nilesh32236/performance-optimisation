@@ -228,7 +228,7 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$method     = $reflection->getMethod( 'process_delay_setting' );
 		$method->setAccessible( true );
 
-		$raw_data = array(
+		$raw_data       = array(
 			'valid-handle'   => 'interaction',
 			'empty-value'    => '',
 			'invalid-handle' => 'viewport',
