@@ -337,6 +337,38 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that is_client_side_media_processing() reports false when the
+	 * "Force Server-Side Conversion" toggle is enabled even though core
+	 * reports client-side media processing is available.
+	 */
+	public function test_client_side_media_processing_forced_off_by_setting(): void {
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		$converter = $this->make_converter( array( 'forceServerSideConversion' => true ) );
+
+		$method = new ReflectionMethod( Img_Converter::class, 'is_client_side_media_processing' );
+		$method->setAccessible( true );
+
+		$this->assertFalse( $method->invoke( $converter ) );
+	}
+
+	/**
+	 * Test that is_client_side_media_processing() reports true when core
+	 * reports client-side media processing is available and the opt-out toggle
+	 * is not enabled (control case).
+	 */
+	public function test_client_side_media_processing_true_by_default(): void {
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		$converter = $this->make_converter();
+
+		$method = new ReflectionMethod( Img_Converter::class, 'is_client_side_media_processing' );
+		$method->setAccessible( true );
+
+		$this->assertTrue( $method->invoke( $converter ) );
+	}
+
+	/**
 	 * Test that convert_image() resolves the encode quality via
 	 * wp_get_image_encode_quality() (WP 7.1+) with the expected
 	 * MIME/size/default arguments and uses its return value for the encode.

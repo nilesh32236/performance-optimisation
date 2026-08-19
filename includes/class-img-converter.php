@@ -1064,6 +1064,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * The result is cached per blog ID to avoid re-reading the core option
 		 * on every rendered image (frontend hot path).
 		 *
+		 * When the "Force Server-Side Conversion" toggle is enabled, this returns
+		 * false even if core reports client-side processing is available, so the
+		 * plugin's own GD/Imagick pipeline is authoritative in every context
+		 * (upload metadata, serving, cron, REST) — not only on requests where
+		 * Image_Optimisation has already registered the core opt-out filter.
+		 *
 		 * @since 1.9.0
 		 *
 		 * @return bool True if client-side media processing is enabled.
@@ -1072,7 +1078,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$blog_id = get_current_blog_id();
 
 			if ( ! is_array( self::$client_side_processing_state ) || ! isset( self::$client_side_processing_state[ $blog_id ] ) ) {
-				self::$client_side_processing_state[ $blog_id ] = function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled();
+				$client_side_enabled = function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled();
+
+				if ( ! empty( $this->options['image_optimisation']['forceServerSideConversion'] ) ) {
+					$client_side_enabled = false;
+				}
+
+				self::$client_side_processing_state[ $blog_id ] = $client_side_enabled;
 			}
 
 			return self::$client_side_processing_state[ $blog_id ];

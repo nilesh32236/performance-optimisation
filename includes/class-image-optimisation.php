@@ -179,6 +179,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				&& ! empty( $this->options['image_optimisation']['clientSideMimeTypeOverride'] ) ) {
 				add_filter( 'client_side_supported_mime_types', array( $this, 'filter_client_side_supported_mime_types' ) );
 			}
+
+			// Allow the "Force Server-Side Conversion" toggle to opt out of WP 7.1+
+			// client-side media processing entirely. Core gates its own in-browser
+			// conversion on wp_is_client_side_media_processing_enabled(), so forcing
+			// this to false stops the browser worker AND lets the plugin's own
+			// GD/Imagick pipeline handle conversion without duplicate work. Registered
+			// only when the toggle is enabled and only on cores that support it.
+			if ( function_exists( 'wp_is_client_side_media_processing_enabled' )
+				&& ! empty( $this->options['image_optimisation']['forceServerSideConversion'] ) ) {
+				add_filter( 'wp_client_side_media_processing_enabled', '__return_false' );
+			}
 		}
 
 		/**

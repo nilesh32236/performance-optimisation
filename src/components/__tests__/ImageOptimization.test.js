@@ -56,4 +56,51 @@ describe( 'ImageOptimization Component', () => {
 			screen.getByLabelText( /Lazy-load CSS Background Images/i )
 		).toBeInTheDocument();
 	} );
+
+	it( 'renders the client-side processing notice when WP 7.1+ media processing is active', () => {
+		global.wppoSettings.client_side_media_processing_enabled = true;
+
+		render( <ImageOptimization /> );
+
+		expect(
+			screen.getByText(
+				/WordPress 7.1\+ is handling image conversion in the browser/i
+			)
+		).toBeInTheDocument();
+	} );
+
+	it( 'does not render the client-side processing notice when the flag is absent', () => {
+		render( <ImageOptimization /> );
+
+		expect(
+			screen.queryByText(
+				/WordPress 7.1\+ is handling image conversion in the browser/i
+			)
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'does not render the client-side processing notice when server-side conversion is forced', () => {
+		global.wppoSettings.client_side_media_processing_enabled = true;
+
+		render(
+			<ImageOptimization
+				options={ { forceServerSideConversion: true } }
+			/>
+		);
+
+		expect(
+			screen.queryByText(
+				/WordPress 7.1\+ is handling image conversion in the browser/i
+			)
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'renders and toggles the Force Server-Side Conversion switch', () => {
+		render( <ImageOptimization /> );
+
+		const toggle = screen.getByLabelText( /Force Server-Side Conversion/i );
+		expect( toggle ).not.toBeChecked();
+		fireEvent.click( toggle );
+		expect( toggle ).toBeChecked();
+	} );
 } );
