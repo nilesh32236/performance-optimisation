@@ -7,9 +7,11 @@
  * editor is always rendered in an iframe with its own `document`/`window`, so
  * any metabox JS reaching for the global `document`/`window` would target the
  * wrong document. These tests assert the rendered output contains no inline
- * script tags, i.e. no global document/window access is involved.
+ * script tags, no `addEventListener` bindings, and no `onclick` handlers, i.e.
+ * no global document/window access is involved.
  *
  * @package PerformanceOptimise\Tests
+ * @since NEXT
  */
 
 use PerformanceOptimise\Inc\Metabox;
@@ -137,6 +139,8 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'https://example.com/hero.jpg', $output );
 		$this->assertStringContainsString( 'wppo_preload_image_nonce', $output );
 		$this->assertStringNotContainsString( '<script', $output );
+		$this->assertStringNotContainsString( 'addEventListener', $output );
+		$this->assertStringNotContainsString( 'onclick=', $output );
 	}
 
 	/**
@@ -157,6 +161,8 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'Visit Page to Capture Assets', $output );
 		$this->assertStringContainsString( 'wppo_asset_manager_nonce', $output );
 		$this->assertStringNotContainsString( '<script', $output );
+		$this->assertStringNotContainsString( 'addEventListener', $output );
+		$this->assertStringNotContainsString( 'onclick=', $output );
 	}
 
 	/**
@@ -211,6 +217,8 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'high', $output );
 		$this->assertStringContainsString( 'protected', $output );
 		$this->assertStringNotContainsString( '<script', $output );
+		$this->assertStringNotContainsString( 'addEventListener', $output );
+		$this->assertStringNotContainsString( 'onclick=', $output );
 	}
 
 	/**

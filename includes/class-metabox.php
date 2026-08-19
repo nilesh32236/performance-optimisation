@@ -76,8 +76,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		/**
 		 * Renders the content of the preload image URL metabox.
 		 *
+		 * Output is purely server-side HTML (form fields + nonce). The WP 7.1+
+		 * post editor always renders in an iframe with its own document/window,
+		 * so no inline or enqueued JS may touch the global document/window for
+		 * the canvas.
+		 *
 		 * @param \WP_Post $post The current post object.
 		 * @since 1.0.0
+		 * @since NEXT Output intentionally remains server-side/iframe-safe.
 		 */
 		public function render_metabox( $post ) {
 			// Retrieve current meta value.
@@ -99,8 +105,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * Displays a list of all scripts and styles captured on the frontend
 		 * for the current post, with checkboxes to disable them.
 		 *
+		 * Output is purely server-side HTML (tables + nonce). The WP 7.1+ post
+		 * editor always renders in an iframe with its own document/window, so
+		 * no inline or enqueued JS may touch the global document/window for
+		 * the canvas.
+		 *
 		 * @param \WP_Post $post The current post object.
 		 * @since 1.1.0
+		 * @since NEXT Output intentionally remains server-side/iframe-safe.
 		 */
 		public function render_asset_manager_metabox( $post ) {
 			wp_nonce_field( 'wppo_save_asset_manager', 'wppo_asset_manager_nonce' );
