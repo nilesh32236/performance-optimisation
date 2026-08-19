@@ -522,6 +522,7 @@ describe( 'FileOptimization Component', () => {
 		act( () => {
 			jest.advanceTimersByTime( 3000 );
 		} );
+		await act( async () => {} );
 
 		await waitFor( () => {
 			expect(
@@ -561,6 +562,7 @@ describe( 'FileOptimization Component', () => {
 		act( () => {
 			jest.advanceTimersByTime( 1500 );
 		} );
+		await act( async () => {} );
 
 		// Trigger second call
 		await act( async () => {
@@ -576,6 +578,7 @@ describe( 'FileOptimization Component', () => {
 		act( () => {
 			jest.advanceTimersByTime( 1500 );
 		} );
+		await act( async () => {} );
 
 		expect( screen.getByText( 'Second update.' ) ).toBeInTheDocument();
 
@@ -583,6 +586,7 @@ describe( 'FileOptimization Component', () => {
 		act( () => {
 			jest.advanceTimersByTime( 1500 );
 		} );
+		await act( async () => {} );
 
 		await waitFor( () => {
 			expect(
