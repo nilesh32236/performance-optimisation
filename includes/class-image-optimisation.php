@@ -185,8 +185,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			// conversion on wp_is_client_side_media_processing_enabled(), so forcing
 			// this to false stops the browser worker AND lets the plugin's own
 			// GD/Imagick pipeline handle conversion without duplicate work. Registered
-			// only when the toggle is enabled and only on cores that support it.
+			// only when the toggle is enabled, the plugin's own conversion pipeline
+			// (convertImg) is active, and the core hook exists — otherwise opting out
+			// would disable core's in-browser processing while leaving no plugin
+			// pipeline to replace it (no next-gen conversion at all).
 			if ( function_exists( 'wp_is_client_side_media_processing_enabled' )
+				&& ! empty( $this->options['image_optimisation']['convertImg'] )
 				&& ! empty( $this->options['image_optimisation']['forceServerSideConversion'] ) ) {
 				add_filter( 'wp_client_side_media_processing_enabled', '__return_false' );
 			}

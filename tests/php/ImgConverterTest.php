@@ -369,6 +369,103 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that the "Force Server-Side Conversion" toggle makes the
+	 * constructor keep the plugin's own conversion format instead of mapping
+	 * 'webp' to 'none' when WP 6.7+ core handles next-gen natively.
+	 */
+	public function test_force_server_side_conversion_keeps_plugin_webp_format(): void {
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		$converter = $this->make_converter(
+			array(
+				'conversionFormat'          => 'webp',
+				'forceServerSideConversion' => true,
+			)
+		);
+
+		$this->assertSame( 'webp', $converter->get_format() );
+	}
+
+	/**
+	 * Test that the "Force Server-Side Conversion" toggle makes the
+	 * constructor keep the 'both' format so AVIF is not silently dropped when
+	 * WP 6.7+ core handles next-gen natively.
+	 */
+	public function test_force_server_side_conversion_keeps_plugin_both_format(): void {
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		$converter = $this->make_converter(
+			array(
+				'conversionFormat'          => 'both',
+				'forceServerSideConversion' => true,
+			)
+		);
+
+		$this->assertSame( 'both', $converter->get_format() );
+	}
+
+	/**
+	 * Test that without the toggle the constructor still maps 'both' down to
+	 * 'avif' on the WP 6.7+ core-native path (control for the forced case).
+	 */
+	public function test_core_native_next_gen_nulls_format_without_force(): void {
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( false );
+
+		$converter = $this->make_converter( array( 'conversionFormat' => 'both' ) );
+
+		$this->assertSame( 'avif', $converter->get_format() );
+	}
+
+	/**
+	 * Test that with "Force Server-Side Conversion" enabled the upload path
+	 * queues the plugin's own WebP conversion instead of short-circuiting via
+	 * the client-side/core-native skip branches.
+	 */
+	public function test_force_server_side_conversion_queues_upload_conversion(): void {
+		$file = $this->create_sample_png( 'forced-queue.png' );
+
+		Functions\when( 'get_attached_file' )->justReturn( $file );
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		$metadata = array(
+			'file'  => '2026/08/forced-queue.png',
+			'sizes' => array(),
+		);
+
+		$converter = $this->make_converter( array( 'forceServerSideConversion' => true ) );
+		$result    = $converter->convert_image_to_next_gen_format( $metadata, 47 );
+
+		$this->assertSame( $metadata, $result );
+
+		$info     = Img_Converter::get_img_info();
+		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+		$this->assertContains( $full_rel, $info['pending']['webp'] ?? array() );
+	}
+
+	/**
+	 * Test that the same upload path skips queuing when the toggle is off
+	 * (WP 7.1+ client-side processing is authoritative) — control for the
+	 * forced-queue case above.
+	 */
+	public function test_client_side_processing_skips_upload_queueing_by_default(): void {
+		$file = $this->create_sample_png( 'client-queue.png' );
+
+		Functions\when( 'get_attached_file' )->justReturn( $file );
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		$metadata = array(
+			'file'  => '2026/08/client-queue.png',
+			'sizes' => array(),
+		);
+
+		$converter = $this->make_converter();
+		$converter->convert_image_to_next_gen_format( $metadata, 48 );
+
+		$info = Img_Converter::get_img_info();
+		$this->assertEmpty( $info['pending']['webp'] ?? array() );
+	}
+
+	/**
 	 * Test that convert_image() resolves the encode quality via
 	 * wp_get_image_encode_quality() (WP 7.1+) with the expected
 	 * MIME/size/default arguments and uses its return value for the encode.

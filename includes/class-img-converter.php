@@ -119,8 +119,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			$this->format = $this->options['image_optimisation']['conversionFormat'] ?? 'webp';
 
-			// If WP 6.7+ natively generates next-gen formats, skip plugin's own conversion.
-			if ( self::core_handles_next_gen() ) {
+			// If WP 6.7+ natively generates next-gen formats, skip plugin's own
+			// conversion unless the "Force Server-Side Conversion" toggle opts out
+			// so the plugin's own GD/Imagick pipeline remains authoritative.
+			if ( self::core_handles_next_gen() && empty( $this->options['image_optimisation']['forceServerSideConversion'] ) ) {
 				if ( 'webp' === $this->format ) {
 					$this->format = 'none';
 				} elseif ( 'both' === $this->format ) {
@@ -247,8 +249,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return false;
 			}
 
-			// Skip WebP conversion when WP 6.7+ core handles it natively.
-			if ( in_array( $format, array( 'webp', 'both' ), true ) && self::core_handles_next_gen() ) {
+			// Skip WebP conversion when WP 6.7+ core handles it natively, unless the
+			// "Force Server-Side Conversion" toggle opts out so the plugin's own
+			// GD/Imagick pipeline runs instead of core's native generation.
+			if ( in_array( $format, array( 'webp', 'both' ), true )
+				&& self::core_handles_next_gen()
+				&& empty( $this->options['image_optimisation']['forceServerSideConversion'] ) ) {
 				$this->update_conversion_status( $source_image, 'skipped', $format );
 				return false;
 			}

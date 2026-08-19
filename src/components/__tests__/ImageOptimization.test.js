@@ -57,24 +57,36 @@ describe( 'ImageOptimization Component', () => {
 		).toBeInTheDocument();
 	} );
 
-	it( 'renders the client-side processing notice when WP 7.1+ media processing is active', () => {
+	it( 'renders the client-side processing notice when WP 7.1+ media processing is active and conversion is on', () => {
 		global.wppoSettings.client_side_media_processing_enabled = true;
 
-		render( <ImageOptimization /> );
+		render( <ImageOptimization options={ { convertImg: true } } /> );
 
 		expect(
 			screen.getByText(
-				/WordPress 7.1\+ is handling image conversion in the browser/i
+				/WordPress 7.1\+ may handle image conversion in the browser/i
 			)
 		).toBeInTheDocument();
 	} );
 
 	it( 'does not render the client-side processing notice when the flag is absent', () => {
+		render( <ImageOptimization options={ { convertImg: true } } /> );
+
+		expect(
+			screen.queryByText(
+				/WordPress 7.1\+ may handle image conversion in the browser/i
+			)
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'does not render the client-side processing notice when Auto Convert is off', () => {
+		global.wppoSettings.client_side_media_processing_enabled = true;
+
 		render( <ImageOptimization /> );
 
 		expect(
 			screen.queryByText(
-				/WordPress 7.1\+ is handling image conversion in the browser/i
+				/WordPress 7.1\+ may handle image conversion in the browser/i
 			)
 		).not.toBeInTheDocument();
 	} );
@@ -84,23 +96,56 @@ describe( 'ImageOptimization Component', () => {
 
 		render(
 			<ImageOptimization
-				options={ { forceServerSideConversion: true } }
+				options={ {
+					convertImg: true,
+					forceServerSideConversion: true,
+				} }
 			/>
 		);
 
 		expect(
 			screen.queryByText(
-				/WordPress 7.1\+ is handling image conversion in the browser/i
+				/WordPress 7.1\+ may handle image conversion in the browser/i
 			)
 		).not.toBeInTheDocument();
 	} );
 
-	it( 'renders and toggles the Force Server-Side Conversion switch', () => {
-		render( <ImageOptimization /> );
+	it( 'hides the client-side processing notice immediately when the Force toggle is enabled', () => {
+		global.wppoSettings.client_side_media_processing_enabled = true;
+
+		render( <ImageOptimization options={ { convertImg: true } } /> );
+
+		expect(
+			screen.getByText(
+				/WordPress 7.1\+ may handle image conversion in the browser/i
+			)
+		).toBeInTheDocument();
+
+		fireEvent.click(
+			screen.getByLabelText( /Force Server-Side Conversion/i )
+		);
+
+		expect(
+			screen.queryByText(
+				/WordPress 7.1\+ may handle image conversion in the browser/i
+			)
+		).not.toBeInTheDocument();
+	} );
+
+	it( 'renders and toggles the Force Server-Side Conversion switch when Auto Convert is on', () => {
+		render( <ImageOptimization options={ { convertImg: true } } /> );
 
 		const toggle = screen.getByLabelText( /Force Server-Side Conversion/i );
 		expect( toggle ).not.toBeChecked();
 		fireEvent.click( toggle );
 		expect( toggle ).toBeChecked();
+	} );
+
+	it( 'does not render the Force Server-Side Conversion switch when Auto Convert is off', () => {
+		render( <ImageOptimization /> );
+
+		expect(
+			screen.queryByLabelText( /Force Server-Side Conversion/i )
+		).not.toBeInTheDocument();
 	} );
 } );

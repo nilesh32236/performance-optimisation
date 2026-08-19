@@ -481,11 +481,12 @@ const ImageOptimization = ( { options = {} } ) => {
 					<div className="wppo-field-group">
 						{ wppoSettings?.client_side_media_processing_enabled ===
 							true &&
+							settings.convertImg &&
 							! settings.forceServerSideConversion && (
 								<NoticeBanner
 									type="info"
 									message={ __(
-										'WordPress 7.1+ is handling image conversion in the browser (client-side media processing). New uploads skip this plugin\'s server-side WebP/AVIF conversion. Enable "Force Server-Side Conversion" below to use the plugin\'s own pipeline.',
+										'WordPress 7.1+ may handle image conversion in the browser on supported browsers (client-side media processing). New uploads then skip this plugin\'s server-side WebP/AVIF conversion. Enable "Force Server-Side Conversion" below to use the plugin\'s own pipeline.',
 										'performance-optimisation'
 									) }
 									className="wppo-mb-20"
@@ -506,64 +507,89 @@ const ImageOptimization = ( { options = {} } ) => {
 						/>
 
 						{ settings.convertImg && (
-							<div className="wppo-field-nest">
-								<div className="wppo-field">
-									<label
-										className="wppo-field-label"
-										htmlFor="conversionFormat"
-									>
-										Target Format
-									</label>
-									<select
-										className="wppo-select"
-										id="conversionFormat"
-										name="conversionFormat"
-										value={ settings.conversionFormat }
-										onChange={ handleChange( setSettings ) }
-									>
-										<option value="webp">
-											WebP (Standard — 95%+ browser
-											support)
-										</option>
-										<option value="avif">
-											AVIF (Maximum Compression — newer
-											browsers only)
-										</option>
-										<option value="both">
-											Both (Best Compatibility — serves
-											AVIF where supported, WebP as
-											fallback)
-										</option>
-									</select>
+							<>
+								<div className="wppo-field-nest">
+									<div className="wppo-field">
+										<label
+											className="wppo-field-label"
+											htmlFor="conversionFormat"
+										>
+											Target Format
+										</label>
+										<select
+											className="wppo-select"
+											id="conversionFormat"
+											name="conversionFormat"
+											value={ settings.conversionFormat }
+											onChange={ handleChange(
+												setSettings
+											) }
+										>
+											<option value="webp">
+												WebP (Standard — 95%+ browser
+												support)
+											</option>
+											<option value="avif">
+												AVIF (Maximum Compression —
+												newer browsers only)
+											</option>
+											<option value="both">
+												Both (Best Compatibility —
+												serves AVIF where supported,
+												WebP as fallback)
+											</option>
+										</select>
+									</div>
+									<div className="wppo-field wppo-field--spaced">
+										<label
+											className="wppo-field-label"
+											htmlFor="excludeConvertImages"
+										>
+											Exclude from Conversion
+										</label>
+										<textarea
+											className="wppo-textarea"
+											id="excludeConvertImages"
+											name="excludeConvertImages"
+											rows="2"
+											placeholder="Partial URLs (one per line)"
+											value={
+												settings.excludeConvertImages
+											}
+											onChange={ handleChange(
+												setSettings
+											) }
+											aria-describedby="excludeConvertImages-desc"
+										/>
+										<p
+											id="excludeConvertImages-desc"
+											className="wppo-text-muted wppo-mt-10 wppo-text-small"
+										>
+											Images matching these partial URLs
+											will keep their original format.
+											Useful for logos or images where
+											exact color accuracy matters.
+										</p>
+									</div>
 								</div>
 								<div className="wppo-field wppo-field--spaced">
-									<label
-										className="wppo-field-label"
-										htmlFor="excludeConvertImages"
-									>
-										Exclude from Conversion
-									</label>
-									<textarea
-										className="wppo-textarea"
-										id="excludeConvertImages"
-										name="excludeConvertImages"
-										rows="2"
-										placeholder="Partial URLs (one per line)"
-										value={ settings.excludeConvertImages }
+									<SwitchField
+										label={ __(
+											'Force Server-Side Conversion',
+											'performance-optimisation'
+										) }
+										description={ __(
+											"Disable WordPress 7.1+ client-side (in-browser) media processing and use this plugin's own server-side WebP/AVIF conversion instead. Only applies on WordPress 7.1+; older versions are unaffected.",
+											'performance-optimisation'
+										) }
+										name="forceServerSideConversion"
+										checked={
+											settings.forceServerSideConversion
+										}
 										onChange={ handleChange( setSettings ) }
-										aria-describedby="excludeConvertImages-desc"
 									/>
-									<p
-										id="excludeConvertImages-desc"
-										className="wppo-text-muted wppo-mt-10 wppo-text-small"
-									>
-										Images matching these partial URLs will
-										keep their original format. Useful for
-										logos or images where exact color
-										accuracy matters.
-									</p>
 								</div>
-							</div>
+							</>
 						) }
 
 						<div className="wppo-field wppo-field--spaced">
@@ -637,22 +663,6 @@ const ImageOptimization = ( { options = {} } ) => {
 									</p>
 								</div>
 							) }
-						</div>
-
-						<div className="wppo-field wppo-field--spaced">
-							<SwitchField
-								label={ __(
-									'Force Server-Side Conversion',
-									'performance-optimisation'
-								) }
-								description={ __(
-									"Disable WordPress 7.1+ client-side (in-browser) media processing and use this plugin's own server-side WebP/AVIF conversion instead. Only applies on WordPress 7.1+; older versions are unaffected.",
-									'performance-optimisation'
-								) }
-								name="forceServerSideConversion"
-								checked={ settings.forceServerSideConversion }
-								onChange={ handleChange( setSettings ) }
-							/>
 						</div>
 					</div>
 				</FeatureCard>

@@ -449,10 +449,30 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that enabling "Force Server-Side Conversion" registers the core
-	 * opt-out filter so WP 7.1+ client-side media processing is disabled.
+	 * Test that enabling "Force Server-Side Conversion" with the plugin's own
+	 * conversion pipeline (convertImg) active registers the core opt-out filter
+	 * so WP 7.1+ client-side media processing is disabled.
 	 */
 	public function test_force_server_side_conversion_registers_opt_out_filter(): void {
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
+
+		$options                                     = $this->default_options;
+		$options['image_optimisation']['convertImg'] = true;
+		$options['image_optimisation']['forceServerSideConversion'] = true;
+
+		new Image_Optimisation( $options );
+
+		$this->assertTrue( Filters\has( 'wp_client_side_media_processing_enabled', '__return_false', 10 ) );
+	}
+
+	/**
+	 * Test that "Force Server-Side Conversion" being on while the plugin's own
+	 * conversion pipeline (convertImg) is off does NOT register the core
+	 * opt-out filter — otherwise core's in-browser processing would be disabled
+	 * with no plugin pipeline to replace it (no next-gen conversion at all).
+	 */
+	public function test_force_server_side_conversion_without_convert_img_registers_no_opt_out_filter(): void {
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
 		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
 
@@ -461,7 +481,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		new Image_Optimisation( $options );
 
-		$this->assertTrue( Filters\has( 'wp_client_side_media_processing_enabled', '__return_false', 10 ) );
+		$this->assertFalse( Filters\has( 'wp_client_side_media_processing_enabled' ) );
 	}
 
 	/**
@@ -472,7 +492,10 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
 		Functions\when( 'wp_is_client_side_media_processing_enabled' )->justReturn( true );
 
-		new Image_Optimisation( $this->default_options );
+		$options                                     = $this->default_options;
+		$options['image_optimisation']['convertImg'] = true;
+
+		new Image_Optimisation( $options );
 
 		$this->assertFalse( Filters\has( 'wp_client_side_media_processing_enabled' ) );
 	}
