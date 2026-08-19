@@ -32,6 +32,7 @@ const ConfirmDialog = ( {
 	const dialogRef = useRef( null );
 	const confirmBtnRef = useRef( null );
 	const focusableRef = useRef( [] );
+	const previouslyFocusedRef = useRef( null );
 
 	const handleKeyDown = useCallback(
 		( e ) => {
@@ -91,6 +92,7 @@ const ConfirmDialog = ( {
 		const currentDialog = dialogRef.current;
 		const doc = currentDialog?.ownerDocument || document;
 		if ( isOpen ) {
+			previouslyFocusedRef.current = doc.activeElement;
 			doc.addEventListener( 'keydown', handleKeyDown );
 			doc.body.style.overflow = 'hidden';
 		}
@@ -99,6 +101,22 @@ const ConfirmDialog = ( {
 			doc.body.style.overflow = '';
 		};
 	}, [ isOpen, handleKeyDown ] );
+
+	// Return focus to the element that opened the dialog when it closes.
+	useEffect( () => {
+		if ( isOpen || ! previouslyFocusedRef.current ) {
+			return;
+		}
+		const previouslyFocused = previouslyFocusedRef.current;
+		previouslyFocusedRef.current = null;
+		if (
+			previouslyFocused &&
+			typeof previouslyFocused.focus === 'function' &&
+			previouslyFocused.isConnected
+		) {
+			previouslyFocused.focus();
+		}
+	}, [ isOpen ] );
 
 	if ( ! isOpen ) {
 		return null;

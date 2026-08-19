@@ -212,7 +212,10 @@ const ImageOptimization = ( { options = {} } ) => {
 										className="wppo-field-label"
 										htmlFor="excludeFirstImages"
 									>
-										Exclude First X Images
+										{ __(
+											'Exclude First X Images',
+											'performance-optimisation'
+										) }
 									</label>
 									<input
 										className="wppo-input"
@@ -227,10 +230,10 @@ const ImageOptimization = ( { options = {} } ) => {
 										id="excludeFirstImages-desc"
 										className="wppo-text-muted wppo-mt-10 wppo-text-small"
 									>
-										Skip lazy loading for the first N images
-										on the page. Set to 1–3 to ensure your
-										hero/banner image loads immediately
-										without waiting for scroll.
+										{ __(
+											'Skip lazy loading for the first N images on the page. Set to 1–3 to ensure your hero/banner image loads immediately without waiting for scroll.',
+											'performance-optimisation'
+										) }
 									</p>
 								</div>
 								<SwitchField
@@ -322,7 +325,13 @@ const ImageOptimization = ( { options = {} } ) => {
 										</option>
 									</select>
 									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
-										<strong>None:</strong>{ ' ' }
+										<strong>
+											{ __(
+												'None',
+												'performance-optimisation'
+											) }
+											:
+										</strong>{ ' ' }
 										{ wppoSettings?.translations
 											?.placeholderNoneDesc ||
 											__(
@@ -448,14 +457,20 @@ const ImageOptimization = ( { options = {} } ) => {
 								className="wppo-field-label"
 								htmlFor="excludeVideos"
 							>
-								Exclude from Video Lazy Load
+								{ __(
+									'Exclude from Video Lazy Load',
+									'performance-optimisation'
+								) }
 							</label>
 							<textarea
 								className="wppo-textarea"
 								id="excludeVideos"
 								name="excludeVideos"
 								rows="3"
-								placeholder="Class names or partial URLs (one per line)"
+								placeholder={ __(
+									'Class names or partial URLs (one per line)',
+									'performance-optimisation'
+								) }
 								value={ settings.excludeVideos }
 								onChange={ handleChange( setSettings ) }
 								aria-describedby="excludeVideos-desc"
@@ -464,8 +479,10 @@ const ImageOptimization = ( { options = {} } ) => {
 								id="excludeVideos-desc"
 								className="wppo-text-muted wppo-mt-10 wppo-text-small"
 							>
-								Enter CSS class names or partial URLs of embeds
-								that should always load immediately.
+								{ __(
+									'Enter CSS class names or partial URLs of embeds that should always load immediately.',
+									'performance-optimisation'
+								) }
 							</p>
 						</div>
 					</div>
@@ -512,7 +529,10 @@ const ImageOptimization = ( { options = {} } ) => {
 										className="wppo-field-label"
 										htmlFor="conversionFormat"
 									>
-										Target Format
+										{ __(
+											'Target Format',
+											'performance-optimisation'
+										) }
 									</label>
 									<select
 										className="wppo-select"
@@ -522,17 +542,22 @@ const ImageOptimization = ( { options = {} } ) => {
 										onChange={ handleChange( setSettings ) }
 									>
 										<option value="webp">
-											WebP (Standard — 95%+ browser
-											support)
+											{ __(
+												'WebP (Standard — 95%+ browser support)',
+												'performance-optimisation'
+											) }
 										</option>
 										<option value="avif">
-											AVIF (Maximum Compression — newer
-											browsers only)
+											{ __(
+												'AVIF (Maximum Compression — newer browsers only)',
+												'performance-optimisation'
+											) }
 										</option>
 										<option value="both">
-											Both (Best Compatibility — serves
-											AVIF where supported, WebP as
-											fallback)
+											{ __(
+												'Both (Best Compatibility — serves AVIF where supported, WebP as fallback)',
+												'performance-optimisation'
+											) }
 										</option>
 									</select>
 								</div>
@@ -541,14 +566,20 @@ const ImageOptimization = ( { options = {} } ) => {
 										className="wppo-field-label"
 										htmlFor="excludeConvertImages"
 									>
-										Exclude from Conversion
+										{ __(
+											'Exclude from Conversion',
+											'performance-optimisation'
+										) }
 									</label>
 									<textarea
 										className="wppo-textarea"
 										id="excludeConvertImages"
 										name="excludeConvertImages"
 										rows="2"
-										placeholder="Partial URLs (one per line)"
+										placeholder={ __(
+											'Partial URLs (one per line)',
+											'performance-optimisation'
+										) }
 										value={ settings.excludeConvertImages }
 										onChange={ handleChange( setSettings ) }
 										aria-describedby="excludeConvertImages-desc"
@@ -557,10 +588,10 @@ const ImageOptimization = ( { options = {} } ) => {
 										id="excludeConvertImages-desc"
 										className="wppo-text-muted wppo-mt-10 wppo-text-small"
 									>
-										Images matching these partial URLs will
-										keep their original format. Useful for
-										logos or images where exact color
-										accuracy matters.
+										{ __(
+											'Images matching these partial URLs will keep their original format. Useful for logos or images where exact color accuracy matters.',
+											'performance-optimisation'
+										) }
 									</p>
 								</div>
 							</div>
@@ -670,7 +701,10 @@ const ImageOptimization = ( { options = {} } ) => {
 								className="wppo-field-label"
 								htmlFor="maxWidthImgSize"
 							>
-								Max Image Width (px)
+								{ __(
+									'Max Image Width (px)',
+									'performance-optimisation'
+								) }
 							</label>
 							<input
 								className="wppo-input"
@@ -685,11 +719,20 @@ const ImageOptimization = ( { options = {} } ) => {
 								id="maxWidthImgSize-desc"
 								className="wppo-text-muted wppo-mt-10 wppo-text-small"
 							>
-								Images wider than this value will have a{ ' ' }
-								<code>max-width</code> style applied. Set to{ ' ' }
-								<code>0</code> to disable. Useful for preventing
-								oversized images from breaking layouts on small
-								screens.
+								{ __(
+									'Images wider than this value will have a',
+									'performance-optimisation'
+								) }{ ' ' }
+								<code>max-width</code>{ ' ' }
+								{ __(
+									'style applied. Set to',
+									'performance-optimisation'
+								) }{ ' ' }
+								<code>0</code>{ ' ' }
+								{ __(
+									'to disable. Useful for preventing oversized images from breaking layouts on small screens.',
+									'performance-optimisation'
+								) }
 							</p>
 						</div>
 						<div className="wppo-field">
@@ -697,14 +740,20 @@ const ImageOptimization = ( { options = {} } ) => {
 								className="wppo-field-label"
 								htmlFor="excludeSize"
 							>
-								Exclude Classes from Max Width
+								{ __(
+									'Exclude Classes from Max Width',
+									'performance-optimisation'
+								) }
 							</label>
 							<input
 								className="wppo-input"
 								id="excludeSize"
 								type="text"
 								name="excludeSize"
-								placeholder="e.g. 300, 600, 1200"
+								placeholder={ __(
+									'e.g. 300, 600, 1200',
+									'performance-optimisation'
+								) }
 								value={ settings.excludeSize }
 								onChange={ handleChange( setSettings ) }
 								aria-describedby="excludeSize-desc"
@@ -713,9 +762,10 @@ const ImageOptimization = ( { options = {} } ) => {
 								id="excludeSize-desc"
 								className="wppo-text-muted wppo-mt-10 wppo-text-small"
 							>
-								Comma-separated image width values (pixels).
-								Images with these widths in srcset will be
-								skipped.
+								{ __(
+									'Comma-separated image width values (pixels). Images with these widths in srcset will be skipped.',
+									'performance-optimisation'
+								) }
 							</p>
 						</div>
 					</div>
@@ -860,14 +910,20 @@ const ImageOptimization = ( { options = {} } ) => {
 											className="wppo-field-label"
 											htmlFor="excludePostTypeImgUrl"
 										>
-											Exclude URLs from Preload
+											{ __(
+												'Exclude URLs from Preload',
+												'performance-optimisation'
+											) }
 										</label>
 										<textarea
 											className="wppo-textarea"
 											id="excludePostTypeImgUrl"
 											name="excludePostTypeImgUrl"
 											rows="2"
-											placeholder="Partial URLs (one per line)"
+											placeholder={ __(
+												'Partial URLs (one per line)',
+												'performance-optimisation'
+											) }
 											value={
 												settings.excludePostTypeImgUrl
 											}

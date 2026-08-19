@@ -73,8 +73,13 @@ describe( 'WebVitalsRum', () => {
 		render( <WebVitalsRum /> );
 
 		await waitFor( () =>
-			expect( apiCall ).toHaveBeenCalledWith( 'rum_data', {}, 'GET' )
+			expect(
+				screen.getByText( 'Failed to load real-user data.' )
+			).toBeInTheDocument()
 		);
+		expect(
+			screen.queryByText( /No real-user data yet/i )
+		).not.toBeInTheDocument();
 
 		errorSpy.mockRestore();
 	} );

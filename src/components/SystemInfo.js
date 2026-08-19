@@ -151,69 +151,108 @@ const SystemInfo = () => {
 			{ info && (
 				<div className="wppo-sysinfo-grid">
 					<InfoTable
-						title="PHP"
+						title={ __( 'PHP', 'performance-optimisation' ) }
 						data={ info.php }
 						labels={ {
 							version: __(
 								'PHP Version',
 								'performance-optimisation'
 							),
-							sapi: 'SAPI',
+							sapi: __( 'SAPI', 'performance-optimisation' ),
 							memory_limit: __(
 								'Memory Limit',
 								'performance-optimisation'
 							),
-							max_execution_time: 'Max Execution Time',
-							upload_max_filesize: 'Upload Max Filesize',
-							post_max_size: 'Post Max Size',
-							display_errors: 'Display Errors',
-							extensions_count: 'Extensions Loaded',
+							max_execution_time: __(
+								'Max Execution Time',
+								'performance-optimisation'
+							),
+							upload_max_filesize: __(
+								'Upload Max Filesize',
+								'performance-optimisation'
+							),
+							post_max_size: __(
+								'Post Max Size',
+								'performance-optimisation'
+							),
+							display_errors: __(
+								'Display Errors',
+								'performance-optimisation'
+							),
+							extensions_count: __(
+								'Extensions Loaded',
+								'performance-optimisation'
+							),
 						} }
 					/>
 					<InfoTable
-						title="Database"
+						title={ __( 'Database', 'performance-optimisation' ) }
 						data={ info.database }
 						labels={ {
 							server_version: __(
 								'DB Version',
 								'performance-optimisation'
 							),
-							extension: 'Extension',
-							client_version: 'Client Version',
-							max_connections: 'Max Connections',
+							extension: __(
+								'Extension',
+								'performance-optimisation'
+							),
+							client_version: __(
+								'Client Version',
+								'performance-optimisation'
+							),
+							max_connections: __(
+								'Max Connections',
+								'performance-optimisation'
+							),
 						} }
 					/>
 					<InfoTable
-						title="WordPress"
+						title={ __( 'WordPress', 'performance-optimisation' ) }
 						data={ info.wordpress }
 						labels={ {
 							version: __(
 								'WP Version',
 								'performance-optimisation'
 							),
-							environment_type: 'Environment',
-							permalink_structure: 'Permalink Structure',
+							environment_type: __(
+								'Environment',
+								'performance-optimisation'
+							),
+							permalink_structure: __(
+								'Permalink Structure',
+								'performance-optimisation'
+							),
 							using_https: __(
 								'HTTPS',
 								'performance-optimisation'
 							),
-							multisite: 'Multisite',
+							multisite: __(
+								'Multisite',
+								'performance-optimisation'
+							),
 						} }
 					/>
 					<InfoTable
-						title="Server"
+						title={ __( 'Server', 'performance-optimisation' ) }
 						data={ info.server }
 						labels={ {
 							server_software: __(
 								'Server Software',
 								'performance-optimisation'
 							),
-							os: 'Operating System',
-							architecture: 'Architecture',
+							os: __(
+								'Operating System',
+								'performance-optimisation'
+							),
+							architecture: __(
+								'Architecture',
+								'performance-optimisation'
+							),
 						} }
 					/>
 					<InfoTable
-						title="Cache"
+						title={ __( 'Cache', 'performance-optimisation' ) }
 						data={ {
 							object_cache_status:
 								info.cache?.object_cache_status,
@@ -232,12 +271,18 @@ const SystemInfo = () => {
 								'Active Cache Plugin',
 								'performance-optimisation'
 							),
-							peak_memory_usage: 'Peak Memory',
-							current_memory_usage: 'Current Memory',
+							peak_memory_usage: __(
+								'Peak Memory',
+								'performance-optimisation'
+							),
+							current_memory_usage: __(
+								'Current Memory',
+								'performance-optimisation'
+							),
 						} }
 					/>
 					<InfoTable
-						title="OPCache"
+						title={ __( 'OPCache', 'performance-optimisation' ) }
 						data={ info.opcache }
 						labels={ {
 							status: __( 'Status', 'performance-optimisation' ),
@@ -293,7 +338,10 @@ const SystemInfo = () => {
 						} }
 					/>
 					<InfoTable
-						title="WP Constants"
+						title={ __(
+							'WP Constants',
+							'performance-optimisation'
+						) }
 						data={ info.wp_constants }
 					/>
 				</div>

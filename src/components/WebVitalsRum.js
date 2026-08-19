@@ -44,9 +44,11 @@ const dayAverages = ( day ) => {
 const WebVitalsRum = () => {
 	const [ data, setData ] = useState( [] );
 	const [ loading, setLoading ] = useState( true );
+	const [ error, setError ] = useState( null );
 
 	const load = useCallback( async () => {
 		setLoading( true );
+		setError( null );
 		try {
 			const response = await apiCall( 'rum_data', {}, 'GET' );
 			if ( response.success && response.data ) {
@@ -58,9 +60,23 @@ const WebVitalsRum = () => {
 					} ) )
 					.slice( -14 );
 				setData( rows );
+			} else {
+				setError(
+					response.message ||
+						__(
+							'Failed to load real-user data.',
+							'performance-optimisation'
+						)
+				);
 			}
-		} catch ( error ) {
-			console.error( 'Error fetching RUM data:', error );
+		} catch ( loadError ) {
+			setError(
+				__(
+					'Failed to load real-user data.',
+					'performance-optimisation'
+				)
+			);
+			console.error( 'Error fetching RUM data:', loadError );
 		} finally {
 			setLoading( false );
 		}
@@ -76,6 +92,47 @@ const WebVitalsRum = () => {
 			: `${ Math.round( value ) } ms`;
 	const fmtCls = ( value ) =>
 		value === null || value === undefined ? '—' : value.toFixed( 3 );
+
+	let body;
+	if ( error ) {
+		body = <p className="wppo-text-muted">{ error }</p>;
+	} else if ( data.length === 0 && ! loading ) {
+		body = (
+			<p className="wppo-text-muted">
+				{ __(
+					'No real-user data yet. Enable "Collect Real-user Web Vitals" in Tools and wait for visitors.',
+					'performance-optimisation'
+				) }
+			</p>
+		);
+	} else {
+		body = (
+			<table className="wppo-rum-table wppo-table">
+				<thead>
+					<tr>
+						<th>{ __( 'Day', 'performance-optimisation' ) }</th>
+						<th>{ __( 'LCP', 'performance-optimisation' ) }</th>
+						<th>{ __( 'INP', 'performance-optimisation' ) }</th>
+						<th>{ __( 'CLS', 'performance-optimisation' ) }</th>
+						<th>{ __( 'FCP', 'performance-optimisation' ) }</th>
+						<th>{ __( 'TTFB', 'performance-optimisation' ) }</th>
+					</tr>
+				</thead>
+				<tbody>
+					{ data.map( ( row ) => (
+						<tr key={ row.day }>
+							<td>{ row.day }</td>
+							<td>{ fmtMs( row.lcp ) }</td>
+							<td>{ fmtMs( row.inp ) }</td>
+							<td>{ fmtCls( row.cls ) }</td>
+							<td>{ fmtMs( row.fcp ) }</td>
+							<td>{ fmtMs( row.ttfb ) }</td>
+						</tr>
+					) ) }
+				</tbody>
+			</table>
+		);
+	}
 
 	return (
 		<FeatureCard
@@ -100,41 +157,7 @@ const WebVitalsRum = () => {
 					'performance-optimisation'
 				) }
 			</p>
-			{ data.length === 0 && ! loading ? (
-				<p className="wppo-text-muted">
-					{ __(
-						'No real-user data yet. Enable "Collect Real-user Web Vitals" in Tools and wait for visitors.',
-						'performance-optimisation'
-					) }
-				</p>
-			) : (
-				<table className="wppo-rum-table wppo-table">
-					<thead>
-						<tr>
-							<th>{ __( 'Day', 'performance-optimisation' ) }</th>
-							<th>{ __( 'LCP', 'performance-optimisation' ) }</th>
-							<th>{ __( 'INP', 'performance-optimisation' ) }</th>
-							<th>{ __( 'CLS', 'performance-optimisation' ) }</th>
-							<th>{ __( 'FCP', 'performance-optimisation' ) }</th>
-							<th>
-								{ __( 'TTFB', 'performance-optimisation' ) }
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{ data.map( ( row ) => (
-							<tr key={ row.day }>
-								<td>{ row.day }</td>
-								<td>{ fmtMs( row.lcp ) }</td>
-								<td>{ fmtMs( row.inp ) }</td>
-								<td>{ fmtCls( row.cls ) }</td>
-								<td>{ fmtMs( row.fcp ) }</td>
-								<td>{ fmtMs( row.ttfb ) }</td>
-							</tr>
-						) ) }
-					</tbody>
-				</table>
-			) }
+			{ body }
 			{ data.length > 0 && (
 				<p className="wppo-text-muted wppo-text-small">
 					{ sprintf(
