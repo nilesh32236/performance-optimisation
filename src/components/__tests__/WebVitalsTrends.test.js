@@ -92,7 +92,9 @@ describe( 'WebVitalsTrends Component', () => {
 			new Error( 'Network error' )
 		);
 
-		const consoleSpy = jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		const consoleSpy = jest
+			.spyOn( console, 'error' )
+			.mockImplementation( () => {} );
 
 		try {
 			render( <WebVitalsTrends url="https://example.com/" /> );
