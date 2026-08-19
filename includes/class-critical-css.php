@@ -3,7 +3,7 @@
  * Critical CSS Generation for above-the-fold optimization.
  *
  * @package PerformanceOptimise\Inc
- * @since   2.0.0
+ * @since NEXT
  */
 
 namespace PerformanceOptimise\Inc;
@@ -23,7 +23,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 	 * full stylesheets. Uses heuristic PHP-based extraction with no external
 	 * dependencies.
 	 *
-	 * @since 2.0.0
+	 * @since NEXT
 	 */
 	class Critical_CSS {
 
@@ -31,7 +31,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Directory for CCSS files.
 		 *
 		 * @var string
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private const CCSS_DIR = '/cache/wppo/ccss';
 
@@ -41,7 +41,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Uses precise token-based matching to avoid false positives.
 		 *
 		 * @var string[]
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private const ABOVE_FOLD_SELECTORS = array(
 			'html',
@@ -98,7 +98,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * CSS handles to skip during deferral.
 		 *
 		 * @var string[]
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private const SKIP_DEFER_HANDLES = array(
 			'wppo-combine-css',
@@ -112,7 +112,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Maximum recursion depth for @import resolution.
 		 *
 		 * @var int
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private const MAX_IMPORT_DEPTH = 3;
 
@@ -120,7 +120,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Get the CCSS directory path.
 		 *
 		 * @return string
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function get_ccss_dir(): string {
 			return wp_normalize_path( WP_CONTENT_DIR . self::CCSS_DIR );
@@ -130,7 +130,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Get the CCSS directory URL.
 		 *
 		 * @return string
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function get_ccss_url(): string {
 			return WP_CONTENT_URL . self::CCSS_DIR;
@@ -141,7 +141,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template Optional template slug. Defaults to current template via get_current_template_slug().
 		 * @return string MD5 hash.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function get_template_hash( string $template = '' ): string {
 			if ( empty( $template ) ) {
@@ -156,7 +156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Maps WordPress conditional tags to the template slugs used in get_templates().
 		 *
 		 * @return string Template slug: 'home', 'single', 'page', 'archive', or 'index'.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function get_current_template_slug(): string {
 			if ( is_front_page() || is_home() ) {
@@ -179,7 +179,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash The template hash.
 		 * @return string Full file path.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function get_ccss_file( string $template_hash ): string {
 			return self::get_ccss_dir() . '/' . $template_hash . '.css';
@@ -190,7 +190,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash The template hash.
 		 * @return bool
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function ccss_exists( string $template_hash ): bool {
 			return file_exists( self::get_ccss_file( $template_hash ) );
@@ -203,7 +203,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * are arrays with 'status' and 'label' keys.
 		 *
 		 * @return array<string, array{status: string, label: string}> Template hash => status + label.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function get_status_all(): array {
 			$templates = self::get_templates();
@@ -232,7 +232,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Get the list of supported templates.
 		 *
 		 * @return array<string, string> Template identifier => Label.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function get_templates(): array {
 			$templates = array(
@@ -258,7 +258,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template Template identifier.
 		 * @return string|false URL or false if not found.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function get_sample_url( string $template ): string|false {
 			switch ( $template ) {
@@ -316,7 +316,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $url The page URL to generate CCSS for.
 		 * @return string|false The critical CSS content, or false on failure.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function generate( string $url ) {
 			$response = wp_remote_get(
@@ -413,7 +413,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $url   The stylesheet URL.
 		 * @param int    $depth Current recursion depth.
 		 * @return string The combined CSS content with @imports inlined, or empty string on failure.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function fetch_stylesheet_with_imports( string $url, int $depth = 0 ): string {
 			if ( $depth > self::MAX_IMPORT_DEPTH ) {
@@ -461,7 +461,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $import_url The URL from the @import statement.
 		 * @param string $base_url   The base stylesheet URL.
 		 * @return string The absolute resolved URL, or empty string if unresolvable.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function resolve_import_url( string $import_url, string $base_url ): string {
 			// If already absolute, return as-is.
@@ -505,7 +505,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $css Full CSS content.
 		 * @return string Extracted critical CSS.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function extract_above_fold_css( string $css ): string {
 			$critical_parts = array();
@@ -563,7 +563,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $css            Full CSS content.
 		 * @param array  $critical_parts Reference to array of extracted critical CSS parts.
 		 * @return void
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function parse_regular_rules( string $css, array &$critical_parts ): void {
 			$length   = strlen( $css );
@@ -617,7 +617,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $media_query Full media query block.
 		 * @return string Filtered media query or empty string.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function filter_media_query_rules( string $media_query ): string {
 			$header_end = strpos( $media_query, '{' );
@@ -662,7 +662,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $selector The CSS selector string (may contain multiple selectors separated by commas).
 		 * @return bool True if any individual selector should be included in critical CSS.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function matches_above_fold( string $selector ): bool {
 			$selector = trim( $selector );
@@ -695,7 +695,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $selector A single trimmed CSS selector.
 		 * @return bool True if the selector matches.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function matches_above_fold_single( string $selector ): bool {
 			$selector = trim( $selector );
@@ -736,7 +736,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $selector_part A single selector fragment (e.g., '.container', '#header', 'h1').
 		 * @param string $above         The above-fold selector pattern to match against.
 		 * @return bool True if the selector part matches the pattern.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function token_match( string $selector_part, string $above ): bool {
 			if ( $selector_part === $above ) {
@@ -755,7 +755,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $template_hash The template hash.
 		 * @param string $template      The template identifier.
 		 * @return bool True on success, false on failure.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private static function generate_and_store( string $template_hash, string $template ): bool {
 			$url = self::get_sample_url( $template );
@@ -801,7 +801,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * to match the hashes stored by generate_and_store().
 		 *
 		 * @return void
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function inline_ccss(): void {
 			if ( is_admin() ) {
@@ -848,7 +848,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @param string $handle The stylesheet handle.
 		 * @param string $href   The stylesheet URL.
 		 * @return string Modified link tag.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function defer_stylesheets( string $tag, string $handle, string $href ): string {
 			if ( is_admin() ) {
@@ -894,7 +894,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param array $args Arguments containing 'template_hash'.
 		 * @return void
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function background_generate( array $args ): void {
 			$template_hash = $args['template_hash'] ?? '';
@@ -942,7 +942,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Regenerate all template CCSS files via Action Scheduler.
 		 *
 		 * @return int Number of jobs queued.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function regenerate_all(): int {
 			$templates = self::get_templates();
@@ -981,7 +981,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * Clear all CCSS files and status transients.
 		 *
 		 * @return void
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public static function clear_all(): void {
 			$dir = self::get_ccss_dir();

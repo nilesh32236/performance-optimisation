@@ -386,7 +386,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 *
 		 * @param string $key The $_POST key to check.
 		 * @return array The raw unslashed array, or an empty array if invalid.
-		 * @since 2.16.0
+		 * @since NEXT
 		 */
 		private function get_raw_post_array( string $key ): array {
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
@@ -399,7 +399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @param array $raw_data      Raw input array from $_POST.
 		 * @param array $valid_handles Array of valid handles for the page.
 		 * @return array Sanitized and whitelisted array of disabled handles.
-		 * @since 2.16.0
+		 * @since NEXT
 		 */
 		private function process_disabled_assets( array $raw_data, array $valid_handles ): array {
 			if ( empty( $raw_data ) ) {
@@ -416,7 +416,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 		 * @param array $valid_handles  Array of valid script handles for the page.
 		 * @param array $allowed_values Array of valid values for the setting.
 		 * @return array Sanitized and whitelisted associative array.
-		 * @since 2.16.0
+		 * @since NEXT
 		 */
 		private function process_delay_setting( array $raw_data, array $valid_handles, array $allowed_values ): array {
 			if ( empty( $raw_data ) ) {
@@ -428,9 +428,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				$clean_handle = sanitize_text_field( $handle );
 				$clean_value  = sanitize_text_field( $value );
 
-				if ( in_array( $clean_handle, $valid_handles, true ) && in_array( $clean_value, $allowed_values, true ) && '' !== $clean_value ) {
-					$saved_settings[ $clean_handle ] = $clean_value;
+				if ( '' === $clean_value ) {
+					continue;
 				}
+
+				if ( ! in_array( $clean_handle, $valid_handles, true ) ) {
+					continue;
+				}
+
+				if ( ! in_array( $clean_value, $allowed_values, true ) ) {
+					continue;
+				}
+
+				$saved_settings[ $clean_handle ] = $clean_value;
 			}
 
 			return $saved_settings;

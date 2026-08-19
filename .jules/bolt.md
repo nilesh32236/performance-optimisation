@@ -97,3 +97,8 @@
 ## 2026-08-05 - Avoid duplicating URL matching logic
 **Learning:** The URL exclusion matching logic used in `remove_woocommerce_scripts()` was highly redundant and manually re-implemented string checking logic already centralized in `Util::is_url_excluded()`.
 **Action:** Always prefer centralized utility functions (like `Util::is_url_excluded()`) over re-implementing matching logic for lists of URLs. This reduces potential bugs and ensures cacheable results like `Util::cached_home_url()` are utilized properly.
+
+## 2026-08-16 - Replacing Regex in Loops with Native String Methods
+
+**Learning:** When normalizing URLs or performing string manipulation inside a loop (like iterating through `$exclude_urls` in `Util::is_url_excluded`), using `preg_replace()` for simple scheme stripping adds significant overhead, especially since the same target string may be redundantly normalized for every exclusion rule.
+**Action:** Replace `preg_replace( '#^https?://#i', '', $str )` with a faster native closure using `stripos()` and `substr()`. Additionally, hoist the normalization of any loop-invariant strings out of the `foreach` to execute exactly once.

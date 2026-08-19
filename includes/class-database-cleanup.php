@@ -36,7 +36,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Keys correspond to cleanup types; values are unprefixed table identifiers
 		 * passed to `$wpdb->{table}` for dynamic table name resolution.
 		 *
-		 * @since 4.0.0
+		 * @since NEXT
 		 * @var array<string, array<string>>
 		 */
 		public const TABLE_MAP = array(
@@ -54,7 +54,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Maps cleanup method names to their cleanup type keys for TABLE_MAP lookup.
 		 *
-		 * @since 4.0.0
+		 * @since NEXT
 		 * @var array<string, string>
 		 */
 		private const METHOD_TO_TYPE = array(
@@ -72,7 +72,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Option key used for the DB cleanup counts cache salt.
 		 *
-		 * @since 2.5.0
+		 * @since NEXT
 		 * @var string
 		 */
 		private const SALT_KEY = 'wppo_db_cleanup_salt';
@@ -616,7 +616,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * referenced by any post, page, or custom post type. Unattached media
 		 * accumulates quickly on busy sites and bloats the database.
 		 *
-		 * @since 2.17.0
+		 * @since NEXT
 		 * @return int|false Number of attachments deleted, or false on error.
 		 */
 		public static function clean_unattached_media() {
@@ -665,7 +665,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Uses the core API when available (WP 6.6+ introduced the `auto-on`
 		 * value) and falls back to the full historical list otherwise.
 		 *
-		 * @since 2.18.0
+		 * @since NEXT
 		 * @return string[]
 		 */
 		public static function get_autoloadable_values(): array {
@@ -681,7 +681,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Mirrors the Performance Lab autoloaded-options health check so users can
 		 * identify option bloat that inflates every page load.
 		 *
-		 * @since 2.18.0
+		 * @since NEXT
 		 *
 		 * @param int $limit Maximum number of options to return.
 		 * @return array<int, array{option_name:string,size:int}> Sorted by size.
@@ -987,7 +987,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		/**
 		 * Invalidate the DB cleanup counts cache by incrementing the salt or deleting the transient.
 		 *
-		 * @since 2.5.0
+		 * @since NEXT
 		 * @return void
 		 */
 		public static function invalidate_counts_cache(): void {
@@ -1003,7 +1003,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * @param int           $post_id Post ID.
 		 * @param \WP_Post|null $post    Post object.
-		 * @since 2.5.0
+		 * @since NEXT
 		 * @return void
 		 */
 		public static function on_post_change( $post_id, ?\WP_Post $post = null ): void {
@@ -1021,7 +1021,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Queries `information_schema.TABLES` to determine the total size.
 		 *
-		 * @since 4.0.0
+		 * @since NEXT
 		 *
 		 * @param string $table Full table name (including prefix).
 		 * @return int Table size in bytes, or 0 if unknown.
@@ -1047,7 +1047,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Skips tables larger than 1 GB to avoid long table locks.
 		 * Logs the result via {@see Log::add()}.
 		 *
-		 * @since 4.0.0
+		 * @since NEXT
 		 *
 		 * @param string $table Unprefixed table identifier (e.g. 'posts', 'postmeta').
 		 * @return bool True on success, false on failure or if skipped.
@@ -1105,7 +1105,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 *
 		 * Deduplicates table names and calls {@see optimize_table()} for each.
 		 *
-		 * @since 4.0.0
+		 * @since NEXT
 		 *
 		 * @param array<string> $table_names Unprefixed table identifiers (e.g. 'posts', 'commentmeta').
 		 * @param bool          $enabled     Whether optimization is enabled.

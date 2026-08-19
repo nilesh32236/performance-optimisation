@@ -49,11 +49,10 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
-  workflows: write
-  # workflows: write is required so the fix agent can push changes that touch
-  # .github/workflows/*. GITHUB_TOKEN without this permission gets rejected with
-  # "refusing to allow a GitHub App to create or update workflow ... without
-  # workflows permission", which fails the whole autofix push.
+  # Workflow-file writes are handled by the GH_PAT (repo scope), not GITHUB_TOKEN:
+  # GitHub does not allow a `workflows` scope in the permissions block, and the
+  # action steps use `secrets.GH_PAT || secrets.GITHUB_TOKEN` so the PAT (which
+  # may write .github/workflows/*) wins when it is configured.
 
 # Outer group: differ by actor so bot-generated events don't compete with
 # human-triggered reviews.  cancel-in-progress: false everywhere.
@@ -146,6 +145,9 @@ jobs:
             3. npm test — Jest unit tests
             4. npm run build — wp-scripts compile
             All 4 must pass before considering the fix complete.
+            Versioning rule: Never invent a version number. New functions, classes, and methods
+            get @since NEXT (the NEXT placeholder is replaced with the real version at release time).
+            Do not guess future versions like 2.0.0 or 3.8.0.
 
   # ── 2. REVIEW ────────────────────────────────────────────────────────────────
   # Triggered on human-created PRs only.
@@ -334,6 +336,9 @@ jobs:
             3. npm test — Jest unit tests
             4. npm run build — wp-scripts compile
             All 4 must pass before considering the fix complete.
+            Versioning rule: Never invent a version number. New functions, classes, and methods
+            get @since NEXT (the NEXT placeholder is replaced with the real version at release time).
+            Do not guess future versions like 2.0.0 or 3.8.0.
 
   # ── 4. AUTO-MERGE ────────────────────────────────────────────────────────────
   # Squash-merges and deletes the branch when "autofix:ready" label is added.

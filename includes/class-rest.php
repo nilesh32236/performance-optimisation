@@ -284,7 +284,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * and error message structure. Enables API discoverability and integration
 		 * with WP REST API tooling.
 		 *
-		 * @since 2.1.0
+		 * @since NEXT
 		 *
 		 * @return array The JSON schema definition.
 		 */
@@ -1336,7 +1336,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * trend option data so the React Dashboard can render trend charts.
 		 *
 		 * @param \WP_REST_Request $request The request object.
-		 * @since 2.14.0
+		 * @since NEXT
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_web_vitals_trends( \WP_REST_Request $request ): \WP_REST_Response {
@@ -1477,7 +1477,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Regenerate critical CSS for all templates.
 		 *
 		 * @param \WP_REST_Request $_request The request object.
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function regenerate_ccss( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -1499,7 +1499,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Get critical CSS status per template.
 		 *
 		 * @param \WP_REST_Request $_request The request object.
-		 * @since 2.0.0
+		 * @since NEXT
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_ccss_status( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
@@ -1511,7 +1511,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Dismisses the welcome panel for the current user.
 		 *
-		 * @since 2.8.0
+		 * @since NEXT
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function dismiss_welcome(): \WP_REST_Response {

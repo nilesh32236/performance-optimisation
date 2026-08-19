@@ -116,3 +116,22 @@
 	flex-wrap: wrap;
 	gap: 8px;
 }
+
+.wppo-checkbox-option {
+	.wppo-option-description {
+		margin: 4px 0 0 var(--wppo-nest-indent);
+		font-size: 13px;
+		line-height: 1.5;
+		color: var(--wppo-text-muted);
+	}
+}
+
+.wppo-checkbox-option--spaced {
+	margin-bottom: 16px;
+
+	.wppo-option-label-text {
+		font-size: 14px;
+		font-weight: 600;
+		color: var(--wppo-text-main);
+	}
+}

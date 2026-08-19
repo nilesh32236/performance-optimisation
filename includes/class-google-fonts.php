@@ -7,7 +7,7 @@
  * DNS lookups, improve GDPR compliance, and apply font-display: swap.
  *
  * @package PerformanceOptimise\Inc
- * @since   2.7.0
+ * @since NEXT
  */
 
 namespace PerformanceOptimise\Inc;
@@ -21,7 +21,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 	/**
 	 * Class Google_Fonts
 	 *
-	 * @since 2.7.0
+	 * @since NEXT
 	 */
 	class Google_Fonts {
 
@@ -29,7 +29,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Font cache subdirectory under WP_CONTENT_DIR /cache/wppo/.
 		 *
 		 * @var string
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		private const FONTS_CACHE_DIR = '/cache/wppo/fonts';
 
@@ -37,7 +37,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Chrome 120+ user-agent to request woff2 format from Google Fonts API.
 		 *
 		 * @var string
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		private const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -45,7 +45,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Plugin settings.
 		 *
 		 * @var array
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		private array $options;
 
@@ -53,7 +53,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Font cache directory path.
 		 *
 		 * @var string
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		private string $font_cache_dir;
 
@@ -61,7 +61,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Font cache directory URL.
 		 *
 		 * @var string
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		private string $font_cache_url;
 
@@ -69,7 +69,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Constructor.
 		 *
 		 * @param array $options Plugin settings array.
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		public function __construct( array $options ) {
 			$this->options        = $options;
@@ -86,7 +86,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @param string $handle The stylesheet handle.
 		 * @param string $href   The stylesheet URL.
 		 * @return string Modified link tag with local URL or original tag.
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		public function process_style_tag( $tag, $handle, $href ) {
 			if ( is_admin() ) {
@@ -123,7 +123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * @param string $buffer The HTML buffer.
 		 * @return string The modified HTML buffer.
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		public function process_buffer( $buffer ) {
 			$enabled = $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false;
@@ -165,7 +165,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * @param string $url The Google Fonts CSS URL.
 		 * @return string Local CSS URL on success, empty string on failure.
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		public function download_and_rewrite( $url ) {
 			$url = $this->normalize_google_fonts_url( $url );
@@ -252,7 +252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * @param string $url The raw URL.
 		 * @return string Normalized URL or empty string if not a Google Fonts URL.
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		private function normalize_google_fonts_url( $url ) {
 			if ( false === strpos( $url, 'fonts.googleapis.com' ) ) {
@@ -276,7 +276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @param string $url   The font file URL.
 		 * @param string $dest  Local destination path.
 		 * @return bool True on success, false on failure.
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		private function download_font_file( $url, $dest ) {
 			$tmp = $dest . '.tmp.' . wp_rand();
@@ -317,7 +317,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * Clear the entire Google Fonts cache directory.
 		 *
 		 * @return void
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		public static function clear_font_cache() {
 			$font_cache_dir = wp_normalize_path( WP_CONTENT_DIR . self::FONTS_CACHE_DIR );

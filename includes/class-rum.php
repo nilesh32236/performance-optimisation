@@ -17,7 +17,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 	 * protected with a daily rolling token and per-IP rate limiting instead of
 	 * the manage_options permission used by the admin endpoints.
 	 *
-	 * @since 2.18.0
+	 * @since NEXT
 	 */
 	class RUM {
 

@@ -67,7 +67,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Default delay strategy: 'interaction', 'idle', or 'viewport'.
 		 *
 		 * @var   string
-		 * @since 3.8.0
+		 * @since NEXT
 		 */
 		private string $delay_js_default_strategy = 'interaction';
 
@@ -75,7 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * List of script handles/URLs to load via requestIdleCallback.
 		 *
 		 * @var   array
-		 * @since 3.8.0
+		 * @since NEXT
 		 */
 		private array $delay_js_idle_list = array();
 
@@ -83,7 +83,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * List of script handles/URLs to load when in viewport.
 		 *
 		 * @var   array
-		 * @since 3.8.0
+		 * @since NEXT
 		 */
 		private array $delay_js_viewport_list = array();
 
@@ -91,7 +91,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Map of script handles/URLs to priority ('high', 'normal', 'low').
 		 *
 		 * @var   array<string, string>
-		 * @since 3.8.0
+		 * @since NEXT
 		 */
 		private array $delay_js_priority = array();
 
@@ -99,7 +99,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Idle callback timeout in milliseconds (default 3000).
 		 *
 		 * @var   int
-		 * @since 3.8.0
+		 * @since NEXT
 		 */
 		private int $delay_js_idle_timeout = 3000;
 
@@ -107,7 +107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Associative array of deferred script handles (keyed by handle for O(1) lookups).
 		 *
 		 * @var   array<string, bool>
-		 * @since 2.4.0
+		 * @since NEXT
 		 */
 		private array $deferred_handles = array();
 
@@ -115,7 +115,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Cache instance for static HTML cache operations.
 		 *
 		 * @var   Cache|null
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private $cache;
 
@@ -139,7 +139,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Google_Fonts instance for hosting Google Fonts locally.
 		 *
 		 * @var   Google_Fonts
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		private Google_Fonts $google_fonts;
 
@@ -991,7 +991,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @param int      $post_id Post ID.
 		 * @param \WP_Post $post    Post object.
 		 * @param bool     $update  Whether this is an existing post being updated.
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public function on_save_post_invalidate_cache( $post_id, $post, $update ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found, Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			if ( wp_is_post_revision( $post_id ) || wp_is_post_autosave( $post_id ) ) {
@@ -1244,7 +1244,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 *
 		 * Checks block theme (theme.json) first, then classic theme (customizer).
 		 *
-		 * @since  2.0.0
+		 * @since NEXT
 		 * @return array{primary?: string, secondary?: string, text?: string}
 		 */
 		private function get_frontend_theme_colors(): array {
@@ -1500,7 +1500,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * critical CSS/images win the network queue. Uses the core API when
 		 * available (WP 6.9+) and is a no-op on older core.
 		 *
-		 * @since 2.18.0
+		 * @since NEXT
 		 * @return void
 		 */
 		public function apply_module_loading_strategies(): void {
@@ -1656,7 +1656,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Applies defer strategy to non-logged-in users' scripts using wp_script_add_data.
 		 *
-		 * @since 2.1.0
+		 * @since NEXT
 		 *
 		 * @return void
 		 */
@@ -2214,7 +2214,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * modification time; this only affects URLs that still carry a `ver` arg
 		 * and are not served from the plugin's own `cache/wppo` directories.
 		 *
-		 * @since 2.17.0
+		 * @since NEXT
 		 *
 		 * @param string $src    The asset source URL.
 		 * @param string $handle The script/style handle.
@@ -2296,7 +2296,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * filter is registered (the filter may return context-dependent output),
 		 * so the caching benefit only applies to installs without such a filter.
 		 *
-		 * @since 2.18.0
+		 * @since NEXT
 		 *
 		 * @param string $src The asset source URL.
 		 * @return bool
@@ -2343,7 +2343,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Resolves content_url() on every call so a registered `content_url` filter
 		 * is honored per invocation. Only used while such a filter is active.
 		 *
-		 * @since 2.18.0
+		 * @since NEXT
 		 *
 		 * @param string $src The asset source URL.
 		 * @return bool

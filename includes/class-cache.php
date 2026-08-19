@@ -107,7 +107,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Image_Optimisation instance for buffer processing.
 		 *
 		 * @var Image_Optimisation|null
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		private $image_optimisation;
 
@@ -115,7 +115,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Google_Fonts instance for buffer-level font interception.
 		 *
 		 * @var Google_Fonts|null
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		private $google_fonts;
 
@@ -123,7 +123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Role hash for the current request, set during buffer processing.
 		 *
 		 * @var string
-		 * @since 2.8.0
+		 * @since NEXT
 		 */
 		private string $current_role_hash = '';
 
@@ -142,7 +142,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * and emitted on `wp_head` by {@see maybe_preload_combine_css()}.
 		 *
 		 * @var string
-		 * @since 2.15.0
+		 * @since NEXT
 		 */
 		private string $combine_css_preload_url = '';
 
@@ -241,7 +241,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param Image_Optimisation $image_optimisation The existing instance.
 		 * @return void
-		 * @since 2.0.0
+		 * @since NEXT
 		 */
 		public function set_image_optimisation( Image_Optimisation $image_optimisation ): void {
 			$this->image_optimisation = $image_optimisation;
@@ -252,7 +252,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @param Google_Fonts $google_fonts The existing instance.
 		 * @return void
-		 * @since 2.7.0
+		 * @since NEXT
 		 */
 		public function set_google_fonts( Google_Fonts $google_fonts ): void {
 			$this->google_fonts = $google_fonts;
@@ -465,7 +465,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param int|string $version       Cache-busting version suffix.
 		 * @param string     $css_file_path Absolute path to the combined CSS file.
 		 * @return void
-		 * @since 2.15.0
+		 * @since NEXT
 		 */
 		private function set_combine_css_preload( $css_url, $version, $css_file_path ): void {
 			if ( $this->will_combine_css_inline( $css_file_path ) ) {
@@ -483,7 +483,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * and before core prints the stylesheet `<link>` at priority 8.
 		 *
 		 * @return void
-		 * @since 2.15.0
+		 * @since NEXT
 		 */
 		public function maybe_preload_combine_css(): void {
 			if ( '' === $this->combine_css_preload_url ) {
@@ -792,7 +792,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $buffer The content to be processed.
 		 * @return string The processed buffer content.
 		 *
-		 * @since 2.3.0
+		 * @since NEXT
 		 */
 		private function process_buffer_only( $buffer ) {
 			$image_optimisation = $this->image_optimisation ? $this->image_optimisation : new Image_Optimisation( $this->options );
@@ -836,7 +836,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $output          The raw output buffer content.
 		 * @return string The processed output buffer.
 		 *
-		 * @since 2.3.0
+		 * @since NEXT
 		 */
 		public function process_buffer_for_cache( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
@@ -856,7 +856,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $output The finalized output buffer content.
 		 * @return void
 		 *
-		 * @since 2.3.0
+		 * @since NEXT
 		 */
 		public function stash_cache( $output ) {
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
@@ -1178,7 +1178,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string $file_path The file path for saving.
 		 * @return void
 		 *
-		 * @since 2.4.0
+		 * @since NEXT
 		 */
 		private function save_processed_buffer( string $buffer, string $file_path ): void {
 			if ( ! $this->get_filesystem() || ! $this->prepare_cache_dir() ) {
@@ -1562,7 +1562,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * Returns size, cached page count, last-cleared timestamp, and cache directory path.
 		 *
-		 * @since 2.14.0
+		 * @since NEXT
 		 * @return array{size: string, cached_pages: int, last_cleared: string, cache_dir: string}
 		 */
 		public static function get_cache_stats(): array {
@@ -1661,7 +1661,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Allows targeted flushing of object cache groups (e.g. wppo_minify_check,
 		 * wppo_activity_logs) instead of a full cache flush.
 		 *
-		 * @since 2.1.0
+		 * @since NEXT
 		 *
 		 * @param string $group The cache group to flush.
 		 * @return bool True if the flush succeeded, false if the cache implementation

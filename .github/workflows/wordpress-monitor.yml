@@ -261,6 +261,7 @@ jobs:
           - "low risk" means the change is isolated to a single function/method
           - Prefer easy/medium difficulty improvements — skip hard ones that risk instability
           - Each issue should describe ONE specific change with a clear file + function target
+          - New functions, classes, and methods must use "@since NEXT" in their doc blocks — never guess a version (e.g. 2.0.0, 3.8.0); the placeholder is resolved at release time
 
           Use this command to create each issue:
           gh issue create --title "[WP Monitor] <short description>" \
