@@ -83,9 +83,11 @@ describe( 'FileOptimization Component', () => {
 			/>
 		);
 
-		fireEvent.click(
-			screen.getByRole( 'button', { name: /Save Settings/i } )
-		);
+		await act( async () => {
+			fireEvent.click(
+				screen.getByRole( 'button', { name: /Save Settings/i } )
+			);
+		} );
 
 		expect( apiCall ).toHaveBeenCalledWith(
 			'update_settings',
@@ -109,7 +111,10 @@ describe( 'FileOptimization Component', () => {
 		const submitButton = screen.getByRole( 'button', {
 			name: /Save Settings/i,
 		} );
-		fireEvent.click( submitButton );
+
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		expect( apiCall ).toHaveBeenCalledWith(
 			'update_settings',
@@ -137,7 +142,9 @@ describe( 'FileOptimization Component', () => {
 		const submitButton = screen.getByRole( 'button', {
 			name: /Save Settings/i,
 		} );
-		fireEvent.click( submitButton );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		await waitFor( () => {
 			expect(
@@ -159,7 +166,9 @@ describe( 'FileOptimization Component', () => {
 		const submitButton = screen.getByRole( 'button', {
 			name: /Save Settings/i,
 		} );
-		fireEvent.click( submitButton );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		await waitFor( () => {
 			expect(
@@ -288,7 +297,9 @@ describe( 'FileOptimization Component', () => {
 		const submitButton = screen.getByRole( 'button', {
 			name: /Save Settings/i,
 		} );
-		fireEvent.click( submitButton );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		await waitFor( () => {
 			expect( apiCall ).toHaveBeenCalledWith(
@@ -335,7 +346,9 @@ describe( 'FileOptimization Component', () => {
 		const submitButton = screen.getByRole( 'button', {
 			name: /Save Settings/i,
 		} );
-		fireEvent.click( submitButton );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		await waitFor( () => {
 			expect( apiCall ).toHaveBeenCalledWith(
@@ -496,7 +509,9 @@ describe( 'FileOptimization Component', () => {
 		const submitButton = screen.getByRole( 'button', {
 			name: /Save Settings/i,
 		} );
-		fireEvent.click( submitButton );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		await waitFor( () => {
 			expect(
@@ -507,6 +522,7 @@ describe( 'FileOptimization Component', () => {
 		act( () => {
 			jest.advanceTimersByTime( 3000 );
 		} );
+		await act( async () => {} );
 
 		await waitFor( () => {
 			expect(
@@ -528,7 +544,9 @@ describe( 'FileOptimization Component', () => {
 		const submitButton = screen.getByRole( 'button', {
 			name: /Save Settings/i,
 		} );
-		fireEvent.click( submitButton );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		await waitFor( () => {
 			expect( screen.getByText( 'First update.' ) ).toBeInTheDocument();
@@ -544,9 +562,12 @@ describe( 'FileOptimization Component', () => {
 		act( () => {
 			jest.advanceTimersByTime( 1500 );
 		} );
+		await act( async () => {} );
 
 		// Trigger second call
-		fireEvent.click( submitButton );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		await waitFor( () => {
 			expect( screen.getByText( 'Second update.' ) ).toBeInTheDocument();
@@ -557,6 +578,7 @@ describe( 'FileOptimization Component', () => {
 		act( () => {
 			jest.advanceTimersByTime( 1500 );
 		} );
+		await act( async () => {} );
 
 		expect( screen.getByText( 'Second update.' ) ).toBeInTheDocument();
 
@@ -564,6 +586,7 @@ describe( 'FileOptimization Component', () => {
 		act( () => {
 			jest.advanceTimersByTime( 1500 );
 		} );
+		await act( async () => {} );
 
 		await waitFor( () => {
 			expect(
@@ -723,7 +746,9 @@ describe( 'FileOptimization Component', () => {
 		const submitButton = screen.getByRole( 'button', {
 			name: /Save Settings/i,
 		} );
-		fireEvent.click( submitButton );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		await waitFor( () => {
 			expect( apiCall ).toHaveBeenCalledWith(
@@ -801,7 +826,9 @@ describe( 'FileOptimization Component', () => {
 		const submitButton = screen.getByRole( 'button', {
 			name: /Save Settings/i,
 		} );
-		fireEvent.click( submitButton );
+		await act( async () => {
+			fireEvent.click( submitButton );
+		} );
 
 		await waitFor( () => {
 			expect( apiCall ).toHaveBeenCalledWith(

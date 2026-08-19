@@ -146,7 +146,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		private function initialize_minification_settings(): void {
 			$this->html_min = new HtmlMin();
 			// Get the home URL (e.g., http://localhost/awm).
-			$home_url = home_url();
+			$home_url = Util::cached_home_url();
 
 			// Parse the home URL and extract just the base domain (e.g., http://localhost).
 			$parsed_url = wp_parse_url( $home_url );
@@ -156,7 +156,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 			// Guard against malformed or relative URLs that have no scheme/host.
 			if ( ! is_array( $parsed_url ) || empty( $parsed_url['scheme'] ) || empty( $parsed_url['host'] ) ) {
-				$base_url = home_url();
+				$base_url = Util::cached_home_url();
 			} else {
 				$base_url = $parsed_url['scheme'] . '://' . $parsed_url['host'];
 

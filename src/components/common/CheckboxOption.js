@@ -16,6 +16,7 @@ import { useId } from '@wordpress/element';
  * @param {Function}             [props.onTextareaChange]    Change handler for the textarea.
  * @param {string}               [props.description]         Optional description text.
  * @param {import('react').Node} [props.children]            Additional child elements.
+ * @param {string}               [props.className]           Optional additional class names.
  */
 export const CheckboxOption = ( {
 	label,
@@ -29,6 +30,7 @@ export const CheckboxOption = ( {
 	onTextareaChange,
 	description,
 	children,
+	className = '',
 } ) => {
 	const uid = useId();
 	const id = idProp ?? ( description ? uid : undefined );
@@ -38,7 +40,7 @@ export const CheckboxOption = ( {
 		<div
 			className={ `wppo-checkbox-option ${
 				checked ? 'wppo-is-checked' : ''
-			}` }
+			} ${ className }`.trim() }
 		>
 			<label htmlFor={ id }>
 				<input
@@ -61,7 +63,10 @@ export const CheckboxOption = ( {
 			{ checked && ( textareaName || children ) && (
 				<div
 					className="wppo-nested-content"
-					style={ { marginTop: '20px', paddingLeft: '36px' } }
+					style={ {
+						marginTop: '20px',
+						paddingLeft: 'var(--wppo-nest-indent)',
+					} }
 				>
 					{ textareaName && (
 						<div className="wppo-field-group">
