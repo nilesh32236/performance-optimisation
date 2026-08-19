@@ -369,7 +369,7 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 	 *    WP_CONTENT_DIR, locates the helper there, loads it, and connects.
 	 */
 	#[RunInSeparateProcess]
-	#[PreserveGlobalState(false)]
+	#[PreserveGlobalState( false )]
 	public function test_connect_redis_no_fatal_when_wp_plugin_dir_undefined(): void {
 		$this->assertFalse( defined( 'WP_PLUGIN_DIR' ), 'Test precondition: WP_PLUGIN_DIR must be undefined at object cache boot.' );
 
