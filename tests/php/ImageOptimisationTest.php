@@ -754,4 +754,103 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringNotContainsString( 'wppo-lazy-bg', $out );
 		$this->assertStringContainsString( 'background-image:url', $out );
 	}
+
+	/**
+	 * Test that a core animated-GIF companion video (WP 7.1, <source> children)
+	 * has its sources deferred, autoplay removed, and poster moved to data-poster.
+	 */
+	public function test_lazy_load_videos_defers_companion_video_with_sources(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$html = '<video autoplay loop muted playsinline poster="https://example.com/gif.jpg">'
+			. '<source src="https://example.com/gif.mp4" type="video/mp4">'
+			. '<source src="https://example.com/gif.webm" type="video/webm">'
+			. '</video>';
+
+		$result = $image_opt->lazy_load_videos( $html );
+
+		$this->assertSame( 1, substr_count( $result, 'autoplay' ) );
+		$this->assertStringContainsString( 'data-wppo-autoplay="1"', $result );
+		$this->assertStringContainsString( 'preload="none"', $result );
+		$this->assertStringContainsString( 'wppo-lazy-video', $result );
+		$this->assertStringContainsString( 'loop', $result );
+		$this->assertStringContainsString( 'muted', $result );
+		$this->assertStringContainsString( 'playsinline', $result );
+		$this->assertStringContainsString( 'data-poster="https://example.com/gif.jpg"', $result );
+		$this->assertStringNotContainsString( ' poster="https://example.com/gif.jpg"', $result );
+		$this->assertStringContainsString( 'data-src="https://example.com/gif.mp4"', $result );
+		$this->assertStringContainsString( 'data-src="https://example.com/gif.webm"', $result );
+		$this->assertStringNotContainsString( ' src="https://example.com/gif.mp4"', $result );
+	}
+
+	/**
+	 * Test that a core animated-GIF companion video emitted with a plain src
+	 * (no <source> children) is also lazy-loaded and its poster deferred.
+	 */
+	public function test_lazy_load_videos_defers_companion_video_with_plain_src(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$html = '<video src="https://example.com/gif.mp4" autoplay loop muted playsinline poster="https://example.com/gif.jpg"></video>';
+
+		$result = $image_opt->lazy_load_videos( $html );
+
+		$this->assertStringContainsString( 'data-src="https://example.com/gif.mp4"', $result );
+		$this->assertStringNotContainsString( ' src="https://example.com/gif.mp4"', $result );
+		$this->assertSame( 1, substr_count( $result, 'autoplay' ) );
+		$this->assertStringContainsString( 'data-wppo-autoplay="1"', $result );
+		$this->assertStringContainsString( 'preload="none"', $result );
+		$this->assertStringContainsString( 'wppo-lazy-video', $result );
+		$this->assertStringContainsString( 'data-poster="https://example.com/gif.jpg"', $result );
+		$this->assertStringNotContainsString( ' poster="https://example.com/gif.jpg"', $result );
+	}
+
+	/**
+	 * Test that a companion video matching an exclusion rule is returned untouched.
+	 */
+	public function test_lazy_load_videos_skips_excluded_companion_video(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array( 'excludeVideos' => array( 'https://example.com/excluded.mp4' ) )
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$html = '<video autoplay loop muted playsinline poster="https://example.com/excluded.jpg">'
+			. '<source src="https://example.com/excluded.mp4" type="video/mp4">'
+			. '</video>';
+
+		$result = $image_opt->lazy_load_videos( $html );
+
+		$this->assertSame( $html, $result );
+	}
+
+	/**
+	 * Test that a regular user video without the companion-video signature keeps
+	 * its poster eager (only core's companion videos get poster deferral).
+	 */
+	public function test_lazy_load_videos_keeps_regular_video_poster_eager(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$html = '<video src="https://example.com/normal.mp4" controls poster="https://example.com/poster.jpg"></video>';
+
+		$result = $image_opt->lazy_load_videos( $html );
+
+		$this->assertStringContainsString( 'poster="https://example.com/poster.jpg"', $result );
+		$this->assertStringNotContainsString( 'data-poster', $result );
+		$this->assertStringContainsString( 'data-src="https://example.com/normal.mp4"', $result );
+		$this->assertStringContainsString( 'preload="none"', $result );
+		$this->assertStringContainsString( 'wppo-lazy-video', $result );
+	}
 }

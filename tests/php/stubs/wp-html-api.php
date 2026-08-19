@@ -156,6 +156,44 @@ if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) {
 		}
 
 		/**
+		 * Whether the current token carries the given CSS class.
+		 *
+		 * @param string $class_name Class name to look for.
+		 * @return bool True when the class is present.
+		 */
+		public function has_class( $class_name ) {
+			$existing = $this->get_attribute( 'class' );
+			if ( ! $existing ) {
+				return false;
+			}
+
+			$classes = preg_split( '/\s+/', trim( (string) $existing ) );
+			return in_array( (string) $class_name, $classes, true );
+		}
+
+		/**
+		 * Add a CSS class to the current token's class attribute.
+		 *
+		 * @param string $class_name Class name to add.
+		 * @return bool True on success or when the class is already present.
+		 */
+		public function add_class( $class_name ) {
+			$idx   = $this->cursor;
+			$token = isset( $this->tokens[ $idx ] ) ? $this->tokens[ $idx ] : null;
+			if ( ! $token || '#tag' !== $token['type'] ) {
+				return false;
+			}
+
+			if ( $this->has_class( $class_name ) ) {
+				return true;
+			}
+
+			$existing = $this->get_attribute( 'class' );
+			$new      = $existing ? $existing . ' ' . $class_name : $class_name;
+			return $this->set_attribute( 'class', $new );
+		}
+
+		/**
 		 * Serialize the processed HTML, applying any token modifications.
 		 *
 		 * @return string The updated HTML.
