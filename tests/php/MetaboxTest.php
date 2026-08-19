@@ -218,11 +218,10 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 	 *
 	 * @since NEXT
 	 */
-	public function test_process_delay_setting_filters_correctly() {
-		\Brain\Monkey\Functions\when( 'add_action' )->justReturn();
+	public function test_process_delay_setting_filters_correctly(): void {
 		\Brain\Monkey\Functions\when( 'sanitize_text_field' )->returnArg();
 
-		$metabox = new \PerformanceOptimise\Inc\Metabox();
+		$metabox = $this->make_metabox();
 
 		$reflection = new \ReflectionClass( $metabox );
 		$method     = $reflection->getMethod( 'process_delay_setting' );
@@ -241,7 +240,7 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertIsArray( $result );
 		$this->assertArrayHasKey( 'valid-handle', $result );
-		$this->assertEquals( 'interaction', $result['valid-handle'] );
+		$this->assertSame( 'interaction', $result['valid-handle'] );
 
 		$this->assertArrayNotHasKey( 'empty-value', $result, 'Empty values should be skipped' );
 		$this->assertArrayNotHasKey( 'invalid-handle', $result, 'Handles not in valid_handles should be skipped' );
