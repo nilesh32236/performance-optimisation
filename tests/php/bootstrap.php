@@ -237,6 +237,7 @@ trait WPPO_Test_Bootstrap {
 		);
 		\Brain\Monkey\Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 		\Brain\Monkey\Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		\Brain\Monkey\Functions\when( 'is_multisite' )->justReturn( false );
 		\Brain\Monkey\Functions\when( 'WP_Filesystem' )->justReturn( false );
 		\Brain\Monkey\Functions\when( 'sanitize_text_field' )->returnArg();
 		\Brain\Monkey\Functions\when( 'wp_unslash' )->returnArg();

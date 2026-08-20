@@ -756,7 +756,10 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		// function_exists() reports it missing; overriding function_exists first
 		// would skip the declaration and leave the namespaced call undefined.
 		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'wp_kses_post' )->returnArg();
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
 		Functions\when( 'update_option' )->justReturn( true );
 		Functions\when( 'function_exists' )->justReturn( true );
 		$this->swap_wpdb_for_log();
@@ -862,7 +865,10 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		// function_exists() reports it missing; overriding function_exists first
 		// would skip the declaration and leave the namespaced call undefined.
 		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'wp_kses_post' )->returnArg();
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
 		Functions\when( 'update_option' )->justReturn( true );
 		Functions\when( 'function_exists' )->justReturn( true );
 		$wpdb = $this->swap_wpdb_for_log();

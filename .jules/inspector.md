@@ -52,3 +52,8 @@
 **Bug/Gap:** Dashboard component tests failed with a TypeError because a child component (`WebVitalsTrends`) invoked a new API function (`fetchWebVitalsTrends`) that wasn't included in the parent test's API mock.
 **Root Cause:** When modifying child components to depend on new shared utilities, the parent component tests using strict object mocks for those utilities often fail because the new dependency isn't defined.
 **Test Added:** Added the missing `fetchWebVitalsTrends: jest.fn()` to the `apiRequest` mock in `Dashboard.test.js` and provided a default resolved value before tests. Also wrapped async `fireEvent` clicks in `FileOptimization.test.js` in `await act( async () => {} )` to fix 'not wrapped in act' warnings.
+
+## 2024-03-22 - Missing Mock for `is_multisite` and `set_transient` in BrainMonkey Context
+**Bug/Gap:** Tests using `Cache::core_will_inline` were failing because `is_multisite` and `set_transient` were not mocked, despite `get_transient` and `is_multisite` being used implicitly by `Util::transient_key()` within `Cache` logic.
+**Root Cause:** When running BrainMonkey tests, standard WP functions need to be explicitly stubbed. If a test relies on transients or network checks indirectly, it crashes without them.
+**Test Added:** Reconfigured BrainMonkey setup in `InlineCssTest.php` to explicitly stub `is_multisite`, `get_transient` and `set_transient`.
