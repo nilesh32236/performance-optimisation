@@ -420,13 +420,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return '';
 			}
 
-			$response = wp_remote_get(
-				$url,
-				array(
-					'timeout'    => 15,
-					'user-agent' => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
-				)
+			// SSRF guard: refuse invalid or internal targets before any request.
+			if ( ! self::is_safe_stylesheet_url( $url ) ) {
+				return '';
+			}
+
+			$args = array(
+				'timeout'    => 15,
+				'user-agent' => 'WPPO Critical CSS Generator/' . WPPO_VERSION,
 			);
+
+			// Own-host fetches may legitimately target loopback/private addresses
+			// (localhost / private-IP dev sites); every other host goes through
+			// the safe API so redirect hops are re-validated against private ranges.
+			$response = self::is_same_site_host( $url )
+				? wp_remote_get( $url, $args )
+				: wp_safe_remote_get( $url, $args );
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
 				return '';
@@ -464,9 +473,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private static function resolve_import_url( string $import_url, string $base_url ): string {
-			// If already absolute, return as-is.
+			// If already absolute, only allow safe destinations (defense-in-depth;
+			// the fetch layer validates again before requesting).
 			if ( preg_match( '/^https?:\/\//i', $import_url ) ) {
-				return $import_url;
+				return self::is_safe_stylesheet_url( $import_url ) ? $import_url : '';
 			}
 
 			// If protocol-relative, prepend the base scheme.
@@ -492,6 +502,97 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			return $scheme . '://' . $host . $port . $base_dir . '/' . $import_url;
+		}
+
+		/**
+		 * Whether the URL points at this WordPress site's own host.
+		 *
+		 * Allows localhost / private-IP development sites to keep using their
+		 * own stylesheets even though core URL validation rejects such hosts.
+		 *
+		 * @param string $url The URL to inspect.
+		 * @return bool True when the URL host matches home_url().
+		 * @since NEXT
+		 */
+		private static function is_same_site_host( string $url ): bool {
+			$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+			if ( '' === $host ) {
+				return false;
+			}
+
+			$site_host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+
+			return '' !== $site_host && $host === $site_host;
+		}
+
+		/**
+		 * Whether a stylesheet URL is safe to request server-side.
+		 *
+		 * Guards the Critical CSS generator against SSRF: only http(s) URLs are
+		 * accepted, restricted to hosts that either pass core validation, belong
+		 * to this site, or are explicitly allowlisted via the
+		 * wppo_ccss_allowed_stylesheet_host filter.
+		 *
+		 * @param string $url The stylesheet URL.
+		 * @return bool True when safe to fetch.
+		 * @since NEXT
+		 */
+		private static function is_safe_stylesheet_url( string $url ): bool {
+			$scheme = strtolower( (string) wp_parse_url( $url, PHP_URL_SCHEME ) );
+			if ( 'http' !== $scheme && 'https' !== $scheme ) {
+				return false;
+			}
+
+			$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+			if ( '' === $host ) {
+				return false;
+			}
+
+			/**
+			 * Filters whether an external stylesheet host may be fetched while
+			 * generating Critical CSS.
+			 *
+			 * @param bool   $allowed Whether the host is explicitly allowed. Default false.
+			 * @param string $host    Candidate host, lowercased.
+			 * @since NEXT
+			 */
+			if ( apply_filters( 'wppo_ccss_allowed_stylesheet_host', false, $host ) ) {
+				return true;
+			}
+
+			if ( self::is_same_site_host( $url ) ) {
+				return true;
+			}
+
+			return false !== wp_http_validate_url( $url );
+		}
+
+		/**
+		 * Sanitize generated critical CSS for safe output inside a <style> tag.
+		 *
+		 * Neutralizes the `</style>` raw-text terminator and `<script` injection
+		 * token case-insensitively, then encodes any remaining `<` as the
+		 * equivalent CSS escape so stored CSS can never break out of the style
+		 * element.
+		 *
+		 * @param string $css Raw critical CSS.
+		 * @return string Sanitized critical CSS.
+		 * @since NEXT
+		 */
+		private static function sanitize_inline_css( string $css ): string {
+			$css = str_ireplace( '</style', '<\/style', $css );
+			$css = str_ireplace( '<script', '<\script', $css );
+
+			// Defense-in-depth: encode every remaining '<' (CSS-valid escape).
+			$css = str_replace( '<', '\3c ', $css );
+
+			/**
+			 * Filters the inline critical CSS right before output.
+			 *
+			 * @param string $css Sanitized critical CSS.
+			 * @since NEXT
+			 */
+			return apply_filters( 'wppo_ccss_sanitize_inline', $css );
 		}
 
 		/**
@@ -765,7 +866,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			$critical_css = self::generate( $url );
-			if ( false === $critical_css ) {
+
+			// Reject generated CSS that could break out of the <style> context when
+			// inlined — a poisoned source stylesheet must never reach the CCSS cache.
+			if ( false === $critical_css || preg_match( '/<\/style|<script/i', $critical_css ) ) {
 				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 				return false;
 			}
@@ -823,7 +927,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				$content = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 				if ( ! empty( $content ) ) {
 					echo '<style id="wppo-critical-css">' . "\n";
-					echo $content . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content generated by plugin from its own cache.
+					// Sanitized against HTML breakout tokens; see sanitize_inline_css().
+					echo self::sanitize_inline_css( $content ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
 					echo '</style>' . "\n";
 				}
 			} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
