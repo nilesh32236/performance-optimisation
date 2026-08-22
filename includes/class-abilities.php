@@ -185,7 +185,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Execute callback: Cache Management.
 		 *
 		 * @since NEXT
-		 * @return true
+		 * @return bool
 		 */
 		public static function can_cache_management(): bool {
 			$options = get_option( 'wppo_settings', array() );

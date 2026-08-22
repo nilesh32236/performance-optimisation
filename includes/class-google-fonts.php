@@ -73,8 +73,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 */
 		public function __construct( array $options ) {
 			$this->options        = $options;
-			$this->font_cache_dir = wp_normalize_path( WP_CONTENT_DIR . self::FONTS_CACHE_DIR );
-			$this->font_cache_url = content_url( self::FONTS_CACHE_DIR );
+			$this->font_cache_dir = (string) ( defined( 'WP_CONTENT_DIR' ) ? wp_normalize_path( WP_CONTENT_DIR . self::FONTS_CACHE_DIR ) : '' );
+			$this->font_cache_url = (string) ( function_exists( 'content_url' ) ? content_url( self::FONTS_CACHE_DIR ) : '' );
 		}
 
 		/**

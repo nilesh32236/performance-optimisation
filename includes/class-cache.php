@@ -228,7 +228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// Define cache root directory and URL.
 			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR );
-			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
+			$this->cache_root_url = content_url( self::CACHE_DIR );
 
 			$this->request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$url_path          = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
@@ -306,7 +306,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Lazily initializes and returns the WP_Filesystem object.
 		 *
-		 * @return object|false The filesystem object or false on failure.
+		 * @return object The filesystem object.
 		 * @since 1.6.0
 		 */
 		private function get_filesystem() {
@@ -442,7 +442,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				if ( ! $source_newer ) {
 					$css_url = $this->get_cache_file_url( 'css', $css_variant );
-					$version = $cache_mtime;
+					$version = (string) $cache_mtime;
 					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 					$this->register_combine_css_path( $css_file_path );
 					$this->set_combine_css_preload( $css_url, $version, $css_file_path );
@@ -528,7 +528,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				$css_url = $this->get_cache_file_url( 'css', $css_variant );
 
-				$version = $fs->mtime( $css_file_path );
+				$version = (string) $fs->mtime( $css_file_path );
 				wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 				$this->register_combine_css_path( $css_file_path );
 				$this->write_combined_handles( $css_file_path, $eligible_handles );

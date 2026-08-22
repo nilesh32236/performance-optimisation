@@ -471,6 +471,7 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'current_time' )->justReturn( '2026-01-01 00:00:00' );
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'content_url' )->justReturn( 'http://example.com/wp-content' );
 		Functions\when( 'wp_kses_post' )->returnArg();
 		Functions\when( '__' )->returnArg( 1 );
 
