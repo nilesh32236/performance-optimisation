@@ -1,6 +1,0 @@
-{
-    "redefinable-internals": [
-        "function_exists",
-        "getimagesize"
-    ]
-}
