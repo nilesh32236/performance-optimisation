@@ -264,6 +264,11 @@ describe( 'PluginSetting', () => {
 		expect( blob ).toBeInstanceOf( Blob );
 		expect( anchorClick ).toHaveBeenCalled();
 
+		// Object URL revocation is deferred so the download can start first.
+		await waitFor( () =>
+			expect( revokeObjectURL ).toHaveBeenCalledWith( 'blob:fake-url' )
+		);
+
 		const text = await new Promise( ( resolve, reject ) => {
 			const reader = new FileReader(); // eslint-disable-line no-undef -- jsdom browser global.
 			reader.onload = () => resolve( reader.result );

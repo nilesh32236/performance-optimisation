@@ -360,4 +360,109 @@ class CacheTest extends \PHPUnit\Framework\TestCase {
 		$this->assertContains( '/tmp/wordpress/wp-content/cache/wppo/min/js', $deleted );
 		$this->assertNotContains( '/tmp/wordpress/wp-content/cache/wppo/min', $deleted );
 	}
+
+	/**
+	 * Data provider for get_combined_handles separate-assets cases.
+	 *
+	 * @return array<string,array{separate:bool,expected:array<string>}>
+	 */
+	public static function data_provider_get_combined_handles_separate_assets(): array {
+		return array(
+			'separate assets active excludes core block handles' => array(
+				'separate' => true,
+				'expected' => array( 'theme', 'plugin-css' ),
+			),
+			'separate assets off keeps wp-block handles' => array(
+				'separate' => false,
+				'expected' => array( 'wp-block-library', 'wp-block-cover', 'theme', 'plugin-css' ),
+			),
+		);
+	}
+
+	/**
+	 * Test that get_combined_handles excludes the whole core block-asset family
+	 * when WP 6.9+ separate assets are active, and keeps them when they are not.
+	 *
+	 * The sidecar produced from this list must match what the combine generation
+	 * loop folds into the file, so the same gate is asserted here that the mtime
+	 * scan and generation loops use.
+	 *
+	 * @param bool          $separate Whether core loads separate block assets on demand.
+	 * @param array<string> $expected The handles expected in the combined list.
+	 */
+	#[DataProvider( 'data_provider_get_combined_handles_separate_assets' )]
+	public function test_get_combined_handles_honors_separate_block_assets( bool $separate, array $expected ): void {
+		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( $separate );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+
+		global $wp_styles;
+		$wp_styles             = \Mockery::mock();
+		$wp_styles->registered = array(
+			'wp-block-library' => (object) array(
+				'src'  => 'http://example.com/wp-includes/css/dist/block-library/style.css',
+				'args' => 'all',
+			),
+			'wp-block-cover'   => (object) array(
+				'src'  => 'http://example.com/wp-includes/css/dist/block-library/style.css',
+				'args' => 'all',
+			),
+			'theme'            => (object) array(
+				'src'  => 'http://example.com/wp-content/themes/t/style.css',
+				'args' => 'all',
+			),
+			'plugin-css'       => (object) array(
+				'src'  => 'http://example.com/wp-content/plugins/p/style.css',
+				'args' => 'all',
+			),
+		);
+		$wp_styles->queue      = array( 'wp-block-library', 'wp-block-cover', 'theme', 'plugin-css' );
+		$wp_styles->shouldReceive( 'get_data' )->with( \Mockery::any(), 'path' )->andReturn( false );
+
+		$cache      = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
+		$reflection = new ReflectionMethod( Cache::class, 'get_combined_handles' );
+		$reflection->setAccessible( true );
+		$result = $reflection->invoke( $cache, $wp_styles->queue, array() );
+
+		$this->assertSame( $expected, $result );
+	}
+
+	/**
+	 * Test that the separate-assets gate resolves to true when core exposes it.
+	 */
+	public function test_block_assets_are_separate_true_when_core_gate_active(): void {
+		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( true );
+
+		$cache      = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
+		$reflection = new ReflectionMethod( Cache::class, 'block_assets_are_separate' );
+		$reflection->setAccessible( true );
+
+		$this->assertTrue( $reflection->invoke( $cache ) );
+	}
+
+	/**
+	 * Test that the separate-assets gate stays false when core reports it off.
+	 */
+	public function test_block_assets_are_separate_false_when_core_gate_off(): void {
+		Functions\when( 'wp_should_load_separate_core_block_assets' )->justReturn( false );
+
+		$cache      = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
+		$reflection = new ReflectionMethod( Cache::class, 'block_assets_are_separate' );
+		$reflection->setAccessible( true );
+
+		$this->assertFalse( $reflection->invoke( $cache ) );
+	}
+
+	/**
+	 * Test that the separate-assets gate stays false on pre-6.9 cores that have
+	 * no wp_should_load_separate_core_block_assets() function.
+	 */
+	public function test_block_assets_are_separate_false_on_pre_69(): void {
+		Functions\expect( 'function_exists' )->with( 'wp_should_load_separate_core_block_assets' )->andReturn( false );
+
+		$cache      = ( new \ReflectionClass( Cache::class ) )->newInstanceWithoutConstructor();
+		$reflection = new ReflectionMethod( Cache::class, 'block_assets_are_separate' );
+		$reflection->setAccessible( true );
+
+		$this->assertFalse( $reflection->invoke( $cache ) );
+	}
 }

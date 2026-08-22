@@ -77,7 +77,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			}
 
 			// SSRF protection: validate that the URL belongs to this website.
-			$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
 			if ( ( $parsed_url['host'] ?? '' ) !== $home_host ) {
 				return new \WP_Error( 'invalid_url', __( 'You can only scan URLs belonging to this website.', 'performance-optimisation' ) );
 			}
@@ -109,7 +109,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				curl_setopt(
 					$ch,
 					CURLOPT_USERAGENT,
-					'WordPress/' . get_bloginfo( 'version' ) . '; ' . home_url()
+					'WordPress/' . get_bloginfo( 'version' ) . '; ' . Util::cached_home_url()
 				);
 				// SSL verification enabled by default; filterable for local/dev environments.
 				$verify_ssl = (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url );
@@ -168,7 +168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 					$url,
 					array(
 						'timeout'    => 30,
-						'user-agent' => 'WordPress/' . get_bloginfo( 'version' ) . '; ' . home_url(),
+						'user-agent' => 'WordPress/' . get_bloginfo( 'version' ) . '; ' . Util::cached_home_url(),
 						'sslverify'  => (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url ),
 					)
 				);
@@ -375,7 +375,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			}
 
 			$third_party_count = 0;
-			$home_host         = wp_parse_url( home_url(), PHP_URL_HOST );
+			$home_host         = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
 			foreach ( $js as $script ) {
 				$host = wp_parse_url( $script, PHP_URL_HOST );
 				if ( $host && $host !== $home_host ) {
@@ -428,7 +428,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				}
 
 				// Only allow HEAD requests to the site's own domain for security.
-				$home_host = wp_parse_url( home_url(), PHP_URL_HOST );
+				$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
 				$url_host  = wp_parse_url( $url, PHP_URL_HOST );
 				if ( ! $home_host || ! $url_host || $url_host !== $home_host ) {
 					return 0;

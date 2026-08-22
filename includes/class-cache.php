@@ -72,6 +72,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private string $url_path;
 
 		/**
+		 * Whether the inline-CSS budget prediction drifted from core this request.
+		 *
+		 * Set when {@see core_will_inline()} finds its legacy accounting disagrees
+		 * with a core-faithful re-derivation, e.g. when a queued path-data style
+		 * lacks a `src` or exceeds the inline budget. Causes the combined file to be
+		 * served externally instead of inlined so core cannot double-inline it.
+		 *
+		 * @var bool
+		 * @since 2.22.0
+		 */
+		private bool $inline_drift_detected = false;
+
+		/**
+		 * Whether the budget-drift notice has been logged this PHP process.
+		 *
+		 * Rate-limits {@see log_inline_budget_drift()} to a single activity-log
+		 * entry per request regardless of how many handles drift during one render.
+		 * A condition-keyed transient (see {@see log_inline_budget_drift()})
+		 * additionally throttles persistent drift across requests.
+		 *
+		 * @var bool
+		 * @since 2.22.0
+		 */
+		private static bool $inline_drift_logged = false;
+
+		/**
+		 * Cached handle => file-size/readability map for the inline-budget simulation.
+		 *
+		 * Built lazily on the first {@see core_inline_budget_will_inline()} call of
+		 * the request so every simulation reuses a single `is_file()`/`filesize()`
+		 * pass over the queue instead of repeating it per handle (up to 6*n per
+		 * request via the freshness, generation, and combined-handle loops). The
+		 * map is reset whenever a style's `path` data changes, i.e. after
+		 * {@see register_combine_css_path()} registers the combined file.
+		 *
+		 * Each entry stores the file size alongside an `is_readable()` flag so the
+		 * core-faithful reference can mirror WP 7.0+ core, which skips unreadable
+		 * styles in its budget loop without charging their size.
+		 *
+		 * @var array<string,array{size:int,readable:bool}>|null
+		 * @since 2.22.0
+		 */
+		private ?array $inline_size_map = null;
+
+		/**
 		 * The filesystem object used for file operations.
 		 *
 		 * @var object|null
@@ -273,12 +318,50 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether WP 6.9+ core is loading separate (on-demand) core block assets.
+		 *
+		 * Single source of truth for the separate-assets state shared by the
+		 * combined-CSS cache filename variant and every combine/preload loop. The
+		 * 6.9+ gate keeps pre-6.9 cores (which have no such function) on the
+		 * legacy monolith path.
+		 *
+		 * @return bool True when core loads separate core block assets on demand.
+		 * @since NEXT
+		 */
+		private function block_assets_are_separate(): bool {
+			return function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets();
+		}
+
+		/**
+		 * Whether a style handle belongs to the core block-assets family.
+		 *
+		 * On WP 6.9+ with separate block assets active, the combined stylesheet
+		 * (`wp-block-library`) and every per-block stylesheet (`wp-block-cover`,
+		 * `wp-block-group`, …) are loaded on demand for the blocks actually present
+		 * on the page. Folding them into the combined file would re-monolithize what
+		 * core ships conditionally and make the combined file churn as the block set
+		 * changes across pages, so they are excluded from combining in that mode.
+		 *
+		 * @param string $handle                The registered style handle.
+		 * @param bool   $separate_block_assets Whether core loads separate block assets.
+		 * @return bool True if the handle is a core block asset under separate assets.
+		 * @since NEXT
+		 */
+		private function is_core_block_asset( $handle, bool $separate_block_assets ): bool {
+			return $separate_block_assets && str_starts_with( (string) $handle, 'wp-block-' );
+		}
+
+		/**
 		 * Combines all enqueued CSS files into a single file.
 		 *
 		 * @return void
 		 * @since 1.0.0
 		 */
 		public function combine_css() {
+			// TODO(#624): when WP 7.2 removes script/style concatenation in favour
+			// of core preload emission, reassess whether this concat pipeline should
+			// be dropped / relegated to an opt-in legacy toggle in favour of core
+			// preloads (wp_resource_hints). No runtime change until the core API lands.
 			if ( ! $this->is_cache_allowed_for_current_user() || is_404() || $this->is_not_cacheable() ) {
 				return;
 			}
@@ -301,10 +384,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			// On WP 6.9+ with separate (on-demand) core block assets active, never
-			// fold the combined wp-block-library stylesheet into the minified file —
-			// doing so would force the monolith back into the head. Belt-and-suspenders:
-			// wp-block-library is normally not in the queue on 6.9 anyway.
-			$separate_block_assets = function_exists( 'wp_should_load_separate_core_block_assets' ) && wp_should_load_separate_core_block_assets();
+			// fold any core block-asset stylesheet into the combined file — doing so
+			// would force the wp-block-library monolith (or per-block styles for
+			// blocks not even on the page) back into the head and fight core's
+			// conditional loading. Belt-and-suspenders: these handles are normally
+			// not in the queue on 6.9 anyway.
+			$separate_block_assets = $this->block_assets_are_separate();
 
 			// The effective separate-assets state is baked into the combined-CSS
 			// cache filename, so a 6.8 -> 6.9 upgrade (which flips separate block
@@ -336,7 +421,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						continue;
 					}
 
-					if ( $separate_block_assets && 'wp-block-library' === $handle ) {
+					if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
 						continue;
 					}
 
@@ -381,7 +466,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					continue;
 				}
 
-				if ( $separate_block_assets && 'wp-block-library' === $handle ) {
+				if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
 					continue;
 				}
 
@@ -486,6 +571,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		public function maybe_preload_combine_css(): void {
+			// TODO(#624): once WP 7.2 removes concatenation in favour of preloads,
+			// reassess whether this plugin-emitted preload should defer to core
+			// preload emission (wp_resource_hints) instead. No runtime change.
 			if ( '' === $this->combine_css_preload_url ) {
 				return;
 			}
@@ -497,9 +585,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Computes the set of handles that belong in the combined CSS file.
 		 *
 		 * Mirrors the skip rules applied in {@see combine_css()} generation: styles
-		 * core inlines itself, handles excluded from combining, and non-'all' media
-		 * styles stay out of the combined file. Used both to build the file and to
-		 * detect when a previously cached file is stale.
+		 * core inlines itself, core block-asset styles under the 6.9+ separate-assets
+		 * mode, handles excluded from combining, and non-'all' media styles stay out
+		 * of the combined file. Used both to build the file and to detect when a
+		 * previously cached file is stale.
 		 *
 		 * @since 1.9.0
 		 *
@@ -510,6 +599,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private function get_combined_handles( $styles, $exclude_combine_css ): array {
 			global $wp_styles;
 
+			$separate_block_assets = $this->block_assets_are_separate();
+
 			$handles = array();
 			foreach ( $styles as $handle ) {
 				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
@@ -518,6 +609,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$style_data = $wp_styles->registered[ $handle ];
 
 				if ( $this->core_will_inline( $handle ) ) {
+					continue;
+				}
+
+				if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
 					continue;
 				}
 
@@ -621,35 +716,139 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			global $wp_styles;
-			if ( ! isset( $wp_styles->registered[ $handle ] ) || empty( $wp_styles->registered[ $handle ]->src ) ) {
+			if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+				return false;
+			}
+
+			// Since WP 6.3 core only inlines styles that carry a `src`; on 5.8-6.2
+			// any queued style with `path` data was a candidate, so a src-less
+			// handle can still be inlined there.
+			if ( $this->inline_candidates_require_src() && empty( $wp_styles->registered[ $handle ]->src ) ) {
 				return false;
 			}
 
 			$limit = $this->get_styles_inline_limit();
 
-			// Gather every queued path-data style with a usable file size, matching
-			// core's wp_maybe_inline_styles() candidate collection.
-			$paths = array();
-			foreach ( $wp_styles->queue as $queued_handle ) {
-				$path = $wp_styles->get_data( $queued_handle, 'path' );
-				if ( empty( $path ) || ! is_file( $path ) ) {
-					continue;
-				}
-				$size = (int) filesize( $path );
-				if ( $size <= 0 ) {
-					continue;
-				}
-				$paths[ $queued_handle ] = $size;
+			// Prediction using the plugin's long-standing budget accounting.
+			$prediction = $this->core_inline_budget_will_inline( $handle, $limit, false );
+
+			// Re-derivation of core's own candidate collection and budget pass. Any
+			// divergence (a queued path-data style without a `src`, an over-budget
+			// sibling, or tie-order differences) means the prediction is unreliable,
+			// so the request degrades to the safe outcome below instead.
+			$reference = $this->core_inline_budget_will_inline( $handle, $limit, true );
+
+			if ( $prediction !== $reference ) {
+				$this->inline_drift_detected = true;
+				$this->log_inline_budget_drift( $handle, $limit );
+
+				// Conservative downgrade: assume core WILL inline the style. Leaving it
+				// out of the combined file is safe in every direction — either core
+				// inlines it (correct), or it is served as its own external <link>
+				// (a minor perf loss, never duplicated rules). Returning false here
+				// would risk pulling an inlined style into the combined file.
+				return true;
 			}
 
-			// Replicate core's greedy smallest-first cumulative budget.
-			asort( $paths );
+			return $prediction;
+		}
+
+		/**
+		 * Simulates core's greedy smallest-first inline-CSS budget for a handle.
+		 *
+		 * When `$core_faithful` is true the candidate set mirrors core's
+		 * `wp_maybe_inline_styles()`: a queued handle only counts when it carries
+		 * path data, its file size is within the inline limit, and (since WP 6.3)
+		 * it also has a `src`. Styles over the budget are excluded up-front
+		 * (equivalent to core's ascending sort + `break` on first overflow). On
+		 * WP 7.0+ unreadable styles are skipped inside the budget loop without
+		 * charging their size, which mirrors core's own `is_readable()` gate. When
+		 * false, the plugin's legacy accounting is reproduced exactly (any
+		 * path-data handle with a usable file size counts, regardless of `src`,
+		 * readability, or budget).
+		 *
+		 * The handle => size/readability map is cached for the request (see
+		 * {@see $inline_size_map}) so repeated simulations pay the filesystem stat
+		 * cost once per queue snapshot instead of once per call.
+		 *
+		 * @since 2.22.0
+		 *
+		 * @param string $handle       The registered style handle.
+		 * @param int    $limit        The inline size limit in bytes.
+		 * @param bool   $core_faithful Whether to mirror core's candidate collection.
+		 * @return bool True if core's budget pass would inline the style.
+		 */
+		private function core_inline_budget_will_inline( $handle, $limit, $core_faithful ): bool {
+			global $wp_styles;
+
+			if ( null === $this->inline_size_map ) {
+				$this->inline_size_map = array();
+				foreach ( $wp_styles->queue as $queued_handle ) {
+					$path = $wp_styles->get_data( $queued_handle, 'path' );
+					if ( empty( $path ) || ! is_file( $path ) ) {
+						continue;
+					}
+					$size = (int) filesize( $path );
+					if ( $size > 0 ) {
+						$this->inline_size_map[ $queued_handle ] = array(
+							'size'     => $size,
+							'readable' => is_readable( $path ),
+						);
+					}
+				}
+			}
+
+			$entries = array();
+			foreach ( $this->inline_size_map as $queued_handle => $entry ) {
+				if ( $core_faithful ) {
+					// Core skips handles that are not registered.
+					if ( ! isset( $wp_styles->registered[ $queued_handle ] ) ) {
+						continue;
+					}
+					$registered = $wp_styles->registered[ $queued_handle ];
+					// Core only considers a queued style a candidate when it carries
+					// a `src` (the `path && src` gate landed in 6.3) and is found on
+					// disk; on 5.8-6.2 path data alone was sufficient. Styles over
+					// the limit are excluded up-front — they sort last and would only
+					// ever trigger the loop's overflow `break`, which stops nothing
+					// that fits the budget.
+					if ( ( $this->inline_candidates_require_src() && empty( $registered->src ) ) || $entry['size'] > $limit ) {
+						continue;
+					}
+				}
+
+				$entries[ $queued_handle ] = $entry;
+			}
+
+			// Replicate core's greedy smallest-first cumulative budget. Core uses an
+			// unstable usort; the stable uasort is retained here because the drift
+			// check + conservative downgrade neutralize the residual tie-order
+			// ambiguity.
+			uasort(
+				$entries,
+				static function ( $a, $b ) {
+					return $a['size'] <=> $b['size'];
+				}
+			);
 
 			$total = 0;
-			foreach ( $paths as $queued_handle => $size ) {
+			foreach ( $entries as $queued_handle => $entry ) {
+				$size = $entry['size'];
+
+				// Overflow check first, exactly as core orders it: an unreadable
+				// but in-budget file is skipped below without charging its size, but
+				// one that would push the running total over the limit still stops
+				// the pass.
 				if ( $total + $size > $limit ) {
 					return false;
 				}
+
+				// WP 7.0+ core skips unreadable styles in its budget loop without
+				// charging their size; earlier core versions charged them regardless.
+				if ( $core_faithful && $this->inline_candidates_require_readable() && ! $entry['readable'] ) {
+					continue;
+				}
+
 				$total += $size;
 				if ( $queued_handle === $handle ) {
 					return true;
@@ -657,6 +856,56 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			return false;
+		}
+
+		/**
+		 * Logs that the inline-CSS budget prediction drifted from core.
+		 *
+		 * Rate-limited to at most one activity-log entry per PHP process so a single
+		 * drifted request cannot flood the log, and — because drift conditions are
+		 * deterministic and persistent (e.g. a queued path-data style without a
+		 * `src` on WP 6.3+, or an unreadable over-limit peer on WP 7.0+) — at most
+		 * one entry per rolling window per drift condition via a transient, so a
+		 * persistent drift cannot grow the log by one row per pageview. Cache and
+		 * Log share the `PerformanceOptimise\Inc` namespace, so no import is
+		 * required.
+		 *
+		 * @since 2.22.0
+		 *
+		 * @param string $handle The handle whose prediction drifted.
+		 * @param int    $limit  The inline size limit in bytes.
+		 * @return void
+		 */
+		private function log_inline_budget_drift( $handle, $limit ): void {
+			if ( self::$inline_drift_logged ) {
+				return;
+			}
+			self::$inline_drift_logged = true;
+
+			if ( ! class_exists( Log::class ) ) {
+				return;
+			}
+
+			// The same drift condition is reproduced on every pageview, so a once
+			// per-process flag alone would still append one row per request. Key a
+			// transient by the condition (handle + core version) and skip repeats
+			// within the rolling window; a change in WP or an operator theme fix
+			// re-arms the notice.
+			$version = isset( $GLOBALS['wp_version'] ) ? $GLOBALS['wp_version'] : 'unknown';
+			$log_key = Util::transient_key( 'wppo_inline_drift_' . md5( $handle . '|' . $version ) );
+			if ( get_transient( $log_key ) ) {
+				return;
+			}
+			set_transient( $log_key, 1, DAY_IN_SECONDS );
+
+			Log::add(
+				sprintf(
+					/* translators: %1$s: style handle, %2$d: inline size limit in bytes. */
+					__( 'Inline-CSS budget prediction drifted from core for %1$s (limit %2$d); degraded to safe fallback.', 'performance-optimisation' ),
+					$handle,
+					$limit
+				)
+			);
 		}
 
 		/**
@@ -686,7 +935,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return;
 			}
 
+			// When the inline-CSS budget prediction drifted from core this request,
+			// serve the combined file externally rather than register `path` data: a
+			// wrongly-registered file would either be unexpectedly inlined or left
+			// external despite the preload decision made earlier.
+			if ( $this->inline_drift_detected ) {
+				return;
+			}
+
 			wp_style_add_data( 'wppo-combine-css', 'path', $css_file_path );
+
+			// The combined handle now carries `path` data, so the size map cached
+			// for the inline-budget simulation is stale; rebuild it on the next call.
+			$this->inline_size_map = null;
 		}
 
 		/**
@@ -704,6 +965,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function will_combine_css_inline( $css_file_path ): bool {
 			if ( empty( $css_file_path ) ) {
+				return false;
+			}
+
+			// When the budget prediction drifted this request the combined file is
+			// served externally (see register_combine_css_path()), so keep the
+			// preload hint for the now-external stylesheet instead of delegating.
+			if ( $this->inline_drift_detected ) {
 				return false;
 			}
 
@@ -730,6 +998,40 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			return (int) apply_filters( 'styles_inline_size_limit', $default );
+		}
+
+		/**
+		 * Whether inline candidates must carry a `src` on this core version.
+		 *
+		 * WP 6.3 introduced the `path && src` gate in `wp_maybe_inline_styles()`;
+		 * before that (5.8-6.2) any queued style with `path` data was a candidate
+		 * regardless of `src`. An absent `$wp_version` assumes the newest behavior,
+		 * matching {@see get_styles_inline_limit()}.
+		 *
+		 * @since 2.22.0
+		 *
+		 * @return bool True when inline candidates must carry a `src`.
+		 */
+		private function inline_candidates_require_src(): bool {
+			return ! isset( $GLOBALS['wp_version'] ) || version_compare( $GLOBALS['wp_version'], '6.3', '>=' );
+		}
+
+		/**
+		 * Whether inline candidates must be readable on this core version.
+		 *
+		 * WP 7.0 added a `_doing_it_wrong` notice and an unreadable-path skip
+		 * (`continue`) inside the budget loop of `wp_maybe_inline_styles()`, so an
+		 * unreadable stylesheet no longer consumes the inline budget. On earlier
+		 * versions its size was charged regardless of readability, matching the
+		 * plugin's legacy accounting. An absent `$wp_version` assumes the newest
+		 * behavior.
+		 *
+		 * @since 2.22.0
+		 *
+		 * @return bool True when the core-faithful pass must skip unreadable styles.
+		 */
+		private function inline_candidates_require_readable(): bool {
+			return ! isset( $GLOBALS['wp_version'] ) || version_compare( $GLOBALS['wp_version'], '7.0', '>=' );
 		}
 
 		/**
@@ -889,7 +1191,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $buffer;
 			}
 
-			$site_url = home_url();
+			$site_url = Util::cached_home_url();
 			$cdn_url  = rtrim( $cdn_url, '/' );
 
 			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
@@ -1143,7 +1445,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			if ( 'html' === $type ) {
-				$current_url = home_url( $this->request_uri );
+				$current_url = Util::cached_home_url( $this->request_uri );
 				$buffer      = apply_filters( 'wppo_cache_page_html', $buffer, $current_url );
 			}
 
@@ -1216,11 +1518,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					$exclude_urls = Util::process_urls( $this->options['preload_settings']['excludePreloadCache'] );
 
 					$request_uri = $this->request_uri;
-					$home_path   = wp_parse_url( home_url(), PHP_URL_PATH ) ?? '';
+					$home_path   = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
 					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
 						$request_uri = substr( $request_uri, strlen( $home_path ) );
 					}
-					$current_url = home_url( $request_uri );
+					$current_url = Util::cached_home_url( $request_uri );
 
 					if ( Util::is_url_excluded( $current_url, $exclude_urls ) ) {
 						return false;
@@ -1252,7 +1554,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->delete_no_cache_marker( $html_file_path );
 
 			// Smart Purging: Always clear the home page and blog archive.
-			$home_path = wp_make_link_relative( home_url( '/' ) );
+			$home_path = wp_make_link_relative( Util::cached_home_url( '/' ) );
 			$home_html = $this->get_file_path( $home_path, 'html' );
 			$this->delete_cache_files( $home_html );
 			$this->delete_role_variant_files( dirname( $home_html ) );

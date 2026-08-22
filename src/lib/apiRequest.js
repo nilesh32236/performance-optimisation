@@ -122,12 +122,13 @@ export const fetchRecentActivities = ( page = 1, signal ) => {
  * Run a local telemetry scan on the given URL.
  *
  * @since 1.5.0
- * @param {string}  url   The URL to scan.
- * @param {boolean} force Whether to force the scan.
+ * @param {string}      url      The URL to scan.
+ * @param {boolean}     force    Whether to force the scan.
+ * @param {AbortSignal} [signal] Optional AbortSignal for request cancellation.
  * @return {Promise<Object>} Resolved scan result data.
  */
-export const runPerformanceScan = ( url, force = false ) => {
-	return apiCall( 'performance_scan', { url, force } );
+export const runPerformanceScan = ( url, force = false, signal ) => {
+	return apiCall( 'performance_scan', { url, force }, 'POST', signal );
 };
 
 /**
