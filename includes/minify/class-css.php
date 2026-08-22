@@ -229,7 +229,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				$css_content
 			);
 
-			return null !== $updated ? $updated : $css_content;
+			return (string) ( $updated ?? $css_content );
 		}
 
 		/**

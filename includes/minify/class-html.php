@@ -115,7 +115,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$this->exclude_delay_js = array_values(
 				array_filter(
 					$this->exclude_delay_js,
-					function ( $val ) {
+					static function ( mixed $val ): bool {
 						return is_string( $val ) && '' !== $val;
 					}
 				)
@@ -125,7 +125,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$this->delay_js_idle_list        = array_values(
 				array_filter(
 					(array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() ),
-					function ( $val ) {
+					static function ( mixed $val ): bool {
 						return is_string( $val ) && '' !== $val;
 					}
 				)
@@ -133,7 +133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$this->delay_js_viewport_list    = array_values(
 				array_filter(
 					(array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() ),
-					function ( $val ) {
+					static function ( mixed $val ): bool {
 						return is_string( $val ) && '' !== $val;
 					}
 				)
@@ -284,8 +284,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 					// Support quoted, unquoted, and empty values using regex and fallback extraction.
 					if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-						/* @var array<int, string> $type_matches */
-						$type = $type_matches[3] ?? $type_matches[2];
+						$type = ( '' !== $type_matches[2] ) ? $type_matches[2] : ( $type_matches[3] ?? '' );
 						$type = strtolower( trim( $type ) );
 
 						$exclude_types = array( 'text/javascript', 'application/ld+json', 'module', 'importmap' );
@@ -395,8 +394,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$type_matches = array();
 			$script_type  = '';
 			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-				/* @var array<int, string> $type_matches */
-				$script_type = $type_matches[3] ?? $type_matches[2];
+				$script_type = ( '' !== $type_matches[2] ) ? $type_matches[2] : ( $type_matches[3] ?? '' );
 				$script_type = strtolower( trim( $script_type ) );
 			}
 
