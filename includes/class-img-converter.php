@@ -1507,6 +1507,77 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Discover library images missing next-gen versions and queue them.
+		 *
+		 * Runs inside the hourly cron so images uploaded before activation (or
+		 * while conversion was disabled) enter the queue instead of relying on
+		 * lazy frontend discovery. Bounded per run; newest attachments first.
+		 *
+		 * @param string[] $formats Conversion formats to ensure ('webp', 'avif').
+		 * @param int      $limit   Maximum attachments inspected per run.
+		 * @return int Number of files newly queued.
+		 * @since NEXT
+		 */
+		public static function queue_unconverted_library_images( array $formats, int $limit = 50 ): int {
+			global $wpdb;
+
+			if ( empty( $formats ) || 1 > $limit || ! is_object( $wpdb ) || ! is_callable( array( $wpdb, 'get_col' ) ) || ! is_callable( array( $wpdb, 'prepare' ) ) ) {
+				return 0;
+			}
+
+			$mime_types   = array( 'image/jpeg', 'image/png', 'image/webp' );
+			$placeholders = implode( ',', array_fill( 0, count( $mime_types ), '%s' ) );
+
+			// phpcs:ignore WordPress.WP.PreparedSQL.NotPrepared -- Placeholder list built from a fixed internal constant set; only LIMIT is bound.
+			$sql = 'SELECT ID FROM ' . $wpdb->posts . " WHERE post_type = 'attachment' AND post_mime_type IN ( " . $placeholders . ' ) ORDER BY ID DESC LIMIT %d';
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Bounded indexed lookup; placeholder list built from fixed internal constants, only LIMIT is bound.
+			$attachment_ids = $wpdb->get_col( $wpdb->prepare( $sql, array_merge( $mime_types, array( $limit ) ) ) );
+
+			if ( empty( $attachment_ids ) || ! is_array( $attachment_ids ) ) {
+				return 0;
+			}
+
+			// Same eligibility list as the queue gate itself.
+			$convertible = (array) apply_filters(
+				'wppo_convertible_image_extensions',
+				array( 'jpg', 'jpeg', 'png', 'webp' )
+			);
+
+			$queued = 0;
+
+			foreach ( $attachment_ids as $attachment_id ) {
+				$file = get_attached_file( (int) $attachment_id );
+
+				if ( empty( $file ) || ! file_exists( $file ) ) {
+					continue;
+				}
+
+				$extension = strtolower( (string) pathinfo( $file, PATHINFO_EXTENSION ) );
+				if ( ! in_array( $extension, $convertible, true ) ) {
+					continue;
+				}
+
+				foreach ( $formats as $format ) {
+					if ( ! in_array( $format, array( 'webp', 'avif' ), true ) ) {
+						continue;
+					}
+
+					// Skip files whose next-gen version already exists on disk.
+					if ( file_exists( self::get_img_path( $file, $format ) ) ) {
+						continue;
+					}
+
+					if ( self::add_img_into_queue( $file, $format ) ) {
+						++$queued;
+					}
+				}
+			}
+
+			return $queued;
+		}
+
+		/**
 		 * Add an image to the conversion queue.
 		 *
 		 * @param string $img_path The image path.

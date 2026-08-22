@@ -73,6 +73,7 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 				'wp_image_quality',
 				'wp_get_image_encode_quality',
 				'wp_get_image_editor_output_format',
+				'wp_delete_file',
 			)
 		);
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
@@ -902,15 +903,139 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that convertible raster formats are queued, and a source whose
-	 * extension already matches the target format is skipped.
+	 * Install a scriptable $wpdb double and return the original instance.
+	 *
+	 * The bootstrap's $wpdb mock is a plain stdClass without query methods,
+	 * and production calls `$wpdb->get_col()` method-style, which property
+	 * closures cannot intercept — hence an anonymous class with __call().
+	 *
+	 * @param array $responses Method-name => return-value (or callable) map.
+	 * @return object Original $wpdb instance for restoration in finally.
 	 */
-	public function test_add_img_into_queue_accepts_convertible_raster_formats(): void {
-		$this->assertTrue( Img_Converter::add_img_into_queue( $this->uploads_dir . '/photo.jpg' ) );
-		$this->assertTrue( Img_Converter::add_img_into_queue( $this->uploads_dir . '/photo.png', 'avif' ) );
-		$this->assertTrue( Img_Converter::add_img_into_queue( $this->uploads_dir . '/photo.webp', 'avif' ) );
+	private function stub_wpdb( array $responses ): object {
+		global $wpdb;
 
-		// Source extension equal to the target type is skipped.
-		$this->assertFalse( Img_Converter::add_img_into_queue( $this->uploads_dir . '/photo.webp', 'webp' ) );
+		$original = $wpdb;
+		$double   = new class() {
+			/**
+			 * Posts table name used inside interpolated SQL.
+			 *
+			 * @var string
+			 */
+			public string $posts = 'wp_posts';
+
+			/**
+			 * Method-name => return-value (or callable) map.
+			 *
+			 * @var array
+			 */
+			private array $responses = array();
+
+			/**
+			 * Configure the response map.
+			 *
+			 * @param array $responses Method-name => value-or-callable map.
+			 * @return void
+			 */
+			public function set_responses( array $responses ): void {
+				$this->responses = $responses;
+			}
+
+			/**
+			 * Serve mapped responses for any queried method.
+			 *
+			 * @param string $name      Method name.
+			 * @param array  $arguments Call arguments.
+			 * @return mixed
+			 */
+			public function __call( string $name, array $arguments ) {
+				$value = $this->responses[ $name ] ?? null;
+
+				return is_callable( $value ) && ! is_string( $value )
+					? call_user_func_array( $value, $arguments )
+					: $value;
+			}
+		};
+		$double->set_responses( $responses );
+		$wpdb = $double;
+
+		return $original;
+	}
+
+	/**
+	 * Test that the cron discovery scan queues library images whose next-gen
+	 * versions are missing on disk.
+	 */
+	public function test_queue_unconverted_library_images_queues_missing_conversions(): void {
+		global $wpdb;
+
+		Functions\when( 'content_url' )->justReturn( 'http://example.com/wp-content' );
+
+		$source = $this->uploads_dir . '/disc.jpg';
+		touch( $source ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch -- Test fixture.
+		$this->assertFileExists( $source );
+
+		Functions\when( 'get_attached_file' )->justReturn( $source );
+
+		$original = $this->stub_wpdb(
+			array(
+				'prepare' => static function ( $sql ) {
+					return $sql;
+				},
+				'get_col' => array( '11' ),
+			)
+		);
+
+		try {
+			$this->assertSame(
+				2,
+				Img_Converter::queue_unconverted_library_images( array( 'webp', 'avif' ), 10 )
+			);
+		} finally {
+			$wpdb = $original;
+		}
+	}
+
+	/**
+	 * Test that the discovery scan skips images whose converted versions
+	 * already exist under the wppo output directory.
+	 */
+	public function test_queue_unconverted_library_images_skips_already_converted(): void {
+		global $wpdb;
+
+		Functions\when( 'content_url' )->justReturn( 'http://example.com/wp-content' );
+
+		$source = $this->uploads_dir . '/disc2.jpg';
+		touch( $source ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch -- Test fixture.
+
+		$dest_dir = wp_normalize_path( WP_CONTENT_DIR . '/wppo/uploads/2026/08' );
+		if ( ! is_dir( $dest_dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixtures use native filesystem.
+			mkdir( $dest_dir, 0755, true );
+		}
+		touch( $dest_dir . '/disc2.webp' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch -- Test fixture.
+		touch( $dest_dir . '/disc2.avif' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_touch -- Test fixture.
+
+		Functions\when( 'get_attached_file' )->justReturn( $source );
+
+		$original = $this->stub_wpdb(
+			array(
+				'prepare' => static function ( $sql ) {
+					return $sql;
+				},
+				'get_col' => array( '21' ),
+			)
+		);
+
+		try {
+			$this->assertSame(
+				0,
+				Img_Converter::queue_unconverted_library_images( array( 'webp', 'avif' ), 10 )
+			);
+		} finally {
+			wp_delete_file( $dest_dir . '/disc2.webp' ); // Test fixture cleanup.
+			wp_delete_file( $dest_dir . '/disc2.avif' ); // Test fixture cleanup.
+			$wpdb = $original;
+		}
 	}
 }

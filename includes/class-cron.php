@@ -611,6 +611,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					$formats_to_process[] = $conversion_format;
 				}
 
+				// Discover library images that predate plugin activation (or ran while
+				// conversion was disabled) so they enter the queue instead of relying
+				// on lazy frontend discovery. Bounded per run; newest attachments first.
+				if ( ! empty( $formats_to_process ) ) {
+					Img_Converter::queue_unconverted_library_images(
+						$formats_to_process,
+						(int) apply_filters( 'wppo_cron_discovery_limit', 50 )
+					);
+
+					// Re-read so this run also processes newly discovered items.
+					$img_info = Img_Converter::get_img_info();
+				}
+
 				foreach ( $formats_to_process as $format ) {
 					$images = $img_info['pending'][ $format ] ?? array();
 
