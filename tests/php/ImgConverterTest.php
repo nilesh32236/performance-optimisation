@@ -888,4 +888,29 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			Img_Converter::get_img_path( $url, 'webp' )
 		);
 	}
+
+	/**
+	 * Test that non-convertible formats (SVG, GIF, BMP, uppercase) are
+	 * rejected at the queue gate and never enter the conversion queue.
+	 */
+	public function test_add_img_into_queue_rejects_non_convertible_formats(): void {
+		$this->assertFalse( Img_Converter::add_img_into_queue( $this->uploads_dir . '/vector.svg' ) );
+		$this->assertFalse( Img_Converter::add_img_into_queue( $this->uploads_dir . '/VECTOR.SVG' ) );
+		$this->assertFalse( Img_Converter::add_img_into_queue( $this->uploads_dir . '/anim.gif' ) );
+		$this->assertFalse( Img_Converter::add_img_into_queue( $this->uploads_dir . '/scan.bmp' ) );
+		$this->assertFalse( Img_Converter::add_img_into_queue( $this->uploads_dir . '/clip.tiff' ) );
+	}
+
+	/**
+	 * Test that convertible raster formats are queued, and a source whose
+	 * extension already matches the target format is skipped.
+	 */
+	public function test_add_img_into_queue_accepts_convertible_raster_formats(): void {
+		$this->assertTrue( Img_Converter::add_img_into_queue( $this->uploads_dir . '/photo.jpg' ) );
+		$this->assertTrue( Img_Converter::add_img_into_queue( $this->uploads_dir . '/photo.png', 'avif' ) );
+		$this->assertTrue( Img_Converter::add_img_into_queue( $this->uploads_dir . '/photo.webp', 'avif' ) );
+
+		// Source extension equal to the target type is skipped.
+		$this->assertFalse( Img_Converter::add_img_into_queue( $this->uploads_dir . '/photo.webp', 'webp' ) );
+	}
 }

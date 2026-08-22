@@ -185,4 +185,41 @@ describe( 'ImageOptimizationCard Component', () => {
 		expect( screen.getByText( '10 / 15' ) ).toBeInTheDocument();
 		expect( screen.getByText( '5 / 8' ) ).toBeInTheDocument();
 	} );
+
+	it( 'renders the original-vs-optimised savings line when size data exists', () => {
+		render(
+			<ImageOptimizationCard
+				completed={ { webp: 2, avif: 0 } }
+				pending={ { webp: 0, avif: 0 } }
+				savings={ {
+					original_bytes: 2097152,
+					converted_bytes: 1048576,
+					saved_bytes: 1048576,
+					images_counted: 2,
+				} }
+				onOptimize={ onOptimize }
+				onRemove={ onRemove }
+			/>
+		);
+
+		expect(
+			screen.getByText( /Original\s+2\.0 MB\s+→ Optimised\s+1\.0 MB/ )
+		).toBeInTheDocument();
+		expect( screen.getByText( /50% smaller/ ) ).toBeInTheDocument();
+		expect( screen.getByText( /2 images/ ) ).toBeInTheDocument();
+	} );
+
+	it( 'hides the savings line when no size data has been recorded', () => {
+		render(
+			<ImageOptimizationCard
+				completed={ { webp: 3, avif: 0 } }
+				pending={ { webp: 0, avif: 0 } }
+				savings={ null }
+				onOptimize={ onOptimize }
+				onRemove={ onRemove }
+			/>
+		);
+
+		expect( screen.queryByText( /smaller/ ) ).not.toBeInTheDocument();
+	} );
 } );

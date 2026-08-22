@@ -124,6 +124,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	const [ bgProcessing, setBgProcessing ] = useState( false );
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
+	const [ imgSavings, setImgSavings ] = useState( null );
 	const pollingRef = useRef( null );
 	const pollRetryRef = useRef( 0 );
 	const submittingRef = useRef( false );
@@ -190,6 +191,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			if ( response.success && response.data ) {
 				const { queued_jobs: queuedJobs } = response.data;
 				setBgJobsQueued( queuedJobs );
+				setImgSavings( response.data.savings || null );
 
 				updateState( {
 					imageInfo: {
@@ -923,6 +925,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					bgProcessing={ bgProcessing }
 					bgJobsQueued={ bgJobsQueued }
 					loading={ loading }
+					savings={ imgSavings }
 					pendingPathsCount={
 						( pending.webp || 0 ) + ( pending.avif || 0 )
 					}

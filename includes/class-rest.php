@@ -978,6 +978,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$status['queued_jobs'] = 0;
 			}
 
+			// Aggregate original-vs-optimised sizes for the dashboard report.
+			$status['savings'] = Img_Converter::get_savings_summary();
+
 			return $this->send_response( $status );
 		}
 

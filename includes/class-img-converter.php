@@ -1415,6 +1415,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								unset( $img_info['failed'][ $type ][ $key ] );
 							}
 						}
+
+						// Record original vs converted byte sizes for the savings report.
+						$sizes = self::measure_conversion_sizes( $img_path, $type );
+						if ( null !== $sizes ) {
+							$img_info['sizes'][ $type ][ $img_path ] = $sizes;
+						}
 					}
 
 					if ( 'failed' === $status || 'skipped' === $status ) {
@@ -1436,6 +1442,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Measure original vs converted byte sizes for a completed conversion.
+		 *
+		 * @param string $img_path Relative source path (ABSPATH-stripped).
+		 * @param string $type     Conversion type ('webp' or 'avif').
+		 * @return array|null { original: int, converted: int } or null when either file cannot be measured.
+		 * @since NEXT
+		 */
+		private static function measure_conversion_sizes( string $img_path, string $type ): ?array {
+			$source = wp_normalize_path( ABSPATH . ltrim( $img_path, '/' ) );
+			$dest   = self::get_img_path( $source, $type );
+
+			if ( ! file_exists( $source ) || ! file_exists( $dest ) ) {
+				return null;
+			}
+
+			$original  = filesize( $source );
+			$converted = filesize( $dest );
+
+			if ( false === $original || false === $converted || 0 >= $original ) {
+				return null;
+			}
+
+			return array(
+				'original'  => (int) $original,
+				'converted' => (int) $converted,
+			);
+		}
+
+		/**
+		 * Aggregate recorded conversion sizes into a savings summary.
+		 *
+		 * Only images whose sizes were measured (post-dating this feature)
+		 * are counted; legacy completed entries contribute nothing.
+		 *
+		 * @return array { original_bytes: int, converted_bytes: int, saved_bytes: int, images_counted: int }
+		 * @since NEXT
+		 */
+		public static function get_savings_summary(): array {
+			$img_info  = self::get_img_info();
+			$sizes     = is_array( $img_info['sizes'] ?? null ) ? $img_info['sizes'] : array();
+			$original  = 0;
+			$converted = 0;
+			$counted   = 0;
+
+			foreach ( array( 'webp', 'avif' ) as $type ) {
+				foreach ( ( $sizes[ $type ] ?? array() ) as $pair ) {
+					if ( ! is_array( $pair ) || ! isset( $pair['original'], $pair['converted'] ) ) {
+						continue;
+					}
+
+					$original  += (int) $pair['original'];
+					$converted += (int) $pair['converted'];
+					++$counted;
+				}
+			}
+
+			return array(
+				'original_bytes'  => $original,
+				'converted_bytes' => $converted,
+				'saved_bytes'     => max( 0, $original - $converted ),
+				'images_counted'  => $counted,
+			);
+		}
+
+		/**
 		 * Add an image to the conversion queue.
 		 *
 		 * @param string $img_path The image path.
@@ -1443,7 +1514,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function add_img_into_queue( $img_path, $type = 'webp' ) {
-			if ( empty( $img_path ) || pathinfo( $img_path, PATHINFO_EXTENSION ) === $type ) {
+			if ( empty( $img_path ) ) {
+				return false;
+			}
+
+			// Only raster formats the converters can actually process enter the
+			// queue. SVG (vector), GIF (animation safety) and other formats are
+			// skipped so sites that allow their upload never queue unconvertible
+			// files that would fail at conversion time.
+			$extension = strtolower( (string) pathinfo( $img_path, PATHINFO_EXTENSION ) );
+
+			/**
+			 * Filters the source image extensions eligible for WebP/AVIF conversion.
+			 *
+			 * @param string[] $extensions Lowercase source extensions eligible for conversion.
+			 * @since NEXT
+			 */
+			$convertible = apply_filters(
+				'wppo_convertible_image_extensions',
+				array( 'jpg', 'jpeg', 'png', 'webp' )
+			);
+
+			if ( ! in_array( $extension, (array) $convertible, true ) || $extension === $type ) {
 				return false;
 			}
 
@@ -1538,6 +1630,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				function ( array $img_info ): array {
 					$img_info['completed']['webp'] = array();
 					$img_info['completed']['avif'] = array();
+					// Drop measured size pairs so the savings report reflects
+					// only currently-optimised images.
+					$img_info['sizes'] = array(
+						'webp' => array(),
+						'avif' => array(),
+					);
 					// Write cleared completed to the DB immediately so that
 					// commit_img_info()'s live re-read cannot merge old entries back in.
 					update_option( 'wppo_img_info', $img_info, false );

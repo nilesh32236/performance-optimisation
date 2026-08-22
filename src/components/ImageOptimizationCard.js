@@ -10,6 +10,24 @@ import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { __ } from '@wordpress/i18n';
 
+/**
+ * Format a byte count as a human-readable size string.
+ *
+ * @param {number} bytes Byte count.
+ * @return {string} Formatted size (e.g. "1.5 MB").
+ */
+const formatBytes = ( bytes ) => {
+	if ( ! bytes || bytes <= 0 ) {
+		return '0 B';
+	}
+	const units = [ 'B', 'KB', 'MB', 'GB' ];
+	const index = Math.min(
+		Math.floor( Math.log( bytes ) / Math.log( 1024 ) ),
+		units.length - 1
+	);
+	return `${ ( bytes / 1024 ** index ).toFixed( 1 ) } ${ units[ index ] }`;
+};
+
 const ImageOptimizationCard = ( {
 	completed = {},
 	pending = {},
@@ -17,6 +35,7 @@ const ImageOptimizationCard = ( {
 	bgJobsQueued = 0,
 	loading = {},
 	pendingPathsCount = 0,
+	savings = null,
 	onOptimize,
 	onRemove,
 } ) => {
@@ -125,6 +144,34 @@ const ImageOptimizationCard = ( {
 					</div>
 				</div>
 			</div>
+
+			{ savings &&
+				savings.original_bytes > 0 &&
+				savings.images_counted > 0 && (
+					<div
+						className="wppo-image-savings"
+						aria-live="polite"
+						style={ { marginTop: '16px' } }
+					>
+						<span>
+							{ __( 'Original', 'performance-optimisation' ) }{ ' ' }
+							{ formatBytes( savings.original_bytes ) }{ ' ' }
+							{ __( '→ Optimised', 'performance-optimisation' ) }{ ' ' }
+							{ formatBytes( savings.converted_bytes ) } (
+							{ Math.max(
+								0,
+								Math.round(
+									( savings.saved_bytes /
+										savings.original_bytes ) *
+										100
+								)
+							) }
+							% { __( 'smaller', 'performance-optimisation' ) } ·{ ' ' }
+							{ savings.images_counted }{ ' ' }
+							{ __( 'images', 'performance-optimisation' ) })
+						</span>
+					</div>
+				) }
 
 			{ ( bgProcessing || bgJobsQueued > 0 ) && (
 				<div
