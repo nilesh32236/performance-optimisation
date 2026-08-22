@@ -38,7 +38,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 				'autoPreloadLCP'  => false,
 				'convertToWebp'   => true,
 				'convertToAvif'   => false,
-				'lazyLoadNative'  => false,
+				'lazyLoadNative'  => true,
 			),
 		);
 
@@ -64,7 +64,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test lazy load attribute injection in HTML.
+	 * Test lazy load attribute injection in HTML with native lazy loading (default).
 	 */
 	public function test_lazy_load_attribute_injection(): void {
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
@@ -125,11 +125,13 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 
 		$html   = '<img src="test.jpg" alt="test"/>';
 		$result = $image_opt->add_delay_load_img( $html );
-		$this->assertStringContainsString( 'data-src', $result );
+		$this->assertStringContainsString( 'loading="lazy"', $result );
+		$this->assertStringContainsString( 'decoding="async"', $result );
+		$this->assertStringNotContainsString( 'data-src', $result );
 	}
 
 	/**
-	 * Test that expected methods exist on the class.
+	 * Test that the expected methods exist on the class.
 	 */
 	public function test_methods_exist(): void {
 		$this->assertTrue( method_exists( Image_Optimisation::class, 'lazy_load_videos' ) );
@@ -168,6 +170,86 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$html   = '<img src="hero.jpg" loading="lazy" />';
 		$result = $image_opt->prioritize_lcp_in_buffer( $html, $html );
 		$this->assertSame( $html, $result );
+	}
+
+	/**
+	 * Test that disabling native lazy loading restores the legacy JS data-src swap.
+	 */
+	public function test_lazy_load_native_off_still_uses_data_src(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'wp_parse_url' )->returnArg( 1 );
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array(
+				'lazyLoadNative'  => false,
+				'placeholderType' => 'none',
+			)
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$html   = '<img src="test.jpg" alt="test"/>';
+		$result = $image_opt->add_delay_load_img( $html );
+		$this->assertStringContainsString( 'data-src="test.jpg"', $result );
+		$this->assertStringNotContainsString( ' src="test.jpg"', $result );
+	}
+
+	/**
+	 * Test that iframes go native (loading="lazy", src preserved) when lazyLoadNative is on.
+	 */
+	public function test_lazy_load_native_iframe_keeps_src(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+
+		$html   = '<iframe src="https://example.com/embed" width="560" height="315"></iframe>';
+		$result = $image_opt->add_delay_load_img( $html );
+		$this->assertStringContainsString( 'loading="lazy"', $result );
+		$this->assertStringContainsString( 'src="https://example.com/embed"', $result );
+		$this->assertStringNotContainsString( 'data-src', $result );
+		$this->assertStringNotContainsString( 'wppo-lazyload', $result );
+	}
+
+	/**
+	 * Test that iframes use the JS data-src path when native lazy loading is off.
+	 */
+	public function test_lazy_load_iframe_uses_data_src_when_native_off(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array( 'lazyLoadNative' => false )
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$html   = '<iframe src="https://example.com/embed" width="560" height="315"></iframe>';
+		$result = $image_opt->add_delay_load_img( $html );
+		$this->assertStringContainsString( 'data-src="https://example.com/embed"', $result );
+		$this->assertStringNotContainsString( ' src="https://example.com/embed"', $result );
+		$this->assertStringContainsString( 'wppo-lazyload', $result );
 	}
 
 	/**

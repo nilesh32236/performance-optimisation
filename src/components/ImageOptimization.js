@@ -36,7 +36,7 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
 const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
-		lazyLoadNative: false,
+		lazyLoadNative: true,
 		lazyLoadBackgroundImages: false,
 		wrapInPicture: true,
 		excludeFirstImages: 0,
@@ -249,7 +249,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										wppoSettings?.translations
 											?.lazyLoadNativeDesc ||
 										__(
-											'Use the browser\'s native loading="lazy" attribute instead of JavaScript-based IntersectionObserver. Supported in modern browsers and reduces JS overhead.',
+											'Use the browser\'s native loading="lazy" attribute instead of JavaScript-based IntersectionObserver. On by default; disable to fall back to the legacy JS lazy loader. Supported in all modern browsers and reduces JS overhead.',
 											'performance-optimisation'
 										)
 									}

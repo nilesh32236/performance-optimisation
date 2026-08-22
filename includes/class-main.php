@@ -222,6 +222,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'preloadSitemap'         => false,
 					),
 					'image_optimisation' => array(
+						'lazyLoadImages'             => false,
+						'lazyLoadNative'             => true,
 						'placeholderType'            => 'svg',
 						'autoPreloadLCP'             => false,
 						'prioritizeLCPImages'        => false,
@@ -251,6 +253,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! isset( $this->options['file_optimisation']['blockAssetsOnDemand'] ) ) {
 					$this->options['file_optimisation']['blockAssetsOnDemand'] = true;
 				}
+			}
+
+			// Native lazy loading is the default path (loading="lazy" + decoding="async"
+			// emitted directly, core attributes respected). Existing installs whose stored
+			// settings predate the `lazyLoadNative` key inherit the native default in-memory
+			// here so the JS data-src swap never runs for them; an explicit stored `false`
+			// (user revert to the legacy IntersectionObserver path) is preserved untouched.
+			if ( ! isset( $this->options['image_optimisation'] ) || ! is_array( $this->options['image_optimisation'] ) ) {
+				$this->options['image_optimisation'] = array();
+			}
+			if ( ! isset( $this->options['image_optimisation']['lazyLoadNative'] ) ) {
+				$this->options['image_optimisation']['lazyLoadNative'] = true;
+			}
+			if ( ! isset( $this->options['image_optimisation']['lazyLoadImages'] ) ) {
+				$this->options['image_optimisation']['lazyLoadImages'] = false;
 			}
 
 			$this->includes();
