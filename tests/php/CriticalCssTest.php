@@ -70,7 +70,7 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		// Deterministic stand-in for core's private/loopback rejection.
 		Functions\when( 'wp_http_validate_url' )->alias(
 			static function ( $url ) {
-				$parts = parse_url( (string) $url );
+				$parts = wp_parse_url( (string) $url );
 				if ( empty( $parts['scheme'] ) || empty( $parts['host'] ) ) {
 					return false;
 				}
@@ -86,7 +86,7 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		$self = $this;
 
 		Functions\when( 'wp_remote_get' )->alias(
-			function ( $url ) use ( $self ) {
+			function () use ( $self ) {
 				++$self->http_calls['regular'];
 
 				return $self->fake_response();
@@ -94,7 +94,7 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		);
 
 		Functions\when( 'wp_safe_remote_get' )->alias(
-			function ( $url ) use ( $self ) {
+			function () use ( $self ) {
 				++$self->http_calls['safe'];
 
 				return $self->fake_response();
