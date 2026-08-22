@@ -81,3 +81,7 @@
 **Bug/Gap:** Methods declaring a string return type triggered PHPStan level 5 errors when failure paths used bare `return;`.
 **Root Cause:** An implicit void or null return violates a strict string contract.
 **Test Added:** Replaced `return;` and `return null;` with `return '';` in Minify classes to satisfy the contract.
+## 2026-08-22 - Empty Commits for CI/PR state
+**Bug/Gap:** PR reviewer bots sometimes hold outdated states or require a new commit hash to resolve their checks, even if the underlying code is already correct.
+**Root Cause:** CI/CD systems and GitHub review bots often cache status against the latest commit SHA.
+**Test Added:** Trigger an empty commit (via submit tool without file modifications) to force a branch update and re-evaluate PR status.
