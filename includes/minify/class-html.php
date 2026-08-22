@@ -284,7 +284,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 					// Support quoted, unquoted, and empty values using regex and fallback extraction.
 					if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-						$type = isset( $type_matches[3] ) ? $type_matches[3] : $type_matches[2];
+						/** @var array<int, string> $type_matches */
+						$type = $type_matches[3] ?? $type_matches[2];
 						$type = strtolower( trim( $type ) );
 
 						$exclude_types = array( 'text/javascript', 'application/ld+json', 'module', 'importmap' );
@@ -394,7 +395,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$type_matches = array();
 			$script_type  = '';
 			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-				$script_type = isset( $type_matches[3] ) ? $type_matches[3] : $type_matches[2];
+				/** @var array<int, string> $type_matches */
+				$script_type = $type_matches[3] ?? $type_matches[2];
 				$script_type = strtolower( trim( $script_type ) );
 			}
 

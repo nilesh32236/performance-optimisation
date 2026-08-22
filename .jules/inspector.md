@@ -61,3 +61,7 @@
 **Bug/Gap:** The Minify CSS, JS and HTML classes triggered several strict PHPStan errors (level 5) including implicit void returns violating string types, invalid string callbacks in array_filter, and offset errors from regex matches. Additionally, single line closures broke WPCS and a temporary debug script caused CI failures.
 **Root Cause:** Using `return;` when a function requires a string or null, using `"strlen"` callback instead of a native closure in array_filter which generates deprecations in PHP 8.1+, directly accessing regex match indexes without checking availability, and leaving temporary scripts in the repo.
 **Fix:** Added explicit PHPStan level 5 checks via phpstan.neon to prevent similar static analysis issues going forward. Added explicit fallback logic for preg_replace_callback: return null !== $updated ? $updated : $original;. Formatted closures to be multi-line. Removed stray get_comments.php; verified with phpcs/phpcbf.
+## 2026-08-22 - preg_match array bounds in PHPStan
+**Bug/Gap:** Defensive null coalesce `$type_matches[3] ?? $type_matches[2] ?? ''` triggered an 'always exists and is not nullable' offset error in PHPStan level 5.
+**Root Cause:** When preg_match satisfies a later capture group in an alternation (e.g. group 3), PHP populates the preceding unmatched groups in the matches array as empty strings, guaranteeing group 2 exists.
+**Test Added:** Replaced defensive coalesce with `$type_matches[3] ?? $type_matches[2]` which accurately reflects runtime state and passes static analysis.
