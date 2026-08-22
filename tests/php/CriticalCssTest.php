@@ -66,6 +66,7 @@ class CriticalCssTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'update_option' )->justReturn( true );
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_wp_error' )->justReturn( false );
 
 		// Deterministic stand-in for core's private/loopback rejection.
 		Functions\when( 'wp_http_validate_url' )->alias(
