@@ -10,3 +10,6 @@ coverage/
 *.orig
 .phpunit.cache/
 review-output.jsonl
+
+# OpenCode agent workspace artifacts
+.omo/
