@@ -1,4 +1,10 @@
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	act,
+	fireEvent,
+	waitFor,
+} from '@testing-library/react';
 import WelcomePanel from '../WelcomePanel';
 import { apiCall } from '../../lib/apiRequest';
 
@@ -9,6 +15,13 @@ jest.mock( '../../lib/apiRequest', () => ( {
 describe( 'WelcomePanel', () => {
 	beforeEach( () => {
 		jest.clearAllMocks();
+	} );
+
+	afterEach( () => {
+		jest.restoreAllMocks();
+	} );
+
+	beforeEach( () => {
 		global.wppoSettings = {
 			show_welcome: true,
 			settings: {
@@ -71,5 +84,107 @@ describe( 'WelcomePanel', () => {
 		await act( async () => {
 			resolveApiCall( { success: true } );
 		} );
+	} );
+
+	it( 'handles API failure when attempting to enable a feature', async () => {
+		apiCall.mockImplementation( ( endpoint ) => {
+			if ( endpoint === 'update_settings' ) {
+				return Promise.resolve( {
+					success: false,
+					message: 'Custom API error',
+				} );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <WelcomePanel /> );
+		const cacheButton = screen.getByRole( 'button', {
+			name: 'Enable Enable Page Caching',
+		} );
+
+		await act( async () => {
+			fireEvent.click( cacheButton );
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Custom API error' )
+			).toBeInTheDocument();
+		} );
+		expect( cacheButton ).not.toHaveAttribute( 'aria-busy', 'true' );
+	} );
+
+	it( 'handles API exception when attempting to enable a feature', async () => {
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		apiCall.mockRejectedValue( new Error( 'Network Error' ) );
+
+		render( <WelcomePanel /> );
+		const cacheButton = screen.getByRole( 'button', {
+			name: 'Enable Enable Page Caching',
+		} );
+
+		await act( async () => {
+			fireEvent.click( cacheButton );
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to enable the feature.' )
+			).toBeInTheDocument();
+		} );
+	} );
+
+	it( 'dismisses the panel successfully when Got it button is clicked', async () => {
+		apiCall.mockResolvedValue( { success: true } );
+
+		render( <WelcomePanel /> );
+		const dismissButton = screen.getByRole( 'button', { name: 'Got it' } );
+
+		await act( async () => {
+			fireEvent.click( dismissButton );
+		} );
+		await waitFor( () => {
+			expect(
+				screen.queryByText( 'Welcome to Performance Optimisation' )
+			).not.toBeInTheDocument();
+		} );
+	} );
+
+	it( 'handles API failure when attempting to dismiss the panel', async () => {
+		apiCall.mockResolvedValue( {
+			success: false,
+			message: 'Dismiss failed',
+		} );
+
+		render( <WelcomePanel /> );
+		const dismissButton = screen.getByRole( 'button', { name: 'Got it' } );
+
+		await act( async () => {
+			fireEvent.click( dismissButton );
+		} );
+		await waitFor( () => {
+			expect( screen.getByText( 'Dismiss failed' ) ).toBeInTheDocument();
+		} );
+		expect(
+			screen.getByText( 'Welcome to Performance Optimisation' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'handles API exception when attempting to dismiss the panel', async () => {
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		apiCall.mockRejectedValue( new Error( 'Network Error' ) );
+
+		render( <WelcomePanel /> );
+		const dismissButton = screen.getByRole( 'button', { name: 'Got it' } );
+
+		await act( async () => {
+			fireEvent.click( dismissButton );
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to dismiss the welcome panel.' )
+			).toBeInTheDocument();
+		} );
+		expect(
+			screen.getByText( 'Welcome to Performance Optimisation' )
+		).toBeInTheDocument();
 	} );
 } );
