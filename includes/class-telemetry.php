@@ -5,6 +5,9 @@
  * Performs local HTTP-based page analysis. Uses raw cURL when available for
  * granular network timings (DNS, connect, SSL, true TTFB) and automatic
  * gzip/brotli decoding. Falls back to wp_remote_get() when cURL is absent.
+ * Redirects are never followed implicitly: every hop is resolved and
+ * re-validated against the site's own host before the next request is issued,
+ * preventing redirect-based SSRF into internal endpoints.
  * HTML parsing uses WP_HTML_Tag_Processor (WP 6.2+) with a regex fallback.
  *
  * @package PerformanceOptimise\Inc
@@ -37,6 +40,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @var string
 		 */
 		private const AUDIT_SALT_KEY = 'wppo_audit_salt';
+
+		/**
+		 * Maximum number of redirect hops a scan may follow.
+		 *
+		 * Redirects are followed manually so every hop can be re-validated
+		 * against the same-host policy before the next request is issued.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const MAX_REDIRECT_HOPS = 2;
 
 		/**
 		 * Scan a URL and return all performance metrics.
@@ -91,111 +105,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			// cURL is used here intentionally because wp_remote_get() does not expose
 			// DNS/connect/SSL timing data and does not support automatic content-encoding
 			// decoding (CURLOPT_ENCODING), which is required to parse gzip-compressed HTML.
-			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_init
-			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_setopt
-			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_exec
-			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_getinfo
-			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_errno
-			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_close
 			if ( function_exists( 'curl_init' ) ) {
-				$ch = curl_init();
-				curl_setopt( $ch, CURLOPT_URL, $url );
-				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-				curl_setopt( $ch, CURLOPT_HEADER, true );
-				curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, true );
-				curl_setopt( $ch, CURLOPT_ENCODING, '' ); // Auto-decode gzip/brotli/deflate.
-				curl_setopt( $ch, CURLOPT_MAXREDIRS, 2 );
-				curl_setopt( $ch, CURLOPT_TIMEOUT, 30 );
-				curl_setopt(
-					$ch,
-					CURLOPT_USERAGENT,
-					'WordPress/' . get_bloginfo( 'version' ) . '; ' . Util::cached_home_url()
-				);
-				// SSL verification enabled by default; filterable for local/dev environments.
-				$verify_ssl = (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url );
-				curl_setopt( $ch, CURLOPT_SSL_VERIFYPEER, $verify_ssl );
-				curl_setopt( $ch, CURLOPT_SSL_VERIFYHOST, $verify_ssl ? 2 : 0 );
-				// Restrict to HTTP/HTTPS only — prevent file://, ftp://, etc.
-				if ( defined( 'CURLPROTO_HTTP' ) && defined( 'CURLPROTO_HTTPS' ) ) {
-					curl_setopt( $ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS );
-					curl_setopt( $ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS );
+				$curl_result = self::fetch_via_curl( $url );
+
+				if ( is_wp_error( $curl_result ) ) {
+					return $curl_result;
 				}
 
-				$raw_response = curl_exec( $ch );
-				$info         = curl_getinfo( $ch );
-				$curl_error   = curl_errno( $ch );
-				// curl_close() is a no-op in PHP 8.0+ but calling it is harmless and
-				// keeps compatibility with PHP 7.4 where it still frees resources.
-				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated
-				curl_close( $ch );
-
-				if ( ! $curl_error && 200 === (int) $info['http_code'] && $raw_response ) {
-					$header_size = (int) $info['header_size'];
-					$header_raw  = substr( $raw_response, 0, $header_size );
-					$body        = substr( $raw_response, $header_size );
-
-					// Parse only the final set of headers (after any redirects).
-					$header_blocks = explode( "\r\n\r\n", trim( $header_raw ) );
-					$last_block    = end( $header_blocks );
-
-					foreach ( explode( "\r\n", $last_block ) as $line ) {
-						$parts = explode( ':', $line, 2 );
-						if ( 2 === count( $parts ) ) {
-							$headers[ strtolower( trim( $parts[0] ) ) ] = trim( $parts[1] );
-						}
-					}
-
-					// Precise network timings from cURL info struct.
-					$timings   = array(
-						'dns'              => round( $info['namelookup_time'] * 1000, 2 ),
-						'connect'          => round( ( $info['connect_time'] - $info['namelookup_time'] ) * 1000, 2 ),
-						'ssl'              => ( isset( $info['appconnect_time'] ) && $info['appconnect_time'] > 0 )
-							? round( ( $info['appconnect_time'] - $info['connect_time'] ) * 1000, 2 )
-							: 0,
-						'ttfb'             => round( $info['starttransfer_time'] * 1000, 2 ), // True TTFB.
-						'server_wait_time' => round( ( $info['starttransfer_time'] - $info['pretransfer_time'] ) * 1000, 2 ),
-						'total'            => round( $info['total_time'] * 1000, 2 ),
-					);
-					$load_time = round( $info['total_time'], 2 );
+				if ( null !== $curl_result ) {
+					$body      = $curl_result['body'];
+					$headers   = $curl_result['headers'];
+					$timings   = $curl_result['timings'];
+					$load_time = $curl_result['load_time'];
 				}
 			}
-			// phpcs:enable
 
 			// --- Fallback: wp_remote_get() when cURL is unavailable or failed ---
 			if ( empty( $body ) ) {
-				$start    = microtime( true );
-				$response = wp_remote_get(
-					$url,
-					array(
-						'timeout'    => 30,
-						'user-agent' => 'WordPress/' . get_bloginfo( 'version' ) . '; ' . Util::cached_home_url(),
-						'sslverify'  => (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url ),
-					)
-				);
+				$remote_result = self::fetch_via_wp_remote( $url );
 
-				if ( is_wp_error( $response ) ) {
-					return $response;
+				if ( is_wp_error( $remote_result ) ) {
+					return $remote_result;
 				}
 
-				$response_code = (int) wp_remote_retrieve_response_code( $response );
-				if ( 200 !== $response_code ) {
-					return new \WP_Error(
-						'scan_failed',
-						sprintf(
-							/* translators: 1: HTTP status code, 2: URL */
-							__( 'HTTP %1$d returned for %2$s', 'performance-optimisation' ),
-							$response_code,
-							esc_url( $url )
-						)
-					);
-				}
-
-				$load_time = round( microtime( true ) - $start, 2 );
-				$body      = wp_remote_retrieve_body( $response );
-				$headers   = wp_remote_retrieve_headers( $response );
-
-				// Populate synthetic TTFB for fallback path to avoid second request.
-				$timings['ttfb'] = $load_time * 1000;
+				$body      = $remote_result['body'];
+				$headers   = $remote_result['headers'];
+				$timings   = $remote_result['timings'];
+				$load_time = $remote_result['load_time'];
 			}
 
 			$resources    = self::parse_resources( $body );
@@ -245,6 +181,341 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 			}
 
 			return $result;
+		}
+
+		/**
+		 * Execute a single cURL request without following redirects.
+		 *
+		 * CURLOPT_FOLLOWLOCATION is deliberately disabled: libcurl would follow
+		 * a 302 into internal endpoints such as 169.254.169.254 or 127.0.0.1
+		 * (SSRF). Redirects are instead handled manually by fetch_via_curl(),
+		 * which validates each hop before re-issuing the request.
+		 *
+		 * Split out from fetch_via_curl() so tests can stub the transport layer.
+		 *
+		 * @since  NEXT
+		 * @param  string $url URL to request.
+		 * @return array {
+		 *     @type string|false $raw_response Raw response (headers + body), or false on transport failure.
+		 *     @type array        $info         curl_getinfo() transfer info.
+		 *     @type int          $error        curl_errno() value (0 = success).
+		 * }
+		 */
+		protected static function execute_curl( string $url ): array {
+			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_init -- cURL required for granular network timings.
+			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_setopt -- cURL required for granular network timings.
+			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_exec -- cURL required for granular network timings.
+			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- cURL required for granular network timings.
+			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_errno -- cURL required for granular network timings.
+			// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_close -- cURL required for granular network timings.
+			$ch = curl_init();
+			curl_setopt( $ch, CURLOPT_URL, $url );
+			curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+			curl_setopt( $ch, CURLOPT_HEADER, true );
+			// SECURITY: never enable CURLOPT_FOLLOWLOCATION here — redirects are
+			// followed manually (see fetch_via_curl()) so each hop can be
+			// re-validated against the same-host policy first.
+			curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, false );
+			curl_setopt( $ch, CURLOPT_ENCODING, '' ); // Auto-decode gzip/brotli/deflate.
+			curl_setopt( $ch, CURLOPT_TIMEOUT, 30 );
+			curl_setopt(
+				$ch,
+				CURLOPT_USERAGENT,
+				'WordPress/' . get_bloginfo( 'version' ) . '; ' . Util::cached_home_url()
+			);
+			// SSL verification enabled by default; filterable for local/dev environments.
+			$verify_ssl = (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url );
+			curl_setopt( $ch, CURLOPT_SSL_VERIFYPEER, $verify_ssl );
+			curl_setopt( $ch, CURLOPT_SSL_VERIFYHOST, $verify_ssl ? 2 : 0 );
+			// Restrict to HTTP/HTTPS only — prevent file://, ftp://, etc.
+			if ( defined( 'CURLPROTO_HTTP' ) && defined( 'CURLPROTO_HTTPS' ) ) {
+				curl_setopt( $ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS );
+			}
+
+			$raw_response = curl_exec( $ch );
+			$info         = curl_getinfo( $ch );
+			$curl_error   = curl_errno( $ch );
+			// curl_close() is a no-op in PHP 8.0+ but calling it is harmless and
+			// keeps compatibility with PHP 7.4 where it still frees resources.
+			// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated
+			curl_close( $ch );
+			// phpcs:enable
+
+			return array(
+				'raw_response' => is_string( $raw_response ) ? $raw_response : false,
+				'info'         => is_array( $info ) ? $info : array(),
+				'error'        => (int) $curl_error,
+			);
+		}
+
+		/**
+		 * Parse raw response headers into a lowercase-keyed array.
+		 *
+		 * Mirrors the original single-hop parsing: only the final header block
+		 * is considered (robust against interim 100 Continue responses).
+		 *
+		 * @since  NEXT
+		 * @param  string $header_raw Raw header text (everything before the body).
+		 * @return array Lowercase header name => value map.
+		 */
+		private static function parse_header_block( string $header_raw ): array {
+			$headers = array();
+
+			$header_blocks = explode( "\r\n\r\n", trim( $header_raw ) );
+			$last_block    = end( $header_blocks );
+
+			foreach ( explode( "\r\n", (string) $last_block ) as $line ) {
+				$parts = explode( ':', $line, 2 );
+				if ( 2 === count( $parts ) ) {
+					$headers[ strtolower( trim( $parts[0] ) ) ] = trim( $parts[1] );
+				}
+			}
+
+			return $headers;
+		}
+
+		/**
+		 * Resolve and validate a redirect Location against the current URL.
+		 *
+		 * Resolution mirrors Critical_CSS::resolve_import_url(): absolute URLs
+		 * are taken as-is, protocol-relative URLs inherit the current scheme,
+		 * and relative URLs resolve against the current URL's directory. The
+		 * resolved hop must then pass the same SSRF rules as the initial scan
+		 * URL: wp_http_validate_url(), http/https schemes only, and the same
+		 * host as this website's home URL.
+		 *
+		 * @since  NEXT
+		 * @param  string $location    Raw Location header value.
+		 * @param  string $current_url URL of the response that sent the Location.
+		 * @return string|false Absolute validated URL, or false when the hop is not allowed.
+		 */
+		private static function resolve_redirect( string $location, string $current_url ): string|false {
+			$location = trim( $location );
+			if ( '' === $location ) {
+				return false;
+			}
+
+			// Absolute URL — take as-is.
+			if ( preg_match( '/^https?:\/\//i', $location ) ) {
+				$resolved = $location;
+			} elseif ( 0 === strpos( $location, '//' ) ) {
+				// Protocol-relative — inherit the current scheme.
+				$scheme   = wp_parse_url( $current_url, PHP_URL_SCHEME );
+				$resolved = ( $scheme ? $scheme : 'https' ) . ':' . $location;
+			} else {
+				// Relative URL — resolve against the current URL's directory.
+				$base_parts = wp_parse_url( $current_url );
+				if ( empty( $base_parts['host'] ) ) {
+					return false;
+				}
+
+				$scheme   = isset( $base_parts['scheme'] ) ? $base_parts['scheme'] : 'https';
+				$host     = $base_parts['host'];
+				$port     = isset( $base_parts['port'] ) ? ':' . $base_parts['port'] : '';
+				$base_dir = dirname( isset( $base_parts['path'] ) ? $base_parts['path'] : '/' );
+
+				if ( 0 === strpos( $location, '/' ) ) {
+					$resolved = $scheme . '://' . $host . $port . $location;
+				} else {
+					$resolved = $scheme . '://' . $host . $port . $base_dir . '/' . $location;
+				}
+			}
+
+			// Validate the hop with the same SSRF rules as the initial URL.
+			if ( ! wp_http_validate_url( $resolved ) ) {
+				return false;
+			}
+
+			$parsed = wp_parse_url( $resolved );
+			if ( ! isset( $parsed['scheme'] ) || ! in_array( $parsed['scheme'], array( 'http', 'https' ), true ) ) {
+				return false;
+			}
+
+			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
+			if ( ! isset( $parsed['host'] ) || $parsed['host'] !== $home_host ) {
+				return false;
+			}
+
+			return $resolved;
+		}
+
+		/**
+		 * Fetch a page via cURL, manually following validated redirects.
+		 *
+		 * Follows at most MAX_REDIRECT_HOPS hops. Every Location header is
+		 * resolved and validated via resolve_redirect() BEFORE the next request
+		 * is issued, so a same-host scan URL cannot bounce the server into
+		 * internal endpoints. Network timings always come from the final hop.
+		 *
+		 * Returns null when the caller should fall back to wp_remote_get()
+		 * (transport failure or terminal non-200/non-3xx status), matching the
+		 * pre-hardening behaviour of scan().
+		 *
+		 * @since  NEXT
+		 * @param  string $url Validated scan URL.
+		 * @return array|\WP_Error|null {
+		 *     Success payload on a 200 response, WP_Error on an unsafe hop or
+		 *     exceeded hop limit, or null when the wp_remote_get() fallback
+		 *     should be used instead.
+		 *
+		 *     @type string $body      Response body.
+		 *     @type array  $headers   Lowercase response headers from the final hop.
+		 *     @type array  $timings   DNS/connect/SSL/TTFB timings in milliseconds.
+		 *     @type float  $load_time Total load time of the final hop in seconds.
+		 * }
+		 */
+		protected static function fetch_via_curl( string $url ): array|\WP_Error|null {
+			$current_url = $url;
+			$followed    = 0;
+
+			while ( true ) {
+				$exec         = static::execute_curl( $current_url );
+				$raw_response = $exec['raw_response'];
+
+				if ( $exec['error'] || ! $raw_response ) {
+					return null; // Transport failure — fall back to wp_remote_get().
+				}
+
+				$status      = (int) ( $exec['info']['http_code'] ?? 0 );
+				$header_size = (int) ( $exec['info']['header_size'] ?? 0 );
+				$hop_headers = self::parse_header_block( substr( $raw_response, 0, $header_size ) );
+				$hop_body    = substr( $raw_response, $header_size );
+
+				if ( $status >= 300 && $status < 400 && isset( $hop_headers['location'] ) ) {
+					if ( $followed >= self::MAX_REDIRECT_HOPS ) {
+						return new \WP_Error(
+							'redirect_limit_exceeded',
+							__( 'The scanned URL exceeded the maximum number of allowed redirects.', 'performance-optimisation' )
+						);
+					}
+
+					$next_url = self::resolve_redirect( $hop_headers['location'], $current_url );
+					if ( false === $next_url ) {
+						return new \WP_Error(
+							'unsafe_redirect',
+							__( 'The scanned URL attempted to redirect to a destination that is not allowed.', 'performance-optimisation' )
+						);
+					}
+
+					++$followed;
+					$current_url = $next_url;
+					continue;
+				}
+
+				if ( 200 !== $status || ! $hop_body ) {
+					return null; // Terminal non-success status — fall back to wp_remote_get().
+				}
+
+				$info = $exec['info'];
+
+				return array(
+					'body'      => $hop_body,
+					'headers'   => $hop_headers,
+					// Precise network timings from the final hop's cURL info struct.
+					'timings'   => array(
+						'dns'              => round( $info['namelookup_time'] * 1000, 2 ),
+						'connect'          => round( ( $info['connect_time'] - $info['namelookup_time'] ) * 1000, 2 ),
+						'ssl'              => ( isset( $info['appconnect_time'] ) && $info['appconnect_time'] > 0 )
+							? round( ( $info['appconnect_time'] - $info['connect_time'] ) * 1000, 2 )
+							: 0,
+						'ttfb'             => round( $info['starttransfer_time'] * 1000, 2 ), // True TTFB.
+						'server_wait_time' => round( ( $info['starttransfer_time'] - $info['pretransfer_time'] ) * 1000, 2 ),
+						'total'            => round( $info['total_time'] * 1000, 2 ),
+					),
+					'load_time' => round( $info['total_time'], 2 ),
+				);
+			}
+		}
+
+		/**
+		 * Fetch a page via wp_remote_get(), manually following validated redirects.
+		 *
+		 * Requests are issued with 'redirection' => 0 so WordPress never follows
+		 * a redirect implicitly; each Location header is resolved and validated
+		 * by resolve_redirect() before the next request is issued (same rules
+		 * as the cURL path).
+		 *
+		 * @since  NEXT
+		 * @param  string $url Validated scan URL.
+		 * @return array|\WP_Error Success payload, or WP_Error on failure/unsafe hop/hop limit.
+		 */
+		protected static function fetch_via_wp_remote( string $url ): array|\WP_Error {
+			$start       = microtime( true );
+			$current_url = $url;
+			$followed    = 0;
+
+			while ( true ) {
+				$response = wp_remote_get(
+					$current_url,
+					array(
+						'timeout'     => 30,
+						'user-agent'  => 'WordPress/' . get_bloginfo( 'version' ) . '; ' . Util::cached_home_url(),
+						'sslverify'   => (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url ),
+						// Redirects are validated manually below (SSRF hardening).
+						'redirection' => 0,
+					)
+				);
+
+				if ( is_wp_error( $response ) ) {
+					return $response;
+				}
+
+				$response_code = (int) wp_remote_retrieve_response_code( $response );
+
+				if ( $response_code >= 300 && $response_code < 400 ) {
+					$location = (string) wp_remote_retrieve_header( $response, 'location' );
+
+					if ( '' === $location ) {
+						break; // Nothing to follow — reported as scan_failed below.
+					}
+
+					if ( $followed >= self::MAX_REDIRECT_HOPS ) {
+						return new \WP_Error(
+							'redirect_limit_exceeded',
+							__( 'The scanned URL exceeded the maximum number of allowed redirects.', 'performance-optimisation' )
+						);
+					}
+
+					$next_url = self::resolve_redirect( $location, $current_url );
+					if ( false === $next_url ) {
+						return new \WP_Error(
+							'unsafe_redirect',
+							__( 'The scanned URL attempted to redirect to a destination that is not allowed.', 'performance-optimisation' )
+						);
+					}
+
+					++$followed;
+					$current_url = $next_url;
+					continue;
+				}
+
+				break;
+			}
+
+			$response_code = (int) wp_remote_retrieve_response_code( $response );
+			if ( 200 !== $response_code ) {
+				return new \WP_Error(
+					'scan_failed',
+					sprintf(
+						/* translators: 1: HTTP status code, 2: URL */
+						__( 'HTTP %1$d returned for %2$s', 'performance-optimisation' ),
+						$response_code,
+						esc_url( $current_url )
+					)
+				);
+			}
+
+			$load_time = round( microtime( true ) - $start, 2 );
+
+			return array(
+				'body'      => wp_remote_retrieve_body( $response ),
+				'headers'   => wp_remote_retrieve_headers( $response ),
+				'timings'   => array(
+					// Synthetic TTFB for the fallback path to avoid a second request.
+					'ttfb' => $load_time * 1000,
+				),
+				'load_time' => $load_time,
+			);
 		}
 
 		/**
