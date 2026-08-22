@@ -73,6 +73,9 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
 		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false ); // default: single-site, override per-test if needed.
+		Functions\when( 'get_transient' )->justReturn( false ); // cache-miss default; per-test can stub hit value.
+		Functions\when( 'set_transient' )->justReturn( true );
 		Functions\when( 'wp_normalize_path' )->alias(
 			static function ( $path ) {
 				$path = str_replace( '\\', '/', (string) $path );
