@@ -1038,4 +1038,28 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 			$wpdb = $original;
 		}
 	}
+
+	/**
+	 * Test that UltraHDR / gain-map sources are skipped untouched so the
+	 * embedded gain map survives (mirrors core's own handling).
+	 */
+	public function test_convert_image_skips_gain_map_sources(): void {
+		$file = $this->uploads_dir . '/ultrahdr.jpg';
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents(
+			$file,
+			"\xFF\xD8\xFF\xE0" . str_repeat( "\x00", 16 )
+				. 'xmpmeta hdrgm:GainMapMin="0.0" hdrgm:GainMapMax="1.0"'
+				. str_repeat( "\x00", 16 ) . "\xFF\xD9"
+		);
+
+		$converter = $this->make_converter( array( 'conversionFormat' => 'webp' ) );
+		$result    = $converter->convert_image( $file, 'webp' );
+
+		$this->assertFalse( $result );
+
+		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
+		$info     = Img_Converter::get_img_info();
+		$this->assertContains( $full_rel, $info['skipped']['webp'] ?? array() );
+	}
 }
