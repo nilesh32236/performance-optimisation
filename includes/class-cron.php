@@ -40,6 +40,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
+
+		/**
+		 * Maximum number of child sitemaps to fetch from an index.
+		 *
+		 * @since NEXT
+		 */
+		private const TO_FETCH_LIMIT = 50;
+
+		/**
+		 * Constructor.
+		 *
+		 * @since 1.0.0
+		 */
 		public function __construct() {
 			add_action( 'init', array( $this, 'schedule_cron_jobs' ) );
 			add_action( 'wppo_page_cron_hook', array( $this, 'wppo_page_cron_callback' ) );
@@ -482,7 +495,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					}
 
 					if ( $is_index ) {
-						if ( isset( $fetched[ $loc ] ) || $to_fetch_count >= 50 ) {
+						if ( isset( $fetched[ $loc ] ) || $to_fetch_count >= self::TO_FETCH_LIMIT ) {
 							continue;
 						}
 
