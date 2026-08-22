@@ -306,7 +306,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			}
 
 			$result = rename( $tmp, $dest ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
-			if ( ! $result && file_exists( $tmp ) ) {
+			if ( false === $result && file_exists( $tmp ) ) {
 				wp_delete_file( $tmp );
 			}
 

@@ -75,7 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 
 			if ( ! empty( $this->settings['disableShortlinks'] ) ) {
 				remove_action( 'wp_head', 'wp_shortlink_wp_head' );
-				add_filter( 'after_setup_theme', array( $this, 'remove_shortlink_tag' ) );
+				add_action( 'after_setup_theme', array( $this, 'remove_shortlink_tag' ) );
 			}
 
 			if ( ! empty( $this->settings['disableGeneratorTag'] ) ) {
@@ -308,6 +308,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 */
 		public function remove_shortlink_tag() {
 			remove_action( 'wp_head', 'wp_shortlink_wp_head' );
+			return '';
 		}
 
 		/**
