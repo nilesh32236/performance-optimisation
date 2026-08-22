@@ -149,7 +149,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
-			'if ( preg_match( \'#^/(?:cart|checkout|my-account)(?:/|$)\#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
+			'if ( preg_match( \'#^/(?:cart|checkout|my-account)(?:/|$)#i\', $request_uri ) || preg_match( \'/(?:sitemap[^\/]*\.xml|wp-sitemap[^\/]*\.xml|\.xml)$/i\', $request_uri ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
