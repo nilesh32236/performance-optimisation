@@ -69,3 +69,7 @@
 **Bug/Gap:** Using preg_replace_callback with strict string return types caused PHPStan errors if PCRE errors occurred.
 **Root Cause:** preg_replace_callback can return null on error, violating string-only return types.
 **Test Added:** Added explicit fallback logic: return null !== $updated ? $updated : $original;
+## 2026-08-22 - WPCS and Temporary Files
+**Bug/Gap:** A temporary python script committed by mistake triggered WPCS failures.
+**Root Cause:** The script was created in the workspace for debugging and not deleted, failing CI checks which expect WPCS compliance for all files.
+**Test Added:** Delete temporary files before commit and run `phpcs` locally to ensure no unexpected files are flagged.
