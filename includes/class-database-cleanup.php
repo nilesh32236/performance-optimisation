@@ -802,7 +802,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$results[ $key ] = $res;
 				if ( ! is_wp_error( $res ) && false !== $res && (int) $res > 0 ) {
 					$total_deleted += (int) $res;
-					if ( isset( self::TABLE_MAP[ $key ] ) ) {
+					if ( array_key_exists( $key, self::TABLE_MAP ) ) {
 						$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $key ] );
 					}
 				}
@@ -867,8 +867,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					Log::add( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
 					$failures[] = $method;
 				} elseif ( $result > 0 ) {
-					$type = self::METHOD_TO_TYPE[ $method ] ?? '';
-					if ( isset( self::TABLE_MAP[ $type ] ) ) {
+					$type = array_key_exists( $method, self::METHOD_TO_TYPE ) ? self::METHOD_TO_TYPE[ $method ] : '';
+					if ( '' !== $type && array_key_exists( $type, self::TABLE_MAP ) ) {
 						$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $type ] );
 					}
 				}
@@ -891,7 +891,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return array<string,int> Associative array mapping cleanup type to its current count.
 		 */
 		public static function get_counts() {
-			$has_salted = function_exists( 'wp_cache_get_salted' );
+			$has_salted = function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_cache_set_salted' );
 
 			if ( $has_salted ) {
 				$cached = wp_cache_get_salted( 'wppo_db_cleanup_counts', 'wppo', self::SALT_KEY );
@@ -1029,11 +1029,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		private static function get_table_size( string $table ): int {
 			global $wpdb;
 
+			// Fallback if DB_NAME is strictly not defined in standard WP config
+			$db_name = defined( 'DB_NAME' ) ? DB_NAME : $wpdb->dbname;
+
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$size = $wpdb->get_var(
 				$wpdb->prepare(
 					'SELECT ( data_length + index_length ) FROM information_schema.TABLES WHERE table_schema = %s AND table_name = %s',
-					DB_NAME,
+					$db_name,
 					$table
 				)
 			);

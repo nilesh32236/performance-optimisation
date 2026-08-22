@@ -133,7 +133,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private static function get_ccss_url(): string {
-			return WP_CONTENT_URL . self::CCSS_DIR;
+			return content_url( self::CCSS_DIR );
 		}
 
 		/**
@@ -361,6 +361,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$link_tags = $xpath->query( '//link[@rel="stylesheet"]' );
 			if ( $link_tags ) {
 				foreach ( $link_tags as $tag ) {
+					if ( ! ( $tag instanceof \DOMElement ) ) {
+						continue;
+					}
 					$href = $tag->getAttribute( 'href' );
 					if ( empty( $href ) ) {
 						continue;
@@ -931,9 +934,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					echo self::sanitize_inline_css( $content ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
 					echo '</style>' . "\n";
 				}
-			} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
+			} elseif ( function_exists( 'as_enqueue_async_action' ) && function_exists( 'as_has_scheduled_action' ) ) {
 				$hook = 'wppo_generate_ccss';
-				if ( ! as_next_scheduled_action( $hook, array( 'template_hash' => $template_hash ), 'performance_optimisation' ) ) {
+				if ( ! as_has_scheduled_action( $hook, array( 'template_hash' => $template_hash ), 'performance_optimisation' ) ) {
 					as_enqueue_async_action(
 						$hook,
 						array( 'template_hash' => $template_hash ),
@@ -1057,9 +1060,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
-				if ( function_exists( 'as_enqueue_async_action' ) ) {
+				if ( function_exists( 'as_enqueue_async_action' ) && function_exists( 'as_has_scheduled_action' ) ) {
 					$hook = 'wppo_generate_ccss';
-					if ( ! as_next_scheduled_action( $hook, array( 'template_hash' => $hash ), 'performance_optimisation' ) ) {
+					if ( ! as_has_scheduled_action( $hook, array( 'template_hash' => $hash ), 'performance_optimisation' ) ) {
 						as_enqueue_async_action(
 							$hook,
 							array( 'template_hash' => $hash ),

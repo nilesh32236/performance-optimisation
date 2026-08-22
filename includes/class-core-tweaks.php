@@ -75,7 +75,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 
 			if ( ! empty( $this->settings['disableShortlinks'] ) ) {
 				remove_action( 'wp_head', 'wp_shortlink_wp_head' );
-				add_filter( 'after_setup_theme', array( $this, 'remove_shortlink_tag' ) );
+				add_action( 'after_setup_theme', array( $this, 'remove_shortlink_tag' ) );
 			}
 
 			if ( ! empty( $this->settings['disableGeneratorTag'] ) ) {
@@ -233,7 +233,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 
 			if ( 'disable_all' === $heartbeat_control ) {
 				wp_deregister_script( 'heartbeat' );
-			} elseif ( 'disable_ext' === $heartbeat_control && ! is_admin() && ! ( defined( 'DOING_AJAX' ) && DOING_AJAX ) ) {
+			} elseif ( 'disable_ext' === $heartbeat_control && ! is_admin() && ! wp_doing_ajax() ) {
 				wp_deregister_script( 'heartbeat' );
 			} elseif ( '60s' === $heartbeat_control ) {
 				add_filter( 'heartbeat_settings', array( $this, 'heartbeat_60s' ) );
@@ -308,6 +308,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 */
 		public function remove_shortlink_tag() {
 			remove_action( 'wp_head', 'wp_shortlink_wp_head' );
+			return '';
 		}
 
 		/**

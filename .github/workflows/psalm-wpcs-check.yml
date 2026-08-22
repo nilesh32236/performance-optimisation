@@ -47,6 +47,9 @@ jobs:
         id: wpcs_check
         run: vendor/bin/phpcs --report=checkstyle --report-file=reports/wpcs.xml
 
+      - name: PHPStan level 5
+        run: vendor/bin/phpstan analyse --error-format=github
+
       - name: Psalm Security Scan
         id: psalm
         uses: docker://ghcr.io/psalm/psalm-security-scan

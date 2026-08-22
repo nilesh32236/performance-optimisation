@@ -101,7 +101,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 * Minifies the JavaScript file and saves it to the cache directory.
 		 * If the minified file exists, it returns its URL.
 		 *
-		 * @return string|null The URL of the minified JavaScript file or null if minification fails.
+		 * @return string The URL of the minified JavaScript file or empty string if minification fails.
 		 *
 		 * @since 1.0.0
 		 */
@@ -110,21 +110,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 			$min_dir    = dirname( $cache_file );
 
 			if ( ! $this->filesystem || ! Util::prepare_cache_dir( $min_dir ) ) {
-				return;
+				return '';
 			}
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
 				try {
 					$js_content = $this->filesystem->get_contents( $this->file_path );
 					if ( false === $js_content ) {
-						return null;
+						return '';
 					}
 					$js_minifier = new Minify\JS( $js_content );
 					$minified_js = $js_minifier->minify();
 
 					$this->save_min_file( $minified_js, $cache_file );
 				} catch ( \Exception $e ) {
-					return null;
+					return '';
 				}
 			}
 
