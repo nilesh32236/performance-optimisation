@@ -73,3 +73,11 @@
 **Bug/Gap:** Auxiliary python script parse_comments.py committed to branch and flagged in PR review.
 **Root Cause:** Temporary files created via run_in_bash_session to parse API JSON responses were not removed before commit.
 **Test Added:** Deleted python script and updated memory to ensure all debug scripts are cleared before submitting.
+## 2026-08-22 - Strict String Return Contracts
+**Bug/Gap:** Methods declaring a string return type triggered PHPStan level 5 errors when failure paths used bare .
+**Root Cause:** An implicit void or null return violates a strict string contract.
+**Test Added:** Replaced  and  with  in Minify classes to satisfy the contract.
+## 2026-08-22 - Strict String Return Contracts
+**Bug/Gap:** Methods declaring a string return type triggered PHPStan level 5 errors when failure paths used bare `return;`.
+**Root Cause:** An implicit void or null return violates a strict string contract.
+**Test Added:** Replaced `return;` and `return null;` with `return '';` in Minify classes to satisfy the contract.
