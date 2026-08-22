@@ -270,7 +270,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 */
 		public function suppress_rest_header( $served, $result ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			if ( $result instanceof \WP_REST_Response ) {
-				$result->remove_header( 'Link' );
+				// WP_REST_Response has no remove_header() method (that lives on
+				// WP_REST_Server), so rewrite the header list without `Link`.
+				$headers = $result->get_headers();
+				if ( isset( $headers['Link'] ) ) {
+					unset( $headers['Link'] );
+					$result->set_headers( $headers );
+				}
 			}
 			return $served;
 		}
