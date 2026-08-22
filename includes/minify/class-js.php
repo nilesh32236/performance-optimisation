@@ -110,7 +110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 			$min_dir    = dirname( $cache_file );
 
 			if ( ! $this->filesystem || ! Util::prepare_cache_dir( $min_dir ) ) {
-				return;
+				return null;
 			}
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {

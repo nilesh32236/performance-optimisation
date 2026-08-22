@@ -112,11 +112,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				array( 'wppo-lazyload', 'data-wppo-preserve' ),
 				Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() )
 			);
-			$this->exclude_delay_js = array_values( array_filter( $this->exclude_delay_js, 'strlen' ) );
+			$this->exclude_delay_js = array_values( array_filter( $this->exclude_delay_js, function ( $val ) { return is_string( $val ) && strlen( $val ) > 0; } ) );
 
 			// Cache delay JS strategy lists, filtering empty strings to avoid strpos('', $x) matching everything.
-			$this->delay_js_idle_list        = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() ), 'strlen' ) );
-			$this->delay_js_viewport_list    = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() ), 'strlen' ) );
+			$this->delay_js_idle_list        = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() ), function ( $val ) { return is_string( $val ) && strlen( $val ) > 0; } ) );
+			$this->delay_js_viewport_list    = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() ), function ( $val ) { return is_string( $val ) && strlen( $val ) > 0; } ) );
 			$this->delay_js_default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 				? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 				: 'interaction';
@@ -263,7 +263,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 
 					// Support quoted, unquoted, and empty values using regex and fallback extraction.
 					if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-						$type = isset( $type_matches[3] ) ? $type_matches[3] : ( $type_matches[2] ?? '' );
+						$type = isset( $type_matches[3] ) ? $type_matches[3] : $type_matches[2];
 						$type = strtolower( trim( $type ) );
 
 						$exclude_types = array( 'text/javascript', 'application/ld+json', 'module', 'importmap' );
@@ -373,7 +373,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$type_matches = array();
 			$script_type  = '';
 			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-				$script_type = isset( $type_matches[3] ) ? $type_matches[3] : ( $type_matches[2] ?? '' );
+				$script_type = isset( $type_matches[3] ) ? $type_matches[3] : $type_matches[2];
 				$script_type = strtolower( trim( $script_type ) );
 			}
 

@@ -99,7 +99,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 			$min_dir = dirname( $cache_file );
 			if ( ! $this->filesystem || ! Util::prepare_cache_dir( $min_dir ) ) {
-				return;
+				return null;
 			}
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
@@ -168,7 +168,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 *
 		 * @param string $css_content The CSS content to modify.
 		 * @param string $file_path The file path of the original CSS file.
-		 * @return string The updated CSS content with modified image paths.
+		 * @return string|null The updated CSS content with modified image paths.
 		 * @since 1.0.0
 		 */
 		public static function update_image_paths( $css_content, $file_path ) {

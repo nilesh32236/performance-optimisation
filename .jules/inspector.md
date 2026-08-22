@@ -57,3 +57,7 @@
 **Bug/Gap:** The `phpunit` test suite in `InlineCssTest.php` was failing with `MissingFunctionExpectations: "is_multisite" is not defined nor mocked in this test.`
 **Root Cause:** The `setUp()` method did not include mock definitions for `is_multisite`, `get_transient`, and `set_transient`, which are invoked by `Util::transient_key` when dealing with WordPress multisite checks inside `Cache` or `Util` classes.
 **Test Added:** Added mock definitions for `is_multisite`, `get_transient`, and `set_transient` to the `setUp()` method in `InlineCssTest.php` to satisfy BrainMonkey expectations.
+## 2025-02-27 - Strict Types in Minify Classes
+**Bug/Gap:** The Minify CSS, JS and HTML classes triggered several strict PHPStan errors (level 5) including implicit void returns violating string types, invalid string callbacks in array_filter, and offset errors from regex matches.
+**Root Cause:** Using `return;` when a function requires a string or null, using `"strlen"` callback instead of a native closure in array_filter which generates deprecations in PHP 8.1+, and directly accessing regex match indexes without checking availability.
+**Test Added:** Added explicit PHPStan level 5 checks via phpstan.neon to prevent similar static analysis issues going forward.
