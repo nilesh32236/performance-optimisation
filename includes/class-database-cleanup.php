@@ -802,7 +802,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$results[ $key ] = $res;
 				if ( ! is_wp_error( $res ) && false !== $res && (int) $res > 0 ) {
 					$total_deleted += (int) $res;
-					if ( isset( self::TABLE_MAP[ $key ] ) ) {
+					if ( array_key_exists( $key, self::TABLE_MAP ) ) {
 						$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $key ] );
 					}
 				}
@@ -867,8 +867,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					Log::add( sprintf( __( 'Auto cleanup failed: %s', 'performance-optimisation' ), $label ) );
 					$failures[] = $method;
 				} elseif ( $result > 0 ) {
-					$type = self::METHOD_TO_TYPE[ $method ] ?? '';
-					if ( isset( self::TABLE_MAP[ $type ] ) ) {
+					$type = array_key_exists( $method, self::METHOD_TO_TYPE ) ? self::METHOD_TO_TYPE[ $method ] : '';
+					if ( '' !== $type && array_key_exists( $type, self::TABLE_MAP ) ) {
 						$affected_tables = array_merge( $affected_tables, self::TABLE_MAP[ $type ] );
 					}
 				}
