@@ -112,11 +112,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				array( 'wppo-lazyload', 'data-wppo-preserve' ),
 				Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() )
 			);
-			$this->exclude_delay_js = array_values( array_filter( $this->exclude_delay_js, function ( $val ) { return is_string( $val ) && strlen( $val ) > 0; } ) );
+			$this->exclude_delay_js = array_values(
+				array_filter(
+					$this->exclude_delay_js,
+					function ( $val ) {
+						return is_string( $val ) && strlen( $val ) > 0;
+					}
+				)
+			);
 
 			// Cache delay JS strategy lists, filtering empty strings to avoid strpos('', $x) matching everything.
-			$this->delay_js_idle_list        = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() ), function ( $val ) { return is_string( $val ) && strlen( $val ) > 0; } ) );
-			$this->delay_js_viewport_list    = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() ), function ( $val ) { return is_string( $val ) && strlen( $val ) > 0; } ) );
+			$this->delay_js_idle_list        = array_values(
+				array_filter(
+					(array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() ),
+					function ( $val ) {
+						return is_string( $val ) && strlen( $val ) > 0;
+					}
+				)
+			);
+			$this->delay_js_viewport_list    = array_values(
+				array_filter(
+					(array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() ),
+					function ( $val ) {
+						return is_string( $val ) && strlen( $val ) > 0;
+					}
+				)
+			);
 			$this->delay_js_default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 				? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 				: 'interaction';

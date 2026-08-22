@@ -61,3 +61,7 @@
 **Bug/Gap:** The Minify CSS, JS and HTML classes triggered several strict PHPStan errors (level 5) including implicit void returns violating string types, invalid string callbacks in array_filter, and offset errors from regex matches.
 **Root Cause:** Using `return;` when a function requires a string or null, using `"strlen"` callback instead of a native closure in array_filter which generates deprecations in PHP 8.1+, and directly accessing regex match indexes without checking availability.
 **Test Added:** Added explicit PHPStan level 5 checks via phpstan.neon to prevent similar static analysis issues going forward.
+## 2026-08-22 - WPCS formatting for closures
+**Bug/Gap:** Single line closures for array_filter break WPCS.
+**Root Cause:** WPCS rules require multiline closure brackets and statements.
+**Test Added:** Verified with `./vendor/bin/phpcbf` and `./vendor/bin/phpcs`.
