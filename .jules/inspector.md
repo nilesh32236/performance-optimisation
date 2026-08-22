@@ -69,3 +69,7 @@
 **Bug/Gap:** WPCS throws 'Missing short description' for inline type declarations like `/** @var array<int, string> $matches */`.
 **Root Cause:** WPCS strictly expects double-asterisk docblocks to document functions or classes, and flags them if they lack a description. Inline variables should use single-asterisk block comments.
 **Test Added:** Verified syntax uses single-asterisk block comments via phpcs.
+## 2026-08-22 - Scratchpad Scripts in Workspace
+**Bug/Gap:** Auxiliary python script parse_comments.py committed to branch and flagged in PR review.
+**Root Cause:** Temporary files created via run_in_bash_session to parse API JSON responses were not removed before commit.
+**Test Added:** Deleted python script and updated memory to ensure all debug scripts are cleared before submitting.
