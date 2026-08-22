@@ -14,8 +14,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 	 * per-day/per-path aggregates, plus the frontend beacon + admin data API.
 	 *
 	 * The beacon endpoint is intentionally public (anonymous visitors) so it is
-	 * protected with a daily rolling token and per-IP rate limiting instead of
-	 * the manage_options permission used by the admin endpoints.
+	 * protected with a daily rolling, per-page token and per-IP rate limiting
+	 * instead of the manage_options permission used by the admin endpoints.
 	 *
 	 * @since NEXT
 	 */
@@ -75,7 +75,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 			}
 
 			$token = isset( $params['token'] ) ? sanitize_text_field( (string) $params['token'] ) : '';
-			if ( ! self::is_valid_token( $token ) ) {
+			$path  = isset( $params['path'] ) ? sanitize_text_field( (string) $params['path'] ) : '/';
+			if ( ! self::is_valid_token( $token, $path ) ) {
 				return array(
 					'ok'      => false,
 					'status'  => 401,
@@ -155,10 +156,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return;
 			}
 
+			$path = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+
 			$config = array(
 				'apiUrl' => esc_url_raw( rest_url( 'performance-optimisation/v1/rum_collect' ) ),
-				'token'  => self::token_for( time() ),
-				'path'   => isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/',
+				'token'  => self::token_for( time(), $path ),
+				'path'   => $path,
 			);
 
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON encoded config.
@@ -166,28 +169,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
-		 * Rolling daily token for the beacon.
+		 * Rolling daily token for the beacon, scoped to the page path.
 		 *
-		 * @param int $timestamp Unix timestamp.
+		 * A token minted for one URL path cannot be replayed against another,
+		 * so a leaked token can only inflate metrics for its own page.
+		 *
+		 * @param int    $timestamp Unix timestamp.
+		 * @param string $path      Page path the token is minted for.
 		 * @return string
+		 *
+		 * @since NEXT The $path parameter was added.
 		 */
-		private static function token_for( int $timestamp ): string {
-			return wp_hash( 'wppo_rum_' . gmdate( 'Ymd', $timestamp ) );
+		private static function token_for( int $timestamp, string $path = '/' ): string {
+			return wp_hash( 'wppo_rum_' . gmdate( 'Ymd', $timestamp ) . '|' . $path );
 		}
 
 		/**
-		 * Validate the beacon token against today or yesterday.
+		 * Validate the beacon token against today or yesterday for the given path.
 		 *
 		 * @param string $token Beacon token.
+		 * @param string $path  Page path the beacon was served on.
 		 * @return bool
+		 *
+		 * @since NEXT The $path parameter was added.
 		 */
-		private static function is_valid_token( string $token ): bool {
+		private static function is_valid_token( string $token, string $path = '/' ): bool {
 			if ( '' === $token ) {
 				return false;
 			}
 			$now = time();
 			foreach ( array( $now, $now - DAY_IN_SECONDS ) as $timestamp ) {
-				if ( hash_equals( self::token_for( $timestamp ), $token ) ) {
+				if ( hash_equals( self::token_for( $timestamp, $path ), $token ) ) {
 					return true;
 				}
 			}

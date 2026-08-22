@@ -166,6 +166,64 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that a single-page clear makes zero Cloudflare requests.
+	 */
+	public function test_purge_all_skips_single_page_type_for_cloudflare(): void {
+		$this->install_stubs();
+		$this->set_cache_settings(
+			array(
+				'cdnPurgeService'  => 'cloudflare',
+				'cloudflareZoneId' => 'abc123',
+			)
+		);
+
+		$result = CDN_Purger::purge_all( 'single_page', '/about/' );
+
+		$this->assertTrue( $result );
+		$this->assertCount( 0, $this->requests );
+	}
+
+	/**
+	 * Test that a single-page clear makes zero Varnish requests.
+	 */
+	public function test_purge_all_skips_single_page_type_for_varnish(): void {
+		$this->install_stubs();
+		$this->set_cache_settings(
+			array(
+				'cdnPurgeService'  => 'varnish',
+				'varnishPurgeUrls' => array( 'http://127.0.0.1:8081/purge' ),
+			)
+		);
+
+		$result = CDN_Purger::purge_all( 'single_page', '/about/' );
+
+		$this->assertTrue( $result );
+		$this->assertCount( 0, $this->requests );
+	}
+
+	/**
+	 * Test that an explicit 'all' type (hook-style invocation) still purges.
+	 */
+	public function test_purge_all_fires_for_explicit_all_type(): void {
+		$this->install_stubs();
+		$this->set_cache_settings(
+			array(
+				'cdnPurgeService'  => 'cloudflare',
+				'cloudflareZoneId' => 'abc123',
+			)
+		);
+
+		$result = CDN_Purger::purge_all( 'all', null );
+
+		$this->assertTrue( $result );
+		$this->assertCount( 1, $this->requests );
+		$this->assertSame(
+			'https://api.cloudflare.com/client/v4/zones/abc123/purge_cache',
+			$this->requests[0]['url']
+		);
+	}
+
+	/**
 	 * Test is_configured reflects the service + credentials.
 	 */
 	public function test_is_configured(): void {

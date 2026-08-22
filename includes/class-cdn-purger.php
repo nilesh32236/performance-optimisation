@@ -32,11 +32,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 * Purge the configured third-party cache.
 		 *
 		 * Hooks into wppo_after_cache_clear so a full cache clear also empties
-		 * the CDN/edge cache.
+		 * the CDN/edge cache. Single-page clears only invalidate this plugin's
+		 * own static files and deliberately skip the edge purge: wiping the
+		 * whole zone for one page would be disproportionate.
 		 *
+		 * @param string      $type     Clear type ('all' or 'single_page').
+		 * @param string|null $url_path Page path for single-page clears (unused; edge purges are all-or-nothing).
 		 * @return bool True when no purge was needed or all requests succeeded.
+		 *
+		 * @since NEXT The $type and $url_path parameters were added.
 		 */
-		public static function purge_all(): bool {
+		public static function purge_all( string $type = 'all', $url_path = null ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( 'all' !== $type ) {
+				return true;
+			}
+
 			$options = get_option( 'wppo_settings', array() );
 			$cache   = isset( $options['cache_settings'] ) && is_array( $options['cache_settings'] ) ? $options['cache_settings'] : array();
 

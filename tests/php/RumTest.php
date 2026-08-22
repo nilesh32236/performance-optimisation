@@ -84,10 +84,11 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 	/**
 	 * Valid RUM token for the current day under the stubbed wp_hash.
 	 *
+	 * @param string $path Page path the token is minted for.
 	 * @return string
 	 */
-	private function valid_token(): string {
-		return 'h_wppo_rum_' . gmdate( 'Ymd' );
+	private function valid_token( string $path = '/' ): string {
+		return 'h_wppo_rum_' . gmdate( 'Ymd' ) . '|' . $path;
 	}
 
 	/**
@@ -116,7 +117,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$result = RUM::collect(
 			array(
-				'token' => $this->valid_token(),
+				'token' => $this->valid_token( '/about/' ),
 				'path'  => '/about/',
 				'lcp'   => 2500.5,
 				'cls'   => 0.08,
@@ -210,6 +211,74 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertFalse( $result['ok'] );
 		$this->assertSame( 401, $result['status'] );
+	}
+
+	/**
+	 * Test that a token minted for one path is rejected for another page.
+	 */
+	public function test_collect_rejects_token_minted_for_other_path(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		$_SERVER['REMOTE_ADDR']         = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token' => $this->valid_token( '/a/' ),
+				'path'  => '/b/',
+				'lcp'   => 1000,
+			)
+		);
+
+		$this->assertFalse( $result['ok'] );
+		$this->assertSame( 401, $result['status'] );
+
+		// Nothing may be stored for either path.
+		$this->assertSame( array(), RUM::get_data() );
+	}
+
+	/**
+	 * Test that a payload whose path does not match the token fails closed.
+	 */
+	public function test_collect_rejects_payload_path_token_mismatch(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		$_SERVER['REMOTE_ADDR']         = '203.0.113.5';
+
+		$result = RUM::collect(
+			array(
+				'token' => $this->valid_token( '/' ),
+				'path'  => '/checkout/',
+				'lcp'   => 1000,
+			)
+		);
+
+		$this->assertFalse( $result['ok'] );
+		$this->assertSame( 401, $result['status'] );
+	}
+
+	/**
+	 * Test that is_valid_token accepts today + yesterday for the same path
+	 * and rejects other paths or empty tokens.
+	 */
+	public function test_is_valid_token_scopes_to_path_and_day(): void {
+		$this->install_stubs();
+
+		$method = new \ReflectionMethod( RUM::class, 'is_valid_token' );
+		$method->setAccessible( true );
+
+		$today     = 'h_wppo_rum_' . gmdate( 'Ymd' ) . '|/a/';
+		$yesterday = 'h_wppo_rum_' . gmdate( 'Ymd', time() - DAY_IN_SECONDS ) . '|/a/';
+		$two_days  = 'h_wppo_rum_' . gmdate( 'Ymd', time() - ( 2 * DAY_IN_SECONDS ) ) . '|/a/';
+
+		$this->assertTrue( $method->invoke( null, $today, '/a/' ) );
+		$this->assertTrue( $method->invoke( null, $yesterday, '/a/' ) );
+		$this->assertFalse( $method->invoke( null, $today, '/b/' ) );
+		$this->assertFalse( $method->invoke( null, $two_days, '/a/' ) );
+		$this->assertFalse( $method->invoke( null, '', '/a/' ) );
 	}
 
 	/**
