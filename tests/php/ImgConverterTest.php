@@ -101,6 +101,10 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_get_image_editor_output_format' )->justReturn( array() );
 		Functions\when( 'wp_parse_url' )->alias(
 			static function ( string $url, $component = -1 ) {
+				if ( PHP_URL_HOST === $component ) {
+					// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Used to emulate wp_parse_url() in tests.
+					return parse_url( $url, PHP_URL_HOST );
+				}
 				// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Used to emulate wp_parse_url() in tests.
 				$path = parse_url( $url, PHP_URL_PATH );
 				$path = is_string( $path ) ? $path : '/';
@@ -849,5 +853,39 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 		$full_rel = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $file ) );
 		$this->assertContains( $full_rel, $info['skipped']['webp'] ?? array() );
 		$this->assertNotContains( $full_rel, $info['pending']['webp'] ?? array() );
+	}
+
+	/**
+	 * Test that get_img_path() returns off-site URLs unchanged instead of
+	 * mapping them onto ABSPATH-based filesystem paths (Finding 9 hardening).
+	 *
+	 * Because convert_image() requires file_exists() on the source, returning
+	 * the URL unchanged makes external sources fail gracefully rather than
+	 * fabricating local paths.
+	 */
+	public function test_get_img_path_returns_external_urls_unchanged(): void {
+		// The host guard resolves the site's content/home URL hosts.
+		Functions\when( 'content_url' )->justReturn( 'http://example.com/wp-content' );
+
+		$external = 'https://external-cdn.example.com/img/photo.jpg';
+
+		$this->assertSame( $external, Img_Converter::get_img_path( $external, 'webp' ) );
+		$this->assertSame( $external, Img_Converter::get_img_path( $external, 'avif' ) );
+	}
+
+	/**
+	 * Test that get_img_path() still resolves same-host content URLs to the
+	 * plugin's wppo output directory — genuinely local sources keep working.
+	 */
+	public function test_get_img_path_resolves_same_host_content_urls(): void {
+		// The host guard resolves the site's content/home URL hosts.
+		Functions\when( 'content_url' )->justReturn( 'http://example.com/wp-content' );
+
+		$url = 'http://example.com/wp-content/uploads/2026/08/photo.jpg';
+
+		$this->assertSame(
+			wp_normalize_path( WP_CONTENT_DIR . '/wppo/uploads/2026/08/photo.webp' ),
+			Img_Converter::get_img_path( $url, 'webp' )
+		);
 	}
 }

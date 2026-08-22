@@ -65,7 +65,7 @@ class SystemInfoTest extends \PHPUnit\Framework\TestCase {
 	public function test_get_php_returns_environment_details(): void {
 		$php = System_Info::get_php();
 
-		$this->assertSame( PHP_VERSION, $php['version'] );
+		$this->assertSame( PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION, $php['version'] );
 		$this->assertIsString( $php['sapi'] );
 		$this->assertIsInt( $php['extensions_count'] );
 		$this->assertGreaterThan( 0, $php['extensions_count'] );
@@ -80,8 +80,21 @@ class SystemInfoTest extends \PHPUnit\Framework\TestCase {
 
 		$db = System_Info::get_database();
 
-		$this->assertSame( '8.0.36', $db['server_version'] );
+		$this->assertSame( '8.0', $db['server_version'] );
 		$this->assertNull( $db['extension'] );
+	}
+
+	/**
+	 * Test that get_database redacts MariaDB build/platform suffixes to the
+	 * major.minor series.
+	 */
+	public function test_get_database_redacts_mariadb_build_suffix(): void {
+		$GLOBALS['wpdb']                    = new WPPO_SystemInfo_DB_Mock();
+		$GLOBALS['wpdb']->db_version_result = '10.6.18-MariaDB';
+
+		$db = System_Info::get_database();
+
+		$this->assertSame( '10.6', $db['server_version'] );
 	}
 
 	/**
@@ -134,9 +147,27 @@ class SystemInfoTest extends \PHPUnit\Framework\TestCase {
 
 		$server = System_Info::get_server();
 
-		$this->assertSame( 'nginx/1.18.0', $server['server_software'] );
+		$this->assertSame( 'nginx', $server['server_software'] );
 		$this->assertSame( PHP_OS, explode( ' ', $server['os'] )[0] );
 		$this->assertIsString( $server['architecture'] );
+	}
+
+	/**
+	 * Test that get_server normalizes raw SERVER_SOFTWARE banners to family
+	 * names without version numbers, and returns null when unset.
+	 */
+	public function test_get_server_normalizes_software_banner(): void {
+		$_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4.41 (Ubuntu)';
+		$this->assertSame( 'Apache', System_Info::get_server()['server_software'] );
+
+		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
+		$this->assertSame( 'LiteSpeed', System_Info::get_server()['server_software'] );
+
+		$_SERVER['SERVER_SOFTWARE'] = 'MyCustomProxy/3.1';
+		$this->assertSame( 'Unknown', System_Info::get_server()['server_software'] );
+
+		unset( $_SERVER['SERVER_SOFTWARE'] );
+		$this->assertNull( System_Info::get_server()['server_software'] );
 	}
 
 	/**

@@ -80,7 +80,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 *
 		 * @since  1.5.0
 		 * @return array {
-		 *     @type string|null $version             PHP version string.
+		 *     @type string|null $version             PHP major.minor version series (patch level redacted).
 		 *     @type string|null $sapi                PHP SAPI name.
 		 *     @type string|null $memory_limit         memory_limit ini value.
 		 *     @type string|null $max_execution_time   max_execution_time ini value.
@@ -98,7 +98,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			$display_errors      = ini_get( 'display_errors' );
 
 			return array(
-				'version'             => phpversion(),
+				// Security: expose only the major.minor series so the exact,
+				// fingerprintable patch version never leaves the server.
+				'version'             => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
 				'sapi'                => php_sapi_name(),
 				'memory_limit'        => false !== $memory_limit ? $memory_limit : null,
 				'max_execution_time'  => false !== $max_execution_time ? $max_execution_time : null,
@@ -115,7 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * @since  1.5.0
 		 * @global \wpdb $wpdb WordPress database abstraction object.
 		 * @return array {
-		 *     @type string|null $server_version  MySQL/MariaDB server version.
+		 *     @type string|null $server_version  MySQL/MariaDB server version (major.minor only).
 		 *     @type string|null $extension        PHP database extension class name.
 		 *     @type string|null $client_version   Client library version.
 		 *     @type string|null $max_connections  max_connections MySQL variable.
@@ -132,7 +134,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 
 			return array(
-				'server_version'  => $wpdb->db_version() ? $wpdb->db_version() : null,
+				// Security: major.minor only — patch/build suffixes (e.g.
+				// "-MariaDB", "-log") are dropped to hinder fingerprinting.
+				'server_version'  => self::redact_version( $wpdb->db_version() ),
 				'extension'       => $extension,
 				'client_version'  => $client_version,
 				'max_connections' => self::get_mysql_var( 'max_connections' ),
@@ -190,16 +194,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 *
 		 * @since  1.5.0
 		 * @return array {
-		 *     @type string|null $server_software  Server software string.
+		 *     @type string|null $server_software  Normalized server family name (version banner redacted).
 		 *     @type string      $os               OS name and kernel version.
 		 *     @type string      $architecture     CPU architecture.
 		 * }
 		 */
 		public static function get_server(): array {
 			return array(
-				'server_software' => isset( $_SERVER['SERVER_SOFTWARE'] )
-					? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) )
-					: null,
+				// Security: report the normalized server family instead of the
+				// raw SERVER_SOFTWARE banner, which embeds exact versions.
+				'server_software' => self::normalize_server_software(
+					isset( $_SERVER['SERVER_SOFTWARE'] )
+						? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) )
+						: null
+				),
 				'os'              => PHP_OS . ' ' . php_uname( 'r' ),
 				'architecture'    => php_uname( 'm' ),
 			);
@@ -417,6 +425,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			// SHOW VARIABLES returns two columns: Variable_name and Value.
 			// get_var() returns column 0 (Variable_name) by default, so we use get_row().
 			return isset( $row->Value ) ? (string) $row->Value : null; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+		}
+
+		/**
+		 * Redact a software version string to its major.minor series.
+		 *
+		 * Drops the patch level and any build/platform suffix (e.g. "-MariaDB",
+		 * "-log") so exact server versions cannot be fingerprinted from the
+		 * system info endpoint. Unparseable values are reported as null.
+		 *
+		 * @since  NEXT
+		 * @param  string|null $version Raw version string.
+		 * @return string|null Major.minor version series, or null when unavailable or unparseable.
+		 */
+		private static function redact_version( ?string $version ): ?string {
+			if ( null === $version || '' === $version ) {
+				return null;
+			}
+
+			if ( preg_match( '/^(\d+\.\d+)/', $version, $matches ) ) {
+				return $matches[1];
+			}
+
+			return null;
+		}
+
+		/**
+		 * Normalize a raw SERVER_SOFTWARE banner into a server family name.
+		 *
+		 * The raw banner embeds exact version numbers (e.g. "Apache/2.4.41"),
+		 * which is fingerprintable; only the product family is exposed.
+		 *
+		 * @since  NEXT
+		 * @param  string|null $software Raw SERVER_SOFTWARE value.
+		 * @return string|null Normalized family name, 'Unknown' for unrecognized
+		 *                     servers, or null when unavailable.
+		 */
+		private static function normalize_server_software( ?string $software ): ?string {
+			if ( null === $software || '' === $software ) {
+				return null;
+			}
+
+			$families = array(
+				'openlitespeed' => 'OpenLiteSpeed',
+				'litespeed'     => 'LiteSpeed',
+				'apache'        => 'Apache',
+				'nginx'         => 'nginx',
+				'caddy'         => 'Caddy',
+				'cloudflare'    => 'Cloudflare',
+				'iis'           => 'IIS',
+			);
+
+			foreach ( $families as $needle => $label ) {
+				if ( false !== stripos( $software, $needle ) ) {
+					return $label;
+				}
+			}
+
+			return 'Unknown';
 		}
 
 		/**

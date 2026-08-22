@@ -957,6 +957,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * If the source refers to a known local file or can be resolved to one, the returned path
 		 * is the same directory and filename with the extension replaced by the requested format,
 		 * and rewritten under the plugin's `wppo` directory when the file is inside WP_CONTENT_DIR.
+		 * Off-site URLs whose host matches neither the site's content URL nor its home URL are
+		 * returned unchanged so a remote origin is never rewritten into a filesystem path.
 		 * If the source cannot be resolved to a safe local path, the original source string is returned.
 		 *
 		 * @param string $source_image Absolute filesystem path or URL of the source image.
@@ -978,6 +980,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 				$local_path = $normalized_source;
 			} else {
+				// Security: only resolve URLs hosted on this site. Off-site
+				// URLs (CDNs, hotlinked images) are returned unchanged so a
+				// remote origin can never be rewritten into a filesystem
+				// path under ABSPATH.
+				$source_host = wp_parse_url( $source_image, PHP_URL_HOST );
+
+				if ( $source_host ) {
+					$content_host = strtolower( (string) wp_parse_url( Util::cached_content_url( '' ), PHP_URL_HOST ) );
+					$home_host    = strtolower( (string) wp_parse_url( Util::cached_home_url(), PHP_URL_HOST ) );
+					$source_host  = strtolower( (string) $source_host );
+
+					if ( $source_host !== $content_host && $source_host !== $home_host ) {
+						return $source_image;
+					}
+				}
+
 				// Use Util::get_local_path to get a clean local path from URL or existing path.
 				$local_path = Util::get_local_path( $source_image );
 
