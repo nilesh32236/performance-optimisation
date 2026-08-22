@@ -95,6 +95,9 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
 		Functions\when( 'apply_filters' )->returnArg( 2 );
 		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
 	}
 
 	/**

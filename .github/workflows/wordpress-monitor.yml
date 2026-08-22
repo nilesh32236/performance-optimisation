@@ -135,7 +135,7 @@ jobs:
           Overall recommendation.
           RESEARCH_PROMPT
 
-          opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}" < /tmp/research-prompt.txt || echo "::warning::OpenCode research exited with code $?"
+          opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode/deepseek-v4-flash-free' }}" < /tmp/research-prompt.txt || echo "::warning::OpenCode research exited with code $?"
 
           if [ -f /tmp/research-results.md ]; then
             cp /tmp/research-results.md /tmp/wp-research.md
@@ -288,7 +288,7 @@ jobs:
           PROMPT_FOOTER
 
           # Allow OpenCode to use gh via bash tool — auto mode approves all permissions
-          opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode-go/deepseek-v4-flash' }}" < /tmp/create-issues-prompt.md
+          opencode run --auto --model "${{ vars.OPENCODE_MODEL || 'opencode/deepseek-v4-flash-free' }}" < /tmp/create-issues-prompt.md
           echo "created=true" >> "$GITHUB_OUTPUT"
 
   # ── 3. SUMMARY ───────────────────────────────────────────────────────────────
