@@ -65,3 +65,7 @@
 **Bug/Gap:** Defensive null coalesce `$type_matches[3] ?? $type_matches[2] ?? ''` triggered an 'always exists and is not nullable' offset error in PHPStan level 5.
 **Root Cause:** When preg_match satisfies a later capture group in an alternation (e.g. group 3), PHP populates the preceding unmatched groups in the matches array as empty strings, guaranteeing group 2 exists.
 **Test Added:** Replaced defensive coalesce with `$type_matches[3] ?? $type_matches[2]` which accurately reflects runtime state and passes static analysis.
+## 2026-08-22 - WPCS and inline type hints
+**Bug/Gap:** WPCS throws 'Missing short description' for inline type declarations like `/** @var array<int, string> $matches */`.
+**Root Cause:** WPCS strictly expects double-asterisk docblocks to document functions or classes, and flags them if they lack a description. Inline variables should use single-asterisk block comments.
+**Test Added:** Verified syntax uses single-asterisk block comments via phpcs.
