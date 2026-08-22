@@ -57,19 +57,7 @@
 **Bug/Gap:** The `phpunit` test suite in `InlineCssTest.php` was failing with `MissingFunctionExpectations: "is_multisite" is not defined nor mocked in this test.`
 **Root Cause:** The `setUp()` method did not include mock definitions for `is_multisite`, `get_transient`, and `set_transient`, which are invoked by `Util::transient_key` when dealing with WordPress multisite checks inside `Cache` or `Util` classes.
 **Test Added:** Added mock definitions for `is_multisite`, `get_transient`, and `set_transient` to the `setUp()` method in `InlineCssTest.php` to satisfy BrainMonkey expectations.
-## 2025-02-27 - Strict Types in Minify Classes
-**Bug/Gap:** The Minify CSS, JS and HTML classes triggered several strict PHPStan errors (level 5) including implicit void returns violating string types, invalid string callbacks in array_filter, and offset errors from regex matches.
-**Root Cause:** Using `return;` when a function requires a string or null, using `"strlen"` callback instead of a native closure in array_filter which generates deprecations in PHP 8.1+, and directly accessing regex match indexes without checking availability.
-**Test Added:** Added explicit PHPStan level 5 checks via phpstan.neon to prevent similar static analysis issues going forward.
-## 2026-08-22 - WPCS formatting for closures
-**Bug/Gap:** Single line closures for array_filter break WPCS.
-**Root Cause:** WPCS rules require multiline closure brackets and statements.
-**Test Added:** Verified with `./vendor/bin/phpcbf` and `./vendor/bin/phpcs`.
-## 2026-08-22 - preg_replace_callback potential null return
-**Bug/Gap:** Using preg_replace_callback with strict string return types caused PHPStan errors if PCRE errors occurred.
-**Root Cause:** preg_replace_callback can return null on error, violating string-only return types.
-**Test Added:** Added explicit fallback logic: return null !== $updated ? $updated : $original;
-## 2026-08-22 - WPCS and Temporary Files
-**Bug/Gap:** A temporary python script committed by mistake triggered WPCS failures.
-**Root Cause:** The script was created in the workspace for debugging and not deleted, failing CI checks which expect WPCS compliance for all files.
-**Test Added:** Delete temporary files before commit and run `phpcs` locally to ensure no unexpected files are flagged.
+## 2026-08-22 - Strict Types and WPCS Fixes in Minify Classes (PHPStan Level 5)
+**Bug/Gap:** The Minify CSS, JS and HTML classes triggered several strict PHPStan errors (level 5) including implicit void returns violating string types, invalid string callbacks in array_filter, and offset errors from regex matches. Additionally, single line closures broke WPCS and a temporary debug script caused CI failures.
+**Root Cause:** Using `return;` when a function requires a string or null, using `"strlen"` callback instead of a native closure in array_filter which generates deprecations in PHP 8.1+, directly accessing regex match indexes without checking availability, and leaving temporary scripts in the repo.
+**Fix:** Added explicit PHPStan level 5 checks via phpstan.neon to prevent similar static analysis issues going forward. Added explicit fallback logic for preg_replace_callback: return null !== $updated ? $updated : $original;. Formatted closures to be multi-line. Removed stray get_comments.php; verified with phpcs/phpcbf.
