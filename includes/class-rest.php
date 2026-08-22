@@ -481,38 +481,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Sanitizes the settings array recursively.
 		 *
+		 * Delegates to Util::sanitize_settings_recursively() so that all
+		 * settings entry points (REST API, WP-CLI import/update) share
+		 * identical sanitization semantics.
+		 *
 		 * @param array $settings The settings array.
 		 * @return array The sanitized settings array.
 		 * @since 1.1.1
 		 */
 		private function sanitize_settings_recursively( $settings ) {
-			$sanitized = array();
-			foreach ( $settings as $key => $value ) {
-				$safe_key = preg_replace( '/[^a-zA-Z0-9_\-]/', '', $key );
-
-				// Skip keys that become empty after sanitization so that
-				// settings are never stored under an empty-string key.
-				if ( '' === $safe_key ) {
-					continue;
-				}
-
-				if ( is_array( $value ) ) {
-					$sanitized[ $safe_key ] = $this->sanitize_settings_recursively( $value );
-				} elseif ( is_bool( $value ) ) {
-					$sanitized[ $safe_key ] = (bool) $value;
-				} elseif ( is_numeric( $value ) ) {
-					$sanitized[ $safe_key ] = (int) $value;
-				} elseif ( in_array( $safe_key, array( 'pagespeed_api_key', 'password' ), true ) ) {
-					$sanitized[ $safe_key ] = sanitize_text_field( $value );
-				} elseif ( stripos( $safe_key, 'url' ) !== false || stripos( $safe_key, 'cdn' ) !== false || stripos( $safe_key, 'origin' ) !== false ) {
-					$sanitized[ $safe_key ] = esc_url_raw( $value );
-				} elseif ( stripos( $safe_key, 'exclude' ) !== false || stripos( $safe_key, 'preload' ) !== false || stripos( $safe_key, 'delay' ) !== false || stripos( $safe_key, 'list' ) !== false ) {
-					$sanitized[ $safe_key ] = sanitize_textarea_field( $value );
-				} else {
-					$sanitized[ $safe_key ] = sanitize_text_field( $value );
-				}
-			}
-			return $sanitized;
+			return Util::sanitize_settings_recursively( $settings );
 		}
 
 		/**
@@ -1006,6 +984,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Handles object cache requests (status, ping, enable, disable, flush).
 		 *
+		 * Admin REST calls that include a Redis password should always run over
+		 * HTTPS, as the password transits the request body. Any request-supplied
+		 * password is used at connection time only and is never persisted: it is
+		 * stripped from the generated drop-in config file (see
+		 * Object_Cache::enable()), and update_settings stores only a boolean
+		 * `password_set` flag. When the WPPO_REDIS_PASSWORD constant is defined
+		 * it takes precedence over request-supplied passwords unless the
+		 * `wppo_redis_allow_request_password` filter returns true.
+		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @since 1.4.0
 		 * @return \WP_REST_Response The response object.
@@ -1077,8 +1064,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Builds a sanitized Redis configuration array from request parameters.
 		 *
+		 * When the WPPO_REDIS_PASSWORD constant is defined it takes precedence:
+		 * request-supplied passwords are dropped unless the
+		 * `wppo_redis_allow_request_password` filter returns true. Admin REST
+		 * calls carrying a password should run over HTTPS; the password is used
+		 * at connection time only and is never persisted (it is stripped from
+		 * the generated drop-in config file and from stored settings).
+		 *
 		 * @param array $params Request parameters.
 		 * @since 1.4.0
+		 * @since NEXT Request-supplied passwords are ignored when WPPO_REDIS_PASSWORD is defined, unless the `wppo_redis_allow_request_password` filter returns true.
 		 * @return array Sanitized Redis config.
 		 */
 		private function build_redis_config( $params ) {
@@ -1104,7 +1099,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 						$config[ $key ] = (int) $value;
 						break;
 					case 'password':
-						$config[ $key ] = sanitize_text_field( (string) $value );
+						// When WPPO_REDIS_PASSWORD is defined the constant takes
+						// precedence: request-supplied passwords are dropped unless
+						// the wppo_redis_allow_request_password escape hatch returns true.
+						if ( defined( 'WPPO_REDIS_PASSWORD' ) && ! apply_filters( 'wppo_redis_allow_request_password', false ) ) {
+							$config['password'] = '';
+						} else {
+							$config['password'] = sanitize_text_field( (string) $value );
+						}
 						break;
 					case 'use_tls':
 					case 'persistent':

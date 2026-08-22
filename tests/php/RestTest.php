@@ -7,6 +7,8 @@
 
 use PerformanceOptimise\Inc\Rest;
 use Brain\Monkey\Functions;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 
 /**
  * Tests for the REST API endpoints registration and permission callbacks.
@@ -248,6 +250,154 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$this->assertArrayHasKey( 'normal_key', $result );
 		$this->assertSame( 'value', $result['normal_key'] );
 		$this->assertSame( array(), $result['nested'] );
+	}
+
+	/**
+	 * Test that update_settings sanitizes markup injected into exclude/delay
+	 * fields and coerces numeric strings supplied for string settings.
+	 *
+	 * Exercises the shared Util::sanitize_settings_recursively() pipeline so
+	 * REST and WP-CLI entry points cannot store unsanitized values.
+	 */
+	public function test_update_settings_sanitizes_xss_and_types_numeric_strings(): void {
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$captured = array();
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$captured ) {
+				$captured = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'tab'      => 'file_optimisation',
+				'settings' => array(
+					'excludeCSS' => '<script>alert(1)</script>/wp-admin',
+					'delayJS'    => '<img src=x onerror=alert(1)>321',
+					'minifyHTML' => '123',
+				),
+			)
+		);
+
+		$response = $this->rest->update_settings( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertSame( 'alert(1)/wp-admin', $captured['file_optimisation']['excludeCSS'], 'Markup must be stripped from exclude fields' );
+		$this->assertSame( '321', $captured['file_optimisation']['delayJS'], 'Markup must be stripped from delay fields' );
+		$this->assertSame( 123, $captured['file_optimisation']['minifyHTML'], 'Numeric strings must be typed to int' );
+	}
+
+	/**
+	 * Test that import_settings sanitizes markup injected into exclude/delay
+	 * fields and coerces numeric strings supplied for string settings.
+	 */
+	public function test_import_settings_sanitizes_xss_and_types_numeric_strings(): void {
+		Functions\when( 'esc_url_raw' )->returnArg();
+		Functions\when( 'sanitize_textarea_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+		Functions\when( 'get_option' )->justReturn( array() );
+
+		$captured = array();
+		Functions\when( 'update_option' )->alias(
+			static function ( $name, $value ) use ( &$captured ) {
+				$captured = $value;
+				return true;
+			}
+		);
+
+		$request = new WP_REST_Request(
+			array(
+				'action'   => 'import_settings',
+				'settings' => array(
+					'file_optimisation' => array(
+						'excludeCSS' => '<script>alert(1)</script>/wp-admin',
+						'delayJS'    => '<img src=x onerror=alert(1)>321',
+						'minifyHTML' => '123',
+					),
+				),
+			)
+		);
+
+		$response = $this->rest->import_settings( $request );
+
+		$this->assertSame( 200, $response->get_status() );
+		$file_tab = $captured['file_optimisation'];
+		$this->assertSame( 'alert(1)/wp-admin', $file_tab['excludeCSS'], 'Markup must be stripped from exclude fields' );
+		$this->assertSame( '321', $file_tab['delayJS'], 'Markup must be stripped from delay fields' );
+		$this->assertSame( 123, $file_tab['minifyHTML'], 'Numeric strings must be typed to int' );
+	}
+
+	/**
+	 * Test that build_redis_config passes a request-supplied password through
+	 * (sanitized) when the WPPO_REDIS_PASSWORD constant is not defined.
+	 */
+	public function test_build_redis_config_passes_password_through_without_constant(): void {
+		if ( defined( 'WPPO_REDIS_PASSWORD' ) ) {
+			$this->markTestSkipped( 'WPPO_REDIS_PASSWORD is already defined in this environment.' );
+		}
+
+		Functions\when( 'sanitize_text_field' )->alias(
+			static fn( $value ): string => trim( preg_replace( '/<[^>]*>/', '', (string) $value ) )
+		);
+
+		$reflection = new ReflectionMethod( $this->rest, 'build_redis_config' );
+		$reflection->setAccessible( true );
+
+		$config = $reflection->invoke( $this->rest, array( 'password' => ' <b>s3cret</b> ' ) );
+
+		$this->assertSame( 's3cret', $config['password'] );
+	}
+
+	/**
+	 * Test that a request-supplied Redis password is dropped when the
+	 * WPPO_REDIS_PASSWORD constant is defined: the constant takes precedence,
+	 * with the wppo_redis_allow_request_password escape hatch consulted first.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_build_redis_config_drops_request_password_when_constant_defined(): void {
+		define( 'WPPO_REDIS_PASSWORD', 'constant-secret' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
+
+		Functions\expect( 'apply_filters' )
+			->once()
+			->with( 'wppo_redis_allow_request_password', false )
+			->andReturn( false );
+
+		$reflection = new ReflectionMethod( $this->rest, 'build_redis_config' );
+		$reflection->setAccessible( true );
+
+		$config = $reflection->invoke( $this->rest, array( 'password' => 'request-secret' ) );
+
+		$this->assertSame( '', $config['password'], 'Request password must be dropped when WPPO_REDIS_PASSWORD is defined' );
+	}
+
+	/**
+	 * Test that the wppo_redis_allow_request_password escape-hatch filter lets
+	 * a request-supplied password win even when WPPO_REDIS_PASSWORD is defined.
+	 */
+	#[RunInSeparateProcess]
+	#[PreserveGlobalState( false )]
+	public function test_build_redis_config_allows_request_password_via_filter(): void {
+		define( 'WPPO_REDIS_PASSWORD', 'constant-secret' ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals
+
+		Functions\expect( 'apply_filters' )
+			->once()
+			->with( 'wppo_redis_allow_request_password', false )
+			->andReturn( true );
+
+		$reflection = new ReflectionMethod( $this->rest, 'build_redis_config' );
+		$reflection->setAccessible( true );
+
+		$config = $reflection->invoke( $this->rest, array( 'password' => 'request-secret' ) );
+
+		$this->assertSame( 'request-secret', $config['password'], 'Escape-hatch filter must let the request password win' );
 	}
 
 	/**

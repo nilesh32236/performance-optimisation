@@ -491,6 +491,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					}
 				}
 
+				// Sanitize every value before merging (mirrors REST endpoint logic).
+				$new_settings = Util::sanitize_settings_recursively( $new_settings );
+
 				// Handle Redis password.
 				if ( isset( $new_settings['object_cache']['password'] ) ) {
 					$password_provided = ! empty( $new_settings['object_cache']['password'] );
@@ -559,6 +562,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					WP_CLI::error( __( 'Invalid JSON settings provided.', 'performance-optimisation' ) );
 					return;
 				}
+
+				// Sanitize every value before merging (mirrors REST endpoint logic).
+				$new_settings = Util::sanitize_settings_recursively( $new_settings );
 
 				$known_tabs = array( 'file_optimisation', 'preload_settings', 'image_optimisation', 'database_cleanup', 'object_cache', 'performance_audit', 'cache_settings', 'core_tweaks' );
 				if ( ! in_array( $tab, $known_tabs, true ) ) {
