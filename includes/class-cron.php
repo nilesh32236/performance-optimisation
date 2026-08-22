@@ -482,10 +482,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					}
 
 					if ( $is_index ) {
-						if ( ! isset( $fetched[ $loc ] ) && $to_fetch_count < 50 ) {
-							$to_fetch[] = $loc;
-							++$to_fetch_count;
+						if ( isset( $fetched[ $loc ] ) || $to_fetch_count >= 50 ) {
+							continue;
 						}
+
+						$to_fetch[] = $loc;
+						++$to_fetch_count;
 						continue;
 					}
 
