@@ -91,7 +91,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		/**
 		 * Minifies the CSS file and stores it in the cache directory.
 		 *
-		 * @return string|null The URL of the minified CSS file, or null on failure.
+		 * @return string The URL of the minified CSS file, or empty string on failure.
 		 * @since 1.0.0
 		 */
 		public function minify() {
@@ -99,22 +99,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 			$min_dir = dirname( $cache_file );
 			if ( ! $this->filesystem || ! Util::prepare_cache_dir( $min_dir ) ) {
-				return null;
+				return '';
 			}
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
 				try {
 					$css_content = $this->filesystem->get_contents( $this->file_path );
 					if ( false === $css_content ) {
-						return null;
+						return '';
 					}
 
 					// update_image_paths uses preg_replace_callback internally; fall back to
 					// original content if the regex engine returns null (PCRE error).
-					$updated = self::update_image_paths( $css_content, $this->file_path );
-					if ( null !== $updated ) {
-						$css_content = $updated;
-					}
+					$css_content = self::update_image_paths( $css_content, $this->file_path );
 
 					// Inject font-display: swap into @font-face declarations.
 					$css_content = self::inject_font_display_swap( $css_content );
@@ -124,7 +121,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 					$this->save_min_file( $minified_css, $cache_file );
 				} catch ( \Exception $e ) {
-					return null;
+					return '';
 				}
 			}
 
@@ -168,7 +165,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 *
 		 * @param string $css_content The CSS content to modify.
 		 * @param string $file_path The file path of the original CSS file.
-		 * @return string|null The updated CSS content with modified image paths.
+		 * @return string The updated CSS content with modified image paths.
 		 * @since 1.0.0
 		 */
 		public static function update_image_paths( $css_content, $file_path ) {
@@ -188,7 +185,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				$css_dir_url = site_url();
 			}
 
-			return preg_replace_callback(
+			$updated = preg_replace_callback(
 				$pattern,
 				function ( $matches ) use ( $css_dir_url ) {
 					$image_path = trim( $matches[2] );
@@ -231,6 +228,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				},
 				$css_content
 			);
+
+			return null !== $updated ? $updated : $css_content;
 		}
 
 		/**

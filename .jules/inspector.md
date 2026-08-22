@@ -65,3 +65,7 @@
 **Bug/Gap:** Single line closures for array_filter break WPCS.
 **Root Cause:** WPCS rules require multiline closure brackets and statements.
 **Test Added:** Verified with `./vendor/bin/phpcbf` and `./vendor/bin/phpcs`.
+## 2026-08-22 - preg_replace_callback potential null return
+**Bug/Gap:** Using preg_replace_callback with strict string return types caused PHPStan errors if PCRE errors occurred.
+**Root Cause:** preg_replace_callback can return null on error, violating string-only return types.
+**Test Added:** Added explicit fallback logic: return null !== $updated ? $updated : $original;

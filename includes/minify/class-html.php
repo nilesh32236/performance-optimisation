@@ -116,7 +116,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				array_filter(
 					$this->exclude_delay_js,
 					function ( $val ) {
-						return is_string( $val ) && strlen( $val ) > 0;
+						return is_string( $val ) && '' !== $val;
 					}
 				)
 			);
@@ -126,7 +126,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				array_filter(
 					(array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() ),
 					function ( $val ) {
-						return is_string( $val ) && strlen( $val ) > 0;
+						return is_string( $val ) && '' !== $val;
 					}
 				)
 			);
@@ -134,7 +134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				array_filter(
 					(array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() ),
 					function ( $val ) {
-						return is_string( $val ) && strlen( $val ) > 0;
+						return is_string( $val ) && '' !== $val;
 					}
 				)
 			);
