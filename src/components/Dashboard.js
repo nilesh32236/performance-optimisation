@@ -98,6 +98,9 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		!! cacheSettings.enableCache
 	);
 	const [ savingPageCache, setSavingPageCache ] = useState( false );
+	const [ cacheLife, setCacheLife ] = useState(
+		Number( cacheSettings.cacheLife ?? 0 )
+	);
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
 		!! cacheSettings.enableLoggedInCache
 	);
@@ -422,6 +425,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			settings: {
 				...currentSettings,
 				enableCache: pageCacheEnabled,
+				cacheLife,
 			},
 		} )
 			.then( ( response ) => {
@@ -447,7 +451,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				} )
 			)
 			.finally( () => setSavingPageCache( false ) );
-	}, [ pageCacheEnabled, notify ] );
+	}, [ pageCacheEnabled, cacheLife, notify ] );
 
 	const saveLoggedInCacheSettings = useCallback( () => {
 		setSavingLoggedInCache( true );
@@ -680,6 +684,42 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						setPageCacheEnabled( e.target.checked )
 					}
 				/>
+				<div className="wppo-field">
+					<label className="wppo-field-label" htmlFor="wppoCacheLife">
+						{ __( 'Cache Life', 'performance-optimisation' ) }
+					</label>
+					<select
+						className="wppo-select"
+						id="wppoCacheLife"
+						name="cacheLife"
+						value={ cacheLife }
+						onChange={ ( e ) =>
+							setCacheLife( Number( e.target.value ) )
+						}
+					>
+						<option value={ 0 }>
+							{ __( 'Never expire', 'performance-optimisation' ) }
+						</option>
+						<option value={ 1 }>
+							{ __( '1 hour', 'performance-optimisation' ) }
+						</option>
+						<option value={ 6 }>
+							{ __( '6 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 12 }>
+							{ __( '12 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 24 }>
+							{ __( '24 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 48 }>
+							{ __( '48 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 168 }>
+							{ __( '1 week', 'performance-optimisation' ) }
+						</option>
+					</select>
+				</div>
 				<div className="wppo-feature-card__footer">
 					<LoadingSubmitButton
 						className="wppo-button wppo-button--primary"

@@ -924,6 +924,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			if ( $should_clear ) {
 				self::clear_all_cache();
+
+				// Re-generate the drop-in so values baked into it (e.g. cache
+				// life) always match the saved settings.
+				Advanced_Cache_Handler::create();
 			} elseif ( $should_runtime_flush ) {
 				Cache::flush_runtime();
 			}

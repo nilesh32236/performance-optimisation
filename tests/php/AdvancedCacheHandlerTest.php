@@ -119,12 +119,68 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\when( 'wp_normalize_path' )->returnArg();
 		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
 
 		$result = Advanced_Cache_Handler::create();
 
 		$this->assertTrue( $result );
 		$this->assertTrue( $fs->put_called );
 		$this->assertStringContainsString( Advanced_Cache_Handler::DROPIN_MARKER, $fs->put_contents );
+	}
+
+	/**
+	 * Test that create bakes the configured cache life into the drop-in.
+	 */
+	public function test_create_bakes_configured_cache_life(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn(
+			array(
+				'cache_settings' => array( 'cacheLife' => 24 ),
+			)
+		);
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertStringContainsString( '$cache_life    = 24;', $fs->put_contents );
+		$this->assertStringContainsString( '> $cache_life * 3600', $fs->put_contents );
+		$this->assertStringContainsString( ', $cache_life );', $fs->put_contents );
+	}
+
+	/**
+	 * Test that create defaults to a never-expiring cache when unset.
+	 */
+	public function test_create_defaults_to_never_expiring_cache(): void {
+		$fs                       = new WPPO_AdvancedCache_FS_Mock();
+		$fs->file_exists          = false;
+		$GLOBALS['wp_filesystem'] = $fs;
+
+		Functions\when( 'wp_normalize_path' )->returnArg();
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'absint' )->alias(
+			static function ( $value ) {
+				return abs( (int) $value );
+			}
+		);
+
+		$this->assertTrue( Advanced_Cache_Handler::create() );
+
+		$this->assertStringContainsString( '$cache_life    = 0;', $fs->put_contents );
 	}
 
 	/**

@@ -127,6 +127,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$site_url_escaped = var_export( $site_url, true );
 			$cookie_hash      = defined( 'COOKIEHASH' ) ? COOKIEHASH : md5( $site_url );
 
+			// Cache life in hours baked into the drop-in; 0 = never expire.
+			$wppo_options = get_option( 'wppo_settings', array() );
+			$cache_life   = isset( $wppo_options['cache_settings']['cacheLife'] ) ? absint( $wppo_options['cache_settings']['cacheLife'] ) : 0;
+
 			$handler_code = '<?php' . PHP_EOL .
 			'// ' . self::DROPIN_MARKER . PHP_EOL .
 			'if ( ! defined( \'ABSPATH\' ) ) {' . PHP_EOL .
@@ -139,7 +143,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$site_domain   = strtolower( preg_replace( \'/[^a-z0-9.:-]+/i\', \'\', $raw_domain ) );' . PHP_EOL .
 			'$request_uri   = isset( $_SERVER[\'REQUEST_URI\'] ) ? (string) parse_url( $_SERVER[\'REQUEST_URI\'], PHP_URL_PATH ) : \'\';' . PHP_EOL .
 			'$request_uri   = rawurldecode( $request_uri );' . PHP_EOL .
-			'$request_uri   = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL . PHP_EOL .
+			'$request_uri   = function_exists( \'wp_normalize_path\' ) ? wp_normalize_path( $request_uri ) : str_replace( \'\\\\\', \'/\', $request_uri );' . PHP_EOL .
+			'$cache_life    = ' . $cache_life . ';' . PHP_EOL . PHP_EOL .
 
 			'if ( \'\' === $site_domain || strpos( $site_domain, \'..\' ) !== false || strpos( $request_uri, \'..\' ) !== false ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
@@ -182,7 +187,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'	return false;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 
-			'function wppo_serve_cache_file( $file_path, $gzip_file_path ) {' . PHP_EOL .
+			'function wppo_serve_cache_file( $file_path, $gzip_file_path, $cache_life ) {' . PHP_EOL .
+			'	if ( $cache_life > 0 ) {' . PHP_EOL .
+			'		$check_path = file_exists( $gzip_file_path ) ? $gzip_file_path : $file_path;' . PHP_EOL .
+			'		if ( file_exists( $check_path ) && ( time() - (int) filemtime( $check_path ) ) > $cache_life * 3600 ) {' . PHP_EOL .
+			'			return;' . PHP_EOL .
+			'		}' . PHP_EOL .
+			'	}' . PHP_EOL .
 			'	if ( file_exists( $gzip_file_path ) ) {' . PHP_EOL .
 			'		$last_modified_time = filemtime( $gzip_file_path );' . PHP_EOL .
 			'		$etag               = md5_file( $gzip_file_path );' . PHP_EOL .
@@ -223,14 +234,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'$is_logged_in = is_user_logged_in_without_wp( $site_url );' . PHP_EOL .
 			'$has_query    = ! empty( $_SERVER[\'QUERY_STRING\'] );' . PHP_EOL . PHP_EOL .
 			'if ( ! $is_logged_in && ! $has_query ) {' . PHP_EOL .
-			'	wppo_serve_cache_file( $file_path, $gzip_file_path );' . PHP_EOL .
+			'	wppo_serve_cache_file( $file_path, $gzip_file_path, $cache_life );' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
 			'if ( $is_logged_in && ! $has_query ) {' . PHP_EOL .
 			'	$role_hash = isset( $_COOKIE[\'wppo_role_hash\'] ) ? preg_replace( \'/[^a-f0-9]/\', \'\', $_COOKIE[\'wppo_role_hash\'] ) : \'\';' . PHP_EOL .
 			'	if ( \'\' !== $role_hash ) {' . PHP_EOL .
 			'		$role_file_path = preg_replace( \'/index\\.html$/\', \'index-\' . $role_hash . \'.html\', $file_path );' . PHP_EOL .
 			'		$role_gzip_path = $role_file_path . \'.gz\';' . PHP_EOL .
-			'		wppo_serve_cache_file( $role_file_path, $role_gzip_path );' . PHP_EOL .
+			'		wppo_serve_cache_file( $role_file_path, $role_gzip_path, $cache_life );' . PHP_EOL .
 			'	}' . PHP_EOL .
 			'}' . PHP_EOL;
 
