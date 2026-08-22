@@ -52,7 +52,8 @@
 **Bug/Gap:** Dashboard component tests failed with a TypeError because a child component (`WebVitalsTrends`) invoked a new API function (`fetchWebVitalsTrends`) that wasn't included in the parent test's API mock.
 **Root Cause:** When modifying child components to depend on new shared utilities, the parent component tests using strict object mocks for those utilities often fail because the new dependency isn't defined.
 **Test Added:** Added the missing `fetchWebVitalsTrends: jest.fn()` to the `apiRequest` mock in `Dashboard.test.js` and provided a default resolved value before tests. Also wrapped async `fireEvent` clicks in `FileOptimization.test.js` in `await act( async () => {} )` to fix 'not wrapped in act' warnings.
-## 2026-08-20 - Ensure NoticeBanner is conditionally asserted in Tests
-**Bug/Gap:** Tests validating error states inside components like `WelcomePanel` failed when using synchronous `getByText` on the notice message.
-**Root Cause:** Component updates from API resolutions and subsequent `notify` calls happen asynchronously.
-**Test Added:** Ensured tests use `await waitFor(() => { expect(screen.getByText(...)).toBeInTheDocument(); });` to wait for the UI to reflect the updated state.
+
+## 2024-05-14 - Missing Function Expectations for is_multisite
+**Bug/Gap:** The `phpunit` test suite in `InlineCssTest.php` was failing with `MissingFunctionExpectations: "is_multisite" is not defined nor mocked in this test.`
+**Root Cause:** The `setUp()` method did not include mock definitions for `is_multisite`, `get_transient`, and `set_transient`, which are invoked by `Util::transient_key` when dealing with WordPress multisite checks inside `Cache` or `Util` classes.
+**Test Added:** Added mock definitions for `is_multisite`, `get_transient`, and `set_transient` to the `setUp()` method in `InlineCssTest.php` to satisfy BrainMonkey expectations.

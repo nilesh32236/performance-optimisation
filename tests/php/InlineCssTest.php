@@ -38,6 +38,20 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 	private string $large_css_file;
 
 	/**
+	 * The bootstrap $wpdb object replaced by swap_wpdb_for_log(), if any.
+	 *
+	 * @var object|null
+	 */
+	private $original_wpdb = null;
+
+	/**
+	 * Value of Cache::$inline_drift_logged before a drift test resets it.
+	 *
+	 * @var bool|null
+	 */
+	private $original_drift_log = null;
+
+	/**
 	 * Set up test environment.
 	 */
 	protected function setUp(): void {
@@ -77,12 +91,27 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
 		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'has_filter' )->justReturn( false );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
 	}
 
 	/**
 	 * Clean up after each test.
 	 */
 	protected function tearDown(): void {
+		if ( null !== $this->original_wpdb ) {
+			$GLOBALS['wpdb']     = $this->original_wpdb;
+			$this->original_wpdb = null;
+		}
+		if ( null !== $this->original_drift_log ) {
+			$prop = new \ReflectionProperty( Cache::class, 'inline_drift_logged' );
+			$prop->setAccessible( true );
+			$prop->setValue( null, $this->original_drift_log );
+			$this->original_drift_log = null;
+		}
+
 		if ( file_exists( $this->small_css_file ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 			unlink( $this->small_css_file );
@@ -183,6 +212,115 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		$wp_styles->queue      = $queue;
 		$wp_styles->shouldReceive( 'get_data' )->with( \Mockery::any(), 'path' )->andReturn( $path_value );
 		return $wp_styles;
+	}
+
+	/**
+	 * Build a WP_Styles-like mock with per-handle path data.
+	 *
+	 * @param array $registered Map of handle => object with ->src.
+	 * @param array $queue      Queued handles.
+	 * @param array $paths      Map of handle => path-data file.
+	 * @return object WP_Styles-like mock.
+	 */
+	private function make_wp_styles_with_paths( array $registered, array $queue, array $paths ) {
+		$wp_styles             = \Mockery::mock();
+		$wp_styles->registered = $registered;
+		$wp_styles->queue      = $queue;
+		$wp_styles->shouldReceive( 'get_data' )->with( \Mockery::any(), 'path' )->andReturnUsing(
+			static function ( $handle ) use ( $paths ) {
+				return $paths[ $handle ] ?? null;
+			}
+		);
+		return $wp_styles;
+	}
+
+	/**
+	 * Create a temp CSS fixture of exactly the requested size.
+	 *
+	 * @param int $bytes The file size in bytes.
+	 * @return string Absolute path to the temp fixture.
+	 */
+	private function make_temp_css( $bytes ): string {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		$file = tempnam( sys_get_temp_dir(), 'wppo-bud-' );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+		file_put_contents( $file, str_repeat( 'a', $bytes ) );
+		return $file;
+	}
+
+	/**
+	 * Remove temp CSS fixtures.
+	 *
+	 * @param string[] $files Absolute paths to temp fixtures.
+	 */
+	private function cleanup_temp_files( array $files ): void {
+		foreach ( $files as $file ) {
+			if ( file_exists( $file ) ) {
+				// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
+				unlink( $file );
+			}
+		}
+	}
+
+	/**
+	 * Reset the once-per-process inline-drift logger flag for a drift test.
+	 *
+	 * The flag is held in a private static, so reflection is required to make
+	 * drift-triggering tests order-independent and observe the log path. The
+	 * pre-test value is stashed so {@see tearDown()} can restore it.
+	 */
+	private function reset_inline_drift_logger_flag(): void {
+		$prop = new \ReflectionProperty( Cache::class, 'inline_drift_logged' );
+		$prop->setAccessible( true );
+		if ( null === $this->original_drift_log ) {
+			$this->original_drift_log = (bool) $prop->getValue( null );
+		}
+		$prop->setValue( null, false );
+	}
+
+	/**
+	 * Swap in a minimal $wpdb mock so the activity log insert can run.
+	 *
+	 * Log::add() calls `$wpdb->insert()`, which the bootstrap's plain stdClass
+	 * cannot satisfy (a closure assigned to a property is not callable as a
+	 * method). Returns the mock so callers can assert whether an insert ran.
+	 *
+	 * @return object Minimal $wpdb stand-in with prefix + insert().
+	 */
+	private function swap_wpdb_for_log() {
+		if ( null === $this->original_wpdb && isset( $GLOBALS['wpdb'] ) ) {
+			$this->original_wpdb = $GLOBALS['wpdb'];
+		}
+		$mock            = new class() {
+			/**
+			 * Database table prefix.
+			 *
+			 * @var string
+			 */
+			public $prefix = 'wp_';
+
+			/**
+			 * Number of inserts performed.
+			 *
+			 * @var int
+			 */
+			public $inserts = 0;
+
+			/**
+			 * Simulate an insert into the activity log table.
+			 *
+			 * @param string $table  Table name.
+			 * @param array  $data   Data to insert.
+			 * @param array  $format Format specifiers (unused).
+			 * @return int
+			 */
+			public function insert( $table, $data, $format = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+				++$this->inserts;
+				return 1;
+			}
+		};
+		$GLOBALS['wpdb'] = $mock;
+		return $mock;
 	}
 
 	/**
@@ -543,6 +681,249 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		unlink( $medium_a );
 		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink
 		unlink( $medium_b );
+	}
+
+	/**
+	 * Test that core_will_inline matches core's inline budget across the
+	 * 20KB (WP < 6.9) and 40KB (WP 6.9+) boundaries.
+	 *
+	 * A style at or under the limit is inlined; a style one byte over is not.
+	 */
+	public function test_core_will_inline_budget_boundary_is_version_aware(): void {
+		Functions\when( 'function_exists' )->justReturn( true );
+
+		$cases = array(
+			'6.8' => array(
+				19000 => true,
+				20000 => true,
+				21000 => false,
+			),
+			'6.9' => array(
+				39000 => true,
+				40000 => true,
+				41000 => false,
+			),
+			'7.1' => array(
+				39000 => true,
+				40000 => true,
+				41000 => false,
+			),
+		);
+
+		$files = array();
+		try {
+			foreach ( $cases as $version => $boundaries ) {
+				$GLOBALS['wp_version'] = $version;
+				foreach ( $boundaries as $bytes => $expected ) {
+					$file    = $this->make_temp_css( $bytes );
+					$files[] = $file;
+
+					global $wp_styles;
+					$wp_styles = $this->make_wp_styles(
+						array(
+							'foo' => (object) array(
+								'src'   => 'http://example.com/foo.css',
+								'args'  => 'all',
+								'extra' => array(),
+							),
+						),
+						array( 'foo' ),
+						$file
+					);
+
+					$cache = $this->make_cache();
+					$this->assertSame(
+						$expected,
+						$this->invoke_private( $cache, 'core_will_inline', array( 'foo' ) ),
+						sprintf( 'Unexpected inline decision at %d bytes on WP %s', $bytes, $version )
+					);
+				}
+			}
+		} finally {
+			$this->cleanup_temp_files( $files );
+			unset( $GLOBALS['wp_version'] );
+		}
+	}
+
+	/**
+	 * Test that a queued path-data sibling without a `src` does not consume the
+	 * inline budget, matching core's candidate collection.
+	 *
+	 * Core ignores styles without a `src`; the legacy prediction counted them,
+	 * so this is where the budget accounting drifted. The decision must come
+	 * out on the conservative side (true) rather than the old wrong prediction.
+	 */
+	public function test_core_will_inline_matches_core_when_path_peer_lacks_src(): void {
+		// Stub the drift-log helper functions BEFORE stubbing `function_exists`.
+		// Brain Monkey only lazily eval-declares a stubbed function when
+		// function_exists() reports it missing; overriding function_exists first
+		// would skip the declaration and leave the namespaced call undefined.
+		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'wp_kses_post' )->returnArg();
+		Functions\when( 'update_option' )->justReturn( true );
+		Functions\when( 'function_exists' )->justReturn( true );
+		$this->swap_wpdb_for_log();
+		$this->reset_inline_drift_logger_flag();
+		$GLOBALS['wp_version'] = '6.9';
+
+		$file_a = $this->make_temp_css( 8192 );
+		$file_b = $this->make_temp_css( 8192 );
+		$file_c = $this->make_temp_css( 28672 );
+
+		try {
+			global $wp_styles;
+			$wp_styles = $this->make_wp_styles_with_paths(
+				array(
+					'a' => (object) array(
+						'src'   => 'http://example.com/a.css',
+						'extra' => array(),
+					),
+					'b' => (object) array( 'extra' => array() ), // No src: core never inlines it.
+					'c' => (object) array(
+						'src'   => 'http://example.com/c.css',
+						'extra' => array(),
+					),
+				),
+				array( 'a', 'b', 'c' ),
+				array(
+					'a' => $file_a,
+					'b' => $file_b,
+					'c' => $file_c,
+				)
+			);
+
+			$cache = $this->make_cache();
+
+			// Core counts only A + C (36864 <= 40000), so C is inlined; the
+			// legacy prediction counted B too (45056 > 40000) and rejected C.
+			$this->assertFalse( $this->invoke_private( $cache, 'core_inline_budget_will_inline', array( 'c', 40000, false ) ) );
+			$this->assertTrue( $this->invoke_private( $cache, 'core_inline_budget_will_inline', array( 'c', 40000, true ) ) );
+
+			// core_will_inline() sees the mismatch and degrades to true.
+			$this->assertTrue( $this->invoke_private( $cache, 'core_will_inline', array( 'c' ) ) );
+		} finally {
+			$this->cleanup_temp_files( array( $file_a, $file_b, $file_c ) );
+			unset( $GLOBALS['wp_version'] );
+		}
+	}
+
+	/**
+	 * Test that a queued path-data sibling over the inline budget is not counted.
+	 *
+	 * Core only considers styles within the budget as candidates, so an oversized
+	 * sibling can never push the target over the cumulative limit.
+	 */
+	public function test_core_will_inline_ignores_over_limit_path_peer(): void {
+		Functions\when( 'function_exists' )->justReturn( true );
+		$GLOBALS['wp_version'] = '6.9';
+
+		$file_foo  = $this->make_temp_css( 30000 );
+		$file_peer = $this->make_temp_css( 41000 );
+
+		try {
+			global $wp_styles;
+			$wp_styles = $this->make_wp_styles_with_paths(
+				array(
+					'peer' => (object) array(
+						'src'   => 'http://example.com/big.css',
+						'extra' => array(),
+					),
+					'foo'  => (object) array(
+						'src'   => 'http://example.com/foo.css',
+						'extra' => array(),
+					),
+				),
+				array( 'peer', 'foo' ),
+				array(
+					'peer' => $file_peer,
+					'foo'  => $file_foo,
+				)
+			);
+
+			$cache = $this->make_cache();
+
+			// The core-faithful reference never counts the oversized sibling, so
+			// `foo` (30000 <= 40000) is inlined...
+			$this->assertTrue( $this->invoke_private( $cache, 'core_inline_budget_will_inline', array( 'foo', 40000, true ) ) );
+			// ...and the legacy prediction agrees here (the big sibling sorts
+			// last and never reaches the budget check), so no drift fires.
+			$this->assertTrue( $this->invoke_private( $cache, 'core_inline_budget_will_inline', array( 'foo', 40000, false ) ) );
+			$this->assertTrue( $this->invoke_private( $cache, 'core_will_inline', array( 'foo' ) ) );
+		} finally {
+			$this->cleanup_temp_files( array( $file_foo, $file_peer ) );
+			unset( $GLOBALS['wp_version'] );
+		}
+	}
+
+	/**
+	 * Test that a prediction/reference mismatch degrades the request to the safe
+	 * fallback: no `path` data on the combined file, preload kept, logged once.
+	 */
+	public function test_inline_budget_drift_degrades_to_safe_fallback(): void {
+		// Stub the drift-log helper functions BEFORE stubbing `function_exists`.
+		// Brain Monkey only lazily eval-declares a stubbed function when
+		// function_exists() reports it missing; overriding function_exists first
+		// would skip the declaration and leave the namespaced call undefined.
+		Functions\when( '__' )->returnArg( 1 );
+		Functions\when( 'wp_kses_post' )->returnArg();
+		Functions\when( 'update_option' )->justReturn( true );
+		Functions\when( 'function_exists' )->justReturn( true );
+		$wpdb = $this->swap_wpdb_for_log();
+		$this->reset_inline_drift_logger_flag();
+		$GLOBALS['wp_version'] = '6.9';
+
+		$file_a = $this->make_temp_css( 8192 );
+		$file_b = $this->make_temp_css( 8192 );
+		$file_c = $this->make_temp_css( 28672 );
+
+		try {
+			global $wp_styles;
+			$wp_styles = $this->make_wp_styles_with_paths(
+				array(
+					'a' => (object) array(
+						'src'   => 'http://example.com/a.css',
+						'extra' => array(),
+					),
+					'b' => (object) array( 'extra' => array() ), // No src: core ignores it.
+					'c' => (object) array(
+						'src'   => 'http://example.com/c.css',
+						'extra' => array(),
+					),
+				),
+				array( 'a', 'b', 'c' ),
+				array(
+					'a' => $file_a,
+					'b' => $file_b,
+					'c' => $file_c,
+				)
+			);
+
+			$cache = $this->make_cache();
+
+			// The legacy prediction disagrees with the core-faithful reference,
+			// so the conservative true is returned (never a duplicating false)
+			// and the rate-limited drift notice is written to the activity log.
+			$this->assertTrue( $this->invoke_private( $cache, 'core_will_inline', array( 'c' ) ) );
+
+			// A second drifting handle must reuse the cached size map and must not
+			// add another activity-log entry: the notice is once per process.
+			$this->assertTrue( $this->invoke_private( $cache, 'core_will_inline', array( 'c' ) ) );
+			$this->assertSame( 1, $wpdb->inserts, 'The drift log must be written exactly once per process' );
+
+			$drift_prop = new \ReflectionProperty( Cache::class, 'inline_drift_detected' );
+			$drift_prop->setAccessible( true );
+			$this->assertTrue( $drift_prop->getValue( $cache ) );
+
+			// The combined file is no longer registered for inlining this request.
+			Functions\expect( 'wp_style_add_data' )->never();
+			$this->invoke_private( $cache, 'register_combine_css_path', array( $file_c ) );
+
+			// The combined stylesheet is external now, so the preload is kept.
+			$this->assertFalse( $this->invoke_private( $cache, 'will_combine_css_inline', array( $file_c ) ) );
+		} finally {
+			$this->cleanup_temp_files( array( $file_a, $file_b, $file_c ) );
+			unset( $GLOBALS['wp_version'] );
+		}
 	}
 
 	/**
