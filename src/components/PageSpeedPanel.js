@@ -461,10 +461,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					<p className="wppo-pagespeed-meta">
 						<FontAwesomeIcon
 							icon={ faCheckCircle }
-							style={ {
-								marginRight: '6px',
-								color: 'var(--wppo-success)',
-							} }
+							className="wppo-pagespeed-meta__icon"
 						/>
 						{ ( result.strategy ?? strategy ).toLowerCase() ===
 						'desktop'

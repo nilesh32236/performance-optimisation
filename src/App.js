@@ -64,16 +64,7 @@ const PluginSettings = lazy( () =>
 );
 
 const TabFallback = () => (
-	<div
-		className="wppo-loading-placeholder"
-		style={ {
-			minHeight: '200px',
-			display: 'flex',
-			alignItems: 'center',
-			justifyContent: 'center',
-			gap: '8px',
-		} }
-	>
+	<div className="wppo-loading-placeholder wppo-loading-placeholder--fallback">
 		<FontAwesomeIcon icon={ faSpinner } spin />
 		<span>{ __( 'Loading…', 'performance-optimisation' ) }</span>
 	</div>

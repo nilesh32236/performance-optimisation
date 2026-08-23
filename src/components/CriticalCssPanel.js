@@ -8,6 +8,8 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
+import useNotice from '../lib/useNotice';
+import NoticeBanner from './common/NoticeBanner';
 
 const STATUS_CONFIG = {
 	ready: {
@@ -34,6 +36,7 @@ const STATUS_CONFIG = {
 
 const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 	const [ isRegenerating, setIsRegenerating ] = useState( false );
+	const { notice, notify, dismiss } = useNotice();
 
 	const handleRegenerate = async () => {
 		setIsRegenerating( true );
@@ -41,6 +44,13 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 			await onRegenerate();
 		} catch ( err ) {
 			console.error( 'Failed to regenerate CCSS', err );
+			notify( {
+				type: 'error',
+				message: __(
+					'Failed to regenerate Critical CSS.',
+					'performance-optimisation'
+				),
+			} );
 		} finally {
 			setIsRegenerating( false );
 		}
@@ -50,6 +60,13 @@ const CriticalCssPanel = ( { status = {}, onRegenerate } ) => {
 
 	return (
 		<div className="wppo-ccss-panel wppo-mt-20">
+			{ notice && (
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
+			) }
 			<div className="wppo-field-label">
 				{ __( 'Critical CSS Status', 'performance-optimisation' ) }
 			</div>

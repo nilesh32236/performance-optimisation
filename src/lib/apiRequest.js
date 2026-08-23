@@ -9,6 +9,9 @@
  * @return {Promise<string>} The refreshed nonce string.
  */
 const refreshNonce = async () => {
+	if ( typeof wppoSettings === 'undefined' ) {
+		throw new Error( 'wppoSettings is not defined' );
+	}
 	try {
 		const res = await fetch( wppoSettings.ajaxUrl, {
 			method: 'POST',
@@ -48,6 +51,9 @@ const refreshNonce = async () => {
  * @return {Promise<Object>} Resolved JSON response data.
  */
 export const apiCall = async ( action, body, method = 'POST', signal ) => {
+	if ( typeof wppoSettings === 'undefined' ) {
+		throw new Error( 'wppoSettings is not defined' );
+	}
 	const isGet = 'GET' === method;
 
 	const doFetch = ( nonce ) =>

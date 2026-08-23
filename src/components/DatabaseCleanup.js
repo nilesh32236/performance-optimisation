@@ -492,25 +492,11 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								/>
 							}
 						>
-							<div
-								style={ {
-									display: 'flex',
-									justifyContent: 'space-between',
-									alignItems: 'center',
-								} }
-							>
-								<p
-									className="wppo-text-muted"
-									style={ { margin: 0, fontSize: '13px' } }
-								>
+							<div className="wppo-cleanup-row">
+								<p className="wppo-text-muted wppo-cleanup-row__desc">
 									{ item.description }
 								</p>
-								<span
-									style={ {
-										fontWeight: '700',
-										fontSize: '18px',
-									} }
-								>
+								<span className="wppo-cleanup-row__count">
 									{ counts[ item.key ] || 0 }
 								</span>
 							</div>

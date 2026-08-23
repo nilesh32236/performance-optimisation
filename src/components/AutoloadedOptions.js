@@ -27,8 +27,8 @@ const AutoloadedOptions = () => {
 		setError( null );
 		try {
 			const response = await apiCall(
-				'autoloaded_options',
-				{ limit: 20 },
+				'autoloaded_options?limit=20',
+				{},
 				'GET'
 			);
 			if ( response.success && response.data?.options ) {

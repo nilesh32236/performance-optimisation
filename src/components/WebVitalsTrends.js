@@ -65,10 +65,7 @@ const TrendSeries = ( { strategy, trends } ) => {
 
 	if ( ! seriesKey ) {
 		return (
-			<p
-				className="wppo-text-muted wppo-text-small"
-				style={ { margin: '8px 0 0' } }
-			>
+			<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 				{ __(
 					'Not enough trend data yet. Run PageSpeed scans over time or enable auto-rescan.',
 					'performance-optimisation'
@@ -124,10 +121,7 @@ const TrendSeries = ( { strategy, trends } ) => {
 					/>
 				</svg>
 			) : (
-				<p
-					className="wppo-text-muted wppo-text-small"
-					style={ { margin: '8px 0 0' } }
-				>
+				<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 					{ __(
 						'Not enough trend data yet. Run a few PageSpeed scans over time.',
 						'performance-optimisation'
@@ -190,7 +184,7 @@ const WebVitalsTrends = ( { url = '' } ) => {
 					<FontAwesomeIcon
 						icon={ faSpinner }
 						spin
-						style={ { marginRight: '8px' } }
+						className="wppo-mr-8"
 					/>
 					{ __( 'Loading trends…', 'performance-optimisation' ) }
 				</p>
@@ -200,7 +194,7 @@ const WebVitalsTrends = ( { url = '' } ) => {
 				<div className="wppo-notice wppo-notice--error">
 					<FontAwesomeIcon
 						icon={ faExclamationCircle }
-						style={ { marginRight: '8px' } }
+						className="wppo-mr-8"
 					/>
 					{ error }
 				</div>
@@ -220,7 +214,7 @@ const WebVitalsTrends = ( { url = '' } ) => {
 					<div className="wppo-trend-layout__title">
 						<FontAwesomeIcon
 							icon={ faChartLine }
-							style={ { marginRight: '8px' } }
+							className="wppo-mr-8"
 						/>
 						{ url }
 					</div>

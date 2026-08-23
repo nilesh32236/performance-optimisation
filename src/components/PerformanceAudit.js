@@ -189,9 +189,7 @@ const ResultRow = ( { label, value, status, tooltipKey } ) => (
 const AuditSection = ( { title, icon } ) => (
 	<tr className="wppo-audit-section-header">
 		<td colSpan="3">
-			<div
-				style={ { display: 'flex', alignItems: 'center', gap: '8px' } }
-			>
+			<div className="wppo-audit-section-header__inner">
 				{ icon && <FontAwesomeIcon icon={ icon } /> }
 				{ title }
 			</div>
@@ -436,7 +434,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 							<>
 								<FontAwesomeIcon
 									icon={ faSearch }
-									style={ { marginRight: '8px' } }
+									className="wppo-mr-8"
 								/>
 								{ __( 'Run Scan', 'performance-optimisation' ) }
 							</>
@@ -455,7 +453,7 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 						<div className="wppo-audit-meta__title">
 							<FontAwesomeIcon
 								icon={ faChartBar }
-								style={ { marginRight: '8px' } }
+								className="wppo-mr-8"
 							/>
 							{ __( 'Scan Results', 'performance-optimisation' ) }
 						</div>
@@ -476,19 +474,11 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 					<MetricOverview result={ result } />
 
 					{ result.is_cached && (
-						<div
-							className="wppo-notice wppo-notice--info"
-							style={ {
-								marginBottom: '24px',
-								display: 'flex',
-								alignItems: 'center',
-								justifyContent: 'space-between',
-							} }
-						>
+						<div className="wppo-notice wppo-notice--info wppo-audit-cached-notice">
 							<span>
 								<FontAwesomeIcon
 									icon={ faLightbulb }
-									style={ { marginRight: '8px' } }
+									className="wppo-mr-8"
 								/>
 								{ __(
 									'Displaying cached results from the last hour.',
@@ -822,13 +812,10 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 					</table>
 
 					{ ! devMode && (
-						<div
-							className="wppo-notice wppo-notice--info"
-							style={ { marginTop: '24px' } }
-						>
+						<div className="wppo-notice wppo-notice--info wppo-mt-24">
 							<FontAwesomeIcon
 								icon={ faLightbulb }
-								style={ { marginRight: '8px' } }
+								className="wppo-mr-8"
 							/>
 							<span>
 								{ __( 'Enable', 'performance-optimisation' ) }{ ' ' }

@@ -507,6 +507,24 @@
 	}
 }
 
+.wppo-audit-section-header__inner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.wppo-audit-cached-notice {
+	margin-bottom: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.wppo-pagespeed-meta__icon {
+	margin-right: 6px;
+	color: var(--wppo-success);
+}
+
 // =============================================================================
 // Phase 2 — PageSpeed Integration & Suggestions (v1.6.0)
 // =============================================================================
