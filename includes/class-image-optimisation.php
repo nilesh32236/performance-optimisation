@@ -400,7 +400,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether the WP 6.9+ HTML API picture parser is available.
+		 *
+		 * @since NEXT
+		 * @return bool
+		 */
+		private function should_use_html_processor(): bool {
+			return class_exists( 'WP_HTML_Processor' ) && method_exists( 'WP_HTML_Processor', 'serialize_token' );
+		}
+
+		/**
 		 * Processes <picture> blocks using WP_HTML_Processor for reliable block extraction with depth tracking.
+		 *
+		 * Uses spec-compliant token walking via serialize_token() with manual nesting
+		 * tracking so nested <picture>, comments, SVG/mathML and malformed HTML are
+		 * handled without the fragility of PCRE.
 		 *
 		 * @since NEXT
 		 *
@@ -411,21 +425,111 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified buffer.
 		 */
 		private function process_picture_blocks_processor( string $buffer, int $img_counter, int $exclude_img_count, array $exclude_imgs ): string {
-			return preg_replace_callback(
-				'#<picture\b[^>]*>.*?</picture>#is',
-				function ( $matches ) use ( $img_counter, $exclude_img_count, $exclude_imgs ) {
-					preg_match( '#<img\b[^>]*?(?:data-)?src=["\']([^"\']+)["\'][^>]*>#i', $matches[0], $img_matches );
-					if ( ! empty( $img_matches ) ) {
-						++$img_counter;
-						if ( $exclude_img_count >= $img_counter ) {
-							$exclude_imgs[] = $img_matches[1];
-						}
-						return $this->process_picture_tag( $matches, $img_matches[0], $img_matches[1], $exclude_imgs );
+			if ( ! $this->should_use_html_processor() ) {
+				return $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
+			}
+
+			$create = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
+			$processor = \WP_HTML_Processor::$create( $buffer );
+			if ( null === $processor ) {
+				return $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
+			}
+
+			$out          = '';
+			$in_picture   = false;
+			$nesting      = 0;
+			$picture_html = '';
+
+			while ( $processor->next_token() ) {
+				$type = $processor->get_token_type();
+
+				if ( '#tag' !== $type ) {
+					$tok = $processor->serialize_token();
+					if ( $in_picture ) {
+						$picture_html .= $tok;
+					} else {
+						$out .= $tok;
 					}
-					return $matches[0];
-				},
-				$buffer
-			);
+					continue;
+				}
+
+				$is_closer = $processor->is_tag_closer();
+				$tag       = $processor->get_tag();
+
+				if ( ! $in_picture && 'PICTURE' === $tag && ! $is_closer ) {
+					$in_picture   = true;
+					$nesting      = 1;
+					$picture_html = $processor->serialize_token();
+					continue;
+				}
+
+				if ( $in_picture ) {
+					$picture_html .= $processor->serialize_token();
+
+					if ( 'PICTURE' === $tag ) {
+						if ( ! $is_closer ) {
+							++$nesting;
+						} else {
+							--$nesting;
+							if ( 0 === $nesting ) {
+								// Extract inner <img> src via Tag Processor for correctness.
+								$src     = '';
+								$img_tag = '';
+								$tmp     = new \WP_HTML_Tag_Processor( $picture_html );
+								if ( $tmp->next_tag( array( 'tag_name' => 'img' ) ) ) {
+									$maybe_src = $tmp->get_attribute( 'data-src' );
+									if ( null === $maybe_src ) {
+										$maybe_src = $tmp->get_attribute( 'src' );
+									}
+									$src = is_string( $maybe_src ) ? $maybe_src : '';
+								}
+								if ( preg_match( '#<img\b[^>]*>#i', $picture_html, $m ) ) {
+									$img_tag = $m[0];
+								}
+
+								if ( '' !== $img_tag && '' !== $src ) {
+									++$img_counter;
+									if ( $exclude_img_count >= $img_counter ) {
+										$exclude_imgs[] = $src;
+									}
+									$out .= $this->process_picture_tag( array( $picture_html ), $img_tag, $src, $exclude_imgs );
+								} elseif ( '' !== $img_tag ) {
+									// Fallback: extract src via regex when Tag Processor did not yield one.
+									if ( preg_match( '#<img\b[^>]*?(?:data-)?src=["\']([^"\']+)["\'][^>]*>#i', $picture_html, $img_matches ) ) {
+										$src = $img_matches[1];
+										++$img_counter;
+										if ( $exclude_img_count >= $img_counter ) {
+											$exclude_imgs[] = $src;
+										}
+										$out .= $this->process_picture_tag( array( $picture_html ), $img_matches[0], $src, $exclude_imgs );
+									} else {
+										$out .= $picture_html;
+									}
+								} else {
+									$out .= $picture_html;
+								}
+
+								$in_picture   = false;
+								$picture_html = '';
+								$nesting      = 0;
+							}
+						}
+					}
+					continue;
+				}
+
+				$out .= $processor->serialize_token();
+			}
+
+			if ( null !== $processor->get_last_error() ) {
+				return $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
+			}
+
+			if ( $in_picture && '' !== $picture_html ) {
+				$out .= $picture_html;
+			}
+
+			return $out;
 		}
 
 		/**
@@ -2375,7 +2479,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$buffer = $this->post_process_img_dimensions( $buffer );
 					$buffer = $this->post_process_auto_sizes( $buffer );
 
-					if ( class_exists( 'WP_HTML_Processor' ) ) {
+					if ( $this->should_use_html_processor() ) {
 						$buffer = $this->process_picture_blocks_processor( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
 					} else {
 						$buffer = $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
