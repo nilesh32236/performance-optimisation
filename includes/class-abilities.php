@@ -78,6 +78,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Get the definitions for all registered abilities.
 		 *
 		 * @since NEXT
+		 *
 		 * @return array[] Array of ability definition arrays, each with 'id' and 'args'.
 		 */
 		private function get_ability_definitions(): array {
@@ -101,7 +102,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				),
 			);
 
-			return array(
+			$feature_abilities = array(
 				array(
 					'id'   => 'performance-optimisation/cache-management',
 					'args' => array_merge(
@@ -169,6 +170,151 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					),
 				),
 			);
+
+			$operational = $this->get_operational_abilities();
+
+			return array_merge( $feature_abilities, $operational );
+		}
+
+		/**
+		 * Get operational ability definitions that delegate to REST service methods.
+		 *
+		 * These abilities are additive wrappers around existing REST routes
+		 * (performance-optimisation/v1). The SPA keeps using REST; abilities
+		 * expose the same operations via wp-abilities/v1 for Command Palette
+		 * and MCP discovery. Guarded by function_exists('wp_register_ability')
+		 * in register_abilities() so WP <6.9 is no-op.
+		 *
+		 * @since NEXT
+		 *
+		 * @return array[] Operational ability definitions.
+		 */
+		private function get_operational_abilities(): array {
+			$category = 'performance-optimisation';
+
+			return array(
+				array(
+					'id'   => 'performance-optimisation/clear-cache',
+					'args' => array(
+						'label'               => __( 'Clear Cache', 'performance-optimisation' ),
+						'description'         => __( 'Clear the static HTML cache (all or a single URL).', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'scope' => array(
+									'type'        => 'string',
+									'enum'        => array( 'all', 'single' ),
+									'description' => __( 'Whether to clear all cache or a single URL.', 'performance-optimisation' ),
+								),
+								'url'   => array(
+									'type'        => 'string',
+									'format'      => 'uri',
+									'description' => __( 'URL to clear when scope is single.', 'performance-optimisation' ),
+								),
+							),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'cleared' => array( 'type' => 'boolean' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_clear_cache' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/optimise-image',
+					'args' => array(
+						'label'               => __( 'Optimise Image', 'performance-optimisation' ),
+						'description'         => __( 'Queue or synchronously convert an image attachment to WebP/AVIF.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'attachment_id' => array(
+									'type'        => 'integer',
+									'description' => __( 'Attachment ID to optimise.', 'performance-optimisation' ),
+								),
+								'format'        => array(
+									'type'        => 'string',
+									'enum'        => array( 'webp', 'avif', 'both' ),
+									'description' => __( 'Target format.', 'performance-optimisation' ),
+								),
+							),
+							'required'   => array( 'attachment_id' ),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'queued' => array( 'type' => 'boolean' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_optimise_image' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/run-database-cleanup',
+					'args' => array(
+						'label'               => __( 'Run Database Cleanup', 'performance-optimisation' ),
+						'description'         => __( 'Run a database cleanup operation by type.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'type' => array(
+									'type'        => 'string',
+									'enum'        => array( 'revisions', 'auto_drafts', 'trash', 'spam', 'transients', 'orphans', 'all' ),
+									'description' => __( 'Cleanup type.', 'performance-optimisation' ),
+								),
+							),
+							'required'   => array( 'type' ),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'cleaned' => array( 'type' => 'integer' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_database_cleanup' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/flush-object-cache',
+					'args' => array(
+						'label'               => __( 'Flush Object Cache', 'performance-optimisation' ),
+						'description'         => __( 'Flush the Redis object cache.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'flushed' => array( 'type' => 'boolean' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_flush_object_cache' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+			);
 		}
 
 		/**
@@ -185,7 +331,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 * Execute callback: Cache Management.
 		 *
 		 * @since NEXT
-		 * @return true
+		 * @return bool
 		 */
 		public static function can_cache_management(): bool {
 			$options = get_option( 'wppo_settings', array() );
@@ -244,6 +390,116 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 */
 		public static function can_redis_object_cache(): bool {
 			return wp_using_ext_object_cache();
+		}
+
+		/**
+		 * Execute callback: Clear Cache (operational).
+		 *
+		 * Delegates to Cache::clear_cache() — same path as the REST handler.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (scope, url).
+		 * @return array{cleared: bool}
+		 */
+		public static function execute_clear_cache( array $input = array() ): array {
+			$scope = $input['scope'] ?? 'all';
+			if ( 'single' === $scope && ! empty( $input['url'] ) ) {
+				$url = esc_url_raw( $input['url'] );
+				if ( '' !== $url ) {
+					$path = wp_parse_url( $url, PHP_URL_PATH );
+					Cache::clear_cache( $path );
+					return array( 'cleared' => true );
+				}
+			}
+			Main::clear_all_cache();
+			return array( 'cleared' => true );
+		}
+
+		/**
+		 * Execute callback: Optimise Image (operational).
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (attachment_id, format).
+		 * @return array{queued: bool}
+		 */
+		public static function execute_optimise_image( array $input ): array {
+			$attachment_id = isset( $input['attachment_id'] ) ? (int) $input['attachment_id'] : 0;
+			$format        = isset( $input['format'] ) ? sanitize_text_field( $input['format'] ) : 'webp';
+			if ( $attachment_id <= 0 ) {
+				return array( 'queued' => false );
+			}
+			$file = get_attached_file( $attachment_id );
+			if ( ! $file || ! file_exists( $file ) ) {
+				return array( 'queued' => false );
+			}
+			$queued = Img_Converter::add_img_into_queue( $file, $format );
+			return array( 'queued' => (bool) $queued );
+		}
+
+		/**
+		 * Execute callback: Run Database Cleanup (operational).
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (type).
+		 * @return array{cleaned: int}
+		 */
+		public static function execute_database_cleanup( array $input ): array {
+			$type        = isset( $input['type'] ) ? sanitize_text_field( $input['type'] ) : '';
+			$valid_types = array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'unattached_media', 'oembed_cache', 'all' );
+			if ( ! in_array( $type, $valid_types, true ) ) {
+				return array( 'cleaned' => 0 );
+			}
+			if ( 'all' === $type ) {
+				$results = Database_Cleanup::clean_all();
+				$total   = 0;
+				foreach ( $results as $value ) {
+					if ( ! is_wp_error( $value ) ) {
+						$total += (int) $value;
+					}
+				}
+				return array( 'cleaned' => $total );
+			}
+			$method_map = array(
+				'revisions'          => 'clean_revisions_advanced',
+				'auto_drafts'        => 'clean_auto_drafts',
+				'trashed_posts'      => 'clean_trashed_posts',
+				'spam_comments'      => 'clean_spam_comments',
+				'trashed_comments'   => 'clean_trashed_comments',
+				'expired_transients' => 'clean_expired_transients',
+				'orphan_postmeta'    => 'clean_orphan_postmeta',
+				'unattached_media'   => 'clean_unattached_media',
+				'oembed_cache'       => 'clean_oembed_cache',
+			);
+			$method     = $method_map[ $type ] ?? null;
+			if ( ! $method ) {
+				return array( 'cleaned' => 0 );
+			}
+			if ( 'revisions' === $type ) {
+				$result = Database_Cleanup::invoke_cleanup_method( $method, 30, 5 );
+			} else {
+				$result = Database_Cleanup::invoke_cleanup_method( $method );
+			}
+			if ( is_wp_error( $result ) ) {
+				return array( 'cleaned' => 0 );
+			}
+			return array( 'cleaned' => (int) $result );
+		}
+
+		/**
+		 * Execute callback: Flush Object Cache (operational).
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Unused input data.
+		 * @return array{flushed: bool}
+		 */
+		public static function execute_flush_object_cache( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Ability API passes input even when empty.
+			$object_cache = new Object_Cache();
+			$flushed      = $object_cache->flush();
+			return array( 'flushed' => (bool) $flushed );
 		}
 	}
 }
