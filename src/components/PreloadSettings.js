@@ -420,6 +420,12 @@ const PreloadSettings = ( { options = {} } ) => {
 					icon={ <FontAwesomeIcon icon={ faRocket } /> }
 				>
 					<div className="wppo-field-group">
+						<p className="wppo-text-muted wppo-text-small">
+							{ __(
+								'Effective defaults are prefetch + conservative unless overridden. Host overrides WP_SPECULATIVE_LOADING_DEFAULT_MODE / WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS are superseded by the wp_speculation_rules_configuration filter — this plugin takes precedence when enabled. No auto-elevation to moderate occurs; choose eagerness explicitly.',
+								'performance-optimisation'
+							) }
+						</p>
 						<SwitchField
 							label={ __(
 								'Enable Speculative Loading',
@@ -496,6 +502,12 @@ const PreloadSettings = ( { options = {} } ) => {
 											) }
 										</option>
 									</select>
+									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+										{ __(
+											'Prerender executes JavaScript on hover and may inflate analytics and origin load on uncached routes — use only with caching verified.',
+											'performance-optimisation'
+										) }
+									</p>
 								</div>
 								<div className="wppo-field">
 									<label
