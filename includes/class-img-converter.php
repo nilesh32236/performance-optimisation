@@ -274,6 +274,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		}
 
 		/**
+		 * Whether the source embeds an UltraHDR gain map.
+		 *
+		 * Core skips such images end-to-end when applying
+		 * image_editor_output_format, because re-encoding destroys the
+		 * embedded gain map. The markers live in the XMP packet near the
+		 * start of JPEG files, so peeking at the first 64 KB suffices.
+		 *
+		 * @param string $source_image Filesystem path to the candidate image.
+		 * @return bool True when an hdrgm XMP marker is present.
+		 * @since NEXT
+		 */
+		private function is_gain_map_image( string $source_image ): bool {
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Bounded header peek; silencing missing-file notices is intentional.
+			$header = (string) @file_get_contents( $source_image, false, null, 0, 65536 );
+
+			return false !== stripos( $header, 'hdrgm:' );
+		}
+
+		/**
 		 * Convert a source image into WebP and/or AVIF and record conversion status.
 		 *
 		 * Attempts to create converted files for the requested format(s) and updates the plugin's conversion status store (`wppo_img_info`) to reflect `pending`, `completed`, or `failed` outcomes.
@@ -320,6 +339,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				} else {
 					$this->update_conversion_status( $source_image, 'skipped', $requested_format );
 				}
+			}
+
+			// Skip UltraHDR / gain-map sources: core intentionally preserves
+			// them end-to-end, and a server-side re-encode would strip the
+			// embedded gain map. Filterable for pipelines that want them.
+			if ( ! apply_filters( 'wppo_convert_gain_map_images', false ) && $this->is_gain_map_image( $source_image ) ) {
+				$this->update_conversion_status( $source_image, 'skipped', $format );
+				return false;
 			}
 
 			// Skip WebP conversion when WP 6.7+ core handles it natively.
@@ -393,30 +420,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 				$this->update_conversion_status( $source_image, 'failed', $format );
 				return false;
-			}
-
-			// Resolve the default encode quality now that the source dimensions
-			// are known. WP 7.1+ exposes wp_get_image_encode_quality(), which
-			// resolves the effective quality per MIME type and size (honoring
-			// the size-aware wp_editor_set_quality and legacy jpeg_quality
-			// filters). WP 6.7-7.0 falls back to wp_image_quality();
-			// WP < 6.7 falls back to the plugin default (82).
-			$size = array(
-				'width'  => $image_info[0],
-				'height' => $image_info[1],
-			);
-
-			if ( -1 === $quality ) {
-				if ( 'both' === $format ) {
-					$avif_quality = self::resolve_encode_quality( 'image/avif', $size );
-					$webp_quality = self::resolve_encode_quality( 'image/webp', $size );
-				} else {
-					$mime    = in_array( $format, array( 'avif', 'both' ), true ) ? 'image/avif' : 'image/webp';
-					$quality = self::resolve_encode_quality( $mime, $size );
-				}
-			}
-			if ( -1 === $quality ) {
-				$quality = 82;
 			}
 
 			$image_type = $image_info[2];
