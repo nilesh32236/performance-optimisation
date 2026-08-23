@@ -340,6 +340,46 @@ if ( ! class_exists( 'WP_HTML_Processor' ) ) {
 		}
 
 		/**
+		 * Create a fragment parser for the given HTML.
+		 *
+		 * Mirrors WP 6.9 WP_HTML_Processor::create_fragment().
+		 *
+		 * @param string $html The HTML fragment.
+		 * @return WP_HTML_Processor|null A parser instance, or null on failure.
+		 */
+		public static function create_fragment( $html ) {
+			return new self( (string) $html );
+		}
+
+		/**
+		 * Get the current nesting depth.
+		 *
+		 * Stub implementation increments for every opening tag and decrements
+		 * for closers so that children of <picture> report a deeper depth than
+		 * the picture itself, matching the expectation in process_picture_tag().
+		 *
+		 * @return int|null The depth, or null when no token is active.
+		 */
+		public function get_current_depth() {
+			if ( ! isset( $this->tokens[ $this->cursor ] ) ) {
+				return null;
+			}
+			$depth = 0;
+			for ( $i = 0; $i <= $this->cursor; $i++ ) {
+				$token = $this->tokens[ $i ];
+				if ( '#tag' !== $token['type'] ) {
+					continue;
+				}
+				if ( ! empty( $token['closer'] ) ) {
+					$depth = max( 0, $depth - 1 );
+				} else {
+					++$depth;
+				}
+			}
+			return $depth;
+		}
+
+		/**
 		 * Move the cursor to the next token (text or tag).
 		 *
 		 * @return bool True while tokens remain.
