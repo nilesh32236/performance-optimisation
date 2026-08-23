@@ -198,11 +198,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * This filter is only registered when the override toggle is enabled.
 		 * The stored selection becomes the set of formats the in-browser Web
 		 * Worker should process, intersected with the formats core reports it
-		 * can support so an unsupported selection (e.g. HEIC on a build without
-		 * a decoder) can never shadow core's authoritative list. A non-array
-		 * stored value leaves core's default list untouched (graceful
-		 * degradation); an enabled override with an empty selection returns an
-		 * empty list, which disables browser-side processing entirely.
+		 * can support so an unsupported selection (e.g. HEIC/JXL on a build
+		 * without a wasm-vips decoder) can never shadow core's authoritative
+		 * list. A non-array stored value leaves core's default list untouched
+		 * (graceful degradation); an enabled override with an empty selection
+		 * returns an empty list, which disables browser-side processing
+		 * entirely (core supports empty list). Future decoders (HEIC Sequence,
+		 * JPEG XL) are additive via the same intersection — the UI surfaces
+		 * them but core's list gates availability.
 		 *
 		 * @since NEXT
 		 *

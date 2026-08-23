@@ -23,6 +23,8 @@ const CLIENT_SIDE_MIME_OPTIONS = [
 	{ value: 'image/avif', label: 'AVIF' },
 	{ value: 'image/heic', label: 'HEIC' },
 	{ value: 'image/heif', label: 'HEIF' },
+	{ value: 'image/heic-sequence', label: 'HEIC Sequence' },
+	{ value: 'image/jxl', label: 'JPEG XL' },
 ];
 
 const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
@@ -604,7 +606,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									'performance-optimisation'
 								) }
 								description={ __(
-									'Control which image formats WordPress 7.1+ client-side media processing handles in the browser. Disable AVIF to avoid duplicating this plugin’s AVIF output, or add HEIC/HEIF for direct browser conversion. Only applies on WordPress 7.1+; older versions are unaffected.',
+									'Control which image formats WordPress 7.1+ client-side media processing handles in the browser. Disable AVIF to avoid duplicating this plugin’s AVIF output, or add HEIC/HEIF/HEIC Sequence/JPEG XL when the browser decoder is available (wasm-vips 7.1+ feature plugin). Only applies on WordPress 7.1+; older versions are unaffected and unsupported formats are ignored via intersection with core.',
 									'performance-optimisation'
 								) }
 								name="clientSideMimeTypeOverride"
@@ -662,7 +664,7 @@ const ImageOptimization = ( { options = {} } ) => {
 									} )() }
 									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 										{ __(
-											'Unchecking a format makes the browser skip it during upload, falling back to server-side processing. Unchecking every format disables browser-side processing. Formats core cannot process are ignored.',
+											'Unchecking a format makes the browser skip it during upload, falling back to server-side processing. Unchecking every format disables browser-side processing (empty list is supported by core). Formats core cannot process are ignored — HEIC/HEIC Sequence/JPEG XL appear only when this build\u2019s wasm-vips includes that decoder; JPEG is always safe.',
 											'performance-optimisation'
 										) }
 									</p>
