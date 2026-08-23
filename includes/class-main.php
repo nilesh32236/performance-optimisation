@@ -2089,7 +2089,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * off (so core's WP 7.1 cached-site escalation cannot change behavior
 		 * behind the user's back).
 		 *
-		 * @since 1.9.0
+		 * Effective defaults are `prefetch` + `conservative` unless overridden
+		 * via WP_SPECULATIVE_LOADING_DEFAULT_MODE / _EAGERNESS (WP 7.1,
+		 * wp_get_speculation_rules_default_configuration()). The
+		 * wp_speculation_rules_configuration filter (used here) takes precedence
+		 * over host constants (see filter_speculation_rules_configuration()).
+		 * No auto-elevation to `moderate` is assumed — it must be chosen
+		 * explicitly in the UI.
+		 *
+		 * @since NEXT
 		 *
 		 * @return void
 		 */
