@@ -402,6 +402,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// stay consistent about which styles belong in the file.
 			$eligible_handles = $this->get_combined_handles( $styles, $exclude_combine_css );
 
+			// On small block-theme bundles core's 40KB inline budget (WP 6.9+)
+			// already inlines the eligible styles cheaply — skip creating the
+			// combined file and let core inline instead (one fewer request).
+			if ( $this->should_skip_combine_for_inline_budget( $eligible_handles ) ) {
+				return;
+			}
+
 			// Reuse cached CSS only if it is still fresh (no source file is newer and
 			// the set of combined handles is unchanged).
 			$css_file_path = $this->get_cache_file_path( 'css', '', $css_variant );
@@ -1032,6 +1039,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function inline_candidates_require_readable(): bool {
 			return ! isset( $GLOBALS['wp_version'] ) || version_compare( $GLOBALS['wp_version'], '7.0', '>=' );
+		}
+
+		/**
+		 * Whether the combined-CSS file should be skipped on small block-theme bundles.
+		 *
+		 * On block themes with a small total payload (≤ styles_inline_size_limit,
+		 * 40KB on WP 6.9+) core's greedy smallest-first inline budget will already
+		 * inline the eligible styles at their queue positions. Creating a combined
+		 * file would add an extra request without benefit, so it is skipped and the
+		 * styles are left enqueued for core to inline. Classic themes always combine.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $eligible_handles Handles that would be combined.
+		 * @return bool True when combining should be skipped.
+		 */
+		private function should_skip_combine_for_inline_budget( array $eligible_handles ): bool {
+			if ( empty( $eligible_handles ) ) {
+				return false;
+			}
+			if ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) {
+				return false;
+			}
+			$limit = $this->get_styles_inline_limit();
+			/**
+			 * Filter whether to skip the combined-CSS file on small block-theme bundles.
+			 *
+			 * @since NEXT
+			 *
+			 * @param bool     $skip             Whether to skip combining (default true on block themes with small bundles).
+			 * @param string[] $eligible_handles The handles that would be combined.
+			 * @param int      $limit            The current styles_inline_size_limit in bytes.
+			 */
+			if ( ! apply_filters( 'wppo_skip_combine_on_small_block_theme', true, $eligible_handles, $limit ) ) {
+				return false;
+			}
+			global $wp_styles;
+			$total = 0;
+			foreach ( $eligible_handles as $handle ) {
+				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+					continue;
+				}
+				$src = (string) ( $wp_styles->registered[ $handle ]->src ?? '' );
+				if ( '' === $src ) {
+					continue;
+				}
+				$path = Util::get_local_path( $src );
+				if ( '' === $path || ! is_readable( $path ) ) {
+					// Unreadable/remote styles cannot be measured — do not skip.
+					return false;
+				}
+				$size = filesize( $path );
+				if ( false === $size ) {
+					return false;
+				}
+				if ( $size > $limit ) {
+					// A single handle exceeds the inline limit — core cannot inline it, so combine remains useful.
+					return false;
+				}
+				$total += (int) $size;
+				if ( $total > $limit ) {
+					return false;
+				}
+			}
+			return $total > 0 && $total <= $limit;
 		}
 
 		/**
