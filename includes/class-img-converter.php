@@ -178,7 +178,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * chain (flat helper, then the plugin fallback) rather than encoding at
 		 * quality 0. This means an invalid result from the size-aware helper can
 		 * be satisfied by a valid flat `wp_image_quality()` value before the
-		 * plugin fallback is reached.
+		 * plugin fallback is reached. Size-aware: $size is passed through to
+		 * wp_get_image_encode_quality() (WP 7.1+) so per-size quality filters
+		 * are honoured.
 		 *
 		 * @since NEXT
 		 *
@@ -294,6 +296,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 		/**
 		 * Convert a source image into WebP and/or AVIF and record conversion status.
+		 *
+		 * Note on HDR / bit depth (WP 6.8+, Trac #62285): Do not hard-clamp
+		 * Imagick depth to 8-bit (e.g. setImageDepth(8)). Core's
+		 * `image_max_bit_depth` filter preserves HDR up to 12-bit by default
+		 * and applies via `apply_filters('image_max_bit_depth', $max_depth, $original_depth)`.
+		 * GD paths remain fixed-depth (acceptable). The Imagick GIF→WebP branch
+		 * below intentionally does not call setImageDepth()/setDepth().
+		 * Per-size quality is resolved via resolve_encode_quality() with the
+		 * source dimensions so wp_get_image_encode_quality() (WP 7.1+) is
+		 * size-aware. Core's wp_prevent_unsupported_mime_type_uploads handles
+		 * AVIF/WebP upload blocking — no custom blocking needed.
 		 *
 		 * Attempts to create converted files for the requested format(s) and updates the plugin's conversion status store (`wppo_img_info`) to reflect `pending`, `completed`, or `failed` outcomes.
 		 *
@@ -536,6 +549,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 								return true;
 							}
 							// Initialize Imagick and read the image file.
+							// Do not hard-clamp Imagick depth to 8-bit — core's
+							// image_max_bit_depth filter (WP 6.8+, Trac #62285)
+							// preserves HDR up to 12-bit by default.
 							$imagick = new \Imagick();
 							$imagick->setResourceLimit( \Imagick::RESOURCETYPE_MEMORY, 256 * 1024 * 1024 );
 							$imagick->readImage( $source_image );
