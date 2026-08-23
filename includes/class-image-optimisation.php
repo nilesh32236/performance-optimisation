@@ -429,7 +429,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
 			}
 
-			$create = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
+			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
 			$processor = \WP_HTML_Processor::$create( $buffer );
 			if ( null === $processor ) {
 				return $this->process_picture_blocks_regex( $buffer, $img_counter, $exclude_img_count, $exclude_imgs );
