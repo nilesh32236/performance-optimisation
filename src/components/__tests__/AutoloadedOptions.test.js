@@ -41,8 +41,8 @@ describe( 'AutoloadedOptions', () => {
 		expect( screen.getByText( '4.9 KB' ) ).toBeInTheDocument();
 		expect( screen.getByText( '10 B' ) ).toBeInTheDocument();
 		expect( apiCall ).toHaveBeenCalledWith(
-			'autoloaded_options',
-			{ limit: 20 },
+			'autoloaded_options?limit=20',
+			{},
 			'GET'
 		);
 	} );

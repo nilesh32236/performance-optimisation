@@ -679,11 +679,7 @@ const ObjectCache = ( { options = {} } ) => {
 							</select>
 							<p
 								id="compression-desc"
-								className="wppo-text-muted"
-								style={ {
-									marginTop: '12px',
-									fontSize: '13px',
-								} }
+								className="wppo-text-muted wppo-mt-12 wppo-text-small"
 							>
 								{ __(
 									'Reduces memory footprint for enterprise caches.',

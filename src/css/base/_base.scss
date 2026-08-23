@@ -20,6 +20,7 @@
 }
 
 /* Utility spacing */
+.wppo-mt-8 { margin-top: 8px; }
 .wppo-mt-10 { margin-top: 10px; }
 .wppo-mt-12 { margin-top: 12px; }
 .wppo-mt-16 { margin-top: 16px; }
@@ -29,6 +30,8 @@
 .wppo-mt-40 { margin-top: 40px; }
 .wppo-mb-16 { margin-bottom: 16px; }
 .wppo-mb-20 { margin-bottom: 20px; }
+.wppo-mr-8 { margin-right: 8px; }
+.wppo-mr-6 { margin-right: 6px; }
 .wppo-text-small { font-size: 13px; }
 .wppo-text-13 { font-size: 13px; }
 .wppo-text-muted { color: var(--wppo-text-muted); }
@@ -40,6 +43,11 @@
 	gap: 8px;
 	padding: 20px;
 	color: var(--wppo-text-muted);
+}
+
+.wppo-loading-placeholder--fallback {
+	min-height: 200px;
+	justify-content: center;
 }
 
 .wppo-nginx-rules {

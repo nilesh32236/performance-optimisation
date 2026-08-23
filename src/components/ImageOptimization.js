@@ -850,9 +850,10 @@ const ImageOptimization = ( { options = {} } ) => {
 										id="preloadFrontPageImagesUrls-desc"
 										className="wppo-text-muted wppo-mt-10 wppo-text-small"
 									>
-										One URL per line. Only add
-										above-the-fold images — preloading too
-										many images can hurt performance.
+										{ __(
+											'One URL per line. Only add above-the-fold images — preloading too many images can hurt performance.',
+											'performance-optimisation'
+										) }
 									</p>
 								</div>
 							) }
