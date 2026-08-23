@@ -1695,6 +1695,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Applies defer strategy to non-logged-in users' scripts using wp_script_add_data.
 		 *
+		 * On WP 6.9+ deferred handles also receive native fetchpriority/in_footer
+		 * args via the Script Loader API (Trac #61734 / #63486) so core renders
+		 * them with dependency bumping; the regex fallback
+		 * add_fetchpriority_to_deferred() stays disabled on 6.9+ via setup_hooks().
+		 *
 		 * @since NEXT
 		 *
 		 * @return void
@@ -1713,11 +1718,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
+			$is_wp69_plus = version_compare( (string) get_bloginfo( 'version' ), '6.9-alpha', '>=' );
+
 			foreach ( $wp_scripts->queue as $handle ) {
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {
 					wp_script_add_data( $handle, 'strategy', 'defer' );
 					$this->deferred_handles[ $handle ] = true;
-					wp_script_add_data( $handle, 'fetchpriority', 'low' );
+					// Native fetchpriority on WP 6.9+ (Trac #61734); pre-6.9 is handled
+					// by the script_loader_tag regex fallback (add_fetchpriority_to_deferred).
+					if ( $is_wp69_plus ) {
+						wp_script_add_data( $handle, 'fetchpriority', 'low' );
+						// Optional native in_footer for Script Modules on 6.9+ (Trac #63486).
+						// Guarded — no-op on older core or when the API is absent.
+						if ( class_exists( 'WP_Script_Modules' ) && method_exists( 'WP_Script_Modules', 'set_in_footer' ) ) {
+							// Non-critical deferred handles are safe to move to footer.
+							wp_script_add_data( $handle, 'in_footer', true );
+						}
+					} else {
+						// Keep low fetchpriority via data for forward compat; core <6.9
+						// silently ignores unknown keys, regex fallback renders it.
+						wp_script_add_data( $handle, 'fetchpriority', 'low' );
+					}
 				}
 			}
 		}
