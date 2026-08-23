@@ -459,7 +459,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// cache-miss generation passes; cached responses served by advanced-cache.php never boot WordPress.
 			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $this->server_timing_enabled() ) {
 				add_action( 'template_redirect', array( $this, 'capture_template_start' ), 0 );
-				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 0 );
+				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 1 );
 			}
 
 			// Standalone used-CSS output buffer when page cache is disabled.
@@ -1118,12 +1118,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * Emit a Server-Timing response header on live front-end renders (WP 6.9+).
 		 *
 		 * Runs on wp_finalized_template_enhancement_output_buffer, the last hook
-		 * before the response is sent, so header() is still valid.
+		 * before the response is sent, so header() is still valid. Accepts the
+		 * finalized output buffer for future ETag/late-header use.
 		 *
+		 * Note: registering this action opts the template-enhancement output buffer
+		 * in, which disables response streaming and increases TTFB while the header
+		 * is enabled. Keep requiring WP 6.9+ for this path.
+		 *
+		 * @param string $output The finalized output buffer content (for future ETag/late-header use).
 		 * @return void
-		 * @since 1.9.0
+		 * @since NEXT
 		 */
-		public function emit_server_timing_header(): void {
+		public function emit_server_timing_header( string $output = '' ): void { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Reserved for future ETag hashing without re-registration.
 			if ( ! $this->server_timing_enabled() || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
 				return;
 			}
