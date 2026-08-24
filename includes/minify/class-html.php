@@ -112,11 +112,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				array( 'wppo-lazyload', 'data-wppo-preserve' ),
 				Util::process_urls( $this->options['file_optimisation']['excludeDelayJS'] ?? array() )
 			);
-			$this->exclude_delay_js = array_values( array_filter( $this->exclude_delay_js, 'strlen' ) );
+			$this->exclude_delay_js = array_values(
+				array_filter(
+					$this->exclude_delay_js,
+					static function ( mixed $val ): bool {
+						return is_string( $val ) && '' !== $val;
+					}
+				)
+			);
 
 			// Cache delay JS strategy lists, filtering empty strings to avoid strpos('', $x) matching everything.
-			$this->delay_js_idle_list        = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() ), 'strlen' ) );
-			$this->delay_js_viewport_list    = array_values( array_filter( (array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() ), 'strlen' ) );
+			$this->delay_js_idle_list        = array_values(
+				array_filter(
+					(array) Util::process_urls( $this->options['file_optimisation']['delayJSIdleList'] ?? array() ),
+					static function ( mixed $val ): bool {
+						return is_string( $val ) && '' !== $val;
+					}
+				)
+			);
+			$this->delay_js_viewport_list    = array_values(
+				array_filter(
+					(array) Util::process_urls( $this->options['file_optimisation']['delayJSViewportList'] ?? array() ),
+					static function ( mixed $val ): bool {
+						return is_string( $val ) && '' !== $val;
+					}
+				)
+			);
 			$this->delay_js_default_strategy = ! empty( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 				? sanitize_text_field( $this->options['file_optimisation']['delayJSDefaultStrategy'] )
 				: 'interaction';
@@ -228,6 +249,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		}
 
 		/**
+		 * Extract the script type from attributes string.
+		 *
+		 * @param string $attributes The script attributes string.
+		 * @return string The extracted and lowercased script type, or an empty string.
+		 * @since NEXT
+		 */
+		private function get_script_type( string $attributes ): string {
+			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
+				$type = '' !== $type_matches[2] ? $type_matches[2] : $type_matches[3];
+				return strtolower( trim( $type ) );
+			}
+			return '';
+		}
+
+		/**
 		 * Modify the canonical link in HTML.
 		 *
 		 * @param string $html The HTML content.
@@ -262,10 +298,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 					$attributes = $matches[1];
 
 					// Support quoted, unquoted, and empty values using regex and fallback extraction.
-					if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-						$type = isset( $type_matches[3] ) ? $type_matches[3] : ( $type_matches[2] ?? '' );
-						$type = strtolower( trim( $type ) );
-
+					if ( preg_match( '/\btype\s*=/i', $attributes ) ) {
+						$type          = $this->get_script_type( $attributes );
 						$exclude_types = array( 'text/javascript', 'application/ld+json', 'module', 'importmap' );
 						if ( ! in_array( $type, $exclude_types, true ) ) {
 							$scripts[] = $matches[0];
@@ -370,12 +404,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$content = trim( $content );
 
 			// Support quoted, unquoted, and empty values using regex and fallback extraction.
-			$type_matches = array();
-			$script_type  = '';
-			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-				$script_type = isset( $type_matches[3] ) ? $type_matches[3] : ( $type_matches[2] ?? '' );
-				$script_type = strtolower( trim( $script_type ) );
-			}
+			$script_type = $this->get_script_type( $attributes );
 
 			if ( 'application/ld+json' === $script_type || 'application/json' === $script_type ) {
 				return $this->preserve_json_ld( $content, $attributes );
