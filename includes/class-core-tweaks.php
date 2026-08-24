@@ -264,16 +264,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		/**
 		 * Suppress the Link REST response header.
 		 *
-		 * @param bool              $served  Whether the request has already been served.
-		 * @param \WP_REST_Response $result Result object.
-		 * @return bool
+		 * @param \WP_REST_Response $result  Result object.
+		 * @param \WP_REST_Server   $server  Server instance.
+		 * @param \WP_REST_Request  $request Request used to generate the response.
+		 * @return \WP_REST_Response
 		 */
-		public function suppress_rest_header( $result, $server, $request = null ) {
+		public function suppress_rest_header( $result, $server, $request = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found,Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Filter signature requires all 3 params; only $result is used.
 			if ( $result instanceof \WP_REST_Response ) {
 				// WP_REST_Response has no remove_header() (that lives on WP_REST_Server),
 				// so rewrite the header list without Link (case-insensitive).
 				$headers = $result->get_headers();
-				$found = false;
+				$found   = false;
 				foreach ( array_keys( $headers ) as $key ) {
 					if ( 'link' === strtolower( $key ) ) {
 						unset( $headers[ $key ] );
