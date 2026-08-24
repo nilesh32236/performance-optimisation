@@ -325,11 +325,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		 */
 		private function minify_inline_css( string $html ): string {
 			$html = preg_replace_callback(
-				'#<style\b[^>]*>(.*?)</style>#is',
+				'#<style\b([^>]*)>(.*?)</style>#is',
 				function ( $matches ) {
 					try {
-						$css_minifier = new CSSMinifier( $matches[1] );
-						return '<style>' . $css_minifier->minify() . '</style>';
+						$css_minifier = new CSSMinifier( $matches[2] );
+						return '<style' . $matches[1] . '>' . $css_minifier->minify() . '</style>';
 					} catch ( \Exception $e ) {
 						// Return original content if there's an error.
 						return $matches[0];
