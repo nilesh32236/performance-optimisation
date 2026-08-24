@@ -1,6 +1,11 @@
+includes:
+    - vendor/szepeviktor/phpstan-wordpress/extension.neon
 parameters:
+    bootstrapFiles:
+        - performance-optimisation.php
     level: 5
     paths:
-        - includes
-    bootstrapFiles:
-        - vendor/php-stubs/wordpress-stubs/wordpress-stubs.php
+        - includes/
+    treatPhpDocTypesAsCertain: false
+    ignoreErrors:
+        - '#Offset 2 on array.* on left side of \?\? always exists and is not nullable.#'
