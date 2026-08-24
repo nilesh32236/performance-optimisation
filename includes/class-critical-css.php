@@ -941,6 +941,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 					);
 					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'pending', HOUR_IN_SECONDS );
 				}
+				// Synchronous fallback for localhost/subdirectory where cron/Action Scheduler
+				// cannot persist (e.g., Redis object-cache breaking wp_cron option saves).
+				// Generate inline on this request so the page is still optimized.
+				$url = self::get_sample_url( $template_slug );
+				if ( $url ) {
+					$css = self::generate( $url );
+					if ( false !== $css && '' !== trim( (string) $css ) ) {
+						$dir = self::get_ccss_dir();
+						if ( ! is_dir( $dir ) ) {
+							wp_mkdir_p( $dir );
+						}
+						$file_tmp = self::get_ccss_file( $template_hash );
+						if ( file_put_contents( $file_tmp, $css ) ) {
+							set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'ready', WEEK_IN_SECONDS );
+							echo '<style id="wppo-critical-css">' . "
+" . self::sanitize_inline_css( $css ) . "
+" . '</style>' . "
+";
+						}
+					}
+				}
 			}
 		}
 
