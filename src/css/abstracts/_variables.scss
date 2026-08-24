@@ -49,15 +49,23 @@
 	--wppo-danger: #dc2626;
 	--wppo-danger-hover: #b91c1c;
 
+	/* Per-card accent (premium palette) */
+	--wppo-accent-cache: #0ea5e9;
+	--wppo-accent-files: #8b5cf6;
+	--wppo-accent-db: #f59e0b;
+	--wppo-accent-images: #10b981;
+
 	/* Effects */
-	--wppo-radius: 10px;
-	--wppo-radius-sm: 8px;
+	--wppo-radius: 16px;
+	--wppo-radius-sm: 10px;
 	--wppo-radius-xs: 6px;
 	--wppo-focus-ring: 0 0 0 3px var(--wppo-primary-soft);
-	--wppo-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
-	--wppo-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
-	--wppo-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
-	--wppo-shadow-premium: 0 0 0 1px rgba(34, 113, 177, 0.08), 0 8px 24px -4px rgba(34, 113, 177, 0.12);
+	--wppo-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+	--wppo-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.09), 0 2px 8px -2px rgb(0 0 0 / 0.06);
+	--wppo-shadow-lg: 0 12px 24px -6px rgb(0 0 0 / 0.12), 0 4px 12px -4px rgb(0 0 0 / 0.07);
+	--wppo-shadow-premium: 0 0 0 1px rgba(34, 113, 177, 0.1), 0 12px 32px -8px rgba(34, 113, 177, 0.18);
+	--wppo-shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06), 0 10px 32px -14px rgba(0, 0, 0, 0.11);
+	--wppo-shadow-card-hover: 0 6px 20px rgba(0, 0, 0, 0.09), 0 18px 40px -18px rgba(0, 0, 0, 0.14);
 
 	--wppo-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 	--wppo-max-width: 1120px;

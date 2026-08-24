@@ -32,6 +32,7 @@ import {
 	faDatabase,
 	faImages,
 	faExclamationTriangle,
+	faBroom,
 } from '@fortawesome/free-solid-svg-icons';
 
 /**
@@ -591,7 +592,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				/>
 			) }
 			<FeatureHeader
-				title={ __( 'System Health', 'performance-optimisation' ) }
+				title={
+					<>
+						<span className="wppo-health-dot" aria-hidden="true">
+							●
+						</span>
+						{ __( 'System Health', 'performance-optimisation' ) }
+					</>
+				}
 				description={ __(
 					'Real-time performance overview and quick optimisation actions.',
 					'performance-optimisation'
@@ -599,13 +607,23 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				status={ <></> }
 				actions={
 					<LoadingSubmitButton
+						type="button"
 						className="wppo-button wppo-button--primary"
 						onClick={ onClearCache }
 						isLoading={ loading.clear_cache }
-						label={ __(
-							'Purge All Cache',
-							'performance-optimisation'
-						) }
+						label={
+							<>
+								<FontAwesomeIcon
+									icon={ faBroom }
+									aria-hidden="true"
+									style={ { marginRight: '8px' } }
+								/>
+								{ __(
+									'Purge All Cache',
+									'performance-optimisation'
+								) }
+							</>
+						}
 						loadingLabel={ __(
 							'Purging…',
 							'performance-optimisation'
@@ -617,12 +635,11 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			<WelcomePanel />
 
 			{ isCacheMissing && (
-				<div className="wppo-notice wppo-notice--warning" role="alert">
-					<FontAwesomeIcon
-						icon={ faExclamationTriangle }
-						aria-hidden="true"
-					/>
-					<span>
+				<div className="wppo-banner wppo-banner--warning" role="alert">
+					<span className="wppo-banner__icon" aria-hidden="true">
+						<FontAwesomeIcon icon={ faExclamationTriangle } />
+					</span>
+					<span className="wppo-banner__text">
 						{ __(
 							'Cache directory not found.',
 							'performance-optimisation'
@@ -630,7 +647,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					</span>
 					<button
 						type="button"
-						className="wppo-button wppo-button--secondary wppo-button--sm"
+						className="wppo-button wppo-button--primary wppo-button--sm"
 						onClick={ () => onNavigate( 'fileOptimization' ) }
 					>
 						{ __( 'Fix Now', 'performance-optimisation' ) }
@@ -639,29 +656,48 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			) }
 			{ /* Quick-stat overview strip */ }
 			<div className="wppo-stats-grid">
-				<div className="wppo-stat-item">
+				<div className="wppo-stat-item wppo-stat-item--cache">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
 							{ __( 'CACHE SIZE', 'performance-optimisation' ) }
 						</span>
-						<span className="wppo-stat-icon">
-							<FontAwesomeIcon
-								icon={ faServer }
-								aria-hidden="true"
-							/>
+						<span className="wppo-stat-icon" aria-hidden="true">
+							<FontAwesomeIcon icon={ faServer } />
 						</span>
 					</div>
-					<span className="wppo-stat-value">{ cacheSizeValue }</span>
+					<span
+						className={
+							isCacheMissing
+								? 'wppo-stat-value wppo-stat-value--muted'
+								: 'wppo-stat-value'
+						}
+					>
+						{ cacheSizeValue }
+					</span>
 					<span className="wppo-stat-unit">
-						{ cacheSizeUnit }
-						{ isCacheMissing && (
-							<span className="wppo-status-badge wppo-status-badge--poor">
-								{ __(
-									'Not cached',
-									'performance-optimisation'
-								) }
-							</span>
-						) }
+						{
+							// eslint-disable-next-line no-nested-ternary
+							isCacheMissing ? (
+								<>
+									{ cacheSizeUnit } •{ ' ' }
+									<span className="wppo-status-badge wppo-status-badge--poor">
+										{ __(
+											'Not cached',
+											'performance-optimisation'
+										) }
+									</span>
+								</>
+							) : cacheSizeUnit ? (
+								cacheSizeUnit
+							) : (
+								<span className="wppo-text-muted wppo-text-small">
+									{ __(
+										'Ready',
+										'performance-optimisation'
+									) }
+								</span>
+							)
+						}
 					</span>
 					<div className="wppo-stat-footer">
 						<button
@@ -673,7 +709,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						</button>
 					</div>
 				</div>
-				<div className="wppo-stat-item">
+				<div className="wppo-stat-item wppo-stat-item--files">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
 							{ __(
@@ -681,20 +717,18 @@ const Dashboard = ( { activities, onNavigate } ) => {
 								'performance-optimisation'
 							) }
 						</span>
-						<span className="wppo-stat-icon">
-							<FontAwesomeIcon
-								icon={ faFileCode }
-								aria-hidden="true"
-							/>
+						<span className="wppo-stat-icon" aria-hidden="true">
+							<FontAwesomeIcon icon={ faFileCode } />
 						</span>
 					</div>
 					<span className="wppo-stat-value">
 						{ optimizedFilesCount }
 					</span>
 					<span className="wppo-stat-unit">
-						{ __( 'files', 'performance-optimisation' ) }{ ' ' }
+						{ __( 'files', 'performance-optimisation' ) }
 						<span className="wppo-text-muted wppo-text-small">
-							{ __( '• 0 KB saved', 'performance-optimisation' ) }
+							{ ' ' }
+							• 0 KB saved
 						</span>
 					</span>
 					<div className="wppo-stat-footer">
@@ -707,16 +741,13 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						</button>
 					</div>
 				</div>
-				<div className="wppo-stat-item">
+				<div className="wppo-stat-item wppo-stat-item--db">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
 							{ __( 'DB OVERHEAD', 'performance-optimisation' ) }
 						</span>
-						<span className="wppo-stat-icon">
-							<FontAwesomeIcon
-								icon={ faDatabase }
-								aria-hidden="true"
-							/>
+						<span className="wppo-stat-icon" aria-hidden="true">
+							<FontAwesomeIcon icon={ faDatabase } />
 						</span>
 					</div>
 					<span className="wppo-stat-value">{ dbOverheadCount }</span>
@@ -738,7 +769,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						</button>
 					</div>
 				</div>
-				<div className="wppo-stat-item">
+				<div className="wppo-stat-item wppo-stat-item--images">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
 							{ __(
@@ -746,14 +777,17 @@ const Dashboard = ( { activities, onNavigate } ) => {
 								'performance-optimisation'
 							) }
 						</span>
-						<span className="wppo-stat-icon">
-							<FontAwesomeIcon
-								icon={ faImages }
-								aria-hidden="true"
-							/>
+						<span className="wppo-stat-icon" aria-hidden="true">
+							<FontAwesomeIcon icon={ faImages } />
 						</span>
 					</div>
-					<span className="wppo-stat-value">
+					<span
+						className={
+							totalOptimizedPercent === null
+								? 'wppo-stat-value wppo-stat-value--muted'
+								: 'wppo-stat-value'
+						}
+					>
 						{ totalOptimizedPercent !== null
 							? `${ totalOptimizedPercent.toFixed( 0 ) }%`
 							: '—' }

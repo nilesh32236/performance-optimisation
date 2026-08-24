@@ -1,9 +1,37 @@
 @use '../abstracts/mixins' as *;
 
 .wppo-feature-header {
-	margin-bottom: 32px;
+	margin-bottom: 28px;
 	padding-bottom: 28px;
-	border-bottom: 1px solid var(--wppo-border);
+	border-bottom: 1px solid transparent;
+	position: relative;
+
+	&::after {
+		content: '';
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 1px;
+		background: linear-gradient(90deg, var(--wppo-border) 0%, rgba(226, 232, 240, 0) 100%);
+	}
+
+	// Premium hero for dashboard System Health
+	.wppo-dashboard-view > &:first-of-type {
+		background: linear-gradient(135deg, #ffffff 0%, #eef2ff 55%, #f0f9ff 100%);
+		border: 1px solid rgba(226, 232, 240, 0.9);
+		border-radius: 16px;
+		padding: 24px 28px 22px;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06), 0 10px 32px -14px rgba(79, 70, 229, 0.12);
+		margin-bottom: 22px;
+
+		&::after { display: none; }
+
+		.wppo-feature-header__title h2 {
+			font-size: 30px;
+			letter-spacing: -0.04em;
+		}
+	}
 
 	&__main {
 		display: flex;
@@ -19,24 +47,26 @@
 
 	&__title {
 		h2 {
-			font-size: 24px;
-			font-weight: 700;
-			margin: 0 0 6px 0;
+			font-size: 28px;
+			font-weight: 800;
+			margin: 0 0 8px 0;
 			letter-spacing: -0.03em;
 			color: var(--wppo-text-main);
-			line-height: 1.2;
+			line-height: 1.15;
+			display: inline-flex;
+			align-items: center;
 
 			@include respond-to('sm') {
-				font-size: 20px;
+				font-size: 22px;
 			}
 		}
 
 		p {
-			font-size: 14px;
+			font-size: 15px;
 			line-height: 1.6;
 			color: var(--wppo-text-muted);
 			margin: 0;
-			max-width: 600px;
+			max-width: 640px;
 		}
 	}
 
@@ -72,7 +102,7 @@
 
 	&__actions {
 		display: flex;
-		gap: 10px;
+		gap: 12px;
 		flex-shrink: 0;
 		flex-wrap: wrap;
 
