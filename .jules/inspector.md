@@ -57,3 +57,7 @@
 **Bug/Gap:** The `phpunit` test suite in `InlineCssTest.php` was failing with `MissingFunctionExpectations: "is_multisite" is not defined nor mocked in this test.`
 **Root Cause:** The `setUp()` method did not include mock definitions for `is_multisite`, `get_transient`, and `set_transient`, which are invoked by `Util::transient_key` when dealing with WordPress multisite checks inside `Cache` or `Util` classes.
 **Test Added:** Added mock definitions for `is_multisite`, `get_transient`, and `set_transient` to the `setUp()` method in `InlineCssTest.php` to satisfy BrainMonkey expectations.
+## 2026-08-18 - Fixed PHPStan HTML Minify Errors
+**Bug/Gap:** Static analysis errors in `class-html.php` for `strlen` used in `array_filter` and array offset extraction for `preg_match` results breaking type-safety constraints.
+**Root Cause:** PHP 8.1+ triggers deprecation warnings for `strlen(null)`, and the previous regex logic inverted extraction precedence, incorrectly checking the unquoted group 3 first rather than the quoted group 2.
+**Test Added:** Replaced `array_filter(..., 'strlen')` with strictly typed closures `static function (mixed $val): bool`. Corrected regex capture group extraction logic to explicitly prefer group 2 first and fallback to group 3: `$type = '' !== ($type_matches[2] ?? '') ? ($type_matches[2] ?? '') : ($type_matches[3] ?? '');`. Note: No unit tests were added in this PR as the scope was strictly constrained to static analysis type-safety fixes.
