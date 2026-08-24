@@ -760,6 +760,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						onChange={ ( e ) =>
 							setCdnPurgeService( e.target.value )
 						}
+						aria-describedby="cdnPurgeService-desc"
 					>
 						<option value="none">
 							{ __( 'None', 'performance-optimisation' ) }
@@ -771,7 +772,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							{ __( 'Varnish', 'performance-optimisation' ) }
 						</option>
 					</select>
-					<p className="wppo-text-muted wppo-text-small">
+					<p id="cdnPurgeService-desc" className="wppo-text-muted wppo-text-small">
 						{ __(
 							'Purge the edge cache whenever the plugin cache is cleared.',
 							'performance-optimisation'
@@ -799,8 +800,9 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							onChange={ ( e ) =>
 								setCloudflareZoneId( e.target.value )
 							}
+							aria-describedby="cloudflareZoneId-desc"
 						/>
-						<p className="wppo-text-muted wppo-text-small">
+						<p id="cloudflareZoneId-desc" className="wppo-text-muted wppo-text-small">
 							{ __(
 								'Define WPPO_CLOUDFLARE_API_TOKEN in wp-config.php with an API token that has Zone > Cache Purge permission. The token is never stored in the database.',
 								'performance-optimisation'
@@ -829,12 +831,13 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							onChange={ ( e ) =>
 								setVarnishPurgeUrls( e.target.value )
 							}
+							aria-describedby="varnishPurgeUrls-desc"
 							placeholder={ __(
 								'http://127.0.0.1:8081/purge',
 								'performance-optimisation'
 							) }
 						/>
-						<p className="wppo-text-muted wppo-text-small">
+						<p id="varnishPurgeUrls-desc" className="wppo-text-muted wppo-text-small">
 							{ __(
 								'One URL per line. Each receives a PURGE request on cache clear.',
 								'performance-optimisation'
