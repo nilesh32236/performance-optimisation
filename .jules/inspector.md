@@ -57,3 +57,7 @@
 **Bug/Gap:** The `phpunit` test suite in `InlineCssTest.php` was failing with `MissingFunctionExpectations: "is_multisite" is not defined nor mocked in this test.`
 **Root Cause:** The `setUp()` method did not include mock definitions for `is_multisite`, `get_transient`, and `set_transient`, which are invoked by `Util::transient_key` when dealing with WordPress multisite checks inside `Cache` or `Util` classes.
 **Test Added:** Added mock definitions for `is_multisite`, `get_transient`, and `set_transient` to the `setUp()` method in `InlineCssTest.php` to satisfy BrainMonkey expectations.
+## 2024-05-15 - Fixed PHPStan HTML Minify Errors
+**Bug/Gap:** Static analysis errors in `class-html.php` for `strlen` used in `array_filter` and redundant array offset coalescing for `preg_match` results.
+**Root Cause:** PHP 8.1+ triggers deprecation warnings for `strlen(null)`, and PHPStan correctly identifies that regex matches for later capture groups guarantee earlier groups exist as empty strings, making null coalescing redundant.
+**Test Added:** Replaced `array_filter(..., 'strlen')` with explicit `is_string($val) && '' !== $val` closures. Simplified regex capture group extraction logic to strictly compare against empty string `'' !== ($type_matches[3] ?? '') ? $type_matches[3] : $type_matches[2]`.
