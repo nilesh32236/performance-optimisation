@@ -978,15 +978,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return $tag;
 			}
 
-			$new_tag = str_replace(
-				'media=\'all\'',
-				'media=\'print\' onload=\'this.media="all"\' data-wppo-ccss=\'1\'',
-				$tag
-			);
-			$new_tag = str_replace(
-				'media="all"',
-				'media="print" onload=\'this.media="all"\' data-wppo-ccss="1"',
-				$new_tag
+			// Single regex avoids matching inside the JS string added by the first pass.
+			$new_tag = preg_replace(
+				'/\smedia\s*=\s*([\'"])all\1/i',
+				' media=\'print\' onload=\'this.media="all"\' data-wppo-ccss=\'1\'',
+				$tag,
+				1
 			);
 
 			$noscript = '<noscript>' . $tag . '</noscript>';
