@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7fc53332ec860d741f37da45966605c1",
+    "content-hash": "db830dc721456a93ee9c0bac857efced",
     "packages": [
         {
             "name": "matthiasmullie/minify",
@@ -131,20 +131,20 @@
         },
         {
             "name": "symfony/css-selector",
-            "version": "v8.1.5",
+            "version": "v7.4.17",
             "source": {
                 "type": "git",
                 "url": "https://github.com/symfony/css-selector.git",
-                "reference": "a291fb5adb65f52a4bb315db2d803698315dc64d"
+                "reference": "e3822e1cb7013a0a99b3c578130458927ec4eb89"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/symfony/css-selector/zipball/a291fb5adb65f52a4bb315db2d803698315dc64d",
-                "reference": "a291fb5adb65f52a4bb315db2d803698315dc64d",
+                "url": "https://api.github.com/repos/symfony/css-selector/zipball/e3822e1cb7013a0a99b3c578130458927ec4eb89",
+                "reference": "e3822e1cb7013a0a99b3c578130458927ec4eb89",
                 "shasum": ""
             },
             "require": {
-                "php": ">=8.4.1"
+                "php": ">=8.2"
             },
             "type": "library",
             "autoload": {
@@ -176,7 +176,7 @@
             "description": "Converts CSS selectors to XPath expressions",
             "homepage": "https://symfony.com",
             "support": {
-                "source": "https://github.com/symfony/css-selector/tree/v8.1.5"
+                "source": "https://github.com/symfony/css-selector/tree/v7.4.17"
             },
             "funding": [
                 {
@@ -196,7 +196,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-08-21T17:47:34+00:00"
+            "time": "2026-08-21T17:40:08+00:00"
         },
         {
             "name": "tedivm/jshrink",
@@ -2956,5 +2956,8 @@
         "php": ">=8.2"
     },
     "platform-dev": {},
+    "platform-overrides": {
+        "php": "8.2"
+    },
     "plugin-api-version": "2.9.0"
 }

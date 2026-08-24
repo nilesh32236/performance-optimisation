@@ -59,7 +59,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 
 			if ( ! empty( $this->settings['disableRestApiLinks'] ) ) {
 				add_action( 'wp_head', array( $this, 'remove_rest_api_links' ), 100 );
-				add_filter( 'rest_pre_serve_request', array( $this, 'suppress_rest_header' ), 10, 2 );
+				add_filter( 'rest_post_dispatch', array( $this, 'suppress_rest_header' ), 10, 3 );
 			}
 
 			if ( ! empty( $this->settings['disableRssFeeds'] ) ) {
@@ -262,23 +262,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		}
 
 		/**
-		 * Suppress the X-WP-Total / Link REST response headers on served requests.
+		 * Suppress the Link REST response header.
 		 *
 		 * @param bool              $served  Whether the request has already been served.
 		 * @param \WP_REST_Response $result Result object.
 		 * @return bool
 		 */
-		public function suppress_rest_header( $served, $result ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		public function suppress_rest_header( $result, $server, $request = null ) {
 			if ( $result instanceof \WP_REST_Response ) {
-				// WP_REST_Response has no remove_header() method (that lives on
-				// WP_REST_Server), so rewrite the header list without `Link`.
+				// WP_REST_Response has no remove_header() (that lives on WP_REST_Server),
+				// so rewrite the header list without Link (case-insensitive).
 				$headers = $result->get_headers();
-				if ( isset( $headers['Link'] ) ) {
-					unset( $headers['Link'] );
+				$found = false;
+				foreach ( array_keys( $headers ) as $key ) {
+					if ( 'link' === strtolower( $key ) ) {
+						unset( $headers[ $key ] );
+						$found = true;
+					}
+				}
+				if ( $found ) {
 					$result->set_headers( $headers );
 				}
 			}
-			return $served;
+			return $result;
 		}
 
 		/**
