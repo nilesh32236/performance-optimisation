@@ -249,6 +249,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 		}
 
 		/**
+		 * Extract the script type from attributes string.
+		 *
+		 * @param string $attributes The script attributes string.
+		 * @return string The extracted and lowercased script type, or an empty string.
+		 * @since NEXT
+		 */
+		private function get_script_type( string $attributes ): string {
+			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
+				$type = '' !== $type_matches[2] ? $type_matches[2] : ( $type_matches[3] ?? '' );
+				return strtolower( trim( $type ) );
+			}
+			return '';
+		}
+
+		/**
 		 * Modify the canonical link in HTML.
 		 *
 		 * @param string $html The HTML content.
@@ -282,11 +297,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 				function ( $matches ) use ( &$scripts ) {
 					$attributes = $matches[1];
 
-					// Support quoted, unquoted, and empty values using regex and fallback extraction.
-					if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-						$type = '' !== $type_matches[2] ? $type_matches[2] : ( $type_matches[3] ?? '' );
-						$type = strtolower( trim( $type ) );
+					$type = $this->get_script_type( $attributes );
 
+					// Support quoted, unquoted, and empty values using regex and fallback extraction.
+					if ( '' !== $type || preg_match( '/\btype\s*=/i', $attributes ) ) {
 						$exclude_types = array( 'text/javascript', 'application/ld+json', 'module', 'importmap' );
 						if ( ! in_array( $type, $exclude_types, true ) ) {
 							$scripts[] = $matches[0];
@@ -391,12 +405,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\HTML' ) ) {
 			$content = trim( $content );
 
 			// Support quoted, unquoted, and empty values using regex and fallback extraction.
-			$type_matches = array();
-			$script_type  = '';
-			if ( preg_match( '/\btype\s*=\s*(?:(["\'])(.*?)\1|([^\s>]+))/i', $attributes, $type_matches ) ) {
-				$script_type = '' !== $type_matches[2] ? $type_matches[2] : ( $type_matches[3] ?? '' );
-				$script_type = strtolower( trim( $script_type ) );
-			}
+			$script_type = $this->get_script_type( $attributes );
 
 			if ( 'application/ld+json' === $script_type || 'application/json' === $script_type ) {
 				return $this->preserve_json_ld( $content, $attributes );
