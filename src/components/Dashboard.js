@@ -692,9 +692,9 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						{ optimizedFilesCount }
 					</span>
 					<span className="wppo-stat-unit">
-						{ __( 'files', 'performance-optimisation' ) }
+						{ __( 'files', 'performance-optimisation' ) }{ ' ' }
 						<span className="wppo-text-muted wppo-text-small">
-							{ __( '0 KB saved', 'performance-optimisation' ) }
+							{ __( '• 0 KB saved', 'performance-optimisation' ) }
 						</span>
 					</span>
 					<div className="wppo-stat-footer">
