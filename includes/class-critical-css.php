@@ -943,7 +943,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				);
 				if ( $action_id ) {
 					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'pending', HOUR_IN_SECONDS );
-					return;
 				}
 				// Synchronous fallback only when async enqueue failed and we are on
 				// a local/dev host where cron is known to be broken.
