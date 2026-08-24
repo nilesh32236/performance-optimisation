@@ -933,14 +933,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
 				$hook = 'wppo_generate_ccss';
-				if ( ! as_next_scheduled_action( $hook, array( 'template_hash' => $template_hash ), 'performance_optimisation' ) ) {
-					as_enqueue_async_action(
-						$hook,
-						array( 'template_hash' => $template_hash ),
-						'performance_optimisation'
-					);
+				if ( as_next_scheduled_action( $hook, array( 'template_hash' => $template_hash ), 'performance_optimisation' ) ) {
+					return;
+				}
+				$action_id = as_enqueue_async_action(
+					$hook,
+					array( 'template_hash' => $template_hash ),
+					'performance_optimisation'
+				);
+				if ( $action_id ) {
 					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'pending', HOUR_IN_SECONDS );
 				}
+				// Synchronous fallback only when async enqueue failed and we are on
+				// a local/dev host where cron is known to be broken.
+				$home_url = home_url( '/' );
+				$is_local = ( false !== strpos( $home_url, 'localhost' ) || false !== strpos( $home_url, '127.0.0.1' ) || 'local' === wp_get_environment_type() );
+				if ( ! $is_local ) {
+					return;
+				}
+				$url = self::get_sample_url( $template_slug );
+				if ( ! $url ) {
+					return;
+				}
+				$css = self::generate( $url );
+				if ( false === $css || '' === trim( (string) $css ) || preg_match( '/<\/style|<script/i', (string) $css ) ) {
+					return;
+				}
+				$dir = self::get_ccss_dir();
+				$fs  = Util::init_filesystem();
+				if ( ! $fs ) {
+					return;
+				}
+				if ( ! $fs->is_dir( $dir ) && ! $fs->mkdir( $dir, FS_CHMOD_DIR ) ) {
+					return;
+				}
+				$file_tmp = self::get_ccss_file( $template_hash );
+				if ( ! $fs->put_contents( $file_tmp, $css, FS_CHMOD_FILE ) ) {
+					return;
+				}
+				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'ready', WEEK_IN_SECONDS );
+				echo '<style id="wppo-critical-css">' . PHP_EOL . self::sanitize_inline_css( $css ) . PHP_EOL . '</style>' . PHP_EOL; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS sanitized by sanitize_inline_css().
 			}
 		}
 
@@ -978,15 +1010,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return $tag;
 			}
 
-			$new_tag = str_replace(
-				'media=\'all\'',
-				'media=\'print\' onload=\'this.media="all"\' data-wppo-ccss=\'1\'',
-				$tag
-			);
-			$new_tag = str_replace(
-				'media="all"',
-				'media="print" onload=\'this.media="all"\' data-wppo-ccss="1"',
-				$new_tag
+			// Single regex avoids matching inside the JS string added by the first pass.
+			$new_tag = preg_replace(
+				'/\smedia\s*=\s*([\'"])all\1/i',
+				' media=\'print\' onload=\'this.media="all"\' data-wppo-ccss=\'1\'',
+				$tag,
+				1
 			);
 
 			$noscript = '<noscript>' . $tag . '</noscript>';

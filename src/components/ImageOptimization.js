@@ -215,7 +215,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										htmlFor="excludeFirstImages"
 									>
 										{ __(
-											'Exclude First X Images',
+											'Exclude First Images',
 											'performance-optimisation'
 										) }
 									</label>
@@ -326,7 +326,7 @@ const ImageOptimization = ( { options = {} } ) => {
 												) }
 										</option>
 									</select>
-									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+									<div className="wppo-help-box wppo-mt-10 wppo-text-small wppo-text-muted">
 										<strong>
 											{ __(
 												'None',
@@ -388,7 +388,7 @@ const ImageOptimization = ( { options = {} } ) => {
 												'20×20 blurred preview. Images must be re-optimized for LQIP to take effect.',
 												'performance-optimisation'
 											) }
-									</p>
+									</div>
 								</div>
 							</div>
 						) }
@@ -465,7 +465,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								) }
 							</label>
 							<textarea
-								className="wppo-textarea"
+								className="wppo-textarea wppo-textarea--mono"
 								id="excludeVideos"
 								name="excludeVideos"
 								rows="3"
@@ -574,7 +574,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										) }
 									</label>
 									<textarea
-										className="wppo-textarea"
+										className="wppo-textarea wppo-textarea--mono"
 										id="excludeConvertImages"
 										name="excludeConvertImages"
 										rows="2"
@@ -617,7 +617,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								<div className="wppo-mt-12">
 									<span className="wppo-field-label">
 										{ __(
-											'Formats to process in the browser',
+											'Formats to Process in the Browser',
 											'performance-optimisation'
 										) }
 									</span>
@@ -748,7 +748,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								) }
 							</label>
 							<input
-								className="wppo-input"
+								className="wppo-input wppo-textarea--mono"
 								id="excludeSize"
 								type="text"
 								name="excludeSize"
@@ -832,12 +832,12 @@ const ImageOptimization = ( { options = {} } ) => {
 										htmlFor="preloadFrontPageImagesUrls"
 									>
 										{ __(
-											'Frontpage Image URLs to Preload',
+											'Front Page Image URLs to Preload',
 											'performance-optimisation'
 										) }
 									</label>
 									<textarea
-										className="wppo-textarea"
+										className="wppo-textarea wppo-textarea--mono"
 										id="preloadFrontPageImagesUrls"
 										name="preloadFrontPageImagesUrls"
 										rows="3"
@@ -919,7 +919,7 @@ const ImageOptimization = ( { options = {} } ) => {
 											) }
 										</label>
 										<textarea
-											className="wppo-textarea"
+											className="wppo-textarea wppo-textarea--mono"
 											id="excludePostTypeImgUrl"
 											name="excludePostTypeImgUrl"
 											rows="2"
@@ -933,7 +933,17 @@ const ImageOptimization = ( { options = {} } ) => {
 											onChange={ handleChange(
 												setSettings
 											) }
+											aria-describedby="excludePostTypeImgUrl-desc"
 										/>
+										<p
+											id="excludePostTypeImgUrl-desc"
+											className="wppo-text-muted wppo-mt-10 wppo-text-small"
+										>
+											{ __(
+												'Partial URLs, one per line. Matching images will not be preloaded.',
+												'performance-optimisation'
+											) }
+										</p>
 									</div>
 								</>
 							) }

@@ -12,6 +12,45 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 import NoticeBanner from './common/NoticeBanner';
 
+const RISK_BADGE_MAP = {
+	revisions: {
+		level: 'success',
+		label: __( 'Safe', 'performance-optimisation' ),
+	},
+	expired_transients: {
+		level: 'success',
+		label: __( 'Safe', 'performance-optimisation' ),
+	},
+	oembed_cache: {
+		level: 'success',
+		label: __( 'Safe', 'performance-optimisation' ),
+	},
+	auto_drafts: {
+		level: 'warning',
+		label: __( 'Caution', 'performance-optimisation' ),
+	},
+	trashed_posts: {
+		level: 'warning',
+		label: __( 'Caution', 'performance-optimisation' ),
+	},
+	spam_comments: {
+		level: 'warning',
+		label: __( 'Caution', 'performance-optimisation' ),
+	},
+	trashed_comments: {
+		level: 'warning',
+		label: __( 'Caution', 'performance-optimisation' ),
+	},
+	unattached_media: {
+		level: 'warning',
+		label: __( 'Caution', 'performance-optimisation' ),
+	},
+	orphan_postmeta: {
+		level: 'error',
+		label: __( 'Review', 'performance-optimisation' ),
+	},
+};
+
 const CLEANUP_TYPES = [
 	{
 		key: 'revisions',
@@ -353,6 +392,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									value={ settings.dbRevMaxAge }
 									onChange={ handleChange( setSettings ) }
 									aria-describedby="dbRevMaxAge-desc"
+									style={ {
+										fontFamily:
+											'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+									} }
 								/>
 								<p
 									id="dbRevMaxAge-desc"
@@ -383,6 +426,10 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									value={ settings.dbRevKeepLatest }
 									onChange={ handleChange( setSettings ) }
 									aria-describedby="dbRevKeepLatest-desc"
+									style={ {
+										fontFamily:
+											'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+									} }
 								/>
 								<p
 									id="dbRevKeepLatest-desc"
@@ -441,7 +488,16 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				>
 					<div className="wppo-stat-hero">
 						<span className="wppo-stat-hero__value">
-							{ loadingCounts ? '...' : totalItems }
+							{ loadingCounts
+								? '…'
+								: `${ Number(
+										totalItems
+								  ).toLocaleString() } ${ _n(
+										'item',
+										'items',
+										totalItems,
+										'performance-optimisation'
+								  ) }` }
 						</span>
 						<span className="wppo-stat-hero__label">
 							{ __(
@@ -449,6 +505,23 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								'performance-optimisation'
 							) }
 						</span>
+						<p className="wppo-text-muted wppo-text-small wppo-mt-10">
+							{ totalItems === 0
+								? __(
+										'Your database is clean — no overhead items detected.',
+										'performance-optimisation'
+								  )
+								: sprintf(
+										/* translators: %d is the number of items that can be cleaned. */
+										_n(
+											'%d item can be safely removed to reclaim space.',
+											'%d items can be safely removed to reclaim space.',
+											totalItems,
+											'performance-optimisation'
+										),
+										totalItems
+								  ) }
+						</p>
 					</div>
 				</FeatureCard>
 			</div>
@@ -461,47 +534,75 @@ const DatabaseCleanup = ( { options = {} } ) => {
 					) }
 				</h4>
 				<div className="wppo-grid-2-col wppo-mt-20">
-					{ CLEANUP_TYPES.map( ( item ) => (
-						<FeatureCard
-							key={ item.key }
-							title={ item.label }
-							actions={
-								<LoadingSubmitButton
-									type="button"
-									className="wppo-button wppo-button--secondary wppo-button--sm"
-									onClick={ () =>
-										setConfirmDialog( {
-											isOpen: true,
-											type: item.key,
-											label: item.label,
-										} )
-									}
-									disabled={
-										( counts[ item.key ] || 0 ) === 0 ||
-										loading[ item.key ]
-									}
-									isLoading={ loading[ item.key ] }
-									label={ __(
-										'Clean',
-										'performance-optimisation'
-									) }
-									loadingLabel={ __(
-										'Cleaning',
-										'performance-optimisation'
-									) }
-								/>
-							}
-						>
-							<div className="wppo-cleanup-row">
-								<p className="wppo-text-muted wppo-cleanup-row__desc">
-									{ item.description }
-								</p>
-								<span className="wppo-cleanup-row__count">
-									{ counts[ item.key ] || 0 }
-								</span>
-							</div>
-						</FeatureCard>
-					) ) }
+					{ CLEANUP_TYPES.map( ( item ) => {
+						const risk = RISK_BADGE_MAP[ item.key ];
+						return (
+							<FeatureCard
+								key={ item.key }
+								title={ item.label }
+								actions={
+									<div
+										style={ {
+											display: 'flex',
+											alignItems: 'center',
+											gap: '8px',
+										} }
+									>
+										{ risk && (
+											<span
+												className={ `wppo-status-badge wppo-status-badge--${ risk.level }` }
+											>
+												{ risk.label }
+											</span>
+										) }
+										<LoadingSubmitButton
+											type="button"
+											className="wppo-button wppo-button--secondary wppo-button--sm"
+											onClick={ () =>
+												setConfirmDialog( {
+													isOpen: true,
+													type: item.key,
+													label: item.label,
+												} )
+											}
+											disabled={
+												( counts[ item.key ] || 0 ) ===
+													0 || loading[ item.key ]
+											}
+											isLoading={ loading[ item.key ] }
+											label={ __(
+												'Clean',
+												'performance-optimisation'
+											) }
+											loadingLabel={ __(
+												'Cleaning',
+												'performance-optimisation'
+											) }
+										/>
+									</div>
+								}
+							>
+								<div className="wppo-cleanup-row">
+									<p className="wppo-text-muted wppo-cleanup-row__desc">
+										{ item.description }
+									</p>
+									<span
+										className="wppo-cleanup-row__count"
+										style={ {
+											fontSize: '18px',
+											fontWeight: 700,
+											fontFamily:
+												'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+										} }
+									>
+										{ Number(
+											counts[ item.key ] || 0
+										).toLocaleString() }
+									</span>
+								</div>
+							</FeatureCard>
+						);
+					} ) }
 				</div>
 			</div>
 

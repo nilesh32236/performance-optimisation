@@ -1,9 +1,12 @@
 .wppo-sub-tabs {
 	display: flex;
 	gap: 4px;
-	margin-top: 20px;
-	padding-bottom: 2px;
+	background: #f1f5f9;
+	border: 1px solid #e2e8f0;
+	border-radius: 10px;
+	padding: 4px;
 	overflow-x: auto;
+	margin-top: 20px;
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 
@@ -19,21 +22,28 @@
 	padding: 8px 14px;
 	background: transparent;
 	border: 1px solid transparent;
-	border-radius: var(--wppo-radius-xs);
-	color: var(--wppo-text-muted);
+	border-radius: 8px;
+	color: #475569;
 	font-size: 13px;
 	font-weight: 600;
 	cursor: pointer;
 	transition: var(--wppo-transition);
 	white-space: nowrap;
+	line-height: 1;
 
 	svg {
 		font-size: 12px;
 	}
 
 	&:hover {
-		background: var(--wppo-primary-soft);
-		color: var(--wppo-primary);
+		background: #fff;
+		border-color: #e2e8f0;
+		color: var(--wppo-text-main);
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--wppo-primary);
+		outline-offset: 2px;
 	}
 
 	&--active {
@@ -41,6 +51,12 @@
 		color: #fff;
 		border-color: var(--wppo-primary);
 		box-shadow: 0 2px 8px color-mix(in srgb, var(--wppo-primary) 30%, transparent);
+
+		&:hover {
+			background: var(--wppo-primary-hover);
+			color: #fff;
+			border-color: var(--wppo-primary-hover);
+		}
 	}
 }
 

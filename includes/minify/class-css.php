@@ -95,6 +95,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 * @since 1.0.0
 		 */
 		public function minify() {
+			if ( empty( $this->file_path ) || ! is_readable( $this->file_path ) ) {
+				return null;
+			}
 			$cache_file = $this->get_cache_file_path();
 
 			$min_dir = dirname( $cache_file );

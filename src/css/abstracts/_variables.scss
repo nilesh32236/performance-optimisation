@@ -26,9 +26,9 @@
 
 	/* Text */
 	--wppo-text-main: #0f172a;
-	--wppo-text-muted: #64748b;
-	--wppo-text-light: #94a3b8;
-	--wppo-text-sidebar: #94a3b8;
+	--wppo-text-muted: #475569;
+	--wppo-text-light: #64748b;
+	--wppo-text-sidebar: #cbd5e1;
 	--wppo-text-sidebar-active: #ffffff;
 
 	/* Semantic Colors */
@@ -50,9 +50,10 @@
 	--wppo-danger-hover: #b91c1c;
 
 	/* Effects */
-	--wppo-radius: 12px;
+	--wppo-radius: 10px;
 	--wppo-radius-sm: 8px;
 	--wppo-radius-xs: 6px;
+	--wppo-focus-ring: 0 0 0 3px var(--wppo-primary-soft);
 	--wppo-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
 	--wppo-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
 	--wppo-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
@@ -62,7 +63,7 @@
 	--wppo-max-width: 1120px;
 
 	/* Sidebar */
-	--wppo-sidebar-width: 256px;
+	--wppo-sidebar-width: 260px;
 }
 
 @supports (color: color-mix(in srgb, red, transparent)) {

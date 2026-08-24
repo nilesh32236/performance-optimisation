@@ -25,6 +25,14 @@ import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
 import { __ } from '@wordpress/i18n';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+	faServer,
+	faFileCode,
+	faDatabase,
+	faImages,
+	faExclamationTriangle,
+} from '@fortawesome/free-solid-svg-icons';
 
 /**
  * Normalize wppoSettings.image_info which stores arrays of file paths
@@ -553,6 +561,26 @@ const Dashboard = ( { activities, onNavigate } ) => {
 			  100
 			: null;
 
+	const isCacheMissing =
+		typeof totalCacheSize === 'string' &&
+		totalCacheSize.includes( 'does not exist' );
+	const cacheSizeValue =
+		! isCacheMissing && totalCacheSize !== '0 B' ? totalCacheSize : '—';
+	const cacheSizeUnit = isCacheMissing
+		? __( 'Cache missing', 'performance-optimisation' )
+		: '';
+	const optimizedFilesCount = ( totalJs || 0 ) + ( totalCss || 0 );
+
+	let dbBadgeClass = 'wppo-status-badge--good';
+	let dbBadgeLabel = __( 'Healthy', 'performance-optimisation' );
+	if ( dbOverheadCount > 50 ) {
+		dbBadgeClass = 'wppo-status-badge--poor';
+		dbBadgeLabel = __( 'High', 'performance-optimisation' );
+	} else if ( dbOverheadCount >= 20 ) {
+		dbBadgeClass = 'wppo-status-badge--warning';
+		dbBadgeLabel = __( 'Medium', 'performance-optimisation' );
+	}
+
 	return (
 		<div className="wppo-dashboard-view">
 			{ notice && (
@@ -588,79 +616,162 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 			<WelcomePanel />
 
+			{ isCacheMissing && (
+				<div className="wppo-notice wppo-notice--warning" role="alert">
+					<FontAwesomeIcon
+						icon={ faExclamationTriangle }
+						aria-hidden="true"
+					/>
+					<span>
+						{ __(
+							'Cache directory not found.',
+							'performance-optimisation'
+						) }
+					</span>
+					<button
+						type="button"
+						className="wppo-button wppo-button--secondary wppo-button--sm"
+						onClick={ () => onNavigate( 'fileOptimization' ) }
+					>
+						{ __( 'Fix Now', 'performance-optimisation' ) }
+					</button>
+				</div>
+			) }
 			{ /* Quick-stat overview strip */ }
 			<div className="wppo-stats-grid">
 				<div className="wppo-stat-item">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
-							{ __( 'Cache Size', 'performance-optimisation' ) }
+							{ __( 'CACHE SIZE', 'performance-optimisation' ) }
+						</span>
+						<span className="wppo-stat-icon">
+							<FontAwesomeIcon
+								icon={ faServer }
+								aria-hidden="true"
+							/>
 						</span>
 					</div>
-					<span className="wppo-stat-value">{ totalCacheSize }</span>
-					<button
-						type="button"
-						className="wppo-stat-link"
-						onClick={ () => onNavigate( 'fileOptimization' ) }
-					>
-						{ __( 'Manage Cache →', 'performance-optimisation' ) }
-					</button>
+					<span className="wppo-stat-value">{ cacheSizeValue }</span>
+					<span className="wppo-stat-unit">
+						{ cacheSizeUnit }
+						{ isCacheMissing && (
+							<span className="wppo-status-badge wppo-status-badge--poor">
+								{ __(
+									'Not cached',
+									'performance-optimisation'
+								) }
+							</span>
+						) }
+					</span>
+					<div className="wppo-stat-footer">
+						<button
+							type="button"
+							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
+							onClick={ () => onNavigate( 'fileOptimization' ) }
+						>
+							{ __( 'Manage →', 'performance-optimisation' ) }
+						</button>
+					</div>
 				</div>
 				<div className="wppo-stat-item">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
 							{ __(
-								'Optimized Files',
+								'OPTIMIZED FILES',
 								'performance-optimisation'
 							) }
+						</span>
+						<span className="wppo-stat-icon">
+							<FontAwesomeIcon
+								icon={ faFileCode }
+								aria-hidden="true"
+							/>
 						</span>
 					</div>
 					<span className="wppo-stat-value">
-						{ ( totalJs || 0 ) + ( totalCss || 0 ) }
+						{ optimizedFilesCount }
 					</span>
-					<button
-						type="button"
-						className="wppo-stat-link"
-						onClick={ () => onNavigate( 'fileOptimization' ) }
-					>
-						{ __( 'View Settings →', 'performance-optimisation' ) }
-					</button>
+					<span className="wppo-stat-unit">
+						{ __( 'files', 'performance-optimisation' ) }
+						<span className="wppo-text-muted wppo-text-small">
+							{ __( '0 KB saved', 'performance-optimisation' ) }
+						</span>
+					</span>
+					<div className="wppo-stat-footer">
+						<button
+							type="button"
+							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
+							onClick={ () => onNavigate( 'fileOptimization' ) }
+						>
+							{ __( 'Configure →', 'performance-optimisation' ) }
+						</button>
+					</div>
 				</div>
 				<div className="wppo-stat-item">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
-							{ __( 'DB Overhead', 'performance-optimisation' ) }
+							{ __( 'DB OVERHEAD', 'performance-optimisation' ) }
+						</span>
+						<span className="wppo-stat-icon">
+							<FontAwesomeIcon
+								icon={ faDatabase }
+								aria-hidden="true"
+							/>
 						</span>
 					</div>
 					<span className="wppo-stat-value">{ dbOverheadCount }</span>
-					<button
-						type="button"
-						className="wppo-stat-link"
-						onClick={ () => onNavigate( 'databaseCleanup' ) }
-					>
-						{ __( 'Clean Now →', 'performance-optimisation' ) }
-					</button>
+					<span className="wppo-stat-unit">
+						{ __( 'items', 'performance-optimisation' ) }
+						<span
+							className={ `wppo-status-badge ${ dbBadgeClass }` }
+						>
+							{ dbBadgeLabel }
+						</span>
+					</span>
+					<div className="wppo-stat-footer">
+						<button
+							type="button"
+							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
+							onClick={ () => onNavigate( 'databaseCleanup' ) }
+						>
+							{ __( 'Optimize →', 'performance-optimisation' ) }
+						</button>
+					</div>
 				</div>
 				<div className="wppo-stat-item">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
 							{ __(
-								'Images Optimized',
+								'IMAGES OPTIMIZED',
 								'performance-optimisation'
 							) }
+						</span>
+						<span className="wppo-stat-icon">
+							<FontAwesomeIcon
+								icon={ faImages }
+								aria-hidden="true"
+							/>
 						</span>
 					</div>
 					<span className="wppo-stat-value">
 						{ totalOptimizedPercent !== null
 							? `${ totalOptimizedPercent.toFixed( 0 ) }%`
-							: __( 'N/A', 'performance-optimisation' ) }
+							: '—' }
 					</span>
-					<button
-						type="button"
-						className="wppo-stat-link"
-						onClick={ () => onNavigate( 'imageOptimization' ) }
-					>
-						{ __( 'View Images →', 'performance-optimisation' ) }
-					</button>
+					<span className="wppo-stat-unit">
+						{ totalOptimizedPercent !== null
+							? __( 'optimized', 'performance-optimisation' )
+							: __( 'No images', 'performance-optimisation' ) }
+					</span>
+					<div className="wppo-stat-footer">
+						<button
+							type="button"
+							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
+							onClick={ () => onNavigate( 'imageOptimization' ) }
+						>
+							{ __( 'View →', 'performance-optimisation' ) }
+						</button>
+					</div>
 				</div>
 			</div>
 
@@ -686,7 +797,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				/>
 				<div className="wppo-field">
 					<label className="wppo-field-label" htmlFor="wppoCacheLife">
-						{ __( 'Cache Life', 'performance-optimisation' ) }
+						{ __( 'Cache Lifespan', 'performance-optimisation' ) }
 					</label>
 					<select
 						className="wppo-select"

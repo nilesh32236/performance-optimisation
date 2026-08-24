@@ -25,11 +25,11 @@
 	&:focus-visible {
 		outline: none !important;
 		border-color: var(--wppo-primary) !important;
-		box-shadow: 0 0 0 3px var(--wppo-primary-soft) !important;
+		box-shadow: var(--wppo-focus-ring) !important;
 	}
 
 	&::placeholder {
-		color: var(--wppo-text-light);
+		color: #64748b;
 		opacity: 1;
 	}
 
@@ -38,12 +38,22 @@
 		cursor: not-allowed;
 		background: var(--wppo-bg-app) !important;
 	}
+
+	&:focus-visible {
+		outline: none !important;
+	}
 }
 
 .wppo-textarea {
 	resize: vertical;
 	min-height: 80px;
 	height: auto;
+}
+
+.wppo-textarea--mono {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+	font-size: 12.5px !important;
+	line-height: 1.6 !important;
 }
 
 .wppo-select {
@@ -54,7 +64,7 @@
 	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E") !important;
 	background-repeat: no-repeat !important;
 	background-position: right 12px center !important;
-	padding-right: 36px !important;
+	padding-right: 40px !important;
 	cursor: pointer;
 }
 

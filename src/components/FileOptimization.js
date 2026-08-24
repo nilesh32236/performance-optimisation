@@ -339,23 +339,34 @@ const FileOptimization = ( {
 									onChange={ handleChange( setSettings ) }
 								/>
 								{ settings.combineCSS && (
+									<div className="wppo-notice wppo-notice--warning wppo-mt-12">
+										<FontAwesomeIcon
+											icon={ faExclamationTriangle }
+										/>{ ' ' }
+										{ __(
+											'May cause FOUC — test in incognito and exclude problematic files above.',
+											'performance-optimisation'
+										) }
+									</div>
+								) }
+								{ settings.combineCSS && (
 									<div className="wppo-field">
 										<label
 											className="wppo-field-label"
 											htmlFor="excludeCombineCSS"
 										>
 											{ __(
-												'Exclude CSS from Combining',
+												'Exclude from Combining',
 												'performance-optimisation'
 											) }
 										</label>
 										<textarea
-											className="wppo-textarea"
+											className="wppo-textarea wppo-textarea--mono"
 											id="excludeCombineCSS"
 											name="excludeCombineCSS"
 											rows="3"
 											placeholder={ __(
-												'Handles or partial URLs',
+												'e.g. handle-name or /wp-content/…/style.css',
 												'performance-optimisation'
 											) }
 											value={ settings.excludeCombineCSS }
@@ -363,6 +374,12 @@ const FileOptimization = ( {
 												setSettings
 											) }
 										/>
+										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+											{ __(
+												'One handle or partial URL per line. Fix FOUC by excluding problematic files.',
+												'performance-optimisation'
+											) }
+										</p>
 									</div>
 								) }
 								<SwitchField
@@ -410,12 +427,12 @@ const FileOptimization = ( {
 											) }
 										</label>
 										<textarea
-											className="wppo-textarea"
+											className="wppo-textarea wppo-textarea--mono"
 											id="excludeUnusedCSS"
 											name="excludeUnusedCSS"
 											rows="4"
 											placeholder={ __(
-												'Selectors to always keep (one per line, e.g. .my-dynamic-class)',
+												'e.g. .my-dynamic-class',
 												'performance-optimisation'
 											) }
 											value={ settings.excludeUnusedCSS }
@@ -423,6 +440,12 @@ const FileOptimization = ( {
 												setSettings
 											) }
 										/>
+										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+											{ __(
+												'One selector per line — kept even if unused. Use to fix missing styles.',
+												'performance-optimisation'
+											) }
+										</p>
 										<button
 											className="wppo-button wppo-button--secondary wppo-mt-12"
 											onClick={ handleRegenerateUsedCSS }
@@ -448,12 +471,12 @@ const FileOptimization = ( {
 											) }
 										</label>
 										<textarea
-											className="wppo-textarea"
+											className="wppo-textarea wppo-textarea--mono"
 											id="excludeCSS"
 											name="excludeCSS"
 											rows="3"
 											placeholder={ __(
-												'Handles or partial URLs (one per line)',
+												'e.g. handle-name or /wp-content/…/critical.css',
 												'performance-optimisation'
 											) }
 											value={ settings.excludeCSS }
@@ -461,6 +484,12 @@ const FileOptimization = ( {
 												setSettings
 											) }
 										/>
+										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+											{ __(
+												'One handle or partial URL per line.',
+												'performance-optimisation'
+											) }
+										</p>
 									</div>
 								) }
 								<SwitchField
@@ -528,58 +557,60 @@ const FileOptimization = ( {
 							) }
 							icon={ <FontAwesomeIcon icon={ faCode } /> }
 						>
-							<SwitchField
-								label={ __(
-									'Minify HTML',
-									'performance-optimisation'
-								) }
-								description={ __(
-									'Compress the HTML output of your website by removing unnecessary whitespace and comments.',
-									'performance-optimisation'
-								) }
-								name="minifyHTML"
-								checked={ settings.minifyHTML }
-								onChange={ handleChange( setSettings ) }
-							/>
-							<SwitchField
-								label={ __(
-									'Remove HTML Comments',
-									'performance-optimisation'
-								) }
-								description={ __(
-									'Strip HTML comments from the output (except IE conditional comments).',
-									'performance-optimisation'
-								) }
-								name="removeHTMLComments"
-								checked={ settings.removeHTMLComments }
-								onChange={ handleChange( setSettings ) }
-							/>
-							<SwitchField
-								label={ __(
-									'Minify Inline CSS',
-									'performance-optimisation'
-								) }
-								description={ __(
-									'Minify CSS within <style> tags using the PHP minifier.',
-									'performance-optimisation'
-								) }
-								name="minifyInlineCSS"
-								checked={ settings.minifyInlineCSS }
-								onChange={ handleChange( setSettings ) }
-							/>
-							<SwitchField
-								label={ __(
-									'Minify Inline JavaScript',
-									'performance-optimisation'
-								) }
-								description={ __(
-									'Minify JavaScript within <script> tags using the PHP minifier.',
-									'performance-optimisation'
-								) }
-								name="minifyInlineJS"
-								checked={ settings.minifyInlineJS }
-								onChange={ handleChange( setSettings ) }
-							/>
+							<div className="wppo-field-group">
+								<SwitchField
+									label={ __(
+										'Minify HTML',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Compress the HTML output of your website by removing unnecessary whitespace and comments.',
+										'performance-optimisation'
+									) }
+									name="minifyHTML"
+									checked={ settings.minifyHTML }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Remove HTML Comments',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Strip HTML comments from the output (except IE conditional comments).',
+										'performance-optimisation'
+									) }
+									name="removeHTMLComments"
+									checked={ settings.removeHTMLComments }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Minify Inline CSS',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Minify CSS within <style> tags using the PHP minifier.',
+										'performance-optimisation'
+									) }
+									name="minifyInlineCSS"
+									checked={ settings.minifyInlineCSS }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Minify Inline JavaScript',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Minify JavaScript within <script> tags using the PHP minifier.',
+										'performance-optimisation'
+									) }
+									name="minifyInlineJS"
+									checked={ settings.minifyInlineJS }
+									onChange={ handleChange( setSettings ) }
+								/>
+							</div>
 						</FeatureCard>
 					</div>
 				) }
@@ -632,17 +663,17 @@ const FileOptimization = ( {
 											htmlFor="excludeDeferJS"
 										>
 											{ __(
-												'Exclude JS from Deferring',
+												'Exclude from Deferring',
 												'performance-optimisation'
 											) }
 										</label>
 										<textarea
-											className="wppo-textarea"
+											className="wppo-textarea wppo-textarea--mono"
 											id="excludeDeferJS"
 											name="excludeDeferJS"
 											rows="3"
 											placeholder={ __(
-												'Handles or partial URLs',
+												'e.g. jquery or /wp-includes/…/script.js',
 												'performance-optimisation'
 											) }
 											value={ settings.excludeDeferJS }
@@ -650,6 +681,12 @@ const FileOptimization = ( {
 												setSettings
 											) }
 										/>
+										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+											{ __(
+												'One handle or partial URL per line.',
+												'performance-optimisation'
+											) }
+										</p>
 									</div>
 								) }
 								<SwitchField
@@ -676,263 +713,279 @@ const FileOptimization = ( {
 								) }
 								icon={ <FontAwesomeIcon icon={ faRocket } /> }
 							>
-								{ settings.minifyJS && (
-									<div className="wppo-field">
-										<label
-											className="wppo-field-label"
-											htmlFor="excludeJS"
-										>
-											{ __(
-												'Exclude JS from Minification',
-												'performance-optimisation'
-											) }
-										</label>
-										<textarea
-											className="wppo-textarea"
-											id="excludeJS"
-											name="excludeJS"
-											rows="3"
-											placeholder={ __(
-												'Handles or partial URLs',
-												'performance-optimisation'
-											) }
-											value={ settings.excludeJS }
-											onChange={ handleChange(
-												setSettings
-											) }
-										/>
-									</div>
-								) }
-								{ settings.delayJS && (
-									<>
-										<div className="wppo-field wppo-mt-20">
+								<div className="wppo-field-group">
+									{ settings.minifyJS && (
+										<div className="wppo-field">
 											<label
 												className="wppo-field-label"
-												htmlFor="excludeDelayJS"
+												htmlFor="excludeJS"
 											>
 												{ __(
-													'Scripts to Delay',
+													'Exclude from Minification',
 													'performance-optimisation'
 												) }
 											</label>
 											<textarea
-												className="wppo-textarea"
-												id="excludeDelayJS"
-												name="excludeDelayJS"
+												className="wppo-textarea wppo-textarea--mono"
+												id="excludeJS"
+												name="excludeJS"
 												rows="3"
 												placeholder={ __(
-													'Partial URLs or keywords',
+													'e.g. handle-name or /wp-content/…/critical.js',
 													'performance-optimisation'
 												) }
-												value={
-													settings.excludeDelayJS
-												}
+												value={ settings.excludeJS }
 												onChange={ handleChange(
 													setSettings
 												) }
 											/>
-										</div>
-
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="delayJSDefaultStrategy"
-											>
+											<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 												{ __(
-													'Default Load Strategy',
-													'performance-optimisation'
-												) }
-											</label>
-											<select
-												className="wppo-select"
-												id="delayJSDefaultStrategy"
-												name="delayJSDefaultStrategy"
-												value={
-													settings.delayJSDefaultStrategy
-												}
-												onChange={ handleChange(
-													setSettings
-												) }
-											>
-												<option value="interaction">
-													{ __(
-														'Interaction (load on user interaction)',
-														'performance-optimisation'
-													) }
-												</option>
-												<option value="idle">
-													{ __(
-														'Idle (load during browser idle)',
-														'performance-optimisation'
-													) }
-												</option>
-												<option value="viewport">
-													{ __(
-														'Viewport (load when near viewport)',
-														'performance-optimisation'
-													) }
-												</option>
-											</select>
-											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
-												{ __(
-													'Default strategy for delayed scripts that are not in a specific list below.',
+													'One handle or partial URL per line.',
 													'performance-optimisation'
 												) }
 											</p>
 										</div>
-
-										{ ( settings.delayJSDefaultStrategy ===
-											'idle' ||
-											settings.delayJSIdleList ) && (
-											<div className="wppo-field wppo-mt-16">
+									) }
+									{ settings.delayJS && (
+										<>
+											<div className="wppo-field">
 												<label
 													className="wppo-field-label"
-													htmlFor="delayJSIdleTimeout"
+													htmlFor="excludeDelayJS"
 												>
 													{ __(
-														'Idle Timeout (ms)',
+														'Scripts to Delay',
 														'performance-optimisation'
 													) }
 												</label>
-												<input
-													className="wppo-input"
-													type="number"
-													id="delayJSIdleTimeout"
-													name="delayJSIdleTimeout"
-													min="500"
-													max="30000"
-													step="100"
+												<textarea
+													className="wppo-textarea wppo-textarea--mono"
+													id="excludeDelayJS"
+													name="excludeDelayJS"
+													rows="3"
+													placeholder={ __(
+														'e.g. googletagmanager.com/gtag',
+														'performance-optimisation'
+													) }
 													value={
-														settings.delayJSIdleTimeout
+														settings.excludeDelayJS
 													}
 													onChange={ handleChange(
 														setSettings
 													) }
 												/>
-												<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
 													{ __(
-														'Maximum time (ms) to wait before loading idle scripts (default: 3000).',
+														'One per line — partial URL or keyword (e.g. gtag).',
 														'performance-optimisation'
 													) }
 												</p>
 											</div>
-										) }
 
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="delayJSIdleList"
-											>
-												{ __(
-													'Scripts to Load When Idle',
-													'performance-optimisation'
-												) }
-											</label>
-											<textarea
-												className="wppo-textarea"
-												id="delayJSIdleList"
-												name="delayJSIdleList"
-												rows="3"
-												placeholder={ __(
-													'Handles or partial URLs (one per line)',
-													'performance-optimisation'
-												) }
-												value={
-													settings.delayJSIdleList
-												}
-												onChange={ handleChange(
-													setSettings
-												) }
-											/>
-											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
-												{ __(
-													'These scripts load via requestIdleCallback during browser idle time.',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
+											<div className="wppo-field wppo-mt-16">
+												<label
+													className="wppo-field-label"
+													htmlFor="delayJSDefaultStrategy"
+												>
+													{ __(
+														'Default Load Strategy',
+														'performance-optimisation'
+													) }
+												</label>
+												<select
+													className="wppo-select"
+													id="delayJSDefaultStrategy"
+													name="delayJSDefaultStrategy"
+													value={
+														settings.delayJSDefaultStrategy
+													}
+													onChange={ handleChange(
+														setSettings
+													) }
+												>
+													<option value="interaction">
+														{ __(
+															'Interaction (load on user interaction)',
+															'performance-optimisation'
+														) }
+													</option>
+													<option value="idle">
+														{ __(
+															'Idle (load during browser idle)',
+															'performance-optimisation'
+														) }
+													</option>
+													<option value="viewport">
+														{ __(
+															'Viewport (load when near viewport)',
+															'performance-optimisation'
+														) }
+													</option>
+												</select>
+												<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+													{ __(
+														'Default strategy for delayed scripts that are not in a specific list below.',
+														'performance-optimisation'
+													) }
+												</p>
+											</div>
 
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="delayJSViewportList"
-											>
-												{ __(
-													'Scripts to Load in Viewport',
-													'performance-optimisation'
-												) }
-											</label>
-											<textarea
-												className="wppo-textarea"
-												id="delayJSViewportList"
-												name="delayJSViewportList"
-												rows="3"
-												placeholder={ __(
-													'Handles or partial URLs (one per line)',
-													'performance-optimisation'
-												) }
-												value={
-													settings.delayJSViewportList
-												}
-												onChange={ handleChange(
-													setSettings
-												) }
-											/>
-											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
-												{ __(
-													'These scripts load when their position enters the viewport.',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
+											{ ( settings.delayJSDefaultStrategy ===
+												'idle' ||
+												settings.delayJSIdleList ) && (
+												<div className="wppo-field wppo-mt-16">
+													<label
+														className="wppo-field-label"
+														htmlFor="delayJSIdleTimeout"
+													>
+														{ __(
+															'Idle Timeout (ms)',
+															'performance-optimisation'
+														) }
+													</label>
+													<input
+														className="wppo-input"
+														type="number"
+														id="delayJSIdleTimeout"
+														name="delayJSIdleTimeout"
+														min="500"
+														max="30000"
+														step="100"
+														value={
+															settings.delayJSIdleTimeout
+														}
+														onChange={ handleChange(
+															setSettings
+														) }
+													/>
+													<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+														{ __(
+															'Maximum time (ms) to wait before loading idle scripts (default: 3000).',
+															'performance-optimisation'
+														) }
+													</p>
+												</div>
+											) }
 
-										<div className="wppo-field wppo-mt-16">
-											<label
-												className="wppo-field-label"
-												htmlFor="delayJSPriority"
-											>
-												{ __(
-													'Script Priority',
-													'performance-optimisation'
-												) }
-											</label>
-											<textarea
-												className="wppo-textarea"
-												id="delayJSPriority"
-												name="delayJSPriority"
-												rows="3"
-												placeholder={ __(
-													'handle:high, other:low (one per line)',
-													'performance-optimisation'
-												) }
-												value={
-													settings.delayJSPriority
-												}
-												onChange={ handleChange(
-													setSettings
-												) }
-											/>
-											<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
-												{ __(
-													'Syntax: handle:priority (high, normal, low). High-priority scripts load first.',
-													'performance-optimisation'
-												) }
-											</p>
-										</div>
+											<div className="wppo-field wppo-mt-16">
+												<label
+													className="wppo-field-label"
+													htmlFor="delayJSIdleList"
+												>
+													{ __(
+														'Scripts to Load When Idle',
+														'performance-optimisation'
+													) }
+												</label>
+												<textarea
+													className="wppo-textarea wppo-textarea--mono"
+													id="delayJSIdleList"
+													name="delayJSIdleList"
+													rows="3"
+													placeholder={ __(
+														'e.g. analytics.js',
+														'performance-optimisation'
+													) }
+													value={
+														settings.delayJSIdleList
+													}
+													onChange={ handleChange(
+														setSettings
+													) }
+												/>
+												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+													{ __(
+														'One per line — loads via requestIdleCallback during browser idle.',
+														'performance-optimisation'
+													) }
+												</p>
+											</div>
 
-										<div className="wppo-notice wppo-notice--warning wppo-mt-16">
-											<FontAwesomeIcon
-												icon={ faExclamationTriangle }
-											/>
-											<span>
-												{ __(
-													'Delaying scripts can break immediate functionality. Test carefully.',
-													'performance-optimisation'
-												) }
-											</span>
-										</div>
-									</>
-								) }
+											<div className="wppo-field wppo-mt-16">
+												<label
+													className="wppo-field-label"
+													htmlFor="delayJSViewportList"
+												>
+													{ __(
+														'Scripts to Load in Viewport',
+														'performance-optimisation'
+													) }
+												</label>
+												<textarea
+													className="wppo-textarea wppo-textarea--mono"
+													id="delayJSViewportList"
+													name="delayJSViewportList"
+													rows="3"
+													placeholder={ __(
+														'e.g. chat-widget.js',
+														'performance-optimisation'
+													) }
+													value={
+														settings.delayJSViewportList
+													}
+													onChange={ handleChange(
+														setSettings
+													) }
+												/>
+												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+													{ __(
+														'One per line — loads when near viewport.',
+														'performance-optimisation'
+													) }
+												</p>
+											</div>
+
+											<div className="wppo-field wppo-mt-16">
+												<label
+													className="wppo-field-label"
+													htmlFor="delayJSPriority"
+												>
+													{ __(
+														'Script Priority',
+														'performance-optimisation'
+													) }
+												</label>
+												<textarea
+													className="wppo-textarea wppo-textarea--mono"
+													id="delayJSPriority"
+													name="delayJSPriority"
+													rows="3"
+													placeholder={ __(
+														'e.g. critical:high',
+														'performance-optimisation'
+													) }
+													value={
+														settings.delayJSPriority
+													}
+													onChange={ handleChange(
+														setSettings
+													) }
+												/>
+												<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+													{ __(
+														'One per line — handle:priority (high, normal, low). High loads first.',
+														'performance-optimisation'
+													) }
+												</p>
+											</div>
+
+											<div className="wppo-notice wppo-notice--warning wppo-mt-16">
+												<FontAwesomeIcon
+													icon={
+														faExclamationTriangle
+													}
+												/>{ ' ' }
+												<span>
+													{ __(
+														'Delaying scripts can break immediate functionality. Test carefully.',
+														'performance-optimisation'
+													) }
+												</span>
+											</div>
+										</>
+									) }
+								</div>
 							</FeatureCard>
 						) }
 					</div>
@@ -980,61 +1033,71 @@ const FileOptimization = ( {
 												) }
 											</span>
 										</div>
-										<div className="wppo-stacked-cards wppo-mt-24">
-											<div className="wppo-field">
-												<label
-													className="wppo-field-label"
-													htmlFor="excludeUrlToKeepJSCSS"
-												>
-													{ __(
-														'Keep Assets on these URLs',
-														'performance-optimisation'
-													) }
-												</label>
-												<textarea
-													className="wppo-textarea"
-													id="excludeUrlToKeepJSCSS"
-													name="excludeUrlToKeepJSCSS"
-													rows="4"
-													placeholder={ __(
-														'e.g. shop/.* (regex supported)',
-														'performance-optimisation'
-													) }
-													value={
-														settings.excludeUrlToKeepJSCSS
-													}
-													onChange={ handleChange(
-														setSettings
-													) }
-												/>
-											</div>
-											<div className="wppo-field">
-												<label
-													className="wppo-field-label"
-													htmlFor="removeCssJsHandle"
-												>
-													{ __(
-														'Remove specific CSS/JS handles',
-														'performance-optimisation'
-													) }
-												</label>
-												<textarea
-													className="wppo-textarea"
-													id="removeCssJsHandle"
-													name="removeCssJsHandle"
-													rows="4"
-													placeholder={ __(
-														'Handles (one per line)',
-														'performance-optimisation'
-													) }
-													value={
-														settings.removeCssJsHandle
-													}
-													onChange={ handleChange(
-														setSettings
-													) }
-												/>
-											</div>
+										<div className="wppo-field">
+											<label
+												className="wppo-field-label"
+												htmlFor="excludeUrlToKeepJSCSS"
+											>
+												{ __(
+													'Keep Assets on These URLs',
+													'performance-optimisation'
+												) }
+											</label>
+											<textarea
+												className="wppo-textarea wppo-textarea--mono"
+												id="excludeUrlToKeepJSCSS"
+												name="excludeUrlToKeepJSCSS"
+												rows="4"
+												placeholder={ __(
+													'e.g. shop/.* (regex supported)',
+													'performance-optimisation'
+												) }
+												value={
+													settings.excludeUrlToKeepJSCSS
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+											/>
+											<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+												{ __(
+													'One pattern per line — regex supported.',
+													'performance-optimisation'
+												) }
+											</p>
+										</div>
+										<div className="wppo-field">
+											<label
+												className="wppo-field-label"
+												htmlFor="removeCssJsHandle"
+											>
+												{ __(
+													'Remove Specific CSS/JS Handles',
+													'performance-optimisation'
+												) }
+											</label>
+											<textarea
+												className="wppo-textarea wppo-textarea--mono"
+												id="removeCssJsHandle"
+												name="removeCssJsHandle"
+												rows="4"
+												placeholder={ __(
+													'e.g. woocommerce-smallscreen',
+													'performance-optimisation'
+												) }
+												value={
+													settings.removeCssJsHandle
+												}
+												onChange={ handleChange(
+													setSettings
+												) }
+											/>
+											<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+												{ __(
+													'One handle per line.',
+													'performance-optimisation'
+												) }
+											</p>
 										</div>
 									</>
 								) }
