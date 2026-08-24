@@ -760,7 +760,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						onChange={ ( e ) =>
 							setCdnPurgeService( e.target.value )
 						}
-						aria-describedby="cdnPurgeService-desc"
+						aria-describedby="wppo-cdnPurgeService-desc"
 					>
 						<option value="none">
 							{ __( 'None', 'performance-optimisation' ) }
@@ -773,7 +773,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 						</option>
 					</select>
 					<p
-						id="cdnPurgeService-desc"
+						id="wppo-cdnPurgeService-desc"
 						className="wppo-text-muted wppo-text-small"
 					>
 						{ __(
@@ -803,10 +803,10 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							onChange={ ( e ) =>
 								setCloudflareZoneId( e.target.value )
 							}
-							aria-describedby="cloudflareZoneId-desc"
+							aria-describedby="wppo-cloudflareZoneId-desc"
 						/>
 						<p
-							id="cloudflareZoneId-desc"
+							id="wppo-cloudflareZoneId-desc"
 							className="wppo-text-muted wppo-text-small"
 						>
 							{ __(
@@ -837,14 +837,14 @@ const Dashboard = ( { activities, onNavigate } ) => {
 							onChange={ ( e ) =>
 								setVarnishPurgeUrls( e.target.value )
 							}
-							aria-describedby="varnishPurgeUrls-desc"
+							aria-describedby="wppo-varnishPurgeUrls-desc"
 							placeholder={ __(
 								'http://127.0.0.1:8081/purge',
 								'performance-optimisation'
 							) }
 						/>
 						<p
-							id="varnishPurgeUrls-desc"
+							id="wppo-varnishPurgeUrls-desc"
 							className="wppo-text-muted wppo-text-small"
 						>
 							{ __(
