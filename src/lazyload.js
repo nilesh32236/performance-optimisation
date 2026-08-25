@@ -19,7 +19,9 @@ const readModuleData = () => {
 	}
 	try {
 		return JSON.parse( el.textContent );
-	} catch ( _err ) {} // eslint-disable-line no-unused-vars
+	} catch ( _err ) {
+		console.warn( 'WPPO: invalid lazyload module data', _err );
+	}
 	return {};
 };
 
@@ -67,7 +69,9 @@ const AUTO_SIZES_SUPPORTED = ( () => {
 		const supported = 'size' === window.getComputedStyle( probe ).contain;
 		probe.remove();
 		return supported;
-	} catch ( _e ) {} // eslint-disable-line no-unused-vars
+	} catch ( _e ) {
+		console.warn( 'WPPO: auto-sizes probe failed', _e );
+	}
 	return false;
 } )();
 
@@ -916,7 +920,9 @@ const initVideoPlaceholders = () => {
 							iframe.setAttribute( k, v );
 						}
 					} );
-				} catch ( _err ) {} // eslint-disable-line no-unused-vars
+				} catch ( _err ) {
+					console.warn( 'WPPO: invalid iframe attrs JSON', _err );
+				}
 			}
 
 			// On load, remove thumbnail and show iframe

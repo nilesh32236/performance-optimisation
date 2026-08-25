@@ -39,7 +39,7 @@ const LoadingSubmitButton = ( {
 					icon={ faSpinner }
 					spin
 					aria-hidden="true"
-					style={ { marginRight: '8px' } }
+					className="wppo-mr-8"
 				/>
 			) }
 			<span role="status" aria-live="polite">

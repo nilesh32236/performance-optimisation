@@ -1,4 +1,8 @@
 document.addEventListener( 'DOMContentLoaded', function () {
+	// Keep in sync with src/lib/apiRequest.js: refreshNonce() + apiCall() retry-on-403 logic.
+	// This entry is intentionally standalone (admin-bar, enqueued on every admin page via
+	// wppoObject) and does not import the SPA's apiRequest module to avoid bundle coupling.
+
 	/**
 	 * Shared helper for POST JSON requests.
 	 *

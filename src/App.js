@@ -132,11 +132,20 @@ const App = () => {
 	);
 
 	const renderContent = () => {
-		const settings = wppoSettings?.settings ?? {};
+		const settings =
+			typeof wppoSettings !== 'undefined'
+				? wppoSettings?.settings ?? {}
+				: {};
 		const components = {
 			dashboard: (
 				<Dashboard
 					activities={ recentActivities?.activities }
+					cacheSettings={ settings.cache_settings }
+					userRoles={
+						typeof wppoSettings !== 'undefined'
+							? wppoSettings?.userRoles ?? {}
+							: {}
+					}
 					onNavigate={ setActiveTab }
 				/>
 			),
