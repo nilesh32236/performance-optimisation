@@ -149,9 +149,8 @@ const ImageOptimizationCard = ( {
 				savings.original_bytes > 0 &&
 				savings.images_counted > 0 && (
 					<div
-						className="wppo-image-savings"
+						className="wppo-image-savings wppo-mt-16"
 						aria-live="polite"
-						style={ { marginTop: '16px' } }
 					>
 						<span>
 							{ __( 'Original', 'performance-optimisation' ) }{ ' ' }
@@ -174,10 +173,7 @@ const ImageOptimizationCard = ( {
 				) }
 
 			{ ( bgProcessing || bgJobsQueued > 0 ) && (
-				<div
-					className="wppo-notice wppo-notice--info"
-					style={ { marginTop: '32px' } }
-				>
+				<div className="wppo-notice wppo-notice--info wppo-mt-32">
 					<FontAwesomeIcon icon={ faSpinner } spin />
 					<span>
 						{ __(

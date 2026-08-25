@@ -72,6 +72,9 @@ const ImageOptimization = ( { options = {} } ) => {
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const mimeList = Array.isArray( settings.clientSideMimeTypes )
+		? settings.clientSideMimeTypes
+		: [];
 
 	const togglePostType = ( type ) => {
 		setSettings( ( prev ) => {
@@ -621,47 +624,38 @@ const ImageOptimization = ( { options = {} } ) => {
 											'performance-optimisation'
 										) }
 									</span>
-									{ ( () => {
-										const mimeList = Array.isArray(
-											settings.clientSideMimeTypes
-										)
-											? settings.clientSideMimeTypes
-											: [];
-										return (
-											<div className="wppo-post-types-grid--chips">
-												{ CLIENT_SIDE_MIME_OPTIONS.map(
-													( option ) => (
-														<label
-															key={ option.value }
-															htmlFor={ `client-mime-${ option.value }` }
-															className={ `wppo-post-type-chip ${
-																mimeList.includes(
-																	option.value
-																)
-																	? 'wppo-post-type-chip--active'
-																	: ''
-															}` }
-														>
-															<input
-																type="checkbox"
-																id={ `client-mime-${ option.value }` }
-																className="screen-reader-text"
-																checked={ mimeList.includes(
-																	option.value
-																) }
-																onChange={ () =>
-																	toggleClientSideMimeType(
-																		option.value
-																	)
-																}
-															/>
-															{ option.label }
-														</label>
-													)
-												) }
-											</div>
-										);
-									} )() }
+									<div className="wppo-post-types-grid--chips">
+										{ CLIENT_SIDE_MIME_OPTIONS.map(
+											( option ) => (
+												<label
+													key={ option.value }
+													htmlFor={ `client-mime-${ option.value }` }
+													className={ `wppo-post-type-chip ${
+														mimeList.includes(
+															option.value
+														)
+															? 'wppo-post-type-chip--active'
+															: ''
+													}` }
+												>
+													<input
+														type="checkbox"
+														id={ `client-mime-${ option.value }` }
+														className="screen-reader-text"
+														checked={ mimeList.includes(
+															option.value
+														) }
+														onChange={ () =>
+															toggleClientSideMimeType(
+																option.value
+															)
+														}
+													/>
+													{ option.label }
+												</label>
+											)
+										) }
+									</div>
 									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
 										{ __(
 											'Unchecking a format makes the browser skip it during upload, falling back to server-side processing. Unchecking every format disables browser-side processing (empty list is supported by core). Formats core cannot process are ignored — HEIC/HEIC Sequence/JPEG XL appear only when this build\u2019s wasm-vips includes that decoder; JPEG is always safe.',

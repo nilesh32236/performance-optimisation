@@ -47,12 +47,19 @@ const normalizeImageInfo = ( raw ) => {
 	};
 };
 
-const Dashboard = ( { activities, onNavigate } ) => {
+const Dashboard = ( {
+	activities,
+	cacheSettings: propCacheSettings,
+	userRoles: propUserRoles,
+	onNavigate,
+} ) => {
 	// Phase 2 — suggestions state (populated by telemetry scan + PageSpeed scan).
 	const [ telemetrySuggestions, setTelemetrySuggestions ] = useState( [] );
 	const [ pagespeedSuggestions, setPagespeedSuggestions ] = useState( [] );
 	const [ auditUrl, setAuditUrl ] = useState(
-		wppoSettings?.performance_audit?.homeUrl ?? ''
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings?.performance_audit?.homeUrl ?? ''
+			: ''
 	);
 	// Merge telemetry and PageSpeed suggestions, deduplicating by metric key.
 	const allSuggestions = useMemo( () => {
@@ -78,10 +85,23 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	// Initialize state
 	const [ state, setState ] = useState( {
-		totalCacheSize: wppoSettings?.cache_size ?? '0 B',
-		totalJs: wppoSettings?.total_js_css?.js ?? 0,
-		totalCss: wppoSettings?.total_js_css?.css ?? 0,
-		imageInfo: normalizeImageInfo( wppoSettings?.image_info ),
+		totalCacheSize:
+			typeof wppoSettings !== 'undefined'
+				? wppoSettings?.cache_size ?? '0 B'
+				: '0 B',
+		totalJs:
+			typeof wppoSettings !== 'undefined'
+				? wppoSettings?.total_js_css?.js ?? 0
+				: 0,
+		totalCss:
+			typeof wppoSettings !== 'undefined'
+				? wppoSettings?.total_js_css?.css ?? 0
+				: 0,
+		imageInfo: normalizeImageInfo(
+			typeof wppoSettings !== 'undefined'
+				? wppoSettings?.image_info
+				: {}
+		),
 		dbCounts: {},
 		loading: {
 			clear_cache: false,
@@ -91,9 +111,17 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		},
 	} );
 
-	// Logged-in user cache settings.
-	const cacheSettings = wppoSettings?.settings?.cache_settings || {};
-	const userRoles = wppoSettings?.userRoles || {};
+	// Logged-in user cache settings — prefer props from App.js, fallback to global for direct mounts/tests.
+	const cacheSettings =
+		propCacheSettings ??
+		( typeof wppoSettings !== 'undefined'
+			? wppoSettings?.settings?.cache_settings || {}
+			: {} );
+	const userRoles =
+		propUserRoles ??
+		( typeof wppoSettings !== 'undefined'
+			? wppoSettings?.userRoles || {}
+			: {} );
 	const [ pageCacheEnabled, setPageCacheEnabled ] = useState(
 		!! cacheSettings.enableCache
 	);
@@ -419,7 +447,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 		setSavingPageCache( true );
 		// Merge with the full stored cache_settings so saving one group never
 		// wipes keys saved by the other card (e.g. enableLoggedInCache).
-		const currentSettings = wppoSettings?.settings?.cache_settings ?? {};
+		const currentSettings = cacheSettings ?? {};
 		apiCall( 'update_settings', {
 			tab: 'cache_settings',
 			settings: {
@@ -451,13 +479,13 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				} )
 			)
 			.finally( () => setSavingPageCache( false ) );
-	}, [ pageCacheEnabled, cacheLife, notify ] );
+	}, [ pageCacheEnabled, cacheLife, cacheSettings, notify ] );
 
 	const saveLoggedInCacheSettings = useCallback( () => {
 		setSavingLoggedInCache( true );
 		// Merge with the full stored cache_settings so enabling/disabling the
 		// page-cache master toggle elsewhere is never clobbered here.
-		const currentSettings = wppoSettings?.settings?.cache_settings ?? {};
+		const currentSettings = cacheSettings ?? {};
 		apiCall( 'update_settings', {
 			tab: 'cache_settings',
 			settings: {
@@ -489,11 +517,11 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				} )
 			)
 			.finally( () => setSavingLoggedInCache( false ) );
-	}, [ loggedInCacheEnabled, loggedInCacheRoles, notify ] );
+	}, [ loggedInCacheEnabled, loggedInCacheRoles, cacheSettings, notify ] );
 
 	const saveCdnPurgeSettings = useCallback( () => {
 		setSavingCdnPurge( true );
-		const currentSettings = wppoSettings?.settings?.cache_settings ?? {};
+		const currentSettings = cacheSettings ?? {};
 		const urls = varnishPurgeUrls
 			.split( '\n' )
 			.map( ( url ) => url.trim() )
@@ -530,7 +558,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				} )
 			)
 			.finally( () => setSavingCdnPurge( false ) );
-	}, [ cdnPurgeService, cloudflareZoneId, varnishPurgeUrls, notify ] );
+	}, [ cdnPurgeService, cloudflareZoneId, varnishPurgeUrls, cacheSettings, notify ] );
 
 	const handleLoggedInCacheToggle = useCallback( ( e ) => {
 		setLoggedInCacheEnabled( e.target.checked );

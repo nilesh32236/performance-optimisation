@@ -310,7 +310,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 				<div className="wppo-notice wppo-notice--warning">
 					<FontAwesomeIcon
 						icon={ faExclamationCircle }
-						style={ { marginRight: '8px' } }
+						className="wppo-mr-8"
 					/>
 					{ __(
 						'PageSpeed API key is not configured. Add it in Settings.',
@@ -361,7 +361,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 							<FontAwesomeIcon
 								icon={ faSpinner }
 								spin
-								style={ { marginRight: '8px' } }
+								className="wppo-mr-8"
 							/>
 							{ __( 'Scanning…', 'performance-optimisation' ) }
 						</>
@@ -369,7 +369,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 						<>
 							<FontAwesomeIcon
 								icon={ faTachometerAlt }
-								style={ { marginRight: '8px' } }
+								className="wppo-mr-8"
 							/>
 							{ __(
 								'Run PageSpeed Scan',
@@ -390,7 +390,7 @@ const PageSpeedPanel = ( { url, onSuggestionsReady } ) => {
 					<FontAwesomeIcon
 						icon={ faSpinner }
 						spin
-						style={ { marginRight: '8px' } }
+						className="wppo-mr-8"
 					/>
 					{ __(
 						'PageSpeed scan is running in the background. Results will appear shortly.',

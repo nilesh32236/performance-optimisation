@@ -169,7 +169,7 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 						{ __( 'Fix It', 'performance-optimisation' ) }
 						<FontAwesomeIcon
 							icon={ faArrowRight }
-							style={ { marginLeft: '6px' } }
+							className="wppo-ml-6"
 						/>
 					</button>
 				) }
@@ -178,7 +178,7 @@ const SuggestionCard = ( { suggestion, onNavigate } ) => {
 					<span className="wppo-suggestion-card__passing">
 						<FontAwesomeIcon
 							icon={ faCheckCircle }
-							style={ { marginRight: '4px' } }
+							className="wppo-mr-4"
 						/>
 						{ __( 'Passing', 'performance-optimisation' ) }
 					</span>
@@ -224,7 +224,7 @@ const SuggestionsPanel = ( { suggestions, onNavigate } ) => {
 			<div className="wppo-suggestions-panel__header">
 				<FontAwesomeIcon
 					icon={ faLightbulb }
-					style={ { marginRight: '8px' } }
+					className="wppo-mr-8"
 				/>
 				<h3 className="wppo-suggestions-panel__title">
 					{ __( 'Suggestions', 'performance-optimisation' ) }

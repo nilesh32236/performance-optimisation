@@ -40,7 +40,10 @@ const PreloadSettings = ( { options = {} } ) => {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
-	const speculationRules = wppoSettings?.speculation_rules || {};
+	const speculationRules =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings.speculation_rules || {}
+			: {};
 	const eagernessOverride = speculationRules.eagerness_override || null;
 	const modeOverride = speculationRules.mode_override || null;
 	const staticCacheActive = speculationRules.static_cache_active || false;

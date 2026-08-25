@@ -37,10 +37,7 @@ const RecentActivityCard = ( { activities, onNavigate } ) => {
 				</button>
 			}
 		>
-			<p
-				className="wppo-text-muted wppo-text-small"
-				style={ { marginBottom: '16px' } }
-			>
+			<p className="wppo-text-muted wppo-text-small wppo-mb-16">
 				{ __(
 					'The 5 most recent actions performed by the plugin. Open the Tools tab for the complete paginated log.',
 					'performance-optimisation'

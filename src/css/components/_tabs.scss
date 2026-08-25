@@ -38,7 +38,7 @@
 
 	&--active {
 		background: var(--wppo-primary);
-		color: #fff;
+		color: var(--wppo-text-sidebar-active);
 		border-color: var(--wppo-primary);
 		box-shadow: 0 2px 8px color-mix(in srgb, var(--wppo-primary) 30%, transparent);
 	}
@@ -79,7 +79,7 @@
 	&--active {
 		background: var(--wppo-primary);
 		border-color: var(--wppo-primary);
-		color: #ffffff;
+		color: var(--wppo-text-sidebar-active);
 	}
 
 	&:focus-within {
