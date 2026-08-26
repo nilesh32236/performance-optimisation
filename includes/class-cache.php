@@ -596,7 +596,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			foreach ( $exclude_combine_css as $exclude_css ) {
-				if ( false !== strpos( $src, $exclude_css ) ) {
+				if ( '' !== $exclude_css && str_contains( $src, $exclude_css ) ) {
 					return true;
 				}
 			}
