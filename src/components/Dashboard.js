@@ -98,9 +98,7 @@ const Dashboard = ( {
 				? wppoSettings?.total_js_css?.css ?? 0
 				: 0,
 		imageInfo: normalizeImageInfo(
-			typeof wppoSettings !== 'undefined'
-				? wppoSettings?.image_info
-				: {}
+			typeof wppoSettings !== 'undefined' ? wppoSettings?.image_info : {}
 		),
 		dbCounts: {},
 		loading: {
@@ -112,11 +110,14 @@ const Dashboard = ( {
 	} );
 
 	// Logged-in user cache settings — prefer props from App.js, fallback to global for direct mounts/tests.
-	const cacheSettings =
-		propCacheSettings ??
-		( typeof wppoSettings !== 'undefined'
-			? wppoSettings?.settings?.cache_settings || {}
-			: {} );
+	const cacheSettings = useMemo( () => {
+		return (
+			propCacheSettings ??
+			( typeof wppoSettings !== 'undefined'
+				? wppoSettings?.settings?.cache_settings || {}
+				: {} )
+		);
+	}, [ propCacheSettings ] );
 	const userRoles =
 		propUserRoles ??
 		( typeof wppoSettings !== 'undefined'
@@ -558,7 +559,13 @@ const Dashboard = ( {
 				} )
 			)
 			.finally( () => setSavingCdnPurge( false ) );
-	}, [ cdnPurgeService, cloudflareZoneId, varnishPurgeUrls, cacheSettings, notify ] );
+	}, [
+		cdnPurgeService,
+		cloudflareZoneId,
+		varnishPurgeUrls,
+		cacheSettings,
+		notify,
+	] );
 
 	const handleLoggedInCacheToggle = useCallback( ( e ) => {
 		setLoggedInCacheEnabled( e.target.checked );
