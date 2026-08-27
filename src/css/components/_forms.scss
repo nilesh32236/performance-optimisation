@@ -1,3 +1,5 @@
+@use '../abstracts/mixins' as *;
+
 .wppo-input,
 .wppo-textarea,
 .wppo-select {
@@ -83,6 +85,8 @@
 	justify-content: center;
 	gap: 7px;
 	padding: 9px 16px;
+	min-height: 38px;
+	box-sizing: border-box;
 	font-size: 13.5px;
 	font-weight: 600;
 	border-radius: var(--wppo-radius-sm);
@@ -92,6 +96,11 @@
 	white-space: nowrap;
 	letter-spacing: 0.01em;
 
+	@include respond-to('md') {
+		min-height: 44px;
+		padding: 10px 18px;
+	}
+
 	&--full {
 		width: 100%;
 	}
@@ -99,6 +108,16 @@
 	&--sm {
 		padding: 6px 12px;
 		font-size: 12.5px;
+		min-height: 30px;
+
+		@include respond-to('md') {
+			min-height: 36px;
+		}
+
+		@include respond-to('sm') {
+			min-height: 44px;
+			padding: 8px 14px;
+		}
 	}
 
 	&--primary {
@@ -217,5 +236,27 @@
 	input:focus-visible + .wppo-slider {
 		outline: 2px solid var(--wppo-primary);
 		outline-offset: 2px;
+	}
+}
+
+@media (hover: none) {
+	.wppo-button--primary:hover:not(:disabled),
+	.wppo-button--danger:hover:not(:disabled) {
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.wppo-button {
+		transition: none;
+	}
+}
+
+@media (max-width: 768px) {
+	.wppo-input,
+	.wppo-textarea,
+	.wppo-select {
+		min-height: 44px;
+		font-size: 16px !important; // prevent iOS zoom on focus
 	}
 }

@@ -6,12 +6,36 @@
 	border-radius: var(--wppo-radius, 10px);
 	padding: 4px;
 	overflow-x: auto;
+	overflow-y: hidden;
 	margin-top: 20px;
 	scrollbar-width: none;
 	-ms-overflow-style: none;
+	scroll-snap-type: x proximity;
+	-webkit-overflow-scrolling: touch;
+	position: relative;
+	min-width: 0;
 
 	&::-webkit-scrollbar {
 		display: none;
+	}
+
+	// right fade indicator for scrollable overflow
+	&::after {
+		content: '';
+		position: sticky;
+		right: 0;
+		top: 0;
+		bottom: 0;
+		width: 24px;
+		flex-shrink: 0;
+		background: linear-gradient(90deg, transparent, var(--wppo-switch-hover, #f1f5f9));
+		pointer-events: none;
+		margin-left: -24px;
+		align-self: stretch;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		scroll-behavior: auto;
 	}
 }
 
@@ -31,6 +55,14 @@
 	transition: var(--wppo-transition);
 	white-space: nowrap;
 	line-height: 1;
+	scroll-snap-align: start;
+	flex-shrink: 0;
+	min-height: 36px;
+
+	@media (max-width: 768px) {
+		min-height: 44px;
+		padding: 10px 16px;
+	}
 
 	svg {
 		font-size: 12px;
@@ -86,6 +118,20 @@
 	cursor: pointer;
 	transition: var(--wppo-transition);
 	user-select: none;
+	min-height: 28px;
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+
+	@media (max-width: 768px) {
+		min-height: 36px;
+		padding: 8px 14px;
+	}
+
+	@media (max-width: 640px) {
+		min-height: 44px;
+	}
 
 	&:hover {
 		border-color: var(--wppo-primary);

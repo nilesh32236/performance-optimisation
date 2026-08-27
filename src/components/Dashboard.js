@@ -642,15 +642,12 @@ const Dashboard = ( {
 			) }
 			{ isLiteSpeed && (
 				<div
-					className="wppo-notice wppo-notice--info wppo-mb-16"
+					className="wppo-notice wppo-notice--info wppo-litespeed-banner wppo-mb-16"
 					role="alert"
 					aria-live="polite"
 				>
-					<FontAwesomeIcon
-						icon={ faServer }
-						style={ { marginRight: '8px' } }
-					/>
-					<span style={ { marginRight: '12px' } }>
+					<FontAwesomeIcon icon={ faServer } aria-hidden="true" />
+					<span className="wppo-litespeed-banner__text">
 						<strong>
 							{ __(
 								'LiteSpeed Detected',
@@ -667,29 +664,27 @@ const Dashboard = ( {
 									'performance-optimisation'
 							  ) }
 					</span>
-					<span
-						className={ `wppo-status-badge ${ effectiveBadgeClass }` }
-						style={ { marginRight: '8px' } }
-					>
-						{ __( 'Effective:', 'performance-optimisation' ) }{ ' ' }
-						{ effectiveLabel }
-					</span>
-					<span
-						className={ `wppo-status-badge ${
-							lscacheActive
-								? 'wppo-status-badge--poor'
-								: 'wppo-status-badge--good'
-						}` }
-					>
-						{ lscacheActive
-							? 'LSCache Active'
-							: 'LSCache Inactive' }
+					<span className="wppo-litespeed-banner__badges">
+						<span
+							className={ `wppo-status-badge ${ effectiveBadgeClass }` }
+						>
+							{ __( 'Effective:', 'performance-optimisation' ) }{ ' ' }
+							{ effectiveLabel }
+						</span>
+						<span
+							className={ `wppo-status-badge ${
+								lscacheActive
+									? 'wppo-status-badge--poor'
+									: 'wppo-status-badge--good'
+							}` }
+						>
+							{ lscacheActive
+								? 'LSCache Active'
+								: 'LSCache Inactive' }
+						</span>
 					</span>
 					{ lscacheActive && effectiveMode === 'litespeed' && (
-						<span
-							className="wppo-text-muted wppo-text-small"
-							style={ { marginLeft: '12px' } }
-						>
+						<span className="wppo-text-muted wppo-text-small">
 							{ __(
 								'WPPO optimisation is paused in this mode.',
 								'performance-optimisation'
