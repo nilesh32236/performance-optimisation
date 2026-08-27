@@ -1044,6 +1044,56 @@ if ( ! function_exists( 'wp_cache_set_multiple_salted' ) ) {
 	}
 }
 
+if ( ! function_exists( 'wp_cache_delete_salted' ) ) {
+	/**
+	 * Deletes salted data from the cache (WP 6.9+ native override).
+	 *
+	 * Mirrors core's cache-compat.php: fetch the wrapper, check salt, delete stable key only on match.
+	 *
+	 * @since NEXT
+	 * @param string          $cache_key Cache key.
+	 * @param string          $group     Cache group.
+	 * @param string|string[] $salt      Salt when the group was last updated.
+	 * @return bool True if deleted, false otherwise.
+	 */
+	function wp_cache_delete_salted( $cache_key, $group, $salt ) {
+		global $wp_object_cache;
+		$salt  = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+		$cache = $wp_object_cache->get( $cache_key, $group );
+		if ( ! is_array( $cache ) || ! isset( $cache['salt'], $cache['data'] ) || $salt !== $cache['salt'] ) {
+			return false;
+		}
+		return $wp_object_cache->delete( $cache_key, $group );
+	}
+}
+
+if ( ! function_exists( 'wp_cache_delete_multiple_salted' ) ) {
+	/**
+	 * Deletes multiple salted items from the cache (WP 6.9+ native override).
+	 *
+	 * @since NEXT
+	 * @param string[]        $cache_keys Array of cache keys.
+	 * @param string          $group      Cache group.
+	 * @param string|string[] $salt       Salt when the group was last updated.
+	 * @return bool[] Array of results keyed by cache key.
+	 */
+	function wp_cache_delete_multiple_salted( $cache_keys, $group, $salt ) {
+		global $wp_object_cache;
+		$salt    = is_array( $salt ) ? implode( ':', $salt ) : $salt;
+		$cache   = $wp_object_cache->get_multiple( $cache_keys, $group );
+		$results = array();
+		foreach ( $cache_keys as $key ) {
+			$value = $cache[ $key ] ?? false;
+			if ( ! is_array( $value ) || ! isset( $value['salt'], $value['data'] ) || $salt !== $value['salt'] ) {
+				$results[ $key ] = false;
+				continue;
+			}
+			$results[ $key ] = $wp_object_cache->delete( $key, $group );
+		}
+		return $results;
+	}
+}
+
 if ( ! function_exists( 'wp_cache_supports' ) ) {
 	/**
 	 * Determines whether the object cache implementation supports a particular feature.
