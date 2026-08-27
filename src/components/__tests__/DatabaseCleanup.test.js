@@ -85,9 +85,7 @@ describe( 'DatabaseCleanup Component', () => {
 
 		await waitFor( () => {
 			expect(
-				screen.getByText(
-					/This action will permanently delete overhead items from your database. Proceed?/i
-				)
+				screen.getByRole( 'button', { name: /Delete/i } )
 			).toBeInTheDocument();
 		} );
 	} );
