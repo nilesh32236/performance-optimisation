@@ -148,3 +148,69 @@ add_filter( 'wppo_lazyload_iframe_allowed', function( $allowed, $src, $iframe_ta
     return $allowed;
 }, 10, 3 );
 ```
+
+---
+
+### `wppo_litespeed_is_litespeed`
+Filters whether the current server is detected as LiteSpeed / OpenLiteSpeed. @since NEXT.
+
+**Parameters:**
+- `$is_litespeed` *(bool)* — Whether LiteSpeed was detected.
+
+**Example:**
+```php
+add_filter( 'wppo_litespeed_is_litespeed', function( $is ) {
+    return $is || isset( $_SERVER['HTTP_X_LITESPEED'] );
+} );
+```
+
+---
+
+### `wppo_litespeed_mode`
+Filters the configured LiteSpeed integration mode (`auto|wppo|litespeed|standalone`). @since NEXT.
+
+---
+
+### `wppo_litespeed_ttl`
+Filters LiteSpeed TTL seconds mapped from `cacheLife` hours. File-cache `0` (never expire) maps to `604800` (1 week) for the LS server layer as an explicit policy change — LS cannot store infinite. @since NEXT.
+
+**Parameters:**
+- `$seconds` *(int)* — TTL in seconds.
+- `$hours` *(int)* — Original `cacheLife` hours.
+
+**Example:**
+```php
+add_filter( 'wppo_litespeed_ttl', function( $seconds, $hours ) {
+    return $hours === 0 ? 86400 : $seconds; // 1 day instead of 1 week for never-expire
+}, 10, 2 );
+```
+
+---
+
+### `wppo_litespeed_is_cacheable`
+Filters whether the current request is considered cacheable for the LiteSpeed layer. @since NEXT.
+
+---
+
+### `wppo_litespeed_tag`
+Filters the `X-LiteSpeed-Tag` value for WPPO pages (default `WPPO`). @since NEXT.
+
+---
+
+### `wppo_litespeed_vary`
+Filters the `litespeed_vary` value after WPPO appends `wppo_role_hash` when logged-in cache is enabled. @since NEXT.
+
+---
+
+### `wppo_litespeed_vary_enabled`
+Filters whether the LiteSpeed vary bridge (`wppo_role_hash` → `litespeed_vary`) is enabled. @since NEXT.
+
+---
+
+### `wppo_litespeed_strip_cache_control`
+Filters whether generic `Cache-Control` is stripped when `X-LiteSpeed-Cache-Control: public` is sent (prevents conflict). @since NEXT.
+
+---
+
+### `wppo_litespeed_bypass_file_cache`
+Filters whether the WPPO file cache is bypassed when LiteSpeed owns the cache (`is_litespeed && !is_wppo_cache_owner`). @since NEXT.
