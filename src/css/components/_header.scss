@@ -24,12 +24,17 @@
 		padding: 24px 28px 22px;
 		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06), 0 10px 32px -14px rgba(79, 70, 229, 0.12);
 		margin-bottom: 22px;
+		min-width: 0;
 
 		&::after { display: none; }
 
 		.wppo-feature-header__title h2 {
-			font-size: 30px;
+			font-size: clamp(22px, 5vw, 30px);
 			letter-spacing: -0.04em;
+		}
+
+		@include respond-to('sm') {
+			padding: 16px 18px 14px;
 		}
 	}
 
@@ -46,8 +51,10 @@
 	}
 
 	&__title {
+		min-width: 0;
+
 		h2 {
-			font-size: 28px;
+			font-size: clamp(22px, 4vw, 28px);
 			font-weight: 800;
 			margin: 0 0 8px 0;
 			letter-spacing: -0.03em;
@@ -55,9 +62,14 @@
 			line-height: 1.15;
 			display: inline-flex;
 			align-items: center;
+			flex-wrap: wrap;
+			gap: 8px;
+			min-width: 0;
+			overflow-wrap: anywhere;
+			text-wrap: balance;
 
 			@include respond-to('sm') {
-				font-size: 22px;
+				font-size: clamp(20px, 5vw, 22px);
 			}
 		}
 
@@ -121,15 +133,19 @@
 .wppo-stat-hero {
 	text-align: center;
 	padding: 20px 0;
+	min-width: 0;
 
 	&__value {
 		display: block;
-		font-size: 56px;
+		font-size: clamp(32px, 8vw, 56px);
 		font-weight: 800;
 		color: var(--wppo-primary);
 		line-height: 1;
 		margin-bottom: 10px;
 		letter-spacing: -0.04em;
+		overflow-wrap: anywhere;
+		word-break: break-word;
+		min-width: 0;
 	}
 
 	&__label {
