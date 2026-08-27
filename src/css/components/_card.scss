@@ -4,20 +4,21 @@
 	background: var(--wppo-bg-card);
 	border: 1px solid var(--wppo-border);
 	border-radius: var(--wppo-radius);
-	box-shadow: var(--wppo-shadow-sm);
-	transition: box-shadow 0.2s ease, border-color 0.2s ease;
+	box-shadow: var(--wppo-shadow-card);
+	transition: box-shadow 0.22s ease, border-color 0.22s ease, transform 0.22s ease;
 	overflow: hidden;
 	height: 100%;
 	display: flex;
 	flex-direction: column;
 
 	&:hover {
-		box-shadow: var(--wppo-shadow);
+		box-shadow: var(--wppo-shadow-card-hover);
 		border-color: var(--wppo-border-hover);
+		transform: translateY(-1px);
 	}
 
 	&__header {
-		padding: 20px 24px;
+		padding: 22px 24px;
 		border-bottom: 1px solid var(--wppo-border);
 		display: flex;
 		justify-content: space-between;
@@ -52,12 +53,14 @@
 
 	&__footer {
 		padding: 16px 24px;
-		background: var(--wppo-bg-card-surface, #fafbfc);
-		border-top: 1px solid var(--wppo-border);
+		background: rgba(248, 250, 252, 0.5);
+		backdrop-filter: blur(6px);
+		border-top: 1px solid var(--wppo-border, #f1f5f9);
 		display: flex;
 		justify-content: flex-end;
 		gap: 10px;
 		flex-wrap: wrap;
+		margin-top: auto;
 
 		@include respond-to('sm') {
 			flex-direction: column;
@@ -73,4 +76,10 @@
 		display: flex;
 		gap: 8px;
 	}
+}
+
+.wppo-danger-zone {
+	border-left: 4px solid var(--wppo-danger, #ef4444);
+	background: var(--wppo-error-bg, #fef2f2);
+	margin-top: 20px;
 }

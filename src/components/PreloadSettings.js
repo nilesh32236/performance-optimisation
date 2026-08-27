@@ -145,7 +145,7 @@ const PreloadSettings = ( { options = {} } ) => {
 							onChange={ handleChange( setSettings ) }
 						/>
 						{ settings.enablePreloadCache && (
-							<div className="wppo-mt-20">
+							<div className="wppo-field wppo-mt-20">
 								<label
 									className="wppo-field-label"
 									htmlFor="excludePreloadCache"
@@ -156,7 +156,7 @@ const PreloadSettings = ( { options = {} } ) => {
 									) }
 								</label>
 								<textarea
-									className="wppo-textarea"
+									className="wppo-textarea wppo-textarea--mono"
 									id="excludePreloadCache"
 									name="excludePreloadCache"
 									rows="3"
@@ -228,7 +228,7 @@ const PreloadSettings = ( { options = {} } ) => {
 									) }
 								</label>
 								<textarea
-									className="wppo-textarea"
+									className="wppo-textarea wppo-textarea--mono"
 									id="preconnectOrigins"
 									name="preconnectOrigins"
 									rows="2"
@@ -277,7 +277,7 @@ const PreloadSettings = ( { options = {} } ) => {
 									) }
 								</label>
 								<textarea
-									className="wppo-textarea"
+									className="wppo-textarea wppo-textarea--mono"
 									id="dnsPrefetchOrigins"
 									name="dnsPrefetchOrigins"
 									rows="2"
@@ -338,7 +338,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										) }
 									</label>
 									<textarea
-										className="wppo-textarea"
+										className="wppo-textarea wppo-textarea--mono"
 										id="preloadFontsUrls"
 										name="preloadFontsUrls"
 										rows="3"
@@ -388,7 +388,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										) }
 									</label>
 									<textarea
-										className="wppo-textarea"
+										className="wppo-textarea wppo-textarea--mono"
 										id="preloadCSSUrls"
 										name="preloadCSSUrls"
 										rows="3"
@@ -548,6 +548,12 @@ const PreloadSettings = ( { options = {} } ) => {
 											) }
 										</option>
 									</select>
+									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+										{ __(
+											'Conservative waits for hover, Moderate prefetches nearby links, Eager loads immediately on page load.',
+											'performance-optimisation'
+										) }
+									</p>
 								</div>
 								<div className="wppo-field">
 									<label
@@ -560,7 +566,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										) }
 									</label>
 									<textarea
-										className="wppo-textarea"
+										className="wppo-textarea wppo-textarea--mono"
 										id="speculationExcludeUrls"
 										name="speculationExcludeUrls"
 										rows="3"

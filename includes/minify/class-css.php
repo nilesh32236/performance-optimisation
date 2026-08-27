@@ -62,12 +62,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		 */
 		public function __construct( $file_path, $cache_dir ) {
 			$real_path   = realpath( $file_path );
-			$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+			$content_dir = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
 			if ( false === $real_path ) {
 				$this->file_path = '';
 			} else {
 				$real_path_normalized = wp_normalize_path( $real_path );
-				$is_inside            = ( 0 === strpos( $real_path_normalized, $content_dir ) && ( strlen( $real_path_normalized ) === strlen( $content_dir ) || '/' === substr( $real_path_normalized, strlen( $content_dir ), 1 ) ) );
+				$is_inside            = ( '' !== $content_dir && 0 === strpos( $real_path_normalized, $content_dir ) && ( strlen( $real_path_normalized ) === strlen( $content_dir ) || '/' === substr( $real_path_normalized, strlen( $content_dir ), 1 ) ) );
 				if ( ! $is_inside ) {
 					$this->file_path = '';
 				} else {
@@ -76,8 +76,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 			}
 			$this->cache_dir        = $cache_dir;
 			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
-			$content_dir_normalized = wp_normalize_path( WP_CONTENT_DIR );
-			$cache_inside           = ( 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
+			$content_dir_normalized = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
+			$cache_inside           = ( '' !== $content_dir_normalized && 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
 
 			if ( ! $cache_inside ) {
 				$this->cache_url = Util::cached_content_url( '/' );
@@ -91,22 +91,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 		/**
 		 * Minifies the CSS file and stores it in the cache directory.
 		 *
-		 * @return string|null The URL of the minified CSS file, or null on failure.
+		 * @return string The URL of the minified CSS file, or empty string on failure.
 		 * @since 1.0.0
 		 */
 		public function minify() {
+			if ( empty( $this->file_path ) || ! is_readable( $this->file_path ) ) {
+				return '';
+			}
 			$cache_file = $this->get_cache_file_path();
 
 			$min_dir = dirname( $cache_file );
 			if ( ! $this->filesystem || ! Util::prepare_cache_dir( $min_dir ) ) {
-				return;
+				return '';
 			}
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
 				try {
 					$css_content = $this->filesystem->get_contents( $this->file_path );
 					if ( false === $css_content ) {
-						return null;
+						return '';
 					}
 
 					// update_image_paths uses preg_replace_callback internally; fall back to
@@ -124,7 +127,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 					$this->save_min_file( $minified_css, $cache_file );
 				} catch ( \Exception $e ) {
-					return null;
+					return '';
 				}
 			}
 
@@ -175,13 +178,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 			$file_path   = wp_normalize_path( $file_path );
 			$pattern     = '/url\(\s*([\'"]?)(.*?)\s*\1\s*\)/';
 			$css_dir     = wp_normalize_path( dirname( $file_path ) );
-			$content_dir = wp_normalize_path( WP_CONTENT_DIR );
-			$abs_path    = trailingslashit( wp_normalize_path( ABSPATH ) );
+			$content_dir = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
+			$abs_path    = trailingslashit( wp_normalize_path( defined( 'ABSPATH' ) ? ABSPATH : '' ) );
 
-			if ( 0 === strpos( $css_dir, $content_dir ) ) {
+			if ( '' !== $content_dir && 0 === strpos( $css_dir, $content_dir ) ) {
 				$relative_path = str_replace( $content_dir, '', $css_dir );
 				$css_dir_url   = Util::cached_content_url( $relative_path );
-			} elseif ( 0 === strpos( $css_dir, $abs_path ) ) {
+			} elseif ( '' !== $abs_path && 0 === strpos( $css_dir, $abs_path ) ) {
 				$relative_path = str_replace( $abs_path, '', $css_dir );
 				$css_dir_url   = site_url( $relative_path );
 			} else {

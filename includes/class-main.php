@@ -399,7 +399,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'wp_enqueue_scripts', array( $this, 'apply_module_loading_strategies' ), 10000 );
 			$has_delay_js = ! empty( $this->options['file_optimisation']['delayJS'] );
 			$has_defer_js = ! empty( $this->options['file_optimisation']['deferJS'] );
-			$wp_version   = (string) get_bloginfo( 'version' );
+			$wp_version   = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
 			// The native 'strategy' script data added via wp_script_add_data() is only
 			// honoured by core since WP 6.3, so the native defer path is gated to 6.3+
 			// and older core (WP 6.2) uses the legacy script_loader_tag fallback.
@@ -1718,7 +1718,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			$is_wp69_plus = version_compare( (string) get_bloginfo( 'version' ), '6.9-alpha', '>=' );
+			$is_wp69_plus = version_compare( (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) ), '6.9-alpha', '>=' );
 
 			foreach ( $wp_scripts->queue as $handle ) {
 				if ( ! in_array( $handle, $this->exclude_defer_js, true ) ) {

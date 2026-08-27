@@ -123,6 +123,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private static function get_ccss_dir(): string {
+			if ( ! defined( 'WP_CONTENT_DIR' ) || '' === WP_CONTENT_DIR ) {
+				return '';
+			}
 			return wp_normalize_path( WP_CONTENT_DIR . self::CCSS_DIR );
 		}
 
@@ -133,6 +136,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private static function get_ccss_url(): string {
+			if ( ! defined( 'WP_CONTENT_DIR' ) || '' === WP_CONTENT_DIR ) {
+				return '';
+			}
 			return WP_CONTENT_URL . self::CCSS_DIR;
 		}
 
@@ -182,7 +188,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 * @since NEXT
 		 */
 		private static function get_ccss_file( string $template_hash ): string {
-			return self::get_ccss_dir() . '/' . $template_hash . '.css';
+			$dir = self::get_ccss_dir();
+			if ( '' === $dir ) {
+				return '';
+			}
+			return $dir . '/' . $template_hash . '.css';
 		}
 
 		/**
@@ -943,6 +953,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				);
 				if ( $action_id ) {
 					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'pending', HOUR_IN_SECONDS );
+					return;
 				}
 				// Synchronous fallback only when async enqueue failed and we are on
 				// a local/dev host where cron is known to be broken.
@@ -953,22 +964,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 				$url = self::get_sample_url( $template_slug );
 				if ( ! $url ) {
+					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 					return;
 				}
 				$css = self::generate( $url );
 				if ( false === $css || '' === trim( (string) $css ) || preg_match( '/<\/style|<script/i', (string) $css ) ) {
+					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 					return;
 				}
 				$dir = self::get_ccss_dir();
-				$fs  = Util::init_filesystem();
+				if ( '' === $dir ) {
+					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
+					return;
+				}
+				$fs = Util::init_filesystem();
 				if ( ! $fs ) {
+					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 					return;
 				}
 				if ( ! $fs->is_dir( $dir ) && ! $fs->mkdir( $dir, FS_CHMOD_DIR ) ) {
+					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 					return;
 				}
 				$file_tmp = self::get_ccss_file( $template_hash );
 				if ( ! $fs->put_contents( $file_tmp, $css, FS_CHMOD_FILE ) ) {
+					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
 					return;
 				}
 				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'ready', WEEK_IN_SECONDS );
@@ -1011,9 +1031,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			// Single regex avoids matching inside the JS string added by the first pass.
+			// Preserve original quote char and handle media as first attribute via \b.
 			$new_tag = preg_replace(
-				'/\smedia\s*=\s*([\'"])all\1/i',
-				' media=\'print\' onload=\'this.media="all"\' data-wppo-ccss=\'1\'',
+				'/\bmedia\s*=\s*([\'"])all\1/i',
+				' media=$1print$1 onload="this.media=\'all\'" data-wppo-ccss="1"',
 				$tag,
 				1
 			);

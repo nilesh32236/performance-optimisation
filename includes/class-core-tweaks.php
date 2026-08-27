@@ -270,6 +270,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 		 * @return \WP_REST_Response
 		 */
 		public function suppress_rest_header( $result, $server, $request = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found,Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Filter signature requires all 3 params; only $result is used.
+			if ( $result instanceof \WP_Error || ! $result instanceof \WP_REST_Response ) {
+				return $result;
+			}
 			if ( $result instanceof \WP_REST_Response ) {
 				// WP_REST_Response has no remove_header() (that lives on WP_REST_Server),
 				// so rewrite the header list without Link (case-insensitive).

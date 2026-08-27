@@ -11,12 +11,17 @@ import {
 	faShieldAlt,
 	faTimes,
 	faNetworkWired,
+	faMemory,
+	faChartBar,
+	faUsers,
+	faServer,
 } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
 import FeatureCard from './common/FeatureCard';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
+import ConfirmDialog from './common/ConfirmDialog';
 
 import { __ } from '@wordpress/i18n';
 
@@ -47,6 +52,7 @@ const ObjectCache = ( { options = {} } ) => {
 		statusLoaded: false,
 		supported_compressors: { none: true },
 	} );
+	const [ confirmDisable, setConfirmDisable ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
 	const fetchStatus = useCallback( async () => {
@@ -171,14 +177,40 @@ const ObjectCache = ( { options = {} } ) => {
 
 	const hitRatio = ( () => {
 		if ( ! cacheStatus.telemetry ) {
-			return 0;
+			return '0.0';
 		}
 		const hits =
-			parseInt( cacheStatus.telemetry.keyspace_hits || '0', 10 ) || 0;
+			Number.parseInt( cacheStatus.telemetry.keyspace_hits ?? '0', 10 ) ||
+			0;
 		const misses =
-			parseInt( cacheStatus.telemetry.keyspace_misses || '0', 10 ) || 0;
+			Number.parseInt(
+				cacheStatus.telemetry.keyspace_misses ?? '0',
+				10
+			) || 0;
 		const total = hits + misses;
-		return total > 0 ? ( ( hits / total ) * 100 ).toFixed( 1 ) : 0;
+		return total > 0 ? ( ( hits / total ) * 100 ).toFixed( 1 ) : '0.0';
+	} )();
+
+	const connectionBadge = ( () => {
+		if ( ! cacheStatus.statusLoaded ) {
+			return null;
+		}
+		if ( ! cacheStatus.enabled ) {
+			return {
+				level: 'error',
+				text: `○ ${ __( 'Disconnected', 'performance-optimisation' ) }`,
+			};
+		}
+		if ( cacheStatus.redis_reachable ) {
+			return {
+				level: 'success',
+				text: `● ${ __( 'Connected', 'performance-optimisation' ) }`,
+			};
+		}
+		return {
+			level: 'warning',
+			text: `○ ${ __( 'Unreachable', 'performance-optimisation' ) }`,
+		};
 	} )();
 
 	return (
@@ -192,40 +224,22 @@ const ObjectCache = ( { options = {} } ) => {
 				actions={
 					<div className="wppo-feature-header__actions">
 						{ cacheStatus.enabled ? (
-							<>
-								<LoadingSubmitButton
-									type="button"
-									className="wppo-button wppo-button--secondary"
-									onClick={ () => handleAction( 'flush' ) }
-									disabled={ isActionLoading }
-									isLoading={ isActionLoading }
-									label={
-										<>
-											<FontAwesomeIcon icon={ faBroom } />{ ' ' }
-											{ __(
-												'Flush Cache',
-												'performance-optimisation'
-											) }
-										</>
-									}
-								/>
-								<LoadingSubmitButton
-									type="button"
-									className="wppo-button wppo-button--danger"
-									onClick={ () => handleAction( 'disable' ) }
-									disabled={ isActionLoading }
-									isLoading={ isActionLoading }
-									label={
-										<>
-											<FontAwesomeIcon icon={ faTimes } />{ ' ' }
-											{ __(
-												'Disable',
-												'performance-optimisation'
-											) }
-										</>
-									}
-								/>
-							</>
+							<LoadingSubmitButton
+								type="button"
+								className="wppo-button wppo-button--secondary"
+								onClick={ () => handleAction( 'flush' ) }
+								disabled={ isActionLoading }
+								isLoading={ isActionLoading }
+								label={
+									<>
+										<FontAwesomeIcon icon={ faBroom } />{ ' ' }
+										{ __(
+											'Flush Cache',
+											'performance-optimisation'
+										) }
+									</>
+								}
+							/>
 						) : (
 							<LoadingSubmitButton
 								type="button"
@@ -308,6 +322,10 @@ const ObjectCache = ( { options = {} } ) => {
 				<div className="wppo-stats-grid">
 					<div className="wppo-stat-item">
 						<span className="wppo-stat-label">
+							<FontAwesomeIcon
+								icon={ faMemory }
+								style={ { marginRight: '6px' } }
+							/>
 							{ __( 'Memory Usage', 'performance-optimisation' ) }
 						</span>
 						<span className="wppo-stat-value">
@@ -324,6 +342,10 @@ const ObjectCache = ( { options = {} } ) => {
 							className="wppo-stat-label"
 							id={ hitRatioLabelId }
 						>
+							<FontAwesomeIcon
+								icon={ faChartBar }
+								style={ { marginRight: '6px' } }
+							/>
 							{ __( 'Hit Ratio', 'performance-optimisation' ) }
 						</span>
 						<span className="wppo-stat-value">{ hitRatio }%</span>
@@ -341,9 +363,34 @@ const ObjectCache = ( { options = {} } ) => {
 								style={ { width: `${ hitRatio }%` } }
 							></div>
 						</div>
+						<span
+							className="wppo-text-muted wppo-text-small"
+							title={ __(
+								'Cache hits vs total requests',
+								'performance-optimisation'
+							) }
+						>
+							{ cacheStatus.telemetry?.keyspace_hits || 0 }{ ' ' }
+							{ __( 'hits', 'performance-optimisation' ) } /{ ' ' }
+							{ (
+								parseInt(
+									cacheStatus.telemetry?.keyspace_hits || 0,
+									10
+								) +
+								parseInt(
+									cacheStatus.telemetry?.keyspace_misses || 0,
+									10
+								)
+							).toLocaleString() }{ ' ' }
+							{ __( 'total', 'performance-optimisation' ) }
+						</span>
 					</div>
 					<div className="wppo-stat-item">
 						<span className="wppo-stat-label">
+							<FontAwesomeIcon
+								icon={ faUsers }
+								style={ { marginRight: '6px' } }
+							/>
 							{ __(
 								'Active Clients',
 								'performance-optimisation'
@@ -352,14 +399,29 @@ const ObjectCache = ( { options = {} } ) => {
 						<span className="wppo-stat-value">
 							{ cacheStatus.telemetry?.connected_clients || 0 }
 						</span>
-						<span className="wppo-text-muted">
-							{ __( 'Total:', 'performance-optimisation' ) }{ ' ' }
-							{ cacheStatus.telemetry
-								?.total_connections_received || 0 }
+						<span
+							className="wppo-text-muted"
+							title={ __(
+								'Cumulative connections handled since Redis started',
+								'performance-optimisation'
+							) }
+						>
+							{ __(
+								'Total Connections:',
+								'performance-optimisation'
+							) }{ ' ' }
+							{ Number(
+								cacheStatus.telemetry
+									?.total_connections_received || 0
+							).toLocaleString() }
 						</span>
 					</div>
 					<div className="wppo-stat-item">
 						<span className="wppo-stat-label">
+							<FontAwesomeIcon
+								icon={ faServer }
+								style={ { marginRight: '6px' } }
+							/>
 							{ __(
 								'Redis Version',
 								'performance-optimisation'
@@ -390,6 +452,16 @@ const ObjectCache = ( { options = {} } ) => {
 						'performance-optimisation'
 					) }
 					icon={ <FontAwesomeIcon icon={ faLink } /> }
+					actions={
+						connectionBadge ? (
+							<span
+								className={ `wppo-status-badge wppo-status-badge--${ connectionBadge.level }` }
+								style={ { fontSize: '11px' } }
+							>
+								{ connectionBadge.text }
+							</span>
+						) : null
+					}
 				>
 					<div className="wppo-field-group">
 						<div className="wppo-field">
@@ -405,6 +477,7 @@ const ObjectCache = ( { options = {} } ) => {
 								name="mode"
 								value={ settings.mode }
 								onChange={ handleChange( setSettings ) }
+								aria-describedby="mode-desc"
 							>
 								<option value="standalone">
 									{ __(
@@ -425,6 +498,15 @@ const ObjectCache = ( { options = {} } ) => {
 									) }
 								</option>
 							</select>
+							<p
+								id="mode-desc"
+								className="wppo-text-muted wppo-mt-10 wppo-text-small"
+							>
+								{ __(
+									'Choose the Redis topology that matches your infrastructure.',
+									'performance-optimisation'
+								) }
+							</p>
 						</div>
 
 						{ settings.mode === 'standalone' ? (
@@ -446,6 +528,10 @@ const ObjectCache = ( { options = {} } ) => {
 										name="host"
 										value={ settings.host }
 										onChange={ handleChange( setSettings ) }
+										style={ {
+											fontFamily:
+												'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+										} }
 									/>
 								</div>
 								<div>
@@ -465,6 +551,10 @@ const ObjectCache = ( { options = {} } ) => {
 										name="port"
 										value={ settings.port }
 										onChange={ handleChange( setSettings ) }
+										style={ {
+											fontFamily:
+												'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+										} }
 									/>
 								</div>
 							</div>
@@ -480,7 +570,7 @@ const ObjectCache = ( { options = {} } ) => {
 									) }
 								</label>
 								<textarea
-									className="wppo-textarea"
+									className="wppo-textarea wppo-textarea--mono"
 									id="nodes"
 									name="nodes"
 									rows="3"
@@ -491,6 +581,12 @@ const ObjectCache = ( { options = {} } ) => {
 									value={ settings.nodes }
 									onChange={ handleChange( setSettings ) }
 								/>
+								<p className="wppo-text-muted wppo-text-small wppo-mt-10">
+									{ __(
+										'One host:port per line. Example: 10.0.0.1:6379',
+										'performance-optimisation'
+									) }
+								</p>
 							</div>
 						) }
 
@@ -512,7 +608,17 @@ const ObjectCache = ( { options = {} } ) => {
 									name="master_name"
 									value={ settings.master_name }
 									onChange={ handleChange( setSettings ) }
+									style={ {
+										fontFamily:
+											'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+									} }
 								/>
+								<p className="wppo-text-muted wppo-text-small wppo-mt-10">
+									{ __(
+										'Name of the Redis master as configured in sentinel.conf.',
+										'performance-optimisation'
+									) }
+								</p>
 							</div>
 						) }
 
@@ -557,6 +663,10 @@ const ObjectCache = ( { options = {} } ) => {
 									name="database"
 									value={ settings.database }
 									onChange={ handleChange( setSettings ) }
+									style={ {
+										fontFamily:
+											'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+									} }
 								/>
 							</div>
 						</div>
@@ -718,6 +828,67 @@ const ObjectCache = ( { options = {} } ) => {
 					</div>
 				</FeatureCard>
 			</form>
+
+			{ cacheStatus.enabled && (
+				<div className="wppo-feature-card wppo-danger-zone">
+					<div className="wppo-feature-card__header">
+						<h3>
+							<FontAwesomeIcon
+								icon={ faExclamationCircle }
+								style={ {
+									color: 'var(--wppo-danger, #ef4444)',
+								} }
+							/>{ ' ' }
+							{ __( 'Danger Zone', 'performance-optimisation' ) }
+						</h3>
+					</div>
+					<div className="wppo-feature-card__body">
+						<p className="wppo-text-muted wppo-text-small">
+							{ __(
+								'Disabling the object cache will remove the drop-in and flush all cached objects. This cannot be undone.',
+								'performance-optimisation'
+							) }
+						</p>
+					</div>
+					<div className="wppo-feature-card__footer">
+						<LoadingSubmitButton
+							type="button"
+							className="wppo-button wppo-button--danger"
+							onClick={ () => setConfirmDisable( true ) }
+							disabled={ isActionLoading }
+							isLoading={ isActionLoading }
+							label={
+								<>
+									<FontAwesomeIcon icon={ faTimes } />{ ' ' }
+									{ __(
+										'Disable Object Cache',
+										'performance-optimisation'
+									) }
+								</>
+							}
+						/>
+					</div>
+				</div>
+			) }
+
+			<ConfirmDialog
+				isOpen={ confirmDisable }
+				onConfirm={ () => {
+					setConfirmDisable( false );
+					handleAction( 'disable' );
+				} }
+				onCancel={ () => setConfirmDisable( false ) }
+				title={ __(
+					'Disable Object Cache?',
+					'performance-optimisation'
+				) }
+				message={ __(
+					'This will remove the object-cache drop-in and clear all cached data. Are you sure?',
+					'performance-optimisation'
+				) }
+				confirmLabel={ __( 'Disable', 'performance-optimisation' ) }
+				variant="danger"
+			/>
 		</div>
 	);
 };

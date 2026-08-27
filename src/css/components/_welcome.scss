@@ -32,11 +32,16 @@
 	display: flex;
 	align-items: flex-start;
 	gap: 14px;
-	padding: 14px 16px;
-	border-radius: var(--wppo-radius-sm);
+	padding: 16px;
+	border-radius: 12px;
 	background: var(--wppo-bg-card-surface);
 	border: 1px solid var(--wppo-border);
-	transition: var(--wppo-transition);
+	transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+
+	&:hover {
+		border-color: var(--wppo-border-hover);
+		box-shadow: var(--wppo-shadow-sm);
+	}
 
 	&--done {
 		border-color: var(--wppo-success-border);
@@ -45,8 +50,8 @@
 
 	&__number {
 		flex-shrink: 0;
-		width: 28px;
-		height: 28px;
+		width: 32px;
+		height: 32px;
 		border-radius: 50%;
 		background: var(--wppo-primary);
 		color: var(--wppo-text-sidebar-active);
@@ -57,9 +62,11 @@
 		justify-content: center;
 		line-height: 1;
 		margin-top: 1px;
+		box-shadow: 0 2px 8px rgba(34, 113, 177, 0.3), 0 1px 3px rgba(0, 0, 0, 0.08);
 
 		.wppo-welcome-step--done & {
 			background: var(--wppo-success);
+			box-shadow: 0 2px 8px rgba(5, 150, 105, 0.3), 0 1px 3px rgba(0, 0, 0, 0.08);
 		}
 	}
 
@@ -70,15 +77,15 @@
 
 	&__label {
 		display: block;
-		font-size: 13px;
+		font-size: 14px;
 		font-weight: 600;
 		color: var(--wppo-text-main);
-		margin-bottom: 2px;
+		margin-bottom: 3px;
 	}
 
 	&__desc {
 		margin: 0;
-		font-size: 12px;
+		font-size: 12.5px;
 		color: var(--wppo-text-muted);
 		line-height: 1.5;
 	}
@@ -87,7 +94,7 @@
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
-		min-height: 28px;
+		min-height: 32px;
 	}
 
 	&__check {

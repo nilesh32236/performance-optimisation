@@ -65,10 +65,32 @@
 	border-radius: var(--wppo-radius-sm);
 	padding: 14px 16px;
 	overflow-x: auto;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 	font-size: 12px;
 	line-height: 1.6;
 	white-space: pre;
 	word-break: normal;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+.wppo-focusable:focus-visible {
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+.wppo-input:focus-visible,
+.wppo-select:focus-visible,
+.wppo-textarea:focus-visible {
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--wppo-primary) 35%, transparent);
+	border-color: var(--wppo-primary);
 }
 
 .wppo-field-label {

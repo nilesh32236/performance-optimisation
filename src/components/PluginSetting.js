@@ -545,7 +545,8 @@ const PluginSetting = ( { options } ) => {
 							{ logError }
 							<button
 								type="button"
-								className="wppo-button wppo-button--secondary wppo-button--sm wppo-ml-12"
+								className="wppo-button wppo-button--secondary wppo-button--sm"
+								style={ { marginLeft: '12px' } }
 								onClick={ () => loadActivityLog( logPage ) }
 							>
 								{ __( 'Retry', 'performance-optimisation' ) }
@@ -587,10 +588,26 @@ const PluginSetting = ( { options } ) => {
 				>
 					<p
 						id="pagespeed-api-key-desc"
-						className="wppo-text-muted wppo-mb-16"
+						className="wppo-text-muted"
+						style={ { marginBottom: '16px' } }
 					>
 						{ __(
-							'Required to run PageSpeed Insights scans. Get a free key from Google Cloud Console.',
+							'Required to run PageSpeed Insights scans. Get a free key from',
+							'performance-optimisation'
+						) }{ ' ' }
+						<a
+							href="https://developers.google.com/speed/docs/insights/v5/get-started#APIKey"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							{ __(
+								'Google Cloud Console',
+								'performance-optimisation'
+							) }
+						</a>
+						{ '. ' }
+						{ __(
+							'See Google docs for quota and billing details.',
 							'performance-optimisation'
 						) }
 					</p>
@@ -598,7 +615,8 @@ const PluginSetting = ( { options } ) => {
 					<div
 						className={ `wppo-notice wppo-notice--${
 							apiKeyConfigured ? 'success' : 'warning'
-						} wppo-mb-16` }
+						}` }
+						style={ { marginBottom: '16px' } }
 					>
 						<FontAwesomeIcon
 							icon={
@@ -606,7 +624,7 @@ const PluginSetting = ( { options } ) => {
 									? faCheckCircle
 									: faExclamationCircle
 							}
-							className="wppo-mr-8"
+							style={ { marginRight: '8px' } }
 						/>
 						{ apiKeyConfigured
 							? __(
@@ -667,7 +685,10 @@ const PluginSetting = ( { options } ) => {
 						) }
 					/>
 
-					<hr className="wppo-divider wppo-mt-20 wppo-mb-20" />
+					<hr
+						className="wppo-divider"
+						style={ { margin: '20px 0' } }
+					/>
 
 					<div className="wppo-field">
 						<label
@@ -681,7 +702,8 @@ const PluginSetting = ( { options } ) => {
 						</label>
 						<p
 							id="auto-rescan-desc"
-							className="wppo-text-muted wppo-text-small wppo-mb-8"
+							className="wppo-text-muted wppo-text-small"
+							style={ { marginBottom: '8px' } }
 						>
 							{ __(
 								'Automatically re-run PageSpeed scans on your homepage and high-value URLs to build Web Vitals trend history. Requires a configured API key.',
@@ -767,7 +789,7 @@ const PluginSetting = ( { options } ) => {
 					</label>
 					<textarea
 						id="wppo-high-value-urls"
-						className="wppo-textarea"
+						className="wppo-textarea wppo-textarea--mono"
 						rows={ 4 }
 						value={ highValueUrls }
 						onChange={ ( e ) => setHighValueUrls( e.target.value ) }
@@ -783,6 +805,12 @@ const PluginSetting = ( { options } ) => {
 						].join( '\n' ) }
 						aria-describedby="wppo-high-value-urls-desc"
 					/>
+					<p className="wppo-text-muted wppo-text-small">
+						{ __(
+							'Plain text, one per line. URLs must be on the same origin.',
+							'performance-optimisation'
+						) }
+					</p>
 					<p
 						id="wppo-high-value-urls-desc"
 						className="wppo-text-muted wppo-text-small"
@@ -807,83 +835,112 @@ const PluginSetting = ( { options } ) => {
 					/>
 				</FeatureCard>
 
-				{ /* Export */ }
-				<FeatureCard
-					title={ __(
-						'Export Configuration',
-						'performance-optimisation'
-					) }
-					icon={ <FontAwesomeIcon icon={ faFileExport } /> }
-				>
-					<p className="wppo-text-muted wppo-mb-24">
-						{ __(
-							'Download your current plugin settings as a JSON file for backup or migration to another site.',
+				<div className="wppo-grid-2-col">
+					{ /* Export */ }
+					<FeatureCard
+						title={ __(
+							'Export Configuration',
 							'performance-optimisation'
 						) }
-					</p>
-					<LoadingSubmitButton
-						className="wppo-button wppo-button--primary"
-						onClick={ exportSettings }
-						label={ __(
-							'Export Settings',
-							'performance-optimisation'
-						) }
-					/>
-				</FeatureCard>
-
-				{ /* Import */ }
-				<FeatureCard
-					title={ __(
-						'Import Configuration',
-						'performance-optimisation'
-					) }
-					icon={ <FontAwesomeIcon icon={ faFileImport } /> }
-				>
-					<p className="wppo-text-muted" id="import-config-desc">
-						{ __(
-							'Upload a previously exported settings file to restore your configuration. This will overwrite all current settings.',
-							'performance-optimisation'
-						) }
-					</p>
-					<div className="wppo-field wppo-mt-24">
-						<label
-							className="wppo-field-label"
-							htmlFor="import-config"
+						icon={ <FontAwesomeIcon icon={ faFileExport } /> }
+					>
+						<p
+							className="wppo-text-muted"
+							style={ { marginBottom: '16px' } }
 						>
 							{ __(
-								'Select configuration file',
+								'Download your current plugin settings as a JSON file for backup or migration to another site.',
 								'performance-optimisation'
 							) }
-						</label>
-						<input
-							type="file"
-							id="import-config"
-							accept="application/json"
-							onChange={ handleFileSelection }
-							ref={ fileInputRef }
-							className="wppo-input"
-							aria-describedby="import-config-desc"
+						</p>
+						<p className="wppo-text-muted wppo-text-small wppo-mb-16">
+							{ __(
+								'Sensitive keys are redacted automatically. File is formatted JSON.',
+								'performance-optimisation'
+							) }
+						</p>
+						<LoadingSubmitButton
+							className="wppo-button wppo-button--primary"
+							onClick={ exportSettings }
+							label={ __(
+								'Download JSON',
+								'performance-optimisation'
+							) }
 						/>
-					</div>
-					<LoadingSubmitButton
-						className="wppo-button wppo-button--secondary wppo-mt-24"
-						onClick={ () => {
-							if ( selectedFile ) {
-								setConfirmImport( true );
-							}
+					</FeatureCard>
+
+					{ /* Import — danger zone */ }
+					<div
+						style={ {
+							borderLeft: '4px solid #ef4444',
+							background: '#fef2f2',
+							borderRadius: '10px',
+							overflow: 'hidden',
 						} }
-						disabled={ ! selectedFile || isImporting }
-						isLoading={ isImporting }
-						label={ __(
-							'Import Settings',
-							'performance-optimisation'
-						) }
-						loadingLabel={ __(
-							'Importing…',
-							'performance-optimisation'
-						) }
-					/>
-				</FeatureCard>
+					>
+						<FeatureCard
+							title={ __(
+								'Import Configuration',
+								'performance-optimisation'
+							) }
+							icon={ <FontAwesomeIcon icon={ faFileImport } /> }
+						>
+							<p
+								className="wppo-text-muted"
+								id="import-config-desc"
+							>
+								{ __(
+									'Upload a previously exported settings file to restore your configuration. This will overwrite all current settings.',
+									'performance-optimisation'
+								) }
+							</p>
+							<div className="wppo-field wppo-mt-24">
+								<label
+									className="wppo-field-label"
+									htmlFor="import-config"
+								>
+									{ __(
+										'Select configuration file',
+										'performance-optimisation'
+									) }
+								</label>
+								<input
+									type="file"
+									id="import-config"
+									accept="application/json"
+									onChange={ handleFileSelection }
+									ref={ fileInputRef }
+									className="wppo-input"
+									aria-describedby="import-config-desc"
+								/>
+								<p className="wppo-text-muted wppo-text-small wppo-mt-10">
+									{ __(
+										'Only .json files exported from this plugin are accepted.',
+										'performance-optimisation'
+									) }
+								</p>
+							</div>
+							<LoadingSubmitButton
+								className="wppo-button wppo-button--secondary wppo-mt-24"
+								onClick={ () => {
+									if ( selectedFile ) {
+										setConfirmImport( true );
+									}
+								} }
+								disabled={ ! selectedFile || isImporting }
+								isLoading={ isImporting }
+								label={ __(
+									'Import Settings',
+									'performance-optimisation'
+								) }
+								loadingLabel={ __(
+									'Importing…',
+									'performance-optimisation'
+								) }
+							/>
+						</FeatureCard>
+					</div>
+				</div>
 			</div>
 
 			<ConfirmDialog
@@ -895,11 +952,11 @@ const PluginSetting = ( { options } ) => {
 				onCancel={ () => setConfirmImport( false ) }
 				title={ __( 'Confirm Import', 'performance-optimisation' ) }
 				message={ __(
-					'Importing this file will overwrite all current plugin settings. Continue?',
+					'Importing this file will overwrite all current plugin settings. This cannot be undone. Continue?',
 					'performance-optimisation'
 				) }
 				confirmLabel={ __( 'Confirm', 'performance-optimisation' ) }
-				variant="warning"
+				variant="danger"
 			/>
 		</div>
 	);

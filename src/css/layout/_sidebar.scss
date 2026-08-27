@@ -31,11 +31,11 @@
 	}
 
 	.wppo-sidebar-header {
-		padding: 28px 20px 20px;
+		padding: 24px 20px 20px;
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		border-bottom: 1px solid var(--wppo-bg-sidebar-hover);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 		margin-bottom: 8px;
 
 		.wppo-sidebar-logo {
@@ -50,27 +50,29 @@
 			box-shadow: 0 4px 12px color-mix(in srgb, var(--wppo-primary) 40%, transparent);
 
 			svg {
-				color: var(--wppo-text-sidebar-active);
+				color: #fff;
 				font-size: 16px;
 			}
 		}
 
 		h3 {
 			margin: 0;
-			font-size: 15px;
+			font-size: 14.5px;
 			font-weight: 700;
-			color: var(--wppo-text-sidebar-active);
-			letter-spacing: -0.01em;
+			color: #fff;
+			letter-spacing: -0.015em;
 			white-space: nowrap;
-			line-height: 1.2;
+			line-height: 1.25;
 
 			span {
 				display: block;
 				font-size: 11px;
 				font-weight: 500;
 				color: var(--wppo-text-sidebar);
-				letter-spacing: 0.02em;
-				margin-top: 2px;
+				letter-spacing: 0.03em;
+				margin-top: 3px;
+				line-height: 1.3;
+				opacity: 0.95;
 			}
 		}
 	}
@@ -89,30 +91,42 @@
 
 				button {
 					width: 100%;
+					box-sizing: border-box;
 					display: flex;
 					align-items: center;
 					gap: 10px;
-					padding: 10px 12px;
+					padding: 9px 12px;
+					min-height: 36px;
 					background: transparent;
-					border: none;
+					border: 1px solid transparent;
 					border-radius: var(--wppo-radius-sm);
 					color: var(--wppo-text-sidebar);
 					font-size: 13.5px;
 					font-weight: 500;
 					cursor: pointer;
 					text-align: left;
-					transition: var(--wppo-transition);
+					transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 					letter-spacing: 0.01em;
 
 					&:hover {
 						background: var(--wppo-bg-sidebar-hover);
-						color: var(--wppo-text-sidebar-active);
+						color: #fff;
+
+						.wppo-sidebar-icon {
+							color: #e2e8f0;
+						}
+					}
+
+					&:focus-visible {
+						outline: 2px solid var(--wppo-primary);
+						outline-offset: 2px;
 					}
 
 					&.wppo-is-active {
 						background: var(--wppo-bg-sidebar-active);
-						color: var(--wppo-text-sidebar-active);
+						color: #fff;
 						font-weight: 600;
+						border-color: color-mix(in srgb, var(--wppo-primary) 25%, transparent);
 
 						.wppo-sidebar-icon {
 							color: var(--wppo-primary);
@@ -126,7 +140,7 @@
 						text-align: center;
 						flex-shrink: 0;
 						color: var(--wppo-text-sidebar);
-						transition: var(--wppo-transition);
+						transition: color 0.18s ease, filter 0.18s ease;
 					}
 
 					.wppo-sidebar-label {
@@ -139,7 +153,7 @@
 
 	.wppo-sidebar-footer {
 		padding: 16px 12px;
-		border-top: 1px solid var(--wppo-bg-sidebar-hover);
+		border-top: 1px solid rgba(255, 255, 255, 0.06);
 
 		.wppo-sidebar-version {
 			font-size: 11px;
@@ -164,7 +178,7 @@
 	padding: 0 20px;
 	height: 56px;
 	background: var(--wppo-bg-sidebar);
-	color: var(--wppo-text-sidebar-active);
+	color: #fff;
 	align-items: center;
 	justify-content: space-between;
 	z-index: 110;
@@ -177,7 +191,7 @@
 	.wppo-mobile-brand {
 		font-weight: 700;
 		font-size: 15px;
-		color: var(--wppo-text-sidebar-active);
+		color: #fff;
 		display: flex;
 		align-items: center;
 		gap: 10px;
@@ -193,15 +207,15 @@
 
 			svg {
 				font-size: 12px;
-				color: var(--wppo-text-sidebar-active);
+				color: #fff;
 			}
 		}
 	}
 
 	.wppo-mobile-toggle {
-		background: var(--wppo-bg-sidebar-hover);
-		border: 1px solid var(--wppo-bg-sidebar-hover);
-		color: var(--wppo-text-sidebar-active);
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		color: #fff;
 		width: 36px;
 		height: 36px;
 		border-radius: 8px;

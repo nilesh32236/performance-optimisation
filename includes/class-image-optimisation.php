@@ -2352,7 +2352,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$buffer          = preg_replace_callback(
 				'#<noscript>.*?</noscript>#is',
 				function ( $m ) use ( &$noscript_tokens ) {
-					$token                     = '__WPPO_NOSCRIPT_' . count( $noscript_tokens ) . '__';
+					$token                     = '<!--WPPO_NOSCRIPT_' . count( $noscript_tokens ) . '-->';
 					$noscript_tokens[ $token ] = $m[0];
 					return $token;
 				},
