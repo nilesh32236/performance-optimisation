@@ -429,6 +429,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'performance_audit',
 				'cache_settings',
 				'litespeed_integration',
+				'llms_txt',
 			);
 			if ( empty( $tab ) || ! in_array( $tab, $allowed_tabs, true ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid settings tab.', 'performance-optimisation' ) );
@@ -718,6 +719,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'performance_audit',
 				'cache_settings',
 				'litespeed_integration',
+				'llms_txt',
 			);
 
 			foreach ( array_keys( $data['settings'] ) as $key ) {

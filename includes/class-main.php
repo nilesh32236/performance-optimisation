@@ -245,6 +245,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'enableBrotli'         => false,
 						'purgeSync'            => true,
 					),
+					'llms_txt'              => array(
+						'enabled' => false,
+						'source'  => 'both',
+					),
 				)
 			);
 
@@ -274,6 +278,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( ! isset( $this->options['image_optimisation']['lazyLoadImages'] ) ) {
 				$this->options['image_optimisation']['lazyLoadImages'] = false;
+			}
+
+			if ( ! isset( $this->options['llms_txt'] ) || ! is_array( $this->options['llms_txt'] ) ) {
+				$this->options['llms_txt'] = array();
+			}
+			if ( ! isset( $this->options['llms_txt']['enabled'] ) ) {
+				$this->options['llms_txt']['enabled'] = false;
+			}
+			if ( ! isset( $this->options['llms_txt']['source'] ) ) {
+				$this->options['llms_txt']['source'] = 'both';
 			}
 
 			$this->includes();
@@ -383,6 +397,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php';
+			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-llms.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-llms.php';
 			}
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -537,6 +554,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			// Edge/CDN cache purge on full cache clear (Cloudflare / Varnish).
 			add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\CDN_Purger', 'purge_all' ) );
+
+			// LLMs.txt (N8) — rewrite + template_redirect fallback + Link headers.
+			if ( class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
+				add_action( 'init', array( 'PerformanceOptimise\Inc\Llms', 'register_rewrite' ) );
+				add_filter( 'query_vars', array( 'PerformanceOptimise\Inc\Llms', 'add_query_vars' ) );
+				add_action( 'template_redirect', array( 'PerformanceOptimise\Inc\Llms', 'serve' ), 1 );
+				add_action( 'send_headers', array( 'PerformanceOptimise\Inc\Llms', 'emit_link_header' ) );
+				add_action( 'wp_head', array( 'PerformanceOptimise\Inc\Llms', 'emit_head_link' ), 1 );
+				add_action( 'wppo_llms_txt_daily', array( 'PerformanceOptimise\Inc\Llms', 'generate' ) );
+				add_action( 'update_option_wppo_settings', array( 'PerformanceOptimise\Inc\Llms', 'on_settings_update' ), 10, 2 );
+			}
 
 			if ( ! empty( $this->options['file_optimisation']['minifyJS'] ) ) {
 				if ( ! empty( $this->options['file_optimisation']['excludeJS'] ) ) {

@@ -259,3 +259,32 @@ Filters the nginx rules string. @since NEXT.
 
 ### `wppo_nginx_nextgen_rules`
 Filters the nginx rules array after next-gen map is appended. @since NEXT.
+
+---
+
+### `wppo_llms_txt_content`
+Filters LLMs.txt markdown content before writing. @since NEXT.
+
+**Parameters:**
+- `$content` *(string)* — Markdown content.
+- `$which` *(string)* — `llms` or `llms-full`.
+
+**Example:**
+```php
+add_filter( 'wppo_llms_txt_content', function( $content, $which ) {
+    return $content . "\n## Custom\n- https://example.com/custom/\n";
+}, 10, 2 );
+```
+
+---
+
+### `wppo_llms_txt_enabled`
+Filters whether LLMs.txt is enabled. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether enabled.
+
+**Example:**
+```php
+add_filter( 'wppo_llms_txt_enabled', '__return_true' );
+```

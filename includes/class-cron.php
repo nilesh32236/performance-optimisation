@@ -67,6 +67,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			add_action( 'wppo_web_vitals_rescan', array( $this, 'web_vitals_rescan_cron' ) );
 
+			add_action( 'wppo_llms_txt_daily', array( $this, 'llms_txt_cron' ) );
+
 			add_action( 'wppo_used_css_cron', array( $this, 'used_css_cron' ) );
 			add_action( 'wppo_ccss_regeneration', array( $this, 'ccss_regeneration_cron' ) );
 		}
@@ -136,6 +138,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				wp_schedule_event( time(), 'daily', 'wppo_web_vitals_rescan' );
 			}
 
+			$options_llms = get_option( 'wppo_settings', array() );
+			if ( ! empty( $options_llms['llms_txt']['enabled'] ) ) {
+				if ( ! wp_next_scheduled( 'wppo_llms_txt_daily' ) ) {
+					wp_schedule_event( time(), 'daily', 'wppo_llms_txt_daily' );
+				}
+			} else {
+				wp_clear_scheduled_hook( 'wppo_llms_txt_daily' );
+			}
+
 			if ( ! empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 				if ( ! wp_next_scheduled( 'wppo_used_css_cron' ) ) {
 					wp_schedule_event( time(), 'every_5_hours', 'wppo_used_css_cron' );
@@ -144,6 +155,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			if ( ! wp_next_scheduled( 'wppo_ccss_regeneration' ) ) {
 				wp_schedule_event( time(), 'daily', 'wppo_ccss_regeneration' );
+			}
+		}
+
+		/**
+		 * Callback for LLMs.txt daily regeneration cron.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function llms_txt_cron(): void {
+			$options = get_option( 'wppo_settings', array() );
+			if ( empty( $options['llms_txt']['enabled'] ) ) {
+				return;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
+				Llms::generate();
 			}
 		}
 
@@ -378,6 +405,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			wp_clear_scheduled_hook( 'wppo_ccss_regeneration' );
 			wp_clear_scheduled_hook( 'wppo_generate_ccss' );
 			wp_clear_scheduled_hook( 'wppo_web_vitals_rescan' );
+			wp_clear_scheduled_hook( 'wppo_llms_txt_daily' );
 		}
 
 		/**
