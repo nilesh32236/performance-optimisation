@@ -924,4 +924,24 @@ describe( 'FileOptimization Component', () => {
 			screen.getByLabelText( /Remove jQuery Migrate/i )
 		).toBeInTheDocument();
 	} );
+
+	it( 'renders LiteSpeed server rules correctly', () => {
+		render(
+			<FileOptimization
+				options={ {} }
+				serverRules={ { server_type: 'litespeed' } }
+			/>
+		);
+
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+
+		expect( screen.getByText( /LiteSpeed Detected/i ) ).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Enable Server Rules/i )
+		).toBeInTheDocument();
+		expect(
+			screen.getByLabelText( /Enable Server Rules/i )
+		).not.toBeDisabled();
+	} );
 } );

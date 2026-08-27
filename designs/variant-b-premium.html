@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Variant B — Premium Command Deck (Preview)</title>
+<style>
+:root{--primary:#2271b1;--bg:#f8fafc;--card:#fff;--sidebar:#0f172a;--border:#e2e8f0;--text:#0f172a;--muted:#475569;--radius:16px;--shadow:0 1px 4px rgba(0,0,0,.06),0 10px 32px -14px rgba(0,0,0,.11);--shadow-hover:0 6px 20px rgba(0,0,0,.09),0 18px 40px -18px rgba(0,0,0,.14)}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{font-family:Inter,-apple-system,sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100dvh}
+.sidebar{width:64px;flex-shrink:0;background:var(--sidebar);color:#cbd5e1;display:flex;flex-direction:column;transition:width .2s}
+.sidebar.expanded{width:260px}
+.side-head{padding:20px 14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.07)}
+.logo{width:36px;height:36px;background:var(--primary);border-radius:10px;display:grid;place-items:center;color:#fff;font-weight:800}
+.nav{padding:8px;display:grid;gap:2px;flex:1}
+.nav button{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:1px solid transparent;background:transparent;color:#cbd5e1;font-size:13px;cursor:pointer;text-align:left}
+.nav button.active{background:color-mix(in srgb,var(--primary) 20%, transparent);color:#fff;border-color:color-mix(in srgb,var(--primary) 25%, transparent)}
+.nav .label{white-space:nowrap;opacity:0;transition:opacity .15s}
+.sidebar.expanded .label{opacity:1}
+.content{flex:1;max-width:1280px;margin:0 auto;padding:24px;container-type:inline-size}
+.top-notice{padding:12px 16px;border-radius:12px;background:#f0f9ff;border:1px solid #bae6fd;font-size:13px;margin-bottom:16px}
+.hero{background:linear-gradient(135deg,#fff 0%,#eef2ff 55%,#f0f9ff 100%);border:1px solid var(--border);border-radius:16px;padding:20px 24px;box-shadow:var(--shadow);margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@container (max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+@container (max-width:540px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.card:hover{transform:translateY(-1px);box-shadow:var(--shadow-hover);border-color:#c7d2e0}
+.card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#0ea5e9,transparent)}
+.value{font-size:28px;font-weight:800;letter-spacing:-.04em}
+.muted{font-size:12px;color:var(--muted)}
+.collapse-btn{margin:12px;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#fff;border-radius:8px;padding:8px;cursor:pointer}
+.small{font-size:12px;color:var(--muted)}
+@media(max-width:782px){body{flex-direction:column}.sidebar{width:100%;height:56px;flex-direction:row}.sidebar.expanded{width:100%}.content{padding:16px}}
+</style>
+</head>
+<body>
+<aside class="sidebar expanded" id="sidebar">
+  <div class="side-head"><div class="logo">⚡</div><div class="label"><div style="font-weight:700;color:#fff">Performance</div><div style="font-size:11px">Optimisation</div></div></div>
+  <nav class="nav">
+    <button class="active">◉ <span class="label">Dashboard</span></button>
+    <button>▭ <span class="label">File Optimisation</span></button>
+    <button>◎ <span class="label">Preload</span></button>
+    <button>▣ <span class="label">Images</span></button>
+    <button>▤ <span class="label">Database</span></button>
+    <button>⬢ <span class="label">Object Cache</span></button>
+    <button>⚙ <span class="label">Tools</span></button>
+  </nav>
+  <button class="collapse-btn" onclick="document.getElementById('sidebar').classList.toggle('expanded')">⇔ Toggle collapse (260 → 64 hover-expand, persist localStorage)</button>
+</aside>
+<main class="content">
+  <p class="small" style="margin:0 0 8px">Variant B — Premium Command Deck • Collapsible 260→64 @782px • Inter • container-type • 16px • 103 Early Hints banner slot</p>
+  <div class="top-notice">ℹ️ LiteSpeed detected — <strong>OpenLiteSpeed 1.9.1</strong> • Mode auto → WPPO • <a href="#">Restart OLS after .htaccess change</a></div>
+  <div class="hero"><div style="font-size:14px;font-weight:700">Dashboard</div><div class="small">Refined v5 — hero gradient kept, container-type 1280 centered, correct 782px breakpoint, no 98dvh bug, backdrop-filter gated, dark mode toggle in Tools.</div></div>
+  <div class="grid">
+    <div class="card"><div class="small">CACHE SIZE</div><div class="value">48 MB</div><div class="muted">Static HTML + gzip</div></div>
+    <div class="card" style="--a:#8b5cf6"><div class="small">CSS SAVED</div><div class="value">38 %</div><div class="muted">Used CSS</div></div>
+    <div class="card"><div class="small">DB OVERHEAD</div><div class="value">12 MB</div><div class="muted">Revisions</div></div>
+    <div class="card"><div class="small">IMAGES</div><div class="value">1,240</div><div class="muted">WebP/AVIF</div></div>
+  </div>
+  <div class="card" style="margin-top:16px"><div style="font-size:14px;font-weight:700">Network — LiteSpeed (Apache-compatible) <span style="font-size:11px;padding:2px 8px;border-radius:999px;background:#eef2ff">LiteSpeed</span></div>
+    <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;overflow:auto;font-size:12px;margin-top:10px">&lt;IfModule mod_expires.c&gt;
+ ExpiresActive On
+&lt;/IfModule&gt;</pre>
+    <p class="small" style="margin-top:8px">Segmented tabs get scroll fade + arrow + URL hash sync; Dashboard becomes Overview|Diagnostics|Activity tabs to kill 3000px scroll.</p>
+  </div>
+</main>
+</body>
+</html>

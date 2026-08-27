@@ -41,6 +41,56 @@ class ServerRulesTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that get_server_type detects LiteSpeed.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_server_type_detects_litespeed(): void {
+		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
+		$this->assertSame( 'litespeed', Server_Rules::get_server_type() );
+	}
+
+	/**
+	 * Test that get_server_type detects OpenLiteSpeed.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_server_type_detects_openlitespeed(): void {
+		$_SERVER['SERVER_SOFTWARE'] = 'OpenLiteSpeed';
+		$this->assertSame( 'litespeed', Server_Rules::get_server_type() );
+	}
+
+	/**
+	 * Test that get_server_type is case-insensitive for LiteSpeed.
+	 *
+	 * @since NEXT
+	 */
+	public function test_get_server_type_detects_litespeed_case_insensitive(): void {
+		$_SERVER['SERVER_SOFTWARE'] = 'LITESPEED/1.9.1 Open';
+		$this->assertSame( 'litespeed', Server_Rules::get_server_type() );
+	}
+
+	/**
+	 * Test that is_litespeed returns true for LiteSpeed.
+	 *
+	 * @since NEXT
+	 */
+	public function test_is_litespeed_returns_true_for_litespeed(): void {
+		$_SERVER['SERVER_SOFTWARE'] = 'LiteSpeed';
+		$this->assertTrue( Server_Rules::is_litespeed() );
+	}
+
+	/**
+	 * Test that is_litespeed returns false for Apache.
+	 *
+	 * @since NEXT
+	 */
+	public function test_is_litespeed_returns_false_for_apache(): void {
+		$_SERVER['SERVER_SOFTWARE'] = 'Apache/2.4.41 (Ubuntu)';
+		$this->assertFalse( Server_Rules::is_litespeed() );
+	}
+
+	/**
 	 * Test that get_nginx_rules includes gzip when minify is enabled.
 	 */
 	public function test_get_nginx_rules_includes_gzip_when_minify_enabled(): void {

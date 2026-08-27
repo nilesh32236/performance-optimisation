@@ -29,11 +29,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		 * Detect the current server software.
 		 *
 		 * @since  1.6.0
-		 * @return string 'apache', 'nginx', or 'other'.
+		 * @return string 'apache', 'nginx', 'litespeed', or 'other'.
 		 */
 		public static function get_server_type(): string {
 			$server_software = isset( $_SERVER['SERVER_SOFTWARE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) : '';
 			$server_software = strtolower( $server_software );
+
+			if ( false !== strpos( $server_software, 'litespeed' ) || false !== strpos( $server_software, 'openlitespeed' ) ) {
+				return 'litespeed';
+			}
 
 			if ( false !== strpos( $server_software, 'apache' ) ) {
 				return 'apache';
@@ -44,6 +48,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 			}
 
 			return 'other';
+		}
+
+		/**
+		 * Check if the current server is LiteSpeed / OpenLiteSpeed.
+		 *
+		 * @since  NEXT
+		 * @return bool True if LiteSpeed or OpenLiteSpeed is detected.
+		 */
+		public static function is_litespeed(): bool {
+			return 'litespeed' === self::get_server_type();
 		}
 
 		/**
