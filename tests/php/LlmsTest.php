@@ -113,6 +113,7 @@ class LlmsTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_wp_error' )->justReturn( false );
 		Functions\when( 'wp_remote_get' )->justReturn( new WP_Error_Mock( 'error' ) );
 		Functions\when( 'wp_remote_retrieve_body' )->justReturn( '' );
+		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
 		Functions\when( 'status_header' )->justReturn( null );
 	}
 
