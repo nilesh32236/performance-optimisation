@@ -164,7 +164,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 
 			if ( headers_sent() ) {
 				// Still output content if headers already sent (tests).
-				readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_readfile
+				readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
 				exit;
 			}
 
@@ -181,7 +181,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			header( 'Cache-Control: public, max-age=3600' );
 			header( 'Content-Length: ' . filesize( $path ) );
 
-			readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_readfile
+			readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
 			exit;
 		}
 
@@ -299,9 +299,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				$ok = $fs->put_contents( $path, $content, FS_CHMOD_FILE ) && $ok;
 				$ok = $fs->put_contents( $path_full, $content_full, FS_CHMOD_FILE ) && $ok;
 			} else {
-				$written = file_put_contents( $path, $content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+				$written = file_put_contents( $path, $content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				$ok      = ( false !== $written ) && $ok;
-				$written = file_put_contents( $path_full, $content_full ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_read_file_put_contents
+				$written = file_put_contents( $path_full, $content_full ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				$ok      = ( false !== $written ) && $ok;
 			}
 
