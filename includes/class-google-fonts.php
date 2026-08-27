@@ -72,9 +72,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @since NEXT
 		 */
 		public function __construct( array $options ) {
-			$this->options        = $options;
-			$this->font_cache_dir = (string) wp_normalize_path( WP_CONTENT_DIR . self::FONTS_CACHE_DIR );
-			$this->font_cache_url = (string) content_url( self::FONTS_CACHE_DIR );
+			$this->options  = $options;
+			$font_cache_dir = wp_normalize_path( WP_CONTENT_DIR . self::FONTS_CACHE_DIR );
+			$font_cache_url = content_url( self::FONTS_CACHE_DIR );
+
+			$this->font_cache_dir = is_string( $font_cache_dir ) ? $font_cache_dir : '';
+			$this->font_cache_url = is_string( $font_cache_url ) ? $font_cache_url : '';
 		}
 
 		/**
@@ -307,6 +310,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 
 			$result = rename( $tmp, $dest ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
 			if ( ! $result ) {
+				// The file $tmp is guaranteed to exist here due to prior checks,
+				// but rename failure means it was not moved. Clean it up unconditionally.
 				wp_delete_file( $tmp );
 			}
 
