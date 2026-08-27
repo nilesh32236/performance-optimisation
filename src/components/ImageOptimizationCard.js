@@ -31,6 +31,7 @@ const formatBytes = ( bytes ) => {
 const ImageOptimizationCard = ( {
 	completed = {},
 	pending = {},
+	failed = {},
 	bgProcessing = false,
 	bgJobsQueued = 0,
 	loading = {},
@@ -39,12 +40,16 @@ const ImageOptimizationCard = ( {
 	onOptimize,
 	onRemove,
 } ) => {
-	const totalWebP = ( completed.webp || 0 ) + ( pending.webp || 0 );
-	const totalAvif = ( completed.avif || 0 ) + ( pending.avif || 0 );
+	const totalWebP =
+		( completed.webp || 0 ) + ( pending.webp || 0 ) + ( failed.webp || 0 );
+	const totalAvif =
+		( completed.avif || 0 ) + ( pending.avif || 0 ) + ( failed.avif || 0 );
 	const webpPercent =
 		totalWebP > 0 ? ( ( completed.webp || 0 ) / totalWebP ) * 100 : 0;
 	const avifPercent =
 		totalAvif > 0 ? ( ( completed.avif || 0 ) / totalAvif ) * 100 : 0;
+	const failedWebP = failed.webp || 0;
+	const failedAvif = failed.avif || 0;
 
 	return (
 		<FeatureCard
@@ -144,6 +149,17 @@ const ImageOptimizationCard = ( {
 					</div>
 				</div>
 			</div>
+
+			{ ( failedWebP > 0 || failedAvif > 0 ) && (
+				<div
+					className="wppo-text-muted wppo-text-small wppo-mt-10"
+					aria-live="polite"
+				>
+					{ __( 'Failed conversions:', 'performance-optimisation' ) }{ ' ' }
+					WebP { failedWebP }, AVIF { failedAvif }{ ' ' }
+					{ __( '(included in total)', 'performance-optimisation' ) }
+				</div>
+			) }
 
 			{ savings &&
 				savings.original_bytes > 0 &&

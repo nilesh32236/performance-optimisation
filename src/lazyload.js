@@ -78,11 +78,21 @@ const AUTO_SIZES_SUPPORTED = ( () => {
 /**
  * Selector for all lazy-loadable elements.
  * In full native mode, only videos need JS-based lazy loading.
+ * As a function so call sites recompute after setting changes (requires reload).
+ * @return {string} The selector string.
+ */
+const getLazySelector = () => {
+	return USE_NATIVE_LAZY
+		? 'video.wppo-lazy-video'
+		: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
+};
+
+/**
+ * Back-compat selector constant (evaluated once).
  * @type {string}
  */
-const LAZY_SELECTOR = USE_NATIVE_LAZY
-	? 'video.wppo-lazy-video'
-	: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
+// eslint-disable-next-line no-unused-vars
+const LAZY_SELECTOR = getLazySelector();
 
 /**
  * Load a single deferred script element.
@@ -497,7 +507,7 @@ const restoreSizes = ( el ) => {
  * Check if all lazy-loadable elements have been processed, and clean up observers if so.
  */
 const checkCleanup = () => {
-	const remaining = document.querySelectorAll( LAZY_SELECTOR );
+	const remaining = document.querySelectorAll( getLazySelector() );
 	if ( remaining.length === 0 ) {
 		if ( window.wppoSafetyScanId ) {
 			clearInterval( window.wppoSafetyScanId );
@@ -582,7 +592,7 @@ const loadImages = () => {
 	}
 
 	// When native lazy is active and no video lazy elements exist, skip observer setup entirely.
-	if ( USE_NATIVE_LAZY && ! document.querySelector( LAZY_SELECTOR ) ) {
+	if ( USE_NATIVE_LAZY && ! document.querySelector( getLazySelector() ) ) {
 		return;
 	}
 
@@ -676,7 +686,9 @@ const loadImages = () => {
 					return;
 				}
 				window.wppoSafetyScanId = setInterval( () => {
-					const elements = document.querySelectorAll( LAZY_SELECTOR );
+					const elements = document.querySelectorAll(
+						getLazySelector()
+					);
 					if ( elements.length === 0 ) {
 						clearInterval( window.wppoSafetyScanId );
 						window.wppoSafetyScanId = null;
@@ -707,14 +719,14 @@ const loadImages = () => {
 							) {
 								observeElement( node );
 							}
-							node.querySelectorAll( LAZY_SELECTOR ).forEach(
+							node.querySelectorAll( getLazySelector() ).forEach(
 								( child ) => {
 									observeElement( child );
 								}
 							);
 							if (
-								node.matches( LAZY_SELECTOR ) ||
-								node.querySelector( LAZY_SELECTOR )
+								node.matches( getLazySelector() ) ||
+								node.querySelector( getLazySelector() )
 							) {
 								startSafetyScan();
 							}
@@ -734,11 +746,11 @@ const loadImages = () => {
 				subtree: true,
 			} );
 
-			if ( document.querySelectorAll( LAZY_SELECTOR ).length > 0 ) {
+			if ( document.querySelectorAll( getLazySelector() ).length > 0 ) {
 				startSafetyScan();
 			}
 
-			document.querySelectorAll( LAZY_SELECTOR ).forEach( ( el ) => {
+			document.querySelectorAll( getLazySelector() ).forEach( ( el ) => {
 				observeElement( el );
 			} );
 
@@ -752,7 +764,9 @@ const loadImages = () => {
 			}
 			active = true;
 			setTimeout( () => {
-				const lazyElements = document.querySelectorAll( LAZY_SELECTOR );
+				const lazyElements = document.querySelectorAll(
+					getLazySelector()
+				);
 				lazyElements.forEach( ( el ) => {
 					if ( isElementInViewport( el ) ) {
 						if ( el.tagName === 'VIDEO' ) {

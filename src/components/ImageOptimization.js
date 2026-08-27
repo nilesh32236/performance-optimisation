@@ -1,4 +1,4 @@
-import { useState } from '@wordpress/element';
+import { useState, useEffect } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
@@ -65,11 +65,31 @@ const ImageOptimization = ( { options = {} } ) => {
 		forceServerSideConversion: false,
 		...options,
 		placeholderType:
-			options.placeholderType ||
+			options.placeholderType ??
 			( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
 	};
 
 	const [ settings, setSettings ] = useState( defaultSettings );
+
+	useEffect( () => {
+		setSettings( ( prev ) => ( {
+			...prev,
+			...options,
+			placeholderType:
+				options.placeholderType ??
+				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
+			clientSideMimeTypes: Array.isArray( options.clientSideMimeTypes )
+				? options.clientSideMimeTypes
+				: prev.clientSideMimeTypes,
+			selectedPostType: Array.isArray( options.selectedPostType )
+				? options.selectedPostType
+				: prev.selectedPostType,
+			availablePostTypes: Array.isArray( options.availablePostTypes )
+				? options.availablePostTypes
+				: prev.availablePostTypes,
+		} ) );
+	}, [ options ] );
+
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 	const mimeList = Array.isArray( settings.clientSideMimeTypes )
@@ -78,9 +98,12 @@ const ImageOptimization = ( { options = {} } ) => {
 
 	const togglePostType = ( type ) => {
 		setSettings( ( prev ) => {
-			const newSelected = prev.selectedPostType.includes( type )
-				? prev.selectedPostType.filter( ( t ) => t !== type )
-				: [ ...prev.selectedPostType, type ];
+			const prevSel = Array.isArray( prev.selectedPostType )
+				? prev.selectedPostType
+				: [];
+			const newSelected = prevSel.includes( type )
+				? prevSel.filter( ( t ) => t !== type )
+				: [ ...prevSel, type ];
 			return { ...prev, selectedPostType: newSelected };
 		} );
 	};

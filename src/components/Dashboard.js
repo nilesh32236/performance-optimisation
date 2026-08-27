@@ -200,7 +200,7 @@ const Dashboard = ( {
 
 	const { imageInfo, loading, totalCacheSize, totalJs, totalCss, dbCounts } =
 		state;
-	const { completed = {}, pending = {} } = imageInfo;
+	const { completed = {}, pending = {}, failed = {} } = imageInfo;
 
 	const updateState = useCallback( ( updates ) => {
 		setState( ( prevState ) => ( { ...prevState, ...updates } ) );
@@ -1284,6 +1284,7 @@ const Dashboard = ( {
 				<ImageOptimizationCard
 					completed={ completed }
 					pending={ pending }
+					failed={ failed }
 					bgProcessing={ bgProcessing }
 					bgJobsQueued={ bgJobsQueued }
 					loading={ loading }

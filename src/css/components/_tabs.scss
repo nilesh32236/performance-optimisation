@@ -108,7 +108,7 @@
 }
 
 .wppo-post-type-chip {
-	padding: 5px 12px;
+	padding: 6px 14px;
 	background: var(--wppo-bg-app);
 	border: 1px solid var(--wppo-border);
 	border-radius: 20px;
@@ -118,14 +118,14 @@
 	cursor: pointer;
 	transition: var(--wppo-transition);
 	user-select: none;
-	min-height: 28px;
+	min-height: 32px;
 	box-sizing: border-box;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 
 	@media (max-width: 768px) {
-		min-height: 36px;
+		min-height: 38px;
 		padding: 8px 14px;
 	}
 
