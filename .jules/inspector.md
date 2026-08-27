@@ -69,3 +69,7 @@
 **Bug/Gap:** WPCS failures due to incorrect array formatting for PHPUnit test stubbing. The multi-line function call to `\Brain\Monkey\Functions\stubs` was incorrectly formatted.
 **Root Cause:** The `stubs` function was called with an array mapped argument that wasn't multi-lined correctly. It triggered the `PEAR.Functions.FunctionCallSignature.ContentAfterOpenBracket` and `PEAR.Functions.FunctionCallSignature.CloseBracketLine` sniffs.
 **Test Added:** Not applicable. I fixed the formatting directly by enforcing strict multi-line array wrapping.
+## 2024-08-27 - Test mock formatting WPCS violations
+**Bug/Gap:** WPCS enforces strict formatting rules for multi-line array arguments in function calls, and the `Brain\Monkey\Functions\stubs` call was generating a `Opening parenthesis of a multi-line function call must be the last content on the line` and `Closing parenthesis of a multi-line function call must be on a line by itself` error.
+**Root Cause:** The `array()` argument was kept on the same line as the opening parenthesis of `stubs()`.
+**Test Added:** Fixed `InlineCssTest.php` formatting and ran `vendor/bin/phpcs` to verify. No functional change.
