@@ -26,7 +26,6 @@ const ALLOWED_IMPORT_KEYS = [
 	'database_cleanup',
 	'object_cache',
 	'performance_audit',
-	'core_tweaks',
 	'cache_settings',
 	'litespeed_integration',
 	'llms_txt',

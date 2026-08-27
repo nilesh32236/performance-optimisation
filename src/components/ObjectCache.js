@@ -755,21 +755,26 @@ const ObjectCache = ( { options = {} } ) => {
 									value="zstd"
 									disabled={
 										cacheStatus.statusLoaded &&
-										! cacheStatus.supported_compressors?.zstd
+										! cacheStatus.supported_compressors
+											?.zstd
 									}
 								>
 									{ __( 'ZSTD', 'performance-optimisation' ) }{ ' ' }
-									{ ! cacheStatus.statusLoaded
-										? ''
-										: ! cacheStatus.supported_compressors?.zstd
-										? __(
-												'(Disabled)',
-												'performance-optimisation'
-										  )
-										: __(
-												'(Recommended)',
-												'performance-optimisation'
-										  ) }
+									{
+										// eslint-disable-next-line no-nested-ternary
+										! cacheStatus.statusLoaded
+											? ''
+											: ! cacheStatus
+													.supported_compressors?.zstd
+											? __(
+													'(Disabled)',
+													'performance-optimisation'
+											  )
+											: __(
+													'(Recommended)',
+													'performance-optimisation'
+											  )
+									}
 								</option>
 								<option
 									value="lz4"

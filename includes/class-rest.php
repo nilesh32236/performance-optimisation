@@ -720,7 +720,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'cache_settings',
 				'litespeed_integration',
 				'llms_txt',
-				'core_tweaks',
 			);
 
 			foreach ( array_keys( $data['settings'] ) as $key ) {
