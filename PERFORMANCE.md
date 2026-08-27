@@ -18,6 +18,15 @@ All tests were conducted on a standardized testing environment mirroring common 
 | **Test Page Content** | Full blog article containing 5 high-res images, embedded media, sample comments, and standard theme styles |
 | **Measurement Tools** | Google PageSpeed Insights API, WebPageTest (Cable connection), Chrome DevTools Lighthouse (Mobile Moto G4 emulation) |
 
+> **⚠️ TTFB is host-dependent — lab warm-cache, not universal.** Numbers below are median of 5 runs on **Astra + Nginx/Apache, warm HTML cache** in a controlled lab. File-cache via `advanced-cache.php` cannot hit LiteSpeed server-cache numbers generically.
+
+| Host / Cache Path | Typical warm-cache TTFB | Source |
+|---|---:|---|
+| **LiteSpeed/OLS server cache** (shared-memory, zero PHP) | **~90 ms** (50-90 ms range) | `docs/litespeed-research.md:3.1`, WitsCode 2026 |
+| **PHP file cache Nginx/Apache** (`wp-content/cache/wppo/{domain}/{path}/index.html.gz` via `advanced-cache.php`) | **~170–350 ms** (180 ms benchmark, varies by host/PHP) | WitsCode 2026, `litespeed-research.md:3.1` |
+
+*Lab claim `680→45ms, 52→98` is Astra controlled-env warm-cache; expect `170–220ms` on generic Nginx/Apache file cache, `~90ms` when `X-LiteSpeed-Cache-Control` path is active (Phase 3 LS-301). See `docs/performance-report-2026-08-27.md:4.3` and `docs/competitive-audit-2026.md:3`.*
+
 ---
 
 ## 📊 Before & After Comparison Results
@@ -57,7 +66,7 @@ The significant score gains and loading speed improvements were achieved by enab
 
 1. **Static HTML Page Caching**
    - Bypasses PHP execution and database lookups, delivering pre-rendered Gzip HTML directly from disk.
-   - Reduced TTFB from **680ms to 45ms**.
+   - Reduced TTFB from **680ms to 45ms in lab (Astra warm-cache)** — expect **~90ms on LiteSpeed server cache vs ~170–350ms on PHP file cache** on generic Nginx/Apache hosts (host-dependent, see table above).
 
 2. **WebP & AVIF Image Conversion**
    - Automatically converts uploaded media into modern compressed image formats.
