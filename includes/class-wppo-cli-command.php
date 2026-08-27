@@ -422,11 +422,104 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * @param array $assoc_args Command associative arguments.
 		 * @return void
 		 */
+		/**
+		 * Get default settings structure for fresh installs.
+		 *
+		 * Mirrors the defaults from Main::__construct() without requiring a Main
+		 * instance. Used to ensure CLI works before the option is ever persisted.
+		 *
+		 * @since NEXT
+		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
+		 */
+		private static function get_default_settings(): array {
+			return array(
+				'cache_settings'     => array(
+					'enableLoggedInCache' => false,
+					'loggedInCacheRoles'  => array(),
+				),
+				'file_optimisation'  => array(
+					'enableServerRules'       => false,
+					'cdnURL'                  => '',
+					'removeUnusedCSS'         => false,
+					'excludeUnusedCSS'        => '',
+					'criticalCSS'             => false,
+					'hostGoogleFontsLocally'  => false,
+					'blockAssetsOnDemand'     => false,
+					'loadAllCoreBlockAssets'  => false,
+					'delayJSDefaultStrategy'  => 'interaction',
+					'delayJSIdleList'         => '',
+					'delayJSViewportList'     => '',
+					'delayJSPriority'         => '',
+					'delayJSIdleTimeout'      => 3000,
+					'minifyHTML'              => false,
+					'minifyJS'                => false,
+					'minifyCSS'               => false,
+					'deferJS'                 => false,
+					'delayJS'                 => false,
+					'combineCSS'              => false,
+					'excludeJS'               => '',
+					'excludeCSS'              => '',
+					'excludeDeferJS'          => '',
+					'excludeDelayJS'          => '',
+					'excludeCombineCSS'       => '',
+					'minifyInlineCSS'         => false,
+					'minifyInlineJS'          => false,
+					'removeHTMLComments'      => true,
+					'removeQueryStrings'      => false,
+					'disableRestApiLinks'     => false,
+					'disableRssFeeds'         => false,
+					'disableShortlinks'       => false,
+					'disableGeneratorTag'     => false,
+					'disableJQueryMigrate'    => false,
+					'disablePasswordStrength' => false,
+					'disableSelfPingbacks'    => false,
+				),
+				'preload_settings'   => array(
+					'enableSpeculationRules' => false,
+					'speculationMode'        => 'prerender',
+					'speculationEagerness'   => 'moderate',
+					'speculationExcludeUrls' => '',
+					'preloadSitemap'         => false,
+				),
+				'image_optimisation' => array(
+					'lazyLoadImages'             => false,
+					'lazyLoadNative'             => true,
+					'placeholderType'            => 'svg',
+					'autoPreloadLCP'             => false,
+					'prioritizeLCPImages'        => false,
+					'clientSideMimeTypeOverride' => false,
+					'clientSideMimeTypes'        => array(),
+					'lazyLoadBackgroundImages'   => false,
+				),
+				'performance_audit'  => array(
+					'pagespeed_api_key'     => '',
+					'high_value_urls'       => array(),
+					'auto_fix_enabled'      => false,
+					'server_timing_enabled' => false,
+					'auto_rescan'           => '',
+					'rum_enabled'           => false,
+				),
+				'database_cleanup'   => array(),
+				'object_cache'       => array(),
+			);
+		}
+
 		public function settings( array $args, array $assoc_args ): void {
 			$action = $args[0] ?? 'get';
 			$tab    = $args[1] ?? null;
 
 			$options = get_option( 'wppo_settings', array() );
+			// On fresh installs the option does not exist yet — fall back to
+			// defaults so CLI is usable before the first admin save. This
+			// mirrors Main::__construct() seeding but without persisting until
+			// an explicit update/import.
+			if ( empty( $options ) || ! is_array( $options ) ) {
+				$options = self::get_default_settings();
+			} else {
+				// Ensure all known tabs exist even if the stored option is
+				// partial (e.g. from an older version or a prior wipe).
+				$options = array_replace_recursive( self::get_default_settings(), $options );
+			}
 
 			if ( 'export' === $action ) {
 				$export_data = $options;
@@ -576,7 +669,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					$options[ $tab ] = array();
 				}
 
-				$options[ $tab ] = array_merge( $options[ $tab ], $new_settings );
+				$options[ $tab ] = array_replace_recursive( $options[ $tab ], $new_settings );
 				update_option( 'wppo_settings', $options );
 
 				/* translators: %s: Settings tab name */

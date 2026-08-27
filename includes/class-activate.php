@@ -92,9 +92,92 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				}
 			}
 
+			self::maybe_seed_settings();
 			self::create_activity_log_table();
 			Img_Converter::migrate_img_info_autoload();
 			self::maybe_run_upgrades( ! $has_activation_time );
+		}
+
+		/**
+		 * Seed wppo_settings with defaults on fresh install so CLI works immediately.
+		 *
+		 * Without this, `get_option( 'wppo_settings', [] )` returns an empty array
+		 * and the CLI reports “Available tabs: .” until the first admin save.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function maybe_seed_settings(): void {
+			$existing = get_option( 'wppo_settings', null );
+			if ( null !== $existing ) {
+				return;
+			}
+
+			$defaults = array(
+				'cache_settings'     => array(
+					'enableLoggedInCache' => false,
+					'loggedInCacheRoles'  => array(),
+				),
+				'file_optimisation'  => array(
+					'enableServerRules'      => false,
+					'cdnURL'                 => '',
+					'removeUnusedCSS'        => false,
+					'excludeUnusedCSS'       => '',
+					'criticalCSS'            => false,
+					'hostGoogleFontsLocally' => false,
+					'blockAssetsOnDemand'    => false,
+					'loadAllCoreBlockAssets' => false,
+					'delayJSDefaultStrategy' => 'interaction',
+					'delayJSIdleList'        => '',
+					'delayJSViewportList'    => '',
+					'delayJSPriority'        => '',
+					'delayJSIdleTimeout'     => 3000,
+					'minifyHTML'             => false,
+					'minifyJS'               => false,
+					'minifyCSS'              => false,
+					'deferJS'                => false,
+					'delayJS'                => false,
+					'combineCSS'             => false,
+					'excludeJS'              => '',
+					'excludeCSS'             => '',
+					'excludeDeferJS'         => '',
+					'excludeDelayJS'         => '',
+					'excludeCombineCSS'      => '',
+					'minifyInlineCSS'        => false,
+					'minifyInlineJS'         => false,
+					'removeHTMLComments'     => true,
+					'removeQueryStrings'     => false,
+				),
+				'preload_settings'   => array(
+					'enableSpeculationRules' => false,
+					'speculationMode'        => 'prerender',
+					'speculationEagerness'   => 'moderate',
+					'speculationExcludeUrls' => '',
+					'preloadSitemap'         => false,
+				),
+				'image_optimisation' => array(
+					'lazyLoadImages'             => false,
+					'lazyLoadNative'             => true,
+					'placeholderType'            => 'svg',
+					'autoPreloadLCP'             => false,
+					'prioritizeLCPImages'        => false,
+					'clientSideMimeTypeOverride' => false,
+					'clientSideMimeTypes'        => array(),
+					'lazyLoadBackgroundImages'   => false,
+				),
+				'performance_audit'  => array(
+					'pagespeed_api_key'     => '',
+					'high_value_urls'       => array(),
+					'auto_fix_enabled'      => false,
+					'server_timing_enabled' => false,
+					'auto_rescan'           => '',
+					'rum_enabled'           => false,
+				),
+				'database_cleanup'   => array(),
+				'object_cache'       => array(),
+			);
+
+			add_option( 'wppo_settings', $defaults, '', false );
 		}
 
 		/**
