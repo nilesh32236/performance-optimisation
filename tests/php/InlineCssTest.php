@@ -98,12 +98,26 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_transient' )->justReturn( false );
 		Functions\when( 'set_transient' )->justReturn( true );
+		// GH-722: LiteSpeed_Integration::is_lscache_active() now calls get_option('active_plugins');
+		// and get_option('wppo_settings') via should_disable_wppo_optimizer()/effective_mode().
+		// Stub defaults to empty (non-LS host, no LSCache) so minify_css proceeds as before.
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_site_option' )->justReturn( array() );
+
+		// Clear LiteSpeed per-request static caches for isolation (prevents
+		// cross-test pollution via $cached_is_lscache_active etc.).
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
+			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+		}
 	}
 
 	/**
 	 * Clean up after each test.
 	 */
 	protected function tearDown(): void {
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'reset_cache' ) ) {
+			\PerformanceOptimise\Inc\LiteSpeed_Integration::reset_cache();
+		}
 		if ( null !== $this->original_wpdb ) {
 			$GLOBALS['wpdb']     = $this->original_wpdb;
 			$this->original_wpdb = null;
