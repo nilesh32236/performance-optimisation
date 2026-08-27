@@ -1019,6 +1019,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 			}
 
+			// Guard: when JS is deferred/delayed the onload swap never fires until JS runs.
+			// This leaves cached pages unstyled (media=print deadlock with removeUnusedCSS + criticalCSS + combineCSS).
+			// Keep media=all when either deferJS or delayJS is active so cached HTML stays styled.
+			// @since NEXT.
+			$opts = get_option( 'wppo_settings', array() );
+			$fo   = $opts['file_optimisation'] ?? array();
+			if ( ! empty( $fo['deferJS'] ) || ! empty( $fo['delayJS'] ) ) {
+				return $tag;
+			}
+
 			foreach ( self::SKIP_DEFER_HANDLES as $skip ) {
 				if ( $handle === $skip || false !== strpos( $href, $skip ) ) {
 					return $tag;
