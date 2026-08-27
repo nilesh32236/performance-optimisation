@@ -1173,9 +1173,11 @@ const FileOptimization = ( {
 										<Tooltip
 											content={
 												serverRules?.server_type !==
-												'apache'
+													'apache' &&
+												serverRules?.server_type !==
+													'litespeed'
 													? __(
-															'Server rules require Apache.',
+															'Server rules require Apache or LiteSpeed.',
 															'performance-optimisation'
 													  )
 													: ''
@@ -1186,19 +1188,31 @@ const FileOptimization = ( {
 													'Enable Server Rules (.htaccess)',
 													'performance-optimisation'
 												) }
-												description={ __(
-													'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimisation. Requires Apache. Ensure you have FTP access for recovery if something goes wrong.',
-													'performance-optimisation'
-												) }
+												description={
+													serverRules?.server_type ===
+													'litespeed'
+														? __(
+																'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimisation. LiteSpeed is Apache-compatible — restart OpenLiteSpeed after changes. Ensure you have FTP access for recovery if something goes wrong.',
+																'performance-optimisation'
+														  )
+														: __(
+																'Write performance rules (browser caching, GZIP compression, etc.) directly to your .htaccess file for server-level optimisation. Requires Apache. Ensure you have FTP access for recovery if something goes wrong.',
+																'performance-optimisation'
+														  )
+												}
 												name="enableServerRules"
 												checked={
-													serverRules?.server_type ===
-														'apache' &&
+													( serverRules?.server_type ===
+														'apache' ||
+														serverRules?.server_type ===
+															'litespeed' ) &&
 													settings.enableServerRules
 												}
 												disabled={
 													serverRules?.server_type !==
-													'apache'
+														'apache' &&
+													serverRules?.server_type !==
+														'litespeed'
 												}
 												onChange={ handleChange(
 													setSettings
@@ -1206,8 +1220,10 @@ const FileOptimization = ( {
 											/>
 										</Tooltip>
 
-										{ serverRules?.server_type ===
-											'apache' &&
+										{ ( serverRules?.server_type ===
+											'apache' ||
+											serverRules?.server_type ===
+												'litespeed' ) &&
 											settings.enableServerRules && (
 												<div className="wppo-notice wppo-notice--warning">
 													<FontAwesomeIcon
@@ -1216,13 +1232,40 @@ const FileOptimization = ( {
 														}
 													/>
 													<span>
-														{ __(
-															'This modifies your .htaccess. Ensure you have FTP access for recovery.',
-															'performance-optimisation'
-														) }
+														{ serverRules?.server_type ===
+														'litespeed'
+															? __(
+																	'This modifies your .htaccess. LiteSpeed is Apache-compatible — restart OpenLiteSpeed after changes. Ensure you have FTP access for recovery.',
+																	'performance-optimisation'
+															  )
+															: __(
+																	'This modifies your .htaccess. Ensure you have FTP access for recovery.',
+																	'performance-optimisation'
+															  ) }
 													</span>
 												</div>
 											) }
+
+										{ serverRules?.server_type ===
+											'litespeed' && (
+											<div className="wppo-notice wppo-notice--info wppo-mt-20">
+												<FontAwesomeIcon
+													icon={ faServer }
+												/>
+												<span>
+													<strong>
+														{ __(
+															'LiteSpeed Detected:',
+															'performance-optimisation'
+														) }
+													</strong>{ ' ' }
+													{ __(
+														'LiteSpeed is Apache-compatible. Server rules use the same .htaccess as Apache — restart OpenLiteSpeed after changes.',
+														'performance-optimisation'
+													) }
+												</span>
+											</div>
+										) }
 
 										{ serverRules?.server_type ===
 											'nginx' && (

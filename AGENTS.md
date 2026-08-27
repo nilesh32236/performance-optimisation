@@ -201,6 +201,15 @@ Namespace `performance-optimisation/v1`, defined in `includes/class-rest.php` (2
 - Node version: 22.14.0 (`.nvmrc`)
 - `.browserslistrc`: `last 1` Chrome/Firefox/Safari, `not dead`
 
+## Docs
+
+| Doc | Purpose |
+|-----|---------|
+| `docs/hooks.md` | All `wppo_*` filters/actions |
+| `docs/litespeed-research.md` | LiteSpeed/OpenLiteSpeed deep research (server, LSCWP 7.9, conflict matrix, header protocol, feature comparison) |
+| `docs/litespeed-integration-plan.md` | LiteSpeed integration architecture, 5-phase plan, coexistence modes, data model, REST/SPA wiring, risks |
+| `docs/litespeed-roadmap.md` | Prioritized task board (LS-001…905) + PR split + Definition of Done |
+
 ## Release
 
 - Tag `v*` triggers `.github/workflows/release.yml`
