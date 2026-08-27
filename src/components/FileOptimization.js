@@ -1,5 +1,5 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useRef } from '@wordpress/element';
+import { useState, useRef, useEffect } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -89,6 +89,11 @@ const FileOptimization = ( {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
+	// H-01: sync local state when parent props change after mount.
+	useEffect( () => {
+		setSettings( ( prev ) => ( { ...prev, ...options } ) );
+	}, [ options ] );
+
 	// LiteSpeed integration (Phase 1 — safe coexistence).
 	const litespeedInfo =
 		typeof wppoSettings !== 'undefined' ? wppoSettings?.litespeed : null;
@@ -103,6 +108,9 @@ const FileOptimization = ( {
 	const [ litespeedMode, setLitespeedMode ] = useState(
 		liteSpeedModeFromSettings
 	);
+	useEffect( () => {
+		setLitespeedMode( liteSpeedModeFromSettings );
+	}, [ liteSpeedModeFromSettings ] );
 	const [ savingLiteSpeed, setSavingLiteSpeed ] = useState( false );
 	const pausedTooltip = __(
 		'Paused — LiteSpeed Cache owns optimisation (change in Network → LiteSpeed)',
@@ -490,24 +498,35 @@ const FileOptimization = ( {
 										</p>
 									</div>
 								) }
-								<SwitchField
-									label={ __(
-										'Remove Query Strings From Static Resources',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Strip ?ver= query strings from CSS and JavaScript URLs so proxies and CDNs can cache them more effectively.',
-										'performance-optimisation'
-									) }
-									name="removeQueryStrings"
-									checked={ settings.removeQueryStrings }
-									onChange={ handleChange( setSettings ) }
-								/>
 								<Tooltip
-									content={ __(
-										'Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly.',
-										'performance-optimisation'
-									) }
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Remove Query Strings From Static Resources',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Strip ?ver= query strings from CSS and JavaScript URLs so proxies and CDNs can cache them more effectively.',
+											'performance-optimisation'
+										) }
+										name="removeQueryStrings"
+										checked={ settings.removeQueryStrings }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
+								<Tooltip
+									content={
+										optimizerDisabled
+											? pausedTooltip
+											: __(
+													'Removes CSS rules not used on the current page, similar to PurgeCSS. Reduces page weight significantly.',
+													'performance-optimisation'
+											  )
+									}
 								>
 									<SwitchField
 										label={ __(
@@ -521,6 +540,7 @@ const FileOptimization = ( {
 										name="removeUnusedCSS"
 										checked={ settings.removeUnusedCSS }
 										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
 									/>
 								</Tooltip>
 								{ settings.removeUnusedCSS && (
@@ -608,19 +628,26 @@ const FileOptimization = ( {
 										</p>
 									</div>
 								) }
-								<SwitchField
-									label={ __(
-										'Critical CSS',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Generate and inline above-the-fold CSS, then defer full stylesheets. Improves FCP and LCP by eliminating render-blocking CSS.',
-										'performance-optimisation'
-									) }
-									name="criticalCSS"
-									checked={ settings.criticalCSS }
-									onChange={ handleChange( setSettings ) }
-								/>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Critical CSS',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Generate and inline above-the-fold CSS, then defer full stylesheets. Improves FCP and LCP by eliminating render-blocking CSS.',
+											'performance-optimisation'
+										) }
+										name="criticalCSS"
+										checked={ settings.criticalCSS }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
 								{ settings.criticalCSS && (
 									<>
 										{ ccssError && (
@@ -650,19 +677,28 @@ const FileOptimization = ( {
 										/>
 									</>
 								) }
-								<SwitchField
-									label={ __(
-										'Host Google Fonts Locally',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Automatically detect Google Fonts and serve them from your own server. Eliminates external DNS lookups, improves GDPR compliance, and applies font-display: swap.',
-										'performance-optimisation'
-									) }
-									name="hostGoogleFontsLocally"
-									checked={ settings.hostGoogleFontsLocally }
-									onChange={ handleChange( setSettings ) }
-								/>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Host Google Fonts Locally',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Automatically detect Google Fonts and serve them from your own server. Eliminates external DNS lookups, improves GDPR compliance, and applies font-display: swap.',
+											'performance-optimisation'
+										) }
+										name="hostGoogleFontsLocally"
+										checked={
+											settings.hostGoogleFontsLocally
+										}
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
 							</div>
 						</FeatureCard>
 
