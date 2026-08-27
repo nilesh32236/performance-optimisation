@@ -89,6 +89,85 @@ const FileOptimization = ( {
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
 
+	// LiteSpeed integration (Phase 1 — safe coexistence).
+	const litespeedInfo =
+		typeof wppoSettings !== 'undefined' ? wppoSettings?.litespeed : null;
+	const isLiteSpeed = !! litespeedInfo?.detected;
+	const optimizerDisabled = !! litespeedInfo?.optimizer_disabled;
+	const effectiveMode = litespeedInfo?.effective_mode || 'standalone';
+	const lscacheActive = !! litespeedInfo?.lscache_active;
+	const liteSpeedModeFromSettings =
+		typeof wppoSettings !== 'undefined'
+			? wppoSettings?.settings?.litespeed_integration?.mode || 'auto'
+			: 'auto';
+	const [ litespeedMode, setLitespeedMode ] = useState(
+		liteSpeedModeFromSettings
+	);
+	const [ savingLiteSpeed, setSavingLiteSpeed ] = useState( false );
+	const pausedTooltip = __(
+		'Paused — LiteSpeed Cache owns optimisation (change in Network → LiteSpeed)',
+		'performance-optimisation'
+	);
+	let effectiveLabel = effectiveMode;
+	if ( effectiveMode === 'wppo' ) {
+		effectiveLabel = 'WPPO';
+	} else if ( effectiveMode === 'litespeed' ) {
+		effectiveLabel = 'LiteSpeed';
+	}
+	const effectiveBadgeClass =
+		effectiveMode === 'litespeed'
+			? 'wppo-status-badge--warning'
+			: 'wppo-status-badge--good';
+
+	const handleSaveLiteSpeedMode = async () => {
+		setSavingLiteSpeed( true );
+		try {
+			const res = await apiCall( 'update_settings', {
+				tab: 'litespeed_integration',
+				settings: { mode: litespeedMode },
+			} );
+			if ( res.success ) {
+				notify( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'LiteSpeed settings saved.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+				// Mutate global so Dashboard banner + next mount reflect new mode without reload.
+				if ( typeof wppoSettings !== 'undefined' && res.data ) {
+					wppoSettings.settings = Object.freeze( res.data );
+				}
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'Failed to save LiteSpeed settings.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			}
+		} catch ( err ) {
+			console.error( 'LiteSpeed save failed', err );
+			notify( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setSavingLiteSpeed( false );
+		}
+	};
+
 	const withNotification = async (
 		apiCallPromise,
 		successMessage,
@@ -311,33 +390,58 @@ const FileOptimization = ( {
 							) }
 							icon={ <FontAwesomeIcon icon={ faCode } /> }
 						>
+							{ optimizerDisabled && (
+								<div className="wppo-notice wppo-notice--warning wppo-mb-12">
+									<FontAwesomeIcon
+										icon={ faExclamationTriangle }
+									/>{ ' ' }
+									{ __(
+										'Optimisation paused — LiteSpeed Cache owns CSS/JS optimisation (change in Network → LiteSpeed).',
+										'performance-optimisation'
+									) }
+								</div>
+							) }
 							<div className="wppo-field-group">
-								<SwitchField
-									label={ __(
-										'Minify CSS',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Remove whitespace and comments from stylesheets to reduce file size.',
-										'performance-optimisation'
-									) }
-									name="minifyCSS"
-									checked={ settings.minifyCSS }
-									onChange={ handleChange( setSettings ) }
-								/>
-								<SwitchField
-									label={ __(
-										'Combine CSS',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Merge all CSS files into a single file to reduce the number of HTTP requests.',
-										'performance-optimisation'
-									) }
-									name="combineCSS"
-									checked={ settings.combineCSS }
-									onChange={ handleChange( setSettings ) }
-								/>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Minify CSS',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Remove whitespace and comments from stylesheets to reduce file size.',
+											'performance-optimisation'
+										) }
+										name="minifyCSS"
+										checked={ settings.minifyCSS }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Combine CSS',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Merge all CSS files into a single file to reduce the number of HTTP requests.',
+											'performance-optimisation'
+										) }
+										name="combineCSS"
+										checked={ settings.combineCSS }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
 								{ settings.combineCSS && (
 									<div className="wppo-notice wppo-notice--warning wppo-mt-12">
 										<FontAwesomeIcon
@@ -570,19 +674,26 @@ const FileOptimization = ( {
 							icon={ <FontAwesomeIcon icon={ faCode } /> }
 						>
 							<div className="wppo-field-group">
-								<SwitchField
-									label={ __(
-										'Minify HTML',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Compress the HTML output of your website by removing unnecessary whitespace and comments.',
-										'performance-optimisation'
-									) }
-									name="minifyHTML"
-									checked={ settings.minifyHTML }
-									onChange={ handleChange( setSettings ) }
-								/>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Minify HTML',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Compress the HTML output of your website by removing unnecessary whitespace and comments.',
+											'performance-optimisation'
+										) }
+										name="minifyHTML"
+										checked={ settings.minifyHTML }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
 								<SwitchField
 									label={ __(
 										'Remove HTML Comments',
@@ -596,32 +707,46 @@ const FileOptimization = ( {
 									checked={ settings.removeHTMLComments }
 									onChange={ handleChange( setSettings ) }
 								/>
-								<SwitchField
-									label={ __(
-										'Minify Inline CSS',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Minify CSS within <style> tags using the PHP minifier.',
-										'performance-optimisation'
-									) }
-									name="minifyInlineCSS"
-									checked={ settings.minifyInlineCSS }
-									onChange={ handleChange( setSettings ) }
-								/>
-								<SwitchField
-									label={ __(
-										'Minify Inline JavaScript',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Minify JavaScript within <script> tags using the PHP minifier.',
-										'performance-optimisation'
-									) }
-									name="minifyInlineJS"
-									checked={ settings.minifyInlineJS }
-									onChange={ handleChange( setSettings ) }
-								/>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Minify Inline CSS',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Minify CSS within <style> tags using the PHP minifier.',
+											'performance-optimisation'
+										) }
+										name="minifyInlineCSS"
+										checked={ settings.minifyInlineCSS }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Minify Inline JavaScript',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Minify JavaScript within <script> tags using the PHP minifier.',
+											'performance-optimisation'
+										) }
+										name="minifyInlineJS"
+										checked={ settings.minifyInlineJS }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
 							</div>
 						</FeatureCard>
 					</div>
@@ -641,33 +766,58 @@ const FileOptimization = ( {
 							) }
 							icon={ <FontAwesomeIcon icon={ faRocket } /> }
 						>
+							{ optimizerDisabled && (
+								<div className="wppo-notice wppo-notice--warning wppo-mb-12">
+									<FontAwesomeIcon
+										icon={ faExclamationTriangle }
+									/>{ ' ' }
+									{ __(
+										'Optimisation paused — LiteSpeed Cache owns JS optimisation (change in Network → LiteSpeed).',
+										'performance-optimisation'
+									) }
+								</div>
+							) }
 							<div className="wppo-field-group">
-								<SwitchField
-									label={ __(
-										'Minify JavaScript',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Compress JS files by removing whitespace and comments to reduce execution time.',
-										'performance-optimisation'
-									) }
-									name="minifyJS"
-									checked={ settings.minifyJS }
-									onChange={ handleChange( setSettings ) }
-								/>
-								<SwitchField
-									label={ __(
-										'Defer JavaScript',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Load scripts after the page renders to prevent render-blocking and improve page speed.',
-										'performance-optimisation'
-									) }
-									name="deferJS"
-									checked={ settings.deferJS }
-									onChange={ handleChange( setSettings ) }
-								/>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Minify JavaScript',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Compress JS files by removing whitespace and comments to reduce execution time.',
+											'performance-optimisation'
+										) }
+										name="minifyJS"
+										checked={ settings.minifyJS }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Defer JavaScript',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Load scripts after the page renders to prevent render-blocking and improve page speed.',
+											'performance-optimisation'
+										) }
+										name="deferJS"
+										checked={ settings.deferJS }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
 								{ settings.deferJS && (
 									<div className="wppo-field">
 										<label
@@ -701,19 +851,26 @@ const FileOptimization = ( {
 										</p>
 									</div>
 								) }
-								<SwitchField
-									label={ __(
-										'Delay JavaScript Execution',
-										'performance-optimisation'
-									) }
-									description={ __(
-										'Delay all scripts until the user interacts (keyboard/mouse) or load during idle/viewport. Reduces initial CPU usage but may break immediate functionality — test carefully.',
-										'performance-optimisation'
-									) }
-									name="delayJS"
-									checked={ settings.delayJS }
-									onChange={ handleChange( setSettings ) }
-								/>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Delay JavaScript Execution',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Delay all scripts until the user interacts (keyboard/mouse) or load during idle/viewport. Reduces initial CPU usage but may break immediate functionality — test carefully.',
+											'performance-optimisation'
+										) }
+										name="delayJS"
+										checked={ settings.delayJS }
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
 							</div>
 						</FeatureCard>
 
@@ -1125,6 +1282,202 @@ const FileOptimization = ( {
 						role="tabpanel"
 						aria-labelledby="tab-network"
 					>
+						{ isLiteSpeed && (
+							<FeatureCard
+								title={ __(
+									'LiteSpeed Integration',
+									'performance-optimisation'
+								) }
+								icon={ <FontAwesomeIcon icon={ faServer } /> }
+							>
+								<div className="wppo-field-group">
+									<div className="wppo-mb-12">
+										<span
+											className={ `wppo-status-badge wppo-status-badge--${
+												lscacheActive ? 'poor' : 'good'
+											}` }
+											style={ { marginRight: '8px' } }
+										>
+											{ lscacheActive
+												? __(
+														'LSCache Active',
+														'performance-optimisation'
+												  )
+												: __(
+														'LSCache Inactive',
+														'performance-optimisation'
+												  ) }
+										</span>
+										<span
+											className="wppo-status-badge wppo-status-badge--good"
+											style={ { marginRight: '8px' } }
+										>
+											{ __(
+												'Detected: LiteSpeed',
+												'performance-optimisation'
+											) }
+										</span>
+										<span
+											className={ `wppo-status-badge ${ effectiveBadgeClass }` }
+										>
+											{ __(
+												'Effective:',
+												'performance-optimisation'
+											) }{ ' ' }
+											{ effectiveLabel }
+										</span>
+									</div>
+									{ lscacheActive &&
+										effectiveMode === 'litespeed' && (
+											<NoticeBanner
+												type="warning"
+												message={ __(
+													'LiteSpeed Cache owns page cache & optimisation in the current mode — WPPO combiners/minifiers are paused to prevent double processing.',
+													'performance-optimisation'
+												) }
+												className="wppo-mb-12"
+											/>
+										) }
+									{ lscacheActive &&
+										liteSpeedModeFromSettings ===
+											'auto' && (
+											<NoticeBanner
+												type="info"
+												message={ __(
+													'Both plugins are active in Auto mode. Choose the cache owner below.',
+													'performance-optimisation'
+												) }
+												className="wppo-mb-12"
+											/>
+										) }
+									<div className="wppo-field">
+										<label
+											className="wppo-field-label"
+											htmlFor="litespeedMode"
+										>
+											{ __(
+												'Cache Owner',
+												'performance-optimisation'
+											) }
+										</label>
+										<select
+											className="wppo-select"
+											id="litespeedMode"
+											value={ litespeedMode }
+											onChange={ ( e ) =>
+												setLitespeedMode(
+													e.target.value
+												)
+											}
+										>
+											<option value="auto">
+												{ __(
+													'Auto — Detect (recommended)',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="wppo">
+												{ __(
+													'WPPO owns cache',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="litespeed">
+												{ __(
+													'LiteSpeed owns cache',
+													'performance-optimisation'
+												) }
+											</option>
+											<option value="standalone">
+												{ __(
+													'Standalone — Ignore LiteSpeed',
+													'performance-optimisation'
+												) }
+											</option>
+										</select>
+										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+											{ __(
+												'In Auto, WPPO owns cache when LiteSpeed Cache is not active; otherwise LiteSpeed owns it.',
+												'performance-optimisation'
+											) }
+										</p>
+									</div>
+									<LoadingSubmitButton
+										className="wppo-button wppo-button--secondary"
+										isLoading={ savingLiteSpeed }
+										onClick={ handleSaveLiteSpeedMode }
+										label={ __(
+											'Save LiteSpeed Mode',
+											'performance-optimisation'
+										) }
+									/>
+									{ serverRules?.litespeed?.dropin && (
+										<div className="wppo-mt-16">
+											<p className="wppo-text-muted wppo-text-small">
+												<strong>
+													{ __(
+														'Drop-in status:',
+														'performance-optimisation'
+													) }
+												</strong>{ ' ' }
+												{ __(
+													'Page cache:',
+													'performance-optimisation'
+												) }{ ' ' }
+												{ litespeedInfo?.dropin
+													?.advanced_cache ||
+													serverRules.litespeed.dropin
+														?.advanced_cache ||
+													'none' }{ ' ' }
+												—{ ' ' }
+												{ __(
+													'Object cache:',
+													'performance-optimisation'
+												) }{ ' ' }
+												{ litespeedInfo?.dropin
+													?.object_cache ||
+													serverRules.litespeed.dropin
+														?.object_cache ||
+													'none' }
+											</p>
+											{ ( litespeedInfo?.dropin
+												?.object_cache === 'foreign' ||
+												litespeedInfo?.dropin
+													?.advanced_cache ===
+													'foreign' ||
+												serverRules.litespeed.dropin
+													?.advanced_cache ===
+													'foreign' ||
+												serverRules.litespeed.dropin
+													?.object_cache ===
+													'foreign' ) && (
+												<div className="wppo-notice wppo-notice--warning wppo-mt-8">
+													<FontAwesomeIcon
+														icon={
+															faExclamationTriangle
+														}
+													/>{ ' ' }
+													{ __(
+														'Only one object-cache.php / advanced-cache.php can exist. Choose the handler in Tools → Object Cache.',
+														'performance-optimisation'
+													) }
+												</div>
+											) }
+											{ litespeedInfo?.dropin
+												?.advanced_cache ===
+												'litespeed' && (
+												<div className="wppo-notice wppo-notice--info wppo-mt-8">
+													{ __(
+														'Page cache drop-in is owned by LiteSpeed — WPPO file cache is bypassed in this mode.',
+														'performance-optimisation'
+													) }
+												</div>
+											) }
+										</div>
+									) }
+								</div>
+							</FeatureCard>
+						) }
 						<FeatureCard
 							title={ __(
 								'Server Rules',

@@ -613,6 +613,23 @@ const Dashboard = ( {
 		dbBadgeLabel = __( 'Medium', 'performance-optimisation' );
 	}
 
+	// LiteSpeed banner data from global wppoSettings (injected by PHP).
+	const litespeedInfo =
+		typeof wppoSettings !== 'undefined' ? wppoSettings?.litespeed : null;
+	const isLiteSpeed = !! litespeedInfo?.detected;
+	const effectiveMode = litespeedInfo?.effective_mode || 'standalone';
+	const lscacheActive = !! litespeedInfo?.lscache_active;
+	let effectiveLabel = effectiveMode;
+	if ( effectiveMode === 'wppo' ) {
+		effectiveLabel = 'WPPO';
+	} else if ( effectiveMode === 'litespeed' ) {
+		effectiveLabel = 'LiteSpeed';
+	}
+	const effectiveBadgeClass =
+		effectiveMode === 'litespeed'
+			? 'wppo-status-badge--warning'
+			: 'wppo-status-badge--good';
+
 	return (
 		<div className="wppo-dashboard-view">
 			{ notice && (
@@ -621,6 +638,64 @@ const Dashboard = ( {
 					message={ notice.message }
 					onDismiss={ dismiss }
 				/>
+			) }
+			{ isLiteSpeed && (
+				<div
+					className="wppo-notice wppo-notice--info wppo-mb-16"
+					role="alert"
+					aria-live="polite"
+				>
+					<FontAwesomeIcon
+						icon={ faServer }
+						style={ { marginRight: '8px' } }
+					/>
+					<span style={ { marginRight: '12px' } }>
+						<strong>
+							{ __(
+								'LiteSpeed Detected',
+								'performance-optimisation'
+							) }
+						</strong>{ ' ' }
+						{ lscacheActive
+							? __(
+									'LiteSpeed Cache plugin is active.',
+									'performance-optimisation'
+							  )
+							: __(
+									'Server is LiteSpeed / OpenLiteSpeed.',
+									'performance-optimisation'
+							  ) }
+					</span>
+					<span
+						className={ `wppo-status-badge ${ effectiveBadgeClass }` }
+						style={ { marginRight: '8px' } }
+					>
+						{ __( 'Effective:', 'performance-optimisation' ) }{ ' ' }
+						{ effectiveLabel }
+					</span>
+					<span
+						className={ `wppo-status-badge ${
+							lscacheActive
+								? 'wppo-status-badge--poor'
+								: 'wppo-status-badge--good'
+						}` }
+					>
+						{ lscacheActive
+							? 'LSCache Active'
+							: 'LSCache Inactive' }
+					</span>
+					{ lscacheActive && effectiveMode === 'litespeed' && (
+						<span
+							className="wppo-text-muted wppo-text-small"
+							style={ { marginLeft: '12px' } }
+						>
+							{ __(
+								'WPPO optimisation is paused in this mode.',
+								'performance-optimisation'
+							) }
+						</span>
+					) }
+				</div>
 			) }
 			<FeatureHeader
 				title={

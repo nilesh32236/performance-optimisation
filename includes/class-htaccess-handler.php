@@ -35,6 +35,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		/**
 		 * Updates the .htaccess rules based on plugin settings.
 		 *
+		 * Note on LiteSpeed ordering: `# BEGIN LSCACHE` must stay above
+		 * `# BEGIN WordPress` and `# BEGIN wppo_rules`. This method uses
+		 * `insert_with_markers()` with the `wppo_rules` marker only, so it
+		 * never reorders the LSCACHE block — even on LiteSpeed hosts where
+		 * this method is now called. Do not call `insert_with_markers()`
+		 * with the `wordpress` marker or otherwise reorder markers.
+		 *
+		 * LiteSpeed (and OpenLiteSpeed) reads `.htaccess` like Apache. On
+		 * OpenLiteSpeed a restart (`systemctl restart lsws`) is required
+		 * after changes for the new rules to take effect; LSWS reloads live.
+		 *
 		 * @param bool $enable Whether to enable or disable the rules.
 		 * @return bool True on success, false on failure.
 		 * @since 1.2.0

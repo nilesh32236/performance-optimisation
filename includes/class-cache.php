@@ -363,6 +363,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function combine_css() {
+			// LiteSpeed safe coexistence — when LSCache owns optimization, skip WPPO combine.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
+				return;
+			}
+			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+				return;
+			}
 			// TODO(#624): when WP 7.2 removes script/style concatenation in favour
 			// of core preload emission, reassess whether this concat pipeline should
 			// be dropped / relegated to an opt-in legacy toggle in favour of core
@@ -1262,6 +1269,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.2.0
 		 */
 		public function maybe_apply_cdn( string $buffer ): string {
+			// LiteSpeed: if LSCWP also rewrites CDN, skip ours when litespeed_can_cdn says LS will.
+			if ( has_filter( 'litespeed_can_cdn' ) && ! apply_filters( 'litespeed_can_cdn', true ) ) {
+				return $buffer;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
+				// When LS owns optimization, also gate CDN rewrite to avoid double rewrite.
+				if ( has_filter( 'litespeed_can_cdn' ) ) {
+					return $buffer;
+				}
+			}
+
 			$cdn_url = $this->options['file_optimisation']['cdnURL'] ?? '';
 
 			if ( empty( $cdn_url ) ) {
@@ -1330,6 +1348,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function minify_buffer( $buffer ) {
+			// LiteSpeed safe coexistence — when LS owns optimizer, skip WPPO HTML minify
+			// to prevent double-minify corruption. Respect litespeed_can_optm filter.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
+				return $buffer;
+			}
+			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+				return $buffer;
+			}
 			$minifier = new Minify\HTML( $buffer, $this->options );
 			$buffer   = $minifier->get_minified_html();
 

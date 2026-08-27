@@ -428,6 +428,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'object_cache',
 				'performance_audit',
 				'cache_settings',
+				'litespeed_integration',
 			);
 			if ( empty( $tab ) || ! in_array( $tab, $allowed_tabs, true ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid settings tab.', 'performance-optimisation' ) );
@@ -716,6 +717,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'object_cache',
 				'performance_audit',
 				'cache_settings',
+				'litespeed_integration',
 			);
 
 			foreach ( array_keys( $data['settings'] ) as $key ) {
@@ -1470,13 +1472,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function get_server_rules( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			return $this->send_response(
-				array(
-					'server_type' => Server_Rules::get_server_type(),
-					'nginx'       => Server_Rules::get_nginx_rules(),
-					'apache'      => Server_Rules::get_apache_rules(),
-				)
+			$server_type = Server_Rules::get_server_type();
+			$data        = array(
+				'server_type' => $server_type,
+				'nginx'       => Server_Rules::get_nginx_rules(),
+				'apache'      => Server_Rules::get_apache_rules(),
 			);
+			// LiteSpeed is Apache-compatible — expose litespeed flag + Apache rules already populated.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
+				$data['litespeed'] = LiteSpeed_Integration::get_info();
+			}
+			return $this->send_response( $data );
 		}
 
 		/**

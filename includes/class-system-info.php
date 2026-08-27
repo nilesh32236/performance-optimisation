@@ -70,6 +70,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'wp_constants'   => self::get_wp_constants(),
 				'server'         => self::get_server(),
 				'cache'          => self::get_cache(),
+				'litespeed'      => self::get_litespeed(),
 				'infrastructure' => self::get_infrastructure(),
 				'opcache'        => self::get_opcache(),
 			);
@@ -234,6 +235,108 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'peak_memory_usage'    => size_format( memory_get_peak_usage( true ) ),
 				'current_memory_usage' => size_format( memory_get_usage() ),
 			);
+		}
+
+		/**
+		 * Get LiteSpeed environment details.
+		 *
+		 * Exposes detection + coexistence mode + drop-in arbitration for the SPA.
+		 * Null-safe and cached per request via LiteSpeed_Integration statics.
+		 *
+		 * @since  NEXT
+		 * @return array{
+		 *     detected: bool,
+		 *     server_type: string,
+		 *     lscache_active: bool,
+		 *     mode: string,
+		 *     effective_mode: string,
+		 *     wppo_owns_cache: bool,
+		 *     optimizer_disabled: bool,
+		 *     dropin: array{
+		 *         advanced_cache: string,
+		 *         object_cache: string
+		 *     }
+		 * }
+		 */
+		public static function get_litespeed(): array {
+			$info = array(
+				'detected'           => false,
+				'server_type'        => 'other',
+				'lscache_active'     => false,
+				'mode'               => 'auto',
+				'effective_mode'     => 'standalone',
+				'wppo_owns_cache'    => true,
+				'optimizer_disabled' => false,
+				'dropin'             => array(
+					'advanced_cache' => 'none',
+					'object_cache'   => 'none',
+				),
+			);
+
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'get_info' ) ) {
+				$ls_info = LiteSpeed_Integration::get_info();
+				$info    = array_merge( $info, $ls_info );
+				// Map effective_mode to wppo_owns logic already in get_info.
+				if ( isset( $ls_info['detected'] ) ) {
+					$info['detected'] = (bool) $ls_info['detected'];
+				}
+			} elseif ( class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'get_server_type' ) ) {
+				$type               = Server_Rules::get_server_type();
+				$info['server_type'] = $type;
+				$info['detected']    = 'litespeed' === $type;
+			}
+
+			// Drop-in arbitration: advanced-cache.php
+			$adv = 'none';
+			if ( class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
+				if ( Advanced_Cache_Handler::is_our_dropin() ) {
+					$adv = 'wppo';
+				} elseif ( Advanced_Cache_Handler::foreign_dropin_present() ) {
+					// Try to distinguish LSCache foreign drop-in vs other.
+					$path = Advanced_Cache_Handler::get_dropin_path();
+					$contents = '';
+					if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
+						$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+						if ( is_string( $contents_raw ) ) {
+							$contents = $contents_raw;
+						}
+					}
+					if ( false !== strpos( $contents, 'litespeed' ) || false !== strpos( $contents, 'LSCACHE' ) || false !== strpos( $contents, 'LSCWP' ) ) {
+						$adv = 'litespeed';
+					} else {
+						$adv = 'foreign';
+					}
+				}
+			}
+			$info['dropin']['advanced_cache'] = $adv;
+
+			// Drop-in arbitration: object-cache.php
+			$obj = 'none';
+			if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
+				$oc = new Object_Cache();
+				$status = $oc->get_status();
+				if ( ! empty( $status['enabled'] ) ) {
+					$obj = 'wppo';
+				} elseif ( ! empty( $status['foreign_dropin'] ) ) {
+					// Try to detect if foreign is LSCache's object cache.
+					$path = WP_CONTENT_DIR . '/object-cache.php';
+					$contents = '';
+					if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
+						$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+						if ( is_string( $contents_raw ) ) {
+							$contents = $contents_raw;
+						}
+					}
+					if ( false !== strpos( $contents, 'litespeed' ) || false !== strpos( $contents, 'LSCache' ) ) {
+						$obj = 'litespeed';
+					} else {
+						$obj = 'foreign';
+					}
+				}
+			}
+			$info['dropin']['object_cache'] = $obj;
+
+			return $info;
 		}
 
 		/**
