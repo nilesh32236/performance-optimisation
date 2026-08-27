@@ -1,5 +1,5 @@
 import { __, sprintf } from '@wordpress/i18n';
-import { useState } from '@wordpress/element';
+import { useState, useEffect } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -30,8 +30,8 @@ const PreloadSettings = ( { options = {} } ) => {
 		preloadCSS: false,
 		preloadCSSUrls: '',
 		enableSpeculationRules: false,
-		speculationMode: 'prerender',
-		speculationEagerness: 'moderate',
+		speculationMode: 'prefetch',
+		speculationEagerness: 'conservative',
 		speculationExcludeUrls: '',
 		...options,
 	};
@@ -39,6 +39,14 @@ const PreloadSettings = ( { options = {} } ) => {
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+
+	useEffect( () => {
+		if ( ! options || Object.keys( options ).length === 0 ) {
+			return;
+		}
+		setSettings( ( prev ) => ( { ...prev, ...options } ) );
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [ JSON.stringify( options ) ] );
 
 	const speculationRules =
 		typeof wppoSettings !== 'undefined'
@@ -51,6 +59,9 @@ const PreloadSettings = ( { options = {} } ) => {
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
+		}
+		if ( isLoading ) {
+			return;
 		}
 		setIsLoading( true );
 		dismiss();
@@ -70,6 +81,7 @@ const PreloadSettings = ( { options = {} } ) => {
 							'Settings updated successfully.',
 							'performance-optimisation'
 						),
+					durationMs: 5000,
 				} );
 			} else {
 				notify( {
@@ -80,6 +92,7 @@ const PreloadSettings = ( { options = {} } ) => {
 							'Failed to update settings.',
 							'performance-optimisation'
 						),
+					durationMs: 5000,
 				} );
 			}
 		} catch ( err ) {
@@ -90,6 +103,7 @@ const PreloadSettings = ( { options = {} } ) => {
 					'An unexpected error occurred.',
 					'performance-optimisation'
 				),
+				durationMs: 5000,
 			} );
 		} finally {
 			setIsLoading( false );
@@ -121,6 +135,7 @@ const PreloadSettings = ( { options = {} } ) => {
 						type={ notice.type }
 						message={ notice.message }
 						className="wppo-mb-20"
+						onDismiss={ dismiss }
 					/>
 				) }
 			</FeatureHeader>

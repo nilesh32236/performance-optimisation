@@ -216,8 +216,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					),
 					'preload_settings'      => array(
 						'enableSpeculationRules' => false,
-						'speculationMode'        => 'prerender',
-						'speculationEagerness'   => 'moderate',
+						'speculationMode'        => 'prefetch',
+						'speculationEagerness'   => 'conservative',
 						'speculationExcludeUrls' => '',
 						'preloadSitemap'         => false,
 					),
@@ -2291,8 +2291,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( $enable_speculation ) {
-				$config['mode']      = $preload_settings['speculationMode'] ?? 'prerender';
-				$config['eagerness'] = $preload_settings['speculationEagerness'] ?? 'moderate';
+				$config['mode']      = $preload_settings['speculationMode'] ?? 'prefetch';
+				$config['eagerness'] = $preload_settings['speculationEagerness'] ?? 'conservative';
 				return $config;
 			}
 
