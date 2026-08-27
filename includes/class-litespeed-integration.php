@@ -157,6 +157,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private static ?bool $cached_should_vary = null;
 
 		/**
+		 * Per-request cached next-gen rewrite enabled check.
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $cached_nextgen = null;
+
+		/**
+		 * Per-request cached brotli enabled check.
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $cached_brotli = null;
+
+		/**
+		 * Per-request cached CDN allowed check.
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $cached_can_cdn = null;
+
+		/**
 		 * Whether Phase 3 hooks (send_headers, vary) are registered.
 		 *
 		 * Prevents double-registration when init() is called multiple times.
@@ -1067,6 +1091,177 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Whether next-gen Vary:Accept rewrite is enabled (LS-401).
+		 *
+		 * Opt-in via litespeed_integration.enableNextGenRewrite (default false).
+		 * Gated by is_litespeed() and image_optimisation.convertImg. Filterable
+		 * via wppo_litespeed_nextgen_rewrite.
+		 *
+		 * @since NEXT
+		 * @return bool True if next-gen rewrite should be active.
+		 */
+		public static function is_nextgen_rewrite_enabled(): bool {
+			if ( null !== self::$cached_nextgen ) {
+				return self::$cached_nextgen;
+			}
+
+			// Must be LiteSpeed server — htaccess next-gen is LS-only.
+			if ( ! self::is_litespeed() ) {
+				self::$cached_nextgen = false;
+				return self::$cached_nextgen;
+			}
+
+			$options = get_option( 'wppo_settings', array() );
+			$enabled = ! empty( $options['litespeed_integration']['enableNextGenRewrite'] );
+			// Gate on convertImg (image next-gen conversion must be active).
+			$convert = ! empty( $options['image_optimisation']['convertImg'] );
+			if ( ! $convert ) {
+				$enabled = false;
+			}
+
+			/**
+			 * Filter whether next-gen Vary:Accept rewrite is enabled.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether next-gen rewrite is enabled.
+			 */
+			$enabled = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $enabled );
+
+			/**
+			 * Legacy alias — also check wppo_litespeed_enable_nextgen_rewrite.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether next-gen rewrite is enabled.
+			 */
+			$enabled = (bool) apply_filters( 'wppo_litespeed_enable_nextgen_rewrite', $enabled );
+
+			self::$cached_nextgen = $enabled;
+
+			return self::$cached_nextgen;
+		}
+
+		/**
+		 * Whether next-gen rewrite is enabled for Nginx/server_rules context (LS-402).
+		 *
+		 * For Nginx, is_litespeed is not required — the map is server-agnostic
+		 * but still opt-in via enableNextGenRewrite and gated on convertImg.
+		 * Filterable via wppo_litespeed_nextgen_rewrite.
+		 *
+		 * @since NEXT
+		 * @return bool True if nginx next-gen map should be included.
+		 */
+		public static function is_nextgen_rewrite_enabled_for_nginx(): bool {
+			$options = get_option( 'wppo_settings', array() );
+			$enabled = ! empty( $options['litespeed_integration']['enableNextGenRewrite'] );
+			$convert = ! empty( $options['image_optimisation']['convertImg'] );
+			if ( ! $convert ) {
+				$enabled = false;
+			}
+
+			/**
+			 * Filter whether next-gen rewrite is enabled for Nginx.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether next-gen rewrite is enabled.
+			 */
+			$enabled = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $enabled );
+			$enabled = (bool) apply_filters( 'wppo_litespeed_enable_nextgen_rewrite', $enabled );
+
+			return $enabled;
+		}
+
+		/**
+		 * Whether Brotli .br generation is enabled (LS-403).
+		 *
+		 * Opt-in via litespeed_integration.enableBrotli (default false).
+		 * Requires brotli extension (extension_loaded('brotli') or
+		 * function_exists('brotli_compress')). Filterable via
+		 * wppo_litespeed_brotli and wppo_litespeed_enable_brotli.
+		 *
+		 * @since NEXT
+		 * @return bool True if brotli generation should run.
+		 */
+		public static function is_brotli_enabled(): bool {
+			if ( null !== self::$cached_brotli ) {
+				return self::$cached_brotli;
+			}
+
+			$options = get_option( 'wppo_settings', array() );
+			$enabled = ! empty( $options['litespeed_integration']['enableBrotli'] );
+
+			if ( ! $enabled ) {
+				self::$cached_brotli = false;
+				return self::$cached_brotli;
+			}
+
+			// Require brotli extension.
+			$has_brotli = extension_loaded( 'brotli' ) || function_exists( 'brotli_compress' );
+			if ( ! $has_brotli ) {
+				self::$cached_brotli = false;
+				return self::$cached_brotli;
+			}
+
+			/**
+			 * Filter whether Brotli generation is enabled.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether brotli is enabled.
+			 */
+			$enabled = (bool) apply_filters( 'wppo_litespeed_brotli', $enabled );
+
+			/**
+			 * Legacy alias — also check wppo_litespeed_enable_brotli.
+			 *
+			 * @since NEXT
+			 * @param bool $enabled Whether brotli is enabled.
+			 */
+			$enabled = (bool) apply_filters( 'wppo_litespeed_enable_brotli', $enabled );
+
+			self::$cached_brotli = $enabled;
+
+			return self::$cached_brotli;
+		}
+
+		/**
+		 * Whether CDN rewriting is allowed by LiteSpeed guard (LS-404).
+		 *
+		 * Respects wppo_litespeed_can_cdn (our prefix) and litespeed_can_cdn
+		 * (LSCWP ecosystem filter). When either returns false, WPPO CDN rewrite
+		 * is skipped to avoid double CDN mapping. True by default.
+		 *
+		 * @since NEXT
+		 * @return bool True if CDN rewriting may proceed.
+		 */
+		public static function can_apply_cdn(): bool {
+			if ( null !== self::$cached_can_cdn ) {
+				return self::$cached_can_cdn;
+			}
+
+			/**
+			 * Filter whether WPPO CDN rewriting is allowed.
+			 *
+			 * @since NEXT
+			 * @param bool $can_cdn Whether CDN may be applied.
+			 */
+			$can_cdn = (bool) apply_filters( 'wppo_litespeed_can_cdn', true );
+
+			if ( ! $can_cdn ) {
+				self::$cached_can_cdn = false;
+				return self::$cached_can_cdn;
+			}
+
+			// Respect LSCWP ecosystem filter litespeed_can_cdn when present.
+			if ( has_filter( 'litespeed_can_cdn' ) && ! apply_filters( 'litespeed_can_cdn', true ) ) {
+				self::$cached_can_cdn = false;
+				return self::$cached_can_cdn;
+			}
+
+			self::$cached_can_cdn = true;
+
+			return self::$cached_can_cdn;
+		}
+
+		/**
 		 * Strip generic Cache-Control when LS public header sent (LS-304).
 		 *
 		 * Prevents Cache-Control: no-cache conflicting with
@@ -1109,6 +1304,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			self::$cached_ttl               = null;
 			self::$cached_is_cacheable      = null;
 			self::$cached_should_vary       = null;
+			self::$cached_nextgen           = null;
+			self::$cached_brotli            = null;
+			self::$cached_can_cdn           = null;
 			self::$hooks_registered         = false;
 		}
 

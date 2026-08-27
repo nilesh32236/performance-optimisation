@@ -1269,15 +1269,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.2.0
 		 */
 		public function maybe_apply_cdn( string $buffer ): string {
+			// LS-404: CDN mapping awareness — gate when litespeed_can_cdn === false (LS mapping active).
+			// Gate via wppo_litespeed_can_cdn and LiteSpeed_Integration::can_apply_cdn().
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
+				if ( ! LiteSpeed_Integration::can_apply_cdn() ) {
+					return $buffer;
+				}
+				if ( LiteSpeed_Integration::should_disable_wppo_optimizer() && has_filter( 'litespeed_can_cdn' ) ) {
+					return $buffer;
+				}
+			}
+			// Fallback when LiteSpeed_Integration not loaded: respect ecosystem filters directly.
+			/**
+			 * Filter whether WPPO CDN may be applied (LS-404).
+			 *
+			 * @since NEXT
+			 * @param bool $can_cdn Whether CDN may be applied.
+			 */
+			if ( ! apply_filters( 'wppo_litespeed_can_cdn', true ) ) {
+				return $buffer;
+			}
 			// LiteSpeed: if LSCWP also rewrites CDN, skip ours when litespeed_can_cdn says LS will.
 			if ( has_filter( 'litespeed_can_cdn' ) && ! apply_filters( 'litespeed_can_cdn', true ) ) {
 				return $buffer;
-			}
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
-				// When LS owns optimization, also gate CDN rewrite to avoid double rewrite.
-				if ( has_filter( 'litespeed_can_cdn' ) ) {
-					return $buffer;
-				}
 			}
 
 			$cdn_url = $this->options['file_optimisation']['cdnURL'] ?? '';
@@ -1562,6 +1576,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$gzip_file_path = $file_path . '.gz';
+			$br_file_path   = $file_path . '.br';
 
 			$fs = $this->get_filesystem();
 			if ( ! $fs ) {
@@ -1573,6 +1588,48 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$gzip_output = gzencode( $buffer, 9 );
 				if ( false !== $gzip_output ) {
 					$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
+				}
+			}
+
+			// LS-403: Brotli .br alongside .gz — gated by enableBrotli + extension.
+			if ( 'html' === $type ) {
+				$use_brotli = false;
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_brotli_enabled' ) ) {
+					$use_brotli = LiteSpeed_Integration::is_brotli_enabled();
+				} else {
+					$opts       = get_option( 'wppo_settings', array() );
+					$enabled    = ! empty( $opts['litespeed_integration']['enableBrotli'] );
+					$has_ext    = extension_loaded( 'brotli' ) || function_exists( 'brotli_compress' );
+					$use_brotli = $enabled && $has_ext;
+					/**
+					 * Filter whether brotli generation is enabled (fallback).
+					 *
+					 * @since NEXT
+					 * @param bool $use_brotli Whether brotli is enabled.
+					 */
+					$use_brotli = (bool) apply_filters( 'wppo_litespeed_brotli', $use_brotli );
+				}
+				if ( $use_brotli && function_exists( 'brotli_compress' ) ) {
+					try {
+						$br_output = brotli_compress( $buffer, 4, 0 ); // phpcs:ignore PHPCompatibility.FunctionUse.NewFunctions.brotli_compressFound
+						if ( false !== $br_output && is_string( $br_output ) ) {
+							$fs->put_contents( $br_file_path, $br_output, FS_CHMOD_FILE );
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				} elseif ( $use_brotli && extension_loaded( 'brotli' ) ) {
+					// Fallback when brotli_compress is not exposed but extension is loaded — try gz fallback is already done.
+					try {
+						if ( function_exists( 'brotli_compress' ) ) {
+							$br_output = brotli_compress( $buffer, 4, 0 ); // phpcs:ignore PHPCompatibility.FunctionUse.NewFunctions.brotli_compressFound
+							if ( false !== $br_output && is_string( $br_output ) ) {
+								$fs->put_contents( $br_file_path, $br_output, FS_CHMOD_FILE );
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
 				}
 			}
 
@@ -1827,12 +1884,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function delete_cache_files( $file_path ): bool {
 			$gzip_file_path = $file_path . '.gz';
+			$br_file_path   = $file_path . '.br';
 
 			$fs = $this->get_filesystem();
 			if ( $fs ) {
 				$res1 = ! $fs->exists( $file_path ) || $fs->delete( $file_path );
 				$res2 = ! $fs->exists( $gzip_file_path ) || $fs->delete( $gzip_file_path );
-				return $res1 && $res2;
+				$res3 = ! $fs->exists( $br_file_path ) || $fs->delete( $br_file_path );
+				return $res1 && $res2 && $res3;
 			}
 
 			return false;
@@ -1857,7 +1916,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			foreach ( $files as $file ) {
-				if ( preg_match( '/^index-[a-f0-9]{12}\.html(\.gz)?$/', $file['name'] ) ) {
+				if ( preg_match( '/^index-[a-f0-9]{12}\.html(\.gz|\.br)?$/', $file['name'] ) ) {
 					$file_path = trailingslashit( $dir ) . $file['name'];
 					$fs->delete( $file_path );
 				}

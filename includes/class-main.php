@@ -969,8 +969,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Handle .htaccess rules update.
 			// LiteSpeed and OpenLiteSpeed both read .htaccess (like Apache).
 			// Gate still on enableServerRules but allow litespeed to trigger.
-			$old_enable = isset( $old_value['file_optimisation']['enableServerRules'] ) ? (bool) $old_value['file_optimisation']['enableServerRules'] : false;
-			$new_enable = isset( $value['file_optimisation']['enableServerRules'] ) ? (bool) $value['file_optimisation']['enableServerRules'] : false;
+			// LS-401: also refresh when litespeed_integration.enableNextGenRewrite toggles while server rules are enabled.
+			$old_enable      = isset( $old_value['file_optimisation']['enableServerRules'] ) ? (bool) $old_value['file_optimisation']['enableServerRules'] : false;
+			$new_enable      = isset( $value['file_optimisation']['enableServerRules'] ) ? (bool) $value['file_optimisation']['enableServerRules'] : false;
+			$old_nextgen     = isset( $old_value['litespeed_integration']['enableNextGenRewrite'] ) ? (bool) $old_value['litespeed_integration']['enableNextGenRewrite'] : false;
+			$new_nextgen     = isset( $value['litespeed_integration']['enableNextGenRewrite'] ) ? (bool) $value['litespeed_integration']['enableNextGenRewrite'] : false;
+			$nextgen_changed = $old_nextgen !== $new_nextgen;
 
 			if ( $old_enable !== $new_enable ) {
 				$ok = Htaccess_Handler::update_rules( $new_enable );
@@ -995,6 +999,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__( 'Performance Optimisation: Failed to update .htaccess rules. Please check file permissions.', 'performance-optimisation' ) . '</p></div>';
 						}
 					);
+				}
+			} elseif ( $nextgen_changed && $new_enable ) {
+				// Next-gen toggle changed while server rules remain enabled — refresh htaccess to add/remove next-gen block.
+				$ok = Htaccess_Handler::update_rules( true );
+				if ( $ok && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
+					Log::add( __( 'Server rules updated on LiteSpeed — restart OpenLiteSpeed if changes do not appear immediately.', 'performance-optimisation' ) );
 				}
 			}
 
