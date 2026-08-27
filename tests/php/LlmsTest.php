@@ -1,4 +1,5 @@
 <?php
+// phpcs:ignoreFile Generic.Files.OneObjectStructurePerFile.MultipleFound -- test helper mock in same file
 /**
  * Tests for Llms class.
  *
@@ -161,7 +162,12 @@ class LlmsTest extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_generate_creates_files_and_applies_filter(): void {
 		$this->install_option_stubs();
-		$this->options['wppo_settings'] = array( 'llms_txt' => array( 'enabled' => true, 'source' => 'both' ) );
+		$this->options['wppo_settings'] = array(
+			'llms_txt' => array(
+				'enabled' => true,
+				'source'  => 'both',
+			),
+		);
 
 		// Stub filesystem via Util::init_filesystem returning false so fallback file_put_contents is used.
 		// But we mock Util::prepare_cache_dir and wp_mkdir_p via functions, and let file_put_contents write to temp.
@@ -199,7 +205,7 @@ class LlmsTest extends \PHPUnit\Framework\TestCase {
 
 		Llms::generate();
 
-		$path = Llms::get_file_path( 'llms' );
+		$path    = Llms::get_file_path( 'llms' );
 		$content = file_get_contents( $path );
 		$this->assertStringContainsString( 'Filtered', $content );
 
@@ -246,7 +252,12 @@ class LlmsTest extends \PHPUnit\Framework\TestCase {
 				return 'http://example.com/page-' . $id . '/very-long-url-path-to-increase-size-abcdefghijklmnopqrstuvwxyz/';
 			}
 		);
-		$this->options['wppo_settings'] = array( 'llms_txt' => array( 'enabled' => true, 'source' => 'both' ) );
+		$this->options['wppo_settings'] = array(
+			'llms_txt' => array(
+				'enabled' => true,
+				'source'  => 'both',
+			),
+		);
 
 		Llms::generate();
 
