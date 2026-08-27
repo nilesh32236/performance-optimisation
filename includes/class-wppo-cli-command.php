@@ -504,6 +504,55 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			);
 		}
 
+		/**
+		 * View, update, export, or import plugin settings.
+		 *
+		 * ## OPTIONS
+		 *
+		 * <action>
+		 * : Settings action to perform: get, update, export, or import.
+		 *
+		 * [<tab>]
+		 * : Settings tab name (file_optimisation, preload_settings, image_optimisation, database_cleanup, object_cache).
+		 *
+		 * [--settings=<json>]
+		 * : JSON string containing setting key-value pairs (required for update action).
+		 *
+		 * [--file=<path>]
+		 * : File path for export or import actions.
+		 *
+		 * [--format=<format>]
+		 * : Output format for get action.
+		 * ---
+		 * default: json
+		 * options:
+		 *   - json
+		 *   - yaml
+		 * ---
+		 *
+		 * ## EXAMPLES
+		 *
+		 *     # View all plugin settings
+		 *     wp wppo settings get
+		 *
+		 *     # View file optimization settings
+		 *     wp wppo settings get file_optimisation
+		 *
+		 *     # Enable HTML minification via settings update
+		 *     wp wppo settings update file_optimisation --settings='{"minifyHTML":true}'
+		 *
+		 *     # Export settings to file
+		 *     wp wppo settings export --file=/tmp/wppo-settings.json
+		 *
+		 *     # Import settings from file
+		 *     wp wppo settings import --file=/tmp/wppo-settings.json
+		 *
+		 * @when after_wp_load
+		 * @subcommand settings
+		 * @param array $args Command positional arguments.
+		 * @param array $assoc_args Command associative arguments.
+		 * @return void
+		 */
 		public function settings( array $args, array $assoc_args ): void {
 			$action = $args[0] ?? 'get';
 			$tab    = $args[1] ?? null;
