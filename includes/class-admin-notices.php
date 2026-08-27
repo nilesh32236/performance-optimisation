@@ -77,6 +77,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				update_option( 'wppo_review_snoozed_until', time() + ( 30 * DAY_IN_SECONDS ) );
 			}
 
+			if ( 'litespeed' === $key ) {
+				update_user_meta( get_current_user_id(), 'wppo_litespeed_notice_dismissed', 1 );
+			}
+
 			wp_safe_redirect( remove_query_arg( array( 'wppo_dismiss', '_wpnonce' ) ) );
 			exit;
 		}
@@ -93,6 +97,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 
 			$this->maybe_activation_notices();
 			$this->maybe_competing_plugins_notice();
+			$this->maybe_litespeed_coexistence_notice();
 			$this->maybe_review_notice();
 		}
 
@@ -146,6 +151,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 				echo '<li>' . wp_kses_post( $html ) . '</li>';
 			}
 			echo '</ul><p><a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss this notice', 'performance-optimisation' ) . '</a></p></div>';
+		}
+
+		/**
+		 * LiteSpeed coexistence warning — when both plugins active in auto mode.
+		 *
+		 * In auto mode with LSCache active, WPPO pauses its file cache and
+		 * minify/combine/defer optimizers to avoid double processing. Show a
+		 * dismissible info notice linking to the LiteSpeed control.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private function maybe_litespeed_coexistence_notice(): void {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
+				return;
+			}
+
+			if ( ! LiteSpeed_Integration::is_litespeed() || ! LiteSpeed_Integration::is_lscache_active() ) {
+				return;
+			}
+
+			if ( LiteSpeed_Integration::get_mode() !== LiteSpeed_Integration::MODE_AUTO ) {
+				return;
+			}
+
+			if ( LiteSpeed_Integration::effective_mode() !== LiteSpeed_Integration::MODE_LITESPEED ) {
+				return;
+			}
+
+			// Dismissible per user.
+			$user_id = get_current_user_id();
+			if ( $user_id && get_user_meta( $user_id, 'wppo_litespeed_notice_dismissed', true ) ) {
+				return;
+			}
+
+			$dismiss = wp_nonce_url(
+				add_query_arg( 'wppo_dismiss', 'litespeed' ),
+				'wppo_dismiss_notice',
+				'_wpnonce'
+			);
+
+			echo '<div class="notice notice-warning is-dismissible"><p><strong>' . esc_html__( 'Performance Optimisation — LiteSpeed detected', 'performance-optimisation' ) . '</strong> — ';
+			echo esc_html__( 'Both Performance Optimisation and LiteSpeed Cache are active. In Auto mode, file cache & minify/combine/defer are paused to avoid double processing.', 'performance-optimisation' ) . ' ';
+			echo esc_html__( 'Choose the cache owner in Performance → File Optimisation → Network → LiteSpeed.', 'performance-optimisation' );
+			echo ' <a href="' . esc_url( admin_url( 'admin.php?page=performance-optimisation' ) ) . '">' . esc_html__( 'Open settings', 'performance-optimisation' ) . '</a>';
+			echo ' &middot; <a href="' . esc_url( $dismiss ) . '">' . esc_html__( 'Dismiss', 'performance-optimisation' ) . '</a>';
+			echo '</p></div>';
 		}
 
 		/**

@@ -170,11 +170,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options = get_option(
 				'wppo_settings',
 				array(
-					'cache_settings'     => array(
+					'cache_settings'        => array(
 						'enableLoggedInCache' => false,
 						'loggedInCacheRoles'  => array(),
 					),
-					'file_optimisation'  => array(
+					'file_optimisation'     => array(
 						'enableServerRules'       => false,
 						'cdnURL'                  => '',
 						'removeUnusedCSS'         => false,
@@ -214,14 +214,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'disablePasswordStrength' => false,
 						'disableSelfPingbacks'    => false,
 					),
-					'preload_settings'   => array(
+					'preload_settings'      => array(
 						'enableSpeculationRules' => false,
 						'speculationMode'        => 'prerender',
 						'speculationEagerness'   => 'moderate',
 						'speculationExcludeUrls' => '',
 						'preloadSitemap'         => false,
 					),
-					'image_optimisation' => array(
+					'image_optimisation'    => array(
 						'lazyLoadImages'             => false,
 						'lazyLoadNative'             => true,
 						'placeholderType'            => 'svg',
@@ -231,13 +231,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'clientSideMimeTypes'        => array(),
 						'lazyLoadBackgroundImages'   => false,
 					),
-					'performance_audit'  => array(
+					'performance_audit'     => array(
 						'pagespeed_api_key'     => '',
 						'high_value_urls'       => array(),
 						'auto_fix_enabled'      => false,
 						'server_timing_enabled' => false,
 						'auto_rescan'           => '',
 						'rum_enabled'           => false,
+					),
+					'litespeed_integration' => array(
+						'mode'                 => 'auto',
+						'enableNextGenRewrite' => false,
+						'enableBrotli'         => false,
+						'purgeSync'            => true,
 					),
 				)
 			);
@@ -368,6 +374,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
 			if ( file_exists( WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
+			}
+
+			// LiteSpeed integration (Phase 1 — safe coexistence). Loaded after
+			// Server_Rules so is_litespeed() delegation is available.
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-server-rules.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-server-rules.php';
+			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php';
 			}
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -947,11 +962,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			// Handle .htaccess rules update.
+			// LiteSpeed and OpenLiteSpeed both read .htaccess (like Apache).
+			// Gate still on enableServerRules but allow litespeed to trigger.
 			$old_enable = isset( $old_value['file_optimisation']['enableServerRules'] ) ? (bool) $old_value['file_optimisation']['enableServerRules'] : false;
 			$new_enable = isset( $value['file_optimisation']['enableServerRules'] ) ? (bool) $value['file_optimisation']['enableServerRules'] : false;
 
 			if ( $old_enable !== $new_enable ) {
 				$ok = Htaccess_Handler::update_rules( $new_enable );
+
+				// Log hint for OpenLiteSpeed operators: restart required.
+				if ( $ok && $new_enable && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
+					Log::add( __( 'Server rules updated on LiteSpeed — restart OpenLiteSpeed if changes do not appear immediately.', 'performance-optimisation' ) );
+				}
 
 				if ( ! $ok ) {
 					// Rollback the setting if .htaccess update failed.
@@ -1447,6 +1469,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'eagerness_override'  => $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' ),
 						'static_cache_active' => ! empty( $this->options['cache_settings']['enableCache'] ),
 					),
+					// LiteSpeed integration — for SPA banner + mode selector (Phase 1).
+					'litespeed'                            => class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ? LiteSpeed_Integration::get_info() : array(
+						'detected'           => false,
+						'server_type'        => Server_Rules::get_server_type(),
+						'lscache_active'     => false,
+						'mode'               => 'auto',
+						'effective_mode'     => 'standalone',
+						'wppo_owns_cache'    => true,
+						'optimizer_disabled' => false,
+					),
 				),
 			);
 
@@ -1705,6 +1737,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return void
 		 */
 		public function add_defer_strategy(): void {
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
+				return;
+			}
+			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+				return;
+			}
 			if ( ! $this->should_optimise_for_logged_in() ) {
 				return;
 			}
@@ -1753,6 +1791,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified script tag with defer attribute.
 		 */
 		public function add_defer_attribute( $tag, $handle ): string {
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
+				return $tag;
+			}
+			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+				return $tag;
+			}
 			if ( ! $this->should_optimise_for_logged_in() ) {
 				return $tag;
 			}
@@ -1806,6 +1850,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified script tag with the defer attribute.
 		 */
 		public function add_defer_attribute_legacy( $tag, $handle ): string {
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
+				return $tag;
+			}
+			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+				return $tag;
+			}
 			if ( ! $this->should_optimise_for_logged_in() ) {
 				return $tag;
 			}
@@ -2581,6 +2631,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified link tag with minified CSS.
 		 */
 		public function minify_css( $tag, $handle, $href ) {
+			// LiteSpeed safe coexistence — when LSCache owns optimization, skip WPPO minify.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
+				return $tag;
+			}
+			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+				return $tag;
+			}
 			// Early return for logged-in users (when optimisation not enabled) to avoid
 			// the expensive Util::get_local_path() computation.
 			if ( ! $this->should_optimise_for_logged_in() ) {
@@ -2631,6 +2688,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified script tag with minified JavaScript.
 		 */
 		public function minify_js( $tag, $handle, $src ) {
+			// LiteSpeed safe coexistence — when LSCache owns optimization, skip WPPO minify.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
+				return $tag;
+			}
+			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+				return $tag;
+			}
 			// Early return for logged-in users (when optimisation not enabled), empty URLs, or excluded handles
 			// to avoid the expensive Util::get_local_path() computation.
 			if ( ! $this->should_optimise_for_logged_in() || empty( $src ) || in_array( $handle, $this->exclude_js, true ) ) {

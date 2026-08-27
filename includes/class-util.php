@@ -606,6 +606,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					continue;
 				}
 
+				// LiteSpeed integration — allowlist mode values.
+				if ( 'mode' === $safe_key && ! is_array( $value ) ) {
+					$raw                    = sanitize_text_field( (string) $value );
+					$mode                   = in_array( $raw, array( 'auto', 'wppo', 'litespeed', 'standalone' ), true ) ? $raw : 'auto';
+					$sanitized[ $safe_key ] = $mode;
+					continue;
+				}
+
 				if ( is_array( $value ) ) {
 					$sanitized[ $safe_key ] = self::sanitize_settings_recursively( $value );
 				} elseif ( is_bool( $value ) ) {
