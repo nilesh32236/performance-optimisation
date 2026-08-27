@@ -720,6 +720,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				'cache_settings',
 				'litespeed_integration',
 				'llms_txt',
+				'core_tweaks',
 			);
 
 			foreach ( array_keys( $data['settings'] ) as $key ) {
@@ -863,7 +864,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( 'revisions' === $type ) {
-				$result = Database_Cleanup::invoke_cleanup_method( $method, 30, 5 );
+				$wppo_settings = get_option( 'wppo_settings', array() );
+				$db_settings   = $wppo_settings['database_cleanup'] ?? array();
+				$max_age       = isset( $db_settings['dbRevMaxAge'] ) ? (int) $db_settings['dbRevMaxAge'] : 30;
+				$keep_latest   = isset( $db_settings['dbRevKeepLatest'] ) ? (int) $db_settings['dbRevKeepLatest'] : 5;
+				$result        = Database_Cleanup::invoke_cleanup_method( $method, $max_age, $keep_latest );
 			} else {
 				$result = Database_Cleanup::invoke_cleanup_method( $method );
 			}

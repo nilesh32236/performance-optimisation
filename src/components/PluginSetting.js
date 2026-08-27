@@ -28,6 +28,8 @@ const ALLOWED_IMPORT_KEYS = [
 	'performance_audit',
 	'core_tweaks',
 	'cache_settings',
+	'litespeed_integration',
+	'llms_txt',
 ];
 
 const validateImportData = ( data ) => {
@@ -215,7 +217,7 @@ const PluginSetting = ( { options } ) => {
 				tab: 'performance_audit',
 				settings: {
 					...currentSettings,
-					pagespeed_api_key: newApiKey,
+					...( newApiKey ? { pagespeed_api_key: newApiKey } : {} ),
 				},
 			} );
 			if ( response.success ) {
@@ -452,6 +454,7 @@ const PluginSetting = ( { options } ) => {
 				<NoticeBanner
 					type={ importNotice.type }
 					message={ importNotice.message }
+					onDismiss={ dismissImport }
 				/>
 			) }
 
@@ -642,6 +645,7 @@ const PluginSetting = ( { options } ) => {
 							type={ apiKeyNotice.type }
 							message={ apiKeyNotice.message }
 							className="wppo-mb-16"
+							onDismiss={ dismissApiKey }
 						/>
 					) }
 
