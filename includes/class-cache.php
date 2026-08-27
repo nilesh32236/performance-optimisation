@@ -1727,6 +1727,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! wp_next_scheduled( 'wppo_generate_static_page', array( $page_id ) ) ) {
 				wp_schedule_single_event( time() + wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $page_id ) );
 			}
+
+			// LS-201: invalidate → LSCache purge sync for the post.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
+				LiteSpeed_Integration::sync_purge_post_to_litespeed( (int) $page_id );
+			}
 		}
 
 		/**
@@ -1883,6 +1888,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				update_option( 'wppo_cache_last_cleared_time', current_time( 'mysql' ), false );
 				do_action( 'wppo_after_cache_clear', $type, $url_path );
+
+				// LS-201: WPPO → LSCache purge sync (all or single URL). Gated
+				// by is_litespeed() + is_lscache_active() + purgeSync via
+				// LiteSpeed_Integration::is_purge_sync_enabled(); loop-safe via
+				// wppo_litespeed_purge_lock (60s, blog-prefixed).
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
+					if ( null === $url_path || '' === $url_path ) {
+						LiteSpeed_Integration::sync_purge_all_to_litespeed();
+					} else {
+						$path_for_url = '/' . ltrim( (string) $url_path, '/' );
+						LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
+					}
+				}
 			}
 
 			return $result;

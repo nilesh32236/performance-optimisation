@@ -293,9 +293,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Admin_Notices' ) ) {
 		private static function get_active_plugin_files(): array {
 			$plugins = (array) get_option( 'active_plugins', array() );
 
-			if ( is_multisite() ) {
-				$network = (array) get_site_option( 'active_sitewide_plugins', array() );
-				$plugins = array_merge( $plugins, array_keys( $network ) );
+			if ( function_exists( 'is_multisite' ) ) {
+				$is_multisite = false;
+				try {
+					$is_multisite = is_multisite();
+				} catch ( \Throwable $e ) {
+					$is_multisite = false;
+				}
+				if ( $is_multisite ) {
+					try {
+						$network = (array) get_site_option( 'active_sitewide_plugins', array() );
+						$plugins = array_merge( $plugins, array_keys( $network ) );
+					} catch ( \Throwable $e ) {
+						unset( $e ); // Missing mock — treat as no network plugins.
+					}
+				}
 			}
 
 			return array_values( array_unique( $plugins ) );

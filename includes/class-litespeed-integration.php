@@ -74,6 +74,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		);
 
 		/**
+		 * Transient key for purge-loop lock.
+		 *
+		 * Used to prevent infinite purge loops between WPPO and LSCache
+		 * (WPPO→LS→WPPO) when purgeSync is enabled.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private const PURGE_LOCK = 'wppo_litespeed_purge_lock';
+
+		/**
+		 * TTL for purge-loop lock in seconds.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const PURGE_LOCK_TTL = 60;
+
+		/**
 		 * Per-request cached effective mode.
 		 *
 		 * Null means not yet resolved.
@@ -168,9 +187,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 
 			// Check active plugins (including network-activated on multisite).
 			$active_plugins = (array) get_option( 'active_plugins', array() );
-			if ( is_multisite() ) {
-				$network_plugins = array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) );
-				$active_plugins  = array_merge( $active_plugins, $network_plugins );
+			if ( function_exists( 'is_multisite' ) ) {
+				$is_multisite = false;
+				try {
+					$is_multisite = is_multisite();
+				} catch ( \Throwable $e ) {
+					$is_multisite = false;
+				}
+				if ( $is_multisite ) {
+					try {
+						$network_plugins = array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) );
+						$active_plugins  = array_merge( $active_plugins, $network_plugins );
+					} catch ( \Throwable $e ) {
+						unset( $e ); // Mock missing get_site_option — treat as no network plugins.
+					}
+				}
 			}
 
 			foreach ( $active_plugins as $plugin_path ) {
@@ -360,6 +391,210 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$disable = (bool) apply_filters( 'wppo_litespeed_should_disable_optimizer', $disable, self::effective_mode() );
 
 			return $disable;
+		}
+
+		/**
+		 * Whether purge sync is enabled (WPPO ↔ LSCache).
+		 *
+		 * Requires LiteSpeed server, LSCache active, and
+		 * `litespeed_integration.purgeSync` true (default on). Filterable
+		 * via `wppo_litespeed_purge_sync`.
+		 *
+		 * @since NEXT
+		 * @return bool True if purges should be synced.
+		 */
+		public static function is_purge_sync_enabled(): bool {
+			if ( ! self::is_litespeed() || ! self::is_lscache_active() ) {
+				return false;
+			}
+
+			$options    = get_option( 'wppo_settings', array() );
+			$purge_sync = $options['litespeed_integration']['purgeSync'] ?? true;
+			$purge_sync = (bool) $purge_sync;
+
+			/**
+			 * Filter whether LiteSpeed purge sync is enabled.
+			 *
+			 * @since NEXT
+			 * @param bool $purge_sync Whether purge sync is enabled.
+			 */
+			$purge_sync = (bool) apply_filters( 'wppo_litespeed_purge_sync', $purge_sync );
+
+			return $purge_sync;
+		}
+
+		/**
+		 * Get the blog-prefixed purge-lock transient key.
+		 *
+		 * @since NEXT
+		 * @return string Transient key.
+		 */
+		public static function get_purge_lock_key(): string {
+			return Util::transient_key( self::PURGE_LOCK );
+		}
+
+		/**
+		 * Whether a purge-loop lock is currently active.
+		 *
+		 * @since NEXT
+		 * @return bool True if lock present.
+		 */
+		public static function has_purge_lock(): bool {
+			return (bool) get_transient( self::get_purge_lock_key() );
+		}
+
+		/**
+		 * Set the purge-loop lock for PURGE_LOCK_TTL seconds.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function set_purge_lock(): void {
+			set_transient( self::get_purge_lock_key(), 1, self::PURGE_LOCK_TTL );
+		}
+
+		/**
+		 * Sync a WPPO "purge all" to LSCache.
+		 *
+		 * No-op when a lock is active or purgeSync disabled. Sets a 60s
+		 * blog-prefixed lock via Util::transient_key() before emitting
+		 * `litespeed_purge_all`.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function sync_purge_all_to_litespeed(): void {
+			if ( ! self::is_purge_sync_enabled() ) {
+				return;
+			}
+			if ( self::has_purge_lock() ) {
+				return;
+			}
+			self::set_purge_lock();
+			do_action( 'litespeed_purge_all', 'wppo clear_all' );
+		}
+
+		/**
+		 * Sync a WPPO single-page purge to LSCache via URL.
+		 *
+		 * @since NEXT
+		 * @param string $url_path URL path (e.g. "/about/").
+		 * @return void
+		 */
+		public static function sync_purge_url_to_litespeed( string $url_path ): void {
+			if ( ! self::is_purge_sync_enabled() ) {
+				return;
+			}
+			if ( self::has_purge_lock() ) {
+				return;
+			}
+			if ( '' === $url_path ) {
+				return;
+			}
+			$url = home_url( $url_path );
+			self::set_purge_lock();
+			do_action( 'litespeed_purge_url', $url );
+		}
+
+		/**
+		 * Sync a WPPO post invalidation to LSCache via post ID.
+		 *
+		 * @since NEXT
+		 * @param int $post_id Post ID.
+		 * @return void
+		 */
+		public static function sync_purge_post_to_litespeed( int $post_id ): void {
+			if ( ! self::is_purge_sync_enabled() ) {
+				return;
+			}
+			if ( self::has_purge_lock() ) {
+				return;
+			}
+			if ( $post_id <= 0 ) {
+				return;
+			}
+			self::set_purge_lock();
+			do_action( 'litespeed_purge_post', $post_id );
+		}
+
+		/**
+		 * Initialise LiteSpeed purge-sync listeners (LS → WPPO).
+		 *
+		 * Hooks `litespeed_purged_all`, `litespeed_purged_post`, and
+		 * `litespeed_purge_finalize` to mirror LSCache purges back to WPPO's
+		 * file cache. Each handler checks the 60s blog-prefixed lock via
+		 * Util::transient_key() to avoid loops.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function init(): void {
+			add_action( 'litespeed_purged_all', array( self::class, 'handle_litespeed_purged_all' ) );
+			add_action( 'litespeed_purged_post', array( self::class, 'handle_litespeed_purged_post' ), 10, 1 );
+			add_action( 'litespeed_purge_finalize', array( self::class, 'handle_litespeed_purge_finalize' ) );
+		}
+
+		/**
+		 * Handle LSCache "purged all" → clear WPPO file cache.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function handle_litespeed_purged_all(): void {
+			if ( ! self::is_purge_sync_enabled() ) {
+				return;
+			}
+			if ( self::has_purge_lock() ) {
+				return;
+			}
+			self::set_purge_lock();
+			if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+				Cache::clear_cache();
+			}
+		}
+
+		/**
+		 * Handle LSCache "purged post" → invalidate WPPO static HTML for post.
+		 *
+		 * @since NEXT
+		 * @param int $post_id Post ID purged by LSCache.
+		 * @return void
+		 */
+		public static function handle_litespeed_purged_post( $post_id ): void {
+			if ( ! self::is_purge_sync_enabled() ) {
+				return;
+			}
+			if ( self::has_purge_lock() ) {
+				return;
+			}
+			$post_id = (int) $post_id;
+			if ( $post_id <= 0 ) {
+				return;
+			}
+			self::set_purge_lock();
+			if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+				$cache = new Cache();
+				$cache->invalidate_dynamic_static_html( $post_id );
+			}
+		}
+
+		/**
+		 * Handle LSCache purge finalize (catch-all) → clear WPPO cache.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function handle_litespeed_purge_finalize(): void {
+			if ( ! self::is_purge_sync_enabled() ) {
+				return;
+			}
+			if ( self::has_purge_lock() ) {
+				return;
+			}
+			self::set_purge_lock();
+			if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+				Cache::clear_cache();
+			}
 		}
 
 		/**

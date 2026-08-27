@@ -507,7 +507,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since NEXT
 		 */
 		public static function transient_key( string $key ): string {
-			return is_multisite() ? (string) get_current_blog_id() . '_' . $key : $key;
+			if ( ! function_exists( 'is_multisite' ) ) {
+				return $key;
+			}
+			try {
+				return is_multisite() ? (string) get_current_blog_id() . '_' . $key : $key;
+			} catch ( \Throwable $e ) {
+				return $key;
+			}
 		}
 
 		/**
