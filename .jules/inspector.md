@@ -65,3 +65,7 @@
 **Bug/Gap:** Static analysis errors in `class-google-fonts.php` where `wp_normalize_path` and `content_url` were potentially assigning null to string properties, and a boolean check `! $result && file_exists( $tmp )` where the right side was always true due to previous checks.
 **Root Cause:** Missing explicit string casts for function returns that PHPStan considered possibly null, and redundant file existence checks after download failures.
 **Test Added:** Added string casting `(string)` for the path/url property assignments. Simplified the cleanup condition by removing the redundant `file_exists($tmp)` check.
+## 2024-08-27 - [Fix WPCS errors in InlineCssTest.php]
+**Bug/Gap:** WPCS failures due to incorrect array formatting for PHPUnit test stubbing. The multi-line function call to `\Brain\Monkey\Functions\stubs` was incorrectly formatted.
+**Root Cause:** The `stubs` function was called with an array mapped argument that wasn't multi-lined correctly. It triggered the `PEAR.Functions.FunctionCallSignature.ContentAfterOpenBracket` and `PEAR.Functions.FunctionCallSignature.CloseBracketLine` sniffs.
+**Test Added:** Not applicable. I fixed the formatting directly by enforcing strict multi-line array wrapping.
