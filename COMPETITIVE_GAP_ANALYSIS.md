@@ -3,7 +3,7 @@
 **Date:** 2026-08-11 · **Research depth:** 4 parallel research passes (WordPress core 6.7–7.1 APIs, 10 big competitors, ~20 small/niche/emerging plugins, full local codebase inventory). 60+ sources browsed.
 **Plugin baseline:** full-featured free performance plugin — static HTML cache + `advanced-cache.php` drop-in, Redis object cache, minify (JS/CSS/HTML), WebP/AVIF conversion, lazy loading, used/critical CSS, DB cleanup, PageSpeed + local telemetry, speculation rules, Google Fonts self-hosting, per-page asset manager, activity log, WP-CLI, Abilities API registration, WP 6.9 template-enhancement buffers, WP 7.1 client-side media handling.
 
-**Implementation status (2026-08-11):** Tier-1 items #1–#5 implemented + verified (RUM, UI fixes, background lazy, module defer, CDN purge) plus Tier-2 bloat toggles + autoloaded-options audit. 276 PHP tests / 315 JS tests green. Deferred to next pass: Brotli, feed/REST caching, bfcache, server-level next-gen delivery, OD integration, per-page cache TTL, `.mo`→`.php` translations, LLMs.txt.
+**Implementation status (2026-08-11, matrix synced 2026-08-27 LS-902):** Tier-1 items #1–#5 implemented + verified (RUM class-rum.php:22, background lazy lazyLoadBackgroundImages class-cache.php:1188, CDN_Purger class-cdn-purger.php:45) plus Tier-2 bloat toggles + autoloaded-options audit. 276 PHP tests / 315 JS tests green. Deferred to next pass: Brotli, feed/REST caching, bfcache, server-level next-gen delivery, OD integration, per-page cache TTL, `.mo`→`.php` translations, LLMs.txt.
 
 Legend: ✅ native · 🟡 partial · ❌ missing · (WP x.y) = minimum core version for the API, always behind a `function_exists()`/`class_exists()` fallback.
 
@@ -45,7 +45,7 @@ Research: WP Rocket, Perfmatters, FlyingPress, LiteSpeed Cache, W3 Total Cache, 
 | Critical CSS / used CSS | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
 | Per-page asset manager | ✅ | 🟡 | ✅ | 🟡 | 🟡 | ✅ | 🟡 | 🟡 | ❌ | ❌ | 🟡 |
 | Lazy load images/iframes/videos | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ✅ |
-| **Lazy-load CSS background images / elements** | ❌ | 🟡 | ✅ | 🟡 | 🟡 | ❌ | ✅ | ❌ | ❌ | ❌ | 🟡 |
+| **Lazy-load CSS background images / elements** | ✅ | 🟡 | ✅ | 🟡 | 🟡 | ❌ | ✅ | ❌ | ❌ | ❌ | 🟡 |
 | LCP preload / fetchpriority | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
 | CLS (width/height) | ✅ | ✅ | ✅ | ✅ | 🟡 | 🟡 | ✅ | 🟡 | ❌ | ❌ | 🟡 |
 | WebP/AVIF conversion | ✅ | 🟡 | ❌ | ✅ | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ✅ |
@@ -53,10 +53,10 @@ Research: WP Rocket, Perfmatters, FlyingPress, LiteSpeed Cache, W3 Total Cache, 
 | Speculation rules | ✅ | ✅ | ✅ | ✅ | 🟡 | ❌ | ✅ | ❌ | ❌ | ❌ | 🟡 |
 | DB cleanup + scheduled | ✅ | ✅ | ✅ | ✅ | ✅ | 🟡 | ❌ | ❌ | ❌ | ✅ | ✅ |
 | CDN rewrite | ✅ | ✅ | ❌ | ✅ | ✅ | 🟡 | ✅ | 🟡 | 🟡 | ❌ | ✅ |
-| **Cloudflare / Varnish purge** | ❌ | ✅ | ❌ | 🟡 | ✅ | ✅ | ✅ | ❌ | ❌ | 🟡 | ✅ |
+| **Cloudflare / Varnish purge** | ✅ | ✅ | ❌ | 🟡 | ✅ | ✅ | ✅ | ❌ | ❌ | 🟡 | ✅ |
 | **Brotli precompression** | ❌ | 🟡 | ❌ | 🟡 | 🟡 | 🟡 | ✅ | ✅ | ✅ | ✅ | ✅ |
 | PageSpeed / audit | ✅ | ✅ | ❌ | ❌ | 🟡 | ❌ | 🟡 | ❌ | ❌ | ❌ | ✅ |
-| **Real-user monitoring (RUM/CrUX)** | ❌ | 🟡 | ❌ | ✅ | ❌ | ❌ | 🟡 | ❌ | ❌ | ❌ | ✅ |
+| **Real-user monitoring (RUM/CrUX)** | ✅ | 🟡 | ❌ | ✅ | ❌ | ❌ | 🟡 | ❌ | ❌ | ❌ | ✅ |
 | Server rules (.htaccess/Nginx) | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | 🟡 | 🟡 |
 | WooCommerce handling | ✅ | ✅ | ✅ | 🟡 | ✅ | 🟡 | ✅ | ✅ | 🟡 | ✅ | ✅ |
 | 50+ bloat toggles | 🟡 | 🟡 | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ |
@@ -64,6 +64,10 @@ Research: WP Rocket, Perfmatters, FlyingPress, LiteSpeed Cache, W3 Total Cache, 
 | Activity log | ✅ | ❌ | ❌ | ❌ | 🟡 | ❌ | ✅ | ❌ | ❌ | ❌ | 🟡 |
 | Uptime monitoring | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ |
 | WP-CLI | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | 🟡 | 🟡 | ✅ | ❌ |
+| **INP "Optimize Interactive Elements"** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+Δ Purge All clears edge; single-page skips edge (CDN_Purger.php:45). § FlyingPress Redis since v5.6 (2026-06-24) + RUM since v5.2 (2025-09). NitroPack INP "Optimize Interactive Elements" 2026-01-19 is new watchlist row (no free plugin ships it).
+*Reconciled 2026-08-27 per docs/competitive-audit-2026.md:2 — this table now matches; see docs/performance-report-2026-08-27.md:4.3.*
 
 ---
 
