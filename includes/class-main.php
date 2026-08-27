@@ -170,11 +170,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->options = get_option(
 				'wppo_settings',
 				array(
-					'cache_settings'     => array(
+					'cache_settings'        => array(
 						'enableLoggedInCache' => false,
 						'loggedInCacheRoles'  => array(),
 					),
-					'file_optimisation'  => array(
+					'file_optimisation'     => array(
 						'enableServerRules'       => false,
 						'cdnURL'                  => '',
 						'removeUnusedCSS'         => false,
@@ -214,14 +214,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'disablePasswordStrength' => false,
 						'disableSelfPingbacks'    => false,
 					),
-					'preload_settings'   => array(
+					'preload_settings'      => array(
 						'enableSpeculationRules' => false,
 						'speculationMode'        => 'prerender',
 						'speculationEagerness'   => 'moderate',
 						'speculationExcludeUrls' => '',
 						'preloadSitemap'         => false,
 					),
-					'image_optimisation' => array(
+					'image_optimisation'    => array(
 						'lazyLoadImages'             => false,
 						'lazyLoadNative'             => true,
 						'placeholderType'            => 'svg',
@@ -240,10 +240,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'rum_enabled'           => false,
 					),
 					'litespeed_integration' => array(
-						'mode'                   => 'auto',
-						'enableNextGenRewrite'   => false,
-						'enableBrotli'           => false,
-						'purgeSync'              => true,
+						'mode'                 => 'auto',
+						'enableNextGenRewrite' => false,
+						'enableBrotli'         => false,
+						'purgeSync'            => true,
 					),
 				)
 			);
@@ -1470,7 +1470,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'static_cache_active' => ! empty( $this->options['cache_settings']['enableCache'] ),
 					),
 					// LiteSpeed integration — for SPA banner + mode selector (Phase 1).
-					'litespeed'                              => class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ? LiteSpeed_Integration::get_info() : array(
+					'litespeed'                            => class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ? LiteSpeed_Integration::get_info() : array(
 						'detected'           => false,
 						'server_type'        => Server_Rules::get_server_type(),
 						'lscache_active'     => false,

@@ -281,19 +281,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 					$info['detected'] = (bool) $ls_info['detected'];
 				}
 			} elseif ( class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'get_server_type' ) ) {
-				$type               = Server_Rules::get_server_type();
+				$type                = Server_Rules::get_server_type();
 				$info['server_type'] = $type;
 				$info['detected']    = 'litespeed' === $type;
 			}
 
-			// Drop-in arbitration: advanced-cache.php
+			// Drop-in arbitration: advanced-cache.php.
 			$adv = 'none';
 			if ( class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				if ( Advanced_Cache_Handler::is_our_dropin() ) {
 					$adv = 'wppo';
 				} elseif ( Advanced_Cache_Handler::foreign_dropin_present() ) {
 					// Try to distinguish LSCache foreign drop-in vs other.
-					$path = Advanced_Cache_Handler::get_dropin_path();
+					$path     = Advanced_Cache_Handler::get_dropin_path();
 					$contents = '';
 					if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
 						$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
@@ -310,16 +310,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			}
 			$info['dropin']['advanced_cache'] = $adv;
 
-			// Drop-in arbitration: object-cache.php
+			// Drop-in arbitration: object-cache.php.
 			$obj = 'none';
 			if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
-				$oc = new Object_Cache();
+				$oc     = new Object_Cache();
 				$status = $oc->get_status();
 				if ( ! empty( $status['enabled'] ) ) {
 					$obj = 'wppo';
 				} elseif ( ! empty( $status['foreign_dropin'] ) ) {
 					// Try to detect if foreign is LSCache's object cache.
-					$path = WP_CONTENT_DIR . '/object-cache.php';
+					$path     = WP_CONTENT_DIR . '/object-cache.php';
 					$contents = '';
 					if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
 						$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents

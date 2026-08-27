@@ -124,8 +124,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				self::$cached_is_litespeed = Server_Rules::is_litespeed();
 			} else {
 				// Fallback: raw SERVER_SOFTWARE check (defensive, no dependency).
-				$raw = isset( $_SERVER['SERVER_SOFTWARE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) : '';
-				$s   = strtolower( $raw );
+				$raw                       = isset( $_SERVER['SERVER_SOFTWARE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) : '';
+				$s                         = strtolower( $raw );
 				self::$cached_is_litespeed = ( false !== strpos( $s, 'litespeed' ) || false !== strpos( $s, 'openlitespeed' ) );
 			}
 
@@ -346,9 +346,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$disable = self::MODE_WPPO !== self::effective_mode();
 
 			// Respect LSCWP ecosystem filter: if it says don't optimize this route, we also skip.
-			if ( $disable && has_filter( 'litespeed_can_optm' ) ) {
-				// When we already will disable, no need to check filter.
-			} elseif ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+			if ( ! $disable && has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
 				$disable = true;
 			}
 
