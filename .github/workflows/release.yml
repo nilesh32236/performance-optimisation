@@ -53,6 +53,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.build_zip.outputs.zip_file }}
+          fail_on_unmatched_files: true
           name: Release ${{ steps.build_zip.outputs.version }}
           draft: false
           prerelease: false
