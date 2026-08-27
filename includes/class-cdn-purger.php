@@ -42,7 +42,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 *
 		 * @since NEXT The $type and $url_path parameters were added.
 		 */
-		public static function purge_all( string $type = 'all', $url_path = null ): bool { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+		public static function purge_all( string $type = 'all', $url_path = null ): bool {
+			// LS-203: LiteSpeed purge sync — always attempt before the
+			// 'all'-only early return so single-page clears also sync when
+			// purgeSync is enabled (loop-safe via Util::transient_key lock).
+			self::purge_litespeed( $type, $url_path );
+
 			if ( 'all' !== $type ) {
 				return true;
 			}
@@ -60,6 +65,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 			}
 
 			return true;
+		}
+
+		/**
+		 * Purge LiteSpeed/LSCache when purgeSync is enabled.
+		 *
+		 * Delegates to LiteSpeed_Integration's loop-safe sync helpers. Handles
+		 * both "all" (→ litespeed_purge_all) and single-page (→
+		 * litespeed_purge_url) via home_url().
+		 *
+		 * @since NEXT
+		 * @param string      $type     Clear type ('all' or 'single_page').
+		 * @param string|null $url_path Page path for single-page clears.
+		 * @return void
+		 */
+		private static function purge_litespeed( string $type, $url_path = null ): void {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
+				return;
+			}
+
+			if ( 'all' === $type ) {
+				LiteSpeed_Integration::sync_purge_all_to_litespeed();
+				return;
+			}
+
+			if ( 'single_page' === $type && is_string( $url_path ) && '' !== $url_path ) {
+				$path_for_url = '/' . ltrim( $url_path, '/' );
+				LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
+				return;
+			}
+
+			// Fallback: if caller passes raw path with 'all' already handled,
+			// any non-empty url_path as single URL.
+			if ( is_string( $url_path ) && '' !== $url_path ) {
+				$path_for_url = '/' . ltrim( $url_path, '/' );
+				LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
+			}
 		}
 
 		/**

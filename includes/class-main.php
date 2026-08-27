@@ -677,6 +677,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'deactivated_plugin', array( __CLASS__, 'clear_all_cache' ) );
 
 			add_action( 'wp_ajax_wppo_get_nonce', array( $rest, 'ajax_get_nonce' ) );
+
+			// LS-202: LiteSpeed → WPPO purge sync (litespeed_purged_all/post/purge_finalize).
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'init' ) ) {
+				LiteSpeed_Integration::init();
+			}
 		}
 
 		/**

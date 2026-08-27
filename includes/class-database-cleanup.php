@@ -493,7 +493,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				// On multisite, _site_transient_ entries live in wp_sitemeta — skip them here
 				// (the options table query below only applies to the wp_options table).
 				// On single-site, _site_transient_ entries are stored in wp_options and must be cleaned.
-				if ( '_site_transient_' === $prefix && is_multisite() ) {
+				$is_multisite = false;
+				if ( function_exists( 'is_multisite' ) ) {
+					try {
+						$is_multisite = is_multisite();
+					} catch ( \Throwable $e ) {
+						$is_multisite = false;
+					}
+				}
+				if ( '_site_transient_' === $prefix && $is_multisite ) {
 					continue;
 				}
 
@@ -912,7 +920,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$transient_count = 0;
 			foreach ( array( '_transient_', '_site_transient_' ) as $prefix ) {
-				if ( '_site_transient_' === $prefix && is_multisite() ) {
+				$is_multisite = false;
+				if ( function_exists( 'is_multisite' ) ) {
+					try {
+						$is_multisite = is_multisite();
+					} catch ( \Throwable $e ) {
+						$is_multisite = false;
+					}
+				}
+				if ( '_site_transient_' === $prefix && $is_multisite ) {
 					continue;
 				}
 				$timeout_prefix   = $prefix . 'timeout_';

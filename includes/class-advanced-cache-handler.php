@@ -54,11 +54,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				return false;
 			}
 
-			if ( ! $wp_filesystem->exists( $handler_file ) ) {
+			if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'exists' ) || ! method_exists( $wp_filesystem, 'get_contents' ) ) {
 				return false;
 			}
 
-			$contents = $wp_filesystem->get_contents( $handler_file );
+			try {
+				if ( ! $wp_filesystem->exists( $handler_file ) ) {
+					return false;
+				}
+
+				$contents = $wp_filesystem->get_contents( $handler_file );
+			} catch ( \Throwable $e ) {
+				return false;
+			}
 
 			if ( ! is_string( $contents ) ) {
 				return false;
@@ -86,7 +94,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				return false;
 			}
 
-			if ( ! $wp_filesystem->exists( $handler_file ) ) {
+			if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'exists' ) ) {
+				return false;
+			}
+
+			try {
+				if ( ! $wp_filesystem->exists( $handler_file ) ) {
+					return false;
+				}
+			} catch ( \Throwable $e ) {
 				return false;
 			}
 

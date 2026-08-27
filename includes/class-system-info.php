@@ -157,12 +157,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * }
 		 */
 		public static function get_wordpress(): array {
+			$multisite = false;
+			if ( function_exists( 'is_multisite' ) ) {
+				try {
+					$multisite = is_multisite();
+				} catch ( \Throwable $e ) {
+					$multisite = false;
+				}
+			}
 			return array(
 				'version'             => get_bloginfo( 'version' ),
 				'environment_type'    => wp_get_environment_type(),
 				'permalink_structure' => get_option( 'permalink_structure' ) ? get_option( 'permalink_structure' ) : __( 'Default', 'performance-optimisation' ),
 				'using_https'         => is_ssl() ? __( 'Yes', 'performance-optimisation' ) : __( 'No', 'performance-optimisation' ),
-				'multisite'           => is_multisite() ? __( 'Yes', 'performance-optimisation' ) : __( 'No', 'performance-optimisation' ),
+				'multisite'           => $multisite ? __( 'Yes', 'performance-optimisation' ) : __( 'No', 'performance-optimisation' ),
 			);
 		}
 
@@ -289,23 +297,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			// Drop-in arbitration: advanced-cache.php.
 			$adv = 'none';
 			if ( class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
-				if ( Advanced_Cache_Handler::is_our_dropin() ) {
-					$adv = 'wppo';
-				} elseif ( Advanced_Cache_Handler::foreign_dropin_present() ) {
-					// Try to distinguish LSCache foreign drop-in vs other.
-					$path     = Advanced_Cache_Handler::get_dropin_path();
-					$contents = '';
-					if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
-						$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-						if ( is_string( $contents_raw ) ) {
-							$contents = $contents_raw;
+				try {
+					if ( Advanced_Cache_Handler::is_our_dropin() ) {
+						$adv = 'wppo';
+					} elseif ( Advanced_Cache_Handler::foreign_dropin_present() ) {
+						// Try to distinguish LSCache foreign drop-in vs other.
+						$path     = Advanced_Cache_Handler::get_dropin_path();
+						$contents = '';
+						if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
+							$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+							if ( is_string( $contents_raw ) ) {
+								$contents = $contents_raw;
+							}
+						}
+						if ( false !== strpos( $contents, 'litespeed' ) || false !== strpos( $contents, 'LSCACHE' ) || false !== strpos( $contents, 'LSCWP' ) ) {
+							$adv = 'litespeed';
+						} else {
+							$adv = 'foreign';
 						}
 					}
-					if ( false !== strpos( $contents, 'litespeed' ) || false !== strpos( $contents, 'LSCACHE' ) || false !== strpos( $contents, 'LSCWP' ) ) {
-						$adv = 'litespeed';
-					} else {
-						$adv = 'foreign';
-					}
+				} catch ( \Throwable $e ) {
+					$adv = 'none';
 				}
 			}
 			$info['dropin']['advanced_cache'] = $adv;
@@ -313,25 +325,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			// Drop-in arbitration: object-cache.php.
 			$obj = 'none';
 			if ( class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
-				$oc     = new Object_Cache();
-				$status = $oc->get_status();
-				if ( ! empty( $status['enabled'] ) ) {
-					$obj = 'wppo';
-				} elseif ( ! empty( $status['foreign_dropin'] ) ) {
-					// Try to detect if foreign is LSCache's object cache.
-					$path     = WP_CONTENT_DIR . '/object-cache.php';
-					$contents = '';
-					if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
-						$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-						if ( is_string( $contents_raw ) ) {
-							$contents = $contents_raw;
+				try {
+					$oc     = new Object_Cache();
+					$status = $oc->get_status();
+					if ( ! empty( $status['enabled'] ) ) {
+						$obj = 'wppo';
+					} elseif ( ! empty( $status['foreign_dropin'] ) ) {
+						// Try to detect if foreign is LSCache's object cache.
+						$path     = WP_CONTENT_DIR . '/object-cache.php';
+						$contents = '';
+						if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
+							$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+							if ( is_string( $contents_raw ) ) {
+								$contents = $contents_raw;
+							}
+						}
+						if ( false !== strpos( $contents, 'litespeed' ) || false !== strpos( $contents, 'LSCache' ) ) {
+							$obj = 'litespeed';
+						} else {
+							$obj = 'foreign';
 						}
 					}
-					if ( false !== strpos( $contents, 'litespeed' ) || false !== strpos( $contents, 'LSCache' ) ) {
-						$obj = 'litespeed';
-					} else {
-						$obj = 'foreign';
-					}
+				} catch ( \Throwable $e ) {
+					$obj = 'none';
 				}
 			}
 			$info['dropin']['object_cache'] = $obj;
@@ -491,9 +507,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			$active_plugins = (array) get_option( 'active_plugins', array() );
 
 			// On multisite, also check network-activated plugins.
-			if ( is_multisite() ) {
-				$network_plugins = array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) );
-				$active_plugins  = array_merge( $active_plugins, $network_plugins );
+			if ( function_exists( 'is_multisite' ) ) {
+				$is_multisite = false;
+				try {
+					$is_multisite = is_multisite();
+				} catch ( \Throwable $e ) {
+					$is_multisite = false;
+				}
+				if ( $is_multisite ) {
+					try {
+						$network_plugins = array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) );
+						$active_plugins  = array_merge( $active_plugins, $network_plugins );
+					} catch ( \Throwable $e ) {
+						unset( $e ); // Missing mock — treat as no network plugins.
+					}
+				}
 			}
 
 			foreach ( $active_plugins as $plugin_path ) {
