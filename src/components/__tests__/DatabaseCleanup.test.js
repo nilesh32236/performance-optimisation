@@ -70,7 +70,11 @@ describe( 'DatabaseCleanup Component', () => {
 		render( <DatabaseCleanup /> );
 
 		await waitFor( () => {
-			expect( screen.getByText( '15' ) ).toBeInTheDocument();
+			expect(
+				screen.getByRole( 'button', {
+					name: /Optimize Everything Now/i,
+				} )
+			).toBeInTheDocument();
 		} );
 
 		// Click optimize everything

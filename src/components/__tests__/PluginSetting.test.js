@@ -257,7 +257,7 @@ describe( 'PluginSetting', () => {
 
 		render( <PluginSetting options={ options } /> );
 		fireEvent.click(
-			screen.getByRole( 'button', { name: /Export Settings/i } )
+			screen.getByRole( 'button', { name: /Download JSON/i } )
 		);
 
 		const blob = createObjectURL.mock.calls[ 0 ][ 0 ];
