@@ -1,8 +1,12 @@
+@use '../abstracts/mixins' as *;
+
 .wppo-dashboard-view {
 	padding: 0;
 	max-width: 100%;
 	margin: 0;
 	line-height: 1.5;
+	min-width: 0;
+	overflow-wrap: anywhere;
 
 	h2, h3, h4 {
 		color: var(--wppo-text-main);
@@ -65,11 +69,39 @@
 	border-radius: var(--wppo-radius-sm);
 	padding: 14px 16px;
 	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	max-width: 100%;
+	box-sizing: border-box;
 	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 	font-size: 12px;
 	line-height: 1.6;
 	white-space: pre;
 	word-break: normal;
+}
+
+.wppo-responsive-table-wrap {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	overscroll-behavior-x: contain;
+	scrollbar-width: thin;
+	min-width: 0;
+	box-sizing: border-box;
+
+	&::-webkit-scrollbar {
+		height: 6px;
+	}
+
+	&::-webkit-scrollbar-thumb {
+		background: var(--wppo-border-hover, #cbd5e1);
+		border-radius: 4px;
+	}
+
+	table {
+		min-width: 420px;
+	}
 }
 
 a:focus-visible,
@@ -125,6 +157,16 @@ textarea:focus-visible,
 
 		&:hover {
 			padding-left: 6px;
+		}
+
+		@media (hover: none) {
+			&:hover {
+				padding-left: 0;
+			}
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			transition: none;
 		}
 
 		.wppo-activity-text {

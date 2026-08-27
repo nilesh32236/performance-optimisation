@@ -3,13 +3,15 @@
 	border-radius: var(--wppo-radius-sm);
 	margin-bottom: 20px;
 	display: flex;
-	align-items: flex-start;
+	align-items: center;
 	justify-content: flex-start;
-	gap: 10px;
+	flex-wrap: wrap;
+	gap: 8px 10px;
 	font-size: 13.5px;
 	line-height: 1.5;
 	border-width: 1px;
 	border-style: solid;
+	min-width: 0;
 
 	&__content {
 		display: flex;
@@ -28,7 +30,12 @@
 		border: none;
 		color: inherit;
 		cursor: pointer;
-		padding: 2px;
+		padding: 6px;
+		min-width: 32px;
+		min-height: 32px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		opacity: 0.5;
 		transition: opacity 0.15s ease;
 		flex-shrink: 0;
@@ -37,6 +44,11 @@
 
 		&:hover {
 			opacity: 1;
+		}
+
+		@media (max-width: 768px) {
+			min-width: 44px;
+			min-height: 44px;
 		}
 	}
 
@@ -68,5 +80,23 @@
 		background: var(--wppo-info-bg);
 		border-color: var(--wppo-info-border);
 		color: var(--wppo-info);
+	}
+}
+
+.wppo-litespeed-banner {
+	flex-wrap: wrap;
+	gap: 8px;
+
+	&__text {
+		flex: 1 1 220px;
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
+
+	&__badges {
+		display: inline-flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		align-items: center;
 	}
 }

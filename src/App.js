@@ -396,14 +396,22 @@ const App = () => {
 		<div className="wppo-container">
 			{ /* Mobile Top Header */ }
 			<div className="wppo-mobile-header">
-				<div className="wppo-mobile-brand">
-					<div className="wppo-mobile-logo">
-						<FontAwesomeIcon icon={ faBolt } />
-					</div>
-					{ __(
+				<div
+					className="wppo-mobile-brand"
+					title={ __(
 						'Performance Optimisation',
 						'performance-optimisation'
 					) }
+				>
+					<div className="wppo-mobile-logo">
+						<FontAwesomeIcon icon={ faBolt } />
+					</div>
+					<span className="wppo-mobile-brand__text">
+						{ __(
+							'Performance Optimisation',
+							'performance-optimisation'
+						) }
+					</span>
 				</div>
 				<button
 					className="wppo-mobile-toggle"
