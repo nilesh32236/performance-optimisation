@@ -71,7 +71,7 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 | `voku/html-min` | `^5.0` | 5.0.0 2026-04-23 | 5.0.0 | ✅ current |
 | `matthiasmullie/minify` | `^1.3` | 1.3.75 2025-06-25 | 1.3.75 | ✅ current |
 | `symfony/css-selector` | `^7.4` | v7.4.17 2026-08-21 | v7.4.17 latest 7.4 (v8.1.5 exists) | ✅ latest in major; bump to `^8.0` optional |
-| `woocommerce/action-scheduler` | `^3.8` | 3.9.3 2025-07-15 | 4.1.0 2026-08-05 | ⚠️ 1 major behind |
+| `woocommerce/action-scheduler` | `^4.1` | 4.1.0 2026-08-05 | 4.1.0 | ✅ current |
 | `matthiasmullie/path-converter` | — | 1.1.3 | 1.1.3 | ✅ |
 | `@wordpress/scripts` | `^33.0.0` | — | 33.x | ✅ current for 7.1 |
 | `@wordpress/components` | `^29.0.0` | — | 29.x | ✅ |
@@ -79,6 +79,7 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 | `browserslistrc` | last 1 Chrome/Firefox/Safari not dead | — | — | ✅ |
 
 **Action:** bump `woocommerce/action-scheduler 3.9.3→4.1.0` (update `composer.json ^4.1`, `composer update`, smoke cron/image/PageSpeed via `composer test`). Symfony 8.1 needs PHP 8.2+ so safe to stay on 7.4 or widen to `^7.4 || ^8.0` post-7.2.
+ * Action:* bumped 2026-08-27 → `4.1.0` (`composer.json ^4.1`, lock regenerated, `composer test` green, `wppo_convert_image_background` + `wppo_pagespeed_scan` schedule intact). Next: Symfony `^8.0` optional post-7.2.
 
 ---
 
@@ -86,7 +87,7 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 
 | Priority | Item | Files | Effort |
 |---|---|---|---|
-| **P0** | Bump `action-scheduler` | `composer.json`/`composer.lock` | 1 day |
+| **P0** | Bump `action-scheduler` ✅ done 4.1.0 | `composer.json`/`composer.lock` | 1 day |
 | **P1** | Salted-cache family in `templates/object-cache.php` (`get_multiple_salted` + `*-queries` eviction) | `templates/object-cache.php`, `Tests` | 2 days |
 | **P1** | `wp_get_loading_optimization_attributes()` for occluded images | `class-image-optimisation.php`, `ImageOptimization.js` | 2 days |
 | **P1** | Emoji footer module dequeuing | `class-core-tweaks.php` | 0.5 day |
