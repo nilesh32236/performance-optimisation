@@ -289,7 +289,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'}' . PHP_EOL;
 
 			// Write the handler file in the wp-content directory as advanced-cache.php.
-			return (bool) $wp_filesystem->put_contents( wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' ), $handler_code, FS_CHMOD_FILE );
+			$chmod_file = defined( 'FS_CHMOD_FILE' ) ? FS_CHMOD_FILE : 0644;
+			return (bool) $wp_filesystem->put_contents( wp_normalize_path( WP_CONTENT_DIR . '/advanced-cache.php' ), $handler_code, $chmod_file );
 		}
 
 		/**
