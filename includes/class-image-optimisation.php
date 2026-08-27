@@ -1282,7 +1282,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Sets loading optimization attributes (fetchpriority, decoding) on a tag processor.
 		 *
 		 * Uses wp_get_loading_optimization_attributes() (WP 6.7+) when available,
-		 * falling back to manual attribute assignment.
+		 * falling back to manual attribute assignment. Also handles occluded
+		 * detection (Image Prioritizer) when core returns fetchpriority low for
+		 * below-fold images.
 		 *
 		 * @since NEXT
 		 *
@@ -1405,7 +1407,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							if ( null === $tags->get_attribute( 'decoding' ) ) {
 								$tags->set_attribute( 'decoding', 'async' );
 							}
+							// Occluded: let core decide fetchpriority (low for below-fold/occluded) when available.
+							if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+								$this->set_loading_optimization_attributes(
+									$tags,
+									array(
+										'fetchpriority' => 'low',
+										'decoding'      => 'async',
+									)
+								);
+								if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+									$tags->set_attribute( 'fetchpriority', 'low' );
+								}
+							}
 						} else {
+							// JS-lazy path: consult core for occluded/fetchpriority before stripping src.
+							if ( function_exists( 'wp_get_loading_optimization_attributes' ) && null === $tags->get_attribute( 'fetchpriority' ) ) {
+								$this->set_loading_optimization_attributes( $tags );
+								if ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+									$tags->set_attribute( 'fetchpriority', 'low' );
+								}
+							} elseif ( null === $tags->get_attribute( 'fetchpriority' ) ) {
+								$tags->set_attribute( 'fetchpriority', 'low' );
+							}
 							$tags->set_attribute( 'data-src', $original_src_decoded );
 
 							// WP_HTML_Tag_Processor blocks data: URIs in src for security.
@@ -1556,7 +1580,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						if ( false === stripos( $img_tag, 'decoding=' ) ) {
 							$img_tag = preg_replace( '#<img\b#i', '<img decoding="async"', $img_tag );
 						}
+						// Occluded: fetchpriority low for below-fold images when not already present.
+						if ( false === stripos( $img_tag, 'fetchpriority' ) ) {
+							if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+								$tag_attr = array( 'src' => $original_src );
+								if ( preg_match( '/\bwidth=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['width'] = (int) $m[2];
+								}
+								if ( preg_match( '/\bheight=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['height'] = (int) $m[2];
+								}
+								if ( preg_match( '/\bloading=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['loading'] = $m[2];
+								}
+								if ( preg_match( '/\bdecoding=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['decoding'] = $m[2];
+								}
+								$loading_attrs = wp_get_loading_optimization_attributes( 'img', $tag_attr, array( 'context' => 'regex-fallback' ) );
+								if ( isset( $loading_attrs['fetchpriority'] ) && false === stripos( $img_tag, 'fetchpriority' ) ) {
+									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="' . esc_attr( $loading_attrs['fetchpriority'] ) . '"', $img_tag );
+								}
+							}
+							if ( false === stripos( $img_tag, 'fetchpriority' ) ) {
+								$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="low"', $img_tag );
+							}
+						}
 					} else {
+						// JS-lazy path: occluded fetchpriority low before stripping src.
+						if ( false === stripos( $img_tag, 'fetchpriority' ) ) {
+							if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+								$tag_attr = array( 'src' => $original_src );
+								if ( preg_match( '/\bwidth=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['width'] = (int) $m[2];
+								}
+								if ( preg_match( '/\bheight=(["\'])(\d+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['height'] = (int) $m[2];
+								}
+								if ( preg_match( '/\bloading=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['loading'] = $m[2];
+								}
+								if ( preg_match( '/\bdecoding=(["\'])([^"\']+)\1/i', $img_tag, $m ) ) {
+									$tag_attr['decoding'] = $m[2];
+								}
+								$loading_attrs = wp_get_loading_optimization_attributes( 'img', $tag_attr, array( 'context' => 'regex-fallback' ) );
+								if ( isset( $loading_attrs['fetchpriority'] ) && false === stripos( $img_tag, 'fetchpriority' ) ) {
+									$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="' . esc_attr( $loading_attrs['fetchpriority'] ) . '"', $img_tag );
+								}
+							}
+							if ( false === stripos( $img_tag, 'fetchpriority' ) ) {
+								$img_tag = preg_replace( '#<img\b([^>]*?)#i', '<img $1 fetchpriority="low"', $img_tag );
+							}
+						}
 						$replaced_tag = preg_replace_callback(
 							'#src=["\']([^"\']+)["\']#i',
 							function () use ( $original_src_decoded ) {
@@ -2423,7 +2497,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 								if ( null === $wppo_tags->get_attribute( 'decoding' ) ) {
 									$wppo_tags->set_attribute( 'decoding', 'async' );
 								}
+								// Occluded: let core decide fetchpriority (low for below-fold/occluded) when available.
+								if ( null === $wppo_tags->get_attribute( 'fetchpriority' ) ) {
+									$this->set_loading_optimization_attributes(
+										$wppo_tags,
+										array(
+											'fetchpriority' => 'low',
+											'decoding' => 'async',
+										)
+									);
+									// If still none (pre-6.7), set low for non-excluded below-fold as progressive enhancement.
+									if ( null === $wppo_tags->get_attribute( 'fetchpriority' ) ) {
+										$wppo_tags->set_attribute( 'fetchpriority', 'low' );
+									}
+								}
 							} else {
+								// JS-lazy path: consult core for occluded/fetchpriority before stripping src,
+								// so hidden/below-fold images still hint low priority.
+								if ( function_exists( 'wp_get_loading_optimization_attributes' ) && null === $wppo_tags->get_attribute( 'fetchpriority' ) ) {
+									$this->set_loading_optimization_attributes( $wppo_tags );
+									if ( null === $wppo_tags->get_attribute( 'fetchpriority' ) ) {
+										$wppo_tags->set_attribute( 'fetchpriority', 'low' );
+									}
+								} elseif ( null === $wppo_tags->get_attribute( 'fetchpriority' ) ) {
+									$wppo_tags->set_attribute( 'fetchpriority', 'low' );
+								}
 								$wppo_tags->set_attribute( 'data-src', $original_src_decoded );
 								$wppo_tags->remove_attribute( 'src' );
 

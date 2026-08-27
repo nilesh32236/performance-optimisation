@@ -140,4 +140,66 @@ class CoreTweaksTest extends \PHPUnit\Framework\TestCase {
 			$pung
 		);
 	}
+
+	/**
+	 * Test that disable_emojis dequeues emoji script module when available.
+	 */
+	public function test_disable_emojis_dequeues_script_module_when_available(): void {
+		if ( ! function_exists( 'wp_dequeue_script_module' ) ) {
+			eval( 'function wp_dequeue_script_module($id){ $GLOBALS["wppo_test_dequeued_module"] = $id; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		if ( ! function_exists( 'wp_dequeue_script' ) ) {
+			eval( 'function wp_dequeue_script($handle){ $GLOBALS["wppo_test_dequeued_script"] = $handle; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		$GLOBALS['wppo_test_dequeued_module'] = null;
+		$GLOBALS['wppo_test_dequeued_script'] = null;
+		Functions\when( 'remove_action' )->justReturn( true );
+		Functions\when( 'remove_filter' )->justReturn( true );
+		Functions\when( 'add_filter' )->justReturn( true );
+
+		$core_tweaks = new Core_Tweaks();
+		$core_tweaks->disable_emojis();
+
+		$this->assertSame( 'emoji', $GLOBALS['wppo_test_dequeued_module'] );
+		$this->assertSame( 'wp-emoji', $GLOBALS['wppo_test_dequeued_script'] );
+	}
+
+	/**
+	 * Test that disable_emojis_script_module dequeues emoji module.
+	 */
+	public function test_disable_emojis_script_module_method_dequeues(): void {
+		if ( ! function_exists( 'wp_dequeue_script_module' ) ) {
+			eval( 'function wp_dequeue_script_module($id){ $GLOBALS["wppo_test_dequeued_module"] = $id; }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		$GLOBALS['wppo_test_dequeued_module'] = null;
+
+		$core_tweaks = new Core_Tweaks();
+		$core_tweaks->disable_emojis_script_module();
+
+		$this->assertSame( 'emoji', $GLOBALS['wppo_test_dequeued_module'] );
+	}
+
+	/**
+	 * Test that constructor registers emoji module hooks when function exists.
+	 */
+	public function test_constructor_registers_emoji_module_hooks(): void {
+		if ( ! function_exists( 'wp_dequeue_script_module' ) ) {
+			eval( 'function wp_dequeue_script_module($id){ }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		Functions\when( 'add_action' )->justReturn( true );
+		// Capture add_action calls via mock.
+		$actions = array();
+		Functions\when( 'add_action' )->alias(
+			static function ( $hook, $cb, $priority = 10 ) use ( &$actions ) {
+				$actions[] = array( $hook, $cb, $priority );
+				return true;
+			}
+		);
+		Functions\when( 'add_filter' )->justReturn( true );
+
+		$core_tweaks = new Core_Tweaks( array( 'disableEmojis' => true ) );
+		$hooks       = array_column( $actions, 0 );
+		$this->assertContains( 'wp_enqueue_scripts', $hooks );
+		$this->assertContains( 'admin_enqueue_scripts', $hooks );
+	}
 }

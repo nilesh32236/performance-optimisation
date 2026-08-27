@@ -128,6 +128,22 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 				unset( $this->cache[ $group . ':' . $key ] );
 				return true;
 			}
+
+			/**
+			 * Mimics WP_Object_Cache::delete_multiple().
+			 *
+			 * @param string[] $keys  Array of cache keys.
+			 * @param string   $group Cache group.
+			 * @return array
+			 */
+			public function delete_multiple( $keys, $group = 'default' ) {
+				$results = array();
+				foreach ( $keys as $key ) {
+					unset( $this->cache[ $group . ':' . $key ] );
+					$results[ $key ] = true;
+				}
+				return $results;
+			}
 		};
 		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
 		$GLOBALS['wp_object_cache'] = $this->stub;
@@ -329,6 +345,75 @@ class ObjectCacheTest extends \PHPUnit\Framework\TestCase {
 				)
 			)
 		);
+	}
+
+	/**
+	 * Test that delete_salted with matching salt deletes the wrapper.
+	 */
+	public function test_delete_salted_with_matching_salt_deletes_wrapper(): void {
+		wp_cache_set_salted( 'query-key', 'cached-value', 'post-queries', '2026-01-01' );
+		$this->assertTrue( wp_cache_delete_salted( 'query-key', 'post-queries', '2026-01-01' ) );
+		$this->assertFalse( wp_cache_get_salted( 'query-key', 'post-queries', '2026-01-01' ) );
+		$this->assertFalse( $this->stub->get( 'query-key', 'post-queries' ) );
+	}
+
+	/**
+	 * Test that delete_salted with stale salt returns false and keeps wrapper.
+	 */
+	public function test_delete_salted_with_stale_salt_returns_false_and_keeps_wrapper(): void {
+		wp_cache_set_salted( 'query-key', 'cached-value', 'post-queries', '2026-01-01' );
+		$this->assertFalse( wp_cache_delete_salted( 'query-key', 'post-queries', '2026-01-02' ) );
+		$this->assertSame( 'cached-value', wp_cache_get_salted( 'query-key', 'post-queries', '2026-01-01' ) );
+	}
+
+	/**
+	 * Test that delete_salted when not cached returns false.
+	 */
+	public function test_delete_salted_when_not_cached_returns_false(): void {
+		$this->assertFalse( wp_cache_delete_salted( 'missing-key', 'post-queries', '2026-01-01' ) );
+	}
+
+	/**
+	 * Test that delete_multiple_salted mixed stale and matching.
+	 */
+	public function test_delete_multiple_salted_mixed(): void {
+		wp_cache_set_salted( 'query-a', 'val-a', 'post-queries', '2026-01-01' );
+		wp_cache_set_salted( 'query-b', 'val-b', 'post-queries', '2026-01-01' );
+		// Overwrite b with new salt to make stale for old salt.
+		wp_cache_set_salted( 'query-b', 'val-b2', 'post-queries', '2026-01-02' );
+		$results = wp_cache_delete_multiple_salted( array( 'query-a', 'query-b' ), 'post-queries', '2026-01-01' );
+		$this->assertSame(
+			array(
+				'query-a' => true,
+				'query-b' => false,
+			),
+			$results
+		);
+		$this->assertFalse( wp_cache_get_salted( 'query-a', 'post-queries', '2026-01-01' ) );
+		$this->assertSame( 'val-b2', wp_cache_get_salted( 'query-b', 'post-queries', '2026-01-02' ) );
+	}
+
+	/**
+	 * Test that delete_multiple_salted all stale returns false.
+	 */
+	public function test_delete_multiple_salted_all_stale(): void {
+		wp_cache_set_salted( 'query-a', 'val-a', 'post-queries', '2026-01-01' );
+		$results = wp_cache_delete_multiple_salted( array( 'query-a' ), 'post-queries', '2026-01-02' );
+		$this->assertSame( array( 'query-a' => false ), $results );
+		$this->assertSame( 'val-a', wp_cache_get_salted( 'query-a', 'post-queries', '2026-01-01' ) );
+	}
+
+	/**
+	 * Test that array salt delete normalizes via implode.
+	 */
+	public function test_array_salt_delete_normalizes(): void {
+		$salt = array(
+			'posts' => '2026-01-01',
+			'terms' => '2026-01-02',
+		);
+		wp_cache_set_salted( 'query-key', 'cached-value', 'post-queries', $salt );
+		$this->assertTrue( wp_cache_delete_salted( 'query-key', 'post-queries', $salt ) );
+		$this->assertFalse( wp_cache_get_salted( 'query-key', 'post-queries', $salt ) );
 	}
 
 	/**

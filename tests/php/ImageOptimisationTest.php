@@ -965,4 +965,136 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		$this->assertStringContainsString( 'preload="none"', $result );
 		$this->assertStringContainsString( 'wppo-lazy-video', $result );
 	}
+
+	/**
+	 * Test that occluded/below-fold images get fetchpriority low via core or fallback (JS lazy path).
+	 */
+	public function test_occluded_image_gets_fetchpriority_low_via_core(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		Functions\when( 'wp_parse_url' )->returnArg( 1 );
+		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		$GLOBALS['wppo_mock_fetchpriority'] = 'low';
+		Functions\when( 'esc_attr' )->returnArg();
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array(
+				'lazyLoadNative'  => false,
+				'placeholderType' => 'none',
+			)
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$html   = '<img src="https://example.com/below.jpg" alt="below"/>';
+		$result = $image_opt->add_delay_load_img( $html );
+		$this->assertStringContainsString( 'fetchpriority="low"', $result );
+		$this->assertStringContainsString( 'data-src="https://example.com/below.jpg"', $result );
+	}
+
+	/**
+	 * Test that excluded images still get high priority, not low.
+	 */
+	public function test_excluded_image_still_high_not_low(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("fetchpriority"=>"high"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		$GLOBALS['wppo_mock_fetchpriority'] = 'high';
+		Functions\when( 'esc_attr' )->returnArg();
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array(
+				'excludeImages'   => array( 'https://example.com/excluded.jpg' ),
+				'lazyLoadNative'  => true,
+				'placeholderType' => 'none',
+			)
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$html   = '<img src="https://example.com/excluded.jpg" alt="excluded"/>';
+		$result = $image_opt->add_delay_load_img( $html );
+		$this->assertStringContainsString( 'fetchpriority="high"', $result );
+		$this->assertStringNotContainsString( 'fetchpriority="low"', $result );
+	}
+
+	/**
+	 * Test that process_img_tag occluded path sets low without overriding existing priority.
+	 */
+	public function test_process_img_tag_occluded_low(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		$GLOBALS['wppo_mock_fetchpriority'] = 'low';
+		Functions\when( 'esc_attr' )->returnArg();
+
+		$options                       = $this->default_options;
+		$options['image_optimisation'] = array_merge(
+			$options['image_optimisation'],
+			array(
+				'lazyLoadNative'  => false,
+				'placeholderType' => 'none',
+			)
+		);
+		$image_opt                     = new Image_Optimisation( $options );
+
+		$img_tag = '<img src="https://example.com/below.jpg" alt="below"/>';
+		$result  = $image_opt->process_img_tag( $img_tag, 'https://example.com/below.jpg', array() );
+		$this->assertStringContainsString( 'fetchpriority="low"', $result );
+
+		// Existing priority must not be overridden.
+		$img_tag2 = '<img src="https://example.com/below.jpg" fetchpriority="high" alt="below"/>';
+		$result2  = $image_opt->process_img_tag( $img_tag2, 'https://example.com/below.jpg', array() );
+		$this->assertStringContainsString( 'fetchpriority="high"', $result2 );
+		$this->assertSame( 1, substr_count( $result2, 'fetchpriority' ) );
+	}
+
+	/**
+	 * Test that native lazy path also gets occluded low.
+	 */
+	public function test_occluded_native_lazy_gets_fetchpriority_low(): void {
+		require_once __DIR__ . '/stubs/wp-html-api.php';
+		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'get_the_ID' )->justReturn( 0 );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_post_meta' )->justReturn( '' );
+		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
+		Functions\when( 'apply_filters' )->returnArg( 2 );
+		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+		}
+		$GLOBALS['wppo_mock_fetchpriority'] = 'low';
+		Functions\when( 'esc_attr' )->returnArg();
+
+		$image_opt = new Image_Optimisation( $this->default_options );
+		$html      = '<img src="https://example.com/below.jpg" alt="below"/>';
+		$result    = $image_opt->add_delay_load_img( $html );
+		$this->assertStringContainsString( 'fetchpriority="low"', $result );
+		$this->assertStringContainsString( 'loading="lazy"', $result );
+	}
 }

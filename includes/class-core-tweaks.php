@@ -35,6 +35,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 
 			if ( ! empty( $this->settings['disableEmojis'] ) ) {
 				add_action( 'init', array( $this, 'disable_emojis' ) );
+				if ( function_exists( 'wp_dequeue_script_module' ) ) {
+					add_action( 'wp_enqueue_scripts', array( $this, 'disable_emojis_script_module' ), 100 );
+					add_action( 'admin_enqueue_scripts', array( $this, 'disable_emojis_script_module' ), 100 );
+				}
 			}
 
 			if ( ! empty( $this->settings['disableEmbeds'] ) ) {
@@ -111,6 +115,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			remove_filter( 'wp_mail', 'wp_staticize_emoji_for_email' );
 			add_filter( 'tiny_mce_plugins', array( $this, 'disable_emojis_tinymce' ) );
 			add_filter( 'wp_resource_hints', array( $this, 'disable_emojis_remove_dns_prefetch' ), 10, 2 );
+			// WP 6.9+: emoji detection moved to footer script module (in_footer + low fetchpriority).
+			// Gate behind function_exists so <6.9 unchanged.
+			if ( function_exists( 'wp_dequeue_script_module' ) ) {
+				wp_dequeue_script_module( 'emoji' );
+			}
+			// Also dequeue legacy handle if still registered (defense in depth).
+			if ( function_exists( 'wp_dequeue_script' ) ) {
+				wp_dequeue_script( 'wp-emoji' );
+			}
+		}
+
+		/**
+		 * Dequeue the WP 6.9+ emoji script module.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function disable_emojis_script_module() {
+			if ( function_exists( 'wp_dequeue_script_module' ) ) {
+				wp_dequeue_script_module( 'emoji' );
+			}
 		}
 
 		/**
