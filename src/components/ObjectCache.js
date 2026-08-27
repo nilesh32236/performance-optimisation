@@ -177,14 +177,18 @@ const ObjectCache = ( { options = {} } ) => {
 
 	const hitRatio = ( () => {
 		if ( ! cacheStatus.telemetry ) {
-			return 0;
+			return '0.0';
 		}
 		const hits =
-			parseInt( cacheStatus.telemetry.keyspace_hits || '0', 10 ) || 0;
+			Number.parseInt( cacheStatus.telemetry.keyspace_hits ?? '0', 10 ) ||
+			0;
 		const misses =
-			parseInt( cacheStatus.telemetry.keyspace_misses || '0', 10 ) || 0;
+			Number.parseInt(
+				cacheStatus.telemetry.keyspace_misses ?? '0',
+				10
+			) || 0;
 		const total = hits + misses;
-		return total > 0 ? ( ( hits / total ) * 100 ).toFixed( 1 ) : 0;
+		return total > 0 ? ( ( hits / total ) * 100 ).toFixed( 1 ) : '0.0';
 	} )();
 
 	const connectionBadge = ( () => {
@@ -826,19 +830,14 @@ const ObjectCache = ( { options = {} } ) => {
 			</form>
 
 			{ cacheStatus.enabled && (
-				<div
-					className="wppo-feature-card"
-					style={ {
-						borderLeft: '4px solid #ef4444',
-						background: '#fef2f2',
-						marginTop: '20px',
-					} }
-				>
+				<div className="wppo-feature-card wppo-danger-zone">
 					<div className="wppo-feature-card__header">
 						<h3>
 							<FontAwesomeIcon
 								icon={ faExclamationCircle }
-								style={ { color: '#ef4444' } }
+								style={ {
+									color: 'var(--wppo-danger, #ef4444)',
+								} }
 							/>{ ' ' }
 							{ __( 'Danger Zone', 'performance-optimisation' ) }
 						</h3>

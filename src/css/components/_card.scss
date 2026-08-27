@@ -55,7 +55,7 @@
 		padding: 16px 24px;
 		background: rgba(248, 250, 252, 0.5);
 		backdrop-filter: blur(6px);
-		border-top: 1px solid #f1f5f9;
+		border-top: 1px solid var(--wppo-border, #f1f5f9);
 		display: flex;
 		justify-content: flex-end;
 		gap: 10px;
@@ -76,4 +76,10 @@
 		display: flex;
 		gap: 8px;
 	}
+}
+
+.wppo-danger-zone {
+	border-left: 4px solid var(--wppo-danger, #ef4444);
+	background: var(--wppo-error-bg, #fef2f2);
+	margin-top: 20px;
 }

@@ -373,8 +373,12 @@ const FileOptimization = ( {
 											onChange={ handleChange(
 												setSettings
 											) }
+											aria-describedby="excludeCombineCSS-desc"
 										/>
-										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+										<p
+											id="excludeCombineCSS-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
 											{ __(
 												'One handle or partial URL per line. Fix FOUC by excluding problematic files.',
 												'performance-optimisation'
@@ -439,8 +443,12 @@ const FileOptimization = ( {
 											onChange={ handleChange(
 												setSettings
 											) }
+											aria-describedby="excludeUnusedCSS-desc"
 										/>
-										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+										<p
+											id="excludeUnusedCSS-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
 											{ __(
 												'One selector per line — kept even if unused. Use to fix missing styles.',
 												'performance-optimisation'
@@ -483,8 +491,12 @@ const FileOptimization = ( {
 											onChange={ handleChange(
 												setSettings
 											) }
+											aria-describedby="excludeCSS-desc"
 										/>
-										<p className="wppo-text-muted wppo-text-small wppo-mt-8">
+										<p
+											id="excludeCSS-desc"
+											className="wppo-text-muted wppo-text-small wppo-mt-8"
+										>
 											{ __(
 												'One handle or partial URL per line.',
 												'performance-optimisation'

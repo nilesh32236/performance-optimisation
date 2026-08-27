@@ -226,9 +226,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$this->domain = $domain;
 
-			// Define cache root directory and URL.
-			$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR );
-			$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
+			// Define cache root directory and URL. Guard empty WP_CONTENT_DIR to prevent writing to filesystem root.
+			if ( ! defined( 'WP_CONTENT_DIR' ) || '' === WP_CONTENT_DIR ) {
+				$this->cache_root_dir = '';
+				$this->cache_root_url = '';
+			} else {
+				$this->cache_root_dir = wp_normalize_path( WP_CONTENT_DIR . self::CACHE_DIR );
+				$this->cache_root_url = WP_CONTENT_URL . self::CACHE_DIR;
+			}
 
 			$this->request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
 			$url_path          = wp_normalize_path( trim( rawurldecode( (string) wp_parse_url( $this->request_uri, PHP_URL_PATH ) ), '/' ) );
@@ -1394,6 +1399,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function is_not_cacheable(): bool {
+			if ( '' === $this->cache_root_dir ) {
+				return true;
+			}
 			if ( empty( $this->domain ) ) {
 				return true;
 			}
@@ -1453,6 +1461,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function get_cache_file_path( $type = 'html', string $role_hash = '', string $variant = '' ): string {
+			if ( '' === $this->cache_root_dir ) {
+				return '';
+			}
 			$suffix = $role_hash ? "-{$role_hash}" : '';
 			if ( $variant ) {
 				$suffix .= "-{$variant}";
@@ -1470,6 +1481,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function get_cache_file_url( $type = 'html', string $variant = '' ): string {
+			if ( '' === $this->cache_root_url ) {
+				return '';
+			}
 			$suffix = $variant ? "-{$variant}" : '';
 			return "{$this->cache_root_url}/{$this->domain}/" . ( '' === $this->url_path ? "index{$suffix}.{$type}" : "{$this->url_path}/index{$suffix}.{$type}" );
 		}

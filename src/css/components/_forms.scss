@@ -29,7 +29,7 @@
 	}
 
 	&::placeholder {
-		color: #64748b;
+		color: var(--wppo-text-muted, #64748b);
 		opacity: 1;
 	}
 
@@ -37,10 +37,6 @@
 		opacity: 0.55;
 		cursor: not-allowed;
 		background: var(--wppo-bg-app) !important;
-	}
-
-	&:focus-visible {
-		outline: none !important;
 	}
 }
 

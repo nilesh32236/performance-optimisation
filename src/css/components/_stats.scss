@@ -116,7 +116,7 @@
 	.wppo-stat-label {
 		font-size: 10px;
 		font-weight: 700;
-		color: #64748b;
+		color: var(--wppo-text-muted, #64748b);
 		text-transform: uppercase;
 		letter-spacing: 0.1em;
 		display: block;
@@ -199,7 +199,7 @@
 	.wppo-stat-unit {
 		font-size: 13px;
 		font-weight: 500;
-		color: #475569;
+		color: var(--wppo-text-muted, #475569);
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
@@ -221,7 +221,7 @@
 
 		// inline bullet separator styling
 		.wppo-text-muted {
-			color: #64748b;
+			color: var(--wppo-text-muted, #64748b);
 		}
 		.wppo-text-small {
 			font-size: 12.5px;
@@ -232,7 +232,7 @@
 	.wppo-stat-footer {
 		margin-top: auto;
 		padding-top: 14px;
-		border-top: 1px solid #f1f5f9;
+		border-top: 1px solid var(--wppo-border, #f1f5f9);
 		display: flex;
 		align-items: center;
 		position: relative;

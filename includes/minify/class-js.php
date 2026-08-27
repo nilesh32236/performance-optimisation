@@ -71,12 +71,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 */
 		public function __construct( $file_path, $cache_dir ) {
 			$real_path   = realpath( $file_path );
-			$content_dir = wp_normalize_path( WP_CONTENT_DIR );
+			$content_dir = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
 			if ( false === $real_path ) {
 				$this->file_path = '';
 			} else {
 				$real_path_normalized = wp_normalize_path( $real_path );
-				$is_inside            = ( 0 === strpos( $real_path_normalized, $content_dir ) && ( strlen( $real_path_normalized ) === strlen( $content_dir ) || '/' === substr( $real_path_normalized, strlen( $content_dir ), 1 ) ) );
+				$is_inside            = ( '' !== $content_dir && 0 === strpos( $real_path_normalized, $content_dir ) && ( strlen( $real_path_normalized ) === strlen( $content_dir ) || '/' === substr( $real_path_normalized, strlen( $content_dir ), 1 ) ) );
 				if ( ! $is_inside ) {
 					$this->file_path = '';
 				} else {
@@ -85,8 +85,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 			}
 			$this->cache_dir        = $cache_dir;
 			$cache_dir_normalized   = wp_normalize_path( $cache_dir );
-			$content_dir_normalized = wp_normalize_path( WP_CONTENT_DIR );
-			$cache_inside           = ( 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
+			$content_dir_normalized = wp_normalize_path( defined( 'WP_CONTENT_DIR' ) ? WP_CONTENT_DIR : '' );
+			$cache_inside           = ( '' !== $content_dir_normalized && 0 === strpos( $cache_dir_normalized, $content_dir_normalized ) && ( strlen( $cache_dir_normalized ) === strlen( $content_dir_normalized ) || '/' === substr( $cache_dir_normalized, strlen( $content_dir_normalized ), 1 ) ) );
 
 			if ( ! $cache_inside ) {
 				$this->cache_url = Util::cached_content_url( '/' );
@@ -101,33 +101,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 * Minifies the JavaScript file and saves it to the cache directory.
 		 * If the minified file exists, it returns its URL.
 		 *
-		 * @return string|null The URL of the minified JavaScript file or null if minification fails.
+		 * @return string The URL of the minified JavaScript file or empty string if minification fails.
 		 *
 		 * @since 1.0.0
 		 */
 		public function minify() {
 			if ( empty( $this->file_path ) || ! is_readable( $this->file_path ) ) {
-				return null;
+				return '';
 			}
 			$cache_file = $this->get_cache_file_path();
 			$min_dir    = dirname( $cache_file );
 
 			if ( ! $this->filesystem || ! Util::prepare_cache_dir( $min_dir ) ) {
-				return;
+				return '';
 			}
 
 			if ( ! $this->filesystem->exists( $cache_file ) ) {
 				try {
 					$js_content = $this->filesystem->get_contents( $this->file_path );
 					if ( false === $js_content ) {
-						return null;
+						return '';
 					}
 					$js_minifier = new Minify\JS( $js_content );
 					$minified_js = $js_minifier->minify();
 
 					$this->save_min_file( $minified_js, $cache_file );
 				} catch ( \Exception $e ) {
-					return null;
+					return '';
 				}
 			}
 

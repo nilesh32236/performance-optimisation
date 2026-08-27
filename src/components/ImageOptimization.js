@@ -215,7 +215,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										htmlFor="excludeFirstImages"
 									>
 										{ __(
-											'Exclude First Images',
+											'Exclude First N Images',
 											'performance-optimisation'
 										) }
 									</label>

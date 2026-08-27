@@ -564,7 +564,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 
 	const isCacheMissing =
 		typeof totalCacheSize === 'string' &&
-		totalCacheSize.includes( 'does not exist' );
+		/does not exist/i.test( totalCacheSize );
 	const cacheSizeValue =
 		! isCacheMissing && totalCacheSize !== '0 B' ? totalCacheSize : '—';
 	const cacheSizeUnit = isCacheMissing
@@ -659,7 +659,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				<div className="wppo-stat-item wppo-stat-item--cache">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
-							{ __( 'CACHE SIZE', 'performance-optimisation' ) }
+							{ __( 'Cache Size', 'performance-optimisation' ) }
 						</span>
 						<span className="wppo-stat-icon" aria-hidden="true">
 							<FontAwesomeIcon icon={ faServer } />
@@ -713,7 +713,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
 							{ __(
-								'OPTIMIZED FILES',
+								'Optimized Files',
 								'performance-optimisation'
 							) }
 						</span>
@@ -726,10 +726,6 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					</span>
 					<span className="wppo-stat-unit">
 						{ __( 'files', 'performance-optimisation' ) }
-						<span className="wppo-text-muted wppo-text-small">
-							{ ' ' }
-							• 0 KB saved
-						</span>
 					</span>
 					<div className="wppo-stat-footer">
 						<button
@@ -744,7 +740,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 				<div className="wppo-stat-item wppo-stat-item--db">
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
-							{ __( 'DB OVERHEAD', 'performance-optimisation' ) }
+							{ __( 'DB Overhead', 'performance-optimisation' ) }
 						</span>
 						<span className="wppo-stat-icon" aria-hidden="true">
 							<FontAwesomeIcon icon={ faDatabase } />
@@ -773,7 +769,7 @@ const Dashboard = ( { activities, onNavigate } ) => {
 					<div className="wppo-stat-header">
 						<span className="wppo-stat-label">
 							{ __(
-								'IMAGES OPTIMIZED',
+								'Images Optimized',
 								'performance-optimisation'
 							) }
 						</span>

@@ -67,19 +67,25 @@
 	word-break: normal;
 }
 
-*:focus-visible {
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+.wppo-focusable:focus-visible {
 	outline: 2px solid var(--wppo-primary);
 	outline-offset: 2px;
 	border-radius: 4px;
 }
 
-/* Inputs use box-shadow focus ring instead of outline — preserve that */
 .wppo-input:focus-visible,
 .wppo-select:focus-visible,
 .wppo-textarea:focus-visible {
-	outline: none !important;
-	box-shadow: var(--wppo-focus-ring) !important;
-	border-color: var(--wppo-primary) !important;
+	outline: 2px solid var(--wppo-primary);
+	outline-offset: 2px;
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--wppo-primary) 35%, transparent);
+	border-color: var(--wppo-primary);
 }
 
 .wppo-field-label {

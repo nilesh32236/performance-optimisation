@@ -1,9 +1,9 @@
 .wppo-sub-tabs {
 	display: flex;
 	gap: 4px;
-	background: #f1f5f9;
-	border: 1px solid #e2e8f0;
-	border-radius: 10px;
+	background: var(--wppo-switch-hover, #f1f5f9);
+	border: 1px solid var(--wppo-border, #e2e8f0);
+	border-radius: var(--wppo-radius, 10px);
 	padding: 4px;
 	overflow-x: auto;
 	margin-top: 20px;
@@ -22,8 +22,9 @@
 	padding: 8px 14px;
 	background: transparent;
 	border: 1px solid transparent;
-	border-radius: 8px;
-	color: #475569;
+	box-sizing: border-box;
+	border-radius: var(--wppo-radius-sm, 8px);
+	color: var(--wppo-text-muted, #475569);
 	font-size: 13px;
 	font-weight: 600;
 	cursor: pointer;
@@ -37,7 +38,7 @@
 
 	&:hover {
 		background: #fff;
-		border-color: #e2e8f0;
+		border-color: var(--wppo-border, #e2e8f0);
 		color: var(--wppo-text-main);
 	}
 
