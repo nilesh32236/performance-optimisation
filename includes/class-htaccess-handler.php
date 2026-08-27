@@ -87,11 +87,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 		/**
 		 * Retrieve the rules to be added to .htaccess.
 		 *
+		 * Includes LiteSpeed/Apache next-gen Vary:Accept rewrite (LS-401)
+		 * when enableNextGenRewrite is true, LiteSpeed is detected, and
+		 * convertImg is enabled. Opt-in default false. Filterable via
+		 * wppo_litespeed_nextgen_rewrite.
+		 *
 		 * @return array Array of rules.
 		 * @since  1.0.0
 		 */
 		public static function get_rules(): array {
-			return array(
+			$rules = array(
 				'<IfModule mod_deflate.c>',
 				'    # Compress HTML, CSS, JavaScript, Text, XML, and Fonts',
 				'    # NOTE: WOFF2 is omitted intentionally — WOFF2 files are already pre-compressed (Brotli)',
@@ -148,6 +153,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				'    ExpiresByType font/woff2 "access plus 1 year"',
 				'</IfModule>',
 			);
+
+			// LS-401: Next-gen Vary:Accept rewrite — sibling .webp/.avif.
+			$use_nextgen = false;
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_nextgen_rewrite_enabled' ) ) {
+				$use_nextgen = LiteSpeed_Integration::is_nextgen_rewrite_enabled();
+			} else {
+				// Fallback when LiteSpeed_Integration not loaded: raw option check with filters.
+				$opts        = get_option( 'wppo_settings', array() );
+				$enabled     = ! empty( $opts['litespeed_integration']['enableNextGenRewrite'] );
+				$convert     = ! empty( $opts['image_optimisation']['convertImg'] );
+				$is_ls       = class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'is_litespeed' ) ? Server_Rules::is_litespeed() : false;
+				$use_nextgen = $enabled && $convert && $is_ls;
+				/**
+				 * Filter whether next-gen rewrite is enabled (fallback).
+				 *
+				 * @since NEXT
+				 * @param bool $use_nextgen Whether next-gen rewrite is enabled.
+				 */
+				$use_nextgen = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $use_nextgen );
+			}
+
+			if ( $use_nextgen ) {
+				$rules = array_merge(
+					$rules,
+					array(
+						'',
+						'# WPPO Next-gen delivery (LiteSpeed/Apache) — sibling .webp/.avif',
+						'<IfModule mod_rewrite.c>',
+						'    RewriteEngine On',
+						'    # Serve .webp when client supports it and file exists',
+						'    RewriteCond %{HTTP:Accept} image/webp',
+						'    RewriteCond %{REQUEST_FILENAME}.webp -f',
+						'    RewriteRule ^(.+)\.(jpe?g|png)$ $1.webp [T=image/webp,E=accept:1]',
+						'    # Serve .avif when client prefers it (prefer AVIF over WebP — order after)',
+						'    RewriteCond %{HTTP:Accept} image/avif',
+						'    RewriteCond %{REQUEST_FILENAME}.avif -f',
+						'    RewriteRule ^(.+)\.(jpe?g|png)$ $1.avif [T=image/avif,E=accept:1]',
+						'</IfModule>',
+						'<IfModule mod_headers.c>',
+						'    Header append Vary Accept env=accept',
+						'</IfModule>',
+						'AddType image/webp .webp',
+						'AddType image/avif .avif',
+					)
+				);
+
+				/**
+				 * Filter the next-gen htaccess block.
+				 *
+				 * @since NEXT
+				 * @param bool $use_nextgen Whether next-gen block was added.
+				 */
+				$rules = (array) apply_filters( 'wppo_htaccess_nextgen_rules', $rules );
+			}
+
+			/**
+			 * Filter htaccess rules.
+			 *
+			 * @since NEXT
+			 * @param array $rules Htaccess rules.
+			 */
+			$rules = (array) apply_filters( 'wppo_htaccess_rules', $rules );
+
+			return $rules;
 		}
 	}
 }

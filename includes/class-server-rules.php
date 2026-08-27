@@ -63,6 +63,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		/**
 		 * Get performance rules for Nginx configuration.
 		 *
+		 * Includes LiteSpeed-style next-gen map (LS-402) when
+		 * enableNextGenRewrite is true and convertImg is enabled.
+		 * Opt-in default false. Filterable via wppo_litespeed_nextgen_rewrite.
+		 *
 		 * @since  1.6.0
 		 * @return string Nginx configuration snippet.
 		 */
@@ -111,8 +115,61 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				$rules[] = '}';
 			}
 
+			// LS-402: Nginx next-gen map — map $http_accept → try_files avif/webp.
+			$use_nextgen = false;
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_nextgen_rewrite_enabled_for_nginx' ) ) {
+				$use_nextgen = LiteSpeed_Integration::is_nextgen_rewrite_enabled_for_nginx();
+			} else {
+				$opts        = get_option( 'wppo_settings', array() );
+				$enabled     = ! empty( $opts['litespeed_integration']['enableNextGenRewrite'] );
+				$convert     = ! empty( $opts['image_optimisation']['convertImg'] );
+				$use_nextgen = $enabled && $convert;
+				/**
+				 * Filter whether nginx next-gen map is enabled (fallback).
+				 *
+				 * @since NEXT
+				 * @param bool $use_nextgen Whether next-gen map is enabled.
+				 */
+				$use_nextgen = (bool) apply_filters( 'wppo_litespeed_nextgen_rewrite', $use_nextgen );
+			}
+
+			if ( $use_nextgen ) {
+				if ( ! empty( $rules ) ) {
+					$rules[] = '';
+				}
+				$rules[] = '# WPPO Next-gen delivery (Nginx) — sibling .webp/.avif via Accept header';
+				$rules[] = 'map $http_accept $wppo_avif_suffix {';
+				$rules[] = '    default "";';
+				$rules[] = '    "~*image/avif" ".avif";';
+				$rules[] = '}';
+				$rules[] = 'map $http_accept $wppo_webp_suffix {';
+				$rules[] = '    default "";';
+				$rules[] = '    "~*image/webp" ".webp";';
+				$rules[] = '}';
+				$rules[] = 'server {';
+				$rules[] = '    location ~* \.(jpe?g|png)$ {';
+				$rules[] = '        # Try avif first, then webp, then original — requires sibling .avif/.webp files';
+				$rules[] = '        try_files $uri$wppo_avif_suffix $uri$wppo_webp_suffix $uri =404;';
+				$rules[] = '        add_header Vary Accept;';
+				$rules[] = '    }';
+				$rules[] = '}';
+				/**
+				 * Filter nginx next-gen rules.
+				 *
+				 * @since NEXT
+				 * @param bool $use_nextgen Whether next-gen map was added.
+				 */
+				$rules = (array) apply_filters( 'wppo_nginx_nextgen_rules', $rules );
+			}
+
 			$rules_str = implode( "\n", $rules );
 
+			/**
+			 * Filter nginx rules.
+			 *
+			 * @since NEXT
+			 * @param string $rules_str Nginx rules.
+			 */
 			return apply_filters( 'wppo_nginx_rules', $rules_str );
 		}
 

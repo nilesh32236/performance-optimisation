@@ -214,3 +214,48 @@ Filters whether generic `Cache-Control` is stripped when `X-LiteSpeed-Cache-Cont
 
 ### `wppo_litespeed_bypass_file_cache`
 Filters whether the WPPO file cache is bypassed when LiteSpeed owns the cache (`is_litespeed && !is_wppo_cache_owner`). @since NEXT.
+
+---
+
+### `wppo_litespeed_nextgen_rewrite`
+Filters whether next-gen Vary:Accept rewrite (LS-401/LS-402) is enabled. Gated by `is_litespeed && convertImg && enableNextGenRewrite` (htaccess) or `convertImg && enableNextGenRewrite` (nginx). Opt-in default false. @since NEXT.
+
+---
+
+### `wppo_litespeed_enable_nextgen_rewrite`
+Legacy alias for `wppo_litespeed_nextgen_rewrite`. @since NEXT.
+
+---
+
+### `wppo_litespeed_brotli`
+Filters whether Brotli `.br` generation (LS-403) is enabled. Requires `extension_loaded('brotli')` or `brotli_compress`. Opt-in via `enableBrotli` default false. @since NEXT.
+
+---
+
+### `wppo_litespeed_enable_brotli`
+Legacy alias for `wppo_litespeed_brotli`. @since NEXT.
+
+---
+
+### `wppo_litespeed_can_cdn`
+Filters whether WPPO CDN rewriting is allowed. When `false`, `maybe_apply_cdn()` is skipped to avoid double CDN mapping when `litespeed_can_cdn` (LSCWP) is active. Respects `litespeed_can_cdn` ecosystem filter. @since NEXT.
+
+---
+
+### `wppo_htaccess_rules`
+Filters the full htaccess rules array before return. @since NEXT.
+
+---
+
+### `wppo_htaccess_nextgen_rules`
+Filters the htaccess rules after next-gen block is appended. @since NEXT.
+
+---
+
+### `wppo_nginx_rules`
+Filters the nginx rules string. @since NEXT.
+
+---
+
+### `wppo_nginx_nextgen_rules`
+Filters the nginx rules array after next-gen map is appended. @since NEXT.

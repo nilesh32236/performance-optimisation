@@ -158,7 +158,10 @@ class AdvancedCacheHandlerTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertStringContainsString( '$cache_life    = 24;', $fs->put_contents );
 		$this->assertStringContainsString( '> $cache_life * 3600', $fs->put_contents );
-		$this->assertStringContainsString( ', $cache_life );', $fs->put_contents );
+		// LS-403: brotli support — signature now includes $brotli_file_path and $accept_encoding, and fallback contains cache_life.
+		$this->assertStringContainsString( '$brotli_file_path', $fs->put_contents );
+		$this->assertStringContainsString( '$accept_encoding', $fs->put_contents );
+		$this->assertStringContainsString( 'Content-Encoding: br', $fs->put_contents );
 	}
 
 	/**
