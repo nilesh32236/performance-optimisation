@@ -405,6 +405,8 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 		global $wp_styles;
 		$wp_styles = $this->make_wp_styles( array(), array(), '/tmp/wordpress/wp-content/cache/wppo/min/css/abc123.css' );
 
+		\Brain\Monkey\Functions\when( 'get_option' )->justReturn( array() );
+
 		$main   = $this->make_main();
 		$rel    = 'stylesheet';
 		$tag    = sprintf( '<link rel="%1$s" id="foo-css" href="http://example.com/foo.css" />', $rel );

@@ -61,3 +61,11 @@
 **Bug/Gap:** Static analysis errors in `class-html.php` for `strlen` used in `array_filter` and array offset extraction for `preg_match` results breaking type-safety constraints.
 **Root Cause:** PHP 8.1+ triggers deprecation warnings for `strlen(null)`, and the previous regex logic inverted extraction precedence, incorrectly checking the unquoted group 3 first rather than the quoted group 2.
 **Test Added:** Replaced `array_filter(..., 'strlen')` with strictly typed closures `static function (mixed $val): bool`. Corrected regex capture group extraction logic to explicitly prefer group 2 first and fallback to group 3: `$type = '' !== ($type_matches[2] ?? '') ? ($type_matches[2] ?? '') : ($type_matches[3] ?? '');`. Note: No unit tests were added in this PR as the scope was strictly constrained to static analysis type-safety fixes.
+## 2026-08-27 - Fixed PHPStan Errors in class-google-fonts.php
+**Bug/Gap:** Static analysis errors in `class-google-fonts.php` where `wp_normalize_path` and `content_url` were potentially assigning null to string properties, and a boolean check `! $result && file_exists( $tmp )` where the right side was always true due to previous checks.
+**Root Cause:** Missing explicit string casts for function returns that PHPStan considered possibly null, and redundant file existence checks after download failures.
+**Test Added:** Added string casting `(string)` for the path/url property assignments. Simplified the cleanup condition by removing the redundant `file_exists($tmp)` check.
+## 2026-08-27 - Test mock formatting WPCS violations
+**Bug/Gap:** WPCS enforces strict formatting rules for multi-line array arguments in function calls, and the `Brain\Monkey\Functions\stubs` call was generating a `Opening parenthesis of a multi-line function call must be the last content on the line` and `Closing parenthesis of a multi-line function call must be on a line by itself` error.
+**Root Cause:** The `array()` argument was kept on the same line as the opening parenthesis of `stubs()`.
+**Test Added:** Fixed `InlineCssTest.php` formatting and ran `vendor/bin/phpcs` to verify. No functional change.
