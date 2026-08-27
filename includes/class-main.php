@@ -562,7 +562,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'template_redirect', array( 'PerformanceOptimise\Inc\Llms', 'serve' ), 1 );
 				add_action( 'send_headers', array( 'PerformanceOptimise\Inc\Llms', 'emit_link_header' ) );
 				add_action( 'wp_head', array( 'PerformanceOptimise\Inc\Llms', 'emit_head_link' ), 1 );
-				add_action( 'wppo_llms_txt_daily', array( 'PerformanceOptimise\Inc\Llms', 'generate' ) );
+				// Daily generation handled solely by Cron::llms_txt_cron() (gated on enabled) to avoid double dispatch.
 				add_action( 'update_option_wppo_settings', array( 'PerformanceOptimise\Inc\Llms', 'on_settings_update' ), 10, 2 );
 			}
 

@@ -230,12 +230,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		 */
 		public static function generate(): bool {
 			if ( ! self::is_enabled() ) {
-				// Still allow generation on toggle-on before is_enabled flips?
-				// Check raw option to allow on_settings_update to generate.
-				$opts = get_option( 'wppo_settings', array() );
-				if ( empty( $opts['llms_txt']['enabled'] ) ) {
-					return false;
-				}
+				return false;
 			}
 
 			$options = get_option( 'wppo_settings', array() );
@@ -457,6 +452,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				}
 				$response = wp_remote_get( $current, array( 'timeout' => 5 ) );
 				if ( is_wp_error( $response ) ) {
+					continue;
+				}
+				if ( function_exists( 'wp_remote_retrieve_response_code' ) && 200 !== (int) wp_remote_retrieve_response_code( $response ) ) {
 					continue;
 				}
 				$body = wp_remote_retrieve_body( $response );
