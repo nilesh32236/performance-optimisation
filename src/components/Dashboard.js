@@ -21,6 +21,7 @@ import WebVitalsRum from './WebVitalsRum';
 import SuggestionsPanel from './SuggestionsPanel';
 import SystemInfo from './SystemInfo';
 import AutoloadedOptions from './AutoloadedOptions';
+import LlmsPanel from './LlmsPanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
@@ -1212,6 +1213,8 @@ const Dashboard = ( {
 
 				{ /* Phase 3 — Autoloaded options audit (v2.18.0) */ }
 				<AutoloadedOptions />
+
+				<LlmsPanel />
 
 				<SystemInfo />
 			</div>
