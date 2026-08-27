@@ -422,11 +422,153 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * @param array $assoc_args Command associative arguments.
 		 * @return void
 		 */
+		/**
+		 * Get default settings structure for fresh installs.
+		 *
+		 * Mirrors the defaults from Main::__construct() without requiring a Main
+		 * instance. Used to ensure CLI works before the option is ever persisted.
+		 *
+		 * @since NEXT
+		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
+		 */
+		private static function get_default_settings(): array {
+			return array(
+				'cache_settings'     => array(
+					'enableLoggedInCache' => false,
+					'loggedInCacheRoles'  => array(),
+				),
+				'file_optimisation'  => array(
+					'enableServerRules'       => false,
+					'cdnURL'                  => '',
+					'removeUnusedCSS'         => false,
+					'excludeUnusedCSS'        => '',
+					'criticalCSS'             => false,
+					'hostGoogleFontsLocally'  => false,
+					'blockAssetsOnDemand'     => false,
+					'loadAllCoreBlockAssets'  => false,
+					'delayJSDefaultStrategy'  => 'interaction',
+					'delayJSIdleList'         => '',
+					'delayJSViewportList'     => '',
+					'delayJSPriority'         => '',
+					'delayJSIdleTimeout'      => 3000,
+					'minifyHTML'              => false,
+					'minifyJS'                => false,
+					'minifyCSS'               => false,
+					'deferJS'                 => false,
+					'delayJS'                 => false,
+					'combineCSS'              => false,
+					'excludeJS'               => '',
+					'excludeCSS'              => '',
+					'excludeDeferJS'          => '',
+					'excludeDelayJS'          => '',
+					'excludeCombineCSS'       => '',
+					'minifyInlineCSS'         => false,
+					'minifyInlineJS'          => false,
+					'removeHTMLComments'      => true,
+					'removeQueryStrings'      => false,
+					'disableRestApiLinks'     => false,
+					'disableRssFeeds'         => false,
+					'disableShortlinks'       => false,
+					'disableGeneratorTag'     => false,
+					'disableJQueryMigrate'    => false,
+					'disablePasswordStrength' => false,
+					'disableSelfPingbacks'    => false,
+				),
+				'preload_settings'   => array(
+					'enableSpeculationRules' => false,
+					'speculationMode'        => 'prerender',
+					'speculationEagerness'   => 'moderate',
+					'speculationExcludeUrls' => '',
+					'preloadSitemap'         => false,
+				),
+				'image_optimisation' => array(
+					'lazyLoadImages'             => false,
+					'lazyLoadNative'             => true,
+					'placeholderType'            => 'svg',
+					'autoPreloadLCP'             => false,
+					'prioritizeLCPImages'        => false,
+					'clientSideMimeTypeOverride' => false,
+					'clientSideMimeTypes'        => array(),
+					'lazyLoadBackgroundImages'   => false,
+				),
+				'performance_audit'  => array(
+					'pagespeed_api_key'     => '',
+					'high_value_urls'       => array(),
+					'auto_fix_enabled'      => false,
+					'server_timing_enabled' => false,
+					'auto_rescan'           => '',
+					'rum_enabled'           => false,
+				),
+				'database_cleanup'   => array(),
+				'object_cache'       => array(),
+			);
+		}
+
+		/**
+		 * View, update, export, or import plugin settings.
+		 *
+		 * ## OPTIONS
+		 *
+		 * <action>
+		 * : Settings action to perform: get, update, export, or import.
+		 *
+		 * [<tab>]
+		 * : Settings tab name (file_optimisation, preload_settings, image_optimisation, database_cleanup, object_cache).
+		 *
+		 * [--settings=<json>]
+		 * : JSON string containing setting key-value pairs (required for update action).
+		 *
+		 * [--file=<path>]
+		 * : File path for export or import actions.
+		 *
+		 * [--format=<format>]
+		 * : Output format for get action.
+		 * ---
+		 * default: json
+		 * options:
+		 *   - json
+		 *   - yaml
+		 * ---
+		 *
+		 * ## EXAMPLES
+		 *
+		 *     # View all plugin settings
+		 *     wp wppo settings get
+		 *
+		 *     # View file optimization settings
+		 *     wp wppo settings get file_optimisation
+		 *
+		 *     # Enable HTML minification via settings update
+		 *     wp wppo settings update file_optimisation --settings='{"minifyHTML":true}'
+		 *
+		 *     # Export settings to file
+		 *     wp wppo settings export --file=/tmp/wppo-settings.json
+		 *
+		 *     # Import settings from file
+		 *     wp wppo settings import --file=/tmp/wppo-settings.json
+		 *
+		 * @when after_wp_load
+		 * @subcommand settings
+		 * @param array $args Command positional arguments.
+		 * @param array $assoc_args Command associative arguments.
+		 * @return void
+		 */
 		public function settings( array $args, array $assoc_args ): void {
 			$action = $args[0] ?? 'get';
 			$tab    = $args[1] ?? null;
 
 			$options = get_option( 'wppo_settings', array() );
+			// On fresh installs the option does not exist yet — fall back to
+			// defaults so CLI is usable before the first admin save. This
+			// mirrors Main::__construct() seeding but without persisting until
+			// an explicit update/import.
+			if ( empty( $options ) || ! is_array( $options ) ) {
+				$options = self::get_default_settings();
+			} else {
+				// Ensure all known tabs exist even if the stored option is
+				// partial (e.g. from an older version or a prior wipe).
+				$options = array_replace_recursive( self::get_default_settings(), $options );
+			}
 
 			if ( 'export' === $action ) {
 				$export_data = $options;
@@ -576,7 +718,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					$options[ $tab ] = array();
 				}
 
-				$options[ $tab ] = array_merge( $options[ $tab ], $new_settings );
+				$options[ $tab ] = array_replace_recursive( $options[ $tab ], $new_settings );
 				update_option( 'wppo_settings', $options );
 
 				/* translators: %s: Settings tab name */

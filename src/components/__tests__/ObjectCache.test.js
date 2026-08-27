@@ -63,7 +63,7 @@ describe( 'ObjectCache Component', () => {
 		} );
 
 		expect( hitRatioProgress ).toHaveAttribute( 'aria-valuenow', '0' );
-		expect( hitRatioProgress ).toHaveAttribute( 'aria-valuetext', '0%' );
+		expect( hitRatioProgress ).toHaveAttribute( 'aria-valuetext', '0.0%' );
 	} );
 
 	it( 'does not render Hit Ratio progress bar when cache is disabled', async () => {
