@@ -1609,6 +1609,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function maybe_store_cache() {
+			// LS-302: Bypass file cache when LiteSpeed owns cache — keep
+			// process_buffer_only() for CDN/used-css but skip save.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() && ! LiteSpeed_Integration::is_wppo_cache_owner() ) {
+				// For non-cacheable routes LS would otherwise cache, signal
+				// no-cache so LS does not cache dynamic pages (LS-302).
+				if ( $this->is_not_cacheable() ) {
+					if ( has_action( 'litespeed_control_set_nocache' ) ) {
+						do_action( 'litespeed_control_set_nocache', 'wppo not cacheable (ls owns)' );
+					} elseif ( ! headers_sent() ) {
+						header( 'X-LiteSpeed-Cache-Control: no-cache' );
+					}
+				}
+				/**
+				 * Filter whether WPPO file cache storage should be bypassed on LiteSpeed.
+				 *
+				 * @since NEXT
+				 * @param bool $bypass Whether to bypass file cache.
+				 */
+				$bypass = (bool) apply_filters( 'wppo_litespeed_bypass_file_cache', true );
+				if ( $bypass ) {
+					return false;
+				}
+			}
+
 			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
 				$this->maybe_mark_page_not_cacheable();
 				return false;
@@ -1643,6 +1667,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			return true;
+		}
+
+		/**
+		 * Whether current request is cacheable (public wrapper for LiteSpeed).
+		 *
+		 * Mirrors is_not_cacheable() for external callers (e.g. LiteSpeed
+		 * header emission) without exposing private internals. Cheap — creates
+		 * no I/O beyond what is_not_cacheable() already does.
+		 *
+		 * @since NEXT
+		 * @return bool True if cacheable.
+		 */
+		public function is_request_cacheable(): bool {
+			return ! $this->is_not_cacheable();
 		}
 
 		/**

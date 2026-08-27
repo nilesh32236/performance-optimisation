@@ -127,6 +127,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private static ?bool $cached_is_lscache_active = null;
 
 		/**
+		 * Per-request cached LiteSpeed TTL seconds.
+		 *
+		 * Null means not yet resolved.
+		 *
+		 * @since NEXT
+		 * @var int|null
+		 */
+		private static ?int $cached_ttl = null;
+
+		/**
+		 * Per-request cached cacheability check.
+		 *
+		 * Null means not yet resolved.
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $cached_is_cacheable = null;
+
+		/**
+		 * Per-request cached vary-by-role check.
+		 *
+		 * Null means not yet resolved.
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $cached_should_vary = null;
+
+		/**
+		 * Whether Phase 3 hooks (send_headers, vary) are registered.
+		 *
+		 * Prevents double-registration when init() is called multiple times.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $hooks_registered = false;
+
+		/**
 		 * Whether the current server is LiteSpeed / OpenLiteSpeed.
 		 *
 		 * Delegates to Server_Rules::is_litespeed() when available.
@@ -518,20 +558,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
-		 * Initialise LiteSpeed purge-sync listeners (LS → WPPO).
+		 * Initialise LiteSpeed integration hooks.
 		 *
-		 * Hooks `litespeed_purged_all`, `litespeed_purged_post`, and
-		 * `litespeed_purge_finalize` to mirror LSCache purges back to WPPO's
-		 * file cache. Each handler checks the 60s blog-prefixed lock via
-		 * Util::transient_key() to avoid loops.
+		 * Registers purge-sync listeners (LS → WPPO) and Phase 3 server-level
+		 * acceleration hooks (send_headers header emission + vary bridge).
+		 * Idempotent — safe to call multiple times per request.
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function init(): void {
+			if ( self::$hooks_registered ) {
+				return;
+			}
+			self::$hooks_registered = true;
+
 			add_action( 'litespeed_purged_all', array( self::class, 'handle_litespeed_purged_all' ) );
 			add_action( 'litespeed_purged_post', array( self::class, 'handle_litespeed_purged_post' ), 10, 1 );
 			add_action( 'litespeed_purge_finalize', array( self::class, 'handle_litespeed_purge_finalize' ) );
+
+			// Phase 3 — LS-native header emission (LS-301) + vary bridge (LS-303).
+			add_action( 'send_headers', array( self::class, 'handle_send_headers' ), 0 );
+			add_filter( 'litespeed_vary', array( self::class, 'filter_litespeed_vary' ), 10, 1 );
 		}
 
 		/**
@@ -598,6 +646,456 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Get LiteSpeed cache TTL in seconds mapped from cacheLife hours.
+		 *
+		 * Maps `cache_settings.cacheLife` (hours: 0/1/6/12/24/48/168) to LS
+		 * `max-age` seconds. File-cache `0` = never expire; LS server layer
+		 * cannot store infinite, so `0` maps to 1 week (604800, WEEK_IN_SECONDS)
+		 * as an explicit policy change, documented here and in Cache.
+		 *
+		 * Result is cached per request; filterable via `wppo_litespeed_ttl`.
+		 *
+		 * @since NEXT
+		 * @return int TTL seconds (>=1).
+		 */
+		public static function get_litespeed_ttl(): int {
+			if ( null !== self::$cached_ttl ) {
+				return self::$cached_ttl;
+			}
+
+			$options = get_option( 'wppo_settings', array() );
+			$hours   = isset( $options['cache_settings']['cacheLife'] ) ? absint( $options['cache_settings']['cacheLife'] ) : 0;
+
+			if ( 0 === $hours ) {
+				$seconds = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
+			} else {
+				$seconds = $hours * ( defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+			}
+
+			/**
+			 * Filter LiteSpeed TTL seconds mapped from cacheLife.
+			 *
+			 * @since NEXT
+			 * @param int $seconds TTL in seconds.
+			 * @param int $hours   Original cacheLife hours (0 = never expire).
+			 */
+			$seconds = (int) apply_filters( 'wppo_litespeed_ttl', $seconds, $hours );
+
+			if ( $seconds <= 0 ) {
+				$seconds = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
+			}
+
+			self::$cached_ttl = $seconds;
+
+			return self::$cached_ttl;
+		}
+
+		/**
+		 * Whether current request is cacheable for LiteSpeed layer.
+		 *
+		 * Cheap per-request cached check. Delegates to Cache when available
+		 * to mirror is_not_cacheable() without duplicating logic, falling back
+		 * to DONOTCACHEPAGE when Cache is unavailable. Filterable via
+		 * `wppo_litespeed_is_cacheable`.
+		 *
+		 * @since NEXT
+		 * @return bool True if cacheable.
+		 */
+		public static function is_request_cacheable(): bool {
+			if ( null !== self::$cached_is_cacheable ) {
+				return self::$cached_is_cacheable;
+			}
+
+			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+				self::$cached_is_cacheable = false;
+				/**
+				 * Filter whether current request is cacheable for LiteSpeed.
+				 *
+				 * @since NEXT
+				 * @param bool $is_cacheable Whether request is cacheable.
+				 */
+				self::$cached_is_cacheable = (bool) apply_filters( 'wppo_litespeed_is_cacheable', self::$cached_is_cacheable );
+				return self::$cached_is_cacheable;
+			}
+
+			$cacheable = false;
+			try {
+				if ( class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
+					$cache = new Cache();
+					if ( method_exists( $cache, 'is_request_cacheable' ) ) {
+						$cacheable = $cache->is_request_cacheable();
+					} else {
+						$ref = new \ReflectionMethod( Cache::class, 'is_not_cacheable' );
+						$ref->setAccessible( true );
+						$cacheable = ! $ref->invoke( $cache );
+					}
+				}
+			} catch ( \Throwable $e ) {
+				$cacheable = false;
+			}
+
+			// LS-304: align with maybe_store_cache — query strings s|ver|v are not cacheable.
+			if ( $cacheable && ! empty( $_SERVER['QUERY_STRING'] ) ) {
+				$qs = sanitize_text_field( wp_unslash( $_SERVER['QUERY_STRING'] ) );
+				if ( preg_match( '/(?:^|&)(s|ver|v)(?:=|&|$)/', $qs ) ) {
+					$cacheable = false;
+				}
+			}
+
+			// LS-304: honor preload_settings.excludePreloadCache when enabled.
+			if ( $cacheable ) {
+				$options = get_option( 'wppo_settings', array() );
+				if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) && ! empty( $options['preload_settings']['excludePreloadCache'] ) ) {
+					$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
+					$request_uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+					$home_path    = wp_parse_url( Util::cached_home_url(), PHP_URL_PATH ) ?? '';
+					if ( $home_path && '/' !== $home_path && 0 === strpos( $request_uri, $home_path ) ) {
+						$request_uri = substr( $request_uri, strlen( $home_path ) );
+					}
+					$current_url = Util::cached_home_url( $request_uri );
+					if ( Util::is_url_excluded( $current_url, $exclude_urls ) ) {
+						$cacheable = false;
+					}
+				}
+			}
+
+			self::$cached_is_cacheable = (bool) $cacheable;
+
+			/**
+			 * Filter whether current request is cacheable for LiteSpeed.
+			 *
+			 * @since NEXT
+			 * @param bool $is_cacheable Whether request is cacheable.
+			 */
+			self::$cached_is_cacheable = (bool) apply_filters( 'wppo_litespeed_is_cacheable', self::$cached_is_cacheable );
+
+			return self::$cached_is_cacheable;
+		}
+
+		/**
+		 * Whether vary-by-role should be added for LiteSpeed.
+		 *
+		 * True when is_litespeed && is_wppo_cache_owner && enableLoggedInCache.
+		 * Cheap per-request cached; filterable via `wppo_litespeed_vary_enabled`.
+		 *
+		 * @since NEXT
+		 * @return bool True if vary bridge should be active.
+		 */
+		public static function should_vary_by_role(): bool {
+			if ( null !== self::$cached_should_vary ) {
+				return self::$cached_should_vary;
+			}
+
+			if ( ! self::is_litespeed() || ! self::is_wppo_cache_owner() ) {
+				self::$cached_should_vary = false;
+				return self::$cached_should_vary;
+			}
+
+			$options = get_option( 'wppo_settings', array() );
+			$enable  = ! empty( $options['cache_settings']['enableLoggedInCache'] );
+
+			/**
+			 * Filter whether LiteSpeed vary-by-role is enabled.
+			 *
+			 * @since NEXT
+			 * @param bool $enable Whether vary bridge is enabled.
+			 */
+			$enable = (bool) apply_filters( 'wppo_litespeed_vary_enabled', $enable );
+
+			self::$cached_should_vary = $enable;
+
+			return self::$cached_should_vary;
+		}
+
+		/**
+		 * Handle send_headers — LS-native header emission (LS-301/302/304).
+		 *
+		 * When is_litespeed && is_wppo_cache_owner && is_cacheable, emits
+		 * `X-LiteSpeed-Cache-Control: public,max-age=N` (mapped from cacheLife,
+		 * 0→604800 documented) + `X-LiteSpeed-Tag: WPPO` + per-post tag via
+		 * is_singular(). Uses do_action('litespeed_control_set_ttl') when hook
+		 * exists else raw header. For non-cacheable routes emits no-cache via
+		 * litespeed_control_set_nocache. When LSCache owns cache, emits no-cache
+		 * for non-cacheable routes only (bypass path, LS-302). Strips generic
+		 * Cache-Control when LS public header sent to avoid conflict (LS-304).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function handle_send_headers(): void {
+			if ( ! self::is_litespeed() ) {
+				return;
+			}
+
+			if ( headers_sent() ) {
+				return;
+			}
+
+			$is_owner     = self::is_wppo_cache_owner();
+			$is_cacheable = self::is_request_cacheable();
+
+			// LS-302 bypass path: when LSCache owns, only signal no-cache for
+			// non-cacheable routes LS would otherwise cache. Cacheable routes
+			// are handled by LSCache's own control and need no WPPO header.
+			if ( ! $is_owner ) {
+				if ( ! $is_cacheable ) {
+					self::send_litespeed_nocache( 'wppo not cacheable' );
+				}
+				return;
+			}
+
+			// WPPO owner path.
+			if ( ! $is_cacheable ) {
+				self::send_litespeed_nocache( 'wppo not cacheable' );
+				return;
+			}
+
+			// Cacheable + WPPO owner — LS-301.
+			$ttl = self::get_litespeed_ttl();
+			self::send_litespeed_ttl( $ttl );
+			self::send_litespeed_tags();
+
+			// LS-303 fallback: when LSCWP not active, raw Vary: Cookie so OLS
+			// can vary by our role cookie. When LSCWP active, the litespeed_vary
+			// filter handles it; do not double-emit. Detect external callbacks
+			// beyond our own to decide fallback.
+			if ( self::should_vary_by_role() ) {
+				$has_external = false;
+				if ( function_exists( 'has_filter' ) ) {
+					global $wp_filter;
+					if ( isset( $wp_filter['litespeed_vary'] ) && is_object( $wp_filter['litespeed_vary'] ) ) {
+						$callbacks = $wp_filter['litespeed_vary']->callbacks ?? array();
+						$only_self = true;
+						foreach ( $callbacks as $prio => $cbs ) {
+							foreach ( $cbs as $cb ) {
+								$fn = $cb['function'] ?? null;
+								if ( is_array( $fn ) && isset( $fn[0], $fn[1] ) && 'PerformanceOptimise\\Inc\\LiteSpeed_Integration' === $fn[0] && 'filter_litespeed_vary' === $fn[1] ) {
+									continue;
+								}
+								$only_self    = false;
+								$has_external = true;
+							}
+						}
+						// If only our callback exists, LSCWP likely absent → fallback needed.
+						if ( $only_self ) {
+							$has_external = false;
+						}
+					} else {
+						// No wp_filter object → no external.
+						$has_external = false;
+					}
+				}
+				if ( ! $has_external ) {
+					header( 'Vary: Cookie', false );
+					header( 'X-LiteSpeed-Vary: cookie=wppo_role_hash', false );
+					/**
+					 * Filter the fallback vary header value when litespeed_vary not present.
+					 *
+					 * @since NEXT
+					 * @param string $vary Fallback vary header.
+					 */
+					$fallback = (string) apply_filters( 'wppo_litespeed_vary_fallback', 'cookie=wppo_role_hash' );
+					if ( '' !== $fallback && 'cookie=wppo_role_hash' !== $fallback ) {
+						header( 'X-LiteSpeed-Vary: ' . $fallback, false );
+					}
+				}
+			}
+
+			// LS-304: strip generic Cache-Control that would conflict with LS public header.
+			self::maybe_strip_generic_cache_control();
+		}
+
+		/**
+		 * Send LiteSpeed TTL header (public,max-age=N).
+		 *
+		 * Uses do_action('litespeed_control_set_ttl') when hook exists (bitmask
+		 * correct when LSCWP active) else raw header('X-LiteSpeed-Cache-Control').
+		 * Filterable via wppo_litespeed_ttl and wppo_litespeed_cache_control_header.
+		 *
+		 * @since NEXT
+		 * @param int $ttl TTL seconds.
+		 * @return void
+		 */
+		private static function send_litespeed_ttl( int $ttl ): void {
+			$ttl = (int) apply_filters( 'wppo_litespeed_ttl', $ttl );
+			if ( $ttl <= 0 ) {
+				$ttl = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
+			}
+
+			$header = 'X-LiteSpeed-Cache-Control: public,max-age=' . $ttl;
+
+			/**
+			 * Filter the LiteSpeed cache-control header for cacheable routes.
+			 *
+			 * @since NEXT
+			 * @param string $header Header string.
+			 * @param int    $ttl    TTL seconds.
+			 */
+			$header = (string) apply_filters( 'wppo_litespeed_cache_control_header', $header, $ttl );
+
+			if ( has_action( 'litespeed_control_set_ttl' ) ) {
+				do_action( 'litespeed_control_set_ttl', $ttl );
+			}
+
+			// Always emit raw header as fallback for OLS without LSCWP (OLS honors raw header).
+			if ( ! headers_sent() ) {
+				header( $header );
+			}
+		}
+
+		/**
+		 * Send LiteSpeed no-cache header for non-cacheable routes.
+		 *
+		 * Uses do_action('litespeed_control_set_nocache') when hook exists else
+		 * raw header('X-LiteSpeed-Cache-Control: no-cache').
+		 *
+		 * @since NEXT
+		 * @param string $reason Reason for nocache (for LSCWP logging).
+		 * @return void
+		 */
+		private static function send_litespeed_nocache( string $reason ): void {
+			/**
+			 * Filter reason for LiteSpeed no-cache.
+			 *
+			 * @since NEXT
+			 * @param string $reason Reason string.
+			 */
+			$reason = (string) apply_filters( 'wppo_litespeed_nocache_reason', $reason );
+
+			if ( has_action( 'litespeed_control_set_nocache' ) ) {
+				do_action( 'litespeed_control_set_nocache', $reason );
+			}
+
+			if ( ! headers_sent() ) {
+				$header = 'X-LiteSpeed-Cache-Control: no-cache';
+				/**
+				 * Filter the LiteSpeed no-cache header.
+				 *
+				 * @since NEXT
+				 * @param string $header Header string.
+				 * @param string $reason Reason.
+				 */
+				$header = (string) apply_filters( 'wppo_litespeed_nocache_header', $header, $reason );
+				header( $header );
+			}
+		}
+
+		/**
+		 * Send LiteSpeed tag headers (WPPO + per-post).
+		 *
+		 * Emits X-LiteSpeed-Tag WPPO and per-post tag via is_singular().
+		 * Uses do_action('litespeed_tag') / litespeed_tag_post when hook exists
+		 * else raw header. Filterable via wppo_litespeed_tag.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function send_litespeed_tags(): void {
+			$tag = 'WPPO';
+			/**
+			 * Filter the LiteSpeed tag for WPPO pages.
+			 *
+			 * @since NEXT
+			 * @param string $tag Tag string.
+			 */
+			$tag = (string) apply_filters( 'wppo_litespeed_tag', $tag );
+
+			if ( '' !== $tag ) {
+				if ( has_action( 'litespeed_tag' ) ) {
+					do_action( 'litespeed_tag', $tag );
+				}
+				if ( ! headers_sent() ) {
+					header( 'X-LiteSpeed-Tag: ' . $tag, false );
+				}
+			}
+
+			if ( function_exists( 'is_singular' ) && is_singular() ) {
+				$post_id = function_exists( 'get_queried_object_id' ) ? (int) get_queried_object_id() : 0;
+				if ( $post_id > 0 ) {
+					/**
+					 * Filter post ID for LiteSpeed per-post tag.
+					 *
+					 * @since NEXT
+					 * @param int $post_id Post ID.
+					 */
+					$post_id = (int) apply_filters( 'wppo_litespeed_tag_post_id', $post_id );
+					if ( $post_id > 0 ) {
+						if ( has_action( 'litespeed_tag_post' ) ) {
+							do_action( 'litespeed_tag_post', $post_id );
+						}
+						if ( ! headers_sent() ) {
+							header( 'X-LiteSpeed-Tag: Po.' . $post_id, false );
+						}
+					}
+				}
+			}
+		}
+
+		/**
+		 * Filter litespeed_vary — append wppo_role_hash when vary bridge active.
+		 *
+		 * Uses litespeed_vary (not litespeed_vary_cookies) per LS-303. Only when
+		 * is_litespeed && is_wppo_cache_owner && enableLoggedInCache. Filterable
+		 * via wppo_litespeed_vary.
+		 *
+		 * @since NEXT
+		 * @param mixed $vary Vary value from LSCWP (array|string).
+		 * @return mixed Modified vary value.
+		 */
+		public static function filter_litespeed_vary( $vary ) {
+			if ( ! self::should_vary_by_role() ) {
+				return $vary;
+			}
+
+			if ( is_array( $vary ) ) {
+				$vary['wppo_role_hash'] = 'wppo_role_hash';
+			} elseif ( is_string( $vary ) ) {
+				$vary = '' !== $vary ? $vary . ',wppo_role_hash' : 'wppo_role_hash';
+			} else {
+				$vary = array( 'wppo_role_hash' => 'wppo_role_hash' );
+			}
+
+			/**
+			 * Filter the LiteSpeed vary value after WPPO role hash appended.
+			 *
+			 * @since NEXT
+			 * @param mixed $vary Vary value.
+			 */
+			$vary = apply_filters( 'wppo_litespeed_vary', $vary );
+
+			return $vary;
+		}
+
+		/**
+		 * Strip generic Cache-Control when LS public header sent (LS-304).
+		 *
+		 * Prevents Cache-Control: no-cache conflicting with
+		 * X-LiteSpeed-Cache-Control: public,max-age=N. Uses header_remove()
+		 * when available; respects wppo_litespeed_strip_cache_control filter.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function maybe_strip_generic_cache_control(): void {
+			/**
+			 * Filter whether to strip generic Cache-Control when LS header sent.
+			 *
+			 * @since NEXT
+			 * @param bool $strip Whether to strip.
+			 */
+			$strip = (bool) apply_filters( 'wppo_litespeed_strip_cache_control', true );
+
+			if ( ! $strip || headers_sent() ) {
+				return;
+			}
+
+			if ( function_exists( 'header_remove' ) ) {
+				header_remove( 'Cache-Control' );
+				header_remove( 'Pragma' );
+			}
+		}
+
+		/**
 		 * Reset all per-request caches (for testing).
 		 *
 		 * @since NEXT
@@ -608,6 +1106,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			self::$cached_mode              = null;
 			self::$cached_is_litespeed      = null;
 			self::$cached_is_lscache_active = null;
+			self::$cached_ttl               = null;
+			self::$cached_is_cacheable      = null;
+			self::$cached_should_vary       = null;
+			self::$hooks_registered         = false;
 		}
 
 		/**
