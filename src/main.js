@@ -3,6 +3,9 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	// This entry is intentionally standalone (admin-bar, enqueued on every admin page via
 	// wppoObject) and does not import the SPA's apiRequest module to avoid bundle coupling.
 
+	let pendingRefresh = null;
+	let fallbackTimer = null;
+
 	/**
 	 * Shared helper for POST JSON requests.
 	 *
@@ -48,14 +51,22 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	/**
 	 * Refreshes the REST API nonce.
 	 *
+	 * Deduplicates concurrent refreshes so simultaneous 403s share a single
+	 * admin-ajax round-trip (thundering-herd guard). Mirrors the
+	 * pendingRefresh pattern in src/lib/apiRequest.js.
+	 *
 	 * @return {Promise<boolean>} Whether the refresh was successful.
 	 */
 	const refreshNonce = () => {
+		if ( pendingRefresh ) {
+			return pendingRefresh;
+		}
+
 		const formData = new FormData();
 		formData.append( 'action', 'wppo_get_nonce' );
 		formData.append( 'nonce', wppoObject.nonce_refresh );
 
-		return fetch( wppoObject.ajaxUrl, {
+		const refreshPromise = fetch( wppoObject.ajaxUrl, {
 			method: 'POST',
 			body: formData,
 		} )
@@ -81,6 +92,12 @@ document.addEventListener( 'DOMContentLoaded', function () {
 				console.error( 'Failed to refresh nonce:', error );
 				return false;
 			} );
+
+		pendingRefresh = refreshPromise.finally( () => {
+			pendingRefresh = null;
+		} );
+
+		return pendingRefresh;
 	};
 
 	/**
@@ -109,6 +126,10 @@ document.addEventListener( 'DOMContentLoaded', function () {
 		}
 
 		if ( ! dispatched ) {
+			if ( fallbackTimer ) {
+				clearTimeout( fallbackTimer );
+				fallbackTimer = null;
+			}
 			const noticeEl = document.createElement( 'div' );
 			noticeEl.className = `notice notice-${ type } is-dismissible wppo-admin-notice`;
 			noticeEl.setAttribute( 'role', 'alert' );
@@ -116,14 +137,30 @@ document.addEventListener( 'DOMContentLoaded', function () {
 			const dismissBtn = document.createElement( 'button' );
 			dismissBtn.className = 'notice-dismiss';
 			dismissBtn.setAttribute( 'aria-label', 'Dismiss' );
-			dismissBtn.addEventListener( 'click', () => noticeEl.remove() );
+			dismissBtn.addEventListener( 'click', () => {
+				if ( fallbackTimer ) {
+					clearTimeout( fallbackTimer );
+					fallbackTimer = null;
+				}
+				noticeEl.remove();
+			} );
 			noticeEl.appendChild( dismissBtn );
 			const target =
 				document.getElementById( 'wpbody-content' ) || document.body;
 			target.insertBefore( noticeEl, target.firstChild );
-			setTimeout( () => noticeEl.remove(), 5000 );
+			fallbackTimer = setTimeout( () => {
+				noticeEl.remove();
+				fallbackTimer = null;
+			}, 5000 );
 		}
 	};
+
+	window.addEventListener( 'pagehide', () => {
+		if ( fallbackTimer ) {
+			clearTimeout( fallbackTimer );
+			fallbackTimer = null;
+		}
+	} );
 
 	const clearAllCacheBtn = document.querySelector(
 		'#wp-admin-bar-wppo_clear_all .ab-item'

@@ -21,6 +21,37 @@
 	const config = window.wppoRum;
 	const values = {};
 	let sent = false;
+	let lcpObserver = null;
+	let clsObserver = null;
+	let inpObserver = null;
+	let scheduleTimerId = null;
+
+	const disconnectObservers = () => {
+		if ( lcpObserver ) {
+			try {
+				lcpObserver.disconnect();
+			} catch {
+				// Ignore disconnect errors.
+			}
+			lcpObserver = null;
+		}
+		if ( clsObserver ) {
+			try {
+				clsObserver.disconnect();
+			} catch {
+				// Ignore disconnect errors.
+			}
+			clsObserver = null;
+		}
+		if ( inpObserver ) {
+			try {
+				inpObserver.disconnect();
+			} catch {
+				// Ignore disconnect errors.
+			}
+			inpObserver = null;
+		}
+	};
 
 	const send = () => {
 		if ( sent ) {
@@ -36,6 +67,11 @@
 			return;
 		}
 		sent = true;
+		if ( scheduleTimerId ) {
+			clearTimeout( scheduleTimerId );
+			scheduleTimerId = null;
+		}
+		disconnectObservers();
 
 		const payload = JSON.stringify( {
 			token: config.token,
@@ -77,7 +113,7 @@
 
 	if ( 'PerformanceObserver' in window ) {
 		try {
-			const lcpObserver = new PerformanceObserver( ( list ) => {
+			lcpObserver = new PerformanceObserver( ( list ) => {
 				const entries = list.getEntries();
 				values.lcp = Math.round(
 					entries[ entries.length - 1 ].startTime
@@ -93,7 +129,7 @@
 
 		try {
 			let cls = 0;
-			const clsObserver = new PerformanceObserver( ( list ) => {
+			clsObserver = new PerformanceObserver( ( list ) => {
 				for ( const entry of list.getEntries() ) {
 					if ( ! entry.hadRecentInput ) {
 						cls += entry.value;
@@ -107,7 +143,7 @@
 		}
 
 		try {
-			const inpObserver = new PerformanceObserver( ( list ) => {
+			inpObserver = new PerformanceObserver( ( list ) => {
 				const entries = list.getEntries();
 				values.inp = Math.round(
 					entries[ entries.length - 1 ].duration
@@ -124,7 +160,13 @@
 	}
 
 	const scheduleSend = () => {
-		window.setTimeout( send, 5000 );
+		if ( scheduleTimerId ) {
+			clearTimeout( scheduleTimerId );
+		}
+		scheduleTimerId = window.setTimeout( () => {
+			scheduleTimerId = null;
+			send();
+		}, 5000 );
 	};
 
 	if ( document.readyState === 'complete' ) {
@@ -138,5 +180,16 @@
 			send();
 		}
 	} );
-	window.addEventListener( 'pagehide', send, { once: true } );
+	window.addEventListener(
+		'pagehide',
+		() => {
+			if ( scheduleTimerId ) {
+				clearTimeout( scheduleTimerId );
+				scheduleTimerId = null;
+			}
+			send();
+			disconnectObservers();
+		},
+		{ once: true }
+	);
 } )();
