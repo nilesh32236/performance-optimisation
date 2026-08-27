@@ -1,3 +1,5 @@
+let pendingRefresh = null;
+
 /**
  * Refresh the REST nonce from the admin-ajax endpoint.
  *
@@ -5,37 +7,53 @@
  * is left open across multiple days, the SPA needs a fresh nonce to keep
  * making write requests.
  *
+ * Deduplicates concurrent refreshes via a shared promise (thundering-herd
+ * guard) so multiple simultaneous 403s share a single admin-ajax round-trip.
+ *
  * @since 1.6.0
  * @return {Promise<string>} The refreshed nonce string.
  */
 const refreshNonce = async () => {
+	if ( pendingRefresh ) {
+		return pendingRefresh;
+	}
 	if ( typeof wppoSettings === 'undefined' ) {
 		throw new Error( 'wppoSettings is not defined' );
 	}
-	try {
-		const res = await fetch( wppoSettings.ajaxUrl, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded',
-			},
-			body: new URLSearchParams( {
-				action: 'wppo_get_nonce',
-				nonce: wppoSettings.nonce_refresh,
-			} ),
-		} );
-		if ( ! res.ok ) {
-			throw new Error( 'Nonce refresh failed with status ' + res.status );
+	const refreshPromise = ( async () => {
+		try {
+			const res = await fetch( wppoSettings.ajaxUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+				body: new URLSearchParams( {
+					action: 'wppo_get_nonce',
+					nonce: wppoSettings.nonce_refresh,
+				} ),
+			} );
+			if ( ! res.ok ) {
+				throw new Error(
+					'Nonce refresh failed with status ' + res.status
+				);
+			}
+			const data = await res.json();
+			if ( data.success && data.data?.nonce ) {
+				wppoSettings.nonce = data.data.nonce;
+				return data.data.nonce;
+			}
+			throw new Error( 'Nonce refresh returned invalid response' );
+		} catch ( e ) {
+			console.error( 'Nonce refresh failed:', e );
+			throw e;
 		}
-		const data = await res.json();
-		if ( data.success && data.data?.nonce ) {
-			wppoSettings.nonce = data.data.nonce;
-			return data.data.nonce;
-		}
-		throw new Error( 'Nonce refresh returned invalid response' );
-	} catch ( e ) {
-		console.error( 'Nonce refresh failed:', e );
-		throw e;
-	}
+	} )();
+
+	pendingRefresh = refreshPromise.finally( () => {
+		pendingRefresh = null;
+	} );
+
+	return pendingRefresh;
 };
 
 /**
