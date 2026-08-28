@@ -239,6 +239,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'ai_model'                => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_ai_model' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'ai_learn'                => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'ai_learn' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'ai_suggestions'          => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_ai_suggestions' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
 		}
 
@@ -1412,6 +1430,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			$suggestions = Suggestion_Engine::from_telemetry( $telemetry );
+			// Merge AI suggestions when the feature is enabled (never auto-applies).
+			if ( class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) && AI_Adaptive::is_enabled() ) {
+				$ai = Suggestion_Engine::from_ai_adaptive();
+				if ( ! empty( $ai ) ) {
+					$suggestions = array_merge( $suggestions, $ai );
+				}
+			}
 
 			return $this->send_response( array( 'suggestions' => $suggestions ) );
 		}
@@ -1520,6 +1545,42 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$status = Critical_CSS::get_status_all();
 
 			return $this->send_response( $status );
+		}
+
+		/**
+		 * Get AI adaptive model.
+		 *
+		 * @param \WP_REST_Request $_request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_ai_model( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$model = class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ? AI_Adaptive::get_model() : array();
+			return $this->send_response( $model );
+		}
+
+		/**
+		 * Trigger AI learning.
+		 *
+		 * @param \WP_REST_Request $_request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function ai_learn( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$model = class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ? AI_Adaptive::learn() : array();
+			return $this->send_response( $model );
+		}
+
+		/**
+		 * Get AI suggestions.
+		 *
+		 * @param \WP_REST_Request $_request The request object.
+		 * @return \WP_REST_Response The response object.
+		 * @since NEXT
+		 */
+		public function get_ai_suggestions( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$suggestions = class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ? Suggestion_Engine::from_ai_adaptive() : array();
+			return $this->send_response( array( 'suggestions' => $suggestions ) );
 		}
 
 		/**

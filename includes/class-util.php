@@ -53,6 +53,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'od_integration',
 			'bfcache',
 			'perf_translations',
+			'ai_adaptive',
 		);
 
 		/**
