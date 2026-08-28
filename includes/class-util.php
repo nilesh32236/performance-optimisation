@@ -50,6 +50,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'cache_settings',
 			'litespeed_integration',
 			'llms_txt',
+			'od_integration',
 		);
 
 		/**
