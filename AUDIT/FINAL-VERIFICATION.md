@@ -1,17 +1,23 @@
-# FINAL-VERIFICATION.md — 2026-08-28 audit pre-fix verification
+# FINAL-VERIFICATION.md — 2026-08-28 post-fix verification
 
-**Base:** `master@31fffc61` | **Date:** 2026-08-28 | **Mode:** audit-only (no prod code modified)
+**Branch:** `fix/audit-2026-08-28` (`44d7bcbf` + docs) | **Base:** `origin/master@31fffc61` | **Date:** 2026-08-28
 
 | Check | Result | Evidence |
 |-------|--------|----------|
-| `php -l` runtime | ✅ 42/42 clean | `find includes -name "*.php" -exec php -l` |
-| `vendor/bin/phpcs --report=summary` | ✅ 0 errors WordPress | `phpcs` summary |
-| `npm run lint:js` | ✅ 0 errors 3 warnings (Dashboard exhaustive-deps, triaged) | `wp-scripts lint-js src` |
-| `npm test` | ✅ 34/34 345/345 PASS jsdom | `wp-scripts test-unit-js` |
-| `vendor/bin/phpunit` | ✅ 435/435 1021 assertions 2 skipped (Redis) | Brain Monkey |
-| `npm run build` | ✅ webpack 5.109 `build/index.js` `build/tab-dashboard.js` committed | `wp-scripts build src/index.js src/lazyload.js src/main.js src/rum.js` |
-| Inventory ↔ Agents 1:1 | ✅ 0 missing | `GAP-ANALYSIS-2026-08-28.md` |
-| Agents written | ✅ 14 new 6755 lines | `ls AUDIT/AGENTS/*.md` |
-| Master + gap | ✅ `MASTER-AUDIT-2026-08-28.md` + `GAP-ANALYSIS-2026-08-28.md` | 18k each |
+| `php -l` 42 runtime | ✅ 42/42 clean | `find includes -name "*.php" -exec php -l` |
+| `vendor/bin/phpcs --report=summary includes/` | ✅ 0 errors 3 warnings | `phpcs.xml` WordPress |
+| `npm run lint:js` | ✅ 0 errors 3 warnings (Dashboard exhaustive-deps triaged) | `wp-scripts lint-js src` |
+| `npm test` | ✅ 34/34 345/345 jsdom | `wp-scripts test-unit-js` |
+| `vendor/bin/phpunit` | ✅ 471/471 1134 assertions 2 skipped (Redis) 1 deprecation | Brain Monkey `fd830190→44d7bcbf` +36 tests |
+| `npm run build` | ✅ webpack 5.109 55.1 KiB | `wp-scripts build src/index.js src/lazyload.js src/main.js src/rum.js` |
+| Inventory 1:1 | ✅ 0 missing | `POST-FIX-GAP-ANALYSIS.md` |
+| Agents | ✅ 14 new 6755 lines | `AUDIT/AGENTS/*.md` |
+| Master+gap | ✅ `MASTER-AUDIT-2026-08-28.md` + `POST-FIX-GAP-ANALYSIS.md` | 18k |
+| Final review | ✅ 6 files Agent J independent PASS low residuals | `AUDIT/FINAL-REVIEW/*.md` |
+| Git diff | ✅ 94 files +8177/-1377 no accidental | `git diff origin/master...fix/audit-2026-08-28 --stat` |
+| Artifacts | ✅ no debug/logs/secrets | `find *.log *.tmp debug.log` only node_modules lint.log |
 
-**Next:** Fixes are documented in `MASTER-AUDIT.md §3 P1→P5` but not yet applied per §19 audit-only. A follow-up fix run should apply P1 (CRITICAL namespace typo + TagProcessor invariant + AI/OD/bfcache HIGHs) on a branch, verify via same checks + `gh pr checks`, and merge.
+**Remaining:** H-11 god class `class-main.php:21` 3053 deferred P4 façade (correct deferral), `Used_CSS::regenerate_all` still without `no_found_rows` (deferred low), 3 P-M/S telemetry/md5/OFFSET deferred. No HIGH/CRITICAL remaining.
+
+**Next:** Merge `fix/audit-2026-08-28` to `master` via PR, `gh pr checks` 5-10m, fix real, then tag. Follow `@since NEXT` never bump `1.9.0` until release.
+
