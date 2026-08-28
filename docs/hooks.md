@@ -309,3 +309,50 @@ add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
     return $should;
 }, 10, 2 );
 ```
+
+---
+
+### `wppo_bfcache_enabled`
+Filters whether bfcache (Instant Back/Forward) is enabled. @since NEXT.
+
+Privacy-safe session-token invalidation per Performance Lab Instant Back/Forward: a random token is mirrored in a `wordpress_bfcache_session_{COOKIEHASH}` cookie and embedded in the HTML; on `pageshow` with `persisted=true` (bfcache restore) and on immediate execution (HTTP cache) the tokens are compared and a stale page is cleared and reloaded. The `Cache-Control: no-store` directive is stripped for opted-in sessions and replaced with `private, no-cache, max-age=0, must-revalidate`. Gated by `bfcache.enabled` (false default).
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether bfcache is enabled.
+
+**Example:**
+```php
+add_filter( 'wppo_bfcache_enabled', '__return_true' );
+```
+
+---
+
+### `wppo_perf_translations_enabled`
+Filters whether Performant Translations (.mo→php) is enabled. @since NEXT.
+
+When enabled and `wp_cache_get_salted` exists (WP 6.9+), `.mo` files are compiled to `.php` via the `load_textdomain_mofile` / `load_translation_file` filters using `WP_Translation_File::transform()` and stored per-locale under `wp-content/cache/wppo/lang/` (blog-scoped on multisite, e.g. `wp-content/cache/wppo/lang/site-2/my-plugin-de_DE-abc12345.l10n.php`). The cached file is served when newer than the source `.mo`; OPCache is invalidated on write. Toggle `perf_translations.enabled` defaults to `false`.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether .mo→php compilation is enabled.
+
+**Example:**
+```php
+add_filter( 'wppo_perf_translations_enabled', '__return_true' );
+```
+
+---
+
+### `wppo_perf_translations_file_written`
+Fires after a compiled translation file is written. @since NEXT.
+
+**Parameters:**
+- `$cache_file` *(string)* — Path to the compiled `.php` file.
+- `$mofile` *(string)* — Source `.mo` file.
+- `$domain` *(string)* — Text domain.
+
+**Example:**
+```php
+add_action( 'wppo_perf_translations_file_written', function( $cache_file, $mofile, $domain ) {
+    error_log( "Compiled {$domain} to {$cache_file}" );
+}, 10, 3 );
+```
