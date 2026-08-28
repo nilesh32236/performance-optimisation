@@ -59,7 +59,12 @@ const ObjectCache = ( { options = {} } ) => {
 		try {
 			const res = await apiCall( 'object_cache', { action: 'status' } );
 			if ( res.success ) {
-				setCacheStatus( { ...res.data, statusLoaded: true } );
+				setCacheStatus( ( prev ) => ( {
+					...res.data,
+					statusLoaded: true,
+					supported_compressors: res.data.supported_compressors ??
+						prev.supported_compressors ?? { none: true },
+				} ) );
 			} else {
 				setCacheStatus( ( prev ) => ( {
 					...prev,

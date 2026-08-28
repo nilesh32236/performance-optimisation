@@ -1651,18 +1651,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						} catch ( \Throwable $e ) {
 							unset( $e );
 						}
-					} elseif ( $use_brotli && extension_loaded( 'brotli' ) ) {
-						// Fallback when brotli_compress is not exposed but extension is loaded — try gz fallback is already done.
-						try {
-							if ( function_exists( 'brotli_compress' ) ) {
-								$br_output = brotli_compress( $buffer, 4, 0 ); // phpcs:ignore PHPCompatibility.FunctionUse.NewFunctions.brotli_compressFound
-								if ( false !== $br_output && is_string( $br_output ) ) {
-									$this->atomic_put_contents( $br_file_path, $br_output );
-								}
-							}
-						} catch ( \Throwable $e ) {
-							unset( $e );
-						}
 					}
 				}
 
