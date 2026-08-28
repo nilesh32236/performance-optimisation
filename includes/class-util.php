@@ -51,6 +51,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'litespeed_integration',
 			'llms_txt',
 			'od_integration',
+			'bfcache',
+			'perf_translations',
 		);
 
 		/**

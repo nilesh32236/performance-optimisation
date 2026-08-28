@@ -250,6 +250,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'od_integration'        => array(
 					'enabled' => class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' ),
 				),
+				'bfcache'               => array(
+					'enabled' => false,
+				),
+				'perf_translations'     => array(
+					'enabled' => false,
+				),
 			);
 			$stored        = Util::get_settings();
 			$this->options = ! empty( $stored ) ? $stored : $defaults;
@@ -297,6 +303,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( ! isset( $this->options['od_integration']['enabled'] ) ) {
 				$this->options['od_integration']['enabled'] = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
+			}
+
+			if ( ! isset( $this->options['bfcache'] ) || ! is_array( $this->options['bfcache'] ) ) {
+				$this->options['bfcache'] = array();
+			}
+			if ( ! isset( $this->options['bfcache']['enabled'] ) ) {
+				$this->options['bfcache']['enabled'] = false;
+			}
+
+			if ( ! isset( $this->options['perf_translations'] ) || ! is_array( $this->options['perf_translations'] ) ) {
+				$this->options['perf_translations'] = array();
+			}
+			if ( ! isset( $this->options['perf_translations']['enabled'] ) ) {
+				$this->options['perf_translations']['enabled'] = false;
 			}
 
 			$this->includes();
@@ -412,6 +432,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-od-bridge.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-od-bridge.php';
+			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-bfcache.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-bfcache.php';
+			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-perf-translations.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-perf-translations.php';
 			}
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -576,6 +602,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'wp_head', array( 'PerformanceOptimise\Inc\Llms', 'emit_head_link' ), 1 );
 				// Daily generation handled solely by Cron::llms_txt_cron() (gated on enabled) to avoid double dispatch.
 				add_action( 'update_option_wppo_settings', array( 'PerformanceOptimise\Inc\Llms', 'on_settings_update' ), 10, 2 );
+			}
+
+			// N6 bfcache — Instant Back/Forward (privacy-safe session-token + pageshow).
+			if ( class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
+				Bfcache::init();
+			}
+
+			// N7 Performant Translations — .mo→php compilation.
+			if ( class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
+				Perf_Translations::init();
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['minifyJS'] ) ) {

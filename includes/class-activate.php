@@ -175,6 +175,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				),
 				'database_cleanup'   => array(),
 				'object_cache'       => array(),
+				'bfcache'            => array(
+					'enabled' => false,
+				),
+				'perf_translations'  => array(
+					'enabled' => false,
+				),
 			);
 
 			add_option( 'wppo_settings', $defaults, '', false );
