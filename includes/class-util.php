@@ -79,6 +79,115 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Get default settings structure for fresh installs.
+		 *
+		 * Single source of truth for Main::__construct() defaults and
+		 * WPPO_CLI_Command::get_default_settings() to fix 7-tab drift
+		 * (CLI:451 vs Main:240). Covers all allowed tabs; database_cleanup
+		 * and object_cache are empty (no defaults) for BC.
+		 *
+		 * @since NEXT
+		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
+		 */
+		public static function get_default_settings(): array {
+			return array(
+				'cache_settings'        => array(
+					'enableLoggedInCache' => false,
+					'loggedInCacheRoles'  => array(),
+				),
+				'file_optimisation'     => array(
+					'enableServerRules'       => false,
+					'cdnURL'                  => '',
+					'removeUnusedCSS'         => false,
+					'excludeUnusedCSS'        => '',
+					'criticalCSS'             => false,
+					'hostGoogleFontsLocally'  => false,
+					'blockAssetsOnDemand'     => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+					'loadAllCoreBlockAssets'  => false,
+					'delayJSDefaultStrategy'  => 'interaction',
+					'delayJSIdleList'         => '',
+					'delayJSViewportList'     => '',
+					'delayJSPriority'         => '',
+					'delayJSIdleTimeout'      => 3000,
+					'minifyHTML'              => false,
+					'minifyJS'                => false,
+					'minifyCSS'               => false,
+					'deferJS'                 => false,
+					'delayJS'                 => false,
+					'combineCSS'              => false,
+					'excludeJS'               => '',
+					'excludeCSS'              => '',
+					'excludeDeferJS'          => '',
+					'excludeDelayJS'          => '',
+					'excludeCombineCSS'       => '',
+					'minifyInlineCSS'         => false,
+					'minifyInlineJS'          => false,
+					'removeHTMLComments'      => true,
+					'removeQueryStrings'      => false,
+					'disableRestApiLinks'     => false,
+					'disableRssFeeds'         => false,
+					'disableShortlinks'       => false,
+					'disableGeneratorTag'     => false,
+					'disableJQueryMigrate'    => false,
+					'disablePasswordStrength' => false,
+					'disableSelfPingbacks'    => false,
+				),
+				'preload_settings'      => array(
+					'enableSpeculationRules' => false,
+					'speculationMode'        => 'prefetch',
+					'speculationEagerness'   => 'conservative',
+					'speculationExcludeUrls' => '',
+					'preloadSitemap'         => false,
+				),
+				'image_optimisation'    => array(
+					'lazyLoadImages'             => false,
+					'lazyLoadNative'             => true,
+					'placeholderType'            => 'svg',
+					'autoPreloadLCP'             => false,
+					'prioritizeLCPImages'        => false,
+					'clientSideMimeTypeOverride' => false,
+					'clientSideMimeTypes'        => array(),
+					'lazyLoadBackgroundImages'   => false,
+				),
+				'performance_audit'     => array(
+					'pagespeed_api_key'     => '',
+					'high_value_urls'       => array(),
+					'auto_fix_enabled'      => false,
+					'server_timing_enabled' => false,
+					'auto_rescan'           => '',
+					'rum_enabled'           => false,
+				),
+				'database_cleanup'      => array(),
+				'object_cache'          => array(),
+				'litespeed_integration' => array(
+					'mode'                 => 'auto',
+					'enableNextGenRewrite' => false,
+					'enableBrotli'         => false,
+					'purgeSync'            => true,
+				),
+				'llms_txt'              => array(
+					'enabled' => false,
+					'source'  => 'both',
+				),
+				'od_integration'        => array(
+					'enabled' => class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' ),
+				),
+				'bfcache'               => array(
+					'enabled' => false,
+				),
+				'perf_translations'     => array(
+					'enabled' => false,
+				),
+				'ai_adaptive'           => array(
+					'enabled' => false,
+				),
+				'edge_cache'            => array(
+					'enabled' => false,
+				),
+			);
+		}
+
+		/**
 		 * Static cache for resolved home URLs, keyed by blog ID.
 		 *
 		 * @var array<int, string>

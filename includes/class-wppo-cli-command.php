@@ -46,8 +46,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Cache action to perform: clear, preload, or status.
+		 * [<action>]
+		 * : Cache action to perform.
+		 * ---
+		 * default: clear
+		 * options:
+		 *   - clear
+		 *   - preload
+		 *   - status
+		 * ---
 		 *
 		 * [--page=<url>]
 		 * : Optional specific page URL or relative path to clear cache for.
@@ -128,8 +135,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Action to perform: cleanup, optimize, or counts.
+		 * [<action>]
+		 * : Action to perform.
+		 * ---
+		 * default: cleanup
+		 * options:
+		 *   - cleanup
+		 *   - optimize
+		 *   - counts
+		 * ---
 		 *
 		 * [--type=<type>]
 		 * : Type of database cleanup routine to run.
@@ -149,6 +163,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * : Comma-separated table identifiers for optimize action.
 		 * ---
 		 * default: posts,postmeta,comments,commentmeta,options
+		 * ---
+		 *
+		 * [--format=<format>]
+		 * : Output format for counts action.
+		 * ---
+		 * default: json
+		 * options:
+		 *   - json
 		 * ---
 		 *
 		 * ## EXAMPLES
@@ -175,10 +197,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			$action = $args[0] ?? 'cleanup';
 
 			if ( 'optimize' === $action ) {
-				$tables        = $assoc_args['tables'] ?? 'posts,postmeta,comments,commentmeta,options';
-				$table_list    = array_map( 'trim', explode( ',', $tables ) );
+				$tables         = $assoc_args['tables'] ?? 'posts,postmeta,comments,commentmeta,options';
+				$table_list     = array_map( 'trim', explode( ',', $tables ) );
 				$allowed_tables = array_unique( array_merge( ...array_values( Database_Cleanup::TABLE_MAP ) ) );
-				$success_count = 0;
+				$success_count  = 0;
 				foreach ( $table_list as $table ) {
 					if ( '' === $table || ! in_array( $table, $allowed_tables, true ) ) {
 						WP_CLI::warning( sprintf( ' - Skipped unknown table: %s', $table ) );
@@ -199,6 +221,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			if ( 'counts' === $action ) {
 				$counts = Database_Cleanup::get_counts();
+				// JSON-only output per FINAL-ADVERSARIAL-REVIEW: REJECT table/csv/yaml, Spyc.
+				// Keep wp_json_encode fallback when WP_CLI\Formatter absent.
+				$format = $assoc_args['format'] ?? 'json';
+				if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+					$format = \WP_CLI\Utils::get_flag_value( $assoc_args, 'format', 'json' );
+				}
+				if ( 'json' !== $format ) {
+					$format = 'json';
+				}
 				WP_CLI::log( (string) wp_json_encode( $counts, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
 				return;
 			}
@@ -298,8 +329,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Action: convert or status.
+		 * [<action>]
+		 * : Action to perform.
+		 * ---
+		 * default: status
+		 * options:
+		 *   - convert
+		 *   - status
+		 * ---
 		 *
 		 * [--format=<format>]
 		 * : Conversion format (webp or avif). Default: auto-detected from settings.
@@ -395,8 +432,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Settings action to perform: get, update, export, or import.
+		 * [<action>]
+		 * : Settings action to perform.
+		 * ---
+		 * default: get
+		 * options:
+		 *   - get
+		 *   - update
+		 *   - export
+		 *   - import
+		 * ---
 		 *
 		 * [<tab>]
 		 * : Settings tab name (file_optimisation, preload_settings, image_optimisation, database_cleanup, object_cache).
@@ -442,83 +487,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Get default settings structure for fresh installs.
 		 *
-		 * Mirrors the defaults from Main::__construct() without requiring a Main
-		 * instance. Used to ensure CLI works before the option is ever persisted.
+		 * Delegates to Util::get_default_settings() for single-source defaults
+		 * (A-01 minimal). Keeps CLI usable before first admin save.
 		 *
 		 * @since NEXT
 		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
 		 */
 		private static function get_default_settings(): array {
-			return array(
-				'cache_settings'     => array(
-					'enableLoggedInCache' => false,
-					'loggedInCacheRoles'  => array(),
-				),
-				'file_optimisation'  => array(
-					'enableServerRules'       => false,
-					'cdnURL'                  => '',
-					'removeUnusedCSS'         => false,
-					'excludeUnusedCSS'        => '',
-					'criticalCSS'             => false,
-					'hostGoogleFontsLocally'  => false,
-					'blockAssetsOnDemand'     => false,
-					'loadAllCoreBlockAssets'  => false,
-					'delayJSDefaultStrategy'  => 'interaction',
-					'delayJSIdleList'         => '',
-					'delayJSViewportList'     => '',
-					'delayJSPriority'         => '',
-					'delayJSIdleTimeout'      => 3000,
-					'minifyHTML'              => false,
-					'minifyJS'                => false,
-					'minifyCSS'               => false,
-					'deferJS'                 => false,
-					'delayJS'                 => false,
-					'combineCSS'              => false,
-					'excludeJS'               => '',
-					'excludeCSS'              => '',
-					'excludeDeferJS'          => '',
-					'excludeDelayJS'          => '',
-					'excludeCombineCSS'       => '',
-					'minifyInlineCSS'         => false,
-					'minifyInlineJS'          => false,
-					'removeHTMLComments'      => true,
-					'removeQueryStrings'      => false,
-					'disableRestApiLinks'     => false,
-					'disableRssFeeds'         => false,
-					'disableShortlinks'       => false,
-					'disableGeneratorTag'     => false,
-					'disableJQueryMigrate'    => false,
-					'disablePasswordStrength' => false,
-					'disableSelfPingbacks'    => false,
-				),
-				'preload_settings'   => array(
-					'enableSpeculationRules' => false,
-					'speculationMode'        => 'prefetch',
-					'speculationEagerness'   => 'conservative',
-					'speculationExcludeUrls' => '',
-					'preloadSitemap'         => false,
-				),
-				'image_optimisation' => array(
-					'lazyLoadImages'             => false,
-					'lazyLoadNative'             => true,
-					'placeholderType'            => 'svg',
-					'autoPreloadLCP'             => false,
-					'prioritizeLCPImages'        => false,
-					'clientSideMimeTypeOverride' => false,
-					'clientSideMimeTypes'        => array(),
-					'lazyLoadBackgroundImages'   => false,
-				),
-				'performance_audit'  => array(
-					'pagespeed_api_key'     => '',
-					'high_value_urls'       => array(),
-					'auto_fix_enabled'      => false,
-					'server_timing_enabled' => false,
-					'auto_rescan'           => '',
-					'rum_enabled'           => false,
-				),
-				'database_cleanup'   => array(),
-				'object_cache'       => array(),
-			);
+			return Util::get_default_settings();
 		}
 
 		/**
@@ -526,8 +502,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Settings action to perform: get, update, export, or import.
+		 * [<action>]
+		 * : Settings action to perform.
+		 * ---
+		 * default: get
+		 * options:
+		 *   - get
+		 *   - update
+		 *   - export
+		 *   - import
+		 * ---
 		 *
 		 * [<tab>]
 		 * : Settings tab name (file_optimisation, preload_settings, image_optimisation, database_cleanup, object_cache).
@@ -754,8 +738,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Object Cache action to perform: status, ping, enable, disable, or flush.
+		 * [<action>]
+		 * : Object Cache action to perform.
+		 * ---
+		 * default: status
+		 * options:
+		 *   - status
+		 *   - ping
+		 *   - enable
+		 *   - disable
+		 *   - flush
+		 * ---
 		 *
 		 * [--host=<host>]
 		 * : Redis server hostname (for ping/enable).
@@ -876,8 +869,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Action: scan or results.
+		 * [<action>]
+		 * : Action to perform.
+		 * ---
+		 * default: scan
+		 * options:
+		 *   - scan
+		 *   - results
+		 * ---
 		 *
 		 * [--url=<url>]
 		 * : Page URL to scan.
@@ -939,6 +938,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * [<group>]
 		 * : Optional group filter: php, database, WordPress, wp_constants, server, cache, infrastructure.
 		 *
+		 * [--format=<format>]
+		 * : Output format.
+		 * ---
+		 * default: json
+		 * options:
+		 *   - json
+		 * ---
+		 *
 		 * ## EXAMPLES
 		 *
 		 *     # Show all system info
@@ -954,6 +961,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * @return void
 		 */
 		public function system_info( array $args, array $assoc_args ): void {
+			// JSON-only output per FINAL-ADVERSARIAL-REVIEW: REJECT table/csv/yaml, Spyc.
+			$format = $assoc_args['format'] ?? 'json';
+			if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+				$format = \WP_CLI\Utils::get_flag_value( $assoc_args, 'format', 'json' );
+			}
+			if ( 'json' !== $format ) {
+				$format = 'json';
+			}
 			$all   = System_Info::get_all();
 			$group = $args[0] ?? null;
 
