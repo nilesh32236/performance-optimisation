@@ -682,6 +682,27 @@ const Dashboard = ( {
 		dbBadgeLabel = __( 'Medium', 'performance-optimisation' );
 	}
 
+	const renderCacheStatus = () => {
+		if ( isCacheMissing ) {
+			return (
+				<>
+					{ cacheSizeUnit } •{ ' ' }
+					<span className="wppo-status-badge wppo-status-badge--poor">
+						{ __( 'Not cached', 'performance-optimisation' ) }
+					</span>
+				</>
+			);
+		}
+		if ( cacheSizeUnit ) {
+			return cacheSizeUnit;
+		}
+		return (
+			<span className="wppo-text-muted wppo-text-small">
+				{ __( 'Ready', 'performance-optimisation' ) }
+			</span>
+		);
+	};
+
 	// LiteSpeed banner data from global wppoSettings (injected by PHP).
 	const litespeedInfo =
 		typeof wppoSettings !== 'undefined' ? wppoSettings?.litespeed : null;
@@ -840,29 +861,7 @@ const Dashboard = ( {
 						{ cacheSizeValue }
 					</span>
 					<span className="wppo-stat-unit">
-						{
-							// eslint-disable-next-line no-nested-ternary
-							isCacheMissing ? (
-								<>
-									{ cacheSizeUnit } •{ ' ' }
-									<span className="wppo-status-badge wppo-status-badge--poor">
-										{ __(
-											'Not cached',
-											'performance-optimisation'
-										) }
-									</span>
-								</>
-							) : cacheSizeUnit ? (
-								cacheSizeUnit
-							) : (
-								<span className="wppo-text-muted wppo-text-small">
-									{ __(
-										'Ready',
-										'performance-optimisation'
-									) }
-								</span>
-							)
-						}
+						{ renderCacheStatus() }
 					</span>
 					<div className="wppo-stat-footer">
 						<button

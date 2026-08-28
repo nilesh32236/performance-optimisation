@@ -25,6 +25,19 @@ import ConfirmDialog from './common/ConfirmDialog';
 
 import { __ } from '@wordpress/i18n';
 
+const getCompressionLabel = ( statusLoaded, supported, key ) => {
+	if ( ! statusLoaded ) {
+		return '';
+	}
+	if ( ! supported?.[ key ] ) {
+		return ` (${ __( '(Disabled)', 'performance-optimisation' ) })`;
+	}
+	if ( key === 'zstd' ) {
+		return ` (${ __( '(Recommended)', 'performance-optimisation' ) })`;
+	}
+	return '';
+};
+
 const ObjectCache = ( { options = {} } ) => {
 	const hitRatioLabelId = useId();
 	const defaultSettings = {
@@ -344,7 +357,7 @@ const ObjectCache = ( { options = {} } ) => {
 						<span className="wppo-stat-label">
 							<FontAwesomeIcon
 								icon={ faMemory }
-								style={ { marginRight: '6px' } }
+								className="wppo-stat-icon__spacer"
 							/>
 							{ __( 'Memory Usage', 'performance-optimisation' ) }
 						</span>
@@ -364,7 +377,7 @@ const ObjectCache = ( { options = {} } ) => {
 						>
 							<FontAwesomeIcon
 								icon={ faChartBar }
-								style={ { marginRight: '6px' } }
+								className="wppo-stat-icon__spacer"
 							/>
 							{ __( 'Hit Ratio', 'performance-optimisation' ) }
 						</span>
@@ -380,7 +393,7 @@ const ObjectCache = ( { options = {} } ) => {
 						>
 							<div
 								className="wppo-progress-bar__fill"
-								style={ { width: `${ hitRatio }%` } }
+								style={ { '--wppo-hit-ratio': `${ hitRatio }%` } }
 							></div>
 						</div>
 						<span
@@ -409,7 +422,7 @@ const ObjectCache = ( { options = {} } ) => {
 						<span className="wppo-stat-label">
 							<FontAwesomeIcon
 								icon={ faUsers }
-								style={ { marginRight: '6px' } }
+								className="wppo-stat-icon__spacer"
 							/>
 							{ __(
 								'Active Clients',
@@ -440,7 +453,7 @@ const ObjectCache = ( { options = {} } ) => {
 						<span className="wppo-stat-label">
 							<FontAwesomeIcon
 								icon={ faServer }
-								style={ { marginRight: '6px' } }
+								className="wppo-stat-icon__spacer"
 							/>
 							{ __(
 								'Redis Version',
@@ -475,8 +488,7 @@ const ObjectCache = ( { options = {} } ) => {
 					actions={
 						connectionBadge ? (
 							<span
-								className={ `wppo-status-badge wppo-status-badge--${ connectionBadge.level }` }
-								style={ { fontSize: '11px' } }
+								className={ `wppo-status-badge wppo-status-badge--${ connectionBadge.level } wppo-status-badge--sm` }
 							>
 								{ connectionBadge.text }
 							</span>
@@ -542,16 +554,12 @@ const ObjectCache = ( { options = {} } ) => {
 										) }
 									</label>
 									<input
-										className="wppo-input"
+										className="wppo-input wppo-input--mono"
 										id="host"
 										type="text"
 										name="host"
 										value={ settings.host }
 										onChange={ handleChange( setSettings ) }
-										style={ {
-											fontFamily:
-												'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-										} }
 									/>
 								</div>
 								<div>
@@ -565,16 +573,12 @@ const ObjectCache = ( { options = {} } ) => {
 										) }
 									</label>
 									<input
-										className="wppo-input"
+										className="wppo-input wppo-input--mono"
 										id="port"
 										type="number"
 										name="port"
 										value={ settings.port }
 										onChange={ handleChange( setSettings ) }
-										style={ {
-											fontFamily:
-												'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-										} }
 									/>
 								</div>
 							</div>
@@ -622,16 +626,12 @@ const ObjectCache = ( { options = {} } ) => {
 									) }
 								</label>
 								<input
-									className="wppo-input"
+									className="wppo-input wppo-input--mono"
 									id="master_name"
 									type="text"
 									name="master_name"
 									value={ settings.master_name }
 									onChange={ handleChange( setSettings ) }
-									style={ {
-										fontFamily:
-											'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-									} }
 								/>
 								<p className="wppo-text-muted wppo-text-small wppo-mt-10">
 									{ __(
@@ -676,17 +676,13 @@ const ObjectCache = ( { options = {} } ) => {
 										'performance-optimisation'
 									) }
 								</label>
-								<input
-									className="wppo-input"
+									<input
+									className="wppo-input wppo-input--mono"
 									id="database"
 									type="number"
 									name="database"
 									value={ settings.database }
 									onChange={ handleChange( setSettings ) }
-									style={ {
-										fontFamily:
-											'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-									} }
 								/>
 							</div>
 						</div>
@@ -779,22 +775,12 @@ const ObjectCache = ( { options = {} } ) => {
 											?.zstd
 									}
 								>
-									{ __( 'ZSTD', 'performance-optimisation' ) }{ ' ' }
-									{
-										// eslint-disable-next-line no-nested-ternary
-										! cacheStatus.statusLoaded
-											? ''
-											: ! cacheStatus
-													.supported_compressors?.zstd
-											? __(
-													'(Disabled)',
-													'performance-optimisation'
-											  )
-											: __(
-													'(Recommended)',
-													'performance-optimisation'
-											  )
-									}
+									{ __( 'ZSTD', 'performance-optimisation' ) }
+									{ getCompressionLabel(
+										cacheStatus.statusLoaded,
+										cacheStatus.supported_compressors,
+										'zstd'
+									) }
 								</option>
 								<option
 									value="lz4"
@@ -861,9 +847,7 @@ const ObjectCache = ( { options = {} } ) => {
 						<h3>
 							<FontAwesomeIcon
 								icon={ faExclamationCircle }
-								style={ {
-									color: 'var(--wppo-danger, #ef4444)',
-								} }
+								className="wppo-text-danger"
 							/>{ ' ' }
 							{ __( 'Danger Zone', 'performance-optimisation' ) }
 						</h3>

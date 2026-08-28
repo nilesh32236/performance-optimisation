@@ -67,7 +67,10 @@ const AiPanel = () => {
 					typeof wppoSettings !== 'undefined' &&
 					wppoSettings.settings
 				) {
-					wppoSettings.settings.ai_adaptive = { enabled };
+					wppoSettings.settings = Object.freeze( {
+						...wppoSettings.settings,
+						ai_adaptive: Object.freeze( { enabled } ),
+					} );
 				}
 				notify( {
 					type: 'success',
@@ -156,7 +159,10 @@ const AiPanel = () => {
 					typeof wppoSettings !== 'undefined' &&
 					wppoSettings.settings
 				) {
-					wppoSettings.settings[ payload.tab ] = merged;
+					wppoSettings.settings = Object.freeze( {
+						...wppoSettings.settings,
+						[ payload.tab ]: Object.freeze( merged ),
+					} );
 				}
 				notify( {
 					type: 'success',

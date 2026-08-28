@@ -45,8 +45,23 @@ const PreloadSettings = ( { options = {} } ) => {
 			return;
 		}
 		setSettings( ( prev ) => ( { ...prev, ...options } ) );
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ JSON.stringify( options ) ] );
+	}, [
+		options.enablePreloadCache,
+		options.excludePreloadCache,
+		options.preloadSitemap,
+		options.preconnect,
+		options.preconnectOrigins,
+		options.prefetchDNS,
+		options.dnsPrefetchOrigins,
+		options.preloadFonts,
+		options.preloadFontsUrls,
+		options.preloadCSS,
+		options.preloadCSSUrls,
+		options.enableSpeculationRules,
+		options.speculationMode,
+		options.speculationEagerness,
+		options.speculationExcludeUrls,
+	] );
 
 	const speculationRules =
 		typeof wppoSettings !== 'undefined'

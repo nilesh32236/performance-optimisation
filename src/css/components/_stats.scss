@@ -91,21 +91,21 @@
 		}
 	}
 
-	// per-card gradient accents
+	// per-card gradient accents — use CSS vars for theming
 	&--cache::before {
-		background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+		background: linear-gradient(90deg, var(--wppo-accent-cache, #0ea5e9), var(--wppo-accent-cache-light, #38bdf8));
 		opacity: 1;
 	}
 	&--files::before {
-		background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+		background: linear-gradient(90deg, var(--wppo-accent-files, #8b5cf6), var(--wppo-accent-files-light, #a78bfa));
 		opacity: 1;
 	}
 	&--db::before {
-		background: linear-gradient(90deg, #f59e0b, #fbbf24);
+		background: linear-gradient(90deg, var(--wppo-accent-db, #f59e0b), var(--wppo-accent-db-light, #fbbf24));
 		opacity: 1;
 	}
 	&--images::before {
-		background: linear-gradient(90deg, #10b981, #34d399);
+		background: linear-gradient(90deg, var(--wppo-accent-images, #10b981), var(--wppo-accent-images-light, #34d399));
 		opacity: 1;
 	}
 

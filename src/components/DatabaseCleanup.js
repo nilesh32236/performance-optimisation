@@ -384,7 +384,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									) }
 								</label>
 								<input
-									className="wppo-input"
+									className="wppo-input wppo-input--mono"
 									type="number"
 									id="dbRevMaxAge"
 									name="dbRevMaxAge"
@@ -392,10 +392,6 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									value={ settings.dbRevMaxAge }
 									onChange={ handleChange( setSettings ) }
 									aria-describedby="dbRevMaxAge-desc"
-									style={ {
-										fontFamily:
-											'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-									} }
 								/>
 								<p
 									id="dbRevMaxAge-desc"
@@ -418,7 +414,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									) }
 								</label>
 								<input
-									className="wppo-input"
+									className="wppo-input wppo-input--mono"
 									type="number"
 									id="dbRevKeepLatest"
 									name="dbRevKeepLatest"
@@ -426,10 +422,6 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									value={ settings.dbRevKeepLatest }
 									onChange={ handleChange( setSettings ) }
 									aria-describedby="dbRevKeepLatest-desc"
-									style={ {
-										fontFamily:
-											'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-									} }
 								/>
 								<p
 									id="dbRevKeepLatest-desc"
@@ -541,13 +533,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								key={ item.key }
 								title={ item.label }
 								actions={
-									<div
-										style={ {
-											display: 'flex',
-											alignItems: 'center',
-											gap: '8px',
-										} }
-									>
+									<div className="wppo-cleanup-row__actions">
 										{ risk && (
 											<span
 												className={ `wppo-status-badge wppo-status-badge--${ risk.level }` }
@@ -586,15 +572,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 									<p className="wppo-text-muted wppo-cleanup-row__desc">
 										{ item.description }
 									</p>
-									<span
-										className="wppo-cleanup-row__count"
-										style={ {
-											fontSize: '18px',
-											fontWeight: 700,
-											fontFamily:
-												'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-										} }
-									>
+									<span className="wppo-cleanup-row__count wppo-cleanup-row__count--mono">
 										{ Number(
 											counts[ item.key ] || 0
 										).toLocaleString() }

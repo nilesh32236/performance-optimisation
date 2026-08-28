@@ -884,13 +884,7 @@ const PluginSetting = ( { options } ) => {
 					</FeatureCard>
 
 					{ /* Import — danger zone — uses .wppo-danger-zone tokens (D-17). */ }
-					<div
-						className="wppo-danger-zone"
-						style={ {
-							borderRadius: '10px',
-							overflow: 'hidden',
-						} }
-					>
+					<div className="wppo-danger-zone">
 						<FeatureCard
 							title={ __(
 								'Import Configuration',

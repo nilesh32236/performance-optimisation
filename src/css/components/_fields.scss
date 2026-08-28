@@ -29,8 +29,7 @@
 		gap: 12px;
 	}
 
-	// Bespoke 400px breakpoint — not in design-system map (see A07 F-22). Keep as raw media.
-	@media (max-width: 400px) {
+	@include respond-to('xs') {
 		flex-wrap: wrap;
 	}
 
