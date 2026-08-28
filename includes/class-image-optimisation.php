@@ -1102,6 +1102,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The LCP image URL, or empty string when none is stored.
 		 */
 		private function get_current_lcp_url(): string {
+			// Priority 0: Optimization Detective — LCP tag per viewport group (mobile/desktop).
+			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+				try {
+					$od_url = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
+					if ( '' !== $od_url ) {
+						return $od_url;
+					}
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					}
+				}
+			}
+
 			$strategies = array( 'mobile', 'desktop' );
 
 			// Priority 1: Singular post — check post meta (mobile first, then desktop).
@@ -1135,6 +1149,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			}
 
 			return '';
+		}
+
+		/**
+		 * Get the effective excludeFirstImages count, preferring OD measured data.
+		 *
+		 * When OD is available and enabled, returns the measured count (1-3)
+		 * from viewport groups; otherwise returns the stored heuristic.
+		 *
+		 * @since NEXT
+		 * @param array $image_optimisation Image optimisation settings.
+		 * @return int Exclude count.
+		 */
+		private function get_effective_exclude_first_images_count( array $image_optimisation ): int {
+			if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+				try {
+					if ( \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
+						return \PerformanceOptimise\Inc\OD_Bridge::get_exclude_first_images_count();
+					}
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					}
+				}
+			}
+			return (int) ( $image_optimisation['excludeFirstImages'] ?? 0 );
 		}
 
 		/**
@@ -2349,7 +2388,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The buffer with loading="lazy" removed from the first N images.
 		 */
 		private function unlazyload_first_images( string $buffer, array $image_optimisation ): string {
-			$exclude_img_count = (int) ( $image_optimisation['excludeFirstImages'] ?? 0 );
+			$exclude_img_count = $this->get_effective_exclude_first_images_count( $image_optimisation );
 			if ( $exclude_img_count <= 0 ) {
 				return $buffer;
 			}
@@ -2547,7 +2586,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 */
 		public function add_delay_load_img( $buffer ) {
 			$image_optimisation = $this->options['image_optimisation'] ?? array();
-			$exclude_img_count  = $image_optimisation['excludeFirstImages'] ?? 0;
+			$exclude_img_count  = $this->get_effective_exclude_first_images_count( $image_optimisation );
 			$exclude_imgs       = array();
 
 			$enable_video_placeholder = ! empty( $image_optimisation['enableVideoPlaceholder'] );
@@ -2584,6 +2623,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$preload_img_urls = $this->get_preload_images_urls();
 				$exclude_imgs     = array_unique( array_merge( $exclude_imgs, $preload_img_urls ) );
 
+				// OD bridge: ensure the LCP image (mobile/desktop) is never lazy-loaded.
+				$od_lcp_normalized = '';
+				if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
+					try {
+						if ( \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
+							$od_lcp = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
+							if ( '' !== $od_lcp ) {
+								$exclude_imgs[]    = $od_lcp;
+								$od_lcp_normalized = Util::normalize_url( $od_lcp );
+								if ( '' !== $od_lcp_normalized && ! in_array( $od_lcp_normalized, $exclude_imgs, true ) ) {
+									$exclude_imgs[] = $od_lcp_normalized;
+								}
+								$exclude_imgs = array_unique( $exclude_imgs );
+							}
+						}
+					} catch ( \Throwable $e ) {
+						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+							error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						}
+					}
+				}
+
 				$img_counter = 0;
 
 				$use_native_lazy    = ! empty( $image_optimisation['lazyLoadNative'] );
@@ -2607,10 +2668,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 
 							$should_exclude = false;
-							foreach ( $exclude_imgs as $exclude_img ) {
-								if ( false !== strpos( $src, $exclude_img ) ) {
-									$should_exclude = true;
-									break;
+							// OD LCP normalized match: covers http/https and size-suffix variants.
+							if ( '' !== $od_lcp_normalized && Util::normalize_url( $src ) === $od_lcp_normalized ) {
+								$should_exclude = true;
+							} else {
+								foreach ( $exclude_imgs as $exclude_img ) {
+									if ( false !== strpos( $src, $exclude_img ) ) {
+										$should_exclude = true;
+										break;
+									}
 								}
 							}
 
@@ -2912,7 +2978,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $buffer;
 			}
 
-			$exclude_count = (int) ( $image_optimisation['excludeFirstImages'] ?? 0 );
+			$exclude_count = $this->get_effective_exclude_first_images_count( $image_optimisation );
 			$bg_counter    = 0;
 			$tags          = new \WP_HTML_Tag_Processor( $buffer );
 

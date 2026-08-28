@@ -247,6 +247,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'enabled' => false,
 					'source'  => 'both',
 				),
+				'od_integration'        => array(
+					'enabled' => class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' ),
+				),
 			);
 			$stored        = Util::get_settings();
 			$this->options = ! empty( $stored ) ? $stored : $defaults;
@@ -287,6 +290,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( ! isset( $this->options['llms_txt']['source'] ) ) {
 				$this->options['llms_txt']['source'] = 'both';
+			}
+
+			if ( ! isset( $this->options['od_integration'] ) || ! is_array( $this->options['od_integration'] ) ) {
+				$this->options['od_integration'] = array();
+			}
+			if ( ! isset( $this->options['od_integration']['enabled'] ) ) {
+				$this->options['od_integration']['enabled'] = class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' );
 			}
 
 			$this->includes();
@@ -399,6 +409,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-llms.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-llms.php';
+			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-od-bridge.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-od-bridge.php';
 			}
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {

@@ -288,3 +288,24 @@ Filters whether LLMs.txt is enabled. @since NEXT.
 ```php
 add_filter( 'wppo_llms_txt_enabled', '__return_true' );
 ```
+
+---
+
+### `wppo_od_should_optimize`
+Filters whether Optimization Detective (OD) optimization should be applied. @since NEXT.
+
+When OD is available (`class_exists('OD_URL_Metric')` or `function_exists('od_get_url_metrics')`) and `od_integration.enabled` is true (auto true when OD active), the bridge consumes viewport groups (mobile/desktop LCP tag) to set `fetchpriority=high` for the LCP image and derives `excludeFirstImages` from measured data. Return `false` to degrade to the heuristic 1-3 fallback.
+
+**Parameters:**
+- `$should` *(bool)* — Whether OD optimization should be applied.
+- `$current_url` *(string)* — Current URL (if resolvable).
+
+**Example:**
+```php
+add_filter( 'wppo_od_should_optimize', function( $should, $url ) {
+    if ( false !== strpos( $url, '/no-od/' ) ) {
+        return false;
+    }
+    return $should;
+}, 10, 2 );
+```

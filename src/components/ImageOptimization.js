@@ -72,6 +72,9 @@ const ImageOptimization = ( { options = {} } ) => {
 	const [ settings, setSettings ] = useState( defaultSettings );
 
 	useEffect( () => {
+		if ( ! options || Object.keys( options ).length === 0 ) {
+			return;
+		}
 		setSettings( ( prev ) => ( {
 			...prev,
 			...options,
@@ -88,7 +91,8 @@ const ImageOptimization = ( { options = {} } ) => {
 				? options.availablePostTypes
 				: prev.availablePostTypes,
 		} ) );
-	}, [ options ] );
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [ JSON.stringify( options ) ] );
 
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
