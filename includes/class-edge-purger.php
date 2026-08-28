@@ -129,12 +129,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 		/**
 		 * Purge Cloudflare zone cache (purge_everything).
 		 *
-		 * @since NEXT
+		 * Delegates to the shared Cloudflare_Purger transport (D-19) to avoid
+		 * duplicating the wp_remote_request body with CDN_Purger.
+		 *
+		 * @since NEXT Delegates to Cloudflare_Purger::purge; keep wrapper for backward compat.
 		 * @param string $zone Zone ID.
 		 * @param string $token API token.
 		 * @return bool
 		 */
 		private static function purge_cloudflare( string $zone, string $token ): bool {
+			if ( class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
+				return Cloudflare_Purger::purge( $zone, $token, 'cloudflare-edge' );
+			}
+
 			$response = wp_remote_request(
 				'https://api.cloudflare.com/client/v4/zones/' . rawurlencode( $zone ) . '/purge_cache',
 				array(

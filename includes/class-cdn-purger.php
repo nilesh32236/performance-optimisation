@@ -128,8 +128,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		/**
 		 * Purge everything on Cloudflare for the configured zone.
 		 *
+		 * Delegates to the shared Cloudflare_Purger transport (D-19) to avoid
+		 * duplicating the wp_remote_request body with Edge_Purger.
+		 *
 		 * @param array $cache cache_settings values.
 		 * @return bool
+		 * @since NEXT Delegates to Cloudflare_Purger::purge.
 		 */
 		private static function purge_cloudflare( array $cache ): bool {
 			$zone  = isset( $cache['cloudflareZoneId'] ) ? sanitize_text_field( (string) $cache['cloudflareZoneId'] ) : '';
@@ -137,6 +141,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 
 			if ( '' === $zone || '' === $token ) {
 				return false;
+			}
+
+			// Prefer shared transport; fallback to inline if class not yet loaded (e.g. stale classmap).
+			if ( class_exists( 'PerformanceOptimise\Inc\Cloudflare_Purger' ) ) {
+				return Cloudflare_Purger::purge( $zone, $token, 'cloudflare' );
 			}
 
 			$response = wp_remote_request(

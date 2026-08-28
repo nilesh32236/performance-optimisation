@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import { useApiCallWithNotice } from '../lib/useApiCallWithNotice';
 import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import NoticeBanner from './common/NoticeBanner';
@@ -37,6 +38,11 @@ const EdgeCachePanel = () => {
 	);
 	const [ saving, setSaving ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const withNotice = useApiCallWithNotice( {
+		notify,
+		dismiss,
+		setLoading: setSaving,
+	} );
 
 	useEffect( () => {
 		const s =
@@ -52,65 +58,41 @@ const EdgeCachePanel = () => {
 	}, [] );
 
 	const handleSave = useCallback( async () => {
-		setSaving( true );
-		dismiss();
-		try {
-			const response = await apiCall( 'update_settings', {
-				tab: 'edge_cache',
-				settings: {
-					enabled,
-					provider,
-					ttl: parseInt( ttl, 10 ) || 300,
-					staleWhileRevalidate: parseInt( swr, 10 ) || 86400,
-					cloudflareZoneId: cfZone,
-					bunnyPullZoneId: bunnyZone,
-				},
-			} );
-			if ( response.success ) {
-				if (
-					typeof wppoSettings !== 'undefined' &&
-					wppoSettings.settings
-				) {
-					wppoSettings.settings.edge_cache = {
+		const response = await withNotice(
+			() =>
+				apiCall( 'update_settings', {
+					tab: 'edge_cache',
+					settings: {
 						enabled,
 						provider,
 						ttl: parseInt( ttl, 10 ) || 300,
 						staleWhileRevalidate: parseInt( swr, 10 ) || 86400,
 						cloudflareZoneId: cfZone,
 						bunnyPullZoneId: bunnyZone,
-					};
-				}
-				notify( {
-					type: 'success',
-					message: __(
-						'Edge cache settings saved.',
-						'performance-optimisation'
-					),
-					durationMs: 3000,
-				} );
-			} else {
-				notify( {
-					type: 'error',
-					message:
-						response.message ||
-						__(
-							'Failed to save edge cache settings.',
-							'performance-optimisation'
-						),
-				} );
+					},
+				} ),
+			__( 'Edge cache settings saved.', 'performance-optimisation' ),
+			__(
+				'Failed to save edge cache settings.',
+				'performance-optimisation'
+			)
+		);
+		if ( response?.success ) {
+			if (
+				typeof wppoSettings !== 'undefined' &&
+				wppoSettings.settings
+			) {
+				wppoSettings.settings.edge_cache = {
+					enabled,
+					provider,
+					ttl: parseInt( ttl, 10 ) || 300,
+					staleWhileRevalidate: parseInt( swr, 10 ) || 86400,
+					cloudflareZoneId: cfZone,
+					bunnyPullZoneId: bunnyZone,
+				};
 			}
-		} catch {
-			notify( {
-				type: 'error',
-				message: __(
-					'Failed to save edge cache settings.',
-					'performance-optimisation'
-				),
-			} );
-		} finally {
-			setSaving( false );
 		}
-	}, [ enabled, provider, ttl, swr, cfZone, bunnyZone, notify, dismiss ] );
+	}, [ enabled, provider, ttl, swr, cfZone, bunnyZone, withNotice ] );
 
 	return (
 		<FeatureCard

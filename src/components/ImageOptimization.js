@@ -3,6 +3,7 @@ import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import { useApiCallWithNotice } from '../lib/useApiCallWithNotice';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -96,6 +97,11 @@ const ImageOptimization = ( { options = {} } ) => {
 
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const withNotice = useApiCallWithNotice( {
+		notify,
+		dismiss,
+		setLoading: setIsLoading,
+	} );
 	const mimeList = Array.isArray( settings.clientSideMimeTypes )
 		? settings.clientSideMimeTypes
 		: [];
@@ -145,47 +151,16 @@ const ImageOptimization = ( { options = {} } ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
-		setIsLoading( true );
-		try {
-			const res = await apiCall( 'update_settings', {
-				tab: 'image_optimisation',
-				settings,
-			} );
-
-			if ( res.success ) {
-				notify( {
-					type: 'success',
-					message:
-						res.message ||
-						__(
-							'Settings saved successfully.',
-							'performance-optimisation'
-						),
-					durationMs: 5000,
-				} );
-			} else {
-				notify( {
-					type: 'error',
-					message:
-						res.message ||
-						__(
-							'Error saving settings.',
-							'performance-optimisation'
-						),
-					durationMs: 5000,
-				} );
-			}
-		} catch ( error ) {
-			notify( {
-				type: 'error',
-				message:
-					error.message ||
-					__( 'Error saving settings.', 'performance-optimisation' ),
-				durationMs: 5000,
-			} );
-		} finally {
-			setIsLoading( false );
-		}
+		await withNotice(
+			() =>
+				apiCall( 'update_settings', {
+					tab: 'image_optimisation',
+					settings,
+				} ),
+			__( 'Settings saved successfully.', 'performance-optimisation' ),
+			__( 'Error saving settings.', 'performance-optimisation' ),
+			5000
+		);
 	};
 
 	return (

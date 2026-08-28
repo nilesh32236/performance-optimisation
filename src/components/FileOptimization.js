@@ -4,6 +4,7 @@ import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
 import useNotice from '../lib/useNotice';
+import { useApiCallWithNotice } from '../lib/useApiCallWithNotice';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faCode,
@@ -123,102 +124,46 @@ const FileOptimization = ( {
 			? 'wppo-status-badge--warning'
 			: 'wppo-status-badge--good';
 
+	const withNotification = useApiCallWithNotice( {
+		notify,
+		dismiss,
+		setLoading: setIsLoading,
+	} );
+
+	const withLiteSpeedNotice = useApiCallWithNotice( {
+		notify,
+		dismiss,
+		setLoading: setSavingLiteSpeed,
+	} );
+
 	const handleSaveLiteSpeedMode = async () => {
-		setSavingLiteSpeed( true );
-		try {
-			const res = await apiCall( 'update_settings', {
-				tab: 'litespeed_integration',
-				settings: { mode: litespeedMode },
-			} );
-			if ( res.success ) {
-				notify( {
-					type: 'success',
-					message:
-						res.message ||
-						__(
-							'LiteSpeed settings saved.',
-							'performance-optimisation'
-						),
-					durationMs: 3000,
-				} );
-				// Mutate global so Dashboard banner + next mount reflect new mode without reload.
-				if ( typeof wppoSettings !== 'undefined' && res.data ) {
-					wppoSettings.settings = Object.freeze( res.data );
-				}
-			} else {
-				notify( {
-					type: 'error',
-					message:
-						res.message ||
-						__(
-							'Failed to save LiteSpeed settings.',
-							'performance-optimisation'
-						),
-					durationMs: 3000,
-				} );
-			}
-		} catch ( err ) {
-			console.error( 'LiteSpeed save failed', err );
-			notify( {
-				type: 'error',
-				message: __(
-					'An unexpected error occurred.',
-					'performance-optimisation'
-				),
-				durationMs: 3000,
-			} );
-		} finally {
-			setSavingLiteSpeed( false );
-		}
-	};
-
-	const withNotification = async (
-		apiCallPromise,
-		successMessage,
-		errorMessage
-	) => {
-		setIsLoading( true );
-		dismiss();
-
-		try {
-			const res = await apiCallPromise;
-			if ( res.success ) {
-				notify( {
-					type: 'success',
-					message: res.message || successMessage,
-					durationMs: 3000,
-				} );
-			} else {
-				notify( {
-					type: 'error',
-					message: res.message || errorMessage,
-					durationMs: 3000,
-				} );
-			}
-		} catch ( err ) {
-			console.error( errorMessage, err );
-			notify( {
-				type: 'error',
-				message: __(
-					'An unexpected error occurred.',
-					'performance-optimisation'
-				),
-				durationMs: 3000,
-			} );
-		} finally {
-			setIsLoading( false );
+		const res = await withLiteSpeedNotice(
+			() =>
+				apiCall( 'update_settings', {
+					tab: 'litespeed_integration',
+					settings: { mode: litespeedMode },
+				} ),
+			__( 'LiteSpeed settings saved.', 'performance-optimisation' ),
+			__(
+				'Failed to save LiteSpeed settings.',
+				'performance-optimisation'
+			)
+		);
+		// Mutate global so Dashboard banner + next mount reflect new mode without reload.
+		if ( res?.success && typeof wppoSettings !== 'undefined' && res.data ) {
+			wppoSettings.settings = Object.freeze( res.data );
 		}
 	};
 
 	const handleRegenerateCss = async () => {
 		await withNotification(
-			( async () => {
+			async () => {
 				const res = await apiCall( 'regenerate_ccss' );
 				if ( res?.success && onCcssRefresh ) {
 					onCcssRefresh();
 				}
 				return res;
-			} )(),
+			},
 			__(
 				'Critical CSS regeneration queued.',
 				'performance-optimisation'
@@ -232,7 +177,7 @@ const FileOptimization = ( {
 
 	const handleRegenerateUsedCSS = async () => {
 		await withNotification(
-			( async () => {
+			async () => {
 				const saveRes = await apiCall( 'update_settings', {
 					tab: 'file_optimisation',
 					settings: {
@@ -248,7 +193,7 @@ const FileOptimization = ( {
 					return saveRes;
 				}
 				return await apiCall( 'used_css_regenerate' );
-			} )(),
+			},
 			__( 'Used CSS regeneration queued.', 'performance-optimisation' ),
 			__( 'Failed to regenerate used CSS.', 'performance-optimisation' )
 		);
@@ -259,17 +204,18 @@ const FileOptimization = ( {
 			e.preventDefault();
 		}
 		await withNotification(
-			apiCall( 'update_settings', {
-				tab: 'file_optimisation',
-				settings: {
-					...settings,
-					delayJSDefaultStrategy: settings.delayJSDefaultStrategy,
-					delayJSIdleList: settings.delayJSIdleList,
-					delayJSViewportList: settings.delayJSViewportList,
-					delayJSPriority: settings.delayJSPriority,
-					delayJSIdleTimeout: settings.delayJSIdleTimeout,
-				},
-			} ),
+			() =>
+				apiCall( 'update_settings', {
+					tab: 'file_optimisation',
+					settings: {
+						...settings,
+						delayJSDefaultStrategy: settings.delayJSDefaultStrategy,
+						delayJSIdleList: settings.delayJSIdleList,
+						delayJSViewportList: settings.delayJSViewportList,
+						delayJSPriority: settings.delayJSPriority,
+						delayJSIdleTimeout: settings.delayJSIdleTimeout,
+					},
+				} ),
 			__( 'Settings updated successfully.', 'performance-optimisation' ),
 			__( 'Failed to update settings.', 'performance-optimisation' )
 		);
