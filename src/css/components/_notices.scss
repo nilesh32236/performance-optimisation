@@ -1,3 +1,5 @@
+@use '../abstracts/mixins' as *;
+
 .wppo-notice {
 	padding: 12px 16px;
 	border-radius: var(--wppo-radius-sm);
@@ -46,7 +48,7 @@
 			opacity: 1;
 		}
 
-		@media (max-width: 768px) {
+		@include respond-to('md') {
 			min-width: 44px;
 			min-height: 44px;
 		}

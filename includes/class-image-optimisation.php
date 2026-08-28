@@ -115,6 +115,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private ?Img_Converter $img_converter = null;
 
 		/**
+		 * In-request static map for file_exists results to avoid repeated stat calls per image.
+		 *
+		 * Keyed by absolute path, value is bool. Bounded by FILE_EXISTS_CACHE_LIMIT
+		 * to prevent unbounded growth on pages with many unique images.
+		 *
+		 * @var array<string,bool>
+		 * @since NEXT
+		 */
+		private static array $file_exists_cache = array();
+
+		/**
+		 * Maximum entries in the file_exists cache.
+		 *
+		 * @var int
+		 * @since NEXT
+		 */
+		private const FILE_EXISTS_CACHE_LIMIT = 500;
+
+		/**
 		 * Constructor.
 		 *
 		 * @since 1.0.0
@@ -253,6 +272,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Post-processes the serialized buffer to inject placeholders into lazy-loaded images
 		 * that have data-src but no src attribute. Called after the WP_HTML_Tag_Processor pass.
 		 *
+		 * Duplication note (D-14): `post_process_placeholders`, `post_process_img_dimensions`
+		 * and `post_process_auto_sizes` intentionally scan the buffer in three separate
+		 * `preg_replace_callback` passes. Each stage mutates a distinct attribute set
+		 * (placeholder src, width/height, data-sizes=auto) via the shared
+		 * `get_placeholder_src_for_image()` helper and a per-request bounded LRU
+		 * (`IMG_SIZE_CACHE_LIMIT` / `FILE_EXISTS_CACHE_LIMIT`). Merging into a single
+		 * pass would conflate concerns and break the dimensions→auto-sizes ordering
+		 * dependency. The three-pass cost is linear and acceptable (see audit D-14).
+		 *
 		 * @since NEXT
 		 *
 		 * @param string $buffer                  The HTML buffer after WP_HTML_Tag_Processor serialization.
@@ -307,20 +335,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					if ( ! $has_width || ! $has_height ) {
 						$local_path = Util::get_local_path( $data_src );
-						if ( ! empty( $local_path ) && file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
-							static $img_size_cache = array();
-
-							if ( isset( $img_size_cache[ $local_path ] ) ) {
-								$size = $img_size_cache[ $local_path ];
-								unset( $img_size_cache[ $local_path ] );
-								$img_size_cache[ $local_path ] = $size;
-							} else {
-								if ( count( $img_size_cache ) >= self::IMG_SIZE_CACHE_LIMIT ) {
-									array_shift( $img_size_cache );
-								}
-								$img_size_cache[ $local_path ] = getimagesize( $local_path );
-								$size                          = $img_size_cache[ $local_path ];
-							}
+						if ( ! empty( $local_path ) && $this->cached_file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
+							$size = $this->get_cached_image_size( $local_path );
 							if ( is_array( $size ) ) {
 								if ( ! $has_width ) {
 									$img_tag = preg_replace( '/<img\b/i', '<img width="' . (int) $size[0] . '"', $img_tag, 1 );
@@ -418,6 +434,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * Uses spec-compliant token walking via serialize_token() with manual nesting
 		 * tracking so nested <picture>, comments, SVG/mathML and malformed HTML are
 		 * handled without the fragility of PCRE.
+		 *
+		 * Duplication note (D-13): the sibling `process_picture_blocks_regex()` is kept
+		 * intentionally as a fallback for hosts without `WP_HTML_Processor` (WP < 6.4)
+		 * or when `serialize_token()` is unavailable. Both share `process_picture_tag()`
+		 * for the per-picture decision logic; the `srcset` rewriting helpers are
+		 * similarly split (TagProcessor vs regex) for the same fallback reason.
+		 * Consolidated via shared helpers; no further dedup is safe without losing
+		 * the version-gated fallback.
 		 *
 		 * @since NEXT
 		 *
@@ -651,9 +675,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 					return $tags->get_updated_html();
 				} else {
-					// Regex Fallback (Original logic restored from git history).
-					return preg_replace_callback(
-						'#<img\b[^>]*((?:src|srcset)=["\'][^"\']+["\'])[^>]*>#i',
+					// Regex Fallback for hosts without WP_HTML_Tag_Processor.
+					// @since NEXT Fixed fallback to handle <source> and <video poster> (previously only <img>).
+					// Prefer the TagProcessor path when available; this fallback preserves
+					// <source> src/srcset and <video> poster handling for older WP.
+					$buffer = preg_replace_callback(
+						'#<img\b[^>]*>#i',
 						function ( $matches ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
 							$img_tag = $matches[0];
 
@@ -695,6 +722,74 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 						},
 						$buffer
 					);
+
+					// Preserve <source> src/srcset when TagProcessor is unavailable.
+					$buffer = preg_replace_callback(
+						'#<source\b[^>]*>#i',
+						function ( $matches ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+							$tag = $matches[0];
+
+							$tag = preg_replace_callback(
+								'#\bsrc=["\']([^"\']+)["\']#i',
+								function ( $src_match ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+									$url = $src_match[1];
+									if ( $this->is_valid_url( $url ) ) {
+										return 'src="' . $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp ) . '"';
+									}
+									return $src_match[0];
+								},
+								$tag
+							);
+
+							$tag = preg_replace_callback(
+								'#\bsrcset=["\']([^"\']+)["\']#i',
+								function ( $srcset_match ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+									$srcset     = $srcset_match[1];
+									$new_srcset = implode(
+										', ',
+										array_map(
+											function ( $srcset_item ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+												list($url, $descriptor) = array_pad( preg_split( '/\s+/', trim( $srcset_item ), 2 ), 2, '' );
+												$new_url                = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
+												return $new_url . ( $descriptor ? " $descriptor" : '' );
+											},
+											explode( ',', $srcset )
+										)
+									);
+									return 'srcset="' . $new_srcset . '"';
+								},
+								$tag
+							);
+
+							return $tag;
+						},
+						$buffer
+					);
+
+					// Preserve <video poster> when TagProcessor is unavailable.
+					$buffer = preg_replace_callback(
+						'#<video\b[^>]*>#i',
+						function ( $matches ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+							$tag = $matches[0];
+							return preg_replace_callback(
+								'#\bposter=["\']([^"\']+)["\']#i',
+								function ( $poster_match ) use ( $exclude_imgs, $supports_avif, $supports_webp ) {
+									$url = $poster_match[1];
+									if ( $this->is_valid_url( $url ) ) {
+										$new_url = $this->replace_image_with_next_gen( $url, $exclude_imgs, $supports_avif, $supports_webp );
+										if ( $new_url !== $url ) {
+											return 'poster="' . $new_url . '"';
+										}
+									}
+									return $poster_match[0];
+								},
+								$tag
+							);
+						},
+						$buffer
+					);
+
+					return $buffer;
 				}
 			}
 
@@ -713,6 +808,68 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$this->img_converter = new Img_Converter( $this->options );
 			}
 			return $this->img_converter;
+		}
+
+		/**
+		 * Cached file_exists check to avoid repeated stat calls per image per request.
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute file path.
+		 * @return bool Whether the file exists.
+		 */
+		private function cached_file_exists( string $path ): bool {
+			if ( '' === $path ) {
+				return false;
+			}
+			if ( isset( self::$file_exists_cache[ $path ] ) ) {
+				return self::$file_exists_cache[ $path ];
+			}
+			$exists = file_exists( $path );
+			// Bound cache size to prevent unbounded growth on pages with many images.
+			if ( count( self::$file_exists_cache ) >= self::FILE_EXISTS_CACHE_LIMIT ) {
+				// Evict oldest entry (FIFO).
+				array_shift( self::$file_exists_cache );
+			}
+			self::$file_exists_cache[ $path ] = $exists;
+			return $exists;
+		}
+
+		/**
+		 * Clear the file_exists cache (for testing isolation).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_file_exists_cache(): void {
+			self::$file_exists_cache = array();
+		}
+
+		/**
+		 * Get image dimensions with a bounded per-request LRU cache.
+		 *
+		 * Consolidates the `getimagesize` LRU that was copy-pasted between
+		 * `post_process_img_dimensions()` and `add_delay_load_img()` (D-14).
+		 *
+		 * @since NEXT
+		 * @param string $local_path Absolute file path.
+		 * @return array|false Image size array or false on failure.
+		 */
+		private function get_cached_image_size( string $local_path ): array|false {
+			static $img_size_cache = array();
+
+			if ( isset( $img_size_cache[ $local_path ] ) ) {
+				$size = $img_size_cache[ $local_path ];
+				unset( $img_size_cache[ $local_path ] );
+				$img_size_cache[ $local_path ] = $size;
+				return $size;
+			}
+
+			if ( count( $img_size_cache ) >= self::IMG_SIZE_CACHE_LIMIT ) {
+				array_shift( $img_size_cache );
+			}
+			$size                          = getimagesize( $local_path );
+			$img_size_cache[ $local_path ] = $size;
+			return $size;
 		}
 
 		/**
@@ -752,10 +909,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			if ( 'avif' === $conversion_format || 'both' === $conversion_format ) {
 				// Convert to AVIF if supported and not already converted.
-				if ( ! file_exists( $avif_img_path ) ) {
+				if ( ! $this->cached_file_exists( $avif_img_path ) ) {
 					$source_image_path = Util::get_local_path( $img_url );
 
-					if ( file_exists( $source_image_path ) ) {
+					if ( $this->cached_file_exists( $source_image_path ) ) {
 						$img_converter->add_img_into_queue( $source_image_path, 'avif' );
 					}
 				}
@@ -763,22 +920,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 			if ( 'webp' === $conversion_format || 'both' === $conversion_format ) {
 				// Convert to WebP if supported and not already converted.
-				if ( ! file_exists( $webp_img_path ) ) {
+				if ( ! $this->cached_file_exists( $webp_img_path ) ) {
 					if ( null === $source_image_path ) {
 						$source_image_path = Util::get_local_path( $img_url );
 					}
 
-					if ( file_exists( $source_image_path ) ) {
+					if ( $this->cached_file_exists( $source_image_path ) ) {
 						$img_converter->add_img_into_queue( $source_image_path );
 					}
 				}
 			}
 
-			if ( ( 'avif' === $conversion_format || 'both' === $conversion_format ) && $supports_avif && file_exists( $avif_img_path ) ) {
+			if ( ( 'avif' === $conversion_format || 'both' === $conversion_format ) && $supports_avif && $this->cached_file_exists( $avif_img_path ) ) {
 				return $img_converter->get_img_url( $img_url, 'avif' );
 			}
 
-			if ( ( 'webp' === $conversion_format || 'both' === $conversion_format ) && $supports_webp && file_exists( $webp_img_path ) ) {
+			if ( ( 'webp' === $conversion_format || 'both' === $conversion_format ) && $supports_webp && $this->cached_file_exists( $webp_img_path ) ) {
 				return $img_converter->get_img_url( $img_url );
 			}
 
@@ -1488,20 +1645,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! $has_width || ! $has_height ) {
 					$local_path = Util::get_local_path( $original_src );
 
-					if ( ! empty( $local_path ) && file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
-						static $img_size_cache = array();
-
-						if ( isset( $img_size_cache[ $local_path ] ) ) {
-							$size = $img_size_cache[ $local_path ];
-							unset( $img_size_cache[ $local_path ] );
-							$img_size_cache[ $local_path ] = $size;
-						} else {
-							if ( count( $img_size_cache ) >= self::IMG_SIZE_CACHE_LIMIT ) {
-								array_shift( $img_size_cache );
-							}
-							$img_size_cache[ $local_path ] = getimagesize( $local_path );
-							$size                          = $img_size_cache[ $local_path ];
-						}
+					if ( ! empty( $local_path ) && $this->cached_file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
+						$size = $this->get_cached_image_size( $local_path );
 
 						if ( is_array( $size ) ) {
 							if ( ! $has_width ) {
@@ -1700,7 +1845,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				if ( ! $has_width || ! $has_height ) {
 					$local_path = Util::get_local_path( $original_src );
 
-					if ( ! empty( $local_path ) && file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
+					if ( ! empty( $local_path ) && $this->cached_file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
 						$size = getimagesize( $local_path );
 
 						if ( is_array( $size ) ) {

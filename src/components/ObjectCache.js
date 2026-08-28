@@ -50,7 +50,7 @@ const ObjectCache = ( { options = {} } ) => {
 		foreign_dropin: false,
 		redis_reachable: false,
 		statusLoaded: false,
-		supported_compressors: { none: true },
+		supported_compressors: null,
 	} );
 	const [ confirmDisable, setConfirmDisable ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
@@ -59,10 +59,30 @@ const ObjectCache = ( { options = {} } ) => {
 		try {
 			const res = await apiCall( 'object_cache', { action: 'status' } );
 			if ( res.success ) {
-				setCacheStatus( { ...res.data, statusLoaded: true } );
+				setCacheStatus( ( prev ) => ( {
+					...res.data,
+					statusLoaded: true,
+					supported_compressors: res.data.supported_compressors ??
+						prev.supported_compressors ?? { none: true },
+				} ) );
+			} else {
+				setCacheStatus( ( prev ) => ( {
+					...prev,
+					statusLoaded: true,
+					supported_compressors: prev.supported_compressors ?? {
+						none: true,
+					},
+				} ) );
 			}
 		} catch ( error ) {
 			console.error( 'Error fetching cache status', error );
+			setCacheStatus( ( prev ) => ( {
+				...prev,
+				statusLoaded: true,
+				supported_compressors: prev.supported_compressors ?? {
+					none: true,
+				},
+			} ) );
 			notify( {
 				type: 'error',
 				message: __(
@@ -738,13 +758,13 @@ const ObjectCache = ( { options = {} } ) => {
 								<option
 									value="lzf"
 									disabled={
-										cacheStatus.supported_compressors &&
-										! cacheStatus.supported_compressors.lzf
+										cacheStatus.statusLoaded &&
+										! cacheStatus.supported_compressors?.lzf
 									}
 								>
 									{ __( 'LZF', 'performance-optimisation' ) }{ ' ' }
-									{ cacheStatus.supported_compressors &&
-									! cacheStatus.supported_compressors.lzf
+									{ cacheStatus.statusLoaded &&
+									! cacheStatus.supported_compressors?.lzf
 										? __(
 												'(Disabled)',
 												'performance-optimisation'
@@ -754,32 +774,38 @@ const ObjectCache = ( { options = {} } ) => {
 								<option
 									value="zstd"
 									disabled={
-										cacheStatus.supported_compressors &&
-										! cacheStatus.supported_compressors.zstd
+										cacheStatus.statusLoaded &&
+										! cacheStatus.supported_compressors
+											?.zstd
 									}
 								>
 									{ __( 'ZSTD', 'performance-optimisation' ) }{ ' ' }
-									{ cacheStatus.supported_compressors &&
-									! cacheStatus.supported_compressors.zstd
-										? __(
-												'(Disabled)',
-												'performance-optimisation'
-										  )
-										: __(
-												'(Recommended)',
-												'performance-optimisation'
-										  ) }
+									{
+										// eslint-disable-next-line no-nested-ternary
+										! cacheStatus.statusLoaded
+											? ''
+											: ! cacheStatus
+													.supported_compressors?.zstd
+											? __(
+													'(Disabled)',
+													'performance-optimisation'
+											  )
+											: __(
+													'(Recommended)',
+													'performance-optimisation'
+											  )
+									}
 								</option>
 								<option
 									value="lz4"
 									disabled={
-										cacheStatus.supported_compressors &&
-										! cacheStatus.supported_compressors.lz4
+										cacheStatus.statusLoaded &&
+										! cacheStatus.supported_compressors?.lz4
 									}
 								>
 									{ __( 'LZ4', 'performance-optimisation' ) }{ ' ' }
-									{ cacheStatus.supported_compressors &&
-									! cacheStatus.supported_compressors.lz4
+									{ cacheStatus.statusLoaded &&
+									! cacheStatus.supported_compressors?.lz4
 										? __(
 												'(Disabled)',
 												'performance-optimisation'

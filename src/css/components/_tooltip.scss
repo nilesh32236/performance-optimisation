@@ -11,7 +11,8 @@
 
 	&:hover .wppo-tooltip-content,
 	&:focus .wppo-tooltip-content,
-	&:focus-visible .wppo-tooltip-content {
+	&:focus-visible .wppo-tooltip-content,
+	&:focus-within .wppo-tooltip-content {
 		opacity: 1;
 		visibility: visible;
 		transform: translateX(-50%) translateY(-8px);
@@ -46,11 +47,12 @@
 	font-size: 0.75rem;
 	line-height: 1.4;
 	width: 200px;
+	max-width: min(200px, calc(100vw - 32px));
 	text-align: center;
 	z-index: 1000;
 	opacity: 0;
 	visibility: hidden;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
 	pointer-events: none;
 	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 
@@ -63,5 +65,9 @@
 		border-width: 5px;
 		border-style: solid;
 		border-color: var(--wppo-text-main) transparent transparent transparent;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		transition: none;
 	}
 }

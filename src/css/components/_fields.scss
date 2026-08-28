@@ -29,6 +29,7 @@
 		gap: 12px;
 	}
 
+	// Bespoke 400px breakpoint — not in design-system map (see A07 F-22). Keep as raw media.
 	@media (max-width: 400px) {
 		flex-wrap: wrap;
 	}
@@ -120,17 +121,6 @@
 
 	&--spaced {
 		margin-top: 14px;
-	}
-
-	.wppo-field-label {
-		display: block;
-		font-size: 12px;
-		font-weight: 600;
-		color: var(--wppo-text-muted);
-		margin-bottom: 6px;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		overflow-wrap: anywhere;
 	}
 }
 

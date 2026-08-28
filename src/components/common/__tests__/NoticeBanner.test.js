@@ -30,20 +30,20 @@ describe( 'NoticeBanner', () => {
 		const banner = container.querySelector( '.wppo-notice' );
 		expect( banner ).toHaveClass( 'wppo-notice--error' );
 		expect( banner ).toHaveAttribute( 'role', 'alert' );
-		expect( banner ).not.toHaveAttribute( 'aria-live' );
+		expect( banner ).toHaveAttribute( 'aria-live', 'assertive' );
 		expect(
 			banner.querySelector( 'svg[data-icon="triangle-exclamation"]' )
 		).toBeInTheDocument();
 	} );
 
-	it( 'renders non-error notices with alert semantics and no aria-live', () => {
+	it( 'renders non-error notices with status semantics and polite live', () => {
 		const { container } = render(
 			<NoticeBanner message="Heads up." type="warning" />
 		);
 		const banner = container.querySelector( '.wppo-notice' );
 		expect( banner ).toHaveClass( 'wppo-notice--warning' );
-		expect( banner ).toHaveAttribute( 'role', 'alert' );
-		expect( banner ).not.toHaveAttribute( 'aria-live' );
+		expect( banner ).toHaveAttribute( 'role', 'status' );
+		expect( banner ).toHaveAttribute( 'aria-live', 'polite' );
 	} );
 
 	it( 'does not render a dismiss button without onDismiss', () => {

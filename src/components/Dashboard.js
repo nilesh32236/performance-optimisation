@@ -26,6 +26,7 @@ import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
 import { __ } from '@wordpress/i18n';
+import { modeLabel } from '../lib/litespeed';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faServer,
@@ -161,6 +162,34 @@ const Dashboard = ( {
 	);
 	const [ savingCdnPurge, setSavingCdnPurge ] = useState( false );
 
+	// Sync derived state when cacheSettings changes (e.g. parent App.js
+	// re-fetches settings or apiCall mutates global wppoSettings).
+	useEffect( () => {
+		setPageCacheEnabled( !! cacheSettings.enableCache );
+		setCacheLife( Number( cacheSettings.cacheLife ?? 0 ) );
+		setLoggedInCacheEnabled( !! cacheSettings.enableLoggedInCache );
+		setLoggedInCacheRoles(
+			Array.isArray( cacheSettings.loggedInCacheRoles )
+				? cacheSettings.loggedInCacheRoles
+				: []
+		);
+		setCdnPurgeService( cacheSettings.cdnPurgeService ?? 'none' );
+		setCloudflareZoneId( cacheSettings.cloudflareZoneId ?? '' );
+		setVarnishPurgeUrls(
+			Array.isArray( cacheSettings.varnishPurgeUrls )
+				? cacheSettings.varnishPurgeUrls.join( '\n' )
+				: ''
+		);
+	}, [
+		cacheSettings.enableCache,
+		cacheSettings.cacheLife,
+		cacheSettings.enableLoggedInCache,
+		cacheSettings.loggedInCacheRoles,
+		cacheSettings.cdnPurgeService,
+		cacheSettings.cloudflareZoneId,
+		cacheSettings.varnishPurgeUrls,
+	] );
+
 	const [ bgProcessing, setBgProcessing ] = useState( false );
 	const [ bgJobsQueued, setBgJobsQueued ] = useState( 0 );
 	const [ imgSavings, setImgSavings ] = useState( null );
@@ -172,7 +201,7 @@ const Dashboard = ( {
 
 	const { imageInfo, loading, totalCacheSize, totalJs, totalCss, dbCounts } =
 		state;
-	const { completed = {}, pending = {} } = imageInfo;
+	const { completed = {}, pending = {}, failed = {} } = imageInfo;
 
 	const updateState = useCallback( ( updates ) => {
 		setState( ( prevState ) => ( { ...prevState, ...updates } ) );
@@ -321,6 +350,17 @@ const Dashboard = ( {
 							totalJs: 0,
 							totalCss: 0,
 						} );
+					} else {
+						notify( {
+							type: 'error',
+							message:
+								data.message ||
+								__(
+									'Failed to clear cache.',
+									'performance-optimisation'
+								),
+							durationMs: 5000,
+						} );
 					}
 				} )
 				.catch( () =>
@@ -436,6 +476,17 @@ const Dashboard = ( {
 						),
 						durationMs: 5000,
 					} );
+				} else {
+					notify( {
+						type: 'error',
+						message:
+							data.message ||
+							__(
+								'Failed to remove optimized images.',
+								'performance-optimisation'
+							),
+						durationMs: 5000,
+					} );
 				}
 			} )
 			.catch( () =>
@@ -453,9 +504,14 @@ const Dashboard = ( {
 
 	const savePageCacheSettings = useCallback( () => {
 		setSavingPageCache( true );
-		// Merge with the full stored cache_settings so saving one group never
-		// wipes keys saved by the other card (e.g. enableLoggedInCache).
-		const currentSettings = cacheSettings ?? {};
+		// Re-read global wppoSettings at call-time to avoid stale closure
+		// after prior save mutated it via apiCall's freeze.
+		const currentSettings =
+			( typeof wppoSettings !== 'undefined'
+				? wppoSettings.settings?.cache_settings
+				: null ) ??
+			cacheSettings ??
+			{};
 		apiCall( 'update_settings', {
 			tab: 'cache_settings',
 			settings: {
@@ -491,9 +547,13 @@ const Dashboard = ( {
 
 	const saveLoggedInCacheSettings = useCallback( () => {
 		setSavingLoggedInCache( true );
-		// Merge with the full stored cache_settings so enabling/disabling the
-		// page-cache master toggle elsewhere is never clobbered here.
-		const currentSettings = cacheSettings ?? {};
+		// Re-read global wppoSettings at call-time to avoid stale closure.
+		const currentSettings =
+			( typeof wppoSettings !== 'undefined'
+				? wppoSettings.settings?.cache_settings
+				: null ) ??
+			cacheSettings ??
+			{};
 		apiCall( 'update_settings', {
 			tab: 'cache_settings',
 			settings: {
@@ -529,7 +589,13 @@ const Dashboard = ( {
 
 	const saveCdnPurgeSettings = useCallback( () => {
 		setSavingCdnPurge( true );
-		const currentSettings = cacheSettings ?? {};
+		// Re-read global wppoSettings at call-time to avoid stale closure.
+		const currentSettings =
+			( typeof wppoSettings !== 'undefined'
+				? wppoSettings.settings?.cache_settings
+				: null ) ??
+			cacheSettings ??
+			{};
 		const urls = varnishPurgeUrls
 			.split( '\n' )
 			.map( ( url ) => url.trim() )
@@ -620,12 +686,7 @@ const Dashboard = ( {
 	const isLiteSpeed = !! litespeedInfo?.detected;
 	const effectiveMode = litespeedInfo?.effective_mode || 'standalone';
 	const lscacheActive = !! litespeedInfo?.lscache_active;
-	let effectiveLabel = effectiveMode;
-	if ( effectiveMode === 'wppo' ) {
-		effectiveLabel = 'WPPO';
-	} else if ( effectiveMode === 'litespeed' ) {
-		effectiveLabel = 'LiteSpeed';
-	}
+	const effectiveLabel = modeLabel( effectiveMode );
 	const effectiveBadgeClass =
 		effectiveMode === 'litespeed'
 			? 'wppo-status-badge--warning'
@@ -1219,6 +1280,7 @@ const Dashboard = ( {
 				<ImageOptimizationCard
 					completed={ completed }
 					pending={ pending }
+					failed={ failed }
 					bgProcessing={ bgProcessing }
 					bgJobsQueued={ bgJobsQueued }
 					loading={ loading }

@@ -18,7 +18,7 @@
 	--wppo-border: #e2e8f0;
 	--wppo-border-hover: #c7d2e0;
 
-	/* Form controls */
+	/* Form controls — --wppo-select-arrow is retained for theming but not used via var() because data-URI SVG cannot interpolate CSS vars; fill is hard-coded in _forms.scss to match this token */
 	--wppo-select-arrow: #64748b;
 	/* Base size of native WP admin checkboxes, used to derive description indents */
 	--wppo-checkbox-size: 16px;
@@ -63,11 +63,12 @@
 	--wppo-shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.07), 0 1px 2px -1px rgb(0 0 0 / 0.06);
 	--wppo-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.09), 0 2px 8px -2px rgb(0 0 0 / 0.06);
 	--wppo-shadow-lg: 0 12px 24px -6px rgb(0 0 0 / 0.12), 0 4px 12px -4px rgb(0 0 0 / 0.07);
+	/* Retained for future premium hero/billing surfaces — currently unused but part of P5 design-system token set. See AUDIT/AGENTS/agent-A07-css.md D-02. */
 	--wppo-shadow-premium: 0 0 0 1px rgba(34, 113, 177, 0.1), 0 12px 32px -8px rgba(34, 113, 177, 0.18);
 	--wppo-shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06), 0 10px 32px -14px rgba(0, 0, 0, 0.11);
 	--wppo-shadow-card-hover: 0 6px 20px rgba(0, 0, 0, 0.09), 0 18px 40px -18px rgba(0, 0, 0, 0.14);
 
-	--wppo-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	--wppo-transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
 	--wppo-max-width: 1120px;
 
 	/* Sidebar */

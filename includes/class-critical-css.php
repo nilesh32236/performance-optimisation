@@ -153,7 +153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( empty( $template ) ) {
 				$template = self::get_current_template_slug();
 			}
-			return md5( $template . '-' . get_stylesheet() );
+			return md5( get_current_blog_id() . '-' . $template . '-' . get_stylesheet() );
 		}
 
 		/**

@@ -150,8 +150,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 				),
 				'preload_settings'   => array(
 					'enableSpeculationRules' => false,
-					'speculationMode'        => 'prerender',
-					'speculationEagerness'   => 'moderate',
+					'speculationMode'        => 'prefetch',
+					'speculationEagerness'   => 'conservative',
 					'speculationExcludeUrls' => '',
 					'preloadSitemap'         => false,
 				),

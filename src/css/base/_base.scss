@@ -42,6 +42,7 @@
 .wppo-ml-6 { margin-left: 6px; }
 .wppo-ml-12 { margin-left: 12px; }
 .wppo-text-small { font-size: 13px; }
+// Alias for legacy consumers — keep for backward compatibility (P5 will deprecate wppo-text-13).
 .wppo-text-13 { font-size: 13px; }
 .wppo-text-muted { color: var(--wppo-text-muted); }
 .wppo-flex-gap-12 { display: flex; gap: 12px; flex-wrap: wrap; }
@@ -133,6 +134,7 @@ textarea:focus-visible,
 	margin-bottom: 6px;
 	text-transform: uppercase;
 	letter-spacing: 0.06em;
+	overflow-wrap: anywhere;
 }
 
 /* Activity list */

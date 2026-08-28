@@ -1,9 +1,9 @@
 @use '../abstracts/mixins' as *;
 
-.wppo-input,
-.wppo-textarea,
-.wppo-select {
-	/* Reset WordPress admin overrides */
+.wppo-dashboard-view .wppo-input,
+.wppo-dashboard-view .wppo-textarea,
+.wppo-dashboard-view .wppo-select {
+	/* Reset WordPress admin overrides — scoped to .wppo-dashboard-view for higher specificity so fewer !important are needed (A07 F-03) */
 	box-sizing: border-box;
 	display: block;
 	width: 100%;
@@ -20,7 +20,7 @@
 	font-family: inherit;
 	font-weight: 400;
 	line-height: 1.5;
-	transition: var(--wppo-transition);
+	transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 	box-shadow: none !important;
 
 	&:focus,
@@ -49,9 +49,9 @@
 }
 
 .wppo-textarea--mono {
-	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
-	font-size: 12.5px !important;
-	line-height: 1.6 !important;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 12.5px;
+	line-height: 1.6;
 }
 
 .wppo-select {
@@ -185,59 +185,8 @@
 	}
 }
 
-/* Toggle Switch — kept for any non-WP-component usage */
-.wppo-switch {
-	position: relative;
-	display: inline-block;
-	width: 40px;
-	height: 22px;
-	flex-shrink: 0;
+/* Toggle Switch — removed in P5 (A07 D-04). All toggles use @wordpress/components ToggleControl via .wppo-switch-field. */
 
-	input {
-		opacity: 0;
-		width: 0;
-		height: 0;
-		position: absolute;
-	}
-
-	.wppo-slider {
-		position: absolute;
-		cursor: pointer;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background-color: var(--wppo-border-hover);
-		transition: 0.25s ease;
-		border-radius: 22px;
-
-		&:before {
-			position: absolute;
-			content: "";
-			height: 16px;
-			width: 16px;
-			left: 3px;
-			bottom: 3px;
-			background-color: var(--wppo-bg-card);
-			transition: 0.25s ease;
-			border-radius: 50%;
-			box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
-		}
-	}
-
-	input:checked + .wppo-slider {
-		background-color: var(--wppo-primary);
-	}
-
-	input:checked + .wppo-slider:before {
-		transform: translateX(18px);
-	}
-
-	input:focus-visible + .wppo-slider {
-		outline: 2px solid var(--wppo-primary);
-		outline-offset: 2px;
-	}
-}
 
 @media (hover: none) {
 	.wppo-button--primary:hover:not(:disabled),
@@ -252,10 +201,10 @@
 	}
 }
 
-@media (max-width: 768px) {
-	.wppo-input,
-	.wppo-textarea,
-	.wppo-select {
+@include respond-to('md') {
+	.wppo-dashboard-view .wppo-input,
+	.wppo-dashboard-view .wppo-textarea,
+	.wppo-dashboard-view .wppo-select {
 		min-height: 44px;
 		font-size: 16px !important; // prevent iOS zoom on focus
 	}

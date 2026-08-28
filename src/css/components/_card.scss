@@ -99,3 +99,7 @@
 	background: var(--wppo-error-bg, #fef2f2);
 	margin-top: 20px;
 }
+// Keep .wppo-danger-zone as canonical danger-zone token — see
+// src/components/PluginSetting.js (danger-zone import card). Do not
+// duplicate its values via inline style (D-17).
+
