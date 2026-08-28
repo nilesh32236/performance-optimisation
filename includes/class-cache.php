@@ -1507,6 +1507,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
+			/**
+			 * Filter whether the current request should be cached.
+			 *
+			 * Placed after the DONOTCACHEPAGE check so the constant always wins
+			 * even if the filter returns true. Return false to skip caching.
+			 *
+			 * @since NEXT
+			 * @param bool   $should       Whether the request should be cached. Default true.
+			 * @param string $request_uri  The request URI.
+			 * @param bool   $is_mobile    Whether the request is from a mobile device.
+			 * @param bool   $is_logged_in Whether the user is logged in.
+			 */
+			$is_mobile    = function_exists( 'wp_is_mobile' ) ? wp_is_mobile() : false;
+			$is_logged_in = function_exists( 'is_user_logged_in' ) ? is_user_logged_in() : false;
+			$should_cache = (bool) apply_filters( 'wppo_should_cache_request', true, $this->request_uri, $is_mobile, $is_logged_in );
+			if ( ! $should_cache ) {
+				return true;
+			}
+
 			$parsed_path    = wp_parse_url( $this->request_uri, PHP_URL_PATH );
 			$local_url_path = wp_normalize_path( trim( rawurldecode( (string) $parsed_path ), '/' ) );
 
@@ -1838,30 +1857,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		public function invalidate_dynamic_static_html( $page_id ): void {
 			$path = wp_make_link_relative( get_permalink( $page_id ) );
 
-			$html_file_path = $this->get_file_path( $path, 'html' );
-			$css_file_path  = $this->get_file_path( $path, 'css' );
-			$used_css_path  = $this->get_file_path( $path, 'used-css' );
-			$this->delete_cache_files( $html_file_path );
-			$this->delete_role_variant_files( dirname( $html_file_path ) );
-			$this->delete_cache_files( $css_file_path );
-			$this->delete_cache_files( $used_css_path );
-			$this->delete_no_cache_marker( $html_file_path );
+			// Collect canonical invalidation URLs; filtered below for extensibility.
+			$urls   = array();
+			$urls[] = $path;
 
 			// Smart Purging: Always clear the home page and blog archive.
 			$home_path = wp_make_link_relative( Util::cached_home_url( '/' ) );
-			$home_html = $this->get_file_path( $home_path, 'html' );
-			$this->delete_cache_files( $home_html );
-			$this->delete_role_variant_files( dirname( $home_html ) );
-			$this->delete_no_cache_marker( $home_html );
+			$urls[]    = $home_path;
 
 			if ( 'page' === get_option( 'show_on_front' ) ) {
 				$posts_page_id = get_option( 'page_for_posts' );
 				if ( $posts_page_id ) {
 					$posts_path = wp_make_link_relative( get_permalink( $posts_page_id ) );
-					$posts_html = $this->get_file_path( $posts_path, 'html' );
-					$this->delete_cache_files( $posts_html );
-					$this->delete_role_variant_files( dirname( $posts_html ) );
-					$this->delete_no_cache_marker( $posts_html );
+					$urls[]     = $posts_path;
 				}
 			}
 
@@ -1872,10 +1880,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$archive_link = get_post_type_archive_link( $post_type );
 				if ( ! empty( $archive_link ) && ! is_wp_error( $archive_link ) ) {
 					$archive_path = wp_make_link_relative( $archive_link );
-					$archive_html = $this->get_file_path( $archive_path, 'html' );
-					$this->delete_cache_files( $archive_html );
-					$this->delete_role_variant_files( dirname( $archive_html ) );
-					$this->delete_no_cache_marker( $archive_html );
+					$urls[]       = $archive_path;
 				}
 
 				$taxonomy_names = get_object_taxonomies( $post_type, 'names' );
@@ -1895,13 +1900,65 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 								$term_link = get_term_link( $term );
 								if ( ! empty( $term_link ) && ! is_wp_error( $term_link ) ) {
 									$term_path = wp_make_link_relative( $term_link );
-									$term_html = $this->get_file_path( $term_path, 'html' );
-									$this->delete_cache_files( $term_html );
-									$this->delete_role_variant_files( dirname( $term_html ) );
-									$this->delete_no_cache_marker( $term_html );
+									$urls[]    = $term_path;
 								}
 							}
 						}
+					}
+				}
+			}
+
+			/**
+			 * Filter the list of URLs to invalidate.
+			 *
+			 * Merges G-03+G-27: single URL list for both filesystem and CDN purge.
+			 *
+			 * @since NEXT
+			 * @param string[] $urls    List of URL paths to purge.
+			 * @param int      $post_id The post ID being invalidated.
+			 */
+			$urls = (array) apply_filters( 'wppo_invalidation_urls', $urls, $page_id );
+
+			// Sanitize: normalize, reject traversal, enforce cache_root/ABSPATH guard, dedupe.
+			$cache_root_norm = '' !== $this->cache_root_dir ? wp_normalize_path( $this->cache_root_dir ) : '';
+			$abspath_norm    = defined( 'ABSPATH' ) ? wp_normalize_path( ABSPATH ) : '';
+			$sanitized       = array();
+			foreach ( $urls as $u ) {
+				$u = is_string( $u ) ? $u : (string) $u;
+				$u = wp_normalize_path( trim( $u, '/' ) );
+				if ( '' !== $u && strpos( $u, '..' ) !== false ) {
+					continue;
+				}
+				// Allow empty (home) as ''.
+				$sanitized[] = $u;
+			}
+			$sanitized = array_values( array_unique( $sanitized ) );
+
+			// Purge collected URLs via filesystem; primary URL also clears css/used-css.
+			$primary_normalized = wp_normalize_path( trim( (string) $path, '/' ) );
+			foreach ( $sanitized as $url_path ) {
+				$html_file_path = $this->get_file_path( $url_path, 'html' );
+				if ( '' === $html_file_path ) {
+					continue;
+				}
+				$norm = wp_normalize_path( $html_file_path );
+				if ( '' !== $cache_root_norm && 0 !== strpos( $norm, $cache_root_norm ) ) {
+					continue;
+				}
+				if ( '' !== $abspath_norm && 0 !== strpos( $norm, $abspath_norm ) ) {
+					continue;
+				}
+				$this->delete_cache_files( $html_file_path );
+				$this->delete_role_variant_files( dirname( $html_file_path ) );
+				$this->delete_no_cache_marker( $html_file_path );
+				if ( $url_path === $primary_normalized ) {
+					$css_file_path = $this->get_file_path( $url_path, 'css' );
+					$used_css_path = $this->get_file_path( $url_path, 'used-css' );
+					if ( '' !== $css_file_path ) {
+						$this->delete_cache_files( $css_file_path );
+					}
+					if ( '' !== $used_css_path ) {
+						$this->delete_cache_files( $used_css_path );
 					}
 				}
 			}

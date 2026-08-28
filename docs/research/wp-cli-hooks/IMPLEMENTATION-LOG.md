@@ -54,3 +54,30 @@
 **Rejected scope kept:** REJECT `--confirm` alias (handbook --yes only), REJECT `cache clear` prompt/dry-run (idempotent), REJECT `--network` (docs-only shell loop), REJECT hooks/progress/batch-size
 
 **Commit:** Phase2 PR-B — --yes (all+disable) + --dry-run (cleanup/optimize) + allowlist converge
+
+## Phase3 PR-C `fix/hooks-phase3-p0` — 2026-08-28
+
+**Branch:** `fix/audit-2026-08-28` (45ed2f79 → NEXT)
+**Scope:** FINAL-ADVERSARIAL-REVIEW PR-C (RETAIN single wppo_should_cache_request after DONOTCACHEPAGE, wppo_invalidation_urls, wppo_database_cleanup_completed per-type, plus wppo_object_cache_config and lazy init_filesystem per MATRIX)
+**Files:**
+- `includes/class-cache.php:1496-1525` `wppo_should_cache_request` single filter after `DONOTCACHEPAGE` (4 args: `$should, $request_uri, $is_mobile, $is_logged_in`), DONOTCACHEPAGE wins if true, return false → `is_not_cacheable=true` → skip `ob_start`/`process_buffer_for_cache`
+- `includes/class-cache.php:1838-1920` `wppo_invalidation_urls` filter at `invalidate_dynamic_static_html` before foreach, sanitize via `wp_normalize_path` + `ABSPATH`/`cache_root` guard, `array_unique` dedupe, primary css/used-css handling preserved
+- `includes/class-database-cleanup.php:722-737` per-type `wppo_database_cleanup_completed` inside `clean_all` loop (`$key, (int)$res`) plus existing `all` aggregate; `includes/class-rest.php:900-908` and `includes/class-wppo-cli-command.php:376-384` single-type per-type firing for REST/CLI
+- `includes/class-object-cache.php:199-250` `get_redis_config()` merged settings+file + `wppo_object_cache_config` filter; `ping()`/`enable()` also filter incoming config; `get_status()` now delegates to `get_redis_config()`
+- `includes/class-main.php:342-350` lazy `Util::init_filesystem()` only when `is_admin()||WP_CLI` (0.3-0.8ms frontend save); `includes/class-main.php:436` removed duplicate `vendor/autoload.php` (already in `performance-optimisation.php:41`)
+- `docs/hooks.md:44-56,134-175` 4 rows @since NEXT: `wppo_should_cache_request`, `wppo_invalidation_urls`, `wppo_object_cache_config`, updated `wppo_database_cleanup_completed` per-type
+- `tests/php/HookShouldCacheRequestTest.php` 4 tests — veto false, allow true, DONOTCACHEPAGE wins, 4-arg reception
+- `tests/php/HookInvalidationUrlsTest.php` 3 tests — extends purge, traversal sanitized, dedupe
+- `tests/php/HookDatabaseCleanupPerTypeTest.php` 2 tests — source contains per-type + all
+- `tests/php/HookObjectCacheConfigTest.php` 3 tests — get_redis_config filter, ping filter source checks
+
+**Verification:**
+- `php -l includes/class-cache.php includes/class-database-cleanup.php includes/class-object-cache.php includes/class-main.php includes/class-rest.php includes/class-wppo-cli-command.php` OK
+- `vendor/bin/phpcs --standard=phpcs.xml includes/class-cache.php` 0 errors (5 auto-fixed), `includes/class-database-cleanup.php` 0, `includes/class-object-cache.php` 0, `includes/class-main.php` 0, `includes/class-rest.php` 0
+- `vendor/bin/phpunit --filter Hook` 12/12 OK (HookShouldCache 4, HookInvalidation 3, HookDatabase 2, HookObjectCache 3)
+- `vendor/bin/phpunit` 513/513 OK (2 skipped, +12 Phase3)
+- Rejected hooks kept: `wppo_should_cache_for_user`, `wppo_cache_written/miss`, `wppo_cdn_url`, `wppo_delay_js` etc per FINAL-ADVERSARIAL-REVIEW
+
+**Rejected scope kept:** REJECT `wppo_should_cache_for_user` (covered by single veto + loggedInCacheRoles), REJECT `wppo_cache_written/miss`/`wppo_purge_urls` (covered by after_cache_clear + cache_page_html), REJECT `wppo_cdn_url` per-asset (use litespeed_can_cdn + cdnURL), REJECT `wppo_delay_js_should_delay`/`wppo_should_serve_next_gen`/`wppo_should_lazy_load_image` (use exclude settings), REJECT `wppo_cli_redis_config` (converge via ALLOWED_KEYS suffices), REJECT context fence 30-hook (keep lazy filesystem only), REJECT `--network`/`--batch-size`/`make_progress_bar`
+
+**Commit:** Phase3 PR-C — hooks p0 single veto + inval + per-type + object-cache config + lazy fs

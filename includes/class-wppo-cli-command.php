@@ -375,6 +375,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			/* translators: 1: Cleanup type, 2: Number of items removed */
 			Log::add( sprintf( __( 'Database cleanup (%1$s via WP-CLI): %2$d items removed', 'performance-optimisation' ), $type, (int) $cleaned_count ) );
+			/**
+			 * Fires after a per-type database cleanup completes.
+			 *
+			 * @since NEXT
+			 * @param string $type  Cleanup type.
+			 * @param int    $count Number of rows deleted.
+			 */
+			do_action( 'wppo_database_cleanup_completed', $type, (int) $cleaned_count );
 			/* translators: 1: Cleanup type, 2: Number of items removed */
 			WP_CLI::success( sprintf( __( 'Database cleanup completed for %1$s (%2$d items removed).', 'performance-optimisation' ), $type, (int) $cleaned_count ) );
 		}

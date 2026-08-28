@@ -899,6 +899,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				)
 			);
 
+			/**
+			 * Fires after a per-type database cleanup completes.
+			 *
+			 * @since NEXT
+			 * @param string $type  Cleanup type.
+			 * @param int    $count Number of rows deleted.
+			 */
+			do_action( 'wppo_database_cleanup_completed', $type, (int) $result );
+
 			// Optimize affected tables after successful individual cleanup.
 			if ( (int) $result > 0 && isset( Database_Cleanup::TABLE_MAP[ $type ] ) ) {
 				Database_Cleanup::maybe_optimize_tables(

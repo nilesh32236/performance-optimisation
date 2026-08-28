@@ -128,13 +128,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			}
 
 			try {
-				// Determine connection settings (Dashboard settings have priority over on-disk config).
-				$options = Util::get_settings();
-				$config  = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
-
-				if ( empty( $config ) && file_exists( $this->config_path ) ) {
-					$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
-				}
+				$config = $this->get_redis_config();
 
 				$connection = $this->connect_internal( $config );
 
@@ -208,6 +202,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		}
 
 		/**
+		 * Get the merged Redis configuration with filter.
+		 *
+		 * Merges Dashboard settings with on-disk config and allows filtering
+		 * via `wppo_object_cache_config` before connection.
+		 *
+		 * @since NEXT
+		 * @return array The Redis configuration.
+		 */
+		public function get_redis_config(): array {
+			$options = Util::get_settings();
+			$config  = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
+
+			if ( empty( $config ) && file_exists( $this->config_path ) ) {
+				$config = include $this->config_path; // phpcs:ignore WPThemeReview.CoreFunctionality.FileInclude.FileIncludeFound
+				if ( ! is_array( $config ) ) {
+					$config = array();
+				}
+			}
+
+			/**
+			 * Filter the Redis object cache configuration.
+			 *
+			 * @since NEXT
+			 * @param array $config The Redis configuration.
+			 */
+			$config = (array) apply_filters( 'wppo_object_cache_config', $config );
+
+			return $config;
+		}
+
+		/**
 		 * Ping the Redis server to test connection.
 		 *
 		 * @since 1.4.0
@@ -218,6 +243,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( ! class_exists( 'Redis' ) ) {
 				return new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
 			}
+
+			/**
+			 * Filter the Redis object cache configuration.
+			 *
+			 * @since NEXT
+			 * @param array $config The Redis configuration.
+			 */
+			$config = (array) apply_filters( 'wppo_object_cache_config', $config );
 
 			$connection = $this->connect_internal( $config );
 
@@ -265,6 +298,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			if ( ! class_exists( 'Redis' ) ) {
 				return new \WP_Error( 'missing_extension', __( 'The PhpRedis extension is not installed.', 'performance-optimisation' ) );
 			}
+
+			/** This filter is documented in get_redis_config(). */
+			$config = (array) apply_filters( 'wppo_object_cache_config', $config );
 
 			$status = $this->get_status();
 			if ( $status['foreign_dropin'] ) {

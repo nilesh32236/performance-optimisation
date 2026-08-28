@@ -42,11 +42,11 @@ add_action( 'wppo_after_cache_clear', function( $type, $url_path ) {
 ---
 
 ### `wppo_database_cleanup_completed`
-Fires after a database cleanup operation completes.
+Fires after a database cleanup operation completes. Since NEXT, also fires per-type after each individual cleanup (before the `all` aggregate). @since NEXT for per-type.
 
 **Parameters:**
-- `$type` *(string)* — Cleanup type (`'all'`, `'revisions'`, `'auto_drafts'`, `'trashed_posts'`, `'spam_comments'`, `'expired_transients'`, `'orphan_postmeta'`).
-- `$count` *(int)* — Total number of database rows deleted.
+- `$type` *(string)* — Cleanup type (`'all'`, `'revisions'`, `'auto_drafts'`, `'trashed_posts'`, `'spam_comments'`, `'trashed_comments'`, `'expired_transients'`, `'orphan_postmeta'`, `'unattached_media'`, `'oembed_cache'`).
+- `$count` *(int)* — Total number of database rows deleted (or per-type count).
 - `$results` *(array|null)* — Detailed per-type cleanup counts when `$type` is `'all'`.
 
 **Example:**
@@ -127,6 +127,60 @@ add_filter( 'wppo_cache_page_html', function( $html, $url ) {
     // Inject custom HTML signature comment
     return $html . "\n<!-- Cached by Performance Optimisation at " . date( 'c' ) . " -->";
 }, 10, 2 );
+```
+
+---
+
+### `wppo_should_cache_request`
+Filters whether the current request should be cached. Placed **after** the `DONOTCACHEPAGE` constant check so the constant always wins even if the filter returns true. Return `false` to skip `ob_start` and cache storage. @since NEXT.
+
+**Parameters:**
+- `$should` *(bool)* — Whether the request should be cached. Default `true`.
+- `$request_uri` *(string)* — The request URI.
+- `$is_mobile` *(bool)* — Whether the request is from a mobile device (`wp_is_mobile()`).
+- `$is_logged_in` *(bool)* — Whether the user is logged in.
+
+**Example:**
+```php
+add_filter( 'wppo_should_cache_request', function( $should, $request_uri, $is_mobile, $is_logged_in ) {
+    if ( false !== strpos( $request_uri, '/members/' ) ) {
+        return false; // Membership area: never cache
+    }
+    return $should;
+}, 10, 4 );
+```
+
+---
+
+### `wppo_invalidation_urls`
+Filters the list of URL paths to purge when a post is invalidated. Merges G-03+G-27: single URL list for both filesystem and CDN purge. Sanitized via `wp_normalize_path` + `ABSPATH`/`cache_root` guard and deduped before deletion. @since NEXT.
+
+**Parameters:**
+- `$urls` *(string[])* — List of URL paths to purge (relative, e.g. `'/about/'`, `'/'`).
+- `$post_id` *(int)* — The post ID being invalidated.
+
+**Example:**
+```php
+add_filter( 'wppo_invalidation_urls', function( $urls, $post_id ) {
+    $urls[] = '/feed/';
+    return $urls;
+}, 10, 2 );
+```
+
+---
+
+### `wppo_object_cache_config`
+Filters the Redis object cache configuration after merging Dashboard settings with on-disk config (and before connection in `ping`/`enable`). @since NEXT.
+
+**Parameters:**
+- `$config` *(array)* — Redis configuration (`mode`, `host`, `port`, `password`, `database`, `timeout`, `prefix`, `nodes`, `master_name`, `use_tls`, `persistent`, `compression`).
+
+**Example:**
+```php
+add_filter( 'wppo_object_cache_config', function( $config ) {
+    $config['timeout'] = 2;
+    return $config;
+} );
 ```
 
 ---

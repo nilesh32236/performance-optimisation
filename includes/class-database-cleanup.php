@@ -726,6 +726,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 					$res = self::invoke_cleanup_method( $method );
 				}
 				$results[ $key ] = $res;
+				if ( ! is_wp_error( $res ) && false !== $res ) {
+					/**
+					 * Fires after a per-type database cleanup completes.
+					 *
+					 * @since NEXT
+					 * @param string $type  Cleanup type.
+					 * @param int    $count Number of rows deleted.
+					 */
+					do_action( 'wppo_database_cleanup_completed', $key, (int) $res );
+				}
 				if ( ! is_wp_error( $res ) && false !== $res && (int) $res > 0 ) {
 					$total_deleted += (int) $res;
 					if ( isset( self::TABLE_MAP[ $key ] ) ) {

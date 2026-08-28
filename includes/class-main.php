@@ -343,8 +343,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$this->image_optimisation = new Image_Optimisation( $this->options );
 			$this->google_fonts       = new Google_Fonts( $this->options );
 			$this->setup_hooks();
-			$this->filesystem = Util::init_filesystem();
-			if ( ! $this->filesystem ) {
+			// Lazy filesystem: only in admin or CLI to avoid 0.3-0.8ms frontend overhead.
+			if ( ( function_exists( 'is_admin' ) && is_admin() ) || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				$this->filesystem = Util::init_filesystem();
+				if ( ! $this->filesystem ) {
+					$this->filesystem = null;
+				}
+			} else {
 				$this->filesystem = null;
 			}
 
@@ -434,7 +439,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since  1.0.0
 		 */
 		private function includes(): void {
-			require_once WPPO_PLUGIN_PATH . 'vendor/autoload.php';
 			if ( file_exists( WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'vendor/woocommerce/action-scheduler/action-scheduler.php';
 			}
