@@ -172,7 +172,7 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 			$s_port      = $parsed_node['port'];
 
 			if ( '' === $s_host || (int) $s_port <= 0 ) {
-					$errors[] = __( 'Sentinel node skipped: invalid host or port.', 'performance-optimisation' );
+				$errors[] = __( 'Sentinel node skipped: invalid host or port.', 'performance-optimisation' );
 				continue;
 			}
 
