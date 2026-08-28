@@ -122,18 +122,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$delay_strategies = get_post_meta( $post->ID, '_wppo_delay_strategies', true );
 			$delay_priorities = get_post_meta( $post->ID, '_wppo_delay_priorities', true );
 
-			if ( ! is_array( $disabled_scripts ) ) {
-				$disabled_scripts = array();
-			}
-			if ( ! is_array( $disabled_styles ) ) {
-				$disabled_styles = array();
-			}
-			if ( ! is_array( $delay_strategies ) ) {
-				$delay_strategies = array();
-			}
-			if ( ! is_array( $delay_priorities ) ) {
-				$delay_priorities = array();
-			}
+			$disabled_scripts = is_array( $disabled_scripts ) ? $disabled_scripts : array();
+			$disabled_styles  = is_array( $disabled_styles ) ? $disabled_styles : array();
+			$delay_strategies = is_array( $delay_strategies ) ? $delay_strategies : array();
+			$delay_priorities = is_array( $delay_priorities ) ? $delay_priorities : array();
 
 			$assets        = Asset_Manager::get_page_assets( $post->ID );
 			$protected_js  = Asset_Manager::get_protected_scripts();
