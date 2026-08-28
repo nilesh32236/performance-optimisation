@@ -588,6 +588,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether a handle should be excluded from CSS combining.
+		 *
+		 * Checks both exact handle match and URL fragment substring.
+		 *
+		 * @since NEXT
+		 * @param string $handle              Handle to check.
+		 * @param string $src                 Style src URL.
+		 * @param array  $exclude_combine_css Exclusion list.
+		 * @return bool True if excluded.
+		 */
+		private function is_excluded_from_combine( $handle, $src, array $exclude_combine_css ): bool {
+			if ( empty( $exclude_combine_css ) ) {
+				return false;
+			}
+			if ( in_array( $handle, $exclude_combine_css, true ) ) {
+				return true;
+			}
+			foreach ( $exclude_combine_css as $exclude_css ) {
+				if ( '' !== $exclude_css && false !== strpos( $src, $exclude_css ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
 		 * Computes the set of handles that belong in the combined CSS file.
 		 *
 		 * Mirrors the skip rules applied in {@see combine_css()} generation: styles
@@ -622,21 +648,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					continue;
 				}
 
-				if ( ! empty( $exclude_combine_css ) ) {
-					if ( in_array( $handle, $exclude_combine_css, true ) ) {
-						continue;
-					}
-
-					$should_exclude = false;
-					foreach ( $exclude_combine_css as $exclude_css ) {
-						if ( false !== strpos( $style_data->src, $exclude_css ) ) {
-							$should_exclude = true;
-						}
-					}
-
-					if ( $should_exclude ) {
-						continue;
-					}
+				if ( $this->is_excluded_from_combine( $handle, (string) $style_data->src, $exclude_combine_css ) ) {
+					continue;
 				}
 
 				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
