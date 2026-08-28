@@ -123,7 +123,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 			$delay_priorities = get_post_meta( $post->ID, '_wppo_delay_priorities', true );
 
 			$disabled_scripts = is_array( $disabled_scripts ) ? $disabled_scripts : array();
-			$disabled_styles = is_array( $disabled_styles ) ? $disabled_styles : array();
+			$disabled_styles  = is_array( $disabled_styles ) ? $disabled_styles : array();
 			$delay_strategies = is_array( $delay_strategies ) ? $delay_strategies : array();
 			$delay_priorities = is_array( $delay_priorities ) ? $delay_priorities : array();
 
