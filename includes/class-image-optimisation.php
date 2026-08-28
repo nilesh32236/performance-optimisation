@@ -1109,7 +1109,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( '' !== $od_url ) {
 						return $od_url;
 					}
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					}
 				}
 			}
 
@@ -1164,7 +1167,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
 						return \PerformanceOptimise\Inc\OD_Bridge::get_exclude_first_images_count();
 					}
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					}
 				}
 			}
 			return (int) ( $image_optimisation['excludeFirstImages'] ?? 0 );
@@ -2618,16 +2624,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$exclude_imgs     = array_unique( array_merge( $exclude_imgs, $preload_img_urls ) );
 
 				// OD bridge: ensure the LCP image (mobile/desktop) is never lazy-loaded.
+				$od_lcp_normalized = '';
 				if ( class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 					try {
 						if ( \PerformanceOptimise\Inc\OD_Bridge::is_enabled() ) {
 							$od_lcp = \PerformanceOptimise\Inc\OD_Bridge::get_lcp_url();
 							if ( '' !== $od_lcp ) {
-								$exclude_imgs[] = $od_lcp;
-								$exclude_imgs   = array_unique( $exclude_imgs );
+								$exclude_imgs[]    = $od_lcp;
+								$od_lcp_normalized = Util::normalize_url( $od_lcp );
+								if ( '' !== $od_lcp_normalized && ! in_array( $od_lcp_normalized, $exclude_imgs, true ) ) {
+									$exclude_imgs[] = $od_lcp_normalized;
+								}
+								$exclude_imgs = array_unique( $exclude_imgs );
 							}
 						}
-					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					} catch ( \Throwable $e ) {
+						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+							error_log( 'WPPO Image optimisation OD error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						}
 					}
 				}
 
@@ -2654,10 +2668,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 
 							$should_exclude = false;
-							foreach ( $exclude_imgs as $exclude_img ) {
-								if ( false !== strpos( $src, $exclude_img ) ) {
-									$should_exclude = true;
-									break;
+							// OD LCP normalized match: covers http/https and size-suffix variants.
+							if ( '' !== $od_lcp_normalized && Util::normalize_url( $src ) === $od_lcp_normalized ) {
+								$should_exclude = true;
+							} else {
+								foreach ( $exclude_imgs as $exclude_img ) {
+									if ( false !== strpos( $src, $exclude_img ) ) {
+										$should_exclude = true;
+										break;
+									}
 								}
 							}
 

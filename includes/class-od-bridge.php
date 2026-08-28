@@ -78,6 +78,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 			$enabled  = null;
 			if ( isset( $settings[ self::SETTINGS_KEY ] ) && is_array( $settings[ self::SETTINGS_KEY ] ) && isset( $settings[ self::SETTINGS_KEY ]['enabled'] ) ) {
 				$enabled = (bool) $settings[ self::SETTINGS_KEY ]['enabled'];
+			} elseif ( isset( $settings['wppo_od_enabled'] ) ) {
+				// Legacy flat key.
+				$enabled = (bool) $settings['wppo_od_enabled'];
 			} else {
 				// Auto: true when OD is active, false else. This mirrors the
 				// in-memory default applied in Main::__construct() without
@@ -85,12 +88,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				$enabled = true;
 			}
 
-			// Also support legacy flat key wppo_od_enabled if present.
-			if ( null === $enabled && isset( $settings['wppo_od_enabled'] ) ) {
-				$enabled = (bool) $settings['wppo_od_enabled'];
-			}
-
-			$current_url = function_exists( 'PerformanceOptimise\Inc\Util::get_current_url' ) ? Util::get_current_url() : '';
+			$current_url = method_exists( Util::class, 'get_current_url' ) ? Util::get_current_url() : Util::cached_home_url();
 
 			/**
 			 * Filters whether OD-based optimization should be applied.
@@ -120,15 +118,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				return '';
 			}
 
-			$lcp_urls = self::collect_lcp_urls();
-			if ( empty( $lcp_urls ) ) {
+			$raw_urls = self::collect_raw_lcp_urls();
+			if ( empty( $raw_urls ) ) {
 				return '';
 			}
 
-			// Prefer the most common LCP URL across viewport groups; if tie,
-			// prefer the first (mobile-first) entry. Deduplicated already,
-			// so just return the first distinct URL.
-			return (string) $lcp_urls[0];
+			// Normalize for counting so http/https and size-suffix variants
+			// collapse to the same LCP. Keep original URL for return value
+			// but count via normalized form.
+			$normalized = array();
+			foreach ( $raw_urls as $u ) {
+				$norm         = Util::normalize_url( $u );
+				$normalized[] = '' !== $norm ? $norm : trim( (string) $u );
+			}
+
+			$counts = array_count_values( $normalized );
+			if ( empty( $counts ) ) {
+				return (string) $raw_urls[0];
+			}
+
+			$max = max( $counts );
+			// Tie-break: earliest in original order among those with max count.
+			foreach ( $normalized as $idx => $norm ) {
+				if ( ( $counts[ $norm ] ?? 0 ) === $max ) {
+					return (string) $raw_urls[ $idx ];
+				}
+			}
+
+			return (string) $raw_urls[0];
 		}
 
 		/**
@@ -199,6 +216,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 		 * @return string[] Distinct LCP image URLs.
 		 */
 		private static function collect_lcp_urls(): array {
+			$urls = self::collect_raw_lcp_urls();
+			// Deduplicate while preserving order (mobile-first).
+			$urls = array_values( array_unique( array_filter( $urls ) ) );
+			return $urls;
+		}
+
+		/**
+		 * Collect raw (non-deduplicated) LCP URLs from OD metrics.
+		 *
+		 * Preserves duplicates so callers can compute most-common frequency
+		 * across viewport groups. Uses the same extraction logic as
+		 * collect_lcp_urls() but returns filtered list without uniquing.
+		 *
+		 * @since NEXT
+		 * @return string[] Raw LCP image URLs (may contain duplicates).
+		 */
+		private static function collect_raw_lcp_urls(): array {
 			$metrics = self::get_url_metrics();
 			if ( empty( $metrics ) ) {
 				return array();
@@ -218,7 +252,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 								$urls[] = $url;
 								continue;
 							}
-						} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+						} catch ( \Throwable $e ) {
+							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+								error_log( 'WPPO OD bridge get_lcp_element error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+							}
 						}
 					}
 
@@ -237,7 +274,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 								}
 								continue;
 							}
-						} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+						} catch ( \Throwable $e ) {
+							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+								error_log( 'WPPO OD bridge get_elements error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+							}
 						}
 					}
 
@@ -291,9 +331,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				}
 			}
 
-			// Deduplicate while preserving order (mobile-first).
-			$urls = array_values( array_unique( array_filter( $urls ) ) );
-			return $urls;
+			return array_values( array_filter( $urls ) );
 		}
 
 		/**
@@ -327,7 +365,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 							return count( $groups );
 						}
 					}
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					}
 				}
 			}
 
@@ -339,7 +380,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 							return count( $groups );
 						}
 					}
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					}
 				}
 			}
 
@@ -357,7 +401,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 						if ( is_int( $w ) && $w > 0 ) {
 							$widths[] = $w;
 						}
-					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					} catch ( \Throwable $e ) {
+						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+							error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						}
 					}
 				} elseif ( is_array( $metric ) && isset( $metric['viewportWidth'] ) ) {
 					$widths[] = (int) $metric['viewportWidth'];
@@ -402,7 +449,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 							if ( is_array( $metrics ) && ! empty( $metrics ) ) {
 								return $metrics;
 							}
-						} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+						} catch ( \Throwable $e ) {
+							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+								error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+							}
 						}
 					}
 
@@ -410,7 +460,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 					if ( is_array( $metrics ) ) {
 						return $metrics;
 					}
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					}
 				}
 			}
 
@@ -441,7 +494,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 							}
 						}
 					}
-				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				} catch ( \Throwable $e ) {
+					if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+						error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					}
 				}
 			}
 
@@ -465,13 +521,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 				if ( method_exists( $element, 'is_lcp' ) ) {
 					try {
 						return (bool) $element->is_lcp();
-					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					} catch ( \Throwable $e ) {
+						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+							error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						}
 					}
 				}
 				if ( method_exists( $element, 'isLCP' ) ) {
 					try {
 						return (bool) $element->isLCP();
-					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					} catch ( \Throwable $e ) {
+						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+							error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						}
 					}
 				}
 				if ( isset( $element->isLCP ) ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
@@ -488,7 +550,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 							// Presence of xpath alone does not indicate LCP; need flag.
 							return false;
 						}
-					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					} catch ( \Throwable $e ) {
+						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+							error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						}
 					}
 				}
 				return false;
@@ -547,7 +612,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 							if ( is_string( $val ) && '' !== $val && false !== strpos( $val, '/' ) ) {
 								return $val;
 							}
-						} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+						} catch ( \Throwable $e ) {
+							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+								error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+							}
 						}
 					}
 				}
@@ -583,7 +651,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 								return $url;
 							}
 						}
-					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+					} catch ( \Throwable $e ) {
+						if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+							error_log( 'WPPO OD bridge error: ' . $e->getMessage() ); // phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+						}
 					}
 				}
 			}

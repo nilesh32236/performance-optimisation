@@ -35,8 +35,7 @@ const DEFAULT_CLIENT_SIDE_MIME_TYPES = [
 	'image/avif',
 ];
 
-const ImageOptimization = ( { options } ) => {
-	const opts = options || {};
+const ImageOptimization = ( { options = {} } ) => {
 	const defaultSettings = {
 		lazyLoadImages: false,
 		lazyLoadNative: true,
@@ -64,36 +63,36 @@ const ImageOptimization = ( { options } ) => {
 		clientSideMimeTypeOverride: false,
 		clientSideMimeTypes: DEFAULT_CLIENT_SIDE_MIME_TYPES,
 		forceServerSideConversion: false,
-		...opts,
+		...options,
 		placeholderType:
-			opts.placeholderType ??
-			( opts.replacePlaceholderWithSVG ? 'svg' : 'none' ),
+			options.placeholderType ??
+			( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
 	};
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 
 	useEffect( () => {
-		if ( ! opts || Object.keys( opts ).length === 0 ) {
+		if ( ! options || Object.keys( options ).length === 0 ) {
 			return;
 		}
 		setSettings( ( prev ) => ( {
 			...prev,
-			...opts,
+			...options,
 			placeholderType:
-				opts.placeholderType ??
-				( opts.replacePlaceholderWithSVG ? 'svg' : 'none' ),
-			clientSideMimeTypes: Array.isArray( opts.clientSideMimeTypes )
-				? opts.clientSideMimeTypes
+				options.placeholderType ??
+				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
+			clientSideMimeTypes: Array.isArray( options.clientSideMimeTypes )
+				? options.clientSideMimeTypes
 				: prev.clientSideMimeTypes,
-			selectedPostType: Array.isArray( opts.selectedPostType )
-				? opts.selectedPostType
+			selectedPostType: Array.isArray( options.selectedPostType )
+				? options.selectedPostType
 				: prev.selectedPostType,
-			availablePostTypes: Array.isArray( opts.availablePostTypes )
-				? opts.availablePostTypes
+			availablePostTypes: Array.isArray( options.availablePostTypes )
+				? options.availablePostTypes
 				: prev.availablePostTypes,
 		} ) );
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ options ] );
+	}, [ JSON.stringify( options ) ] );
 
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();

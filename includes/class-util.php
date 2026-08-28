@@ -549,6 +549,45 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Normalize a URL for LCP matching.
+		 *
+		 * Resolves protocol-relative and root-relative URLs against home_url(),
+		 * drops the scheme and any query string, and strips WordPress generated
+		 * size suffixes (-NNNxNNN, -scaled, -eNNN) so derived assets are treated
+		 * as the same image as their full-size original. Returns host + path
+		 * lowercased for host, or empty string when unparseable.
+		 *
+		 * @since NEXT
+		 * @param string $url The raw URL to normalize.
+		 * @return string Normalized host + path, or empty string when unparseable.
+		 */
+		public static function normalize_url( string $url ): string {
+			$url = trim( $url );
+			if ( '' === $url || 0 === strpos( $url, 'data:' ) ) {
+				return '';
+			}
+
+			if ( 0 === strpos( $url, '//' ) ) {
+				$url = 'https:' . $url;
+			}
+
+			if ( 0 === strpos( $url, '/' ) || false === strpos( $url, '://' ) ) {
+				$url = self::cached_home_url() . '/' . ltrim( $url, '/' );
+			}
+
+			$parts = wp_parse_url( $url );
+			if ( empty( $parts['path'] ) ) {
+				return '';
+			}
+
+			$host = strtolower( $parts['host'] ?? '' );
+			$path = $parts['path'];
+			$path = (string) preg_replace( '#-(?:\d+x\d+|scaled|e\d+)(?=\.[A-Za-z0-9]+)$#', '', $path );
+
+			return $host . $path;
+		}
+
+		/**
 		 * Base (shared) minify cache directory.
 		 *
 		 * Minified JS/CSS files are namespaced per site (see {@see min_cache_dir()}),
