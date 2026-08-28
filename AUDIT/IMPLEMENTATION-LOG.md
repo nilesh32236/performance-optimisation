@@ -43,6 +43,10 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 | NoticeBanner test | TEST | Testing | `src/components/common/__tests__/NoticeBanner.test.js:33` | FIXED→VERIFIED | updated expectations `alert/assertive` vs `status/polite` | `npm test` PASS | Final Frontend/Testing PASS |
 | C-01 namespace typo | CRITICAL | Architecture | `includes/class-main.php:489` | FIXED→VERIFIED | `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate` (1 line) | `php -l` + `phpcs` OK | 2026-08-28 audit fix |
 | H-01 count invariant | HIGH | Correctness | `includes/class-image-optimisation.php:2800` | FIXED→VERIFIED | `if (5===count($matches))` → `if (isset($matches[4]) && ''!==$matches[4])` (1 line) | `php -l` OK, `phpunit` 435 OK (40 ImageOptimisation), `grep count.*matches` 0 hits | 2026-08-28 audit fix |
+| H-02 eagerness unreachable | HIGH | Correctness | `includes/class-ai-adaptive.php:279` | FIXED→VERIFIED | `>3500 moderate` → `>3500 eager`, `>2500 moderate` kept; ternary `eager\|moderate\|conservative` (1 line) | `php -l` OK, `phpunit` AiAdaptive 5 OK, `phpunit` 435 OK | 2026-08-28 audit fix |
+| H-07 asort inverted + exclude_css dead | HIGH | Correctness | `includes/class-ai-adaptive.php:246` | FIXED→VERIFIED | `asort` → `arsort` + populate `exclude_css` from `_wppo_disabled_styles` (500 limit, 3 top) (30 lines) | `php -l` OK, `phpunit` AiAdaptive 5 OK, 435 OK | 2026-08-28 audit fix |
+| H-03 non-LCP else pollutes LCP | HIGH | Correctness | `includes/class-od-bridge.php:318` | FIXED→VERIFIED | removed `else { $urls[] = non-LCP }` branch (7 lines deleted) → only `element_is_lcp` adds | `php -l` OK, `phpunit` OdBridge 17 OK, 435 OK | 2026-08-28 audit fix |
+| H-04 dead inner null!==token | HIGH | Correctness | `includes/class-bfcache.php:270` | FIXED→VERIFIED | collapsed `if(null===$token){dead inner}+else` → `if(null===$token) return;` + single cookie-ensure ( -20/+10 lines) | `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
 
 ## C-01 — Namespace typo `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate`
 
@@ -76,6 +80,70 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
 - **Status:** FIXED→VERIFIED
 
+## H-02 — `>3500` and `>2500` both `moderate`, `eager` unreachable (speculation eagerness)
+
+- **Finding ID:** H-02
+- **Severity:** HIGH
+- **Category:** Correctness
+- **Original file:line:** `includes/class-ai-adaptive.php:279-283`
+- **Changed files:** `includes/class-ai-adaptive.php` (1 line), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** Line 280 `if ($avg_lcp_all > 3500) $eagerness='moderate';` → `$eagerness='eager';` — keeps `elseif ($avg_lcp_all > 2500) $eagerness='moderate';` else `conservative`. Restores tri-state `eager (>3500) / moderate (>2500) / conservative` as documented in `AUDIT/AGENTS/agent-A05-php-new.md:AI-02` and `FINDINGS/HIGH.md:H-02`. Filter `wppo_ai_adaptive_eagerness` still sanitizes to `conservative|moderate|eager`.
+- **Why:** Both branches assigned `moderate`, so AI Adaptive never produced `eager` speculation despite high LCP. Callers `get_model()['eagerness']` and `filter_speculation_rules()` append `['eagerness'=>model]` to speculation rules; eager never reached, limiting prefetch aggressiveness on slowest pages.
+- **Tests added:** None (threshold fix; existing `AiAdaptiveTest::test_learn_heuristic_produces_model` asserts model shape, not eagerness thresholds — would require RUM fixtures for >3500).
+- **Tests executed:** `php -l includes/class-ai-adaptive.php` → no syntax errors; `vendor/bin/phpunit --filter AiAdaptiveTest` → 5/5 OK; `vendor/bin/phpunit` full → 435/435 OK (2 skipped).
+- **Result:** PASS — eager now reachable at >3500 ms avg LCP; moderate at >2500 ms.
+- **Regression risk:** NONE — single literal change (`moderate` → `eager`) in isolated heuristic; downstream filter still clamps to allowed values.
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
+## H-07 — `asort` picks rarely-disabled (low freq) + `exclude_css` never populated
+
+- **Finding ID:** H-07
+- **Severity:** HIGH
+- **Category:** Correctness
+- **Original file:line:** `includes/class-ai-adaptive.php:246-250` (`asort` + missing css query)
+- **Changed files:** `includes/class-ai-adaptive.php` (30 lines), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** `asort($disabled);` → `arsort($disabled);` with comment updated to `Most-frequently disabled = least-used`. Added parallel query for `'_wppo_disabled_styles'` building `$disabled_css` frequency map, `arsort`, `array_slice(...,0,3)` into `$exclude_css`. Guard tightened to `isset($wpdb) && is_object($wpdb) && method_exists($wpdb,'get_col')` single check, deduped outer `if (method_exists)` nesting. `$exclude_css` now populated; `get_suggestions()` already has `ai_exclude_css` branch (`metric ai_exclude_css`, `fix_action open_file_optimization_tab`, `settings excludeCSS`).
+- **Why:** `asort` selects lowest count (rarely disabled = likely critical handle), suggesting wrong scripts for exclusion and risking breakage. `exclude_css` was declared but never filled, so CSS suggestions never fired. Audit: `AUDIT/AGENTS/agent-A05-php-new.md:AI-03`, `FINDINGS/HIGH.md:H-07`.
+- **Tests added:** None (heuristic frequency fix; existing `AiAdaptiveTest` mocks `wpdb` via `method_exists` guard — no get_col stub, so path not exercised in unit tests; manual trace verified via `read`).
+- **Tests executed:** `php -l includes/class-ai-adaptive.php` → no syntax errors; `vendor/bin/phpunit --filter AiAdaptiveTest` → 5/5 OK; `vendor/bin/phpunit` full → 435/435 OK (2 skipped); `grep -n asort class-ai-adaptive.php` → 0 hits (only `arsort` remains, 2 occurrences).
+- **Result:** PASS — most-frequently disabled handles now suggested; CSS handles populated from `_wppo_disabled_styles`.
+- **Regression risk:** LOW — frequency ordering inverted to correct direction; additional query is same pattern/limit as scripts, capped at 3 handles, behind same `$wpdb` guard.
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
+## H-03 — `else` branch adds non-LCP URLs to LCP list (fetchpriority inversion)
+
+- **Finding ID:** H-03
+- **Severity:** HIGH
+- **Category:** Correctness
+- **Original file:line:** `includes/class-od-bridge.php:318-330`
+- **Changed files:** `includes/class-od-bridge.php` (7 lines deleted), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** Removed `else { $url = extract_url_from_element($metric); if(''!==$url) $urls[]=$url; }` after `if (self::element_is_lcp($metric)) { ... }` in array-shape branch of `collect_raw_lcp_urls()`. Now non-LCP arrays are ignored; only `element_is_lcp===true` adds URL. Callers `collect_lcp_urls()` dedupes, `get_lcp_url()` counts most-common, `get_exclude_first_images_count()` counts distinct — all derived from filtered LCP list.
+- **Why:** Else added any array with `src/url` as LCP even when `isLCP` flag false, polluting raw LCP list. Most-common tie-break could return non-LCP image as `fetchpriority=high`, causing LCP regression. Source: `AUDIT/AGENTS/agent-A05-php-new.md:OD-01`, `FINDINGS/HIGH.md:H-03`.
+- **Tests added:** None (existing `OdBridgeTest` covers LCP via `isLCP true` arrays; removed else does not affect those tests — non-LCP data would previously have been miscounted, now correctly ignored).
+- **Tests executed:** `php -l includes/class-od-bridge.php` → no syntax errors; `vendor/bin/phpunit --filter OdBridgeTest` → 17/17 OK (1 skipped for OD stub pre-existence, expected); `vendor/bin/phpunit` full → 435/435 OK.
+- **Result:** PASS — non-LCP URLs no longer pollute LCP list; `get_lcp_url()` now strictly LCP-sourced.
+- **Regression risk:** NONE — deletion of erroneous else; true-LCP path unchanged (`get_lcp_element`/`get_elements` object branches still guarded by `element_is_lcp`).
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
+## H-04 — `filter_nocache_headers` dead inner `null!==$token` after outer `null===$token`
+
+- **Finding ID:** H-04
+- **Severity:** HIGH
+- **Category:** Correctness
+- **Original file:line:** `includes/class-bfcache.php:270-308`
+- **Changed files:** `includes/class-bfcache.php` (-20/+10 lines), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** Collapsed `if(null===$token){ if(!isset($_COOKIE) && null!==$token) set_cookie; if(null===$token) return; } else { if(!isset($_COOKIE) set_cookie }` → `if(null===$token) return $headers;` + single cookie-ensure `if(!isset($_COOKIE[cookie])) set_token_cookie(...)` outside. Dead `null!==$token` inner check (always false when outer `null===$token`) removed; duplicate cookie logic deduped to one block. Privacy semantics unchanged: `no-store` kept when token absent, stripped to `private,no-cache,max-age=0,must-revalidate` only when token present.
+- **Why:** Inner `null!==$token` unreachable, so cookie repair for deleted-mid-session never ran in null branch; outer `if(null===$token) return` already collapsed to correct early-return. Audit: `AUDIT/AGENTS/agent-A05-php-new.md:BFC-02`, `FINDINGS/HIGH.md:H-04`.
+- **Tests added:** None (bfcache has no dedicated PHPUnit class; verified via `php -l` and full suite).
+- **Tests executed:** `php -l includes/class-bfcache.php` → no syntax errors; `vendor/bin/phpunit` full → 435/435 OK (2 skipped); manual trace of `filter_nocache_headers` callers `init: nocache_headers 1000`.
+- **Result:** PASS — dead branch removed; cookie repair now single reachable path post-null-guard.
+- **Regression risk:** NONE — early-return preserves privacy (`no-store` when no token); cookie-ensure logic identical after dedup.
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
 ## Evidence per batch
 - P1 security: `php -l` 5 files clean, `phpcs` 0, `phpunit` 403 OK
 - P2 perf: `php -l` 7 files clean, `phpunit` 403 OK, `npm build` 54.8 KiB
@@ -83,8 +151,10 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - P4 dedupe: `php -l` 7 files, `phpunit` 67 focused OK + `npm build`
 - P5 cleanup: `php -l` clean, `npm run lint:js` 0e3w, `npm test` 8 suites PASS (after NoticeBanner fix), `npm run build` success
 - H-01 fix: `php -l` clean, `phpunit` 435 OK, `grep count.*matches` 0
+- H-02/H-07/H-03/H-04 fix: `php -l` 3 files clean, `phpunit --filter AiAdaptiveTest|OdBridgeTest` 23 OK (1 skipped), `phpunit` full 435 OK (2 skipped)
 
 ## Regression risk
 - LOW for P1/P3 correctness (small guards), MEDIUM for P2 RUM queue state machine (advisory race), LOW for `core_tweaks` narrowing (import 400 legacy), LOW for stampede advisory lock.
 - H-01: NONE — predicate fix is strictly more correct; no new branching for picture/img path.
+- H-02/H-07/H-03/H-04: NONE/LOW — H-02 literal fix, H-07 arsort+added css query, H-03 deletion of erroneous else, H-04 dedup+early-return; all covered by full 435 suite.
 

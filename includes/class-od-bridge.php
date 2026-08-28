@@ -320,13 +320,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\OD_Bridge' ) ) {
 						if ( '' !== $url ) {
 							$urls[] = $url;
 						}
-					} else {
-						// Direct array with xpath/src.
-						$url = self::extract_url_from_element( $metric );
-						if ( '' !== $url ) {
-							// Check isLCP flag in array.
-							$urls[] = $url;
-						}
 					}
 				}
 			}
