@@ -1,46 +1,24 @@
-# REVIEW-MATRIX.md — Agent assignments (deterministic, every file ≥1 agent)
+# REVIEW-MATRIX.md — Deterministic agent assignments (2026-08-28)
 
-_Gap rule: CODE-INVENTORY ↔ REVIEW-MATRIX ↔ AGENTS/ ↔ FINDINGS/ must 1:1. No file skipped because small. 5-line file = same discipline._
+_Every source file assigned to ≥1 detailed-review agent. 14 specialized agents A01-A14 cover all 42 runtime PHP + 80 JS + 20 SCSS + 5 templates + configs. No file is too small. Cross-cut agents (security/perf/dupe/compat) re-cover all files._
 
-## Army roster (12 specialized agents, parallel)
+| Agent | Specialty | Files | Lines | Primary scope |
+|-------|-----------|-------|-------|---------------|
+| A01 | PHP correctness — Core/Main/Lifecycle | `performance-optimisation.php`, `includes/class-main.php` (3053), `class-activate.php`, `class-deactivate.php`, `uninstall.php`, `class-admin-notices.php` | ~4k | Hooks, init, activation, deactivation, admin page |
+| A02 | PHP correctness — Media/Optimization | `class-image-optimisation.php` (3248), `class-img-converter.php` (1865), `class-critical-css.php` (1169), `class-used-css.php` (1266), `class-google-fonts.php` (363), `minify/*` | ~8k | WebP/AVIF, lazy, picture, LQIP, CCSS, fonts, minify |
+| A03 | PHP correctness — Infra/Cache/Cron | `class-cache.php` (2306), `class-advanced-cache-handler.php`, `class-htaccess-handler.php`, `class-server-rules.php`, `class-cron.php` (738), `class-object-cache.php`, `redis-connect-helper.php`, `templates/object-cache.php` | ~6k | Static HTML cache, drop-in, htaccess, cron scheduling, Redis |
+| A04 | PHP correctness — API/CLI/Rest/RUM | `class-rest.php` (1620), `class-rum.php`, `class-pagespeed.php`, `class-telemetry.php`, `class-system-info.php`, `class-wppo-cli-command.php`, `class-log.php`, `class-suggestion-engine.php` (397) | ~5.5k | REST 28 endpoints, RUM collect, PageSpeed, CLI, logging |
+| A05 | PHP correctness — New features + Utils | `class-ai-adaptive.php` (459), `class-edge-cache.php` (287), `class-edge-purger.php` (208), `class-bfcache.php` (403), `class-perf-translations.php` (276), `class-od-bridge.php` (685), `class-llms.php` (577), `class-util.php` (854), `class-litespeed-integration.php` (1343), `class-cdn-purger.php`, `class-asset-manager.php`, `class-metabox.php`, `class-abilities.php`, `class-database-cleanup.php`, `class-core-tweaks.php` | ~7k | AI, Edge, bfcache, mo→php, OD, LLMs, Litespeed, CDN, abilities |
+| A06 | JS — React SPA | `src/App.js`, `src/index.js`, `src/components/*.js` (18 files incl AiPanel, EdgeCachePanel, Dashboard, FileOptimization, ObjectCache etc.), `src/lib/*.js` (apiRequest, useNotice, util, litespeed), `src/components/common/*.js` (10) | ~18k | SPA state, tabs, apiCall, wppoSettings, hooks |
+| A07 | JS — Vanilla loaders + RUM | `src/lazyload.js`, `src/main.js`, `src/rum.js`, `templates/cloudflare-worker.js`, `templates/bunny-edge.js`, `templates/app.html`, `templates/perf-translations.php` | ~1.5k | IntersectionObserver, MutationObserver, admin bar, beacon, edge workers |
+| A08 | CSS/SCSS | `src/css/**/*.scss` (20 files: abstracts, base, components, layout, style.scss) + `build/style-index.css` | ~3.4k | BEM, variables, breakpoints, responsive, a11y |
+| A09 | Security | ALL PHP + JS (auth, input, output, SQL, XSS, CSRF, file, priv-esc) + `uninstall.php` symlink, `rum_collect` public, `import_settings` | 31k+22k | OWASP, WP caps, nonces, sanitization |
+| A10 | Performance — PHP/DB/Cache | ALL PHP (get_option stampede, RUM queue, combine_css, file_exists×480, WP_Query, transients, object-cache, cron) | 31k | CPU, memory, FS, DB queries, caching |
+| A11 | Performance — Frontend | ALL JS/SCSS + `class-cache.php` CDN rewrite + `class-main.php` script defer/delay + `performance-optimisation.php` enqueue | 22k+3.4k | JS exec, DOM, reflow, render-blocking, assets |
+| A12 | Duplication + Dead Code | ALL PHP+JS+SCSS (exact/near dupes, unused funcs/classes, obsolete compat, commented code) | 31k+22k+3.4k | DRY, dead branches, migration code |
+| A13 | Compatibility | ALL PHP+JS (WP 6.3-7.2, PHP 8.2-8.5, multisite Util::transient_key, object-cache backends, Apache/Nginx/LiteSpeed, wp.org External Services, hosting) | 31k+22k | Env assumptions, version gates |
+| A14 | Architecture + Quality | ALL PHP+JS (god classes Main 3053 Util 854 Dashboard 1329, manual require_once, global wppoSettings, naming, complexity, testability) | 31k+22k | Coupling, abstractions, maintainability |
 
-| # | Agent ID | Specialty | Scope (files) | Primary output |
-|---|----------|-----------|---------------|----------------|
-| A01 | `php-correctness` | PHP correctness, WP hooks, edge cases | `includes/class-main.php`, `class-cache.php`, `class-advanced-cache-handler.php`, `class-htaccess-handler.php`, `class-server-rules.php`, `performance-optimisation.php`, `uninstall.php` | `AUDIT/AGENTS/agent-A01-php-correctness.md` |
-| A02 | `php-media` | Media / CSS / image pipeline | `includes/class-image-optimisation.php`, `class-img-converter.php`, `class-critical-css.php`, `class-used-css.php`, `class-google-fonts.php`, `class-asset-manager.php`, `class-abilities.php` | `AUDIT/AGENTS/agent-A02-php-media.md` |
-| A03 | `php-infra` | Infra: DB, cache, cron, object-cache, telemetry, system-info, log, CDN, RUM, PageSpeed, suggestion | `includes/class-database-cleanup.php`, `class-cron.php`, `class-object-cache.php`, `templates/object-cache.php`, `includes/redis-connect-helper.php`, `class-telemetry.php`, `class-system-info.php`, `class-log.php`, `class-cdn-purger.php`, `class-rum.php`, `class-pagespeed.php`, `class-suggestion-engine.php`, `class-litespeed-integration.php`, `class-llms.php` | `AUDIT/AGENTS/agent-A03-php-infra.md` |
-| A04 | `php-rest-cli-metabox` | REST + CLI + metabox + activate/deactivate + util + core-tweaks + admin-notices | `includes/class-rest.php`, `class-wppo-cli-command.php`, `class-metabox.php`, `class-activate.php`, `class-deactivate.php`, `class-util.php`, `class-core-tweaks.php`, `class-admin-notices.php` | `AUDIT/AGENTS/agent-A04-php-rest-cli.md` |
-| A05 | `js-spa` | React SPA + state + API | `src/App.js`, `src/index.js`, `src/lib/*.js`, `src/components/*.js` (Dashboard, FileOptimization, Preload, Image, Database, ObjectCache, PluginSetting, PageSpeedPanel, PerformanceAudit, etc.), `src/components/common/*.js` | `AUDIT/AGENTS/agent-A05-js-spa.md` |
-| A06 | `js-vanilla-a11y` | Vanilla JS loaders + a11y + RUM beacons | `src/lazyload.js`, `src/main.js`, `src/rum.js`, `src/setupTests.js`, `src/__tests__/lazyload.test.js` + `main.test.js` | `AUDIT/AGENTS/agent-A06-js-vanilla.md` |
-| A07 | `css-designsystem` | SCSS design system + responsive + RTL | `src/css/**/*.scss` (abstracts, base, components, layout), `src/css/style.scss`, `build/style-index*.css` | `AUDIT/AGENTS/agent-A07-css.md` |
-| A08 | `security` | AuthN/Z, nonces, caps, sanitization, SQLi, XSS, CSRF, file ops, SSRF, RUM token | All PHP: `class-rest::permission_callback`, `class-cache`, `class-database-cleanup`, `class-img-converter`, `class-rum`, `class-llms`, `class-util` | `AUDIT/AGENTS/agent-A08-security.md` |
-| A09 | `performance` | Runtime, WP, DB, frontend, caching, assets (largest priority for perf plugin) | All PHP hot paths: `class-cache::process_buffer_for_cache`, `class-image-optimisation::process_*`, `class-cron::*`, `class-database-cleanup::*`, `class-main::enqueue_scripts`, JS `lazyload`/`App` | `AUDIT/AGENTS/agent-A09-performance.md` |
-| A10 | `duplication-deadcode` | Duplicates, dead code, unused symbols | All `includes/*.php` + `src/**/*.js` + `src/css/**/*.scss` (regex + manual trace) | `AUDIT/AGENTS/agent-A10-duplication-deadcode.md` |
-| A11 | `compatibility` | WP/PHP/multisite/object-cache/hosting (Apache/Nginx/OLS/LiteSpeed), wp.org compliance | `phpcs.xml`, `composer.json` `php>=8.2`, `readme.txt`, `performance-optimisation.php` headers, `Util::transient_key`, `object-cache` drop-in | `AUDIT/AGENTS/agent-A11-compatibility.md` |
-| A12 | `quality-architecture` | Architecture, coupling, god classes, maintainability, error handling, naming, testing | All `includes/*.php` + `src/**` + `tests/php/**` + `package.json` Jest config | `AUDIT/AGENTS/agent-A12-quality-architecture.md` |
+**Coverage guarantee:** Every file appears in at least one primary agent (A01-A08) and at least one cross-cut agent (A09-A14). `CODE-INVENTORY §1-3` ↔ `REVIEW-MATRIX` row ↔ `AUDIT/AGENTS/agent-A*.md` header "Files reviewed" ↔ `FINDINGS/*.md` ↔ `MASTER-AUDIT` §22 checklist.
 
-## Coverage map (every source file → agent)
-
-- PHP 37 runtime files → A01-A04 + A08-A12 (each file in exactly one primary A01-A04, plus cross-cut A08-A12)
-- JS 143 src files → A05 (SPA) + A06 (vanilla) + cross-cut A08-A12
-- SCSS 20 → A07 + cross-cut
-- Config/build/tests/docs → A11/A12
-
-## Status tracking (updated by orchestrator after agents write)
-
-| Agent | Files | Lines | Reviewed | Findings | Severity max | Report exists |
-|-------|-------|-------|----------|----------|--------------|---------------|
-| A01 | 8 | ~5.8k | ☐ | — | — | ☐ |
-| A02 | 7 | ~7.3k | ☐ | — | — | ☐ |
-| A03 | 14 | ~9.8k | ☐ | — | — | ☐ |
-| A04 | 8 | ~6.2k | ☐ | — | — | ☐ |
-| A05 | ~60 | ~18k | ☐ | — | — | ☐ |
-| A06 | 5 | ~2k | ☐ | — | — | ☐ |
-| A07 | 20 | ~3.4k | ☐ | — | — | ☐ |
-| A08 | all | 57k | ☐ | — | — | ☐ |
-| A09 | all | 57k | ☐ | — | — | ☐ |
-| A10 | all | 57k | ☐ | — | — | ☐ |
-| A11 | — | — | ☐ | — | — | ☐ |
-| A12 | — | — | ☐ | — | — | ☐ |
-
-> After agents finish, orchestrator reconciles this table against `CODE-INVENTORY.md` and `AUDIT/AGENTS/*.md` existence + `wc -l` before declaring gap-closed.
+**New files since 2026-08-27 audit:** `class-ai-adaptive.php` → A05, `class-edge-cache/purger.php` → A05, `class-bfcache.php` → A05, `class-perf-translations.php` → A05 + A03 (drop-in), `src/components/AiPanel.js` + `EdgeCachePanel.js` → A06, `templates/cloudflare-worker.js` + `bunny-edge.js` → A07, updated `class-main.php` (+100 lines), `class-rest.php` (+57 lines, 3 new endpoints), `class-util.php` (+211 lines), `class-suggestion-engine.php` (+37 lines), `AUDIT_PLAN.md` delta.

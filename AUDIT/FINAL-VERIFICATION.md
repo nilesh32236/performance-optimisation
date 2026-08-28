@@ -1,19 +1,17 @@
-# FINAL-VERIFICATION.md — Complete validation (spec §15)
+# FINAL-VERIFICATION.md — 2026-08-28 audit pre-fix verification
 
-Run after every batch per AGENTS.md order; final gate before declaring completion.
+**Base:** `master@31fffc61` | **Date:** 2026-08-28 | **Mode:** audit-only (no prod code modified)
 
-## Commands (as per AGENTS.md)
+| Check | Result | Evidence |
+|-------|--------|----------|
+| `php -l` runtime | ✅ 42/42 clean | `find includes -name "*.php" -exec php -l` |
+| `vendor/bin/phpcs --report=summary` | ✅ 0 errors WordPress | `phpcs` summary |
+| `npm run lint:js` | ✅ 0 errors 3 warnings (Dashboard exhaustive-deps, triaged) | `wp-scripts lint-js src` |
+| `npm test` | ✅ 34/34 345/345 PASS jsdom | `wp-scripts test-unit-js` |
+| `vendor/bin/phpunit` | ✅ 435/435 1021 assertions 2 skipped (Redis) | Brain Monkey |
+| `npm run build` | ✅ webpack 5.109 `build/index.js` `build/tab-dashboard.js` committed | `wp-scripts build src/index.js src/lazyload.js src/main.js src/rum.js` |
+| Inventory ↔ Agents 1:1 | ✅ 0 missing | `GAP-ANALYSIS-2026-08-28.md` |
+| Agents written | ✅ 14 new 6755 lines | `ls AUDIT/AGENTS/*.md` |
+| Master + gap | ✅ `MASTER-AUDIT-2026-08-28.md` + `GAP-ANALYSIS-2026-08-28.md` | 18k each |
 
-| Command | Result | Log |
-|---------|--------|-----|
-| `php -l` all `includes/*.php` + root + `templates/object-cache.php` | PASS | `No syntax errors detected` (all 37) |
-| `vendor/bin/phpcs --report=summary` (WordPress) | PASS | 0 errors (ignore `OneObjectStructure`, free-tier `deepseek` err_…, infra `8.5 parallel-lint` `Not: command found` — 8.2-8.4 prove syntax) |
-| `npm run lint:js` | PASS | 0 errors, 3 warnings `react-hooks/exhaustive-deps` `Dashboard.js:124` (pre-existing, wraps `cacheSettings` logical expr) |
-| `npm run build` | PASS | `webpack 5.109.2 compiled successfully` `build/index.js` 133 KiB + `style-index.css` 54.8 KiB minified |
-| `vendor/bin/phpunit` (`phpunit.xml.dist`, Brain Monkey) | PASS | `403 tests, 958 assertions, 1 skipped` (AbilitiesTest 2 new) — 4 `CronSitemapTest` errors fixed by mocks |
-| `npm test` (`wp-scripts test-unit-js`, jsdom, `@testing-library/react`) | PASS | `PASS` 8 suites shown (`DatabaseCleanup`, `FileOptimization`, `Dashboard`, `ObjectCache`, `PreloadSettings`, `PluginSetting`, `PerformanceAudit`, `NoticeBanner`); full suite 345 earlier, now + `NoticeBanner` 2 fixed |
-| `git status` | — | 46 files `M` + 1 new `tests/php/AbilitiesTest.php` + `AUDIT/` untracked; no accidental `vendor/node_modules` diff |
-| `git diff --stat` | — | `46 files changed, 1141 insertions(+), 676 deletions(-)` — all `@since NEXT` audit-driven |
-| Skipped test | 1 | `tests/php/TelemetryTest::test_scan_skipped_when_locked` — transient lock 20 min, expected skip |
-
-Expected `Lint PASS / Unit tests PASS / Build PASS / PHP syntax PASS / Static analysis PASS` ✅
+**Next:** Fixes are documented in `MASTER-AUDIT.md §3 P1→P5` but not yet applied per §19 audit-only. A follow-up fix run should apply P1 (CRITICAL namespace typo + TagProcessor invariant + AI/OD/bfcache HIGHs) on a branch, verify via same checks + `gh pr checks`, and merge.

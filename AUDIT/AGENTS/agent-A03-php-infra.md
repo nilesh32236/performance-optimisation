@@ -1,135 +1,315 @@
-# Agent A03 — PHP Infra Audit (`php-infra`)
+# Agent A03 — PHP Correctness Audit: Infra / Cache / Cron
 
-**Scope:** `includes/class-database-cleanup.php`, `includes/class-cron.php`, `includes/class-object-cache.php`, `templates/object-cache.php`, `includes/redis-connect-helper.php`, `includes/class-telemetry.php`, `includes/class-system-info.php`, `includes/class-log.php`, `includes/class-cdn-purger.php`, `includes/class-rum.php`, `includes/class-pagespeed.php`, `includes/class-suggestion-engine.php`, `includes/class-litespeed-integration.php`, `includes/class-llms.php`
+**Base:** master@31fffc61
+**Date:** 2026-08-28
+**Scope:** Audit-only, no production modifications
+**Files reviewed:** 8
+**Lines reviewed:** 5679
 
-**Date:** 2026-08-27  
-**Auditor:** agent A03 `php-infra`  
-**Mode:** Read-only — no production code modified
+| File | Lines |
+|------|-------|
+| `includes/class-cache.php` | 2306 |
+| `includes/class-advanced-cache-handler.php` | 330 |
+| `includes/class-htaccess-handler.php` | 222 |
+| `includes/class-server-rules.php` | 191 |
+| `includes/class-cron.php` | 738 |
+| `includes/class-object-cache.php` | 363 |
+| `includes/redis-connect-helper.php` | 377 |
+| `templates/object-cache.php` | 1152 |
 
----
-
-## 1. Files Reviewed
-
-| # | File | Lines | Purpose | Hooks / Schedules | DB / Options / Transients | FS / Network |
-|---|------|------:|---------|-------------------|---------------------------|--------------|
-| 1 | `includes/class-database-cleanup.php` | 1142 | DB bloat cleanup (9 types), OPTIMIZE, counts cache | `wppo_database_cleanup_completed` action (#819) | `$wpdb` direct queries on `posts/postmeta/comments/commentmeta/options`, `information_schema.TABLES` (#1051), `wppo_db_cleanup_salt` option, `wppo_db_cleanup_counts` transient/salted cache, `wppo_activity_logs` via `Log::add` | `OPTIMIZE TABLE` (#1094) |
-| 2 | `includes/class-cron.php` | 733 | Cron orchestrator (preload, sitemap, images, DB, vitals, LLMs, used-CSS, CCSS) | `init`→`schedule_cron_jobs`, `wppo_page_cron_hook/batch`, `wppo_img_conversion`, `wppo_generate_static_page/url`, `wppo_database_cleanup_cron`, `wppo_web_vitals_rescan`, `wppo_llms_txt_daily`, `wppo_used_css_cron`, `wppo_ccss_regeneration`, filter `cron_schedules` | `wppo_settings`, `wppo_preload_cron_offset`, `wppo_last_db_cleanup`, `wppo_web_vitals_last_rescan`, `wppo_preload_cron_lock`, `wppo_used_css_lock`, `wppo_img_convert_lock`, `wppo_db_cleanup_lock` transients, options direct | `WP_Filesystem` delete cache html, `wp_remote_get` sitemap + preload GET |
-| 3 | `includes/class-object-cache.php` | 363 | Redis drop-in lifecycle + telemetry | filter `wppo_object_cache_dropin_path` | `wppo_settings[object_cache]`, `wppo-redis-config.php` include | `WP_Filesystem` copy/delete `object-cache.php`, `wp_cache_flush` |
-| 4 | `templates/object-cache.php` | 1152 | Runtime `WP_Object_Cache` (standalone/sentinel/cluster, replica, salt, group, flush) | `object_cache_allow_flush_all`, global funcs `wp_cache_*`, `wp_cache_get/set_salted`, `wp_cache_supports`, `wp_cache_add_salt` | `wppo-redis-config.php` + helper, Redis keys `${blog_prefix}:${salt}${group}:${key}` | `error_log` on helper missing, TLS `tls://` prefix |
-| 5 | `includes/redis-connect-helper.php` | 377 | Shared Redis connectors (standalone/sentinel/cluster), node parse, options | — | `WPPO_REDIS_PASSWORD` constant / env | `Redis`, `RedisCluster`, `RedisSentinel`, `CURLOPT_ENCODING` not here, `auth/select/serializer/compression` |
-| 6 | `includes/class-telemetry.php` | 985 | Local HTTP scan (cURL → wp_remote fallback), manual redirect validation, HTML parse, size calc, transient index | filter `wppo_telemetry_verify_ssl` | `wppo_settings`, salted `wppo_audit_{md5(url)}` (HOUR), `wppo_audit_salt`, `wppo_transient_index` option | cURL raw `CURLOPT_FOLLOWLOCATION=false`, `wp_remote_get/head` — 30s/5s timeouts |
-| 7 | `includes/class-system-info.php` | 633 | PHP/DB/WP/server/cache/infra/opcache system snapshot | filter implicit via `apply_filters` in LiteSpeed path | `wppo_settings`, `active_plugins`, `active_sitewide_plugins`, `SHOW VARIABLES LIKE 'max_connections'` | `file_get_contents` drop-ins (<1M), `opcache_get_status(false)` |
-| 8 | `includes/class-log.php` | 150 | Activity log table insert + paginated fetch | — | `{prefix}wppo_activity_logs` (`$wpdb->insert/get_var/get_results`), `wppo_activity_log_salt` / `wppo_activity_cache_version`, salted `wppo_activity_logs_{p}_{pp}` | — |
-| 9 | `includes/class-cdn-purger.php` | 229 | CDN purge (Cloudflare zone, Varnish PURGE, LiteSpeed sync) | `wppo_after_cache_clear` implied, `wppo_varnish_purge_max_urls`, `wppo_debug_log` | `wppo_settings[cache_settings]` | `wp_remote_request` POST/PURGE to Cloudflare `api.cloudflare.com` + Varnish endpoints |
-| 10 | `includes/class-rum.php` | 332 | Public RUM beacon (rolling daily token, per-IP rate limit, bounded aggregate) | `wp_footer` `print_config`, `wp_enqueue_scripts` | `wppo_settings[performance_audit.rum_enabled]`, `wppo_web_vitals_rum` option (14d × 200 paths), `wppo_rum_ratelimit_{md5(ip)}` transient | `build/rum.asset.php` include, `rest_url rum_collect` |
-| 11 | `includes/class-pagespeed.php` | 661 | PageSpeed Insights v5 via Action Scheduler, trends, LCP image store | `wppo_pagespeed_scan` AS hook, group `performance_optimisation` | `wppo_settings[performance_audit.pagespeed_api_key]`, `wppo_pagespeed_{md5}_{strat}` transient (DAY / 5min failure), `wppo_web_vitals_trends` option (30×20 keys), `wppo_web_vitals_trends_lock` option | `wp_remote_get` to `www.googleapis.com` 120s |
-| 12 | `includes/class-suggestion-engine.php` | 360 | Threshold→status→suggestion objects (telemetry + PageSpeed), fix_action allowlist | — | — | — |
-| 13 | `includes/class-litespeed-integration.php` | 1343 | Detection, effective-mode resolution, TTL map, header emission, purge sync, vary bridge, next-gen/brotli/CDN guards | `init`→ `litespeed_purged_all/post/finalize`, `send_headers` (0), `litespeed_vary`, `litespeed_control_set_ttl/nocache/tag`, `wppo_litespeed_*` filters (9), `litespeed_can_optm/cdn` | `wppo_settings[litespeed_integration]`, `wppo_litespeed_purge_lock` transient (60s) | `header()` / `header_remove()` |
-| 14 | `includes/class-llms.php` | 577 | Virtual `llms.txt`/`llms-full.txt` (rewrite, ETag/304, 20KB cap, trends+sitemap+posts source) | `add_rewrite_rule` `^llms\.txt/full`, `template_redirect` `serve`, `send_headers` Link, `wp_head` link, `update_option_wppo_settings` | `wppo_settings[llms_txt]`, `wppo_web_vitals_trends` (read), `flush_rewrite_rules` | `WP_CONTENT_DIR/cache/wppo[/site-{id}]/llms*.txt` via `WP_Filesystem` or `file_put_contents`, `readfile`, `wp_remote_get` sitemap |
-
-Total reviewed: **14 files, 9309 lines** (sum of `wc -l` per file).
+## Methodology
+- Read every line via `Read` with offsets (1-1488, 1489+ for class-cache; full reads for others).
+- Grepped cron schedules (`wp_next_scheduled`, `wp_schedule_event`, `wp_schedule_single_event`), transient keys (`Util::transient_key`, `get_transient`, `set_transient`), and LiteSpeed gates.
+- Traced static HTML generation path: `template_redirect` → output buffer (`start_output_buffer` legacy vs `process_buffer_for_cache`/`stash_cache` WP 6.9+) → `process_buffer_only` → `save_processed_buffer` → `save_cache_files` with atomic write + gzip/brotli; drop-in `advanced-cache.php` serve path; invalidation (`invalidate_dynamic_static_html`, `clear_cache`, `delete_*`); htaccess/nginx rules; Redis standalone/sentinel/cluster via `redis-connect-helper.php` + `templates/object-cache.php` drop-in.
 
 ---
 
-## 2. Findings
+## Findings
 
-> Severity: `CRITICAL` > `HIGH` > `MEDIUM` > `LOW` > `INFO` > `OPTIMIZATION` / `DUPLICATE` / `DEAD CODE`  
-> Confidence: `high` / `medium` / `low` (how certain the finding is without runtime)
+### 1. `includes/class-cache.php:212-236` — Host-header cache poisoning / domain-port mismatch with drop-in
+- **Category:** Correctness / Security
+- **Severity:** Major
+- **Problem:** `Cache::__construct()` derives `$domain` from `$_SERVER['HTTP_HOST']` (client-controlled) with `sanitize_text_field`, IDN conversion, port strip, regex `^[a-z0-9\.\-]+$`. This is intentional for domain-based `WP_CONTENT_DIR/cache/wppo/{domain}/` isolation (multisite-safe). However `class-cron.php:592-595` (`Cron::mark_page_as_processed`) derives domain from `site_url()` host (`$parsed_url['host']` + port) while `Cache::get_cache_file_path()` uses the request Host. On port-bearing installs or behind a proxy rewriting Host, invalidation deletes `/{site_url host}/...` but runtime writes `/{HTTP_HOST host}/...`, leaving orphaned stale files that are never purged. `Advanced_Cache_Handler::create()` (line 165) keeps the port in `$site_domain` (`preg_replace('/[^a-z0-9.:-]+/i','',$raw_domain)`), so the drop-in serves `/$site_domain/index.html` with port, while `Cache` strips port — cache never hits on non-standard ports.
+- **Why matters:** Stale HTML persists after post edits; on `:8080`/`:8443` or Cloudflare-style host rewrites, static cache is effectively bypassed (performance loss) or never invalidated (stale content).
+- **Evidence:** `class-cache.php:223-236` `$host = explode(':',$domain,2)[0]` + strtolower; `class-cron.php:594` `$domain = sanitize_text_field($parsed_url['host'] . (port?))`; `class-advanced-cache-handler.php:164-165` `$raw_domain` → `$site_domain` retains `:`.
+- **Impact:** Cache invalidation miss + serve miss on ported hosts; potential Host-header driven cache fragmentation (attacker can create arbitrary `{evil.com}/` cache dirs — not traversal but disk fill).
+- **Recommended solution:** Canonicalize domain to `wp_parse_url(Util::cached_home_url(), PHP_URL_HOST)` for storage paths, or share a single `Util::get_cache_domain()` helper used by `Cache`, `Cron`, and drop-in generator; drop-in should strip port before path (or include variant). Document that `HTTP_HOST` fallback is only for multisite domain mapping and must be sanitized identically everywhere. Add test: port-bearing site_url vs HTTP_HOST.
+- **Confidence:** High
 
-| # | Severity | File:Line | Category | Finding | Impact | Recommendation | Confidence |
-|---|----------|-----------|----------|---------|--------|----------------|------------|
-| A03-001 | HIGH | `class-database-cleanup.php:1093-1094` — `optimize_table()` | Security / DB | `OPTIMIZE TABLE {$full_table_name}` is interpolated without backticks or allowlist. `maybe_optimize_tables()` deduplicates but does not validate `$table` against `TABLE_MAP` values; any internal caller passing an arbitrary string could optimize an unintended table. `$wpdb->{$table}` is dynamic and could resolve to empty. | Low-probability privilege-adjacent misuse; on managed hosts `OPTIMIZE` may be blocked or lock large tables despite 1 GB guard (which relies on `information_schema` that may be inaccessible returning 0). | Allowlist `maybe_optimize_tables`/`optimize_table` to `array('posts','postmeta','comments','commentmeta','options')` and wrap as `` `{$wpdb->prefix}{$validated}` `` or use `$wpdb->query("OPTIMIZE TABLE `{$full_table_name}`")` after `preg_match('/^[A-Za-z0-9_]+$/', $full_table_name)`. | high |
-| A03-002 | HIGH | `class-database-cleanup.php:630-668` `clean_unattached_media()` | Performance / Safety | Loops `wp_delete_attachment(..., true)` per attachment inside `do…while(batch=500)`. Each call loads post, fires `delete_attachment`/`deleted_post` hooks, unlinks N intermediate sizes. No `set_time_limit`/`wp_suspend_cache_addition` and no `OPTIMIZE` gating on failure count. A media library with 20k unattached images will issue 20k `unlink` + DB deletes within a single REST request (no Action Scheduler sharding). | Request timeout / OOM on large libraries; hook side-effects (e.g. offloaded media plugins) may re-create rows mid-loop causing infinite pagination. | Shard via Action Scheduler (like image conversion) or document single-batch admin use only + add `wp_suspend_cache_invalidation` and chunk size filter. Alternatively add `wppo_database_cleanup_batch_size` filter. | high |
-| A03-003 | HIGH | `templates/object-cache.php:544-552,585-605,556-565,608-618` `flush()`/`flush_group()` | Performance / Correctness | SCAN+DEL uses `100` COUNT and `$redis->del($keys)` per SCAN page. On a site with 500k keys, flushing the site prefix scans entire keyspace (O(N) network round-trips). Pre-7.4 phpredis `del(array)` semantics differ; cluster path deletes per node but still iterates all shards. No `UNLINK` (non-blocking delete). | Flush on settings save / purge-all may block PHP for seconds and spike Redis CPU; on Cluster mode spec cites `_masters()` which is undocumented and may not include replicas. | Use `UNLINK` when available (`$redis->unlink` fallback to `del`), raise COUNT to 500, and document that `object_cache_allow_flush_all=true` is the production path for large caches. Add `try/catch` around `_masters()`. | medium |
-| A03-004 | HIGH | `class-telemetry.php:682-743` `calculate_sizes()` | Performance / SSRF-scope | `$get_size` HEAD-fallback fires a `wp_remote_head` per local-unresolvable same-host asset, serially, with 5 s timeout. A page with 40 CDN-rewritten URLs that still match `home_host` after CDN filter will issue 40 HEADs synchronously inside `scan()` (which already made 1 GET). Each HEAD also re-validates via `wp_http_validate_url` + `apply_filters('wppo_telemetry_verify_ssl')`. | Scan latency: worst case ~200 s (40×5 s) before timeout handling; ties up admin AJAX worker. | Cap HEADs (e.g. first 10) or make `calculate_sizes` return 0 for non-local paths without HEAD, and compute sizes from `Content-Length` only when header already present from primary GET. Alternatively batch with `wp_remote_head` curl-multi. | high |
-| A03-005 | HIGH | `class-cron.php:473-544,547-563` `get_sitemap_urls()` + `schedule_sitemap_url_jobs()` | Availability / Loop | `get_sitemap_urls(500)` does `wp_remote_get` with 5 s timeout per sitemap child, bounded by 15 s wall clock but still called from `schedule_page_cron_jobs()` which holds the 20-min preload lock via transient. If `wp-sitemap.xml` is 50 child sitemaps (TO_FETCH_LIMIT=50) the lock remains for the full 15 s, blocking concurrent cron workers. No `wp_http_validate_url` on child locs before fetch (relies only on loc_host check after parsing). | Stale preload cycle; on slow sitemap hosts the lock expiry (20 min) may cause duplicate `wppo_generate_static_url` scheduling on next tick because `has_more` path re-enters. | Move sitemap discovery off the lock (fetch first, then acquire lock only for scheduling), add `wp_http_validate_url` + `esc_url_raw` before `wp_remote_get($loc)`, and expose `wppo_sitemap_timeout` filter. | medium |
-| A03-006 | MEDIUM | `class-database-cleanup.php:1045-1058` `get_table_size()` | Compatibility | Queries `information_schema.TABLES WHERE table_schema = DB_NAME`. On many managed hosts (Kinsta, WP Engine, some RDS proxies) `information_schema` access is restricted → `$wpdb->get_var` returns NULL → `optimize_table` treats size as 0 and proceeds to lock even a multi-GB table. `size > 1GB` skip is thus ineffective where it matters most. | Production table lock (>1 GB) causes downtime during cleanup; silent fallback masks permission error. | Check `$wpdb->last_error` and skip OPTIMIZE when size unknown (return 0 and log "size unavailable, skipping"), or default to skip if `information_schema` query fails. | high |
-| A03-007 | MEDIUM | `class-rum.php:215-223` `is_rate_limited()` | Race / Correctness | `get_transient` + `set_transient(count+1, HOUR)` is not atomic. Two concurrent beacons from same IP both read `count=119`, both set `120`, bypassing limit by 1 per race window. On high-traffic pages 120/h is generous and attacker can rotate IP anyway, but the primitive is unsound for object-cache backends with race. | Slightly inflated `wppo_web_vitals_rum` aggregates; low abuse-resistance claim. | Use Redis `INCR`+`EXPIRE` when `wp_using_ext_object_cache()` and Redis available, or `wp_cache_add` CAS loop, else accept eventual consistency and document. | high |
-| A03-008 | MEDIUM | `class-cron.php:113-127,129-148` `schedule_cron_jobs()` | Correctness / Waste | Reads `get_option('wppo_settings')` twice (line 114 and 141). Clears `wppo_generate_static_page/url` single events only when preload disabled; when preload stays enabled but `excludePreloadCache` changes, stale single events for now-excluded URLs still fire (they check `is_url_excluded` only at schedule time, not at `process_page`). Also schedules `wppo_database_cleanup_cron`/`wppo_web_vitals_rescan` without checking `dbSchedule`/`auto_rescan` — daily event fires even when mode=`none` then early-returns, waking WP-Cron daily for no work. | ~1 extra cron wake per day per disabled feature; excluded URLs get needlessly fetched until queue drains. | Deduplicate to one `get_option`, guard `wp_schedule_event` for DB/vitals behind setting check (or clear when `none`), and add exclusion re-check inside `process_page`/`process_url` before `mark_page_as_processed`+`load_page`. | high |
-| A03-009 | MEDIUM | `class-pagespeed.php:344-382,394-416` `record_trend()` lock | Concurrency | Trend write serializes via `add_option` lock (DB atomic) then re-reads trends. Stale lock steal is `update_option` without verifying caller owns lock, so two workers both stale-stealing within same second will both proceed and last writer overwrites first's snapshot (lost update). Also `prune_trends` sorts by `strtotime(fetched_at)` which depends on `current_time('mysql',true)` string parsing and may be 0 for malformed rows → oldest-key eviction becomes nondeterministic. | Occasional lost trend snapshot when mobile+desktop scans run concurrently (the case the lock was added to fix). History cap prunes wrong keys when `fetched_at` invalid. | Switch steal to `update_option(lock, time())` only if `get_option(lock) == held_since` (CAS) via `$wpdb->query("UPDATE … WHERE option_value = %s")`, and fall back to `sanitize_text_field`+`strtotime` with fallback to array insertion order. | medium |
-| A03-010 | MEDIUM | `includes/redis-connect-helper.php:248-251,120-123,109-115` TLS + timeout | Config / Hardening | Standalone TLS wraps host as `tls://` only for `connect`/`pconnect`; sentinel child master address is separately wrapped but replica manual `Redis` in drop-in also wraps. Cluster mode prepends `tls://` to every node string by `array_map`. No `STREAM_CRYPTO_METHOD` / `OPT_TLS` tuning, and hard-coded `0.5` s timeout for all modes is too short for cross-AZ cluster (should be filterable). | Cross-AZ or TLS-terminated Redis unreachable under 0.5 s despite being healthy; no way to tune without patching helper. | Expose `wppo_redis_timeout` filter and `wppo_redis_tls_options` filter; document that 0.5 s is connection timeout only (read timeout already 0). | medium |
-| A03-011 | MEDIUM | `class-telemetry.php:292-340` `resolve_redirect()` | Robustness | Relative redirect resolution uses `dirname(path)` which for `/` yields `/` and for `/a` yields `/` → `//` double slash handling? `$base_dir . '/' . $location` for `location='b/c'` with base_dir `/a` yields `/a/b/c` (correct) but for base `dirname('/a/b')='/a'` → `/a/b/c` correct. However query string on Location like `/foo?bar=1` loses original query handling? `wp_http_validate_url` may reject `scheme://host:port` with high port not validated as numeric. `substr($location,0,2)=='//'` path never reached for `https://` case but for `//host/path` re-adds scheme — correct. No limit on Location length (header injection). | Edge-case redirect loop or malformed hop not blocked; spec says max 2 hops but `href` with whitespace before scheme bypass? Mitigated by `trim`+`wp_http_validate_url`. | Use `WP_Http::make_absolute_url($location,$current_url)` (core) instead of hand-rolling, and cap Location at 2048 chars via `substr(...,0,2048)`. | medium |
-| A03-012 | MEDIUM | `includes/class-log.php:107-144` `get_recent_activities()` | Performance | Counts and paginates from `wppo_activity_logs` without `WHERE` pruning. Table grows unbounded (no retention / rotation — `Log::add` only increments salt). `get_total_items` does `SELECT COUNT(*)` full scan per page view; with 100k rows this scan is costly. No index hint; `ORDER BY created_at DESC LIMIT` relies on implicit index on `created_at` which Activate schema may or may not provide (check `class-activate.php`). | Admin Activity tab slow on long-lived sites; DB size grows indefinitely. | Add weekly pruning (keep last 1000 rows or 30 days) in `Log::add` or cron, and ensure `KEY created_at (created_at)` index exists; consider `SQL_CALC_FOUND_ROWS` alternative via two queries already done — keep. | medium |
-| A03-013 | MEDIUM | `class-litespeed-integration.php:769-783` `is_request_cacheable()` exclude handling | Correctness | Reads `preload_settings.excludePreloadCache` to decide cacheability for LS header emission, but canonical exclusion check for file cache lives in `Cache::is_not_cacheable()` (which also checks `DONOTCACHEPAGE`, post type, query string, nonce, etc.). Duplicating only one predicate (`excludePreloadCache`) here creates a split-brain: a URL excluded from preload may still be considered cacheable by file cache while LS header says no-cache, or vice versa when other predicates differ. | LS layer and file cache diverge; CDN may cache pages file cache intentionally skips (`s`/`ver`/`v` already handled but still partial). | Eliminate duplication: rely solely on `Cache::is_request_cacheable()` result and remove the extra `excludePreloadCache` block (or ensure `Cache::is_request_cacheable()` already incorporates it, which it does via `Util::is_url_excluded` on preload exclude). | medium |
-| A03-014 | MEDIUM | `class-llms.php:334-423` `collect_urls()` trends proxy | Correctness / Waste | Cannot reverse `md5(url)_strategy` trend keys so it fabricates top URLs from `high_value_urls` + home rather than actual trend URLs. Two identical blocks (lines 341-372 duplicated for `trends` present/absent) duplicate `get_option` fetch and loop. Fallback `get_posts` queries all public post types without `no_found_rows` or `update_post_meta_cache => false` optimizations (full `get_posts` overhead per generate). | Generated `llms.txt` may list URLs not actually top-performing per trends; generation heavier than needed and code duplicated from `class-cron.php:432-494`. | Deduplicate high-value loop, use `wp_list_pluck` once, add `'no_found_rows'=>true,'update_post_term_cache'=>false` to `get_posts`, or store reverse map `url => md5` alongside trends for accurate LLMs source. | high |
-| A03-015 | MEDIUM | `templates/object-cache.php:163-183` replica connect + `redis-connect-helper.php:230-276` standalone | Resilience | Drop-in replica `new \Redis()->connect(...,0.5)` with 0.5 s timeout inside `try` that catches `\Throwable` and nulled on failure. No retry, no auth failure logging (silent `null`). Standalone helper suppresses errors with `@$redis->$func` (silenced). Connection failures are silent except when `WP_DEBUG` true; `Object_Cache::ping()` returns generic "Ping returned false" without underlying code. | Operators cannot diagnose Redis auth/network vs. extension missing without enabling `WP_DEBUG`. | Log to `wppo_debug_log` action (like CDN purger) at `LOG_WARNING` level for replica failures, and surface `redis->getLastError()` when available. | medium |
-| A03-016 | LOW | `class-database-cleanup.php:86-130,267-311,321-365,373-417,425-469` batch deletes | Optimization | 5 methods copy-paste 30-line `do{ get_col LIMIT 1000; implode placeholders; DELETE postmeta/commentmeta; DELETE posts/comments }` with only table/where differing. Fix requires 5-file edits. `clean_revisions` uses `post_type='revision'` string literal not `prepare`, but safe because literal. | Maintenance burden; risk of divergent fixes (e.g. A03-006 OPTIMIZE guard fix needs 5 edits). | Extract `delete_posts_by_where(string $whereClause, array $tables)` helper; keep PHPCS ignores centralized. | low |
-| A03-017 | LOW | `class-cron.php:141` + `113` double `get_option` + `class-system-info.php:368-379` double `get_option` | Optimization | `schedule_cron_jobs()` line 114 and 141 re-fetch same option; `get_infrastructure()` and `get_litespeed()` each call `get_option('wppo_settings')` within same `get_all()` request without static memoization. Consent overhead ~2 extra `get_option` DB hits per `init`/`system_info` REST call. | Negligible but measurable on high-traffic `init` (cron schedule runs every page view though short-circuited by `wp_next_scheduled`). | Memoize with `static $opts` inside `Cron::schedule_cron_jobs` or call `Main::get_settings()` single source. | low |
-| A03-018 | LOW | `class-telemetry.php:957-983,68-82,939-944` salt vs transient fallback | Compatibility | `invalidate_audit_cache()` no-ops when `wp_cache_get_salted` absent (fallback transients not invalidated). Conversely `scan()` fallback writes `set_transient` + `register_transient_key` but salted path uses `wp_cache_set_salted` with 1 h expiry while fallback writes with `HOUR_IN_SECONDS` + index. Mixed environments (object cache flushed, function appears/disappears) could leave stale data in one store. | Stale audit results after settings save when running without drop-in; minor UX glitch. | In fallback, mirror `delete` path: `invalidate_audit_cache` should `delete_transient` wildcard via index when salted absent, or always delete index entries. | medium |
-| A03-019 | LOW | `class-pagespeed.php:579-610` `extract_lcp_image_url()` snippet regex | Brittleness | Falls back to `preg_match('/<img\s[^>]*src=["\']([^"\']+)["\']/i', $snippet)` — will capture first src but snippets may contain escaped entities (`&quot;`) or single-quoted mixed case; also matches `data-src`? Actually first alternative prioritizes structured `url` field now, but snippet regex could return CDN-rewritten URL with query params truncated by sanitizer. | Rare LCP preload mis-url; preloading wrong image. | Prefer `DOMDocument` fragment parse over regex for snippet, and pass through `Util::get_local_path` normalization check before store. | low |
-| A03-020 | LOW | `class-litespeed-integration.php:887-926,943-968,980-1005` header emission | Timing / Testing | Uses `has_action('litespeed_control_set_ttl')` runtime check then `header()` immediate. Unit tests need `headers_sent()` stub; currently bypassed by `headers_sent()` early return which test env mocks differently. Duplicate `apply_filters('wppo_litespeed_ttl')` called both in `get_litespeed_ttl()` and again in `send_litespeed_ttl()` — double-filter. | TTL filter invoked twice; test doubles need two expectations. | Cache TTL after filtering once; pass through unfiltered TTL to `send_litespeed_ttl` and document single filter point. | low |
-| A03-021 | INFO | `class-system-info.php:129-145` `get_database()` | Dead field | `$client_version` is always `null` (initialized null, never assigned). Historically `mysqli_get_client_version()` or `$wpdb->client_version()` but removed. Returned as `'client_version'=>null` in `get_all()` — SPA shows "—". Not harmful but misleading diagnostics. | Admin System Info panel shows blank client version. | Populate via `mysqli_get_client_info()` when `$wpdb->dbh instanceof \mysqli`, or remove field and document intentional omission due to fingerprinting policy (adjacent to version redaction). | low |
-| A03-022 | INFO | `class-suggestion-engine.php:114-116,128-130` raw header override | Clarity | `compression_value`/`cache_control_value` override mutates `$suggestions[count-1]['value']` after `make_boolean()` built `'pass'`→ raw header. Relies on last-index invariant; if additional suggestions inserted later the index breaks. Works now but fragile. | Future edits may silently mis-attribute raw header to wrong metric. | Capture index at push time: `$idx = count($suggestions); $suggestions[] = …; if($comp_pass) $suggestions[$idx]['value']=$comp_value;` | low |
-| A03-023 | INFO | `class-cdn-purger.php:82-104` `purge_litespeed()` path normalization | Edge | `purge_litespeed('single_page', $url_path)` prepends `'/' . ltrim($path,'/')` then `home_url($path_for_url)` inside `sync_purge_url_to_litespeed`. If `$url_path` already contains query string `/page?foo=1`, tag purge will be `home_url('/page?foo=1')` which LSCWP may treat as different tag than `Po.{id}`. Second fallback block duplicates same logic (lines 100-103). | Duplicate code; query-string pages not purged accurately by URL tag fallback. | Deduplicate to single `if (is_string($url_path) && ''!==trim)` branch; strip query via `wp_parse_url($path_for_url,PHP_URL_PATH)` before `home_url`. | low |
-| A03-024 | INFO | `class-rum.php:154-169` `print_config()` | Exposure | Prints `<script id="wppo-rum-config">window.wppoRum={"apiUrl":"…","token":"…","path":"…"}</script>` on `wp_footer` even for cached pages (baked into `index.html`). Token is daily-per-path `wp_hash('wppo_rum_' . Ymd . '|' . path)` — deterministic and brute-forceable if `NONCE_SALT` leaked. No `nonce` attribute on script tag for CSP. | Token replay within day is allowed (by design); exposure is intentional for cache-hit operation. Not a vulnerability per se but CSP strict sites will block inline script. | Consider `wp_add_inline_script('wppo-rum', 'window.wppoRum=…', 'before')` instead of echo, and add `apply_filters('wppo_rum_token_ttl', DAY)` for rotation. Document token is not a secret. | low |
-| A03-025 | OPTIMIZATION | `class-telemetry.php:632-665` `get_sitemap_urls` regex vs parser | Performance | Uses `preg_match_all('#<loc>\s*([^<]+?)\s*</loc>#i', $body)` which is O(n) on body string but allocates `$matches[1]` full copy per sitemap child. For a 500-URL sitemap (10k loc elements across 50 children) allocates ~10k strings × 50 iterations = transient memory spike (~5 MB). `SimpleXML` would stream. | Acceptable for 500 cap but allocation-heavy under `WPPO_CRON_DISCOVERY_LIMIT=2000` filter edge. | Keep regex (fast, no libxml errors on malformed XML) but free via `unset($matches)` after iteration. | low |
-| A03-026 | OPTIMIZATION | `class-cron.php:648,326,491` `apply_filters('wppo_cron_discovery_limit',50)` | API | Filter applied inside `img_convert_cron` and `schedule_sitemap_url_jobs` hard caps but no sanity clamp (could be set to 100000). Would cause OOM if filter returns large number. | Operator error via filter misconfiguration. | Clamp with `max(1, min(500, (int) apply_filters(...)))`. | low |
-| A03-027 | DUPLICATE | `class-cron.php:432-494` vs `class-llms.php:432-495` sitemap discovery | Duplicate code | Both classes implement near-identical `get_sitemap_urls`/`collect_sitemap_urls` (15 s deadline, 50 TO_FETCH_LIMIT, regex loc, home_host filter, `wp_remote_get` 5 s). Diff: Cron caps 500, LLMs caps `limit` param; Cron uppercases? Not. | Fixing SSRF/URL validation in one must be mirrored in other; drift will diverge. | Extract to `Util::discover_sitemap_urls(int $cap, int $timeoutMs = 15000, int $toFetchLimit = 50)` shared helper, unit-tested. | medium |
-| A03-028 | DUPLICATE | `class-database-cleanup.php:60-70` `METHOD_TO_TYPE` + `TABLE_MAP` | Duplicate mapping | Two maps keyed differently (`TABLE_MAP` by type, `METHOD_TO_TYPE` by method) invert each other; `clean_all` defines a third inline `$methods` array mirroring both. `auto_clean` defines fourth list (omits `unattached_media`/`oembed_cache`). | Adding a new cleanup type requires 4 edits; omission bug in `auto_clean` (intentional omission of 2 types from cron auto-clean) is implicit. | Single `CLEANUP_REGISTRY = ['revisions'=>['method'=>'clean_revisions_advanced','tables'=>…, 'auto'=>true],…]` source of truth. | medium |
-| A03-029 | DEAD CODE | `class-cron.php:83-86` `trigger_preload()` | Info | Public static `trigger_preload(): void { new self()->schedule_page_cron_jobs(); }` instantiates a fresh `Cron` (hence re-adds 11 hooks via `__construct`) just to call private `schedule_page_cron_jobs`. Each call leaks duplicate `init`/`action` callbacks into `$wp_filter` for that request. WP-CLI invocation thereby registers hooks twice if plugin already instantiated `Cron` earlier. | Hook duplication may cause double scheduling when CLI calls `trigger_preload` inside same process that already has a `Cron` instance (though `wp_next_scheduled` guards limit effect). | Make `schedule_page_cron_jobs` public static or inject existing instance; avoid `new self()` in static context. | medium |
-| A03-030 | DEAD CODE | `templates/object-cache.php:229-256` `add()` with expire branch | Subtle | When `expire>0` uses `$this->redis->set($key,$data, ['nx'=>true,'ex'=>expire])` — expects phpredis 3.1+ array syntax. Fallback `setnx` without expire ignores TTL when `expire==0`? Actually `setnx` never expires, but spec says `expire` param should be honored only when >0, so correct. However `wp_cache_add(...,0)` means forever — `setnx` forever is fine. No bug. But `expires` integer 0 vs falsy special: `expire = '0'` string becomes 0 after `(int)` cast upstream — handled. | No issue — document Redis version requirement. | Annotate minimum phpredis version in README. | low |
-| A03-031 | INFO | `class-system-info.php:298-322,326-352` `get_litespeed()` drop-in arbitration | FS | Reads both `advanced-cache.php` and `object-cache.php` via `file_get_contents` (<1 M guard) on every `get_all()` REST call, even when not LiteSpeed. `Advanced_Cache_Handler::foreign_dropin_present()` already checks, then file read again for substring `litespeed`/`LSCACHE`. | Extra FS I/O per System Info poll (~2 reads). | Memoize drop-in content per request with `static $adv_content`. | low |
+### 2. `includes/class-cache.php:1494-1496` + `1587-1600` — Invalidation / stale-artifact gaps for `.br`, `.handles`, role variants
+- **Category:** Correctness
+- **Severity:** Major
+- **Problem:** `Cron::mark_page_as_processed()` (called by `process_page` before `load_page`) only deletes `index.html` and `index.html.gz` (`class-cron.php:599-610`). It omits `.br` brotli, role-variant `index-{12hex}.html*`, `.wppo-no-cache` marker, and CSS sidecar `index.css` / `index.css.handles`. `Cache::delete_all_cache_files()` and `Cache::invalidate_dynamic_static_html()` do purge those, but the preload batch path leaves stale brotli/role files behind. Similarly `Cache::save_cache_files()` writes `.br` alongside `.gz`; a later `mark_page_as_processed` leaves old `.br` to be served by drop-in (br preferred).
+- **Why matters:** After a page update, authenticated-role users may still receive stale role-variant HTML; brotli cache may serve old HTML even after purge.
+- **Evidence:** `class-cron.php:599-610` two `delete()` calls only; vs `class-cache.php:1922-1931` `delete_cache_files` deletes `.gz` + `.br`; `1944-1961` `delete_role_variant_files`; `class-cache.php:1790-1798` full purge.
+- **Impact:** Stale content for logged-in role caches and brotli-capable clients.
+- **Recommended solution:** Make `mark_page_as_processed()` delete `.br`, call `delete_role_variant_files(dirname($file_path))`, and optionally `delete_no_cache_marker()` / `*.handles`; or reuse `Cache::get_file_path` + `delete_cache_files` logic (inject filesystem helper) instead of duplicating path construction.
+- **Confidence:** High
+
+### 3. `includes/class-cache.php:250-258` + `253-255` — Single rawurldecode vs double-encode traversal
+- **Category:** Security / Correctness
+- **Severity:** Minor
+- **Problem:** `__construct()` does `rawurldecode(wp_parse_url(REQUEST_URI, PHP_URL_PATH))` once then checks `strpos($url_path,'..')`. A double-encoded `%252e%252e` decodes to `%2e%2e` and passes the check, later `prepare_cache_dir()` explodes and builds directories with `%2e%2e` literally (no traversal), so no FS escape. However `get_file_path()` also checks `strpos($url_path,'..')` after `wp_normalize_path(trim(..., '/'))` without decoding, so `%2e` variants are not caught. Inconsistent decoding means attacker can create cache dirs named `%2e%2e` (percent-encoded dots) that later normalization might mishandle on case-sensitive FS.
+- **Why matters:** Low direct risk (no directory escape) but cache pollution / key collision; defense should be uniform.
+- **Evidence:** `class-cache.php:251` `rawurldecode`, `253-255` `strpos('..')`; `1878-1882` `get_file_path` `strpos('..')` without decode.
+- **Impact:** Cache directory pollution, potential confusion with `prepare_cache_dir`.
+- **Recommended solution:** Normalize via `rawurldecode` repeatedly (or use `urldecode` + loop) before `..` check, or reject `%2e` case-insensitively via regex `%2e` + `..`. Align both call sites to same helper.
+- **Confidence:** Medium
+
+### 4. `includes/class-cache.php:1622-1628` — File-level transient lock is blog-prefixed but file path is domain-scoped
+- **Category:** Correctness / Multisite
+- **Severity:** Minor
+- **Problem:** Lock key `Util::transient_key('wppo_cache_write_' . md5($file_path))` prefixes with `get_current_blog_id()`. On multisite with shared object cache (Redis), this is correct isolation. But `$file_path` already includes domain string (which is site-specific). For single-site with domain alias or multisite domain mapping, two blogs sharing same domain (unlikely) would still share file lock due to same md5 but different blog prefix → two different transients, so no mutual exclusion — concurrent writes could stampede. Conversely, same logic for `wppo_preload_cron_lock` etc is correctly blog-prefixed.
+- **Why matters:** Stampede window reopens for domain-aliased multisite edge case; 5-second lock may be bypassed.
+- **Evidence:** `class-cache.php:1624` `md5($file_path)` + `Util::transient_key`; `class-util.php:720-729` blog prefix logic.
+- **Impact:** Rare concurrent cache corruption (partial write) on domain-aliased multisite.
+- **Recommended solution:** Include both `get_current_blog_id()` and domain in md5, or keep as-is but document assumption that domain is unique per blog (enforced by multisite). Add test for transient key uniqueness.
+- **Confidence:** Low (edge case)
+
+### 5. `includes/class-cache.php:1572-1589` — Atomic write fallback lacks fsync / permissions check
+- **Category:** Reliability
+- **Severity:** Info
+- **Problem:** `atomic_put_contents()` writes tmp `.$path.tmp.{rand}` then `$fs->move($tmp,$path,true)`. If move fails (e.g., cross-FS, FTP FS), it deletes tmp and falls back to direct `put_contents`. The direct write is not atomic, reintroducing partial-read race that transient lock was meant to prevent. No `wp_rand()` collision handling, no cleanup of stale `.tmp.*` on failure.
+- **Why matters:** On FTP/SSH FS, readers may see torn HTML.
+- **Evidence:** `class-cache.php:1582-1586`.
+- **Impact:** Brief torn cache serve under FTP FS under high concurrency.
+- **Recommended solution:** Keep fallback but log via `wppo_debug_log`; optionally `chmod` check; consider `FS_CHMOD_FILE` already applied.
+- **Confidence:** Medium
+
+### 6. `includes/class-advanced-cache-handler.php:151-158` — Cache life baked at generation time, never refreshed
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** `create()` reads `wppo_settings[cache_settings][cacheLife]` once and bakes `$cache_life = N` into generated `advanced-cache.php` (`'$cache_life = ' . $cache_life`). Settings change requires re-running `create()` (done on settings save via `Main` — verify). If that re-create fails or `create()` is short-circuited by `foreign_dropin_present()==true` (returns true without regen), the baked value stays stale. Drop-in expiry check `time() - filemtime($check_path) > $cache_life*3600` then uses wrong TTL.
+- **Why matters:** Users changing cache TTL see no effect until manual regeneration.
+- **Evidence:** `class-advanced-cache-handler.php:152-154` `get_option`, `169` `$cache_life = ...`, `214-223` filemtime check.
+- **Impact:** TTL drift, cache served longer/shorter than configured.
+- **Recommended solution:** Either read TTL dynamically via lightweight `include` of config at serve time (costly) or ensure `Main` always calls `create()` on `wppo_settings` update and on `foreign_dropin_present` false path; add `advanced-cache.php` re-generation on `update_option_wppo_settings` hook.
+- **Confidence:** Medium
+
+### 7. `includes/class-advanced-cache-handler.php:179-181`, `284-286` — Drop-in serve omits query-string & DONOTCACHEPAGE nuances
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** Drop-in checks `!empty($_SERVER['QUERY_STRING'])` via `! $has_query` and woocommerce cookies + sitemap/xml regex + `.wppo-no-cache` marker. `Cache::is_not_cacheable()` additionally checks `is_feed()`, `is_cart/checkout/account_page()`, `pathinfo extension`, `woocommerce_cart_hash` cookies, and `DONOTCACHEPAGE` marker (which writes file). The drop-in cannot call `is_feed()` pre-WP, so parity is approximate. It also checks `$_COOKIE['woocommerce_items_in_cart']` etc but not `woocommerce_cart_hash`? Actually it does: `175-176` checks `woocommerce_items_in_cart` + `woocommerce_cart_hash` — parity ok. But it does not check `?s=` search query specially like `Cache::maybe_store_cache()` does (`preg_match('/(?:^|&)(s|ver|v)(?:=|&|$)/')`). Drop-in only checks `!empty(QUERY_STRING)` generically, so search pages are correctly not served (both agree). However pages with `?ver=` query that WordPress would cache as separate file are not distinguished; drop-in simply bypasses.
+- **Why matters:** Mostly correct, but slight divergence: `Cache::is_not_cacheable()` excludes `sitemap*.xml` via regex, drop-in does same; parity is close.
+- **Evidence:** `class-cache.php:1488-1496`, `1739-1742` query check; `class-advanced-cache-handler.php:283-286` query check.
+- **Impact:** No serve of dynamic pages — safe, slightly over-conservative.
+- **Recommended solution:** Document parity table; consider mirroring `s|ver|v` logic in drop-in for consistency.
+- **Confidence:** Low
+
+### 8. `includes/class-advanced-cache-handler.php:226-244` — Brotli serve prefers `br` over `gzip` but cache_life check prefers br filemtime
+- **Category:** Performance
+- **Severity:** Info
+- **Problem:** `wppo_serve_cache_file()` selects `$check_path` based on `Accept-Encoding: br` and file existence to enforce TTL, then later serves `br` if found. If `br` exists but is stale (>TTL) and `gzip` is fresh, it returns early (bypass) even though a fresh gzip could be served. Similarly, if `br` missing but `gzip` stale, it bypasses even if `index.html` fresh.
+- **Why matters:** Unnecessary cache bypass when one variant stale but another fresh; regeneration still happens but extra WP boots.
+- **Evidence:** `class-advanced-cache-handler.php:214-225`.
+- **Impact:** Extra origin hits until brotli regenerated.
+- **Recommended solution:** Check each variant TTL individually and serve the freshest available variant matching Accept-Encoding, or delete stale variants on regeneration (`save_cache_files` already overwrites both).
+- **Confidence:** Medium
+
+### 9. `includes/class-htaccess-handler.php:187-192` — Next-gen rewrite lacks `[L]` and order dependency
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** The appended next-gen block does:
+```
+RewriteCond %{HTTP:Accept} image/webp
+RewriteCond %{REQUEST_FILENAME}.webp -f
+RewriteRule ^(.+)\.(jpe?g|png)$ $1.webp [T=image/webp,E=accept:1]
+RewriteCond %{HTTP:Accept} image/avif
+...
+RewriteRule ^(.+)\.(jpe?g|png)$ $1.avif [T=image/avif,E=accept:1]
+```
+  No `[L]` flag means both rules may apply sequentially (first rewrites to `.webp`, second then tests `.avif` existence on the *rewritten* filename, not original — Apache re-evaluates `REQUEST_FILENAME` after first internal rewrite? Actually without `L`, rules are processed top-down in same round, `REQUEST_FILENAME` unchanged until rewrite, so second rule's `REQUEST_FILENAME.avif` tests original + `.avif`. If both `.webp` and `.avif` exist and client accepts both, request will be rewritten twice: first to `.webp`, then to `.avif` (avif wins). That's intentional (avif preferred if placed second) but the double filesystem check (`-f`) is wasteful. More importantly, without `L`, a request that matched webp will still evaluate avif condition, but if avif not exists, it stays at `.webp` — works. However `T=` MIME change without `L` may cause `mod_headers` Vary to be set inconsistently.
+- **Why matters:** Works but inefficient; on Apache with `AllowOverride` limited, `-f` check is per-request stat.
+- **Evidence:** `class-htaccess-handler.php:183-192`.
+- **Impact:** Extra stat syscall per image request.
+- **Recommended solution:** Add `[L]` to each rule and order avif first (prefer avif) with `L`, or use single rule with `E=`; add comment about `L` to prevent double evaluation. Verify on LiteSpeed (OpenLiteSpeed requires restart).
+- **Confidence:** Medium
+
+### 10. `includes/class-server-rules.php:78-81` — Nginx gzip gated on minifyJS/CSS
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** `get_nginx_rules()` only emits `gzip on;` block if `minifyJS || minifyCSS` (`class-server-rules.php:81`). Gzip should be independent of minify. On installs with CDN or external minify but wanting nginx gzip, user gets no gzip snippet. `Htaccess_Handler` always emits gzip regardless of settings — inconsistency.
+- **Why matters:** Users miss gzip config when they disable minify.
+- **Evidence:** `class-server-rules.php:78-81` vs `class-htaccess-handler.php:99-122` unconditional gzip.
+- **Impact:** Manual nginx config incomplete, performance left on table.
+- **Recommended solution:** Gate gzip on `enableServerRules` or always emit when `enableServerRules` true, or separate toggle. Align with htaccess behavior.
+- **Confidence:** High
+
+### 11. `includes/class-server-rules.php:140-155` — Nginx next-gen generates nested `server {}` block
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** `get_nginx_rules()` appends:
+```
+map $http_accept $wppo_avif_suffix { ... }
+map $http_accept $wppo_webp_suffix { ... }
+server {
+    location ~* \.(jpe?g|png)$ { try_files $uri$wppo_avif_suffix ... }
+}
+```
+  If user pastes snippet inside an existing `server {}` block (typical), the nested `server {}` is invalid nginx. `map` directives must be in `http {}` context, not `server`. The snippet conflates contexts. Also browser-caching `location ~* \.(jpg|...)$` (line 111) and next-gen `location ~* \.(jpe?g|png)$` conflict: nginx chooses one regex location (first match if `~` vs `~*` precedence), so next-gen may never be evaluated if browser caching location wins.
+- **Why matters:** Copied nginx rules may fail `nginx -t` or silently not serve webp/avif.
+- **Evidence:** `class-server-rules.php:140-155`, `109-115`.
+- **Impact:** Next-gen delivery broken on nginx.
+- **Recommended solution:** Split snippet into `http` context (map) vs `server` context (location) with documentation; emit `location` without wrapping `server {}` or emit include file. Order locations to ensure avif/webp location takes precedence (e.g., more specific regex first).
+- **Confidence:** High
+
+### 12. `includes/class-cron.php:274-339` — Preload batch offset logic fragile + sitemap once-per-cycle gate
+- **Category:** Correctness / Performance
+- **Severity:** Major
+- **Problem:**
+  1. `schedule_page_cron_jobs()` computes `$paged = max(1, ceil(($paged_offset+1)/200))` and queries `get_posts(paged=$paged, posts_per_page=200, fields=ids, orderby=ID ASC)`. If posts are deleted between cycles, offset (`wppo_preload_cron_offset` option, autoload false) may point past end, query returns empty, offset deleted — next cycle restarts at 0. That's correct reset. But if new posts with low IDs are inserted (e.g., via import with explicit ID), `ORDER BY ID ASC` with `paged` offset may skip them because `paged` is offset-based, not cursor-based. Classic WP pagination drift.
+  2. Sitemap warm-up fires only when `$paged_offset===0` (`313-315`). If a previous cycle crashed before offset reset (e.g., lock expiry, fatal), offset stays non-zero, sitemap URLs never warmed again. Also `schedule_sitemap_url_jobs(500)` schedules each URL with `wp_schedule_single_event(time()+rand(0,1800))` — up to 500 distinct `wppo_generate_static_url` events at once. `wp_next_scheduled('wppo_generate_static_url', [$url])` check is O(n) over cron array per URL (500*500 checks) and stores args serialized, bloating `cron` option (can exceed `max_allowed_packet` on some DBs). 5-hourly preload repeats this, causing cron option bloat.
+  3. Transient lock `wppo_preload_cron_lock` 20min, but `used_css` lock also 20min — parallel preload + used_css may deadlock if both scheduled together (both `every_5_hours`).
+- **Why matters:** Missing pages in preload, cron table bloat, sitemap starvation.
+- **Evidence:** `class-cron.php:283-297`, `313-315`, `351-362`, `276-279` lock, `332-334` follow-up batch `+60s`.
+- **Impact:** Incomplete cache warming; DB performance degraded by large cron option; sitemap-only URLs (archives, custom endpoints) go cold.
+- **Recommended solution:** Use cursor pagination (`post__in` with `ID > last_id` + `ORDER BY ID ASC` limit 200) storing `last_id` not offset+200. Cap `wppo_generate_static_url` events to 100 and throttle with Action Scheduler instead of `wp_schedule_single_event`. Ensure sitemap jobs scheduled via separate daily hook or when offset resets to 0 *or* on transient expiry, not only offset==0. Add `wp_schedule_single_event` batching with `wp_next_scheduled` dedup via in-memory set.
+- **Confidence:** High
+
+### 13. `includes/class-cron.php:474-549` — Sitemap discovery: permissive regex, host check bypass for relative URLs, deadline 15s may truncate
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:**
+  - `preg_match_all('#<loc>\s*([^<]+?)\s*</loc>#i')` captures any `<loc>` across the document, including those inside `<image:loc>` (image sitemap) or comments, inflating URL list with non-HTML assets.
+  - Host check: `$loc_host = wp_parse_url($loc, PHP_URL_HOST); if ($loc_host && $loc_host !== $home_host) continue;` — If sitemap contains relative URLs (rare but valid per spec), `loc_host` is empty → not filtered, and later `process_url(esc_url_raw(relative))` may normalize to `https://relative`? Actually `esc_url_raw` of `/custom-page` returns `/custom-page`? Then `wp_remote_get('/custom-page')` fails (invalid URL). Should resolve relative via `Util::cached_home_url()`.
+  - Deadline 15s wall-clock includes sequential `wp_remote_get(timeout=5)` per sitemap fetch (up to 50 children). Worst-case 50*5=250s >15s, so loop breaks early, returning partial list. That's intentional (bound), but remainder of sitemap URLs never warmed that cycle.
+- **Why matters:** Extra image URLs queued for static cache (wasteful, may 404); relative URLs silently fail.
+- **Evidence:** `class-cron.php:483` deadline, `497` timeout 5, `511-528` loc parsing, `525-527` host check.
+- **Impact:** Up to ~500 URLs but includes noise; incomplete coverage under slow sitemap.
+- **Recommended solution:** Filter locs via `FILTER_VALIDATE_URL` + host check also for schemeless; resolve relative via `home_url`. Use `simplexml_load_string` if available for proper XML parsing (fallback to regex). Document 15s cap and TO_FETCH_LIMIT interaction.
+- **Confidence:** Medium
+
+### 14. `includes/class-cron.php:114-158` — `schedule_cron_jobs` re-registers daily/hourly events without rescheduling on settings toggle off→on
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** For always-on hooks (`wppo_img_conversion` hourly, `wppo_database_cleanup_cron` daily, `wppo_web_vitals_rescan` daily, `wppo_ccss_regeneration` daily) the code only schedules if `!wp_next_scheduled`. If `wppo_database_cleanup_cron` was previously cleared via `clear_cron_jobs()` (e.g., deactivate), `schedule_cron_jobs` on next `init` will re-schedule — ok. But for `wppo_llms_txt_daily` and `wppo_used_css_cron` gated by `if (!empty($options['llms_txt']['enabled']))` vs `else wp_clear_scheduled_hook`, toggling `removeUnusedCSS` on after it was off will schedule `wppo_used_css_cron` on next init (good). Toggling off clears. However `wppo_ccss_regeneration` is unconditional daily — but `ccss_regeneration_cron()` early returns if `criticalCSS` off, so daily event wakes for no reason (wasteful but harmless).
+- **Why matters:** Unnecessary wakeups; `wppo_used_css_cron` uses `every_5_hours` but `clear_cron_jobs` on preload disable does not clear `wppo_ccss_regeneration`? Actually `clear_cron_jobs` line 405 `wp_clear_scheduled_hook('wppo_ccss_regeneration')` does clear.
+- **Evidence:** `class-cron.php:114-158`, `396-410`.
+- **Impact:** Minor cron bloat.
+- **Recommended solution:** Gate `wppo_ccss_regeneration` scheduling on `criticalCSS` like `wppo_used_css_cron`. Or keep but document.
+- **Confidence:** Low
+
+### 15. `includes/class-cron.php:697-735` — DB cleanup schedule threshold off-by-one + lock not cleared on failure path
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** `database_cleanup_cron()` computes `$should_run = ($now - $last_run > X - HOUR_IN_SECONDS)` e.g., daily `> 82800` (23h) not 86400. So if cron fires exactly 24h later, it runs (23h threshold). That's lenient to handle late cron, good. But `update_option('wppo_last_db_cleanup', $now)` is outside the try/finally for lock, but inside `if ($should_run)` — if `get_transient(lock)` returns true (concurrent run), it returns early without updating `last_run`, correct. However if `auto_clean` throws, `finally` clears lock, then `update_option` still sets `last_run` even though cleanup failed, blocking retry for 23h.
+- **Why matters:** Transient failure prevents retry for a day.
+- **Evidence:** `class-cron.php:709-735` switch, lock, try/finally, `update_option`.
+- **Impact:** DB bloat remains uncleaned until next day.
+- **Recommended solution:** Move `update_option` inside try after successful `auto_clean`, or set only on success boolean return.
+- **Confidence:** Medium
+
+### 16. `includes/class-cron.php:622-687` — Image conversion batch: path traversal guard strong but discovery unbounded
+- **Category:** Security / Performance
+- **Severity:** Info
+- **Problem:** Good: `img_convert_cron` validates `realpath(source)` starts with `ABSPATH` (`677`). Batch size from `image_optimisation.batch` default 50, plus `apply_filters('wppo_cron_discovery_limit',50)` for library discovery `651-654`. `queue_unconverted_library_images` is called every hourly run, scanning library for unconverted images (up to 50 discovery). That's O(n) table scan hourly; okay. But `$img_info = Img_Converter::get_img_info()` re-read after discovery inside same lock, good.
+- **Why matters:** Secure; performance okay but discovery limit filter could be abused via large value (e.g., 10000) causing OOM — but filter is site-controlled.
+- **Evidence:** `class-cron.php:640-682`.
+- **Impact:** None beyond perf note.
+- **Recommended solution:** Cap discovery limit upper bound (e.g., min(filter,200)) in cron wrapper to prevent admin filter misuse.
+- **Confidence:** Low
+
+### 17. `includes/class-object-cache.php:86-183` — Status telemetry for cluster misreads `redis_version` etc
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** `get_status()` handles `RedisCluster::info()` returning `array node => info` but only extracts `db0` from first node for `$keys` count (`144-149`). It does not extract `redis_version`, `uptime_in_seconds`, etc from first node — it reads `$info['redis_version']` directly (`158`), which for cluster is not set (keys are node ids). So telemetry shows Unknown version on cluster.
+- **Why matters:** Dashboard misreports Redis version on cluster.
+- **Evidence:** `class-object-cache.php:140-168`.
+- **Impact:** Cosmetic, but may confuse support.
+- **Recommended solution:** For cluster, pick `$first = reset($info)` and read version/uptime from `$first` when instanceof `\RedisCluster`.
+- **Confidence:** High
+
+### 18. `includes/class-object-cache.php:119-125` — Config fallback includes raw file without validation
+- **Category:** Security
+- **Severity:** Info
+- **Problem:** `get_status()` does `if (empty($config) && file_exists(config_path)) $config = include $config_path`. The config file is generated via `var_export($config_data,true)` (line 293-294) with `<?php return [...]`. If file is tampered, include executes arbitrary PHP. File is in `WP_CONTENT_DIR` writable by webserver, but already trusted boundary. However `include` without `is_readable` + size check could be exploited if attacker writes PHP there via other vuln.
+- **Why matters:** Standard WP drop-in pattern, but worth noting.
+- **Evidence:** `class-object-cache.php:123-124`, `291-294`.
+- **Impact:** Low, requires prior file write.
+- **Recommended solution:** Keep but add `is_readable` + `filesize < 64KB` guard before include (as done for drop-in content check 97).
+- **Confidence:** Low
+
+### 19. `includes/redis-connect-helper.php:57-68` — Password fallback order env vs constant vs config, but logs generic error
+- **Category:** Correctness / Security
+- **Severity:** Info
+- **Problem:** `wppo_redis_connect()` checks `if (!isset($config['password']) || ''===...)` then `WPPO_REDIS_PASSWORD` constant, else `getenv('WPPO_REDIS_PASSWORD')`. This means empty string password in config is treated as "not set" and falls through to env, which is correct for `enable()` which unsets password before writing file. Good. However catch-all `Throwable` logs `error_log('WPPO Redis connection failed')` without sanitizing exception message, then returns generic `WP_Error('redis_err')` — hides root cause unless `WP_DEBUG true` branch in `Object_Cache::get_status` shows detailed message. That's intentional (debug gate) — good.
+- **Evidence:** `redis-connect-helper.php:59-68`, `80-86`.
+- **Impact:** Hard to debug on production without WP_DEBUG.
+- **Recommended solution:** Log hashed error via `wppo_debug_log` action with sanitized message.
+- **Confidence:** Low
+
+### 20. `includes/redis-connect-helper.php:288-316` — `wppo_parse_redis_node` port default inconsistency
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** Bracket IPv6 without port → `trim($node,'[]')` + port 26379 (sentinel default). Bare IPv6 without brackets with `substr_count(':')>1` → host=whole node, port 26379. But for standalone Redis, default port is 6379, not 26379. This parser is only used for sentinel/cluster nodes (`redis-connect-helper.php:151`, `104`), where 26379 is correct. Standalone uses `host`/`port` directly, so not affected. Document that this default is sentinel-specific.
+- **Why matters:** If someone configures cluster with bare IPv6 standalone-style, port 26379 vs 6379 mismatch.
+- **Evidence:** `redis-connect-helper.php:289-314`, `wppo_redis_connect_sentinel:169-173`.
+- **Impact:** Minor, cluster/sentinel IPv6 edge.
+- **Recommended solution:** Add docblock noting 26379 default is sentinel; cluster default should be 6379 (or make configurable).
+- **Confidence:** Medium
+
+### 21. `templates/object-cache.php:69-87` — Blog prefix + salt keying, but `add_salt` not persisted across `flush`/`init`
+- **Category:** Correctness
+- **Severity:** Info
+- **Problem:** `WP_Object_Cache::__construct` sets `$blog_prefix = (is_multisite()?blog_id:table_prefix).':'` and `$salt=''`. `add_salt($salt)` is called via `wp_cache_add_salt()` (WP 6.9+) to namespace keys for query cache. `get_key()` returns `$prefix . $salt . $group . ':' . $key`. On `flush()` SCAN loop uses `$prefix . '*'` (line 536) not including salt, so flush clears all salts — correct. On `flush_group`, pattern `get_key('', $group) . '*'` includes salt, so only current salt's group is cleared — correct for wrapper-based `wp_cache_set_salted` pattern (stable key). However `wp_cache_close()` only closes primary and replica `close()`, not resetting salt — fine.
+- **Why matters:** Salted cache wrapper (lines 928-1095) stores `{data,salt}` at stable key; flush_group SCAN after salt rotation would miss stale wrapper if SCAN pattern includes new salt. But wrapper pattern is intentional: old salt rows remain but `wp_cache_get_salted` checks salt mismatch → miss, not served. Stale rows remain until expiration or `flush()` full prefix scan. That's per-core behavior.
+- **Evidence:** `templates/object-cache.php:208-218` get_key, `529-570` flush, `581-622` flush_group, `928-986` wrapper.
+- **Impact:** Stale wrapper accumulation (bounded, not leak infinite because set overwrites stable key).
+- **Recommended solution:** No change needed; document that SCAN in `flush_group` is salt-sensitive and full flush is needed to reclaim old salt rows.
+- **Confidence:** High
+
+### 22. `templates/object-cache.php:159-184` — Replica random selection + TLS/auth not mirrored for cluster
+- **Category:** Reliability
+- **Severity:** Minor
+- **Problem:** Standalone replica support picks `array_rand($config['replicas'])` random replica per request (`159`), connects via `new \Redis()->connect($r_host,$r_port)`. If replica is down, request falls back to primary (since `get` uses `$redis_replica ? $redis_replica : $redis` → actually uses replica if set, else primary). If replica connection fails, `redis_replica` stays null, so reads go to primary — correct fallback. However replica TLS, database select, and `wppo_apply_redis_options` are applied (`189-191`), good. But for cluster/sentinel modes, replicas are not supported (code checks `mode === standalone` only) — documented, fine. `retrieve_password` for replica defaults to `$password` (primary password) if replica entry lacks password — okay. But `enable()` stripped replica passwords from config file (`283-288`), so replica password must come from DB `wppo_settings` merged at load via constant/env — but `templates/object-cache.php:101-118` only merges primary password, not replica passwords. Actually it sets `$config['password'] = $password` (derived from constant/env) but replica password logic `r_pass = $replica['password'] ?? $password` will use stripped replica file's password (empty) → falls back to primary password. So replica auth uses primary password — may fail if replicas have different passwords.
+- **Why matters:** Replica auth fails when replica has distinct password.
+- **Evidence:** `templates/object-cache.php:154-184`, `includes/class-object-cache.php:283-288` stripping.
+- **Impact:** Replica reads fail, fallback to primary (perf loss).
+- **Recommended solution:** Strip replica passwords only if they equal primary, or store replica passwords in DB and merge at load similarly to primary via `WPPO_REDIS_PASSWORD` replica variants or separate option.
+- **Confidence:** Medium
+
+### 23. `templates/object-cache.php:267-280` — `set` vs `setex` / `set` without NX for cluster, no expiration handling for `add`
+- **Category:** Correctness
+- **Severity:** Minor
+- **Problem:** `set($key, $data, $expire=0)` uses `setex` if `expire>0` else `set`. `add($key, ..., $expire)` uses `$redis->set($key,$data,['nx'=>true,'ex'=>$expire])` if expire else `setnx`. For `RedisCluster`, `set` with options array `['nx'=>true,'ex'=>..]` is supported via phpredis cluster (since 5.3). Good. But `set_multiple` uses pipeline with `setex` per key (409-413) — pipeline on `RedisCluster` with `multi(PIPELINE)` may not shard correctly (keys may map to different slots). The code does `$this->redis->multi(\Redis::PIPELINE)` without checking `instanceof RedisCluster` — on cluster, pipeline is node-local, not cross-slot. Similarly `delete_multiple` pipeline `multi(PIPELINE)` then `del` per key may not handle cross-slot. However WP rarely uses `set_multiple` with cluster; but if it does, writes may silently fail for cross-slot keys.
+- **Why matters:** Cluster cache writes may be incomplete.
+- **Evidence:** `templates/object-cache.php:388-433` set_multiple, `461-495` delete_multiple.
+- **Impact:** Inconsistent cache on cluster under `set_multiple` heavy plugins (e.g., `wp_cache_set_multiple_salted`).
+- **Recommended solution:** For cluster, avoid pipeline and loop `setex`/`del` per key, or use `mSet` only when `expire==0` and keys same slot? Simpler: loop without pipeline for cluster, or use `_masters` loop like flush does.
+- **Confidence:** Medium
+
+### 24. `templates/object-cache.php:1097-1131` — `wp_cache_supports` claims `flush_group` but `flush` is prefix SCAN not atomic
+- **Category:** Performance / Correctness
+- **Severity:** Info
+- **Problem:** `wp_cache_supports('flush_group')` returns true (`1126`), and `flush_group` is implemented via SCAN + `del` loops with COUNT 100 (`595-617`). Under high key count (100k+), this SCAN loop may take seconds and hold PHP request. No timeout. Similarly `flush()` SCAN over prefix. That's acceptable for admin-initiated flush but could timeout on HTTP. Original `Cache::flush_group` in `class-cache.php:2236` checks `wp_cache_supports('flush_group')` before delegating — correct.
+- **Why matters:** Large Redis DB may cause 504 on flush.
+- **Evidence:** `templates/object-cache.php:528-570`, `581-622`, `1100-1131`.
+- **Impact:** Potential request timeout on flush.
+- **Recommended solution:** Increase COUNT to 1000, add `set_time_limit(0)` guard, or document that `flush_group` is iterative.
+- **Confidence:** Low
 
 ---
 
-## 3. No-Issues Confirmed (Positives)
+## Summary Counts
+- **Critical:** 0
+- **Major:** 3 (domain-port mismatch, stale .br/role purge gap, preload batch offset + cron bloat)
+- **Minor:** 12
+- **Info:** 9
 
-These areas were inspected line-by-line and found correct (or already mitigated):
+## Positive Notes
+- `Cache::prepare_cache_dir` iterative mkdir with FS check is resilient.
+- `Util::transient_key` blog-prefix correctly applied to all preload/img/db locks (verified via grep).
+- `Cache::atomic_put_contents` + 5s transient file lock + `save_cache_files` brotli/ gzip generation is robust.
+- `redis-connect-helper.php` sentinel TLS prefix handling, `wppo_parse_nodes` delimiter robustness, and `wppo_apply_redis_options` serializer/compression gates are well-structured.
+- `Advanced_Cache_Handler` foreign drop-in safety (`is_our_dropin` / `foreign_dropin_present`) prevents clobbering third-party `advanced-cache.php`.
+- `templates/object-cache.php` correctly implements WP 6.9+ salted wrapper, `wp_cache_close` for replica, and SCAN-based flush for site-isolated Redis (avoids global `FLUSHDB`).
 
-- **SQL injection surface:** All `$wpdb->prepare` uses typed placeholders (`%d`/`%s`) with spread `...$ids`; interpolations are `implode` of `'%d'`/`'%s'` only, never raw user input. `TABLE_MAP` interpolated via `{$wpdb->options}` / `{$wpdb->posts}` is sanitized by WP table names.
-- **SSRF hardening — Telemetry:** `scan()` validates `wp_http_validate_url` + scheme allowlist + same-host `home_host` before any fetch, `CURLOPT_PROTOCOLS` restricted, `CURLOPT_FOLLOWLOCATION=false`, manual `resolve_redirect` re-validates every hop with `MAX_REDIRECT_HOPS=2` — correctly merged from earlier audit.
-- **Multisite isolation:** `Util::transient_key("{blog_id}_…")` used everywhere for preload/lock/ratelimit; `base_dir()` for LLMs adds `site-{id}`; `blog_prefix` in drop-in uses `get_current_blog_id()` when multisite.
-- **Redis credential hygiene:** `Object_Cache::enable()` explicitly `unset($config_data['password'])` and replicas passwords before `var_export` to `wppo-redis-config.php`; runtime merges `WPPO_REDIS_PASSWORD` constant/env.
-- **Salted cache pattern (WP 6.9+):** `Telemetry`, `Database_Cleanup::get_counts`, `Log::get_recent_activities` all branch `if (function_exists('wp_cache_get_salted'))` → salted, else versioned transient; invalidation via `update_option(SALT_KEY,time())` — bounded memory, orphan-free (stable key, wrapper on same key).
-- **Action Scheduler trend lock fallback** correctly uses `add_option` DB atomic rather than pure transient for shared-storage correctness.
-- **RUM rate limiting** includes `Util::transient_key` per-IP md5 and 120/h cap; CL S/TTFB/INP clamping and `is_finite` guard reject NaN/Infinity beacons.
-- **PageSpeed API key hygiene:** `get_api_key()` reads only from `wppo_settings`; redacted log URL omits `key`; `wp_http_validate_url` rejects loopback/private ranges before API call.
-- **Suggestion engine** never compares booleans against localized `'Enabled'` strings, validates `fix_action` against `VALID_FIX_ACTIONS`, and coerces `good`→`no_action_required` invariant.
-- **LiteSpeed `is_wppo_cache_owner()` truth table** correctly maps `standalone → true` (WPPO owns) and respects `MODE_WPPO` vs `MODE_LITESPEED` vs `auto`; `should_disable_wppo_optimizer()` gates on `is_lscache_active()` before checking mode.
-- **LLMs `serve()` ETag/304** includes `W/"etag"` weak comparison, `readfile` with `exit`, and `headers_sent()` guard for testability; 20 KB cap trims at last newline above 80% threshold to avoid mid-line truncation.
-
----
-
-## 4. Duplicate / Dead Code Summary
-
-| Area | Files | Description | Severity |
-|------|-------|-------------|----------|
-| Sitemap discovery | `class-cron.php:473-544` vs `class-llms.php:432-495` | Identical regex discovery, deadline, TO_FETCH_LIMIT, host filter. See A03-027. | DUPLICATE |
-| Batch delete template | `class-database-cleanup.php` ×5 methods | Copy-paste `do { get_col LIMIT 1000; DELETE meta; DELETE rows }`. See A03-016. | DUPLICATE |
-| Cleanup registry | `class-database-cleanup.php:42-70,788-798,843-851` | 4 parallel maps for same types. See A03-028. | DUPLICATE |
-| `trigger_preload()` | `class-cron.php:83-86` | `new self()` leaks hooks. See A03-029. | DEAD CODE |
-| `wppo_settings` double fetch | `class-cron.php:114+141`, `class-system-info.php` | Same option fetched twice per request. See A03-017. | DUPLICATE |
-| Header emission double-filter | `class-litespeed-integration.php:706` + `944` | `wppo_litespeed_ttl` applied in getter and again in sender. See A03-020. | DUPLICATE |
-| LLMs high_value loop | `class-llms.php:341-372` | Two identical `high_value_urls` blocks for trends present/absent. See A03-014. | DUPLICATE |
-| `client_version` field | `class-system-info.php:131-143` | Always null. See A03-021. | DEAD CODE |
+## Verification Steps Performed
+- Grepped transient keys (`wppo_cache_write_`, `wppo_preload_cron_lock`, `wppo_used_css_lock`, `wppo_img_convert_lock`, `wppo_db_cleanup_lock`, `wppo_inline_drift_`) and confirmed `Util::transient_key` wrapping.
+- Grepped cron schedules (`every_5_hours` 5h, `hourly`, `daily`, single events `wppo_generate_static_page/url`, `wppo_page_cron_batch` +60s).
+- Compared domain derivation across `Cache`, `Cron`, `Advanced_Cache_Handler`.
+- Compared gzip/brotli/role purge coverage across code paths.
+- Inspected Nginx/Apache rule generation for context errors.
 
 ---
-
-## 5. Open Questions (Needs Product / Architecture Decision)
-
-1. **DB cleanup retention for logs?** `Log::add` never prunes `wppo_activity_logs`. What is the intended retention (days / row cap)? Daily audit also writes via `Log::add` on PageSpeed failure, so logs could grow faster than anticipated. Decide between cron pruning vs. `MAX_ROWS=5000` cap on insert. — *affects A03-012*
-2. **Should `auto_clean` include `unattached_media` and `oembed_cache`?** `clean_all()` (manual) handles 9 types; `auto_clean()` (cron) handles only 7, explicitly omitting those two with no comment. Is this intentional (media deletion too destructive for cron) or an oversight? — *affects A03-028*
-3. **Preload vs. LS header exclusion source of truth:** Should `excludePreloadCache` remain a preload-only concept, or should it feed into file-cache/LS cacheability uniformly? Current split means ops must maintain two exclusion lists in mind. — *affects A03-013*
-4. **Trends accurate URL source for LLMs:** Do we want to store `{md5 → original URL}` alongside `wppo_web_vitals_trends` so LLMs can enumerate actual high-vitals URLs instead of proxy `high_value_urls + home`? Storage overhead is ~50 bytes per key × 20 keys — negligible. — *affects A03-014*
-5. **RUM token threat model:** Is the daily `wp_hash('wppo_rum_Ymd|path')` token intended as anti-abuse vs. confidentiality? Document that it is not a capability token and that rate limiting is the real abuse control, to avoid future "encrypt the token" requests. — *affects A03-024*
-6. **OPcache redaction boundary:** `get_php()` now redacts `PHP_MAJOR.MINOR` only (patch dropped for fingerprinting) — should the same apply to `wp_get_environment_type()` path? Already fine, but confirm security policy for `server_software` normalization (`Apache` vs `Apache/2.4`) is intentional to hide version. — *informational*
-7. **Redis operation timeout configurability:** 0.5 s hard-coded across standalone/sentinel/cluster + replica path: should this be `apply_filters('wppo_redis_timeout', 0.5)` for cross-AZ clusters, or is fixed low timeout a deliberate fail-fast for web-tier latency? — *affects A03-010*
-
----
-
-## 6. How This Was Verified
-
-- Full line-by-line read of all 14 files (9 309 lines) with hook trace (`add_action`/`add_filter`/`apply_filters`/`do_action`), DB query enumeration (`$wpdb->get_col/get_var/get_row/get_results/query/insert/prepare`, `SHOW VARIABLES`, `information_schema`), transient/option inventory, filesystem (`WP_Filesystem`, `file_get_contents/readfile/put_contents/unlink/mkdir`), and network (`wp_remote_get/head/request`, `curl_*`) inspection.
-- Cross-referenced `AGENTS.md` architecture table, REST namespace `performance-optimisation/v1` (25 endpoints), cron schedules (5 h / hourly / daily / every_5_hours), and `docs/litespeed-integration-plan.md` for expected LS behavior.
-- Compared duplicate implementations across files (`Cron::get_sitemap_urls` vs `Llms::collect_sitemap_urls`, `Object_Cache::get_status` vs `System_Info::get_litespeed` drop-in reads).
-- No code execution or mutation was performed; all findings are static-analysis with confidence notation.
-
----
-
-## 7. Recommendation Priority
-
-**Fix before merge (HIGH):** A03-001, A03-002, A03-003, A03-004, A03-005  
-**Next iteration (MEDIUM):** A03-006, A03-007, A03-008, A03-009, A03-010, A03-011, A03-012, A03-013, A03-014, A03-015  
-**Polish (LOW/INFO):** A03-016–A03-026  
-**Deduplication debt (DUPLICATE/DEAD):** A03-027–A03-031
-
+*Teams: file references include `:line_number` for navigation. No production code was modified.*
