@@ -1,3 +1,5 @@
+@use '../abstracts/mixins' as *;
+
 .wppo-sub-tabs {
 	display: flex;
 	gap: 4px;
@@ -59,7 +61,7 @@
 	flex-shrink: 0;
 	min-height: 36px;
 
-	@media (max-width: 768px) {
+	@include respond-to('md') {
 		min-height: 44px;
 		padding: 10px 16px;
 	}
@@ -124,12 +126,12 @@
 	align-items: center;
 	justify-content: center;
 
-	@media (max-width: 768px) {
+	@include respond-to('md') {
 		min-height: 38px;
 		padding: 8px 14px;
 	}
 
-	@media (max-width: 640px) {
+	@include respond-to('sm') {
 		min-height: 44px;
 	}
 

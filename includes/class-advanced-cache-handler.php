@@ -141,7 +141,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$site_url = home_url();
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export -- var_export produces a correctly escaped single-quoted PHP literal for the generated drop-in.
 			$site_url_escaped = var_export( $site_url, true );
-			$cookie_hash      = defined( 'COOKIEHASH' ) ? COOKIEHASH : md5( $site_url );
+			// COOKIEHASH fallback must be scheme-agnostic; the logged-in cookie name does not include
+			// scheme/path, so md5(home_url()) would mismatch on http/https or subdirectory installs.
+			// Derive the fallback from the host only.
+			// @since NEXT Fallback now uses host-only hash to avoid scheme mismatch.
+			$site_host        = wp_parse_url( $site_url, PHP_URL_HOST );
+			$fallback_hash    = $site_host ? md5( $site_host ) : md5( $site_url );
+			$cookie_hash      = defined( 'COOKIEHASH' ) ? COOKIEHASH : $fallback_hash;
 
 			// Cache life in hours baked into the drop-in; 0 = never expire.
 			$wppo_options = get_option( 'wppo_settings', array() );

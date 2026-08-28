@@ -215,6 +215,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				// Real-user Web Vitals (v2.18.0). The beacon is intentionally public
 				// (anonymous visitors) so it is validated via token + rate limiting
 				// instead of the manage_options permission used by the admin routes.
+				// Compensating controls (see RUM::collect):
+				// - Daily rolling per-path token: wp_hash('wppo_rum_' . Ymd . '|' . path) + hash_equals(), 24h rotation.
+				// - Per-IP rate limit: 120/hour via Util::transient_key('wppo_rum_ratelimit_' . md5(IP)), multisite-safe.
+				// - Bounded storage: 14 days × 200 paths/day with oldest-path eviction; metrics clamped.
+				// __return_true is intentional and reviewed (A08 A-AUTH-01) — do not gate with manage_options.
+				// @since NEXT Added rate-limit documentation.
 				'rum_collect'             => array(
 					'methods'             => 'POST',
 					'callback'            => array( $this, 'collect_rum' ),
@@ -253,8 +259,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		/**
 		 * Handle a real-user Web Vitals beacon.
 		 *
+		 * Public endpoint (permission_callback __return_true) — intentionally
+		 * unauthenticated so anonymous visitors can submit beacons. Protected by
+		 * daily per-path token (RUM::is_valid_token) + per-IP rate limiting
+		 * (RUM::is_rate_limited, 120/hour) instead of manage_options.
+		 * See route definition docblock for compensating controls.
+		 *
 		 * @param \WP_REST_Request $request The request object.
 		 * @return \WP_REST_Response The response object.
+		 * @since NEXT Added public-endpoint justification with rate-limit reference.
 		 */
 		public function collect_rum( \WP_REST_Request $request ): \WP_REST_Response {
 			$params = $request->get_json_params();
@@ -374,15 +387,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Empty path (clear all) has no traversal risk; realpath() returns false
 			// when the cache directory does not exist yet, so it must not be validated.
 			if ( '' !== $path ) {
-				$real_path            = realpath( $this->cache_dir . $path );
-				$normalized_cache_dir = wp_normalize_path( $this->cache_dir );
-				$normalized_real_path = false !== $real_path ? wp_normalize_path( $real_path ) : '';
+				$normalized_cache_dir       = wp_normalize_path( $this->cache_dir );
+				$normalized_cache_dir_trail = trailingslashit( $normalized_cache_dir );
+				// Normalized candidate for fallback when realpath() fails (uncached page).
+				$candidate_path             = wp_normalize_path( trailingslashit( $this->cache_dir ) . ltrim( $path, '/\\' ) );
 
-				$is_exact_match = ( $normalized_real_path === $normalized_cache_dir );
-				$is_under_dir   = ( 0 === strpos( $normalized_real_path, trailingslashit( $normalized_cache_dir ) ) );
+				$real_path = realpath( $this->cache_dir . $path );
+				if ( false !== $real_path ) {
+					$normalized_real_path = wp_normalize_path( $real_path );
 
-				if ( false === $real_path || ( ! $is_exact_match && ! $is_under_dir ) ) {
-					return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+					$is_exact_match = ( $normalized_real_path === $normalized_cache_dir );
+					$is_under_dir   = ( 0 === strpos( $normalized_real_path, $normalized_cache_dir_trail ) );
+
+					if ( ! $is_exact_match && ! $is_under_dir ) {
+						return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+					}
+				} else {
+					// Fallback when realpath() returns false (uncached page or missing dir).
+					// Validates via normalized string prefix so "Clear This Page" works before caching.
+					// @since NEXT Added wp_normalize_path fallback for uncached pages.
+					$is_exact_match = ( $candidate_path === $normalized_cache_dir );
+					$is_under_dir   = ( 0 === strpos( $candidate_path, $normalized_cache_dir_trail ) );
+
+					if ( ( ! $is_exact_match && ! $is_under_dir ) || false !== strpos( $candidate_path, '..' ) ) {
+						return $this->send_response( null, false, 400, __( 'Invalid path provided.', 'performance-optimisation' ) );
+					}
 				}
 			}
 
@@ -419,18 +448,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$tab      = isset( $params['tab'] ) ? sanitize_text_field( $params['tab'] ) : '';
 			$settings = isset( $params['settings'] ) && is_array( $params['settings'] ) ? $params['settings'] : array();
 
-			// Validate tab against known whitelist.
-			$allowed_tabs = array(
-				'file_optimisation',
-				'preload_settings',
-				'image_optimisation',
-				'database_cleanup',
-				'object_cache',
-				'performance_audit',
-				'cache_settings',
-				'litespeed_integration',
-				'llms_txt',
-			);
+			// Validate tab against known whitelist (single source: Util::ALLOWED_SETTINGS_TABS).
+			$allowed_tabs = Util::ALLOWED_SETTINGS_TABS;
 			if ( empty( $tab ) || ! in_array( $tab, $allowed_tabs, true ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid settings tab.', 'performance-optimisation' ) );
 			}
@@ -452,7 +471,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Preserve the pagespeed_api_key when the request omits it.
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['pagespeed_api_key'] ) && isset( $options['performance_audit']['pagespeed_api_key'] ) ) {
-				$sanitized_settings['pagespeed_api_key'] = $options['performance_audit']['pagespeed_api_key'];
+				$sanitized_settings['pagespeed_api_key'] = sanitize_text_field( $options['performance_audit']['pagespeed_api_key'] );
 			}
 
 			// Preserve the server_timing_enabled flag when the request omits it (no UI toggle exists yet).
@@ -709,18 +728,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 400, __( 'Settings are missing or invalid.', 'performance-optimisation' ) );
 			}
 
-			// Validate that only known top-level setting keys are present.
-			$allowed_keys = array(
-				'file_optimisation',
-				'preload_settings',
-				'image_optimisation',
-				'database_cleanup',
-				'object_cache',
-				'performance_audit',
-				'cache_settings',
-				'litespeed_integration',
-				'llms_txt',
-			);
+			// Validate that only known top-level setting keys are present (single source: Util::ALLOWED_SETTINGS_KEYS).
+			$allowed_keys = Util::ALLOWED_SETTINGS_KEYS;
 
 			foreach ( array_keys( $data['settings'] ) as $key ) {
 				if ( ! in_array( $key, $allowed_keys, true ) ) {
@@ -793,7 +802,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$params = $request->get_params();
 			$type   = isset( $params['type'] ) ? sanitize_text_field( $params['type'] ) : '';
 
-			$valid_types = array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'unattached_media', 'oembed_cache', 'all' );
+			$valid_types = Database_Cleanup::get_valid_cleanup_types();
 
 			if ( ! in_array( $type, $valid_types, true ) ) {
 				return $this->send_response( null, false, 400, __( 'Invalid cleanup type.', 'performance-optimisation' ) );
@@ -844,17 +853,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				);
 			}
 
-			$method_map = array(
-				'revisions'          => 'clean_revisions_advanced',
-				'auto_drafts'        => 'clean_auto_drafts',
-				'trashed_posts'      => 'clean_trashed_posts',
-				'spam_comments'      => 'clean_spam_comments',
-				'trashed_comments'   => 'clean_trashed_comments',
-				'expired_transients' => 'clean_expired_transients',
-				'orphan_postmeta'    => 'clean_orphan_postmeta',
-				'unattached_media'   => 'clean_unattached_media',
-				'oembed_cache'       => 'clean_oembed_cache',
-			);
+			$method_map = Database_Cleanup::CLEANUP_METHOD_MAP;
 
 			$method = $method_map[ $type ] ?? null;
 

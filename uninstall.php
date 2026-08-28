@@ -103,10 +103,22 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 	/**
 	 * Recursively delete a directory using native PHP (safe for uninstall context).
 	 *
+	 * Symlink guard: never follow symlinks — delete the link itself. This
+	 * prevents a planted symlink inside cache/wppo from causing arbitrary
+	 * directory deletion on uninstall (classic symlink traversal).
+	 *
 	 * @param string $dir Absolute path to the directory.
 	 * @return void
+	 * @since NEXT Symlink traversal hardening (is_link guard).
 	 */
 	function wppo_delete_directory( string $dir ): void {
+		// If $dir itself is a symlink, delete the link only — do not follow.
+		// @since NEXT
+		if ( is_link( $dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			@unlink( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
+			return;
+		}
+
 		if ( ! is_dir( $dir ) ) {
 			return;
 		}
@@ -122,6 +134,14 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 			}
 
 			$path = $dir . '/' . $item;
+
+			// Symlink guard: delete the link itself, never recurse into it.
+			// Must be before is_dir() because is_dir() follows symlinks.
+			// @since NEXT
+			if ( is_link( $path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+				@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
+				continue;
+			}
 
 			if ( is_dir( $path ) ) {
 				wppo_delete_directory( $path );

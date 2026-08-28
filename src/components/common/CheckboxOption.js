@@ -33,7 +33,7 @@ export const CheckboxOption = ( {
 	className = '',
 } ) => {
 	const uid = useId();
-	const id = idProp ?? ( description ? uid : undefined );
+	const id = idProp ?? uid;
 	const descriptionId = description ? `desc-${ id }` : undefined;
 
 	return (

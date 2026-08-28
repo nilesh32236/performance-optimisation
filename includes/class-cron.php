@@ -71,6 +71,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			add_action( 'wppo_used_css_cron', array( $this, 'used_css_cron' ) );
 			add_action( 'wppo_ccss_regeneration', array( $this, 'ccss_regeneration_cron' ) );
+			add_action( 'wppo_rum_flush', array( 'PerformanceOptimise\Inc\RUM', 'flush_queue' ) );
 		}
 
 		/**
@@ -111,7 +112,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		public function schedule_cron_jobs(): void {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 
 			// The preload toggle is the source of truth: when it is off, clear any
 			// leftover per-page preload events instead of warming the cache anyway.
@@ -138,8 +139,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				wp_schedule_event( time(), 'daily', 'wppo_web_vitals_rescan' );
 			}
 
-			$options_llms = get_option( 'wppo_settings', array() );
-			if ( ! empty( $options_llms['llms_txt']['enabled'] ) ) {
+			if ( ! empty( $options['llms_txt']['enabled'] ) ) {
 				if ( ! wp_next_scheduled( 'wppo_llms_txt_daily' ) ) {
 					wp_schedule_event( time(), 'daily', 'wppo_llms_txt_daily' );
 				}
@@ -165,7 +165,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @return void
 		 */
 		public function llms_txt_cron(): void {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			if ( empty( $options['llms_txt']['enabled'] ) ) {
 				return;
 			}
@@ -181,7 +181,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since NEXT
 		 */
 		public function ccss_regeneration_cron() {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			if ( ! empty( $options['file_optimisation']['criticalCSS'] ) ) {
 				Critical_CSS::regenerate_all();
 			}
@@ -199,7 +199,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since NEXT
 		 */
 		public function web_vitals_rescan_cron(): void {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$audit   = isset( $options['performance_audit'] ) && is_array( $options['performance_audit'] ) ? $options['performance_audit'] : array();
 
 			$frequency = isset( $audit['auto_rescan'] ) ? sanitize_text_field( $audit['auto_rescan'] ) : '';
@@ -253,7 +253,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.0.0
 		 */
 		public function wppo_page_cron_callback(): void {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			if ( empty( $options['preload_settings']['enablePreloadCache'] ) ) {
 				return;
 			}
@@ -304,7 +304,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					return; // Lock released in finally.
 				}
 
-				$options      = get_option( 'wppo_settings', array() );
+				$options      = Util::get_settings();
 				$preload      = $options['preload_settings'] ?? array();
 				$exclude_urls = Util::process_urls( $preload['excludePreloadCache'] ?? array() );
 
@@ -375,7 +375,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			set_transient( Util::transient_key( 'wppo_used_css_lock' ), 1, 20 * MINUTE_IN_SECONDS );
 
 			try {
-				$options = get_option( 'wppo_settings', array() );
+				$options = Util::get_settings();
 				if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 					return;
 				}
@@ -406,6 +406,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			wp_clear_scheduled_hook( 'wppo_generate_ccss' );
 			wp_clear_scheduled_hook( 'wppo_web_vitals_rescan' );
 			wp_clear_scheduled_hook( 'wppo_llms_txt_daily' );
+			wp_clear_scheduled_hook( 'wppo_rum_flush' );
 		}
 
 		/**
@@ -495,6 +496,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 				$response = wp_remote_get( $current, array( 'timeout' => 5 ) );
 				if ( is_wp_error( $response ) ) {
+					continue;
+				}
+
+				if ( 200 !== wp_remote_retrieve_response_code( $response ) ) {
 					continue;
 				}
 
@@ -621,7 +626,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			set_transient( Util::transient_key( 'wppo_img_convert_lock' ), true, 5 * MINUTE_IN_SECONDS );
 
 			try {
-				$options       = get_option( 'wppo_settings', array() );
+				$options       = Util::get_settings();
 				$img_converter = new Img_Converter( $options );
 
 				$img_info = Img_Converter::get_img_info();
@@ -690,7 +695,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since 1.3.0
 		 */
 		public function database_cleanup_cron() {
-			$options  = get_option( 'wppo_settings', array() );
+			$options  = Util::get_settings();
 			$settings = $options['database_cleanup'] ?? array();
 
 			$schedule = $settings['dbSchedule'] ?? 'none';

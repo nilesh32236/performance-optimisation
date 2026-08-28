@@ -32,7 +32,8 @@ const NoticeBanner = ( {
 			className={ `wppo-notice wppo-notice--${ type }${
 				className ? ` ${ className }` : ''
 			}` }
-			role="alert"
+			role={ type === 'error' ? 'alert' : 'status' }
+			aria-live={ type === 'error' ? 'assertive' : 'polite' }
 		>
 			<div className="wppo-notice__content">
 				<FontAwesomeIcon icon={ icon } />

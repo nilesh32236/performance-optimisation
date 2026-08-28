@@ -276,6 +276,26 @@ Yes. Use the **Tools** tab to export your current configuration as a JSON file a
 = Is this plugin free? =
 Yes. Performance Optimisation is 100% free and open source. There is no premium version, no upsells, and no feature restrictions.
 
+== External Services ==
+
+This plugin relies on the following external services. No data is sent to any external service without an explicit admin action as described below.
+
+= Google PageSpeed Insights API (https://www.googleapis.com/pagespeedonline/v5/runPagespeed) =
+* **Purpose:** Provides Lighthouse performance scores, Core Web Vitals, and diagnostic audits for the URL you choose to scan. Used by the Dashboard → Performance Audit → PageSpeed panel.
+* **When:** Only when an administrator who has set a PageSpeed API key (Performance Audit → PageSpeed API Key) clicks “Scan” (or when the daily auto-rescan cron runs if that option is enabled). No request is made on page load, and no request is made without a stored API key.
+* **Where:** The request is made server-side via `wp_remote_get` to `https://www.googleapis.com/pagespeedonline/v5/runPagespeed` with query params `url` (the scanned URL), `strategy` (`mobile` or `desktop`), `category` (PERFORMANCE, ACCESSIBILITY, BEST_PRACTICES, SEO), and `key` (your API key).
+* **What data is sent:** The public URL to audit and the chosen strategy. The API key is sent as authentication. No site visitor data, cookies, or admin credentials are sent. Results are cached as a transient (`wppo_pagespeed_*`) for 24 hours and optionally stored as trend history in the `wppo_web_vitals_trends` option.
+* **Terms/Privacy:** https://developers.google.com/speed/docs/insights/v5/get-started and https://policies.google.com/privacy. You must obtain your own API key from https://console.cloud.google.com/; the plugin never ships a default key.
+* **EOL/Opt-out:** Remove the API key or disable the PageSpeed panel to stop all requests. No further calls are made.
+
+= Google Fonts CDN (https://fonts.googleapis.com and https://fonts.gstatic.com) =
+* **Purpose:** When the File Optimization option “Host Google Fonts Locally” is enabled, the plugin detects Google Fonts CSS requested via `fonts.googleapis.com` and downloads the CSS and associated font files (`fonts.gstatic.com`, woff2) to serve locally (`wp-content/cache/wppo/fonts/`). This eliminates external DNS lookups on the frontend, improves GDPR compliance, and enables `font-display: swap`.
+* **When:** Only when “Host Google Fonts Locally” is enabled **and** a page or enqueued stylesheet contains a `fonts.googleapis.com` URL (via `style_loader_tag` or an `@import`/`link` in the HTML buffer). Each unique Google Fonts CSS URL is fetched once and then served from the local cache. When the option is disabled, the plugin makes no requests to Google Fonts; the browser loads fonts directly from Google as authored.
+* **Where:** Server-side via `wp_remote_get` to `https://fonts.googleapis.com/...` (CSS, using a Chrome 120 UA to request woff2) and `https://fonts.gstatic.com/...` (font file, woff2). Timeouts are 20s (CSS) and 30s (font file).
+* **What data is sent:** Only the Google Fonts stylesheet URL as authored in the theme/plugin (e.g. `https://fonts.googleapis.com/css2?family=Inter:wght@400`). No visitor IP beyond the server’s outbound request, no cookies, and no site content is sent.
+* **Terms/Privacy:** https://developers.google.com/fonts/faq and https://policies.google.com/privacy.
+* **EOL/Opt-out:** Disable “Host Google Fonts Locally” to stop all server-side fetches; existing cached files remain in `wp-content/cache/wppo/fonts/` until cleared via “Clear All Cache” or the plugin is uninstalled.
+
 == Upgrade Notice ==
 
 = 1.9.0 (2026-08-11) =

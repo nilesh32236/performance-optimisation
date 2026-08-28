@@ -18,12 +18,17 @@
 }
 
 @mixin flex-center {
+	// Retained for P5 design-system reuse — currently unused but part of
+	// the shared layout toolkit. Marked @since NEXT to allow removal if
+	// still unused after the P5 card/grid audit.
 	display: flex;
 	align-items: center;
 	justify-content: center;
 }
 
 @mixin truncate {
+	// Retained for P5 design-system reuse — currently unused but part of
+	// the shared truncation toolkit. See AUDIT/DUPLICATE-CODE.md X-04.
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;

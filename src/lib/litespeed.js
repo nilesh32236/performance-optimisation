@@ -2,7 +2,8 @@
  * LiteSpeed helper — pure JS, no WordPress dependencies.
  *
  * Mirrors the PHP LiteSpeed_Integration::effective_mode() logic for the SPA
- * so the UI can decide ownership without an extra REST call.
+ * so the UI can decide ownership without an extra REST call. Imported by
+ * FileOptimization.js and Dashboard.js for mode-label rendering (A05/A10).
  *
  * @since NEXT
  */

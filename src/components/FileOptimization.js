@@ -2,6 +2,7 @@ import { __ } from '@wordpress/i18n';
 import { useState, useRef, useEffect } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
+import { modeLabel } from '../lib/litespeed';
 import useNotice from '../lib/useNotice';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -116,12 +117,7 @@ const FileOptimization = ( {
 		'Paused — LiteSpeed Cache owns optimisation (change in Network → LiteSpeed)',
 		'performance-optimisation'
 	);
-	let effectiveLabel = effectiveMode;
-	if ( effectiveMode === 'wppo' ) {
-		effectiveLabel = 'WPPO';
-	} else if ( effectiveMode === 'litespeed' ) {
-		effectiveLabel = 'LiteSpeed';
-	}
+	const effectiveLabel = modeLabel( effectiveMode );
 	const effectiveBadgeClass =
 		effectiveMode === 'litespeed'
 			? 'wppo-status-badge--warning'
@@ -312,6 +308,10 @@ const FileOptimization = ( {
 			nextIndex = ( index + 1 ) % subTabs.length;
 		} else if ( e.key === 'ArrowLeft' ) {
 			nextIndex = ( index - 1 + subTabs.length ) % subTabs.length;
+		} else if ( e.key === 'Home' ) {
+			nextIndex = 0;
+		} else if ( e.key === 'End' ) {
+			nextIndex = subTabs.length - 1;
 		} else {
 			return;
 		}

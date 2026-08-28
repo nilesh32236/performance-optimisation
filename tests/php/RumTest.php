@@ -41,11 +41,15 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 				'update_option',
 				'get_transient',
 				'set_transient',
+				'delete_transient',
 				'wp_hash',
 				'sanitize_text_field',
 				'esc_url_raw',
 				'wp_unslash',
 				'is_multisite',
+				'wp_next_scheduled',
+				'wp_schedule_single_event',
+				'wp_rand',
 			)
 		);
 		Functions\when( 'get_option' )->alias(
@@ -69,6 +73,15 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 				$this->transients[ $key ] = $value;
 			}
 		);
+		Functions\when( 'delete_transient' )->alias(
+			function ( $key ) {
+				unset( $this->transients[ $key ] );
+				return true;
+			}
+		);
+		Functions\when( 'wp_next_scheduled' )->justReturn( false );
+		Functions\when( 'wp_schedule_single_event' )->justReturn( true );
+		Functions\when( 'wp_rand' )->justReturn( 2 );
 		// Deterministic token derivation so tests can predict the valid token.
 		Functions\when( 'wp_hash' )->alias(
 			static function ( $data ) {
@@ -99,9 +112,11 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->options['wppo_settings'] = array(
 			'performance_audit' => array( 'rum_enabled' => true ),
 		);
+		Util::clear_settings_cache();
 		$this->assertTrue( RUM::is_enabled() );
 
 		$this->options['wppo_settings']['performance_audit']['rum_enabled'] = false;
+		Util::clear_settings_cache();
 		$this->assertFalse( RUM::is_enabled() );
 	}
 

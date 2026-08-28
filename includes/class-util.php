@@ -29,6 +29,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 	class Util {
 
 		/**
+		 * Top-level settings keys allowlisted for import and update operations.
+		 *
+		 * Single source of truth for REST (`update_settings`, `import_settings`),
+		 * WP-CLI (`settings` subcommand) and the JS `ALLOWED_IMPORT_KEYS` guard.
+		 * Changing this list requires a single edit; the JS copy in
+		 * `src/components/PluginSetting.js` is kept in sync via `wppoSettings.allowedSettingsKeys`
+		 * (see Main::enqueue_admin_scripts()) and a build-time comment.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const ALLOWED_SETTINGS_KEYS = array(
+			'file_optimisation',
+			'preload_settings',
+			'image_optimisation',
+			'database_cleanup',
+			'object_cache',
+			'performance_audit',
+			'cache_settings',
+			'litespeed_integration',
+			'llms_txt',
+		);
+
+		/**
+		 * Allowed tab slugs for `update_settings`.
+		 *
+		 * Identical to ALLOWED_SETTINGS_KEYS — kept as an alias for semantic
+		 * clarity at call-sites that validate a single tab.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const ALLOWED_SETTINGS_TABS = self::ALLOWED_SETTINGS_KEYS;
+
+		/**
+		 * Get the allowlisted top-level settings keys.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_allowed_settings_keys(): array {
+			return self::ALLOWED_SETTINGS_KEYS;
+		}
+
+		/**
 		 * Static cache for resolved home URLs, keyed by blog ID.
 		 *
 		 * @var array<int, string>
@@ -37,12 +82,134 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		private static array $home_url_cache = array();
 
 		/**
+		 * Per-request memo for wppo_settings to avoid repeated get_option deserialization.
+		 *
+		 * @var array|null
+		 * @since NEXT
+		 */
+		private static ?array $settings_cache = null;
+
+		/**
+		 * Whether the settings cache has been populated this request.
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private static bool $settings_cache_loaded = false;
+
+		/**
 		 * Resets the home_url static cache for testing isolation.
 		 *
 		 * @since NEXT
 		 */
 		public static function reset_cached_home_urls(): void {
 			self::$home_url_cache = array();
+		}
+
+		/**
+		 * Get wppo_settings with per-request memoization.
+		 *
+		 * Wraps get_option('wppo_settings') with a static cache so up to 6
+		 * deserializations per frontend render (Main, Cache, Cron, Used_CSS, etc.)
+		 * collapse to a single DB-backed fetch per request. Invalidated automatically
+		 * on update/add/delete of the option.
+		 *
+		 * @since NEXT
+		 * @return array The plugin settings.
+		 */
+		public static function get_settings(): array {
+			if ( self::$settings_cache_loaded ) {
+				return self::$settings_cache ?? array();
+			}
+			self::ensure_settings_cache_hook();
+			$raw = get_option( 'wppo_settings', array() );
+			if ( ! is_array( $raw ) ) {
+				$raw = array();
+			}
+			self::$settings_cache        = $raw;
+			self::$settings_cache_loaded = true;
+			return $raw;
+		}
+
+		/**
+		 * Set the settings cache to a known value (e.g. after update_option in same request).
+		 *
+		 * @since NEXT
+		 * @param array $settings The settings to cache.
+		 * @return void
+		 */
+		public static function set_settings_cache( array $settings ): void {
+			self::$settings_cache        = $settings;
+			self::$settings_cache_loaded = true;
+			self::ensure_settings_cache_hook();
+		}
+
+		/**
+		 * Clear the settings memo (e.g. in tests or on delete).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_settings_cache(): void {
+			self::$settings_cache        = null;
+			self::$settings_cache_loaded = false;
+		}
+
+		/**
+		 * Reset all Util static caches (home_url + settings) for testing isolation.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_all_caches(): void {
+			self::$home_url_cache        = array();
+			self::$settings_cache        = null;
+			self::$settings_cache_loaded = false;
+		}
+
+		/**
+		 * Ensure the invalidation hooks for wppo_settings are registered once per request.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function ensure_settings_cache_hook(): void {
+			static $hooked = false;
+			if ( $hooked ) {
+				return;
+			}
+			$hooked = true;
+			add_action( 'update_option_wppo_settings', array( self::class, 'on_settings_update' ), 10, 2 );
+			add_action( 'add_option_wppo_settings', array( self::class, 'on_settings_add' ), 10, 2 );
+			add_action( 'delete_option_wppo_settings', array( self::class, 'clear_settings_cache' ) );
+		}
+
+		/**
+		 * Invalidate/update the memo when wppo_settings is updated.
+		 *
+		 * @since NEXT
+		 * @param mixed $old_value Previous value.
+		 * @param mixed $value New value.
+		 * @return void
+		 */
+		public static function on_settings_update( $old_value, $value ): void {
+			self::$settings_cache        = is_array( $value ) ? $value : array();
+			self::$settings_cache_loaded = true;
+		}
+
+		/**
+		 * Populate the memo when wppo_settings is added.
+		 *
+		 * @since NEXT
+		 * @param string $option Option name.
+		 * @param mixed  $value Option value.
+		 * @return void
+		 */
+		public static function on_settings_add( $option, $value ): void {
+			if ( 'wppo_settings' === $option ) {
+				self::$settings_cache        = is_array( $value ) ? $value : array();
+				self::$settings_cache_loaded = true;
+			}
 		}
 
 		/**
@@ -629,10 +796,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$sanitized[ $safe_key ] = (int) $value;
 				} elseif ( in_array( $safe_key, array( 'pagespeed_api_key', 'password' ), true ) ) {
 					$sanitized[ $safe_key ] = sanitize_text_field( $value );
-				} elseif ( stripos( $safe_key, 'url' ) !== false || stripos( $safe_key, 'cdn' ) !== false || stripos( $safe_key, 'origin' ) !== false ) {
-					$sanitized[ $safe_key ] = esc_url_raw( $value );
 				} elseif ( stripos( $safe_key, 'exclude' ) !== false || stripos( $safe_key, 'preload' ) !== false || stripos( $safe_key, 'delay' ) !== false || stripos( $safe_key, 'list' ) !== false ) {
 					$sanitized[ $safe_key ] = sanitize_textarea_field( $value );
+				} elseif ( stripos( $safe_key, 'url' ) !== false || stripos( $safe_key, 'cdn' ) !== false || stripos( $safe_key, 'origin' ) !== false ) {
+					$sanitized[ $safe_key ] = esc_url_raw( $value );
 				} else {
 					$sanitized[ $safe_key ] = sanitize_text_field( $value );
 				}

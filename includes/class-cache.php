@@ -117,6 +117,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private ?array $inline_size_map = null;
 
 		/**
+		 * Memoized core_will_inline results per handle per request.
+		 *
+		 * Avoids running the dual budget simulation (prediction + reference)
+		 * twice for the same handle across the eligibility, freshness, and
+		 * generation loops (2*3*n simulations → 2*n with memo).
+		 *
+		 * @var array<string,bool>
+		 * @since NEXT
+		 */
+		private array $core_will_inline_memo = array();
+
+		/**
 		 * The filesystem object used for file operations.
 		 *
 		 * @var object|null
@@ -246,7 +258,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$this->url_path = $url_path;
 
 			// Initialize filesystem lazily via get_filesystem().
-			$this->options = ! empty( $options ) ? $options : get_option( 'wppo_settings', array() );
+			$this->options = ! empty( $options ) ? $options : Util::get_settings();
 
 			if ( ! $valid_domain && ! empty( $this->options['debug'] ) ) {
 				do_action( 'wppo_debug_log', 'Cache domain validation failed' );
@@ -357,17 +369,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether WPPO optimisers should be bypassed for LiteSpeed co-existence.
+		 *
+		 * Centralises the `litespeed_can_optm` gate that was copy-pasted across
+		 * combine/minify/CDN paths.
+		 *
+		 * @since NEXT
+		 * @return bool True if the current request should bypass WPPO optimisation.
+		 */
+		private function should_bypass_for_litespeed(): bool {
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
+				return true;
+			}
+			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+				return true;
+			}
+			return false;
+		}
+
+		/**
 		 * Combines all enqueued CSS files into a single file.
 		 *
 		 * @return void
 		 * @since 1.0.0
 		 */
 		public function combine_css() {
-			// LiteSpeed safe coexistence — when LSCache owns optimization, skip WPPO combine.
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
-				return;
-			}
-			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+			if ( $this->should_bypass_for_litespeed() ) {
 				return;
 			}
 			// TODO(#624): when WP 7.2 removes script/style concatenation in favour
@@ -429,21 +456,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$cache_mtime  = (int) $fs->mtime( $css_file_path );
 				$source_newer = false;
 
-				foreach ( $styles as $handle ) {
+				// Reuse the pre-classified eligible handles to avoid re-running
+				// core_will_inline / block-asset / exclusion checks (triple classify).
+				foreach ( $eligible_handles as $handle ) {
 					if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
 						continue;
 					}
-
-					// Styles core inlines are not part of the combined file, so their
-					// mtime must not force a regeneration.
-					if ( $this->core_will_inline( $handle ) ) {
-						continue;
-					}
-
-					if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
-						continue;
-					}
-
 					$src      = $wp_styles->registered[ $handle ]->src;
 					$src_path = Util::get_local_path( (string) $src );
 					if ( '' !== $src_path && $fs->exists( $src_path ) && $fs->mtime( $src_path ) > $cache_mtime ) {
@@ -471,44 +489,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			$combined_css = '';
 
-			foreach ( $styles as $handle ) {
+			// Generate from the pre-classified eligible handles to avoid
+			// re-classifying each handle (triple classify -> single classify).
+			foreach ( $eligible_handles as $handle ) {
 				if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
 					continue;
 				}
 				$style_data = $wp_styles->registered[ $handle ];
-
-				// Skip styles core will inline itself (registered with 'path' data and
-				// small enough to fit the inline budget). Leaving them enqueued lets
-				// core inline them at their own queue position; pulling them into the
-				// combined file would duplicate their rules and inflate its size.
-				if ( $this->core_will_inline( $handle ) ) {
-					continue;
-				}
-
-				if ( $this->is_core_block_asset( $handle, $separate_block_assets ) ) {
-					continue;
-				}
-
-				if ( ! empty( $exclude_combine_css ) ) {
-					if ( in_array( $handle, $exclude_combine_css, true ) ) {
-						continue;
-					}
-
-					$should_exclude = false;
-					foreach ( $exclude_combine_css as $exclude_css ) {
-						if ( false !== strpos( $style_data->src, $exclude_css ) ) {
-							$should_exclude = true;
-						}
-					}
-
-					if ( $should_exclude ) {
-						continue;
-					}
-				}
-
-				if ( ! isset( $style_data->args ) || 'all' !== $style_data->args ) {
-					continue;
-				}
 
 				$src = $wp_styles->registered[ $handle ]->src;
 
@@ -730,12 +717,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True if core will inline the style, false otherwise.
 		 */
 		private function core_will_inline( $handle ): bool {
+			if ( isset( $this->core_will_inline_memo[ $handle ] ) ) {
+				return $this->core_will_inline_memo[ $handle ];
+			}
+
 			if ( ! function_exists( 'wp_maybe_inline_styles' ) ) {
+				$this->core_will_inline_memo[ $handle ] = false;
 				return false;
 			}
 
 			global $wp_styles;
 			if ( ! isset( $wp_styles->registered[ $handle ] ) ) {
+				$this->core_will_inline_memo[ $handle ] = false;
 				return false;
 			}
 
@@ -743,6 +736,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// any queued style with `path` data was a candidate, so a src-less
 			// handle can still be inlined there.
 			if ( $this->inline_candidates_require_src() && empty( $wp_styles->registered[ $handle ]->src ) ) {
+				$this->core_will_inline_memo[ $handle ] = false;
 				return false;
 			}
 
@@ -766,9 +760,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// inlines it (correct), or it is served as its own external <link>
 				// (a minor perf loss, never duplicated rules). Returning false here
 				// would risk pulling an inlined style into the combined file.
+				$this->core_will_inline_memo[ $handle ] = true;
 				return true;
 			}
 
+			$this->core_will_inline_memo[ $handle ] = $prediction;
 			return $prediction;
 		}
 
@@ -966,7 +962,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// The combined handle now carries `path` data, so the size map cached
 			// for the inline-budget simulation is stale; rebuild it on the next call.
-			$this->inline_size_map = null;
+			$this->inline_size_map          = null;
+			$this->core_will_inline_memo = array();
 		}
 
 		/**
@@ -1362,12 +1359,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function minify_buffer( $buffer ) {
-			// LiteSpeed safe coexistence — when LS owns optimizer, skip WPPO HTML minify
-			// to prevent double-minify corruption. Respect litespeed_can_optm filter.
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
-				return $buffer;
-			}
-			if ( has_filter( 'litespeed_can_optm' ) && ! apply_filters( 'litespeed_can_optm', true ) ) {
+			if ( $this->should_bypass_for_litespeed() ) {
 				return $buffer;
 			}
 			$minifier = new Minify\HTML( $buffer, $this->options );
@@ -1562,6 +1554,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
+		/**
+		 * Atomically write contents to a file via tmp+rename.
+		 *
+		 * Writes to a temporary sibling file in the same directory and then
+		 * atomically moves it to the final path, preventing readers from
+		 * observing a partially-written cache file during stampede writes.
+		 *
+		 * @since NEXT
+		 * @param string $path Final file path.
+		 * @param string $contents File contents.
+		 * @return bool True on success.
+		 */
+		private function atomic_put_contents( string $path, string $contents ): bool {
+			$fs = $this->get_filesystem();
+			if ( ! $fs ) {
+				return false;
+			}
+			$tmp = $path . '.tmp.' . wp_rand();
+			if ( ! $fs->put_contents( $tmp, $contents, FS_CHMOD_FILE ) ) {
+				$fs->delete( $tmp );
+				return false;
+			}
+			$moved = $fs->move( $tmp, $path, true );
+			if ( ! $moved ) {
+				$fs->delete( $tmp );
+				// Fallback to direct write if move is unavailable.
+				return (bool) $fs->put_contents( $path, $contents, FS_CHMOD_FILE );
+			}
+			return true;
+		}
+
 		private function save_cache_files( $buffer, $file_path, $type = 'html' ): void {
 
 			// Only evaluate the storage decision for HTML writes so the DONOTCACHEPAGE
@@ -1582,63 +1605,76 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( ! $fs ) {
 				return;
 			}
-			$fs->put_contents( $file_path, $buffer, FS_CHMOD_FILE );
 
-			if ( function_exists( 'gzencode' ) ) {
-				$gzip_output = gzencode( $buffer, 9 );
-				if ( false !== $gzip_output ) {
-					$fs->put_contents( $gzip_file_path, $gzip_output, FS_CHMOD_FILE );
-				}
+			// Stampede protection: transient lock per file path (5s). If another
+			// process is already writing the same cache file, skip this write.
+			$lock_key = Util::transient_key( 'wppo_cache_write_' . md5( $file_path ) );
+			if ( get_transient( $lock_key ) ) {
+				return;
 			}
+			set_transient( $lock_key, 1, 5 );
 
-			// LS-403: Brotli .br alongside .gz — gated by enableBrotli + extension.
-			if ( 'html' === $type ) {
-				$use_brotli = false;
-				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_brotli_enabled' ) ) {
-					$use_brotli = LiteSpeed_Integration::is_brotli_enabled();
-				} else {
-					$opts       = get_option( 'wppo_settings', array() );
-					$enabled    = ! empty( $opts['litespeed_integration']['enableBrotli'] );
-					$has_ext    = extension_loaded( 'brotli' ) || function_exists( 'brotli_compress' );
-					$use_brotli = $enabled && $has_ext;
-					/**
-					 * Filter whether brotli generation is enabled (fallback).
-					 *
-					 * @since NEXT
-					 * @param bool $use_brotli Whether brotli is enabled.
-					 */
-					$use_brotli = (bool) apply_filters( 'wppo_litespeed_brotli', $use_brotli );
-				}
-				if ( $use_brotli && function_exists( 'brotli_compress' ) ) {
-					try {
-						$br_output = brotli_compress( $buffer, 4, 0 ); // phpcs:ignore PHPCompatibility.FunctionUse.NewFunctions.brotli_compressFound
-						if ( false !== $br_output && is_string( $br_output ) ) {
-							$fs->put_contents( $br_file_path, $br_output, FS_CHMOD_FILE );
-						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+			try {
+				$this->atomic_put_contents( $file_path, $buffer );
+
+				if ( function_exists( 'gzencode' ) ) {
+					$gzip_output = gzencode( $buffer, 9 );
+					if ( false !== $gzip_output ) {
+						$this->atomic_put_contents( $gzip_file_path, $gzip_output );
 					}
-				} elseif ( $use_brotli && extension_loaded( 'brotli' ) ) {
-					// Fallback when brotli_compress is not exposed but extension is loaded — try gz fallback is already done.
-					try {
-						if ( function_exists( 'brotli_compress' ) ) {
+				}
+
+				// LS-403: Brotli .br alongside .gz — gated by enableBrotli + extension.
+				if ( 'html' === $type ) {
+					$use_brotli = false;
+					if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_brotli_enabled' ) ) {
+						$use_brotli = LiteSpeed_Integration::is_brotli_enabled();
+					} else {
+						$opts       = Util::get_settings();
+						$enabled    = ! empty( $opts['litespeed_integration']['enableBrotli'] );
+						$has_ext    = extension_loaded( 'brotli' ) || function_exists( 'brotli_compress' );
+						$use_brotli = $enabled && $has_ext;
+						/**
+						 * Filter whether brotli generation is enabled (fallback).
+						 *
+						 * @since NEXT
+						 * @param bool $use_brotli Whether brotli is enabled.
+						 */
+						$use_brotli = (bool) apply_filters( 'wppo_litespeed_brotli', $use_brotli );
+					}
+					if ( $use_brotli && function_exists( 'brotli_compress' ) ) {
+						try {
 							$br_output = brotli_compress( $buffer, 4, 0 ); // phpcs:ignore PHPCompatibility.FunctionUse.NewFunctions.brotli_compressFound
 							if ( false !== $br_output && is_string( $br_output ) ) {
-								$fs->put_contents( $br_file_path, $br_output, FS_CHMOD_FILE );
+								$this->atomic_put_contents( $br_file_path, $br_output );
 							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
 						}
-					} catch ( \Throwable $e ) {
-						unset( $e );
+					} elseif ( $use_brotli && extension_loaded( 'brotli' ) ) {
+						// Fallback when brotli_compress is not exposed but extension is loaded — try gz fallback is already done.
+						try {
+							if ( function_exists( 'brotli_compress' ) ) {
+								$br_output = brotli_compress( $buffer, 4, 0 ); // phpcs:ignore PHPCompatibility.FunctionUse.NewFunctions.brotli_compressFound
+								if ( false !== $br_output && is_string( $br_output ) ) {
+									$this->atomic_put_contents( $br_file_path, $br_output );
+								}
+							}
+						} catch ( \Throwable $e ) {
+							unset( $e );
+						}
 					}
 				}
-			}
 
-			// A cacheable page was just written: clear any stale DONOTCACHEPAGE marker
-			// so static caching resumes automatically once a plugin stops setting the
-			// constant (self-healing). A later request that sets the constant again
-			// re-creates the marker and purges these files.
-			if ( 'html' === $type ) {
-				$this->delete_cache_files( trailingslashit( dirname( $file_path ) ) . '.wppo-no-cache' );
+				// A cacheable page was just written: clear any stale DONOTCACHEPAGE marker
+				// so static caching resumes automatically once a plugin stops setting the
+				// constant (self-healing). A later request that sets the constant again
+				// re-creates the marker and purges these files.
+				if ( 'html' === $type ) {
+					$this->delete_cache_files( trailingslashit( dirname( $file_path ) ) . '.wppo-no-cache' );
+				}
+			} finally {
+				delete_transient( $lock_key );
 			}
 		}
 

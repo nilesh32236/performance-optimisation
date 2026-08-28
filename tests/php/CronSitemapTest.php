@@ -53,6 +53,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 				'home_url',
 				'wp_remote_get',
 				'wp_remote_retrieve_body',
+				'wp_remote_retrieve_response_code',
 				'esc_url_raw',
 			)
 		);
@@ -63,6 +64,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_remote_retrieve_body' )->justReturn(
 			'<?xml version="1.0"?><urlset><url><loc>http://example.com/about/</loc></url><url><loc>http://example.com/contact/</loc></url></urlset>'
 		);
+		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
 		Functions\when( 'esc_url_raw' )->returnArg();
 
 		$urls = $this->invoke_private( $cron, 'get_sitemap_urls', 500 );
@@ -83,6 +85,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 				'home_url',
 				'wp_remote_get',
 				'wp_remote_retrieve_body',
+				'wp_remote_retrieve_response_code',
 				'esc_url_raw',
 			)
 		);
@@ -93,6 +96,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_remote_retrieve_body' )->justReturn(
 			'<urlset><url><loc>http://example.com/about/</loc></url><url><loc>https://external.example.net/evil/</loc></url></urlset>'
 		);
+		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
 		Functions\when( 'esc_url_raw' )->returnArg();
 
 		$urls = $this->invoke_private( $cron, 'get_sitemap_urls', 500 );
@@ -113,6 +117,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 				'home_url',
 				'wp_remote_get',
 				'wp_remote_retrieve_body',
+				'wp_remote_retrieve_response_code',
 				'esc_url_raw',
 			)
 		);
@@ -121,6 +126,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 		Functions\when( 'wp_remote_get' )->justReturn( new WPPO_WP_Error() );
 		Functions\when( 'wp_remote_retrieve_body' )->justReturn( '' );
+		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 500 );
 		Functions\when( 'esc_url_raw' )->returnArg();
 
 		$urls = $this->invoke_private( $cron, 'get_sitemap_urls', 500 );
@@ -140,6 +146,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 				'home_url',
 				'wp_remote_get',
 				'wp_remote_retrieve_body',
+				'wp_remote_retrieve_response_code',
 				'esc_url_raw',
 				'wp_next_scheduled',
 				'wp_schedule_single_event',
@@ -155,6 +162,7 @@ class CronSitemapTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_remote_retrieve_body' )->justReturn(
 			'<urlset><url><loc>http://example.com/about/</loc></url><url><loc>http://example.com/cart/</loc></url></urlset>'
 		);
+		Functions\when( 'wp_remote_retrieve_response_code' )->justReturn( 200 );
 		Functions\when( 'esc_url_raw' )->returnArg();
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'untrailingslashit' )->alias(

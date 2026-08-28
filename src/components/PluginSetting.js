@@ -19,7 +19,11 @@ import CheckboxOption from './common/CheckboxOption';
 
 import { __, sprintf } from '@wordpress/i18n';
 
-const ALLOWED_IMPORT_KEYS = [
+// Keep in sync with PHP Util::ALLOWED_SETTINGS_KEYS (single source).
+// At runtime the list is also available as wppoSettings.allowedSettingsKeys
+// via wp_localize_script; this fallback ensures correctness before the
+// script is localized (e.g. in Jest without wppoSettings).
+const FALLBACK_ALLOWED_KEYS = [
 	'file_optimisation',
 	'preload_settings',
 	'image_optimisation',
@@ -30,6 +34,12 @@ const ALLOWED_IMPORT_KEYS = [
 	'litespeed_integration',
 	'llms_txt',
 ];
+const ALLOWED_IMPORT_KEYS =
+	typeof wppoSettings !== 'undefined' &&
+	Array.isArray( wppoSettings.allowedSettingsKeys ) &&
+	wppoSettings.allowedSettingsKeys.length
+		? wppoSettings.allowedSettingsKeys
+		: FALLBACK_ALLOWED_KEYS;
 
 const validateImportData = ( data ) => {
 	if ( ! data || typeof data !== 'object' || Array.isArray( data ) ) {
@@ -872,11 +882,10 @@ const PluginSetting = ( { options } ) => {
 						/>
 					</FeatureCard>
 
-					{ /* Import — danger zone */ }
+					{ /* Import — danger zone — uses .wppo-danger-zone tokens (D-17). */ }
 					<div
+						className="wppo-danger-zone"
 						style={ {
-							borderLeft: '4px solid #ef4444',
-							background: '#fef2f2',
 							borderRadius: '10px',
 							overflow: 'hidden',
 						} }

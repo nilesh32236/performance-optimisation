@@ -106,7 +106,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return $tag;
 			}
 
-			if ( false === strpos( $href, 'fonts.googleapis.com' ) ) {
+			// Exact host allowlist — not strpos (prevents evil.com/fonts.googleapis.com or fonts.googleapis.com.evil.com).
+			// Caller: style_loader_tag filter; $href is the queued stylesheet URL.
+			// @since NEXT
+			if ( wp_parse_url( $href, PHP_URL_HOST ) !== 'fonts.googleapis.com' ) {
 				return $tag;
 			}
 
@@ -252,13 +255,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * For v1 API URLs (/css), keeps the original URL to avoid format conversion
 		 * issues with weight/style syntax. For v2 (/css2), returns as-is.
+		 * Exact host check prevents substring bypass (e.g. evil.com/fonts.googleapis.com).
+		 *
+		 * Callers: {@see download_and_rewrite()} ← {@see process_style_tag()} and {@see process_buffer()}.
+		 * Only fonts.googleapis.com is allowed for CSS; fonts.gstatic.com is handled
+		 * separately in {@see download_font_file()}.
 		 *
 		 * @param string $url The raw URL.
 		 * @return string Normalized URL or empty string if not a Google Fonts URL.
 		 * @since NEXT
 		 */
 		private function normalize_google_fonts_url( $url ) {
-			if ( false === strpos( $url, 'fonts.googleapis.com' ) ) {
+			// Exact host allowlist — replaces strpos substring check.
+			// @since NEXT
+			$host = wp_parse_url( $url, PHP_URL_HOST );
+			if ( 'fonts.googleapis.com' !== $host && 'fonts.gstatic.com' !== $host ) {
+				return '';
+			}
+			// CSS endpoint must be googleapis; gstatic URLs are font files, not CSS — reject them here.
+			if ( 'fonts.gstatic.com' === $host ) {
 				return '';
 			}
 
@@ -282,6 +297,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @since NEXT
 		 */
 		private function download_font_file( $url, $dest ) {
+			// Exact host allowlist — only fonts.gstatic.com may be fetched as a font file.
+			// @since NEXT
+			if ( wp_parse_url( $url, PHP_URL_HOST ) !== 'fonts.gstatic.com' ) {
+				return false;
+			}
+
 			$tmp = $dest . '.tmp.' . wp_rand();
 
 			$response = wp_remote_get(

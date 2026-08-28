@@ -70,12 +70,114 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		);
 
 		/**
+		 * Single source of truth for cleanup type => method mapping.
+		 *
+		 * Used by Rest, Abilities and clean_all to avoid 4-way drift.
+		 * Mirrors TABLE_MAP keys.
+		 *
+		 * @since NEXT
+		 * @var array<string, string>
+		 */
+		public const CLEANUP_METHOD_MAP = array(
+			'revisions'          => 'clean_revisions_advanced',
+			'auto_drafts'        => 'clean_auto_drafts',
+			'trashed_posts'      => 'clean_trashed_posts',
+			'spam_comments'      => 'clean_spam_comments',
+			'trashed_comments'   => 'clean_trashed_comments',
+			'expired_transients' => 'clean_expired_transients',
+			'orphan_postmeta'    => 'clean_orphan_postmeta',
+			'unattached_media'   => 'clean_unattached_media',
+			'oembed_cache'       => 'clean_oembed_cache',
+		);
+
+		/**
+		 * Get the cleanup method map (type => method).
+		 *
+		 * @since NEXT
+		 * @return array<string, string>
+		 */
+		public static function get_cleanup_method_map(): array {
+			return self::CLEANUP_METHOD_MAP;
+		}
+
+		/**
+		 * Get valid cleanup types including 'all'.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_valid_cleanup_types(): array {
+			return array_merge( array_keys( self::CLEANUP_METHOD_MAP ), array( 'all' ) );
+		}
+
+		/**
 		 * Option key used for the DB cleanup counts cache salt.
 		 *
 		 * @since NEXT
 		 * @var string
 		 */
 		private const SALT_KEY = 'wppo_db_cleanup_salt';
+
+		/**
+		 * Batched DELETE helper for post/comment cleanup.
+		 *
+		 * Centralises the `SELECT IDs LIMIT 1000 → DELETE meta → DELETE rows` loop
+		 * that was copy-pasted across 5 `clean_*` methods. Keeps error handling,
+		 * placeholder generation and `while ( count >= batch )` semantics identical.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $select_sql  SQL returning a single ID column (must include LIMIT).
+		 * @param string $meta_table  Fully-qualified meta table name (e.g. $wpdb->postmeta).
+		 * @param string $meta_column FK column in the meta table (e.g. post_id).
+		 * @param string $main_table  Fully-qualified main table name (e.g. $wpdb->posts).
+		 * @param string $id_column   PK column in the main table (e.g. ID).
+		 * @param int    $batch       Batch size; matches the LIMIT in $select_sql.
+		 * @return int|false Number of main rows deleted, or false on SQL error.
+		 */
+		private static function delete_in_batches( string $select_sql, string $meta_table, string $meta_column, string $main_table, string $id_column, int $batch = 1000 ): int|false {
+			global $wpdb;
+			$deleted = 0;
+
+			do {
+				$wpdb->last_error = '';
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$ids = $wpdb->get_col( $select_sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+				if ( ! empty( $wpdb->last_error ) ) {
+					return false;
+				}
+
+				if ( empty( $ids ) ) {
+					break;
+				}
+
+				$placeholders = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+
+				$wpdb->last_error = '';
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+				$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM {$meta_table} WHERE {$meta_column} IN ($placeholders)", ...$ids ) );
+
+				if ( false === $meta_deleted ) {
+					return false;
+				}
+
+				$wpdb->last_error = '';
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+				$rows_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM {$main_table} WHERE {$id_column} IN ($placeholders)", ...$ids ) );
+
+				if ( false === $rows_deleted ) {
+					return false;
+				}
+
+				if ( $rows_deleted ) {
+					$deleted += (int) $rows_deleted;
+				}
+				$ids_count = count( $ids );
+			} while ( $ids_count >= $batch );
+
+			return $deleted;
+		}
 
 		/**
 		 * Delete all post revisions from the database.
@@ -85,48 +187,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function clean_revisions() {
 			global $wpdb;
-			$deleted = 0;
-
-			do {
-				// Select a batch of post IDs to delete.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$post_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_type = 'revision' LIMIT 1000" );
-
-				if ( ! empty( $wpdb->last_error ) ) {
-					return false;
-				}
-
-				if ( empty( $post_ids ) ) {
-					break;
-				}
-
-				// Delete associated meta data for these specific revisions.
-				$wpdb->last_error = '';
-				$placeholders     = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->postmeta WHERE post_id IN ($placeholders)", ...$post_ids ) );
-
-				if ( false === $meta_deleted ) {
-					return false;
-				}
-
-				// Delete the revision posts.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$posts_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->posts WHERE ID IN ($placeholders)", ...$post_ids ) );
-
-				if ( false === $posts_deleted ) {
-					return false;
-				}
-
-				if ( $posts_deleted ) {
-					$deleted += (int) $posts_deleted;
-				}
-				$ids_count = count( $post_ids );
-			} while ( $ids_count >= 1000 );
-
-			return $deleted;
+			return self::delete_in_batches(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_type = 'revision' LIMIT 1000",
+				$wpdb->postmeta,
+				'post_id',
+				$wpdb->posts,
+				'ID'
+			);
 		}
 
 		/**
@@ -266,48 +333,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function clean_auto_drafts() {
 			global $wpdb;
-			$deleted = 0;
-
-			do {
-				// Select a batch of post IDs to delete.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$post_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_status = 'auto-draft' LIMIT 1000" );
-
-				if ( ! empty( $wpdb->last_error ) ) {
-					return false;
-				}
-
-				if ( empty( $post_ids ) ) {
-					break;
-				}
-
-				// Delete associated meta data for these specific posts.
-				$wpdb->last_error = '';
-				$placeholders     = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->postmeta WHERE post_id IN ($placeholders)", ...$post_ids ) );
-
-				if ( false === $meta_deleted ) {
-					return false;
-				}
-
-				// Delete the posts.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$posts_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->posts WHERE ID IN ($placeholders)", ...$post_ids ) );
-
-				if ( false === $posts_deleted ) {
-					return false;
-				}
-
-				if ( $posts_deleted ) {
-					$deleted += (int) $posts_deleted;
-				}
-				$ids_count = count( $post_ids );
-			} while ( $ids_count >= 1000 );
-
-			return $deleted;
+			return self::delete_in_batches(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_status = 'auto-draft' LIMIT 1000",
+				$wpdb->postmeta,
+				'post_id',
+				$wpdb->posts,
+				'ID'
+			);
 		}
 
 		/**
@@ -320,48 +352,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function clean_trashed_posts() {
 			global $wpdb;
-			$deleted = 0;
-
-			do {
-				// Select a batch of post IDs to delete.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$post_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_status = 'trash' LIMIT 1000" );
-
-				if ( ! empty( $wpdb->last_error ) ) {
-					return false;
-				}
-
-				if ( empty( $post_ids ) ) {
-					break;
-				}
-
-				// Delete associated meta data for these specific posts.
-				$wpdb->last_error = '';
-				$placeholders     = implode( ',', array_fill( 0, count( $post_ids ), '%d' ) );
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->postmeta WHERE post_id IN ($placeholders)", ...$post_ids ) );
-
-				if ( false === $meta_deleted ) {
-					return false;
-				}
-
-				// Delete the posts.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$posts_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->posts WHERE ID IN ($placeholders)", ...$post_ids ) );
-
-				if ( false === $posts_deleted ) {
-					return false;
-				}
-
-				if ( $posts_deleted ) {
-					$deleted += (int) $posts_deleted;
-				}
-				$ids_count = count( $post_ids );
-			} while ( $ids_count >= 1000 );
-
-			return $deleted;
+			return self::delete_in_batches(
+				"SELECT ID FROM {$wpdb->posts} WHERE post_status = 'trash' LIMIT 1000",
+				$wpdb->postmeta,
+				'post_id',
+				$wpdb->posts,
+				'ID'
+			);
 		}
 
 		/**
@@ -372,48 +369,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function clean_spam_comments() {
 			global $wpdb;
-			$deleted = 0;
-
-			do {
-				// Select a batch of comment IDs to delete.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$comment_ids = $wpdb->get_col( "SELECT comment_ID FROM $wpdb->comments WHERE comment_approved = 'spam' LIMIT 1000" );
-
-				if ( ! empty( $wpdb->last_error ) ) {
-					return false;
-				}
-
-				if ( empty( $comment_ids ) ) {
-					break;
-				}
-
-				$placeholders = implode( ',', array_fill( 0, count( $comment_ids ), '%d' ) );
-
-				// Delete comment meta for spam comments.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->commentmeta WHERE comment_id IN ($placeholders)", ...$comment_ids ) );
-
-				if ( false === $meta_deleted ) {
-					return false;
-				}
-
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$comments_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->comments WHERE comment_ID IN ($placeholders)", ...$comment_ids ) );
-
-				if ( false === $comments_deleted ) {
-					return false;
-				}
-
-				if ( $comments_deleted ) {
-					$deleted += $comments_deleted;
-				}
-				$ids_count = count( $comment_ids );
-			} while ( $ids_count >= 1000 );
-
-			return $deleted;
+			return self::delete_in_batches(
+				"SELECT comment_ID FROM {$wpdb->comments} WHERE comment_approved = 'spam' LIMIT 1000",
+				$wpdb->commentmeta,
+				'comment_id',
+				$wpdb->comments,
+				'comment_ID'
+			);
 		}
 
 		/**
@@ -424,48 +386,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 */
 		public static function clean_trashed_comments() {
 			global $wpdb;
-			$deleted = 0;
-
-			do {
-				// Select a batch of comment IDs to delete.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$comment_ids = $wpdb->get_col( "SELECT comment_ID FROM $wpdb->comments WHERE comment_approved = 'trash' LIMIT 1000" );
-
-				if ( ! empty( $wpdb->last_error ) ) {
-					return false;
-				}
-
-				if ( empty( $comment_ids ) ) {
-					break;
-				}
-
-				$placeholders = implode( ',', array_fill( 0, count( $comment_ids ), '%d' ) );
-
-				// Delete comment meta for trashed comments.
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$meta_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->commentmeta WHERE comment_id IN ($placeholders)", ...$comment_ids ) );
-
-				if ( false === $meta_deleted ) {
-					return false;
-				}
-
-				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
-				$comments_deleted = $wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->comments WHERE comment_ID IN ($placeholders)", ...$comment_ids ) );
-
-				if ( false === $comments_deleted ) {
-					return false;
-				}
-
-				if ( $comments_deleted ) {
-					$deleted += $comments_deleted;
-				}
-				$ids_count = count( $comment_ids );
-			} while ( $ids_count >= 1000 );
-
-			return $deleted;
+			return self::delete_in_batches(
+				"SELECT comment_ID FROM {$wpdb->comments} WHERE comment_approved = 'trash' LIMIT 1000",
+				$wpdb->commentmeta,
+				'comment_id',
+				$wpdb->comments,
+				'comment_ID'
+			);
 		}
 
 		/**
@@ -785,17 +712,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return array<string, int|WP_Error> Associative array keyed by cleanup type (e.g. 'revisions', 'auto_drafts') with each value set to the number of rows deleted or a `WP_Error` instance if that cleanup failed.
 		 */
 		public static function clean_all() {
-			$methods = array(
-				'revisions'          => 'clean_revisions_advanced',
-				'auto_drafts'        => 'clean_auto_drafts',
-				'trashed_posts'      => 'clean_trashed_posts',
-				'spam_comments'      => 'clean_spam_comments',
-				'trashed_comments'   => 'clean_trashed_comments',
-				'expired_transients' => 'clean_expired_transients',
-				'orphan_postmeta'    => 'clean_orphan_postmeta',
-				'unattached_media'   => 'clean_unattached_media',
-				'oembed_cache'       => 'clean_oembed_cache',
-			);
+			$methods = self::CLEANUP_METHOD_MAP;
 
 			$results         = array();
 			$total_deleted   = 0;
@@ -840,15 +757,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$max_age = isset( $settings['dbRevMaxAge'] ) ? (int) $settings['dbRevMaxAge'] : 30;
 			$keep    = isset( $settings['dbRevKeepLatest'] ) ? (int) $settings['dbRevKeepLatest'] : 5;
 
-			$methods = array(
-				'clean_revisions_advanced',
-				'clean_auto_drafts',
-				'clean_trashed_posts',
-				'clean_spam_comments',
-				'clean_trashed_comments',
-				'clean_expired_transients',
-				'clean_orphan_postmeta',
-			);
+			$methods = array_values( self::CLEANUP_METHOD_MAP );
 
 			$failures        = array();
 			$affected_tables = array();
@@ -869,6 +778,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 						'clean_trashed_comments'   => __( 'Trashed Comments', 'performance-optimisation' ),
 						'clean_expired_transients' => __( 'Expired Transients', 'performance-optimisation' ),
 						'clean_orphan_postmeta'    => __( 'Orphan Post Meta', 'performance-optimisation' ),
+						'clean_unattached_media'   => __( 'Unattached Media', 'performance-optimisation' ),
+						'clean_oembed_cache'       => __( 'oEmbed Cache', 'performance-optimisation' ),
 					);
 					$label  = $labels[ $method ] ?? $method;
 					// Translators: %s is the cleanup type label.
@@ -1045,6 +956,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		private static function get_table_size( string $table ): int {
 			global $wpdb;
 
+			$wpdb->last_error = '';
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$size = $wpdb->get_var(
 				$wpdb->prepare(
@@ -1054,7 +966,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				)
 			);
 
-			return $size ? (int) $size : 0;
+			if ( null !== $size && '' !== $size ) {
+				return (int) $size;
+			}
+
+			// Fallback when information_schema is not readable (permission denied).
+			// SHOW TABLE STATUS does not require information_schema SELECT privilege.
+			// @since NEXT Added fallback for restricted DB users.
+			if ( ! empty( $wpdb->last_error ) ) {
+				$wpdb->last_error = '';
+			}
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$row = $wpdb->get_row( $wpdb->prepare( 'SHOW TABLE STATUS LIKE %s', $table ), ARRAY_A );
+
+			if ( is_array( $row ) && isset( $row['Data_length'], $row['Index_length'] ) ) {
+				return (int) $row['Data_length'] + (int) $row['Index_length'];
+			}
+
+			return 0;
 		}
 
 		/**
@@ -1063,7 +993,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * Skips tables larger than 1 GB to avoid long table locks.
 		 * Logs the result via {@see Log::add()}.
 		 *
+		 * Security: $table is an unprefixed identifier (e.g. 'posts') that must be
+		 * allowlisted via {@see TABLE_MAP} / {@see METHOD_TO_TYPE}. Callers
+		 * {@see clean_all()} and {@see auto_clean()} only pass allowlisted values
+		 * through {@see maybe_optimize_tables()}, so no user input reaches this
+		 * interpolation. Table names cannot be passed as %s placeholders (identifiers
+		 * vs values), so direct interpolation with allowlist check is the correct
+		 * WordPress pattern. Verified: no REST/CLI path forwards raw user input here.
+		 *
 		 * @since NEXT
+		 * @since NEXT Added allowlist justification and verified no user input reaches interpolation.
 		 *
 		 * @param string $table Unprefixed table identifier (e.g. 'posts', 'postmeta').
 		 * @return bool True on success, false on failure or if skipped.
@@ -1090,7 +1029,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				return false;
 			}
 
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			// Allowlisted identifier: $full_table_name is derived from $wpdb->{allowlisted key}
+			// (TABLE_MAP), not from user input. Cannot use $wpdb->prepare() for identifiers.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $full_table_name is allowlisted via TABLE_MAP + $wpdb property; safe identifier interpolation.
 			$result = $wpdb->query( "OPTIMIZE TABLE {$full_table_name}" );
 
 			if ( false === $result ) {

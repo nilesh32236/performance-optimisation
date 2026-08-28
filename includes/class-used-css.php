@@ -134,7 +134,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		 * @since 1.9.0
 		 */
 		public function __construct( array $options = array() ) {
-			$this->options = ! empty( $options ) ? $options : get_option( 'wppo_settings', array() );
+			$this->options = ! empty( $options ) ? $options : Util::get_settings();
 
 			$domain = isset( $_SERVER['HTTP_HOST'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
@@ -480,13 +480,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			$simple_selectors = $this->extract_simple_selectors( $selector );
 
+			// Conservative OR logic: keep the rule if ANY simple selector part
+			// exists in the DOM, to avoid breaking descendant selectors like
+			// `.sidebar .widget` when only one side is present. This matches
+			// the documented behaviour and avoids false-positive purging.
+			// @since NEXT Fixed from AND to OR to match docs.
 			foreach ( $simple_selectors as $simple ) {
-				if ( ! $this->matches_simple_selector( $simple, $used ) ) {
-					return false;
+				if ( $this->matches_simple_selector( $simple, $used ) ) {
+					return true;
 				}
 			}
 
-			return ! empty( $simple_selectors );
+			return false;
 		}
 
 		/**
@@ -986,7 +991,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return;
 			}
 
-			$options    = get_option( 'wppo_settings', array() );
+			$options    = Util::get_settings();
 			$used_css   = new self( $options );
 			$purged_css = $used_css->generate_used_css( $html, $css_assets );
 

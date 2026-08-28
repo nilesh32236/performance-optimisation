@@ -213,6 +213,10 @@ trait WPPO_Test_Bootstrap {
 		parent::setUp();
 		\Brain\Monkey\setUp();
 		\PerformanceOptimise\Inc\Util::reset_cached_home_urls();
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
+		if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
+			\PerformanceOptimise\Inc\Image_Optimisation::clear_file_exists_cache();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

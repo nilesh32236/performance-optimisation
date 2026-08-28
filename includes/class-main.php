@@ -167,90 +167,89 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.0.0
 		 */
 		public function __construct() {
-			$this->options = get_option(
-				'wppo_settings',
-				array(
-					'cache_settings'        => array(
-						'enableLoggedInCache' => false,
-						'loggedInCacheRoles'  => array(),
-					),
-					'file_optimisation'     => array(
-						'enableServerRules'       => false,
-						'cdnURL'                  => '',
-						'removeUnusedCSS'         => false,
-						'excludeUnusedCSS'        => '',
-						'criticalCSS'             => false,
-						'hostGoogleFontsLocally'  => false,
-						// On WP 6.9+ classic themes load core block assets on demand by default, so
-						// the toggle defaults to ON there and only acts as an opt-out. Pre-6.9 cores
-						// keep the legacy opt-in default (OFF).
-						'blockAssetsOnDemand'     => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
-						'loadAllCoreBlockAssets'  => false,
-						'delayJSDefaultStrategy'  => 'interaction',
-						'delayJSIdleList'         => '',
-						'delayJSViewportList'     => '',
-						'delayJSPriority'         => '',
-						'delayJSIdleTimeout'      => 3000,
-						'minifyHTML'              => false,
-						'minifyJS'                => false,
-						'minifyCSS'               => false,
-						'deferJS'                 => false,
-						'delayJS'                 => false,
-						'combineCSS'              => false,
-						'excludeJS'               => '',
-						'excludeCSS'              => '',
-						'excludeDeferJS'          => '',
-						'excludeDelayJS'          => '',
-						'excludeCombineCSS'       => '',
-						'minifyInlineCSS'         => false,
-						'minifyInlineJS'          => false,
-						'removeHTMLComments'      => true,
-						'removeQueryStrings'      => false,
-						'disableRestApiLinks'     => false,
-						'disableRssFeeds'         => false,
-						'disableShortlinks'       => false,
-						'disableGeneratorTag'     => false,
-						'disableJQueryMigrate'    => false,
-						'disablePasswordStrength' => false,
-						'disableSelfPingbacks'    => false,
-					),
-					'preload_settings'      => array(
-						'enableSpeculationRules' => false,
-						'speculationMode'        => 'prefetch',
-						'speculationEagerness'   => 'conservative',
-						'speculationExcludeUrls' => '',
-						'preloadSitemap'         => false,
-					),
-					'image_optimisation'    => array(
-						'lazyLoadImages'             => false,
-						'lazyLoadNative'             => true,
-						'placeholderType'            => 'svg',
-						'autoPreloadLCP'             => false,
-						'prioritizeLCPImages'        => false,
-						'clientSideMimeTypeOverride' => false,
-						'clientSideMimeTypes'        => array(),
-						'lazyLoadBackgroundImages'   => false,
-					),
-					'performance_audit'     => array(
-						'pagespeed_api_key'     => '',
-						'high_value_urls'       => array(),
-						'auto_fix_enabled'      => false,
-						'server_timing_enabled' => false,
-						'auto_rescan'           => '',
-						'rum_enabled'           => false,
-					),
-					'litespeed_integration' => array(
-						'mode'                 => 'auto',
-						'enableNextGenRewrite' => false,
-						'enableBrotli'         => false,
-						'purgeSync'            => true,
-					),
-					'llms_txt'              => array(
-						'enabled' => false,
-						'source'  => 'both',
-					),
-				)
+			$defaults      = array(
+				'cache_settings'        => array(
+					'enableLoggedInCache' => false,
+					'loggedInCacheRoles'  => array(),
+				),
+				'file_optimisation'     => array(
+					'enableServerRules'       => false,
+					'cdnURL'                  => '',
+					'removeUnusedCSS'         => false,
+					'excludeUnusedCSS'        => '',
+					'criticalCSS'             => false,
+					'hostGoogleFontsLocally'  => false,
+					// On WP 6.9+ classic themes load core block assets on demand by default, so
+					// the toggle defaults to ON there and only acts as an opt-out. Pre-6.9 cores
+					// keep the legacy opt-in default (OFF).
+					'blockAssetsOnDemand'     => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+					'loadAllCoreBlockAssets'  => false,
+					'delayJSDefaultStrategy'  => 'interaction',
+					'delayJSIdleList'         => '',
+					'delayJSViewportList'     => '',
+					'delayJSPriority'         => '',
+					'delayJSIdleTimeout'      => 3000,
+					'minifyHTML'              => false,
+					'minifyJS'                => false,
+					'minifyCSS'               => false,
+					'deferJS'                 => false,
+					'delayJS'                 => false,
+					'combineCSS'              => false,
+					'excludeJS'               => '',
+					'excludeCSS'              => '',
+					'excludeDeferJS'          => '',
+					'excludeDelayJS'          => '',
+					'excludeCombineCSS'       => '',
+					'minifyInlineCSS'         => false,
+					'minifyInlineJS'          => false,
+					'removeHTMLComments'      => true,
+					'removeQueryStrings'      => false,
+					'disableRestApiLinks'     => false,
+					'disableRssFeeds'         => false,
+					'disableShortlinks'       => false,
+					'disableGeneratorTag'     => false,
+					'disableJQueryMigrate'    => false,
+					'disablePasswordStrength' => false,
+					'disableSelfPingbacks'    => false,
+				),
+				'preload_settings'      => array(
+					'enableSpeculationRules' => false,
+					'speculationMode'        => 'prefetch',
+					'speculationEagerness'   => 'conservative',
+					'speculationExcludeUrls' => '',
+					'preloadSitemap'         => false,
+				),
+				'image_optimisation'    => array(
+					'lazyLoadImages'             => false,
+					'lazyLoadNative'             => true,
+					'placeholderType'            => 'svg',
+					'autoPreloadLCP'             => false,
+					'prioritizeLCPImages'        => false,
+					'clientSideMimeTypeOverride' => false,
+					'clientSideMimeTypes'        => array(),
+					'lazyLoadBackgroundImages'   => false,
+				),
+				'performance_audit'     => array(
+					'pagespeed_api_key'     => '',
+					'high_value_urls'       => array(),
+					'auto_fix_enabled'      => false,
+					'server_timing_enabled' => false,
+					'auto_rescan'           => '',
+					'rum_enabled'           => false,
+				),
+				'litespeed_integration' => array(
+					'mode'                 => 'auto',
+					'enableNextGenRewrite' => false,
+					'enableBrotli'         => false,
+					'purgeSync'            => true,
+				),
+				'llms_txt'              => array(
+					'enabled' => false,
+					'source'  => 'both',
+				),
 			);
+			$stored        = Util::get_settings();
+			$this->options = ! empty( $stored ) ? $stored : $defaults;
 
 			// WP 6.9+ loads core block assets on demand in classic themes by default. Existing
 			// installs whose stored settings predate the `blockAssetsOnDemand` key inherit that
@@ -1522,6 +1521,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'wppo_owns_cache'    => true,
 						'optimizer_disabled' => false,
 					),
+					// Allowlisted top-level settings keys — single source is Util::ALLOWED_SETTINGS_KEYS
+					// (exposed here so JS `ALLOWED_IMPORT_KEYS` can stay in sync without codegen).
+					'allowedSettingsKeys'                => Util::ALLOWED_SETTINGS_KEYS,
 				),
 			);
 
@@ -1722,11 +1724,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Adds custom settings to the WordPress admin bar.
 		 *
+		 * Capability-gated: only users with `manage_options` see cache-clear nodes.
+		 * The REST handlers behind the nodes also enforce `manage_options` + nonce,
+		 * so this is a UI disclosure guard (defence in depth).
+		 *
 		 * @param \WP_Admin_Bar $wp_admin_bar The WordPress admin bar object used to add nodes and settings.
 		 *
 		 * @since 1.0.0
+		 * @since NEXT Added `manage_options` capability check.
 		 */
 		public function add_setting_to_admin_bar( $wp_admin_bar ) {
+			if ( ! current_user_can( 'manage_options' ) ) {
+				return;
+			}
 			$wp_admin_bar->add_node(
 				array(
 					'id'    => 'wppo_setting',

@@ -272,7 +272,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 							'properties' => array(
 								'type' => array(
 									'type'        => 'string',
-									'enum'        => array( 'revisions', 'auto_drafts', 'trash', 'spam', 'transients', 'orphans', 'all' ),
+									'enum'        => array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'unattached_media', 'oembed_cache', 'all' ),
 									'description' => __( 'Cleanup type.', 'performance-optimisation' ),
 								),
 							),
@@ -448,7 +448,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		 */
 		public static function execute_database_cleanup( array $input ): array {
 			$type        = isset( $input['type'] ) ? sanitize_text_field( $input['type'] ) : '';
-			$valid_types = array( 'revisions', 'auto_drafts', 'trashed_posts', 'spam_comments', 'trashed_comments', 'expired_transients', 'orphan_postmeta', 'unattached_media', 'oembed_cache', 'all' );
+			$valid_types = Database_Cleanup::get_valid_cleanup_types();
 			if ( ! in_array( $type, $valid_types, true ) ) {
 				return array( 'cleaned' => 0 );
 			}
@@ -462,17 +462,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				}
 				return array( 'cleaned' => $total );
 			}
-			$method_map = array(
-				'revisions'          => 'clean_revisions_advanced',
-				'auto_drafts'        => 'clean_auto_drafts',
-				'trashed_posts'      => 'clean_trashed_posts',
-				'spam_comments'      => 'clean_spam_comments',
-				'trashed_comments'   => 'clean_trashed_comments',
-				'expired_transients' => 'clean_expired_transients',
-				'orphan_postmeta'    => 'clean_orphan_postmeta',
-				'unattached_media'   => 'clean_unattached_media',
-				'oembed_cache'       => 'clean_oembed_cache',
-			);
+			$method_map = Database_Cleanup::CLEANUP_METHOD_MAP;
 			$method     = $method_map[ $type ] ?? null;
 			if ( ! $method ) {
 				return array( 'cleaned' => 0 );

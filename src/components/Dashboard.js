@@ -26,6 +26,7 @@ import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
 import { __ } from '@wordpress/i18n';
+import { modeLabel } from '../lib/litespeed';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faServer,
@@ -685,12 +686,7 @@ const Dashboard = ( {
 	const isLiteSpeed = !! litespeedInfo?.detected;
 	const effectiveMode = litespeedInfo?.effective_mode || 'standalone';
 	const lscacheActive = !! litespeedInfo?.lscache_active;
-	let effectiveLabel = effectiveMode;
-	if ( effectiveMode === 'wppo' ) {
-		effectiveLabel = 'WPPO';
-	} else if ( effectiveMode === 'litespeed' ) {
-		effectiveLabel = 'LiteSpeed';
-	}
+	const effectiveLabel = modeLabel( effectiveMode );
 	const effectiveBadgeClass =
 		effectiveMode === 'litespeed'
 			? 'wppo-status-badge--warning'

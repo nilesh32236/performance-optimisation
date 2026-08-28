@@ -623,8 +623,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					return;
 				}
 
-				// Validate allowed keys (mirrors REST endpoint logic).
-				$allowed_keys = array( 'file_optimisation', 'preload_settings', 'image_optimisation', 'database_cleanup', 'object_cache', 'performance_audit', 'core_tweaks', 'cache_settings' );
+				// Validate allowed keys (single source: Util::ALLOWED_SETTINGS_KEYS).
+				$allowed_keys = Util::ALLOWED_SETTINGS_KEYS;
 				foreach ( array_keys( $new_settings ) as $key ) {
 					if ( ! in_array( $key, $allowed_keys, true ) ) {
 						/* translators: %s: Setting key name */
@@ -708,7 +708,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				// Sanitize every value before merging (mirrors REST endpoint logic).
 				$new_settings = Util::sanitize_settings_recursively( $new_settings );
 
-				$known_tabs = array( 'file_optimisation', 'preload_settings', 'image_optimisation', 'database_cleanup', 'object_cache', 'performance_audit', 'cache_settings', 'core_tweaks' );
+				$known_tabs = Util::ALLOWED_SETTINGS_TABS;
 				if ( ! in_array( $tab, $known_tabs, true ) ) {
 					/* translators: %s: Settings tab name */
 					WP_CLI::warning( sprintf( __( 'Unrecognized settings tab "%s". Settings will be saved but the plugin may not read them.', 'performance-optimisation' ), $tab ) );

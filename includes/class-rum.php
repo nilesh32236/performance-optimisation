@@ -50,12 +50,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		const RATE_LIMIT_PER_HOUR = 120;
 
 		/**
+		 * Transient key for the RUM sample queue.
+		 *
+		 * @var string
+		 * @since NEXT
+		 */
+		private const QUEUE_KEY = 'wppo_rum_queue';
+
+		/**
+		 * Transient key for the flush lock.
+		 *
+		 * @var string
+		 * @since NEXT
+		 */
+		private const FLUSH_LOCK_KEY = 'wppo_rum_flush_lock';
+
+		/**
+		 * Maximum queued samples before forced flush.
+		 *
+		 * @var int
+		 * @since NEXT
+		 */
+		private const QUEUE_MAX = 100;
+
+		/**
+		 * Flush when queue reaches this size.
+		 *
+		 * @var int
+		 * @since NEXT
+		 */
+		private const FLUSH_THRESHOLD = 20;
+
+		/**
 		 * Whether RUM collection is enabled.
 		 *
 		 * @return bool
 		 */
 		public static function is_enabled(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return ! empty( $options['performance_audit']['rum_enabled'] );
 		}
 
@@ -114,9 +146,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		/**
 		 * Retrieve the aggregated RUM data for the admin dashboard.
 		 *
+		 * Flushes any queued samples first so the dashboard sees fresh data.
+		 *
 		 * @return array
 		 */
 		public static function get_data(): array {
+			// Opportunistically flush queued beacons before reading.
+			self::flush_queue();
 			$data = get_option( self::OPTION, array() );
 			return is_array( $data ) ? $data : array();
 		}
@@ -268,65 +304,130 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		}
 
 		/**
-		 * Merge a sample into the per-day/per-path aggregate option.
+		 * Buffer a sample to a transient queue and flush periodically.
+		 *
+		 * Replaces the previous per-beacon get_option+update_option with a
+		 * transient queue that is flushed in batches, reducing option
+		 * writes from 1 per beacon to ~1 per FLUSH_THRESHOLD beacons.
 		 *
 		 * @param array $sample Normalized sample.
 		 * @return void
+		 * @since NEXT
 		 */
 		private static function store_sample( array $sample ): void {
-			$date = gmdate( 'Y-m-d' );
-			$path = $sample['path'];
-
-			$all = get_option( self::OPTION, array() );
-			if ( ! is_array( $all ) ) {
-				$all = array();
+			// Attach timestamp so flush can bucket by sample day, not flush day.
+			$sample['_ts'] = time();
+			$queue_key     = Util::transient_key( self::QUEUE_KEY );
+			$queue         = get_transient( $queue_key );
+			if ( ! is_array( $queue ) ) {
+				$queue = array();
 			}
-			if ( ! isset( $all[ $date ] ) ) {
-				$all[ $date ] = array();
+			$queue[] = $sample;
+			if ( count( $queue ) > self::QUEUE_MAX ) {
+				$queue = array_slice( $queue, -self::QUEUE_MAX );
 			}
+			set_transient( $queue_key, $queue, HOUR_IN_SECONDS );
 
-			$day    = $all[ $date ];
-			$bucket = isset( $day[ $path ] ) ? $day[ $path ] : array();
-
-			foreach ( array( 'ttfb', 'fcp', 'lcp', 'inp', 'cls' ) as $metric ) {
-				if ( ! isset( $sample[ $metric ] ) ) {
-					continue;
-				}
-				$value = (float) $sample[ $metric ];
-				if ( ! isset( $bucket[ $metric ] ) ) {
-					$bucket[ $metric ] = array(
-						'n'   => 0,
-						'sum' => 0.0,
-						'min' => $value,
-						'max' => $value,
-					);
-				}
-				++$bucket[ $metric ]['n'];
-				$bucket[ $metric ]['sum'] += $value;
-				$bucket[ $metric ]['min']  = min( $bucket[ $metric ]['min'], $value );
-				$bucket[ $metric ]['max']  = max( $bucket[ $metric ]['max'], $value );
-			}
-
-			$day[ $path ] = $bucket;
-
-			// Bound paths per day (drop the oldest-inserted path when over budget).
-			$path_total = count( $day );
-			while ( $path_total > self::MAX_PATHS_PER_DAY ) {
-				array_shift( $day );
-				--$path_total;
-			}
-
-			$all[ $date ] = $day;
-
-			// Drop days older than the retention window.
-			$cutoff = gmdate( 'Y-m-d', time() - ( self::MAX_DAYS * DAY_IN_SECONDS ) );
-			foreach ( array_keys( $all ) as $day_key ) {
-				if ( $day_key < $cutoff ) {
-					unset( $all[ $day_key ] );
+			if ( count( $queue ) >= self::FLUSH_THRESHOLD ) {
+				self::flush_queue();
+			} elseif ( function_exists( 'wp_rand' ) && wp_rand( 1, 10 ) === 1 ) {
+				self::flush_queue();
+			} elseif ( function_exists( 'rand' ) && rand( 1, 10 ) === 1 ) {
+				self::flush_queue();
+			} else {
+				// Ensure a cron will eventually flush the queue even on low traffic.
+				if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
+					if ( ! wp_next_scheduled( 'wppo_rum_flush' ) ) {
+						wp_schedule_single_event( time() + 300, 'wppo_rum_flush' );
+					}
 				}
 			}
+		}
 
-			update_option( self::OPTION, $all, false );
+		/**
+		 * Flush queued RUM samples to the persistent aggregate option.
+		 *
+		 * Batched to perform a single get_option/update_option for up to
+		 * QUEUE_MAX samples, with a transient lock to prevent concurrent
+		 * flushes from duplicating or losing samples.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function flush_queue(): void {
+			$lock_key = Util::transient_key( self::FLUSH_LOCK_KEY );
+			if ( get_transient( $lock_key ) ) {
+				return;
+			}
+			set_transient( $lock_key, 1, 30 );
+			try {
+				$queue_key = Util::transient_key( self::QUEUE_KEY );
+				$queue     = get_transient( $queue_key );
+				if ( empty( $queue ) || ! is_array( $queue ) ) {
+					return;
+				}
+				// Copy and clear queue before processing so new beacons arriving
+				// during aggregation queue separately.
+				delete_transient( $queue_key );
+
+				$all = get_option( self::OPTION, array() );
+				if ( ! is_array( $all ) ) {
+					$all = array();
+				}
+
+				foreach ( $queue as $sample ) {
+					$ts   = isset( $sample['_ts'] ) ? (int) $sample['_ts'] : time();
+					$date = gmdate( 'Y-m-d', $ts );
+					$path = $sample['path'];
+
+					if ( ! isset( $all[ $date ] ) ) {
+						$all[ $date ] = array();
+					}
+					$day    = $all[ $date ];
+					$bucket = isset( $day[ $path ] ) ? $day[ $path ] : array();
+
+					foreach ( array( 'ttfb', 'fcp', 'lcp', 'inp', 'cls' ) as $metric ) {
+						if ( ! isset( $sample[ $metric ] ) ) {
+							continue;
+						}
+						$value = (float) $sample[ $metric ];
+						if ( ! isset( $bucket[ $metric ] ) ) {
+							$bucket[ $metric ] = array(
+								'n'   => 0,
+								'sum' => 0.0,
+								'min' => $value,
+								'max' => $value,
+							);
+						}
+						++$bucket[ $metric ]['n'];
+						$bucket[ $metric ]['sum'] += $value;
+						$bucket[ $metric ]['min']  = min( $bucket[ $metric ]['min'], $value );
+						$bucket[ $metric ]['max']  = max( $bucket[ $metric ]['max'], $value );
+					}
+
+					$day[ $path ] = $bucket;
+
+					// Bound paths per day.
+					$path_total = count( $day );
+					while ( $path_total > self::MAX_PATHS_PER_DAY ) {
+						array_shift( $day );
+						--$path_total;
+					}
+					$all[ $date ] = $day;
+				}
+
+				// Drop days older than retention.
+				$cutoff = gmdate( 'Y-m-d', time() - ( self::MAX_DAYS * DAY_IN_SECONDS ) );
+				foreach ( array_keys( $all ) as $day_key ) {
+					if ( $day_key < $cutoff ) {
+						unset( $all[ $day_key ] );
+					}
+				}
+
+				update_option( self::OPTION, $all, false );
+			} finally {
+				delete_transient( $lock_key );
+			}
 		}
 	}
 }
