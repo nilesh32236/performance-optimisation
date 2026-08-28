@@ -172,6 +172,7 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 			$s_port      = $parsed_node['port'];
 
 			if ( '' === $s_host || (int) $s_port <= 0 ) {
+					$errors[] = __( 'Sentinel node skipped: invalid host or port.', 'performance-optimisation' );
 				continue;
 			}
 
@@ -213,8 +214,10 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 					}
 				}
 			} catch ( \Throwable $e ) {
-				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
-				error_log( 'WPPO Sentinel node connection failed: ' . $e->getMessage() );
+				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO Sentinel node connection failed: ' . $e->getMessage() );
+				}
 				$errors[] = __( 'Sentinel node connection failed.', 'performance-optimisation' );
 				continue;
 			}
