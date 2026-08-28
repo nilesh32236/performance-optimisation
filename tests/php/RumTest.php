@@ -47,9 +47,11 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 				'esc_url_raw',
 				'wp_unslash',
 				'is_multisite',
+				'get_current_blog_id',
 				'wp_next_scheduled',
 				'wp_schedule_single_event',
 				'wp_rand',
+				'add_action',
 			)
 		);
 		Functions\when( 'get_option' )->alias(
@@ -82,6 +84,7 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_next_scheduled' )->justReturn( false );
 		Functions\when( 'wp_schedule_single_event' )->justReturn( true );
 		Functions\when( 'wp_rand' )->justReturn( 2 );
+		Functions\when( 'add_action' )->justReturn( true );
 		// Deterministic token derivation so tests can predict the valid token.
 		Functions\when( 'wp_hash' )->alias(
 			static function ( $data ) {

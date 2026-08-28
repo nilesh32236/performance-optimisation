@@ -150,7 +150,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$cookie_hash   = defined( 'COOKIEHASH' ) ? COOKIEHASH : $fallback_hash;
 
 			// Cache life in hours baked into the drop-in; 0 = never expire.
-			$wppo_options = get_option( 'wppo_settings', array() );
+			$wppo_options = Util::get_settings();
 			$cache_life   = isset( $wppo_options['cache_settings']['cacheLife'] ) ? absint( $wppo_options['cache_settings']['cacheLife'] ) : 0;
 
 			$handler_code = '<?php' . PHP_EOL .

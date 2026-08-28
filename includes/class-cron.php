@@ -199,51 +199,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @since NEXT
 		 */
 		public function web_vitals_rescan_cron(): void {
-			$options = Util::get_settings();
-			$audit   = isset( $options['performance_audit'] ) && is_array( $options['performance_audit'] ) ? $options['performance_audit'] : array();
-
-			$frequency = isset( $audit['auto_rescan'] ) ? sanitize_text_field( $audit['auto_rescan'] ) : '';
-			if ( ! in_array( $frequency, array( 'daily', 'weekly' ), true ) ) {
+			if ( get_transient( Util::transient_key( 'wppo_web_vitals_rescan_lock' ) ) ) {
 				return;
 			}
+			set_transient( Util::transient_key( 'wppo_web_vitals_rescan_lock' ), 1, 10 * MINUTE_IN_SECONDS );
 
-			if ( 'weekly' === $frequency ) {
-				$last_run = (int) get_option( 'wppo_web_vitals_last_rescan', 0 );
-				if ( ( time() - $last_run ) < WEEK_IN_SECONDS ) {
+			try {
+				$options = Util::get_settings();
+				$audit   = isset( $options['performance_audit'] ) && is_array( $options['performance_audit'] ) ? $options['performance_audit'] : array();
+
+				$frequency = isset( $audit['auto_rescan'] ) ? sanitize_text_field( $audit['auto_rescan'] ) : '';
+				if ( ! in_array( $frequency, array( 'daily', 'weekly' ), true ) ) {
 					return;
 				}
-			}
 
-			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
-				return;
-			}
-
-			$urls = array( Util::cached_home_url( '/' ) );
-
-			if ( ! empty( $audit['high_value_urls'] ) && is_array( $audit['high_value_urls'] ) ) {
-				foreach ( $audit['high_value_urls'] as $high_url ) {
-					$clean = esc_url_raw( (string) $high_url );
-					if ( ! empty( $clean ) && ! in_array( $clean, $urls, true ) ) {
-						$urls[] = $clean;
+				if ( 'weekly' === $frequency ) {
+					$last_run = (int) get_option( 'wppo_web_vitals_last_rescan', 0 );
+					if ( ( time() - $last_run ) < WEEK_IN_SECONDS ) {
+						return;
 					}
 				}
-			}
 
-			$all_queued = true;
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					return;
+				}
 
-			foreach ( $urls as $scan_url ) {
-				foreach ( array( 'mobile', 'desktop' ) as $scan_strategy ) {
-					// queue_scan() returns 0 when Action Scheduler cannot create the job.
-					if ( 0 === Pagespeed::queue_scan( $scan_url, $scan_strategy ) ) {
-						$all_queued = false;
+				$urls = array( Util::cached_home_url( '/' ) );
+
+				if ( ! empty( $audit['high_value_urls'] ) && is_array( $audit['high_value_urls'] ) ) {
+					foreach ( $audit['high_value_urls'] as $high_url ) {
+						$clean = esc_url_raw( (string) $high_url );
+						if ( ! empty( $clean ) && ! in_array( $clean, $urls, true ) ) {
+							$urls[] = $clean;
+						}
 					}
 				}
-			}
 
-			// Only record a completed run when everything queued successfully, so a
-			// failed enqueue does not block retries for the full weekly window.
-			if ( $all_queued ) {
-				update_option( 'wppo_web_vitals_last_rescan', time(), false );
+				$all_queued = true;
+
+				foreach ( $urls as $scan_url ) {
+					foreach ( array( 'mobile', 'desktop' ) as $scan_strategy ) {
+						// queue_scan() returns 0 when Action Scheduler cannot create the job.
+						if ( 0 === Pagespeed::queue_scan( $scan_url, $scan_strategy ) ) {
+							$all_queued = false;
+						}
+					}
+				}
+
+				// Only record a completed run when everything queued successfully, so a
+				// failed enqueue does not block retries for the full weekly window.
+				if ( $all_queued ) {
+					update_option( 'wppo_web_vitals_last_rescan', time(), false );
+				}
+			} finally {
+				delete_transient( Util::transient_key( 'wppo_web_vitals_rescan_lock' ) );
 			}
 		}
 
@@ -286,14 +295,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$post_types = array_unique( array_merge( array_values( array_diff( $post_types, array( 'attachment' ) ) ), array( 'page', 'post' ) ) );
 
 				$args = array(
-					'post_type'      => $post_types,
-					'post_status'    => 'publish',
+					'post_type'              => $post_types,
+					'post_status'            => 'publish',
 					// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page
-					'posts_per_page' => 200, // Process pages in batches to prevent OOM.
-					'paged'          => max( 1, (int) ceil( ( $paged_offset + 1 ) / 200 ) ),
-					'fields'         => 'ids',
-					'orderby'        => 'ID',
-					'order'          => 'ASC',
+					'posts_per_page'         => 200, // Process pages in batches to prevent OOM.
+					'paged'                  => max( 1, (int) ceil( ( $paged_offset + 1 ) / 200 ) ),
+					'fields'                 => 'ids',
+					'orderby'                => 'ID',
+					'order'                  => 'ASC',
+					'no_found_rows'          => true,
+					'update_post_meta_cache' => false,
+					'update_post_term_cache' => false,
 				);
 
 				$query_batch_posts = get_posts( $args );
@@ -405,6 +417,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			wp_clear_scheduled_hook( 'wppo_ccss_regeneration' );
 			wp_clear_scheduled_hook( 'wppo_generate_ccss' );
 			wp_clear_scheduled_hook( 'wppo_web_vitals_rescan' );
+			delete_transient( Util::transient_key( 'wppo_web_vitals_rescan_lock' ) );
 			wp_clear_scheduled_hook( 'wppo_llms_txt_daily' );
 			wp_clear_scheduled_hook( 'wppo_rum_flush' );
 		}
@@ -623,7 +636,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( get_transient( Util::transient_key( 'wppo_img_convert_lock' ) ) ) {
 				return;
 			}
-			set_transient( Util::transient_key( 'wppo_img_convert_lock' ), true, 5 * MINUTE_IN_SECONDS );
+			set_transient( Util::transient_key( 'wppo_img_convert_lock' ), true, 15 * MINUTE_IN_SECONDS );
 
 			try {
 				$options       = Util::get_settings();

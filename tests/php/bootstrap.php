@@ -217,6 +217,23 @@ trait WPPO_Test_Bootstrap {
 		if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			\PerformanceOptimise\Inc\Image_Optimisation::clear_file_exists_cache();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
+			try {
+				$ref = new \ReflectionClass( \PerformanceOptimise\Inc\RUM::class );
+				if ( $ref->hasProperty( 'shutdown_buffer' ) ) {
+					$prop = $ref->getProperty( 'shutdown_buffer' );
+					$prop->setAccessible( true );
+					$prop->setValue( null, array() );
+				}
+				if ( $ref->hasProperty( 'shutdown_registered' ) ) {
+					$prop = $ref->getProperty( 'shutdown_registered' );
+					$prop->setAccessible( true );
+					$prop->setValue( null, false );
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.

@@ -302,7 +302,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return self::$cached_mode;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$raw     = $options['litespeed_integration']['mode'] ?? self::MODE_AUTO;
 			$mode    = is_string( $raw ) ? sanitize_text_field( $raw ) : self::MODE_AUTO;
 
@@ -472,7 +472,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return false;
 			}
 
-			$options    = get_option( 'wppo_settings', array() );
+			$options    = Util::get_settings();
 			$purge_sync = $options['litespeed_integration']['purgeSync'] ?? true;
 			$purge_sync = (bool) $purge_sync;
 
@@ -687,7 +687,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return self::$cached_ttl;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$hours   = isset( $options['cache_settings']['cacheLife'] ) ? absint( $options['cache_settings']['cacheLife'] ) : 0;
 
 			if ( 0 === $hours ) {
@@ -768,7 +768,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 
 			// LS-304: honor preload_settings.excludePreloadCache when enabled.
 			if ( $cacheable ) {
-				$options = get_option( 'wppo_settings', array() );
+				$options = Util::get_settings();
 				if ( ! empty( $options['preload_settings']['enablePreloadCache'] ) && ! empty( $options['preload_settings']['excludePreloadCache'] ) ) {
 					$exclude_urls = Util::process_urls( $options['preload_settings']['excludePreloadCache'] );
 					$request_uri  = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
@@ -815,7 +815,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return self::$cached_should_vary;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$enable  = ! empty( $options['cache_settings']['enableLoggedInCache'] );
 
 			/**
@@ -1111,7 +1111,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return self::$cached_nextgen;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$enabled = ! empty( $options['litespeed_integration']['enableNextGenRewrite'] );
 			// Gate on convertImg (image next-gen conversion must be active).
 			$convert = ! empty( $options['image_optimisation']['convertImg'] );
@@ -1151,7 +1151,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return bool True if nginx next-gen map should be included.
 		 */
 		public static function is_nextgen_rewrite_enabled_for_nginx(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$enabled = ! empty( $options['litespeed_integration']['enableNextGenRewrite'] );
 			$convert = ! empty( $options['image_optimisation']['convertImg'] );
 			if ( ! $convert ) {
@@ -1186,7 +1186,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return self::$cached_brotli;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$enabled = ! empty( $options['litespeed_integration']['enableBrotli'] );
 
 			if ( ! $enabled ) {

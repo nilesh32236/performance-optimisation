@@ -82,6 +82,7 @@ class CDNPurgerTest extends \PHPUnit\Framework\TestCase {
 		$this->options['wppo_settings'] = array(
 			'cache_settings' => $cache_settings,
 		);
+		\PerformanceOptimise\Inc\Util::clear_settings_cache();
 	}
 
 	/**

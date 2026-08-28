@@ -322,7 +322,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 		 * @return string API key, or empty string if not configured.
 		 */
 		private static function get_api_key(): string {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return (string) ( isset( $options['performance_audit']['pagespeed_api_key'] ) ? $options['performance_audit']['pagespeed_api_key'] : '' );
 		}
 

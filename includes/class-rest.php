@@ -485,7 +485,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				}
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 
 			// Preserve the pagespeed_api_key when the request omits it.
 			if ( 'performance_audit' === $tab && ! isset( $params['settings']['pagespeed_api_key'] ) && isset( $options['performance_audit']['pagespeed_api_key'] ) ) {
@@ -662,7 +662,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			// Fallback: synchronous processing (Action Scheduler not available).
-			$options       = get_option( 'wppo_settings', array() );
+			$options       = Util::get_settings();
 			$img_converter = new Img_Converter( $options );
 
 			foreach ( $webp_images as $webp_image ) {
@@ -769,7 +769,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			// Retrieve the existing settings and merge the imported settings on top,
 			// so newer setting keys from future plugin versions are preserved.
-			$existing_settings = get_option( 'wppo_settings', array() );
+			$existing_settings = Util::get_settings();
 			$merged_settings   = array_replace_recursive( $existing_settings, $sanitized_settings );
 
 			// Check if the settings are the same.

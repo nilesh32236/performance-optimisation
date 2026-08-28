@@ -1153,7 +1153,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			$options       = get_option( 'wppo_settings', array() );
+			$options       = Util::get_settings();
 			$img_converter = new Img_Converter( $options );
 
 			$source_path = wp_normalize_path( $args['source_path'] );
@@ -1198,7 +1198,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			if ( empty( $options['file_optimisation']['removeUnusedCSS'] ) ) {
 				return;
 			}

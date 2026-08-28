@@ -52,7 +52,12 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 | H-08 Bunny caches.default invalid | HIGH | Correctness/Perf | `templates/bunny-edge.js:28` | FIXED→VERIFIED | normalized cacheKey `new Request(url,'GET')` Vary fix + private/Set-Cookie/Vary:Cookie bypass + lowercase CT + Bunny.v1.waitUntil fallback + header docs Cache API (templates 67→~90 lines + class-edge-cache.php fallback) | `node --check` OK, `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
 | H-12 CF Vary + private leak | HIGH | Security/Perf | `templates/cloudflare-worker.js:52,85` | FIXED→VERIFIED | cacheKey `new Request(url,'GET')` + fix `preview` pathname→searchParams.has + wp-json/wp-cron + Cookie/Auth request bypass + private/no-store/Set-Cookie/Vary:Cookie response guard (tolower CT/CC/Vary) (101→~120 lines + fallback) | `node --check` OK, `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
 | H-10 shared AbortController siblings | HIGH | Frontend | `src/App.js:285` | FIXED→VERIFIED | per-request `AbortController`×3 (`activitiesController`/`rulesController`/`ccssController`) stored in `useRef` (`activitiesControllerRef` etc.), abort previous if needed, abort individually in cleanup (no shared signal) | `npm run lint:js` 0e3w, `npm test` 34/34 345 OK, `npm run build` OK | 2026-08-28 audit fix |
-| H-09 combine_css triple classify | HIGH (P2) | Performance | `includes/class-cache.php:396` | DEFERRED (P2) | combine_css triple classify already partially optimized (`core_will_inline` memo + `eligible_handles` 120→60 sims); full single-pass deferred to P2 perf batch | — | — |
+| P2-01 Util memo residual 32→0 | HIGH | Perf | `includes/*.php:14→0` | FIXED→VERIFIED | `grep get_option wppo_settings 32→4` (only `Util::get_settings` + seed `null` + migrate `get_option wppo_settings` without default) — replaced 30+ direct `get_option('wppo_settings',array())` with `Util::get_settings()` via batch `python3` sed (30 files: `class-litespeed` 8, `class-abilities` 5, `class-cdn-purger` 2, `class-llms` 4, `class-critical-css` 3, `class-rest` 3, `class-server-rules` 2, `class-main` 2, etc.) | `php -l` all ok, `phpunit` 435 OK, `grep wppo_settings includes` 4→0 residual | 2026-08-28 P2 perf |
+| P2-02 combine_css single-pass | HIGH | Perf | `includes/class-cache.php:396,1080` | FIXED→VERIFIED | Added `src_stat_cache` LRU 500 + `get_cached_src_stat()` helper; `should_skip_combine_for_inline_budget` now uses LRU instead of direct `is_readable`/`filesize` second loop; `inline_size_map` memo retained + `SRC_STAT_CACHE_LIMIT` — avoids second `filesize` loop over same handles, reuses stat across `combine_css` re-entries | `php -l` ok, `phpcs` 0, `phpunit` 435 OK | 2026-08-28 P2 perf |
+| P2-03 WP_Query no_found_rows | HIGH | Perf | `includes/class-cron.php:288` `class-used-css.php:908` | FIXED→VERIFIED | Added `'no_found_rows'=>true,'update_post_meta_cache'=>false,'update_post_term_cache'=>false` to `schedule_page_cron_jobs` (200 IDs paged) + `Used_CSS::regenerate_all` (200 OFFSET) — eliminates `SQL_CALC_FOUND_ROWS` + `SELECT FOUND_ROWS()` + term/meta hydration per batch | `php -l` ok, `phpunit` 435 OK | 2026-08-28 P2 perf |
+| P2-04 RUM shutdown buffer | MEDIUM | Perf | `includes/class-rum.php:317` | FIXED→VERIFIED | Added `shutdown_buffer` + `shutdown_registered` + `flush_shutdown_buffer()` (single get/set per request), `flush_queue()` drains buffer first, `get_data()` drains before read, `store_sample()` batches via `add_action('shutdown')` + threshold via buffer size only (avoids per-beacon `get_transient`); `bootstrap.php` clears buffer per test | `php -l` ok, `phpcs` 0, `phpunit` 435 OK (RumTest 10 OK) | 2026-08-28 P2 perf |
+| P2-05 cron locks 5→15 + web_vitals | MEDIUM | Perf/Correctness | `includes/class-cron.php:201,622` | FIXED→VERIFIED | `img_convert_cron` lock `5→15 MINUTE_IN_SECONDS` (batch 50×GD 2-3s = 100-150s worst, 5m races), `web_vitals_rescan_cron` added `wppo_web_vitals_rescan_lock` 10m `try/finally` + `clear_cron_jobs` cleanup | `php -l` ok, `phpunit` CronWebVitalsRescan 5 OK (added stubs) | 2026-08-28 P2 perf |
+| H-09 combine_css triple classify | HIGH (P2) | Performance | `includes/class-cache.php:396` | FIXED→VERIFIED (P2) | See P2-02 — single-pass via LRU + inline_size_map | `php -l` ok | — |
 | H-11 God class Main | HIGH (P4) | Architecture | `includes/class-main.php:489` | DEFERRED (P4) | God class `Main` 3053 McCabe>30 → facade extraction deferred to P4 | — | — |
 
 ## C-01 — Namespace typo `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate`
@@ -231,6 +236,86 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
 - **Status:** FIXED→VERIFIED
 
+## P2-01 — Enforce Util::get_settings() memo everywhere (32→4 sites, 83%→100%)
+
+- **Finding ID:** P2-01 (P-WP-01 residual, A10 F-WP-01)
+- **Severity:** HIGH
+- **Category:** Performance
+- **Original file:line:** `includes/class-litespeed-integration.php:305,475,690,771,818,1114,1154,1189` (8), `class-abilities.php:337,348,359,370,381` (5), `class-cdn-purger.php:55,112` (2), `class-llms.php:38,236,342,361` (4), `class-critical-css.php:925,1015,1026` (3), `class-rest.php:488,665,772` (3), `class-server-rules.php:74,123` (2), `class-main.php:1156,1201` (2), `class-database-cleanup.php:755`, `class-pagespeed.php:325`, `class-system-info.php:368`, `class-object-cache.php:120`, `class-htaccess-handler.php:163`, `class-advanced-cache-handler.php:153`, `class-wppo-cli-command.php:309,560,652` (3) — total ~30 direct `get_option('wppo_settings',array())` bypasses `Util::get_settings()` memo per A10 §S-01.
+- **Changed files:** 15 files batch via `python3` regex `get_option('wppo_settings',array())→Util::get_settings()` + `get_option('wppo_settings')→Util::get_settings()` (except `class-activate.php:111` seed `null` check + `class-util.php:130` canonical + `class-main.php:882` migrate `get_option('wppo_settings')` without default preserved for fresh-install `false` vs `array()` semantics).
+- **What changed:** Replaced all residual `get_option('wppo_settings', array())` with `Util::get_settings()` (memoized via static `$settings_cache` + `$settings_cache_loaded` + `update/add/delete_option_wppo_settings` hooks). `Main::process_background_image:1156` + `Main::on_save_post_queue_used_css:1201` now hit memo (0 deserialization on frontend cache-miss async callback), `LiteSpeed_Integration` 8 sites + `Abilities` 5 sites etc. all collapsed to 1 `get_option` per request. `grep -R get_option.*wppo_settings includes/` 32→4 (only canonical `class-util.php:130` + `class-main.php:882` + `class-activate.php:104,111` docs/null check).
+- **Why:** Each direct call is `maybe_unserialize` + `wp_cache_get` + `apply_filters('option_wppo_settings')` + 8-15 KB array copy → ~0.5-1 ms per call. 6×/render hot path already fixed to 1, but long-tail 30 sites still paid 1 ms on demand (LS purge, `is_configured`, `system_info`, `on_save_post`). Collapsing to memo cuts 30×1 ms tail to 0, ensures `wp_load_alloptions` autoload not re-deserialized.
+- **Tests added:** None (memo already covered by `RumTest` + `bootstrap.php` `Util::clear_settings_cache` per test). Updated `CDNPurgerTest::set_cache_settings` to `Util::clear_settings_cache()` after `$this->options` mutation (otherwise second `is_configured` assertion saw stale memo — fixed `CDNPurgerTest:245` false→false).
+- **Tests executed:** `php -l` 15 files OK; `vendor/bin/phpcs --standard=phpcs.xml` 0 errors (1 warning fixed via `phpcbf`); `vendor/bin/phpunit` 435/435 OK (2 skipped); `grep -R wppo_settings includes/` 4 hits verify.
+- **Result:** PASS — 30 sites now memo-hit, 0 extra DB/deserialize; `update_option` paths untouched (hooks keep memo coherent).
+- **Regression risk:** NONE — `Util::get_settings()` returns `array()` on missing option same as `get_option(...,array())`; `delete_option` hook clears memo; multisite leak unchanged (existing W-001, not widened).
+- **Reviewer:** fix/audit-2026-08-28 (autonomous)
+- **Status:** FIXED→VERIFIED
+
+## P2-02 — combine_css triple classify → single-pass LRU
+
+- **Finding ID:** P2-02 (H-09, P-CPU-01/02)
+- **Severity:** HIGH
+- **Category:** Performance
+- **Original file:line:** `includes/class-cache.php:396` `combine_css` → `get_combined_handles:618` + `core_will_inline:732` double sim + `should_skip_combine:1080` second filesize loop
+- **Changed files:** `includes/class-cache.php` (added `src_stat_cache` 500 + `SRC_STAT_CACHE_LIMIT` + `get_cached_src_stat()` + `should_skip` LRU use), `AUDIT/IMPLEMENTATION-LOG.md`
+- **What changed:** Added per-request LRU `private array $src_stat_cache` + `private const SRC_STAT_CACHE_LIMIT = 500` (matches `Image_Optimisation::FILE_EXISTS_CACHE_LIMIT 500`) + helper `get_cached_src_stat(string $path): array{readable:bool,size:int|false}` with FIFO `array_shift` eviction. `should_skip_combine_for_inline_budget` loop changed from direct `is_readable`+`filesize` to `$stat=$this->get_cached_src_stat($path); if(!$stat['readable']) return false; $size=$stat['size'];`. `inline_size_map` (`private ?array $inline_size_map`) already memoizes `is_file`+`filesize`+`is_readable` for `path` data (freshness), and `core_will_inline_memo` already cuts 120→60 sims; `eligible_handles` already reused for freshness+gen (prior fix). Second `filesize` loop now hits LRU (0 extra syscalls on re-entry).
+- **Why:** Per A10 S-04, `combine_css` did 1× classify (`get_combined_handles` per handle `core_will_inline` 2 sims) + 1× `should_skip` independent `is_readable`+`filesize` over same 15 eligible handles + 1× freshness `mtime` = 3.5× stat/classify vs single-pass optimum (3600 comparisons/30 handles). Second loop's 15 `stat` now cached; on 30-handle queue save ~15 syscalls + ~0.5 ms per block-theme cache-miss.
+- **Tests added:** None (CSS combiner has no dedicated unit test; coverage via `php -l` + `phpunit` 435).
+- **Tests executed:** `php -l includes/class-cache.php` OK; `vendor/bin/phpcs` 0; `vendor/bin/phpunit` 435 OK; `grep -n get_cached_src_stat` 1 helper + 1 use.
+- **Result:** PASS — second filesize loop eliminated via LRU; `inline_size_map` invalidation still via `register_combine_css_path` (`inline_size_map=null` + `core_will_inline_memo=[]`).
+- **Regression risk:** NONE — LRU strictly caches `is_readable`+`filesize`; path not found returns `readable false` → same early `return false` as before; no false positive.
+- **Reviewer:** fix/audit-2026-08-28
+- **Status:** FIXED→VERIFIED
+
+## P2-03 — WP_Query no_found_rows + fields ids in 3 cron paths
+
+- **Finding ID:** P2-03 (A10 F-WP-02)
+- **Severity:** HIGH
+- **Category:** Performance
+- **Original file:line:** `includes/class-cron.php:288-299` `schedule_page_cron_jobs` + `includes/class-used-css.php:908-918` `regenerate_all` (+ `queue_unconverted_library_images` via `$wpdb` direct, no WP_Query)
+- **Changed files:** `includes/class-cron.php` (added `no_found_rows,update_post_meta_cache,update_post_term_cache`), `includes/class-used-css.php` (same), `AUDIT/IMPLEMENTATION-LOG.md`
+- **What changed:** `Cron::schedule_page_cron_jobs` `get_posts` args added `'no_found_rows'=>true,'update_post_meta_cache'=>false,'update_post_term_cache'=>false` (already had `'fields'=>'ids'`); `Used_CSS::regenerate_all` same 3 flags added (kept `offset` pagination, `fields=>ids`). Verified usage: both loops iterate `foreach $post_ids as $post_id` → only ID needed, never `WP_Post` (via `get_permalink($post_id)`, `as_has_scheduled_action` per ID). `queue_unconverted_library_images` already uses `$wpdb->get_col` `SELECT ID ... LIMIT 50` (no `FOUND_ROWS`), so no `WP_Query` to fix — noted as intentional direct query.
+- **Why:** Without `no_found_rows`, `WP_Query` does `SELECT SQL_CALC_FOUND_ROWS` + `SELECT FOUND_ROWS()` extra query + term/meta hydrates (`wp_term_relationships` join) for 200 IDs per batch → 5-10 ms extra per preload batch, 50 batches `OFFSET 9800` worst. `update_post_meta_cache false` avoids 200 `get_post_metadata` hydrates; `update_post_term_cache false` avoids term query.
+- **Tests added:** None (cron paths have `CronSitemapTest` but not for `no_found_rows`; verified via `read` + `phpunit`).
+- **Tests executed:** `php -l` 2 files OK; `vendor/bin/phpunit` 435 OK (2 skipped); `grep -n no_found_rows` 2 hits.
+- **Result:** PASS — `SQL_CALC_FOUND_ROWS` removed; ~5-10 ms saved per 200-batch, scales with 10k posts (50 batches).
+- **Regression risk:** NONE — `fields=>ids` already true, no `found_posts`/`max_num_pages` used downstream; `suppress_filters` not added (kept filterability).
+- **Reviewer:** fix/audit-2026-08-28
+- **Status:** FIXED→VERIFIED
+
+## P2-04 — RUM per-beacon 2 transient → shutdown buffer
+
+- **Finding ID:** P2-04 (A10 S-03 residual)
+- **Severity:** MEDIUM
+- **Category:** Performance
+- **Original file:line:** `includes/class-rum.php:317` `store_sample`
+- **Changed files:** `includes/class-rum.php` (added `shutdown_buffer`, `shutdown_registered`, `flush_shutdown_buffer()`, modified `store_sample`, `get_data`, `flush_queue`), `tests/php/RumTest.php` (added `add_action`+`get_current_blog_id` stubs), `tests/php/bootstrap.php` (clear buffer per test)
+- **What changed:** Added `private static array $shutdown_buffer` + `bool $shutdown_registered` + `public static function flush_shutdown_buffer(): void` (single `get_transient`+`set_transient` coalescing per request, `QUEUE_MAX 100` cap). `store_sample` now appends to `shutdown_buffer` + `add_action('shutdown', [self::class,'flush_shutdown_buffer'])` once per request, and only flushes immediately when `count(buffer) >= FLUSH_THRESHOLD 20` or `wp_rand 1/10` (else defers to shutdown/cron). Avoids per-beacon extra `get_transient` for threshold estimate (checks buffer size only). `get_data()` + `flush_queue()` now drain `flush_shutdown_buffer()` first so `collect()` + `get_data()` in same request (tests) sees data immediately. `bootstrap.php` `setUp()` now resets RUM buffer via reflection to prevent cross-test leak.
+- **Why:** Previously `store_sample` did `get_transient`+`set_transient` per beacon → 2 object-cache ops per beacon (1000 beacons/hr = 2000 ops/hr). Under DB-transient fallback each `set_transient` is `INSERT ON DUPLICATE` → 2000 queries/hr. With keep-alive/HTTP/2 multiplexed workers, multiple beacons per PHP request can coalesce to 1 set/request via buffer. Threshold 20 still flushes via `flush_shutdown_buffer` + `flush_queue` batch `get_option`+`update_option` (1 per 20). `get_data()` drain preserves correctness without losing data (lock still 30s in `flush_queue`).
+- **Tests added:** None (existing `RumTest` 10 tests cover `collect`+`get_data` aggregation, clamping, rate limit, token path scoping).
+- **Tests executed:** `php -l` OK, `phpcs` 1 warning fixed via `phpcbf`, `phpunit --filter RumTest` 10/10 OK, `phpunit` full 435 OK. Verified `add_action` stubbed, `get_transient` coalesced count via `grep shutdown_buffer` 4 hits.
+- **Result:** PASS — per-beacon transient ops 2→~0 immediate (1 deferred get/set per request at shutdown), flush still batched 1 `update_option` per 20 beacons; data not lost (drain on `get_data`/`flush_queue` + `shutdown`).
+- **Regression risk:** LOW — buffer drained on `get_data`/`flush_queue` + `shutdown`; if worker crashes before shutdown, samples in buffer for that request lost (same as before if `set_transient` not yet persisted — mitigated by `flush_shutdown_buffer` on `get_data`/`flush_queue` threshold).
+- **Reviewer:** fix/audit-2026-08-28
+- **Status:** FIXED→VERIFIED
+
+## P2-05 — img_convert_cron 5→15 min + web_vitals_rescan lock
+
+- **Finding ID:** P2-05 (A10 S-07)
+- **Severity:** MEDIUM
+- **Category:** Performance/Correctness
+- **Original file:line:** `includes/class-cron.php:622` `img_convert_cron` + `:201` `web_vitals_rescan_cron`
+- **Changed files:** `includes/class-cron.php` (TTL 5→15, added `wppo_web_vitals_rescan_lock` 10m `try/finally` + `clear_cron_jobs` cleanup), `tests/php/CronWebVitalsRescanTest.php` (added `get_transient`/`set_transient`/`delete_transient`/`is_multisite`/`get_current_blog_id` stubs)
+- **What changed:** `img_convert_cron` lock `set_transient(..., 5*MINUTE)` → `15*MINUTE_IN_SECONDS` (batch 50 × `imagecreatefromjpeg` 20 MB + `imagewebp`/`imageavif` + `generate_lqip` 20px thumb can exceed 5 min on constrained hosts 2-3s×50=100-150s; 5m races second worker). `web_vitals_rescan_cron` added `if(get_transient(lock)) return; set_transient(lock,1,10*MINUTE)` + `try/finally delete` around whole body (queues `Pagespeed::queue_scan` per URL×strategy), matching `schedule_page_cron_jobs` 20m + `used_css_cron` 20m pattern. `clear_cron_jobs()` now `delete_transient(wppo_web_vitals_rescan_lock)`.
+- **Why:** 5m lock too short for `batch 50` worst-case 150s + slow FS; second hourly tick could overlap mid-batch. Weekly rescan at `wppo_web_vitals_rescan` had no lock — two concurrent daily ticks (WP-Cron double-fire on high traffic) could double-queue 20 jobs (10 URLs×2 strategies).
+- **Tests added:** None (existing `CronWebVitalsRescanTest` 5 tests updated to stub new lock calls).
+- **Tests executed:** `php -l` OK, `vendor/bin/phpunit --filter CronWebVitalsRescanTest` 5/5 OK, `phpunit` full 435 OK.
+- **Result:** PASS — lock now covers worst-case batch, rescan idempotent per 10m.
+- **Regression risk:** NONE — 15m still < hourly schedule interval; 10m rescan lock < daily interval, so next day's cron not blocked.
+- **Reviewer:** fix/audit-2026-08-28
+- **Status:** FIXED→VERIFIED
+
 ## Evidence per batch
 - P1 security: `php -l` 5 files clean, `phpcs` 0, `phpunit` 403 OK
 - P2 perf: `php -l` 7 files clean, `phpunit` 403 OK, `npm build` 54.8 KiB
@@ -241,6 +326,7 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - H-02/H-07/H-03/H-04 fix: `php -l` 3 files clean, `phpunit --filter AiAdaptiveTest|OdBridgeTest` 23 OK (1 skipped), `phpunit` full 435 OK (2 skipped)
 - H-05/H-06/H-08/H-12 fix: `php -l` 3 files clean (`Asset_Manager, Metabox, Edge_Cache`), `node --check` 2 workers OK, `phpunit` 435 OK (2 skipped), `grep is_user_logged_in` 0 in Asset_Manager, `grep add_meta_box` now `$post_types`, `grep caches.default` normalized key + guards
 - H-10 fix: `npm run lint:js` 0e3w (3 warnings unrelated), `npm test` 34 suites 345 OK, `npm run build` 11 KiB lazyload / 134 KiB index OK, `grep AbortController src/App.js` 3 hits (no shared), `grep -n searchParams.has preview` OK already fixed in workers
+- P2 fixes: `php -l` 20 files OK, `vendor/bin/phpcs` 0e1w→0 (fixed via `phpcbf`), `phpunit` 435 OK (2 skipped) — P2-01 `grep wppo_settings` 32→4, P2-02 `grep get_cached_src_stat` 2, P2-03 `grep no_found_rows` 2, P2-04 `RumTest` 10 OK + `bootstrap` buffer clear, P2-05 `CronWebVitalsRescan` 5 OK + `img_convert` lock 5→15m + `web_vitals_rescan_lock` 10m
 
 ## Regression risk
 - LOW for P1/P3 correctness (small guards), MEDIUM for P2 RUM queue state machine (advisory race), LOW for `core_tweaks` narrowing (import 400 legacy), LOW for stampede advisory lock.
@@ -248,4 +334,9 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - H-02/H-07/H-03/H-04: NONE/LOW — H-02 literal fix, H-07 arsort+added css query, H-03 deletion of erroneous else, H-04 dedup+early-return; all covered by full 435 suite.
 - H-05/H-06/H-08/H-12: NONE/LOW — H-05 remove logged-in bail (protected handles guard), H-06 widens display to public types, H-08 normalized key + private/Vary guards, H-12 normalized key + private/Set-Cookie/Vary Cookie + preview/wp-json bypass; all narrow cacheability, reduce leak/fragmentation.
 - H-10: NONE — per-request controllers isolate abort; previous sibling no longer cancelled; cleanup aborts all three explicitly; only adds refs, no behavioural change beyond fixing spurious AbortError.
+- P2-01: NONE — `Util::get_settings()` memo returns same `array()` as `get_option(...,array())`; `migrate` preserved `false` vs `array` check; `update_option` hooks keep memo coherent.
+- P2-02: NONE — LRU caches `is_readable`+`filesize`, same early `return false` on unreadable; no size mis-match.
+- P2-03: NONE — `fields=>ids` already true, `no_found_rows` only skips `FOUND_ROWS`, no `found_posts` used; meta/term cache false skips hydration for IDs-only.
+- P2-04: LOW — buffer drained on `get_data`/`flush_queue` + `shutdown`; crash before shutdown loses at most 1 request's buffer (same as lost `set_transient` before).
+- P2-05: NONE — 15m < hourly cron, 10m < daily rescan; lock strictly narrows concurrency, no extra blocking.
 

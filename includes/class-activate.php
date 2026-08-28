@@ -81,7 +81,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Activate' ) ) {
 			// version-upgrade routine (drop-in regeneration + full cache clear).
 			update_option( 'wppo_version', WPPO_VERSION, false );
 
-			$options             = get_option( 'wppo_settings', array() );
+			$options             = Util::get_settings();
 			$enable_server_rules = isset( $options['file_optimisation']['enableServerRules'] ) ? (bool) $options['file_optimisation']['enableServerRules'] : false;
 
 			if ( $enable_server_rules ) {

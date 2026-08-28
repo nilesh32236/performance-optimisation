@@ -906,13 +906,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 
 			do {
 				$args = array(
-					'post_type'      => $post_types,
-					'post_status'    => 'publish',
-					'posts_per_page' => $batch,
-					'offset'         => $offset,
-					'fields'         => 'ids',
-					'orderby'        => 'ID',
-					'order'          => 'ASC',
+					'post_type'              => $post_types,
+					'post_status'            => 'publish',
+					'posts_per_page'         => $batch,
+					'offset'                 => $offset,
+					'fields'                 => 'ids',
+					'orderby'                => 'ID',
+					'order'                  => 'ASC',
+					'no_found_rows'          => true,
+					'update_post_meta_cache' => false,
+					'update_post_term_cache' => false,
 				);
 
 				$post_ids = get_posts( $args );

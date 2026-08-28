@@ -35,7 +35,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 		 * @return bool
 		 */
 		public static function is_enabled(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$enabled = ! empty( $options['llms_txt']['enabled'] );
 			/**
 			 * Filters whether LLMs.txt is enabled.
@@ -233,7 +233,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				return false;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$llms    = isset( $options['llms_txt'] ) && is_array( $options['llms_txt'] ) ? $options['llms_txt'] : array();
 			$source  = isset( $llms['source'] ) ? sanitize_text_field( (string) $llms['source'] ) : 'both';
 			if ( ! in_array( $source, array( 'both', 'trends', 'sitemap' ), true ) ) {
@@ -339,7 +339,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 				$trends = get_option( 'wppo_web_vitals_trends', array() );
 				if ( is_array( $trends ) && ! empty( $trends ) ) {
 					// Also pull high_value_urls from performance_audit.
-					$opts = get_option( 'wppo_settings', array() );
+					$opts = Util::get_settings();
 					$high = isset( $opts['performance_audit']['high_value_urls'] ) && is_array( $opts['performance_audit']['high_value_urls'] ) ? $opts['performance_audit']['high_value_urls'] : array(); // phpcs:ignore Generic.Files.LineLength.TooLong
 					foreach ( $high as $h ) {
 						$clean = esc_url_raw( (string) $h );
@@ -358,7 +358,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 					}
 				} else {
 					// No trends yet — still include high_value_urls if any.
-					$opts = get_option( 'wppo_settings', array() );
+					$opts = Util::get_settings();
 					$high = isset( $opts['performance_audit']['high_value_urls'] ) && is_array( $opts['performance_audit']['high_value_urls'] ) ? $opts['performance_audit']['high_value_urls'] : array(); // phpcs:ignore Generic.Files.LineLength.TooLong
 					foreach ( $high as $h ) {
 						$clean = esc_url_raw( (string) $h );

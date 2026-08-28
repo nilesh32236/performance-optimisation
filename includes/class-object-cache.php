@@ -117,7 +117,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			try {
 				// Determine connection settings (Dashboard settings have priority over on-disk config).
-				$options = get_option( 'wppo_settings', array() );
+				$options = Util::get_settings();
 				$config  = isset( $options['object_cache'] ) ? $options['object_cache'] : array();
 
 				if ( empty( $config ) && file_exists( $this->config_path ) ) {

@@ -52,7 +52,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 				return true;
 			}
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$cache   = isset( $options['cache_settings'] ) && is_array( $options['cache_settings'] ) ? $options['cache_settings'] : array();
 
 			$service = isset( $cache['cdnPurgeService'] ) ? sanitize_text_field( (string) $cache['cdnPurgeService'] ) : 'none';
@@ -109,7 +109,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		 * @return bool
 		 */
 		public static function is_configured(): bool {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$cache   = isset( $options['cache_settings'] ) && is_array( $options['cache_settings'] ) ? $options['cache_settings'] : array();
 			$service = isset( $cache['cdnPurgeService'] ) ? sanitize_text_field( (string) $cache['cdnPurgeService'] ) : 'none';
 

@@ -306,7 +306,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			$format = $assoc_args['format'] ?? '';
 
 			if ( 'convert' === $action ) {
-				$options           = get_option( 'wppo_settings', array() );
+				$options           = Util::get_settings();
 				$img_converter     = new Img_Converter( $options );
 				$img_info          = Img_Converter::get_img_info();
 				$conversion_format = $format ? $format : ( $options['image_optimisation']['conversionFormat'] ?? 'webp' );
@@ -557,7 +557,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			$action = $args[0] ?? 'get';
 			$tab    = $args[1] ?? null;
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			// On fresh installs the option does not exist yet — fall back to
 			// defaults so CLI is usable before the first admin save. This
 			// mirrors Main::__construct() seeding but without persisting until
@@ -649,7 +649,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					unset( $new_settings['performance_audit']['pagespeed_api_key'] );
 				}
 
-				$existing_settings = get_option( 'wppo_settings', array() );
+				$existing_settings = Util::get_settings();
 				$merged_settings   = array_replace_recursive( $existing_settings, $new_settings );
 				update_option( 'wppo_settings', $merged_settings );
 

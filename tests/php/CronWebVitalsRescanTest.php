@@ -42,12 +42,22 @@ class CronWebVitalsRescanTest extends \PHPUnit\Framework\TestCase {
 			array(
 				'get_option',
 				'update_option',
+				'get_transient',
+				'set_transient',
+				'delete_transient',
 				'sanitize_text_field',
 				'home_url',
 				'esc_url_raw',
 				'as_enqueue_async_action',
+				'is_multisite',
+				'get_current_blog_id',
 			)
 		);
+		Functions\when( 'get_transient' )->justReturn( false );
+		Functions\when( 'set_transient' )->justReturn( true );
+		Functions\when( 'delete_transient' )->justReturn( true );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'get_option' )->alias(
 			function ( $name, $fallback = false ) {
 				return array_key_exists( $name, $this->options ) ? $this->options[ $name ] : $fallback;

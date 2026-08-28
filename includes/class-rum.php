@@ -82,6 +82,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		private const FLUSH_THRESHOLD = 20;
 
 		/**
+		 * Per-request shutdown buffer for RUM samples.
+		 *
+		 * Batches multiple beacons arriving in the same PHP request into a
+		 * single get/set_transient pair at shutdown, reducing per-beacon object-cache
+		 * ops from 2 to ~1/request when keep-alive or HTTP/2 multiplexing delivers
+		 * several beacons per worker.
+		 *
+		 * @var array<int, array>
+		 * @since NEXT
+		 */
+		private static array $shutdown_buffer = array();
+
+		/**
+		 * Whether the shutdown handler for the RUM buffer has been registered.
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private static bool $shutdown_registered = false;
+
+		/**
 		 * Whether RUM collection is enabled.
 		 *
 		 * @return bool
@@ -151,6 +172,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return array
 		 */
 		public static function get_data(): array {
+			// Drain the per-request shutdown buffer before flushing so a beacon
+			// collected in the same request (e.g. in tests) is visible immediately.
+			self::flush_shutdown_buffer();
 			// Opportunistically flush queued beacons before reading.
 			self::flush_queue();
 			$data = get_option( self::OPTION, array() );
@@ -309,6 +333,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * Replaces the previous per-beacon get_option+update_option with a
 		 * transient queue that is flushed in batches, reducing option
 		 * writes from 1 per beacon to ~1 per FLUSH_THRESHOLD beacons.
+		 * Multiple beacons in the same request are coalesced into a single
+		 * set_transient at shutdown to avoid per-beacon object-cache churn
+		 * on keep-alive/HTTP/2 multiplexed workers.
 		 *
 		 * @param array $sample Normalized sample.
 		 * @return void
@@ -316,21 +343,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 */
 		private static function store_sample( array $sample ): void {
 			// Attach timestamp so flush can bucket by sample day, not flush day.
-			$sample['_ts'] = time();
-			$queue_key     = Util::transient_key( self::QUEUE_KEY );
-			$queue         = get_transient( $queue_key );
-			if ( ! is_array( $queue ) ) {
-				$queue = array();
-			}
-			$queue[] = $sample;
-			if ( count( $queue ) > self::QUEUE_MAX ) {
-				$queue = array_slice( $queue, -self::QUEUE_MAX );
-			}
-			set_transient( $queue_key, $queue, HOUR_IN_SECONDS );
+			$sample['_ts']           = time();
+			self::$shutdown_buffer[] = $sample;
 
-			if ( count( $queue ) >= self::FLUSH_THRESHOLD ) {
+			if ( ! self::$shutdown_registered ) {
+				self::$shutdown_registered = true;
+				if ( function_exists( 'add_action' ) ) {
+					add_action( 'shutdown', array( self::class, 'flush_shutdown_buffer' ) );
+				}
+			}
+
+			// For the common single-beacon-per-request case, avoid an extra
+			// get_transient per beacon. Only flush immediately when the
+			// per-request buffer itself hits the threshold (e.g. 20 beacons
+			// coalesced via keep-alive), otherwise defer to shutdown / cron.
+			if ( count( self::$shutdown_buffer ) >= self::FLUSH_THRESHOLD ) {
+				self::flush_shutdown_buffer();
 				self::flush_queue();
 			} elseif ( wp_rand( 1, 10 ) === 1 ) {
+				self::flush_shutdown_buffer();
 				self::flush_queue();
 			} elseif ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
 				// Ensure a cron will eventually flush the queue even on low traffic.
@@ -338,6 +369,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 					wp_schedule_single_event( time() + 300, 'wppo_rum_flush' );
 				}
 			}
+		}
+
+		/**
+		 * Flush the per-request shutdown buffer to the transient queue.
+		 *
+		 * Coalesces all samples collected in the current request into a single
+		 * get/set_transient pair. Safe to call multiple times (second call is
+		 * a no-op when the buffer is empty) and preserves the existing
+		 * QUEUE_MAX cap.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function flush_shutdown_buffer(): void {
+			if ( empty( self::$shutdown_buffer ) ) {
+				return;
+			}
+			$queue_key = Util::transient_key( self::QUEUE_KEY );
+			$queue     = get_transient( $queue_key );
+			if ( ! is_array( $queue ) ) {
+				$queue = array();
+			}
+			foreach ( self::$shutdown_buffer as $sample ) {
+				$queue[] = $sample;
+			}
+			if ( count( $queue ) > self::QUEUE_MAX ) {
+				$queue = array_slice( $queue, -self::QUEUE_MAX );
+			}
+			set_transient( $queue_key, $queue, HOUR_IN_SECONDS );
+			self::$shutdown_buffer = array();
 		}
 
 		/**
@@ -351,6 +412,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 		 * @return void
 		 */
 		public static function flush_queue(): void {
+			// Ensure any samples buffered for this request are materialized
+			// before the lock check so a threshold-triggered flush in the same
+			// request does not lose data.
+			self::flush_shutdown_buffer();
+
 			$lock_key = Util::transient_key( self::FLUSH_LOCK_KEY );
 			if ( get_transient( $lock_key ) ) {
 				return;

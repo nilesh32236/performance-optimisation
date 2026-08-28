@@ -365,7 +365,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 		 * }
 		 */
 		public static function get_infrastructure(): array {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			return array(
 				'action_scheduler' => array(
 					'available' => function_exists( 'as_enqueue_async_action' ),
