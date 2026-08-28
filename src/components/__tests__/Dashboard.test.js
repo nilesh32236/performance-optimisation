@@ -41,6 +41,8 @@ jest.mock( '../ImageOptimizationCard', () => ( { onOptimize, onRemove } ) => (
 		<button onClick={ onRemove }>Remove Images</button>
 	</div>
 ) );
+jest.mock( '../AiPanel', () => () => <div data-testid="ai-panel" /> );
+jest.mock( '../LlmsPanel', () => () => <div data-testid="llms-panel" /> );
 jest.mock( '../RecentActivityCard', () => () => (
 	<div data-testid="activity-card" />
 ) );

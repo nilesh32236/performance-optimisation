@@ -342,6 +342,37 @@ add_filter( 'wppo_perf_translations_enabled', '__return_true' );
 
 ---
 
+### `wppo_ai_adaptive_enabled`
+Filters whether AI Adaptive is enabled. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether AI adaptive is enabled (from `ai_adaptive.enabled`, false default).
+
+**Example:**
+```php
+add_filter( 'wppo_ai_adaptive_enabled', '__return_true' );
+```
+
+---
+
+### `wppo_ai_adaptive_eagerness`
+Filters AI-learned speculation eagerness. @since NEXT.
+
+**Parameters:**
+- `$eagerness` *(string)* — `conservative` | `moderate` | `eager`.
+- `$rum` *(array)* — RUM aggregates.
+
+---
+
+### `wppo_ai_adaptive_speculation_rules`
+Filters AI-injected speculation rules. @since NEXT.
+
+**Parameters:**
+- `$rules` *(array)* — Speculation rules array.
+- `$urls` *(string[])* — Top-2 predicted prefetch URLs.
+
+---
+
 ### `wppo_perf_translations_file_written`
 Fires after a compiled translation file is written. @since NEXT.
 

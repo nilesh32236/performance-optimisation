@@ -22,6 +22,7 @@ import SuggestionsPanel from './SuggestionsPanel';
 import SystemInfo from './SystemInfo';
 import AutoloadedOptions from './AutoloadedOptions';
 import LlmsPanel from './LlmsPanel';
+import AiPanel from './AiPanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
@@ -1271,6 +1272,8 @@ const Dashboard = ( {
 				<AutoloadedOptions />
 
 				<LlmsPanel />
+
+				<AiPanel />
 
 				<SystemInfo />
 			</div>

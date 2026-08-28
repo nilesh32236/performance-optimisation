@@ -256,6 +256,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'perf_translations'     => array(
 					'enabled' => false,
 				),
+				'ai_adaptive'           => array(
+					'enabled' => false,
+				),
 			);
 			$stored        = Util::get_settings();
 			$this->options = ! empty( $stored ) ? $stored : $defaults;
@@ -317,6 +320,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( ! isset( $this->options['perf_translations']['enabled'] ) ) {
 				$this->options['perf_translations']['enabled'] = false;
+			}
+
+			if ( ! isset( $this->options['ai_adaptive'] ) || ! is_array( $this->options['ai_adaptive'] ) ) {
+				$this->options['ai_adaptive'] = array();
+			}
+			if ( ! isset( $this->options['ai_adaptive']['enabled'] ) ) {
+				$this->options['ai_adaptive']['enabled'] = false;
 			}
 
 			$this->includes();
@@ -438,6 +448,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-perf-translations.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-perf-translations.php';
+			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-ai-adaptive.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-ai-adaptive.php';
 			}
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
@@ -612,6 +625,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// N7 Performant Translations — .mo→php compilation.
 			if ( class_exists( 'PerformanceOptimise\Inc\Perf_Translations' ) ) {
 				Perf_Translations::init();
+			}
+
+			// N1 AI Adaptive — RUM → heuristic suggestions + speculation prefetch.
+			if ( class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
+				AI_Adaptive::init();
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['minifyJS'] ) ) {

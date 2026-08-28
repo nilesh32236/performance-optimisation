@@ -55,6 +55,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ) {
 		);
 
 		/**
+		 * Build suggestion objects from the AI Adaptive model.
+		 *
+		 * Delegates to AI_Adaptive::get_suggestions() when the feature is
+		 * enabled (guard: never auto-applies — caller must render Apply UX).
+		 * Returns an empty list when the AI feature is disabled or unavailable.
+		 *
+		 * @since NEXT
+		 * @return array[] Array of suggestion objects.
+		 */
+		public static function from_ai_adaptive(): array {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
+				return array();
+			}
+			if ( ! AI_Adaptive::is_enabled() ) {
+				return array();
+			}
+			$suggestions = AI_Adaptive::get_suggestions();
+			// Validate every suggestion through the usual build guard so
+			// fix_action stays within VALID_FIX_ACTIONS even for AI payloads.
+			$validated = array();
+			foreach ( $suggestions as $s ) {
+				if ( ! is_array( $s ) || empty( $s['metric'] ) ) {
+					continue;
+				}
+				$validated[] = self::build(
+					(string) $s['metric'],
+					$s['value'] ?? '',
+					(string) ( $s['unit'] ?? 'string' ),
+					(string) ( $s['status'] ?? 'needs_improvement' ),
+					(string) ( $s['description'] ?? $s['metric'] ),
+					(string) ( $s['fix_action'] ?? 'no_action_required' )
+				) + ( isset( $s['ai_payload'] ) ? array( 'ai_payload' => $s['ai_payload'] ) : array() );
+			}
+			return $validated;
+		}
+
+		/**
 		 * Build suggestion objects from a local telemetry scan result.
 		 *
 		 * Expects native PHP types from class-telemetry.php:
