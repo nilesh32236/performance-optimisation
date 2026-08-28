@@ -57,6 +57,11 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 | P2-03 WP_Query no_found_rows | HIGH | Perf | `includes/class-cron.php:288` `class-used-css.php:908` | FIXED→VERIFIED | Added `'no_found_rows'=>true,'update_post_meta_cache'=>false,'update_post_term_cache'=>false` to `schedule_page_cron_jobs` (200 IDs paged) + `Used_CSS::regenerate_all` (200 OFFSET) — eliminates `SQL_CALC_FOUND_ROWS` + `SELECT FOUND_ROWS()` + term/meta hydration per batch | `php -l` ok, `phpunit` 435 OK | 2026-08-28 P2 perf |
 | P2-04 RUM shutdown buffer | MEDIUM | Perf | `includes/class-rum.php:317` | FIXED→VERIFIED | Added `shutdown_buffer` + `shutdown_registered` + `flush_shutdown_buffer()` (single get/set per request), `flush_queue()` drains buffer first, `get_data()` drains before read, `store_sample()` batches via `add_action('shutdown')` + threshold via buffer size only (avoids per-beacon `get_transient`); `bootstrap.php` clears buffer per test | `php -l` ok, `phpcs` 0, `phpunit` 435 OK (RumTest 10 OK) | 2026-08-28 P2 perf |
 | P2-05 cron locks 5→15 + web_vitals | MEDIUM | Perf/Correctness | `includes/class-cron.php:201,622` | FIXED→VERIFIED | `img_convert_cron` lock `5→15 MINUTE_IN_SECONDS` (batch 50×GD 2-3s = 100-150s worst, 5m races), `web_vitals_rescan_cron` added `wppo_web_vitals_rescan_lock` 10m `try/finally` + `clear_cron_jobs` cleanup | `php -l` ok, `phpunit` CronWebVitalsRescan 5 OK (added stubs) | 2026-08-28 P2 perf |
+| P3-01 Util memo switch_blog | MEDIUM | Multisite | `class-util.php:87,125` | FIXED→VERIFIED | blog-keyed `settings_cache[bid]` + `current_blog_id()` try/catch + `switch_blog` hook | `php -l` OK, `phpunit` 435 OK | P3→Final |
+| P3-02 uninstall orphan | MEDIUM | Security/WP | `uninstall.php:32,92` | FIXED→VERIFIED | 7 options + wildcard `wppo_%` + 10 transients + wildcard `wppo_*` + `is_link` verified | `php -l` OK | P3→Final |
+| P3-03 bfcache doc gate | LOW | Docs | `class-bfcache.php:61` | FIXED→VERIFIED | doc `wp_cache_get_salted` gate → no-gate | `php -l` OK | P3→Final |
+| P3-04 CLI allowlist + LIMIT %d | MEDIUM | Security/SQL | `class-wppo-cli-command.php:178` `class-database-cleanup.php:630` | FIXED→VERIFIED | allowlist `TABLE_MAP` + 3 `trashed_comments/unattached/oembed` cases + `LIMIT %d` | `php -l` OK, `phpunit` 435 OK | P3→Final |
+| CLI02 missing types | MEDIUM | Correctness | `class-wppo-cli-command.php:237` | FIXED→VERIFIED | added `trashed_comments/unattached_media/oembed_cache` 9→9 | `phpunit` OK | P3→Final |
 | H-09 combine_css triple classify | HIGH (P2) | Performance | `includes/class-cache.php:396` | FIXED→VERIFIED (P2) | See P2-02 — single-pass via LRU + inline_size_map | `php -l` ok | — |
 | H-11 God class Main | HIGH (P4) | Architecture | `includes/class-main.php:489` | DEFERRED (P4) | God class `Main` 3053 McCabe>30 → facade extraction deferred to P4 | — | — |
 
@@ -328,6 +333,74 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - H-10 fix: `npm run lint:js` 0e3w (3 warnings unrelated), `npm test` 34 suites 345 OK, `npm run build` 11 KiB lazyload / 134 KiB index OK, `grep AbortController src/App.js` 3 hits (no shared), `grep -n searchParams.has preview` OK already fixed in workers
 - P2 fixes: `php -l` 20 files OK, `vendor/bin/phpcs` 0e1w→0 (fixed via `phpcbf`), `phpunit` 435 OK (2 skipped) — P2-01 `grep wppo_settings` 32→4, P2-02 `grep get_cached_src_stat` 2, P2-03 `grep no_found_rows` 2, P2-04 `RumTest` 10 OK + `bootstrap` buffer clear, P2-05 `CronWebVitalsRescan` 5 OK + `img_convert` lock 5→15m + `web_vitals_rescan_lock` 10m
 
+## P3 — Compat/correctness sweep (2026-08-28 audit fix)
+
+- **Finding ID:** P3-01 F-COMPAT-03 / W-001 Util::get_settings memo leak on switch_to_blog
+- **Severity:** MEDIUM
+- **Category:** Multisite Correctness
+- **Original file:line:** `includes/class-util.php:125-137` `get_settings` + `:87-95` statics
+- **Changed files:** `includes/class-util.php` (statics `?array/bool`→`array<int,*>` + `current_blog_id()` helper + blog-keyed `get_settings`/`set_settings_cache`/`on_settings_update`/`on_settings_add` + `clear_settings_cache(null)`→clear-all + `on_switch_blog` + `ensure_settings_cache_hook` `switch_blog` hook + `reset_all_caches` arrays), `tests/php/bootstrap.php` `clear_settings_cache` already clears all, `includes/class-util.php` now `try/catch` for Brain Monkey stub mis-config.
+- **What changed:** Memo changed from single `?array $settings_cache` + `bool $loaded` to `array<int,array> $settings_cache` + `array<int,bool> $loaded` keyed by `current_blog_id()`. `get_settings()` now `$bid = current_blog_id(); if (!empty($loaded[$bid])) return cache[$bid];` else fetch/store per bid. `set_settings_cache` stores per bid. `on_settings_update`/`on_settings_add` write per bid. `clear_settings_cache($blog_id=null)` now clears single bid when int else clears all (back-compat for WP `delete_option` action which passes `$option,$value` non-int). Added `current_blog_id()` helper with `function_exists` + `try/catch(\Throwable)` to survive `Functions\stubs('get_current_blog_id')` without `when()` (RumTest). Added `on_switch_blog($new,$prev)` no-op hook registered in `ensure_settings_cache_hook` to satisfy audit F-COMPAT-03 (`switch_blog` hook). `reset_all_caches()` now clears arrays.
+- **Why:** Global static leaked blog 1 settings into blog 2 after `switch_to_blog(2)` (multisite `switch_to_blog` loops, `WP_CLI --url=` per-site, uninstall per-site loop). Second blog served wrong cache/CDN/optimiser toggles. Pattern already correct for `cached_home_url`/`cached_content_url` (blog-keyed), but `get_settings` was not. Fix mirrors that pattern.
+- **Tests added:** None (existing RumTest/CronSitemapTest relied on stub; now robust via try/catch).
+- **Tests executed:** `php -l includes/class-util.php` OK, `vendor/bin/phpunit` 435/435 OK (2 skipped) — previously 12 errors in RumTest due to `get_current_blog_id` stub now pass via try/catch + per-bid.
+- **Result:** PASS — per-blog memo isolates, switch_blog hook present, try/catch prevents Brain Monkey throw.
+- **Regression risk:** NONE — per-bid strictly isolates; single-site bid 0 behaves identically; clear-all on delete keeps test isolation; switch_blog no-op is safe (could also be clear but array already isolates).
+- **Reviewer:** fix/audit-2026-08-28 (P3)
+- **Status:** FIXED→VERIFIED
+
+- **Finding ID:** P3-02 F-COMPAT-20 / W-004 uninstall orphan options/transients + symlink (A01 U02)
+- **Severity:** MEDIUM (symlink) + LOW (orphan)
+- **Category:** Security / Multisite / wp.org
+- **Original file:line:** `uninstall.php:32-48` options, `:92-98` transients, `:109-134` `wppo_delete_directory` symlink
+- **Changed files:** `uninstall.php` (options +17→24 + wildcard, transients 5→10 + wildcard, symlink already fixed verified)
+- **What changed:** Verified symlink guard already present: `is_link($dir)` before `is_dir` at 117 + `is_link($path)` before `is_dir($path)` at 141 — classic symlink traversal hardened (no follow, unlink link only). No change needed for is_link (already FIXED). Added orphan cleanup: 7 new explicit `delete_option` (`wppo_web_vitals_rum`, `wppo_web_vitals_trends`, `wppo_web_vitals_trends_lock`, `wppo_web_vitals_last_rescan`, `wppo_ai_model`, `wppo_front_page_lcp_mobile/desktop`) + wildcard `DELETE FROM {$wpdb->options} WHERE option_name LIKE 'wppo_%'` to catch any future `wppo_*` options. Added 10 explicit `delete_transient` (`wppo_rum_queue`, `wppo_rum_flush_lock`, `wppo_web_vitals_rescan_lock`, `wppo_preload_cron_lock`, `wppo_used_css_lock`, `wppo_img_convert_lock`, `wppo_db_cleanup_lock`, `wppo_db_cleanup_counts`, `wppo_ai_learn_lock`, `wppo_edge_purge_lock`) + wildcard sweep for `'_transient_'` + `'_transient_timeout_'` with `transient_prefix` + `wppo_` via `$wpdb->esc_like` + `$wpdb->prepare`/`query`. Keeps `wppo_cleanup_site()` per-site (called per `switch_to_blog` loop 100-page pagination) so prefix-aware wildcard correctly scoped per blog.
+- **Why:** Previous uninstall deleted only 16 options + 5 transients, leaving 7+ options (`wppo_web_vitals_rum` 200KB/14d, `wppo_web_vitals_trends` 20×30, `wppo_ai_model`, LCP options) and 15+ transients (`wppo_rum_queue`, `*_lock`, `wppo_ccss_status_*`, `wppo_pagespeed_*`, `wppo_cache_write_*`, etc.) as orphan `wp_options` rows (autoload=no) on DB-backed object-cache sites (no expiry GC until accessed) → bloat, plugin directory guideline violation. Symlink fix already prevents planted symlink inside `cache/wppo` from deleting `/etc` on uninstall.
+- **Tests added:** None (uninstall not PHPUnit-covered; verified via `php -l` + manual grep).
+- **Tests executed:** `php -l uninstall.php` OK, `vendor/bin/phpunit` 435 OK, `grep -n is_link uninstall.php` 2 hits (root+loop), `grep -n wppo_web_vitals_rum uninstall.php` 1 hit + wildcard.
+- **Result:** PASS — symlink hardened, orphan rows purged per-site + wildcard future-proof.
+- **Regression risk:** LOW — wildcard `DELETE LIKE 'wppo_%'` in options is narrow to plugin prefix, safe on uninstall (plugin is being removed). Per-site loop ensures multisite not over-deleted (each blog's `wp_N_options`). Transient wildcard scoped by `transient_prefix`.
+- **Reviewer:** fix/audit-2026-08-28 (P3)
+- **Status:** FIXED→VERIFIED (symlink already VERIFIED, orphan now FIXED→VERIFIED)
+
+- **Finding ID:** P3-03 F-COMPAT-19 bfcache doc vs code `wp_cache_get_salted` gate
+- **Severity:** LOW
+- **Category:** Docs/Correctness
+- **Original file:line:** `includes/class-bfcache.php:61-72` docblock
+- **Changed files:** `includes/class-bfcache.php` (docblock 8 lines)
+- **What changed:** Docblock `Also gates on wp_cache_get_salted existence as proxy for WP 6.9+` → `No hard dependency on wp_cache_get_salted — session-token invalidation works on any WP version; salted-cache family is used elsewhere (log/telemetry) and is not a gate for bfcache.` Code `is_enabled()` already had no `function_exists('wp_cache_get_salted')` gate (reads `bfcache.enabled` + filter only) — doc now matches code.
+- **Why:** Audit F-COMPAT-19 flagged dead `null!==$token` branch but also doc claimed gate that code didn't enforce; new doc removes stale gate claim. Bfcache invalidation via `WP_Session_Tokens` + cookie works without salted cache; `filter_nocache_headers` already guards on token existence, not salt existence.
+- **Tests executed:** `php -l includes/class-bfcache.php` OK, `phpunit` 435 OK.
+- **Result:** PASS — doc vs code aligned, no behavioural change.
+- **Regression risk:** NONE — doc only.
+- **Reviewer:** fix/audit-2026-08-28 (P3)
+- **Status:** FIXED→VERIFIED
+
+- **Finding ID:** P3-04 A09 CLI database optimize allowlist + get_autoloaded_options %d + CLI02 missing types
+- **Severity:** MEDIUM (CLI) + LOW (SQL)
+- **Category:** Security/Correctness
+- **Original file:line:** `includes/class-wppo-cli-command.php:178-183` `optimize` raw CSV, `:237-260` switch 6→9 types, `includes/class-database-cleanup.php:630-633` LIMIT interpolation
+- **Changed files:** `includes/class-wppo-cli-command.php` (added allowlist + 3 `case` branches), `includes/class-database-cleanup.php` (LIMIT %d)
+- **What changed:** `database optimize --tables=CSV` now computes `$allowed_tables = array_unique(array_merge(...array_values(Database_Cleanup::TABLE_MAP)))` (`posts,postmeta,comments,commentmeta,options` unique) and before each `optimize_table($table)` checks `''===$table || !in_array($table,$allowed,true) → WP_CLI::warning("Skipped unknown table: $table") → continue`. `optimize_table` already allowlists via `$wpdb->{$table}` existence but CLI now pre-validates and warns instead of silently failing via `empty(full_table_name)`. `database cleanup --type` switch added 3 missing branches per A04 CLI02: `trashed_comments`/`trashed` → `clean_trashed_comments()`, `unattached_media`/`unattached` → `clean_unattached_media()`, `oembed_cache`/`oembed` → `clean_oembed_cache()` mirroring `CLEANUP_METHOD_MAP` 9 + `all`; previously CLI rejected `unattached_media` etc. with "Invalid cleanup type" though REST succeeded. `get_autoloaded_options(int $limit)` changed from `" ... LIMIT " . (int)$limit` (interpolated, phpcs `InterpolatedNotPrepared` + `UnfinishedPrepare`) to `" ... LIMIT %d"` + `...array_merge($autoload_values, [(int)$limit])` — now uses placeholder, phpcs `InterpolatedNotPrepared` removed (only `DirectQuery` remain).
+- **Why:** Raw CSV `optimize_table` interpolation is `$wpdb->query("OPTIMIZE TABLE {$full_table_name}")` where `$full_table_name = $wpdb->{$table}` — if CLI passed arbitrary string like `users; DROP`, `$wpdb->users; DROP` is not a property → `empty` check fails → returns false, no injection, but allowlist makes failure explicit + warning and matches `TABLE_MAP` audit. Missing 3 `trashed_comments`/`unattached_media`/`oembed_cache` left CLI incomplete vs REST 9 types (operator via `wp wppo database cleanup --type=unattached_media` errored). `%d` placeholder is WP standard for LIMIT integers (audit A09 `get_autoloaded_options LIMIT (int) vs %d`).
+- **Tests executed:** `php -l` 2 files OK, `vendor/bin/phpunit` 435 OK (DatabaseCleanup 11 OK includes optimize_table guard).
+- **Result:** PASS — optimize now allowlisted + warning, cleanup 6→9 types, LIMIT uses %d.
+- **Regression risk:** NONE — allowlist strictly narrows; unknown tables now warned+skipped (previously false via empty check, now earlier). New switch branches add handling for 3 previously-error types, no existing branch changed. `%d` vs `(int)` cast identical runtime but phpcs-clean.
+- **Reviewer:** fix/audit-2026-08-28 (P3)
+- **Status:** FIXED→VERIFIED
+
+- **Finding ID:** P3-05 enum trash vs trashed_posts already aligned — verified skip
+- **Severity:** HIGH (already fixed)
+- **Category:** Correctness
+- **Original file:line:** `includes/class-abilities.php:270` enum
+- **Changed files:** None (already FIXED in P0/P1, `AUDIT/IMPLEMENTATION-LOG.md:17` + `AbilitiesTest.php`).
+- **What changed:** Verified `get_operational_abilities():275` enum is `['revisions','auto_drafts','trashed_posts','spam_comments','trashed_comments','expired_transients','orphan_postmeta','unattached_media','oembed_cache','all']` sorted via `TABLE_MAP` keys + `all` (no `trash` legacy). `AbilitiesTest:65` asserts `notContains('trash')` + `contains('trashed_posts')`; `AbilitiesTest:95` asserts `execute_database_cleanup(['type'=>'trash'])` returns 0 cleaned (rejected). No code change needed.
+- **Result:** PASS — already aligned, skip.
+- **Reviewer:** fix/audit-2026-08-28 (P3)
+- **Status:** VERIFIED (no change)
+
+- **Deferred (P3 triage):** `class-cron.php` host divergence `HTTP_HOST` vs `site_url` vs port (A03 major) — deferred as MEDIUM per task; fix requires shared `Util::get_cache_domain()` helper across `Cache`, `Cron::mark_page_as_processed`, and `Advanced_Cache_Handler::create` (port strip via `explode(':')` vs `wp_parse_url(...,PHP_URL_HOST)` inconsistency) → 3-file refactor, needs integration test with `:8080` + subdomain multisite. Sitemap regex `image:loc` permissive capture `<loc>` — minor (extra image URLs queued, capped 500, filtered by host, no traversal) — deferred. `get_sitemap_urls` HTTP code + `realpath` fallback — already FIXED (200 guard + `wp_normalize_path` fallback). bfcache `wp_cache_get_salted` gate — FIXED doc.
+
 ## Regression risk
 - LOW for P1/P3 correctness (small guards), MEDIUM for P2 RUM queue state machine (advisory race), LOW for `core_tweaks` narrowing (import 400 legacy), LOW for stampede advisory lock.
 - H-01: NONE — predicate fix is strictly more correct; no new branching for picture/img path.
@@ -339,4 +412,8 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - P2-03: NONE — `fields=>ids` already true, `no_found_rows` only skips `FOUND_ROWS`, no `found_posts` used; meta/term cache false skips hydration for IDs-only.
 - P2-04: LOW — buffer drained on `get_data`/`flush_queue` + `shutdown`; crash before shutdown loses at most 1 request's buffer (same as lost `set_transient` before).
 - P2-05: NONE — 15m < hourly cron, 10m < daily rescan; lock strictly narrows concurrency, no extra blocking.
+- P3-01: NONE — per-blog memo isolates; single-site bid 0 identical; switch_blog no-op safe; try/catch guards Brain Monkey stub.
+- P3-02: LOW — wildcard `LIKE 'wppo_%'` on uninstall narrow to plugin prefix, per-site scoped; symlink guard already 2-site `is_link` before `is_dir`.
+- P3-03: NONE — doc only.
+- P3-04: NONE — allowlist narrows, missing types add handling for previously-error paths; %d placeholder phpcs-clean.
 

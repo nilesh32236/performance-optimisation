@@ -46,6 +46,19 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_option( 'wppo_img_info_salt' );
 		delete_option( 'wppo_review_dismissed' );
 		delete_option( 'wppo_review_snoozed_until' );
+		// Orphan options introduced after 1.9.0 (rum/trends/ai/lcp).
+		delete_option( 'wppo_web_vitals_rum' );
+		delete_option( 'wppo_web_vitals_trends' );
+		delete_option( 'wppo_web_vitals_trends_lock' );
+		delete_option( 'wppo_web_vitals_last_rescan' );
+		delete_option( 'wppo_ai_model' );
+		// Front-page LCP URL options (per strategy).
+		delete_option( 'wppo_front_page_lcp_mobile' );
+		delete_option( 'wppo_front_page_lcp_desktop' );
+		// Wildcard sweep for any future wppo_* options that may have been
+		// added without an explicit delete. Keeps uninstall idempotent.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'wppo_%'" );
 
 		// Delete post meta using the meta API to respect hooks.
 		delete_post_meta_by_key( '_wppo_preload_image_url' );
@@ -96,6 +109,25 @@ if ( ! function_exists( 'wppo_cleanup_site' ) ) {
 		delete_transient( $transient_prefix . 'wppo_cache_size' );
 		delete_transient( $transient_prefix . 'wppo_total_js_css' );
 		delete_transient( $transient_prefix . 'wppo_wp_cache_fix_checked' );
+		delete_transient( $transient_prefix . 'wppo_rum_queue' );
+		delete_transient( $transient_prefix . 'wppo_rum_flush_lock' );
+		delete_transient( $transient_prefix . 'wppo_web_vitals_rescan_lock' );
+		delete_transient( $transient_prefix . 'wppo_preload_cron_lock' );
+		delete_transient( $transient_prefix . 'wppo_used_css_lock' );
+		delete_transient( $transient_prefix . 'wppo_img_convert_lock' );
+		delete_transient( $transient_prefix . 'wppo_db_cleanup_lock' );
+		delete_transient( $transient_prefix . 'wppo_db_cleanup_counts' );
+		delete_transient( $transient_prefix . 'wppo_ai_learn_lock' );
+		delete_transient( $transient_prefix . 'wppo_edge_purge_lock' );
+		// Wildcard sweep for remaining wppo_ transients (ratelimit_*, ccss_status_*,
+		// pagespeed_*, cache_write_*, inline_drift_*, etc.) that are stored as
+		// options when no external object cache is present.
+		$like_transient = $wpdb->esc_like( '_transient_' . $transient_prefix . 'wppo_' ) . '%';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $like_transient ) );
+		$like_timeout = $wpdb->esc_like( '_transient_timeout_' . $transient_prefix . 'wppo_' ) . '%';
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $like_timeout ) );
 	}
 }
 

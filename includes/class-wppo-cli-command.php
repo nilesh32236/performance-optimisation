@@ -177,8 +177,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			if ( 'optimize' === $action ) {
 				$tables        = $assoc_args['tables'] ?? 'posts,postmeta,comments,commentmeta,options';
 				$table_list    = array_map( 'trim', explode( ',', $tables ) );
+				$allowed_tables = array_unique( array_merge( ...array_values( Database_Cleanup::TABLE_MAP ) ) );
 				$success_count = 0;
 				foreach ( $table_list as $table ) {
+					if ( '' === $table || ! in_array( $table, $allowed_tables, true ) ) {
+						WP_CLI::warning( sprintf( ' - Skipped unknown table: %s', $table ) );
+						continue;
+					}
 					$result = Database_Cleanup::optimize_table( $table );
 					if ( $result ) {
 						++$success_count;
@@ -245,6 +250,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				case 'spam':
 					$cleaned_count = Database_Cleanup::clean_spam_comments();
 					break;
+				case 'trashed_comments':
+				case 'trashed':
+					$cleaned_count = Database_Cleanup::clean_trashed_comments();
+					break;
 				case 'expired_transients':
 				case 'transients':
 					$cleaned_count = Database_Cleanup::clean_expired_transients();
@@ -252,6 +261,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				case 'orphan_postmeta':
 				case 'orphans':
 					$cleaned_count = Database_Cleanup::clean_orphan_postmeta();
+					break;
+				case 'unattached_media':
+				case 'unattached':
+					$cleaned_count = Database_Cleanup::clean_unattached_media();
+					break;
+				case 'oembed_cache':
+				case 'oembed':
+					$cleaned_count = Database_Cleanup::clean_oembed_cache();
 					break;
 				default:
 					/* translators: %s: Cleanup type */

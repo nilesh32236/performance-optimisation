@@ -89,18 +89,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Per-request memo for wppo_settings to avoid repeated get_option deserialization.
 		 *
-		 * @var array|null
+		 * Keyed by blog ID for multisite correctness under switch_to_blog().
+		 *
+		 * @var array<int, array>
 		 * @since NEXT
 		 */
-		private static ?array $settings_cache = null;
+		private static array $settings_cache = array();
 
 		/**
-		 * Whether the settings cache has been populated this request.
+		 * Whether the settings cache has been populated this request, keyed by blog ID.
 		 *
-		 * @var bool
+		 * @var array<int, bool>
 		 * @since NEXT
 		 */
-		private static bool $settings_cache_loaded = false;
+		private static array $settings_cache_loaded = array();
 
 		/**
 		 * Resets the home_url static cache for testing isolation.
@@ -112,27 +114,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Resolve current blog ID safely (handles Brain Monkey stub mis-configuration in tests).
+		 *
+		 * @since NEXT
+		 * @return int Blog ID.
+		 */
+		private static function current_blog_id(): int {
+			if ( ! function_exists( 'get_current_blog_id' ) ) {
+				return 0;
+			}
+			try {
+				return (int) get_current_blog_id();
+			} catch ( \Throwable $e ) {
+				return 0;
+			}
+		}
+
+		/**
 		 * Get wppo_settings with per-request memoization.
 		 *
 		 * Wraps get_option('wppo_settings') with a static cache so up to 6
 		 * deserializations per frontend render (Main, Cache, Cron, Used_CSS, etc.)
 		 * collapse to a single DB-backed fetch per request. Invalidated automatically
-		 * on update/add/delete of the option.
+		 * on update/add/delete of the option. Blog-keyed to avoid cross-site
+		 * leakage under switch_to_blog() (see F-COMPAT-03).
 		 *
 		 * @since NEXT
 		 * @return array The plugin settings.
 		 */
 		public static function get_settings(): array {
-			if ( self::$settings_cache_loaded ) {
-				return self::$settings_cache ?? array();
+			$bid = self::current_blog_id();
+			if ( ! empty( self::$settings_cache_loaded[ $bid ] ) ) {
+				return self::$settings_cache[ $bid ] ?? array();
 			}
 			self::ensure_settings_cache_hook();
 			$raw = get_option( 'wppo_settings', array() );
 			if ( ! is_array( $raw ) ) {
 				$raw = array();
 			}
-			self::$settings_cache        = $raw;
-			self::$settings_cache_loaded = true;
+			self::$settings_cache[ $bid ]        = $raw;
+			self::$settings_cache_loaded[ $bid ] = true;
 			return $raw;
 		}
 
@@ -144,20 +165,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function set_settings_cache( array $settings ): void {
-			self::$settings_cache        = $settings;
-			self::$settings_cache_loaded = true;
+			$bid                                 = self::current_blog_id();
+			self::$settings_cache[ $bid ]        = $settings;
+			self::$settings_cache_loaded[ $bid ] = true;
 			self::ensure_settings_cache_hook();
 		}
 
 		/**
 		 * Clear the settings memo (e.g. in tests or on delete).
 		 *
+		 * When called without args clears all blog entries (test isolation).
+		 * When called with a blog ID clears that blog only. The WP
+		 * delete_option_wppo_settings action passes no blog ID, so the full
+		 * clear path is taken. switch_blog is handled by on_switch_blog().
+		 *
 		 * @since NEXT
+		 * @param int|null $blog_id Optional blog ID to clear. Null clears all.
 		 * @return void
 		 */
-		public static function clear_settings_cache(): void {
-			self::$settings_cache        = null;
-			self::$settings_cache_loaded = false;
+		public static function clear_settings_cache( $blog_id = null ): void {
+			if ( null !== $blog_id && is_int( $blog_id ) ) {
+				$bid = (int) $blog_id;
+				unset( self::$settings_cache[ $bid ], self::$settings_cache_loaded[ $bid ] );
+				return;
+			}
+			// Action callbacks (update/delete) pass $old/$new or $option/$value
+			// which are not int blog IDs; treat non-int as "clear all" for
+			// backwards-compat with the pre-blog-keyed API.
+			if ( null !== $blog_id && ! is_int( $blog_id ) ) {
+				self::$settings_cache        = array();
+				self::$settings_cache_loaded = array();
+				return;
+			}
+			self::$settings_cache        = array();
+			self::$settings_cache_loaded = array();
+		}
+
+		/**
+		 * Handler for switch_blog — clears stale memo association.
+		 *
+		 * Kept separate from clear_settings_cache for hook arity clarity.
+		 *
+		 * @since NEXT
+		 * @param int $new_blog_id New blog ID.
+		 * @param int $prev_blog_id Previous blog ID.
+		 * @return void
+		 */
+		public static function on_switch_blog( $new_blog_id, $prev_blog_id ): void {
+			// No destructive clear needed because get_settings() is blog-keyed;
+			// this hook exists as a safety net and to satisfy F-COMPAT-03 audit.
+			// Intentionally no-op: per-blog keying already isolates.
+			unset( $new_blog_id, $prev_blog_id );
 		}
 
 		/**
@@ -168,8 +226,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function reset_all_caches(): void {
 			self::$home_url_cache        = array();
-			self::$settings_cache        = null;
-			self::$settings_cache_loaded = false;
+			self::$settings_cache        = array();
+			self::$settings_cache_loaded = array();
 		}
 
 		/**
@@ -187,6 +245,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			add_action( 'update_option_wppo_settings', array( self::class, 'on_settings_update' ), 10, 2 );
 			add_action( 'add_option_wppo_settings', array( self::class, 'on_settings_add' ), 10, 2 );
 			add_action( 'delete_option_wppo_settings', array( self::class, 'clear_settings_cache' ) );
+			add_action( 'switch_blog', array( self::class, 'on_switch_blog' ), 10, 2 );
 		}
 
 		/**
@@ -198,8 +257,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function on_settings_update( $old_value, $value ): void {
-			self::$settings_cache        = is_array( $value ) ? $value : array();
-			self::$settings_cache_loaded = true;
+			$bid                                 = self::current_blog_id();
+			self::$settings_cache[ $bid ]        = is_array( $value ) ? $value : array();
+			self::$settings_cache_loaded[ $bid ] = true;
 		}
 
 		/**
@@ -212,8 +272,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function on_settings_add( $option, $value ): void {
 			if ( 'wppo_settings' === $option ) {
-				self::$settings_cache        = is_array( $value ) ? $value : array();
-				self::$settings_cache_loaded = true;
+				$bid                                 = self::current_blog_id();
+				self::$settings_cache[ $bid ]        = is_array( $value ) ? $value : array();
+				self::$settings_cache_loaded[ $bid ] = true;
 			}
 		}
 

@@ -62,12 +62,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 		 * Whether bfcache handling is enabled.
 		 *
 		 * Reads `wppo_settings[bfcache][enabled]` (false default) and applies
-		 * the `wppo_bfcache_enabled` filter. Also gates on `wp_cache_get_salted`
-		 * existence as a proxy for WP 6.9+ object-cache enhancements where
-		 * bfcache invalidation via session token is expected to be available.
-		 * The function_exists gate is soft: if the salted family is unavailable
-		 * the feature still works, but the filter documents the intended WP
-		 * version. No hard dependency — pure function_exists guard.
+		 * the `wppo_bfcache_enabled` filter. No hard dependency on
+		 * `wp_cache_get_salted` — the session-token invalidation works on any
+		 * WP version; the salted-cache family is used elsewhere (log/telemetry)
+		 * and is not a gate for bfcache.
 		 *
 		 * @since NEXT
 		 * @return bool True when bfcache is enabled.
