@@ -862,11 +862,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			if ( 'revisions' === $type ) {
-				$wppo_settings = get_option( 'wppo_settings', array() );
-				$db_settings   = $wppo_settings['database_cleanup'] ?? array();
-				$max_age       = isset( $db_settings['dbRevMaxAge'] ) ? (int) $db_settings['dbRevMaxAge'] : 30;
-				$keep_latest   = isset( $db_settings['dbRevKeepLatest'] ) ? (int) $db_settings['dbRevKeepLatest'] : 5;
-				$result        = Database_Cleanup::invoke_cleanup_method( $method, $max_age, $keep_latest );
+				list( $max_age, $keep_latest ) = Database_Cleanup::get_revision_defaults();
+				$result                        = Database_Cleanup::invoke_cleanup_method( $method, $max_age, $keep_latest );
 			} else {
 				$result = Database_Cleanup::invoke_cleanup_method( $method );
 			}

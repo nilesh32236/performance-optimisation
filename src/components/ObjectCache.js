@@ -60,9 +60,24 @@ const ObjectCache = ( { options = {} } ) => {
 			const res = await apiCall( 'object_cache', { action: 'status' } );
 			if ( res.success ) {
 				setCacheStatus( { ...res.data, statusLoaded: true } );
+			} else {
+				setCacheStatus( ( prev ) => ( {
+					...prev,
+					statusLoaded: true,
+					supported_compressors: prev.supported_compressors ?? {
+						none: true,
+					},
+				} ) );
 			}
 		} catch ( error ) {
 			console.error( 'Error fetching cache status', error );
+			setCacheStatus( ( prev ) => ( {
+				...prev,
+				statusLoaded: true,
+				supported_compressors: prev.supported_compressors ?? {
+					none: true,
+				},
+			} ) );
 			notify( {
 				type: 'error',
 				message: __(

@@ -718,9 +718,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			$total_deleted   = 0;
 			$affected_tables = array();
 
+				list( $rev_max_age, $rev_keep ) = self::get_revision_defaults();
 			foreach ( $methods as $key => $method ) {
 				if ( 'revisions' === $key ) {
-					$res = self::invoke_cleanup_method( $method, 30, 5 );
+					$res = self::invoke_cleanup_method( $method, $rev_max_age, $rev_keep );
 				} else {
 					$res = self::invoke_cleanup_method( $method );
 				}
@@ -750,12 +751,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @since 1.3.0
 		 *
 		 * @param array $settings Cleanup settings. Recognized keys:
-		 *                        - 'dbRevMaxAge'     (int) Maximum age in days for revision pruning (default 30).
+			 *                        - 'dbRevMaxAge'     (int) Maximum age in days for revision pruning (default 30).
 		 *                        - 'dbRevKeepLatest' (int) Number of latest revisions to retain per parent (default 5).
 		 */
-		public static function auto_clean( $settings ) {
+		public static function get_revision_defaults( $settings = null ) {
+			if ( null === $settings ) {
+				$settings = get_option( 'wppo_settings', array() );
+				if ( ! is_array( $settings ) ) {
+					$settings = array();
+				}
+				$settings = $settings['database_cleanup'] ?? array();
+				if ( ! is_array( $settings ) ) {
+					$settings = array();
+				}
+			}
 			$max_age = isset( $settings['dbRevMaxAge'] ) ? (int) $settings['dbRevMaxAge'] : 30;
+			$max_age = max( 1, min( 365, $max_age ) );
 			$keep    = isset( $settings['dbRevKeepLatest'] ) ? (int) $settings['dbRevKeepLatest'] : 5;
+			$keep    = max( 1, min( 100, $keep ) );
+			return array( $max_age, $keep );
+		}
+
+		public static function auto_clean( $settings ) {
+			if ( ! is_array( $settings ) ) {
+				$settings = array();
+			}
+			list( $max_age, $keep ) = self::get_revision_defaults( $settings );
 
 			$methods = array_values( self::CLEANUP_METHOD_MAP );
 

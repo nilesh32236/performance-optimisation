@@ -468,7 +468,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				return array( 'cleaned' => 0 );
 			}
 			if ( 'revisions' === $type ) {
-				$result = Database_Cleanup::invoke_cleanup_method( $method, 30, 5 );
+				list( $rev_max_age, $rev_keep ) = Database_Cleanup::get_revision_defaults();
+				$result = Database_Cleanup::invoke_cleanup_method( $method, $rev_max_age, $rev_keep );
 			} else {
 				$result = Database_Cleanup::invoke_cleanup_method( $method );
 			}

@@ -127,12 +127,8 @@
 	justify-content: center;
 
 	@include respond-to('md') {
-		min-height: 38px;
-		padding: 8px 14px;
-	}
-
-	@include respond-to('sm') {
 		min-height: 44px;
+		padding: 8px 14px;
 	}
 
 	&:hover {

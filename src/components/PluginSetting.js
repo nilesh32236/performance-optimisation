@@ -222,11 +222,12 @@ const PluginSetting = ( { options } ) => {
 		try {
 			const currentSettings =
 				wppoSettings?.settings?.performance_audit ?? {};
+			const trimmedKey = newApiKey.trim();
 			const response = await apiCall( 'update_settings', {
 				tab: 'performance_audit',
 				settings: {
 					...currentSettings,
-					...( newApiKey ? { pagespeed_api_key: newApiKey } : {} ),
+					...( trimmedKey ? { pagespeed_api_key: trimmedKey } : {} ),
 				},
 			} );
 			if ( response.success ) {

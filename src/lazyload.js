@@ -82,17 +82,25 @@ const AUTO_SIZES_SUPPORTED = ( () => {
  * @return {string} The selector string.
  */
 const getLazySelector = () => {
-	return USE_NATIVE_LAZY
+	const useNative =
+		typeof window.wppoSettings !== 'undefined' &&
+		window.wppoSettings.settings &&
+		typeof window.wppoSettings.settings.general !== 'undefined'
+			? !! window.wppoSettings.settings.general.native_lazy &&
+			  NATIVE_LAZY_SUPPORTED
+			: USE_NATIVE_LAZY;
+	return useNative
 		? 'video.wppo-lazy-video'
 		: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
 };
 
 /**
- * Back-compat selector constant (evaluated once).
+ * Back-compat alias — prefer getLazySelector() for live value.
+ * @deprecated Use getLazySelector().
  * @type {string}
  */
 // eslint-disable-next-line no-unused-vars
-const LAZY_SELECTOR = getLazySelector();
+const LAZY_SELECTOR = getLazySelector(); // Deprecated alias.
 
 /**
  * Load a single deferred script element.
@@ -709,33 +717,35 @@ const loadImages = () => {
 			}
 
 			mutationObserver = new MutationObserver( ( mutations ) => {
+				const selector = getLazySelector();
 				mutations.forEach( ( mutation ) => {
 					mutation.addedNodes.forEach( ( node ) => {
-						if ( node.nodeType === 1 ) {
-							if (
-								node.tagName === 'IMG' ||
-								node.tagName === 'IFRAME' ||
-								node.tagName === 'VIDEO'
-							) {
-								observeElement( node );
+						if ( 1 !== node.nodeType ) {
+							return;
+						}
+						if (
+							node.tagName === 'IMG' ||
+							node.tagName === 'IFRAME' ||
+							node.tagName === 'VIDEO'
+						) {
+							observeElement( node );
+						}
+						node.querySelectorAll( selector ).forEach(
+							( child ) => {
+								observeElement( child );
 							}
-							node.querySelectorAll( getLazySelector() ).forEach(
-								( child ) => {
-									observeElement( child );
-								}
-							);
-							if (
-								node.matches( getLazySelector() ) ||
-								node.querySelector( getLazySelector() )
-							) {
-								startSafetyScan();
-							}
-							if (
-								node.matches( '.wppo-video-placeholder' ) ||
-								node.querySelector( '.wppo-video-placeholder' )
-							) {
-								initVideoPlaceholders();
-							}
+						);
+						if (
+							node.matches( selector ) ||
+							node.querySelector( selector )
+						) {
+							startSafetyScan();
+						}
+						if (
+							node.matches( '.wppo-video-placeholder' ) ||
+							node.querySelector( '.wppo-video-placeholder' )
+						) {
+							initVideoPlaceholders();
 						}
 					} );
 				} );
