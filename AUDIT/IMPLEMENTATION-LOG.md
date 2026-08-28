@@ -51,6 +51,9 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 | H-06 preload metabox empty screen | HIGH | Correctness | `includes/class-metabox.php:54` | FIXED→VERIFIED | `add_meta_box(...,'',...)` → `add_meta_box(...,$post_types,...)` public types minus attachment (1 line) | `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
 | H-08 Bunny caches.default invalid | HIGH | Correctness/Perf | `templates/bunny-edge.js:28` | FIXED→VERIFIED | normalized cacheKey `new Request(url,'GET')` Vary fix + private/Set-Cookie/Vary:Cookie bypass + lowercase CT + Bunny.v1.waitUntil fallback + header docs Cache API (templates 67→~90 lines + class-edge-cache.php fallback) | `node --check` OK, `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
 | H-12 CF Vary + private leak | HIGH | Security/Perf | `templates/cloudflare-worker.js:52,85` | FIXED→VERIFIED | cacheKey `new Request(url,'GET')` + fix `preview` pathname→searchParams.has + wp-json/wp-cron + Cookie/Auth request bypass + private/no-store/Set-Cookie/Vary:Cookie response guard (tolower CT/CC/Vary) (101→~120 lines + fallback) | `node --check` OK, `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
+| H-10 shared AbortController siblings | HIGH | Frontend | `src/App.js:285` | FIXED→VERIFIED | per-request `AbortController`×3 (`activitiesController`/`rulesController`/`ccssController`) stored in `useRef` (`activitiesControllerRef` etc.), abort previous if needed, abort individually in cleanup (no shared signal) | `npm run lint:js` 0e3w, `npm test` 34/34 345 OK, `npm run build` OK | 2026-08-28 audit fix |
+| H-09 combine_css triple classify | HIGH (P2) | Performance | `includes/class-cache.php:396` | DEFERRED (P2) | combine_css triple classify already partially optimized (`core_will_inline` memo + `eligible_handles` 120→60 sims); full single-pass deferred to P2 perf batch | — | — |
+| H-11 God class Main | HIGH (P4) | Architecture | `includes/class-main.php:489` | DEFERRED (P4) | God class `Main` 3053 McCabe>30 → facade extraction deferred to P4 | — | — |
 
 ## C-01 — Namespace typo `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate`
 
@@ -212,6 +215,22 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
 - **Status:** FIXED→VERIFIED
 
+## H-10 — Shared AbortController cancels sibling requests (App.js:285)
+
+- **Finding ID:** H-10
+- **Severity:** HIGH
+- **Category:** Frontend
+- **Original file:line:** `src/App.js:285-386` (`const abortController = new AbortController()` shared across 3 fetches)
+- **Changed files:** `src/App.js` (shared 1→3 controllers + 3 `useRef` + per-signal aborted checks), `AUDIT/IMPLEMENTATION-LOG.md` (this entry), `build/*` (rebuilt)
+- **What changed:** Replaced single `const abortController = new AbortController()` shared by `fetchRecentActivities`, `fetchServerRules`, `apiCall('ccss_status')` with 3 per-request controllers `activitiesController`/`rulesController`/`ccssController` each stored in its own `useRef` (`activitiesControllerRef`, `rulesControllerRef`, `ccssControllerRef`). At effect start each ref's previous controller is aborted if present (`if (ref.current) ref.current.abort()`), new controller created and stored (`ref.current = new AbortController()`). Each `fetch*` / `apiCall` receives its own `signal` (`activitiesController.signal`, etc.) and its own `signal.aborted` guard in `try/catch/finally`. Cleanup `return () => { activitiesController.abort(); rulesController.abort(); ccssController.abort(); }` aborts all three individually instead of one shared abort. `src/lib/apiRequest.js` already supports optional `signal` param (passed through to `fetch(...,{signal})`) — verified `apiCall`/`fetchRecentActivities`/`fetchServerRules` signatures propagate signal correctly.
+- **Why:** Single controller meant `rulesRetryTrigger`/`ccssRefreshTrigger` bump or tab switch aborted in-flight `fetchRecentActivities` as well, and unmount cleanup aborted all with one signal. `hasFetched*` refs desynced when sibling aborted mid-flight → spurious `AbortError` → activities never load when user quickly switches tabs or retries server rules. Audit: `AUDIT/FINDINGS/HIGH.md:H-10`, `AUDIT/FINDINGS/HIGH-2026-08-28.md:H-10`, `AUDIT/AGENTS/agent-A06-js-spa.md:F-02` (95% confidence).
+- **Tests added:** None (abort isolation; existing JSDOM tests cover render path).
+- **Tests executed:** `npm run lint:js` → 0 errors, 3 warnings (unrelated Dashboard cacheSettings exhaustive-deps); `npm test` → 34/34 suites 345/345 tests PASS; `npm run build` → success (index 134 KiB, lazyload 11 KiB, main 2.57 KiB, rum 1.78 KiB); `grep -n AbortController src/App.js` → 3 hits (no shared), `grep -n abortController src/App.js` → 0 shared name beyond per-request locals; manual trace of `activeTab`/`rulesRetryTrigger`/`ccssRefreshTrigger` dependencies confirms per-request isolation. Workers preview bypass already verified: `url.searchParams.has('preview')` in `templates/cloudflare-worker.js:48` and `templates/bunny-edge.js` normalized key `new Request(url.toString(),{method:'GET'})`.
+- **Result:** PASS — per-request aborts isolate siblings; previous controllers aborted via ref before new fetch; cleanup aborts all three without cross-cancellation; no global shared controller remains.
+- **Regression risk:** NONE — strictly isolates abort scope; `signal.aborted` checks mirror previous shared checks but per-controller; no new state or deps added beyond refs (refs do not trigger re-render).
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
 ## Evidence per batch
 - P1 security: `php -l` 5 files clean, `phpcs` 0, `phpunit` 403 OK
 - P2 perf: `php -l` 7 files clean, `phpunit` 403 OK, `npm build` 54.8 KiB
@@ -221,10 +240,12 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - H-01 fix: `php -l` clean, `phpunit` 435 OK, `grep count.*matches` 0
 - H-02/H-07/H-03/H-04 fix: `php -l` 3 files clean, `phpunit --filter AiAdaptiveTest|OdBridgeTest` 23 OK (1 skipped), `phpunit` full 435 OK (2 skipped)
 - H-05/H-06/H-08/H-12 fix: `php -l` 3 files clean (`Asset_Manager, Metabox, Edge_Cache`), `node --check` 2 workers OK, `phpunit` 435 OK (2 skipped), `grep is_user_logged_in` 0 in Asset_Manager, `grep add_meta_box` now `$post_types`, `grep caches.default` normalized key + guards
+- H-10 fix: `npm run lint:js` 0e3w (3 warnings unrelated), `npm test` 34 suites 345 OK, `npm run build` 11 KiB lazyload / 134 KiB index OK, `grep AbortController src/App.js` 3 hits (no shared), `grep -n searchParams.has preview` OK already fixed in workers
 
 ## Regression risk
 - LOW for P1/P3 correctness (small guards), MEDIUM for P2 RUM queue state machine (advisory race), LOW for `core_tweaks` narrowing (import 400 legacy), LOW for stampede advisory lock.
 - H-01: NONE — predicate fix is strictly more correct; no new branching for picture/img path.
 - H-02/H-07/H-03/H-04: NONE/LOW — H-02 literal fix, H-07 arsort+added css query, H-03 deletion of erroneous else, H-04 dedup+early-return; all covered by full 435 suite.
 - H-05/H-06/H-08/H-12: NONE/LOW — H-05 remove logged-in bail (protected handles guard), H-06 widens display to public types, H-08 normalized key + private/Vary guards, H-12 normalized key + private/Set-Cookie/Vary Cookie + preview/wp-json bypass; all narrow cacheability, reduce leak/fragmentation.
+- H-10: NONE — per-request controllers isolate abort; previous sibling no longer cancelled; cleanup aborts all three explicitly; only adds refs, no behavioural change beyond fixing spurious AbortError.
 
