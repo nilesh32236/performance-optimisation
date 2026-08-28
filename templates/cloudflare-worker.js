@@ -43,13 +43,26 @@ export default {
     if (
       url.pathname.startsWith('/wp-admin') ||
       url.pathname.startsWith('/wp-login') ||
-      url.pathname.includes('preview=true')
+      url.pathname.startsWith('/wp-json') ||
+      url.pathname.startsWith('/wp-cron') ||
+      url.searchParams.has('preview') ||
+      url.search.includes('preview=true')
     ) {
       return fetch(request);
     }
 
+    // Bypass cache for authenticated requests (logged-in cookie or auth header).
+    const cookie = request.headers.get('cookie') || '';
+    const auth = request.headers.get('authorization') || '';
+    if (cookie.includes('wordpress_logged_in') || auth) {
+      return fetch(request);
+    }
+
     const cache = caches.default;
-    const cacheKey = new Request(url.toString(), request);
+    // Normalize cache key to URL-only GET to avoid Vary fragmentation
+    // (Cookie, User-Agent, Accept-Language etc. would otherwise create
+    // per-header cache variants and blow up storage).
+    const cacheKey = new Request(url.toString(), { method: 'GET' });
 
     // Try edge cache first.
     let cachedResponse = await cache.match(cacheKey);
@@ -60,7 +73,11 @@ export default {
         (async () => {
           try {
             const originRes = await fetch(request);
-            if (originRes.ok && originRes.headers.get('content-type')?.includes('text/html')) {
+            const ct = (originRes.headers.get('content-type') || '').toLowerCase();
+            const cc = (originRes.headers.get('cache-control') || '').toLowerCase();
+            const vary = (originRes.headers.get('vary') || '').toLowerCase();
+            // Do not cache private or cookie-setting responses; also respect Vary: Cookie.
+            if (originRes.ok && ct.includes('text/html') && !originRes.headers.has('set-cookie') && !cc.includes('private') && !cc.includes('no-store') && !vary.includes('cookie') && vary !== '*') {
               const res = new Response(originRes.body, originRes);
               res.headers.set('Cache-Control', 'public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');
               res.headers.set('X-Edge-Cache', 'REVALIDATE');
@@ -84,9 +101,19 @@ export default {
     // Cache miss — fetch origin and populate edge cache.
     const originResponse = await fetch(request);
 
-    // Only cache successful HTML responses.
-    const contentType = originResponse.headers.get('content-type') || '';
-    if (originResponse.ok && contentType.includes('text/html')) {
+    // Only cache successful HTML responses that are not private and do not set cookies.
+    const contentType = (originResponse.headers.get('content-type') || '').toLowerCase();
+    const cacheControl = (originResponse.headers.get('cache-control') || '').toLowerCase();
+    const varyHeader = (originResponse.headers.get('vary') || '').toLowerCase();
+    if (
+      originResponse.ok &&
+      contentType.includes('text/html') &&
+      !originResponse.headers.has('set-cookie') &&
+      !cacheControl.includes('private') &&
+      !cacheControl.includes('no-store') &&
+      !varyHeader.includes('cookie') &&
+      varyHeader !== '*'
+    ) {
       const response = new Response(originResponse.body, originResponse);
       response.headers.set('Cache-Control', 'public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}');
       response.headers.set('X-Edge-Cache', 'MISS');

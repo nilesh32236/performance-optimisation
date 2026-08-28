@@ -90,7 +90,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Asset_Manager' ) ) {
 		 * @since 1.1.0
 		 */
 		public function dequeue_selected_assets() {
-			if ( is_admin() || is_user_logged_in() ) {
+			if ( is_admin() ) {
 				return;
 			}
 

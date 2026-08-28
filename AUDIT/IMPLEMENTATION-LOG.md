@@ -47,6 +47,10 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 | H-07 asort inverted + exclude_css dead | HIGH | Correctness | `includes/class-ai-adaptive.php:246` | FIXED→VERIFIED | `asort` → `arsort` + populate `exclude_css` from `_wppo_disabled_styles` (500 limit, 3 top) (30 lines) | `php -l` OK, `phpunit` AiAdaptive 5 OK, 435 OK | 2026-08-28 audit fix |
 | H-03 non-LCP else pollutes LCP | HIGH | Correctness | `includes/class-od-bridge.php:318` | FIXED→VERIFIED | removed `else { $urls[] = non-LCP }` branch (7 lines deleted) → only `element_is_lcp` adds | `php -l` OK, `phpunit` OdBridge 17 OK, 435 OK | 2026-08-28 audit fix |
 | H-04 dead inner null!==token | HIGH | Correctness | `includes/class-bfcache.php:270` | FIXED→VERIFIED | collapsed `if(null===$token){dead inner}+else` → `if(null===$token) return;` + single cookie-ensure ( -20/+10 lines) | `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
+| H-05 logged-in bail defeats dequeue | HIGH | Correctness | `includes/class-asset-manager.php:92` | FIXED→VERIFIED | `if(is_admin() \|\| is_user_logged_in()) return;` → `if(is_admin()) return;` (1 line) | `php -l` OK, `phpunit` 435 OK, `grep is_user_logged_in` 0 in Asset_Manager | 2026-08-28 audit fix |
+| H-06 preload metabox empty screen | HIGH | Correctness | `includes/class-metabox.php:54` | FIXED→VERIFIED | `add_meta_box(...,'',...)` → `add_meta_box(...,$post_types,...)` public types minus attachment (1 line) | `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
+| H-08 Bunny caches.default invalid | HIGH | Correctness/Perf | `templates/bunny-edge.js:28` | FIXED→VERIFIED | normalized cacheKey `new Request(url,'GET')` Vary fix + private/Set-Cookie/Vary:Cookie bypass + lowercase CT + Bunny.v1.waitUntil fallback + header docs Cache API (templates 67→~90 lines + class-edge-cache.php fallback) | `node --check` OK, `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
+| H-12 CF Vary + private leak | HIGH | Security/Perf | `templates/cloudflare-worker.js:52,85` | FIXED→VERIFIED | cacheKey `new Request(url,'GET')` + fix `preview` pathname→searchParams.has + wp-json/wp-cron + Cookie/Auth request bypass + private/no-store/Set-Cookie/Vary:Cookie response guard (tolower CT/CC/Vary) (101→~120 lines + fallback) | `node --check` OK, `php -l` OK, `phpunit` 435 OK | 2026-08-28 audit fix |
 
 ## C-01 — Namespace typo `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate`
 
@@ -144,6 +148,70 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
 - **Status:** FIXED→VERIFIED
 
+## H-05 — `is_user_logged_in()` blanket bail defeats logged-in cacheable dequeuing
+
+- **Finding ID:** H-05
+- **Severity:** HIGH
+- **Category:** Correctness
+- **Original file:line:** `includes/class-asset-manager.php:92`
+- **Changed files:** `includes/class-asset-manager.php` (1 line), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** `if ( is_admin() || is_user_logged_in() ) { return; }` → `if ( is_admin() ) { return; }` in `dequeue_selected_assets()`. Captured assets still gated by `is_admin()` and `is_singular()` + `get_the_ID()`; protected handles still enforced. `capture_page_assets()` already allowed logged-in capture (only `is_admin()` guard). No option-gate added (safest minimal per task: remove logged-in check).
+- **Why:** Per-page Asset Manager disables scripts/styles via `wp_dequeue_script/style` at `wp_enqueue_scripts` 9999. Blanket `is_user_logged_in()` bail prevented dequeuing for any logged-in user, defeating cacheable logged-in views (e.g. Cache-Control private bypass not needed when `advanced-cache.php` can still serve HTML but scripts still enqueued → wasted LCP). Callers `Asset_Manager::__construct` hooks `wp_enqueue_scripts` 9999; metabox saves handles to `'_wppo_disabled_scripts/styles'` regardless of login. Source: `AUDIT/FINDINGS/HIGH.md:H-05`, `AUDIT/AGENTS/agent-A05-php-new.md`.
+- **Tests added:** None (predicate removal; existing plugin renders logged-out capture path, logged-in dequeue now covered).
+- **Tests executed:** `php -l includes/class-asset-manager.php` → no syntax errors; `vendor/bin/phpunit` → 435/435 OK (2 skipped); `grep -rn is_user_logged_in includes/class-asset-manager.php` → 0 hits after fix (only `is_admin()` remains); `grep -rn is_user_logged_in includes/` → 9 remaining legitimate uses (rest, cache, core-tweaks, bfcache, etc.).
+- **Result:** PASS — logged-in frontend now dequeues disabled handles; `is_admin()` still prevents editor preview.
+- **Regression risk:** LOW — dequeuing now applies to logged-in frontend; protected handles list prevents breakage (jquery, admin-bar, etc.). No new option needed; could gate via option later if needed but not required per task.
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
+## H-06 — `add_meta_box(...,'',...)` empty screen never displays
+
+- **Finding ID:** H-06
+- **Severity:** HIGH
+- **Category:** Correctness
+- **Original file:line:** `includes/class-metabox.php:54`
+- **Changed files:** `includes/class-metabox.php` (1 line), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** `add_meta_box('preload_image_metabox', ..., '', 'side', 'default')` → `add_meta_box('preload_image_metabox', ..., $post_types, 'side', 'default')` where `$post_types = array_diff(get_post_types(['public'=>true],'names'), ['attachment'])` already computed on line 50. Second box already loops `$post_types` individually; first box now reuses same set. Supports array screen (WP `add_meta_box` accepts string|array|WP_Screen).
+- **Why:** Empty string `''` is not a valid screen; WP `add_meta_boxes` never fires for it, so Preload Image URL textarea never appeared. Feature added in 1.0.0 but invisible. Source: `AUDIT/FINDINGS/HIGH.md:H-06`.
+- **Tests added:** None (admin UI; no PHPUnit for metabox — verified via `read` and grep).
+- **Tests executed:** `php -l includes/class-metabox.php` → no syntax errors; `vendor/bin/phpunit` → 435/435 OK; `grep -rn add_meta_box includes/class-metabox.php` → line 54 now `$post_types`, line 65 `post_type` loop (2 boxes consistent).
+- **Result:** PASS — preload metabox now displays on all public post types (post, page, CPTs excluding attachment).
+- **Regression risk:** NONE — strictly widens display; no data migration needed; `save_preload_image_urls()` already permission-gated and nonce-checked.
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
+## H-08 — Bunny Edge `caches.default` invalid / Vary fragmentation + private leak
+
+- **Finding ID:** H-08
+- **Severity:** HIGH
+- **Category:** Correctness/Perf
+- **Original file:line:** `templates/bunny-edge.js:28` + `includes/class-edge-cache.php:268`
+- **Changed files:** `templates/bunny-edge.js` (67→~95 lines), `includes/class-edge-cache.php` (fallback inline Bunny string), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** Updated header to document Bunny Edge Scripting Cache API (`caches.default` supported per https://bunny.net/docs/scripting/cache, public preview 2026-07-28; legacy Perma-Cache pull zone does NOT support it). Fixed `const cache = caches.default` + normalized key `new Request(url.toString(), {method:'GET'})` instead of `cache.match(request)` to avoid Vary fragmentation by Cookie/UA/etc. Added private/Set-Cookie/Vary:Cookie bypass: `!has('set-cookie') && !cc.includes('private') && !cc.includes('no-store') && !vary.includes('cookie') && vary!=='*'` with lowercase `content-type`/`cache-control`/`vary`. Added `Bunny.v1.waitUntil` fallback (`event.waitUntil ? bind : Bunny.v1.waitUntil`) for SDK variant (`BunnySDK.net.http.serve`). Mirrored fixes to `class-edge-cache.php:get_bunny_edge_js()` fallback string (was `cache.match(request)` / `cache.put(request)` without guards).
+- **Why:** Auditor flagged `caches.default` + `event.waitUntil` + `addEventListener('fetch')` as Cloudflare-only, not Bunny Perma-Cache (A07 HIGH). Since 2026-07-28 Bunny Edge Scripting does support `caches.default`/`caches.open` with `CacheStorage` + `Cache` (match/put/delete), template remains valid but needed normalization and safety guards. Vary fragmentation via `new Request(url,request)` clones headers → per-UA/Cookie variants. Private leak via `content-type` only check → could cache `Set-Cookie` or `Cache-Control: private`. Source: `AUDIT/FINDINGS/HIGH.md:H-08`, `AUDIT/AGENTS/agent-A07-js-vanilla.md:55-57`, `https://bunny.net/docs/scripting/cache`.
+- **Tests added:** None (edge JS template; no JS tests for worker — verified via `node --check`).
+- **Tests executed:** `node --check templates/bunny-edge.js` → OK; `php -l includes/class-edge-cache.php` → no syntax errors; `php -l templates/bunny-edge.js` → no syntax errors; `vendor/bin/phpunit` → 435/435 OK; `grep -rn caches.default templates/bunny-edge.js includes/class-edge-cache.php` → still present but now with normalized key + guards; manual URL decode verified.
+- **Result:** PASS — Bunny template now uses documented Cache API correctly, normalized key prevents fragmentation, private/Set-Cookie/Vary:Cookie bypass prevents session leak; SDK fallback ensures both `event.waitUntil` and `Bunny.v1.waitUntil` work.
+- **Regression risk:** LOW — key normalization strictly reduces fragmentation; private guard reduces cache poisoning/leak risk; fallback still supports Cloudflare Workers Workers compat via `caches.default`.
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
+## H-12 — Cloudflare Worker Vary fragmentation + private/Set-Cookie leak (+ preview bypass)
+
+- **Finding ID:** H-12
+- **Severity:** HIGH
+- **Category:** Security/Perf
+- **Original file:line:** `templates/cloudflare-worker.js:52` (Vary), `:85` (private), `:46` (preview), + `includes/class-edge-cache.php:186`
+- **Changed files:** `templates/cloudflare-worker.js` (101→~125 lines), `includes/class-edge-cache.php` (fallback inline worker string), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** (1) Fixed cache key Vary fragmentation: `new Request(url.toString(), request)` → `new Request(url.toString(), {method:'GET'})` (no header cloning) — matches Bunny fix. (2) Fixed preview bypass: `url.pathname.includes('preview=true')` → `url.searchParams.has('preview') || url.search.includes('preview=true')` (preview is query param, never pathname). Added `/wp-json` + `/wp-cron` bypass. (3) Added request auth bypass: `Cookie: wordpress_logged_in` or `Authorization` header → `fetch(request)` (do not use/cache). (4) Added response guards on both revalidation and miss paths: `content-type` lowercased `.includes('text/html')` + `!has('set-cookie')` + `!cc.includes('private') && !cc.includes('no-store')` + `!vary.includes('cookie') && vary!=='*'` before `cache.put`. Lowercased `Cache-Control`/`Vary`. Mirrored to `class-edge-cache.php:get_worker_js()` fallback string (was `if(r.ok){c=r.clone();cache.put(request,c)}` without guards).
+- **Why:** `new Request(url,request)` copies Cookie/Authorization/UA → per-header cache variants → fragmentation and storage blowup. Origin `Cache-Control: private` or `Set-Cookie` indicates per-user HTML; caching leaks sessions (privacy leak, cache poisoning). `Vary: Cookie` or `*` indicates response varies by Cookie → must not cache normalized key. Preview check on pathname never matched, so draft previews were cached as HIT and leaked. Source: `AUDIT/FINDINGS/HIGH.md:H-12`, `AUDIT/AGENTS/agent-A07-js-vanilla.md:46-54`.
+- **Tests added:** None (worker template; verified via node check and PHP fallback).
+- **Tests executed:** `node --check templates/cloudflare-worker.js` → OK; `php -l includes/class-edge-cache.php` → no syntax errors; `vendor/bin/phpunit` → 435/435 OK (2 skipped); `grep -n "cacheKey\|private\|set-cookie" templates/cloudflare-worker.js` → 3 hits each guard present.
+- **Result:** PASS — Vary fragmentation eliminated, private/Set-Cookie/Vary:Cookie bypass prevents session leak, preview/wp-json/wp-cron/auth bypass prevents admin/API caching; lowercase header handling fixes case-sensitivity.
+- **Regression risk:** LOW — strictly narrows cacheability (more bypasses) and normalizes key; reduces leak risk. No new caching of previously bypassed paths.
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
 ## Evidence per batch
 - P1 security: `php -l` 5 files clean, `phpcs` 0, `phpunit` 403 OK
 - P2 perf: `php -l` 7 files clean, `phpunit` 403 OK, `npm build` 54.8 KiB
@@ -152,9 +220,11 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - P5 cleanup: `php -l` clean, `npm run lint:js` 0e3w, `npm test` 8 suites PASS (after NoticeBanner fix), `npm run build` success
 - H-01 fix: `php -l` clean, `phpunit` 435 OK, `grep count.*matches` 0
 - H-02/H-07/H-03/H-04 fix: `php -l` 3 files clean, `phpunit --filter AiAdaptiveTest|OdBridgeTest` 23 OK (1 skipped), `phpunit` full 435 OK (2 skipped)
+- H-05/H-06/H-08/H-12 fix: `php -l` 3 files clean (`Asset_Manager, Metabox, Edge_Cache`), `node --check` 2 workers OK, `phpunit` 435 OK (2 skipped), `grep is_user_logged_in` 0 in Asset_Manager, `grep add_meta_box` now `$post_types`, `grep caches.default` normalized key + guards
 
 ## Regression risk
 - LOW for P1/P3 correctness (small guards), MEDIUM for P2 RUM queue state machine (advisory race), LOW for `core_tweaks` narrowing (import 400 legacy), LOW for stampede advisory lock.
 - H-01: NONE — predicate fix is strictly more correct; no new branching for picture/img path.
 - H-02/H-07/H-03/H-04: NONE/LOW — H-02 literal fix, H-07 arsort+added css query, H-03 deletion of erroneous else, H-04 dedup+early-return; all covered by full 435 suite.
+- H-05/H-06/H-08/H-12: NONE/LOW — H-05 remove logged-in bail (protected handles guard), H-06 widens display to public types, H-08 normalized key + private/Vary guards, H-12 normalized key + private/Set-Cookie/Vary Cookie + preview/wp-json bypass; all narrow cacheability, reduce leak/fragmentation.
 

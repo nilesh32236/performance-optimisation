@@ -55,7 +55,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Metabox' ) ) {
 				'preload_image_metabox',
 				__( 'Preload Image URL', 'performance-optimisation' ),
 				array( $this, 'render_metabox' ),
-				'',
+				$post_types,
 				'side',
 				'default'
 			);
