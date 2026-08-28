@@ -41,6 +41,23 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 | External Services | HIGH (wp.org) | Compat | `readme.txt:279` | FIXED→VERIFIED | added `== External Services ==` 2 subsections `pagespeedonline.googleapis.com` + `fonts.googleapis.com` purpose/when/where/EOL | `phpcs` 0 | A11→Final WP PASS |
 | CronSitemapTest mock | TEST | Testing | `tests/php/CronSitemapTest.php:50,81,110,135` | FIXED→VERIFIED | added `wp_remote_retrieve_response_code` mocks 200/500 | `phpunit` 403 OK | Final Testing PASS |
 | NoticeBanner test | TEST | Testing | `src/components/common/__tests__/NoticeBanner.test.js:33` | FIXED→VERIFIED | updated expectations `alert/assertive` vs `status/polite` | `npm test` PASS | Final Frontend/Testing PASS |
+| C-01 namespace typo | CRITICAL | Architecture | `includes/class-main.php:489` | FIXED→VERIFIED | `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate` (1 line) | `php -l` + `phpcs` OK | 2026-08-28 audit fix |
+
+## C-01 — Namespace typo `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate`
+
+- **Finding ID:** C-01
+- **Severity:** CRITICAL
+- **Category:** Architecture
+- **Original file:line:** `includes/class-main.php:489`
+- **Changed files:** `includes/class-main.php` (1 line), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** Line 489 `add_action( 'wppo_run_upgrades', array( 'PerformanceOptimisation\Inc\Activate', 'maybe_run_upgrades' ) );` → `array( 'PerformanceOptimise\Inc\Activate', 'maybe_run_upgrades' )` — removed trailing `s` (`Optimisation` → `Optimise`) to match real namespace `PerformanceOptimise\Inc` declared in `includes/class-main.php:13` and `includes/class-activate.php:11`. Exact indentation and array syntax preserved; no other occurrences of `PerformanceOptimisation\Inc` in code (grep confirms only docs/AUDIT references remain).
+- **Why:** Hook `wppo_run_upgrades` referenced nonexistent class `PerformanceOptimisation\Inc\Activate`; WordPress action dispatch silently failed (class not found, no alias), so legacy Redis cache-key eviction retry via `Activate::maybe_run_upgrades()` / `schedule_upgrade_routine()` never fired. Affects old installs with unsalted query-group keys; stale on old Redis drop-in installs. Source: `AUDIT/FINDINGS/CRITICAL-2026-08-28.md:C-01`, `AUDIT/AGENTS/agent-A01-php-core.md:A01-005`, `agent-A14-arch.md:A14-15`.
+- **Tests added:** None (one-char namespace fix; no new behaviour to unit-test).
+- **Tests executed:** `php -l includes/class-main.php` → no syntax errors; `vendor/bin/phpcs --standard=phpcs.xml includes/class-main.php` → 0 errors; `grep -rn PerformanceOptimisation` → 0 hits in `includes/`/`src/` (remaining 19 hits are docs/AUDIT history, not code); `git diff` → single line change verified.
+- **Result:** PASS — hook now resolves to real class; `php -l` and `phpcs` clean; diff is minimal and correct.
+- **Regression risk:** NONE — string literal correction to match existing class; no logic, signature, or behavioural change beyond fixing dead handler. No alias needed (all other call sites already use `PerformanceOptimise`).
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
 
 ## Evidence per batch
 - P1 security: `php -l` 5 files clean, `phpcs` 0, `phpunit` 403 OK
