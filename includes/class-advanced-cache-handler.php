@@ -145,9 +145,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// scheme/path, so md5(home_url()) would mismatch on http/https or subdirectory installs.
 			// Derive the fallback from the host only.
 			// @since NEXT Fallback now uses host-only hash to avoid scheme mismatch.
-			$site_host        = wp_parse_url( $site_url, PHP_URL_HOST );
-			$fallback_hash    = $site_host ? md5( $site_host ) : md5( $site_url );
-			$cookie_hash      = defined( 'COOKIEHASH' ) ? COOKIEHASH : $fallback_hash;
+			$site_host     = wp_parse_url( $site_url, PHP_URL_HOST );
+			$fallback_hash = $site_host ? md5( $site_host ) : md5( $site_url );
+			$cookie_hash   = defined( 'COOKIEHASH' ) ? COOKIEHASH : $fallback_hash;
 
 			// Cache life in hours baked into the drop-in; 0 = never expire.
 			$wppo_options = get_option( 'wppo_settings', array() );

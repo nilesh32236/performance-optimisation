@@ -141,8 +141,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 
 			do {
 				$wpdb->last_error = '';
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-				$ids = $wpdb->get_col( $select_sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- Direct query necessary for batched cleanup helper with dynamic SELECT.
+				$ids = $wpdb->get_col( $select_sql );
 
 				if ( ! empty( $wpdb->last_error ) ) {
 					return false;
@@ -742,17 +742,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		}
 
 		/**
-		 * Execute configured database cleanup routines according to provided settings.
+		 * Get revision cleanup defaults.
 		 *
-		 * Calls a set of cleanup methods (including advanced revision cleanup, drafts, trashed posts,
-		 * spam/trashed comments, expired transients, and orphan postmeta). If a cleanup fails,
-		 * an error is logged via the Log class.
+		 * Resolves maximum age and keep-latest values from settings with bounds.
 		 *
-		 * @since 1.3.0
-		 *
-		 * @param array $settings Cleanup settings. Recognized keys:
-			 *                        - 'dbRevMaxAge'     (int) Maximum age in days for revision pruning (default 30).
-		 *                        - 'dbRevKeepLatest' (int) Number of latest revisions to retain per parent (default 5).
+		 * @since NEXT
+		 * @param mixed $settings Optional settings array or null to load from option.
+		 * @return array{0:int,1:int} Tuple of [max_age_days, keep_latest].
 		 */
 		public static function get_revision_defaults( $settings = null ) {
 			if ( null === $settings ) {
@@ -772,6 +768,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			return array( $max_age, $keep );
 		}
 
+		/**
+		 * Execute configured database cleanup routines according to provided settings.
+		 *
+		 * Calls a set of cleanup methods (including advanced revision cleanup, drafts, trashed posts,
+		 * spam/trashed comments, expired transients, and orphan postmeta). If a cleanup fails,
+		 * an error is logged via the Log class.
+		 *
+		 * @since NEXT
+		 * @param array $settings Cleanup settings. Recognized keys:
+		 *                        - 'dbRevMaxAge'     (int) Maximum age in days for revision pruning (default 30).
+		 *                        - 'dbRevKeepLatest' (int) Number of latest revisions to retain per parent (default 5).
+		 * @return string[] List of methods that failed.
+		 */
 		public static function auto_clean( $settings ) {
 			if ( ! is_array( $settings ) ) {
 				$settings = array();

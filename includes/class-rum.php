@@ -330,16 +330,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 			if ( count( $queue ) >= self::FLUSH_THRESHOLD ) {
 				self::flush_queue();
-			} elseif ( function_exists( 'wp_rand' ) && wp_rand( 1, 10 ) === 1 ) {
+			} elseif ( wp_rand( 1, 10 ) === 1 ) {
 				self::flush_queue();
-			} elseif ( function_exists( 'rand' ) && rand( 1, 10 ) === 1 ) {
-				self::flush_queue();
-			} else {
+			} elseif ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
 				// Ensure a cron will eventually flush the queue even on low traffic.
-				if ( function_exists( 'wp_next_scheduled' ) && function_exists( 'wp_schedule_single_event' ) ) {
-					if ( ! wp_next_scheduled( 'wppo_rum_flush' ) ) {
-						wp_schedule_single_event( time() + 300, 'wppo_rum_flush' );
-					}
+				if ( ! wp_next_scheduled( 'wppo_rum_flush' ) ) {
+					wp_schedule_single_event( time() + 300, 'wppo_rum_flush' );
 				}
 			}
 		}

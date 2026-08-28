@@ -86,7 +86,7 @@ class AbilitiesTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_option' )->justReturn( time() );
 
 		// Stub $wpdb for clean_trashed_posts: first get_col returns 3 IDs, second returns empty to end loop.
-		$GLOBALS['wpdb'] = new WPPO_DB_Mock_Abilities();
+		$GLOBALS['wpdb']               = new WPPO_DB_Mock_Abilities();
 		$GLOBALS['wpdb']->query_return = 3;
 
 		$result_canonical = Abilities::execute_database_cleanup( array( 'type' => 'trashed_posts' ) );
@@ -107,17 +107,53 @@ if ( ! class_exists( 'WPPO_DB_Mock_Abilities' ) ) {
 	 */
 	class WPPO_DB_Mock_Abilities {
 		/**
-		 * Table names.
+		 * Posts table.
 		 *
 		 * @var string
 		 */
-		public $posts       = 'wp_posts';
-		public $postmeta    = 'wp_postmeta';
-		public $comments    = 'wp_comments';
+		public $posts = 'wp_posts';
+
+		/**
+		 * Postmeta table.
+		 *
+		 * @var string
+		 */
+		public $postmeta = 'wp_postmeta';
+
+		/**
+		 * Comments table.
+		 *
+		 * @var string
+		 */
+		public $comments = 'wp_comments';
+
+		/**
+		 * Commentmeta table.
+		 *
+		 * @var string
+		 */
 		public $commentmeta = 'wp_commentmeta';
-		public $options     = 'wp_options';
-		public $prefix      = 'wp_';
-		public $last_error  = '';
+
+		/**
+		 * Options table.
+		 *
+		 * @var string
+		 */
+		public $options = 'wp_options';
+
+		/**
+		 * Table prefix.
+		 *
+		 * @var string
+		 */
+		public $prefix = 'wp_';
+
+		/**
+		 * Last error.
+		 *
+		 * @var string
+		 */
+		public $last_error = '';
 
 		/**
 		 * Configurable return for query.

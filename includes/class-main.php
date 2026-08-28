@@ -1523,7 +1523,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					),
 					// Allowlisted top-level settings keys — single source is Util::ALLOWED_SETTINGS_KEYS
 					// (exposed here so JS `ALLOWED_IMPORT_KEYS` can stay in sync without codegen).
-					'allowedSettingsKeys'                => Util::ALLOWED_SETTINGS_KEYS,
+					'allowedSettingsKeys'                  => Util::ALLOWED_SETTINGS_KEYS,
 				),
 			);
 

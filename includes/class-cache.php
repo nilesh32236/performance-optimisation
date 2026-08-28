@@ -962,7 +962,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			// The combined handle now carries `path` data, so the size map cached
 			// for the inline-budget simulation is stale; rebuild it on the next call.
-			$this->inline_size_map          = null;
+			$this->inline_size_map       = null;
 			$this->core_will_inline_memo = array();
 		}
 
@@ -1545,16 +1545,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Save cache files with optional gzip compression.
-		 *
-		 * @param string $buffer The content to save.
-		 * @param string $file_path The file path for saving.
-		 * @param string $type The file type (default: 'html').
-		 * @return void
-		 *
-		 * @since 1.0.0
-		 */
-		/**
 		 * Atomically write contents to a file via tmp+rename.
 		 *
 		 * Writes to a temporary sibling file in the same directory and then
@@ -1585,6 +1575,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			return true;
 		}
 
+		/**
+		 * Save cache files with optional gzip compression.
+		 *
+		 * @param string $buffer The content to save.
+		 * @param string $file_path The file path for saving.
+		 * @param string $type The file type (default: 'html').
+		 * @return void
+		 *
+		 * @since NEXT
+		 */
 		private function save_cache_files( $buffer, $file_path, $type = 'html' ): void {
 
 			// Only evaluate the storage decision for HTML writes so the DONOTCACHEPAGE

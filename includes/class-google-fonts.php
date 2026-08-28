@@ -108,7 +108,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 
 			// Exact host allowlist — not strpos (prevents evil.com/fonts.googleapis.com or fonts.googleapis.com.evil.com).
 			// Caller: style_loader_tag filter; $href is the queued stylesheet URL.
-			// @since NEXT
+			// @since NEXT.
 			if ( wp_parse_url( $href, PHP_URL_HOST ) !== 'fonts.googleapis.com' ) {
 				return $tag;
 			}
@@ -267,7 +267,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 */
 		private function normalize_google_fonts_url( $url ) {
 			// Exact host allowlist — replaces strpos substring check.
-			// @since NEXT
+			// @since NEXT.
 			$host = wp_parse_url( $url, PHP_URL_HOST );
 			if ( 'fonts.googleapis.com' !== $host && 'fonts.gstatic.com' !== $host ) {
 				return '';
@@ -298,7 +298,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 */
 		private function download_font_file( $url, $dest ) {
 			// Exact host allowlist — only fonts.gstatic.com may be fetched as a font file.
-			// @since NEXT
+			// @since NEXT.
 			if ( wp_parse_url( $url, PHP_URL_HOST ) !== 'fonts.gstatic.com' ) {
 				return false;
 			}

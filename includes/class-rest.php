@@ -390,7 +390,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$normalized_cache_dir       = wp_normalize_path( $this->cache_dir );
 				$normalized_cache_dir_trail = trailingslashit( $normalized_cache_dir );
 				// Normalized candidate for fallback when realpath() fails (uncached page).
-				$candidate_path             = wp_normalize_path( trailingslashit( $this->cache_dir ) . ltrim( $path, '/\\' ) );
+				$candidate_path = wp_normalize_path( trailingslashit( $this->cache_dir ) . ltrim( $path, '/\\' ) );
 
 				$real_path = realpath( $this->cache_dir . $path );
 				if ( false !== $real_path ) {

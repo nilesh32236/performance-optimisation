@@ -113,7 +113,7 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 	 */
 	function wppo_delete_directory( string $dir ): void {
 		// If $dir itself is a symlink, delete the link only — do not follow.
-		// @since NEXT
+		// @since NEXT — added.
 		if ( is_link( $dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			@unlink( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
 			return;
@@ -137,7 +137,7 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 
 			// Symlink guard: delete the link itself, never recurse into it.
 			// Must be before is_dir() because is_dir() follows symlinks.
-			// @since NEXT
+			// @since NEXT — added.
 			if ( is_link( $path ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 				@unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
 				continue;
