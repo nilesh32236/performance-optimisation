@@ -25,3 +25,32 @@
 **Rejected scope kept:** No `--network`, no `--dry-run`, no hooks, no `--batch-size`, no progress bar (deferred per FINAL-ADVERSARIAL-REVIEW).
 
 **Commit:** Phase1 PR-A — synopsis, json-only, Util defaults converge
+
+## Phase2 PR-B `fix/cli-phase2-safety-dryrun` — 2026-08-28
+
+**Branch:** `fix/audit-2026-08-28` (d306e677)
+**Scope:** FINAL-ADVERSARIAL-REVIEW PR-B (MODIFY --yes + --dry-run + allowlist converge, REJECT --confirm/cache-dry-run/--network)
+**Files:**
+- `includes/class-wppo-cli-command.php:133-195` database docblock `[--yes]` + `[--dry-run]` (REJECT --confirm alias, cache dry-run)
+- `includes/class-wppo-cli-command.php:202-311` `database()` --dry-run early `Utils::get_flag_value('dry-run')` → `get_counts()` logs `would_delete` + `WP_CLI::warning` no DELETE/OPTIMIZE, `--yes` gate for `type==all` with `posix_isatty`/`stream_isatty` check + `WP_CLI::confirm` (REJECT --confirm, non-tty skip)
+- `includes/class-wppo-cli-command.php:791-853` object-cache docblock `[--yes]` + `[--mode/--nodes/--master_name/--use_tls/--persistent/--compression]` converge 6→12
+- `includes/class-wppo-cli-command.php:880-905` `object_cache()` disable `--yes` gate (same isatty logic, REJECT --confirm)
+- `includes/class-wppo-cli-command.php:915-928` `get_redis_config_from_assoc()` uses `Object_Cache::ALLOWED_KEYS` (single source)
+- `includes/class-object-cache.php:32-48` `Object_Cache::ALLOWED_KEYS` const (12 keys: mode,host,port,password,database,timeout,prefix,nodes,master_name,use_tls,persistent,compression)
+- `includes/class-rest.php:1104-1115` `build_redis_config()` uses `Object_Cache::ALLOWED_KEYS` + handles `timeout`/`prefix` sanitization (converged)
+- `tests/php/WppoCliConfirmTest.php` 8 tests — docblock yes, no confirm alias, yes-skips-confirm, non-tty skips, cache no confirm, allowlist converged
+- `tests/php/WppoCliDryRunTest.php` 7 tests — docblock dry-run, cache no dry-run, would_delete preview, would_optimize preview, no network flag
+- `tests/php/WppoCliFormatTest.php` patched stub to include `WP_CLI::$confirms` for cross-test isolation
+
+**Verification:**
+- `php -l includes/class-wppo-cli-command.php` OK
+- `php -l includes/class-object-cache.php` OK
+- `php -l includes/class-rest.php` OK
+- `vendor/bin/phpcs --standard=phpcs.xml includes/class-wppo-cli-command.php includes/class-object-cache.php includes/class-rest.php` 0 errors
+- `vendor/bin/phpunit --filter WppoCli` 30/30 OK (15 Phase1 + 15 Phase2)
+- `vendor/bin/phpunit` 501/501 OK (2 skipped, +15 Phase2)
+- No --confirm alias, no cache clear prompt, no --network, no cache dry-run per FINAL-ADVERSARIAL-REVIEW
+
+**Rejected scope kept:** REJECT `--confirm` alias (handbook --yes only), REJECT `cache clear` prompt/dry-run (idempotent), REJECT `--network` (docs-only shell loop), REJECT hooks/progress/batch-size
+
+**Commit:** Phase2 PR-B — --yes (all+disable) + --dry-run (cleanup/optimize) + allowlist converge

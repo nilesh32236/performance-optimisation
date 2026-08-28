@@ -34,7 +34,14 @@ class WppoCliFormatTest extends \PHPUnit\Framework\TestCase {
 
 		// Define WP_CLI stubs if not already defined (CLI tests run without WP-CLI binary).
 		if ( ! class_exists( 'WP_CLI' ) ) {
-			eval( 'class WP_CLI { public static $logs = array(); public static $warnings = array(); public static $errors = array(); public static $successes = array(); public static function log($msg){ self::$logs[] = $msg; } public static function warning($msg){ self::$warnings[] = $msg; } public static function error($msg){ self::$errors[] = $msg; throw new RuntimeException($msg); } public static function success($msg){ self::$successes[] = $msg; } public static function reset(){ self::$logs=array(); self::$warnings=array(); self::$errors=array(); self::$successes=array(); } }' );
+			eval( 'class WP_CLI { public static $logs = array(); public static $warnings = array(); public static $errors = array(); public static $successes = array(); public static $confirms = array(); public static function log($msg){ self::$logs[] = $msg; } public static function warning($msg){ self::$warnings[] = $msg; } public static function error($msg){ self::$errors[] = $msg; throw new RuntimeException($msg); } public static function success($msg){ self::$successes[] = $msg; } public static function confirm($q, $assoc=null){ self::$confirms[]=$q; } public static function reset(){ self::$logs=array(); self::$warnings=array(); self::$errors=array(); self::$successes=array(); self::$confirms=array(); } }' );
+		} else {
+			if ( ! property_exists( 'WP_CLI', 'confirms' ) ) {
+				\WP_CLI::$confirms = array();
+			}
+			if ( ! method_exists( 'WP_CLI', 'confirm' ) ) {
+				// Cannot add method dynamically; ensure stub is used via Confirm test first.
+			}
 		}
 		if ( ! class_exists( 'WP_CLI_Command' ) ) {
 			eval( 'class WP_CLI_Command {}' );

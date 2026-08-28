@@ -38,6 +38,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		public const LEGACY_DROPIN_MARKER = 'Redis Object Cache Drop-in';
 
 		/**
+		 * Allowed Redis configuration keys (single source for REST + CLI).
+		 *
+		 * Converges CLI 6-key allowlist (host,port,password,database,timeout,prefix)
+		 * with REST 10-key allowlist (mode,host,port,password,database,nodes,master_name,use_tls,persistent,compression)
+		 * to prevent silent drops for Sentinel/Cluster/TLS options.
+		 *
+		 * @since NEXT
+		 * @var string[]
+		 */
+		public const ALLOWED_KEYS = array( 'mode', 'host', 'port', 'password', 'database', 'timeout', 'prefix', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
+
+		/**
 		 * Path to the object cache drop-in.
 		 *
 		 * @var string

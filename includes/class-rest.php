@@ -1102,7 +1102,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return array Sanitized Redis config.
 		 */
 		private function build_redis_config( $params ) {
-			$allowed_keys = array( 'mode', 'host', 'port', 'password', 'database', 'nodes', 'master_name', 'use_tls', 'persistent', 'compression' );
+			$allowed_keys = Object_Cache::ALLOWED_KEYS;
 			$config       = array();
 
 			foreach ( $allowed_keys as $key ) {
@@ -1117,10 +1117,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					case 'master_name':
 					case 'compression':
 					case 'mode':
+					case 'prefix':
 						$config[ $key ] = sanitize_text_field( (string) $value );
 						break;
 					case 'port':
 					case 'database':
+					case 'timeout':
 						$config[ $key ] = (int) $value;
 						break;
 					case 'password':
