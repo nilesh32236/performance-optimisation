@@ -54,6 +54,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			'bfcache',
 			'perf_translations',
 			'ai_adaptive',
+			'edge_cache',
 		);
 
 		/**

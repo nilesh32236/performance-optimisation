@@ -23,6 +23,7 @@ import SystemInfo from './SystemInfo';
 import AutoloadedOptions from './AutoloadedOptions';
 import LlmsPanel from './LlmsPanel';
 import AiPanel from './AiPanel';
+import EdgeCachePanel from './EdgeCachePanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
@@ -1274,6 +1275,8 @@ const Dashboard = ( {
 				<LlmsPanel />
 
 				<AiPanel />
+
+				<EdgeCachePanel />
 
 				<SystemInfo />
 			</div>

@@ -43,6 +43,7 @@ jest.mock( '../ImageOptimizationCard', () => ( { onOptimize, onRemove } ) => (
 ) );
 jest.mock( '../AiPanel', () => () => <div data-testid="ai-panel" /> );
 jest.mock( '../LlmsPanel', () => () => <div data-testid="llms-panel" /> );
+jest.mock( '../EdgeCachePanel', () => () => <div data-testid="edge-panel" /> );
 jest.mock( '../RecentActivityCard', () => () => (
 	<div data-testid="activity-card" />
 ) );
