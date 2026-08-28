@@ -16,15 +16,24 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
 
 	/**
+	 * In-memory options store.
+	 *
 	 * @var array
 	 */
 	private $options = array();
 
 	/**
+	 * In-memory transients store.
+	 *
 	 * @var array
 	 */
 	private $transients = array();
 
+	/**
+	 * Install Brain Monkey stubs.
+	 *
+	 * @return void
+	 */
 	private function install_stubs(): void {
 		Functions\stubs(
 			array(
@@ -85,6 +94,11 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		);
 	}
 
+	/**
+	 * Test is_enabled returns false when disabled.
+	 *
+	 * @return void
+	 */
 	public function test_is_enabled_false_by_default(): void {
 		$this->install_stubs();
 		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => false ) );
@@ -92,6 +106,11 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( AI_Adaptive::is_enabled() );
 	}
 
+	/**
+	 * Test is_enabled returns true when enabled.
+	 *
+	 * @return void
+	 */
 	public function test_is_enabled_true_when_setting_set(): void {
 		$this->install_stubs();
 		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => true ) );
@@ -100,22 +119,42 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertTrue( AI_Adaptive::is_enabled() );
 	}
 
+	/**
+	 * Test heuristic learn produces model with prefetch URLs.
+	 *
+	 * @return void
+	 */
 	public function test_learn_heuristic_produces_model(): void {
 		$this->install_stubs();
-		$today                          = gmdate( 'Y-m-d' );
-		$this->options['wppo_web_vitals_rum'] = array(
+		$today                                   = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum']    = array(
 			$today => array(
 				'/slow/' => array(
-					'lcp'  => array( 'n' => 5, 'sum' => 20000, 'min' => 3000, 'max' => 5000 ),
-					'ttfb' => array( 'n' => 5, 'sum' => 4000, 'min' => 700, 'max' => 900 ),
+					'lcp'  => array(
+						'n'   => 5,
+						'sum' => 20000,
+						'min' => 3000,
+						'max' => 5000,
+					),
+					'ttfb' => array(
+						'n'   => 5,
+						'sum' => 4000,
+						'min' => 700,
+						'max' => 900,
+					),
 				),
 				'/fast/' => array(
-					'lcp' => array( 'n' => 1, 'sum' => 1000, 'min' => 1000, 'max' => 1000 ),
+					'lcp' => array(
+						'n'   => 1,
+						'sum' => 1000,
+						'min' => 1000,
+						'max' => 1000,
+					),
 				),
 			),
 		);
 		$this->options['wppo_web_vitals_trends'] = array();
-		$this->options['wppo_settings']           = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
 		Util::clear_settings_cache();
 
 		$model = AI_Adaptive::learn();
@@ -125,20 +164,30 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$this->assertContains( 'http://example.com/slow/', $model['prefetch_urls'] );
 	}
 
+	/**
+	 * Test get_prefetch_urls returns top two URLs.
+	 *
+	 * @return void
+	 */
 	public function test_get_prefetch_urls_returns_top_two(): void {
 		$this->install_stubs();
 		$this->options[ AI_Adaptive::OPTION ] = array(
 			'prefetch_urls' => array( 'http://example.com/a/', 'http://example.com/b/', 'http://example.com/c/' ),
 			'eagerness'     => 'conservative',
 		);
-		$urls = AI_Adaptive::get_prefetch_urls();
+		$urls                                 = AI_Adaptive::get_prefetch_urls();
 		$this->assertCount( 2, $urls );
 		$this->assertSame( 'http://example.com/a/', $urls[0] );
 	}
 
+	/**
+	 * Test speculation rules respect disabled flag.
+	 *
+	 * @return void
+	 */
 	public function test_filter_speculation_rules_respects_disabled(): void {
 		$this->install_stubs();
-		$this->options['wppo_settings'] = array( 'ai_adaptive' => array( 'enabled' => false ) );
+		$this->options['wppo_settings']       = array( 'ai_adaptive' => array( 'enabled' => false ) );
 		$this->options[ AI_Adaptive::OPTION ] = array(
 			'prefetch_urls' => array( 'http://example.com/a/' ),
 			'eagerness'     => 'conservative',
