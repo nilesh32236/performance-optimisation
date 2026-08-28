@@ -230,7 +230,7 @@ if ( ! class_exists( 'WPPO_DB_Mock_Abilities' ) ) {
 		 * @param string $query Query.
 		 * @return array
 		 */
-		public function get_results( $query = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		public function get_results( $query = null, $output = OBJECT ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return array();
 		}
 	}

@@ -45,7 +45,7 @@ class DatabaseCleanupTest extends \PHPUnit\Framework\TestCase {
 			 * @param string $query SQL query (unused).
 			 * @return array
 			 */
-			public function get_results( $query = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			public function get_results( $query = null, $output = OBJECT ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 				return array(
 					array(
 						'option_name' => 'small_option',
@@ -292,7 +292,7 @@ if ( ! class_exists( 'WPPO_DB_Mock' ) ) {
 		 * @param string $query SQL query (unused).
 		 * @return array<int, mixed>
 		 */
-		public function get_results( $query = null ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+		public function get_results( $query = null, $output = OBJECT ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			return array();
 		}
 

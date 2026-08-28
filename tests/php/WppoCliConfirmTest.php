@@ -96,9 +96,9 @@ class WppoCliConfirmTest extends \PHPUnit\Framework\TestCase {
 		$backdrop = $wpdb;
 		$wpdb     = new class() extends WPPO_DB_Mock {
 			public function get_col( $query = null ) { return array(); }
-			public function get_var( $query = null ) { return 0; }
+			public function get_var( $query = null, $x = 0, $y = 0 ) { return 0; }
 			public function query( $query = null ) { return 0; }
-			public function get_results( $query = null ) { return array(); }
+			public function get_results( $query = null, $output = OBJECT ) { return array(); }
 			public function insert( $table = null, $data = null, $format = null ) { return 1; } // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			public function prepare( $query, ...$args ) { return $query; } // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		};
@@ -139,9 +139,9 @@ class WppoCliConfirmTest extends \PHPUnit\Framework\TestCase {
 		$backdrop = $wpdb;
 		$wpdb     = new class() extends WPPO_DB_Mock {
 			public function get_col( $query = null ) { return array(); }
-			public function get_var( $query = null ) { return 0; }
+			public function get_var( $query = null, $x = 0, $y = 0 ) { return 0; }
 			public function query( $query = null ) { return 0; }
-			public function get_results( $query = null ) { return array(); }
+			public function get_results( $query = null, $output = OBJECT ) { return array(); }
 			public function insert( $table = null, $data = null, $format = null ) { return 1; } // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			public function prepare( $query, ...$args ) { return $query; } // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 		};

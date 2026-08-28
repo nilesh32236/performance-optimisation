@@ -96,9 +96,9 @@ class WppoCliDryRunTest extends \PHPUnit\Framework\TestCase {
 		$wpdb     = new class() extends WPPO_DB_Mock {
 			public int $query_calls = 0;
 			public function get_col( $query = null ) { return array( 1, 2 ); }
-			public function get_var( $query = null ) { return 5; }
+			public function get_var( $query = null, $x = 0, $y = 0 ) { return 5; }
 			public function query( $query = null ) { ++$this->query_calls; return 1; }
-			public function get_results( $query = null ) { return array(); }
+			public function get_results( $query = null, $output = OBJECT ) { return array(); }
 		};
 
 		try {
@@ -139,8 +139,8 @@ class WppoCliDryRunTest extends \PHPUnit\Framework\TestCase {
 		global $wpdb;
 		$backdrop = $wpdb;
 		$wpdb     = new class() extends WPPO_DB_Mock {
-			public function get_var( $query = null ) { return 3; }
-			public function get_results( $query = null ) { return array(); }
+			public function get_var( $query = null, $x = 0, $y = 0 ) { return 3; }
+			public function get_results( $query = null, $output = OBJECT ) { return array(); }
 		};
 
 		try {
@@ -171,7 +171,7 @@ class WppoCliDryRunTest extends \PHPUnit\Framework\TestCase {
 		$wpdb     = new class() extends WPPO_DB_Mock {
 			public int $query_calls = 0;
 			public function query( $query = null ) { ++$this->query_calls; return 1; }
-			public function get_var( $query = null ) { return 0; }
+			public function get_var( $query = null, $x = 0, $y = 0 ) { return 0; }
 		};
 
 		try {
@@ -215,7 +215,7 @@ class WppoCliDryRunTest extends \PHPUnit\Framework\TestCase {
 			public $prefix = 'wp_';
 			public $posts = 'wp_posts';
 			public $options = 'wp_options';
-			public function get_var( $query = null ) { return 1024; } // size <1GB
+			public function get_var( $query = null, $x = 0, $y = 0 ) { return 1024; } // size <1GB
 			public function query( $query = null ) { ++$this->query_calls; return 1; }
 			public function get_row( $query = null, $output = OBJECT, $y = 0 ) { return null; }
 			public function insert( $table = null, $data = null, $format = null ) { return 1; } // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
