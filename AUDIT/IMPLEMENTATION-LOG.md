@@ -65,6 +65,15 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 | CLI02 missing types | MEDIUM | Correctness | `class-wppo-cli-command.php:237` | FIXED→VERIFIED | added `trashed_comments/unattached_media/oembed_cache` 9→9 | `phpunit` OK | P3→Final |
 | H-09 combine_css triple classify | HIGH (P2) | Performance | `includes/class-cache.php:396` | FIXED→VERIFIED (P2) | See P2-02 — single-pass via LRU + inline_size_map | `php -l` ok | — |
 | H-11 God class Main | HIGH (P4) | Architecture | `includes/class-main.php:489` | DEFERRED (P4) | God class `Main` 3053 McCabe>30 → facade extraction deferred to P4 | — | — |
+| P5-01 sidebar left→transform | MEDIUM (A08 P-01/R-07) | CSS/Perf | `src/css/layout/_sidebar.scss:18` | FIXED→VERIFIED | `left: calc(-1*var(--wppo-sidebar-width))` + `left:0` → `left:0` + `transform: translateX(-100%)` / `translateX(0)`; compositor-only, transition already `transform 0.2s` via `--wppo-transition` | `npm run build` 55.1 KiB, `grep translateX build` 5 hits, `lint:js` 0e | P5 (A08) |
+| P5-02 fields 400px→respond-to | LOW (A08 M-06/R-03) | CSS/Architecture | `src/css/components/_fields.scss:33` `abstracts/_mixins.scss:5` | FIXED→VERIFIED | Added `xs:400px` to `respond-to` map + replaced bespoke `@media (max-width:400px)` with `@include respond-to('xs')` (design-system single source) | `npm run build` OK, `grep xs` 1 hit | P5 (A08) |
+| P5-03 lazy-placeholder reduced-motion | LOW (A08 A-06) | CSS/A11y | `src/css/components/_lazy-placeholder.scss:15` | FIXED→VERIFIED | Added `@media (prefers-reduced-motion:reduce){.wppo-lqip-loaded{transition:none}}` to disable blur/scale on vestibular preference | `build` contains `prefers-reduced 14 hits`, `grep lqip` 1 guard | P5 (A08) |
+| P5-04 video-placeholder reduced-motion | LOW (A08 A-07) | CSS/A11y | `src/css/components/_video-placeholder.scss:44` | FIXED→VERIFIED | Added `@media (prefers-reduced-motion:reduce)` disabling `transition` on `.wppo-video-play-btn`/`.wppo-play-btn-bg`/loading `picture` and resetting hover `scale(1.1)`→`translate(-50%,-50%)` | `build` guard present, `lint` 0e | P5 (A08) |
+| P5-05 tooltip transition all | LOW (A08) | CSS/Perf | `src/css/components/_tooltip.scss:31,55` | VERIFIED (no change) | Grep `transition: all` 0 hits; already `transition: color 0.2s` + `opacity+transform+visibility 0.2s` explicit (not `all`), with `prefers-reduced` guard at 70 — correct, no `all` to fix | `grep transition:all` 0 | P5 (A08) |
+| P5-06 Edge Cache TTL variance | LOW (P5 triage) | Perf/Cache | `includes/class-edge-cache.php:132` `templates/cloudflare-worker.js:82` | VERIFIED (no change) | Fixed TTL 300 + SWR 86400 suffices; SWR fragmentation avoided via `stale-while-revalidate` revalidation (H-12) + normalized `cacheKey=new Request(url,'GET')` prevents Vary explosion; variance/jitter unnecessary with SWR — documented as intentional | `grep CACHE_TTL` 3 hits | P5 (A08) |
+| P5-07 readme Tested up to | INFO (A13 F-COMPAT-01) | Compat/WP.org | `readme.txt:6` `performance-optimisation.php:7` | VERIFIED (no bump) | `Tested up to: 7.1` matches changelog 1.9.0 WP 7.1 features (`filter_client_side_supported_mime_types`, `wp_get_image_encode_quality`); A13 PASS for External Services; forward claim intentional per 1.9.0, keep | `grep Tested` 7.1 | P5 (A13) |
+| P5-08 dead SCSS mixins flex-center/truncate | LOW (A08 M-01/D-03) | Dead code | `abstracts/_mixins.scss:20` | VERIFIED (keep) | Retained as `@since NEXT` design-system library per A12 X-04 + AUDIT/DUPLICATE-CODE — intentional, not emitted to build | `grep flex-center` 0 include | P5 (A08/A12) |
+| P5-09 build duplicate selectors | LOW (A08 D-04) | Build | `build/style-index.css:1` | VERIFIED (skip) | 73 duplicate selector groups (510→418 distinct) from `max-width` `respond-to` media splits — expected, not true duplication, ~2–3 KB overhead; skip per task | `wc` 55.1 KiB | P5 (A08) |
 
 ## C-01 — Namespace typo `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate`
 
@@ -441,6 +450,94 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - **Reviewer:** fix/audit-2026-08-28 (P4)
 - **Status:** FIXED→VERIFIED (carry-over, no new commit)
 
+## P5 — CSS/build cleanup (2026-08-28 audit fix, LOW/MEDIUM) — branch fix/audit-2026-08-28
+
+- **Finding ID:** P5-01 A08 R-07/P-01 sidebar `left` → `transform` (MEDIUM)
+- **Severity:** MEDIUM
+- **Category:** CSS Performance
+- **Original file:line:** `src/css/layout/_sidebar.scss:18` `left: calc(-1 * var(--wppo-sidebar-width))` / `left:0`
+- **Changed files:** `src/css/layout/_sidebar.scss` (2 lines `left`→`transform`), `build/style-index.css` + `build/style-index-rtl.css` (rebuilt), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** Replaced `left: calc(-1 * var(--wppo-sidebar-width))` (layout/reflow per frame) + `&.wppo-sidebar--mobile-open { left:0 }` with `left:0; transform: translateX(-100%)` + `&.wppo-sidebar--mobile-open { transform: translateX(0) }`. `transition: var(--wppo-transition)` already includes `transform 0.2s ease` (variables.scss:71) so drawer now slides compositor-only; previously `left` not in transition list so snap. Kept `position:fixed; inset` + `box-shadow` + `prefers-reduced-motion` guard (256) which already `transition:none`.
+- **Why:** A08 R-07/P-01 MEDIUM — animating `left` triggers layout; `transform` is compositor-only, smoother on low-end devices. Prior variable `--wppo-transition` did not include `left`, so drawer snapped rather than slid; switching to `transform` satisfies both Perf and UX. Minimal change, BEM preserved.
+- **Tests executed:** `npm run lint:js` 0e3w, `npm run build` success (55.1 KiB), `python3 -c` grep build `translateX` 5 hits + `@media(max-width:992px){.wppo-sidebar{...transform:translateX(-100%)}` verified, `grep -n left: src/css/layout/_sidebar.scss` now only `left:0` (no calc).
+- **Result:** PASS — drawer now transform-based, no reflow, transition covered.
+- **Regression risk:** NONE — strictly narrower (transform vs left), left:0 keeps origin; mobile-open shadow unchanged.
+- **Reviewer:** fix/audit-2026-08-28 (P5)
+- **Status:** FIXED→VERIFIED
+
+- **Finding ID:** P5-02 A08 M-06/R-03 bespoke `@media (max-width:400px)` → `respond-to('xs')` (LOW)
+- **Severity:** LOW
+- **Category:** CSS Architecture
+- **Original file:line:** `src/css/components/_fields.scss:33` `@media (max-width:400px)` + `abstracts/_mixins.scss:5` map
+- **Changed files:** `src/css/abstracts/_mixins.scss` (added `'xs':400px` to `$breakpoint-map`), `src/css/components/_fields.scss` (replaced bespoke `@media` with `@include respond-to('xs') { flex-wrap:wrap }`), `build/style-index.css` (rebuilt), `AUDIT/IMPLEMENTATION-LOG.md`
+- **What changed:** Extended `respond-to` map from `sm:640,md:768,lg:992,xl:1200` to include `xs:400px`; replaced raw `@media (max-width:400px)` one-off with `@include respond-to('xs')`. Single source of truth via mixin; `AGENTS.md` contract now effectively `xs:400` reserved for narrow toggle wrapping (previously bespoke comment `A07 F-22`). No other breakpoint order change.
+- **Why:** A08 M-03 `respond-to` was `max-width`-only, bespoke 400px bypassed map — fragmentation. Adding `xs` keeps single map and enforces via Stylelint `at-rule-disallowed-list` future. Labeled LOW as one occurrence but architectural hygiene per A12.
+- **Tests executed:** `npm run build` success, `grep -n xs src/css/abstracts/_mixins.scss` 1 hit, `grep -n respond-to src/css/components/_fields.scss` now `xs` not raw, `grep "@media (max-width: 400px)" src/css` 0 hits (only `mixins.scss:12` + responsive), `python3` check build `400px` still present via compiled media (xs) → 1 hit.
+- **Result:** PASS — map now covers 400px, bespoke eliminated, build identical output but via mixin.
+- **Regression risk:** NONE — `xs:400px` strictly adds entry, `respond-to('xs')` emits same `@media (max-width:400px)` as before (verified identical CSS).
+- **Reviewer:** fix/audit-2026-08-28 (P5)
+- **Status:** FIXED→VERIFIED
+
+- **Finding ID:** P5-03 A08 A-06 LQIP `prefers-reduced-motion` guard (LOW)
+- **Severity:** LOW
+- **Category:** CSS A11y
+- **Original file:line:** `src/css/components/_lazy-placeholder.scss:15` `transition: filter 0.4s, transform 0.4s`
+- **Changed files:** `src/css/components/_lazy-placeholder.scss` (added `@media (prefers-reduced-motion:reduce){.wppo-lqip-loaded{transition:none}}`), `build/style-index.css` (rebuilt), `AUDIT/IMPLEMENTATION-LOG.md`
+- **What changed:** Added reduced-motion guard disabling blur/scale transition when user prefers reduced motion. Minor LQIP animation (20px blur + scale 1.05) now respects vestibular preference.
+- **Tests executed:** `npm run build` success, `python3` grep build `prefers-reduced` 14 hits (was 12) + `.wppo-lqip-loaded{transition:none}` inside media verified.
+- **Result:** PASS — guard added, no other selector affected.
+- **Regression risk:** NONE — only disables transition under preference.
+- **Reviewer:** fix/audit-2026-08-28 (P5)
+- **Status:** FIXED→VERIFIED
+
+- **Finding ID:** P5-04 A08 A-07 video placeholder reduced-motion (LOW)
+- **Severity:** LOW
+- **Category:** CSS A11y
+- **Original file:line:** `src/css/components/_video-placeholder.scss:44` `transform: scale(1.1)` / `fill 0.2s`
+- **Changed files:** `src/css/components/_video-placeholder.scss` (added `@media (prefers-reduced-motion:reduce)` disabling `transition` on `.wppo-video-play-btn`/`.wppo-play-btn-bg`/loading `picture` and resetting hover `scale(1.1)`→`translate(-50%,-50%)`), `build/style-index.css` (rebuilt)
+- **What changed:** Play button hover scale (44) and fill transition (56) plus loading picture opacity 0.3s now disabled under reduced-motion. Keeps focus-visible outline unaffected.
+- **Tests executed:** `npm run build` success, `python3` grep build `@media(prefers-reduced-motion:reduce){.wppo-video-play-btn{transition:none}.wppo-video-play-btn:hover{transform:translate(-50%,-50%)}` verified, `grep prefers-reduced src/css/components/_video-placeholder.scss` 1 guard added.
+- **Result:** PASS — small scale/fill now respects preference.
+- **Regression risk:** NONE — only under `prefers-reduced-motion`.
+- **Reviewer:** fix/audit-2026-08-28 (P5)
+- **Status:** FIXED→VERIFIED
+
+- **Finding ID:** P5-05 A08 tooltip `transition:all` → `opacity,transform` (LOW)
+- **Severity:** LOW
+- **Category:** CSS Perf
+- **Original file:line:** `src/css/components/_tooltip.scss:55` `transition`
+- **Changed files:** None (verified)
+- **What changed:** Grep `transition: all` / `transition:all` 0 hits across `src/css` + `build/style-index.css`. Current file already `transition: color 0.2s ease` (icon) + `transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease` (content) explicit, not `all`; plus `prefers-reduced` guard at 70. No change needed — verified as already correct (A08 A-05 PASS).
+- **Tests executed:** `grep -rn "transition: all" src/css build/style-index.css` 0 hits; `read src/css/components/_tooltip.scss` lines 31/55/70 verified explicit.
+- **Result:** PASS — already explicit, no `all` to fix; skip per task.
+- **Reviewer:** fix/audit-2026-08-28 (P5)
+- **Status:** VERIFIED (no change)
+
+- **Finding ID:** P5-06 Edge_Cache TTL variance / SWR fragmentation (LOW triage)
+- **Severity:** LOW
+- **Category:** Cache/Perf
+- **Original file:line:** `includes/class-edge-cache.php:132` `cache_ttl 300` / `swr 86400`, `templates/cloudflare-worker.js:82` `Cache-Control`
+- **Changed files:** None (verified)
+- **What changed:** Verified `Edge_Cache::get_config()` fixed `cache_ttl 300` + `swr 86400` with `Cache-Control: public, max-age={{CACHE_TTL}}, stale-while-revalidate={{SWR}}` suffices; SWR fragmentation avoided via H-12 fixes (`cacheKey=new Request(url,'GET')` normalized + `private/no-store/Set-Cookie/Vary:Cookie` bypass) so no thundering herd or Vary explosion; variance/jitter unnecessary with SWR semantics. Documented as intentional constant TTL + SWR.
+- **Tests executed:** `grep -rn CACHE_TTL templates/cloudflare-worker.js includes/class-edge-cache.php` 3 hits, `node --check templates/cloudflare-worker.js` OK, `php -l includes/class-edge-cache.php` OK, `grep translateX` already verifies normalized key.
+- **Result:** PASS — worker already handles via SWR; no additional variance needed.
+- **Reviewer:** fix/audit-2026-08-28 (P5)
+- **Status:** VERIFIED (no change, already fixed via worker H-12)
+
+- **Finding ID:** P5-07 readme `Tested up to` + External Services (A13 F-COMPAT-01/14)
+- **Severity:** INFO
+- **Category:** Compat/wp.org
+- **Original file:line:** `readme.txt:6` `Tested up to: 7.1` + `:279` `== External Services ==`
+- **Changed files:** None (verified)
+- **What changed:** `Tested up to: 7.1` matches `performance-optimisation.php:7` header + changelog `1.9.0 (2026-08-11)` WP 7.1 features (`wp_get_image_encode_quality`, `filter_client_side_supported_mime_types`); A13 F-COMPAT-14 External Services PASS already (PageSpeed + Fonts disclosed with purpose/when/where/EOL), no additional service (Edge/AI/OD local-only). Forward claim `7.1` is intentional per 1.9.0 changelog, not overstatement requiring bump; keep as-is per task "already PASSED so skip, but check Tested up to bump".
+- **Tests executed:** `grep "Tested up to" readme.txt performance-optimisation.php` both 7.1, `grep -A20 "== External Services ==" readme.txt` 2 subsections verified.
+- **Result:** PASS — External Services already PASS, Tested up to intentionally 7.1, no bump needed.
+- **Reviewer:** fix/audit-2026-08-28 (P5)
+- **Status:** VERIFIED (no change)
+
+- **Deferred (P5 triage):** `abstracts/_mixins.scss:20 flex-center/truncate` + `variables.scss:67 --wppo-shadow-premium` + `build duplicate 73 groups` — intentionally kept per A12 X-04/X-10 + A08 D-04 expected media-query splits, documented `@since NEXT` library tokens, no emit to build; skip per task.
+- **Deferred (P5 CSS):** `respond-to` still `max-width`-only (A08 M-03uggest `respond-from` min-width companion) — keep as `max-width` system per AGENTS.md contract `sm 640/md 768/lg 992/xl 1200` (plus `xs 400` now internal); min-width companion deferred to P6 if mobile-first migration pursued. Stylelint `at-rule-disallowed-list: ["@media"]` enforcement deferred to P6.
+
 ## Regression risk
 - LOW for P1/P3 correctness (small guards), MEDIUM for P2 RUM queue state machine (advisory race), LOW for `core_tweaks` narrowing (import 400 legacy), LOW for stampede advisory lock.
 - H-01: NONE — predicate fix is strictly more correct; no new branching for picture/img path.
@@ -456,4 +553,8 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - P3-02: LOW — wildcard `LIKE 'wppo_%'` on uninstall narrow to plugin prefix, per-site scoped; symlink guard already 2-site `is_link` before `is_dir`.
 - P3-03: NONE — doc only.
 - P3-04: NONE — allowlist narrows, missing types add handling for previously-error paths; %d placeholder phpcs-clean.
+- P5-01: NONE — transform vs left strictly narrower, compositor-only; left:0 keeps origin, mobile-open shadow unchanged; transition already covers transform.
+- P5-02: NONE — xs:400 adds entry, respond-to('xs') emits identical `@media (max-width:400px)` as before (verified build).
+- P5-03/P5-04: NONE — only disables transition under `prefers-reduced-motion`, no effect for default motion.
+- P5-05/P5-06/P5-07: NONE — verified, no code change.
 

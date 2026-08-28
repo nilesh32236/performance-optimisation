@@ -17,15 +17,16 @@
 
 	@include respond-to('lg') {
 		position: fixed;
-		left: calc(-1 * var(--wppo-sidebar-width));
+		left: 0;
 		top: 0;
 		bottom: 0;
 		height: 100%;
 		overflow-y: auto;
 		box-shadow: none;
+		transform: translateX(-100%);
 
 		&.wppo-sidebar--mobile-open {
-			left: 0;
+			transform: translateX(0);
 			box-shadow: 8px 0 32px rgba(0, 0, 0, 0.25);
 		}
 	}

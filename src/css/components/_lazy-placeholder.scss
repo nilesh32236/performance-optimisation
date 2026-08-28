@@ -14,3 +14,9 @@
 	transform: scale(var(--wppo-lqip-loaded-scale));
 	transition: filter var(--wppo-lqip-transition-duration) var(--wppo-lqip-transition-easing), transform var(--wppo-lqip-transition-duration) var(--wppo-lqip-transition-easing);
 }
+
+@media (prefers-reduced-motion: reduce) {
+	.wppo-lqip-loaded {
+		transition: none;
+	}
+}

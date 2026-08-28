@@ -59,3 +59,18 @@
 .wppo-video-play-btn:hover .wppo-play-btn-bg {
 	fill: var(--wppo-primary-hover);
 }
+
+@media (prefers-reduced-motion: reduce) {
+	.wppo-video-play-btn {
+		transition: none;
+	}
+
+	.wppo-video-play-btn:hover {
+		transform: translate(-50%, -50%);
+	}
+
+	.wppo-play-btn-bg,
+	.wppo-video-placeholder.wppo-video-loading picture {
+		transition: none;
+	}
+}
