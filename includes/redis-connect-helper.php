@@ -171,13 +171,17 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 			$s_host      = $parsed_node['host'];
 			$s_port      = $parsed_node['port'];
 
+			if ( '' === $s_host || (int) $s_port <= 0 ) {
+				continue;
+			}
+
 			try {
 				$sentinel = new \RedisSentinel(
-					$s_host,
-					$s_port,
-					$timeout,
+					(string) $s_host,
+					(int) $s_port,
+					(float) $timeout,
 					'',
-					$retry,
+					(int) $retry,
 					(float) $read_timeout
 				);
 				$address  = $sentinel->getMasterAddrByName( $master_name );
@@ -209,6 +213,8 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 					}
 				}
 			} catch ( \Throwable $e ) {
+				// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+				error_log( 'WPPO Sentinel node connection failed: ' . $e->getMessage() );
 				$errors[] = __( 'Sentinel node connection failed.', 'performance-optimisation' );
 				continue;
 			}
