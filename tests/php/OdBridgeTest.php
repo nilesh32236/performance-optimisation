@@ -524,6 +524,89 @@ class OdBridgeTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Test that non-LCP elements are not added to LCP URL list (H-03 regression).
+	 *
+	 * A metric with get_lcp_element returning a non-LCP element or elements array
+	 * where is_lcp false must not pollute the LCP URL.
+	 */
+	public function test_non_lcp_elements_not_added_to_lcp_url(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		// Create a stub metric where get_lcp_element returns null and get_elements returns non-LCP.
+		$non_lcp_metric = new class() {
+			public function get_lcp_element() { return null; }
+			public function get_elements() {
+				return array(
+					array( 'src' => 'https://example.com/not-lcp.jpg', 'isLCP' => false ),
+					array( 'src' => 'https://example.com/also-not-lcp.jpg', 'isLCP' => false ),
+				);
+			}
+			public function get_viewport_width() { return 400; }
+		};
+		$this->od_metrics           = array( $non_lcp_metric );
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( '', OD_Bridge::get_lcp_url(), 'Non-LCP elements must not yield an LCP URL' );
+
+		// Same via array shape: metric array with elements not LCP.
+		$this->od_metrics = array(
+			array(
+				'elements' => array(
+					array( 'src' => 'https://example.com/bogus.jpg', 'isLCP' => false ),
+				),
+			),
+		);
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+		$this->assertSame( '', OD_Bridge::get_lcp_url(), 'Array-shaped non-LCP elements must not yield LCP URL' );
+	}
+
+	/**
+	 * Test that mixed LCP + non-LCP metrics only returns the LCP URL.
+	 */
+	public function test_mixed_lcp_and_non_lcp_returns_only_lcp(): void {
+		$this->install_common_stubs();
+		$this->ensure_od_class();
+		$this->options = array(
+			'od_integration' => array( 'enabled' => true ),
+		);
+
+		$lcp_url     = 'https://example.com/real-lcp.jpg';
+		$non_lcp_url = 'https://example.com/not-lcp.jpg';
+
+		$metric_with_both = new class( $lcp_url, $non_lcp_url ) {
+			private $lcp;
+			private $non_lcp;
+			public function __construct( $lcp, $non_lcp ) {
+				$this->lcp     = $lcp;
+				$this->non_lcp = $non_lcp;
+			}
+			public function get_lcp_element() {
+				return array( 'src' => $this->lcp, 'isLCP' => true );
+			}
+			public function get_elements() {
+				return array(
+					array( 'src' => $this->lcp, 'isLCP' => true ),
+					array( 'src' => $this->non_lcp, 'isLCP' => false ),
+				);
+			}
+			public function get_viewport_width() { return 360; }
+		};
+
+		$this->od_metrics           = array( $metric_with_both );
+		$GLOBALS['od_metrics_stub'] = $this->od_metrics;
+
+		$this->assertSame( $lcp_url, OD_Bridge::get_lcp_url() );
+		$this->assertStringNotContainsString( $non_lcp_url, OD_Bridge::get_lcp_url() );
+
+		// For exclude count, non-LCP should not inflate distinct count.
+		$this->assertSame( 1, OD_Bridge::get_exclude_first_images_count() );
+	}
+
+	/**
 	 * Data provider for OD present/absent threshold.
 	 *
 	 * @return array

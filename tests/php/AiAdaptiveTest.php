@@ -196,4 +196,117 @@ class AiAdaptiveTest extends \PHPUnit\Framework\TestCase {
 		$rules = AI_Adaptive::filter_speculation_rules( array() );
 		$this->assertSame( array(), $rules );
 	}
+
+	/**
+	 * Helper to build RUM data with a given avg LCP and invoke heuristic via learn().
+	 *
+	 * @param float $avg_lcp Average LCP to encode.
+	 * @return string Eagerness.
+	 */
+	private function eagerness_for_avg_lcp( float $avg_lcp ): string {
+		$this->install_stubs();
+		$today = gmdate( 'Y-m-d' );
+		// Use n=2 sum=avg*2 so avg is exact.
+		$this->options[ AI_Adaptive::OPTION ] = array(); // Ensure learn recomputes.
+		$this->options['wppo_web_vitals_rum'] = array(
+			$today => array(
+				'/a/' => array(
+					'lcp' => array(
+						'n'   => 2,
+						'sum' => $avg_lcp * 2,
+						'min' => (int) $avg_lcp,
+						'max' => (int) $avg_lcp,
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		// Clear previous learn lock.
+		$this->transients = array();
+		$model = AI_Adaptive::learn();
+		return $model['eagerness'] ?? 'conservative';
+	}
+
+	/**
+	 * Test eagerness is eager when avg LCP > 3500.
+	 */
+	public function test_eagerness_is_eager_above_3500(): void {
+		$eagerness = $this->eagerness_for_avg_lcp( 3600 );
+		$this->assertSame( 'eager', $eagerness );
+		// Boundary: exactly 3500 should NOT be eager (requires >3500).
+		$this->transients = array();
+		$eagerness2 = $this->eagerness_for_avg_lcp( 3500 );
+		$this->assertSame( 'moderate', $eagerness2, 'Exactly 3500 should be moderate, not eager' );
+	}
+
+	/**
+	 * Test eagerness is moderate when avg LCP > 2500 and <=3500.
+	 */
+	public function test_eagerness_is_moderate_above_2500(): void {
+		$eagerness = $this->eagerness_for_avg_lcp( 3000 );
+		$this->assertSame( 'moderate', $eagerness );
+		$eagerness2 = $this->eagerness_for_avg_lcp( 2600 );
+		$this->assertSame( 'moderate', $eagerness2 );
+		// Boundary: exactly 2500 should be conservative.
+		$this->transients = array();
+		$eagerness3 = $this->eagerness_for_avg_lcp( 2500 );
+		$this->assertSame( 'conservative', $eagerness3, 'Exactly 2500 should be conservative' );
+	}
+
+	/**
+	 * Test eagerness is conservative when avg LCP <= 2500 or no data.
+	 */
+	public function test_eagerness_is_conservative_otherwise(): void {
+		$eagerness = $this->eagerness_for_avg_lcp( 2000 );
+		$this->assertSame( 'conservative', $eagerness );
+		$eagerness2 = $this->eagerness_for_avg_lcp( 1000 );
+		$this->assertSame( 'conservative', $eagerness2 );
+
+		// No RUM data at all -> conservative.
+		$this->install_stubs();
+		$this->options['wppo_web_vitals_rum']    = array();
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->transients = array();
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'conservative', $model['eagerness'] );
+	}
+
+	/**
+	 * Test that filter can override eagerness and invalid filter value falls back to conservative.
+	 */
+	public function test_eagerness_filter_sanitizes_invalid_value(): void {
+		$this->install_stubs();
+		$today = gmdate( 'Y-m-d' );
+		$this->options['wppo_web_vitals_rum'] = array(
+			$today => array(
+				'/a/' => array(
+					'lcp' => array(
+						'n'   => 2,
+						'sum' => 7200,
+						'min' => 3600,
+						'max' => 3600,
+					),
+				),
+			),
+		);
+		$this->options['wppo_web_vitals_trends'] = array();
+		$this->options['wppo_settings']          = array( 'ai_adaptive' => array( 'enabled' => true ) );
+		Util::clear_settings_cache();
+		$this->transients = array();
+		// Override filter to return invalid value.
+		Functions\when( 'apply_filters' )->alias(
+			static function ( $hook, $value ) {
+				if ( 'wppo_ai_adaptive_eagerness' === $hook ) {
+					return 'invalid_eagerness';
+				}
+				return $value;
+			}
+		);
+		$model = AI_Adaptive::learn();
+		$this->assertSame( 'conservative', $model['eagerness'], 'Invalid filtered eagerness must fall back to conservative' );
+	}
 }

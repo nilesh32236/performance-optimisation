@@ -156,6 +156,17 @@ class CoreTweaksTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'remove_action' )->justReturn( true );
 		Functions\when( 'remove_filter' )->justReturn( true );
 		Functions\when( 'add_filter' )->justReturn( true );
+		// Ensure Brain Monkey stub (if already defined by earlier test) is configured to capture.
+		Functions\when( 'wp_dequeue_script_module' )->alias(
+			static function ( $id ) {
+				$GLOBALS['wppo_test_dequeued_module'] = $id;
+			}
+		);
+		Functions\when( 'wp_dequeue_script' )->alias(
+			static function ( $handle ) {
+				$GLOBALS['wppo_test_dequeued_script'] = $handle;
+			}
+		);
 
 		$core_tweaks = new Core_Tweaks();
 		$core_tweaks->disable_emojis();

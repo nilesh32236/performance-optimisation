@@ -370,4 +370,133 @@ class RumTest extends \PHPUnit\Framework\TestCase {
 		$this->assertFalse( $result['ok'] );
 		$this->assertSame( 429, $result['status'] );
 	}
+
+	/**
+	 * Test that multiple beacons in same request are coalesced via shutdown_buffer.
+	 *
+	 * Verifies that store_sample batches via the per-request buffer and that
+	 * get_data drains the buffer before aggregating.
+	 */
+	public function test_shutdown_buffer_coalesces_multiple_beacons(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		$_SERVER['REMOTE_ADDR']         = '203.0.113.5';
+
+		// Force deterministic wp_rand so the 1/10 random flush does not trigger early.
+		Functions\when( 'wp_rand' )->justReturn( 2 );
+
+		RUM::collect(
+			array(
+				'token' => $this->valid_token( '/' ),
+				'path'  => '/',
+				'lcp'   => 1000,
+			)
+		);
+		RUM::collect(
+			array(
+				'token' => $this->valid_token( '/' ),
+				'path'  => '/',
+				'lcp'   => 2000,
+			)
+		);
+
+		// Buffer should contain 2 samples.
+		$ref  = new \ReflectionProperty( RUM::class, 'shutdown_buffer' );
+		$ref->setAccessible( true );
+		$buffer = $ref->getValue();
+		$this->assertCount( 2, $buffer, 'Both beacons must be in shutdown_buffer before flush' );
+
+		// get_data should drain buffer, flush queue, and aggregate.
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertSame( 2, $data[ $today ]['/']['lcp']['n'] );
+		$this->assertSame( 3000.0, $data[ $today ]['/']['lcp']['sum'] );
+
+		// After get_data, buffer must be empty.
+		$buffer2 = $ref->getValue();
+		$this->assertCount( 0, $buffer2 );
+
+		// And the transient queue should be empty after flush.
+		$queue_key = Util::transient_key( 'wppo_rum_queue' );
+		$this->assertFalse( get_transient( $queue_key ) );
+	}
+
+	/**
+	 * Test that flush_shutdown_buffer coalesces into single set_transient.
+	 */
+	public function test_flush_shutdown_buffer_single_write(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		$_SERVER['REMOTE_ADDR']         = '203.0.113.10';
+		Functions\when( 'wp_rand' )->justReturn( 2 );
+
+		$set_calls = 0;
+		$orig_set  = $this->transients;
+		Functions\when( 'set_transient' )->alias(
+			function ( $key, $value, $exp = 0 ) use ( &$set_calls ) {
+				if ( str_contains( $key, 'wppo_rum_queue' ) ) {
+					++$set_calls;
+				}
+				$this->transients[ $key ] = $value;
+			}
+		);
+		Functions\when( 'get_transient' )->alias(
+			function ( $key ) {
+				return array_key_exists( $key, $this->transients ) ? $this->transients[ $key ] : false;
+			}
+		);
+
+		RUM::collect( array( 'token' => $this->valid_token( '/a/' ), 'path' => '/a/', 'lcp' => 1000 ) );
+		RUM::collect( array( 'token' => $this->valid_token( '/a/' ), 'path' => '/a/', 'lcp' => 2000 ) );
+		RUM::collect( array( 'token' => $this->valid_token( '/a/' ), 'path' => '/a/', 'lcp' => 3000 ) );
+
+		// No flush yet (wp_rand 2 never triggers 1/10 and count <20).
+		$this->assertSame( 0, $set_calls, 'No set_transient for queue before explicit flush' );
+
+		RUM::flush_shutdown_buffer();
+		$this->assertSame( 1, $set_calls, 'Single set_transient must coalesce all 3 beacons' );
+
+		$queue_key = Util::transient_key( 'wppo_rum_queue' );
+		$queue     = $this->transients[ $queue_key ] ?? array();
+		$this->assertCount( 3, $queue );
+	}
+
+	/**
+	 * Test that reaching FLUSH_THRESHOLD triggers immediate flush.
+	 */
+	public function test_flush_threshold_triggers_immediate_flush(): void {
+		$this->install_stubs();
+		$this->options['wppo_settings'] = array(
+			'performance_audit' => array( 'rum_enabled' => true ),
+		);
+		$_SERVER['REMOTE_ADDR']         = '203.0.113.11';
+		Functions\when( 'wp_rand' )->justReturn( 2 );
+
+		// Collect 20 beacons to hit threshold.
+		for ( $i = 1; $i <= 20; $i++ ) {
+			RUM::collect(
+				array(
+					'token' => $this->valid_token( '/' ),
+					'path'  => '/',
+					'lcp'   => 1000 + $i,
+				)
+			);
+		}
+
+		// After 20, the buffer should have been flushed and queue already flushed to option (via flush_queue).
+		$ref = new \ReflectionProperty( RUM::class, 'shutdown_buffer' );
+		$ref->setAccessible( true );
+		$buffer = $ref->getValue();
+		$this->assertCount( 0, $buffer, 'Buffer must be flushed after reaching threshold' );
+
+		// Data should be aggregated (may require get_data to flush remaining queue if threshold flushed via queue).
+		$data  = RUM::get_data();
+		$today = gmdate( 'Y-m-d' );
+		$this->assertArrayHasKey( $today, $data );
+		$this->assertSame( 20, $data[ $today ]['/']['lcp']['n'] );
+	}
 }

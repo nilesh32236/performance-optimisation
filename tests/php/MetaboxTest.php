@@ -110,6 +110,10 @@ class MetaboxTest extends \PHPUnit\Framework\TestCase {
 		// Preload metabox is registered for the current screen, side context.
 		$this->assertNotNull( $preload_box );
 		$this->assertSame( 'side', $preload_box[4] );
+		// H-06 regression: screen must be array of post types, not empty string (which would register globally).
+		$this->assertIsArray( $preload_box[3], 'Preload metabox screen must be array, not empty string' );
+		$this->assertNotSame( '', $preload_box[3] );
+		$this->assertSame( array( 'post', 'page', 'product' ), array_values( $preload_box[3] ) );
 
 		// Asset Manager metabox is registered per public post type (no attachment).
 		$screens = array_map(
