@@ -42,6 +42,7 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 | CronSitemapTest mock | TEST | Testing | `tests/php/CronSitemapTest.php:50,81,110,135` | FIXED→VERIFIED | added `wp_remote_retrieve_response_code` mocks 200/500 | `phpunit` 403 OK | Final Testing PASS |
 | NoticeBanner test | TEST | Testing | `src/components/common/__tests__/NoticeBanner.test.js:33` | FIXED→VERIFIED | updated expectations `alert/assertive` vs `status/polite` | `npm test` PASS | Final Frontend/Testing PASS |
 | C-01 namespace typo | CRITICAL | Architecture | `includes/class-main.php:489` | FIXED→VERIFIED | `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate` (1 line) | `php -l` + `phpcs` OK | 2026-08-28 audit fix |
+| H-01 count invariant | HIGH | Correctness | `includes/class-image-optimisation.php:2800` | FIXED→VERIFIED | `if (5===count($matches))` → `if (isset($matches[4]) && ''!==$matches[4])` (1 line) | `php -l` OK, `phpunit` 435 OK (40 ImageOptimisation), `grep count.*matches` 0 hits | 2026-08-28 audit fix |
 
 ## C-01 — Namespace typo `PerformanceOptimisation\Inc\Activate` → `PerformanceOptimise\Inc\Activate`
 
@@ -59,13 +60,31 @@ Method: P1→P5 batches, sub-agents A–J, `@since NEXT`, `php -l` + `phpcs` + `
 - **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
 - **Status:** FIXED→VERIFIED
 
+## H-01 — `count($matches)==5` invariant (4 capture groups → always 5 with PREG_UNMATCHED_AS_NULL)
+
+- **Finding ID:** H-01
+- **Severity:** HIGH
+- **Category:** Correctness
+- **Original file:line:** `includes/class-image-optimisation.php:2800-2805`
+- **Changed files:** `includes/class-image-optimisation.php` (1 line), `AUDIT/IMPLEMENTATION-LOG.md` (this entry)
+- **What changed:** Line 2803 `if (5 === count($matches)) { return $this->process_iframe_tag(...) }` → `if (isset($matches[4]) && '' !== $matches[4]) { return $this->process_iframe_tag(...) }`. Pattern `#<picture>.*?</picture>|<img\b([^>]*?)src=...|<iframe\b([^>]*?)src=...>#is` has 4 capture groups. Without `PREG_UNMATCHED_AS_NULL` PHP 8.3 returns variable counts (1 for `<picture>`, 3 for `<img>`, 5 for `<iframe>`); with `PREG_UNMATCHED_AS_NULL` or older PCRE counts are always 5 (trailing empty groups included), so `5===count` is invariant/accidental. New check explicitly tests iframe src capture `$matches[4]` non-empty, robust across both behaviours and PCRE flags. No other `count($matches)` occurrences remain (grep clean).
+- **Why:** Regex fallback is active on WP <6.4 (no `WP_HTML_Tag_Processor`) and when TagProcessor is filtered out. With `PREG_UNMATCHED_AS_NULL` (or PHP builds where empty trailing groups counted) every `<img>`/`<picture>` was mis-routed to `process_iframe_tag` with empty `$matches[4]`, so image lazy-load (`data-src`/placeholder, `process_picture_tag`, `excludeFirstImages` counting) was completely broken. Source: `AUDIT/FINDINGS/HIGH.md:H-01`, `AUDIT/AGENTS/agent-A02-php-media.md:A02-M01`.
+- **Tests added:** None (logic fix; existing `ImageOptimisationTest` covers native/JS lazy paths). Verified via local `php -r` repro: `preg_match` dumps for `<img>` count=3, `<picture>` count=1, `<iframe>` count=5 (PHP 8.3 default) and count=5 for all three with `PREG_UNMATCHED_AS_NULL`; `isset&&!==''` routes correctly in both, `5===count` only in non-flag case.
+- **Tests executed:** `php -l includes/class-image-optimisation.php` → no syntax errors; `grep -rn "count.*matches"` → 0 hits in `includes/`; `vendor/bin/phpunit --filter ImageOptimisation` → 40/40 OK; `vendor/bin/phpunit` full → 435/435 OK (2 skipped); manual `/tmp/opencode/repro.php` + `/tmp/opencode/verify_fix.php` mixed-buffer callback verified iframe vs img routing.
+- **Result:** PASS — iframe detection now content-based, not count-based; survives `PREG_UNMATCHED_AS_NULL` and PHP version variation; full suite green; no other invariant remains.
+- **Regression risk:** NONE — single predicate narrowed from fragile count to explicit group presence; `process_iframe_tag`/`process_picture_tag` signatures unchanged; fallback still increments `$img_counter` and respects `excludeFirstImages`. `isset` correctly returns false for `null` (PREG_UNMATCHED_AS_NULL) so img/picture not misclassified.
+- **Reviewer:** fix/audit-2026-08-28 (autonomous, audit-driven)
+- **Status:** FIXED→VERIFIED
+
 ## Evidence per batch
 - P1 security: `php -l` 5 files clean, `phpcs` 0, `phpunit` 403 OK
 - P2 perf: `php -l` 7 files clean, `phpunit` 403 OK, `npm build` 54.8 KiB
 - P3 correctness: `php -l` 8 files, `phpunit` 403 (after CronSitemap fix)
 - P4 dedupe: `php -l` 7 files, `phpunit` 67 focused OK + `npm build`
 - P5 cleanup: `php -l` clean, `npm run lint:js` 0e3w, `npm test` 8 suites PASS (after NoticeBanner fix), `npm run build` success
+- H-01 fix: `php -l` clean, `phpunit` 435 OK, `grep count.*matches` 0
 
 ## Regression risk
 - LOW for P1/P3 correctness (small guards), MEDIUM for P2 RUM queue state machine (advisory race), LOW for `core_tweaks` narrowing (import 400 legacy), LOW for stampede advisory lock.
+- H-01: NONE — predicate fix is strictly more correct; no new branching for picture/img path.
 

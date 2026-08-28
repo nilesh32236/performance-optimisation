@@ -2800,7 +2800,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$buffer = preg_replace_callback(
 						'#<picture\b[^>]*>.*?</picture>|<img\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>|<iframe\b([^>]*?)src=["\']([^"\']+)["\'][^>]*>#is',
 						function ( $matches ) use ( &$img_counter, $exclude_img_count, &$exclude_imgs ) {
-							if ( 5 === count( $matches ) ) {
+							if ( isset( $matches[4] ) && '' !== $matches[4] ) {
 								return $this->process_iframe_tag( $matches[0], $matches[4], $exclude_imgs );
 							}
 
