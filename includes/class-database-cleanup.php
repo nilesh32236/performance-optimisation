@@ -1041,12 +1041,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 			global $wpdb;
 
 			if ( 1 !== preg_match( '/^[A-Za-z0-9_]+$/', $table ) ) {
-					_doing_it_wrong(
-						__METHOD__,
-						/* translators: %s: The invalid table identifier type */
-						esc_html__( 'Invalid table identifier passed to optimize_table.', 'performance-optimisation' ),
-						'1.9.0'
-					);
+				_doing_it_wrong(
+					__METHOD__,
+					esc_html__( 'Invalid table identifier passed to optimize_table.', 'performance-optimisation' ),
+					'1.9.0'
+				);
 				return false;
 			}
 
