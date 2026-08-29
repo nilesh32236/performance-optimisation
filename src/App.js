@@ -25,7 +25,10 @@ import {
 	fetchServerRules,
 } from './lib/apiRequest';
 import ErrorBoundary from './components/common/ErrorBoundary';
-import SetupWizard from './components/SetupWizard';
+
+const SetupWizard = lazy( () =>
+	import( /* webpackChunkName: "setup-wizard" */ './components/SetupWizard' )
+);
 
 import { __ } from '@wordpress/i18n';
 
@@ -552,7 +555,9 @@ const App = () => {
 
 	return (
 		<div className="wppo-container">
-			<SetupWizard />
+			<Suspense fallback={ null }>
+				<SetupWizard />
+			</Suspense>
 			<div className="wppo-mobile-header">
 				<div
 					className="wppo-mobile-brand"

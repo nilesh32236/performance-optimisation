@@ -10,6 +10,7 @@ import {
 	faExclamationCircle,
 	faHistory,
 	faTachometerAlt,
+	faUndo,
 } from '@fortawesome/free-solid-svg-icons';
 import ConfirmDialog from './common/ConfirmDialog';
 import FeatureHeader from './common/FeatureHeader';
@@ -67,6 +68,12 @@ const PluginSetting = ( { options } ) => {
 		dismiss: dismissImport,
 	} = useNotice();
 	const [ confirmImport, setConfirmImport ] = useState( false );
+	const [ undoLoading, setUndoLoading ] = useState( false );
+	const {
+		notice: undoNotice,
+		notify: notifyUndo,
+		dismiss: dismissUndo,
+	} = useNotice();
 	const fileInputRef = useRef( null );
 	const cancelledRef = useRef( false );
 
@@ -321,6 +328,40 @@ const PluginSetting = ( { options } ) => {
 		const file = event.target.files[ 0 ];
 		setSelectedFile( file || null );
 		dismissImport();
+	};
+
+	const handleUndo = async () => {
+		setUndoLoading( true );
+		try {
+			const res = await apiCall( 'wppo_snapshot_undo', {}, 'POST' );
+			if ( res.success ) {
+				notifyUndo( {
+					type: 'success',
+					message:
+						res.message ||
+						__( 'Settings restored.', 'performance-optimisation' ),
+				} );
+			} else {
+				notifyUndo( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'No snapshot available or it has expired.',
+							'performance-optimisation'
+						),
+				} );
+			}
+		} catch ( e ) {
+			notifyUndo( {
+				type: 'error',
+				message:
+					e.message ||
+					__( 'Undo failed.', 'performance-optimisation' ),
+			} );
+		} finally {
+			setUndoLoading( false );
+		}
 	};
 
 	const resetFileInput = () => {
@@ -589,6 +630,45 @@ const PluginSetting = ( { options } ) => {
 							) }
 						</>
 					) }
+				</FeatureCard>
+
+				{ /* Undo Last Change — snapshot recovery @since NEXT */ }
+				<FeatureCard
+					title={ __(
+						'Undo Last Change',
+						'performance-optimisation'
+					) }
+					icon={ <FontAwesomeIcon icon={ faUndo } /> }
+				>
+					<p
+						className="wppo-text-muted"
+						style={ { marginBottom: '12px' } }
+					>
+						{ __(
+							'Restore settings from before your last change. Available for 10 minutes after saving.',
+							'performance-optimisation'
+						) }
+					</p>
+					{ undoNotice && (
+						<NoticeBanner
+							type={ undoNotice.type }
+							message={ undoNotice.message }
+							onDismiss={ dismissUndo }
+						/>
+					) }
+					<LoadingSubmitButton
+						type="button"
+						isLoading={ undoLoading }
+						label={ __(
+							'Undo Last Change',
+							'performance-optimisation'
+						) }
+						loadingLabel={ __(
+							'Restoring…',
+							'performance-optimisation'
+						) }
+						onClick={ handleUndo }
+					/>
 				</FeatureCard>
 
 				{ /* Phase 2 — PageSpeed API Key (v1.6.0) */ }

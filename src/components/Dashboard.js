@@ -29,6 +29,16 @@ import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
 import HealthHeader from './HealthHeader';
 import { __ } from '@wordpress/i18n';
+
+// Diagnostics anchor for HealthHeader Run Scan → scroll target (fixes wppo-audit-details dead anchor).
+const DiagnosticsAnchor = () => (
+	<div
+		id="wppo-audit-details"
+		className="wppo-diagnostics-anchor"
+		aria-hidden="true"
+		style={ { scrollMarginTop: '24px' } }
+	/>
+);
 import { modeLabel } from '../lib/litespeed';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -695,15 +705,41 @@ const Dashboard = ( {
 			? 'wppo-status-badge--warning'
 			: 'wppo-status-badge--good';
 
+	// Truthful health derived from real settings — no fake 92/88/64 scores (trust issue §6).
+	// Use status only (Good/Needs attention/Needs review) rather than invented precision.
+	const health = ( () => {
+		const cacheOn = !! cacheSettings?.enableCache;
+		const fo =
+			typeof wppoSettings !== 'undefined'
+				? wppoSettings?.settings?.file_optimisation
+				: null;
+		const minifyOn = !! ( fo?.minifyCSS || fo?.minifyJS );
+		const deferOn = !! fo?.deferJS;
+		const lazyOn =
+			typeof wppoSettings !== 'undefined'
+				? !! wppoSettings?.settings?.image_optimisation?.lazyLoadImages
+				: false;
+		// Speed: good if cache + minify, needs_attention if cache off, poor never invented.
+		let speedStatus = 'needs_attention';
+		if ( cacheOn && minifyOn ) {
+			speedStatus = 'good';
+		}
+		// Stability: good by default (no CLS/INP without RUM); needs_review if defer off but could improve.
+		const stabilityStatus = deferOn ? 'good' : 'needs_attention';
+		// Efficiency: good if lazy + cache, needs_attention otherwise.
+		const efficiencyStatus = cacheOn && lazyOn ? 'good' : 'needs_attention';
+		return { speedStatus, stabilityStatus, efficiencyStatus };
+	} )();
+
 	return (
 		<div className="wppo-dashboard-view">
 			<HealthHeader
-				speedStatus="good"
-				stabilityStatus="good"
-				efficiencyStatus="needs_attention"
-				speedScore={ 92 }
-				stabilityScore={ 88 }
-				efficiencyScore={ 64 }
+				speedStatus={ health.speedStatus }
+				stabilityStatus={ health.stabilityStatus }
+				efficiencyStatus={ health.efficiencyStatus }
+				speedScore={ null }
+				stabilityScore={ null }
+				efficiencyScore={ null }
 				onApplyRecommended={ () => {
 					// Delegate to SetupWizard via event
 					window.dispatchEvent(
@@ -714,6 +750,12 @@ const Dashboard = ( {
 					const el = document.getElementById( 'wppo-audit-details' );
 					if ( el ) {
 						el.scrollIntoView( { behavior: 'smooth' } );
+					} else {
+						// Fallback: diagnostics live in Manage → Tools, navigate there.
+						// HealthHeader triggers via onNavigate when available.
+						window.dispatchEvent(
+							new CustomEvent( 'wppo:navigate-manage' )
+						);
 					}
 				} }
 			/>
@@ -1263,6 +1305,7 @@ const Dashboard = ( {
 				</div>
 			</FeatureCard>
 
+			<DiagnosticsAnchor />
 			{ /* Phase 1 — Performance Audit & System Info (v1.5.0) */ }
 			<div className="wppo-stacked-cards">
 				<PerformanceAudit

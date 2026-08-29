@@ -1627,12 +1627,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * @return \WP_REST_Response The response object.
 		 */
 		public function handle_snapshot_undo( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
-			$latest = get_transient( Util::transient_key( 'wppo_settings_snapshot_latest' ) );
+			// Defense-in-depth: route already gated by permission_callback, but re-check for direct calls.
+			if ( ! current_user_can( 'manage_options' ) ) {
+				return $this->send_response( null, false, 403, __( 'Insufficient permissions.', 'performance-optimisation' ) );
+			}
+			$latest     = get_transient( Util::transient_key( 'wppo_settings_snapshot_latest' ) );
+			$latest_key = get_transient( Util::transient_key( 'wppo_settings_snapshot_latest_key' ) );
 			if ( false !== $latest && is_array( $latest ) ) {
 				update_option( 'wppo_settings', $latest );
 				Util::set_settings_cache( $latest );
 				delete_transient( Util::transient_key( 'wppo_settings_snapshot_latest' ) );
 				delete_transient( Util::transient_key( 'wppo_settings_snapshot_latest_key' ) );
+				// Also delete the timestamped transient to prevent replay via fallback.
+				if ( is_string( $latest_key ) && '' !== $latest_key ) {
+					delete_transient( $latest_key );
+				} elseif ( is_string( $latest_key ) ) {
+					// latest_key may be blog-prefixed; delete via raw key without double prefix.
+					delete_transient( Util::transient_key( $latest_key ) );
+				}
 				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
 					Log::add( __( 'Settings restored from snapshot (undo).', 'performance-optimisation' ) );
 				}
@@ -1648,17 +1660,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			// Fallback: scan options table for most recent snapshot (when helper expired or object cache store missed).
+			// Must respect 600s expiry via companion _transient_timeout row (otherwise restores expired snapshot).
 			global $wpdb;
-			$like = '%' . $wpdb->esc_like( 'wppo_settings_snapshot_' ) . '%';
+			// Use blog-prefixed pattern for multisite isolation and avoid matching timeout rows.
+			$prefix      = Util::transient_key( '' );
+			$like        = $wpdb->esc_like( '_transient_' . $prefix . 'wppo_settings_snapshot_' ) . '%';
+			$like        = '%' . $like;
+			$like_latest = '%' . $wpdb->esc_like( '_transient_' . $prefix . 'wppo_settings_snapshot_latest' ) . '%';
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 			$row = $wpdb->get_row(
 				$wpdb->prepare(
-					"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s AND option_name NOT LIKE %s ORDER BY option_name DESC LIMIT 1",
+					"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s ORDER BY option_name DESC LIMIT 1",
 					$like,
-					'%' . $wpdb->esc_like( 'wppo_settings_snapshot_latest' ) . '%'
+					$like_latest,
+					'%' . $wpdb->esc_like( '_transient_timeout_' ) . '%'
 				)
 			);
 			if ( $row && isset( $row->option_value ) ) {
+				// Enforce expiry via companion _transient_timeout (600s) for direct query.
+				$timeout_name = str_replace( '_transient_', '_transient_timeout_', $row->option_name );
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+				$timeout_val = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $timeout_name ) );
+				if ( false !== $timeout_val && (int) $timeout_val < time() ) {
+					return $this->send_response( null, false, 410, __( 'Snapshot expired.', 'performance-optimisation' ) );
+				}
 				$value = maybe_unserialize( $row->option_value );
 				// Transient values are stored with _transient_timeout companion; get_transient handles expiry.
 				// For direct row fetch, unwrap the transient payload if needed.

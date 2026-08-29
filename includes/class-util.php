@@ -996,8 +996,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						$path   = defined( 'COOKIEPATH' ) ? COOKIEPATH : '/';
 						$domain = defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '';
 						$secure = function_exists( 'is_ssl' ) ? is_ssl() : false;
-						// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.cookies_setcookie
-						setcookie( 'wppo_safe_mode', '1', $expire, $path, $domain, $secure, true );
+						// SameSite=Lax for CSRF resilience while preserving normal navigation (MUST per Security Agent F).
+						$opts = array(
+							'expires'  => $expire,
+							'path'     => $path,
+							'domain'   => $domain,
+							'secure'   => $secure,
+							'httponly' => true,
+							'samesite' => 'Lax',
+						);
+						if ( PHP_VERSION_ID >= 70300 ) {
+							// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.cookies_setcookie
+							setcookie( 'wppo_safe_mode', '1', $opts );
+						} else {
+							// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.cookies_setcookie
+							setcookie( 'wppo_safe_mode', '1', $expire, $path . '; SameSite=Lax', $domain, $secure, true );
+						}
 					}
 					$_COOKIE['wppo_safe_mode'] = '1';
 					return true;

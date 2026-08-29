@@ -34,6 +34,7 @@ const FileOptimization = ( {
 	onRetryServerRules,
 	onCcssRefresh,
 	onCcssRetry,
+	compact = '',
 } ) => {
 	const [ activeSubTab, setActiveSubTab ] = useState( 'assets' );
 	const tabRefs = useRef( {} );
@@ -413,6 +414,7 @@ const FileOptimization = ( {
 								</Tooltip>
 								{ settings.combineCSS && (
 									<Disclosure
+										searchQuery={ compact }
 										title={ __(
 											'Combine CSS — Advanced',
 											'performance-optimisation'
@@ -522,6 +524,7 @@ const FileOptimization = ( {
 								</Tooltip>
 								{ settings.removeUnusedCSS && (
 									<Disclosure
+										searchQuery={ compact }
 										title={ __(
 											'Remove Unused CSS — Safelist',
 											'performance-optimisation'
@@ -986,6 +989,7 @@ const FileOptimization = ( {
 											</div>
 
 											<Disclosure
+												searchQuery={ compact }
 												title={ __(
 													'Delay Strategies — Advanced',
 													'performance-optimisation'
@@ -1252,6 +1256,7 @@ const FileOptimization = ( {
 											</span>
 										</div>
 										<Disclosure
+											searchQuery={ compact }
 											title={ __(
 												'WooCommerce — Advanced handles',
 												'performance-optimisation'
@@ -1694,6 +1699,7 @@ const FileOptimization = ( {
 										{ serverRules?.server_type ===
 											'nginx' && (
 											<Disclosure
+												searchQuery={ compact }
 												title={ __(
 													'Nginx Configuration — Raw rules',
 													'performance-optimisation'

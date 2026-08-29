@@ -14,6 +14,7 @@ import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
  * @param {string}                    [props.badge]       Optional badge text (e.g. Advanced).
  * @param {import('react').ReactNode} props.children      Disclosed content.
  *
+ * @param {string}                    [props.searchQuery] Optional search query for filtering.
  * @since NEXT
  */
 const Disclosure = ( {
@@ -22,9 +23,29 @@ const Disclosure = ( {
 	defaultOpen = false,
 	badge,
 	children,
+	searchQuery = '',
 } ) => {
 	const [ isOpen, setIsOpen ] = useState( defaultOpen );
 	const contentId = useId();
+
+	// Search filtering: fast, keyboard accessible, does not destroy state — hides via CSS hidden when no match.
+	const query = ( searchQuery || '' ).trim().toLowerCase();
+	const matchesSearch =
+		! query ||
+		( title && title.toLowerCase().includes( query ) ) ||
+		( description && description.toLowerCase().includes( query ) ) ||
+		( badge && badge.toLowerCase().includes( query ) );
+
+	if ( ! matchesSearch ) {
+		// Hide via CSS hidden but keep mounted to preserve isOpen state per §5.
+		return (
+			<div
+				className="wppo-disclosure wppo-disclosure--hidden"
+				hidden
+				aria-hidden="true"
+			/>
+		);
+	}
 
 	return (
 		<div className="wppo-disclosure">
