@@ -166,12 +166,12 @@ const formatBytes = ( bytes ) => {
  */
 const ResultRow = ( { label, value, status, tooltipKey } ) => (
 	<tr className="wppo-audit-table__row">
-		<td className="wppo-audit-table__label">
+		<th scope="row" className="wppo-audit-table__label">
 			{ label }
 			{ tooltipKey && (
 				<Tooltip content={ METRIC_INFO[ tooltipKey ]?.() } />
 			) }
-		</td>
+		</th>
 		<td className="wppo-audit-table__value">{ value }</td>
 		<td className="wppo-audit-table__status">
 			{ status && <StatusBadge status={ status } /> }
@@ -188,12 +188,12 @@ const ResultRow = ( { label, value, status, tooltipKey } ) => (
  */
 const AuditSection = ( { title, icon } ) => (
 	<tr className="wppo-audit-section-header">
-		<td colSpan="3">
+		<th scope="colgroup" colSpan="3">
 			<div className="wppo-audit-section-header__inner">
 				{ icon && <FontAwesomeIcon icon={ icon } /> }
 				{ title }
 			</div>
-		</td>
+		</th>
 	</tr>
 );
 
@@ -506,19 +506,19 @@ const PerformanceAudit = ( { onSuggestionsReady, onUrlChange } ) => {
 					<table className="wppo-audit-table">
 						<thead>
 							<tr>
-								<th>
+								<th scope="col">
 									{ __(
 										'Metric',
 										'performance-optimisation'
 									) }
 								</th>
-								<th>
+								<th scope="col">
 									{ __(
 										'Value',
 										'performance-optimisation'
 									) }
 								</th>
-								<th>
+								<th scope="col">
 									{ __(
 										'Status',
 										'performance-optimisation'

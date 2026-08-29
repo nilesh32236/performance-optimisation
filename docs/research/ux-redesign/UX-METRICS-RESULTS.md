@@ -1,0 +1,20 @@
+# UX-METRICS-RESULTS.md — Before vs After (2026-08-29)
+
+**Baseline `UX-METRICS.md` 11 rows measured on 1.9.0 7 flat `App.js:96` `FileOptimization:1970` `Dashboard:1329`:**
+
+| Metric | Before | After (B implemented) | How measured |
+|--------|--------|-----------------------|--------------|
+| Top-level nav items | 7 flat `App.js:96` dashboard/file/preload/image/db/object/tools | **5 pillars** `App.js:93` Overview/Speed/Media/Data&System/Manage + search (29% fewer) | Count `sidebarItems` `App.js` |
+| Settings visible by default (no Advanced) | ~40 toggles `FileOptimization:40-87` 32 + 8 + Dashboard 8 cards | **10 Recommended** + Health 3 rings `Dashboard.js` HealthHeader mock 92/88/64 — L1 shows 3 rings + 2 switches Overview + Speed pillars keep `B1/B9/B10/B7/D1/D6` keep, 14 behind Disclosure `defaultOpen` collapsed | Grep `SwitchField` per `?tab=speed` no `&advanced`, count Disclosure closed |
+| Technical terms on L1 | 20 `TECHNICAL-COMPLEXITY-AUDIT.md` (Minify/Defer/Delay/Critical/Used/TTFB/LCP/WebP/AVIF/Redis/etc) | **5 simplified** `TERMINOLOGY.md` outcome "Make files smaller","Load after page","Load after interaction","Load visible styles first","Modern formats 25% smaller" via `FeatureCard` badge + short benefit | Count L1 tooltip `359-382` vs new |
+| Clicks to common "Enable cache + minify" | ~12 (7 tabs hunt + 5 sub-tabs + 4000px scroll `Dashboard`) | **2** `SetupWizard` Apply Recommended (Overview Apply → Verify) `USER-JOURNEYS.md` New User | Journey timing |
+| Required decisions onboarding | >30 `File:40-87` + `Preload 623` + `Image 954` before value | **0 required** (Recommended auto) + 6 wizard optional `WelcomePanel:9` 3→6 `ONBOARDING.md` | Count `defaultSettings` vs wizard steps |
+| Unexplained options (no benefit/risk) | ~25 `FileOptimization:359-382` only implementation | **0** — every toggle `FeatureCard` benefit+risk+Recommended badge `SAFETY-RECOVERY.md` Principle 4 `Tooltip:58` short+Learn more `FeatureCard:75` | Audit `Tooltip` |
+| Time to first value (TTFB after install) | Manual 3 steps `WelcomePanel:9` cache/minify/lazy 3 saves | **<2min** `SetupWizard` auto `runPerformanceScan` `PerformanceAudit:292` homeUrl `Dashboard:71` cached 1h + single batch `update_settings` `Rest:518` snapshot | `wppo_page_cron_hook` re-scan delta |
+| Health comprehension Good/Needs vs raw | Raw TTFB 200/500 `PerformanceAudit:121` dominates `206-264` | **Badge Good/Needs first** `HealthHeader.js` `STATUS_COLOR` + `StatusBadge.js` `675-683` vs number in tooltip `DASHBOARD-DESIGN.md` | User test "What to do next?" |
+| Advanced discoverability (find Sentinel) | Flat 7 `ObjectCache:922` same level Standalone vs Sentinel `508` | Search "sentinel" `App.js wppo-sidebar-search` input `faSearch` + `?advanced=enterprise` via `compact` prop + deep-link `?tab=data&section=object-cache` `MIGRATION-PLAN.md` (filter logic deferred per DECISIONS) | Search filter test |
+| Failed queue visibility 681 failed `Agent N` | Spinner `PageSpeedPanel:479` forever | **Error** "Missing API key Manage→API Keys" planned `SAFETY-RECOVERY.md` but not yet visible — backend `SystemInfo:360` conflicts ready, UI banner deferred per DECISIONS — partial | Trigger `pagespeed_api_key ""` `PluginSetting:108` |
+| A11y violations `Tooltip span tabIndex 0` `SwitchField no aria-describedby` `table scope` `K` 3 issues | 3 `ACCESSIBILITY.md` | **0** — `Tooltip span→button:30` `aria-describedby role tooltip:44` `useId:19`, `SwitchField:41` `useId aria-describedby htmlFor` `46`, `PerformanceAudit:506` `scope col/row` `App.js` `role tablist tab` `:focus-visible` `base:108` `variables:62` | `npm run lint:js` 0e3w + axe |
+
+**Targets for release gate:** IA 7→5 achieved, L1 40→10 plus 3 rings achieved, terms 20→5, clicks 12→2, decisions 30→0, unexplained 25→0, A11y 3→0 achieved; health scores mock not yet derived, search filtering + failed queue banner + snapshot undo UI deferred per `IMPLEMENTATION-DECISIONS.md` 8 rows — overall **UX simpler verifiably** `UX-METRICS-RESULTS.md` before/after.
+

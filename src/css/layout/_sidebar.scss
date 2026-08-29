@@ -78,6 +78,51 @@
 		}
 	}
 
+	.wppo-sidebar-search {
+		padding: 8px 12px 4px;
+		position: relative;
+
+		&__icon {
+			position: absolute;
+			left: 22px;
+			top: 50%;
+			transform: translateY(-50%);
+			color: var(--wppo-text-sidebar);
+			font-size: 12px;
+			pointer-events: none;
+			opacity: 0.7;
+		}
+
+		&__input {
+			width: 100%;
+			padding: 7px 10px 7px 28px;
+			border-radius: var(--wppo-radius-sm);
+			border: 1px solid rgba(255, 255, 255, 0.08);
+			background: rgba(255, 255, 255, 0.06);
+			color: #fff;
+			font-size: 12.5px;
+
+			&::placeholder {
+				color: var(--wppo-text-sidebar);
+			}
+
+			&:focus {
+				outline: 2px solid var(--wppo-primary);
+				outline-offset: 2px;
+				border-color: var(--wppo-primary);
+			}
+		}
+	}
+
+	.wppo-sidebar-desc {
+		display: block;
+		font-size: 10.5px;
+		font-weight: 400;
+		color: var(--wppo-text-sidebar);
+		opacity: 0.8;
+		white-space: nowrap;
+	}
+
 	nav {
 		padding: 8px 12px;
 		flex-grow: 1;

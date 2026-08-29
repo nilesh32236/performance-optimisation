@@ -22,29 +22,49 @@ const Tooltip = ( { content, children } ) => {
 		return children;
 	}
 
+	const hasChildren = !! children;
+	const containerProps = {
+		className: `wppo-tooltip-container${
+			visible ? ' wppo-tooltip-container--visible' : ''
+		}`,
+		'aria-describedby': id,
+		onFocus: () => setVisible( true ),
+		onBlur: () => setVisible( false ),
+		onMouseEnter: () => setVisible( true ),
+		onMouseLeave: () => setVisible( false ),
+		onKeyDown: ( e ) => {
+			if ( e.key === 'Enter' || e.key === ' ' ) {
+				e.preventDefault();
+				setVisible( ( prev ) => ! prev );
+			}
+			if ( e.key === 'Escape' ) {
+				setVisible( false );
+			}
+		},
+	};
+
+	if ( hasChildren ) {
+		return (
+			<span { ...containerProps }>
+				{ children }
+				<span className="wppo-tooltip-content" role="tooltip" id={ id }>
+					{ content }
+				</span>
+			</span>
+		);
+	}
+
 	return (
-		<span
-			className={ `wppo-tooltip-container${
-				visible ? ' wppo-tooltip-container--visible' : ''
-			}` }
-			tabIndex="0"
-			aria-describedby={ id }
-			onFocus={ () => setVisible( true ) }
-			onBlur={ () => setVisible( false ) }
-			onMouseEnter={ () => setVisible( true ) }
-			onMouseLeave={ () => setVisible( false ) }
-		>
-			{ children || (
-				<FontAwesomeIcon
-					icon={ faInfoCircle }
-					className="wppo-tooltip-icon"
-					aria-hidden="true"
-				/>
-			) }
+		<button type="button" { ...containerProps }>
+			<FontAwesomeIcon
+				icon={ faInfoCircle }
+				className="wppo-tooltip-icon"
+				aria-hidden="true"
+			/>
 			<span className="wppo-tooltip-content" role="tooltip" id={ id }>
 				{ content }
 			</span>
-		</span>
+		</button>
 	);
 };
 

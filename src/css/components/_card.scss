@@ -38,7 +38,8 @@
 		border-bottom: 1px solid var(--wppo-border);
 		display: flex;
 		justify-content: space-between;
-		align-items: center;
+		align-items: flex-start;
+		gap: 12px;
 		background: var(--wppo-bg-card-surface, #fafbfc);
 
 		h3 {
@@ -50,11 +51,54 @@
 			align-items: center;
 			gap: 10px;
 			letter-spacing: -0.01em;
+			flex-wrap: wrap;
 
 			svg {
 				color: var(--wppo-primary);
 				font-size: 15px;
 			}
+		}
+	}
+
+	&__header-main {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		flex: 1;
+		min-width: 0;
+	}
+
+	&__badge {
+		font-size: 11px;
+		vertical-align: middle;
+	}
+
+	&__benefit {
+		margin: 0;
+		font-size: 13px;
+		line-height: 1.5;
+		color: var(--wppo-text-muted);
+	}
+
+	&__learn-more {
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--wppo-primary);
+		text-decoration: none;
+
+		&:hover {
+			text-decoration: underline;
+		}
+
+		&:focus-visible {
+			outline: 2px solid var(--wppo-primary);
+			outline-offset: 2px;
+			border-radius: 2px;
+		}
+
+		&--standalone {
+			font-size: 13px;
+			margin-top: 2px;
 		}
 	}
 

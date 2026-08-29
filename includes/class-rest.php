@@ -257,6 +257,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'wppo_snapshot_undo'      => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'handle_snapshot_undo' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
 		}
 
@@ -503,6 +509,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			$options[ $tab ] = $sanitized_settings;
+
+			// Snapshot previous settings before update for 10-minute undo (SAFETY-RECOVERY.md).
+			// Key format matches spec: wppo_settings_snapshot_{time}, 600s TTL, blog-prefixed via Util::transient_key().
+			$old_settings_for_snapshot = Util::get_settings();
+			// Only snapshot when there is an existing option to restore; fresh installs skip.
+			if ( ! empty( $old_settings_for_snapshot ) ) {
+				$snapshot_key = Util::transient_key( 'wppo_settings_snapshot_' . time() );
+				set_transient( $snapshot_key, $old_settings_for_snapshot, 600 );
+				// Helper pointers for fast undo without DB scan (object-cache friendly).
+				set_transient( Util::transient_key( 'wppo_settings_snapshot_latest' ), $old_settings_for_snapshot, 600 );
+				set_transient( Util::transient_key( 'wppo_settings_snapshot_latest_key' ), $snapshot_key, 600 );
+			}
 
 			update_option( 'wppo_settings', $options );
 
@@ -1592,6 +1610,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		public function get_ai_suggestions( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
 			$suggestions = class_exists( 'PerformanceOptimise\Inc\Suggestion_Engine' ) ? Suggestion_Engine::from_ai_adaptive() : array();
 			return $this->send_response( array( 'suggestions' => $suggestions ) );
+		}
+
+		/**
+		 * Restore the most recent settings snapshot (10-minute undo).
+		 *
+		 * Looks up the latest `wppo_settings_snapshot_{time}` transient created
+		 * before `update_settings`. Prefers the helper `wppo_settings_snapshot_latest`
+		 * pointer (object-cache friendly), then falls back to a DB scan of
+		 * `_transient_wppo_settings_snapshot_%` options ordered by key desc.
+		 * On success restores `wppo_settings` via update_option and clears helper
+		 * transients. No backend rewrite — reuses existing settings flow.
+		 *
+		 * @param \WP_REST_Request $_request The request object (unused).
+		 * @since NEXT
+		 * @return \WP_REST_Response The response object.
+		 */
+		public function handle_snapshot_undo( \WP_REST_Request $_request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$latest = get_transient( Util::transient_key( 'wppo_settings_snapshot_latest' ) );
+			if ( false !== $latest && is_array( $latest ) ) {
+				update_option( 'wppo_settings', $latest );
+				Util::set_settings_cache( $latest );
+				delete_transient( Util::transient_key( 'wppo_settings_snapshot_latest' ) );
+				delete_transient( Util::transient_key( 'wppo_settings_snapshot_latest_key' ) );
+				if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+					Log::add( __( 'Settings restored from snapshot (undo).', 'performance-optimisation' ) );
+				}
+				// Return redacted view (no passwords/API keys) like update_settings.
+				$resp = $latest;
+				if ( isset( $resp['performance_audit']['pagespeed_api_key'] ) ) {
+					unset( $resp['performance_audit']['pagespeed_api_key'] );
+				}
+				if ( isset( $resp['object_cache']['password'] ) ) {
+					unset( $resp['object_cache']['password'] );
+				}
+				return $this->send_response( $resp, true, 200, __( 'Settings restored.', 'performance-optimisation' ) );
+			}
+
+			// Fallback: scan options table for most recent snapshot (when helper expired or object cache store missed).
+			global $wpdb;
+			$like = '%' . $wpdb->esc_like( 'wppo_settings_snapshot_' ) . '%';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$row = $wpdb->get_row(
+				$wpdb->prepare(
+					"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s AND option_name NOT LIKE %s ORDER BY option_name DESC LIMIT 1",
+					$like,
+					'%' . $wpdb->esc_like( 'wppo_settings_snapshot_latest' ) . '%'
+				)
+			);
+			if ( $row && isset( $row->option_value ) ) {
+				$value = maybe_unserialize( $row->option_value );
+				// Transient values are stored with _transient_timeout companion; get_transient handles expiry.
+				// For direct row fetch, unwrap the transient payload if needed.
+				if ( is_array( $value ) && isset( $value['data'] ) ) {
+					$value = $value['data'];
+				}
+				if ( is_array( $value ) && ! empty( $value ) ) {
+					update_option( 'wppo_settings', $value );
+					Util::set_settings_cache( $value );
+					if ( class_exists( 'PerformanceOptimise\Inc\Log' ) ) {
+						Log::add( __( 'Settings restored from snapshot (undo, DB fallback).', 'performance-optimisation' ) );
+					}
+					$resp = $value;
+					if ( isset( $resp['performance_audit']['pagespeed_api_key'] ) ) {
+						unset( $resp['performance_audit']['pagespeed_api_key'] );
+					}
+					if ( isset( $resp['object_cache']['password'] ) ) {
+						unset( $resp['object_cache']['password'] );
+					}
+					return $this->send_response( $resp, true, 200, __( 'Settings restored.', 'performance-optimisation' ) );
+				}
+			}
+
+			return $this->send_response( null, false, 404, __( 'No snapshot available to restore (expired).', 'performance-optimisation' ) );
 		}
 
 		/**

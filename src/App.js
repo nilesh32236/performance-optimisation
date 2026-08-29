@@ -9,16 +9,15 @@ import {
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faTachometerAlt,
-	faFileCode,
-	faBullseye,
+	faRocket,
 	faImages,
 	faDatabase,
 	faTools,
 	faBars,
 	faTimes,
-	faServer,
 	faBolt,
 	faSpinner,
+	faSearch,
 } from '@fortawesome/free-solid-svg-icons';
 import {
 	apiCall,
@@ -26,6 +25,7 @@ import {
 	fetchServerRules,
 } from './lib/apiRequest';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import SetupWizard from './components/SetupWizard';
 
 import { __ } from '@wordpress/i18n';
 
@@ -72,8 +72,41 @@ const TabFallback = () => (
 
 const SIDEBAR_BREAKPOINT = 992;
 
+const TAB_ALIASES = {
+	dashboard: 'overview',
+	fileOptimization: 'speed',
+	preload: 'speed',
+	imageOptimization: 'media',
+	databaseCleanup: 'data',
+	objectCache: 'data',
+	tools: 'manage',
+	overview: 'overview',
+	speed: 'speed',
+	media: 'media',
+	data: 'data',
+	manage: 'manage',
+};
+
+const getInitialTab = () => {
+	if ( typeof window !== 'undefined' ) {
+		const params = new URLSearchParams( window.location.search );
+		const tabParam = params.get( 'tab' );
+		if ( tabParam && TAB_ALIASES[ tabParam ] ) {
+			return TAB_ALIASES[ tabParam ];
+		}
+		if ( window.location.hash ) {
+			const hash = window.location.hash.replace( /^#/, '' );
+			if ( TAB_ALIASES[ hash ] ) {
+				return TAB_ALIASES[ hash ];
+			}
+		}
+	}
+	return 'overview';
+};
+
 const App = () => {
-	const [ activeTab, setActiveTab ] = useState( 'dashboard' );
+	const [ activeTab, setActiveTab ] = useState( getInitialTab );
+	const [ searchQuery, setSearchQuery ] = useState( '' );
 	const [ transition, setTransition ] = useState( false );
 	const [ mobileMenuOpen, setMobileMenuOpen ] = useState( false );
 	const [ recentActivities, setRecentActivities ] = useState( [] );
@@ -96,43 +129,81 @@ const App = () => {
 	const sidebarItems = useMemo(
 		() => [
 			{
-				name: 'dashboard',
+				name: 'overview',
 				icon: faTachometerAlt,
-				label: __( 'Dashboard', 'performance-optimisation' ),
+				label: __( 'Overview', 'performance-optimisation' ),
+				description: __(
+					'Health & quick actions',
+					'performance-optimisation'
+				),
 			},
 			{
-				name: 'fileOptimization',
-				icon: faFileCode,
-				label: __( 'File Optimisation', 'performance-optimisation' ),
+				name: 'speed',
+				icon: faRocket,
+				label: __( 'Speed', 'performance-optimisation' ),
+				description: __(
+					'Make pages load faster',
+					'performance-optimisation'
+				),
 			},
 			{
-				name: 'preload',
-				icon: faBullseye,
-				label: __( 'Preload', 'performance-optimisation' ),
-			},
-			{
-				name: 'imageOptimization',
+				name: 'media',
 				icon: faImages,
-				label: __( 'Image Optimisation', 'performance-optimisation' ),
+				label: __( 'Media', 'performance-optimisation' ),
+				description: __(
+					'Images & videos',
+					'performance-optimisation'
+				),
 			},
 			{
-				name: 'databaseCleanup',
+				name: 'data',
 				icon: faDatabase,
-				label: __( 'Database', 'performance-optimisation' ),
+				label: __( 'Data & System', 'performance-optimisation' ),
+				description: __(
+					'Database & caching',
+					'performance-optimisation'
+				),
 			},
 			{
-				name: 'objectCache',
-				icon: faServer,
-				label: __( 'Object Cache', 'performance-optimisation' ),
-			},
-			{
-				name: 'tools',
+				name: 'manage',
 				icon: faTools,
-				label: __( 'Tools', 'performance-optimisation' ),
+				label: __( 'Manage', 'performance-optimisation' ),
+				description: __(
+					'Tools & diagnostics',
+					'performance-optimisation'
+				),
 			},
 		],
 		[]
 	);
+
+	// Sync activeTab to URL ?tab= for deep-link & migration.
+	useEffect( () => {
+		if ( typeof window === 'undefined' || ! window.history?.pushState ) {
+			return;
+		}
+		const url = new URL( window.location.href );
+		if ( url.searchParams.get( 'tab' ) !== activeTab ) {
+			url.searchParams.set( 'tab', activeTab );
+			window.history.pushState( {}, '', url.toString() );
+		}
+	}, [ activeTab ] );
+
+	useEffect( () => {
+		const onPopState = () => {
+			const params = new URLSearchParams( window.location.search );
+			const tab = params.get( 'tab' );
+			if (
+				tab &&
+				TAB_ALIASES[ tab ] &&
+				TAB_ALIASES[ tab ] !== activeTab
+			) {
+				setActiveTab( TAB_ALIASES[ tab ] );
+			}
+		};
+		window.addEventListener( 'popstate', onPopState );
+		return () => window.removeEventListener( 'popstate', onPopState );
+	}, [ activeTab ] );
 
 	const renderContent = () => {
 		const settings =
@@ -140,6 +211,72 @@ const App = () => {
 				? wppoSettings?.settings ?? {}
 				: {};
 		const components = {
+			overview: (
+				<Dashboard
+					activities={ recentActivities?.activities }
+					cacheSettings={ settings.cache_settings }
+					userRoles={
+						typeof wppoSettings !== 'undefined'
+							? wppoSettings?.userRoles ?? {}
+							: {}
+					}
+					onNavigate={ setActiveTab }
+					searchQuery={ searchQuery }
+				/>
+			),
+			speed: (
+				<div className="wppo-pillar wppo-pillar--speed">
+					<FileOptimization
+						options={ settings.file_optimisation }
+						serverRules={ serverRules }
+						serverRulesError={ serverRulesError }
+						ccssStatus={ ccssStatus }
+						ccssError={ ccssError }
+						compact={ searchQuery }
+						onRetryServerRules={ () => {
+							hasFetchedRules.current = false;
+							setServerRulesError( false );
+							setServerRules( null );
+							setRulesRetryTrigger( ( c ) => c + 1 );
+						} }
+						onCcssRefresh={ () => {
+							hasFetchedCcss.current = false;
+							setCcssError( false );
+							setCcssRefreshTrigger( ( c ) => c + 1 );
+						} }
+						onCcssRetry={ () => {
+							hasFetchedCcss.current = false;
+							setCcssError( false );
+							setCcssRefreshTrigger( ( c ) => c + 1 );
+						} }
+					/>
+					<PreloadSettings
+						options={ settings.preload_settings }
+						compact={ searchQuery }
+					/>
+				</div>
+			),
+			media: (
+				<ImageOptimization
+					options={ settings.image_optimisation }
+					compact={ searchQuery }
+				/>
+			),
+			data: (
+				<div className="wppo-pillar wppo-pillar--data">
+					<DatabaseCleanup
+						options={ settings.database_cleanup }
+						compact={ searchQuery }
+					/>
+					<ObjectCache
+						options={ settings.object_cache }
+						compact={ searchQuery }
+					/>
+				</div>
+			),
+			manage: (
+				<PluginSettings options={ settings } compact={ searchQuery } />
+			),
 			dashboard: (
 				<Dashboard
 					activities={ recentActivities?.activities }
@@ -188,7 +325,7 @@ const App = () => {
 			tools: <PluginSettings options={ settings } />,
 		};
 
-		const activeComponent = components[ activeTab ] || components.dashboard;
+		const activeComponent = components[ activeTab ] || components.overview;
 
 		return (
 			<Suspense fallback={ <TabFallback /> }>
@@ -285,8 +422,6 @@ const App = () => {
 	}, [] );
 
 	useEffect( () => {
-		// H-10: Per-request AbortControllers — shared controller cancelled siblings.
-		// Create a fresh controller per apiCall, store in ref, abort previous if needed.
 		if ( activitiesControllerRef.current ) {
 			activitiesControllerRef.current.abort();
 		}
@@ -306,7 +441,9 @@ const App = () => {
 		ccssControllerRef.current = ccssController;
 
 		if (
-			( activeTab === 'dashboard' || recentActivities.length === 0 ) &&
+			( activeTab === 'overview' ||
+				activeTab === 'dashboard' ||
+				recentActivities.length === 0 ) &&
 			! hasFetchedActivities.current
 		) {
 			const fetchActivities = async () => {
@@ -387,8 +524,6 @@ const App = () => {
 					setCcssError( true );
 				}
 			} finally {
-				// Reset the refresh trigger so the guard re-trues and the
-				// status is not re-fetched on every subsequent tab switch.
 				if ( ! ccssController.signal.aborted ) {
 					setCcssRefreshTrigger( 0 );
 				}
@@ -417,7 +552,7 @@ const App = () => {
 
 	return (
 		<div className="wppo-container">
-			{ /* Mobile Top Header */ }
+			<SetupWizard />
 			<div className="wppo-mobile-header">
 				<div
 					className="wppo-mobile-brand"
@@ -453,7 +588,6 @@ const App = () => {
 				</button>
 			</div>
 
-			{ /* Sidebar Overlay */ }
 			{ mobileMenuOpen && (
 				<div
 					className="wppo-sidebar-overlay"
@@ -490,26 +624,50 @@ const App = () => {
 						</span>
 					</h3>
 				</div>
+				<div className="wppo-sidebar-search">
+					<FontAwesomeIcon
+						icon={ faSearch }
+						className="wppo-sidebar-search__icon"
+						aria-hidden="true"
+					/>
+					<input
+						type="search"
+						className="wppo-sidebar-search__input"
+						placeholder={ __(
+							'Search settings…',
+							'performance-optimisation'
+						) }
+						aria-label={ __(
+							'Search settings',
+							'performance-optimisation'
+						) }
+						value={ searchQuery }
+						onChange={ ( e ) => setSearchQuery( e.target.value ) }
+					/>
+				</div>
 				<nav
 					aria-label={ __(
 						'Main Navigation',
 						'performance-optimisation'
 					) }
 				>
-					<ul>
+					<ul role="tablist">
 						{ sidebarItems.map( ( item ) => (
-							<li key={ item.name }>
+							<li key={ item.name } role="presentation">
 								<button
+									role="tab"
 									className={
 										activeTab === item.name
 											? 'wppo-is-active'
 											: ''
 									}
+									aria-selected={ activeTab === item.name }
 									aria-current={
 										activeTab === item.name
 											? 'page'
 											: undefined
 									}
+									aria-describedby={ `wppo-desc-${ item.name }` }
 									onClick={ () => {
 										setActiveTab( item.name );
 										setMobileMenuOpen( false );
@@ -518,9 +676,16 @@ const App = () => {
 									<FontAwesomeIcon
 										className="wppo-sidebar-icon"
 										icon={ item.icon }
+										aria-hidden="true"
 									/>
 									<span className="wppo-sidebar-label">
 										{ item.label }
+									</span>
+									<span
+										id={ `wppo-desc-${ item.name }` }
+										className="wppo-sidebar-desc"
+									>
+										{ item.description }
 									</span>
 								</button>
 							</li>

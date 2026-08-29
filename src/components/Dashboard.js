@@ -27,6 +27,7 @@ import EdgeCachePanel from './EdgeCachePanel';
 import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
+import HealthHeader from './HealthHeader';
 import { __ } from '@wordpress/i18n';
 import { modeLabel } from '../lib/litespeed';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -696,6 +697,26 @@ const Dashboard = ( {
 
 	return (
 		<div className="wppo-dashboard-view">
+			<HealthHeader
+				speedStatus="good"
+				stabilityStatus="good"
+				efficiencyStatus="needs_attention"
+				speedScore={ 92 }
+				stabilityScore={ 88 }
+				efficiencyScore={ 64 }
+				onApplyRecommended={ () => {
+					// Delegate to SetupWizard via event
+					window.dispatchEvent(
+						new CustomEvent( 'wppo:open-wizard' )
+					);
+				} }
+				onRunScan={ () => {
+					const el = document.getElementById( 'wppo-audit-details' );
+					if ( el ) {
+						el.scrollIntoView( { behavior: 'smooth' } );
+					}
+				} }
+			/>
 			{ notice && (
 				<NoticeBanner
 					type={ notice.type }

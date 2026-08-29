@@ -73,6 +73,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'litespeed'      => self::get_litespeed(),
 				'infrastructure' => self::get_infrastructure(),
 				'opcache'        => self::get_opcache(),
+				'conflicts'      => self::get_conflicts(),
 			);
 		}
 
@@ -353,6 +354,113 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			$info['dropin']['object_cache'] = $obj;
 
 			return $info;
+		}
+
+		/**
+		 * Detect active optimization plugins that may conflict with WPPO minify/combine.
+		 *
+		 * Extends LiteSpeed-only banner detection (Dashboard.js:686-693) to also
+		 * check WP Rocket `is_plugin_active('wp-rocket/wp-rocket.php')`,
+		 * FlyingPress, SG Optimizer, and Autoptimize via `get_option('active_plugins')`
+		 * plus network-activated plugins on multisite, mirroring get_active_cache_plugin().
+		 * Exposed via System_Info REST `system_info` (class-rest.php:78) and surfaced
+		 * in the SPA HealthHeader warning "Another plugin handles minify — leave off.
+		 * Why? Details → Advanced".
+		 *
+		 * @since NEXT
+		 * @return array{
+		 *     wp_rocket: bool,
+		 *     flyingpress: bool,
+		 *     sg_optimizer: bool,
+		 *     autoptimize: bool,
+		 *     has_conflict: bool,
+		 *     active: string[],
+		 *     message: string|null
+		 * }
+		 */
+		public static function get_conflicts(): array {
+			$active_plugins = (array) get_option( 'active_plugins', array() );
+			if ( function_exists( 'is_multisite' ) ) {
+				$is_multisite = false;
+				try {
+					$is_multisite = is_multisite();
+				} catch ( \Throwable $e ) {
+					$is_multisite = false;
+				}
+				if ( $is_multisite ) {
+					try {
+						$network_plugins = array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) );
+						$active_plugins  = array_merge( $active_plugins, $network_plugins );
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			}
+
+			// Prefer is_plugin_active() when available (admin context), fallback to active_plugins list.
+			$is_active = static function ( string $plugin_file, array $active_plugins ): bool {
+				if ( function_exists( 'is_plugin_active' ) ) {
+					try {
+						if ( is_plugin_active( $plugin_file ) ) {
+							return true;
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// Also check by substring for directory-agnostic matching.
+				foreach ( $active_plugins as $p ) {
+					if ( $p === $plugin_file ) {
+						return true;
+					}
+					// Directory prefix match (e.g. wp-rocket/wp-rocket.php vs wp-rocket).
+					if ( 0 === strpos( $p, dirname( $plugin_file ) . '/' ) ) {
+						return true;
+					}
+				}
+				return false;
+			};
+
+			$wp_rocket    = $is_active( 'wp-rocket/wp-rocket.php', $active_plugins );
+			$flyingpress  = $is_active( 'flying-press/flying-press.php', $active_plugins ) || $is_active( 'flyingpress/flyingpress.php', $active_plugins );
+			$sg_optimizer = $is_active( 'sg-cachepress/sg-cachepress.php', $active_plugins ) || $is_active( 'sg-optimizer/sg-optimizer.php', $active_plugins );
+			$autoptimize  = $is_active( 'autoptimize/autoptimize.php', $active_plugins );
+
+			$active = array();
+			if ( $wp_rocket ) {
+				$active[] = 'wp-rocket';
+			}
+			if ( $flyingpress ) {
+				$active[] = 'flying-press';
+			}
+			if ( $sg_optimizer ) {
+				$active[] = 'sg-cachepress';
+			}
+			if ( $autoptimize ) {
+				$active[] = 'autoptimize';
+			}
+
+			$has_conflict = ! empty( $active );
+			$message      = $has_conflict ? __( 'Another plugin handles minify — leave off. Why? Details → Advanced', 'performance-optimisation' ) : null;
+
+			/**
+			 * Filter the conflict detection result.
+			 *
+			 * @since NEXT
+			 * @param array $conflicts Conflict map (wp_rocket, flyingpress, sg_optimizer, autoptimize, has_conflict, active, message).
+			 * @param array $active_plugins Raw active_plugins list (including network).
+			 */
+			$conflicts = array(
+				'wp_rocket'    => $wp_rocket,
+				'flyingpress'  => $flyingpress,
+				'sg_optimizer' => $sg_optimizer,
+				'autoptimize'  => $autoptimize,
+				'has_conflict' => $has_conflict,
+				'active'       => $active,
+				'message'      => $message,
+			);
+
+			return (array) apply_filters( 'wppo_conflicts', $conflicts, $active_plugins );
 		}
 
 		/**

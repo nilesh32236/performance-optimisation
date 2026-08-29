@@ -540,7 +540,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'wp_enqueue_scripts', array( $this, 'remove_woocommerce_scripts' ), 999 );
 			}
 
-			if ( ! empty( $this->options['cache_settings']['enableCache'] ) ) {
+			// Emergency kill-switch `?wppo_safe=1` — bypass static cache buffer when safe mode is active (SAFETY-RECOVERY.md).
+			// Checked here in setup_hooks:489 so Buffer::process_buffer_only (class-cache.php) is never registered.
+			if ( ! Util::is_safe_mode() && ! empty( $this->options['cache_settings']['enableCache'] ) ) {
 				$this->cache = new Cache( $this->options );
 				$this->cache->set_image_optimisation( $this->image_optimisation );
 				$this->cache->set_google_fonts( $this->google_fonts );
@@ -565,8 +567,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 1 );
 			}
 
-			// Standalone used-CSS output buffer when page cache is disabled.
-			if ( empty( $this->options['cache_settings']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
+			// Standalone used-CSS output buffer when page cache is disabled (also bypassed in safe mode).
+			if ( ! Util::is_safe_mode() && empty( $this->options['cache_settings']['enableCache'] ) && ! empty( $this->options['file_optimisation']['removeUnusedCSS'] ) ) {
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
@@ -1611,6 +1613,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						'effective_mode'     => 'standalone',
 						'wppo_owns_cache'    => true,
 						'optimizer_disabled' => false,
+					),
+					// Conflict detection — WP Rocket, FlyingPress, SG Optimizer, Autoptimize (SAFETY-RECOVERY.md).
+					// Exposed for HealthHeader warning "Another plugin handles minify — leave off. Why? Details → Advanced".
+					'conflicts'                            => class_exists( 'PerformanceOptimise\Inc\System_Info' ) ? System_Info::get_conflicts() : array(
+						'wp_rocket'    => false,
+						'flyingpress'  => false,
+						'sg_optimizer' => false,
+						'autoptimize'  => false,
+						'has_conflict' => false,
+						'active'       => array(),
+						'message'      => null,
 					),
 					// Allowlisted top-level settings keys — single source is Util::ALLOWED_SETTINGS_KEYS
 					// (exposed here so JS `ALLOWED_IMPORT_KEYS` can stay in sync without codegen).

@@ -1216,7 +1216,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		public function start_output_buffer(): void {
 			// TODO(#553): remove when minimum supported WP is raised to 6.9.
-			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
+			if ( Util::is_safe_mode() || ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
 			}
 
@@ -1241,6 +1241,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		private function process_buffer_only( $buffer ) {
+			// Emergency safe mode `?wppo_safe=1` — bypass all buffer optimisations (SAFETY-RECOVERY.md).
+			if ( Util::is_safe_mode() ) {
+				return $buffer;
+			}
 			$image_optimisation = $this->image_optimisation ? $this->image_optimisation : new Image_Optimisation( $this->options );
 
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
@@ -1285,6 +1289,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		public function process_buffer_for_cache( $filtered_output, $output ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
+			if ( Util::is_safe_mode() ) {
+				return $filtered_output;
+			}
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return $filtered_output;
 			}
@@ -1305,6 +1312,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		public function stash_cache( $output ) {
+			if ( Util::is_safe_mode() ) {
+				return;
+			}
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
 			}
@@ -1494,6 +1504,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function is_not_cacheable(): bool {
+			// Safe mode bypasses page cache like DONOTCACHEPAGE (SAFETY-RECOVERY.md).
+			if ( Util::is_safe_mode() ) {
+				return true;
+			}
 			if ( '' === $this->cache_root_dir ) {
 				return true;
 			}

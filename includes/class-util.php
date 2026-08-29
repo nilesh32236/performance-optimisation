@@ -973,6 +973,44 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether safe mode is active via ?wppo_safe=1 kill-switch.
+		 *
+		 * Checked in Main::setup_hooks() to bypass Buffer::process_buffer_only
+		 * (see class-cache.php). When `?wppo_safe=1` is present on the request,
+		 * a `wppo_safe_mode=1` cookie is set for 10 minutes (600s) so the
+		 * bypass persists without keeping the query string. Subsequent requests
+		 * without the query string are still considered safe when the cookie
+		 * value is `1`. Uses COOKIEPATH/COOKIE_DOMAIN when available and mirrors
+		 * WordPress cookie conventions (secure + httponly).
+		 *
+		 * @since NEXT
+		 * @return bool True when safe mode should bypass optimisations.
+		 */
+		public static function is_safe_mode(): bool {
+			// Kill-switch via query string `?wppo_safe=1` — also arms the 10-minute cookie.
+			if ( isset( $_GET['wppo_safe'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$wppo_safe = sanitize_text_field( wp_unslash( $_GET['wppo_safe'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				if ( '1' === $wppo_safe ) {
+					if ( ! headers_sent() ) {
+						$expire = time() + 600;
+						$path   = defined( 'COOKIEPATH' ) ? COOKIEPATH : '/';
+						$domain = defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '';
+						$secure = function_exists( 'is_ssl' ) ? is_ssl() : false;
+						// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.cookies_setcookie
+						setcookie( 'wppo_safe_mode', '1', $expire, $path, $domain, $secure, true );
+					}
+					$_COOKIE['wppo_safe_mode'] = '1';
+					return true;
+				}
+			}
+			if ( isset( $_COOKIE['wppo_safe_mode'] ) ) {
+				$cookie = sanitize_text_field( wp_unslash( $_COOKIE['wppo_safe_mode'] ) );
+				return '1' === $cookie;
+			}
+			return false;
+		}
+
+		/**
 		 * Sanitizes the settings array recursively.
 		 *
 		 * Shared by every settings entry point (REST API, WP-CLI import/update)
