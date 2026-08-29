@@ -1253,9 +1253,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		private function store_placeholder_data_for_upload( array $metadata, int $attachment_id ): void {
 			$file = get_attached_file( $attachment_id );
 
-			if ( ! $file || ! file_exists( $file ) || ! is_readable( $file ) || ! function_exists( 'imagecreatefromstring' ) ) {
+			if ( ! $file || ! file_exists( $file ) || ! is_readable( $file ) ) {
 				return;
 			}
+			// Gate only the fallback string-decode path on imagecreatefromstring; direct GD loaders (imagecreatefromjpeg/png/webp/gif/avif) are independent and may exist even when the string helper is absent.
+			$has_string_loader = function_exists( 'imagecreatefromstring' );
 
 			// Security Fix: Prevent File Size & Memory Bomb DoS (same limit as convert_image()).
 			$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
@@ -1325,8 +1327,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						if ( defined( 'IMAGETYPE_AVIF' ) && IMAGETYPE_AVIF === $image_type && function_exists( 'imagecreatefromavif' ) ) {
 							// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 							$image = @imagecreatefromavif( $file );
-						} else {
-							// Last resort: buffer + string decode.
+						} elseif ( $has_string_loader ) {
+							// Last resort: buffer + string decode (only when string loader exists).
 							// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
 							$contents = @file_get_contents( $file );
 							if ( false !== $contents ) {

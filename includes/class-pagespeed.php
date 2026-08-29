@@ -127,6 +127,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 				),
 			);
 			if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $args, self::AS_GROUP ) ) {
+				// Return existing job ID so callers can distinguish dedup from failure.
+				if ( function_exists( 'as_get_scheduled_actions' ) ) {
+					$existing = as_get_scheduled_actions(
+						array(
+							'hook'   => self::AS_HOOK,
+							'args'   => $args,
+							'group'  => self::AS_GROUP,
+							'status' => \ActionScheduler_Store::STATUS_PENDING,
+						),
+						'ids'
+					);
+					if ( is_array( $existing ) && ! empty( $existing ) ) {
+						return (int) reset( $existing );
+					}
+				}
 				return 0;
 			}
 			return (int) as_enqueue_async_action(

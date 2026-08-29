@@ -1304,7 +1304,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				return $this->send_response( null, false, 500, __( 'Action Scheduler is not available.', 'performance-optimisation' ) );
 			}
 
+			// Check dedup before enqueuing so we can return 200 with the existing job ID instead of 202+0.
+			$dedup_args = array( array( 'url' => $url, 'strategy' => $strategy ) );
+			$is_deduped = function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( Pagespeed::AS_HOOK, $dedup_args, Pagespeed::AS_GROUP );
+
 			$job_id = Pagespeed::queue_scan( $url, $strategy );
+
+			if ( $is_deduped && $job_id > 0 ) {
+				return $this->send_response(
+					array(
+						'job_id'       => $job_id,
+						'url'          => $url,
+						'strategy'     => $strategy,
+						'already_queued' => true,
+					),
+					true,
+					200
+				);
+			}
+
+			if ( 0 === $job_id && $is_deduped ) {
+				// Deduped but existing ID could not be resolved — return 200 without ambiguous 202+0.
+				return $this->send_response(
+					array(
+						'job_id'       => 0,
+						'url'          => $url,
+						'strategy'     => $strategy,
+						'already_queued' => true,
+					),
+					true,
+					200
+				);
+			}
 
 			return $this->send_response(
 				array(

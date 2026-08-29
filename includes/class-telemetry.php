@@ -669,7 +669,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 *
 		 * Uses Util::get_local_path() + filesize() (~0.0001ms per file) instead of
 		 * HTTP HEAD requests. External/CDN assets that cannot be resolved to a local
-		 * path return 0 — intentional for Phase 1 local telemetry.
+		 * path return 0 — intentional for Phase 1 local telemetry. This means same-host
+		 * assets that are CDN-rewritten, proxy-pathed, or symlink-missed in
+		 * Util::get_local_path() will be under-reported (0 instead of prior
+		 * same-host HEAD Content-Length). Sites needing accurate sizing for such
+		 * assets can opt-in via the `wppo_telemetry_allow_remote_head` filter (return true to re-enable
+		 * same-host HEAD with caching).
 		 *
 		 * @since  1.5.0
 		 * @param  array $resources Parsed resources from parse_resources().
@@ -701,6 +706,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				// Non-local assets return 0 — Phase 1 is local-only per docblock.
 				// A prior fallback issued a synchronous wp_remote_head() per
 				// unresolvable asset (N×5s), stalling the 30s telemetry scan.
+				// Opt-in same-host HEAD via wppo_telemetry_allow_remote_head filter.
+				if ( apply_filters( 'wppo_telemetry_allow_remote_head', false, $url ) ) {
+					$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
+					$asset_host = wp_parse_url( $url, PHP_URL_HOST );
+					// Only for same-host assets to avoid SSRF/external calls.
+					if ( $asset_host && $home_host && $asset_host === $home_host ) {
+						static $head_cache = array();
+						if ( isset( $head_cache[ $url ] ) ) {
+							return $head_cache[ $url ];
+						}
+						$response = wp_remote_head( $url, array( 'timeout' => 3 ) );
+						if ( ! is_wp_error( $response ) ) {
+							$len = wp_remote_retrieve_header( $response, 'content-length' );
+							if ( $len ) {
+								$head_cache[ $url ] = (int) $len;
+								return (int) $len;
+							}
+						}
+						$head_cache[ $url ] = 0;
+					}
+				}
 				return 0;
 			};
 
