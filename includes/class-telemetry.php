@@ -698,33 +698,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 					return (int) filesize( $local_path );
 				}
 
-				// Only allow HEAD requests to the site's own domain for security.
-				$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
-				$url_host  = wp_parse_url( $url, PHP_URL_HOST );
-				if ( ! $home_host || ! $url_host || $url_host !== $home_host ) {
-					return 0;
-				}
-
-				if ( ! wp_http_validate_url( $url ) ) {
-					return 0;
-				}
-
-				// Fallback: Individual HEAD request for same-domain assets.
-				$response = wp_remote_head(
-					$url,
-					array(
-						'timeout'   => 5,
-						'sslverify' => (bool) apply_filters( 'wppo_telemetry_verify_ssl', true, $url ),
-					)
-				);
-
-				if ( ! is_wp_error( $response ) ) {
-					$content_length = wp_remote_retrieve_header( $response, 'content-length' );
-					if ( $content_length ) {
-						return (int) $content_length;
-					}
-				}
-
+				// Non-local assets return 0 — Phase 1 is local-only per docblock.
+				// A prior fallback issued a synchronous wp_remote_head() per
+				// unresolvable asset (N×5s), stalling the 30s telemetry scan.
 				return 0;
 			};
 

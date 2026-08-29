@@ -603,19 +603,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$jobs_queued          = 0;
 
 			if ( $use_action_scheduler ) {
-				// Schedule background jobs via Action Scheduler.
+				// Schedule background jobs via Action Scheduler with deduplication.
 				foreach ( $webp_images as $webp_image ) {
 					$source_path = wp_normalize_path( ABSPATH . $webp_image );
 
 					if ( file_exists( $source_path ) ) {
+						$args = array(
+							array(
+								'source_path' => $source_path,
+								'format'      => 'webp',
+							),
+						);
+						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+							continue;
+						}
 						as_enqueue_async_action(
 							'wppo_convert_image_background',
-							array(
-								array(
-									'source_path' => $source_path,
-									'format'      => 'webp',
-								),
-							),
+							$args,
 							'performance_optimisation'
 						);
 						++$jobs_queued;
@@ -626,14 +630,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					$source_path = wp_normalize_path( ABSPATH . $avif_image );
 
 					if ( file_exists( $source_path ) ) {
+						$args = array(
+							array(
+								'source_path' => $source_path,
+								'format'      => 'avif',
+							),
+						);
+						if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_convert_image_background', $args, 'performance_optimisation' ) ) {
+							continue;
+						}
 						as_enqueue_async_action(
 							'wppo_convert_image_background',
-							array(
-								array(
-									'source_path' => $source_path,
-									'format'      => 'avif',
-								),
-							),
+							$args,
 							'performance_optimisation'
 						);
 						++$jobs_queued;

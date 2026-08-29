@@ -241,7 +241,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$has_more            = ( count( $parent_ids ) === 200 );
 
 				foreach ( $parent_ids as $parent_id ) {
-					$offset     = 0;
+					$last_date  = '9999-12-31 23:59:59';
+					$last_id    = PHP_INT_MAX;
 					$first_page = true;
 					$batch_size = 500;
 
@@ -250,10 +251,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.DirectQuery
 						$revisions = $wpdb->get_results(
 							$wpdb->prepare(
-								"SELECT ID, post_date_gmt FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' ORDER BY post_date_gmt DESC LIMIT %d OFFSET %d",
+								"SELECT ID, post_date_gmt FROM $wpdb->posts WHERE post_parent = %d AND post_type = 'revision' AND (post_date_gmt < %s OR (post_date_gmt = %s AND ID < %d)) ORDER BY post_date_gmt DESC, ID DESC LIMIT %d",
 								$parent_id,
-								$batch_size,
-								$offset
+								$last_date,
+								$last_date,
+								$last_id,
+								$batch_size
 							)
 						);
 
@@ -276,7 +279,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 							}
 						}
 
-						$offset        += $batch_size;
+						$last       = end( $revisions );
+						$last_date  = $last->post_date_gmt;
+						$last_id    = (int) $last->ID;
 						$revision_count = count( $revisions );
 					} while ( $revision_count === $batch_size );
 				}

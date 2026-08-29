@@ -120,14 +120,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Pagespeed' ) ) {
 			if ( ! function_exists( 'as_enqueue_async_action' ) ) {
 				return 0;
 			}
+			$args = array(
+				array(
+					'url'      => $url,
+					'strategy' => $strategy,
+				),
+			);
+			if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::AS_HOOK, $args, self::AS_GROUP ) ) {
+				return 0;
+			}
 			return (int) as_enqueue_async_action(
 				self::AS_HOOK,
-				array(
-					array(
-						'url'      => $url,
-						'strategy' => $strategy,
-					),
-				),
+				$args,
 				self::AS_GROUP
 			);
 		}

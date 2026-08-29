@@ -2016,10 +2016,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( function_exists( 'wp_cache_get_salted' ) ) {
 					$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
 					update_option( 'wppo_cache_last_cleared', $salt, false );
-				} else {
-					delete_transient( Util::transient_key( 'wppo_cache_size' ) );
-					delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
 				}
+				delete_transient( Util::transient_key( 'wppo_cache_size' ) );
+				delete_transient( Util::transient_key( 'wppo_cache_count' ) );
+				delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
 				update_option( 'wppo_cache_last_cleared_time', current_time( 'mysql' ), false );
 				do_action( 'wppo_after_cache_clear', $type, $url_path );
 
@@ -2119,8 +2119,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return __( 'Cache directory does not exist.', 'performance-optimisation' );
 			}
 
+			$transient_key = Util::transient_key( 'wppo_cache_size' );
+			$cached        = get_transient( $transient_key );
+			if ( false !== $cached ) {
+				return $cached;
+			}
+
 			$total_size = $instance->calculate_directory_size( $cache_dir );
-			return size_format( $total_size );
+			$formatted  = size_format( $total_size );
+			set_transient( $transient_key, $formatted, 15 * MINUTE_IN_SECONDS );
+			return $formatted;
 		}
 
 		/**
@@ -2151,9 +2159,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $stats;
 			}
 
-			$total_size            = $instance->calculate_directory_size( $cache_dir );
-			$stats['size']         = size_format( $total_size );
-			$stats['cached_pages'] = $instance->count_cached_pages( $cache_dir );
+			$size_key  = Util::transient_key( 'wppo_cache_size' );
+			$count_key = Util::transient_key( 'wppo_cache_count' );
+
+			$cached_size  = get_transient( $size_key );
+			$cached_count = get_transient( $count_key );
+
+			if ( false !== $cached_size ) {
+				$stats['size'] = $cached_size;
+			} else {
+				$total_size    = $instance->calculate_directory_size( $cache_dir );
+				$stats['size'] = size_format( $total_size );
+				set_transient( $size_key, $stats['size'], 15 * MINUTE_IN_SECONDS );
+			}
+
+			if ( false !== $cached_count ) {
+				$stats['cached_pages'] = (int) $cached_count;
+			} else {
+				$stats['cached_pages'] = $instance->count_cached_pages( $cache_dir );
+				set_transient( $count_key, $stats['cached_pages'], 15 * MINUTE_IN_SECONDS );
+			}
+
 			$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 
 			return $stats;
@@ -2167,7 +2193,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
-		private function calculate_directory_size( string $directory ): int {
+		private function calculate_directory_size( string $directory, int $depth = 0 ): int {
+			// Guard against unbounded recursion on very large caches (10k+ pages).
+			if ( $depth > 20 ) {
+				return 0;
+			}
 			$total_size = 0;
 			$fs         = $this->get_filesystem();
 
@@ -2184,7 +2214,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			foreach ( $files as $file ) {
 				$file_path   = trailingslashit( $directory ) . $file['name'];
 				$total_size += ( 'd' === $file['type'] )
-					? $this->calculate_directory_size( $file_path )
+					? $this->calculate_directory_size( $file_path, $depth + 1 )
 					: $fs->size( $file_path );
 			}
 
@@ -2199,7 +2229,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.9.0
 		 */
-		private function count_cached_pages( string $directory ): int {
+		private function count_cached_pages( string $directory, int $depth = 0 ): int {
+			if ( $depth > 20 ) {
+				return 0;
+			}
 			$fs = $this->get_filesystem();
 
 			if ( ! $fs ) {
@@ -2213,7 +2246,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$count = 0;
 			foreach ( $files as $file ) {
 				if ( 'd' === $file['type'] ) {
-					$count += $this->count_cached_pages( trailingslashit( $directory ) . $file['name'] );
+					$count += $this->count_cached_pages( trailingslashit( $directory ) . $file['name'], $depth + 1 );
 				} elseif ( 'index.html' === $file['name'] ) {
 					++$count;
 				}
