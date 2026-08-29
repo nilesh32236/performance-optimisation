@@ -1040,6 +1040,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public static function optimize_table( string $table ): bool {
 			global $wpdb;
 
+			if ( 1 !== preg_match( '/^[A-Za-z0-9_]+$/', $table ) ) {
+				return false;
+			}
+
+			if ( ! isset( $wpdb->{$table} ) || ! is_string( $wpdb->{$table} ) ) {
+				return false;
+			}
 			$full_table_name = $wpdb->{$table}; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase
 
 			if ( empty( $full_table_name ) ) {
