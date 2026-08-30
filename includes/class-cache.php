@@ -1226,7 +1226,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Filter callback for wp_template_enhancement_output_buffer (WP 6.9+).
 		 *
-		 * Processes the output buffer without saving to cache.
+		 * Processes the output buffer without saving to cache. Part of the WP 6.9
+		 * template-enhancement buffer path adopted in {@see Main::setup_hooks()}:
+		 * wp_template_enhancement_output_buffer (filter at priority 10) +
+		 * wp_finalized_template_enhancement_output_buffer (action). Registering the
+		 * finalized action automatically opts into the buffer (priority 1000 by
+		 * default), which disables response streaming — TTFB increases while TTLB
+		 * unchanged; see {@see Main::emit_server_timing_header()} for the intentional
+		 * tradeoff (Server-Timing keeps disabled by default, emit only on cache-miss).
+		 * Returns filtered output via process_buffer_only(); persistence is handled
+		 * by {@see Cache::stash_cache()} / save_processed_buffer() to index.html+.gz+.br.
 		 *
 		 * @param string $filtered_output The filtered output from previous callbacks.
 		 * @param string $output          The raw output buffer content.
@@ -1247,9 +1256,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Action callback for wp_finalized_template_enhancement_output_buffer (WP 6.9+).
 		 *
-		 * Stashes the processed output to the static cache files.
+		 * Stashes the processed output to the static cache files. Complements
+		 * {@see Cache::process_buffer_for_cache()} on wp_template_enhancement_output_buffer
+		 * (filter). Registering this finalized action opts into the template-enhancement
+		 * buffer (priority 1000 by default) which disables response streaming; TTFB
+		 * tradeoff is documented in {@see Main::emit_server_timing_header()} and
+		 * {@see Main::setup_hooks()} Server-Timing block. Persists via
+		 * save_processed_buffer() to index.html + .gz + .br.
 		 *
-		 * @param string $output The finalized output buffer content.
+		 * @param string $output The finalized output buffer content (alias $final).
 		 * @return void
 		 *
 		 * @since NEXT
