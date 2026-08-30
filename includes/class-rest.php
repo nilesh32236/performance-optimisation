@@ -530,9 +530,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 * Removes sensitive settings from the response array.
 		 *
 		 * @param array $settings The settings array passed by reference.
-		 * @return void
 		 */
-		private function remove_sensitive_settings_from_response( array &$settings ): void {
+		private function remove_sensitive_settings_from_response( array &$settings ) {
 			if ( isset( $settings['performance_audit'] ) ) {
 				unset( $settings['performance_audit']['pagespeed_api_key'] );
 			}
