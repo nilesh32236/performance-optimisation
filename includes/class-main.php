@@ -2855,13 +2855,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$content_url      = Util::min_cache_url( 'css', $basename );
 				$cached_file_path = $css_minifier->get_cache_file_path();
 
-				if ( ! file_exists( $cached_file_path ) ) {
+				if ( empty( $cached_file_path ) || ! file_exists( $cached_file_path ) ) {
 					return $tag;
 				}
 
 				$file_version = filemtime( $cached_file_path );
-				$new_href     = $content_url . '?ver=' . $file_version;
-				$new_tag      = str_replace( $href, $new_href, $tag );
+				if ( false === $file_version ) {
+					return $tag;
+				}
+
+				$new_href = $content_url . '?ver=' . $file_version;
+				$new_tag  = str_replace( $href, $new_href, $tag );
 				return $new_tag;
 			}
 
@@ -2918,11 +2922,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$content_url      = Util::min_cache_url( 'js', $basename );
 				$cached_file_path = $js_minifier->get_cache_file_path();
 
-				if ( ! file_exists( $cached_file_path ) ) {
+				if ( empty( $cached_file_path ) || ! file_exists( $cached_file_path ) ) {
 					return $tag;
 				}
 
 				$file_version = filemtime( $cached_file_path );
+				if ( false === $file_version ) {
+					return $tag;
+				}
 
 				$new_src = $content_url . '?ver=' . $file_version;
 				$new_tag = str_replace( $src, $new_src, $tag );
