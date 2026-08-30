@@ -191,14 +191,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				$css_dir_url = site_url();
 			}
 
+			$is_absolute_or_data = static function ( $path ) {
+				return 0 === stripos( $path, 'http://' )
+					|| 0 === stripos( $path, 'https://' )
+					|| 0 === strpos( $path, '//' )
+					|| 0 === stripos( $path, 'data:' );
+			};
+			$allowed_extensions  = array(
+				'jpg'  => true,
+				'jpeg' => true,
+				'png'  => true,
+				'gif'  => true,
+				'webp' => true,
+			);
+
 			return preg_replace_callback(
 				$pattern,
-				function ( $matches ) use ( $css_dir_url ) {
+				function ( $matches ) use ( $css_dir_url, $is_absolute_or_data, $allowed_extensions ) {
 					$image_path = trim( $matches[2] );
 
 					$image_path_no_qs = strtok( $image_path, '?' );
-					if ( preg_match( '/\.(jpg|jpeg|png|gif|webp)$/i', $image_path_no_qs, $ext_matches ) ) {
-						if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^\/\//', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
+					$ext              = strtolower( pathinfo( $image_path_no_qs, PATHINFO_EXTENSION ) );
+					if ( isset( $allowed_extensions[ $ext ] ) ) {
+						if ( ! $is_absolute_or_data( $image_path ) ) {
 							$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
 						}
 
@@ -211,7 +226,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 							Img_Converter::add_img_into_queue( $local_path, 'avif' );
 						}
 
-						if ( 'webp' === $ext_matches[1] ) {
+						if ( 'webp' === $ext ) {
 							return 'url("' . $image_path . '")';
 						}
 
@@ -225,7 +240,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 						return 'url("' . $image_path . '")';
 					}
 
-					if ( ! preg_match( '/^https?:\/\//i', $image_path ) && ! preg_match( '/^\/\//', $image_path ) && ! preg_match( '/^data:/', $image_path ) ) {
+					if ( ! $is_absolute_or_data( $image_path ) ) {
 						$image_path = $css_dir_url . '/' . ltrim( $image_path, '/' );
 						return 'url("' . $image_path . '")';
 					}

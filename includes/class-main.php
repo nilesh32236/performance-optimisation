@@ -2854,7 +2854,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$basename    = basename( $cached_file );
 				$content_url = Util::min_cache_url( 'css', $basename );
 
-				$file_version = filemtime( Util::get_local_path( $cached_file ) );
+				$file_version = file_exists( Util::min_cache_dir( 'css' ) . '/' . $basename ) ? filemtime( Util::min_cache_dir( 'css' ) . '/' . $basename ) : time();
 				$new_href     = $content_url . '?ver=' . $file_version;
 				$new_tag      = str_replace( $href, $new_href, $tag );
 				return $new_tag;
@@ -2912,7 +2912,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$basename    = basename( $cached_file );
 				$content_url = Util::min_cache_url( 'js', $basename );
 
-				$file_version = filemtime( Util::get_local_path( $cached_file ) );
+				$file_version = file_exists( Util::min_cache_dir( 'js' ) . '/' . $basename ) ? filemtime( Util::min_cache_dir( 'js' ) . '/' . $basename ) : time();
 
 				$new_src = $content_url . '?ver=' . $file_version;
 				$new_tag = str_replace( $src, $new_src, $tag );
