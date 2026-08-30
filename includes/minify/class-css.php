@@ -229,6 +229,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 
 						$local_path = Util::get_local_path( $image_path );
 
+						if ( '' === $local_path ) {
+							return 'url("' . $image_path . '")';
+						}
+
 						$avif_path = Img_Converter::get_img_path( $image_path, 'avif' );
 						if ( file_exists( $avif_path ) ) {
 							return 'url("' . Img_Converter::get_img_url( $image_path, 'avif' ) . '")';

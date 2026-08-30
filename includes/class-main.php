@@ -2851,10 +2851,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cached_file  = $css_minifier->minify();
 
 			if ( $cached_file ) {
-				$basename     = basename( $cached_file );
-				$content_url  = Util::min_cache_url( 'css', $basename );
-				$local_file   = Util::min_cache_dir( 'css' ) . '/' . $basename;
-				$file_version = file_exists( $local_file ) ? (int) filemtime( $local_file ) : time();
+				$basename         = basename( $cached_file );
+				$content_url      = Util::min_cache_url( 'css', $basename );
+				$cached_file_path = $css_minifier->get_cache_file_path();
+
+				if ( ! file_exists( $cached_file_path ) ) {
+					return $tag;
+				}
+
+				$file_version = filemtime( $cached_file_path );
 				$new_href     = $content_url . '?ver=' . $file_version;
 				$new_tag      = str_replace( $href, $new_href, $tag );
 				return $new_tag;
@@ -2909,10 +2914,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cached_file = $js_minifier->minify();
 
 			if ( $cached_file ) {
-				$basename     = basename( $cached_file );
-				$content_url  = Util::min_cache_url( 'js', $basename );
-				$local_file   = Util::min_cache_dir( 'js' ) . '/' . $basename;
-				$file_version = file_exists( $local_file ) ? (int) filemtime( $local_file ) : time();
+				$basename         = basename( $cached_file );
+				$content_url      = Util::min_cache_url( 'js', $basename );
+				$cached_file_path = $js_minifier->get_cache_file_path();
+
+				if ( ! file_exists( $cached_file_path ) ) {
+					return $tag;
+				}
+
+				$file_version = filemtime( $cached_file_path );
 
 				$new_src = $content_url . '?ver=' . $file_version;
 				$new_tag = str_replace( $src, $new_src, $tag );
