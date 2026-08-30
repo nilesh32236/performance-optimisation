@@ -210,7 +210,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\CSS' ) ) {
 				function ( $matches ) use ( $css_dir_url, $is_absolute_or_data, $allowed_extensions ) {
 					$image_path = trim( $matches[2] );
 
-					$image_path_no_qs = strtok( $image_path, '?' );
+					$qpos = strpos( $image_path, '?' );
+					$hpos = strpos( $image_path, '#' );
+					$cut  = false;
+					if ( false !== $qpos && false !== $hpos ) {
+						$cut = min( $qpos, $hpos );
+					} elseif ( false !== $qpos ) {
+						$cut = $qpos;
+					} elseif ( false !== $hpos ) {
+						$cut = $hpos;
+					}
+					$image_path_no_qs = ( false !== $cut ) ? substr( $image_path, 0, $cut ) : $image_path;
 					$ext              = strtolower( pathinfo( $image_path_no_qs, PATHINFO_EXTENSION ) );
 					if ( isset( $allowed_extensions[ $ext ] ) ) {
 						if ( ! $is_absolute_or_data( $image_path ) ) {

@@ -557,7 +557,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// which disables response streaming. TTFB increases while TTLB unchanged — intentional
 			// when Server-Timing is enabled; keep disabled by default and emit only on cache-miss
 			// generation passes (advanced-cache.php serves cached pages without booting WordPress).
-			// @since NEXT
+			// @since NEXT.
 			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $this->server_timing_enabled() ) {
 				add_action( 'template_redirect', array( $this, 'capture_template_start' ), 0 );
 				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 1 );
@@ -2851,10 +2851,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cached_file  = $css_minifier->minify();
 
 			if ( $cached_file ) {
-				$basename    = basename( $cached_file );
-				$content_url = Util::min_cache_url( 'css', $basename );
-
-				$file_version = file_exists( Util::min_cache_dir( 'css' ) . '/' . $basename ) ? filemtime( Util::min_cache_dir( 'css' ) . '/' . $basename ) : time();
+				$basename     = basename( $cached_file );
+				$content_url  = Util::min_cache_url( 'css', $basename );
+				$local_file   = Util::min_cache_dir( 'css' ) . '/' . $basename;
+				$file_version = file_exists( $local_file ) ? (int) filemtime( $local_file ) : time();
 				$new_href     = $content_url . '?ver=' . $file_version;
 				$new_tag      = str_replace( $href, $new_href, $tag );
 				return $new_tag;
@@ -2909,10 +2909,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$cached_file = $js_minifier->minify();
 
 			if ( $cached_file ) {
-				$basename    = basename( $cached_file );
-				$content_url = Util::min_cache_url( 'js', $basename );
-
-				$file_version = file_exists( Util::min_cache_dir( 'js' ) . '/' . $basename ) ? filemtime( Util::min_cache_dir( 'js' ) . '/' . $basename ) : time();
+				$basename     = basename( $cached_file );
+				$content_url  = Util::min_cache_url( 'js', $basename );
+				$local_file   = Util::min_cache_dir( 'js' ) . '/' . $basename;
+				$file_version = file_exists( $local_file ) ? (int) filemtime( $local_file ) : time();
 
 				$new_src = $content_url . '?ver=' . $file_version;
 				$new_tag = str_replace( $src, $new_src, $tag );
