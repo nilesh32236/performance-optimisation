@@ -437,3 +437,63 @@ add_action( 'wppo_perf_translations_file_written', function( $cache_file, $mofil
     error_log( "Compiled {$domain} to {$cache_file}" );
 }, 10, 3 );
 ```
+
+---
+
+### `wppo_server_timing_enabled`
+Filters whether the Server-Timing header is emitted. @since NEXT.
+
+**Parameters:**
+- `$enabled` *(bool)* — Whether Server-Timing is enabled (from `performance_audit.server_timing_enabled`, `false` default).
+
+When `true`, the plugin registers `wp_finalized_template_enhancement_output_buffer` (see WordPress Core section below), which opts into the template-enhancement buffer (priority 1000 by default) and disables response streaming — TTFB increases while TTLB unchanged. Keep disabled by default; header is emitted only on cache-miss generation passes (`advanced-cache.php` serves cached pages without booting WordPress).
+
+**Example:**
+```php
+add_filter( 'wppo_server_timing_enabled', function( $enabled ) {
+    // Only emit for administrators.
+    return $enabled && current_user_can( 'manage_options' );
+} );
+```
+
+---
+
+## 🔌 WordPress Core Late-Header Hooks Used by Plugin
+
+### `wp_finalized_template_enhancement_output_buffer` (alias `wp_send_late_headers`)
+WordPress 6.9 late-header / final buffer action. Canonical place to emit late headers (Server-Timing, ETag/304) before flush. @since NEXT.
+
+**Origin:** WP 6.9 standardised the former ad-hoc `ob_start()` at `template_redirect` / `template_include` into `wp_should_output_buffer_template_for_enhancement()` / `wp_start_template_enhancement_output_buffer()` / `wp_finalize_template_enhancement_output_buffer()` with filter `wp_template_enhancement_output_buffer` and action `wp_finalized_template_enhancement_output_buffer ($final)` (also `wp_send_late_headers` alias), try/catch wrapped with `WP_DEBUG_DISPLAY` appended on error. Trac #64126 / #63636 / #43258; Performance Lab #2225/#2515.
+
+**Parameters:**
+- `$final` *(string)* — Final HTML string before flush (alias `$output` in plugin; not the filtered value).
+
+**Streaming tradeoff:** Registering this action automatically opts into the template-enhancement buffer (priority 1000 by default via `wp_should_output_buffer_template_for_enhancement()`), which disables response streaming / early flush. TTFB increases while TTLB unchanged — intentional when Server-Timing is enabled; keep disabled by default and emit only on cache-miss generation passes (`advanced-cache.php` serves cached pages without booting WordPress; see `includes/class-main.php:559` `setup_hooks`, `capture_template_start`, `emit_server_timing_header` and `includes/class-cache.php:process_buffer_for_cache`).
+
+**Late-header mechanics:** Header must be sent via `header( 'Server-Timing: ...', false )` before flush (`false` appends to preserve coexisting metrics); guard `headers_sent()` and `null === System_Info::get_request_start_microtime()`. Core wraps the action in try/catch with `WP_DEBUG_DISPLAY` on error — no extra try/catch needed in plugin.
+
+**ETag note:** `Advanced_Cache_Handler::create()` drop-in (`includes/class-advanced-cache-handler.php:214` `wppo_serve_cache_file()`) already handles conditional GET (`If-Modified-Since` / `If-None-Match` → `304` with `ETag` / `Last-Modified`); no ETag is computed in `Main::emit_server_timing_header()`.
+
+**Example:**
+```php
+// Plugin usage (gated, docs-only tradeoff):
+// Server-Timing (WP 6.9+). Registering wp_finalized_template_enhancement_output_buffer
+// automatically opts into the template-enhancement buffer (priority 1000 by default),
+// which disables response streaming. TTFB increases while TTLB unchanged — intentional
+// when Server-Timing is enabled; keep disabled by default and emit only on cache-miss
+// generation passes (advanced-cache.php serves cached pages without booting WordPress).
+// @since NEXT
+if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $this->server_timing_enabled() ) {
+    add_action( 'template_redirect', array( $this, 'capture_template_start' ), 0 );
+    add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 1 );
+}
+```
+
+### `wp_template_enhancement_output_buffer`
+WordPress 6.9 filter for the template-enhancement buffer. @since NEXT.
+
+**Parameters:**
+- `$filtered_output` *(string)* — Filtered output from previous callbacks.
+- `$output` *(string)* — Raw output buffer content.
+
+Used by `Cache::process_buffer_for_cache()` at priority 10 to process (image optimisation, minification, CDN rewrite) without saving; persistence is via `Cache::stash_cache()` on the finalized action above. See also `Main::process_used_css_only` (priority 20) and `Image_Optimisation::prioritize_lcp_in_buffer` (priority 30) on the same filter.

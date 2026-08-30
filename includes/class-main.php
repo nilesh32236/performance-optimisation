@@ -552,10 +552,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
 
-			// Server-Timing response header for live front-end renders (WP 6.9+). Independent of enableCache.
-			// Note: registering this action forces the template-enhancement output buffer on for live renders,
-			// which disables response streaming while the header is enabled. The header is only emitted on
-			// cache-miss generation passes; cached responses served by advanced-cache.php never boot WordPress.
+			// Server-Timing (WP 6.9+). Registering wp_finalized_template_enhancement_output_buffer
+			// automatically opts into the template-enhancement buffer (priority 1000 by default),
+			// which disables response streaming. TTFB increases while TTLB unchanged — intentional
+			// when Server-Timing is enabled; keep disabled by default and emit only on cache-miss
+			// generation passes (advanced-cache.php serves cached pages without booting WordPress).
+			// @since NEXT
 			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $this->server_timing_enabled() ) {
 				add_action( 'template_redirect', array( $this, 'capture_template_start' ), 0 );
 				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 1 );
@@ -1240,11 +1242,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Whether the Server-Timing debug header is enabled.
 		 *
-		 * Reads the performance_audit.server_timing_enabled setting (default off).
+		 * Reads the performance_audit.server_timing_enabled setting (default false, off).
 		 * Operators may override it via the wppo_server_timing_enabled filter, e.g. to
 		 * restrict emission to logged-in administrators with manage_options capability.
 		 *
+		 * Enabling forces the template-enhancement output buffer via
+		 * wp_finalized_template_enhancement_output_buffer registration in
+		 * {@see Main::setup_hooks()} (priority 1000 by default), which disables
+		 * response streaming / early flush. TTFB increases while TTLB unchanged —
+		 * intentional when Server-Timing is active; keep disabled by default and
+		 * emit only on cache-miss generation passes. Cached hits served by
+		 * advanced-cache.php never boot WordPress so the header never appears there.
+		 * Paired with {@see Main::capture_template_start()} /
+		 * {@see Main::emit_server_timing_header()}.
+		 *
 		 * @since  1.9.0
+		 * @since  NEXT Streaming tradeoff note and cross-reference.
 		 * @return bool True when Server-Timing telemetry is active.
 		 */
 		public function server_timing_enabled(): bool {
@@ -1255,8 +1268,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Capture the template render start time for Server-Timing telemetry.
 		 *
-		 * @return void
+		 * Records microtime(true) at template_redirect:0 before the template is
+		 * included, for later duration calculation in
+		 * {@see Main::emit_server_timing_header()}. Early bail for admin, AJAX,
+		 * REST, or when {@see Main::server_timing_enabled()} is false; stores
+		 * the timestamp in {@see Main::$server_timing_template_start}. Paired
+		 * with emit_server_timing_header() on
+		 * wp_finalized_template_enhancement_output_buffer.
+		 *
 		 * @since 1.9.0
+		 * @since NEXT Expanded documentation for buffering opt-in context.
+		 * @return void
 		 */
 		public function capture_template_start(): void {
 			if ( ! $this->server_timing_enabled() || is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
@@ -1268,15 +1290,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Emit a Server-Timing response header on live front-end renders (WP 6.9+).
 		 *
-		 * Runs on wp_finalized_template_enhancement_output_buffer, the last hook
-		 * before the response is sent, so header() is still valid. Accepts the
-		 * finalized output buffer for future ETag/late-header use.
+		 * Hook: wp_finalized_template_enhancement_output_buffer (also wp_send_late_headers
+		 * alias) — WP 6.9 canonical late-header spot before flush. WP 6.9 standardised
+		 * the former ad-hoc ob_start() at template_redirect / template_include into
+		 * wp_should_output_buffer_template_for_enhancement() /
+		 * wp_start_template_enhancement_output_buffer() /
+		 * wp_finalize_template_enhancement_output_buffer() with filter
+		 * wp_template_enhancement_output_buffer and action
+		 * wp_finalized_template_enhancement_output_buffer ($final) (Trac #64126 / #63636
+		 * / #43258; Performance Lab #2225/#2515), try/catch wrapped with WP_DEBUG_DISPLAY
+		 * on error.
 		 *
-		 * Note: registering this action opts the template-enhancement output buffer
-		 * in, which disables response streaming and increases TTFB while the header
-		 * is enabled. Keep requiring WP 6.9+ for this path.
+		 * Param $output ($final) is the final HTML string passed by Core to the action
+		 * (not the filtered value); reserved for future ETag hashing without re-registration
+		 * and currently unused.
 		 *
-		 * @param string $output The finalized output buffer content (for future ETag/late-header use).
+		 * Header must be sent via header('Server-Timing: ...', false) before flush; the
+		 * second arg false appends to preserve coexisting metrics. Guards headers_sent()
+		 * and null === System_Info::get_request_start_microtime() before emitting. Core
+		 * wraps this action in try/catch and appends WP_DEBUG_DISPLAY on error, so the
+		 * plugin does not add an extra try/catch.
+		 *
+		 * Streaming tradeoff: registering this action automatically opts into the
+		 * template-enhancement buffer (priority 1000 by default), which disables response
+		 * streaming / early flush. TTFB increases while TTLB unchanged — intentional when
+		 * Server-Timing is enabled; keep disabled by default and emit only on cache-miss
+		 * generation passes (advanced-cache.php serves cached pages without booting
+		 * WordPress).
+		 *
+		 * No ETag / 304 computation here — conditional GET (If-Modified-Since /
+		 * If-None-Match → 304 with ETag / Last-Modified) is already handled in the
+		 * Advanced_Cache_Handler drop-in (advanced-cache.php).
+		 *
+		 * @param string $output The finalized output buffer content (final HTML string, alias $final).
 		 * @return void
 		 * @since NEXT
 		 */
