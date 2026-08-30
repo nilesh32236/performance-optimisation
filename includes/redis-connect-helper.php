@@ -172,15 +172,7 @@ if ( ! function_exists( 'wppo_redis_connect_sentinel' ) ) {
 			$s_port      = $parsed_node['port'];
 
 			try {
-				$sentinel = new \RedisSentinel(
-					array(
-						'host'           => $s_host,
-						'port'           => $s_port,
-						'timeout'        => $timeout,
-						'retry_interval' => $retry,
-						'read_timeout'   => $read_timeout,
-					)
-				);
+				$sentinel = new \RedisSentinel( $s_host, $s_port, $timeout, '', $retry, $read_timeout );
 				$address  = $sentinel->getMasterAddrByName( $master_name );
 
 				if ( $address ) {
