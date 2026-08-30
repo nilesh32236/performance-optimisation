@@ -506,13 +506,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 
 			update_option( 'wppo_settings', $options );
 
-			if ( isset( $options['performance_audit'] ) ) {
-				unset( $options['performance_audit']['pagespeed_api_key'] );
-			}
-
-			if ( isset( $options['object_cache'] ) && isset( $options['object_cache']['password'] ) ) {
-				unset( $options['object_cache']['password'] );
-			}
+			$this->remove_sensitive_settings_from_response( $options );
 
 			return $this->send_response( $options );
 		}
@@ -530,6 +524,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 		 */
 		private function sanitize_settings_recursively( $settings ) {
 			return Util::sanitize_settings_recursively( $settings );
+		}
+
+		/**
+		 * Removes sensitive settings from the response array.
+		 *
+		 * @param array $settings The settings array passed by reference.
+		 * @return void
+		 */
+		private function remove_sensitive_settings_from_response( array &$settings ): void {
+			if ( isset( $settings['performance_audit'] ) ) {
+				unset( $settings['performance_audit']['pagespeed_api_key'] );
+			}
+			if ( isset( $settings['object_cache'] ) && isset( $settings['object_cache']['password'] ) ) {
+				unset( $settings['object_cache']['password'] );
+			}
 		}
 
 		/**
@@ -775,12 +784,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			// Check if the settings are the same.
 			if ( $existing_settings === $merged_settings ) {
 				$response_settings = $existing_settings;
-				if ( isset( $response_settings['performance_audit'] ) ) {
-					unset( $response_settings['performance_audit']['pagespeed_api_key'] );
-				}
-				if ( isset( $response_settings['object_cache'] ) && isset( $response_settings['object_cache']['password'] ) ) {
-					unset( $response_settings['object_cache']['password'] );
-				}
+				$this->remove_sensitive_settings_from_response( $response_settings );
 				return $this->send_response( $response_settings, true, 200, __( 'No changes detected, settings are already up-to-date', 'performance-optimisation' ) );
 			}
 
@@ -789,12 +793,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			}
 
 			$response_settings = $merged_settings;
-			if ( isset( $response_settings['performance_audit'] ) ) {
-				unset( $response_settings['performance_audit']['pagespeed_api_key'] );
-			}
-			if ( isset( $response_settings['object_cache'] ) && isset( $response_settings['object_cache']['password'] ) ) {
-				unset( $response_settings['object_cache']['password'] );
-			}
+			$this->remove_sensitive_settings_from_response( $response_settings );
 
 			return $this->send_response( $response_settings, true, 200, __( 'Settings updated successfully', 'performance-optimisation' ) );
 		}
