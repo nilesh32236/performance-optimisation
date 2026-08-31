@@ -554,7 +554,7 @@ const App = () => {
 	}, [ activeTab ] );
 
 	return (
-		<div className="wppo-container">
+		<div className="wppo-container tw-w-full tw-max-w-full tw-min-w-0 tw-overflow-x-hidden">
 			<Suspense fallback={ null }>
 				<SetupWizard />
 			</Suspense>
@@ -706,8 +706,8 @@ const App = () => {
 				</div>
 			</div>
 
-			<div className="wppo-content">
-				<div className="wppo-main">
+			<div className="wppo-content tw-w-full tw-max-w-full tw-min-w-0 tw-overflow-x-hidden">
+				<div className="wppo-main tw-w-full tw-max-w-full tw-min-w-0 tw-overflow-x-hidden">
 					<div className={ transition ? 'wppo-fadeIn' : undefined }>
 						<ErrorBoundary>{ renderContent() }</ErrorBoundary>
 					</div>

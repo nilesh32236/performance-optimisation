@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tailwind layer overrides for WordPress admin compatibility — preflight is disabled,
+   so we only add minimal base resets scoped to .wppo-* to avoid breaking WP admin. */
+@layer base {
+	.wppo-dashboard-view {
+		@apply tw-font-wppo tw-text-wppo-text tw-leading-normal;
+	}
+}

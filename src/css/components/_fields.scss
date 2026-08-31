@@ -30,6 +30,8 @@
 	}
 
 	@include respond-to('xs') {
+		flex-direction: column;
+		align-items: stretch;
 		flex-wrap: wrap;
 	}
 
@@ -78,6 +80,8 @@
 
 		.components-form-toggle__track {
 			background-color: var(--wppo-border-hover);
+			min-width: 44px;
+			min-height: 28px;
 		}
 	}
 }
@@ -174,4 +178,9 @@
 	font-size: 18px;
 	flex-shrink: 0;
 	white-space: nowrap;
+}
+
+// Fix duplicate ToggleControl label on right side of switch — hide it, keep only left wppo-switch-field__label
+.wppo-switch-field .components-toggle-control .components-toggle-control__label {
+	display: none;
 }

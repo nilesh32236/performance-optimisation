@@ -1447,7 +1447,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : Util::cached_home_url( '/' );
 
 			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
-			$telemetry     = get_transient( $transient_key );
+			$has_salted    = function_exists( 'wp_cache_get_salted' );
+			if ( $has_salted ) {
+				$telemetry = wp_cache_get_salted( $transient_key, 'wppo', Telemetry::AUDIT_SALT_KEY );
+			} else {
+				$telemetry = get_transient( $transient_key );
+			}
 
 			if ( false === $telemetry ) {
 				return $this->send_response(

@@ -139,11 +139,10 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 	const { notice, notify, dismiss } = useNotice();
 	const abortRef = useRef( null );
 
-	const homeUrl = useMemo( () => {
-		return typeof wppoSettings !== 'undefined'
+	const homeUrl =
+		typeof wppoSettings !== 'undefined'
 			? wppoSettings?.performance_audit?.homeUrl ?? ''
 			: '';
-	}, [] );
 
 	// Listen for re-open event from Manage tab.
 	useEffect( () => {
@@ -224,7 +223,10 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 
 	// Auto analyze on step 2 entry
 	useEffect( () => {
-		if ( step !== 2 || ! open || analyzing || auditResult ) {
+		if ( step !== 2 || ! open ) {
+			return;
+		}
+		if ( analyzing || auditResult ) {
 			return;
 		}
 		if ( ! homeUrl ) {
@@ -233,12 +235,17 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 		let cancelled = false;
 		const run = async () => {
 			setAnalyzing( true );
+			// Debug log for troubleshooting (visible when WP_DEBUG_LOG enabled, browser console)
+			// eslint-disable-next-line no-console
+			console.log( '[WPPO Wizard] Analyze start', { homeUrl, step } );
 			try {
 				const res = await runPerformanceScan(
 					homeUrl,
 					false,
 					abortRef.current?.signal
 				);
+				// eslint-disable-next-line no-console
+				console.log( '[WPPO Wizard] performance_scan result', res );
 				if ( ! cancelled && res.success && res.data ) {
 					setAuditResult( res.data );
 					try {
@@ -246,6 +253,8 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 							homeUrl,
 							abortRef.current?.signal
 						);
+						// eslint-disable-next-line no-console
+						console.log( '[WPPO Wizard] suggestions', sug );
 						if (
 							! cancelled &&
 							sug.success &&
@@ -253,11 +262,24 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 						) {
 							setSuggestions( sug.data.suggestions );
 						}
-					} catch {}
+					} catch ( sugErr ) {
+						console.warn(
+							'[WPPO Wizard] suggestions failed',
+							sugErr
+						);
+					}
+				} else if ( ! cancelled ) {
+					console.warn( '[WPPO Wizard] scan no data', res );
 				}
-			} catch {}
+			} catch ( scanErr ) {
+				console.error( '[WPPO Wizard] scan failed', scanErr );
+			}
 			if ( ! cancelled ) {
 				setAnalyzing( false );
+				// eslint-disable-next-line no-console
+				console.log( '[WPPO Wizard] Analyze done', {
+					auditResult: !! auditResult,
+				} );
 			}
 		};
 		abortRef.current = new AbortController();
@@ -266,7 +288,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 			cancelled = true;
 			abortRef.current?.abort();
 		};
-	}, [ step, open, homeUrl, analyzing, auditResult ] );
+	}, [ step, open, homeUrl ] );
 
 	const grouped = useMemo( () => {
 		const g = { safe: [], review: [], advanced: [] };
@@ -395,26 +417,29 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 
 	return (
 		<div
-			className="wppo-wizard-overlay"
+			className="tw-fixed tw-inset-0 tw-bg-[rgba(15,23,42,0.52)] tw-backdrop-blur-[3px] tw-z-[9998] tw-flex tw-items-center tw-justify-center tw-p-4 sm:tw-p-5"
 			role="dialog"
 			aria-modal="true"
 			aria-label={ __( 'Setup Wizard', 'performance-optimisation' ) }
 		>
-			<div className="wppo-wizard" role="document">
-				<div className="wppo-wizard__header">
-					<div className="wppo-wizard__steps">
+			<div
+				className="tw-bg-white tw-border tw-border-[var(--wppo-border)] tw-rounded-[16px] tw-shadow-[var(--wppo-shadow-lg)] tw-w-full tw-max-w-[760px] tw-max-h-[88vh] tw-flex tw-flex-col tw-overflow-hidden"
+				role="document"
+			>
+				<div className="tw-flex tw-items-start tw-justify-between tw-gap-3 tw-p-4 tw-border-b tw-border-[var(--wppo-border)] tw-bg-[var(--wppo-bg-card-surface)]">
+					<div className="tw-flex tw-flex-nowrap tw-gap-1.5 sm:tw-gap-2 tw-flex-1 tw-overflow-x-auto tw-scrollbar-none tw-pb-1 sm:tw-pb-0">
 						{ STEP_LABELS.map( ( label, idx ) => (
 							<span
 								key={ label }
-								className={ `wppo-wizard__step ${
+								className={ `tw-inline-flex tw-items-center tw-gap-1.5 tw-text-[11px] tw-font-semibold tw-px-2 tw-py-1 tw-rounded-full tw-border tw-border-transparent ${
 									idx === step
-										? 'wppo-wizard__step--active'
+										? 'tw-text-[var(--wppo-primary)] tw-bg-[var(--wppo-primary-soft)] tw-border-[var(--wppo-primary-medium)]'
 										: idx < step
-										? 'wppo-wizard__step--done'
+										? 'tw-text-[var(--wppo-success)] tw-bg-[var(--wppo-success-bg)] tw-border-[var(--wppo-success-border)]'
 										: ''
 								}` }
 							>
-								<span className="wppo-wizard__step-num">
+								<span className="tw-w-[18px] tw-h-[18px] tw-rounded-full tw-bg-current tw-text-white tw-inline-flex tw-items-center tw-justify-center tw-text-[10px] tw-flex-shrink-0">
 									{ idx < step ? (
 										<FontAwesomeIcon
 											icon={ faCheckCircle }
@@ -423,7 +448,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 										idx + 1
 									) }
 								</span>
-								<span className="wppo-wizard__step-label">
+								<span className="tw-whitespace-nowrap tw-hidden sm:tw-inline">
 									{ label }
 								</span>
 							</span>
@@ -431,7 +456,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 					</div>
 					<button
 						type="button"
-						className="wppo-wizard__close"
+						className="tw-bg-transparent tw-border tw-border-[var(--wppo-border)] tw-rounded-[8px] tw-w-8 tw-h-8 tw-inline-flex tw-items-center tw-justify-center tw-text-[var(--wppo-text-muted)] hover:tw-bg-[var(--wppo-switch-hover)] tw-flex-shrink-0"
 						onClick={ handleClose }
 						aria-label={ __(
 							'Close wizard',
@@ -450,22 +475,22 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 					/>
 				) }
 
-				<div className="wppo-wizard__body">
+				<div className="tw-p-5 sm:tw-p-6 tw-overflow-auto tw-flex-1">
 					{ step === 0 && (
-						<div className="wppo-wizard__panel">
+						<div className="tw-space-y-3">
 							<h2>
 								{ __(
 									'Welcome to Performance Optimisation',
 									'performance-optimisation'
 								) }
 							</h2>
-							<p className="wppo-text-muted">
+							<p className="tw-text-[var(--wppo-text-muted)]">
 								{ __(
 									'This quick 6-step setup will detect your environment, run a health check, and apply safe recommendations in one click. You can dismiss anytime and re-open from Manage → Re-open setup.',
 									'performance-optimisation'
 								) }
 							</p>
-							<div className="wppo-wizard__hero">
+							<div className="tw-flex tw-gap-4 tw-my-4 tw-text-[var(--wppo-primary)]">
 								<FontAwesomeIcon icon={ faRocket } size="2x" />
 								<FontAwesomeIcon
 									icon={ faShieldAlt }
@@ -473,7 +498,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 								/>
 								<FontAwesomeIcon icon={ faLeaf } size="2x" />
 							</div>
-							<ul className="wppo-wizard__list">
+							<ul className="tw-my-3 tw-pl-5 tw-list-disc tw-text-[13px] tw-leading-6 tw-text-[var(--wppo-text-muted)] tw-space-y-1">
 								<li>
 									{ __(
 										'Detects LiteSpeed, Redis, and image libraries',
@@ -496,7 +521,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 						</div>
 					) }
 					{ step === 1 && (
-						<div className="wppo-wizard__panel">
+						<div className="tw-space-y-3">
 							<h3>
 								{ __(
 									'Environment',
@@ -511,8 +536,8 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 									) }
 								</p>
 							) : (
-								<div className="wppo-wizard__env-grid">
-									<div className="wppo-wizard__env-item">
+								<div className="tw-grid tw-grid-cols-1 sm:tw-grid-cols-3 tw-gap-3 tw-my-3">
+									<div className="tw-border tw-border-[var(--wppo-border)] tw-rounded-[10px] tw-p-3.5 tw-bg-[var(--wppo-bg-card-surface)] tw-flex tw-flex-col tw-gap-1.5 tw-text-[13px]">
 										<FontAwesomeIcon icon={ faServer } />
 										<strong>
 											{ __(
@@ -537,7 +562,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 												  ) }
 										</span>
 									</div>
-									<div className="wppo-wizard__env-item">
+									<div className="tw-border tw-border-[var(--wppo-border)] tw-rounded-[10px] tw-p-3.5 tw-bg-[var(--wppo-bg-card-surface)] tw-flex tw-flex-col tw-gap-1.5 tw-text-[13px]">
 										<FontAwesomeIcon icon={ faDatabase } />
 										<strong>
 											{ __(
@@ -555,7 +580,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 												  ) }
 										</span>
 									</div>
-									<div className="wppo-wizard__env-item">
+									<div className="tw-border tw-border-[var(--wppo-border)] tw-rounded-[10px] tw-p-3.5 tw-bg-[var(--wppo-bg-card-surface)] tw-flex tw-flex-col tw-gap-1.5 tw-text-[13px]">
 										<FontAwesomeIcon icon={ faImages } />
 										<strong>
 											{ __(
@@ -569,7 +594,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 									</div>
 								</div>
 							) }
-							<p className="wppo-text-muted wppo-text-small">
+							<p className="tw-text-[12px] tw-text-[var(--wppo-text-muted)]">
 								{ __(
 									'We use wppoSettings.litespeed + Redis PONG + GD/Imagick hints. No extra server calls except ping & system_info.',
 									'performance-optimisation'
@@ -578,11 +603,11 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 						</div>
 					) }
 					{ step === 2 && (
-						<div className="wppo-wizard__panel">
+						<div className="tw-space-y-3">
 							<h3>
 								{ __( 'Analyze', 'performance-optimisation' ) }
 							</h3>
-							<p className="wppo-text-muted">
+							<p className="tw-text-[var(--wppo-text-muted)]">
 								{ sprintf(
 									/* translators: %s: URL being scanned */
 									__(
@@ -606,7 +631,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 								</p>
 							) }
 							{ ! analyzing && auditResult && (
-								<div className="wppo-wizard__analyze-result">
+								<div className="tw-bg-[var(--wppo-info-bg)] tw-border tw-border-[var(--wppo-info-border)] tw-rounded-[10px] tw-p-3 tw-mt-2.5">
 									<p>
 										<strong>
 											{ __(
@@ -629,7 +654,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 										) }{ ' ' }
 										KB
 									</p>
-									<p className="wppo-text-muted wppo-text-small">
+									<p className="tw-text-[12px] tw-text-[var(--wppo-text-muted)]">
 										{ __(
 											'Suggestions will be grouped into Safe / Review / Advanced in the next step (merged telemetry + PageSpeed).',
 											'performance-optimisation'
@@ -638,7 +663,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 								</div>
 							) }
 							{ ! analyzing && ! auditResult && (
-								<p className="wppo-text-muted">
+								<p className="tw-text-[var(--wppo-text-muted)]">
 									{ __(
 										'No scan data yet. Try again or skip.',
 										'performance-optimisation'
@@ -648,14 +673,14 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 						</div>
 					) }
 					{ step === 3 && (
-						<div className="wppo-wizard__panel">
+						<div className="tw-space-y-3">
 							<h3>
 								{ __(
 									'Recommendations',
 									'performance-optimisation'
 								) }
 							</h3>
-							<p className="wppo-text-muted">
+							<p className="tw-text-[var(--wppo-text-muted)]">
 								{ __(
 									'Grouped into 3 tiers. Select which to apply.',
 									'performance-optimisation'
@@ -665,9 +690,9 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 								( tier ) => (
 									<div
 										key={ tier }
-										className="wppo-wizard__tier"
+										className="tw-border tw-border-[var(--wppo-border)] tw-rounded-[10px] tw-p-3 tw-mb-3 tw-bg-white"
 									>
-										<label className="wppo-wizard__tier-header">
+										<label className="tw-flex tw-items-center tw-gap-2 tw-text-[13px] tw-cursor-pointer">
 											<input
 												type="checkbox"
 												checked={
@@ -685,7 +710,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 												}
 											/>
 											<span
-												className="wppo-wizard__tier-badge"
+												className="tw-text-white tw-px-2 tw-py-0.5 tw-rounded-full tw-text-[11px] tw-font-bold"
 												style={ {
 													background:
 														tierMeta[ tier ].color,
@@ -693,16 +718,16 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 											>
 												{ tierMeta[ tier ].label }
 											</span>
-											<span className="wppo-wizard__tier-desc">
+											<span className="tw-text-[var(--wppo-text-muted)] tw-text-[12px] tw-flex-1">
 												{ tierMeta[ tier ].desc }
 											</span>
-											<span className="wppo-wizard__tier-count">
+											<span className="tw-bg-[var(--wppo-bg-card-surface)] tw-border tw-border-[var(--wppo-border)] tw-rounded-full tw-px-2 tw-py-0.5 tw-text-[11px]">
 												{ grouped[ tier ].length }
 											</span>
 										</label>
-										<ul className="wppo-wizard__tier-list">
+										<ul className="tw-mt-2.5 tw-p-0 tw-list-none tw-flex tw-flex-col tw-gap-1.5">
 											{ grouped[ tier ].length === 0 && (
-												<li className="wppo-text-muted wppo-text-small">
+												<li className="tw-text-[12px] tw-text-[var(--wppo-text-muted)]">
 													{ __(
 														'No items in this tier.',
 														'performance-optimisation'
@@ -712,7 +737,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 											{ grouped[ tier ].map( ( s ) => (
 												<li
 													key={ s.metric }
-													className="wppo-wizard__suggestion"
+													className="tw-flex tw-items-center tw-gap-2 tw-text-[12.5px] tw-bg-[var(--wppo-bg-card-surface)] tw-border tw-border-[var(--wppo-border)] tw-rounded-[8px] tw-p-2 tw-px-2.5"
 												>
 													<span
 														className={ `wppo-status-badge wppo-status-badge--${ s.status }` }
@@ -722,7 +747,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 													<span>
 														{ s.description }
 													</span>
-													<span className="wppo-text-muted wppo-text-small">
+													<span className="tw-text-[12px] tw-text-[var(--wppo-text-muted)]">
 														{ s.metric }
 													</span>
 												</li>
@@ -732,7 +757,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 								)
 							) }
 							{ suggestions.length === 0 && (
-								<p className="wppo-text-muted">
+								<p className="tw-text-[var(--wppo-text-muted)]">
 									{ __(
 										'No suggestions yet — run Analyze first or proceed with Safe defaults (cache + minify + defer + native lazy).',
 										'performance-optimisation'
@@ -742,17 +767,17 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 						</div>
 					) }
 					{ step === 4 && (
-						<div className="wppo-wizard__panel">
+						<div className="tw-space-y-3">
 							<h3>
 								{ __( 'Review', 'performance-optimisation' ) }
 							</h3>
-							<p className="wppo-text-muted">
+							<p className="tw-text-[var(--wppo-text-muted)]">
 								{ __(
 									'Benefit / risk / badge for each selected tier.',
 									'performance-optimisation'
 								) }
 							</p>
-							<table className="wppo-wizard__review-table">
+							<table className="tw-w-full tw-border-collapse tw-text-[13px] tw-my-3">
 								<thead>
 									<tr>
 										<th>
@@ -874,9 +899,9 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 									</tr>
 								</tbody>
 							</table>
-							<div className="wppo-wizard__actions-inline">
+							<div className="tw-flex tw-items-center tw-gap-3 tw-flex-wrap tw-mt-3">
 								<LoadingSubmitButton
-									className="wppo-button wppo-button--primary"
+									className="tw-inline-flex tw-items-center tw-justify-center tw-px-4 tw-py-2 tw-bg-[var(--wppo-primary)] tw-text-white tw-rounded-[8px] tw-text-[13px] tw-font-semibold"
 									onClick={ handleApply }
 									isLoading={ applying }
 									label={
@@ -897,7 +922,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 										'performance-optimisation'
 									) }
 								/>
-								<span className="wppo-text-muted wppo-text-small">
+								<span className="tw-text-[12px] tw-text-[var(--wppo-text-muted)]">
 									{ __(
 										'Single apiCall batch: enableCache, minifyCSS/JS, deferJS, lazyLoadNative',
 										'performance-optimisation'
@@ -907,7 +932,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 						</div>
 					) }
 					{ step === 5 && (
-						<div className="wppo-wizard__panel">
+						<div className="tw-space-y-3">
 							<h3>
 								{ __( 'Verify', 'performance-optimisation' ) }
 							</h3>
@@ -932,7 +957,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 										{ verifyResult.load_time }s • TTFB{ ' ' }
 										{ verifyResult.ttfb }ms
 									</p>
-									<p className="wppo-notice wppo-notice--success">
+									<p className="tw-bg-[var(--wppo-success-bg)] tw-border tw-border-[var(--wppo-success-border)] tw-rounded-[8px] tw-p-3 tw-text-[13px]">
 										{ __(
 											'Verification complete — compare before/after in Dashboard → Performance Audit.',
 											'performance-optimisation'
@@ -941,16 +966,16 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 								</div>
 							) }
 							{ ! verifying && ! verifyResult && (
-								<p className="wppo-text-muted">
+								<p className="tw-text-[var(--wppo-text-muted)]">
 									{ __(
 										'Run a fresh scan to verify improvements.',
 										'performance-optimisation'
 									) }
 								</p>
 							) }
-							<div className="wppo-wizard__actions-inline">
+							<div className="tw-flex tw-items-center tw-gap-3 tw-flex-wrap tw-mt-3">
 								<LoadingSubmitButton
-									className="wppo-button wppo-button--secondary"
+									className="tw-inline-flex tw-items-center tw-justify-center tw-px-4 tw-py-2 tw-bg-white tw-border tw-border-[var(--wppo-border)] tw-rounded-[8px] tw-text-[13px] tw-font-semibold"
 									onClick={ handleVerify }
 									isLoading={ verifying }
 									label={ __(
@@ -964,7 +989,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 								/>
 								<button
 									type="button"
-									className="wppo-button wppo-button--primary"
+									className="tw-inline-flex tw-items-center tw-justify-center tw-px-4 tw-py-2 tw-bg-[var(--wppo-primary)] tw-text-white tw-rounded-[8px] tw-text-[13px] tw-font-semibold"
 									onClick={ handleDismiss }
 								>
 									{ __(
@@ -977,16 +1002,16 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 					) }
 				</div>
 
-				<div className="wppo-wizard__footer">
-					<div className="wppo-wizard__footer-left">
+				<div className="tw-flex tw-flex-col sm:tw-flex-row tw-items-center tw-justify-between tw-gap-3 tw-p-3.5 sm:tw-p-4 tw-border-t tw-border-[var(--wppo-border)] tw-bg-[rgba(248,250,252,0.6)] tw-backdrop-blur-[6px]">
+					<div className="tw-flex tw-items-center tw-gap-2.5 tw-flex-1">
 						<button
 							type="button"
-							className="wppo-button wppo-button--secondary"
+							className="tw-inline-flex tw-items-center tw-justify-center tw-px-4 tw-py-2 tw-bg-white tw-border tw-border-[var(--wppo-border)] tw-rounded-[8px] tw-text-[13px] tw-font-semibold"
 							onClick={ handleDismiss }
 						>
 							{ __( 'Dismiss', 'performance-optimisation' ) }
 						</button>
-						<span className="wppo-text-muted wppo-text-small">
+						<span className="tw-text-[12px] tw-text-[var(--wppo-text-muted)]">
 							{ sprintf(
 								/* translators: %1$d: current step, %2$d: total steps */
 								__(
@@ -998,11 +1023,11 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 							) }
 						</span>
 					</div>
-					<div className="wppo-wizard__footer-right">
+					<div className="tw-flex tw-items-center tw-gap-2.5 tw-flex-shrink-0">
 						{ step > 0 && (
 							<button
 								type="button"
-								className="wppo-button wppo-button--secondary"
+								className="tw-inline-flex tw-items-center tw-justify-center tw-px-4 tw-py-2 tw-bg-white tw-border tw-border-[var(--wppo-border)] tw-rounded-[8px] tw-text-[13px] tw-font-semibold"
 								onClick={ () =>
 									setStep( ( s ) => Math.max( 0, s - 1 ) )
 								}
@@ -1013,7 +1038,7 @@ const SetupWizard = ( { onClose, initialOpen = false } ) => {
 						{ step < totalSteps - 1 && step !== 4 && (
 							<button
 								type="button"
-								className="wppo-button wppo-button--primary"
+								className="tw-inline-flex tw-items-center tw-justify-center tw-px-4 tw-py-2 tw-bg-[var(--wppo-primary)] tw-text-white tw-rounded-[8px] tw-text-[13px] tw-font-semibold"
 								onClick={ () =>
 									setStep( ( s ) =>
 										Math.min( totalSteps - 1, s + 1 )

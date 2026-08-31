@@ -7,10 +7,7 @@ import {
 } from '@wordpress/element';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
-import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
-import FeatureHeader from './common/FeatureHeader';
-import FeatureCard from './common/FeatureCard';
 import SwitchField from './common/SwitchField';
 import CheckboxOption from './common/CheckboxOption';
 import NoticeBanner from './common/NoticeBanner';
@@ -28,15 +25,19 @@ import ImageOptimizationCard from './ImageOptimizationCard';
 import RecentActivityCard from './RecentActivityCard';
 import WelcomePanel from './WelcomePanel';
 import HealthHeader from './HealthHeader';
+import SectionHeader from './ui/SectionHeader';
+import Card from './ui/Card';
+import Button from './ui/Button';
+import Badge from './ui/Badge';
+import Alert from './ui/Alert';
 import { __ } from '@wordpress/i18n';
 
-// Diagnostics anchor for HealthHeader Run Scan → scroll target (fixes wppo-audit-details dead anchor).
+// Diagnostics anchor for HealthHeader Run Scan → scroll target.
 const DiagnosticsAnchor = () => (
 	<div
 		id="wppo-audit-details"
-		className="wppo-diagnostics-anchor"
+		className="tw-scroll-mt-6"
 		aria-hidden="true"
-		style={ { scrollMarginTop: '24px' } }
 	/>
 );
 import { modeLabel } from '../lib/litespeed';
@@ -46,7 +47,6 @@ import {
 	faFileCode,
 	faDatabase,
 	faImages,
-	faExclamationTriangle,
 	faBroom,
 } from '@fortawesome/free-solid-svg-icons';
 
@@ -683,14 +683,34 @@ const Dashboard = ( {
 		: '';
 	const optimizedFilesCount = ( totalJs || 0 ) + ( totalCss || 0 );
 
-	let dbBadgeClass = 'wppo-status-badge--good';
 	let dbBadgeLabel = __( 'Healthy', 'performance-optimisation' );
+	let dbBadgeTone = 'good';
 	if ( dbOverheadCount > 50 ) {
-		dbBadgeClass = 'wppo-status-badge--poor';
 		dbBadgeLabel = __( 'High', 'performance-optimisation' );
+		dbBadgeTone = 'error';
 	} else if ( dbOverheadCount >= 20 ) {
-		dbBadgeClass = 'wppo-status-badge--warning';
 		dbBadgeLabel = __( 'Medium', 'performance-optimisation' );
+		dbBadgeTone = 'warning';
+	}
+
+	let cacheSizeSubtext = null;
+	if ( isCacheMissing ) {
+		cacheSizeSubtext = (
+			<>
+				{ cacheSizeUnit } <span className="tw-mx-1">•</span>{ ' ' }
+				<Badge tone="error">
+					{ __( 'Not cached', 'performance-optimisation' ) }
+				</Badge>
+			</>
+		);
+	} else if ( cacheSizeUnit ) {
+		cacheSizeSubtext = cacheSizeUnit;
+	} else {
+		cacheSizeSubtext = (
+			<span className="tw-text-[13px] tw-text-[var(--wppo-text-muted)]">
+				{ __( 'Ready', 'performance-optimisation' ) }
+			</span>
+		);
 	}
 
 	// LiteSpeed banner data from global wppoSettings (injected by PHP).
@@ -700,10 +720,6 @@ const Dashboard = ( {
 	const effectiveMode = litespeedInfo?.effective_mode || 'standalone';
 	const lscacheActive = !! litespeedInfo?.lscache_active;
 	const effectiveLabel = modeLabel( effectiveMode );
-	const effectiveBadgeClass =
-		effectiveMode === 'litespeed'
-			? 'wppo-status-badge--warning'
-			: 'wppo-status-badge--good';
 
 	// Truthful health derived from real settings — no fake 92/88/64 scores (trust issue §6).
 	// Use status only (Good/Needs attention/Needs review) rather than invented precision.
@@ -732,7 +748,35 @@ const Dashboard = ( {
 	} )();
 
 	return (
-		<div className="wppo-dashboard-view">
+		<div className="tw-w-full tw-max-w-full tw-min-w-0 tw-space-y-5 sm:tw-space-y-6 tw-py-2 sm:tw-py-4 tw-overflow-x-hidden">
+			{ /* Page Header — product identity, title, description */ }
+			<SectionHeader
+				eyebrow={ __(
+					'Performance Optimisation',
+					'performance-optimisation'
+				) }
+				title={ __( 'Overview', 'performance-optimisation' ) }
+				description={ __(
+					'Performance overview and quick actions for your site. Health shows what to improve next.',
+					'performance-optimisation'
+				) }
+				actions={
+					<Button
+						variant="secondary"
+						size="md"
+						className="tw-w-full sm:tw-w-auto"
+						onClick={ onClearCache }
+						isLoading={ loading.clear_cache }
+						loadingLabel={ __(
+							'Purging…',
+							'performance-optimisation'
+						) }
+					>
+						<FontAwesomeIcon icon={ faBroom } aria-hidden="true" />
+						{ __( 'Purge All Cache', 'performance-optimisation' ) }
+					</Button>
+				}
+			/>
 			<HealthHeader
 				speedStatus={ health.speedStatus }
 				stabilityStatus={ health.stabilityStatus }
@@ -767,277 +811,294 @@ const Dashboard = ( {
 				/>
 			) }
 			{ isLiteSpeed && (
-				<div
-					className="wppo-notice wppo-notice--info wppo-litespeed-banner wppo-mb-16"
-					role="alert"
-					aria-live="polite"
-				>
-					<FontAwesomeIcon icon={ faServer } aria-hidden="true" />
-					<span className="wppo-litespeed-banner__text">
-						<strong>
-							{ __(
-								'LiteSpeed Detected',
-								'performance-optimisation'
-							) }
-						</strong>{ ' ' }
-						{ lscacheActive
-							? __(
-									'LiteSpeed Cache plugin is active.',
+				<Alert tone="info" className="tw-mb-0">
+					<div className="tw-flex tw-flex-col sm:tw-flex-row sm:tw-items-center tw-gap-2 sm:tw-gap-3 tw-w-full tw-min-w-0">
+						<div className="tw-flex tw-items-center tw-gap-2 tw-min-w-0 tw-flex-1">
+							<FontAwesomeIcon
+								icon={ faServer }
+								aria-hidden="true"
+								className="tw-flex-shrink-0"
+							/>
+							<span className="tw-font-semibold tw-text-[13.5px] tw-leading-5 tw-min-w-0">
+								{ __(
+									'LiteSpeed Detected',
 									'performance-optimisation'
-							  )
-							: __(
-									'Server is LiteSpeed / OpenLiteSpeed.',
+								) }
+								<span className="tw-font-normal tw-text-[var(--wppo-text-muted)] tw-ml-2">
+									{ lscacheActive
+										? __(
+												'LiteSpeed Cache plugin is active.',
+												'performance-optimisation'
+										  )
+										: __(
+												'Server is LiteSpeed / OpenLiteSpeed.',
+												'performance-optimisation'
+										  ) }
+								</span>
+							</span>
+						</div>
+						<div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2 tw-shrink-0">
+							<Badge
+								tone={
+									effectiveMode === 'litespeed'
+										? 'warning'
+										: 'good'
+								}
+							>
+								{ __(
+									'Effective:',
 									'performance-optimisation'
-							  ) }
-					</span>
-					<span className="wppo-litespeed-banner__badges">
-						<span
-							className={ `wppo-status-badge ${ effectiveBadgeClass }` }
-						>
-							{ __( 'Effective:', 'performance-optimisation' ) }{ ' ' }
-							{ effectiveLabel }
-						</span>
-						<span
-							className={ `wppo-status-badge ${
-								lscacheActive
-									? 'wppo-status-badge--poor'
-									: 'wppo-status-badge--good'
-							}` }
-						>
-							{ lscacheActive
-								? 'LSCache Active'
-								: 'LSCache Inactive' }
-						</span>
-					</span>
+								) }{ ' ' }
+								{ effectiveLabel }
+							</Badge>
+							<Badge tone={ lscacheActive ? 'error' : 'good' }>
+								{ lscacheActive
+									? 'LSCache Active'
+									: 'LSCache Inactive' }
+							</Badge>
+						</div>
+					</div>
 					{ lscacheActive && effectiveMode === 'litespeed' && (
-						<span className="wppo-text-muted wppo-text-small">
+						<p className="tw-text-[12.5px] tw-text-[var(--wppo-text-muted)] tw-mt-2 tw-leading-5">
 							{ __(
 								'WPPO optimisation is paused in this mode.',
 								'performance-optimisation'
 							) }
-						</span>
+						</p>
 					) }
-				</div>
+				</Alert>
 			) }
-			<FeatureHeader
-				title={
-					<>
-						<span className="wppo-health-dot" aria-hidden="true">
-							●
-						</span>
-						{ __( 'System Health', 'performance-optimisation' ) }
-					</>
-				}
+			<SectionHeader
+				title={ __( 'System Health', 'performance-optimisation' ) }
 				description={ __(
-					'Real-time performance overview and quick optimisation actions.',
+					'At a glance — what is healthy, what needs attention, and what you can do next.',
 					'performance-optimisation'
 				) }
-				status={ <></> }
-				actions={
-					<LoadingSubmitButton
-						type="button"
-						className="wppo-button wppo-button--primary"
-						onClick={ onClearCache }
-						isLoading={ loading.clear_cache }
-						label={
-							<>
-								<FontAwesomeIcon
-									icon={ faBroom }
-									aria-hidden="true"
-									style={ { marginRight: '8px' } }
-								/>
-								{ __(
-									'Purge All Cache',
-									'performance-optimisation'
-								) }
-							</>
-						}
-						loadingLabel={ __(
-							'Purging…',
-							'performance-optimisation'
-						) }
-					/>
-				}
 			/>
 
 			<WelcomePanel />
 
 			{ isCacheMissing && (
-				<div className="wppo-banner wppo-banner--warning" role="alert">
-					<span className="wppo-banner__icon" aria-hidden="true">
-						<FontAwesomeIcon icon={ faExclamationTriangle } />
-					</span>
-					<span className="wppo-banner__text">
-						{ __(
-							'Cache directory not found.',
-							'performance-optimisation'
-						) }
-					</span>
-					<button
-						type="button"
-						className="wppo-button wppo-button--primary wppo-button--sm"
-						onClick={ () => onNavigate( 'fileOptimization' ) }
-					>
-						{ __( 'Fix Now', 'performance-optimisation' ) }
-					</button>
-				</div>
+				<Alert
+					tone="warning"
+					title={ __(
+						'Cache directory not found.',
+						'performance-optimisation'
+					) }
+				>
+					<div className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-mt-2">
+						<span className="tw-text-[13.5px] tw-leading-5">
+							{ __(
+								'The cache folder is missing. Re-save settings or check file permissions.',
+								'performance-optimisation'
+							) }
+						</span>
+						<Button
+							variant="secondary"
+							size="sm"
+							onClick={ () => onNavigate( 'fileOptimization' ) }
+						>
+							{ __( 'Fix Now', 'performance-optimisation' ) }
+						</Button>
+					</div>
+				</Alert>
 			) }
-			{ /* Quick-stat overview strip */ }
-			<div className="wppo-stats-grid">
-				<div className="wppo-stat-item wppo-stat-item--cache">
-					<div className="wppo-stat-header">
-						<span className="wppo-stat-label">
+			{ /* Metrics — consistent cards, responsive grid */ }
+			<div className="tw-grid tw-grid-cols-1 sm:tw-grid-cols-2 lg:tw-grid-cols-4 tw-gap-4">
+				{ /* Cache Size */ }
+				<Card
+					className="tw-flex tw-flex-col tw-p-5 tw-min-h-[168px]"
+					hover
+				>
+					<div className="tw-flex tw-items-start tw-justify-between tw-gap-3 tw-mb-3">
+						<span className="tw-text-[11px] tw-font-bold tw-tracking-[0.08em] tw-uppercase tw-text-[var(--wppo-text-muted)]">
 							{ __( 'Cache Size', 'performance-optimisation' ) }
 						</span>
-						<span className="wppo-stat-icon" aria-hidden="true">
-							<FontAwesomeIcon icon={ faServer } />
+						<span
+							className="tw-w-8 tw-h-8 tw-rounded-full tw-bg-[var(--wppo-primary-soft)] tw-flex tw-items-center tw-justify-center tw-text-[var(--wppo-primary)] tw-flex-shrink-0"
+							aria-hidden="true"
+						>
+							<FontAwesomeIcon
+								icon={ faServer }
+								className="tw-text-[14px]"
+							/>
 						</span>
 					</div>
 					<span
 						className={
 							isCacheMissing
-								? 'wppo-stat-value wppo-stat-value--muted'
-								: 'wppo-stat-value'
+								? 'tw-text-[22px] tw-font-extrabold tw-tracking-tight tw-text-[var(--wppo-text-light)] tw-leading-none'
+								: 'tw-text-[26px] tw-font-extrabold tw-tracking-tight tw-text-[var(--wppo-text-main)] tw-leading-none'
 						}
 					>
 						{ cacheSizeValue }
 					</span>
-					<span className="wppo-stat-unit">
-						{
-							// eslint-disable-next-line no-nested-ternary
-							isCacheMissing ? (
-								<>
-									{ cacheSizeUnit } •{ ' ' }
-									<span className="wppo-status-badge wppo-status-badge--poor">
-										{ __(
-											'Not cached',
-											'performance-optimisation'
-										) }
-									</span>
-								</>
-							) : cacheSizeUnit ? (
-								cacheSizeUnit
-							) : (
-								<span className="wppo-text-muted wppo-text-small">
-									{ __(
-										'Ready',
-										'performance-optimisation'
-									) }
-								</span>
-							)
-						}
+					<span className="tw-text-[13px] tw-text-[var(--wppo-text-muted)] tw-mt-1 tw-flex tw-flex-wrap tw-items-center tw-gap-1.5">
+						{ cacheSizeSubtext }
 					</span>
-					<div className="wppo-stat-footer">
-						<button
-							type="button"
-							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
-							onClick={ () => onNavigate( 'fileOptimization' ) }
+					<div className="tw-mt-auto tw-pt-4">
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={ () => onNavigate( 'speed' ) }
+							className="tw-w-full sm:tw-w-auto"
 						>
 							{ __( 'Manage →', 'performance-optimisation' ) }
-						</button>
+						</Button>
 					</div>
-				</div>
-				<div className="wppo-stat-item wppo-stat-item--files">
-					<div className="wppo-stat-header">
-						<span className="wppo-stat-label">
+				</Card>
+				{ /* Optimized Files */ }
+				<Card
+					className="tw-flex tw-flex-col tw-p-5 tw-min-h-[168px]"
+					hover
+				>
+					<div className="tw-flex tw-items-start tw-justify-between tw-gap-3 tw-mb-3">
+						<span className="tw-text-[11px] tw-font-bold tw-tracking-[0.08em] tw-uppercase tw-text-[var(--wppo-text-muted)]">
 							{ __(
 								'Optimized Files',
 								'performance-optimisation'
 							) }
 						</span>
-						<span className="wppo-stat-icon" aria-hidden="true">
-							<FontAwesomeIcon icon={ faFileCode } />
+						<span
+							className="tw-w-8 tw-h-8 tw-rounded-full tw-bg-[#f5f3ff] tw-flex tw-items-center tw-justify-center tw-text-[#8b5cf6] tw-flex-shrink-0"
+							aria-hidden="true"
+						>
+							<FontAwesomeIcon
+								icon={ faFileCode }
+								className="tw-text-[14px]"
+							/>
 						</span>
 					</div>
-					<span className="wppo-stat-value">
+					<span className="tw-text-[26px] tw-font-extrabold tw-tracking-tight tw-text-[var(--wppo-text-main)] tw-leading-none">
 						{ optimizedFilesCount }
 					</span>
-					<span className="wppo-stat-unit">
+					<span className="tw-text-[13px] tw-text-[var(--wppo-text-muted)] tw-mt-1">
 						{ __( 'files', 'performance-optimisation' ) }
 					</span>
-					<div className="wppo-stat-footer">
-						<button
-							type="button"
-							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
-							onClick={ () => onNavigate( 'fileOptimization' ) }
+					<div className="tw-mt-auto tw-pt-4">
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={ () => onNavigate( 'speed' ) }
+							className="tw-w-full sm:tw-w-auto"
 						>
 							{ __( 'Configure →', 'performance-optimisation' ) }
-						</button>
+						</Button>
 					</div>
-				</div>
-				<div className="wppo-stat-item wppo-stat-item--db">
-					<div className="wppo-stat-header">
-						<span className="wppo-stat-label">
+				</Card>
+				{ /* DB Overhead */ }
+				<Card
+					className="tw-flex tw-flex-col tw-p-5 tw-min-h-[168px]"
+					hover
+				>
+					<div className="tw-flex tw-items-start tw-justify-between tw-gap-3 tw-mb-3">
+						<span className="tw-text-[11px] tw-font-bold tw-tracking-[0.08em] tw-uppercase tw-text-[var(--wppo-text-muted)]">
 							{ __( 'DB Overhead', 'performance-optimisation' ) }
 						</span>
-						<span className="wppo-stat-icon" aria-hidden="true">
-							<FontAwesomeIcon icon={ faDatabase } />
+						<span
+							className="tw-w-8 tw-h-8 tw-rounded-full tw-bg-[#fffbeb] tw-flex tw-items-center tw-justify-center tw-text-[#d97706] tw-flex-shrink-0"
+							aria-hidden="true"
+						>
+							<FontAwesomeIcon
+								icon={ faDatabase }
+								className="tw-text-[14px]"
+							/>
 						</span>
 					</div>
-					<span className="wppo-stat-value">{ dbOverheadCount }</span>
-					<span className="wppo-stat-unit">
-						{ __( 'items', 'performance-optimisation' ) }
-						<span
-							className={ `wppo-status-badge ${ dbBadgeClass }` }
-						>
-							{ dbBadgeLabel }
-						</span>
+					<span className="tw-text-[26px] tw-font-extrabold tw-tracking-tight tw-text-[var(--wppo-text-main)] tw-leading-none">
+						{ dbOverheadCount }
 					</span>
-					<div className="wppo-stat-footer">
-						<button
-							type="button"
-							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
-							onClick={ () => onNavigate( 'databaseCleanup' ) }
+					<span className="tw-text-[13px] tw-text-[var(--wppo-text-muted)] tw-mt-1 tw-flex tw-flex-wrap tw-items-center tw-gap-1.5">
+						{ __( 'items', 'performance-optimisation' ) }
+						<Badge tone={ dbBadgeTone }>{ dbBadgeLabel }</Badge>
+					</span>
+					<div className="tw-mt-auto tw-pt-4">
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={ () => onNavigate( 'data' ) }
+							className="tw-w-full sm:tw-w-auto"
 						>
 							{ __( 'Optimize →', 'performance-optimisation' ) }
-						</button>
+						</Button>
 					</div>
-				</div>
-				<div className="wppo-stat-item wppo-stat-item--images">
-					<div className="wppo-stat-header">
-						<span className="wppo-stat-label">
+				</Card>
+				{ /* Images Optimized */ }
+				<Card
+					className="tw-flex tw-flex-col tw-p-5 tw-min-h-[168px]"
+					hover
+				>
+					<div className="tw-flex tw-items-start tw-justify-between tw-gap-3 tw-mb-3">
+						<span className="tw-text-[11px] tw-font-bold tw-tracking-[0.08em] tw-uppercase tw-text-[var(--wppo-text-muted)]">
 							{ __(
 								'Images Optimized',
 								'performance-optimisation'
 							) }
 						</span>
-						<span className="wppo-stat-icon" aria-hidden="true">
-							<FontAwesomeIcon icon={ faImages } />
+						<span
+							className="tw-w-8 tw-h-8 tw-rounded-full tw-bg-[#ecfdf5] tw-flex tw-items-center tw-justify-center tw-text-[#059669] tw-flex-shrink-0"
+							aria-hidden="true"
+						>
+							<FontAwesomeIcon
+								icon={ faImages }
+								className="tw-text-[14px]"
+							/>
 						</span>
 					</div>
 					<span
 						className={
 							totalOptimizedPercent === null
-								? 'wppo-stat-value wppo-stat-value--muted'
-								: 'wppo-stat-value'
+								? 'tw-text-[22px] tw-font-extrabold tw-tracking-tight tw-text-[var(--wppo-text-light)] tw-leading-none'
+								: 'tw-text-[26px] tw-font-extrabold tw-tracking-tight tw-text-[var(--wppo-text-main)] tw-leading-none'
 						}
 					>
 						{ totalOptimizedPercent !== null
 							? `${ totalOptimizedPercent.toFixed( 0 ) }%`
 							: '—' }
 					</span>
-					<span className="wppo-stat-unit">
+					<span className="tw-text-[13px] tw-text-[var(--wppo-text-muted)] tw-mt-1">
 						{ totalOptimizedPercent !== null
 							? __( 'optimized', 'performance-optimisation' )
 							: __( 'No images', 'performance-optimisation' ) }
 					</span>
-					<div className="wppo-stat-footer">
-						<button
-							type="button"
-							className="wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link"
-							onClick={ () => onNavigate( 'imageOptimization' ) }
+					<div className="tw-mt-auto tw-pt-4">
+						<Button
+							variant="ghost"
+							size="sm"
+							onClick={ () => onNavigate( 'media' ) }
+							className="tw-w-full sm:tw-w-auto"
 						>
 							{ __( 'View →', 'performance-optimisation' ) }
-						</button>
+						</Button>
 					</div>
-				</div>
+				</Card>
 			</div>
 
-			{ /* Page cache master toggle */ }
-			<FeatureCard
-				title={ __( 'Page Cache', 'performance-optimisation' ) }
-				icon={ <i className="fas fa-bolt"></i> }
-			>
+			{ /* Page cache — Tailwind Card (Overview migrated) */ }
+			<Card>
+				<div className="tw-flex tw-items-center tw-gap-2.5 tw-mb-4">
+					<span
+						className="tw-w-8 tw-h-8 tw-rounded-full tw-bg-[var(--wppo-primary-soft)] tw-flex tw-items-center tw-justify-center tw-text-[var(--wppo-primary)]"
+						aria-hidden="true"
+					>
+						<FontAwesomeIcon
+							icon={ faBroom }
+							className="tw-text-[14px]"
+						/>
+					</span>
+					<h3 className="tw-text-[15px] tw-font-bold tw-text-[var(--wppo-text-main)] tw-tracking-tight">
+						{ __( 'Page Cache', 'performance-optimisation' ) }
+					</h3>
+					<Badge tone="good">
+						{ __( 'Recommended', 'performance-optimisation' ) }
+					</Badge>
+				</div>
+				<p className="tw-text-[13.5px] tw-leading-5 tw-text-[var(--wppo-text-muted)] tw-mb-4">
+					{ __(
+						'Generate static HTML copies of your pages and serve them to visitors without running WordPress. Recommended for faster TTFB on non-logged-in traffic.',
+						'performance-optimisation'
+					) }
+				</p>
 				<SwitchField
 					label={ __(
 						'Enable Page Cache',
@@ -1053,12 +1114,15 @@ const Dashboard = ( {
 						setPageCacheEnabled( e.target.checked )
 					}
 				/>
-				<div className="wppo-field">
-					<label className="wppo-field-label" htmlFor="wppoCacheLife">
+				<div className="tw-flex tw-flex-col tw-gap-1.5">
+					<label
+						className="tw-text-[11px] tw-font-bold tw-tracking-[0.06em] tw-uppercase tw-text-[var(--wppo-text-muted)] tw-mb-1"
+						htmlFor="wppoCacheLife"
+					>
 						{ __( 'Cache Lifespan', 'performance-optimisation' ) }
 					</label>
 					<select
-						className="wppo-select"
+						className="tw-w-full tw-bg-white tw-border tw-border-[var(--wppo-border)] tw-rounded-[8px] tw-px-3 tw-py-2.5 sm:tw-py-2 tw-text-[13.5px] tw-text-[var(--wppo-text-main)] tw-leading-5 focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-[var(--wppo-primary)] focus:tw-border-[var(--wppo-primary)] tw-transition"
 						id="wppoCacheLife"
 						name="cacheLife"
 						value={ cacheLife }
@@ -1089,31 +1153,43 @@ const Dashboard = ( {
 						</option>
 					</select>
 				</div>
-				<div className="wppo-feature-card__footer">
-					<LoadingSubmitButton
-						className="wppo-button wppo-button--primary"
+				<div className="tw-flex tw-justify-end tw-pt-4 tw-mt-4 tw-border-t tw-border-[var(--wppo-border)]">
+					<Button
+						variant="primary"
 						onClick={ savePageCacheSettings }
 						isLoading={ savingPageCache }
-						label={ __(
-							'Save Page Cache Settings',
-							'performance-optimisation'
-						) }
 						loadingLabel={ __(
 							'Saving…',
 							'performance-optimisation'
 						) }
-					/>
+					>
+						{ __(
+							'Save Page Cache Settings',
+							'performance-optimisation'
+						) }
+					</Button>
 				</div>
-			</FeatureCard>
+			</Card>
 
-			{ /* CDN cache purge (Cloudflare / Varnish) */ }
-			<FeatureCard
-				title={ __( 'CDN Cache Purge', 'performance-optimisation' ) }
-				icon={ <i className="fas fa-globe"></i> }
-			>
-				<div className="wppo-field">
+			{ /* CDN cache purge — Tailwind Card (Overview migrated) */ }
+			<Card>
+				<div className="tw-flex tw-items-center tw-gap-2.5 tw-mb-4">
+					<span
+						className="tw-w-8 tw-h-8 tw-rounded-full tw-bg-[var(--wppo-info-bg)] tw-flex tw-items-center tw-justify-center tw-text-[var(--wppo-info)]"
+						aria-hidden="true"
+					>
+						<FontAwesomeIcon
+							icon={ faServer }
+							className="tw-text-[14px]"
+						/>
+					</span>
+					<h3 className="tw-text-[15px] tw-font-bold tw-text-[var(--wppo-text-main)] tw-tracking-tight">
+						{ __( 'CDN Cache Purge', 'performance-optimisation' ) }
+					</h3>
+				</div>
+				<div className="tw-flex tw-flex-col tw-gap-1.5">
 					<label
-						className="wppo-field-label"
+						className="tw-text-[11px] tw-font-bold tw-tracking-[0.06em] tw-uppercase tw-text-[var(--wppo-text-muted)] tw-mb-1"
 						htmlFor="cdnPurgeService"
 					>
 						{ __(
@@ -1122,7 +1198,7 @@ const Dashboard = ( {
 						) }
 					</label>
 					<select
-						className="wppo-select"
+						className="tw-w-full tw-bg-white tw-border tw-border-[var(--wppo-border)] tw-rounded-[8px] tw-px-3 tw-py-2.5 sm:tw-py-2 tw-text-[13.5px] tw-text-[var(--wppo-text-main)] tw-leading-5 focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-[var(--wppo-primary)] focus:tw-border-[var(--wppo-primary)] tw-transition"
 						id="cdnPurgeService"
 						name="cdnPurgeService"
 						value={ cdnPurgeService }
@@ -1143,7 +1219,7 @@ const Dashboard = ( {
 					</select>
 					<p
 						id="wppo-cdnPurgeService-desc"
-						className="wppo-text-muted wppo-text-small"
+						className="tw-text-[12.5px] tw-text-[var(--wppo-text-muted)] tw-leading-5"
 					>
 						{ __(
 							'Purge the edge cache whenever the plugin cache is cleared.',
@@ -1153,9 +1229,9 @@ const Dashboard = ( {
 				</div>
 
 				{ cdnPurgeService === 'cloudflare' && (
-					<div className="wppo-field">
+					<div className="tw-flex tw-flex-col tw-gap-1.5">
 						<label
-							className="wppo-field-label"
+							className="tw-text-[11px] tw-font-bold tw-tracking-[0.06em] tw-uppercase tw-text-[var(--wppo-text-muted)] tw-mb-1"
 							htmlFor="cloudflareZoneId"
 						>
 							{ __(
@@ -1164,7 +1240,7 @@ const Dashboard = ( {
 							) }
 						</label>
 						<input
-							className="wppo-input"
+							className="tw-w-full tw-bg-white tw-border tw-border-[var(--wppo-border)] tw-rounded-[8px] tw-px-3 tw-py-2.5 sm:tw-py-2 tw-text-[13.5px] tw-text-[var(--wppo-text-main)] tw-leading-5 focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-[var(--wppo-primary)] focus:tw-border-[var(--wppo-primary)] tw-transition"
 							id="cloudflareZoneId"
 							name="cloudflareZoneId"
 							type="text"
@@ -1176,7 +1252,7 @@ const Dashboard = ( {
 						/>
 						<p
 							id="wppo-cloudflareZoneId-desc"
-							className="wppo-text-muted wppo-text-small"
+							className="tw-text-[12.5px] tw-text-[var(--wppo-text-muted)] tw-leading-5"
 						>
 							{ __(
 								'Define WPPO_CLOUDFLARE_API_TOKEN in wp-config.php with an API token that has Zone > Cache Purge permission. The token is never stored in the database.',
@@ -1187,9 +1263,9 @@ const Dashboard = ( {
 				) }
 
 				{ cdnPurgeService === 'varnish' && (
-					<div className="wppo-field">
+					<div className="tw-flex tw-flex-col tw-gap-1.5">
 						<label
-							className="wppo-field-label"
+							className="tw-text-[11px] tw-font-bold tw-tracking-[0.06em] tw-uppercase tw-text-[var(--wppo-text-muted)] tw-mb-1"
 							htmlFor="varnishPurgeUrls"
 						>
 							{ __(
@@ -1198,7 +1274,7 @@ const Dashboard = ( {
 							) }
 						</label>
 						<textarea
-							className="wppo-textarea"
+							className="tw-w-full tw-bg-white tw-border tw-border-[var(--wppo-border)] tw-rounded-[8px] tw-px-3 tw-py-2.5 sm:tw-py-2 tw-text-[13.5px] tw-text-[var(--wppo-text-main)] tw-leading-5 focus:tw-outline-none focus:tw-ring-2 focus:tw-ring-[var(--wppo-primary)] focus:tw-border-[var(--wppo-primary)] tw-transition"
 							id="varnishPurgeUrls"
 							name="varnishPurgeUrls"
 							rows={ 3 }
@@ -1214,7 +1290,7 @@ const Dashboard = ( {
 						/>
 						<p
 							id="wppo-varnishPurgeUrls-desc"
-							className="wppo-text-muted wppo-text-small"
+							className="tw-text-[12.5px] tw-text-[var(--wppo-text-muted)] tw-leading-5"
 						>
 							{ __(
 								'One URL per line. Each receives a PURGE request on cache clear.',
@@ -1224,31 +1300,40 @@ const Dashboard = ( {
 					</div>
 				) }
 
-				<div className="wppo-feature-card__footer">
-					<LoadingSubmitButton
-						className="wppo-button wppo-button--primary"
+				<div className="tw-flex tw-justify-end tw-pt-4 tw-mt-4 tw-border-t tw-border-[var(--wppo-border)]">
+					<Button
+						variant="primary"
 						onClick={ saveCdnPurgeSettings }
 						isLoading={ savingCdnPurge }
-						label={ __(
-							'Save CDN Purge',
-							'performance-optimisation'
-						) }
 						loadingLabel={ __(
 							'Saving…',
 							'performance-optimisation'
 						) }
-					/>
+					>
+						{ __( 'Save CDN Purge', 'performance-optimisation' ) }
+					</Button>
 				</div>
-			</FeatureCard>
+			</Card>
 
-			{ /* Logged-in user cache settings */ }
-			<FeatureCard
-				title={ __(
-					'Cache for Logged-in Users',
-					'performance-optimisation'
-				) }
-				icon={ <i className="fas fa-user-check"></i> }
-			>
+			{ /* Logged-in cache — Tailwind Card (Overview migrated) */ }
+			<Card>
+				<div className="tw-flex tw-items-center tw-gap-2.5 tw-mb-4">
+					<span
+						className="tw-w-8 tw-h-8 tw-rounded-full tw-bg-[#f0fdf4] tw-flex tw-items-center tw-justify-center tw-text-[#059669]"
+						aria-hidden="true"
+					>
+						<FontAwesomeIcon
+							icon={ faServer }
+							className="tw-text-[14px]"
+						/>
+					</span>
+					<h3 className="tw-text-[15px] tw-font-bold tw-text-[var(--wppo-text-main)] tw-tracking-tight">
+						{ __(
+							'Cache for Logged-in Users',
+							'performance-optimisation'
+						) }
+					</h3>
+				</div>
 				<SwitchField
 					label={ __( 'Enable', 'performance-optimisation' ) }
 					description={ __(
@@ -1260,8 +1345,8 @@ const Dashboard = ( {
 					onChange={ handleLoggedInCacheToggle }
 				/>
 				{ loggedInCacheEnabled && (
-					<div className="wppo-logged-in-cache-roles">
-						<p className="wppo-text-muted">
+					<div className="tw-space-y-3 tw-mt-3">
+						<p className="tw-text-[13.5px] tw-text-[var(--wppo-text-muted)]">
 							{ __(
 								'Select which user roles should receive cached pages:',
 								'performance-optimisation'
@@ -1280,7 +1365,7 @@ const Dashboard = ( {
 								/>
 							)
 						) }
-						<p className="wppo-text-muted wppo-mt-10">
+						<p className="tw-text-[13px] tw-text-[var(--wppo-text-muted)] tw-mt-2.5">
 							{ __(
 								'When no roles are selected, caching applies to all logged-in users.',
 								'performance-optimisation'
@@ -1288,26 +1373,24 @@ const Dashboard = ( {
 						</p>
 					</div>
 				) }
-				<div className="wppo-feature-card__footer">
-					<LoadingSubmitButton
-						className="wppo-button wppo-button--primary"
+				<div className="tw-flex tw-justify-end tw-pt-4 tw-mt-4 tw-border-t tw-border-[var(--wppo-border)]">
+					<Button
+						variant="primary"
 						onClick={ saveLoggedInCacheSettings }
 						isLoading={ savingLoggedInCache }
-						label={ __(
-							'Save Settings',
-							'performance-optimisation'
-						) }
 						loadingLabel={ __(
 							'Saving…',
 							'performance-optimisation'
 						) }
-					/>
+					>
+						{ __( 'Save Settings', 'performance-optimisation' ) }
+					</Button>
 				</div>
-			</FeatureCard>
+			</Card>
 
 			<DiagnosticsAnchor />
 			{ /* Phase 1 — Performance Audit & System Info (v1.5.0) */ }
-			<div className="wppo-stacked-cards">
+			<div className="tw-space-y-5">
 				<PerformanceAudit
 					onSuggestionsReady={ setTelemetrySuggestions }
 					onUrlChange={ setAuditUrl }
@@ -1346,7 +1429,7 @@ const Dashboard = ( {
 			</div>
 
 			{ /* Image optimization + activity log */ }
-			<div className="wppo-stacked-cards wppo-mt-20">
+			<div className="tw-space-y-5 tw-mt-6">
 				<ImageOptimizationCard
 					completed={ completed }
 					pending={ pending }

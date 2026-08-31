@@ -39,7 +39,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 		 * @since NEXT
 		 * @var string
 		 */
-		private const AUDIT_SALT_KEY = 'wppo_audit_salt';
+		public const AUDIT_SALT_KEY = 'wppo_audit_salt';
 
 		/**
 		 * Maximum number of redirect hops a scan may follow.

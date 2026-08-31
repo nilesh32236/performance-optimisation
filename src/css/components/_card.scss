@@ -35,6 +35,10 @@
 
 	&__header {
 		padding: 22px 24px;
+
+		@include respond-to('sm') {
+			padding: 16px 18px;
+		}
 		border-bottom: 1px solid var(--wppo-border);
 		display: flex;
 		justify-content: space-between;

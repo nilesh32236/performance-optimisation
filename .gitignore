@@ -13,3 +13,5 @@ review-output.jsonl
 
 # OpenCode agent workspace artifacts
 .omo/
+take_screenshot*.js
+take_wizard_390.js

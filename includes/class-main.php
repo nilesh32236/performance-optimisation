@@ -1521,6 +1521,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			wp_enqueue_style( 'performance-optimisation-style', WPPO_PLUGIN_URL . 'build/style-index.css', array(), $asset_data['version'], 'all' );
+			// Tailwind CSS (Overview migrated) — built as build/index.css via postcss/tailwind from src/css/tailwind.css
+			// Must be enqueued after style-index.css so Tailwind utilities win for Overview (hybrid SCSS+Tailwind until full migration).
+			$tailwind_css = WPPO_PLUGIN_PATH . 'build/index.css';
+			if ( file_exists( $tailwind_css ) ) {
+				wp_enqueue_style( 'performance-optimisation-tailwind', WPPO_PLUGIN_URL . 'build/index.css', array( 'performance-optimisation-style' ), $asset_data['version'], 'all' );
+			}
 			wp_enqueue_script( 'performance-optimisation-script', WPPO_PLUGIN_URL . 'build/index.js', $asset_data['dependencies'], $asset_data['version'], true );
 
 			$this->add_available_post_types_to_options();
@@ -2502,6 +2508,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$parsed = wp_parse_url( $src );
 			if ( ! isset( $parsed['query'] ) || '' === $parsed['query'] ) {
+				return $src;
+			}
+
+			// Never strip ver from the plugin's own build assets (style-index.css, index.css for Tailwind).
+			// Those are versioned via index.asset.php so browsers bust cache on rebuild.
+			if ( in_array( $handle, array( 'performance-optimisation-style', 'performance-optimisation-tailwind' ), true ) ) {
 				return $src;
 			}
 

@@ -68,3 +68,11 @@
 		animation: none;
 	}
 }
+
+// Fix sticky header overlap: ensure scroll-padding for anchor links
+.wppo-main {
+	scroll-padding-top: 56px;
+	@include respond-to('sm') {
+		scroll-padding-top: 16px;
+	}
+}
