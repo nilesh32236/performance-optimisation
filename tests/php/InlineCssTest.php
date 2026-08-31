@@ -482,6 +482,7 @@ class InlineCssTest extends \PHPUnit\Framework\TestCase {
 
 		$minifier = \Mockery::mock( 'overload:PerformanceOptimise\Inc\Minify\CSS' );
 		$minifier->shouldReceive( 'minify' )->once()->andReturn( $cached_url );
+		$minifier->shouldReceive( 'get_cache_file_path' )->once()->andReturn( $cached_file );
 
 		$main = $this->make_main();
 		// phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedStylesheet -- Static fixture HTML for minify_css() tests.
