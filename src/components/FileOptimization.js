@@ -235,14 +235,7 @@ const FileOptimization = ( {
 			( async () => {
 				const saveRes = await apiCall( 'update_settings', {
 					tab: 'file_optimisation',
-					settings: {
-						...settings,
-						delayJSDefaultStrategy: settings.delayJSDefaultStrategy,
-						delayJSIdleList: settings.delayJSIdleList,
-						delayJSViewportList: settings.delayJSViewportList,
-						delayJSPriority: settings.delayJSPriority,
-						delayJSIdleTimeout: settings.delayJSIdleTimeout,
-					},
+					settings: { ...settings },
 				} );
 				if ( ! saveRes.success ) {
 					return saveRes;
@@ -261,14 +254,7 @@ const FileOptimization = ( {
 		await withNotification(
 			apiCall( 'update_settings', {
 				tab: 'file_optimisation',
-				settings: {
-					...settings,
-					delayJSDefaultStrategy: settings.delayJSDefaultStrategy,
-					delayJSIdleList: settings.delayJSIdleList,
-					delayJSViewportList: settings.delayJSViewportList,
-					delayJSPriority: settings.delayJSPriority,
-					delayJSIdleTimeout: settings.delayJSIdleTimeout,
-				},
+				settings: { ...settings },
 			} ),
 			__( 'Settings updated successfully.', 'performance-optimisation' ),
 			__( 'Failed to update settings.', 'performance-optimisation' )

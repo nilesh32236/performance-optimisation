@@ -49,7 +49,7 @@ const EdgeCachePanel = () => {
 		setSwr( String( s.staleWhileRevalidate ?? 86400 ) );
 		setCfZone( s.cloudflareZoneId || '' );
 		setBunnyZone( s.bunnyPullZoneId || '' );
-	}, [] );
+	}, [ wppoSettings?.settings?.edge_cache ] );
 
 	const handleSave = useCallback( async () => {
 		setSaving( true );
@@ -71,14 +71,18 @@ const EdgeCachePanel = () => {
 					typeof wppoSettings !== 'undefined' &&
 					wppoSettings.settings
 				) {
-					wppoSettings.settings.edge_cache = {
+					const nextEdgeCache = Object.freeze( {
 						enabled,
 						provider,
 						ttl: parseInt( ttl, 10 ) || 300,
 						staleWhileRevalidate: parseInt( swr, 10 ) || 86400,
 						cloudflareZoneId: cfZone,
 						bunnyPullZoneId: bunnyZone,
-					};
+					} );
+					wppoSettings.settings = Object.freeze( {
+						...wppoSettings.settings,
+						edge_cache: nextEdgeCache,
+					} );
 				}
 				notify( {
 					type: 'success',

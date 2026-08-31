@@ -98,6 +98,8 @@
 	border-left: 4px solid var(--wppo-danger, #ef4444);
 	background: var(--wppo-error-bg, #fef2f2);
 	margin-top: 20px;
+	border-radius: var(--wppo-radius-sm, 10px);
+	overflow: hidden;
 }
 // Keep .wppo-danger-zone as canonical danger-zone token — see
 // src/components/PluginSetting.js (danger-zone import card). Do not

@@ -12,6 +12,8 @@ import { __, sprintf } from '@wordpress/i18n';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDatabase, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { apiCall } from '../lib/apiRequest';
+import useNotice from '../lib/useNotice';
+import NoticeBanner from './common/NoticeBanner';
 import FeatureCard from './common/FeatureCard';
 
 /**
@@ -20,11 +22,11 @@ import FeatureCard from './common/FeatureCard';
 const AutoloadedOptions = () => {
 	const [ options, setOptions ] = useState( [] );
 	const [ loading, setLoading ] = useState( true );
-	const [ error, setError ] = useState( null );
+	const { notice, notify, dismiss } = useNotice();
 
 	const load = useCallback( async () => {
 		setLoading( true );
-		setError( null );
+		dismiss();
 		try {
 			const response = await apiCall(
 				'autoloaded_options?limit=20',
@@ -34,26 +36,31 @@ const AutoloadedOptions = () => {
 			if ( response.success && response.data?.options ) {
 				setOptions( response.data.options );
 			} else {
-				setError(
-					response.message ||
+				notify( {
+					type: 'error',
+					message:
+						response.message ||
 						__(
 							'Failed to load autoloaded options.',
 							'performance-optimisation'
-						)
-				);
+						),
+					durationMs: 5000,
+				} );
 			}
 		} catch ( loadError ) {
-			setError(
-				__(
+			notify( {
+				type: 'error',
+				message: __(
 					'Failed to load autoloaded options.',
 					'performance-optimisation'
-				)
-			);
+				),
+				durationMs: 5000,
+			} );
 			console.error( 'Error fetching autoloaded options:', loadError );
 		} finally {
 			setLoading( false );
 		}
-	}, [] );
+	}, [ notify, dismiss ] );
 
 	useEffect( () => {
 		load();
@@ -67,9 +74,7 @@ const AutoloadedOptions = () => {
 	};
 
 	let body;
-	if ( error ) {
-		body = <p className="wppo-text-muted">{ error }</p>;
-	} else if ( options.length === 0 && ! loading ) {
+	if ( options.length === 0 && ! loading ) {
 		body = (
 			<p className="wppo-text-muted">
 				{ __(
@@ -116,6 +121,13 @@ const AutoloadedOptions = () => {
 					'performance-optimisation'
 				) }
 			</p>
+			{ notice && (
+				<NoticeBanner
+					type={ notice.type }
+					message={ notice.message }
+					onDismiss={ dismiss }
+				/>
+			) }
 			{ body }
 			{ options.length > 0 && (
 				<p className="wppo-text-muted wppo-text-small">

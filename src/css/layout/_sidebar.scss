@@ -35,7 +35,7 @@
 		display: flex;
 		align-items: center;
 		gap: 12px;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+		border-bottom: 1px solid var(--wppo-bg-sidebar-hover, rgba(255, 255, 255, 0.07));
 		margin-bottom: 8px;
 
 		.wppo-sidebar-logo {
@@ -50,7 +50,7 @@
 			box-shadow: 0 4px 12px color-mix(in srgb, var(--wppo-primary) 40%, transparent);
 
 			svg {
-				color: #fff;
+				color: var(--wppo-text-sidebar-active, #fff);
 				font-size: 16px;
 			}
 		}
@@ -59,7 +59,7 @@
 			margin: 0;
 			font-size: 14.5px;
 			font-weight: 700;
-			color: #fff;
+			color: var(--wppo-text-sidebar-active, #fff);
 			letter-spacing: -0.015em;
 			white-space: nowrap;
 			line-height: 1.25;
@@ -110,10 +110,10 @@
 
 					&:hover {
 						background: var(--wppo-bg-sidebar-hover);
-						color: #fff;
+						color: var(--wppo-text-sidebar-active, #fff);
 
 						.wppo-sidebar-icon {
-							color: #e2e8f0;
+							color: var(--wppo-text-sidebar, #e2e8f0);
 						}
 					}
 
@@ -124,7 +124,7 @@
 
 					&.wppo-is-active {
 						background: var(--wppo-bg-sidebar-active);
-						color: #fff;
+						color: var(--wppo-text-sidebar-active, #fff);
 						font-weight: 600;
 						border-color: color-mix(in srgb, var(--wppo-primary) 25%, transparent);
 
@@ -153,7 +153,7 @@
 
 	.wppo-sidebar-footer {
 		padding: 16px 12px;
-		border-top: 1px solid rgba(255, 255, 255, 0.06);
+		border-top: 1px solid var(--wppo-bg-sidebar-hover, rgba(255, 255, 255, 0.06));
 
 		.wppo-sidebar-version {
 			font-size: 11px;
@@ -178,7 +178,7 @@
 	padding: env(safe-area-inset-top, 0px) 12px 0 16px;
 	height: 56px;
 	background: var(--wppo-bg-sidebar);
-	color: #fff;
+	color: var(--wppo-text-sidebar-active, #fff);
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
@@ -194,7 +194,7 @@
 	.wppo-mobile-brand {
 		font-weight: 700;
 		font-size: 14px;
-		color: #fff;
+		color: var(--wppo-text-sidebar-active, #fff);
 		display: flex;
 		align-items: center;
 		gap: 10px;
@@ -213,7 +213,7 @@
 
 			svg {
 				font-size: 12px;
-				color: #fff;
+				color: var(--wppo-text-sidebar-active, #fff);
 			}
 		}
 
@@ -228,7 +228,7 @@
 	.wppo-mobile-toggle {
 		background: rgba(255, 255, 255, 0.08);
 		border: 1px solid rgba(255, 255, 255, 0.1);
-		color: #fff;
+		color: var(--wppo-text-sidebar-active, #fff);
 		width: 36px;
 		height: 36px;
 		min-width: 44px;

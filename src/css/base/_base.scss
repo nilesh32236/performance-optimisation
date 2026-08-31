@@ -46,6 +46,13 @@
 .wppo-text-13 { font-size: 13px; }
 .wppo-text-muted { color: var(--wppo-text-muted); }
 .wppo-flex-gap-12 { display: flex; gap: 12px; flex-wrap: wrap; }
+.wppo-font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.wppo-text-danger { color: var(--wppo-danger, #ef4444); }
+.wppo-stat-icon__spacer { margin-right: 6px; }
+.wppo-status-badge--sm { font-size: 11px; }
+.wppo-cleanup-row__actions { display: flex; align-items: center; gap: 8px; }
+.wppo-cleanup-row__count--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.wppo-input--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 .wppo-loading-placeholder {
 	display: flex;

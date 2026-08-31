@@ -94,13 +94,7 @@ const getLazySelector = () => {
 		: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
 };
 
-/**
- * Back-compat alias — prefer getLazySelector() for live value.
- * @deprecated Use getLazySelector().
- * @type {string}
- */
-// eslint-disable-next-line no-unused-vars
-const LAZY_SELECTOR = getLazySelector(); // Deprecated alias.
+
 
 /**
  * Load a single deferred script element.

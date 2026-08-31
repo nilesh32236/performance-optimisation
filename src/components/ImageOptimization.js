@@ -91,8 +91,35 @@ const ImageOptimization = ( { options = {} } ) => {
 				? options.availablePostTypes
 				: prev.availablePostTypes,
 		} ) );
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [ JSON.stringify( options ) ] );
+	}, [
+		options.lazyLoadImages,
+		options.lazyLoadNative,
+		options.lazyLoadBackgroundImages,
+		options.wrapInPicture,
+		options.excludeFirstImages,
+		options.excludeImages,
+		options.lazyLoadVideos,
+		options.enableVideoPlaceholder,
+		options.excludeVideos,
+		options.convertImg,
+		options.conversionFormat,
+		options.excludeConvertImages,
+		options.preloadFrontPageImages,
+		options.preloadFrontPageImagesUrls,
+		options.preloadPostTypeImage,
+		options.selectedPostType,
+		options.availablePostTypes,
+		options.excludePostTypeImgUrl,
+		options.maxWidthImgSize,
+		options.excludeSize,
+		options.autoPreloadLCP,
+		options.prioritizeLCPImages,
+		options.clientSideMimeTypeOverride,
+		options.clientSideMimeTypes,
+		options.forceServerSideConversion,
+		options.placeholderType,
+		options.replacePlaceholderWithSVG,
+	] );
 
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
