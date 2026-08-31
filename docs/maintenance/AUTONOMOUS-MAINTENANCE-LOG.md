@@ -64,3 +64,12 @@ Completed: 2026-08-31 11:35 UTC
 - 6 marketing/design → require product/design input
 - Fix/audit branch split → 5 PRs (CLI, Hooks, Perf, H-fixes, Option B redesign pending #709)
 
+
+### 2026-08-31 14:30 UTC — E1 CLI Batch (fix/cli-e1 → 7eb05beb, PR #775)
+- Master  e5b824c6 → 7eb05beb (39e52805 E1)
+- Branch  fix/audit-2026-08-28 (661a3a7c) E1 extracted: 3 files (class-wppo-cli-command, class-util, class-object-cache) 531 ins vs 212-file supersized
+- PR #775: synopsis [<action>] defaults, --format=json (counts), --yes (type=all tty + WP_CLI::confirm), --dry-run (would_delete/would_optimize JSON), allowlist TABLE_MAP, extra types trashed_comments/unattached_media/oembed_cache, hook wppo_database_cleanup_completed per-type, Util::get_default_settings single source + blog-keyed cache (switch_blog), ALLOWED_KEYS 12 + wppo_object_cache_config filter
+- Tests: phpcs 0, phpunit 435/435, npm 34/34, build success, manual dry-run/counts/yes/help verified
+- CI: JS 55s/59s pass, PHP 4× pass, WPCS 1m1s pass, Psalm 3s pass, Snyk pass, CodeRabbit pass, AI fail non-blocking (opencode-go unknown) → MERGED 7eb05beb
+- Real WP: nileshportfolio.duckdns.org WP 7.1 PHP 8.3 LiteSpeed hit, wp wppo database counts --format=json 9 keys, dry-run preview, cache status
+
