@@ -486,7 +486,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			add_action( 'admin_menu', array( $this, 'init_menu' ) );
 			add_action( 'admin_init', array( $this, 'maybe_fix_wp_cache' ) );
 			add_action( 'admin_init', array( $this, 'maybe_run_upgrades' ) );
-			add_action( 'wppo_run_upgrades', array( 'PerformanceOptimisation\Inc\Activate', 'maybe_run_upgrades' ) );
+			add_action( 'wppo_run_upgrades', array( 'PerformanceOptimise\Inc\Activate', 'maybe_run_upgrades' ) );
 			add_action( 'upgrader_process_complete', array( $this, 'maybe_schedule_upgrade_routine' ), 10, 2 );
 			add_action( 'admin_init', array( $this, 'maybe_run_version_upgrade' ) );
 			add_action( 'upgrader_process_complete', array( $this, 'maybe_run_version_upgrade' ), 10, 0 );
