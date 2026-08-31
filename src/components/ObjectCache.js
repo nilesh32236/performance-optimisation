@@ -393,7 +393,9 @@ const ObjectCache = ( { options = {} } ) => {
 						>
 							<div
 								className="wppo-progress-bar__fill"
-								style={ { '--wppo-hit-ratio': `${ hitRatio }%` } }
+								style={ {
+									'--wppo-hit-ratio': `${ hitRatio }%`,
+								} }
 							></div>
 						</div>
 						<span
@@ -676,7 +678,7 @@ const ObjectCache = ( { options = {} } ) => {
 										'performance-optimisation'
 									) }
 								</label>
-									<input
+								<input
 									className="wppo-input wppo-input--mono"
 									id="database"
 									type="number"

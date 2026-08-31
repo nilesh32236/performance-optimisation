@@ -2189,8 +2189,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $stats;
 			}
 
-			$stats_key     = Util::transient_key( 'wppo_cache_stats' );
-			$cached_stats  = get_transient( $stats_key );
+			$stats_key    = Util::transient_key( 'wppo_cache_stats' );
+			$cached_stats = get_transient( $stats_key );
 			if ( is_array( $cached_stats ) && isset( $cached_stats['size'], $cached_stats['count'] ) ) {
 				$stats['size']         = (string) $cached_stats['size'];
 				$stats['cached_pages'] = (int) $cached_stats['count'];
@@ -2205,7 +2205,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$stats['size']         = (string) $legacy_size;
 				$stats['cached_pages'] = (int) $legacy_count;
 				// Promote to unified key atomically.
-				set_transient( $stats_key, array( 'size' => $stats['size'], 'count' => $stats['cached_pages'] ), 15 * MINUTE_IN_SECONDS );
+				set_transient(
+					$stats_key,
+					array(
+						'size'  => $stats['size'],
+						'count' => $stats['cached_pages'],
+					),
+					15 * MINUTE_IN_SECONDS
+				);
 				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 				return $stats;
 			}
@@ -2214,7 +2221,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$total_size            = $instance->calculate_directory_size( $cache_dir );
 			$stats['size']         = size_format( $total_size );
 			$stats['cached_pages'] = $instance->count_cached_pages( $cache_dir );
-			set_transient( $stats_key, array( 'size' => $stats['size'], 'count' => $stats['cached_pages'] ), 15 * MINUTE_IN_SECONDS );
+			set_transient(
+				$stats_key,
+				array(
+					'size'  => $stats['size'],
+					'count' => $stats['cached_pages'],
+				),
+				15 * MINUTE_IN_SECONDS
+			);
 			// Also prime legacy keys for any external consumers still reading them.
 			set_transient( Util::transient_key( 'wppo_cache_size' ), $stats['size'], 15 * MINUTE_IN_SECONDS );
 			set_transient( Util::transient_key( 'wppo_cache_count' ), $stats['cached_pages'], 15 * MINUTE_IN_SECONDS );
@@ -2228,6 +2242,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Calculate the size of a directory.
 		 *
 		 * @param string $directory The path to the directory whose size is to be calculated.
+		 * @param int    $depth     Recursion depth guard.
 		 * @return int The total size of the directory in bytes.
 		 *
 		 * @since 1.0.0
@@ -2269,6 +2284,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * Recursively count cached pages by counting index.html files in the cache directory.
 		 *
 		 * @param string $directory The directory to scan.
+		 * @param int    $depth     Recursion depth guard.
 		 * @return int Number of index.html files found.
 		 *
 		 * @since 1.9.0

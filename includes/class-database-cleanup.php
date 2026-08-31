@@ -240,10 +240,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 				$has_more           = ( count( $parent_ids ) === 200 );
 
 				foreach ( $parent_ids as $parent_id ) {
-					$last_date  = null;
-					$last_id    = 0;
-					$first_page = true;
-					$batch_size = 500;
+					$last_date      = null;
+					$last_id        = 0;
+					$first_page     = true;
+					$batch_size     = 500;
 					$pending_delete = array();
 
 					do {
@@ -301,9 +301,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 							$pending_delete = array();
 						}
 
-						$last       = end( $revisions );
-						$last_date  = $last->post_date_gmt;
-						$last_id    = (int) $last->ID;
+						$last           = end( $revisions );
+						$last_date      = $last->post_date_gmt;
+						$last_id        = (int) $last->ID;
 						$revision_count = count( $revisions );
 					} while ( $revision_count === $batch_size );
 

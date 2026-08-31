@@ -73,8 +73,10 @@ const AutoloadedOptions = () => {
 		return `${ ( bytes / 1024 ).toFixed( 1 ) } KB`;
 	};
 
-	let body;
-	if ( options.length === 0 && ! loading ) {
+	let body = null;
+	if ( notice ) {
+		body = null;
+	} else if ( options.length === 0 && ! loading ) {
 		body = (
 			<p className="wppo-text-muted">
 				{ __(
@@ -83,7 +85,7 @@ const AutoloadedOptions = () => {
 				) }
 			</p>
 		);
-	} else {
+	} else if ( options.length > 0 ) {
 		body = (
 			<ul className="wppo-autoloaded-options">
 				{ options.map( ( option ) => (

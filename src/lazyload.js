@@ -94,8 +94,6 @@ const getLazySelector = () => {
 		: 'img[data-src], img[data-srcset], iframe[data-src], video.wppo-lazy-video';
 };
 
-
-
 /**
  * Load a single deferred script element.
  *
