@@ -1035,11 +1035,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @since NEXT Added allowlist justification and verified no user input reaches interpolation.
 		 *
 		 * @param string $table Unprefixed table identifier (e.g. 'posts', 'postmeta').
-		 * @return bool True on success, false on failure or if skipped.
+		 * @return bool True on success, false on invalid identifier, empty table, skipped due to size (>1GB), or query failure.
 		 */
 		public static function optimize_table( string $table ): bool {
 			global $wpdb;
 
+			if ( 1 !== preg_match( '/^[A-Za-z0-9_]+$/', $table ) ) {
+				_doing_it_wrong(
+					__METHOD__,
+					esc_html__( 'Invalid table identifier passed to optimize_table.', 'performance-optimisation' ),
+					'1.9.0'
+				);
+				return false;
+			}
+
+			if ( ! isset( $wpdb->{$table} ) || ! is_string( $wpdb->{$table} ) ) {
+				return false;
+			}
 			$full_table_name = $wpdb->{$table}; // phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase
 
 			if ( empty( $full_table_name ) ) {

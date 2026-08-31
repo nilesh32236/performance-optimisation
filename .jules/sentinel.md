@@ -22,3 +22,7 @@
 **Vulnerability:** Path traversal check bypass in caching mechanisms using URL encoding (`%2e%2e` instead of `..`).
 **Learning:** Checking for `..` in a path via `strpos` is insufficient if the path originates from an un-decoded URL parameter like `$_SERVER['REQUEST_URI']`. `wp_parse_url` does not automatically decode the URL string.
 **Prevention:** Always use `rawurldecode()` on any URI component before checking it for directory traversal sequences or using it to construct file paths.
+## 2025-03-09 - [Dynamic Property Access Security]
+**Vulnerability:** A method used dynamic table name resolution via `$wpdb->{$table}` where `$table` was passed from the caller. Without proper validation, this allows arbitrary property access on the `$wpdb` object, which could lead to type errors, property injection, or even indirect SQL injection if the accessed property holds unexpected data.
+**Learning:** Hardcoding a whitelist (e.g. only allowing 'posts', 'comments') is too restrictive in WordPress, as it breaks functionality for other legitimate core or custom tables (like 'users' or 'woocommerce_sessions').
+**Prevention:** Always validate that dynamically accessed properties on `$wpdb` are strictly formatted (using `preg_match('/^[A-Za-z0-9_]+$/')`), explicitly check that they exist (`isset()`), and ensure they are strings (`is_string()`) before using them in queries.
