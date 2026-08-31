@@ -115,7 +115,10 @@ const SystemInfo = () => {
 				}` }
 			>
 				{ ! loaded && ! notice && (
-					<p className="wppo-sysinfo-trigger__desc">
+					<p
+						id="wppo-sysinfo-desc"
+						className="wppo-sysinfo-trigger__desc"
+					>
 						{ __(
 							'View PHP, database, WordPress, and server environment details.',
 							'performance-optimisation'
@@ -126,6 +129,9 @@ const SystemInfo = () => {
 					type="button"
 					className="wppo-button wppo-button--secondary"
 					onClick={ handleLoad }
+					aria-describedby={
+						! loaded && ! notice ? 'wppo-sysinfo-desc' : undefined
+					}
 					isLoading={ loading }
 					label={
 						loaded

@@ -557,7 +557,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// which disables response streaming. TTFB increases while TTLB unchanged — intentional
 			// when Server-Timing is enabled; keep disabled by default and emit only on cache-miss
 			// generation passes (advanced-cache.php serves cached pages without booting WordPress).
-			// @since NEXT
+			// @since NEXT.
 			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $this->server_timing_enabled() ) {
 				add_action( 'template_redirect', array( $this, 'capture_template_start' ), 0 );
 				add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this, 'emit_server_timing_header' ), 0, 1 );

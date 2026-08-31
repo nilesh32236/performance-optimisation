@@ -40,3 +40,7 @@
 **Learning:** Found checkboxes for complex features in `PluginSetting.js` (Server-Timing and RUM) that had helpful `<p>` descriptions following them, but were not programmatically linked, causing a poor screen reader experience where the description is not announced.
 **Action:** When auditing or building new forms, I must always look for unlinked description `<p>` elements and add an `id` to the `<p>` tag along with `aria-describedby="[id]"` on the corresponding `<input>` or `<textarea>`.
 >>>>>>> origin/master
+
+## 2026-08-31 - Missing ARIA Describedby on Action Buttons
+**Learning:** Standalone action buttons, like "Load System Info," sometimes have descriptive text directly preceding them in the UI to explain their purpose. If these buttons aren't programmatically linked to the text, screen reader users miss crucial context.
+**Action:** Always link action buttons to their adjacent descriptive text using `aria-describedby` and an `id`, ensuring the attribute is dynamically removed when the description is hidden (e.g., `aria-describedby={ !loaded ? 'desc-id' : undefined }`).
