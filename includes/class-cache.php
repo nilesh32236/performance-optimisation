@@ -594,7 +594,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( '' === $this->combine_css_preload_url ) {
 				return;
 			}
-			Util::generate_preload_link( $this->combine_css_preload_url, 'preload', 'style' );
+			/**
+			 * Filters the fetchpriority for the combined-CSS preload link.
+			 *
+			 * Default 'high' for external preload (LCP). Return falsy to suppress.
+			 *
+			 * @since NEXT
+			 *
+			 * @param string $fetchpriority Fetchpriority value ('high'|'low'|'auto').
+			 * @param string $url           Preload URL.
+			 */
+			$fetchpriority = apply_filters( 'wppo_combine_preload_fetchpriority', 'high', $this->combine_css_preload_url );
+			if ( ! is_string( $fetchpriority ) ) {
+				$fetchpriority = '';
+			}
+			$fetchpriority = strtolower( trim( $fetchpriority ) );
+			if ( ! in_array( $fetchpriority, array( 'high', 'low', 'auto' ), true ) ) {
+				$fetchpriority = '';
+			}
+			Util::generate_preload_link( $this->combine_css_preload_url, 'preload', 'style', false, '', '', $fetchpriority );
 			$this->combine_css_preload_url = '';
 		}
 
