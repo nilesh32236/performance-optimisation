@@ -980,7 +980,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'apply_filters' )->returnArg( 2 );
 		Functions\when( 'wp_parse_url' )->returnArg( 1 );
 		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
-			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("loading"=>"lazy","fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("loading"=>"lazy","fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
 		}
 		$GLOBALS['wppo_mock_fetchpriority'] = 'low';
 		Functions\when( 'esc_attr' )->returnArg();
@@ -1047,7 +1047,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_current_blog_id' )->justReturn( 1 );
 		Functions\when( 'is_multisite' )->justReturn( false );
 		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
-			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("loading"=>"lazy","fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("loading"=>"lazy","fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
 		}
 		$GLOBALS['wppo_mock_fetchpriority'] = 'low';
 		Functions\when( 'esc_attr' )->returnArg();
@@ -1086,7 +1086,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'wp_get_attachment_image_src' )->justReturn( false );
 		Functions\when( 'apply_filters' )->returnArg( 2 );
 		if ( ! function_exists( 'wp_get_loading_optimization_attributes' ) ) {
-			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
+			eval( 'function wp_get_loading_optimization_attributes($tag,$attrs,$ctx){ if(isset($GLOBALS["wppo_mock_fetchpriority"])){ return array("loading"=>"lazy","fetchpriority"=>$GLOBALS["wppo_mock_fetchpriority"]); } return array("loading"=>"lazy","fetchpriority"=>"low"); }' ); // phpcs:ignore Squiz.PHP.Eval.Discouraged
 		}
 		$GLOBALS['wppo_mock_fetchpriority'] = 'low';
 		Functions\when( 'esc_attr' )->returnArg();

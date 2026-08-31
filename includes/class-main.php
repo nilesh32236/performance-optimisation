@@ -2780,6 +2780,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					continue;
 				}
 
+				// Preserve auto-sizes containment fix (WP 6.9+) — must not be minified/combined.
+				if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
+					continue;
+				}
+
 				$style_data = $wp_styles->registered[ $handle ];
 
 				// Only external, 'all'-media stylesheets can be rewritten to a file.
@@ -2865,6 +2870,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @return string Modified link tag with minified CSS.
 		 */
 		public function minify_css( $tag, $handle, $href ) {
+			// Preserve auto-sizes containment fix (WP 6.9+) — must not be minified.
+			if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
+				return $tag;
+			}
 			// LiteSpeed safe coexistence — when LSCache owns optimization, skip WPPO minify.
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::should_disable_wppo_optimizer() ) {
 				return $tag;
