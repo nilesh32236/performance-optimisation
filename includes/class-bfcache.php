@@ -280,29 +280,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Bfcache' ) ) {
 			// Only strip no-store for sessions that opted into bfcache (have a token).
 			$token = self::get_user_token();
 			if ( null === $token ) {
-				// Still ensure cookie is set if token exists but cookie missing (e.g. deleted mid-session).
-				$cookie_name = self::get_cookie_name();
-				if ( ! isset( $_COOKIE[ $cookie_name ] ) && null !== $token ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
-					if ( function_exists( 'get_current_user_id' ) ) {
-						$user_id = get_current_user_id();
-						if ( $user_id > 0 ) {
-							self::set_token_cookie( (int) $user_id, $token, time() + 14 * DAY_IN_SECONDS );
-						}
-					}
-				}
-				// If no token, keep no-store (privacy).
-				if ( null === $token ) {
-					return $headers;
-				}
-			} else {
-				// Ensure cookie present.
-				$cookie_name = self::get_cookie_name();
-				if ( ! isset( $_COOKIE[ $cookie_name ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
-					if ( function_exists( 'get_current_user_id' ) ) {
-						$user_id = get_current_user_id();
-						if ( $user_id > 0 ) {
-							self::set_token_cookie( (int) $user_id, $token, time() + 14 * DAY_IN_SECONDS );
-						}
+				return $headers;
+			}
+			// Ensure cookie present (repair if deleted mid-session).
+			$cookie_name = self::get_cookie_name();
+			if ( ! isset( $_COOKIE[ $cookie_name ] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				if ( function_exists( 'get_current_user_id' ) ) {
+					$user_id = get_current_user_id();
+					if ( $user_id > 0 ) {
+						self::set_token_cookie( (int) $user_id, $token, time() + 14 * DAY_IN_SECONDS );
 					}
 				}
 			}
