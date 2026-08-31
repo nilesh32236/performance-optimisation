@@ -140,6 +140,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private array $core_will_inline_memo = array();
 
 		/**
+		 * Max entries for the src stat LRU.
+		 *
+		 * @since NEXT
+		 */
+		private const SRC_STAT_CACHE_LIMIT = 500;
+
+		/**
+		 * Per-request LRU cache for src file stat (is_readable + filesize).
+		 *
+		 * @since NEXT
+		 * @var array<string,array{readable:bool,size:int|false}>
+		 */
+		private array $src_stat_cache = array();
+
+		/**
 		 * The filesystem object used for file operations.
 		 *
 		 * @var object|null
@@ -1110,6 +1125,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @param string[] $eligible_handles Handles that would be combined.
 		 * @return bool True when combining should be skipped.
 		 */
+		/**
+		 * Retrieve cached src file stat (readable + filesize) with per-request LRU.
+		 *
+		 * Avoids a second filesize()/is_readable() loop over the same handles in
+		 * should_skip_combine_for_inline_budget and reuses filesystem results when
+		 * combine_css is invoked multiple times per request.
+		 *
+		 * @since NEXT
+		 * @param string $path Absolute filesystem path.
+		 * @return array{readable:bool,size:int|false}
+		 */
+		private function get_cached_src_stat( string $path ): array {
+			if ( isset( $this->src_stat_cache[ $path ] ) ) {
+				return $this->src_stat_cache[ $path ];
+			}
+			$readable = is_readable( $path );
+			$size     = $readable ? filesize( $path ) : false;
+			if ( count( $this->src_stat_cache ) >= self::SRC_STAT_CACHE_LIMIT ) {
+				array_shift( $this->src_stat_cache );
+			}
+			$this->src_stat_cache[ $path ] = array(
+				'readable' => $readable,
+				'size'     => $size,
+			);
+			return $this->src_stat_cache[ $path ];
+		}
+
+		/**
+		 * Whether the combined-CSS file should be skipped on small block-theme bundles.
+		 *
+		 * On block themes with a small total payload (≤ styles_inline_size_limit,
+		 * 40KB on WP 6.9+) core's greedy smallest-first inline budget will already
+		 * inline the eligible styles at their queue positions. Creating a combined
+		 * file would add an extra request without benefit, so it is skipped and the
+		 * styles are left enqueued for core to inline. Classic themes always combine.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string[] $eligible_handles Handles that would be combined.
+		 * @return bool True when combining should be skipped.
+		 */
 		private function should_skip_combine_for_inline_budget( array $eligible_handles ): bool {
 			if ( empty( $eligible_handles ) ) {
 				return false;
@@ -1141,11 +1197,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					continue;
 				}
 				$path = Util::get_local_path( $src );
-				if ( '' === $path || ! is_readable( $path ) ) {
+				if ( '' === $path ) {
+					return false;
+				}
+				$stat = $this->get_cached_src_stat( $path );
+				if ( ! $stat['readable'] ) {
 					// Unreadable/remote styles cannot be measured — do not skip.
 					return false;
 				}
-				$size = filesize( $path );
+				$size = $stat['size'];
 				if ( false === $size ) {
 					return false;
 				}
