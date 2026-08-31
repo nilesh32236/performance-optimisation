@@ -1,9 +1,9 @@
-# 765 Extraction Map — fix/audit-2026-08-28 (212 files) vs master @ 788bf59b
+# 765 Extraction Map — fix/audit-2026-08-28 (212 files) vs master @ c1cda64f
 
 **Branch:** `origin/fix/audit-2026-08-28` at `661a3a7c` (pushed 2026-08-31)
-**Master:** `788bf59b` (after 769)
-**Diff:** `git diff master...origin/fix/audit-2026-08-28` → 212 files changed, +25011/-3545
-**Overlap with master merges:** 30 files in `comm -12` (already touched by 746/751/761 etc.), 182 only-in-765
+**Master:** `c1cda64f` (after 773 — includes 771/772/773: fetchpriority, speculation, lazy 757)
+**Diff:** `git diff master...origin/fix/audit-2026-08-28` → 212 files changed, +25011/-3545 (filtered non-AUDIT still ~114 code files)
+**Overlap with master merges:** 30+ files in `comm -12` (already touched by 746/751/761/771/772/773 etc.), ~182 only-in-765 before #755/754/757, now reduced but still largely STILL NEEDED (CLI, Hooks, H-fixes, UX)
 **Decision in prior run:** CLOSED supersized, branch preserved for split (<100 files/PR). Do NOT merge as-is.
 
 ## Classification Legend
