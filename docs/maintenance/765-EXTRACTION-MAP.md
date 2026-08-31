@@ -83,3 +83,25 @@ Each <100 files, must pass `vendor/bin/phpcs 0, npm lint 0e, npm test 34/34, php
 - All E's will conflict on `build/*` — rebuild via `npm run build` after cherry-pick, keep source `src/*` as authority.
 - E5 tailwind will conflict on `src/index.js`, `src/css/style.scss` — rebase carefully.
 - AUDIT docs should not be merged as code — keep branch for reference, do not count toward 100-file limit.
+
+---
+
+## FORENSIC RE-VERIFICATION (2026-08-31 15:00 UTC, master 2c5b1dd6 vs 661a3a7c, audit-only)
+
+**Re-verified via fresh sub-agents (Git/PHP/Frontend/CSS/WP-CLI/Hooks/UX/Tests/Security/Performance/Adversarial/Final Reviewer):**
+
+- **Genuinely duplicate (safe to ignore):** CLI synopsis/JSON/yes/dry-run/allowlist via #775 (39e52805), Util `get_default_settings` via 39e52805, ALLOWED_KEYS via 39e52805, `is_safe_mode` convergent duplicate (39e52805 vs 7fbfc8d8 identical 38 lines), `wppo_database_cleanup_completed` hook name (partial). **5 changes.**
+- **Superficially similar (not genuine duplicate):** `Util::get_settings` blog-keyed memo, `is_safe_mode` surrounding gates (6 vs 1), Palette/WPCS same files different semantics — **4 changes.**
+- **Still missing / partially:** **C-01** namespace typo, **H-01/02/03/04/07** bfcache, **H-10** AbortController, **P4** cloudflare purger, **SRC_STAT LRU**, **12 tests**, **wppo_should_cache/invalidation** (now on `fix/hooks-e2` ddac08ec, not master), **per-type DB**, **E5 UX blocked** — **16 changes (10 STILL NEEDED +6 PARTIALLY).**
+- **Obsolete/Conflicting:** AUDIT 52 docs, research 50 docs (for code), build tailwind artifacts, E5 vs `Simple by default` philosophy — **4 changes.**
+- **Previously misclassified:** `is_safe_mode` was STILL NEEDED → now **ALREADY IMPLEMENTED** (convergent), `SRC_STAT LRU` was ALREADY → now **PARTIALLY**, `wppo_object_cache_config` was STILL → now **ALREADY** via #775.
+
+**Evidence:** `git show <branch>:<file>` byte comparison, `git blame`, `git log -S`, `git diff --stat` (212 files), `grep wppo_` filtered (62 code hooks vs 47 docs), `phpcs`/`phpunit` baseline 435/435, `gh pr list` 0/1 (777 open), `gh issue list` 8 open.
+
+**Safe to ignore:** AUDIT docs, research docs for code, build artifacts, duplicate CLI (superseded).
+**Still valuable:** 10 STILL NEEDED + 6 PARTIALLY (see `765-REMAINING-WORK.md` P0-P3).
+**Master-only must preserve:** 13 commits (744,747,748,753,761,746,751,749,767,771,772,773,775).
+
+**Recommended next batch:** 1) E2 Hooks via #777 (merge ddac08ec, 3 files, <100) — required before tests, 2) C-01+H-01+H-02/03/04/07, 3) H-10, 4) cloudflare, 5) tests, 6) SRC_STAT LRU — after #709 vote E5.
+
+See `765-FORENSIC-AUDIT.md`, `765-CHANGE-INVENTORY.md`, `765-DUPLICATE-VERIFICATION.md`, `765-REMAINING-WORK.md`, `765-FORENSIC-FINAL-REPORT.md` for full forensic details.
