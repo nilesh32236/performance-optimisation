@@ -216,37 +216,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 				$prefetch_urls[] = esc_url_raw( $url );
 			}
 
-			// Least-used scripts: frequency of disabled handles across posts.
+			// Most-frequently disabled handles = least-used (candidates to exclude).
 			$exclude_js  = array();
 			$exclude_css = array();
 			global $wpdb;
-			if ( isset( $wpdb ) && is_object( $wpdb ) ) {
+			if ( isset( $wpdb ) && is_object( $wpdb ) && method_exists( $wpdb, 'get_col' ) ) {
 				$disabled = array();
-				if ( method_exists( $wpdb, 'get_col' ) ) {
-					try {
-						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-						$rows = $wpdb->get_col( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_wppo_disabled_scripts' LIMIT 500" );
-						if ( is_array( $rows ) ) {
-							foreach ( $rows as $row ) {
-								$val = maybe_unserialize( $row );
-								if ( is_array( $val ) ) {
-									foreach ( $val as $handle ) {
-										$handle = sanitize_text_field( (string) $handle );
-										if ( '' === $handle ) {
-											continue;
-										}
-										$disabled[ $handle ] = ( $disabled[ $handle ] ?? 0 ) + 1;
+				try {
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+					$rows = $wpdb->get_col( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_wppo_disabled_scripts' LIMIT 500" );
+					if ( is_array( $rows ) ) {
+						foreach ( $rows as $row ) {
+							$val = maybe_unserialize( $row );
+							if ( is_array( $val ) ) {
+								foreach ( $val as $handle ) {
+									$handle = sanitize_text_field( (string) $handle );
+									if ( '' === $handle ) {
+										continue;
 									}
+									$disabled[ $handle ] = ( $disabled[ $handle ] ?? 0 ) + 1;
 								}
 							}
 						}
-					} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 					}
+				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
 				}
 				if ( ! empty( $disabled ) ) {
-					asort( $disabled );
-					// Least-used = lowest frequency (rarely disabled = maybe safe to suggest excluding).
+					arsort( $disabled );
 					$exclude_js = array_slice( array_keys( $disabled ), 0, 3 );
+				}
+				$disabled_css = array();
+				try {
+					// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+					$rows_css = $wpdb->get_col( "SELECT meta_value FROM {$wpdb->postmeta} WHERE meta_key = '_wppo_disabled_styles' LIMIT 500" );
+					if ( is_array( $rows_css ) ) {
+						foreach ( $rows_css as $row ) {
+							$val = maybe_unserialize( $row );
+							if ( is_array( $val ) ) {
+								foreach ( $val as $handle ) {
+									$handle = sanitize_text_field( (string) $handle );
+									if ( '' === $handle ) {
+										continue;
+									}
+									$disabled_css[ $handle ] = ( $disabled_css[ $handle ] ?? 0 ) + 1;
+								}
+							}
+						}
+					}
+				} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				}
+				if ( ! empty( $disabled_css ) ) {
+					arsort( $disabled_css );
+					$exclude_css = array_slice( array_keys( $disabled_css ), 0, 3 );
 				}
 			}
 
@@ -277,7 +298,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\AI_Adaptive' ) ) {
 			if ( $cnt > 0 ) {
 				$avg_lcp_all /= $cnt;
 				if ( $avg_lcp_all > 3500 ) {
-					$eagerness = 'moderate';
+					$eagerness = 'eager';
 				} elseif ( $avg_lcp_all > 2500 ) {
 					$eagerness = 'moderate';
 				}
