@@ -628,6 +628,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @return bool True if excluded.
 		 */
 		private function is_excluded_from_combine( $handle, $src, array $exclude_combine_css ): bool {
+			// Preserve auto-sizes containment fix (WP 6.9+) — must not be combined.
+			if ( 'wp-img-auto-sizes-contain' === $handle && function_exists( 'wp_enqueue_img_auto_sizes_contain_css_fix' ) ) {
+				return true;
+			}
 			if ( empty( $exclude_combine_css ) ) {
 				return false;
 			}

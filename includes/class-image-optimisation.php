@@ -2703,7 +2703,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 
 							if ( $use_native_lazy || 'lazy' === $wppo_tags->get_attribute( 'loading' ) ) {
 								if ( null === $wppo_tags->get_attribute( 'loading' ) ) {
-									$wppo_tags->set_attribute( 'loading', 'lazy' );
+									// Honour Core's loading decision (WP 6.3+) — first N + header images must not be lazy (LCP).
+									$should_lazy = true;
+									if ( function_exists( 'wp_get_loading_optimization_attributes' ) ) {
+										$test_attr = array();
+										$src_attr  = $wppo_tags->get_attribute( 'src' );
+										if ( null !== $src_attr ) {
+											$test_attr['src'] = $src_attr;
+										}
+										$w_attr = $wppo_tags->get_attribute( 'width' );
+										if ( null !== $w_attr ) {
+											$test_attr['width'] = (int) $w_attr;
+										}
+										$h_attr = $wppo_tags->get_attribute( 'height' );
+										if ( null !== $h_attr ) {
+											$test_attr['height'] = (int) $h_attr;
+										}
+										$loading_attrs = wp_get_loading_optimization_attributes( 'img', $test_attr, 'performance_optimisation_delay_load' );
+										if ( ! isset( $loading_attrs['loading'] ) ) {
+											$should_lazy = false;
+										}
+									}
+									if ( $should_lazy ) {
+										$wppo_tags->set_attribute( 'loading', 'lazy' );
+									}
 								}
 								if ( null === $wppo_tags->get_attribute( 'decoding' ) ) {
 									$wppo_tags->set_attribute( 'decoding', 'async' );
