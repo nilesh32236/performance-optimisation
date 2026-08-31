@@ -69,3 +69,7 @@
 **Bug/Gap:** WPCS enforces strict formatting rules for multi-line array arguments in function calls, and the `Brain\Monkey\Functions\stubs` call was generating a `Opening parenthesis of a multi-line function call must be the last content on the line` and `Closing parenthesis of a multi-line function call must be on a line by itself` error.
 **Root Cause:** The `array()` argument was kept on the same line as the opening parenthesis of `stubs()`.
 **Test Added:** Fixed `InlineCssTest.php` formatting and ran `vendor/bin/phpcs` to verify. No functional change.
+## 2026-08-28 - Fixed PHPStan errors in redis-connect-helper.php
+**Bug/Gap:** The `RedisSentinel` constructor was incorrectly receiving an array of configuration options instead of strictly typed positional arguments, causing a PHP `TypeError` and breaking the connection logic. Furthermore, passing `$master_name` as the fourth argument inadvertently created a persistent connection.
+**Root Cause:** The `RedisSentinel` constructor requires specific positional arguments (host, port, timeout, persistent, retry_interval, read_timeout) according to the `phpredis` extension signature.
+**Test Added:** Replaced the array argument with the required positional arguments. Ensured the fourth argument `$persistent` is passed as an empty string `''` to retain the original non-persistent connection behavior instead of mistakenly passing `$master_name`.
