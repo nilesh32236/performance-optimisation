@@ -229,20 +229,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				}
 			}
 
-			$all_queued = true;
+			$all_queued   = true;
+			$newly_queued = 0;
 
 			foreach ( $urls as $scan_url ) {
 				foreach ( array( 'mobile', 'desktop' ) as $scan_strategy ) {
-					// queue_scan() returns 0 when Action Scheduler cannot create the job.
-					if ( 0 === Pagespeed::queue_scan( $scan_url, $scan_strategy ) ) {
+					// Deduplicate: skip if an identical PageSpeed job is already pending.
+					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( Pagespeed::AS_HOOK, array( array( 'url' => $scan_url, 'strategy' => $scan_strategy ) ), Pagespeed::AS_GROUP ) ) {
+						continue;
+					}
+					// queue_scan() returns 0 when Action Scheduler cannot create the job or deduped.
+					$job_id = Pagespeed::queue_scan( $scan_url, $scan_strategy );
+					if ( 0 === $job_id ) {
 						$all_queued = false;
+					} else {
+						++$newly_queued;
 					}
 				}
 			}
 
-			// Only record a completed run when everything queued successfully, so a
-			// failed enqueue does not block retries for the full weekly window.
-			if ( $all_queued ) {
+			// Only record a completed run when at least one job was newly queued and
+			// no enqueue failed. If all jobs were already pending (newly_queued==0),
+			// do not advance the weekly/daily timestamp — otherwise the rescan is
+			// marked completed without actually scheduling new scans.
+			if ( $all_queued && $newly_queued > 0 ) {
 				update_option( 'wppo_web_vitals_last_rescan', time(), false );
 			}
 		}
@@ -279,27 +289,71 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			set_transient( Util::transient_key( 'wppo_preload_cron_lock' ), 1, 20 * MINUTE_IN_SECONDS );
 
 			try {
-				// Persist iteration offset across runs.
-				$paged_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
+				// Cursor-based pagination: store last processed ID instead of OFFSET.
+				global $wpdb;
+				$last_id = (int) get_option( 'wppo_preload_cron_last_id', 0 );
+
+				// One-time migration: old offset option is OFFSET-based and not convertible to ID cursor.
+				// Convert offset to cursor via a single offset query (one-time cost) instead of restarting at 0
+				// which would re-queue the first 200 IDs. Gated behind a one-time option to avoid duplicate warm-ups.
+				$old_offset = (int) get_option( 'wppo_preload_cron_offset', 0 );
+				if ( 0 === $last_id && 0 !== $old_offset && ! get_option( 'wppo_preload_cron_migrated', false ) ) {
+					// Try to map old OFFSET to an ID cursor to resume without duplicating work.
+					$post_types_for_migration = get_post_types( array( 'public' => true ), 'names' );
+					$post_types_for_migration = array_unique( array_merge( array_values( array_diff( $post_types_for_migration, array( 'attachment' ) ) ), array( 'page', 'post' ) ) );
+					if ( ! empty( $post_types_for_migration ) ) {
+						$mig_placeholders = implode( ',', array_fill( 0, count( $post_types_for_migration ), '%s' ) );
+						$mig_args         = array_values( $post_types_for_migration );
+						$mig_args[]       = $old_offset;
+						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $mig_placeholders is count-derived only; $mig_args is sanitized list of post types + int offset.
+						$mapped_id = $wpdb->get_var(
+							$wpdb->prepare(
+								"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($mig_placeholders) AND post_status = 'publish' ORDER BY ID ASC LIMIT 1 OFFSET %d",
+								...$mig_args
+							)
+						);
+						if ( null !== $mapped_id && '' !== $mapped_id ) {
+							$last_id = (int) $mapped_id;
+							update_option( 'wppo_preload_cron_last_id', $last_id, false );
+							if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+								// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+								error_log( 'WPPO: migrated preload cursor offset ' . $old_offset . ' -> ID ' . $last_id );
+							}
+						} elseif ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+								// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+							error_log( 'WPPO: preload cursor migration reset offset ' . $old_offset . ' to 0 (no mapping found)' );
+						}
+					}
+					update_option( 'wppo_preload_cron_migrated', 1, false );
+					delete_option( 'wppo_preload_cron_offset' );
+				} elseif ( 0 === $last_id && 0 !== $old_offset ) {
+					delete_option( 'wppo_preload_cron_offset' );
+				}
 
 				$post_types = get_post_types( array( 'public' => true ), 'names' );
 				$post_types = array_unique( array_merge( array_values( array_diff( $post_types, array( 'attachment' ) ) ), array( 'page', 'post' ) ) );
 
-				$args = array(
-					'post_type'      => $post_types,
-					'post_status'    => 'publish',
-					// phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page
-					'posts_per_page' => 200, // Process pages in batches to prevent OOM.
-					'paged'          => max( 1, (int) ceil( ( $paged_offset + 1 ) / 200 ) ),
-					'fields'         => 'ids',
-					'orderby'        => 'ID',
-					'order'          => 'ASC',
+				if ( empty( $post_types ) ) {
+					delete_option( 'wppo_preload_cron_last_id' );
+					delete_option( 'wppo_preload_cron_offset' );
+					return;
+				}
+
+				$placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
+				// Build args explicitly to avoid spread-variadic PHPCS concerns; $placeholders is count-derived only.
+				$prepare_args = array_values( $post_types );
+				$prepare_args[] = $last_id;
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is count-derived only; $prepare_args is sanitized.
+				$query_batch_posts = $wpdb->get_col(
+					$wpdb->prepare(
+						"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders) AND post_status = 'publish' AND ID > %d ORDER BY ID ASC LIMIT 200",
+						...$prepare_args
+					)
 				);
 
-				$query_batch_posts = get_posts( $args );
-
 				if ( empty( $query_batch_posts ) ) {
-					// Reset offset on completion.
+					// Reset cursor on completion.
+					delete_option( 'wppo_preload_cron_last_id' );
 					delete_option( 'wppo_preload_cron_offset' );
 					return; // Lock released in finally.
 				}
@@ -308,9 +362,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				$preload      = $options['preload_settings'] ?? array();
 				$exclude_urls = Util::process_urls( $preload['excludePreloadCache'] ?? array() );
 
-				// Sitemap-aware preload: once per cycle (offset 0), warm URLs that
+				// Sitemap-aware preload: once per cycle (cursor 0), warm URLs that
 				// live outside standard post queries (custom endpoints, archives).
-				if ( 0 === $paged_offset && ! empty( $preload['preloadSitemap'] ) ) {
+				if ( 0 === $last_id && ! empty( $preload['preloadSitemap'] ) ) {
 					$this->schedule_sitemap_url_jobs( $exclude_urls );
 				}
 
@@ -326,8 +380,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					}
 				}
 
-				// Update iteration offset for the next batch.
-				update_option( 'wppo_preload_cron_offset', $paged_offset + 200, false );
+				// Update cursor for the next batch.
+				$max_id = (int) end( $query_batch_posts );
+				if ( $max_id > $last_id ) {
+					update_option( 'wppo_preload_cron_last_id', $max_id, false );
+				}
 
 				// Schedule next batch if needed.
 				if ( ! wp_next_scheduled( 'wppo_page_cron_batch' ) ) {
@@ -399,6 +456,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			wp_clear_scheduled_hook( 'wppo_page_cron_hook' );
 			wp_clear_scheduled_hook( 'wppo_page_cron_batch' );
 			delete_option( 'wppo_preload_cron_offset' );
+			delete_option( 'wppo_preload_cron_last_id' );
+			delete_option( 'wppo_preload_cron_migrated' );
 			delete_transient( Util::transient_key( 'wppo_preload_cron_lock' ) );
 			wp_clear_scheduled_hook( 'wppo_used_css_cron' );
 			delete_transient( Util::transient_key( 'wppo_used_css_lock' ) );

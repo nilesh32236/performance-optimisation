@@ -900,41 +900,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			$post_types = get_post_types( array( 'public' => true ), 'names' );
 			$post_types = array_diff( $post_types, array( 'attachment' ) );
 
-			$queued = 0;
-			$offset = 0;
-			$batch  = 200;
+			$queued  = 0;
+			$batch   = 200;
+			$last_id = 0;
 
+			if ( empty( $post_types ) ) {
+				return 0;
+			}
+
+			global $wpdb;
+			$placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
+
+			// Intentional bypass of WP_Query filters (pre_get_posts, language plugins) for performance:
+			// direct $wpdb cursor pagination (ID > last_id) avoids OFFSET cost on large sites. Site-specific
+			// filtering must be handled separately if needed.
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Intentional direct query, $placeholders is count-derived only.
 			do {
-				$args = array(
-					'post_type'      => $post_types,
-					'post_status'    => 'publish',
-					'posts_per_page' => $batch,
-					'offset'         => $offset,
-					'fields'         => 'ids',
-					'orderby'        => 'ID',
-					'order'          => 'ASC',
+				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
+				$prepare_args = array_values( $post_types );
+				$prepare_args[] = $last_id;
+				$prepare_args[] = $batch;
+				$post_ids = $wpdb->get_col(
+					$wpdb->prepare(
+						"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders) AND post_status = 'publish' AND ID > %d ORDER BY ID ASC LIMIT %d",
+						...$prepare_args
+					)
 				);
-
-				$post_ids = get_posts( $args );
 				if ( empty( $post_ids ) ) {
 					break;
 				}
 
 				foreach ( $post_ids as $post_id ) {
-					if ( as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => (int) $post_id ), 'performance_optimisation' ) ) {
 						continue;
 					}
 					as_enqueue_async_action(
 						'wppo_used_css_generate',
-						array( 'post_id' => $post_id ),
+						array( 'post_id' => (int) $post_id ),
 						'performance_optimisation'
 					);
 					++$queued;
 				}
 
-				$offset   = $offset + $batch;
-				$has_more = count( $post_ids ) === $batch;
-			} while ( $has_more );
+				$last_id = (int) end( $post_ids );
+				// Terminate only when last batch was partial; when total is exact multiple of $batch
+				// the next SELECT returns empty and breaks at the top of the loop (one wasted query in that edge case).
+			} while ( count( $post_ids ) === $batch );
+			// phpcs:enable
 
 			if ( $queued > 0 ) {
 				Log::add(

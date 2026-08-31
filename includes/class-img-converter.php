@@ -1253,9 +1253,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		private function store_placeholder_data_for_upload( array $metadata, int $attachment_id ): void {
 			$file = get_attached_file( $attachment_id );
 
-			if ( ! $file || ! file_exists( $file ) || ! is_readable( $file ) || ! function_exists( 'imagecreatefromstring' ) ) {
+			if ( ! $file || ! file_exists( $file ) || ! is_readable( $file ) ) {
 				return;
 			}
+			// Gate only the fallback string-decode path on imagecreatefromstring; direct GD loaders (imagecreatefromjpeg/png/webp/gif/avif) are independent and may exist even when the string helper is absent.
+			$has_string_loader = function_exists( 'imagecreatefromstring' );
 
 			// Security Fix: Prevent File Size & Memory Bomb DoS (same limit as convert_image()).
 			$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
@@ -1289,18 +1291,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return;
 			}
 
-			// Guard against a TOCTOU race where the file disappears between the
-			// checks above and the read; a missing file yields a false contents
-			// value that imagecreatefromstring() rejects with a TypeError.
-			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
-			$contents = @file_get_contents( $file );
-			if ( false === $contents ) {
-				return;
-			}
-
+			// Use direct GD loaders (imagecreatefromjpeg/png/webp/gif) which stream
+			// from disk instead of buffering the whole file via file_get_contents()
+			// + imagecreatefromstring(), which doubles memory (raw string + GD bitmap).
+			$image_type = $image_info[2] ?? 0;
+			$image      = null;
 			try {
-				// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-				$image = @imagecreatefromstring( $contents );
+				switch ( $image_type ) {
+					case IMAGETYPE_JPEG:
+						if ( function_exists( 'imagecreatefromjpeg' ) ) {
+							// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+							$image = @imagecreatefromjpeg( $file );
+						}
+						break;
+					case IMAGETYPE_PNG:
+						if ( function_exists( 'imagecreatefrompng' ) ) {
+							// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+							$image = @imagecreatefrompng( $file );
+						}
+						break;
+					case IMAGETYPE_GIF:
+						if ( function_exists( 'imagecreatefromgif' ) ) {
+							// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+							$image = @imagecreatefromgif( $file );
+						}
+						break;
+					case IMAGETYPE_WEBP:
+						if ( function_exists( 'imagecreatefromwebp' ) ) {
+							// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+							$image = @imagecreatefromwebp( $file );
+						}
+						break;
+					default:
+						// Fallback for AVIF (IMAGETYPE_AVIF = 19 on PHP 8.1+) or unknown types.
+						if ( defined( 'IMAGETYPE_AVIF' ) && IMAGETYPE_AVIF === $image_type && function_exists( 'imagecreatefromavif' ) ) {
+							// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+							$image = @imagecreatefromavif( $file );
+						} elseif ( $has_string_loader ) {
+							// Last resort: buffer + string decode (only when string loader exists).
+							// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents, WordPress.PHP.NoSilencedErrors.Discouraged
+							$contents = @file_get_contents( $file );
+							if ( false !== $contents ) {
+								// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+								$image = @imagecreatefromstring( $contents );
+							}
+						}
+						break;
+				}
 			} catch ( \Throwable $e ) {
 				return;
 			}

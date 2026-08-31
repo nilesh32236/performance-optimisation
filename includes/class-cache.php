@@ -40,6 +40,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		private const CACHE_DIR = '/cache/wppo';
 
 		/**
+		 * Whether the depth-guard warning has been logged this request.
+		 *
+		 * Rate-limits WP_DEBUG logging for depth cap hits to once per request
+		 * so a deeply nested cache tree does not flood the error log.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $depth_warning_logged = false;
+
+		/**
 		 * The domain name of the site.
 		 *
 		 * @var string
@@ -2031,10 +2042,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				if ( function_exists( 'wp_cache_get_salted' ) ) {
 					$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
 					update_option( 'wppo_cache_last_cleared', $salt, false );
-				} else {
-					delete_transient( Util::transient_key( 'wppo_cache_size' ) );
-					delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
 				}
+				delete_transient( Util::transient_key( 'wppo_cache_stats' ) );
+				delete_transient( Util::transient_key( 'wppo_cache_size' ) );
+				delete_transient( Util::transient_key( 'wppo_cache_count' ) );
+				delete_transient( Util::transient_key( 'wppo_total_js_css' ) );
 				update_option( 'wppo_cache_last_cleared_time', current_time( 'mysql' ), false );
 				do_action( 'wppo_after_cache_clear', $type, $url_path );
 
@@ -2122,26 +2134,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public static function get_cache_size(): string {
-			$instance = new self();
-
-			if ( ! $instance->get_filesystem() ) {
-				return __( 'Unable to initialize filesystem.', 'performance-optimisation' );
+			$stats = self::get_cache_stats();
+			// Preserve error strings from get_cache_stats() when filesystem is unavailable.
+			if ( isset( $stats['size'] ) && is_string( $stats['size'] ) ) {
+				// When cache_dir is empty (filesystem unavailable) the stats size is 'N/A' — fall back to legacy error handling.
+				if ( '' === $stats['cache_dir'] ) {
+					$instance = new self();
+					if ( ! $instance->get_filesystem() ) {
+						return __( 'Unable to initialize filesystem.', 'performance-optimisation' );
+					}
+					if ( ! $instance->filesystem->is_dir( $stats['cache_dir'] ) ) {
+						return __( 'Cache directory does not exist.', 'performance-optimisation' );
+					}
+					return __( 'N/A', 'performance-optimisation' );
+				}
+				// Detect dir-existence error: get_cache_stats returns N/A size when dir missing but filesystem ok.
+				// Re-check dir existence to return the historical error string for BC.
+				$instance = new self();
+				if ( $instance->get_filesystem() && ! $instance->filesystem->is_dir( $stats['cache_dir'] ) ) {
+					return __( 'Cache directory does not exist.', 'performance-optimisation' );
+				}
+				return $stats['size'];
 			}
-
-			$cache_dir = "{$instance->cache_root_dir}/{$instance->domain}";
-
-			if ( ! $instance->filesystem->is_dir( $cache_dir ) ) {
-				return __( 'Cache directory does not exist.', 'performance-optimisation' );
-			}
-
-			$total_size = $instance->calculate_directory_size( $cache_dir );
-			return size_format( $total_size );
+			return (string) $stats['size'];
 		}
 
 		/**
 		 * Get detailed cache statistics.
 		 *
 		 * Returns size, cached page count, last-cleared timestamp, and cache directory path.
+		 * Size and count are cached atomically in a single transient (wppo_cache_stats) to avoid
+		 * race conditions where one field is refreshed and the other remains stale.
 		 *
 		 * @since NEXT
 		 * @return array{size: string, cached_pages: int, last_cleared: string, cache_dir: string}
@@ -2166,9 +2189,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $stats;
 			}
 
+			$stats_key     = Util::transient_key( 'wppo_cache_stats' );
+			$cached_stats  = get_transient( $stats_key );
+			if ( is_array( $cached_stats ) && isset( $cached_stats['size'], $cached_stats['count'] ) ) {
+				$stats['size']         = (string) $cached_stats['size'];
+				$stats['cached_pages'] = (int) $cached_stats['count'];
+				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
+				return $stats;
+			}
+
+			// Fallback: check legacy split transients (pre-unified) for BC during upgrade.
+			$legacy_size  = get_transient( Util::transient_key( 'wppo_cache_size' ) );
+			$legacy_count = get_transient( Util::transient_key( 'wppo_cache_count' ) );
+			if ( false !== $legacy_size && false !== $legacy_count ) {
+				$stats['size']         = (string) $legacy_size;
+				$stats['cached_pages'] = (int) $legacy_count;
+				// Promote to unified key atomically.
+				set_transient( $stats_key, array( 'size' => $stats['size'], 'count' => $stats['cached_pages'] ), 15 * MINUTE_IN_SECONDS );
+				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
+				return $stats;
+			}
+
+			// Cache miss: compute both together and store atomically.
 			$total_size            = $instance->calculate_directory_size( $cache_dir );
 			$stats['size']         = size_format( $total_size );
 			$stats['cached_pages'] = $instance->count_cached_pages( $cache_dir );
+			set_transient( $stats_key, array( 'size' => $stats['size'], 'count' => $stats['cached_pages'] ), 15 * MINUTE_IN_SECONDS );
+			// Also prime legacy keys for any external consumers still reading them.
+			set_transient( Util::transient_key( 'wppo_cache_size' ), $stats['size'], 15 * MINUTE_IN_SECONDS );
+			set_transient( Util::transient_key( 'wppo_cache_count' ), $stats['cached_pages'], 15 * MINUTE_IN_SECONDS );
+
 			$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 
 			return $stats;
@@ -2182,7 +2232,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
-		private function calculate_directory_size( string $directory ): int {
+		private function calculate_directory_size( string $directory, int $depth = 0 ): int {
+			// Guard against unbounded recursion on very large caches (10k+ pages).
+			if ( $depth > 20 ) {
+				if ( ! self::$depth_warning_logged && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					self::$depth_warning_logged = true;
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO: calculate_directory_size depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
+				}
+				return 0;
+			}
 			$total_size = 0;
 			$fs         = $this->get_filesystem();
 
@@ -2199,7 +2258,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			foreach ( $files as $file ) {
 				$file_path   = trailingslashit( $directory ) . $file['name'];
 				$total_size += ( 'd' === $file['type'] )
-					? $this->calculate_directory_size( $file_path )
+					? $this->calculate_directory_size( $file_path, $depth + 1 )
 					: $fs->size( $file_path );
 			}
 
@@ -2214,7 +2273,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.9.0
 		 */
-		private function count_cached_pages( string $directory ): int {
+		private function count_cached_pages( string $directory, int $depth = 0 ): int {
+			if ( $depth > 20 ) {
+				if ( ! self::$depth_warning_logged && defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+					self::$depth_warning_logged = true;
+					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+					error_log( 'WPPO: count_cached_pages depth cap (20) hit at ' . $directory . ' — stats may be under-reported due to deep nesting or symlink loop.' );
+				}
+				return 0;
+			}
 			$fs = $this->get_filesystem();
 
 			if ( ! $fs ) {
@@ -2228,7 +2295,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$count = 0;
 			foreach ( $files as $file ) {
 				if ( 'd' === $file['type'] ) {
-					$count += $this->count_cached_pages( trailingslashit( $directory ) . $file['name'] );
+					$count += $this->count_cached_pages( trailingslashit( $directory ) . $file['name'], $depth + 1 );
 				} elseif ( 'index.html' === $file['name'] ) {
 					++$count;
 				}
