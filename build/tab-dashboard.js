@@ -1,6 +1,4764 @@
-"use strict";(globalThis.webpackChunkperformance_optimisation||=[]).push([[759],{761(e,a,s){s.r(a),s.d(a,{default:()=>X});var t=s(87),i=s(175),o=s(263),n=s(468),r=s(927),p=s(268),c=s(323),l=s(351),m=s(831),d=s(693),u=s(496),_=s(188),g=s(723),f=s(790);const h=({status:e})=>{const a={good:(0,g.__)("Good","performance-optimisation"),needs_improvement:(0,g.__)("Needs Improvement","performance-optimisation"),poor:(0,g.__)("Poor","performance-optimisation")}[e]||e;return(0,f.jsx)("span",{className:`wppo-status-badge wppo-status-badge--${e}`,"aria-label":a,children:a})};var w=s(392);const x={load_time:()=>(0,g.__)("The total time taken for the page to fully load in the browser.","performance-optimisation"),ttfb:()=>(0,g.__)("Time to First Byte. The time it takes for the server to send the first byte of data.","performance-optimisation"),dns:()=>(0,g.__)("The time taken to resolve the domain name to an IP address.","performance-optimisation"),connect:()=>(0,g.__)("The time taken to establish a TCP connection with the server.","performance-optimisation"),ssl:()=>(0,g.__)("The time taken to complete the SSL/TLS handshake for secure connections.","performance-optimisation"),page_size:()=>(0,g.__)("The total weight of the page including CSS, JS, and Images.","performance-optimisation"),assets:()=>(0,g.__)("The total number of external resources loaded by the page.","performance-optimisation"),compression:()=>(0,g.__)("Whether the server uses Gzip or Brotli to compress text assets.","performance-optimisation"),cache_control:()=>(0,g.__)("Whether the server instructs the browser to cache assets for a long duration.","performance-optimisation"),modern_images:()=>(0,g.__)("The percentage of images on the page that use modern formats like WebP or AVIF.","performance-optimisation"),alt_text:()=>(0,g.__)("Whether all images have descriptive alt attributes for accessibility.","performance-optimisation"),dom_size:()=>(0,g.__)("The total number of HTML elements on the page. High numbers (> 1,500) can slow down rendering.","performance-optimisation"),unminified:()=>(0,g.__)("The number of CSS and JS files that are not minified (lack .min in filename).","performance-optimisation"),third_party:()=>(0,g.__)("The number of scripts loaded from external domains (e.g., Google, Facebook).","performance-optimisation"),server_wait:()=>(0,g.__)("Server processing time. The time taken by the server to process the request before sending data.","performance-optimisation")},b=(e,a,s)=>e<=a?"good":e<=s?"needs_improvement":"poor",j=e=>e?"good":"poor",v=e=>e&&0!==e?e<1024?`${e} B`:e<1048576?`${(e/1024).toFixed(1)} KB`:`${(e/1048576).toFixed(2)} MB`:"0 B",y=({label:e,value:a,status:s,tooltipKey:t})=>(0,f.jsxs)("tr",{className:"wppo-audit-table__row",children:[(0,f.jsxs)("td",{className:"wppo-audit-table__label",children:[e,t&&(0,f.jsx)(w.A,{content:x[t]?.()})]}),(0,f.jsx)("td",{className:"wppo-audit-table__value",children:a}),(0,f.jsx)("td",{className:"wppo-audit-table__status",children:s&&(0,f.jsx)(h,{status:s})})]}),N=({title:e,icon:a})=>(0,f.jsx)("tr",{className:"wppo-audit-section-header",children:(0,f.jsx)("td",{colSpan:"3",children:(0,f.jsxs)("div",{className:"wppo-audit-section-header__inner",children:[a&&(0,f.jsx)(u.g,{icon:a}),e]})})}),S=({result:e})=>(0,f.jsxs)("div",{className:"wppo-audit-overview",children:[(0,f.jsxs)("div",{className:"wppo-audit-overview-card",children:[(0,f.jsxs)("div",{className:"wppo-audit-overview-card__label",children:[(0,g.__)("Load Time","performance-optimisation"),(0,f.jsx)(w.A,{content:x.load_time()})]}),(0,f.jsxs)("span",{className:"wppo-audit-overview-card__value",children:[e.load_time," s"]}),(0,f.jsx)("div",{className:"wppo-audit-overview-card__status",children:(0,f.jsx)(h,{status:b(e.load_time,2.5,4)})})]}),(0,f.jsxs)("div",{className:"wppo-audit-overview-card",children:[(0,f.jsxs)("div",{className:"wppo-audit-overview-card__label",children:[(0,g.__)("TTFB","performance-optimisation"),(0,f.jsx)(w.A,{content:x.ttfb()})]}),(0,f.jsxs)("span",{className:"wppo-audit-overview-card__value",children:[e.ttfb," ms"]}),(0,f.jsx)("div",{className:"wppo-audit-overview-card__status",children:(0,f.jsx)(h,{status:b(e.ttfb,200,500)})})]}),(0,f.jsxs)("div",{className:"wppo-audit-overview-card",children:[(0,f.jsxs)("div",{className:"wppo-audit-overview-card__label",children:[(0,g.__)("Page Size","performance-optimisation"),(0,f.jsx)(w.A,{content:x.page_size()})]}),(0,f.jsx)("span",{className:"wppo-audit-overview-card__value",children:v(e.total_size)}),(0,f.jsx)("div",{className:"wppo-audit-overview-card__status",children:(0,f.jsx)(h,{status:b(e.total_size/1024,500,1e3)})})]}),(0,f.jsxs)("div",{className:"wppo-audit-overview-card",children:[(0,f.jsxs)("div",{className:"wppo-audit-overview-card__label",children:[(0,g.__)("Total Assets","performance-optimisation"),(0,f.jsx)(w.A,{content:x.assets()})]}),(0,f.jsx)("span",{className:"wppo-audit-overview-card__value",children:e.css_count+e.js_count+e.media_count})]})]}),C=({onSuggestionsReady:e,onUrlChange:a})=>{const s="undefined"!=typeof wppoSettings?wppoSettings.performance_audit?.homeUrl??"":"",[n,r]=(0,t.useState)(s),[p,m]=(0,t.useState)(!1),[h,w]=(0,t.useState)(null),[x,C]=(0,t.useState)(!1),{notice:k,notify:P,dismiss:A}=(0,o.A)(),L=(0,t.useRef)(!1),E=(0,t.useRef)(null);(0,t.useEffect)(()=>()=>{E.current&&E.current.abort()},[]);const F=async(s,t=!1)=>{if(p||L.current)return;L.current=!0,s&&s.preventDefault(),m(!0),A(),w(null),E.current&&E.current.abort(),E.current=new AbortController;const o=E.current;let r=null;try{const e=await(0,i.b5)(n,t,o.signal);!o.signal.aborted&&e.success&&e.data?(r=e.data,w(r),a&&a(n)):o.signal.aborted||P({type:"error",message:e.message||(0,g.__)("Scan failed. Please try again.","performance-optimisation")})}catch(e){if(o.signal.aborted)return;P({type:"error",message:(0,g.__)("Scan failed. Please try again.","performance-optimisation")}),console.error("Performance scan error:",e)}finally{L.current=!1,m(!1)}if(e&&r)try{const a=await(0,i._E)(n,o.signal);!o.signal.aborted&&a.success&&a.data?.suggestions&&e(a.data.suggestions)}catch(e){o.signal.aborted||console.warn("Could not fetch suggestions:",e)}};return(0,f.jsxs)(c.A,{title:(0,g.__)("Performance Audit","performance-optimisation"),children:[(0,f.jsxs)("form",{className:"wppo-audit-controls",onSubmit:F,children:[(0,f.jsx)("div",{className:"wppo-audit-controls__icon",children:(0,f.jsx)(u.g,{icon:_.MjD})}),(0,f.jsx)("input",{id:"wppo-audit-url",type:"url",className:"wppo-audit-controls__input",value:n,onChange:e=>r(e.target.value),placeholder:(0,g.__)("https://example.com","performance-optimisation"),required:!0,"aria-label":(0,g.__)("URL to Audit","performance-optimisation")}),(0,f.jsxs)("div",{className:"wppo-audit-controls__actions",children:[(0,f.jsx)("button",{type:"button",className:"wppo-button wppo-button--ghost",onClick:()=>{r(s)},title:(0,g.__)("Use Home URL","performance-optimisation"),"aria-label":(0,g.__)("Use Home URL","performance-optimisation"),children:(0,f.jsx)(u.g,{icon:_.Bwz})}),(0,f.jsx)("button",{type:"submit",className:"wppo-button wppo-button--primary",disabled:p,children:p?(0,g.__)("Scanning…","performance-optimisation"):(0,f.jsxs)(f.Fragment,{children:[(0,f.jsx)(u.g,{icon:_.MjD,className:"wppo-mr-8"}),(0,g.__)("Run Scan","performance-optimisation")]})})]})]}),k&&(0,f.jsx)(d.A,{type:k.type,message:k.message}),h&&(0,f.jsxs)("div",{className:"wppo-audit-results",children:[(0,f.jsxs)("div",{className:"wppo-audit-meta",children:[(0,f.jsxs)("div",{className:"wppo-audit-meta__title",children:[(0,f.jsx)(u.g,{icon:_.$Fj,className:"wppo-mr-8"}),(0,g.__)("Scan Results","performance-optimisation")]}),(0,f.jsx)("div",{className:"wppo-audit-meta__toggle",children:(0,f.jsx)(l.A,{checked:x,onChange:e=>{C(e.target.checked)},name:"devMode",label:(0,g.__)("Developer Details","performance-optimisation"),showLabel:!1})})]}),(0,f.jsx)(S,{result:h}),h.is_cached&&(0,f.jsxs)("div",{className:"wppo-notice wppo-notice--info wppo-audit-cached-notice",children:[(0,f.jsxs)("span",{children:[(0,f.jsx)(u.g,{icon:_.rC2,className:"wppo-mr-8"}),(0,g.__)("Displaying cached results from the last hour.","performance-optimisation")]}),(0,f.jsx)("button",{type:"button",className:"wppo-button wppo-button--ghost wppo-button--sm",onClick:e=>F(e,!0),disabled:p,"aria-label":(0,g.__)("Scan Fresh Data for Performance Audit","performance-optimisation"),children:(0,g.__)("Scan Fresh Data","performance-optimisation")})]}),(0,f.jsxs)("table",{className:"wppo-audit-table",children:[(0,f.jsx)("thead",{children:(0,f.jsxs)("tr",{children:[(0,f.jsx)("th",{children:(0,g.__)("Metric","performance-optimisation")}),(0,f.jsx)("th",{children:(0,g.__)("Value","performance-optimisation")}),(0,f.jsx)("th",{children:(0,g.__)("Status","performance-optimisation")})]})}),(0,f.jsxs)("tbody",{children:[(0,f.jsx)(N,{title:(0,g.__)("Optimisations","performance-optimisation"),icon:_.Ubc}),(0,f.jsx)(y,{label:(0,g.__)("Gzip/Brotli Compression","performance-optimisation"),value:h.compression_value&&"none"!==h.compression_value?h.compression_value:(0,g.__)("Disabled","performance-optimisation"),status:j(h.gzip_brotli_compression),tooltipKey:"compression"}),(0,f.jsx)(y,{label:(0,g.__)("Cache-Control","performance-optimisation"),value:h.cache_control_value&&"none"!==h.cache_control_value?h.cache_control_value:(0,g.__)("None","performance-optimisation"),status:j(h.cache_control_headers),tooltipKey:"cache_control"}),(0,f.jsx)(y,{label:(0,g.__)("Modern Formats","performance-optimisation"),value:`${Number(h.uses_modern_image_formats||0).toFixed(1)}%`,status:b(100-(parseFloat(h.uses_modern_image_formats)||0),20,50),tooltipKey:"modern_images"}),(0,f.jsx)(y,{label:(0,g.__)("Image Alt Attributes","performance-optimisation"),value:h.image_alt_attributes?(0,g.__)("All images have alt text","performance-optimisation"):(0,g.__)("Some images missing alt text","performance-optimisation"),status:j(h.image_alt_attributes),tooltipKey:"alt_text"}),x&&(0,f.jsxs)(f.Fragment,{children:[(0,f.jsx)(N,{title:(0,g.__)("Advanced Timings","performance-optimisation"),icon:_.MNM}),(0,f.jsx)(y,{label:(0,g.__)("DNS Lookup","performance-optimisation"),value:`${h.dns_lookup_time} ms`,tooltipKey:"dns"}),(0,f.jsx)(y,{label:(0,g.__)("TCP Connection","performance-optimisation"),value:`${h.connect_time} ms`,tooltipKey:"connect"}),(0,f.jsx)(y,{label:(0,g.__)("SSL Handshake","performance-optimisation"),value:`${h.ssl_time} ms`,tooltipKey:"ssl"}),(0,f.jsx)(y,{label:(0,g.__)("True TTFB","performance-optimisation"),value:`${h.ttfb} ms`,tooltipKey:"ttfb"}),(0,f.jsx)(y,{label:(0,g.__)("Server Processing","performance-optimisation"),value:`${h.server_wait_time} ms`,tooltipKey:"server_wait"}),(0,f.jsx)(N,{title:(0,g.__)("Asset Breakdown","performance-optimisation"),icon:_.$Fj}),(0,f.jsx)(y,{label:(0,g.__)("CSS Files","performance-optimisation"),value:`${h.css_count} (${v(h.css_total_size)})`}),(0,f.jsx)(y,{label:(0,g.__)("JS Files","performance-optimisation"),value:`${h.js_count} (${v(h.js_total_size)})`}),(0,f.jsx)(y,{label:(0,g.__)("Total Images","performance-optimisation"),value:`${h.media_count} (${v(h.media_total_size)})`}),(0,f.jsx)(y,{label:(0,g.__)("Lazy-Loaded","performance-optimisation"),value:h.lazy_image_count}),(0,f.jsx)(y,{label:(0,g.__)("Eager-Loaded","performance-optimisation"),value:h.eager_image_count}),(0,f.jsx)(y,{label:(0,g.__)("Total DOM Nodes","performance-optimisation"),value:h.dom_size,tooltipKey:"dom_size"}),(0,f.jsx)(y,{label:(0,g.__)("Unminified Assets","performance-optimisation"),value:h.unminified_assets_count,tooltipKey:"unminified"}),(0,f.jsx)(y,{label:(0,g.__)("Third-Party Scripts","performance-optimisation"),value:h.third_party_scripts_count,tooltipKey:"third_party"}),(0,f.jsx)(N,{title:(0,g.__)("Environment","performance-optimisation"),icon:_.Bwz}),(0,f.jsx)(y,{label:(0,g.__)("Page URL","performance-optimisation"),value:h.page_url}),(0,f.jsx)(y,{label:(0,g.__)("Scan Type","performance-optimisation"),value:h.scan_type}),(0,f.jsx)(y,{label:(0,g.__)("HTTPS","performance-optimisation"),value:h.uses_https?(0,g.__)("Enabled","performance-optimisation"):(0,g.__)("Disabled","performance-optimisation"),status:j(h.uses_https)}),(0,f.jsx)(y,{label:(0,g.__)("robots.txt","performance-optimisation"),value:h.robots_txt_exists?(0,g.__)("Exists","performance-optimisation"):(0,g.__)("Missing","performance-optimisation"),status:j(h.robots_txt_exists)})]})]})]}),!x&&(0,f.jsxs)("div",{className:"wppo-notice wppo-notice--info wppo-mt-24",children:[(0,f.jsx)(u.g,{icon:_.rC2,className:"wppo-mr-8"}),(0,f.jsxs)("span",{children:[(0,g.__)("Enable","performance-optimisation")," ",(0,f.jsx)("strong",{children:(0,g.__)("Developer Details","performance-optimisation")}),(0,g.__)("for granular network timings and environment info.","performance-optimisation")]})]})]})]})},k=({label:e,score:a})=>{const s=(e=>e>=90?"good":e>=50?"needs_improvement":"poor")(a);return(0,f.jsxs)("div",{className:`wppo-score-gauge wppo-score-gauge--${s}`,children:[(0,f.jsx)("div",{className:"wppo-score-gauge__circle",children:(0,f.jsx)("span",{className:"wppo-score-gauge__value",children:a})}),(0,f.jsx)("span",{className:"wppo-score-gauge__label",children:e})]})},P=({label:e,displayValue:a,score:s})=>{let t=null;return null!==s&&(t=s>=.9?"good":s>=.5?"needs_improvement":"poor"),(0,f.jsxs)("tr",{className:"wppo-vitals-table__row",children:[(0,f.jsx)("td",{className:"wppo-vitals-table__label",children:e}),(0,f.jsx)("td",{className:"wppo-vitals-table__value",children:a??"—"}),(0,f.jsx)("td",{className:"wppo-vitals-table__status",children:t&&(0,f.jsx)(h,{status:t})})]})},A=({url:e,onSuggestionsReady:a})=>{const[s,n]=(0,t.useState)(!1),[r,p]=(0,t.useState)(!1),[l,m]=(0,t.useState)(null),{notice:h,notify:w,dismiss:x}=(0,o.A)(),[b,j]=(0,t.useState)("mobile"),v=(0,t.useRef)(null),y=(0,t.useRef)(0),N=(0,t.useRef)(!1),S=(0,t.useCallback)(()=>{v.current&&(clearTimeout(v.current),v.current=null),y.current=0},[]),C=(0,t.useRef)(!0);(0,t.useEffect)(()=>(C.current=!0,()=>{C.current=!1,S()}),[S]);const A="undefined"!=typeof wppoSettings&&(wppoSettings.performance_audit?.pagespeedApiKeyConfigured??!1),L=(0,t.useCallback)((e,s)=>{const t=async()=>{if(y.current+=1,y.current>60)return S(),p(!1),n(!1),void w({type:"error",message:(0,g.__)("PageSpeed scan timed out. Please try again.","performance-optimisation")});try{const o=await(0,i.dB)(e,s);if(!o.success)return S(),p(!1),n(!1),void w({type:"error",message:o.message||(0,g.__)("PageSpeed scan failed. Please try again.","performance-optimisation")});if("not_ready"===o.data?.status)return void(C.current&&(v.current=setTimeout(t,5e3)));C.current&&(S(),p(!1),n(!1),m(o.data),a&&o.data?.suggestions&&a(o.data.suggestions))}catch(e){S(),p(!1),n(!1),w({type:"error",message:(0,g.__)("PageSpeed scan failed.","performance-optimisation")}),console.error("PageSpeed poll error:",e)}};v.current=setTimeout(t,5e3)},[S,a,w]),E=(0,t.useCallback)(async()=>{if(e&&!s&&!r&&!N.current){N.current=!0,S(),n(!0),p(!1),m(null),x();try{const a=await(0,i.dT)(e,b);if(!a.success)return n(!1),N.current=!1,void w({type:"error",message:a.message||(0,g.__)("PageSpeed scan failed. Please try again.","performance-optimisation")});p(!0),N.current=!1,L(e,b)}catch(e){n(!1),N.current=!1,w({type:"error",message:(0,g.__)("PageSpeed scan failed.","performance-optimisation")}),console.error("PageSpeed scan error:",e)}}},[e,b,S,L,s,r,w,x]),F={fcp:(0,g.__)("First Contentful Paint","performance-optimisation"),lcp:(0,g.__)("Largest Contentful Paint","performance-optimisation"),tbt:(0,g.__)("Total Blocking Time","performance-optimisation"),cls:(0,g.__)("Cumulative Layout Shift","performance-optimisation"),speed_index:(0,g.__)("Speed Index","performance-optimisation"),tti:(0,g.__)("Time to Interactive","performance-optimisation")},I={performance:(0,g.__)("Performance","performance-optimisation"),accessibility:(0,g.__)("Accessibility","performance-optimisation"),best_practices:(0,g.__)("Best Practices","performance-optimisation"),seo:(0,g.__)("SEO","performance-optimisation")};return(0,f.jsxs)(c.A,{title:(0,g.__)("PageSpeed Insights","performance-optimisation"),children:[!A&&(0,f.jsxs)("div",{className:"wppo-notice wppo-notice--warning",children:[(0,f.jsx)(u.g,{icon:_.tUE,className:"wppo-mr-8"}),(0,g.__)("PageSpeed API key is not configured. Add it in Settings.","performance-optimisation")]}),(0,f.jsxs)("div",{className:"wppo-pagespeed-controls",children:[(0,f.jsxs)("div",{className:"wppo-pagespeed-strategy",children:[(0,f.jsxs)("button",{type:"button",className:"wppo-strategy-btn "+("mobile"===b?"wppo-strategy-btn--active":""),onClick:()=>j("mobile"),disabled:s||r,children:[(0,f.jsx)(u.g,{icon:_.XRN}),(0,g.__)("Mobile","performance-optimisation")]}),(0,f.jsxs)("button",{type:"button",className:"wppo-strategy-btn "+("desktop"===b?"wppo-strategy-btn--active":""),onClick:()=>j("desktop"),disabled:s||r,children:[(0,f.jsx)(u.g,{icon:_.ArK}),(0,g.__)("Desktop","performance-optimisation")]})]}),(0,f.jsx)("button",{type:"button",className:"wppo-button wppo-button--primary",onClick:E,disabled:!A||s||r,children:s||r?(0,f.jsxs)(f.Fragment,{children:[(0,f.jsx)(u.g,{icon:_.z1G,spin:!0,className:"wppo-mr-8"}),(0,g.__)("Scanning…","performance-optimisation")]}):(0,f.jsxs)(f.Fragment,{children:[(0,f.jsx)(u.g,{icon:_.xiI,className:"wppo-mr-8"}),(0,g.__)("Run PageSpeed Scan","performance-optimisation")]})})]}),r&&(0,f.jsxs)("div",{className:"wppo-notice wppo-notice--info",role:"alert","aria-live":"polite",children:[(0,f.jsx)(u.g,{icon:_.z1G,spin:!0,className:"wppo-mr-8"}),(0,g.__)("PageSpeed scan is running in the background. Results will appear shortly.","performance-optimisation")]}),h&&(0,f.jsx)(d.A,{type:h.type,message:h.message}),l&&(0,f.jsxs)("div",{className:"wppo-pagespeed-results",children:[(0,f.jsx)("div",{className:"wppo-score-gauges",children:Object.entries(l.scores??{}).map(([e,a])=>(0,f.jsx)(k,{label:I[e]??e,score:a},e))}),(0,f.jsxs)("table",{className:"wppo-vitals-table",children:[(0,f.jsx)("thead",{children:(0,f.jsxs)("tr",{children:[(0,f.jsx)("th",{children:(0,g.__)("Metric","performance-optimisation")}),(0,f.jsx)("th",{children:(0,g.__)("Value","performance-optimisation")}),(0,f.jsx)("th",{children:(0,g.__)("Status","performance-optimisation")})]})}),(0,f.jsx)("tbody",{children:Object.entries(l.vitals??{}).map(([e,a])=>(0,f.jsx)(P,{label:F[e]??e,displayValue:a.display_value,score:a.score},e))})]}),(0,f.jsxs)("p",{className:"wppo-pagespeed-meta",children:[(0,f.jsx)(u.g,{icon:_.SGM,className:"wppo-pagespeed-meta__icon"}),"desktop"===(l.strategy??b).toLowerCase()?(0,g.__)("Desktop","performance-optimisation"):(0,g.__)("Mobile","performance-optimisation")," · ",l.fetched_at]})]})]})},L=({strategy:e,trends:a})=>{const s=Object.keys(a).find(a=>a.endsWith(`_${e}`));if(!s)return(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small wppo-mt-8",children:(0,g.__)("Not enough trend data yet. Run PageSpeed scans over time or enable auto-rescan.","performance-optimisation")});const t=a[s]??[],i=t.map(e=>e.performance),o=t.length>0?t[t.length-1].performance:null,n=(e=>{if(!e||e.length<1)return"";const a=Math.max(...e,100),s=Math.min(...e,0),t=a-s||1,i=620/Math.max(e.length-1,1);return e.map((e,a)=>`${10+a*i},${(134-(e-s)/t*108).toFixed(1)}`).join(" ")})(i),r=t.length>1;return(0,f.jsxs)("div",{className:"wppo-trend-series",children:[(0,f.jsxs)("div",{className:"wppo-trend-series__header",children:[(0,f.jsx)("span",{className:"wppo-trend-series__label",children:"mobile"===e?(0,g.__)("Mobile","performance-optimisation"):(0,g.__)("Desktop","performance-optimisation")}),null!==o&&(0,f.jsxs)("span",{className:"wppo-trend-series__latest",children:[(0,g.__)("Latest score","performance-optimisation"),": ",(0,f.jsx)("strong",{children:o})]})]}),r?(0,f.jsx)("svg",{className:"wppo-trend-chart",viewBox:"0 0 640 160",role:"img","aria-label":(0,g.sprintf)(/* translators: %s: strategy (mobile or desktop) */ /* translators: %s: strategy (mobile or desktop) */
-(0,g.__)("%s performance score trend chart","performance-optimisation"),e),children:(0,f.jsx)("polyline",{className:"wppo-trend-chart__line",points:n,strokeWidth:"2",fill:"none"})}):(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small wppo-mt-8",children:(0,g.__)("Not enough trend data yet. Run a few PageSpeed scans over time.","performance-optimisation")})]})},E=({url:e=""})=>{const[a,s]=(0,t.useState)(null),[o,n]=(0,t.useState)(!0),[r,p]=(0,t.useState)(null),l=(0,t.useCallback)(async()=>{if(!e)return s(null),p(null),void n(!1);n(!0),p(null);try{const a=await(0,i.Eh)(e,"");a.success?s(a.data?.trends??{}):p(a.message||(0,g.__)("Failed to load trend data.","performance-optimisation"))}catch(e){p((0,g.__)("Failed to load trend data.","performance-optimisation")),console.error("Web Vitals trends load error:",e)}finally{n(!1)}},[e]);return(0,t.useEffect)(()=>{l()},[l]),(0,f.jsxs)(c.A,{title:(0,g.__)("Web Vitals Trends","performance-optimisation"),children:[o&&(0,f.jsxs)("p",{className:"wppo-text-muted",role:"status","aria-live":"polite",children:[(0,f.jsx)(u.g,{icon:_.z1G,spin:!0,className:"wppo-mr-8"}),(0,g.__)("Loading trends…","performance-optimisation")]}),!o&&r&&(0,f.jsxs)("div",{className:"wppo-notice wppo-notice--error",children:[(0,f.jsx)(u.g,{icon:_.tUE,className:"wppo-mr-8"}),r]}),!o&&!r&&!e&&(0,f.jsx)("p",{className:"wppo-text-muted",children:(0,g.__)("Enter a URL to view Web Vitals trend history.","performance-optimisation")}),!o&&!r&&e&&(0,f.jsxs)("div",{className:"wppo-trend-layout",children:[(0,f.jsxs)("div",{className:"wppo-trend-layout__title",children:[(0,f.jsx)(u.g,{icon:_.gK3,className:"wppo-mr-8"}),e]}),(0,f.jsx)(L,{strategy:"mobile",trends:a??{}}),(0,f.jsx)(L,{strategy:"desktop",trends:a??{}})]})]})},F=e=>{const a={};for(const s of Object.values(e))for(const[e,t]of Object.entries(s))a[e]||(a[e]={n:0,sum:0}),a[e].n+=t.n,a[e].sum+=t.sum;const s={};for(const[e,t]of Object.entries(a))s[e]=t.n?t.sum/t.n:null;return s},I=()=>{const[e,a]=(0,t.useState)([]),[s,o]=(0,t.useState)(!0),[n,r]=(0,t.useState)(null),p=(0,t.useCallback)(async()=>{o(!0),r(null);try{const e=await(0,i.H2)("rum_data",{},"GET");if(e.success&&e.data){const s=Object.entries(e.data).sort(([e],[a])=>e.localeCompare(a)).map(([e,a])=>({day:e,...F(a)})).slice(-14);a(s)}else r(e.message||(0,g.__)("Failed to load real-user data.","performance-optimisation"))}catch(e){r((0,g.__)("Failed to load real-user data.","performance-optimisation")),console.error("Error fetching RUM data:",e)}finally{o(!1)}},[]);(0,t.useEffect)(()=>{p()},[p]);const l=e=>null==e?"—":`${Math.round(e)} ms`;let m;return m=n?(0,f.jsx)("p",{className:"wppo-text-muted",children:n}):0!==e.length||s?(0,f.jsxs)("table",{className:"wppo-rum-table wppo-table",children:[(0,f.jsx)("thead",{children:(0,f.jsxs)("tr",{children:[(0,f.jsx)("th",{children:(0,g.__)("Day","performance-optimisation")}),(0,f.jsx)("th",{children:(0,g.__)("LCP","performance-optimisation")}),(0,f.jsx)("th",{children:(0,g.__)("INP","performance-optimisation")}),(0,f.jsx)("th",{children:(0,g.__)("CLS","performance-optimisation")}),(0,f.jsx)("th",{children:(0,g.__)("FCP","performance-optimisation")}),(0,f.jsx)("th",{children:(0,g.__)("TTFB","performance-optimisation")})]})}),(0,f.jsx)("tbody",{children:e.map(e=>{return(0,f.jsxs)("tr",{children:[(0,f.jsx)("td",{children:e.day}),(0,f.jsx)("td",{children:l(e.lcp)}),(0,f.jsx)("td",{children:l(e.inp)}),(0,f.jsx)("td",{children:(a=e.cls,null==a?"—":a.toFixed(3))}),(0,f.jsx)("td",{children:l(e.fcp)}),(0,f.jsx)("td",{children:l(e.ttfb)})]},e.day);var a})})]}):(0,f.jsx)("p",{className:"wppo-text-muted",children:(0,g.__)('No real-user data yet. Enable "Collect Real-user Web Vitals" in Tools and wait for visitors.',"performance-optimisation")}),(0,f.jsxs)(c.A,{title:(0,g.__)("Real-user Web Vitals","performance-optimisation"),icon:(0,f.jsx)(u.g,{icon:_.gdJ}),actions:s&&(0,f.jsx)(u.g,{icon:_.z1G,spin:!0,"aria-label":(0,g.__)("Loading…","performance-optimisation")}),children:[(0,f.jsx)("p",{className:"wppo-text-muted",children:(0,g.__)("Aggregated Core Web Vitals from real visitors, per day (site-wide).","performance-optimisation")}),m,e.length>0&&(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small",children:(0,g.sprintf)(/* translators: %d: number of sample days retained */ /* translators: %d: number of sample days retained */
-(0,g.__)("Showing up to %d days.","performance-optimisation"),14)})]})},M={open_object_cache_tab:"objectCache",open_image_optimization_tab:"imageOptimization",open_file_optimization_tab:"fileOptimization",open_ccss_settings:"fileOptimization",enable_server_rules:"fileOptimization",open_preload_tab:"preload",no_action_required:null},T=({status:e})=>"good"===e?(0,f.jsx)(u.g,{icon:_.SGM,className:"wppo-suggestion-icon wppo-suggestion-icon--good"}):"needs_improvement"===e?(0,f.jsx)(u.g,{icon:_.zpE,className:"wppo-suggestion-icon wppo-suggestion-icon--warning"}):(0,f.jsx)(u.g,{icon:_.s0Q,className:"wppo-suggestion-icon wppo-suggestion-icon--poor"}),z=(e,a)=>"boolean"===a?"pass"===e?(0,g.__)("Passing","performance-optimisation"):(0,g.__)("Failing","performance-optimisation"):"header"===a?"none"===e?(0,g.__)("None","performance-optimisation"):e:"encoding"===a?"none"===e?(0,g.__)("None","performance-optimisation"):{br:"Brotli",gzip:"Gzip",deflate:"Deflate",zstd:"Zstd"}[String(e).toLowerCase()]||e:"score"===a?`${Math.round(100*parseFloat(e))} / 100`:"%"===a?`${Number(e).toFixed(1)}%`:"s"===a?`${Number(e).toFixed(2)}s`:"ms"===a?`${Math.round(e)}ms`:`${e} ${a}`,R=({suggestion:e,onNavigate:a})=>{const{value:s,unit:t,status:i,description:o,fix_action:n}=e,r=M[n]??null,p="good"!==i&&null!==r;return(0,f.jsxs)("div",{className:`wppo-suggestion-card wppo-suggestion-card--${i}`,role:"listitem",children:[(0,f.jsxs)("div",{className:"wppo-suggestion-card__header",children:[(0,f.jsx)(T,{status:i}),(0,f.jsx)("span",{className:"wppo-suggestion-card__description",children:o}),(0,f.jsx)(h,{status:i})]}),(0,f.jsxs)("div",{className:"wppo-suggestion-card__body",children:[(0,f.jsx)("span",{className:"wppo-suggestion-card__value",children:z(s,t)}),p&&(0,f.jsxs)("button",{type:"button",className:"wppo-button wppo-button--sm wppo-button--primary",onClick:()=>a(r),"aria-label":`${(0,g.__)("Fix It","performance-optimisation")}: ${o}`,children:[(0,g.__)("Fix It","performance-optimisation"),(0,f.jsx)(u.g,{icon:_.dmS,className:"wppo-ml-6"})]}),!p&&"good"===i&&(0,f.jsxs)("span",{className:"wppo-suggestion-card__passing",children:[(0,f.jsx)(u.g,{icon:_.SGM,className:"wppo-mr-4"}),(0,g.__)("Passing","performance-optimisation")]})]})]})},D=(0,t.memo)(({suggestions:e,onNavigate:a})=>{if(!e||0===e.length)return(0,f.jsxs)("div",{className:"wppo-suggestions-panel wppo-suggestions-panel--empty",children:[(0,f.jsx)(u.g,{icon:_.SGM,className:"wppo-suggestions-panel__empty-icon"}),(0,f.jsx)("p",{children:(0,g.__)("No suggestions — your site looks great!","performance-optimisation")})]});const s=e.filter(e=>"good"!==e.status),t=e.filter(e=>"good"===e.status);return(0,f.jsxs)("div",{className:"wppo-suggestions-panel",children:[(0,f.jsxs)("div",{className:"wppo-suggestions-panel__header",children:[(0,f.jsx)(u.g,{icon:_.rC2,className:"wppo-mr-8"}),(0,f.jsx)("h3",{className:"wppo-suggestions-panel__title",children:(0,g.__)("Suggestions","performance-optimisation")}),s.length>0&&(0,f.jsx)("span",{className:"wppo-suggestions-panel__badge",children:s.length})]}),(0,f.jsx)("p",{className:"wppo-suggestions-panel__desc",children:(0,g.__)("Based on your scan results, here are the recommended actions to improve performance.","performance-optimisation")}),(0,f.jsxs)("div",{className:"wppo-suggestions-panel__list",role:"list","aria-label":(0,g.__)("Suggestions","performance-optimisation"),children:[s.map(e=>(0,f.jsx)(R,{suggestion:e,onNavigate:a},e.metric)),t.map(e=>(0,f.jsx)(R,{suggestion:e,onNavigate:a},e.metric))]})]})}),O=({label:e,value:a})=>(0,f.jsxs)("tr",{className:"wppo-sysinfo-table__row",children:[(0,f.jsx)("td",{className:"wppo-sysinfo-table__label",children:e}),(0,f.jsx)("td",{className:"wppo-sysinfo-table__value",children:null!=a&&""!==a?String(a):"—"})]}),$=({title:e,data:a,labels:s={}})=>a?(0,f.jsxs)("div",{className:"wppo-sysinfo-section",children:[(0,f.jsx)("h4",{className:"wppo-sysinfo-section__title",children:e}),(0,f.jsx)("table",{className:"wppo-sysinfo-table",children:(0,f.jsx)("tbody",{children:Object.entries(a).map(([e,a])=>(0,f.jsx)(O,{label:s[e]||e,value:a},e))})})]}):null,B=(0,t.memo)(()=>{const[e,a]=(0,t.useState)(null),[s,r]=(0,t.useState)(!1),[p,l]=(0,t.useState)(!1),{notice:m,notify:u,dismiss:_}=(0,o.A)();return(0,f.jsxs)(c.A,{title:(0,g.__)("System Info","performance-optimisation"),children:[(0,f.jsxs)("div",{className:"wppo-sysinfo-trigger "+(p?"wppo-sysinfo-trigger--compact":""),children:[!p&&!m&&(0,f.jsx)("p",{className:"wppo-sysinfo-trigger__desc",children:(0,g.__)("View PHP, database, WordPress, and server environment details.","performance-optimisation")}),(0,f.jsx)(n.A,{type:"button",className:"wppo-button wppo-button--secondary",onClick:async()=>{r(!0),_();try{const e=await(0,i.w4)();e.success&&e.data?(a(e.data),l(!0)):u({type:"error",message:e.message||(0,g.__)("Failed to fetch system info. Please try again.","performance-optimisation")})}catch(e){u({type:"error",message:(0,g.__)("Failed to fetch system info. Please try again.","performance-optimisation")}),console.error("System info fetch error:",e)}finally{r(!1)}},isLoading:s,label:p?(0,g.__)("Refresh","performance-optimisation"):(0,g.__)("Load System Info","performance-optimisation"),loadingLabel:(0,g.__)("Loading…","performance-optimisation")})]}),m&&(0,f.jsx)(d.A,{type:m.type,message:m.message}),e&&(0,f.jsxs)("div",{className:"wppo-sysinfo-grid",children:[(0,f.jsx)($,{title:(0,g.__)("PHP","performance-optimisation"),data:e.php,labels:{version:(0,g.__)("PHP Version","performance-optimisation"),sapi:(0,g.__)("SAPI","performance-optimisation"),memory_limit:(0,g.__)("Memory Limit","performance-optimisation"),max_execution_time:(0,g.__)("Max Execution Time","performance-optimisation"),upload_max_filesize:(0,g.__)("Upload Max Filesize","performance-optimisation"),post_max_size:(0,g.__)("Post Max Size","performance-optimisation"),display_errors:(0,g.__)("Display Errors","performance-optimisation"),extensions_count:(0,g.__)("Extensions Loaded","performance-optimisation")}}),(0,f.jsx)($,{title:(0,g.__)("Database","performance-optimisation"),data:e.database,labels:{server_version:(0,g.__)("DB Version","performance-optimisation"),extension:(0,g.__)("Extension","performance-optimisation"),client_version:(0,g.__)("Client Version","performance-optimisation"),max_connections:(0,g.__)("Max Connections","performance-optimisation")}}),(0,f.jsx)($,{title:(0,g.__)("WordPress","performance-optimisation"),data:e.wordpress,labels:{version:(0,g.__)("WP Version","performance-optimisation"),environment_type:(0,g.__)("Environment","performance-optimisation"),permalink_structure:(0,g.__)("Permalink Structure","performance-optimisation"),using_https:(0,g.__)("HTTPS","performance-optimisation"),multisite:(0,g.__)("Multisite","performance-optimisation")}}),(0,f.jsx)($,{title:(0,g.__)("Server","performance-optimisation"),data:e.server,labels:{server_software:(0,g.__)("Server Software","performance-optimisation"),os:(0,g.__)("Operating System","performance-optimisation"),architecture:(0,g.__)("Architecture","performance-optimisation")}}),(0,f.jsx)($,{title:(0,g.__)("Cache","performance-optimisation"),data:{object_cache_status:e.cache?.object_cache_status,active_cache_plugin:e.cache?.active_cache_plugin,peak_memory_usage:e.cache?.peak_memory_usage,current_memory_usage:e.cache?.current_memory_usage},labels:{object_cache_status:(0,g.__)("Object Cache","performance-optimisation"),active_cache_plugin:(0,g.__)("Active Cache Plugin","performance-optimisation"),peak_memory_usage:(0,g.__)("Peak Memory","performance-optimisation"),current_memory_usage:(0,g.__)("Current Memory","performance-optimisation")}}),(0,f.jsx)($,{title:(0,g.__)("OPCache","performance-optimisation"),data:e.opcache,labels:{status:(0,g.__)("Status","performance-optimisation"),memory_usage:(0,g.__)("Memory Usage","performance-optimisation"),interned_strings:(0,g.__)("Interned Strings","performance-optimisation"),hit_rate:(0,g.__)("Hit Rate","performance-optimisation"),cache_full:(0,g.__)("Cache Full","performance-optimisation"),detail:(0,g.__)("Detail","performance-optimisation")}}),(0,f.jsx)($,{title:(0,g.__)("Infrastructure","performance-optimisation"),data:{action_scheduler:e.infrastructure?.action_scheduler?.available?(0,g.__)("Available","performance-optimisation"):(0,g.__)("Unavailable","performance-optimisation"),pagespeed_api:e.infrastructure?.pagespeed_api?.configured?(0,g.__)("Configured","performance-optimisation"):(0,g.__)("Not Configured","performance-optimisation")},labels:{action_scheduler:(0,g.__)("Action Scheduler","performance-optimisation"),pagespeed_api:(0,g.__)("PageSpeed Insights API","performance-optimisation")}}),(0,f.jsx)($,{title:(0,g.__)("WP Constants","performance-optimisation"),data:e.wp_constants})]})]})}),W=()=>{const[e,a]=(0,t.useState)([]),[s,o]=(0,t.useState)(!0),[n,r]=(0,t.useState)(null),p=(0,t.useCallback)(async()=>{o(!0),r(null);try{const e=await(0,i.H2)("autoloaded_options?limit=20",{},"GET");e.success&&e.data?.options?a(e.data.options):r(e.message||(0,g.__)("Failed to load autoloaded options.","performance-optimisation"))}catch(e){r((0,g.__)("Failed to load autoloaded options.","performance-optimisation")),console.error("Error fetching autoloaded options:",e)}finally{o(!1)}},[]);let l;return(0,t.useEffect)(()=>{p()},[p]),l=n?(0,f.jsx)("p",{className:"wppo-text-muted",children:n}):0!==e.length||s?(0,f.jsx)("ul",{className:"wppo-autoloaded-options",children:e.map(e=>{return(0,f.jsxs)("li",{children:[(0,f.jsx)("code",{children:e.option_name}),(0,f.jsx)("span",{className:"wppo-text-muted",children:(a=e.size,a<1024?`${a} B`:`${(a/1024).toFixed(1)} KB`)})]},e.option_name);var a})}):(0,f.jsx)("p",{className:"wppo-text-muted",children:(0,g.__)("No autoloaded options found.","performance-optimisation")}),(0,f.jsxs)(c.A,{title:(0,g.__)("Autoloaded Options","performance-optimisation"),icon:(0,f.jsx)(u.g,{icon:_.hem}),actions:s&&(0,f.jsx)(u.g,{icon:_.z1G,spin:!0,"aria-label":(0,g.__)("Loading…","performance-optimisation")}),children:[(0,f.jsx)("p",{className:"wppo-text-muted",children:(0,g.__)("The largest options loaded on every request. Reducing these improves TTFB on shared hosting.","performance-optimisation")}),l,e.length>0&&(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small",children:(0,g.sprintf)(/* translators: %d: number of options listed */ /* translators: %d: number of options listed */
-(0,g.__)("Showing %d options.","performance-optimisation"),e.length)})]})},U=()=>{const e="undefined"!=typeof wppoSettings&&wppoSettings?.settings?.llms_txt||{},[a,s]=(0,t.useState)(!!e.enabled),[r,p]=(0,t.useState)(e.source||"both"),[m,u]=(0,t.useState)(!1),{notice:_,notify:h,dismiss:w}=(0,o.A)(),x="undefined"!=typeof wppoSettings&&wppoSettings?.homeUrl||"",b=x?`${x.replace(/\/$/,"")}/llms.txt`:"/llms.txt";return(0,f.jsxs)(c.A,{title:(0,g.__)("LLMs.txt","performance-optimisation"),icon:(0,f.jsx)("i",{className:"fas fa-robot"}),children:[_&&(0,f.jsx)(d.A,{type:_.type,message:_.message,onDismiss:w}),(0,f.jsx)(l.A,{label:(0,g.__)("Enable LLMs.txt","performance-optimisation"),description:(0,g.__)("Generate /llms.txt and /llms-full.txt for AI crawlers from top URLs (trends + sitemap). Opt-in, local file only.","performance-optimisation"),name:"llmsEnabled",checked:a,onChange:e=>s(e.target.checked)}),(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"wppoLlmsSource",children:(0,g.__)("Source","performance-optimisation")}),(0,f.jsxs)("select",{className:"wppo-select",id:"wppoLlmsSource",value:r,onChange:e=>p(e.target.value),children:[(0,f.jsx)("option",{value:"both",children:(0,g.__)("Both (Trends + Sitemap)","performance-optimisation")}),(0,f.jsx)("option",{value:"trends",children:(0,g.__)("Trends only","performance-optimisation")}),(0,f.jsx)("option",{value:"sitemap",children:(0,g.__)("Sitemap only","performance-optimisation")})]})]}),a&&x&&(0,f.jsxs)("p",{className:"wppo-text-muted wppo-text-small",children:[(0,g.__)("File will be available at:","performance-optimisation")," ",(0,f.jsx)("a",{href:b,target:"_blank",rel:"noreferrer",children:b})]}),(0,f.jsx)("div",{className:"wppo-feature-card__footer",children:(0,f.jsx)(n.A,{className:"wppo-button wppo-button--primary",onClick:async()=>{u(!0);try{const e=await(0,i.H2)("update_settings",{tab:"llms_txt",settings:{enabled:a,source:r}});e.success?("undefined"!=typeof wppoSettings&&wppoSettings.settings&&(wppoSettings.settings.llms_txt={enabled:a,source:r}),h({type:"success",message:(0,g.__)("LLMs.txt settings saved.","performance-optimisation"),durationMs:5e3})):h({type:"error",message:e.message||(0,g.__)("Failed to save LLMs.txt settings.","performance-optimisation")})}catch{h({type:"error",message:(0,g.__)("Failed to save LLMs.txt settings.","performance-optimisation")})}finally{u(!1)}},isLoading:m,label:(0,g.__)("Save LLMs.txt Settings","performance-optimisation"),loadingLabel:(0,g.__)("Saving…","performance-optimisation")})})]})},H=()=>{const e="undefined"!=typeof wppoSettings&&wppoSettings?.settings?.ai_adaptive||{},[a,s]=(0,t.useState)(!!e.enabled),[r,p]=(0,t.useState)(!1),[m,u]=(0,t.useState)(!1),[_,h]=(0,t.useState)(null),[w,x]=(0,t.useState)([]),{notice:b,notify:j,dismiss:v}=(0,o.A)(),y=(0,t.useCallback)(async()=>{try{const e=await(0,i.H2)("ai_model",{},"GET");e.success&&h(e.data)}catch{}},[]),N=(0,t.useCallback)(async()=>{try{const e=await(0,i.H2)("ai_suggestions",{},"GET");e.success&&e.data?.suggestions&&x(e.data.suggestions)}catch{}},[]);return(0,t.useEffect)(()=>{y(),N()},[y,N]),(0,f.jsxs)(c.A,{title:(0,g.__)("AI Adaptive","performance-optimisation"),icon:(0,f.jsx)("i",{className:"fas fa-brain"}),children:[b&&(0,f.jsx)(d.A,{type:b.type,message:b.message,onDismiss:v}),(0,f.jsx)(l.A,{label:(0,g.__)("Enable AI Adaptive","performance-optimisation"),description:(0,g.__)("Learn from RUM and trends to suggest script excludes and speculation prefetch. Never auto-enables — suggestions require confirmation.","performance-optimisation"),name:"aiAdaptiveEnabled",checked:a,onChange:e=>s(e.target.checked)}),(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small",children:(0,g.__)("Toggle is gated by wppo_ai_adaptive_enabled filter.","performance-optimisation")}),(0,f.jsxs)("div",{className:"wppo-feature-card__footer",children:[(0,f.jsx)(n.A,{className:"wppo-button wppo-button--primary",onClick:async()=>{p(!0),v();try{const e=await(0,i.H2)("update_settings",{tab:"ai_adaptive",settings:{enabled:a}});e.success?("undefined"!=typeof wppoSettings&&wppoSettings.settings&&(wppoSettings.settings.ai_adaptive={enabled:a}),j({type:"success",message:(0,g.__)("AI Adaptive settings saved.","performance-optimisation"),durationMs:3e3}),N()):j({type:"error",message:e.message||(0,g.__)("Failed to save AI settings.","performance-optimisation")})}catch{j({type:"error",message:(0,g.__)("Failed to save AI settings.","performance-optimisation")})}finally{p(!1)}},isLoading:r,label:(0,g.__)("Save AI Settings","performance-optimisation"),loadingLabel:(0,g.__)("Saving…","performance-optimisation")}),(0,f.jsx)(n.A,{className:"wppo-button wppo-button--secondary wppo-ml-8",onClick:async()=>{u(!0),v();try{const e=await(0,i.H2)("ai_learn",{},"POST");e.success?(h(e.data),j({type:"success",message:(0,g.__)("AI model updated.","performance-optimisation"),durationMs:3e3}),N()):j({type:"error",message:e.message||(0,g.__)("Failed to learn.","performance-optimisation")})}catch{j({type:"error",message:(0,g.__)("Failed to learn.","performance-optimisation")})}finally{u(!1)}},isLoading:m,label:(0,g.__)("Learn Now","performance-optimisation"),loadingLabel:(0,g.__)("Learning…","performance-optimisation")})]}),_&&_.updated_at&&(0,f.jsxs)("p",{className:"wppo-text-muted wppo-text-small wppo-mt-12",children:[(0,g.__)("Model updated:","performance-optimisation")," ",new Date(1e3*_.updated_at).toLocaleString()," ",_.source?`(${_.source})`:""]}),w.length>0&&(0,f.jsxs)("div",{className:"wppo-stacked-cards wppo-mt-16",children:[(0,f.jsx)("h4",{children:(0,g.__)("AI Suggestions","performance-optimisation")}),w.map(e=>(0,f.jsxs)("div",{className:"wppo-suggestion-card wppo-suggestion-card--needs_improvement",children:[(0,f.jsxs)("div",{className:"wppo-suggestion-card__header",children:[(0,f.jsx)("span",{className:"wppo-suggestion-card__description",children:e.description}),(0,f.jsx)("span",{className:"wppo-status-badge wppo-status-badge--warning",children:e.status})]}),(0,f.jsxs)("div",{className:"wppo-suggestion-card__body",children:[(0,f.jsx)("span",{className:"wppo-suggestion-card__value",children:String(e.value)}),e.ai_payload&&(0,f.jsx)("button",{type:"button",className:"wppo-button wppo-button--sm wppo-button--primary",onClick:()=>(async e=>{const a=e.ai_payload;if(a)try{const e={..."undefined"!=typeof wppoSettings&&wppoSettings.settings?.[a.tab]||{},...a.settings},s=await(0,i.H2)("update_settings",{tab:a.tab,settings:e});s.success?("undefined"!=typeof wppoSettings&&wppoSettings.settings&&(wppoSettings.settings[a.tab]=e),j({type:"success",message:(0,g.__)("Suggestion applied.","performance-optimisation"),durationMs:3e3})):j({type:"error",message:s.message||(0,g.__)("Failed to apply suggestion.","performance-optimisation")})}catch{j({type:"error",message:(0,g.__)("Failed to apply suggestion.","performance-optimisation")})}})(e),children:(0,g.__)("Apply","performance-optimisation")})]})]},e.metric))]})]})},G=()=>{const e="undefined"!=typeof wppoSettings&&wppoSettings?.settings?.edge_cache||{},[a,s]=(0,t.useState)(!!e.enabled),[r,p]=(0,t.useState)(e.provider||"cloudflare"),[m,u]=(0,t.useState)(String(e.ttl??300)),[_,h]=(0,t.useState)(String(e.staleWhileRevalidate??86400)),[w,x]=(0,t.useState)(e.cloudflareZoneId||""),[b,j]=(0,t.useState)(e.bunnyPullZoneId||""),[v,y]=(0,t.useState)(!1),{notice:N,notify:S,dismiss:C}=(0,o.A)();(0,t.useEffect)(()=>{const e="undefined"!=typeof wppoSettings&&wppoSettings?.settings?.edge_cache||{};s(!!e.enabled),p(e.provider||"cloudflare"),u(String(e.ttl??300)),h(String(e.staleWhileRevalidate??86400)),x(e.cloudflareZoneId||""),j(e.bunnyPullZoneId||"")},[]);const k=(0,t.useCallback)(async()=>{y(!0),C();try{const e=await(0,i.H2)("update_settings",{tab:"edge_cache",settings:{enabled:a,provider:r,ttl:parseInt(m,10)||300,staleWhileRevalidate:parseInt(_,10)||86400,cloudflareZoneId:w,bunnyPullZoneId:b}});e.success?("undefined"!=typeof wppoSettings&&wppoSettings.settings&&(wppoSettings.settings.edge_cache={enabled:a,provider:r,ttl:parseInt(m,10)||300,staleWhileRevalidate:parseInt(_,10)||86400,cloudflareZoneId:w,bunnyPullZoneId:b}),S({type:"success",message:(0,g.__)("Edge cache settings saved.","performance-optimisation"),durationMs:3e3})):S({type:"error",message:e.message||(0,g.__)("Failed to save edge cache settings.","performance-optimisation")})}catch{S({type:"error",message:(0,g.__)("Failed to save edge cache settings.","performance-optimisation")})}finally{y(!1)}},[a,r,m,_,w,b,S,C]);return(0,f.jsxs)(c.A,{title:(0,g.__)("Edge HTML Cache","performance-optimisation"),icon:(0,f.jsx)("i",{className:"fas fa-globe"}),children:[N&&(0,f.jsx)(d.A,{type:N.type,message:N.message,onDismiss:C}),(0,f.jsx)(l.A,{label:(0,g.__)("Enable Edge Cache","performance-optimisation"),description:(0,g.__)("Deploy cache/wppo/{domain}/{path}/index.html semantics to Cloudflare Workers / Bunny Edge via stale-while-revalidate. TTFB <30ms global (edge) vs LS-local 90ms. Disabled by default — no behaviour change until enabled.","performance-optimisation"),name:"edgeCacheEnabled",checked:a,onChange:e=>s(e.target.checked)}),(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small",children:(0,g.__)("Gated by wppo_edge_cache_enabled filter. Purge via Edge_Purger::purge_all on wppo_after_cache_clear (transient lock, multisite-safe).","performance-optimisation")}),(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"wppoEdgeProvider",children:(0,g.__)("Provider","performance-optimisation")}),(0,f.jsxs)("select",{className:"wppo-select",id:"wppoEdgeProvider",value:r,onChange:e=>p(e.target.value),children:[(0,f.jsx)("option",{value:"cloudflare",children:(0,g.__)("Cloudflare Workers","performance-optimisation")}),(0,f.jsx)("option",{value:"bunny",children:(0,g.__)("Bunny Edge","performance-optimisation")}),(0,f.jsx)("option",{value:"both",children:(0,g.__)("Both","performance-optimisation")})]})]}),(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"wppoEdgeTtl",children:(0,g.__)("Cache TTL (seconds)","performance-optimisation")}),(0,f.jsx)("input",{className:"wppo-input",id:"wppoEdgeTtl",type:"number",min:"60",value:m,onChange:e=>u(e.target.value)})]}),(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"wppoEdgeSwr",children:(0,g.__)("Stale-While-Revalidate (seconds)","performance-optimisation")}),(0,f.jsx)("input",{className:"wppo-input",id:"wppoEdgeSwr",type:"number",min:"0",value:_,onChange:e=>h(e.target.value)})]}),("cloudflare"===r||"both"===r)&&(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"wppoEdgeCfZone",children:(0,g.__)("Cloudflare Zone ID","performance-optimisation")}),(0,f.jsx)("input",{className:"wppo-input",id:"wppoEdgeCfZone",type:"text",value:w,onChange:e=>x(e.target.value),placeholder:"abc123"}),(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small",children:(0,g.__)("Define WPPO_CLOUDFLARE_API_TOKEN in wp-config.php with Zone > Cache Purge permission.","performance-optimisation")})]}),("bunny"===r||"both"===r)&&(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"wppoEdgeBunnyZone",children:(0,g.__)("Bunny Pull Zone ID","performance-optimisation")}),(0,f.jsx)("input",{className:"wppo-input",id:"wppoEdgeBunnyZone",type:"text",value:b,onChange:e=>j(e.target.value),placeholder:"12345"}),(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small",children:(0,g.__)("Define WPPO_BUNNY_API_KEY in wp-config.php with Pull Zone > Purge permission.","performance-optimisation")})]}),(0,f.jsx)("div",{className:"wppo-feature-card__footer",children:(0,f.jsx)(n.A,{className:"wppo-button wppo-button--primary",onClick:k,isLoading:v,label:(0,g.__)("Save Edge Cache","performance-optimisation"),loadingLabel:(0,g.__)("Saving…","performance-optimisation")})}),(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small wppo-mt-12",children:(0,g.__)("Worker: templates/cloudflare-worker.js • Wrangler: generated via Edge_Cache::get_wrangler_toml() • Bunny: templates/bunny-edge.js","performance-optimisation")})]})},Z=e=>{if(!e||e<=0)return"0 B";const a=["B","KB","MB","GB"],s=Math.min(Math.floor(Math.log(e)/Math.log(1024)),a.length-1);return`${(e/1024**s).toFixed(1)} ${a[s]}`},V=({completed:e={},pending:a={},failed:s={},bgProcessing:t=!1,bgJobsQueued:i=0,loading:o={},pendingPathsCount:r=0,savings:p=null,onOptimize:l,onRemove:m})=>{const d=(e.webp||0)+(a.webp||0)+(s.webp||0),h=(e.avif||0)+(a.avif||0)+(s.avif||0),w=d>0?(e.webp||0)/d*100:0,x=h>0?(e.avif||0)/h*100:0,b=s.webp||0,j=s.avif||0;return(0,f.jsxs)(c.A,{title:(0,g.__)("Image Optimisation","performance-optimisation"),icon:(0,f.jsx)(u.g,{icon:_.yvG}),footer:(0,f.jsxs)(f.Fragment,{children:[(0,f.jsx)(n.A,{className:"wppo-button wppo-button--primary",onClick:l,isLoading:o.optimize_images,disabled:t||0===r,label:(0,g.__)("Optimize All","performance-optimisation"),loadingLabel:(0,g.__)("Optimizing…","performance-optimisation")}),(0,f.jsx)(n.A,{className:"wppo-button wppo-button--danger",onClick:m,isLoading:o.remove_images,disabled:!e.webp&&!e.avif,label:(0,g.__)("Remove Optimized","performance-optimisation"),loadingLabel:(0,g.__)("Removing…","performance-optimisation")})]}),children:[(0,f.jsxs)("div",{className:"wppo-progress-grid",children:[(0,f.jsxs)("div",{className:"wppo-progress-section",children:[(0,f.jsxs)("div",{className:"wppo-progress-header",id:"wppo-webp-progress-label",children:[(0,f.jsx)("span",{children:(0,g.__)("WebP Conversion Progress","performance-optimisation")}),(0,f.jsxs)("span",{children:[e.webp||0," / ",d]})]}),(0,f.jsx)("div",{className:"wppo-progress-bar",role:"progressbar","aria-labelledby":"wppo-webp-progress-label","aria-valuemin":"0","aria-valuemax":"100","aria-valuenow":Math.round(w),children:(0,f.jsx)("div",{className:"wppo-progress-bar__fill",style:{width:`${w}%`}})})]}),(0,f.jsxs)("div",{className:"wppo-progress-section",children:[(0,f.jsxs)("div",{className:"wppo-progress-header",id:"wppo-avif-progress-label",children:[(0,f.jsx)("span",{children:(0,g.__)("AVIF Conversion Progress","performance-optimisation")}),(0,f.jsxs)("span",{children:[e.avif||0," / ",h]})]}),(0,f.jsx)("div",{className:"wppo-progress-bar",role:"progressbar","aria-labelledby":"wppo-avif-progress-label","aria-valuemin":"0","aria-valuemax":"100","aria-valuenow":Math.round(x),children:(0,f.jsx)("div",{className:"wppo-progress-bar__fill",style:{width:`${x}%`}})})]})]}),(b>0||j>0)&&(0,f.jsxs)("div",{className:"wppo-text-muted wppo-text-small wppo-mt-10","aria-live":"polite",children:[(0,g.__)("Failed conversions:","performance-optimisation")," ","WebP ",b,", AVIF ",j," ",(0,g.__)("(included in total)","performance-optimisation")]}),p&&p.original_bytes>0&&p.images_counted>0&&(0,f.jsx)("div",{className:"wppo-image-savings wppo-mt-16","aria-live":"polite",children:(0,f.jsxs)("span",{children:[(0,g.__)("Original","performance-optimisation")," ",Z(p.original_bytes)," ",(0,g.__)("→ Optimised","performance-optimisation")," ",Z(p.converted_bytes)," (",Math.max(0,Math.round(p.saved_bytes/p.original_bytes*100)),"% ",(0,g.__)("smaller","performance-optimisation")," ·"," ",p.images_counted," ",(0,g.__)("images","performance-optimisation"),")"]})}),(t||i>0)&&(0,f.jsxs)("div",{className:"wppo-notice wppo-notice--info wppo-mt-32",children:[(0,f.jsx)(u.g,{icon:_.z1G,spin:!0}),(0,f.jsxs)("span",{children:[(0,g.__)("Currently processing background optimisation jobs","performance-optimisation")," ","( ",i," ",(0,g.__)("queued","performance-optimisation"),")"]})]})]})},K=(0,t.memo)(({activities:e,onNavigate:a})=>(0,f.jsxs)(c.A,{title:(0,g.__)("Recent Optimisation Activity","performance-optimisation"),icon:(0,f.jsx)(u.g,{icon:_.Int}),footer:(0,f.jsxs)("button",{type:"button",className:"wppo-button wppo-button--secondary",onClick:()=>a("tools"),"aria-label":(0,g.__)("View Full Optimisation Activity Log","performance-optimisation"),children:[(0,g.__)("View Full Log","performance-optimisation"),(0,f.jsx)(u.g,{icon:_.dmS})]}),children:[(0,f.jsx)("p",{className:"wppo-text-muted wppo-text-small wppo-mb-16",children:(0,g.__)("The 5 most recent actions performed by the plugin. Open the Tools tab for the complete paginated log.","performance-optimisation")}),(0,f.jsx)("div",{className:"wppo-activity-wrapper",children:e?.length?(0,f.jsx)("ul",{className:"wppo-activity-list",children:e.slice(0,5).map(e=>(0,f.jsx)("li",{children:(0,f.jsx)("span",{className:"wppo-activity-text",children:e.activity})},e.id))}):(0,f.jsx)("div",{className:"wppo-empty-state",children:(0,g.__)("No optimisation activity recorded yet.","performance-optimisation")})})]})),q=[{number:1,key:"cache",label:(0,g.__)("Enable Page Caching","performance-optimisation"),description:(0,g.__)("Speed up your site with static HTML page caching — the single biggest performance win.","performance-optimisation"),settings:{tab:"cache_settings",payload:{enableCache:!0}},isEnabled:()=>wppoSettings?.settings?.cache_settings?.enableCache??!1},{number:2,key:"minify",label:(0,g.__)("Enable JS / CSS Minification","performance-optimisation"),description:(0,g.__)("Reduce file sizes by removing whitespace and comments from your CSS and JavaScript.","performance-optimisation"),settings:{tab:"file_optimisation",payload:{minifyJS:!0,minifyCSS:!0}},isEnabled:()=>(wppoSettings?.settings?.file_optimisation?.minifyJS??!1)&&(wppoSettings?.settings?.file_optimisation?.minifyCSS??!1)},{number:3,key:"lazyload",label:(0,g.__)("Enable Lazy Loading","performance-optimisation"),description:(0,g.__)("Defer off-screen images and videos so they only load when visitors scroll to them.","performance-optimisation"),settings:{tab:"image_optimisation",payload:{lazyLoadImages:!0}},isEnabled:()=>wppoSettings?.settings?.image_optimisation?.lazyLoadImages??!1}],J=()=>{const[e,a]=(0,t.useState)(wppoSettings?.show_welcome??!1),[s,r]=(0,t.useState)(null),[p,l]=(0,t.useState)(!1),{notice:m,notify:u,dismiss:_}=(0,o.A)();return e?(0,f.jsxs)(c.A,{className:"wppo-welcome-panel",title:(0,g.__)("Welcome to Performance Optimisation","performance-optimisation"),footer:(0,f.jsx)(n.A,{type:"button",className:"wppo-button wppo-button--secondary",onClick:async()=>{l(!0),_();try{const e=await(0,i.H2)("dismiss_welcome");e.success?a(!1):u({type:"error",message:e.message||(0,g.__)("Failed to dismiss the welcome panel.","performance-optimisation"),durationMs:5e3})}catch(e){console.error("Welcome dismiss failed:",e),u({type:"error",message:(0,g.__)("Failed to dismiss the welcome panel.","performance-optimisation"),durationMs:5e3})}finally{l(!1)}},isLoading:p,label:(0,g.__)("Got it","performance-optimisation"),loadingLabel:(0,g.__)("Dismissing…","performance-optimisation")}),children:[m&&(0,f.jsx)(d.A,{type:m.type,message:m.message,onDismiss:_}),(0,f.jsx)("p",{className:"wppo-welcome-panel__intro",children:(0,g.__)("Get started in 3 quick steps. Each toggle below activates a key performance feature — no page reload needed.","performance-optimisation")}),(0,f.jsx)("div",{className:"wppo-welcome-steps",children:q.map(e=>{const t=e.isEnabled();return(0,f.jsxs)("div",{className:"wppo-welcome-step"+(t?" wppo-welcome-step--done":""),children:[(0,f.jsx)("span",{className:"wppo-welcome-step__number",children:t?(0,f.jsx)("svg",{width:"16",height:"16",viewBox:"0 0 16 16",fill:"none","aria-hidden":"true",children:(0,f.jsx)("path",{d:"M13.3 4.3L6 11.6 2.7 8.3",stroke:"currentColor",strokeWidth:"2",strokeLinecap:"round",strokeLinejoin:"round"})}):e.number}),(0,f.jsxs)("div",{className:"wppo-welcome-step__content",children:[(0,f.jsx)("strong",{className:"wppo-welcome-step__label",children:e.label}),(0,f.jsx)("p",{className:"wppo-welcome-step__desc",children:e.description})]}),(0,f.jsx)("div",{className:"wppo-welcome-step__action",children:t?(0,f.jsx)("span",{className:"wppo-welcome-step__check",children:(0,g.__)("Active","performance-optimisation")}):(0,f.jsx)(n.A,{type:"button",className:"wppo-button wppo-button--primary",isLoading:s===e.key,"aria-label":s===e.key?(0,g.sprintf)(/* translators: %s: feature name */ /* translators: %s: feature name */
-(0,g.__)("Enabling %s…","performance-optimisation"),e.label):(0,g.sprintf)(/* translators: %s: feature name */ /* translators: %s: feature name */
-(0,g.__)("Enable %s","performance-optimisation"),e.label),onClick:()=>(async e=>{r(e.key),_();try{const s=await(0,i.H2)("update_settings",{tab:e.settings.tab,settings:e.settings.payload}),t=await(0,i.H2)("dismiss_welcome");s.success&&t.success?a(!1):u({type:"error",message:!s.success&&s.message||!t.success&&t.message||(0,g.__)("Failed to enable the feature.","performance-optimisation"),durationMs:5e3})}catch(e){console.error("Welcome panel action failed:",e),u({type:"error",message:(0,g.__)("Failed to enable the feature.","performance-optimisation"),durationMs:5e3})}finally{r(null)}})(e),label:(0,g.__)("Enable","performance-optimisation"),loadingLabel:(0,g.__)("Enabling…","performance-optimisation")})})]},e.key)})})]}):null};var Q=s(899);const Y=e=>{const a=e=>({webp:Array.isArray(e?.webp)?e.webp.length:e?.webp||0,avif:Array.isArray(e?.avif)?e.avif.length:e?.avif||0});return{completed:a(e?.completed),pending:a(e?.pending),failed:a(e?.failed)}},X=({activities:e,cacheSettings:a,userRoles:s,onNavigate:h})=>{const[w,x]=(0,t.useState)([]),[b,j]=(0,t.useState)([]),[v,y]=(0,t.useState)("undefined"!=typeof wppoSettings?wppoSettings?.performance_audit?.homeUrl??"":""),N=(0,t.useMemo)(()=>{const e=new Set,a=[];for(const s of[...b,...w])e.has(s.metric)||(e.add(s.metric),a.push(s));return a},[w,b]);(0,t.useEffect)(()=>{x([]),j([])},[v]);const[S,k]=(0,t.useState)({totalCacheSize:"undefined"!=typeof wppoSettings?wppoSettings?.cache_size??"0 B":"0 B",totalJs:"undefined"!=typeof wppoSettings?wppoSettings?.total_js_css?.js??0:0,totalCss:"undefined"!=typeof wppoSettings?wppoSettings?.total_js_css?.css??0:0,imageInfo:Y("undefined"!=typeof wppoSettings?wppoSettings?.image_info:{}),dbCounts:{},loading:{clear_cache:!1,optimize_images:!1,remove_images:!1,db_counts:!0}}),P=a??("undefined"!=typeof wppoSettings&&wppoSettings?.settings?.cache_settings||{}),L=s??("undefined"!=typeof wppoSettings&&wppoSettings?.userRoles||{}),[F,M]=(0,t.useState)(!!P.enableCache),[T,z]=(0,t.useState)(!1),[R,O]=(0,t.useState)(Number(P.cacheLife??0)),[$,Z]=(0,t.useState)(!!P.enableLoggedInCache),[q,X]=(0,t.useState)(Array.isArray(P.loggedInCacheRoles)?P.loggedInCacheRoles:[]),[ee,ae]=(0,t.useState)(!1),[se,te]=(0,t.useState)(P.cdnPurgeService??"none"),[ie,oe]=(0,t.useState)(P.cloudflareZoneId??""),[ne,re]=(0,t.useState)(Array.isArray(P.varnishPurgeUrls)?P.varnishPurgeUrls.join("\n"):""),[pe,ce]=(0,t.useState)(!1);(0,t.useEffect)(()=>{M(!!P.enableCache),O(Number(P.cacheLife??0)),Z(!!P.enableLoggedInCache),X(Array.isArray(P.loggedInCacheRoles)?P.loggedInCacheRoles:[]),te(P.cdnPurgeService??"none"),oe(P.cloudflareZoneId??""),re(Array.isArray(P.varnishPurgeUrls)?P.varnishPurgeUrls.join("\n"):"")},[P.enableCache,P.cacheLife,P.enableLoggedInCache,P.loggedInCacheRoles,P.cdnPurgeService,P.cloudflareZoneId,P.varnishPurgeUrls]);const[le,me]=(0,t.useState)(!1),[de,ue]=(0,t.useState)(0),[_e,ge]=(0,t.useState)(null),fe=(0,t.useRef)(null),he=(0,t.useRef)(0),we=(0,t.useRef)(!1),[xe,be]=(0,t.useState)(!1),{notice:je,notify:ve,dismiss:ye}=(0,o.A)(),{imageInfo:Ne,loading:Se,totalCacheSize:Ce,totalJs:ke,totalCss:Pe,dbCounts:Ae}=S,{completed:Le={},pending:Ee={},failed:Fe={}}=Ne,Ie=(0,t.useCallback)(e=>{k(a=>({...a,...e}))},[]),Me=(0,t.useCallback)((e,a)=>{k(s=>({...s,loading:{...s.loading,[e]:a}}))},[]),Te=(0,t.useCallback)(async()=>{Me("db_counts",!0);try{const e=await(0,i.H2)("database_cleanup_counts",{},"GET");e.success&&e.data&&Ie({dbCounts:e.data})}catch(e){console.error("Error fetching db counts:",e),ve({type:"error",message:(0,g.__)("Failed to load database counts.","performance-optimisation"),durationMs:5e3})}finally{Me("db_counts",!1)}},[Me,Ie,ve]);(0,t.useEffect)(()=>{Te()},[Te]);const ze=(0,t.useMemo)(()=>Object.values(Ae).reduce((e,a)=>e+(parseInt(a,10)||0),0),[Ae]),Re=(0,t.useCallback)(async()=>{const e=fe.current;try{const e=await(0,i.H2)("image_job_status",{},"GET");if(he.current=0,e.success&&e.data){const{queued_jobs:a}=e.data;if(ue(a),ge(e.data.savings||null),Ie({imageInfo:{completed:{webp:e.data.completed?.webp||0,avif:e.data.completed?.avif||0},pending:{webp:e.data.pending?.webp||0,avif:e.data.pending?.avif||0},failed:{webp:e.data.failed?.webp||0,avif:e.data.failed?.avif||0}}}),0===a)return me(!1),ve({type:"success",message:(0,g.__)("Image optimisation completed.","performance-optimisation"),durationMs:5e3}),void(fe.current=null)}}catch(e){if(console.error("Error polling job status:",e),he.current++,he.current>=5)return me(!1),fe.current=null,void ve({type:"error",message:(0,g.__)("Status check stopped after repeated failures.","performance-optimisation"),durationMs:5e3});ve({type:"error",message:(0,g.__)("Status check failed. Retrying…","performance-optimisation"),durationMs:5e3})}fe.current===e&&(fe.current=setTimeout(Re,5e3))},[Ie,ve]);(0,t.useEffect)(()=>()=>{fe.current&&clearTimeout(fe.current)},[]);const De=(0,t.useCallback)(e=>{e.preventDefault(),Me("clear_cache",!0),(0,i.H2)("clear_cache",{action:"clear_cache"}).then(e=>{e.success?(ve({type:"success",message:(0,g.__)("Cache cleared successfully.","performance-optimisation"),durationMs:5e3}),Ie({totalCacheSize:"0 B",totalJs:0,totalCss:0})):ve({type:"error",message:e.message||(0,g.__)("Failed to clear cache.","performance-optimisation"),durationMs:5e3})}).catch(()=>ve({type:"error",message:(0,g.__)("Failed to clear cache.","performance-optimisation"),durationMs:5e3})).finally(()=>Me("clear_cache",!1))},[Me,Ie,ve]),Oe=(0,t.useCallback)(()=>{Se.optimize_images||le||we.current||(we.current=!0,Me("optimize_images",!0),(0,i.H2)("optimise_image",{}).then(e=>{e.data?.background?(me(!0),ue(e.data.jobs_queued||0),ve({type:"success",message:(0,g.__)("Image optimisation started in background.","performance-optimisation"),durationMs:5e3}),fe.current&&clearTimeout(fe.current),fe.current=setTimeout(Re,5e3)):(ue(0),me(!1),e.success&&e.data&&(Ie({imageInfo:Y(e.data)}),ve({type:"success",message:(0,g.__)("Images optimized successfully.","performance-optimisation"),durationMs:5e3})),fe.current&&(clearTimeout(fe.current),fe.current=null))}).catch(()=>ve({type:"error",message:(0,g.__)("Image optimisation failed.","performance-optimisation"),durationMs:5e3})).finally(()=>{we.current=!1,Me("optimize_images",!1)}))},[Me,Re,Ie,ve,le,Se.optimize_images]),$e=(0,t.useCallback)(()=>{Me("remove_images",!0),(0,i.H2)("delete_optimised_image",{}).then(e=>{e.success?(k(e=>({...e,imageInfo:{completed:{webp:0,avif:0},pending:{webp:0,avif:0},failed:{webp:0,avif:0}}})),ve({type:"success",message:(0,g.__)("Optimized images removed.","performance-optimisation"),durationMs:5e3})):ve({type:"error",message:e.message||(0,g.__)("Failed to remove optimized images.","performance-optimisation"),durationMs:5e3})}).catch(()=>ve({type:"error",message:(0,g.__)("Failed to remove optimized images.","performance-optimisation"),durationMs:5e3})).finally(()=>Me("remove_images",!1))},[Me,ve]),Be=(0,t.useCallback)(()=>{z(!0);const e=("undefined"!=typeof wppoSettings?wppoSettings.settings?.cache_settings:null)??P??{};(0,i.H2)("update_settings",{tab:"cache_settings",settings:{...e,enableCache:F,cacheLife:R}}).then(e=>{e.success&&e.data&&ve({type:"success",message:(0,g.__)("Page cache settings saved.","performance-optimisation"),durationMs:5e3})}).catch(()=>ve({type:"error",message:(0,g.__)("Failed to save page cache settings.","performance-optimisation"),durationMs:5e3})).finally(()=>z(!1))},[F,R,P,ve]),We=(0,t.useCallback)(()=>{ae(!0);const e=("undefined"!=typeof wppoSettings?wppoSettings.settings?.cache_settings:null)??P??{};(0,i.H2)("update_settings",{tab:"cache_settings",settings:{...e,enableLoggedInCache:$,loggedInCacheRoles:q}}).then(e=>{e.success&&e.data&&ve({type:"success",message:(0,g.__)("Logged-in cache settings saved.","performance-optimisation"),durationMs:5e3})}).catch(()=>ve({type:"error",message:(0,g.__)("Failed to save logged-in cache settings.","performance-optimisation"),durationMs:5e3})).finally(()=>ae(!1))},[$,q,P,ve]),Ue=(0,t.useCallback)(()=>{ce(!0);const e=("undefined"!=typeof wppoSettings?wppoSettings.settings?.cache_settings:null)??P??{},a=ne.split("\n").map(e=>e.trim()).filter(Boolean);(0,i.H2)("update_settings",{tab:"cache_settings",settings:{...e,cdnPurgeService:se,cloudflareZoneId:ie,varnishPurgeUrls:a}}).then(e=>{e.success&&e.data&&ve({type:"success",message:(0,g.__)("CDN purge settings saved.","performance-optimisation"),durationMs:5e3})}).catch(()=>ve({type:"error",message:(0,g.__)("Failed to save CDN purge settings.","performance-optimisation"),durationMs:5e3})).finally(()=>ce(!1))},[se,ie,ne,P,ve]),He=(0,t.useCallback)(e=>{Z(e.target.checked)},[]),Ge=(0,t.useCallback)(e=>{const a=e.target.name,s=e.target.checked;X(e=>s?[...e,a]:e.filter(e=>e!==a))},[]),Ze=(Le.webp||0)+(Ee.webp||0),Ve=(Le.avif||0)+(Ee.avif||0),Ke=Ze+Ve>0?((Le.webp||0)+(Le.avif||0))/(Ze+Ve)*100:null,qe="string"==typeof Ce&&/does not exist/i.test(Ce),Je=qe?"—":Ce??"—",Qe=qe?(0,g.__)("Cache missing","performance-optimisation"):"",Ye=(ke||0)+(Pe||0);let Xe="wppo-status-badge--good",ea=(0,g.__)("Healthy","performance-optimisation");ze>50?(Xe="wppo-status-badge--poor",ea=(0,g.__)("High","performance-optimisation")):ze>=20&&(Xe="wppo-status-badge--warning",ea=(0,g.__)("Medium","performance-optimisation"));const aa="undefined"!=typeof wppoSettings?wppoSettings?.litespeed:null,sa=!!aa?.detected,ta=aa?.effective_mode||"standalone",ia=!!aa?.lscache_active,oa=(0,Q.e2)(ta),na="litespeed"===ta?"wppo-status-badge--warning":"wppo-status-badge--good";return(0,f.jsxs)("div",{className:"wppo-dashboard-view",children:[je&&(0,f.jsx)(d.A,{type:je.type,message:je.message,onDismiss:ye}),sa&&(0,f.jsxs)("div",{className:"wppo-notice wppo-notice--info wppo-litespeed-banner wppo-mb-16",role:"alert","aria-live":"polite",children:[(0,f.jsx)(u.g,{icon:_.D6w,"aria-hidden":"true"}),(0,f.jsxs)("span",{className:"wppo-litespeed-banner__text",children:[(0,f.jsx)("strong",{children:(0,g.__)("LiteSpeed Detected","performance-optimisation")})," ",ia?(0,g.__)("LiteSpeed Cache plugin is active.","performance-optimisation"):(0,g.__)("Server is LiteSpeed / OpenLiteSpeed.","performance-optimisation")]}),(0,f.jsxs)("span",{className:"wppo-litespeed-banner__badges",children:[(0,f.jsxs)("span",{className:`wppo-status-badge ${na}`,children:[(0,g.__)("Effective:","performance-optimisation")," ",oa]}),(0,f.jsx)("span",{className:"wppo-status-badge "+(ia?"wppo-status-badge--poor":"wppo-status-badge--good"),children:ia?"LSCache Active":"LSCache Inactive"})]}),ia&&"litespeed"===ta&&(0,f.jsx)("span",{className:"wppo-text-muted wppo-text-small",children:(0,g.__)("WPPO optimisation is paused in this mode.","performance-optimisation")})]}),(0,f.jsx)(p.A,{title:(0,f.jsxs)(f.Fragment,{children:[(0,f.jsx)("span",{className:"wppo-health-dot","aria-hidden":"true",children:"●"}),(0,g.__)("System Health","performance-optimisation")]}),description:(0,g.__)("Real-time performance overview and quick optimisation actions.","performance-optimisation"),status:(0,f.jsx)(f.Fragment,{}),actions:(0,f.jsx)(n.A,{type:"button",className:"wppo-button wppo-button--primary",onClick:De,isLoading:Se.clear_cache,label:(0,f.jsxs)(f.Fragment,{children:[(0,f.jsx)(u.g,{icon:_.pyI,"aria-hidden":"true",style:{marginRight:"8px"}}),(0,g.__)("Purge All Cache","performance-optimisation")]}),loadingLabel:(0,g.__)("Purging…","performance-optimisation")})}),(0,f.jsx)(J,{}),qe&&(0,f.jsxs)("div",{className:"wppo-banner wppo-banner--warning",role:"alert",children:[(0,f.jsx)("span",{className:"wppo-banner__icon","aria-hidden":"true",children:(0,f.jsx)(u.g,{icon:_.zpE})}),(0,f.jsx)("span",{className:"wppo-banner__text",children:(0,g.__)("Cache directory not found.","performance-optimisation")}),(0,f.jsx)("button",{type:"button",className:"wppo-button wppo-button--primary wppo-button--sm",onClick:()=>h("fileOptimization"),children:(0,g.__)("Fix Now","performance-optimisation")})]}),(0,f.jsxs)("div",{className:"wppo-stats-grid",children:[(0,f.jsxs)("div",{className:"wppo-stat-item wppo-stat-item--cache",children:[(0,f.jsxs)("div",{className:"wppo-stat-header",children:[(0,f.jsx)("span",{className:"wppo-stat-label",children:(0,g.__)("Cache Size","performance-optimisation")}),(0,f.jsx)("span",{className:"wppo-stat-icon","aria-hidden":"true",children:(0,f.jsx)(u.g,{icon:_.D6w})})]}),(0,f.jsx)("span",{className:qe?"wppo-stat-value wppo-stat-value--muted":"wppo-stat-value",children:Je}),(0,f.jsx)("span",{className:"wppo-stat-unit",children:qe?(0,f.jsxs)(f.Fragment,{children:[Qe," •"," ",(0,f.jsx)("span",{className:"wppo-status-badge wppo-status-badge--poor",children:(0,g.__)("Not cached","performance-optimisation")})]}):Qe||(0,f.jsx)("span",{className:"wppo-text-muted wppo-text-small",children:(0,g.__)("Ready","performance-optimisation")})}),(0,f.jsx)("div",{className:"wppo-stat-footer",children:(0,f.jsx)("button",{type:"button",className:"wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link",onClick:()=>h("fileOptimization"),children:(0,g.__)("Manage →","performance-optimisation")})})]}),(0,f.jsxs)("div",{className:"wppo-stat-item wppo-stat-item--files",children:[(0,f.jsxs)("div",{className:"wppo-stat-header",children:[(0,f.jsx)("span",{className:"wppo-stat-label",children:(0,g.__)("Optimized Files","performance-optimisation")}),(0,f.jsx)("span",{className:"wppo-stat-icon","aria-hidden":"true",children:(0,f.jsx)(u.g,{icon:_.ruc})})]}),(0,f.jsx)("span",{className:"wppo-stat-value",children:Ye}),(0,f.jsx)("span",{className:"wppo-stat-unit",children:(0,g.__)("files","performance-optimisation")}),(0,f.jsx)("div",{className:"wppo-stat-footer",children:(0,f.jsx)("button",{type:"button",className:"wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link",onClick:()=>h("fileOptimization"),children:(0,g.__)("Configure →","performance-optimisation")})})]}),(0,f.jsxs)("div",{className:"wppo-stat-item wppo-stat-item--db",children:[(0,f.jsxs)("div",{className:"wppo-stat-header",children:[(0,f.jsx)("span",{className:"wppo-stat-label",children:(0,g.__)("DB Overhead","performance-optimisation")}),(0,f.jsx)("span",{className:"wppo-stat-icon","aria-hidden":"true",children:(0,f.jsx)(u.g,{icon:_.hem})})]}),(0,f.jsx)("span",{className:"wppo-stat-value",children:ze}),(0,f.jsxs)("span",{className:"wppo-stat-unit",children:[(0,g.__)("items","performance-optimisation"),(0,f.jsx)("span",{className:`wppo-status-badge ${Xe}`,children:ea})]}),(0,f.jsx)("div",{className:"wppo-stat-footer",children:(0,f.jsx)("button",{type:"button",className:"wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link",onClick:()=>h("databaseCleanup"),children:(0,g.__)("Optimize →","performance-optimisation")})})]}),(0,f.jsxs)("div",{className:"wppo-stat-item wppo-stat-item--images",children:[(0,f.jsxs)("div",{className:"wppo-stat-header",children:[(0,f.jsx)("span",{className:"wppo-stat-label",children:(0,g.__)("Images Optimized","performance-optimisation")}),(0,f.jsx)("span",{className:"wppo-stat-icon","aria-hidden":"true",children:(0,f.jsx)(u.g,{icon:_.yvG})})]}),(0,f.jsx)("span",{className:null===Ke?"wppo-stat-value wppo-stat-value--muted":"wppo-stat-value",children:null!==Ke?`${Ke.toFixed(0)}%`:"—"}),(0,f.jsx)("span",{className:"wppo-stat-unit",children:null!==Ke?(0,g.__)("optimized","performance-optimisation"):(0,g.__)("No images","performance-optimisation")}),(0,f.jsx)("div",{className:"wppo-stat-footer",children:(0,f.jsx)("button",{type:"button",className:"wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link",onClick:()=>h("imageOptimization"),children:(0,g.__)("View →","performance-optimisation")})})]})]}),(0,f.jsxs)(c.A,{title:(0,g.__)("Page Cache","performance-optimisation"),icon:(0,f.jsx)("i",{className:"fas fa-bolt"}),children:[(0,f.jsx)(l.A,{label:(0,g.__)("Enable Page Cache","performance-optimisation"),description:(0,g.__)("Generate static HTML copies of your pages and serve them to visitors without running WordPress. Recommended for faster TTFB on non-logged-in traffic.","performance-optimisation"),name:"enableCache",checked:F,onChange:e=>M(e.target.checked)}),(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"wppoCacheLife",children:(0,g.__)("Cache Lifespan","performance-optimisation")}),(0,f.jsxs)("select",{className:"wppo-select",id:"wppoCacheLife",name:"cacheLife",value:R,onChange:e=>O(Number(e.target.value)),children:[(0,f.jsx)("option",{value:0,children:(0,g.__)("Never expire","performance-optimisation")}),(0,f.jsx)("option",{value:1,children:(0,g.__)("1 hour","performance-optimisation")}),(0,f.jsx)("option",{value:6,children:(0,g.__)("6 hours","performance-optimisation")}),(0,f.jsx)("option",{value:12,children:(0,g.__)("12 hours","performance-optimisation")}),(0,f.jsx)("option",{value:24,children:(0,g.__)("24 hours","performance-optimisation")}),(0,f.jsx)("option",{value:48,children:(0,g.__)("48 hours","performance-optimisation")}),(0,f.jsx)("option",{value:168,children:(0,g.__)("1 week","performance-optimisation")})]})]}),(0,f.jsx)("div",{className:"wppo-feature-card__footer",children:(0,f.jsx)(n.A,{className:"wppo-button wppo-button--primary",onClick:Be,isLoading:T,label:(0,g.__)("Save Page Cache Settings","performance-optimisation"),loadingLabel:(0,g.__)("Saving…","performance-optimisation")})})]}),(0,f.jsxs)(c.A,{title:(0,g.__)("CDN Cache Purge","performance-optimisation"),icon:(0,f.jsx)("i",{className:"fas fa-globe"}),children:[(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"cdnPurgeService",children:(0,g.__)("CDN Purge Service","performance-optimisation")}),(0,f.jsxs)("select",{className:"wppo-select",id:"cdnPurgeService",name:"cdnPurgeService",value:se,onChange:e=>te(e.target.value),"aria-describedby":"wppo-cdnPurgeService-desc",children:[(0,f.jsx)("option",{value:"none",children:(0,g.__)("None","performance-optimisation")}),(0,f.jsx)("option",{value:"cloudflare",children:(0,g.__)("Cloudflare","performance-optimisation")}),(0,f.jsx)("option",{value:"varnish",children:(0,g.__)("Varnish","performance-optimisation")})]}),(0,f.jsx)("p",{id:"wppo-cdnPurgeService-desc",className:"wppo-text-muted wppo-text-small",children:(0,g.__)("Purge the edge cache whenever the plugin cache is cleared.","performance-optimisation")})]}),"cloudflare"===se&&(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"cloudflareZoneId",children:(0,g.__)("Cloudflare Zone ID","performance-optimisation")}),(0,f.jsx)("input",{className:"wppo-input",id:"cloudflareZoneId",name:"cloudflareZoneId",type:"text",value:ie,onChange:e=>oe(e.target.value),"aria-describedby":"wppo-cloudflareZoneId-desc"}),(0,f.jsx)("p",{id:"wppo-cloudflareZoneId-desc",className:"wppo-text-muted wppo-text-small",children:(0,g.__)("Define WPPO_CLOUDFLARE_API_TOKEN in wp-config.php with an API token that has Zone > Cache Purge permission. The token is never stored in the database.","performance-optimisation")})]}),"varnish"===se&&(0,f.jsxs)("div",{className:"wppo-field",children:[(0,f.jsx)("label",{className:"wppo-field-label",htmlFor:"varnishPurgeUrls",children:(0,g.__)("Varnish Purge Endpoints","performance-optimisation")}),(0,f.jsx)("textarea",{className:"wppo-textarea",id:"varnishPurgeUrls",name:"varnishPurgeUrls",rows:3,value:ne,onChange:e=>re(e.target.value),"aria-describedby":"wppo-varnishPurgeUrls-desc",placeholder:(0,g.__)("http://127.0.0.1:8081/purge","performance-optimisation")}),(0,f.jsx)("p",{id:"wppo-varnishPurgeUrls-desc",className:"wppo-text-muted wppo-text-small",children:(0,g.__)("One URL per line. Each receives a PURGE request on cache clear.","performance-optimisation")})]}),(0,f.jsx)("div",{className:"wppo-feature-card__footer",children:(0,f.jsx)(n.A,{className:"wppo-button wppo-button--primary",onClick:Ue,isLoading:pe,label:(0,g.__)("Save CDN Purge","performance-optimisation"),loadingLabel:(0,g.__)("Saving…","performance-optimisation")})})]}),(0,f.jsxs)(c.A,{title:(0,g.__)("Cache for Logged-in Users","performance-optimisation"),icon:(0,f.jsx)("i",{className:"fas fa-user-check"}),children:[(0,f.jsx)(l.A,{label:(0,g.__)("Enable","performance-optimisation"),description:(0,g.__)("Serve cached pages to logged-in users based on their role(s). The admin bar and user-specific content are preserved per role group.","performance-optimisation"),name:"enableLoggedInCache",checked:$,onChange:He}),$&&(0,f.jsxs)("div",{className:"wppo-logged-in-cache-roles",children:[(0,f.jsx)("p",{className:"wppo-text-muted",children:(0,g.__)("Select which user roles should receive cached pages:","performance-optimisation")}),Object.entries(L).map(([e,a])=>(0,f.jsx)(m.A,{label:a,name:e,checked:q.includes(e),onChange:Ge},e)),(0,f.jsx)("p",{className:"wppo-text-muted wppo-mt-10",children:(0,g.__)("When no roles are selected, caching applies to all logged-in users.","performance-optimisation")})]}),(0,f.jsx)("div",{className:"wppo-feature-card__footer",children:(0,f.jsx)(n.A,{className:"wppo-button wppo-button--primary",onClick:We,isLoading:ee,label:(0,g.__)("Save Settings","performance-optimisation"),loadingLabel:(0,g.__)("Saving…","performance-optimisation")})})]}),(0,f.jsxs)("div",{className:"wppo-stacked-cards",children:[(0,f.jsx)(C,{onSuggestionsReady:x,onUrlChange:y}),N.length>0&&(0,f.jsx)(D,{suggestions:N,onNavigate:h}),(0,f.jsx)(A,{url:v,onSuggestionsReady:j}),(0,f.jsx)(E,{url:v}),(0,f.jsx)(I,{}),(0,f.jsx)(W,{}),(0,f.jsx)(U,{}),(0,f.jsx)(H,{}),(0,f.jsx)(G,{}),(0,f.jsx)(B,{})]}),(0,f.jsxs)("div",{className:"wppo-stacked-cards wppo-mt-20",children:[(0,f.jsx)(V,{completed:Le,pending:Ee,failed:Fe,bgProcessing:le,bgJobsQueued:de,loading:Se,savings:_e,pendingPathsCount:(Ee.webp||0)+(Ee.avif||0),onOptimize:Oe,onRemove:()=>be(!0)}),(0,f.jsx)(K,{activities:e,onNavigate:h})]}),(0,f.jsx)(r.A,{isOpen:xe,onConfirm:()=>{be(!1),$e()},onCancel:()=>be(!1),title:(0,g.__)("Remove Optimized Images","performance-optimisation"),message:(0,g.__)("This will delete all optimized WebP and AVIF copies. Original images will not be affected.","performance-optimisation"),confirmLabel:(0,g.__)("Delete","performance-optimisation"),variant:"danger"})]})}},831(e,a,s){var t=s(87),i=s(790);s.d(a,["A",0,({label:e,checked:a,onChange:s,name:o,id:n,textareaName:r,textareaPlaceholder:p,textareaValue:c,onTextareaChange:l,description:m,children:d,className:u=""})=>{const _=(0,t.useId)(),g=n??_,f=m?`desc-${g}`:void 0;return(0,i.jsxs)("div",{className:`wppo-checkbox-option ${a?"wppo-is-checked":""} ${u}`.trim(),children:[(0,i.jsxs)("label",{htmlFor:g,children:[(0,i.jsx)("input",{id:g,type:"checkbox",name:o,checked:a,onChange:s,"aria-describedby":f}),(0,i.jsx)("span",{className:"wppo-option-label-text",children:e})]}),m&&(0,i.jsx)("p",{id:f,className:"wppo-option-description",children:m}),a&&(r||d)&&(0,i.jsxs)("div",{className:"wppo-nested-content",children:[r&&(0,i.jsx)("div",{className:"wppo-field-group",children:(0,i.jsx)("textarea",{className:"wppo-text-area-field",placeholder:p||"","aria-label":p||e,name:r,value:c,onChange:l})}),d]})]})}])},927(e,a,s){var t=s(87),i=s(496),o=s(188),n=s(723),r=s(790);s.d(a,["A",0,({isOpen:e,onConfirm:a,onCancel:s,title:p,message:c,confirmLabel:l,cancelLabel:m,variant:d="danger",children:u})=>{const _=(0,t.useRef)(null),g=(0,t.useRef)(null),f=(0,t.useRef)([]),h=(0,t.useRef)(null),w=(0,t.useCallback)(e=>{if("Escape"===e.key&&s(),"Tab"===e.key&&_.current){const a=f.current,s=a[0],t=a[a.length-1];e.shiftKey?_.current?.ownerDocument?.activeElement===s&&(e.preventDefault(),t.focus()):_.current?.ownerDocument?.activeElement===t&&(e.preventDefault(),s.focus())}},[s]);return(0,t.useEffect)(()=>{e&&_.current?f.current=Array.from(_.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')):f.current=[]},[e]),(0,t.useEffect)(()=>{if(e&&g.current){const e=_.current?.querySelector(".wppo-dialog-cancel");e&&e.focus()}},[e]),(0,t.useEffect)(()=>{const a=_.current,s=a?.ownerDocument||document;return e&&(h.current=s.activeElement,s.addEventListener("keydown",w),s.body.style.overflow="hidden"),()=>{s.removeEventListener("keydown",w),s.body.style.overflow=""}},[e,w]),(0,t.useEffect)(()=>{if(e||!h.current)return;const a=h.current;h.current=null,a&&"function"==typeof a.focus&&a.isConnected&&a.focus()},[e]),e?(0,r.jsx)("div",{className:"wppo-dialog-overlay",onClick:s,onKeyDown:e=>{e.target!==e.currentTarget||"Enter"!==e.key&&" "!==e.key||s()},role:"presentation",children:(0,r.jsxs)("div",{className:"wppo-dialog",ref:_,role:"dialog","aria-modal":"true","aria-labelledby":"wppo-dialog-title",onClick:e=>e.stopPropagation(),children:[(0,r.jsxs)("h3",{id:"wppo-dialog-title",children:[(0,r.jsx)(i.g,{icon:o.zpE}),p]}),(0,r.jsx)("p",{children:c}),u,(0,r.jsxs)("div",{className:"wppo-dialog-actions",children:[(0,r.jsx)("button",{type:"button",className:"wppo-button wppo-button--secondary wppo-dialog-cancel",onClick:s,children:m||(0,n.__)("Cancel","performance-optimisation")}),(0,r.jsx)("button",{type:"button",className:"wppo-button "+("danger"===d?"wppo-button--danger":"wppo-button--primary"),onClick:a,ref:g,children:l||(0,n.__)("Confirm","performance-optimisation")})]})]})}):null}])},323(e,a,s){var t=s(790);s.d(a,["A",0,({title:e,icon:a,actions:s,footer:i,children:o,className:n})=>(0,t.jsxs)("div",{className:`wppo-feature-card ${n||""}`.trim(),children:[(e||s)&&(0,t.jsxs)("div",{className:"wppo-feature-card__header",children:[e&&(0,t.jsxs)("h3",{children:[a,e]}),s&&(0,t.jsx)("div",{className:"wppo-feature-card__header-actions",children:s})]}),(0,t.jsx)("div",{className:"wppo-feature-card__body",children:o}),i&&(0,t.jsx)("div",{className:"wppo-feature-card__footer",children:i})]})])},268(e,a,s){var t=s(790);s.d(a,["A",0,({title:e,description:a,status:s,actions:i,children:o})=>(0,t.jsxs)("div",{className:"wppo-feature-header",children:[(0,t.jsxs)("div",{className:"wppo-feature-header__main",children:[(0,t.jsxs)("div",{className:"wppo-feature-header__title",children:[(0,t.jsx)("h2",{children:e}),a&&(0,t.jsx)("p",{children:a}),s&&(0,t.jsx)("div",{className:"wppo-feature-header__status",children:s})]}),i&&(0,t.jsx)("div",{className:"wppo-feature-header__actions",children:i})]}),o&&(0,t.jsx)("div",{className:"wppo-feature-header__extra",children:o})]})])},468(e,a,s){var t=s(496),i=s(188),o=s(790);s.d(a,["A",0,({isLoading:e,label:a,loadingLabel:s,className:n="wppo-button wppo-button--primary",type:r="submit",disabled:p,children:c,...l})=>{const m=Boolean(p)||Boolean(e);return(0,o.jsxs)("button",{type:r,className:n,disabled:m,"aria-busy":e,...l,children:[e&&(0,o.jsx)(t.g,{icon:i.z1G,spin:!0,"aria-hidden":"true",className:"wppo-mr-8"}),(0,o.jsx)("span",{role:"status","aria-live":"polite",children:e?s||c:a||c})]})}])},693(e,a,s){var t=s(723),i=s(496),o=s(188),n=s(790);s.d(a,["A",0,({type:e="info",message:a="",onDismiss:s,className:r})=>{if(!a)return null;const p="success"===e?o.SGM:o.zpE;return(0,n.jsxs)("div",{className:`wppo-notice wppo-notice--${e}${r?` ${r}`:""}`,role:"error"===e?"alert":"status","aria-live":"error"===e?"assertive":"polite",children:[(0,n.jsxs)("div",{className:"wppo-notice__content",children:[(0,n.jsx)(i.g,{icon:p}),(0,n.jsx)("span",{children:a})]}),s&&(0,n.jsx)("button",{type:"button",className:"wppo-notice__dismiss",onClick:s,"aria-label":(0,t.__)("Dismiss","performance-optimisation"),children:(0,n.jsx)(i.g,{icon:o.GRI})})]})}])},351(e,a,s){var t=s(427),i=s(790);s.d(a,["A",0,({label:e,description:a,name:s,checked:o,onChange:n,showLabel:r=!0,disabled:p=!1})=>(0,i.jsxs)("div",{className:"wppo-switch-field",children:[(r||a)&&(0,i.jsxs)("div",{className:"wppo-switch-field__info",children:[r&&(0,i.jsx)("span",{className:"wppo-switch-field__label",children:e}),a&&(0,i.jsx)("p",{className:"wppo-text-muted",children:a})]}),(0,i.jsx)(t.ToggleControl,{__nextHasNoMarginBottom:!0,checked:o,onChange:e=>{n({target:{name:s,type:"checkbox",checked:e}})},label:e,hideLabelFromVision:!0,disabled:p})]})])},392(e,a,s){var t=s(87),i=s(496),o=s(188),n=s(790);s.d(a,["A",0,({content:e,children:a})=>{const[s,r]=(0,t.useState)(!1),p=(0,t.useId)();return e?(0,n.jsxs)("span",{className:"wppo-tooltip-container"+(s?" wppo-tooltip-container--visible":""),tabIndex:"0","aria-describedby":p,onFocus:()=>r(!0),onBlur:()=>r(!1),onMouseEnter:()=>r(!0),onMouseLeave:()=>r(!1),children:[a||(0,n.jsx)(i.g,{icon:o.iW_,className:"wppo-tooltip-icon","aria-hidden":"true"}),(0,n.jsx)("span",{className:"wppo-tooltip-content",role:"tooltip",id:p,children:e})]}):a}])},899(e,a,s){s.d(a,["e2",0,e=>({auto:"Auto",wppo:"WPPO",litespeed:"LiteSpeed Cache",standalone:"Standalone"}[e]||e)])},263(e,a,s){var t=s(87);s.d(a,["A",0,()=>{const[e,a]=(0,t.useState)(null),s=(0,t.useRef)(null),i=(0,t.useCallback)(()=>{s.current&&(clearTimeout(s.current),s.current=null)},[]),o=(0,t.useCallback)(()=>{i(),a(null)},[i]),n=(0,t.useCallback)(({type:e,message:t,durationMs:o})=>{i(),a({type:e,message:t}),o&&(s.current=setTimeout(()=>{s.current=null,a(null)},o))},[i]);return(0,t.useEffect)(()=>i,[i]),{notice:e,notify:n,dismiss:o}}])}}]);
+"use strict";
+(globalThis["webpackChunkperformance_optimisation"] ||= []).push([["tab-dashboard"],{
+
+/***/ "./src/components/AiPanel.js"
+/*!***********************************!*\
+  !*** ./src/components/AiPanel.js ***!
+  \***********************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _lib_useNotice__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../lib/useNotice */ "./src/lib/useNotice.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_SwitchField__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/SwitchField */ "./src/components/common/SwitchField.js");
+/* harmony import */ var _common_NoticeBanner__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./common/NoticeBanner */ "./src/components/common/NoticeBanner.js");
+/* harmony import */ var _common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./common/LoadingSubmitButton */ "./src/components/common/LoadingSubmitButton.js");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__);
+
+
+
+
+
+
+
+
+
+/**
+ * AI Adaptive panel (N1).
+ *
+ * Toggle + Learn + suggestions with one-click Apply (never auto-enables).
+ *
+ * @since NEXT
+ */
+
+const AiPanel = () => {
+  const initial = typeof wppoSettings !== 'undefined' ? wppoSettings?.settings?.ai_adaptive || {} : {};
+  const [enabled, setEnabled] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(!!initial.enabled);
+  const [saving, setSaving] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [learning, setLearning] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [model, setModel] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const [suggestions, setSuggestions] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)([]);
+  const {
+    notice,
+    notify,
+    dismiss
+  } = (0,_lib_useNotice__WEBPACK_IMPORTED_MODULE_3__["default"])();
+  const fetchModel = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(async () => {
+    try {
+      const res = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('ai_model', {}, 'GET');
+      if (res.success) {
+        setModel(res.data);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+  const fetchSuggestions = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(async () => {
+    try {
+      const res = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('ai_suggestions', {}, 'GET');
+      if (res.success && res.data?.suggestions) {
+        setSuggestions(res.data.suggestions);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    fetchModel();
+    fetchSuggestions();
+  }, [fetchModel, fetchSuggestions]);
+  const handleSave = async () => {
+    setSaving(true);
+    dismiss();
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('update_settings', {
+        tab: 'ai_adaptive',
+        settings: {
+          enabled
+        }
+      });
+      if (response.success) {
+        if (typeof wppoSettings !== 'undefined' && wppoSettings.settings) {
+          wppoSettings.settings.ai_adaptive = {
+            enabled
+          };
+        }
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('AI Adaptive settings saved.', 'performance-optimisation'),
+          durationMs: 3000
+        });
+        fetchSuggestions();
+      } else {
+        notify({
+          type: 'error',
+          message: response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to save AI settings.', 'performance-optimisation')
+        });
+      }
+    } catch {
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to save AI settings.', 'performance-optimisation')
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+  const handleLearn = async () => {
+    setLearning(true);
+    dismiss();
+    try {
+      const res = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('ai_learn', {}, 'POST');
+      if (res.success) {
+        setModel(res.data);
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('AI model updated.', 'performance-optimisation'),
+          durationMs: 3000
+        });
+        fetchSuggestions();
+      } else {
+        notify({
+          type: 'error',
+          message: res.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to learn.', 'performance-optimisation')
+        });
+      }
+    } catch {
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to learn.', 'performance-optimisation')
+      });
+    } finally {
+      setLearning(false);
+    }
+  };
+  const handleApply = async suggestion => {
+    const payload = suggestion.ai_payload;
+    if (!payload) {
+      return;
+    }
+    try {
+      const currentTabSettings = typeof wppoSettings !== 'undefined' ? wppoSettings.settings?.[payload.tab] || {} : {};
+      const merged = {
+        ...currentTabSettings,
+        ...payload.settings
+      };
+      const res = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('update_settings', {
+        tab: payload.tab,
+        settings: merged
+      });
+      if (res.success) {
+        if (typeof wppoSettings !== 'undefined' && wppoSettings.settings) {
+          wppoSettings.settings[payload.tab] = merged;
+        }
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Suggestion applied.', 'performance-optimisation'),
+          durationMs: 3000
+        });
+      } else {
+        notify({
+          type: 'error',
+          message: res.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to apply suggestion.', 'performance-optimisation')
+        });
+      }
+    } catch {
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to apply suggestion.', 'performance-optimisation')
+      });
+    }
+  };
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('AI Adaptive', 'performance-optimisation'),
+    icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("i", {
+      className: "fas fa-brain"
+    }),
+    children: [notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_NoticeBanner__WEBPACK_IMPORTED_MODULE_6__["default"], {
+      type: notice.type,
+      message: notice.message,
+      onDismiss: dismiss
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_SwitchField__WEBPACK_IMPORTED_MODULE_5__["default"], {
+      label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enable AI Adaptive', 'performance-optimisation'),
+      description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Learn from RUM and trends to suggest script excludes and speculation prefetch. Never auto-enables — suggestions require confirmation.', 'performance-optimisation'),
+      name: "aiAdaptiveEnabled",
+      checked: enabled,
+      onChange: e => setEnabled(e.target.checked)
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("p", {
+      className: "wppo-text-muted wppo-text-small",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Toggle is gated by wppo_ai_adaptive_enabled filter.', 'performance-optimisation')
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+      className: "wppo-feature-card__footer",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        className: "wppo-button wppo-button--primary",
+        onClick: handleSave,
+        isLoading: saving,
+        label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Save AI Settings', 'performance-optimisation'),
+        loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Saving…', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        className: "wppo-button wppo-button--secondary wppo-ml-8",
+        onClick: handleLearn,
+        isLoading: learning,
+        label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Learn Now', 'performance-optimisation'),
+        loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Learning…', 'performance-optimisation')
+      })]
+    }), model && model.updated_at && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("p", {
+      className: "wppo-text-muted wppo-text-small wppo-mt-12",
+      children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Model updated:', 'performance-optimisation'), ' ', new Date(model.updated_at * 1000).toLocaleString(), ' ', model.source ? `(${model.source})` : '']
+    }), suggestions.length > 0 && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+      className: "wppo-stacked-cards wppo-mt-16",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("h4", {
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('AI Suggestions', 'performance-optimisation')
+      }), suggestions.map(s => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+        className: "wppo-suggestion-card wppo-suggestion-card--needs_improvement",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+          className: "wppo-suggestion-card__header",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("span", {
+            className: "wppo-suggestion-card__description",
+            children: s.description
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("span", {
+            className: "wppo-status-badge wppo-status-badge--warning",
+            children: s.status
+          })]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+          className: "wppo-suggestion-card__body",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("span", {
+            className: "wppo-suggestion-card__value",
+            children: String(s.value)
+          }), s.ai_payload && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("button", {
+            type: "button",
+            className: "wppo-button wppo-button--sm wppo-button--primary",
+            onClick: () => handleApply(s),
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Apply', 'performance-optimisation')
+          })]
+        })]
+      }, s.metric))]
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (AiPanel);
+
+/***/ },
+
+/***/ "./src/components/AutoloadedOptions.js"
+/*!*********************************************!*\
+  !*** ./src/components/AutoloadedOptions.js ***!
+  \*********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__);
+/**
+ * AutoloadedOptions component.
+ *
+ * Lists the largest autoloaded options (option bloat that inflates every page
+ * load). Fetches GET /autoloaded_options on mount.
+ *
+ * @since 2.18.0
+ */
+
+
+
+
+
+
+
+
+/**
+ * @return {Element} The autoloaded-options card.
+ */
+
+const AutoloadedOptions = () => {
+  const [options, setOptions] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)([]);
+  const [loading, setLoading] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(true);
+  const [error, setError] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const load = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_4__.apiCall)('autoloaded_options?limit=20', {}, 'GET');
+      if (response.success && response.data?.options) {
+        setOptions(response.data.options);
+      } else {
+        setError(response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to load autoloaded options.', 'performance-optimisation'));
+      }
+    } catch (loadError) {
+      setError((0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to load autoloaded options.', 'performance-optimisation'));
+      console.error('Error fetching autoloaded options:', loadError);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    load();
+  }, [load]);
+  const formatSize = bytes => {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  };
+  let body;
+  if (error) {
+    body = /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted",
+      children: error
+    });
+  } else if (options.length === 0 && !loading) {
+    body = /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('No autoloaded options found.', 'performance-optimisation')
+    });
+  } else {
+    body = /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("ul", {
+      className: "wppo-autoloaded-options",
+      children: options.map(option => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("li", {
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("code", {
+          children: option.option_name
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("span", {
+          className: "wppo-text-muted",
+          children: formatSize(option.size)
+        })]
+      }, option.option_name))
+    });
+  }
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Autoloaded Options', 'performance-optimisation'),
+    icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__.faDatabase
+    }),
+    actions: loading && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__.faSpinner,
+      spin: true,
+      "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Loading…', 'performance-optimisation')
+    }),
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('The largest options loaded on every request. Reducing these improves TTFB on shared hosting.', 'performance-optimisation')
+    }), body, options.length > 0 && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted wppo-text-small",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.sprintf)(/* translators: %d: number of options listed */
+      (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Showing %d options.', 'performance-optimisation'), options.length)
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (AutoloadedOptions);
+
+/***/ },
+
+/***/ "./src/components/Dashboard.js"
+/*!*************************************!*\
+  !*** ./src/components/Dashboard.js ***!
+  \*************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _lib_useNotice__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../lib/useNotice */ "./src/lib/useNotice.js");
+/* harmony import */ var _common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./common/LoadingSubmitButton */ "./src/components/common/LoadingSubmitButton.js");
+/* harmony import */ var _common_ConfirmDialog__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./common/ConfirmDialog */ "./src/components/common/ConfirmDialog.js");
+/* harmony import */ var _common_FeatureHeader__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/FeatureHeader */ "./src/components/common/FeatureHeader.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_SwitchField__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./common/SwitchField */ "./src/components/common/SwitchField.js");
+/* harmony import */ var _common_CheckboxOption__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./common/CheckboxOption */ "./src/components/common/CheckboxOption.js");
+/* harmony import */ var _common_NoticeBanner__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./common/NoticeBanner */ "./src/components/common/NoticeBanner.js");
+/* harmony import */ var _PerformanceAudit__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./PerformanceAudit */ "./src/components/PerformanceAudit.js");
+/* harmony import */ var _PageSpeedPanel__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./PageSpeedPanel */ "./src/components/PageSpeedPanel.js");
+/* harmony import */ var _WebVitalsTrends__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./WebVitalsTrends */ "./src/components/WebVitalsTrends.js");
+/* harmony import */ var _WebVitalsRum__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./WebVitalsRum */ "./src/components/WebVitalsRum.js");
+/* harmony import */ var _SuggestionsPanel__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./SuggestionsPanel */ "./src/components/SuggestionsPanel.js");
+/* harmony import */ var _SystemInfo__WEBPACK_IMPORTED_MODULE_15__ = __webpack_require__(/*! ./SystemInfo */ "./src/components/SystemInfo.js");
+/* harmony import */ var _AutoloadedOptions__WEBPACK_IMPORTED_MODULE_16__ = __webpack_require__(/*! ./AutoloadedOptions */ "./src/components/AutoloadedOptions.js");
+/* harmony import */ var _LlmsPanel__WEBPACK_IMPORTED_MODULE_17__ = __webpack_require__(/*! ./LlmsPanel */ "./src/components/LlmsPanel.js");
+/* harmony import */ var _AiPanel__WEBPACK_IMPORTED_MODULE_18__ = __webpack_require__(/*! ./AiPanel */ "./src/components/AiPanel.js");
+/* harmony import */ var _EdgeCachePanel__WEBPACK_IMPORTED_MODULE_19__ = __webpack_require__(/*! ./EdgeCachePanel */ "./src/components/EdgeCachePanel.js");
+/* harmony import */ var _ImageOptimizationCard__WEBPACK_IMPORTED_MODULE_20__ = __webpack_require__(/*! ./ImageOptimizationCard */ "./src/components/ImageOptimizationCard.js");
+/* harmony import */ var _RecentActivityCard__WEBPACK_IMPORTED_MODULE_21__ = __webpack_require__(/*! ./RecentActivityCard */ "./src/components/RecentActivityCard.js");
+/* harmony import */ var _WelcomePanel__WEBPACK_IMPORTED_MODULE_22__ = __webpack_require__(/*! ./WelcomePanel */ "./src/components/WelcomePanel.js");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_23___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__);
+/* harmony import */ var _lib_litespeed__WEBPACK_IMPORTED_MODULE_24__ = __webpack_require__(/*! ../lib/litespeed */ "./src/lib/litespeed.js");
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_25__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_26__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * Normalize wppoSettings.image_info which stores arrays of file paths
+ * into the {webp: count, avif: count} shape the component expects.
+ * @param {Object} raw - Raw image info object.
+ */
+
+const normalizeImageInfo = raw => {
+  const normalize = bucket => ({
+    webp: Array.isArray(bucket?.webp) ? bucket.webp.length : bucket?.webp || 0,
+    avif: Array.isArray(bucket?.avif) ? bucket.avif.length : bucket?.avif || 0
+  });
+  return {
+    completed: normalize(raw?.completed),
+    pending: normalize(raw?.pending),
+    failed: normalize(raw?.failed)
+  };
+};
+const Dashboard = ({
+  activities,
+  cacheSettings: propCacheSettings,
+  userRoles: propUserRoles,
+  onNavigate
+}) => {
+  // Phase 2 — suggestions state (populated by telemetry scan + PageSpeed scan).
+  const [telemetrySuggestions, setTelemetrySuggestions] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)([]);
+  const [pagespeedSuggestions, setPagespeedSuggestions] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)([]);
+  const [auditUrl, setAuditUrl] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(typeof wppoSettings !== 'undefined' ? wppoSettings?.performance_audit?.homeUrl ?? '' : '');
+  // Merge telemetry and PageSpeed suggestions, deduplicating by metric key.
+  const allSuggestions = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => {
+    const seen = new Set();
+    const merged = [];
+    for (const s of [...pagespeedSuggestions, ...telemetrySuggestions]) {
+      if (!seen.has(s.metric)) {
+        seen.add(s.metric);
+        merged.push(s);
+      }
+    }
+    return merged;
+  }, [telemetrySuggestions, pagespeedSuggestions]);
+
+  // Reset suggestions when auditUrl changes to prevent stale results from merging.
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    setTelemetrySuggestions([]);
+    setPagespeedSuggestions([]);
+  }, [auditUrl]);
+
+  // Initialize state
+  const [state, setState] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)({
+    totalCacheSize: typeof wppoSettings !== 'undefined' ? wppoSettings?.cache_size ?? '0 B' : '0 B',
+    totalJs: typeof wppoSettings !== 'undefined' ? wppoSettings?.total_js_css?.js ?? 0 : 0,
+    totalCss: typeof wppoSettings !== 'undefined' ? wppoSettings?.total_js_css?.css ?? 0 : 0,
+    imageInfo: normalizeImageInfo(typeof wppoSettings !== 'undefined' ? wppoSettings?.image_info : {}),
+    dbCounts: {},
+    loading: {
+      clear_cache: false,
+      optimize_images: false,
+      remove_images: false,
+      db_counts: true
+    }
+  });
+
+  // Logged-in user cache settings — prefer props from App.js, fallback to global for direct mounts/tests.
+  const cacheSettings = propCacheSettings ?? (typeof wppoSettings !== 'undefined' ? wppoSettings?.settings?.cache_settings || {} : {});
+  const userRoles = propUserRoles ?? (typeof wppoSettings !== 'undefined' ? wppoSettings?.userRoles || {} : {});
+  const [pageCacheEnabled, setPageCacheEnabled] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(!!cacheSettings.enableCache);
+  const [savingPageCache, setSavingPageCache] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [cacheLife, setCacheLife] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(Number(cacheSettings.cacheLife ?? 0));
+  const [loggedInCacheEnabled, setLoggedInCacheEnabled] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(!!cacheSettings.enableLoggedInCache);
+  const [loggedInCacheRoles, setLoggedInCacheRoles] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(Array.isArray(cacheSettings.loggedInCacheRoles) ? cacheSettings.loggedInCacheRoles : []);
+  const [savingLoggedInCache, setSavingLoggedInCache] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+
+  // CDN cache purge (Cloudflare / Varnish).
+  const [cdnPurgeService, setCdnPurgeService] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(cacheSettings.cdnPurgeService ?? 'none');
+  const [cloudflareZoneId, setCloudflareZoneId] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(cacheSettings.cloudflareZoneId ?? '');
+  const [varnishPurgeUrls, setVarnishPurgeUrls] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(Array.isArray(cacheSettings.varnishPurgeUrls) ? cacheSettings.varnishPurgeUrls.join('\n') : '');
+  const [savingCdnPurge, setSavingCdnPurge] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+
+  // Sync derived state when cacheSettings changes (e.g. parent App.js
+  // re-fetches settings or apiCall mutates global wppoSettings).
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    setPageCacheEnabled(!!cacheSettings.enableCache);
+    setCacheLife(Number(cacheSettings.cacheLife ?? 0));
+    setLoggedInCacheEnabled(!!cacheSettings.enableLoggedInCache);
+    setLoggedInCacheRoles(Array.isArray(cacheSettings.loggedInCacheRoles) ? cacheSettings.loggedInCacheRoles : []);
+    setCdnPurgeService(cacheSettings.cdnPurgeService ?? 'none');
+    setCloudflareZoneId(cacheSettings.cloudflareZoneId ?? '');
+    setVarnishPurgeUrls(Array.isArray(cacheSettings.varnishPurgeUrls) ? cacheSettings.varnishPurgeUrls.join('\n') : '');
+  }, [cacheSettings.enableCache, cacheSettings.cacheLife, cacheSettings.enableLoggedInCache, cacheSettings.loggedInCacheRoles, cacheSettings.cdnPurgeService, cacheSettings.cloudflareZoneId, cacheSettings.varnishPurgeUrls]);
+  const [bgProcessing, setBgProcessing] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [bgJobsQueued, setBgJobsQueued] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(0);
+  const [imgSavings, setImgSavings] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const pollingRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const pollRetryRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(0);
+  const submittingRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(false);
+  const [confirmRemove, setConfirmRemove] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const {
+    notice,
+    notify,
+    dismiss
+  } = (0,_lib_useNotice__WEBPACK_IMPORTED_MODULE_2__["default"])();
+  const {
+    imageInfo,
+    loading,
+    totalCacheSize,
+    totalJs,
+    totalCss,
+    dbCounts
+  } = state;
+  const {
+    completed = {},
+    pending = {},
+    failed = {}
+  } = imageInfo;
+  const updateState = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(updates => {
+    setState(prevState => ({
+      ...prevState,
+      ...updates
+    }));
+  }, []);
+  const handleLoading = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)((key, isLoading) => {
+    setState(prevState => ({
+      ...prevState,
+      loading: {
+        ...prevState.loading,
+        [key]: isLoading
+      }
+    }));
+  }, []);
+  const fetchDbCounts = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(async () => {
+    handleLoading('db_counts', true);
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__.apiCall)('database_cleanup_counts', {}, 'GET');
+      if (response.success && response.data) {
+        updateState({
+          dbCounts: response.data
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching db counts:', error);
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Failed to load database counts.', 'performance-optimisation'),
+        durationMs: 5000
+      });
+    } finally {
+      handleLoading('db_counts', false);
+    }
+  }, [handleLoading, updateState, notify]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    fetchDbCounts();
+  }, [fetchDbCounts]);
+  const dbOverheadCount = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => {
+    return Object.values(dbCounts).reduce((sum, val) => sum + (parseInt(val, 10) || 0), 0);
+  }, [dbCounts]);
+  const pollJobStatus = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(async () => {
+    const currentTimeout = pollingRef.current;
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__.apiCall)('image_job_status', {}, 'GET');
+      pollRetryRef.current = 0;
+      if (response.success && response.data) {
+        const {
+          queued_jobs: queuedJobs
+        } = response.data;
+        setBgJobsQueued(queuedJobs);
+        setImgSavings(response.data.savings || null);
+        updateState({
+          imageInfo: {
+            completed: {
+              webp: response.data.completed?.webp || 0,
+              avif: response.data.completed?.avif || 0
+            },
+            pending: {
+              webp: response.data.pending?.webp || 0,
+              avif: response.data.pending?.avif || 0
+            },
+            failed: {
+              webp: response.data.failed?.webp || 0,
+              avif: response.data.failed?.avif || 0
+            }
+          }
+        });
+        if (queuedJobs === 0) {
+          setBgProcessing(false);
+          notify({
+            type: 'success',
+            message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Image optimisation completed.', 'performance-optimisation'),
+            durationMs: 5000
+          });
+          pollingRef.current = null;
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error polling job status:', error);
+      pollRetryRef.current++;
+      if (pollRetryRef.current >= 5) {
+        setBgProcessing(false);
+        pollingRef.current = null;
+        notify({
+          type: 'error',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Status check stopped after repeated failures.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+        return;
+      }
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Status check failed. Retrying…', 'performance-optimisation'),
+        durationMs: 5000
+      });
+    }
+    if (pollingRef.current === currentTimeout) {
+      pollingRef.current = setTimeout(pollJobStatus, 5000);
+    }
+  }, [updateState, notify]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    return () => {
+      if (pollingRef.current) {
+        clearTimeout(pollingRef.current);
+      }
+    };
+  }, []);
+  const onClearCache = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(e => {
+    e.preventDefault();
+    handleLoading('clear_cache', true);
+    (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__.apiCall)('clear_cache', {
+      action: 'clear_cache'
+    }).then(data => {
+      if (data.success) {
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Cache cleared successfully.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+        updateState({
+          totalCacheSize: '0 B',
+          totalJs: 0,
+          totalCss: 0
+        });
+      } else {
+        notify({
+          type: 'error',
+          message: data.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Failed to clear cache.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      }
+    }).catch(() => notify({
+      type: 'error',
+      message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Failed to clear cache.', 'performance-optimisation'),
+      durationMs: 5000
+    })).finally(() => handleLoading('clear_cache', false));
+  }, [handleLoading, updateState, notify]);
+  const optimizeImages = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    if (loading.optimize_images || bgProcessing || submittingRef.current) {
+      return;
+    }
+    submittingRef.current = true;
+    handleLoading('optimize_images', true);
+    (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__.apiCall)('optimise_image', {}).then(response => {
+      if (response.data?.background) {
+        // Background (Action Scheduler) path.
+        setBgProcessing(true);
+        setBgJobsQueued(response.data.jobs_queued || 0);
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Image optimisation started in background.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+        if (pollingRef.current) {
+          clearTimeout(pollingRef.current);
+        }
+        pollingRef.current = setTimeout(pollJobStatus, 5000);
+      } else {
+        // Synchronous path (Action Scheduler unavailable).
+        setBgJobsQueued(0);
+        setBgProcessing(false);
+        if (response.success && response.data) {
+          updateState({
+            imageInfo: normalizeImageInfo(response.data)
+          });
+          notify({
+            type: 'success',
+            message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Images optimized successfully.', 'performance-optimisation'),
+            durationMs: 5000
+          });
+        }
+        if (pollingRef.current) {
+          clearTimeout(pollingRef.current);
+          pollingRef.current = null;
+        }
+      }
+    }).catch(() => notify({
+      type: 'error',
+      message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Image optimisation failed.', 'performance-optimisation'),
+      durationMs: 5000
+    })).finally(() => {
+      submittingRef.current = false;
+      handleLoading('optimize_images', false);
+    });
+  }, [handleLoading, pollJobStatus, updateState, notify, bgProcessing, loading.optimize_images]);
+  const removeImages = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    handleLoading('remove_images', true);
+    (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__.apiCall)('delete_optimised_image', {}).then(data => {
+      if (data.success) {
+        setState(prev => ({
+          ...prev,
+          imageInfo: {
+            completed: {
+              webp: 0,
+              avif: 0
+            },
+            pending: {
+              webp: 0,
+              avif: 0
+            },
+            failed: {
+              webp: 0,
+              avif: 0
+            }
+          }
+        }));
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Optimized images removed.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      } else {
+        notify({
+          type: 'error',
+          message: data.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Failed to remove optimized images.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      }
+    }).catch(() => notify({
+      type: 'error',
+      message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Failed to remove optimized images.', 'performance-optimisation'),
+      durationMs: 5000
+    })).finally(() => handleLoading('remove_images', false));
+  }, [handleLoading, notify]);
+  const savePageCacheSettings = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    setSavingPageCache(true);
+    // Re-read global wppoSettings at call-time to avoid stale closure
+    // after prior save mutated it via apiCall's freeze.
+    const currentSettings = (typeof wppoSettings !== 'undefined' ? wppoSettings.settings?.cache_settings : null) ?? cacheSettings ?? {};
+    (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__.apiCall)('update_settings', {
+      tab: 'cache_settings',
+      settings: {
+        ...currentSettings,
+        enableCache: pageCacheEnabled,
+        cacheLife
+      }
+    }).then(response => {
+      if (response.success && response.data) {
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Page cache settings saved.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      }
+    }).catch(() => notify({
+      type: 'error',
+      message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Failed to save page cache settings.', 'performance-optimisation'),
+      durationMs: 5000
+    })).finally(() => setSavingPageCache(false));
+  }, [pageCacheEnabled, cacheLife, cacheSettings, notify]);
+  const saveLoggedInCacheSettings = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    setSavingLoggedInCache(true);
+    // Re-read global wppoSettings at call-time to avoid stale closure.
+    const currentSettings = (typeof wppoSettings !== 'undefined' ? wppoSettings.settings?.cache_settings : null) ?? cacheSettings ?? {};
+    (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__.apiCall)('update_settings', {
+      tab: 'cache_settings',
+      settings: {
+        ...currentSettings,
+        enableLoggedInCache: loggedInCacheEnabled,
+        loggedInCacheRoles
+      }
+    }).then(response => {
+      if (response.success && response.data) {
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Logged-in cache settings saved.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      }
+    }).catch(() => notify({
+      type: 'error',
+      message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Failed to save logged-in cache settings.', 'performance-optimisation'),
+      durationMs: 5000
+    })).finally(() => setSavingLoggedInCache(false));
+  }, [loggedInCacheEnabled, loggedInCacheRoles, cacheSettings, notify]);
+  const saveCdnPurgeSettings = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    setSavingCdnPurge(true);
+    // Re-read global wppoSettings at call-time to avoid stale closure.
+    const currentSettings = (typeof wppoSettings !== 'undefined' ? wppoSettings.settings?.cache_settings : null) ?? cacheSettings ?? {};
+    const urls = varnishPurgeUrls.split('\n').map(url => url.trim()).filter(Boolean);
+    (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__.apiCall)('update_settings', {
+      tab: 'cache_settings',
+      settings: {
+        ...currentSettings,
+        cdnPurgeService,
+        cloudflareZoneId,
+        varnishPurgeUrls: urls
+      }
+    }).then(response => {
+      if (response.success && response.data) {
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('CDN purge settings saved.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      }
+    }).catch(() => notify({
+      type: 'error',
+      message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Failed to save CDN purge settings.', 'performance-optimisation'),
+      durationMs: 5000
+    })).finally(() => setSavingCdnPurge(false));
+  }, [cdnPurgeService, cloudflareZoneId, varnishPurgeUrls, cacheSettings, notify]);
+  const handleLoggedInCacheToggle = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(e => {
+    setLoggedInCacheEnabled(e.target.checked);
+  }, []);
+  const handleRoleCheckbox = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(e => {
+    const role = e.target.name;
+    const checked = e.target.checked;
+    setLoggedInCacheRoles(prev => checked ? [...prev, role] : prev.filter(r => r !== role));
+  }, []);
+  const totalWebP = (completed.webp || 0) + (pending.webp || 0);
+  const totalAvif = (completed.avif || 0) + (pending.avif || 0);
+  const totalOptimizedPercent = totalWebP + totalAvif > 0 ? ((completed.webp || 0) + (completed.avif || 0)) / (totalWebP + totalAvif) * 100 : null;
+  const isCacheMissing = typeof totalCacheSize === 'string' && /does not exist/i.test(totalCacheSize);
+  const cacheSizeValue = !isCacheMissing ? totalCacheSize ?? '—' : '—';
+  const cacheSizeUnit = isCacheMissing ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Cache missing', 'performance-optimisation') : '';
+  const optimizedFilesCount = (totalJs || 0) + (totalCss || 0);
+  let dbBadgeClass = 'wppo-status-badge--good';
+  let dbBadgeLabel = (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Healthy', 'performance-optimisation');
+  if (dbOverheadCount > 50) {
+    dbBadgeClass = 'wppo-status-badge--poor';
+    dbBadgeLabel = (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('High', 'performance-optimisation');
+  } else if (dbOverheadCount >= 20) {
+    dbBadgeClass = 'wppo-status-badge--warning';
+    dbBadgeLabel = (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Medium', 'performance-optimisation');
+  }
+
+  // LiteSpeed banner data from global wppoSettings (injected by PHP).
+  const litespeedInfo = typeof wppoSettings !== 'undefined' ? wppoSettings?.litespeed : null;
+  const isLiteSpeed = !!litespeedInfo?.detected;
+  const effectiveMode = litespeedInfo?.effective_mode || 'standalone';
+  const lscacheActive = !!litespeedInfo?.lscache_active;
+  const effectiveLabel = (0,_lib_litespeed__WEBPACK_IMPORTED_MODULE_24__.modeLabel)(effectiveMode);
+  const effectiveBadgeClass = effectiveMode === 'litespeed' ? 'wppo-status-badge--warning' : 'wppo-status-badge--good';
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+    className: "wppo-dashboard-view",
+    children: [notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_NoticeBanner__WEBPACK_IMPORTED_MODULE_9__["default"], {
+      type: notice.type,
+      message: notice.message,
+      onDismiss: dismiss
+    }), isLiteSpeed && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+      className: "wppo-notice wppo-notice--info wppo-litespeed-banner wppo-mb-16",
+      role: "alert",
+      "aria-live": "polite",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_25__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_26__.faServer,
+        "aria-hidden": "true"
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("span", {
+        className: "wppo-litespeed-banner__text",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("strong", {
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('LiteSpeed Detected', 'performance-optimisation')
+        }), ' ', lscacheActive ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('LiteSpeed Cache plugin is active.', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Server is LiteSpeed / OpenLiteSpeed.', 'performance-optimisation')]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("span", {
+        className: "wppo-litespeed-banner__badges",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("span", {
+          className: `wppo-status-badge ${effectiveBadgeClass}`,
+          children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Effective:', 'performance-optimisation'), ' ', effectiveLabel]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+          className: `wppo-status-badge ${lscacheActive ? 'wppo-status-badge--poor' : 'wppo-status-badge--good'}`,
+          children: lscacheActive ? 'LSCache Active' : 'LSCache Inactive'
+        })]
+      }), lscacheActive && effectiveMode === 'litespeed' && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+        className: "wppo-text-muted wppo-text-small",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('WPPO optimisation is paused in this mode.', 'performance-optimisation')
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_FeatureHeader__WEBPACK_IMPORTED_MODULE_5__["default"], {
+      title: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.Fragment, {
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+          className: "wppo-health-dot",
+          "aria-hidden": "true",
+          children: "\u25CF"
+        }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('System Health', 'performance-optimisation')]
+      }),
+      description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Real-time performance overview and quick optimisation actions.', 'performance-optimisation'),
+      status: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.Fragment, {}),
+      actions: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_3__["default"], {
+        type: "button",
+        className: "wppo-button wppo-button--primary",
+        onClick: onClearCache,
+        isLoading: loading.clear_cache,
+        label: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.Fragment, {
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_25__.FontAwesomeIcon, {
+            icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_26__.faBroom,
+            "aria-hidden": "true",
+            style: {
+              marginRight: '8px'
+            }
+          }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Purge All Cache', 'performance-optimisation')]
+        }),
+        loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Purging…', 'performance-optimisation')
+      })
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_WelcomePanel__WEBPACK_IMPORTED_MODULE_22__["default"], {}), isCacheMissing && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+      className: "wppo-banner wppo-banner--warning",
+      role: "alert",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+        className: "wppo-banner__icon",
+        "aria-hidden": "true",
+        children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_25__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_26__.faExclamationTriangle
+        })
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+        className: "wppo-banner__text",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Cache directory not found.', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("button", {
+        type: "button",
+        className: "wppo-button wppo-button--primary wppo-button--sm",
+        onClick: () => onNavigate('fileOptimization'),
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Fix Now', 'performance-optimisation')
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+      className: "wppo-stats-grid",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+        className: "wppo-stat-item wppo-stat-item--cache",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+          className: "wppo-stat-header",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: "wppo-stat-label",
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Cache Size', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: "wppo-stat-icon",
+            "aria-hidden": "true",
+            children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_25__.FontAwesomeIcon, {
+              icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_26__.faServer
+            })
+          })]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+          className: isCacheMissing ? 'wppo-stat-value wppo-stat-value--muted' : 'wppo-stat-value',
+          children: cacheSizeValue
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+          className: "wppo-stat-unit",
+          children:
+          // eslint-disable-next-line no-nested-ternary
+          isCacheMissing ? /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.Fragment, {
+            children: [cacheSizeUnit, " \u2022", ' ', /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+              className: "wppo-status-badge wppo-status-badge--poor",
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Not cached', 'performance-optimisation')
+            })]
+          }) : cacheSizeUnit ? cacheSizeUnit : /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: "wppo-text-muted wppo-text-small",
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Ready', 'performance-optimisation')
+          })
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("div", {
+          className: "wppo-stat-footer",
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("button", {
+            type: "button",
+            className: "wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link",
+            onClick: () => onNavigate('fileOptimization'),
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Manage →', 'performance-optimisation')
+          })
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+        className: "wppo-stat-item wppo-stat-item--files",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+          className: "wppo-stat-header",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: "wppo-stat-label",
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Optimized Files', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: "wppo-stat-icon",
+            "aria-hidden": "true",
+            children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_25__.FontAwesomeIcon, {
+              icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_26__.faFileCode
+            })
+          })]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+          className: "wppo-stat-value",
+          children: optimizedFilesCount
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+          className: "wppo-stat-unit",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('files', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("div", {
+          className: "wppo-stat-footer",
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("button", {
+            type: "button",
+            className: "wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link",
+            onClick: () => onNavigate('fileOptimization'),
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Configure →', 'performance-optimisation')
+          })
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+        className: "wppo-stat-item wppo-stat-item--db",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+          className: "wppo-stat-header",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: "wppo-stat-label",
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('DB Overhead', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: "wppo-stat-icon",
+            "aria-hidden": "true",
+            children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_25__.FontAwesomeIcon, {
+              icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_26__.faDatabase
+            })
+          })]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+          className: "wppo-stat-value",
+          children: dbOverheadCount
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("span", {
+          className: "wppo-stat-unit",
+          children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('items', 'performance-optimisation'), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: `wppo-status-badge ${dbBadgeClass}`,
+            children: dbBadgeLabel
+          })]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("div", {
+          className: "wppo-stat-footer",
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("button", {
+            type: "button",
+            className: "wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link",
+            onClick: () => onNavigate('databaseCleanup'),
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Optimize →', 'performance-optimisation')
+          })
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+        className: "wppo-stat-item wppo-stat-item--images",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+          className: "wppo-stat-header",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: "wppo-stat-label",
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Images Optimized', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+            className: "wppo-stat-icon",
+            "aria-hidden": "true",
+            children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_25__.FontAwesomeIcon, {
+              icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_26__.faImages
+            })
+          })]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+          className: totalOptimizedPercent === null ? 'wppo-stat-value wppo-stat-value--muted' : 'wppo-stat-value',
+          children: totalOptimizedPercent !== null ? `${totalOptimizedPercent.toFixed(0)}%` : '—'
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("span", {
+          className: "wppo-stat-unit",
+          children: totalOptimizedPercent !== null ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('optimized', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('No images', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("div", {
+          className: "wppo-stat-footer",
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("button", {
+            type: "button",
+            className: "wppo-button wppo-button--secondary wppo-button--sm wppo-stat-link",
+            onClick: () => onNavigate('imageOptimization'),
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('View →', 'performance-optimisation')
+          })
+        })]
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_6__["default"], {
+      title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Page Cache', 'performance-optimisation'),
+      icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("i", {
+        className: "fas fa-bolt"
+      }),
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_SwitchField__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Enable Page Cache', 'performance-optimisation'),
+        description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Generate static HTML copies of your pages and serve them to visitors without running WordPress. Recommended for faster TTFB on non-logged-in traffic.', 'performance-optimisation'),
+        name: "enableCache",
+        checked: pageCacheEnabled,
+        onChange: e => setPageCacheEnabled(e.target.checked)
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+        className: "wppo-field",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("label", {
+          className: "wppo-field-label",
+          htmlFor: "wppoCacheLife",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Cache Lifespan', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("select", {
+          className: "wppo-select",
+          id: "wppoCacheLife",
+          name: "cacheLife",
+          value: cacheLife,
+          onChange: e => setCacheLife(Number(e.target.value)),
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: 0,
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Never expire', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: 1,
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('1 hour', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: 6,
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('6 hours', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: 12,
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('12 hours', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: 24,
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('24 hours', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: 48,
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('48 hours', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: 168,
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('1 week', 'performance-optimisation')
+          })]
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("div", {
+        className: "wppo-feature-card__footer",
+        children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_3__["default"], {
+          className: "wppo-button wppo-button--primary",
+          onClick: savePageCacheSettings,
+          isLoading: savingPageCache,
+          label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Save Page Cache Settings', 'performance-optimisation'),
+          loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Saving…', 'performance-optimisation')
+        })
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_6__["default"], {
+      title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('CDN Cache Purge', 'performance-optimisation'),
+      icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("i", {
+        className: "fas fa-globe"
+      }),
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+        className: "wppo-field",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("label", {
+          className: "wppo-field-label",
+          htmlFor: "cdnPurgeService",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('CDN Purge Service', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("select", {
+          className: "wppo-select",
+          id: "cdnPurgeService",
+          name: "cdnPurgeService",
+          value: cdnPurgeService,
+          onChange: e => setCdnPurgeService(e.target.value),
+          "aria-describedby": "wppo-cdnPurgeService-desc",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: "none",
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('None', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: "cloudflare",
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Cloudflare', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("option", {
+            value: "varnish",
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Varnish', 'performance-optimisation')
+          })]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("p", {
+          id: "wppo-cdnPurgeService-desc",
+          className: "wppo-text-muted wppo-text-small",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Purge the edge cache whenever the plugin cache is cleared.', 'performance-optimisation')
+        })]
+      }), cdnPurgeService === 'cloudflare' && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+        className: "wppo-field",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("label", {
+          className: "wppo-field-label",
+          htmlFor: "cloudflareZoneId",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Cloudflare Zone ID', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("input", {
+          className: "wppo-input",
+          id: "cloudflareZoneId",
+          name: "cloudflareZoneId",
+          type: "text",
+          value: cloudflareZoneId,
+          onChange: e => setCloudflareZoneId(e.target.value),
+          "aria-describedby": "wppo-cloudflareZoneId-desc"
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("p", {
+          id: "wppo-cloudflareZoneId-desc",
+          className: "wppo-text-muted wppo-text-small",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Define WPPO_CLOUDFLARE_API_TOKEN in wp-config.php with an API token that has Zone > Cache Purge permission. The token is never stored in the database.', 'performance-optimisation')
+        })]
+      }), cdnPurgeService === 'varnish' && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+        className: "wppo-field",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("label", {
+          className: "wppo-field-label",
+          htmlFor: "varnishPurgeUrls",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Varnish Purge Endpoints', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("textarea", {
+          className: "wppo-textarea",
+          id: "varnishPurgeUrls",
+          name: "varnishPurgeUrls",
+          rows: 3,
+          value: varnishPurgeUrls,
+          onChange: e => setVarnishPurgeUrls(e.target.value),
+          "aria-describedby": "wppo-varnishPurgeUrls-desc",
+          placeholder: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('http://127.0.0.1:8081/purge', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("p", {
+          id: "wppo-varnishPurgeUrls-desc",
+          className: "wppo-text-muted wppo-text-small",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('One URL per line. Each receives a PURGE request on cache clear.', 'performance-optimisation')
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("div", {
+        className: "wppo-feature-card__footer",
+        children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_3__["default"], {
+          className: "wppo-button wppo-button--primary",
+          onClick: saveCdnPurgeSettings,
+          isLoading: savingCdnPurge,
+          label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Save CDN Purge', 'performance-optimisation'),
+          loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Saving…', 'performance-optimisation')
+        })
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_6__["default"], {
+      title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Cache for Logged-in Users', 'performance-optimisation'),
+      icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("i", {
+        className: "fas fa-user-check"
+      }),
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_SwitchField__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Enable', 'performance-optimisation'),
+        description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Serve cached pages to logged-in users based on their role(s). The admin bar and user-specific content are preserved per role group.', 'performance-optimisation'),
+        name: "enableLoggedInCache",
+        checked: loggedInCacheEnabled,
+        onChange: handleLoggedInCacheToggle
+      }), loggedInCacheEnabled && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+        className: "wppo-logged-in-cache-roles",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("p", {
+          className: "wppo-text-muted",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Select which user roles should receive cached pages:', 'performance-optimisation')
+        }), Object.entries(userRoles).map(([slug, name]) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_CheckboxOption__WEBPACK_IMPORTED_MODULE_8__["default"], {
+          label: name,
+          name: slug,
+          checked: loggedInCacheRoles.includes(slug),
+          onChange: handleRoleCheckbox
+        }, slug)), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("p", {
+          className: "wppo-text-muted wppo-mt-10",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('When no roles are selected, caching applies to all logged-in users.', 'performance-optimisation')
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)("div", {
+        className: "wppo-feature-card__footer",
+        children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_3__["default"], {
+          className: "wppo-button wppo-button--primary",
+          onClick: saveLoggedInCacheSettings,
+          isLoading: savingLoggedInCache,
+          label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Save Settings', 'performance-optimisation'),
+          loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Saving…', 'performance-optimisation')
+        })
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+      className: "wppo-stacked-cards",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_PerformanceAudit__WEBPACK_IMPORTED_MODULE_10__["default"], {
+        onSuggestionsReady: setTelemetrySuggestions,
+        onUrlChange: setAuditUrl
+      }), allSuggestions.length > 0 && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_SuggestionsPanel__WEBPACK_IMPORTED_MODULE_14__["default"], {
+        suggestions: allSuggestions,
+        onNavigate: onNavigate
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_PageSpeedPanel__WEBPACK_IMPORTED_MODULE_11__["default"], {
+        url: auditUrl,
+        onSuggestionsReady: setPagespeedSuggestions
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_WebVitalsTrends__WEBPACK_IMPORTED_MODULE_12__["default"], {
+        url: auditUrl
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_WebVitalsRum__WEBPACK_IMPORTED_MODULE_13__["default"], {}), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_AutoloadedOptions__WEBPACK_IMPORTED_MODULE_16__["default"], {}), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_LlmsPanel__WEBPACK_IMPORTED_MODULE_17__["default"], {}), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_AiPanel__WEBPACK_IMPORTED_MODULE_18__["default"], {}), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_EdgeCachePanel__WEBPACK_IMPORTED_MODULE_19__["default"], {}), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_SystemInfo__WEBPACK_IMPORTED_MODULE_15__["default"], {})]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsxs)("div", {
+      className: "wppo-stacked-cards wppo-mt-20",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_ImageOptimizationCard__WEBPACK_IMPORTED_MODULE_20__["default"], {
+        completed: completed,
+        pending: pending,
+        failed: failed,
+        bgProcessing: bgProcessing,
+        bgJobsQueued: bgJobsQueued,
+        loading: loading,
+        savings: imgSavings,
+        pendingPathsCount: (pending.webp || 0) + (pending.avif || 0),
+        onOptimize: optimizeImages,
+        onRemove: () => setConfirmRemove(true)
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_RecentActivityCard__WEBPACK_IMPORTED_MODULE_21__["default"], {
+        activities: activities,
+        onNavigate: onNavigate
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_27__.jsx)(_common_ConfirmDialog__WEBPACK_IMPORTED_MODULE_4__["default"], {
+      isOpen: confirmRemove,
+      onConfirm: () => {
+        setConfirmRemove(false);
+        removeImages();
+      },
+      onCancel: () => setConfirmRemove(false),
+      title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Remove Optimized Images', 'performance-optimisation'),
+      message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('This will delete all optimized WebP and AVIF copies. Original images will not be affected.', 'performance-optimisation'),
+      confirmLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_23__.__)('Delete', 'performance-optimisation'),
+      variant: "danger"
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (Dashboard);
+
+/***/ },
+
+/***/ "./src/components/EdgeCachePanel.js"
+/*!******************************************!*\
+  !*** ./src/components/EdgeCachePanel.js ***!
+  \******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _lib_useNotice__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../lib/useNotice */ "./src/lib/useNotice.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_SwitchField__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/SwitchField */ "./src/components/common/SwitchField.js");
+/* harmony import */ var _common_NoticeBanner__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./common/NoticeBanner */ "./src/components/common/NoticeBanner.js");
+/* harmony import */ var _common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./common/LoadingSubmitButton */ "./src/components/common/LoadingSubmitButton.js");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__);
+
+
+
+
+
+
+
+
+
+/**
+ * Edge Cache panel (N2).
+ *
+ * Host-agnostic Cloudflare Workers / Bunny Edge adapter.
+ * - Generates wrangler.toml + cloudflare-worker.js semantics
+ * - Purge via Edge_Purger alongside CDN_Purger on wppo_after_cache_clear
+ * - Stale-while-revalidate <30ms global TTFB
+ *
+ * @since NEXT
+ */
+
+const EdgeCachePanel = () => {
+  const initial = typeof wppoSettings !== 'undefined' ? wppoSettings?.settings?.edge_cache || {} : {};
+  const [enabled, setEnabled] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(!!initial.enabled);
+  const [provider, setProvider] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(initial.provider || 'cloudflare');
+  const [ttl, setTtl] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(String(initial.ttl ?? 300));
+  const [swr, setSwr] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(String(initial.staleWhileRevalidate ?? 86400));
+  const [cfZone, setCfZone] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(initial.cloudflareZoneId || '');
+  const [bunnyZone, setBunnyZone] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(initial.bunnyPullZoneId || '');
+  const [saving, setSaving] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const {
+    notice,
+    notify,
+    dismiss
+  } = (0,_lib_useNotice__WEBPACK_IMPORTED_MODULE_3__["default"])();
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    const s = typeof wppoSettings !== 'undefined' ? wppoSettings?.settings?.edge_cache || {} : {};
+    setEnabled(!!s.enabled);
+    setProvider(s.provider || 'cloudflare');
+    setTtl(String(s.ttl ?? 300));
+    setSwr(String(s.staleWhileRevalidate ?? 86400));
+    setCfZone(s.cloudflareZoneId || '');
+    setBunnyZone(s.bunnyPullZoneId || '');
+  }, []);
+  const handleSave = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(async () => {
+    setSaving(true);
+    dismiss();
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('update_settings', {
+        tab: 'edge_cache',
+        settings: {
+          enabled,
+          provider,
+          ttl: parseInt(ttl, 10) || 300,
+          staleWhileRevalidate: parseInt(swr, 10) || 86400,
+          cloudflareZoneId: cfZone,
+          bunnyPullZoneId: bunnyZone
+        }
+      });
+      if (response.success) {
+        if (typeof wppoSettings !== 'undefined' && wppoSettings.settings) {
+          wppoSettings.settings.edge_cache = {
+            enabled,
+            provider,
+            ttl: parseInt(ttl, 10) || 300,
+            staleWhileRevalidate: parseInt(swr, 10) || 86400,
+            cloudflareZoneId: cfZone,
+            bunnyPullZoneId: bunnyZone
+          };
+        }
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Edge cache settings saved.', 'performance-optimisation'),
+          durationMs: 3000
+        });
+      } else {
+        notify({
+          type: 'error',
+          message: response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to save edge cache settings.', 'performance-optimisation')
+        });
+      }
+    } catch {
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to save edge cache settings.', 'performance-optimisation')
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [enabled, provider, ttl, swr, cfZone, bunnyZone, notify, dismiss]);
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Edge HTML Cache', 'performance-optimisation'),
+    icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("i", {
+      className: "fas fa-globe"
+    }),
+    children: [notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_NoticeBanner__WEBPACK_IMPORTED_MODULE_6__["default"], {
+      type: notice.type,
+      message: notice.message,
+      onDismiss: dismiss
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_SwitchField__WEBPACK_IMPORTED_MODULE_5__["default"], {
+      label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enable Edge Cache', 'performance-optimisation'),
+      description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Deploy cache/wppo/{domain}/{path}/index.html semantics to Cloudflare Workers / Bunny Edge via stale-while-revalidate. TTFB <30ms global (edge) vs LS-local 90ms. Disabled by default — no behaviour change until enabled.', 'performance-optimisation'),
+      name: "edgeCacheEnabled",
+      checked: enabled,
+      onChange: e => setEnabled(e.target.checked)
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("p", {
+      className: "wppo-text-muted wppo-text-small",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Gated by wppo_edge_cache_enabled filter. Purge via Edge_Purger::purge_all on wppo_after_cache_clear (transient lock, multisite-safe).', 'performance-optimisation')
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+      className: "wppo-field",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("label", {
+        className: "wppo-field-label",
+        htmlFor: "wppoEdgeProvider",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Provider', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("select", {
+        className: "wppo-select",
+        id: "wppoEdgeProvider",
+        value: provider,
+        onChange: e => setProvider(e.target.value),
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("option", {
+          value: "cloudflare",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Cloudflare Workers', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("option", {
+          value: "bunny",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Bunny Edge', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("option", {
+          value: "both",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Both', 'performance-optimisation')
+        })]
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+      className: "wppo-field",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("label", {
+        className: "wppo-field-label",
+        htmlFor: "wppoEdgeTtl",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Cache TTL (seconds)', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("input", {
+        className: "wppo-input",
+        id: "wppoEdgeTtl",
+        type: "number",
+        min: "60",
+        value: ttl,
+        onChange: e => setTtl(e.target.value)
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+      className: "wppo-field",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("label", {
+        className: "wppo-field-label",
+        htmlFor: "wppoEdgeSwr",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Stale-While-Revalidate (seconds)', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("input", {
+        className: "wppo-input",
+        id: "wppoEdgeSwr",
+        type: "number",
+        min: "0",
+        value: swr,
+        onChange: e => setSwr(e.target.value)
+      })]
+    }), (provider === 'cloudflare' || provider === 'both') && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+      className: "wppo-field",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("label", {
+        className: "wppo-field-label",
+        htmlFor: "wppoEdgeCfZone",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Cloudflare Zone ID', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("input", {
+        className: "wppo-input",
+        id: "wppoEdgeCfZone",
+        type: "text",
+        value: cfZone,
+        onChange: e => setCfZone(e.target.value),
+        placeholder: "abc123"
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("p", {
+        className: "wppo-text-muted wppo-text-small",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Define WPPO_CLOUDFLARE_API_TOKEN in wp-config.php with Zone > Cache Purge permission.', 'performance-optimisation')
+      })]
+    }), (provider === 'bunny' || provider === 'both') && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+      className: "wppo-field",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("label", {
+        className: "wppo-field-label",
+        htmlFor: "wppoEdgeBunnyZone",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Bunny Pull Zone ID', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("input", {
+        className: "wppo-input",
+        id: "wppoEdgeBunnyZone",
+        type: "text",
+        value: bunnyZone,
+        onChange: e => setBunnyZone(e.target.value),
+        placeholder: "12345"
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("p", {
+        className: "wppo-text-muted wppo-text-small",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Define WPPO_BUNNY_API_KEY in wp-config.php with Pull Zone > Purge permission.', 'performance-optimisation')
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("div", {
+      className: "wppo-feature-card__footer",
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        className: "wppo-button wppo-button--primary",
+        onClick: handleSave,
+        isLoading: saving,
+        label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Save Edge Cache', 'performance-optimisation'),
+        loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Saving…', 'performance-optimisation')
+      })
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("p", {
+      className: "wppo-text-muted wppo-text-small wppo-mt-12",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Worker: templates/cloudflare-worker.js • Wrangler: generated via Edge_Cache::get_wrangler_toml() • Bunny: templates/bunny-edge.js', 'performance-optimisation')
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (EdgeCachePanel);
+
+/***/ },
+
+/***/ "./src/components/ImageOptimizationCard.js"
+/*!*************************************************!*\
+  !*** ./src/components/ImageOptimizationCard.js ***!
+  \*************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./common/LoadingSubmitButton */ "./src/components/common/LoadingSubmitButton.js");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__);
+/**
+ * ImageOptimizationCard component.
+ *
+ * @since 1.5.0
+ */
+
+
+
+
+
+
+
+/**
+ * Format a byte count as a human-readable size string.
+ *
+ * @param {number} bytes Byte count.
+ * @return {string} Formatted size (e.g. "1.5 MB").
+ */
+
+const formatBytes = bytes => {
+  if (!bytes || bytes <= 0) {
+    return '0 B';
+  }
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** index).toFixed(1)} ${units[index]}`;
+};
+const ImageOptimizationCard = ({
+  completed = {},
+  pending = {},
+  failed = {},
+  bgProcessing = false,
+  bgJobsQueued = 0,
+  loading = {},
+  pendingPathsCount = 0,
+  savings = null,
+  onOptimize,
+  onRemove
+}) => {
+  const totalWebP = (completed.webp || 0) + (pending.webp || 0) + (failed.webp || 0);
+  const totalAvif = (completed.avif || 0) + (pending.avif || 0) + (failed.avif || 0);
+  const webpPercent = totalWebP > 0 ? (completed.webp || 0) / totalWebP * 100 : 0;
+  const avifPercent = totalAvif > 0 ? (completed.avif || 0) / totalAvif * 100 : 0;
+  const failedWebP = failed.webp || 0;
+  const failedAvif = failed.avif || 0;
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_2__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Image Optimisation', 'performance-optimisation'),
+    icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_0__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_1__.faImages
+    }),
+    footer: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.Fragment, {
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_3__["default"], {
+        className: "wppo-button wppo-button--primary",
+        onClick: onOptimize,
+        isLoading: loading.optimize_images,
+        disabled: bgProcessing || pendingPathsCount === 0,
+        label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Optimize All', 'performance-optimisation'),
+        loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Optimizing…', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_3__["default"], {
+        className: "wppo-button wppo-button--danger",
+        onClick: onRemove,
+        isLoading: loading.remove_images,
+        disabled: !completed.webp && !completed.avif,
+        label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Remove Optimized', 'performance-optimisation'),
+        loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Removing…', 'performance-optimisation')
+      })]
+    }),
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+      className: "wppo-progress-grid",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+        className: "wppo-progress-section",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+          className: "wppo-progress-header",
+          id: "wppo-webp-progress-label",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("span", {
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('WebP Conversion Progress', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("span", {
+            children: [completed.webp || 0, " / ", totalWebP]
+          })]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("div", {
+          className: "wppo-progress-bar",
+          role: "progressbar",
+          "aria-labelledby": "wppo-webp-progress-label",
+          "aria-valuemin": "0",
+          "aria-valuemax": "100",
+          "aria-valuenow": Math.round(webpPercent),
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("div", {
+            className: "wppo-progress-bar__fill",
+            style: {
+              width: `${webpPercent}%`
+            }
+          })
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+        className: "wppo-progress-section",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+          className: "wppo-progress-header",
+          id: "wppo-avif-progress-label",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("span", {
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('AVIF Conversion Progress', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("span", {
+            children: [completed.avif || 0, " / ", totalAvif]
+          })]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("div", {
+          className: "wppo-progress-bar",
+          role: "progressbar",
+          "aria-labelledby": "wppo-avif-progress-label",
+          "aria-valuemin": "0",
+          "aria-valuemax": "100",
+          "aria-valuenow": Math.round(avifPercent),
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("div", {
+            className: "wppo-progress-bar__fill",
+            style: {
+              width: `${avifPercent}%`
+            }
+          })
+        })]
+      })]
+    }), (failedWebP > 0 || failedAvif > 0) && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+      className: "wppo-text-muted wppo-text-small wppo-mt-10",
+      "aria-live": "polite",
+      children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Failed conversions:', 'performance-optimisation'), ' ', "WebP ", failedWebP, ", AVIF ", failedAvif, ' ', (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('(included in total)', 'performance-optimisation')]
+    }), savings && savings.original_bytes > 0 && savings.images_counted > 0 && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("div", {
+      className: "wppo-image-savings wppo-mt-16",
+      "aria-live": "polite",
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("span", {
+        children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Original', 'performance-optimisation'), ' ', formatBytes(savings.original_bytes), ' ', (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('→ Optimised', 'performance-optimisation'), ' ', formatBytes(savings.converted_bytes), " (", Math.max(0, Math.round(savings.saved_bytes / savings.original_bytes * 100)), "% ", (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('smaller', 'performance-optimisation'), " \xB7", ' ', savings.images_counted, ' ', (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('images', 'performance-optimisation'), ")"]
+      })
+    }), (bgProcessing || bgJobsQueued > 0) && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+      className: "wppo-notice wppo-notice--info wppo-mt-32",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_0__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_1__.faSpinner,
+        spin: true
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("span", {
+        children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Currently processing background optimisation jobs', 'performance-optimisation'), ' ', "( ", bgJobsQueued, ' ', (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('queued', 'performance-optimisation'), ")"]
+      })]
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (ImageOptimizationCard);
+
+/***/ },
+
+/***/ "./src/components/LlmsPanel.js"
+/*!*************************************!*\
+  !*** ./src/components/LlmsPanel.js ***!
+  \*************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _lib_useNotice__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../lib/useNotice */ "./src/lib/useNotice.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_SwitchField__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/SwitchField */ "./src/components/common/SwitchField.js");
+/* harmony import */ var _common_NoticeBanner__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./common/NoticeBanner */ "./src/components/common/NoticeBanner.js");
+/* harmony import */ var _common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./common/LoadingSubmitButton */ "./src/components/common/LoadingSubmitButton.js");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__);
+
+
+
+
+
+
+
+
+
+/**
+ * LLMs.txt panel for Dashboard (N8).
+ *
+ * @since NEXT
+ */
+
+const LlmsPanel = () => {
+  const initial = typeof wppoSettings !== 'undefined' ? wppoSettings?.settings?.llms_txt || {} : {};
+  const [enabled, setEnabled] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(!!initial.enabled);
+  const [source, setSource] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(initial.source || 'both');
+  const [saving, setSaving] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const {
+    notice,
+    notify,
+    dismiss
+  } = (0,_lib_useNotice__WEBPACK_IMPORTED_MODULE_3__["default"])();
+  const homeUrl = typeof wppoSettings !== 'undefined' ? wppoSettings?.homeUrl || '' : '';
+  const llmsUrl = homeUrl ? `${homeUrl.replace(/\/$/, '')}/llms.txt` : '/llms.txt';
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('update_settings', {
+        tab: 'llms_txt',
+        settings: {
+          enabled,
+          source
+        }
+      });
+      if (response.success) {
+        // Mutate global for next mount.
+        if (typeof wppoSettings !== 'undefined' && wppoSettings.settings) {
+          wppoSettings.settings.llms_txt = {
+            enabled,
+            source
+          };
+        }
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('LLMs.txt settings saved.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      } else {
+        notify({
+          type: 'error',
+          message: response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to save LLMs.txt settings.', 'performance-optimisation')
+        });
+      }
+    } catch {
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to save LLMs.txt settings.', 'performance-optimisation')
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('LLMs.txt', 'performance-optimisation'),
+    icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("i", {
+      className: "fas fa-robot"
+    }),
+    children: [notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_NoticeBanner__WEBPACK_IMPORTED_MODULE_6__["default"], {
+      type: notice.type,
+      message: notice.message,
+      onDismiss: dismiss
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_SwitchField__WEBPACK_IMPORTED_MODULE_5__["default"], {
+      label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enable LLMs.txt', 'performance-optimisation'),
+      description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Generate /llms.txt and /llms-full.txt for AI crawlers from top URLs (trends + sitemap). Opt-in, local file only.', 'performance-optimisation'),
+      name: "llmsEnabled",
+      checked: enabled,
+      onChange: e => setEnabled(e.target.checked)
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("div", {
+      className: "wppo-field",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("label", {
+        className: "wppo-field-label",
+        htmlFor: "wppoLlmsSource",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Source', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("select", {
+        className: "wppo-select",
+        id: "wppoLlmsSource",
+        value: source,
+        onChange: e => setSource(e.target.value),
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("option", {
+          value: "both",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Both (Trends + Sitemap)', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("option", {
+          value: "trends",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Trends only', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("option", {
+          value: "sitemap",
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Sitemap only', 'performance-optimisation')
+        })]
+      })]
+    }), enabled && homeUrl && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsxs)("p", {
+      className: "wppo-text-muted wppo-text-small",
+      children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('File will be available at:', 'performance-optimisation'), ' ', /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("a", {
+        href: llmsUrl,
+        target: "_blank",
+        rel: "noreferrer",
+        children: llmsUrl
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)("div", {
+      className: "wppo-feature-card__footer",
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_8__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        className: "wppo-button wppo-button--primary",
+        onClick: handleSave,
+        isLoading: saving,
+        label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Save LLMs.txt Settings', 'performance-optimisation'),
+        loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Saving…', 'performance-optimisation')
+      })
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (LlmsPanel);
+
+/***/ },
+
+/***/ "./src/components/PageSpeedPanel.js"
+/*!******************************************!*\
+  !*** ./src/components/PageSpeedPanel.js ***!
+  \******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _lib_useNotice__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../lib/useNotice */ "./src/lib/useNotice.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_StatusBadge__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./common/StatusBadge */ "./src/components/common/StatusBadge.js");
+/* harmony import */ var _common_NoticeBanner__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./common/NoticeBanner */ "./src/components/common/NoticeBanner.js");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_8___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__);
+/**
+ * PageSpeedPanel component.
+ *
+ * Provides a "Run PageSpeed Scan" button that queues a background
+ * Google PageSpeed Insights scan via POST /pagespeed_scan, then polls
+ * GET /pagespeed_results until the result is ready.
+ *
+ * Renders Lighthouse category scores, Core Web Vitals, and passes
+ * the PageSpeed suggestions up to the parent via onSuggestionsReady.
+ *
+ * Disabled when pagespeedApiKeyConfigured is false.
+ *
+ * @since 1.6.0
+ */
+
+
+
+
+
+
+
+
+
+
+
+// apiKeyConfigured is now derived inside the component for reactivity.
+
+/**
+ * Polling interval in milliseconds.
+ * PageSpeed API typically takes 15–60 seconds.
+ */
+
+const POLL_INTERVAL_MS = 5000;
+
+/**
+ * Maximum number of poll attempts before giving up (~5 minutes).
+ */
+const MAX_POLL_ATTEMPTS = 60;
+
+/**
+ * Score colour based on Lighthouse thresholds.
+ *
+ * @param {number} score 0–100
+ * @return {string} CSS class suffix.
+ */
+const scoreStatus = score => {
+  if (score >= 90) {
+    return 'good';
+  }
+  if (score >= 50) {
+    return 'needs_improvement';
+  }
+  return 'poor';
+};
+
+/**
+ * A single Lighthouse category score gauge.
+ *
+ * @param {Object} props
+ * @param {string} props.label Category label.
+ * @param {number} props.score 0–100 integer.
+ */
+const ScoreGauge = ({
+  label,
+  score
+}) => {
+  const status = scoreStatus(score);
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("div", {
+    className: `wppo-score-gauge wppo-score-gauge--${status}`,
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("div", {
+      className: "wppo-score-gauge__circle",
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("span", {
+        className: "wppo-score-gauge__value",
+        children: score
+      })
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("span", {
+      className: "wppo-score-gauge__label",
+      children: label
+    })]
+  });
+};
+
+/**
+ * A single Core Web Vital row.
+ *
+ * @param {Object} props
+ * @param {string} props.label        Metric label.
+ * @param {string} props.displayValue Formatted value from Lighthouse.
+ * @param {number} props.score        0.0–1.0 Lighthouse score.
+ */
+const VitalRow = ({
+  label,
+  displayValue,
+  score
+}) => {
+  let status = null;
+  if (score !== null) {
+    if (score >= 0.9) {
+      status = 'good';
+    } else if (score >= 0.5) {
+      status = 'needs_improvement';
+    } else {
+      status = 'poor';
+    }
+  }
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("tr", {
+    className: "wppo-vitals-table__row",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("td", {
+      className: "wppo-vitals-table__label",
+      children: label
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("td", {
+      className: "wppo-vitals-table__value",
+      children: displayValue ?? '—'
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("td", {
+      className: "wppo-vitals-table__status",
+      children: status && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(_common_StatusBadge__WEBPACK_IMPORTED_MODULE_6__["default"], {
+        status: status
+      })
+    })]
+  });
+};
+const PageSpeedPanel = ({
+  url,
+  onSuggestionsReady
+}) => {
+  const [scanning, setScanning] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [pending, setPending] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [result, setResult] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const {
+    notice,
+    notify,
+    dismiss
+  } = (0,_lib_useNotice__WEBPACK_IMPORTED_MODULE_4__["default"])();
+  const [strategy, setStrategy] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)('mobile');
+  const pollRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const pollCountRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(0);
+  const submittingRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(false);
+  const stopPolling = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    if (pollRef.current) {
+      clearTimeout(pollRef.current);
+      pollRef.current = null;
+    }
+    pollCountRef.current = 0;
+  }, []);
+  const isMounted = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(true);
+
+  // Component lifecycle and polling cleanup.
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+      stopPolling();
+    };
+  }, [stopPolling]);
+  const apiKeyConfigured = typeof wppoSettings !== 'undefined' ? wppoSettings.performance_audit?.pagespeedApiKeyConfigured ?? false : false;
+  const pollForResults = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)((scanUrl, scanStrategy) => {
+    const poll = async () => {
+      pollCountRef.current += 1;
+      if (pollCountRef.current > MAX_POLL_ATTEMPTS) {
+        stopPolling();
+        setPending(false);
+        setScanning(false);
+        notify({
+          type: 'error',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('PageSpeed scan timed out. Please try again.', 'performance-optimisation')
+        });
+        return;
+      }
+      try {
+        const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__.getPagespeedResults)(scanUrl, scanStrategy);
+        if (!response.success) {
+          stopPolling();
+          setPending(false);
+          setScanning(false);
+          notify({
+            type: 'error',
+            message: response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('PageSpeed scan failed. Please try again.', 'performance-optimisation')
+          });
+          return;
+        }
+        if (response.data?.status === 'not_ready') {
+          if (isMounted.current) {
+            pollRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+          }
+          return;
+        }
+        if (isMounted.current) {
+          stopPolling();
+          setPending(false);
+          setScanning(false);
+          setResult(response.data);
+          if (onSuggestionsReady && response.data?.suggestions) {
+            onSuggestionsReady(response.data.suggestions);
+          }
+        }
+      } catch (err) {
+        stopPolling();
+        setPending(false);
+        setScanning(false);
+        notify({
+          type: 'error',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('PageSpeed scan failed.', 'performance-optimisation')
+        });
+        console.error('PageSpeed poll error:', err);
+      }
+    };
+    pollRef.current = setTimeout(poll, POLL_INTERVAL_MS);
+  }, [stopPolling, onSuggestionsReady, notify]);
+  const handleScan = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(async () => {
+    if (!url || scanning || pending || submittingRef.current) {
+      return;
+    }
+    submittingRef.current = true;
+    stopPolling();
+    setScanning(true);
+    setPending(false);
+    setResult(null);
+    dismiss();
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__.queuePagespeedScan)(url, strategy);
+      if (!response.success) {
+        setScanning(false);
+        submittingRef.current = false;
+        notify({
+          type: 'error',
+          message: response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('PageSpeed scan failed. Please try again.', 'performance-optimisation')
+        });
+        return;
+      }
+
+      // Job queued — start polling.
+      setPending(true);
+      submittingRef.current = false;
+      pollForResults(url, strategy);
+    } catch (err) {
+      setScanning(false);
+      submittingRef.current = false;
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('PageSpeed scan failed.', 'performance-optimisation')
+      });
+      console.error('PageSpeed scan error:', err);
+    }
+  }, [url, strategy, stopPolling, pollForResults, scanning, pending, notify, dismiss]);
+  const vitalsLabels = {
+    fcp: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('First Contentful Paint', 'performance-optimisation'),
+    lcp: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Largest Contentful Paint', 'performance-optimisation'),
+    tbt: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Total Blocking Time', 'performance-optimisation'),
+    cls: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Cumulative Layout Shift', 'performance-optimisation'),
+    speed_index: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Speed Index', 'performance-optimisation'),
+    tti: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Time to Interactive', 'performance-optimisation')
+  };
+  const categoryLabels = {
+    performance: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Performance', 'performance-optimisation'),
+    accessibility: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Accessibility', 'performance-optimisation'),
+    best_practices: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Best Practices', 'performance-optimisation'),
+    seo: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('SEO', 'performance-optimisation')
+  };
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('PageSpeed Insights', 'performance-optimisation'),
+    children: [!apiKeyConfigured && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("div", {
+      className: "wppo-notice wppo-notice--warning",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faExclamationCircle,
+        className: "wppo-mr-8"
+      }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('PageSpeed API key is not configured. Add it in Settings.', 'performance-optimisation')]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("div", {
+      className: "wppo-pagespeed-controls",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("div", {
+        className: "wppo-pagespeed-strategy",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("button", {
+          type: "button",
+          className: `wppo-strategy-btn ${strategy === 'mobile' ? 'wppo-strategy-btn--active' : ''}`,
+          onClick: () => setStrategy('mobile'),
+          disabled: scanning || pending,
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+            icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faMobileAlt
+          }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Mobile', 'performance-optimisation')]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("button", {
+          type: "button",
+          className: `wppo-strategy-btn ${strategy === 'desktop' ? 'wppo-strategy-btn--active' : ''}`,
+          onClick: () => setStrategy('desktop'),
+          disabled: scanning || pending,
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+            icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faDesktop
+          }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Desktop', 'performance-optimisation')]
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("button", {
+        type: "button",
+        className: "wppo-button wppo-button--primary",
+        onClick: handleScan,
+        disabled: !apiKeyConfigured || scanning || pending,
+        children: scanning || pending ? /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.Fragment, {
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+            icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faSpinner,
+            spin: true,
+            className: "wppo-mr-8"
+          }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Scanning…', 'performance-optimisation')]
+        }) : /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.Fragment, {
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+            icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faTachometerAlt,
+            className: "wppo-mr-8"
+          }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Run PageSpeed Scan', 'performance-optimisation')]
+        })
+      })]
+    }), pending && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("div", {
+      className: "wppo-notice wppo-notice--info",
+      role: "alert",
+      "aria-live": "polite",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faSpinner,
+        spin: true,
+        className: "wppo-mr-8"
+      }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('PageSpeed scan is running in the background. Results will appear shortly.', 'performance-optimisation')]
+    }), notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(_common_NoticeBanner__WEBPACK_IMPORTED_MODULE_7__["default"], {
+      type: notice.type,
+      message: notice.message
+    }), result && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("div", {
+      className: "wppo-pagespeed-results",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("div", {
+        className: "wppo-score-gauges",
+        children: Object.entries(result.scores ?? {}).map(([key, score]) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(ScoreGauge, {
+          label: categoryLabels[key] ?? key,
+          score: score
+        }, key))
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("table", {
+        className: "wppo-vitals-table",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("thead", {
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("tr", {
+            children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("th", {
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Metric', 'performance-optimisation')
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("th", {
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Value', 'performance-optimisation')
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("th", {
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Status', 'performance-optimisation')
+            })]
+          })
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)("tbody", {
+          children: Object.entries(result.vitals ?? {}).map(([key, vital]) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(VitalRow, {
+            label: vitalsLabels[key] ?? key,
+            displayValue: vital.display_value,
+            score: vital.score
+          }, key))
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsxs)("p", {
+        className: "wppo-pagespeed-meta",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_9__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faCheckCircle,
+          className: "wppo-pagespeed-meta__icon"
+        }), (result.strategy ?? strategy).toLowerCase() === 'desktop' ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Desktop', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_8__.__)('Mobile', 'performance-optimisation'), ' · ', result.fetched_at]
+      })]
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (PageSpeedPanel);
+
+/***/ },
+
+/***/ "./src/components/PerformanceAudit.js"
+/*!********************************************!*\
+  !*** ./src/components/PerformanceAudit.js ***!
+  \********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _lib_useNotice__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../lib/useNotice */ "./src/lib/useNotice.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_StatusBadge__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./common/StatusBadge */ "./src/components/common/StatusBadge.js");
+/* harmony import */ var _common_Tooltip__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./common/Tooltip */ "./src/components/common/Tooltip.js");
+/* harmony import */ var _common_SwitchField__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./common/SwitchField */ "./src/components/common/SwitchField.js");
+/* harmony import */ var _common_NoticeBanner__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./common/NoticeBanner */ "./src/components/common/NoticeBanner.js");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_10___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__);
+/**
+ * PerformanceAudit component.
+ *
+ * Provides a modern URL scan bar and detailed results categorized into
+ * user-friendly metrics and advanced developer details.
+ *
+ * @since 1.5.0
+ */
+
+
+
+
+
+
+
+
+
+
+
+
+
+/**
+ * Metric definitions with descriptions for tooltips.
+ *
+ * Values are functions so they can be translated at render time.
+ */
+
+const METRIC_INFO = {
+  load_time: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The total time taken for the page to fully load in the browser.', 'performance-optimisation'),
+  ttfb: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Time to First Byte. The time it takes for the server to send the first byte of data.', 'performance-optimisation'),
+  dns: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The time taken to resolve the domain name to an IP address.', 'performance-optimisation'),
+  connect: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The time taken to establish a TCP connection with the server.', 'performance-optimisation'),
+  ssl: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The time taken to complete the SSL/TLS handshake for secure connections.', 'performance-optimisation'),
+  page_size: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The total weight of the page including CSS, JS, and Images.', 'performance-optimisation'),
+  assets: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The total number of external resources loaded by the page.', 'performance-optimisation'),
+  compression: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Whether the server uses Gzip or Brotli to compress text assets.', 'performance-optimisation'),
+  cache_control: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Whether the server instructs the browser to cache assets for a long duration.', 'performance-optimisation'),
+  modern_images: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The percentage of images on the page that use modern formats like WebP or AVIF.', 'performance-optimisation'),
+  alt_text: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Whether all images have descriptive alt attributes for accessibility.', 'performance-optimisation'),
+  dom_size: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The total number of HTML elements on the page. High numbers (> 1,500) can slow down rendering.', 'performance-optimisation'),
+  unminified: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The number of CSS and JS files that are not minified (lack .min in filename).', 'performance-optimisation'),
+  third_party: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('The number of scripts loaded from external domains (e.g., Google, Facebook).', 'performance-optimisation'),
+  server_wait: () => (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Server processing time. The time taken by the server to process the request before sending data.', 'performance-optimisation')
+};
+
+/**
+ * Derive a status string from a numeric value and thresholds.
+ *
+ * @param {number} value The metric value.
+ * @param {number} good  Upper bound for 'good'.
+ * @param {number} poor  Lower bound for 'poor'.
+ * @return {string} Status string.
+ */
+const numericStatus = (value, good, poor) => {
+  if (value <= good) {
+    return 'good';
+  }
+  if (value <= poor) {
+    return 'needs_improvement';
+  }
+  return 'poor';
+};
+
+/**
+ * Derive a status string from a boolean pass/fail value.
+ *
+ * @param {boolean} passing Whether the check passed.
+ * @return {string} 'good' or 'poor'.
+ */
+const boolStatus = passing => passing ? 'good' : 'poor';
+
+/**
+ * Format bytes into a human-readable string.
+ *
+ * @param {number} bytes Raw byte count.
+ * @return {string} Formatted size string.
+ */
+const formatBytes = bytes => {
+  if (!bytes || bytes === 0) {
+    return '0 B';
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
+
+/**
+ * A single row in the results table with optional tooltip.
+ *
+ * @param {Object} props
+ * @param {string} props.label        Row label.
+ * @param {string} props.value        Row value.
+ * @param {string} [props.status]     Optional status badge.
+ * @param {string} [props.tooltipKey] Key into METRIC_INFO for tooltip text.
+ */
+const ResultRow = ({
+  label,
+  value,
+  status,
+  tooltipKey
+}) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("tr", {
+  className: "wppo-audit-table__row",
+  children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("td", {
+    className: "wppo-audit-table__label",
+    children: [label, tooltipKey && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_Tooltip__WEBPACK_IMPORTED_MODULE_7__["default"], {
+      content: METRIC_INFO[tooltipKey]?.()
+    })]
+  }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("td", {
+    className: "wppo-audit-table__value",
+    children: value
+  }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("td", {
+    className: "wppo-audit-table__status",
+    children: status && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_StatusBadge__WEBPACK_IMPORTED_MODULE_6__["default"], {
+      status: status
+    })
+  })]
+});
+
+/**
+ * A section header row in the table.
+ *
+ * @param {Object} props
+ * @param {string} props.title  Section title.
+ * @param {Object} [props.icon] FontAwesome icon definition.
+ */
+const AuditSection = ({
+  title,
+  icon
+}) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("tr", {
+  className: "wppo-audit-section-header",
+  children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("td", {
+    colSpan: "3",
+    children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+      className: "wppo-audit-section-header__inner",
+      children: [icon && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+        icon: icon
+      }), title]
+    })
+  })
+});
+
+/**
+ * Top-level overview cards showing the four key metrics at a glance.
+ *
+ * @param {Object} props
+ * @param {Object} props.result Scan result from the REST API.
+ */
+const MetricOverview = ({
+  result
+}) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+  className: "wppo-audit-overview",
+  children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+    className: "wppo-audit-overview-card",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+      className: "wppo-audit-overview-card__label",
+      children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Load Time', 'performance-optimisation'), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_Tooltip__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        content: METRIC_INFO.load_time()
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("span", {
+      className: "wppo-audit-overview-card__value",
+      children: [result.load_time, " s"]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("div", {
+      className: "wppo-audit-overview-card__status",
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_StatusBadge__WEBPACK_IMPORTED_MODULE_6__["default"], {
+        status: numericStatus(result.load_time, 2.5, 4)
+      })
+    })]
+  }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+    className: "wppo-audit-overview-card",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+      className: "wppo-audit-overview-card__label",
+      children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('TTFB', 'performance-optimisation'), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_Tooltip__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        content: METRIC_INFO.ttfb()
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("span", {
+      className: "wppo-audit-overview-card__value",
+      children: [result.ttfb, " ms"]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("div", {
+      className: "wppo-audit-overview-card__status",
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_StatusBadge__WEBPACK_IMPORTED_MODULE_6__["default"], {
+        status: numericStatus(result.ttfb, 200, 500)
+      })
+    })]
+  }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+    className: "wppo-audit-overview-card",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+      className: "wppo-audit-overview-card__label",
+      children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Page Size', 'performance-optimisation'), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_Tooltip__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        content: METRIC_INFO.page_size()
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("span", {
+      className: "wppo-audit-overview-card__value",
+      children: formatBytes(result.total_size)
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("div", {
+      className: "wppo-audit-overview-card__status",
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_StatusBadge__WEBPACK_IMPORTED_MODULE_6__["default"], {
+        status: numericStatus(result.total_size / 1024, 500, 1000)
+      })
+    })]
+  }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+    className: "wppo-audit-overview-card",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+      className: "wppo-audit-overview-card__label",
+      children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Total Assets', 'performance-optimisation'), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_Tooltip__WEBPACK_IMPORTED_MODULE_7__["default"], {
+        content: METRIC_INFO.assets()
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("span", {
+      className: "wppo-audit-overview-card__value",
+      children: result.css_count + result.js_count + result.media_count
+    })]
+  })]
+});
+const PerformanceAudit = ({
+  onSuggestionsReady,
+  onUrlChange
+}) => {
+  const homeUrl = typeof wppoSettings !== 'undefined' ? wppoSettings.performance_audit?.homeUrl ?? '' : '';
+  const [url, setUrl] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(homeUrl);
+  const [scanning, setScanning] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [result, setResult] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const [devMode, setDevMode] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const {
+    notice,
+    notify,
+    dismiss
+  } = (0,_lib_useNotice__WEBPACK_IMPORTED_MODULE_4__["default"])();
+  const submittingRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(false);
+  const abortControllerRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+  const handleDevModeToggle = e => {
+    setDevMode(e.target.checked);
+  };
+  const handleScan = async (e, force = false) => {
+    if (scanning || submittingRef.current) {
+      return;
+    }
+    submittingRef.current = true;
+    if (e) {
+      e.preventDefault();
+    }
+    setScanning(true);
+    dismiss();
+    setResult(null);
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    const abortController = abortControllerRef.current;
+    let scanResult = null;
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__.runPerformanceScan)(url, force, abortController.signal);
+      if (!abortController.signal.aborted && response.success && response.data) {
+        scanResult = response.data;
+        setResult(scanResult);
+
+        // Phase 2 — notify parent of the scanned URL so PageSpeedPanel
+        // can use the same URL without the user having to re-enter it.
+        if (onUrlChange) {
+          onUrlChange(url);
+        }
+      } else if (!abortController.signal.aborted) {
+        notify({
+          type: 'error',
+          message: response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Scan failed. Please try again.', 'performance-optimisation')
+        });
+      }
+    } catch (err) {
+      if (abortController.signal.aborted) {
+        return;
+      }
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Scan failed. Please try again.', 'performance-optimisation')
+      });
+      console.error('Performance scan error:', err);
+    } finally {
+      submittingRef.current = false;
+      setScanning(false);
+    }
+
+    // Phase 2 — fetch telemetry-based suggestions after scan completes.
+    if (onSuggestionsReady && scanResult) {
+      try {
+        const sugResp = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__.fetchSuggestions)(url, abortController.signal);
+        if (!abortController.signal.aborted && sugResp.success && sugResp.data?.suggestions) {
+          onSuggestionsReady(sugResp.data.suggestions);
+        }
+      } catch (sugErr) {
+        if (!abortController.signal.aborted) {
+          console.warn('Could not fetch suggestions:', sugErr);
+        }
+      }
+    }
+  };
+  const setHomeUrl = () => {
+    setUrl(homeUrl);
+  };
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Performance Audit', 'performance-optimisation'),
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("form", {
+      className: "wppo-audit-controls",
+      onSubmit: handleScan,
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("div", {
+        className: "wppo-audit-controls__icon",
+        children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faSearch
+        })
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("input", {
+        id: "wppo-audit-url",
+        type: "url",
+        className: "wppo-audit-controls__input",
+        value: url,
+        onChange: e => setUrl(e.target.value),
+        placeholder: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('https://example.com', 'performance-optimisation'),
+        required: true,
+        "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('URL to Audit', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+        className: "wppo-audit-controls__actions",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("button", {
+          type: "button",
+          className: "wppo-button wppo-button--ghost",
+          onClick: setHomeUrl,
+          title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Use Home URL', 'performance-optimisation'),
+          "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Use Home URL', 'performance-optimisation'),
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+            icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faGlobe
+          })
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("button", {
+          type: "submit",
+          className: "wppo-button wppo-button--primary",
+          disabled: scanning,
+          children: scanning ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Scanning…', 'performance-optimisation') : /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.Fragment, {
+            children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+              icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faSearch,
+              className: "wppo-mr-8"
+            }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Run Scan', 'performance-optimisation')]
+          })
+        })]
+      })]
+    }), notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_NoticeBanner__WEBPACK_IMPORTED_MODULE_9__["default"], {
+      type: notice.type,
+      message: notice.message
+    }), result && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+      className: "wppo-audit-results",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+        className: "wppo-audit-meta",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+          className: "wppo-audit-meta__title",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+            icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faChartBar,
+            className: "wppo-mr-8"
+          }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Scan Results', 'performance-optimisation')]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("div", {
+          className: "wppo-audit-meta__toggle",
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_common_SwitchField__WEBPACK_IMPORTED_MODULE_8__["default"], {
+            checked: devMode,
+            onChange: handleDevModeToggle,
+            name: "devMode",
+            label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Developer Details', 'performance-optimisation'),
+            showLabel: false
+          })
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(MetricOverview, {
+        result: result
+      }), result.is_cached && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+        className: "wppo-notice wppo-notice--info wppo-audit-cached-notice",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("span", {
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+            icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faLightbulb,
+            className: "wppo-mr-8"
+          }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Displaying cached results from the last hour.', 'performance-optimisation')]
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("button", {
+          type: "button",
+          className: "wppo-button wppo-button--ghost wppo-button--sm",
+          onClick: e => handleScan(e, true),
+          disabled: scanning,
+          "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Scan Fresh Data for Performance Audit', 'performance-optimisation'),
+          children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Scan Fresh Data', 'performance-optimisation')
+        })]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("table", {
+        className: "wppo-audit-table",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("thead", {
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("tr", {
+            children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("th", {
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Metric', 'performance-optimisation')
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("th", {
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Value', 'performance-optimisation')
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("th", {
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Status', 'performance-optimisation')
+            })]
+          })
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("tbody", {
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(AuditSection, {
+            title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Optimisations', 'performance-optimisation'),
+            icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faCogs
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+            label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Gzip/Brotli Compression', 'performance-optimisation'),
+            value: result.compression_value && result.compression_value !== 'none' ? result.compression_value : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Disabled', 'performance-optimisation'),
+            status: boolStatus(result.gzip_brotli_compression),
+            tooltipKey: "compression"
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+            label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Cache-Control', 'performance-optimisation'),
+            value: result.cache_control_value && result.cache_control_value !== 'none' ? result.cache_control_value : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('None', 'performance-optimisation'),
+            status: boolStatus(result.cache_control_headers),
+            tooltipKey: "cache_control"
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+            label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Modern Formats', 'performance-optimisation'),
+            value: `${Number(result.uses_modern_image_formats || 0).toFixed(1)}%`,
+            status: numericStatus(100 - (parseFloat(result.uses_modern_image_formats) || 0), 20, 50),
+            tooltipKey: "modern_images"
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+            label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Image Alt Attributes', 'performance-optimisation'),
+            value: result.image_alt_attributes ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('All images have alt text', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Some images missing alt text', 'performance-optimisation'),
+            status: boolStatus(result.image_alt_attributes),
+            tooltipKey: "alt_text"
+          }), devMode && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.Fragment, {
+            children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(AuditSection, {
+              title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Advanced Timings', 'performance-optimisation'),
+              icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faTerminal
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('DNS Lookup', 'performance-optimisation'),
+              value: `${result.dns_lookup_time} ms`,
+              tooltipKey: "dns"
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('TCP Connection', 'performance-optimisation'),
+              value: `${result.connect_time} ms`,
+              tooltipKey: "connect"
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('SSL Handshake', 'performance-optimisation'),
+              value: `${result.ssl_time} ms`,
+              tooltipKey: "ssl"
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('True TTFB', 'performance-optimisation'),
+              value: `${result.ttfb} ms`,
+              tooltipKey: "ttfb"
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Server Processing', 'performance-optimisation'),
+              value: `${result.server_wait_time} ms`,
+              tooltipKey: "server_wait"
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(AuditSection, {
+              title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Asset Breakdown', 'performance-optimisation'),
+              icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faChartBar
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('CSS Files', 'performance-optimisation'),
+              value: `${result.css_count} (${formatBytes(result.css_total_size)})`
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('JS Files', 'performance-optimisation'),
+              value: `${result.js_count} (${formatBytes(result.js_total_size)})`
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Total Images', 'performance-optimisation'),
+              value: `${result.media_count} (${formatBytes(result.media_total_size)})`
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Lazy-Loaded', 'performance-optimisation'),
+              value: result.lazy_image_count
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Eager-Loaded', 'performance-optimisation'),
+              value: result.eager_image_count
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Total DOM Nodes', 'performance-optimisation'),
+              value: result.dom_size,
+              tooltipKey: "dom_size"
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Unminified Assets', 'performance-optimisation'),
+              value: result.unminified_assets_count,
+              tooltipKey: "unminified"
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Third-Party Scripts', 'performance-optimisation'),
+              value: result.third_party_scripts_count,
+              tooltipKey: "third_party"
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(AuditSection, {
+              title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Environment', 'performance-optimisation'),
+              icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faGlobe
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Page URL', 'performance-optimisation'),
+              value: result.page_url
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Scan Type', 'performance-optimisation'),
+              value: result.scan_type
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('HTTPS', 'performance-optimisation'),
+              value: result.uses_https ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Enabled', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Disabled', 'performance-optimisation'),
+              status: boolStatus(result.uses_https)
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(ResultRow, {
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('robots.txt', 'performance-optimisation'),
+              value: result.robots_txt_exists ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Exists', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Missing', 'performance-optimisation'),
+              status: boolStatus(result.robots_txt_exists)
+            })]
+          })]
+        })]
+      }), !devMode && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("div", {
+        className: "wppo-notice wppo-notice--info wppo-mt-24",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faLightbulb,
+          className: "wppo-mr-8"
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsxs)("span", {
+          children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Enable', 'performance-optimisation'), ' ', /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_11__.jsx)("strong", {
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('Developer Details', 'performance-optimisation')
+          }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_10__.__)('for granular network timings and environment info.', 'performance-optimisation')]
+        })]
+      })]
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (PerformanceAudit);
+
+/***/ },
+
+/***/ "./src/components/RecentActivityCard.js"
+/*!**********************************************!*\
+  !*** ./src/components/RecentActivityCard.js ***!
+  \**********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__);
+/**
+ * RecentActivityCard component.
+ *
+ * Shows the 5 most recent optimization activities on the Dashboard.
+ * The "View Full Log" button navigates to the Tools tab where the
+ * complete paginated activity log lives.
+ *
+ * @since 1.5.0
+ */
+
+
+
+
+
+
+
+const RecentActivityCard = ({
+  activities,
+  onNavigate
+}) => {
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Recent Optimisation Activity', 'performance-optimisation'),
+    icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__.faHistory
+    }),
+    footer: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("button", {
+      type: "button",
+      className: "wppo-button wppo-button--secondary",
+      onClick: () => onNavigate('tools'),
+      "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('View Full Optimisation Activity Log', 'performance-optimisation'),
+      children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('View Full Log', 'performance-optimisation'), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__.faArrowRight
+      })]
+    }),
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("p", {
+      className: "wppo-text-muted wppo-text-small wppo-mb-16",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('The 5 most recent actions performed by the plugin. Open the Tools tab for the complete paginated log.', 'performance-optimisation')
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("div", {
+      className: "wppo-activity-wrapper",
+      children: activities?.length ? /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("ul", {
+        className: "wppo-activity-list",
+        children: activities.slice(0, 5).map(activity => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("li", {
+          children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("span", {
+            className: "wppo-activity-text",
+            children: activity.activity
+          })
+        }, activity.id))
+      }) : /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("div", {
+        className: "wppo-empty-state",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('No optimisation activity recorded yet.', 'performance-optimisation')
+      })
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ((0,_wordpress_element__WEBPACK_IMPORTED_MODULE_1__.memo)(RecentActivityCard));
+
+/***/ },
+
+/***/ "./src/components/SuggestionsPanel.js"
+/*!********************************************!*\
+  !*** ./src/components/SuggestionsPanel.js ***!
+  \********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _common_StatusBadge__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./common/StatusBadge */ "./src/components/common/StatusBadge.js");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__);
+/**
+ * SuggestionsPanel component.
+ *
+ * Renders one card per suggestion returned by the Suggestion_Engine.
+ * Cards with 'poor' or 'needs_improvement' status show a "Fix It" button
+ * that navigates the user directly to the relevant WPPO tab.
+ * Cards with 'good' status show a passing indicator instead.
+ *
+ * Sits inside the Dashboard tab, directly below <PerformanceAudit />,
+ * so the user sees diagnosis and remedy on the same screen.
+ *
+ * @since 1.6.0
+ */
+
+
+
+
+
+
+
+/**
+ * Maps fix_action values to WPPO sidebar tab names.
+ * Must stay in sync with App.js sidebarItems names.
+ *
+ * @type {Object.<string, string>}
+ */
+
+const FIX_ACTION_TAB_MAP = {
+  open_object_cache_tab: 'objectCache',
+  open_image_optimization_tab: 'imageOptimization',
+  open_file_optimization_tab: 'fileOptimization',
+  open_ccss_settings: 'fileOptimization',
+  enable_server_rules: 'fileOptimization',
+  open_preload_tab: 'preload',
+  no_action_required: null
+};
+
+/**
+ * Status icon for a suggestion card.
+ *
+ * @param {Object} props
+ * @param {string} props.status 'good' | 'needs_improvement' | 'poor'
+ */
+const SuggestionIcon = ({
+  status
+}) => {
+  if (status === 'good') {
+    return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faCheckCircle,
+      className: "wppo-suggestion-icon wppo-suggestion-icon--good"
+    });
+  }
+  if (status === 'needs_improvement') {
+    return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faExclamationTriangle,
+      className: "wppo-suggestion-icon wppo-suggestion-icon--warning"
+    });
+  }
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+    icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faTimesCircle,
+    className: "wppo-suggestion-icon wppo-suggestion-icon--poor"
+  });
+};
+
+/**
+ * Format a suggestion value for display.
+ *
+ * @param {*}      value Metric value.
+ * @param {string} unit  Unit label.
+ * @return {string} Formatted display string.
+ */
+const formatValue = (value, unit) => {
+  if (unit === 'boolean') {
+    return value === 'pass' ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Passing', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Failing', 'performance-optimisation');
+  }
+  if (unit === 'header') {
+    if (value === 'none') {
+      return (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('None', 'performance-optimisation');
+    }
+    // Always show Cache-Control value as-is, never translate the header text.
+    return value;
+  }
+  if (unit === 'encoding') {
+    if (value === 'none') {
+      return (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('None', 'performance-optimisation');
+    }
+    // Map raw content-encoding values to human-readable form.
+    const encodings = {
+      br: 'Brotli',
+      gzip: 'Gzip',
+      deflate: 'Deflate',
+      zstd: 'Zstd'
+    };
+    return encodings[String(value).toLowerCase()] || value;
+  }
+  if (unit === 'score') {
+    return `${Math.round(parseFloat(value) * 100)} / 100`;
+  }
+  if (unit === '%') {
+    return `${Number(value).toFixed(1)}%`;
+  }
+  if (unit === 's') {
+    return `${Number(value).toFixed(2)}s`;
+  }
+  if (unit === 'ms') {
+    return `${Math.round(value)}ms`;
+  }
+  return `${value} ${unit}`;
+};
+
+/**
+ * A single suggestion card.
+ *
+ * @param {Object}   props
+ * @param {Object}   props.suggestion Suggestion object from Suggestion_Engine.
+ * @param {Function} props.onNavigate Callback to switch the active WPPO tab.
+ */
+const SuggestionCard = ({
+  suggestion,
+  onNavigate
+}) => {
+  const {
+    value,
+    unit,
+    status,
+    description,
+    fix_action: fixAction
+  } = suggestion;
+  const targetTab = FIX_ACTION_TAB_MAP[fixAction] ?? null;
+  const canFix = status !== 'good' && targetTab !== null;
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+    className: `wppo-suggestion-card wppo-suggestion-card--${status}`,
+    role: "listitem",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+      className: "wppo-suggestion-card__header",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(SuggestionIcon, {
+        status: status
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("span", {
+        className: "wppo-suggestion-card__description",
+        children: description
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_common_StatusBadge__WEBPACK_IMPORTED_MODULE_3__["default"], {
+        status: status
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+      className: "wppo-suggestion-card__body",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("span", {
+        className: "wppo-suggestion-card__value",
+        children: formatValue(value, unit)
+      }), canFix && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("button", {
+        type: "button",
+        className: "wppo-button wppo-button--sm wppo-button--primary",
+        onClick: () => onNavigate(targetTab),
+        "aria-label": `${(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Fix It', 'performance-optimisation')}: ${description}`,
+        children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Fix It', 'performance-optimisation'), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faArrowRight,
+          className: "wppo-ml-6"
+        })]
+      }), !canFix && status === 'good' && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("span", {
+        className: "wppo-suggestion-card__passing",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faCheckCircle,
+          className: "wppo-mr-4"
+        }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Passing', 'performance-optimisation')]
+      })]
+    })]
+  });
+};
+
+/**
+ * SuggestionsPanel
+ *
+ * Renders the full suggestions list. Shown in the Dashboard tab directly
+ * below <PerformanceAudit /> after a scan completes.
+ *
+ * @param {Object}   props
+ * @param {Array}    props.suggestions Array of suggestion objects.
+ * @param {Function} props.onNavigate  Callback to switch the active WPPO tab.
+ */
+const SuggestionsPanel = ({
+  suggestions,
+  onNavigate
+}) => {
+  if (!suggestions || suggestions.length === 0) {
+    return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+      className: "wppo-suggestions-panel wppo-suggestions-panel--empty",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faCheckCircle,
+        className: "wppo-suggestions-panel__empty-icon"
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("p", {
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('No suggestions — your site looks great!', 'performance-optimisation')
+      })]
+    });
+  }
+  const issues = suggestions.filter(s => s.status !== 'good');
+  const passing = suggestions.filter(s => s.status === 'good');
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+    className: "wppo-suggestions-panel",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+      className: "wppo-suggestions-panel__header",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faLightbulb,
+        className: "wppo-mr-8"
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("h3", {
+        className: "wppo-suggestions-panel__title",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Suggestions', 'performance-optimisation')
+      }), issues.length > 0 && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("span", {
+        className: "wppo-suggestions-panel__badge",
+        children: issues.length
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)("p", {
+      className: "wppo-suggestions-panel__desc",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Based on your scan results, here are the recommended actions to improve performance.', 'performance-optimisation')
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsxs)("div", {
+      className: "wppo-suggestions-panel__list",
+      role: "list",
+      "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_4__.__)('Suggestions', 'performance-optimisation'),
+      children: [issues.map(suggestion => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(SuggestionCard, {
+        suggestion: suggestion,
+        onNavigate: onNavigate
+      }, suggestion.metric)), passing.map(suggestion => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_5__.jsx)(SuggestionCard, {
+        suggestion: suggestion,
+        onNavigate: onNavigate
+      }, suggestion.metric))]
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ((0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.memo)(SuggestionsPanel));
+
+/***/ },
+
+/***/ "./src/components/SystemInfo.js"
+/*!**************************************!*\
+  !*** ./src/components/SystemInfo.js ***!
+  \**************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _lib_useNotice__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../lib/useNotice */ "./src/lib/useNotice.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./common/LoadingSubmitButton */ "./src/components/common/LoadingSubmitButton.js");
+/* harmony import */ var _common_NoticeBanner__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/NoticeBanner */ "./src/components/common/NoticeBanner.js");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__);
+/**
+ * SystemInfo component.
+ *
+ * Renders server/PHP/WP environment details in a tabular layout.
+ * Data is fetched on-demand when the user clicks "Load System Info"
+ * rather than automatically on mount, to keep the Dashboard fast.
+ *
+ * @since 1.5.0
+ */
+
+
+
+
+
+
+
+
+
+/**
+ * A single key-value row in a system info table.
+ *
+ * @param {Object} props
+ * @param {string} props.label Row label.
+ * @param {*}      props.value Row value (null renders as '—').
+ */
+
+const InfoRow = ({
+  label,
+  value
+}) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsxs)("tr", {
+  className: "wppo-sysinfo-table__row",
+  children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("td", {
+    className: "wppo-sysinfo-table__label",
+    children: label
+  }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("td", {
+    className: "wppo-sysinfo-table__value",
+    children: value !== null && value !== undefined && value !== '' ? String(value) : '—'
+  })]
+});
+
+/**
+ * A labelled table of InfoRow items.
+ *
+ * @param {Object} props
+ * @param {string} props.title  Section heading.
+ * @param {Object} props.data   Key-value pairs to render.
+ * @param {Object} props.labels Optional map of data keys to display labels.
+ */
+const InfoTable = ({
+  title,
+  data,
+  labels = {}
+}) => {
+  if (!data) {
+    return null;
+  }
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsxs)("div", {
+    className: "wppo-sysinfo-section",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("h4", {
+      className: "wppo-sysinfo-section__title",
+      children: title
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("table", {
+      className: "wppo-sysinfo-table",
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("tbody", {
+        children: Object.entries(data).map(([key, value]) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(InfoRow, {
+          label: labels[key] || key,
+          value: value
+        }, key))
+      })
+    })]
+  });
+};
+const SystemInfo = () => {
+  const [info, setInfo] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const [loading, setLoading] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const [loaded, setLoaded] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const {
+    notice,
+    notify,
+    dismiss
+  } = (0,_lib_useNotice__WEBPACK_IMPORTED_MODULE_2__["default"])();
+  const handleLoad = async () => {
+    setLoading(true);
+    dismiss();
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_1__.fetchSystemInfo)();
+      if (response.success && response.data) {
+        setInfo(response.data);
+        setLoaded(true);
+      } else {
+        notify({
+          type: 'error',
+          message: response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Failed to fetch system info. Please try again.', 'performance-optimisation')
+        });
+      }
+    } catch (err) {
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Failed to fetch system info. Please try again.', 'performance-optimisation')
+      });
+      console.error('System info fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_3__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('System Info', 'performance-optimisation'),
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsxs)("div", {
+      className: `wppo-sysinfo-trigger ${loaded ? 'wppo-sysinfo-trigger--compact' : ''}`,
+      children: [!loaded && !notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("p", {
+        id: "wppo-sysinfo-desc",
+        className: "wppo-sysinfo-trigger__desc",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('View PHP, database, WordPress, and server environment details.', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_4__["default"], {
+        type: "button",
+        className: "wppo-button wppo-button--secondary",
+        onClick: handleLoad,
+        "aria-describedby": !loaded && !notice ? 'wppo-sysinfo-desc' : undefined,
+        isLoading: loading,
+        label: loaded ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Refresh', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Load System Info', 'performance-optimisation'),
+        loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Loading…', 'performance-optimisation')
+      })]
+    }), notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(_common_NoticeBanner__WEBPACK_IMPORTED_MODULE_5__["default"], {
+      type: notice.type,
+      message: notice.message
+    }), info && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsxs)("div", {
+      className: "wppo-sysinfo-grid",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(InfoTable, {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('PHP', 'performance-optimisation'),
+        data: info.php,
+        labels: {
+          version: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('PHP Version', 'performance-optimisation'),
+          sapi: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('SAPI', 'performance-optimisation'),
+          memory_limit: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Memory Limit', 'performance-optimisation'),
+          max_execution_time: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Max Execution Time', 'performance-optimisation'),
+          upload_max_filesize: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Upload Max Filesize', 'performance-optimisation'),
+          post_max_size: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Post Max Size', 'performance-optimisation'),
+          display_errors: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Display Errors', 'performance-optimisation'),
+          extensions_count: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Extensions Loaded', 'performance-optimisation')
+        }
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(InfoTable, {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Database', 'performance-optimisation'),
+        data: info.database,
+        labels: {
+          server_version: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('DB Version', 'performance-optimisation'),
+          extension: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Extension', 'performance-optimisation'),
+          client_version: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Client Version', 'performance-optimisation'),
+          max_connections: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Max Connections', 'performance-optimisation')
+        }
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(InfoTable, {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('WordPress', 'performance-optimisation'),
+        data: info.wordpress,
+        labels: {
+          version: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('WP Version', 'performance-optimisation'),
+          environment_type: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Environment', 'performance-optimisation'),
+          permalink_structure: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Permalink Structure', 'performance-optimisation'),
+          using_https: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('HTTPS', 'performance-optimisation'),
+          multisite: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Multisite', 'performance-optimisation')
+        }
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(InfoTable, {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Server', 'performance-optimisation'),
+        data: info.server,
+        labels: {
+          server_software: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Server Software', 'performance-optimisation'),
+          os: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Operating System', 'performance-optimisation'),
+          architecture: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Architecture', 'performance-optimisation')
+        }
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(InfoTable, {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Cache', 'performance-optimisation'),
+        data: {
+          object_cache_status: info.cache?.object_cache_status,
+          active_cache_plugin: info.cache?.active_cache_plugin,
+          peak_memory_usage: info.cache?.peak_memory_usage,
+          current_memory_usage: info.cache?.current_memory_usage
+        },
+        labels: {
+          object_cache_status: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Object Cache', 'performance-optimisation'),
+          active_cache_plugin: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Active Cache Plugin', 'performance-optimisation'),
+          peak_memory_usage: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Peak Memory', 'performance-optimisation'),
+          current_memory_usage: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Current Memory', 'performance-optimisation')
+        }
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(InfoTable, {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('OPCache', 'performance-optimisation'),
+        data: info.opcache,
+        labels: {
+          status: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Status', 'performance-optimisation'),
+          memory_usage: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Memory Usage', 'performance-optimisation'),
+          interned_strings: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Interned Strings', 'performance-optimisation'),
+          hit_rate: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Hit Rate', 'performance-optimisation'),
+          cache_full: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Cache Full', 'performance-optimisation'),
+          detail: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Detail', 'performance-optimisation')
+        }
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(InfoTable, {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Infrastructure', 'performance-optimisation'),
+        data: {
+          action_scheduler: info.infrastructure?.action_scheduler?.available ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Available', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Unavailable', 'performance-optimisation'),
+          pagespeed_api: info.infrastructure?.pagespeed_api?.configured ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Configured', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Not Configured', 'performance-optimisation')
+        },
+        labels: {
+          action_scheduler: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('Action Scheduler', 'performance-optimisation'),
+          pagespeed_api: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('PageSpeed Insights API', 'performance-optimisation')
+        }
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(InfoTable, {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_6__.__)('WP Constants', 'performance-optimisation'),
+        data: info.wp_constants
+      })]
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ((0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.memo)(SystemInfo));
+
+/***/ },
+
+/***/ "./src/components/WebVitalsRum.js"
+/*!****************************************!*\
+  !*** ./src/components/WebVitalsRum.js ***!
+  \****************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__);
+/**
+ * WebVitalsRum component.
+ *
+ * Renders aggregated real-user Core Web Vitals (LCP/INP/CLS/FCP/TTFB) collected
+ * from real visitors, grouped by day. Fetches GET /rum_data on mount.
+ *
+ * @since 2.18.0
+ */
+
+
+
+
+
+
+
+
+/**
+ * Aggregate all paths for a day into site-wide metric averages.
+ *
+ * @param {Object} day Aggregates keyed by path.
+ * @return {Object} Per-metric { n, avg }.
+ */
+
+const dayAverages = day => {
+  const totals = {};
+  for (const path of Object.values(day)) {
+    for (const [metric, bucket] of Object.entries(path)) {
+      if (!totals[metric]) {
+        totals[metric] = {
+          n: 0,
+          sum: 0
+        };
+      }
+      totals[metric].n += bucket.n;
+      totals[metric].sum += bucket.sum;
+    }
+  }
+  const averages = {};
+  for (const [metric, total] of Object.entries(totals)) {
+    averages[metric] = total.n ? total.sum / total.n : null;
+  }
+  return averages;
+};
+
+/**
+ * @return {Element} The RUM panel.
+ */
+const WebVitalsRum = () => {
+  const [data, setData] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)([]);
+  const [loading, setLoading] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(true);
+  const [error, setError] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const load = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_4__.apiCall)('rum_data', {}, 'GET');
+      if (response.success && response.data) {
+        const rows = Object.entries(response.data).sort(([a], [b]) => a.localeCompare(b)).map(([day, paths]) => ({
+          day,
+          ...dayAverages(paths)
+        })).slice(-14);
+        setData(rows);
+      } else {
+        setError(response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to load real-user data.', 'performance-optimisation'));
+      }
+    } catch (loadError) {
+      setError((0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to load real-user data.', 'performance-optimisation'));
+      console.error('Error fetching RUM data:', loadError);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    load();
+  }, [load]);
+  const fmtMs = value => value === null || value === undefined ? '—' : `${Math.round(value)} ms`;
+  const fmtCls = value => value === null || value === undefined ? '—' : value.toFixed(3);
+  let body;
+  if (error) {
+    body = /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted",
+      children: error
+    });
+  } else if (data.length === 0 && !loading) {
+    body = /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('No real-user data yet. Enable "Collect Real-user Web Vitals" in Tools and wait for visitors.', 'performance-optimisation')
+    });
+  } else {
+    body = /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("table", {
+      className: "wppo-rum-table wppo-table",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("thead", {
+        children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("tr", {
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("th", {
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Day', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("th", {
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('LCP', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("th", {
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('INP', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("th", {
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('CLS', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("th", {
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('FCP', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("th", {
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('TTFB', 'performance-optimisation')
+          })]
+        })
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("tbody", {
+        children: data.map(row => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("tr", {
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("td", {
+            children: row.day
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("td", {
+            children: fmtMs(row.lcp)
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("td", {
+            children: fmtMs(row.inp)
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("td", {
+            children: fmtCls(row.cls)
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("td", {
+            children: fmtMs(row.fcp)
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("td", {
+            children: fmtMs(row.ttfb)
+          })]
+        }, row.day))
+      })]
+    });
+  }
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Real-user Web Vitals', 'performance-optimisation'),
+    icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__.faUsers
+    }),
+    actions: loading && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__.faSpinner,
+      spin: true,
+      "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Loading…', 'performance-optimisation')
+    }),
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Aggregated Core Web Vitals from real visitors, per day (site-wide).', 'performance-optimisation')
+    }), body, data.length > 0 && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted wppo-text-small",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.sprintf)(/* translators: %d: number of sample days retained */
+      (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Showing up to %d days.', 'performance-optimisation'), 14)
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (WebVitalsRum);
+
+/***/ },
+
+/***/ "./src/components/WebVitalsTrends.js"
+/*!*******************************************!*\
+  !*** ./src/components/WebVitalsTrends.js ***!
+  \*******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__);
+/**
+ * WebVitalsTrends component.
+ *
+ * Renders historical PageSpeed performance scores as an inline SVG line chart
+ * with no external chart library. Fetches trend data from
+ * GET /web_vitals_trends on mount, scoped to the current audit URL.
+ *
+ * @since 2.14.0
+ */
+
+
+
+
+
+
+
+
+const SPARK_WIDTH = 640;
+const SPARK_HEIGHT = 160;
+const PAD_X = 10;
+const PAD_Y = 26;
+
+/**
+ * Builds an SVG polyline points string from a numeric series.
+ *
+ * @param {Array<number>} values Series of numeric values (0–100).
+ * @return {string} Points string for an SVG polyline.
+ */
+const buildPoints = values => {
+  if (!values || values.length < 1) {
+    return '';
+  }
+  const max = Math.max(...values, 100);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
+  const stepX = (SPARK_WIDTH - PAD_X * 2) / Math.max(values.length - 1, 1);
+  return values.map((value, index) => {
+    const x = PAD_X + index * stepX;
+    const y = SPARK_HEIGHT - PAD_Y - (value - min) / range * (SPARK_HEIGHT - PAD_Y * 2);
+    return `${x},${y.toFixed(1)}`;
+  }).join(' ');
+};
+
+/**
+ * Renders one strategy series (mobile or desktop).
+ *
+ * @param {Object} props
+ * @param {string} props.strategy 'mobile' or 'desktop'.
+ * @param {Object} props.trends   Trends object from the API.
+ */
+const TrendSeries = ({
+  strategy,
+  trends
+}) => {
+  const seriesKey = Object.keys(trends).find(key => key.endsWith(`_${strategy}`));
+  if (!seriesKey) {
+    return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted wppo-text-small wppo-mt-8",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Not enough trend data yet. Run PageSpeed scans over time or enable auto-rescan.', 'performance-optimisation')
+    });
+  }
+  const snapshots = trends[seriesKey] ?? [];
+  const values = snapshots.map(snap => snap.performance);
+  const last = snapshots.length > 0 ? snapshots[snapshots.length - 1].performance : null;
+  const points = buildPoints(values);
+  const limited = snapshots.length > 1;
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("div", {
+    className: "wppo-trend-series",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("div", {
+      className: "wppo-trend-series__header",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("span", {
+        className: "wppo-trend-series__label",
+        children: strategy === 'mobile' ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Mobile', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Desktop', 'performance-optimisation')
+      }), last !== null && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("span", {
+        className: "wppo-trend-series__latest",
+        children: [(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Latest score', 'performance-optimisation'), ': ', /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("strong", {
+          children: last
+        })]
+      })]
+    }), limited ? /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("svg", {
+      className: "wppo-trend-chart",
+      viewBox: `0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}`,
+      role: "img",
+      "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.sprintf)(/* translators: %s: strategy (mobile or desktop) */
+      (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('%s performance score trend chart', 'performance-optimisation'), strategy),
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("polyline", {
+        className: "wppo-trend-chart__line",
+        points: points,
+        strokeWidth: "2",
+        fill: "none"
+      })
+    }) : /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted wppo-text-small wppo-mt-8",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Not enough trend data yet. Run a few PageSpeed scans over time.', 'performance-optimisation')
+    })]
+  });
+};
+const WebVitalsTrends = ({
+  url = ''
+}) => {
+  const [trends, setTrends] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const [loading, setLoading] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(true);
+  const [error, setError] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const loadTrends = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(async () => {
+    if (!url) {
+      // Without a known URL the request would return every history and
+      // TrendSeries would mislabel them; show an explicit empty state.
+      setTrends(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_4__.fetchWebVitalsTrends)(url, '');
+      if (response.success) {
+        setTrends(response.data?.trends ?? {});
+      } else {
+        setError(response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to load trend data.', 'performance-optimisation'));
+      }
+    } catch (err) {
+      setError((0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to load trend data.', 'performance-optimisation'));
+      console.error('Web Vitals trends load error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [url]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    loadTrends();
+  }, [loadTrends]);
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_5__["default"], {
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Web Vitals Trends', 'performance-optimisation'),
+    children: [loading && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("p", {
+      className: "wppo-text-muted",
+      role: "status",
+      "aria-live": "polite",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__.faSpinner,
+        spin: true,
+        className: "wppo-mr-8"
+      }), (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Loading trends…', 'performance-optimisation')]
+    }), !loading && error && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("div", {
+      className: "wppo-notice wppo-notice--error",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__.faExclamationCircle,
+        className: "wppo-mr-8"
+      }), error]
+    }), !loading && !error && !url && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)("p", {
+      className: "wppo-text-muted",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enter a URL to view Web Vitals trend history.', 'performance-optimisation')
+    }), !loading && !error && url && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("div", {
+      className: "wppo-trend-layout",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsxs)("div", {
+        className: "wppo-trend-layout__title",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_2__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_3__.faChartLine,
+          className: "wppo-mr-8"
+        }), url]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)(TrendSeries, {
+        strategy: "mobile",
+        trends: trends ?? {}
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_6__.jsx)(TrendSeries, {
+        strategy: "desktop",
+        trends: trends ?? {}
+      })]
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (WebVitalsTrends);
+
+/***/ },
+
+/***/ "./src/components/WelcomePanel.js"
+/*!****************************************!*\
+  !*** ./src/components/WelcomePanel.js ***!
+  \****************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _lib_useNotice__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../lib/useNotice */ "./src/lib/useNotice.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./common/LoadingSubmitButton */ "./src/components/common/LoadingSubmitButton.js");
+/* harmony import */ var _common_NoticeBanner__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./common/NoticeBanner */ "./src/components/common/NoticeBanner.js");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__);
+
+
+
+
+
+
+
+
+const STEPS = [{
+  number: 1,
+  key: 'cache',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enable Page Caching', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Speed up your site with static HTML page caching — the single biggest performance win.', 'performance-optimisation'),
+  settings: {
+    tab: 'cache_settings',
+    payload: {
+      enableCache: true
+    }
+  },
+  isEnabled: () => wppoSettings?.settings?.cache_settings?.enableCache ?? false
+}, {
+  number: 2,
+  key: 'minify',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enable JS / CSS Minification', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Reduce file sizes by removing whitespace and comments from your CSS and JavaScript.', 'performance-optimisation'),
+  settings: {
+    tab: 'file_optimisation',
+    payload: {
+      minifyJS: true,
+      minifyCSS: true
+    }
+  },
+  isEnabled: () => (wppoSettings?.settings?.file_optimisation?.minifyJS ?? false) && (wppoSettings?.settings?.file_optimisation?.minifyCSS ?? false)
+}, {
+  number: 3,
+  key: 'lazyload',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enable Lazy Loading', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Defer off-screen images and videos so they only load when visitors scroll to them.', 'performance-optimisation'),
+  settings: {
+    tab: 'image_optimisation',
+    payload: {
+      lazyLoadImages: true
+    }
+  },
+  isEnabled: () => wppoSettings?.settings?.image_optimisation?.lazyLoadImages ?? false
+}];
+const WelcomePanel = () => {
+  const [visible, setVisible] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(wppoSettings?.show_welcome ?? false);
+  const [activatingStep, setActivatingStep] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const [dismissing, setDismissing] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const {
+    notice,
+    notify,
+    dismiss
+  } = (0,_lib_useNotice__WEBPACK_IMPORTED_MODULE_3__["default"])();
+  if (!visible) {
+    return null;
+  }
+  const handleStepAction = async step => {
+    setActivatingStep(step.key);
+    dismiss();
+    try {
+      const updateRes = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('update_settings', {
+        tab: step.settings.tab,
+        settings: step.settings.payload
+      });
+      const dismissRes = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('dismiss_welcome');
+      if (updateRes.success && dismissRes.success) {
+        setVisible(false);
+      } else {
+        notify({
+          type: 'error',
+          message: !updateRes.success && updateRes.message || !dismissRes.success && dismissRes.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to enable the feature.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      }
+    } catch (error) {
+      console.error('Welcome panel action failed:', error);
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to enable the feature.', 'performance-optimisation'),
+        durationMs: 5000
+      });
+    } finally {
+      setActivatingStep(null);
+    }
+  };
+  const handleDismiss = async () => {
+    setDismissing(true);
+    dismiss();
+    try {
+      const res = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_2__.apiCall)('dismiss_welcome');
+      if (res.success) {
+        setVisible(false);
+      } else {
+        notify({
+          type: 'error',
+          message: res.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to dismiss the welcome panel.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      }
+    } catch (error) {
+      console.error('Welcome dismiss failed:', error);
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Failed to dismiss the welcome panel.', 'performance-optimisation'),
+        durationMs: 5000
+      });
+    } finally {
+      setDismissing(false);
+    }
+  };
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsxs)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_4__["default"], {
+    className: "wppo-welcome-panel",
+    title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Welcome to Performance Optimisation', 'performance-optimisation'),
+    footer: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_5__["default"], {
+      type: "button",
+      className: "wppo-button wppo-button--secondary",
+      onClick: handleDismiss,
+      isLoading: dismissing,
+      label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Got it', 'performance-optimisation'),
+      loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Dismissing…', 'performance-optimisation')
+    }),
+    children: [notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(_common_NoticeBanner__WEBPACK_IMPORTED_MODULE_6__["default"], {
+      type: notice.type,
+      message: notice.message,
+      onDismiss: dismiss
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("p", {
+      className: "wppo-welcome-panel__intro",
+      children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Get started in 3 quick steps. Each toggle below activates a key performance feature — no page reload needed.', 'performance-optimisation')
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("div", {
+      className: "wppo-welcome-steps",
+      children: STEPS.map(step => {
+        const enabled = step.isEnabled();
+        return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsxs)("div", {
+          className: `wppo-welcome-step${enabled ? ' wppo-welcome-step--done' : ''}`,
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("span", {
+            className: "wppo-welcome-step__number",
+            children: enabled ? /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("svg", {
+              width: "16",
+              height: "16",
+              viewBox: "0 0 16 16",
+              fill: "none",
+              "aria-hidden": "true",
+              children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("path", {
+                d: "M13.3 4.3L6 11.6 2.7 8.3",
+                stroke: "currentColor",
+                strokeWidth: "2",
+                strokeLinecap: "round",
+                strokeLinejoin: "round"
+              })
+            }) : step.number
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsxs)("div", {
+            className: "wppo-welcome-step__content",
+            children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("strong", {
+              className: "wppo-welcome-step__label",
+              children: step.label
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("p", {
+              className: "wppo-welcome-step__desc",
+              children: step.description
+            })]
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("div", {
+            className: "wppo-welcome-step__action",
+            children: enabled ? /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)("span", {
+              className: "wppo-welcome-step__check",
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Active', 'performance-optimisation')
+            }) : /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_7__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_5__["default"], {
+              type: "button",
+              className: "wppo-button wppo-button--primary",
+              isLoading: activatingStep === step.key,
+              "aria-label": activatingStep === step.key ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.sprintf)(/* translators: %s: feature name */
+              (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enabling %s…', 'performance-optimisation'), step.label) : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.sprintf)(/* translators: %s: feature name */
+              (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enable %s', 'performance-optimisation'), step.label),
+              onClick: () => handleStepAction(step),
+              label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enable', 'performance-optimisation'),
+              loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_1__.__)('Enabling…', 'performance-optimisation')
+            })
+          })]
+        }, step.key);
+      })
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (WelcomePanel);
+
+/***/ },
+
+/***/ "./src/components/common/CheckboxOption.js"
+/*!*************************************************!*\
+  !*** ./src/components/common/CheckboxOption.js ***!
+  \*************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   CheckboxOption: () => (/* binding */ CheckboxOption),
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__);
+
+
+/**
+ * A reusable checkbox option component with optional description and nested settings.
+ *  * Improved for Premium Indigo Design System.
+ *
+ * @param {Object}               props                       Component props.
+ * @param {string}               props.label                 The checkbox label.
+ * @param {boolean}              props.checked               Whether the checkbox is checked.
+ * @param {Function}             props.onChange              Change handler for the checkbox.
+ * @param {string}               props.name                  Name attribute for the checkbox.
+ * @param {string}               [props.id]                  Optional ID for the checkbox.
+ * @param {string}               [props.textareaName]        Optional name for a nested textarea.
+ * @param {string}               [props.textareaPlaceholder] Optional placeholder for the textarea.
+ * @param {string}               [props.textareaValue]       Value for the nested textarea.
+ * @param {Function}             [props.onTextareaChange]    Change handler for the textarea.
+ * @param {string}               [props.description]         Optional description text.
+ * @param {import('react').Node} [props.children]            Additional child elements.
+ * @param {string}               [props.className]           Optional additional class names.
+ */
+
+const CheckboxOption = ({
+  label,
+  checked,
+  onChange,
+  name,
+  id: idProp,
+  textareaName,
+  textareaPlaceholder,
+  textareaValue,
+  onTextareaChange,
+  description,
+  children,
+  className = ''
+}) => {
+  const uid = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useId)();
+  const id = idProp ?? uid;
+  const descriptionId = description ? `desc-${id}` : undefined;
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsxs)("div", {
+    className: `wppo-checkbox-option ${checked ? 'wppo-is-checked' : ''} ${className}`.trim(),
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsxs)("label", {
+      htmlFor: id,
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("input", {
+        id: id,
+        type: "checkbox",
+        name: name,
+        checked: checked,
+        onChange: onChange,
+        "aria-describedby": descriptionId
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("span", {
+        className: "wppo-option-label-text",
+        children: label
+      })]
+    }), description && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("p", {
+      id: descriptionId,
+      className: "wppo-option-description",
+      children: description
+    }), checked && (textareaName || children) && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsxs)("div", {
+      className: "wppo-nested-content",
+      children: [textareaName && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("div", {
+        className: "wppo-field-group",
+        children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("textarea", {
+          className: "wppo-text-area-field",
+          placeholder: textareaPlaceholder || '',
+          "aria-label": textareaPlaceholder || label,
+          name: textareaName,
+          value: textareaValue,
+          onChange: onTextareaChange
+        })
+      }), children]
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (CheckboxOption);
+
+/***/ },
+
+/***/ "./src/components/common/ConfirmDialog.js"
+/*!************************************************!*\
+  !*** ./src/components/common/ConfirmDialog.js ***!
+  \************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__);
+
+
+
+
+
+/**
+ * A reusable confirmation dialog component for destructive actions.
+ *
+ * @param {Object}               props                Component props.
+ * @param {boolean}              props.isOpen         Whether the dialog is visible.
+ * @param {Function}             props.onConfirm      Callback fired on confirm.
+ * @param {Function}             props.onCancel       Callback fired on cancel or Escape.
+ * @param {string}               props.title          Dialog heading.
+ * @param {string}               props.message        Dialog body text.
+ * @param {string}               [props.confirmLabel] Label for the confirm button.
+ * @param {string}               [props.cancelLabel]  Label for the cancel button.
+ * @param {string}               [props.variant]      'warning' | 'danger' — controls confirm button style.
+ * @param {import('react').Node} [props.children]     Optional extra content (e.g., a detail list).
+ */
+
+const ConfirmDialog = ({
+  isOpen,
+  onConfirm,
+  onCancel,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  variant = 'danger',
+  children
+}) => {
+  const dialogRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const confirmBtnRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const focusableRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)([]);
+  const previouslyFocusedRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const handleKeyDown = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(e => {
+    if (e.key === 'Escape') {
+      onCancel();
+    }
+
+    // Focus trap.
+    if (e.key === 'Tab' && dialogRef.current) {
+      const focusable = focusableRef.current;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (dialogRef.current?.ownerDocument?.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (dialogRef.current?.ownerDocument?.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }, [onCancel]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    if (isOpen && dialogRef.current) {
+      focusableRef.current = Array.from(dialogRef.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'));
+    } else {
+      focusableRef.current = [];
+    }
+  }, [isOpen]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    if (isOpen && confirmBtnRef.current) {
+      const cancelBtn = dialogRef.current?.querySelector('.wppo-dialog-cancel');
+      if (cancelBtn) {
+        cancelBtn.focus();
+      }
+    }
+  }, [isOpen]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    const currentDialog = dialogRef.current;
+    const doc = currentDialog?.ownerDocument || document;
+    if (isOpen) {
+      previouslyFocusedRef.current = doc.activeElement;
+      doc.addEventListener('keydown', handleKeyDown);
+      doc.body.style.overflow = 'hidden';
+    }
+    return () => {
+      doc.removeEventListener('keydown', handleKeyDown);
+      doc.body.style.overflow = '';
+    };
+  }, [isOpen, handleKeyDown]);
+
+  // Return focus to the element that opened the dialog when it closes.
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    if (isOpen || !previouslyFocusedRef.current) {
+      return;
+    }
+    const previouslyFocused = previouslyFocusedRef.current;
+    previouslyFocusedRef.current = null;
+    if (previouslyFocused && typeof previouslyFocused.focus === 'function' && previouslyFocused.isConnected) {
+      previouslyFocused.focus();
+    }
+  }, [isOpen]);
+  if (!isOpen) {
+    return null;
+  }
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)("div", {
+    className: "wppo-dialog-overlay",
+    onClick: onCancel,
+    onKeyDown: e => {
+      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+        onCancel();
+      }
+    },
+    role: "presentation",
+    children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsxs)("div", {
+      className: "wppo-dialog",
+      ref: dialogRef,
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-labelledby": "wppo-dialog-title",
+      onClick: e => e.stopPropagation(),
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsxs)("h3", {
+        id: "wppo-dialog-title",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faExclamationTriangle
+        }), title]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)("p", {
+        children: message
+      }), children, /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsxs)("div", {
+        className: "wppo-dialog-actions",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)("button", {
+          type: "button",
+          className: "wppo-button wppo-button--secondary wppo-dialog-cancel",
+          onClick: onCancel,
+          children: cancelLabel || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_3__.__)('Cancel', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)("button", {
+          type: "button",
+          className: `wppo-button ${variant === 'danger' ? 'wppo-button--danger' : 'wppo-button--primary'}`,
+          onClick: onConfirm,
+          ref: confirmBtnRef,
+          children: confirmLabel || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_3__.__)('Confirm', 'performance-optimisation')
+        })]
+      })]
+    })
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (ConfirmDialog);
+
+/***/ },
+
+/***/ "./src/components/common/FeatureCard.js"
+/*!**********************************************!*\
+  !*** ./src/components/common/FeatureCard.js ***!
+  \**********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__);
+
+/**
+ * FeatureCard — Standardized card wrapper for every settings group.
+ *
+ * @param {Object}                    props             Component props.
+ * @param {string}                    [props.title]     Optional card heading.
+ * @param {import('react').ReactNode} [props.icon]      Optional icon beside the title.
+ * @param {import('react').ReactNode} [props.actions]   Buttons / links in the card header.
+ * @param {import('react').ReactNode} [props.footer]    Buttons / links in the card footer.
+ * @param {import('react').ReactNode} props.children    Card body content.
+ * @param {string}                    [props.className] Extra CSS classes.
+ */
+const FeatureCard = ({
+  title,
+  icon,
+  actions,
+  footer,
+  children,
+  className
+}) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+  className: `wppo-feature-card ${className || ''}`.trim(),
+  children: [(title || actions) && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+    className: "wppo-feature-card__header",
+    children: [title && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("h3", {
+      children: [icon, title]
+    }), actions && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+      className: "wppo-feature-card__header-actions",
+      children: actions
+    })]
+  }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+    className: "wppo-feature-card__body",
+    children: children
+  }), footer && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+    className: "wppo-feature-card__footer",
+    children: footer
+  })]
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (FeatureCard);
+
+/***/ },
+
+/***/ "./src/components/common/FeatureHeader.js"
+/*!************************************************!*\
+  !*** ./src/components/common/FeatureHeader.js ***!
+  \************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__);
+
+/**
+ * FeatureHeader — Consistent hero section for every tab.
+ *
+ * @param {Object}                    props               Component props.
+ * @param {string}                    props.title         Page heading.
+ * @param {string}                    [props.description] Short subtitle text.
+ * @param {import('react').ReactNode} [props.status]      Optional status badge / indicator.
+ * @param {import('react').ReactNode} [props.actions]     Buttons rendered on the right.
+ * @param {import('react').ReactNode} [props.children]    Extra content below the header row.
+ */
+const FeatureHeader = ({
+  title,
+  description,
+  status,
+  actions,
+  children
+}) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+  className: "wppo-feature-header",
+  children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+    className: "wppo-feature-header__main",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+      className: "wppo-feature-header__title",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h2", {
+        children: title
+      }), description && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", {
+        children: description
+      }), status && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+        className: "wppo-feature-header__status",
+        children: status
+      })]
+    }), actions && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+      className: "wppo-feature-header__actions",
+      children: actions
+    })]
+  }), children && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+    className: "wppo-feature-header__extra",
+    children: children
+  })]
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (FeatureHeader);
+
+/***/ },
+
+/***/ "./src/components/common/LoadingSubmitButton.js"
+/*!******************************************************!*\
+  !*** ./src/components/common/LoadingSubmitButton.js ***!
+  \******************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__);
+
+
+
+/**
+ * A reusable submit button with loading state support.
+ *
+ * @param {Object}               props              Component props.
+ * @param {boolean}              props.isLoading    Whether the button is in a loading state.
+ * @param {string}               props.label        The label to show when not loading.
+ * @param {string}               props.loadingLabel The label to show when loading.
+ * @param {string}               props.className    Additional CSS classes.
+ * @param {string}               props.type         Button type (default: 'submit').
+ * @param {boolean}              props.disabled     Whether the button is disabled (default: isLoading).
+ * @param {Object}               props.rest         Any other button props.
+ * @param {import('react').Node} props.children     The child elements.
+ */
+
+const LoadingSubmitButton = ({
+  isLoading,
+  label,
+  loadingLabel,
+  className = 'wppo-button wppo-button--primary',
+  type = 'submit',
+  disabled,
+  children,
+  ...rest
+}) => {
+  const isDisabled = Boolean(disabled) || Boolean(isLoading);
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__.jsxs)("button", {
+    type: type,
+    className: className,
+    disabled: isDisabled,
+    "aria-busy": isLoading,
+    ...rest,
+    children: [isLoading && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_0__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_1__.faSpinner,
+      spin: true,
+      "aria-hidden": "true",
+      className: "wppo-mr-8"
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__.jsx)("span", {
+      role: "status",
+      "aria-live": "polite",
+      children: isLoading ? loadingLabel || children : label || children
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (LoadingSubmitButton);
+
+/***/ },
+
+/***/ "./src/components/common/NoticeBanner.js"
+/*!***********************************************!*\
+  !*** ./src/components/common/NoticeBanner.js ***!
+  \***********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__);
+/**
+ * Shared presentational notice banner.
+ *
+ * Renders the `.wppo-notice` markup used across the admin SPA with the
+ * correct modifier class, icon, ARIA live region semantics and an optional
+ * dismiss button. Pair with the `useNotice()` hook for state and timing.
+ *
+ * @since 1.10.0
+ */
+
+
+
+
+const NoticeBanner = ({
+  type = 'info',
+  message = '',
+  onDismiss,
+  className
+}) => {
+  if (!message) {
+    return null;
+  }
+  const icon = type === 'success' ? _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faCheckCircle : _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faExclamationTriangle;
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsxs)("div", {
+    className: `wppo-notice wppo-notice--${type}${className ? ` ${className}` : ''}`,
+    role: type === 'error' ? 'alert' : 'status',
+    "aria-live": type === 'error' ? 'assertive' : 'polite',
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsxs)("div", {
+      className: "wppo-notice__content",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+        icon: icon
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)("span", {
+        children: message
+      })]
+    }), onDismiss && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)("button", {
+      type: "button",
+      className: "wppo-notice__dismiss",
+      onClick: onDismiss,
+      "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Dismiss', 'performance-optimisation'),
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faTimes
+      })
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (NoticeBanner);
+
+/***/ },
+
+/***/ "./src/components/common/StatusBadge.js"
+/*!**********************************************!*\
+  !*** ./src/components/common/StatusBadge.js ***!
+  \**********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__);
+/**
+ * StatusBadge component.
+ *
+ * Renders a colour-coded pill badge for a metric status value.
+ * Supports 'good', 'needs_improvement', and 'poor' variants using
+ * --wppo- CSS custom properties defined in the abstracts layer.
+ *
+ * @since 1.5.0
+ */
+
+
+
+const StatusBadge = ({
+  status
+}) => {
+  const labelMap = {
+    good: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Good', 'performance-optimisation'),
+    needs_improvement: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Needs Improvement', 'performance-optimisation'),
+    poor: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Poor', 'performance-optimisation')
+  };
+  const label = labelMap[status] || status;
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("span", {
+    className: `wppo-status-badge wppo-status-badge--${status}`,
+    "aria-label": label,
+    children: label
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (StatusBadge);
+
+/***/ },
+
+/***/ "./src/components/common/SwitchField.js"
+/*!**********************************************!*\
+  !*** ./src/components/common/SwitchField.js ***!
+  \**********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_components__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/components */ "@wordpress/components");
+/* harmony import */ var _wordpress_components__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_components__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__);
+
+
+/**
+ * SwitchField — Accessible toggle switch with label and description.
+ * Uses WordPress ToggleControl for native WP styling + accessibility.
+ *
+ * @param {Object}   props               Component props.
+ * @param {string}   props.label         Visible heading for the switch.
+ * @param {string}   [props.description] Subtitle text.
+ * @param {string}   props.name          Input name attribute.
+ * @param {boolean}  props.checked       Whether the switch is on.
+ * @param {Function} props.onChange      Change handler (receives synthetic event).
+ * @param {boolean}  [props.showLabel]   Whether to show the label.
+ * @param {boolean}  [props.disabled]    Whether the switch is disabled.
+ */
+
+const SwitchField = ({
+  label,
+  description,
+  name,
+  checked,
+  onChange,
+  showLabel = true,
+  disabled = false
+}) => {
+  const handleToggle = newValue => {
+    // Synthesize an event-like object so existing handleChange() util works unchanged.
+    onChange({
+      target: {
+        name,
+        type: 'checkbox',
+        checked: newValue
+      }
+    });
+  };
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsxs)("div", {
+    className: "wppo-switch-field",
+    children: [(showLabel || description) && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsxs)("div", {
+      className: "wppo-switch-field__info",
+      children: [showLabel && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("span", {
+        className: "wppo-switch-field__label",
+        children: label
+      }), description && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("p", {
+        className: "wppo-text-muted",
+        children: description
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)(_wordpress_components__WEBPACK_IMPORTED_MODULE_0__.ToggleControl, {
+      __nextHasNoMarginBottom: true,
+      checked: checked,
+      onChange: handleToggle,
+      label: label,
+      hideLabelFromVision: true,
+      disabled: disabled
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (SwitchField);
+
+/***/ },
+
+/***/ "./src/components/common/Tooltip.js"
+/*!******************************************!*\
+  !*** ./src/components/common/Tooltip.js ***!
+  \******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__);
+/**
+ * Tooltip component.
+ *
+ * A simple, lightweight tooltip that displays on hover.
+ * Uses CSS for positioning and visibility.
+ *
+ * @param {Object}                    props
+ * @param {string}                    props.content  The tooltip text.
+ * @param {import('react').ReactNode} props.children The element that triggers the tooltip.
+ *
+ * @since 1.5.0
+ */
+
+
+
+
+const Tooltip = ({
+  content,
+  children
+}) => {
+  const [visible, setVisible] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+  const id = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useId)();
+  if (!content) {
+    return children;
+  }
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsxs)("span", {
+    className: `wppo-tooltip-container${visible ? ' wppo-tooltip-container--visible' : ''}`,
+    tabIndex: "0",
+    "aria-describedby": id,
+    onFocus: () => setVisible(true),
+    onBlur: () => setVisible(false),
+    onMouseEnter: () => setVisible(true),
+    onMouseLeave: () => setVisible(false),
+    children: [children || /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faInfoCircle,
+      className: "wppo-tooltip-icon",
+      "aria-hidden": "true"
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)("span", {
+      className: "wppo-tooltip-content",
+      role: "tooltip",
+      id: id,
+      children: content
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (Tooltip);
+
+/***/ },
+
+/***/ "./src/lib/litespeed.js"
+/*!******************************!*\
+  !*** ./src/lib/litespeed.js ***!
+  \******************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   getEffectiveMode: () => (/* binding */ getEffectiveMode),
+/* harmony export */   modeLabel: () => (/* binding */ modeLabel),
+/* harmony export */   shouldDisableOptimizer: () => (/* binding */ shouldDisableOptimizer)
+/* harmony export */ });
+/**
+ * LiteSpeed helper — pure JS, no WordPress dependencies.
+ *
+ * Mirrors the PHP LiteSpeed_Integration::effective_mode() logic for the SPA
+ * so the UI can decide ownership without an extra REST call. Imported by
+ * FileOptimization.js and Dashboard.js for mode-label rendering (A05/A10).
+ *
+ * @since NEXT
+ */
+
+/**
+ * Resolve the effective LiteSpeed mode from config + detection.
+ *
+ * @param {Object}  opts                 - Options.
+ * @param {string}  opts.mode            - Configured mode (auto|wppo|litespeed|standalone).
+ * @param {boolean} opts.isLiteSpeed     - Whether LiteSpeed server is detected.
+ * @param {boolean} opts.isLscacheActive - Whether LSCache plugin is active.
+ * @return {string} Effective mode (wppo|litespeed|standalone).
+ */
+const getEffectiveMode = ({
+  mode = 'auto',
+  isLiteSpeed = false,
+  isLscacheActive = false
+} = {}) => {
+  if (!isLiteSpeed) {
+    return 'standalone';
+  }
+  if (mode === 'standalone') {
+    return 'standalone';
+  }
+  if (mode === 'wppo') {
+    return 'wppo';
+  }
+  if (mode === 'litespeed') {
+    return 'litespeed';
+  }
+  // auto
+  return isLscacheActive ? 'litespeed' : 'wppo';
+};
+
+/**
+ * Whether WPPO optimizer should be disabled in the current LiteSpeed mode.
+ *
+ * @param {Object} opts - Options.
+ * @return {boolean} True if optimizer should be disabled.
+ */
+const shouldDisableOptimizer = (opts = {}) => {
+  if (!opts.isLscacheActive) {
+    return false;
+  }
+  return getEffectiveMode(opts) !== 'wppo';
+};
+
+/**
+ * Human label for a mode value.
+ *
+ * @param {string} mode - Mode value.
+ * @return {string} Human readable label.
+ */
+const modeLabel = mode => {
+  const map = {
+    auto: 'Auto',
+    wppo: 'WPPO',
+    litespeed: 'LiteSpeed Cache',
+    standalone: 'Standalone'
+  };
+  return map[mode] || mode;
+};
+
+/***/ },
+
+/***/ "./src/lib/useNotice.js"
+/*!******************************!*\
+  !*** ./src/lib/useNotice.js ***!
+  \******************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/**
+ * Shared hook for scoped feedback notices.
+ *
+ * Centralises the divergent per-component notification state and
+ * auto-dismiss timer logic into one pattern backed by the
+ * NoticeBanner presentational component.
+ *
+ * Each component that talks to the REST API previously reinvented its
+ * own feedback state (`notification`, `announcement`, `error`, `actionMsg`).
+ * Use this hook instead:
+ *
+ * ```js
+ * const { notice, notify, dismiss } = useNotice();
+ * notify( { type: 'success', message: 'Saved.', durationMs: 5000 } );
+ * ```
+ *
+ * @since 1.10.0
+ * @return {{ notice: ?Object, notify: Function, dismiss: Function }}
+ *   - `notice`:  `{ type, message }` or `null`.
+ *   - `notify`:  `( { type, message, durationMs? } )` — shows a notice and
+ *                optionally auto-dismisses it after `durationMs`.
+ *   - `dismiss`: `() => void` — clears the notice and any pending timer.
+ */
+
+const useNotice = () => {
+  const [notice, setNotice] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const timerRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const clearTimer = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Clear the current notice and any pending auto-dismiss timer.
+   */
+  const dismiss = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    clearTimer();
+    setNotice(null);
+  }, [clearTimer]);
+
+  /**
+   * Show a notice.
+   *
+   * @param {Object} opts              Notice options.
+   * @param {string} opts.type         'error' | 'success' | 'warning' | 'info'.
+   * @param {string} opts.message      Notice text.
+   * @param {number} [opts.durationMs] Optional auto-dismiss delay in milliseconds.
+   */
+  const notify = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(({
+    type,
+    message,
+    durationMs
+  }) => {
+    clearTimer();
+    setNotice({
+      type,
+      message
+    });
+    if (durationMs) {
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        setNotice(null);
+      }, durationMs);
+    }
+  }, [clearTimer]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    return clearTimer;
+  }, [clearTimer]);
+  return {
+    notice,
+    notify,
+    dismiss
+  };
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (useNotice);
+
+/***/ }
+
+}]);
+//# sourceMappingURL=tab-dashboard.js.map?ver=a1f08b5a55967276a4d5

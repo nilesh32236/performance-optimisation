@@ -1,5 +1,1078 @@
-"use strict";(globalThis.webpackChunkperformance_optimisation||=[]).push([[341],{510(e,a,t){t.r(a);var s=t(723),o=t(87),i=t(730),n=t(175),r=t(263),l=t(496),p=t(188),c=t(268),d=t(323),m=t(351),u=t(468),_=t(927),f=t(693),h=t(790);const b={revisions:{level:"good",label:(0,s.__)("Safe","performance-optimisation")},expired_transients:{level:"good",label:(0,s.__)("Safe","performance-optimisation")},oembed_cache:{level:"good",label:(0,s.__)("Safe","performance-optimisation")},auto_drafts:{level:"warning",label:(0,s.__)("Caution","performance-optimisation")},trashed_posts:{level:"warning",label:(0,s.__)("Caution","performance-optimisation")},spam_comments:{level:"warning",label:(0,s.__)("Caution","performance-optimisation")},trashed_comments:{level:"warning",label:(0,s.__)("Caution","performance-optimisation")},unattached_media:{level:"warning",label:(0,s.__)("Caution","performance-optimisation")},orphan_postmeta:{level:"poor",label:(0,s.__)("Review","performance-optimisation")}},y=[{key:"revisions",label:(0,s.__)("Post Revisions","performance-optimisation"),description:(0,s.__)("Old versions of your posts saved during editing.","performance-optimisation")},{key:"auto_drafts",label:(0,s.__)("Auto Drafts","performance-optimisation"),description:(0,s.__)("Automatically saved drafts that are no longer needed.","performance-optimisation")},{key:"trashed_posts",label:(0,s.__)("Trashed Posts","performance-optimisation"),description:(0,s.__)("Posts that have been moved to the trash.","performance-optimisation")},{key:"spam_comments",label:(0,s.__)("Spam Comments","performance-optimisation"),description:(0,s.__)("Comments marked as spam.","performance-optimisation")},{key:"trashed_comments",label:(0,s.__)("Trashed Comments","performance-optimisation"),description:(0,s.__)("Comments that have been moved to the trash.","performance-optimisation")},{key:"expired_transients",label:(0,s.__)("Expired Transients","performance-optimisation"),description:(0,s.__)("Temporary cached data that has expired.","performance-optimisation")},{key:"orphan_postmeta",label:(0,s.__)("Orphaned Post Meta","performance-optimisation"),description:(0,s.__)("Metadata entries with no associated post.","performance-optimisation")},{key:"unattached_media",label:(0,s.__)("Unattached Media","performance-optimisation"),description:(0,s.__)("Media files uploaded to the library but not attached to any post.","performance-optimisation")},{key:"oembed_cache",label:(0,s.__)("oEmbed Cache","performance-optimisation"),description:(0,s.__)("Stored embed responses from YouTube, Twitter, Vimeo and other providers.","performance-optimisation")}];t.d(a,["default",0,({options:e={}})=>{const a={dbSchedule:"none",dbRevMaxAge:30,dbRevKeepLatest:5,dbOptimize:!0,...e},[t,v]=(0,o.useState)(a),[x,w]=(0,o.useState)(!1),[g,j]=(0,o.useState)({}),[N,k]=(0,o.useState)({}),[C,S]=(0,o.useState)(!0),{notice:A,notify:M,dismiss:E}=(0,r.A)(),[R,L]=(0,o.useState)({isOpen:!1,type:null,label:""}),O=(0,o.useCallback)(async()=>{S(!0);try{const e=await(0,n.H2)("database_cleanup_counts",{},"GET");e.success&&e.data?j(e.data):M({type:"error",message:e.message||(0,s.__)("Failed to load counts.","performance-optimisation"),durationMs:5e3})}catch(e){console.error("Error fetching database cleanup counts:",e),M({type:"error",message:(0,s.__)("Failed to load counts.","performance-optimisation"),durationMs:5e3})}finally{S(!1)}},[M]);(0,o.useEffect)(()=>{O()},[O]);const T=Object.values(g).reduce((e,a)=>e+(parseInt(a)||0),0);return(0,h.jsxs)("div",{className:"wppo-dashboard-view",children:[(0,h.jsx)(c.A,{title:(0,s.__)("Database Cleanup","performance-optimisation"),description:(0,s.__)("Optimize your database by removing junk data and optimizing table overhead.","performance-optimisation"),actions:(0,h.jsx)(u.A,{className:"wppo-button wppo-button--primary",isLoading:x,onClick:async e=>{e&&e.preventDefault(),w(!0);try{await(0,n.H2)("update_settings",{tab:"database_cleanup",settings:t}),M({type:"success",message:(0,s.__)("Settings saved successfully.","performance-optimisation"),durationMs:5e3})}catch{M({type:"error",message:(0,s.__)("Error saving settings.","performance-optimisation"),durationMs:5e3})}finally{w(!1)}},label:(0,s.__)("Save Settings","performance-optimisation")})}),A&&(0,h.jsx)(f.A,{type:A.type,message:A.message,onDismiss:E}),(0,h.jsxs)("div",{className:"wppo-stacked-cards",children:[(0,h.jsx)(d.A,{title:(0,s.__)("Automated Database Cleanup","performance-optimisation"),icon:(0,h.jsx)(l.g,{icon:p.BEE}),children:(0,h.jsxs)("div",{className:"wppo-field-group",children:[(0,h.jsxs)("div",{className:"wppo-field",children:[(0,h.jsx)("label",{className:"wppo-field-label",htmlFor:"dbSchedule",children:(0,s.__)("Schedule Frequency","performance-optimisation")}),(0,h.jsxs)("select",{className:"wppo-select",id:"dbSchedule",name:"dbSchedule",value:t.dbSchedule,onChange:(0,i.Z)(v),"aria-describedby":"dbSchedule-desc",children:[(0,h.jsx)("option",{value:"none",children:(0,s.__)("None (Manual Only)","performance-optimisation")}),(0,h.jsx)("option",{value:"daily",children:(0,s.__)("Daily","performance-optimisation")}),(0,h.jsx)("option",{value:"weekly",children:(0,s.__)("Weekly","performance-optimisation")}),(0,h.jsx)("option",{value:"monthly",children:(0,s.__)("Monthly","performance-optimisation")})]}),(0,h.jsx)("p",{id:"dbSchedule-desc",className:"wppo-text-muted wppo-mt-10 wppo-text-small",children:(0,s.__)("How often the automated database cleanup routine should run in the background.","performance-optimisation")})]}),(0,h.jsxs)("div",{className:"wppo-grid-2-col wppo-mt-24",children:[(0,h.jsxs)("div",{children:[(0,h.jsx)("label",{className:"wppo-field-label",htmlFor:"dbRevMaxAge",children:(0,s.__)("Revision Max Age (Days)","performance-optimisation")}),(0,h.jsx)("input",{className:"wppo-input",type:"number",id:"dbRevMaxAge",name:"dbRevMaxAge",min:"0",value:t.dbRevMaxAge,onChange:(0,i.Z)(v),"aria-describedby":"dbRevMaxAge-desc",style:{fontFamily:"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"}}),(0,h.jsx)("p",{id:"dbRevMaxAge-desc",className:"wppo-text-muted wppo-mt-10 wppo-text-small",children:(0,s.__)("Delete post revisions older than this many days (0 for no age limit).","performance-optimisation")})]}),(0,h.jsxs)("div",{children:[(0,h.jsx)("label",{className:"wppo-field-label",htmlFor:"dbRevKeepLatest",children:(0,s.__)("Keep Latest Revisions","performance-optimisation")}),(0,h.jsx)("input",{className:"wppo-input",type:"number",id:"dbRevKeepLatest",name:"dbRevKeepLatest",min:"0",value:t.dbRevKeepLatest,onChange:(0,i.Z)(v),"aria-describedby":"dbRevKeepLatest-desc",style:{fontFamily:"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"}}),(0,h.jsx)("p",{id:"dbRevKeepLatest-desc",className:"wppo-text-muted wppo-mt-10 wppo-text-small",children:(0,s.__)("Always retain this many recent revisions per post, regardless of age.","performance-optimisation")})]})]}),(0,h.jsx)(m.A,{label:(0,s.__)("Optimize tables after cleanup","performance-optimisation"),description:(0,s.__)("Automatically run OPTIMIZE TABLE on affected tables after cleanup to reclaim disk space and rebuild indexes.","performance-optimisation"),name:"dbOptimize",checked:t.dbOptimize,onChange:(0,i.Z)(v)})]})}),(0,h.jsx)(d.A,{title:(0,s.__)("Total Database Overhead","performance-optimisation"),icon:(0,h.jsx)(l.g,{icon:p.hem}),footer:(0,h.jsx)(u.A,{className:"wppo-button wppo-button--secondary",onClick:()=>L({isOpen:!0,type:"all",label:(0,s.__)("Optimize Everything","performance-optimisation")}),isLoading:N.all,disabled:0===T,label:(0,s.__)("Optimize Everything Now","performance-optimisation")}),children:(0,h.jsxs)("div",{className:"wppo-stat-hero",children:[(0,h.jsx)("span",{className:"wppo-stat-hero__value",children:C?"…":`${Number(T).toLocaleString()} ${(0,s._n)("item","items",T,"performance-optimisation")}`}),(0,h.jsx)("span",{className:"wppo-stat-hero__label",children:(0,s.__)("Total Optimisation Opportunities","performance-optimisation")}),(0,h.jsx)("p",{className:"wppo-text-muted wppo-text-small wppo-mt-10",children:0===T?(0,s.__)("Your database is clean — no overhead items detected.","performance-optimisation"):(0,s.sprintf)(/* translators: %d is the number of items that can be cleaned. */ /* translators: %d is the number of items that can be cleaned. */
-(0,s._n)("%d item can be safely removed to reclaim space.","%d items can be safely removed to reclaim space.",T,"performance-optimisation"),T)})]})})]}),(0,h.jsxs)("div",{className:"wppo-mt-40",children:[(0,h.jsx)("h4",{className:"wppo-section-title",children:(0,s.__)("Granular Cleanup Options","performance-optimisation")}),(0,h.jsx)("div",{className:"wppo-grid-2-col wppo-mt-20",children:y.map(e=>{const a=b[e.key];return(0,h.jsx)(d.A,{title:e.label,actions:(0,h.jsxs)("div",{style:{display:"flex",alignItems:"center",gap:"8px"},children:[a&&(0,h.jsx)("span",{className:`wppo-status-badge wppo-status-badge--${a.level}`,children:a.label}),(0,h.jsx)(u.A,{type:"button",className:"wppo-button wppo-button--secondary wppo-button--sm",onClick:()=>L({isOpen:!0,type:e.key,label:e.label}),disabled:0===(g[e.key]||0)||N[e.key],isLoading:N[e.key],label:(0,s.__)("Clean","performance-optimisation"),loadingLabel:(0,s.__)("Cleaning","performance-optimisation")})]}),children:(0,h.jsxs)("div",{className:"wppo-cleanup-row",children:[(0,h.jsx)("p",{className:"wppo-text-muted wppo-cleanup-row__desc",children:e.description}),(0,h.jsx)("span",{className:"wppo-cleanup-row__count",style:{fontSize:"18px",fontWeight:700,fontFamily:"ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"},children:Number(g[e.key]||0).toLocaleString()})]})},e.key)})})]}),(0,h.jsx)(_.A,{isOpen:R.isOpen,onConfirm:()=>{L({...R,isOpen:!1}),(async e=>{k(a=>({...a,[e]:!0}));try{const a=await(0,n.H2)("database_cleanup",{type:e});if(a.success)M({type:"success",message:(0,s.sprintf)(
-// translators: %d is the number of items removed during cleanup.
-// translators: %d is the number of items removed during cleanup.
-(0,s._n)("Cleanup successful: %d item removed.","Cleanup successful: %d items removed.",a.data?.deleted??0,"performance-optimisation"),a.data?.deleted??0),durationMs:5e3}),O();else{const e=a.data?.failures;let t=a.message||(0,s.__)("Cleanup failed.","performance-optimisation");e&&(t+=" "+(0,s.__)("Failures:","performance-optimisation")+" "+Object.keys(e).join(", ")),M({type:"error",message:t,durationMs:5e3}),a.data?.deleted>0&&O()}}catch(e){console.error("Database cleanup error:",e),M({type:"error",message:(0,s.__)("Error executing cleanup.","performance-optimisation"),durationMs:5e3})}finally{k(a=>({...a,[e]:!1}))}})(R.type)},onCancel:()=>L({...R,isOpen:!1}),title:(0,s.__)("Confirm","performance-optimisation")+` ${R.label}`,message:(0,s.__)("This action will permanently delete","performance-optimisation")+` ${"all"===R.type?(0,s.__)("overhead items","performance-optimisation"):R.label.toLowerCase()} `+(0,s.__)("from your database. Proceed?","performance-optimisation"),confirmLabel:(0,s.__)("Delete","performance-optimisation"),variant:"danger"})]})}])},927(e,a,t){var s=t(87),o=t(496),i=t(188),n=t(723),r=t(790);t.d(a,["A",0,({isOpen:e,onConfirm:a,onCancel:t,title:l,message:p,confirmLabel:c,cancelLabel:d,variant:m="danger",children:u})=>{const _=(0,s.useRef)(null),f=(0,s.useRef)(null),h=(0,s.useRef)([]),b=(0,s.useRef)(null),y=(0,s.useCallback)(e=>{if("Escape"===e.key&&t(),"Tab"===e.key&&_.current){const a=h.current,t=a[0],s=a[a.length-1];e.shiftKey?_.current?.ownerDocument?.activeElement===t&&(e.preventDefault(),s.focus()):_.current?.ownerDocument?.activeElement===s&&(e.preventDefault(),t.focus())}},[t]);return(0,s.useEffect)(()=>{e&&_.current?h.current=Array.from(_.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')):h.current=[]},[e]),(0,s.useEffect)(()=>{if(e&&f.current){const e=_.current?.querySelector(".wppo-dialog-cancel");e&&e.focus()}},[e]),(0,s.useEffect)(()=>{const a=_.current,t=a?.ownerDocument||document;return e&&(b.current=t.activeElement,t.addEventListener("keydown",y),t.body.style.overflow="hidden"),()=>{t.removeEventListener("keydown",y),t.body.style.overflow=""}},[e,y]),(0,s.useEffect)(()=>{if(e||!b.current)return;const a=b.current;b.current=null,a&&"function"==typeof a.focus&&a.isConnected&&a.focus()},[e]),e?(0,r.jsx)("div",{className:"wppo-dialog-overlay",onClick:t,onKeyDown:e=>{e.target!==e.currentTarget||"Enter"!==e.key&&" "!==e.key||t()},role:"presentation",children:(0,r.jsxs)("div",{className:"wppo-dialog",ref:_,role:"dialog","aria-modal":"true","aria-labelledby":"wppo-dialog-title",onClick:e=>e.stopPropagation(),children:[(0,r.jsxs)("h3",{id:"wppo-dialog-title",children:[(0,r.jsx)(o.g,{icon:i.zpE}),l]}),(0,r.jsx)("p",{children:p}),u,(0,r.jsxs)("div",{className:"wppo-dialog-actions",children:[(0,r.jsx)("button",{type:"button",className:"wppo-button wppo-button--secondary wppo-dialog-cancel",onClick:t,children:d||(0,n.__)("Cancel","performance-optimisation")}),(0,r.jsx)("button",{type:"button",className:"wppo-button "+("danger"===m?"wppo-button--danger":"wppo-button--primary"),onClick:a,ref:f,children:c||(0,n.__)("Confirm","performance-optimisation")})]})]})}):null}])},323(e,a,t){var s=t(790);t.d(a,["A",0,({title:e,icon:a,actions:t,footer:o,children:i,className:n})=>(0,s.jsxs)("div",{className:`wppo-feature-card ${n||""}`.trim(),children:[(e||t)&&(0,s.jsxs)("div",{className:"wppo-feature-card__header",children:[e&&(0,s.jsxs)("h3",{children:[a,e]}),t&&(0,s.jsx)("div",{className:"wppo-feature-card__header-actions",children:t})]}),(0,s.jsx)("div",{className:"wppo-feature-card__body",children:i}),o&&(0,s.jsx)("div",{className:"wppo-feature-card__footer",children:o})]})])},268(e,a,t){var s=t(790);t.d(a,["A",0,({title:e,description:a,status:t,actions:o,children:i})=>(0,s.jsxs)("div",{className:"wppo-feature-header",children:[(0,s.jsxs)("div",{className:"wppo-feature-header__main",children:[(0,s.jsxs)("div",{className:"wppo-feature-header__title",children:[(0,s.jsx)("h2",{children:e}),a&&(0,s.jsx)("p",{children:a}),t&&(0,s.jsx)("div",{className:"wppo-feature-header__status",children:t})]}),o&&(0,s.jsx)("div",{className:"wppo-feature-header__actions",children:o})]}),i&&(0,s.jsx)("div",{className:"wppo-feature-header__extra",children:i})]})])},468(e,a,t){var s=t(496),o=t(188),i=t(790);t.d(a,["A",0,({isLoading:e,label:a,loadingLabel:t,className:n="wppo-button wppo-button--primary",type:r="submit",disabled:l,children:p,...c})=>{const d=Boolean(l)||Boolean(e);return(0,i.jsxs)("button",{type:r,className:n,disabled:d,"aria-busy":e,...c,children:[e&&(0,i.jsx)(s.g,{icon:o.z1G,spin:!0,"aria-hidden":"true",className:"wppo-mr-8"}),(0,i.jsx)("span",{role:"status","aria-live":"polite",children:e?t||p:a||p})]})}])},693(e,a,t){var s=t(723),o=t(496),i=t(188),n=t(790);t.d(a,["A",0,({type:e="info",message:a="",onDismiss:t,className:r})=>{if(!a)return null;const l="success"===e?i.SGM:i.zpE;return(0,n.jsxs)("div",{className:`wppo-notice wppo-notice--${e}${r?` ${r}`:""}`,role:"error"===e?"alert":"status","aria-live":"error"===e?"assertive":"polite",children:[(0,n.jsxs)("div",{className:"wppo-notice__content",children:[(0,n.jsx)(o.g,{icon:l}),(0,n.jsx)("span",{children:a})]}),t&&(0,n.jsx)("button",{type:"button",className:"wppo-notice__dismiss",onClick:t,"aria-label":(0,s.__)("Dismiss","performance-optimisation"),children:(0,n.jsx)(o.g,{icon:i.GRI})})]})}])},351(e,a,t){var s=t(427),o=t(790);t.d(a,["A",0,({label:e,description:a,name:t,checked:i,onChange:n,showLabel:r=!0,disabled:l=!1})=>(0,o.jsxs)("div",{className:"wppo-switch-field",children:[(r||a)&&(0,o.jsxs)("div",{className:"wppo-switch-field__info",children:[r&&(0,o.jsx)("span",{className:"wppo-switch-field__label",children:e}),a&&(0,o.jsx)("p",{className:"wppo-text-muted",children:a})]}),(0,o.jsx)(s.ToggleControl,{__nextHasNoMarginBottom:!0,checked:i,onChange:e=>{n({target:{name:t,type:"checkbox",checked:e}})},label:e,hideLabelFromVision:!0,disabled:l})]})])},263(e,a,t){var s=t(87);t.d(a,["A",0,()=>{const[e,a]=(0,s.useState)(null),t=(0,s.useRef)(null),o=(0,s.useCallback)(()=>{t.current&&(clearTimeout(t.current),t.current=null)},[]),i=(0,s.useCallback)(()=>{o(),a(null)},[o]),n=(0,s.useCallback)(({type:e,message:s,durationMs:i})=>{o(),a({type:e,message:s}),i&&(t.current=setTimeout(()=>{t.current=null,a(null)},i))},[o]);return(0,s.useEffect)(()=>o,[o]),{notice:e,notify:n,dismiss:i}}])},730(e,a,t){t.d(a,["Z",0,e=>a=>{const{name:t,type:s,value:o,checked:i}=a.target;let n;if("checkbox"===s)n=i;else if("number"===s||"delayJSIdleTimeout"===t)if(""===o)n="delayJSIdleTimeout"===t?3e3:"";else{const e=Number(o);Number.isNaN(e)?n="delayJSIdleTimeout"===t?3e3:o:(n=e,"delayJSIdleTimeout"===t&&(n=!Number.isFinite(n)||n<=0?3e3:Math.min(2e4,Math.max(500,n))))}else n=o;e(e=>({...e,[t]:n}))}])}}]);
+"use strict";
+(globalThis["webpackChunkperformance_optimisation"] ||= []).push([["tab-database-cleanup"],{
+
+/***/ "./src/components/DatabaseCleanup.js"
+/*!*******************************************!*\
+  !*** ./src/components/DatabaseCleanup.js ***!
+  \*******************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var _lib_util__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../lib/util */ "./src/lib/util.js");
+/* harmony import */ var _lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../lib/apiRequest */ "./src/lib/apiRequest.js");
+/* harmony import */ var _lib_useNotice__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../lib/useNotice */ "./src/lib/useNotice.js");
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _common_FeatureHeader__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./common/FeatureHeader */ "./src/components/common/FeatureHeader.js");
+/* harmony import */ var _common_FeatureCard__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./common/FeatureCard */ "./src/components/common/FeatureCard.js");
+/* harmony import */ var _common_SwitchField__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./common/SwitchField */ "./src/components/common/SwitchField.js");
+/* harmony import */ var _common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./common/LoadingSubmitButton */ "./src/components/common/LoadingSubmitButton.js");
+/* harmony import */ var _common_ConfirmDialog__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./common/ConfirmDialog */ "./src/components/common/ConfirmDialog.js");
+/* harmony import */ var _common_NoticeBanner__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./common/NoticeBanner */ "./src/components/common/NoticeBanner.js");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const RISK_BADGE_MAP = {
+  revisions: {
+    level: 'good',
+    label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Safe', 'performance-optimisation')
+  },
+  expired_transients: {
+    level: 'good',
+    label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Safe', 'performance-optimisation')
+  },
+  oembed_cache: {
+    level: 'good',
+    label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Safe', 'performance-optimisation')
+  },
+  auto_drafts: {
+    level: 'warning',
+    label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Caution', 'performance-optimisation')
+  },
+  trashed_posts: {
+    level: 'warning',
+    label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Caution', 'performance-optimisation')
+  },
+  spam_comments: {
+    level: 'warning',
+    label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Caution', 'performance-optimisation')
+  },
+  trashed_comments: {
+    level: 'warning',
+    label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Caution', 'performance-optimisation')
+  },
+  unattached_media: {
+    level: 'warning',
+    label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Caution', 'performance-optimisation')
+  },
+  orphan_postmeta: {
+    level: 'poor',
+    label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Review', 'performance-optimisation')
+  }
+};
+const CLEANUP_TYPES = [{
+  key: 'revisions',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Post Revisions', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Old versions of your posts saved during editing.', 'performance-optimisation')
+}, {
+  key: 'auto_drafts',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Auto Drafts', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Automatically saved drafts that are no longer needed.', 'performance-optimisation')
+}, {
+  key: 'trashed_posts',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Trashed Posts', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Posts that have been moved to the trash.', 'performance-optimisation')
+}, {
+  key: 'spam_comments',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Spam Comments', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Comments marked as spam.', 'performance-optimisation')
+}, {
+  key: 'trashed_comments',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Trashed Comments', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Comments that have been moved to the trash.', 'performance-optimisation')
+}, {
+  key: 'expired_transients',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Expired Transients', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Temporary cached data that has expired.', 'performance-optimisation')
+}, {
+  key: 'orphan_postmeta',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Orphaned Post Meta', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Metadata entries with no associated post.', 'performance-optimisation')
+}, {
+  key: 'unattached_media',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Unattached Media', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Media files uploaded to the library but not attached to any post.', 'performance-optimisation')
+}, {
+  key: 'oembed_cache',
+  label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('oEmbed Cache', 'performance-optimisation'),
+  description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Stored embed responses from YouTube, Twitter, Vimeo and other providers.', 'performance-optimisation')
+}];
+const DatabaseCleanup = ({
+  options = {}
+}) => {
+  const defaultSettings = {
+    dbSchedule: 'none',
+    dbRevMaxAge: 30,
+    dbRevKeepLatest: 5,
+    dbOptimize: true,
+    ...options
+  };
+  const [settings, setSettings] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_1__.useState)(defaultSettings);
+  const [isSaving, setIsSaving] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_1__.useState)(false);
+  const [counts, setCounts] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_1__.useState)({});
+  const [loading, setLoading] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_1__.useState)({});
+  const [loadingCounts, setLoadingCounts] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_1__.useState)(true);
+  const {
+    notice,
+    notify,
+    dismiss
+  } = (0,_lib_useNotice__WEBPACK_IMPORTED_MODULE_4__["default"])();
+  const [confirmDialog, setConfirmDialog] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_1__.useState)({
+    isOpen: false,
+    type: null,
+    label: ''
+  });
+  const fetchCounts = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_1__.useCallback)(async () => {
+    setLoadingCounts(true);
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__.apiCall)('database_cleanup_counts', {}, 'GET');
+      if (response.success && response.data) {
+        setCounts(response.data);
+      } else {
+        notify({
+          type: 'error',
+          message: response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Failed to load counts.', 'performance-optimisation'),
+          durationMs: 5000
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching database cleanup counts:', error);
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Failed to load counts.', 'performance-optimisation'),
+        durationMs: 5000
+      });
+    } finally {
+      setLoadingCounts(false);
+    }
+  }, [notify]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_1__.useEffect)(() => {
+    fetchCounts();
+  }, [fetchCounts]);
+  const onSubmitSettings = async e => {
+    if (e) {
+      e.preventDefault();
+    }
+    setIsSaving(true);
+    try {
+      await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__.apiCall)('update_settings', {
+        tab: 'database_cleanup',
+        settings
+      });
+      notify({
+        type: 'success',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Settings saved successfully.', 'performance-optimisation'),
+        durationMs: 5000
+      });
+    } catch {
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Error saving settings.', 'performance-optimisation'),
+        durationMs: 5000
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  const handleCleanup = async type => {
+    setLoading(prev => ({
+      ...prev,
+      [type]: true
+    }));
+    try {
+      const response = await (0,_lib_apiRequest__WEBPACK_IMPORTED_MODULE_3__.apiCall)('database_cleanup', {
+        type
+      });
+      if (response.success) {
+        notify({
+          type: 'success',
+          message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.sprintf)(
+          // translators: %d is the number of items removed during cleanup.
+          (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__._n)('Cleanup successful: %d item removed.', 'Cleanup successful: %d items removed.', response.data?.deleted ?? 0, 'performance-optimisation'), response.data?.deleted ?? 0),
+          durationMs: 5000
+        });
+        fetchCounts();
+      } else {
+        const failures = response.data?.failures;
+        let errorMsg = response.message || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Cleanup failed.', 'performance-optimisation');
+        if (failures) {
+          errorMsg += ' ' + (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Failures:', 'performance-optimisation') + ' ' + Object.keys(failures).join(', ');
+        }
+        notify({
+          type: 'error',
+          message: errorMsg,
+          durationMs: 5000
+        });
+        if (response.data?.deleted > 0) {
+          fetchCounts();
+        }
+      }
+    } catch (error) {
+      console.error('Database cleanup error:', error);
+      notify({
+        type: 'error',
+        message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Error executing cleanup.', 'performance-optimisation'),
+        durationMs: 5000
+      });
+    } finally {
+      setLoading(prev => ({
+        ...prev,
+        [type]: false
+      }));
+    }
+  };
+  const totalItems = Object.values(counts).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+    className: "wppo-dashboard-view",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_FeatureHeader__WEBPACK_IMPORTED_MODULE_7__["default"], {
+      title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Database Cleanup', 'performance-optimisation'),
+      description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Optimize your database by removing junk data and optimizing table overhead.', 'performance-optimisation'),
+      actions: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_10__["default"], {
+        className: "wppo-button wppo-button--primary",
+        isLoading: isSaving,
+        onClick: onSubmitSettings,
+        label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Save Settings', 'performance-optimisation')
+      })
+    }), notice && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_NoticeBanner__WEBPACK_IMPORTED_MODULE_12__["default"], {
+      type: notice.type,
+      message: notice.message,
+      onDismiss: dismiss
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+      className: "wppo-stacked-cards",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_8__["default"], {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Automated Database Cleanup', 'performance-optimisation'),
+        icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_5__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_6__.faCalendarAlt
+        }),
+        children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+          className: "wppo-field-group",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+            className: "wppo-field",
+            children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("label", {
+              className: "wppo-field-label",
+              htmlFor: "dbSchedule",
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Schedule Frequency', 'performance-optimisation')
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("select", {
+              className: "wppo-select",
+              id: "dbSchedule",
+              name: "dbSchedule",
+              value: settings.dbSchedule,
+              onChange: (0,_lib_util__WEBPACK_IMPORTED_MODULE_2__.handleChange)(setSettings),
+              "aria-describedby": "dbSchedule-desc",
+              children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("option", {
+                value: "none",
+                children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('None (Manual Only)', 'performance-optimisation')
+              }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("option", {
+                value: "daily",
+                children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Daily', 'performance-optimisation')
+              }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("option", {
+                value: "weekly",
+                children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Weekly', 'performance-optimisation')
+              }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("option", {
+                value: "monthly",
+                children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Monthly', 'performance-optimisation')
+              })]
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("p", {
+              id: "dbSchedule-desc",
+              className: "wppo-text-muted wppo-mt-10 wppo-text-small",
+              children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('How often the automated database cleanup routine should run in the background.', 'performance-optimisation')
+            })]
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+            className: "wppo-grid-2-col wppo-mt-24",
+            children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+              children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("label", {
+                className: "wppo-field-label",
+                htmlFor: "dbRevMaxAge",
+                children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Revision Max Age (Days)', 'performance-optimisation')
+              }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("input", {
+                className: "wppo-input",
+                type: "number",
+                id: "dbRevMaxAge",
+                name: "dbRevMaxAge",
+                min: "0",
+                value: settings.dbRevMaxAge,
+                onChange: (0,_lib_util__WEBPACK_IMPORTED_MODULE_2__.handleChange)(setSettings),
+                "aria-describedby": "dbRevMaxAge-desc",
+                style: {
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+                }
+              }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("p", {
+                id: "dbRevMaxAge-desc",
+                className: "wppo-text-muted wppo-mt-10 wppo-text-small",
+                children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Delete post revisions older than this many days (0 for no age limit).', 'performance-optimisation')
+              })]
+            }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+              children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("label", {
+                className: "wppo-field-label",
+                htmlFor: "dbRevKeepLatest",
+                children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Keep Latest Revisions', 'performance-optimisation')
+              }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("input", {
+                className: "wppo-input",
+                type: "number",
+                id: "dbRevKeepLatest",
+                name: "dbRevKeepLatest",
+                min: "0",
+                value: settings.dbRevKeepLatest,
+                onChange: (0,_lib_util__WEBPACK_IMPORTED_MODULE_2__.handleChange)(setSettings),
+                "aria-describedby": "dbRevKeepLatest-desc",
+                style: {
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+                }
+              }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("p", {
+                id: "dbRevKeepLatest-desc",
+                className: "wppo-text-muted wppo-mt-10 wppo-text-small",
+                children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Always retain this many recent revisions per post, regardless of age.', 'performance-optimisation')
+              })]
+            })]
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_SwitchField__WEBPACK_IMPORTED_MODULE_9__["default"], {
+            label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Optimize tables after cleanup', 'performance-optimisation'),
+            description: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Automatically run OPTIMIZE TABLE on affected tables after cleanup to reclaim disk space and rebuild indexes.', 'performance-optimisation'),
+            name: "dbOptimize",
+            checked: settings.dbOptimize,
+            onChange: (0,_lib_util__WEBPACK_IMPORTED_MODULE_2__.handleChange)(setSettings)
+          })]
+        })
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_8__["default"], {
+        title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Total Database Overhead', 'performance-optimisation'),
+        icon: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_5__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_6__.faDatabase
+        }),
+        footer: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_10__["default"], {
+          className: "wppo-button wppo-button--secondary",
+          onClick: () => setConfirmDialog({
+            isOpen: true,
+            type: 'all',
+            label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Optimize Everything', 'performance-optimisation')
+          }),
+          isLoading: loading.all,
+          disabled: totalItems === 0,
+          label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Optimize Everything Now', 'performance-optimisation')
+        }),
+        children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+          className: "wppo-stat-hero",
+          children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("span", {
+            className: "wppo-stat-hero__value",
+            children: loadingCounts ? '…' : `${Number(totalItems).toLocaleString()} ${(0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__._n)('item', 'items', totalItems, 'performance-optimisation')}`
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("span", {
+            className: "wppo-stat-hero__label",
+            children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Total Optimisation Opportunities', 'performance-optimisation')
+          }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("p", {
+            className: "wppo-text-muted wppo-text-small wppo-mt-10",
+            children: totalItems === 0 ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Your database is clean — no overhead items detected.', 'performance-optimisation') : (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.sprintf)(/* translators: %d is the number of items that can be cleaned. */
+            (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__._n)('%d item can be safely removed to reclaim space.', '%d items can be safely removed to reclaim space.', totalItems, 'performance-optimisation'), totalItems)
+          })]
+        })
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+      className: "wppo-mt-40",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("h4", {
+        className: "wppo-section-title",
+        children: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Granular Cleanup Options', 'performance-optimisation')
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("div", {
+        className: "wppo-grid-2-col wppo-mt-20",
+        children: CLEANUP_TYPES.map(item => {
+          const risk = RISK_BADGE_MAP[item.key];
+          return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_FeatureCard__WEBPACK_IMPORTED_MODULE_8__["default"], {
+            title: item.label,
+            actions: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+              style: {
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              },
+              children: [risk && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("span", {
+                className: `wppo-status-badge wppo-status-badge--${risk.level}`,
+                children: risk.label
+              }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_LoadingSubmitButton__WEBPACK_IMPORTED_MODULE_10__["default"], {
+                type: "button",
+                className: "wppo-button wppo-button--secondary wppo-button--sm",
+                onClick: () => setConfirmDialog({
+                  isOpen: true,
+                  type: item.key,
+                  label: item.label
+                }),
+                disabled: (counts[item.key] || 0) === 0 || loading[item.key],
+                isLoading: loading[item.key],
+                label: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Clean', 'performance-optimisation'),
+                loadingLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Cleaning', 'performance-optimisation')
+              })]
+            }),
+            children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsxs)("div", {
+              className: "wppo-cleanup-row",
+              children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("p", {
+                className: "wppo-text-muted wppo-cleanup-row__desc",
+                children: item.description
+              }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)("span", {
+                className: "wppo-cleanup-row__count",
+                style: {
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+                },
+                children: Number(counts[item.key] || 0).toLocaleString()
+              })]
+            })
+          }, item.key);
+        })
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_13__.jsx)(_common_ConfirmDialog__WEBPACK_IMPORTED_MODULE_11__["default"], {
+      isOpen: confirmDialog.isOpen,
+      onConfirm: () => {
+        setConfirmDialog({
+          ...confirmDialog,
+          isOpen: false
+        });
+        handleCleanup(confirmDialog.type);
+      },
+      onCancel: () => setConfirmDialog({
+        ...confirmDialog,
+        isOpen: false
+      }),
+      title: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Confirm', 'performance-optimisation') + ` ${confirmDialog.label}`,
+      message: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('This action will permanently delete', 'performance-optimisation') + ` ${confirmDialog.type === 'all' ? (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('overhead items', 'performance-optimisation') : confirmDialog.label.toLowerCase()} ` + (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('from your database. Proceed?', 'performance-optimisation'),
+      confirmLabel: (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Delete', 'performance-optimisation'),
+      variant: "danger"
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (DatabaseCleanup);
+
+/***/ },
+
+/***/ "./src/components/common/ConfirmDialog.js"
+/*!************************************************!*\
+  !*** ./src/components/common/ConfirmDialog.js ***!
+  \************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__);
+
+
+
+
+
+/**
+ * A reusable confirmation dialog component for destructive actions.
+ *
+ * @param {Object}               props                Component props.
+ * @param {boolean}              props.isOpen         Whether the dialog is visible.
+ * @param {Function}             props.onConfirm      Callback fired on confirm.
+ * @param {Function}             props.onCancel       Callback fired on cancel or Escape.
+ * @param {string}               props.title          Dialog heading.
+ * @param {string}               props.message        Dialog body text.
+ * @param {string}               [props.confirmLabel] Label for the confirm button.
+ * @param {string}               [props.cancelLabel]  Label for the cancel button.
+ * @param {string}               [props.variant]      'warning' | 'danger' — controls confirm button style.
+ * @param {import('react').Node} [props.children]     Optional extra content (e.g., a detail list).
+ */
+
+const ConfirmDialog = ({
+  isOpen,
+  onConfirm,
+  onCancel,
+  title,
+  message,
+  confirmLabel,
+  cancelLabel,
+  variant = 'danger',
+  children
+}) => {
+  const dialogRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const confirmBtnRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const focusableRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)([]);
+  const previouslyFocusedRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const handleKeyDown = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(e => {
+    if (e.key === 'Escape') {
+      onCancel();
+    }
+
+    // Focus trap.
+    if (e.key === 'Tab' && dialogRef.current) {
+      const focusable = focusableRef.current;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (dialogRef.current?.ownerDocument?.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (dialogRef.current?.ownerDocument?.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }, [onCancel]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    if (isOpen && dialogRef.current) {
+      focusableRef.current = Array.from(dialogRef.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'));
+    } else {
+      focusableRef.current = [];
+    }
+  }, [isOpen]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    if (isOpen && confirmBtnRef.current) {
+      const cancelBtn = dialogRef.current?.querySelector('.wppo-dialog-cancel');
+      if (cancelBtn) {
+        cancelBtn.focus();
+      }
+    }
+  }, [isOpen]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    const currentDialog = dialogRef.current;
+    const doc = currentDialog?.ownerDocument || document;
+    if (isOpen) {
+      previouslyFocusedRef.current = doc.activeElement;
+      doc.addEventListener('keydown', handleKeyDown);
+      doc.body.style.overflow = 'hidden';
+    }
+    return () => {
+      doc.removeEventListener('keydown', handleKeyDown);
+      doc.body.style.overflow = '';
+    };
+  }, [isOpen, handleKeyDown]);
+
+  // Return focus to the element that opened the dialog when it closes.
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    if (isOpen || !previouslyFocusedRef.current) {
+      return;
+    }
+    const previouslyFocused = previouslyFocusedRef.current;
+    previouslyFocusedRef.current = null;
+    if (previouslyFocused && typeof previouslyFocused.focus === 'function' && previouslyFocused.isConnected) {
+      previouslyFocused.focus();
+    }
+  }, [isOpen]);
+  if (!isOpen) {
+    return null;
+  }
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)("div", {
+    className: "wppo-dialog-overlay",
+    onClick: onCancel,
+    onKeyDown: e => {
+      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+        onCancel();
+      }
+    },
+    role: "presentation",
+    children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsxs)("div", {
+      className: "wppo-dialog",
+      ref: dialogRef,
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-labelledby": "wppo-dialog-title",
+      onClick: e => e.stopPropagation(),
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsxs)("h3", {
+        id: "wppo-dialog-title",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+          icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faExclamationTriangle
+        }), title]
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)("p", {
+        children: message
+      }), children, /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsxs)("div", {
+        className: "wppo-dialog-actions",
+        children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)("button", {
+          type: "button",
+          className: "wppo-button wppo-button--secondary wppo-dialog-cancel",
+          onClick: onCancel,
+          children: cancelLabel || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_3__.__)('Cancel', 'performance-optimisation')
+        }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_4__.jsx)("button", {
+          type: "button",
+          className: `wppo-button ${variant === 'danger' ? 'wppo-button--danger' : 'wppo-button--primary'}`,
+          onClick: onConfirm,
+          ref: confirmBtnRef,
+          children: confirmLabel || (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_3__.__)('Confirm', 'performance-optimisation')
+        })]
+      })]
+    })
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (ConfirmDialog);
+
+/***/ },
+
+/***/ "./src/components/common/FeatureCard.js"
+/*!**********************************************!*\
+  !*** ./src/components/common/FeatureCard.js ***!
+  \**********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__);
+
+/**
+ * FeatureCard — Standardized card wrapper for every settings group.
+ *
+ * @param {Object}                    props             Component props.
+ * @param {string}                    [props.title]     Optional card heading.
+ * @param {import('react').ReactNode} [props.icon]      Optional icon beside the title.
+ * @param {import('react').ReactNode} [props.actions]   Buttons / links in the card header.
+ * @param {import('react').ReactNode} [props.footer]    Buttons / links in the card footer.
+ * @param {import('react').ReactNode} props.children    Card body content.
+ * @param {string}                    [props.className] Extra CSS classes.
+ */
+const FeatureCard = ({
+  title,
+  icon,
+  actions,
+  footer,
+  children,
+  className
+}) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+  className: `wppo-feature-card ${className || ''}`.trim(),
+  children: [(title || actions) && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+    className: "wppo-feature-card__header",
+    children: [title && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("h3", {
+      children: [icon, title]
+    }), actions && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+      className: "wppo-feature-card__header-actions",
+      children: actions
+    })]
+  }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+    className: "wppo-feature-card__body",
+    children: children
+  }), footer && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+    className: "wppo-feature-card__footer",
+    children: footer
+  })]
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (FeatureCard);
+
+/***/ },
+
+/***/ "./src/components/common/FeatureHeader.js"
+/*!************************************************!*\
+  !*** ./src/components/common/FeatureHeader.js ***!
+  \************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__);
+
+/**
+ * FeatureHeader — Consistent hero section for every tab.
+ *
+ * @param {Object}                    props               Component props.
+ * @param {string}                    props.title         Page heading.
+ * @param {string}                    [props.description] Short subtitle text.
+ * @param {import('react').ReactNode} [props.status]      Optional status badge / indicator.
+ * @param {import('react').ReactNode} [props.actions]     Buttons rendered on the right.
+ * @param {import('react').ReactNode} [props.children]    Extra content below the header row.
+ */
+const FeatureHeader = ({
+  title,
+  description,
+  status,
+  actions,
+  children
+}) => /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+  className: "wppo-feature-header",
+  children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+    className: "wppo-feature-header__main",
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsxs)("div", {
+      className: "wppo-feature-header__title",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("h2", {
+        children: title
+      }), description && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("p", {
+        children: description
+      }), status && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+        className: "wppo-feature-header__status",
+        children: status
+      })]
+    }), actions && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+      className: "wppo-feature-header__actions",
+      children: actions
+    })]
+  }), children && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_0__.jsx)("div", {
+    className: "wppo-feature-header__extra",
+    children: children
+  })]
+});
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (FeatureHeader);
+
+/***/ },
+
+/***/ "./src/components/common/LoadingSubmitButton.js"
+/*!******************************************************!*\
+  !*** ./src/components/common/LoadingSubmitButton.js ***!
+  \******************************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__);
+
+
+
+/**
+ * A reusable submit button with loading state support.
+ *
+ * @param {Object}               props              Component props.
+ * @param {boolean}              props.isLoading    Whether the button is in a loading state.
+ * @param {string}               props.label        The label to show when not loading.
+ * @param {string}               props.loadingLabel The label to show when loading.
+ * @param {string}               props.className    Additional CSS classes.
+ * @param {string}               props.type         Button type (default: 'submit').
+ * @param {boolean}              props.disabled     Whether the button is disabled (default: isLoading).
+ * @param {Object}               props.rest         Any other button props.
+ * @param {import('react').Node} props.children     The child elements.
+ */
+
+const LoadingSubmitButton = ({
+  isLoading,
+  label,
+  loadingLabel,
+  className = 'wppo-button wppo-button--primary',
+  type = 'submit',
+  disabled,
+  children,
+  ...rest
+}) => {
+  const isDisabled = Boolean(disabled) || Boolean(isLoading);
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__.jsxs)("button", {
+    type: type,
+    className: className,
+    disabled: isDisabled,
+    "aria-busy": isLoading,
+    ...rest,
+    children: [isLoading && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_0__.FontAwesomeIcon, {
+      icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_1__.faSpinner,
+      spin: true,
+      "aria-hidden": "true",
+      className: "wppo-mr-8"
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_2__.jsx)("span", {
+      role: "status",
+      "aria-live": "polite",
+      children: isLoading ? loadingLabel || children : label || children
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (LoadingSubmitButton);
+
+/***/ },
+
+/***/ "./src/components/common/NoticeBanner.js"
+/*!***********************************************!*\
+  !*** ./src/components/common/NoticeBanner.js ***!
+  \***********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/i18n */ "@wordpress/i18n");
+/* harmony import */ var _wordpress_i18n__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @fortawesome/react-fontawesome */ "./node_modules/@fortawesome/react-fontawesome/index.es.js");
+/* harmony import */ var _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @fortawesome/free-solid-svg-icons */ "./node_modules/@fortawesome/free-solid-svg-icons/index.mjs");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__);
+/**
+ * Shared presentational notice banner.
+ *
+ * Renders the `.wppo-notice` markup used across the admin SPA with the
+ * correct modifier class, icon, ARIA live region semantics and an optional
+ * dismiss button. Pair with the `useNotice()` hook for state and timing.
+ *
+ * @since 1.10.0
+ */
+
+
+
+
+const NoticeBanner = ({
+  type = 'info',
+  message = '',
+  onDismiss,
+  className
+}) => {
+  if (!message) {
+    return null;
+  }
+  const icon = type === 'success' ? _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faCheckCircle : _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faExclamationTriangle;
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsxs)("div", {
+    className: `wppo-notice wppo-notice--${type}${className ? ` ${className}` : ''}`,
+    role: type === 'error' ? 'alert' : 'status',
+    "aria-live": type === 'error' ? 'assertive' : 'polite',
+    children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsxs)("div", {
+      className: "wppo-notice__content",
+      children: [/*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+        icon: icon
+      }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)("span", {
+        children: message
+      })]
+    }), onDismiss && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)("button", {
+      type: "button",
+      className: "wppo-notice__dismiss",
+      onClick: onDismiss,
+      "aria-label": (0,_wordpress_i18n__WEBPACK_IMPORTED_MODULE_0__.__)('Dismiss', 'performance-optimisation'),
+      children: /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_3__.jsx)(_fortawesome_react_fontawesome__WEBPACK_IMPORTED_MODULE_1__.FontAwesomeIcon, {
+        icon: _fortawesome_free_solid_svg_icons__WEBPACK_IMPORTED_MODULE_2__.faTimes
+      })
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (NoticeBanner);
+
+/***/ },
+
+/***/ "./src/components/common/SwitchField.js"
+/*!**********************************************!*\
+  !*** ./src/components/common/SwitchField.js ***!
+  \**********************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_components__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/components */ "@wordpress/components");
+/* harmony import */ var _wordpress_components__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_components__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! react/jsx-runtime */ "react/jsx-runtime");
+/* harmony import */ var react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__);
+
+
+/**
+ * SwitchField — Accessible toggle switch with label and description.
+ * Uses WordPress ToggleControl for native WP styling + accessibility.
+ *
+ * @param {Object}   props               Component props.
+ * @param {string}   props.label         Visible heading for the switch.
+ * @param {string}   [props.description] Subtitle text.
+ * @param {string}   props.name          Input name attribute.
+ * @param {boolean}  props.checked       Whether the switch is on.
+ * @param {Function} props.onChange      Change handler (receives synthetic event).
+ * @param {boolean}  [props.showLabel]   Whether to show the label.
+ * @param {boolean}  [props.disabled]    Whether the switch is disabled.
+ */
+
+const SwitchField = ({
+  label,
+  description,
+  name,
+  checked,
+  onChange,
+  showLabel = true,
+  disabled = false
+}) => {
+  const handleToggle = newValue => {
+    // Synthesize an event-like object so existing handleChange() util works unchanged.
+    onChange({
+      target: {
+        name,
+        type: 'checkbox',
+        checked: newValue
+      }
+    });
+  };
+  return /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsxs)("div", {
+    className: "wppo-switch-field",
+    children: [(showLabel || description) && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsxs)("div", {
+      className: "wppo-switch-field__info",
+      children: [showLabel && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("span", {
+        className: "wppo-switch-field__label",
+        children: label
+      }), description && /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)("p", {
+        className: "wppo-text-muted",
+        children: description
+      })]
+    }), /*#__PURE__*/(0,react_jsx_runtime__WEBPACK_IMPORTED_MODULE_1__.jsx)(_wordpress_components__WEBPACK_IMPORTED_MODULE_0__.ToggleControl, {
+      __nextHasNoMarginBottom: true,
+      checked: checked,
+      onChange: handleToggle,
+      label: label,
+      hideLabelFromVision: true,
+      disabled: disabled
+    })]
+  });
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (SwitchField);
+
+/***/ },
+
+/***/ "./src/lib/useNotice.js"
+/*!******************************!*\
+  !*** ./src/lib/useNotice.js ***!
+  \******************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @wordpress/element */ "@wordpress/element");
+/* harmony import */ var _wordpress_element__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_wordpress_element__WEBPACK_IMPORTED_MODULE_0__);
+/**
+ * Shared hook for scoped feedback notices.
+ *
+ * Centralises the divergent per-component notification state and
+ * auto-dismiss timer logic into one pattern backed by the
+ * NoticeBanner presentational component.
+ *
+ * Each component that talks to the REST API previously reinvented its
+ * own feedback state (`notification`, `announcement`, `error`, `actionMsg`).
+ * Use this hook instead:
+ *
+ * ```js
+ * const { notice, notify, dismiss } = useNotice();
+ * notify( { type: 'success', message: 'Saved.', durationMs: 5000 } );
+ * ```
+ *
+ * @since 1.10.0
+ * @return {{ notice: ?Object, notify: Function, dismiss: Function }}
+ *   - `notice`:  `{ type, message }` or `null`.
+ *   - `notify`:  `( { type, message, durationMs? } )` — shows a notice and
+ *                optionally auto-dismisses it after `durationMs`.
+ *   - `dismiss`: `() => void` — clears the notice and any pending timer.
+ */
+
+const useNotice = () => {
+  const [notice, setNotice] = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+  const timerRef = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+  const clearTimer = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Clear the current notice and any pending auto-dismiss timer.
+   */
+  const dismiss = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(() => {
+    clearTimer();
+    setNotice(null);
+  }, [clearTimer]);
+
+  /**
+   * Show a notice.
+   *
+   * @param {Object} opts              Notice options.
+   * @param {string} opts.type         'error' | 'success' | 'warning' | 'info'.
+   * @param {string} opts.message      Notice text.
+   * @param {number} [opts.durationMs] Optional auto-dismiss delay in milliseconds.
+   */
+  const notify = (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useCallback)(({
+    type,
+    message,
+    durationMs
+  }) => {
+    clearTimer();
+    setNotice({
+      type,
+      message
+    });
+    if (durationMs) {
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        setNotice(null);
+      }, durationMs);
+    }
+  }, [clearTimer]);
+  (0,_wordpress_element__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+    return clearTimer;
+  }, [clearTimer]);
+  return {
+    notice,
+    notify,
+    dismiss
+  };
+};
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (useNotice);
+
+/***/ },
+
+/***/ "./src/lib/util.js"
+/*!*************************!*\
+  !*** ./src/lib/util.js ***!
+  \*************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   handleChange: () => (/* binding */ handleChange)
+/* harmony export */ });
+const handleChange = setSettings => e => {
+  const {
+    name,
+    type,
+    value,
+    checked
+  } = e.target;
+  let nextValue;
+  if ('checkbox' === type) {
+    nextValue = checked;
+  } else if ('number' === type || 'delayJSIdleTimeout' === name) {
+    if ('' === value) {
+      nextValue = 'delayJSIdleTimeout' === name ? 3000 : '';
+    } else {
+      const parsed = Number(value);
+      if (Number.isNaN(parsed)) {
+        nextValue = 'delayJSIdleTimeout' === name ? 3000 : value;
+      } else {
+        nextValue = parsed;
+        if ('delayJSIdleTimeout' === name) {
+          if (!Number.isFinite(nextValue) || nextValue <= 0) {
+            nextValue = 3000;
+          } else {
+            nextValue = Math.min(20000, Math.max(500, nextValue));
+          }
+        }
+      }
+    }
+  } else {
+    nextValue = value;
+  }
+  setSettings(prevState => ({
+    ...prevState,
+    [name]: nextValue
+  }));
+};
+
+/***/ }
+
+}]);
+//# sourceMappingURL=tab-database-cleanup.js.map?ver=cb80f9edac4bd5cee032
