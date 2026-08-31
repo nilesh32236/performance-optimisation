@@ -489,6 +489,38 @@ if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $t
 }
 ```
 
+### `wppo_combine_preload_fetchpriority`
+Filters fetchpriority for the combined-CSS `rel="preload"` hint (external path only, not inline). Default `high` prioritises LCP stylesheet. Return falsy to suppress. @since NEXT.
+
+**Parameters:**
+- `$fetchpriority` *(string)* — `'high'|'low'|'auto'` (any other value suppressed).
+- `$url` *(string)* — Preload URL.
+
+**Example:**
+```php
+add_filter( 'wppo_combine_preload_fetchpriority', function( $prio, $url ) {
+    return false; // suppress fetchpriority
+}, 10, 2 );
+```
+
+---
+
+### `wppo_deferred_fetchpriority`
+Filters fetchpriority for each deferred script handle. Default `low` deprioritises non-render-blocking scripts. Return `high` for an LCP-critical handle, falsy to suppress. Guards WP 6.9+ native `wp_script_add_data` plus pre-6.9 regex fallback. @since NEXT.
+
+**Parameters:**
+- `$fetchpriority` *(string)* — `'high'|'low'|'auto'`.
+- `$handle` *(string)* — Script handle.
+
+**Example:**
+```php
+add_filter( 'wppo_deferred_fetchpriority', function( $prio, $handle ) {
+    return 'jquery-core' === $handle ? 'high' : $prio;
+}, 10, 2 );
+```
+
+---
+
 ### `wp_template_enhancement_output_buffer`
 WordPress 6.9 filter for the template-enhancement buffer. @since NEXT.
 
