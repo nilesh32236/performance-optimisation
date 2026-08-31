@@ -28,3 +28,16 @@
 ## .gitignore Screenshot Helpers
 - Added take_screenshot*.js + take_wizard_390.js to .gitignore (local dev artifacts from design work, not part of plugin). Not committed to PR 767 but will be included in maintenance docs PR.
 
+
+### 2026-08-31 14:30 UTC — E1 CLI Extraction Decisions
+- **Synopsis `[<action>]` default:** KEEP — fixes doc-code drift (master `<action>` vs code `??'clear'`), WP-CLI Handbook, no BC break
+- **--format=json JSON-only:** KEEP — wp_json_encode fallback, valid JSON, jq-ready, reject non-json → json, no table/csv/yaml/Spyc per FINAL-ADVERSARIAL-REVIEW (REJECT table/csv)
+- **--yes for type=all:** KEEP — `WP_CLI\Utils::get_flag_value` + tty check + confirm, non-TTY proceeds, WP-CLI convention, safety for destructive all
+- **--dry-run for cleanup/optimize:** KEEP — reuse get_counts, early return before DELETE/OPTIMIZE, warning, standard `wp search-replace --dry-run` pattern, REJECT blind --yes everywhere
+- **Allowlist optimize --tables:** KEEP — TABLE_MAP unique + warning skip, defence-in-depth vs regex, REJECT unbounded
+- **Extra types trashed_comments/unattached/oembed:** KEEP — backend already has clean_* methods, alias support, help now truthful 9+all, REJECT if synopsis not updated
+- **Hook per-type:** KEEP — additive, already clean_all had all, now per-type
+- **Delegate get_default_settings:** KEEP critical — fixes 7-tab drift, blog-keyed memo (switch_blog safe), REJECT stale inline array
+- **Object-cache ALLOWED_KEYS 12:** KEEP — converge CLI 6 + REST 10, parity with UI/API
+- **REJECTED:** --confirm alias, table/csv/yaml, --network custom get_sites (use --url), --batch-size/progress (complexity), research docs not shipped, UX/performance unrelated (E2-E5 separate)
+- **Branch:** Not cherry-pick large range, inspected git diff master...fix/audit -- class-wppo-cli-command.php + class-util.php + class-object-cache.php, extracted only E1 via git checkout

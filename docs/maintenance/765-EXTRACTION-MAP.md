@@ -1,9 +1,9 @@
-# 765 Extraction Map — fix/audit-2026-08-28 (212 files) vs master @ c1cda64f
+# 765 Extraction Map — fix/audit-2026-08-28 (212 files) vs master @ 7eb05beb
 
 **Branch:** `origin/fix/audit-2026-08-28` at `661a3a7c` (pushed 2026-08-31)
-**Master:** `c1cda64f` (after 773 — includes 771/772/773: fetchpriority, speculation, lazy 757)
+**Master:** `7eb05beb` (after 775 — includes 771/772/773 + 775 E1 CLI)
 **Diff:** `git diff master...origin/fix/audit-2026-08-28` → 212 files changed, +25011/-3545 (filtered non-AUDIT still ~114 code files)
-**Overlap with master merges:** 30+ files in `comm -12` (already touched by 746/751/761/771/772/773 etc.), ~182 only-in-765 before #755/754/757, now reduced but still largely STILL NEEDED (CLI, Hooks, H-fixes, UX)
+**Overlap with master merges:** 30+ files in `comm -12` (already touched by 746/751/761/771/772/773/775 etc.), E1 now IMPLEMENTED, ~182 only-in-765 before, now E1 STILL NEEDED → IMPLEMENTED, remaining still largely STILL NEEDED (Hooks, H-fixes, UX, Perf unique)
 **Decision in prior run:** CLOSED supersized, branch preserved for split (<100 files/PR). Do NOT merge as-is.
 
 ## Classification Legend
@@ -18,12 +18,12 @@
 
 ### PR-E1 — CLI Phases (c8d1cef3/45ed2f79/d306e677 etc.)
 **Files:** `includes/class-wppo-cli-command.php` (+ `tests/php/WppoCli*`, `uninstall.php`, `docs/research/wp-cli-hooks/*` docs)
-**Diff:** 60+ lines — adds `synopsis`/`format=json`/`--yes/--dry-run`/`allowlist` converge (phase inputs converge phase, i.e., synopsis, json-only format, allowlist). At `master` this is **NOT present** (master has base CLI only).
-**Class:** STILL NEEDED
+**Diff:** 60+ lines — adds `synopsis`/`format=json`/`--yes/--dry-run`/`allowlist` converge (phase inputs converge phase, i.e., synopsis, json-only format, allowlist). At `master` this was **NOT present** before 775.
+**Class:** ✅ IMPLEMENTED via #775 (7eb05beb) — 39e52805 `feat(cli): E1 WP-CLI improvements` (synopsis, JSON, --yes/--dry-run, allowlist, extra types, blog-keyed cache, ALLOWED_KEYS)
 **Relevance:** High — WP-CLI is public surface, tests exist.
-**Conflicts:** Low — touches CLI only.
-**Split size:** ~8 files, <100, tests included.
-**Deps:** None.
+**Conflicts:** Low — touches CLI only (merged without conflict).
+**Split size:** 3 files (class-wppo-cli-command, class-util, class-object-cache), 531 ins, <100.
+**Deps:** None — DONE.
 
 ### PR-E2 — Hooks Expansion (7ce48341 Phase3 PR-C)
 **Files:** `includes/class-main.php`, `includes/class-cache.php`, `includes/class-abilities.php` (Util::get_settings memo), `class-util.php`, `class-object-cache.php`, `tests/php/Hook*Test.php`, `tests/php/UtilSettingsCacheTest.php`
