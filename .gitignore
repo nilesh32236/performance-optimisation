@@ -1,15 +1,17 @@
-node_modules/
-/vendor/
-.opencode/
-.DS_Store
-reports/
-app/
-test-lab/
-*.log
-coverage/
-*.orig
-.phpunit.cache/
-review-output.jsonl
 
 # OpenCode agent workspace artifacts
+*.log
+*.orig
+.DS_Store
 .omo/
+.opencode/
+.phpunit.cache/
+/vendor/
+app/
+coverage/
+node_modules/
+reports/
+review-output.jsonl
+take_screenshot*.js
+take_wizard_390.js
+test-lab/
