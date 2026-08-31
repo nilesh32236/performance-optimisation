@@ -235,7 +235,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			foreach ( $urls as $scan_url ) {
 				foreach ( array( 'mobile', 'desktop' ) as $scan_strategy ) {
 					// Deduplicate: skip if an identical PageSpeed job is already pending.
-					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( Pagespeed::AS_HOOK, array( array( 'url' => $scan_url, 'strategy' => $scan_strategy ) ), Pagespeed::AS_GROUP ) ) {
+					if ( function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action(
+						Pagespeed::AS_HOOK,
+						array(
+							array(
+								'url'      => $scan_url,
+								'strategy' => $scan_strategy,
+							),
+						),
+						Pagespeed::AS_GROUP
+					) ) {
 						continue;
 					}
 					// queue_scan() returns 0 when Action Scheduler cannot create the job or deduped.
@@ -305,13 +314,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 						$mig_placeholders = implode( ',', array_fill( 0, count( $post_types_for_migration ), '%s' ) );
 						$mig_args         = array_values( $post_types_for_migration );
 						$mig_args[]       = $old_offset;
-						// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $mig_placeholders is count-derived only; $mig_args is sanitized list of post types + int offset.
+						// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $mig_placeholders is count-derived.
 						$mapped_id = $wpdb->get_var(
+							// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- $mig_placeholders is count-derived.
 							$wpdb->prepare(
 								"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($mig_placeholders) AND post_status = 'publish' ORDER BY ID ASC LIMIT 1 OFFSET %d",
 								...$mig_args
 							)
 						);
+						// phpcs:enable
 						if ( null !== $mapped_id && '' !== $mapped_id ) {
 							$last_id = (int) $mapped_id;
 							update_option( 'wppo_preload_cron_last_id', $last_id, false );
@@ -341,15 +352,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 				$placeholders = implode( ',', array_fill( 0, count( $post_types ), '%s' ) );
 				// Build args explicitly to avoid spread-variadic PHPCS concerns; $placeholders is count-derived only.
-				$prepare_args = array_values( $post_types );
+				$prepare_args   = array_values( $post_types );
 				$prepare_args[] = $last_id;
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is count-derived only; $prepare_args is sanitized.
+				// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is count-derived.
 				$query_batch_posts = $wpdb->get_col(
+					// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- $placeholders is count-derived.
 					$wpdb->prepare(
 						"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders) AND post_status = 'publish' AND ID > %d ORDER BY ID ASC LIMIT 200",
 						...$prepare_args
 					)
 				);
+				// phpcs:enable
 
 				if ( empty( $query_batch_posts ) ) {
 					// Reset cursor on completion.

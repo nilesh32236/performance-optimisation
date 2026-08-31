@@ -708,7 +708,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 				// unresolvable asset (N×5s), stalling the 30s telemetry scan.
 				// Opt-in same-host HEAD via wppo_telemetry_allow_remote_head filter.
 				if ( apply_filters( 'wppo_telemetry_allow_remote_head', false, $url ) ) {
-					$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
+					$home_host  = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
 					$asset_host = wp_parse_url( $url, PHP_URL_HOST );
 					// Only for same-host assets to avoid SSRF/external calls.
 					if ( $asset_host && $home_host && $asset_host === $home_host ) {

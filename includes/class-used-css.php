@@ -914,13 +914,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			// Intentional bypass of WP_Query filters (pre_get_posts, language plugins) for performance:
 			// direct $wpdb cursor pagination (ID > last_id) avoids OFFSET cost on large sites. Site-specific
 			// filtering must be handled separately if needed.
-			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Intentional direct query, $placeholders is count-derived only.
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- Intentional direct query, $placeholders is count-derived only.
 			do {
 				// Cursor pagination via ID > last_id avoids O(offset) MySQL scans.
-				$prepare_args = array_values( $post_types );
+				$prepare_args   = array_values( $post_types );
 				$prepare_args[] = $last_id;
 				$prepare_args[] = $batch;
-				$post_ids = $wpdb->get_col(
+				$post_ids       = $wpdb->get_col(
+					// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.ReplacementsWrongNumber -- $placeholders is count-derived; $prepare_args holds post types + 2 ints via spread.
 					$wpdb->prepare(
 						"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders) AND post_status = 'publish' AND ID > %d ORDER BY ID ASC LIMIT %d",
 						...$prepare_args
@@ -945,6 +946,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				$last_id = (int) end( $post_ids );
 				// Terminate only when last batch was partial; when total is exact multiple of $batch
 				// the next SELECT returns empty and breaks at the top of the loop (one wasted query in that edge case).
+				// phpcs:ignore Squiz.PHP.DisallowSizeFunctionsInLoops.Found -- count() on batch is intentional for loop termination.
 			} while ( count( $post_ids ) === $batch );
 			// phpcs:enable
 
