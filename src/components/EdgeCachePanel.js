@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import { useState, useEffect, useCallback, useId } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
@@ -18,6 +18,13 @@ import LoadingSubmitButton from './common/LoadingSubmitButton';
  * @since NEXT
  */
 const EdgeCachePanel = () => {
+	const uid = useId();
+	const providerDescId = `${ uid }-wppoEdgeProvider-desc`;
+	const ttlDescId = `${ uid }-wppoEdgeTtl-desc`;
+	const swrDescId = `${ uid }-wppoEdgeSwr-desc`;
+	const cfZoneDescId = `${ uid }-wppoEdgeCfZone-desc`;
+	const bunnyZoneDescId = `${ uid }-wppoEdgeBunnyZone-desc`;
+
 	const initial =
 		typeof wppoSettings !== 'undefined'
 			? wppoSettings?.settings?.edge_cache || {}
@@ -49,7 +56,7 @@ const EdgeCachePanel = () => {
 		setSwr( String( s.staleWhileRevalidate ?? 86400 ) );
 		setCfZone( s.cloudflareZoneId || '' );
 		setBunnyZone( s.bunnyPullZoneId || '' );
-	}, [ wppoSettings?.settings?.edge_cache ] );
+	}, [] );
 
 	const handleSave = useCallback( async () => {
 		setSaving( true );
@@ -71,18 +78,14 @@ const EdgeCachePanel = () => {
 					typeof wppoSettings !== 'undefined' &&
 					wppoSettings.settings
 				) {
-					const nextEdgeCache = Object.freeze( {
+					wppoSettings.settings.edge_cache = {
 						enabled,
 						provider,
 						ttl: parseInt( ttl, 10 ) || 300,
 						staleWhileRevalidate: parseInt( swr, 10 ) || 86400,
 						cloudflareZoneId: cfZone,
 						bunnyPullZoneId: bunnyZone,
-					} );
-					wppoSettings.settings = Object.freeze( {
-						...wppoSettings.settings,
-						edge_cache: nextEdgeCache,
-					} );
+					};
 				}
 				notify( {
 					type: 'success',
@@ -154,6 +157,7 @@ const EdgeCachePanel = () => {
 					id="wppoEdgeProvider"
 					value={ provider }
 					onChange={ ( e ) => setProvider( e.target.value ) }
+					aria-describedby={ providerDescId }
 				>
 					<option value="cloudflare">
 						{ __(
@@ -168,6 +172,15 @@ const EdgeCachePanel = () => {
 						{ __( 'Both', 'performance-optimisation' ) }
 					</option>
 				</select>
+				<p
+					id={ providerDescId }
+					className="wppo-text-muted wppo-text-small"
+				>
+					{ __(
+						'Select the edge cache provider to generate compatible deployment templates.',
+						'performance-optimisation'
+					) }
+				</p>
 			</div>
 
 			<div className="wppo-field">
@@ -181,7 +194,14 @@ const EdgeCachePanel = () => {
 					min="60"
 					value={ ttl }
 					onChange={ ( e ) => setTtl( e.target.value ) }
+					aria-describedby={ ttlDescId }
 				/>
+				<p id={ ttlDescId } className="wppo-text-muted wppo-text-small">
+					{ __(
+						'Time in seconds that edge servers will cache the HTML before marking it as stale.',
+						'performance-optimisation'
+					) }
+				</p>
 			</div>
 
 			<div className="wppo-field">
@@ -198,7 +218,14 @@ const EdgeCachePanel = () => {
 					min="0"
 					value={ swr }
 					onChange={ ( e ) => setSwr( e.target.value ) }
+					aria-describedby={ swrDescId }
 				/>
+				<p id={ swrDescId } className="wppo-text-muted wppo-text-small">
+					{ __(
+						'Additional time in seconds the edge will serve stale content while revalidating in the background.',
+						'performance-optimisation'
+					) }
+				</p>
 			</div>
 
 			{ ( provider === 'cloudflare' || provider === 'both' ) && (
@@ -219,8 +246,12 @@ const EdgeCachePanel = () => {
 						value={ cfZone }
 						onChange={ ( e ) => setCfZone( e.target.value ) }
 						placeholder="abc123"
+						aria-describedby={ cfZoneDescId }
 					/>
-					<p className="wppo-text-muted wppo-text-small">
+					<p
+						id={ cfZoneDescId }
+						className="wppo-text-muted wppo-text-small"
+					>
 						{ __(
 							'Define WPPO_CLOUDFLARE_API_TOKEN in wp-config.php with Zone > Cache Purge permission.',
 							'performance-optimisation'
@@ -247,8 +278,12 @@ const EdgeCachePanel = () => {
 						value={ bunnyZone }
 						onChange={ ( e ) => setBunnyZone( e.target.value ) }
 						placeholder="12345"
+						aria-describedby={ bunnyZoneDescId }
 					/>
-					<p className="wppo-text-muted wppo-text-small">
+					<p
+						id={ bunnyZoneDescId }
+						className="wppo-text-muted wppo-text-small"
+					>
 						{ __(
 							'Define WPPO_BUNNY_API_KEY in wp-config.php with Pull Zone > Purge permission.',
 							'performance-optimisation'
