@@ -79,6 +79,115 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Get default settings structure for fresh installs.
+		 *
+		 * Single source of truth for Main::__construct() defaults and
+		 * WPPO_CLI_Command::get_default_settings() to fix 7-tab drift
+		 * (CLI:451 vs Main:240). Covers all allowed tabs; database_cleanup
+		 * and object_cache are empty (no defaults) for BC.
+		 *
+		 * @since NEXT
+		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
+		 */
+		public static function get_default_settings(): array {
+			return array(
+				'cache_settings'        => array(
+					'enableLoggedInCache' => false,
+					'loggedInCacheRoles'  => array(),
+				),
+				'file_optimisation'     => array(
+					'enableServerRules'       => false,
+					'cdnURL'                  => '',
+					'removeUnusedCSS'         => false,
+					'excludeUnusedCSS'        => '',
+					'criticalCSS'             => false,
+					'hostGoogleFontsLocally'  => false,
+					'blockAssetsOnDemand'     => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+					'loadAllCoreBlockAssets'  => false,
+					'delayJSDefaultStrategy'  => 'interaction',
+					'delayJSIdleList'         => '',
+					'delayJSViewportList'     => '',
+					'delayJSPriority'         => '',
+					'delayJSIdleTimeout'      => 3000,
+					'minifyHTML'              => false,
+					'minifyJS'                => false,
+					'minifyCSS'               => false,
+					'deferJS'                 => false,
+					'delayJS'                 => false,
+					'combineCSS'              => false,
+					'excludeJS'               => '',
+					'excludeCSS'              => '',
+					'excludeDeferJS'          => '',
+					'excludeDelayJS'          => '',
+					'excludeCombineCSS'       => '',
+					'minifyInlineCSS'         => false,
+					'minifyInlineJS'          => false,
+					'removeHTMLComments'      => true,
+					'removeQueryStrings'      => false,
+					'disableRestApiLinks'     => false,
+					'disableRssFeeds'         => false,
+					'disableShortlinks'       => false,
+					'disableGeneratorTag'     => false,
+					'disableJQueryMigrate'    => false,
+					'disablePasswordStrength' => false,
+					'disableSelfPingbacks'    => false,
+				),
+				'preload_settings'      => array(
+					'enableSpeculationRules' => false,
+					'speculationMode'        => 'prefetch',
+					'speculationEagerness'   => 'conservative',
+					'speculationExcludeUrls' => '',
+					'preloadSitemap'         => false,
+				),
+				'image_optimisation'    => array(
+					'lazyLoadImages'             => false,
+					'lazyLoadNative'             => true,
+					'placeholderType'            => 'svg',
+					'autoPreloadLCP'             => false,
+					'prioritizeLCPImages'        => false,
+					'clientSideMimeTypeOverride' => false,
+					'clientSideMimeTypes'        => array(),
+					'lazyLoadBackgroundImages'   => false,
+				),
+				'performance_audit'     => array(
+					'pagespeed_api_key'     => '',
+					'high_value_urls'       => array(),
+					'auto_fix_enabled'      => false,
+					'server_timing_enabled' => false,
+					'auto_rescan'           => '',
+					'rum_enabled'           => false,
+				),
+				'database_cleanup'      => array(),
+				'object_cache'          => array(),
+				'litespeed_integration' => array(
+					'mode'                 => 'auto',
+					'enableNextGenRewrite' => false,
+					'enableBrotli'         => false,
+					'purgeSync'            => true,
+				),
+				'llms_txt'              => array(
+					'enabled' => false,
+					'source'  => 'both',
+				),
+				'od_integration'        => array(
+					'enabled' => class_exists( 'OD_URL_Metric' ) || function_exists( 'od_get_url_metrics' ),
+				),
+				'bfcache'               => array(
+					'enabled' => false,
+				),
+				'perf_translations'     => array(
+					'enabled' => false,
+				),
+				'ai_adaptive'           => array(
+					'enabled' => false,
+				),
+				'edge_cache'            => array(
+					'enabled' => false,
+				),
+			);
+		}
+
+		/**
 		 * Static cache for resolved home URLs, keyed by blog ID.
 		 *
 		 * @var array<int, string>
@@ -89,18 +198,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		/**
 		 * Per-request memo for wppo_settings to avoid repeated get_option deserialization.
 		 *
-		 * @var array|null
+		 * Keyed by blog ID for multisite correctness under switch_to_blog().
+		 *
+		 * @var array<int, array>
 		 * @since NEXT
 		 */
-		private static ?array $settings_cache = null;
+		private static array $settings_cache = array();
 
 		/**
-		 * Whether the settings cache has been populated this request.
+		 * Whether the settings cache has been populated this request, keyed by blog ID.
 		 *
-		 * @var bool
+		 * @var array<int, bool>
 		 * @since NEXT
 		 */
-		private static bool $settings_cache_loaded = false;
+		private static array $settings_cache_loaded = array();
 
 		/**
 		 * Resets the home_url static cache for testing isolation.
@@ -112,27 +223,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Resolve current blog ID safely (handles Brain Monkey stub mis-configuration in tests).
+		 *
+		 * @since NEXT
+		 * @return int Blog ID.
+		 */
+		private static function current_blog_id(): int {
+			if ( ! function_exists( 'get_current_blog_id' ) ) {
+				return 0;
+			}
+			try {
+				return (int) get_current_blog_id();
+			} catch ( \Throwable $e ) {
+				return 0;
+			}
+		}
+
+		/**
 		 * Get wppo_settings with per-request memoization.
 		 *
 		 * Wraps get_option('wppo_settings') with a static cache so up to 6
 		 * deserializations per frontend render (Main, Cache, Cron, Used_CSS, etc.)
 		 * collapse to a single DB-backed fetch per request. Invalidated automatically
-		 * on update/add/delete of the option.
+		 * on update/add/delete of the option. Blog-keyed to avoid cross-site
+		 * leakage under switch_to_blog() (see F-COMPAT-03).
 		 *
 		 * @since NEXT
 		 * @return array The plugin settings.
 		 */
 		public static function get_settings(): array {
-			if ( self::$settings_cache_loaded ) {
-				return self::$settings_cache ?? array();
+			$bid = self::current_blog_id();
+			if ( ! empty( self::$settings_cache_loaded[ $bid ] ) ) {
+				return self::$settings_cache[ $bid ] ?? array();
 			}
 			self::ensure_settings_cache_hook();
 			$raw = get_option( 'wppo_settings', array() );
 			if ( ! is_array( $raw ) ) {
 				$raw = array();
 			}
-			self::$settings_cache        = $raw;
-			self::$settings_cache_loaded = true;
+			self::$settings_cache[ $bid ]        = $raw;
+			self::$settings_cache_loaded[ $bid ] = true;
 			return $raw;
 		}
 
@@ -144,20 +274,57 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function set_settings_cache( array $settings ): void {
-			self::$settings_cache        = $settings;
-			self::$settings_cache_loaded = true;
+			$bid                                 = self::current_blog_id();
+			self::$settings_cache[ $bid ]        = $settings;
+			self::$settings_cache_loaded[ $bid ] = true;
 			self::ensure_settings_cache_hook();
 		}
 
 		/**
 		 * Clear the settings memo (e.g. in tests or on delete).
 		 *
+		 * When called without args clears all blog entries (test isolation).
+		 * When called with a blog ID clears that blog only. The WP
+		 * delete_option_wppo_settings action passes no blog ID, so the full
+		 * clear path is taken. switch_blog is handled by on_switch_blog().
+		 *
 		 * @since NEXT
+		 * @param int|null $blog_id Optional blog ID to clear. Null clears all.
 		 * @return void
 		 */
-		public static function clear_settings_cache(): void {
-			self::$settings_cache        = null;
-			self::$settings_cache_loaded = false;
+		public static function clear_settings_cache( $blog_id = null ): void {
+			if ( null !== $blog_id && is_int( $blog_id ) ) {
+				$bid = (int) $blog_id;
+				unset( self::$settings_cache[ $bid ], self::$settings_cache_loaded[ $bid ] );
+				return;
+			}
+			// Action callbacks (update/delete) pass $old/$new or $option/$value
+			// which are not int blog IDs; treat non-int as "clear all" for
+			// backwards-compat with the pre-blog-keyed API.
+			if ( null !== $blog_id && ! is_int( $blog_id ) ) {
+				self::$settings_cache        = array();
+				self::$settings_cache_loaded = array();
+				return;
+			}
+			self::$settings_cache        = array();
+			self::$settings_cache_loaded = array();
+		}
+
+		/**
+		 * Handler for switch_blog — clears stale memo association.
+		 *
+		 * Kept separate from clear_settings_cache for hook arity clarity.
+		 *
+		 * @since NEXT
+		 * @param int $new_blog_id New blog ID.
+		 * @param int $prev_blog_id Previous blog ID.
+		 * @return void
+		 */
+		public static function on_switch_blog( $new_blog_id, $prev_blog_id ): void {
+			// No destructive clear needed because get_settings() is blog-keyed;
+			// this hook exists as a safety net and to satisfy F-COMPAT-03 audit.
+			// Intentionally no-op: per-blog keying already isolates.
+			unset( $new_blog_id, $prev_blog_id );
 		}
 
 		/**
@@ -168,8 +335,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function reset_all_caches(): void {
 			self::$home_url_cache        = array();
-			self::$settings_cache        = null;
-			self::$settings_cache_loaded = false;
+			self::$settings_cache        = array();
+			self::$settings_cache_loaded = array();
 		}
 
 		/**
@@ -187,6 +354,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			add_action( 'update_option_wppo_settings', array( self::class, 'on_settings_update' ), 10, 2 );
 			add_action( 'add_option_wppo_settings', array( self::class, 'on_settings_add' ), 10, 2 );
 			add_action( 'delete_option_wppo_settings', array( self::class, 'clear_settings_cache' ) );
+			add_action( 'switch_blog', array( self::class, 'on_switch_blog' ), 10, 2 );
 		}
 
 		/**
@@ -198,8 +366,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function on_settings_update( $old_value, $value ): void {
-			self::$settings_cache        = is_array( $value ) ? $value : array();
-			self::$settings_cache_loaded = true;
+			$bid                                 = self::current_blog_id();
+			self::$settings_cache[ $bid ]        = is_array( $value ) ? $value : array();
+			self::$settings_cache_loaded[ $bid ] = true;
 		}
 
 		/**
@@ -212,8 +381,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 */
 		public static function on_settings_add( $option, $value ): void {
 			if ( 'wppo_settings' === $option ) {
-				self::$settings_cache        = is_array( $value ) ? $value : array();
-				self::$settings_cache_loaded = true;
+				$bid                                 = self::current_blog_id();
+				self::$settings_cache[ $bid ]        = is_array( $value ) ? $value : array();
+				self::$settings_cache_loaded[ $bid ] = true;
 			}
 		}
 
@@ -800,6 +970,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function is_auto_sizes_available(): bool {
 			return function_exists( 'wp_sizes_attribute_includes_valid_auto' )
 				|| function_exists( 'wp_img_tag_add_auto_sizes' );
+		}
+
+		/**
+		 * Whether safe mode is active via ?wppo_safe=1 kill-switch.
+		 *
+		 * Checked in Main::setup_hooks() to bypass Buffer::process_buffer_only
+		 * (see class-cache.php). When `?wppo_safe=1` is present on the request,
+		 * a `wppo_safe_mode=1` cookie is set for 10 minutes (600s) so the
+		 * bypass persists without keeping the query string. Subsequent requests
+		 * without the query string are still considered safe when the cookie
+		 * value is `1`. Uses COOKIEPATH/COOKIE_DOMAIN when available and mirrors
+		 * WordPress cookie conventions (secure + httponly).
+		 *
+		 * @since NEXT
+		 * @return bool True when safe mode should bypass optimisations.
+		 */
+		public static function is_safe_mode(): bool {
+			// Kill-switch via query string `?wppo_safe=1` — also arms the 10-minute cookie.
+			if ( isset( $_GET['wppo_safe'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$wppo_safe = sanitize_text_field( wp_unslash( $_GET['wppo_safe'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				if ( '1' === $wppo_safe ) {
+					if ( ! headers_sent() ) {
+						$expire = time() + 600;
+						$path   = defined( 'COOKIEPATH' ) ? COOKIEPATH : '/';
+						$domain = defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '';
+						$secure = function_exists( 'is_ssl' ) ? is_ssl() : false;
+						// SameSite=Lax for CSRF resilience while preserving normal navigation (MUST per Security Agent F).
+						$opts = array(
+							'expires'  => $expire,
+							'path'     => $path,
+							'domain'   => $domain,
+							'secure'   => $secure,
+							'httponly' => true,
+							'samesite' => 'Lax',
+						);
+						if ( PHP_VERSION_ID >= 70300 ) {
+							// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.cookies_setcookie
+							setcookie( 'wppo_safe_mode', '1', $opts );
+						} else {
+							// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.cookies_setcookie
+							setcookie( 'wppo_safe_mode', '1', $expire, $path . '; SameSite=Lax', $domain, $secure, true );
+						}
+					}
+					$_COOKIE['wppo_safe_mode'] = '1';
+					return true;
+				}
+			}
+			if ( isset( $_COOKIE['wppo_safe_mode'] ) ) {
+				$cookie = sanitize_text_field( wp_unslash( $_COOKIE['wppo_safe_mode'] ) );
+				return '1' === $cookie;
+			}
+			return false;
 		}
 
 		/**

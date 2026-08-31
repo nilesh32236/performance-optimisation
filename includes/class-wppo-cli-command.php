@@ -46,8 +46,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Cache action to perform: clear, preload, or status.
+		 * [<action>]
+		 * : Cache action to perform.
+		 * ---
+		 * default: clear
+		 * options:
+		 *   - clear
+		 *   - preload
+		 *   - status
+		 * ---
 		 *
 		 * [--page=<url>]
 		 * : Optional specific page URL or relative path to clear cache for.
@@ -128,8 +135,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Action to perform: cleanup, optimize, or counts.
+		 * [<action>]
+		 * : Action to perform.
+		 * ---
+		 * default: cleanup
+		 * options:
+		 *   - cleanup
+		 *   - optimize
+		 *   - counts
+		 * ---
 		 *
 		 * [--type=<type>]
 		 * : Type of database cleanup routine to run.
@@ -140,8 +154,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *   - auto_drafts
 		 *   - trashed_posts
 		 *   - spam_comments
+		 *   - trashed_comments
 		 *   - expired_transients
 		 *   - orphan_postmeta
+		 *   - unattached_media
+		 *   - oembed_cache
 		 *   - all
 		 * ---
 		 *
@@ -150,6 +167,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * ---
 		 * default: posts,postmeta,comments,commentmeta,options
 		 * ---
+		 *
+		 * [--format=<format>]
+		 * : Output format for counts action.
+		 * ---
+		 * default: json
+		 * options:
+		 *   - json
+		 * ---
+		 *
+		 * [--yes]
+		 * : Skip confirmation prompt for --type=all (destructive).
+		 *
+		 * [--dry-run]
+		 * : Preview what would be deleted without executing (logs would_delete JSON, no DELETE/OPTIMIZE).
 		 *
 		 * ## EXAMPLES
 		 *
@@ -174,11 +205,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		public function database( array $args, array $assoc_args ): void {
 			$action = $args[0] ?? 'cleanup';
 
+			// Resolve --dry-run via WP_CLI\Utils::get_flag_value when available.
+			$dry_run = false;
+			if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+				$dry_run = (bool) \WP_CLI\Utils::get_flag_value( $assoc_args, 'dry-run', false );
+			} elseif ( isset( $assoc_args['dry-run'] ) ) {
+				$dry_run = (bool) $assoc_args['dry-run'];
+			}
+
 			if ( 'optimize' === $action ) {
-				$tables        = $assoc_args['tables'] ?? 'posts,postmeta,comments,commentmeta,options';
-				$table_list    = array_map( 'trim', explode( ',', $tables ) );
-				$success_count = 0;
+				if ( $dry_run ) {
+					$tables     = $assoc_args['tables'] ?? 'posts,postmeta,comments,commentmeta,options';
+					$table_list = array_map( 'trim', explode( ',', $tables ) );
+					WP_CLI::log( (string) wp_json_encode( array( 'would_optimize' => $table_list ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+					WP_CLI::warning( __( 'Dry run — no tables optimized.', 'performance-optimisation' ) );
+					return;
+				}
+				$tables         = $assoc_args['tables'] ?? 'posts,postmeta,comments,commentmeta,options';
+				$table_list     = array_map( 'trim', explode( ',', $tables ) );
+				$allowed_tables = array_unique( array_merge( ...array_values( Database_Cleanup::TABLE_MAP ) ) );
+				$success_count  = 0;
 				foreach ( $table_list as $table ) {
+					if ( '' === $table || ! in_array( $table, $allowed_tables, true ) ) {
+						WP_CLI::warning( sprintf( ' - Skipped unknown table: %s', $table ) );
+						continue;
+					}
 					$result = Database_Cleanup::optimize_table( $table );
 					if ( $result ) {
 						++$success_count;
@@ -194,6 +245,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			if ( 'counts' === $action ) {
 				$counts = Database_Cleanup::get_counts();
+				// JSON-only output per FINAL-ADVERSARIAL-REVIEW: REJECT table/csv/yaml, Spyc.
+				// Keep wp_json_encode fallback when WP_CLI\Formatter absent.
+				$format = $assoc_args['format'] ?? 'json';
+				if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+					$format = \WP_CLI\Utils::get_flag_value( $assoc_args, 'format', 'json' );
+				}
+				if ( 'json' !== $format ) {
+					$format = 'json';
+				}
 				WP_CLI::log( (string) wp_json_encode( $counts, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
 				return;
 			}
@@ -206,7 +266,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			$type = $assoc_args['type'] ?? 'all';
 
+			// --dry-run preview for cleanup (before any DELETE): reuse get_counts().
+			if ( $dry_run ) {
+				$counts = Database_Cleanup::get_counts();
+				if ( 'all' === $type ) {
+					$payload = array( 'would_delete' => $counts );
+				} elseif ( isset( $counts[ $type ] ) ) {
+					$payload = array( 'would_delete' => array( $type => $counts[ $type ] ) );
+				} else {
+					// Unknown or alias type — show full preview.
+					$payload = array( 'would_delete' => $counts );
+				}
+				WP_CLI::log( (string) wp_json_encode( $payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) );
+				WP_CLI::warning( __( 'Dry run — no rows deleted.', 'performance-optimisation' ) );
+				return;
+			}
+
 			if ( 'all' === $type ) {
+				// --yes gate for destructive all-type cleanup. REJECT --confirm alias.
+				$yes = false;
+				if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+					$yes = (bool) \WP_CLI\Utils::get_flag_value( $assoc_args, 'yes', false );
+				} elseif ( isset( $assoc_args['yes'] ) ) {
+					$yes = (bool) $assoc_args['yes'];
+				}
+				if ( ! $yes ) {
+					$is_tty = false;
+					if ( function_exists( 'posix_isatty' ) ) {
+						$is_tty = @posix_isatty( STDIN ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+					} elseif ( function_exists( 'stream_isatty' ) ) {
+						$is_tty = @stream_isatty( STDIN ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+					}
+					if ( $is_tty ) {
+						WP_CLI::confirm( __( 'Are you sure you want to run database cleanup for all types?', 'performance-optimisation' ) );
+					}
+				}
 				$results = Database_Cleanup::clean_all();
 				$total   = 0;
 
@@ -245,6 +339,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				case 'spam':
 					$cleaned_count = Database_Cleanup::clean_spam_comments();
 					break;
+				case 'trashed_comments':
+				case 'trashed':
+					$cleaned_count = Database_Cleanup::clean_trashed_comments();
+					break;
 				case 'expired_transients':
 				case 'transients':
 					$cleaned_count = Database_Cleanup::clean_expired_transients();
@@ -252,6 +350,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 				case 'orphan_postmeta':
 				case 'orphans':
 					$cleaned_count = Database_Cleanup::clean_orphan_postmeta();
+					break;
+				case 'unattached_media':
+				case 'unattached':
+					$cleaned_count = Database_Cleanup::clean_unattached_media();
+					break;
+				case 'oembed_cache':
+				case 'oembed':
+					$cleaned_count = Database_Cleanup::clean_oembed_cache();
 					break;
 				default:
 					/* translators: %s: Cleanup type */
@@ -272,6 +378,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 
 			/* translators: 1: Cleanup type, 2: Number of items removed */
 			Log::add( sprintf( __( 'Database cleanup (%1$s via WP-CLI): %2$d items removed', 'performance-optimisation' ), $type, (int) $cleaned_count ) );
+			/**
+			 * Fires after a per-type database cleanup completes.
+			 *
+			 * @since NEXT
+			 * @param string $type  Cleanup type.
+			 * @param int    $count Number of rows deleted.
+			 */
+			do_action( 'wppo_database_cleanup_completed', $type, (int) $cleaned_count );
 			/* translators: 1: Cleanup type, 2: Number of items removed */
 			WP_CLI::success( sprintf( __( 'Database cleanup completed for %1$s (%2$d items removed).', 'performance-optimisation' ), $type, (int) $cleaned_count ) );
 		}
@@ -281,8 +395,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Action: convert or status.
+		 * [<action>]
+		 * : Action to perform.
+		 * ---
+		 * default: status
+		 * options:
+		 *   - convert
+		 *   - status
+		 * ---
 		 *
 		 * [--format=<format>]
 		 * : Conversion format (webp or avif). Default: auto-detected from settings.
@@ -306,7 +426,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			$format = $assoc_args['format'] ?? '';
 
 			if ( 'convert' === $action ) {
-				$options           = get_option( 'wppo_settings', array() );
+				$options           = Util::get_settings();
 				$img_converter     = new Img_Converter( $options );
 				$img_info          = Img_Converter::get_img_info();
 				$conversion_format = $format ? $format : ( $options['image_optimisation']['conversionFormat'] ?? 'webp' );
@@ -378,8 +498,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Settings action to perform: get, update, export, or import.
+		 * [<action>]
+		 * : Settings action to perform.
+		 * ---
+		 * default: get
+		 * options:
+		 *   - get
+		 *   - update
+		 *   - export
+		 *   - import
+		 * ---
 		 *
 		 * [<tab>]
 		 * : Settings tab name (file_optimisation, preload_settings, image_optimisation, database_cleanup, object_cache).
@@ -425,83 +553,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Get default settings structure for fresh installs.
 		 *
-		 * Mirrors the defaults from Main::__construct() without requiring a Main
-		 * instance. Used to ensure CLI works before the option is ever persisted.
+		 * Delegates to Util::get_default_settings() for single-source defaults
+		 * (A-01 minimal). Keeps CLI usable before first admin save.
 		 *
 		 * @since NEXT
 		 * @return array<string, array<string, mixed>> Default settings keyed by tab.
 		 */
 		private static function get_default_settings(): array {
-			return array(
-				'cache_settings'     => array(
-					'enableLoggedInCache' => false,
-					'loggedInCacheRoles'  => array(),
-				),
-				'file_optimisation'  => array(
-					'enableServerRules'       => false,
-					'cdnURL'                  => '',
-					'removeUnusedCSS'         => false,
-					'excludeUnusedCSS'        => '',
-					'criticalCSS'             => false,
-					'hostGoogleFontsLocally'  => false,
-					'blockAssetsOnDemand'     => false,
-					'loadAllCoreBlockAssets'  => false,
-					'delayJSDefaultStrategy'  => 'interaction',
-					'delayJSIdleList'         => '',
-					'delayJSViewportList'     => '',
-					'delayJSPriority'         => '',
-					'delayJSIdleTimeout'      => 3000,
-					'minifyHTML'              => false,
-					'minifyJS'                => false,
-					'minifyCSS'               => false,
-					'deferJS'                 => false,
-					'delayJS'                 => false,
-					'combineCSS'              => false,
-					'excludeJS'               => '',
-					'excludeCSS'              => '',
-					'excludeDeferJS'          => '',
-					'excludeDelayJS'          => '',
-					'excludeCombineCSS'       => '',
-					'minifyInlineCSS'         => false,
-					'minifyInlineJS'          => false,
-					'removeHTMLComments'      => true,
-					'removeQueryStrings'      => false,
-					'disableRestApiLinks'     => false,
-					'disableRssFeeds'         => false,
-					'disableShortlinks'       => false,
-					'disableGeneratorTag'     => false,
-					'disableJQueryMigrate'    => false,
-					'disablePasswordStrength' => false,
-					'disableSelfPingbacks'    => false,
-				),
-				'preload_settings'   => array(
-					'enableSpeculationRules' => false,
-					'speculationMode'        => 'prefetch',
-					'speculationEagerness'   => 'conservative',
-					'speculationExcludeUrls' => '',
-					'preloadSitemap'         => false,
-				),
-				'image_optimisation' => array(
-					'lazyLoadImages'             => false,
-					'lazyLoadNative'             => true,
-					'placeholderType'            => 'svg',
-					'autoPreloadLCP'             => false,
-					'prioritizeLCPImages'        => false,
-					'clientSideMimeTypeOverride' => false,
-					'clientSideMimeTypes'        => array(),
-					'lazyLoadBackgroundImages'   => false,
-				),
-				'performance_audit'  => array(
-					'pagespeed_api_key'     => '',
-					'high_value_urls'       => array(),
-					'auto_fix_enabled'      => false,
-					'server_timing_enabled' => false,
-					'auto_rescan'           => '',
-					'rum_enabled'           => false,
-				),
-				'database_cleanup'   => array(),
-				'object_cache'       => array(),
-			);
+			return Util::get_default_settings();
 		}
 
 		/**
@@ -509,8 +568,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Settings action to perform: get, update, export, or import.
+		 * [<action>]
+		 * : Settings action to perform.
+		 * ---
+		 * default: get
+		 * options:
+		 *   - get
+		 *   - update
+		 *   - export
+		 *   - import
+		 * ---
 		 *
 		 * [<tab>]
 		 * : Settings tab name (file_optimisation, preload_settings, image_optimisation, database_cleanup, object_cache).
@@ -557,7 +624,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 			$action = $args[0] ?? 'get';
 			$tab    = $args[1] ?? null;
 
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			// On fresh installs the option does not exist yet — fall back to
 			// defaults so CLI is usable before the first admin save. This
 			// mirrors Main::__construct() seeding but without persisting until
@@ -649,7 +716,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					unset( $new_settings['performance_audit']['pagespeed_api_key'] );
 				}
 
-				$existing_settings = get_option( 'wppo_settings', array() );
+				$existing_settings = Util::get_settings();
 				$merged_settings   = array_replace_recursive( $existing_settings, $new_settings );
 				update_option( 'wppo_settings', $merged_settings );
 
@@ -737,8 +804,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Object Cache action to perform: status, ping, enable, disable, or flush.
+		 * [<action>]
+		 * : Object Cache action to perform.
+		 * ---
+		 * default: status
+		 * options:
+		 *   - status
+		 *   - ping
+		 *   - enable
+		 *   - disable
+		 *   - flush
+		 * ---
 		 *
 		 * [--host=<host>]
 		 * : Redis server hostname (for ping/enable).
@@ -757,6 +833,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * [--prefix=<prefix>]
 		 * : Cache key prefix (for ping/enable).
+		 *
+		 * [--mode=<mode>]
+		 * : Redis mode: standalone, sentinel, or cluster (for ping/enable).
+		 *
+		 * [--nodes=<nodes>]
+		 * : Comma-separated Redis nodes for cluster/sentinel (for ping/enable).
+		 *
+		 * [--master_name=<master_name>]
+		 * : Master name for sentinel mode (for ping/enable).
+		 *
+		 * [--use_tls]
+		 * : Use TLS for connections (for ping/enable).
+		 *
+		 * [--persistent]
+		 * : Use persistent connections (for ping/enable).
+		 *
+		 * [--compression=<compression>]
+		 * : Compression algorithm: none, lzf, zstd, lz4 (for ping/enable).
+		 *
+		 * [--yes]
+		 * : Skip confirmation prompt for disable action (destructive).
 		 *
 		 * ## EXAMPLES
 		 *
@@ -813,6 +910,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 					return;
 
 				case 'disable':
+					// --yes gate for destructive disable. REJECT --confirm alias.
+					$yes = false;
+					if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+						$yes = (bool) \WP_CLI\Utils::get_flag_value( $assoc_args, 'yes', false );
+					} elseif ( isset( $assoc_args['yes'] ) ) {
+						$yes = (bool) $assoc_args['yes'];
+					}
+					if ( ! $yes ) {
+						$is_tty = false;
+						if ( function_exists( 'posix_isatty' ) ) {
+							$is_tty = @posix_isatty( STDIN ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+						} elseif ( function_exists( 'stream_isatty' ) ) {
+							$is_tty = @stream_isatty( STDIN ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+						}
+						if ( $is_tty ) {
+							WP_CLI::confirm( __( 'Are you sure you want to disable Redis Object Cache?', 'performance-optimisation' ) );
+						}
+					}
 					$result = $manager->disable();
 					if ( is_wp_error( $result ) ) {
 						WP_CLI::error( $result->get_error_message() );
@@ -841,12 +956,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		/**
 		 * Build a Redis config array from CLI associative arguments.
 		 *
+		 * Uses Object_Cache::ALLOWED_KEYS as single source (converged 6→10+).
+		 *
+		 * @since NEXT
 		 * @param array $assoc_args The associative arguments from the command.
 		 * @return array<string, mixed> Redis connection configuration.
 		 */
 		private static function get_redis_config_from_assoc( array $assoc_args ): array {
 			$config = array();
-			foreach ( array( 'host', 'port', 'password', 'database', 'timeout', 'prefix' ) as $key ) {
+			foreach ( Object_Cache::ALLOWED_KEYS as $key ) {
 				if ( isset( $assoc_args[ $key ] ) ) {
 					$config[ $key ] = $assoc_args[ $key ];
 				}
@@ -859,8 +977,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 *
 		 * ## OPTIONS
 		 *
-		 * <action>
-		 * : Action: scan or results.
+		 * [<action>]
+		 * : Action to perform.
+		 * ---
+		 * default: scan
+		 * options:
+		 *   - scan
+		 *   - results
+		 * ---
 		 *
 		 * [--url=<url>]
 		 * : Page URL to scan.
@@ -922,6 +1046,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * [<group>]
 		 * : Optional group filter: php, database, WordPress, wp_constants, server, cache, infrastructure.
 		 *
+		 * [--format=<format>]
+		 * : Output format.
+		 * ---
+		 * default: json
+		 * options:
+		 *   - json
+		 * ---
+		 *
 		 * ## EXAMPLES
 		 *
 		 *     # Show all system info
@@ -937,6 +1069,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\WPPO_CLI_Command' ) ) {
 		 * @return void
 		 */
 		public function system_info( array $args, array $assoc_args ): void {
+			// JSON-only output per FINAL-ADVERSARIAL-REVIEW: REJECT table/csv/yaml, Spyc.
+			$format = $assoc_args['format'] ?? 'json';
+			if ( class_exists( '\\WP_CLI\\Utils' ) && method_exists( '\\WP_CLI\\Utils', 'get_flag_value' ) ) {
+				$format = \WP_CLI\Utils::get_flag_value( $assoc_args, 'format', 'json' );
+			}
+			if ( 'json' !== $format ) {
+				$format = 'json';
+			}
 			$all   = System_Info::get_all();
 			$group = $args[0] ?? null;
 
