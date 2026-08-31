@@ -2374,7 +2374,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						? Util::process_urls( $preload_settings['speculationExcludeUrls'] )
 						: array();
 					foreach ( $custom_excludes as $exclude ) {
-						$exclude_paths[] = $exclude;
+						// Convert bare paths to wildcard pattern via WP_URL_Pattern_Prefixer when available (WP 6.8+).
+						if ( class_exists( 'WP_URL_Pattern_Prefixer' ) && method_exists( 'WP_URL_Pattern_Prefixer', 'prefix_path_pattern' ) ) {
+							// Core helper adds /* for path prefix patterns; guard already wildcarded.
+							if ( false === strpos( $exclude, '*' ) && '/' === $exclude[0] ) {
+								$exclude = \WP_URL_Pattern_Prefixer::prefix_path_pattern( $exclude, '/' );
+							}
+						} elseif ( '/' === $exclude[0] && false === strpos( $exclude, '*' ) ) {
+							// Fallback: ensure wildcard for path prefix.
+							$exclude = rtrim( $exclude, '/' ) . '/*';
+						}
+						if ( ! in_array( $exclude, $exclude_paths, true ) ) {
+							$exclude_paths[] = $exclude;
+						}
 					}
 
 					$woocommerce_excludes = array();
@@ -2452,8 +2464,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			if ( $enable_speculation ) {
-				$config['mode']      = $preload_settings['speculationMode'] ?? 'prefetch';
-				$config['eagerness'] = $preload_settings['speculationEagerness'] ?? 'conservative';
+				$mode      = $preload_settings['speculationMode'] ?? 'prefetch';
+				$eagerness = $preload_settings['speculationEagerness'] ?? 'conservative';
+				// Validate via WP_Speculation_Rules when available (WP 6.8+), fallback to allowlist.
+				if ( class_exists( 'WP_Speculation_Rules' ) ) {
+					if ( method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) && ! \WP_Speculation_Rules::is_valid_mode( $mode ) ) {
+						$mode = 'prefetch';
+					}
+					if ( method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) && ! \WP_Speculation_Rules::is_valid_eagerness( $eagerness ) ) {
+						$eagerness = 'conservative';
+					}
+				} else {
+					if ( ! in_array( $mode, array( 'prefetch', 'prerender' ), true ) ) {
+						$mode = 'prefetch';
+					}
+					if ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+						$eagerness = 'conservative';
+					}
+				}
+				$config['mode']      = $mode;
+				$config['eagerness'] = $eagerness;
 				return $config;
 			}
 
