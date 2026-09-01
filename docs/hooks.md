@@ -225,18 +225,42 @@ Filters the configured LiteSpeed integration mode (`auto|wppo|litespeed|standalo
 
 ---
 
-### `wppo_litespeed_ttl`
-Filters LiteSpeed TTL seconds mapped from `cacheLife` hours. File-cache `0` (never expire) maps to `604800` (1 week) for the LS server layer as an explicit policy change — LS cannot store infinite. @since NEXT.
+### `wppo_cache_ttl`
+Tier-1 per-route LiteSpeed TTL override (LS layer only, file-cache stays global). Filter runs inside `LiteSpeed_Integration::get_litespeed_ttl()` / `handle_send_headers()` before `wppo_litespeed_ttl`; use it to vary `X-LiteSpeed-Cache-Control: public,max-age=N` per request without DB or `wppo_settings` schema change (drop-in-safe). Falls back to `url_to_postid( home_url( $uri ) )` and global `$post` when `$post_id` not explicitly passed; `null` when unresolvable. File-cache `cacheLife` constant untouched (as oracle warned: drop-in must not hit DB). @since NEXT.
 
 **Parameters:**
-- `$seconds` *(int)* — TTL in seconds.
-- `$hours` *(int)* — Original `cacheLife` hours.
+- `$seconds` *(int)* — Global TTL seconds mapped from `cacheLife` (0→604800).
+- `$request_uri` *(string)* — Sanitized request URI (e.g. `"/about/"`).
+- `$post_id` *(int|null)* — Resolved post ID or `null` when unresolvable.
 
 **Example:**
 ```php
-add_filter( 'wppo_litespeed_ttl', function( $seconds, $hours ) {
-    return $hours === 0 ? 86400 : $seconds; // 1 day instead of 1 week for never-expire
-}, 10, 2 );
+add_filter( 'wppo_cache_ttl', function( $seconds, $uri, $post_id ) {
+    if ( '/shop/' === $uri || 42 === $post_id ) {
+        return 600; // 10 min for high-churn route
+    }
+    return $seconds;
+}, 10, 3 );
+```
+
+---
+
+### `wppo_litespeed_ttl`
+Filters LiteSpeed TTL seconds mapped from `cacheLife` hours. File-cache `0` (never expire) maps to `604800` (1 week) for the LS server layer as an explicit policy change — LS cannot store infinite. Tier-1 adds third-arg `$context` (`array{uri:string,post_type:string|null,post_id:int|null}`) resolved without DB (REQUEST_URI + `url_to_postid` / `$post` fallback) so per-route TTL works in the `advanced-cache.php` drop-in; existing 2-arg callbacks remain compatible (extra arg ignored). `wppo_cache_ttl` runs first for LS-only overrides; this filter remains the final TTL gate. @since NEXT.
+
+**Parameters:**
+- `$seconds` *(int)* — TTL in seconds (after `wppo_cache_ttl` when present).
+- `$hours` *(int)* — Original `cacheLife` hours.
+- `$context` *(array)* — Context `['uri' => string, 'post_type' => string|null, 'post_id' => int|null]` (since Tier-1).
+
+**Example:**
+```php
+add_filter( 'wppo_litespeed_ttl', function( $seconds, $hours, $context ) {
+    if ( 'product' === ( $context['post_type'] ?? null ) ) {
+        return 300; // 5 min for products
+    }
+    return $hours === 0 ? 86400 : $seconds;
+}, 10, 3 );
 ```
 
 ---
