@@ -2352,9 +2352,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			$swap_dirs = array( '/tmp/lshttpd/swap', '/usr/local/lsws/cachedata' );
 			foreach ( $swap_dirs as $swap_dir ) {
-				if ( is_dir( $swap_dir ) && is_writable( $swap_dir ) ) { // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_is_dir,WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_is_writable
+				if ( is_dir( $swap_dir ) && is_writable( $swap_dir ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_is_dir,WordPress.WP.AlternativeFunctions.file_system_operations_is_writable
 					// Best-effort: find and delete cached files. Suppressed on non-LS hosts.
-					@exec( 'find ' . escapeshellarg( $swap_dir ) . ' -type f -delete 2>/dev/null' ); // phpcs:ignore WordPress.PHP.DiscouragedFunctions.system_calls_exec,WordPress.PHP.NoSilencedErrors.Discouraged
+					@exec( 'find ' . escapeshellarg( $swap_dir ) . ' -type f -delete 2>/dev/null' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec,WordPress.PHP.NoSilencedErrors.Discouraged
 				}
 			}
 			if ( ! headers_sent() ) {

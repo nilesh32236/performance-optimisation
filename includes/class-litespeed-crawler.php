@@ -310,13 +310,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				}
 				$status = curl_multi_exec( $mh, $active );
 				if ( $active ) {
-					curl_multi_select( $mh, 1 );
+					curl_multi_select( $mh, 1 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_select
 				}
 				// Process completed handles.
-				while ( $info = curl_multi_info_read( $mh ) ) {
+				while ( ( $info = curl_multi_info_read( $mh ) ) ) { // phpcs:ignore Generic.CodeAnalysis.AssignmentInCondition.FoundInWhileCondition
 					$ch   = $info['handle'];
 					$code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE );
-					$err  = curl_error( $ch );
+					$err  = curl_error( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_error
 					$url  = $index_to_url[ (int) $ch ] ?? '';
 					if ( '' !== $url ) {
 						if ( '' !== $err || $code >= 400 || 0 === $code ) {
