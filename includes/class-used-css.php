@@ -1027,7 +1027,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				return $assets;
 			}
 			$tags = new \WP_HTML_Tag_Processor( $html );
-			while ( $tags->next_tag( 'link' ) ) {
+			while ( $tags->next_tag( array( 'tag_name' => 'link' ) ) ) {
 				$rel = $tags->get_attribute( 'rel' );
 				if ( 'stylesheet' !== $rel ) {
 					continue;

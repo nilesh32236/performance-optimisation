@@ -1484,7 +1484,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'performance-optimisation',
 				array( $this, 'admin_page' ),
 				'dashicons-admin-post',
-				'2.1',
+				2.1,
 			);
 		}
 
@@ -1602,7 +1602,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$resolved   = wp_normalize_path( realpath( $asset_file ) );
 
 			// Validate the resolved path is within the plugin directory before including.
-			if ( false !== $resolved && strpos( $resolved, WPPO_PLUGIN_PATH ) === 0 ) {
+			if ( false !== $resolved && strpos( $resolved, (string) WPPO_PLUGIN_PATH ) === 0 ) {
 				$asset_data = require $resolved;
 			} else {
 				$asset_data = array(
@@ -3212,7 +3212,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$asset_file = WPPO_PLUGIN_PATH . 'build/main.asset.php';
 			$resolved   = wp_normalize_path( realpath( $asset_file ) );
 
-			if ( false !== $resolved && strpos( $resolved, WPPO_PLUGIN_PATH ) === 0 ) {
+			if ( false !== $resolved && strpos( $resolved, (string) WPPO_PLUGIN_PATH ) === 0 ) {
 				$asset_data = require $resolved;
 			} else {
 				$asset_data = array(
