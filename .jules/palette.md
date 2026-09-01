@@ -43,3 +43,6 @@
 **Learning:** Standalone action buttons, like "Load System Info," sometimes have descriptive text directly preceding them in the UI to explain their purpose. If these buttons aren't programmatically linked to the text, screen reader users miss crucial context.
 **Action:** Always link action buttons to their adjacent descriptive text using `aria-describedby` and an `id`, ensuring the attribute is dynamically removed when the description is hidden (e.g., `aria-describedby={ !loaded ? 'desc-id' : undefined }`).
 
+## 2024-05-24 - Link Inputs with Helper Text
+**Learning:** Found inputs lacking explicit `aria-describedby` associations with their description text, leading to accessibility issues.
+**Action:** Always link inputs to accompanying helper text by giving the text an ID and using `aria-describedby` on the input element.

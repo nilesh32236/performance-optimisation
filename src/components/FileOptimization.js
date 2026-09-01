@@ -1050,8 +1050,12 @@ const FileOptimization = ( {
 														onChange={ handleChange(
 															setSettings
 														) }
+														aria-describedby="delayJSIdleTimeout-desc"
 													/>
-													<p className="wppo-text-muted wppo-mt-8 wppo-text-small">
+													<p
+														id="delayJSIdleTimeout-desc"
+														className="wppo-text-muted wppo-mt-8 wppo-text-small"
+													>
 														{ __(
 															'Maximum time (ms) to wait before loading idle scripts (default: 3000).',
 															'performance-optimisation'
