@@ -192,7 +192,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return;
 			}
 
-			$path = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+			$parsed_path = isset( $_SERVER['REQUEST_URI'] ) ? wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '/';
+			$path        = $parsed_path ? esc_url_raw( $parsed_path ) : '/';
 
 			$config = array(
 				'apiUrl' => esc_url_raw( rest_url( 'performance-optimisation/v1/rum_collect' ) ),
