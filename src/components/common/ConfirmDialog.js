@@ -40,11 +40,17 @@ const ConfirmDialog = ( {
 				onCancel();
 			}
 
-			// Focus trap.
+			// Focus trap — guarded for single-element dialogs.
 			if ( e.key === 'Tab' && dialogRef.current ) {
 				const focusable = focusableRef.current;
+				if ( focusable.length < 2 ) {
+					return;
+				}
 				const first = focusable[ 0 ];
 				const last = focusable[ focusable.length - 1 ];
+				if ( ! first || ! last ) {
+					return;
+				}
 
 				if ( e.shiftKey ) {
 					if (
@@ -88,17 +94,19 @@ const ConfirmDialog = ( {
 		}
 	}, [ isOpen ] );
 
+	const prevOverflowRef = useRef( '' );
+
 	useEffect( () => {
-		const currentDialog = dialogRef.current;
-		const doc = currentDialog?.ownerDocument || document;
+		const doc = dialogRef.current?.ownerDocument || document;
 		if ( isOpen ) {
 			previouslyFocusedRef.current = doc.activeElement;
+			prevOverflowRef.current = doc.body.style.overflow;
 			doc.addEventListener( 'keydown', handleKeyDown );
 			doc.body.style.overflow = 'hidden';
 		}
 		return () => {
 			doc.removeEventListener( 'keydown', handleKeyDown );
-			doc.body.style.overflow = '';
+			doc.body.style.overflow = prevOverflowRef.current;
 		};
 	}, [ isOpen, handleKeyDown ] );
 
