@@ -1412,14 +1412,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $buffer;
 			}
 
-			$cdn_url = $this->options['file_optimisation']['cdnURL'] ?? '';
+			$mappings = $this->get_cdn_mappings();
 
-			if ( empty( $cdn_url ) ) {
+			if ( empty( $mappings ) ) {
 				return $buffer;
 			}
 
 			$site_url = Util::cached_home_url();
-			$cdn_url  = rtrim( $cdn_url, '/' );
 
 			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
 				return $buffer;
@@ -1440,8 +1439,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				foreach ( $attributes as $attr ) {
 					$val = $tags->get_attribute( $attr );
 
-					if ( $val && preg_match( $site_url_regex, $val ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $val ) ) {
-						$tags->set_attribute( $attr, str_replace( $site_url, $cdn_url, $val ) );
+					if ( $val && preg_match( $site_url_regex, $val ) ) {
+						$cdn = $this->find_cdn_for_url( $val, $mappings );
+						if ( null !== $cdn ) {
+							$tags->set_attribute( $attr, str_replace( $site_url, $cdn, $val ) );
+						}
 					}
 				}
 
@@ -1457,8 +1459,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 							$url       = $parts[0];
 							$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
 
-							if ( preg_match( $site_url_regex, $url ) && preg_match( '#\/(?:wp-content|wp-includes)\/#', $url ) ) {
-								$url = str_replace( $site_url, $cdn_url, $url );
+							if ( preg_match( $site_url_regex, $url ) ) {
+								$cdn = $this->find_cdn_for_url( $url, $mappings );
+								if ( null !== $cdn ) {
+									$url = str_replace( $site_url, $cdn, $url );
+								}
 							}
 							$new_srcset[] = $url . $suffix;
 						}
@@ -1469,6 +1474,86 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			return $tags->get_updated_html();
+		}
+
+		/**
+		 * Get CDN mappings (one-to-many parity with LSCWP cdn.cls.php:48).
+		 *
+		 * Migrates legacy single cdnURL → one mapping when cdnMapping empty.
+		 *
+		 * @since NEXT
+		 * @return array<int, array{cdn_url:string,include_dirs:string,include_filetypes:string}>
+		 */
+		private function get_cdn_mappings(): array {
+			$mappings = $this->options['file_optimisation']['cdnMapping'] ?? array();
+			if ( is_array( $mappings ) && ! empty( $mappings ) ) {
+				$mappings = array_values( array_filter( $mappings, fn( $m ) => is_array( $m ) && ! empty( $m['cdn_url'] ) ) );
+				$mappings = array_map( function( $m ) {
+					return array(
+						'cdn_url'           => rtrim( (string) $m['cdn_url'], '/' ),
+						'include_dirs'      => isset( $m['include_dirs'] ) ? (string) $m['include_dirs'] : 'wp-content|wp-includes',
+						'include_filetypes' => isset( $m['include_filetypes'] ) ? (string) $m['include_filetypes'] : '',
+					);
+				}, $mappings );
+				/**
+				 * Filter CDN mappings before use.
+				 *
+				 * @since NEXT
+				 * @param array $mappings CDN mappings.
+				 */
+				$mappings = (array) apply_filters( 'wppo_cdn_mapping', $mappings );
+				return $mappings;
+			}
+			$cdn_url = $this->options['file_optimisation']['cdnURL'] ?? '';
+			if ( empty( $cdn_url ) ) {
+				return array();
+			}
+			$cdn_url = rtrim( (string) $cdn_url, '/' );
+			/**
+			 * Filter legacy CDN URL alias.
+			 *
+			 * @since NEXT
+			 * @param string $cdn_url Legacy CDN URL.
+			 */
+			$cdn_url = (string) apply_filters( 'wppo_cdn_url', $cdn_url );
+			$single  = array(
+				array(
+					'cdn_url'           => $cdn_url,
+					'include_dirs'      => 'wp-content|wp-includes',
+					'include_filetypes' => '',
+				),
+			);
+			$single = (array) apply_filters( 'wppo_cdn_mapping', $single );
+			return $single;
+		}
+
+		/**
+		 * Find CDN URL for a given asset URL based on mappings.
+		 *
+		 * @since NEXT
+		 * @param string $url Asset URL.
+		 * @param array  $mappings CDN mappings.
+		 * @return string|null CDN host or null if no match.
+		 */
+		private function find_cdn_for_url( string $url, array $mappings ): ?string {
+			foreach ( $mappings as $m ) {
+				$dirs = $m['include_dirs'] ?? 'wp-content|wp-includes';
+				$types = $m['include_filetypes'] ?? '';
+				if ( '' !== $dirs && ! preg_match( '#/(?:' . $dirs . ')/#', $url ) ) {
+					continue;
+				}
+				if ( '' !== $types ) {
+					$ext = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ) ?? '', PATHINFO_EXTENSION ) );
+					$allowed = array_map( 'trim', explode( ',', strtolower( $types ) ) );
+					$allowed = array_filter( $allowed );
+					$allowed = array_map( fn( $t ) => ltrim( $t, '.' ), $allowed );
+					if ( '' !== $ext && ! in_array( $ext, $allowed, true ) ) {
+						continue;
+					}
+				}
+				return rtrim( (string) $m['cdn_url'], '/' );
+			}
+			return null;
 		}
 
 		/**
@@ -2028,6 +2113,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// LS-201: invalidate → LSCache purge sync for the post.
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				LiteSpeed_Integration::sync_purge_post_to_litespeed( (int) $page_id );
+				// P3: queued tag purge with taxonomy fan-out (public,private,stale + blog_id_).
+				$tags = array( 'F', 'H', 'PGS', 'Po.' . (int) $page_id );
+				$pt   = get_post_type( $page_id );
+				if ( $pt ) {
+					$tags[] = 'PT.' . sanitize_text_field( $pt );
+					$taxes  = get_object_taxonomies( $pt, 'names' );
+					if ( ! empty( $taxes ) ) {
+						$terms = wp_get_object_terms( $page_id, $taxes );
+						if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+							foreach ( $terms as $term ) {
+								if ( isset( $term->term_id ) ) {
+									$tags[] = 'T.' . (int) $term->term_id;
+								}
+							}
+						}
+					}
+					$author = get_post_field( 'post_author', $page_id );
+					if ( $author ) {
+						$tags[] = 'A.' . (int) $author;
+					}
+				}
+				LiteSpeed_Integration::queue_purge_tags( array_unique( $tags ), 'public' );
 			}
 		}
 
@@ -2201,9 +2308,60 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 						LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
 					}
 				}
+
+				// P0 fallback: when on LiteSpeed but LSCWP purge action not available,
+				// purge OLS swap directory and emit X-LiteSpeed-Purge header.
+				self::purge_litespeed_swap_fallback( $url_path );
 			}
 
 			return $result;
+		}
+
+		/**
+		 * Fallback purge for LiteSpeed/OLS when LSCWP not active (P0).
+		 *
+		 * Attempts to clear /tmp/lshttpd/swap via find+delete and emits
+		 * X-LiteSpeed-Purge header. Gated by is_litespeed() and no-op when
+		 * has_action('litespeed_purge_all') exists (handled via sync above).
+		 * Filterable via wppo_litespeed_swap_purge.
+		 *
+		 * @since NEXT
+		 * @param string|null $url_path URL path or null for all.
+		 * @return void
+		 */
+		private static function purge_litespeed_swap_fallback( $url_path ): void {
+			if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) || ! LiteSpeed_Integration::is_litespeed() ) {
+				return;
+			}
+			if ( has_action( 'litespeed_purge_all' ) ) {
+				return;
+			}
+			/**
+			 * Filter whether swap fallback purge should run.
+			 *
+			 * @since NEXT
+			 * @param bool $enable Whether to run swap purge.
+			 * @param string|null $url_path URL path being purged.
+			 */
+			$enable = (bool) apply_filters( 'wppo_litespeed_swap_purge', true, $url_path );
+			if ( ! $enable ) {
+				return;
+			}
+			$swap_dirs = array( '/tmp/lshttpd/swap', '/usr/local/lsws/cachedata' );
+			foreach ( $swap_dirs as $swap_dir ) {
+				if ( is_dir( $swap_dir ) && is_writable( $swap_dir ) ) {
+					// Best-effort: find and delete cached files. Suppressed on non-LS hosts.
+					@exec( 'find ' . escapeshellarg( $swap_dir ) . ' -type f -delete 2>/dev/null' ); // phpcs:ignore WordPress.PHP.DiscouragedFunctions.system_calls_exec,WordPress.PHP.NoSilencedErrors.Discouraged
+				}
+			}
+			if ( ! headers_sent() ) {
+				if ( null === $url_path || '' === $url_path ) {
+					header( 'X-LiteSpeed-Purge: *' );
+				} else {
+					$clean = '/' . ltrim( (string) $url_path, '/' );
+					header( 'X-LiteSpeed-Purge: ' . $clean );
+				}
+			}
 		}
 
 		/**

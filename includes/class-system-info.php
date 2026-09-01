@@ -275,6 +275,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'effective_mode'     => 'standalone',
 				'wppo_owns_cache'    => true,
 				'optimizer_disabled' => false,
+				'vary_groups'        => array(
+					'guest'  => false,
+					'mobile' => false,
+					'webp'   => false,
+				),
+				'crawler'            => array(
+					'concurrency'        => 2,
+					'blacklistThreshold' => 3,
+				),
+				'esi_available'      => false,
 				'dropin'             => array(
 					'advanced_cache' => 'none',
 					'object_cache'   => 'none',
@@ -284,6 +294,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'get_info' ) ) {
 				$ls_info = LiteSpeed_Integration::get_info();
 				$info    = array_merge( $info, $ls_info );
+				// P2 vary groups.
+				if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'get_vary_groups' ) ) {
+					$info['vary_groups'] = LiteSpeed_Integration::get_vary_groups();
+				}
+				// P4 crawler.
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+					$info['crawler'] = array(
+						'concurrency'        => LiteSpeed_Crawler::get_concurrency(),
+						'blacklistThreshold' => LiteSpeed_Crawler::get_blacklist_threshold(),
+					);
+				}
+				// P5 ESI.
+				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
+					$info['esi_available'] = LiteSpeed_ESI::is_esi_available();
+				}
 				// Map effective_mode to wppo_owns logic already in get_info.
 				if ( isset( $ls_info['detected'] ) ) {
 					$info['detected'] = (bool) $ls_info['detected'];

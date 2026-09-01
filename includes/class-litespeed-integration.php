@@ -582,6 +582,151 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Transient key for tag queue.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private const TAG_QUEUE = 'wppo_lscache_tag_queue';
+
+		/**
+		 * Max tags in queue before dropping oldest.
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private const TAG_QUEUE_MAX = 100;
+
+		/**
+		 * Whether shutdown flush is hooked.
+		 *
+		 * @since NEXT
+		 * @var bool
+		 */
+		private static bool $queue_shutdown_hooked = false;
+
+		/**
+		 * Queue LiteSpeed purge tags (P3).
+		 *
+		 * Mirrors LSCWP Tag taxonomy (F,H,PGS,Po.{id},PT.{type},T.{id},A.{id},D.,B.{id},W.{id},ESI.,REST,HTTP.{code} + public/private/stale scope).
+		 * Stored to blog-prefixed transient with 60s lock fan-out on multisite.
+		 *
+		 * @since NEXT
+		 * @param string[] $tags  Tag strings (e.g. Po.123, T.5, F).
+		 * @param string   $scope Scope: public|private|stale.
+		 * @return void
+		 */
+		public static function queue_purge_tags( array $tags, string $scope = 'public' ): void {
+			if ( ! self::is_purge_sync_enabled() ) {
+				return;
+			}
+			if ( self::has_purge_lock() ) {
+				return;
+			}
+			$tags = array_values( array_filter( array_map( fn( $t ) => preg_replace( '/[^A-Za-z0-9_\.\-]/', '', (string) $t ), $tags ) ) );
+			if ( empty( $tags ) ) {
+				return;
+			}
+			$scope = in_array( $scope, array( 'public', 'private', 'stale' ), true ) ? $scope : 'public';
+
+			// Blog_id fan-out on multisite: prefix tags with B.{blog_id} when multisite.
+			$use_fanout = false;
+			if ( function_exists( 'is_multisite' ) ) {
+				try {
+					$use_fanout = is_multisite();
+				} catch ( \Throwable $e ) {
+					$use_fanout = false;
+				}
+			}
+			if ( $use_fanout ) {
+				$blog_id = function_exists( 'get_current_blog_id' ) ? (int) get_current_blog_id() : 0;
+				if ( $blog_id > 0 ) {
+					$prefix = 'B.' . $blog_id;
+					if ( ! in_array( $prefix, $tags, true ) ) {
+						$tags[] = $prefix;
+					}
+				}
+			}
+
+			/**
+			 * Filter tags before queue.
+			 *
+			 * @since NEXT
+			 * @param string[] $tags Tag list.
+			 * @param string   $scope Scope.
+			 */
+			$tags = (array) apply_filters( 'wppo_litespeed_purge_tags', $tags, $scope );
+
+			$key      = Util::transient_key( self::TAG_QUEUE );
+			$existing = get_transient( $key );
+			if ( ! is_array( $existing ) ) {
+				$existing = array();
+			}
+			// Merge, dedupe, cap.
+			$merged = array_values( array_unique( array_merge( $existing, $tags ) ) );
+			if ( count( $merged ) > self::TAG_QUEUE_MAX ) {
+				$merged = array_slice( $merged, -self::TAG_QUEUE_MAX );
+			}
+			// Include scope as pseudo-tags for OLS raw header fallback.
+			if ( 'private' === $scope && ! in_array( 'private', $merged, true ) ) {
+				$merged[] = 'private';
+			}
+			if ( 'stale' === $scope && ! in_array( 'stale', $merged, true ) ) {
+				$merged[] = 'stale';
+			}
+			set_transient( $key, $merged, MINUTE_IN_SECONDS * 5 );
+			self::maybe_hook_shutdown();
+		}
+
+		/**
+		 * Ensure shutdown flush is hooked once.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		private static function maybe_hook_shutdown(): void {
+			if ( self::$queue_shutdown_hooked ) {
+				return;
+			}
+			self::$queue_shutdown_hooked = true;
+			add_action( 'shutdown', array( self::class, 'flush_tag_queue' ), 20 );
+		}
+
+		/**
+		 * Flush queued tags via X-LiteSpeed-Purge and litespeed_purge action.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function flush_tag_queue(): void {
+			$key  = Util::transient_key( self::TAG_QUEUE );
+			$tags = get_transient( $key );
+			if ( ! is_array( $tags ) || empty( $tags ) ) {
+				return;
+			}
+			delete_transient( $key );
+			if ( self::has_purge_lock() ) {
+				return;
+			}
+			self::set_purge_lock();
+			$tag_str = implode( ',', $tags );
+			/**
+			 * Filter flushed tag string.
+			 *
+			 * @since NEXT
+			 * @param string   $tag_str Tag string.
+			 * @param string[] $tags    Tag array.
+			 */
+			$tag_str = (string) apply_filters( 'wppo_litespeed_purge_tag_string', $tag_str, $tags );
+			if ( has_action( 'litespeed_purge' ) ) {
+				do_action( 'litespeed_purge', $tags );
+			}
+			if ( ! headers_sent() ) {
+				header( 'X-LiteSpeed-Purge: tag=' . $tag_str, false );
+			}
+		}
+
+		/**
 		 * Initialise LiteSpeed integration hooks.
 		 *
 		 * Registers purge-sync listeners (LS → WPPO) and Phase 3 server-level
@@ -832,6 +977,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Get active Vary groups (P2).
+		 *
+		 * Guest/mobile/webp are opt-in via litespeed_integration.varyGroups.
+		 * Role vary is derived from enableLoggedInCache. All filtered via
+		 * wppo_litespeed_vary_groups.
+		 *
+		 * @since NEXT
+		 * @return array{role:bool,guest:bool,mobile:bool,webp:bool}
+		 */
+		public static function get_vary_groups(): array {
+			$options = get_option( 'wppo_settings', array() );
+			$groups  = $options['litespeed_integration']['varyGroups'] ?? array();
+			$active  = array(
+				'role'   => self::should_vary_by_role(),
+				'guest'  => ! empty( $groups['guest'] ),
+				'mobile' => ! empty( $groups['mobile'] ),
+				'webp'   => ! empty( $groups['webp'] ),
+			);
+			/**
+			 * Filter active vary groups.
+			 *
+			 * @since NEXT
+			 * @param array $active Vary groups.
+			 */
+			$active = (array) apply_filters( 'wppo_litespeed_vary_groups', $active );
+			return array(
+				'role'   => (bool) ( $active['role'] ?? false ),
+				'guest'  => (bool) ( $active['guest'] ?? false ),
+				'mobile' => (bool) ( $active['mobile'] ?? false ),
+				'webp'   => (bool) ( $active['webp'] ?? false ),
+			);
+		}
+
+		/**
+		 * Build fallback vary header value from active groups (P2).
+		 *
+		 * @since NEXT
+		 * @return string Vary header value.
+		 */
+		public static function build_vary_header(): string {
+			$groups = self::get_vary_groups();
+			$parts  = array();
+			if ( $groups['role'] ) {
+				$parts[] = 'wppo_role_hash';
+			}
+			if ( $groups['guest'] ) {
+				$parts[] = '_lscache_vary=guest';
+			}
+			if ( $groups['mobile'] ) {
+				$parts[] = '_lscache_vary=mobile';
+			}
+			if ( $groups['webp'] ) {
+				$parts[] = '_lscache_vary=webp';
+			}
+			if ( empty( $parts ) ) {
+				return '';
+			}
+			$cookie_vary = implode( ',', $parts );
+			/**
+			 * Filter built vary header.
+			 *
+			 * @since NEXT
+			 * @param string $cookie_vary Vary header.
+			 * @param array  $groups Active groups.
+			 */
+			return (string) apply_filters( 'wppo_litespeed_vary_header', 'cookie=' . $cookie_vary, $groups );
+		}
+
+		/**
 		 * Handle send_headers — LS-native header emission (LS-301/302/304).
 		 *
 		 * When is_litespeed && is_wppo_cache_owner && is_cacheable, emits
@@ -879,11 +1093,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			self::send_litespeed_ttl( $ttl );
 			self::send_litespeed_tags();
 
-			// LS-303 fallback: when LSCWP not active, raw Vary: Cookie so OLS
-			// can vary by our role cookie. When LSCWP active, the litespeed_vary
-			// filter handles it; do not double-emit. Detect external callbacks
-			// beyond our own to decide fallback.
-			if ( self::should_vary_by_role() ) {
+			// LS-303 + P2 fallback: when LSCWP not active, raw Vary: Cookie + X-LiteSpeed-Vary
+			// for role/guest/mobile/webp groups. When LSCWP active, litespeed_vary filter handles it.
+			$groups_for_header = self::get_vary_groups();
+			$needs_vary        = $groups_for_header['role'] || $groups_for_header['guest'] || $groups_for_header['mobile'] || $groups_for_header['webp'];
+			if ( $needs_vary ) {
 				$has_external = false;
 				if ( function_exists( 'has_filter' ) ) {
 					global $wp_filter;
@@ -900,26 +1114,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 								$has_external = true;
 							}
 						}
-						// If only our callback exists, LSCWP likely absent → fallback needed.
 						if ( $only_self ) {
 							$has_external = false;
 						}
 					} else {
-						// No wp_filter object → no external.
 						$has_external = false;
 					}
 				}
 				if ( ! $has_external ) {
-					header( 'Vary: Cookie', false );
-					header( 'X-LiteSpeed-Vary: cookie=wppo_role_hash', false );
+					$has_cookie_vary = $groups_for_header['role'] || $groups_for_header['guest'] || $groups_for_header['mobile'];
+					if ( $has_cookie_vary ) {
+						header( 'Vary: Cookie', false );
+					}
+					if ( $groups_for_header['webp'] ) {
+						header( 'Vary: Accept', false );
+						header( 'Header append Vary Accept env=accept', false );
+					}
+					$vary_header = self::build_vary_header();
+					if ( '' !== $vary_header ) {
+						header( 'X-LiteSpeed-Vary: ' . $vary_header, false );
+					}
 					/**
 					 * Filter the fallback vary header value when litespeed_vary not present.
 					 *
 					 * @since NEXT
 					 * @param string $vary Fallback vary header.
 					 */
-					$fallback = (string) apply_filters( 'wppo_litespeed_vary_fallback', 'cookie=wppo_role_hash' );
-					if ( '' !== $fallback && 'cookie=wppo_role_hash' !== $fallback ) {
+					$fallback = (string) apply_filters( 'wppo_litespeed_vary_fallback', $vary_header );
+					if ( '' !== $fallback && $vary_header !== $fallback ) {
 						header( 'X-LiteSpeed-Vary: ' . $fallback, false );
 					}
 				}
@@ -1067,25 +1289,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return mixed Modified vary value.
 		 */
 		public static function filter_litespeed_vary( $vary ) {
-			if ( ! self::should_vary_by_role() ) {
+			$groups = self::get_vary_groups();
+			$has_any = $groups['role'] || $groups['guest'] || $groups['mobile'] || $groups['webp'];
+			if ( ! $has_any ) {
 				return $vary;
 			}
 
+			$to_add = array();
+			if ( $groups['role'] ) {
+				$to_add['wppo_role_hash'] = 'wppo_role_hash';
+			}
+			if ( $groups['guest'] ) {
+				$to_add['wppo_guest'] = 'wppo_guest';
+			}
+			if ( $groups['mobile'] ) {
+				$to_add['wppo_mobile'] = 'wppo_mobile';
+			}
+			if ( $groups['webp'] ) {
+				$to_add['wppo_webp'] = 'wppo_webp';
+			}
+
 			if ( is_array( $vary ) ) {
-				$vary['wppo_role_hash'] = 'wppo_role_hash';
+				foreach ( $to_add as $k => $v ) {
+					$vary[ $k ] = $v;
+				}
 			} elseif ( is_string( $vary ) ) {
-				$vary = '' !== $vary ? $vary . ',wppo_role_hash' : 'wppo_role_hash';
+				$parts = '' !== $vary ? explode( ',', $vary ) : array();
+				$parts = array_map( 'trim', $parts );
+				foreach ( $to_add as $v ) {
+					if ( ! in_array( $v, $parts, true ) ) {
+						$parts[] = $v;
+					}
+				}
+				$vary = implode( ',', $parts );
 			} else {
-				$vary = array( 'wppo_role_hash' => 'wppo_role_hash' );
+				$vary = $to_add;
 			}
 
 			/**
-			 * Filter the LiteSpeed vary value after WPPO role hash appended.
+			 * Filter the LiteSpeed vary value after WPPO vary appended.
 			 *
 			 * @since NEXT
 			 * @param mixed $vary Vary value.
+			 * @param array $groups Active vary groups.
 			 */
-			$vary = apply_filters( 'wppo_litespeed_vary', $vary );
+			$vary = apply_filters( 'wppo_litespeed_vary', $vary, $groups );
 
 			return $vary;
 		}
@@ -1308,6 +1556,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			self::$cached_brotli            = null;
 			self::$cached_can_cdn           = null;
 			self::$hooks_registered         = false;
+			self::$queue_shutdown_hooked    = false;
 		}
 
 		/**
@@ -1329,7 +1578,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				? Server_Rules::get_server_type()
 				: 'other';
 
-			return array(
+			$info = array(
 				'detected'           => self::is_litespeed(),
 				'server_type'        => $server_type,
 				'lscache_active'     => self::is_lscache_active(),
@@ -1337,7 +1586,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				'effective_mode'     => self::effective_mode(),
 				'wppo_owns_cache'    => self::is_wppo_cache_owner(),
 				'optimizer_disabled' => self::should_disable_wppo_optimizer(),
+				'vary_groups'        => self::get_vary_groups(),
 			);
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+				$info['crawler'] = array(
+					'concurrency'        => LiteSpeed_Crawler::get_concurrency(),
+					'blacklistThreshold' => LiteSpeed_Crawler::get_blacklist_threshold(),
+				);
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
+				$info['esi_available'] = LiteSpeed_ESI::is_esi_available();
+			}
+			return $info;
 		}
 	}
 }

@@ -242,6 +242,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'enableNextGenRewrite' => false,
 					'enableBrotli'         => false,
 					'purgeSync'            => true,
+					'varyGroups'           => array(
+						'guest'  => false,
+						'mobile' => false,
+						'webp'   => false,
+					),
+					'crawler'              => array(
+						'concurrency'        => 2,
+						'loadLimit'          => 0,
+						'blacklistThreshold' => 3,
+					),
+					'esi'                  => array(
+						'enabled' => false,
+					),
 				),
 				'llms_txt'              => array(
 					'enabled' => false,
@@ -446,6 +459,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-integration.php';
+			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-crawler.php';
+			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-litespeed-esi.php';
 			}
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-llms.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-llms.php';
@@ -797,6 +816,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// LS-202: LiteSpeed → WPPO purge sync (litespeed_purged_all/post/purge_finalize).
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'init' ) ) {
 				LiteSpeed_Integration::init();
+			}
+			// P5 ESI bridge (Enterprise only — OLS has no ESI).
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI', 'init' ) ) {
+				LiteSpeed_ESI::init();
 			}
 		}
 

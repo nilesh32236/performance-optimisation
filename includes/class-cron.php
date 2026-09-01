@@ -62,6 +62,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 
 			add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
 			add_action( 'wppo_generate_static_url', array( $this, 'process_url' ), 10, 1 );
+			add_action( 'wppo_litespeed_crawler_batch', array( $this, 'litespeed_crawler_batch' ), 10, 1 );
 
 			add_action( 'wppo_database_cleanup_cron', array( $this, 'database_cleanup_cron' ) );
 
@@ -517,6 +518,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				return;
 			}
 
+			// P4 lane: use crawler when on LiteSpeed.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
+				LiteSpeed_Crawler::crawl_single( $url );
+				return;
+			}
+
 			$response = wp_remote_get( $url, array( 'timeout' => 30 ) );
 			if ( is_wp_error( $response ) ) {
 				if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
@@ -633,6 +640,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			if ( ! $permalink ) {
 				return;
 			}
+			// P4 lane: use LiteSpeed crawler variant matrix when available.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
+				LiteSpeed_Crawler::crawl_single( $permalink );
+				return;
+			}
 			$response = wp_remote_get( $permalink, array( 'timeout' => 30 ) );
 			if ( is_wp_error( $response ) ) {
 				$clean_err = sanitize_text_field( str_replace( ABSPATH, '', $response->get_error_message() ) );
@@ -645,6 +657,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 					// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 					error_log( 'WPPO preload failed: HTTP status ' . (int) wp_remote_retrieve_response_code( $response ) );
 				}
+			}
+		}
+
+		/**
+		 * Crawl batch via curl_multi variant matrix (P4).
+		 *
+		 * @since NEXT
+		 * @param array $urls URLs.
+		 * @return void
+		 */
+		public function litespeed_crawler_batch( $urls ): void {
+			if ( ! is_array( $urls ) || empty( $urls ) ) {
+				return;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+				LiteSpeed_Crawler::crawl_batch( $urls );
 			}
 		}
 
