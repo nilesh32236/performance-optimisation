@@ -87,6 +87,10 @@ const App = () => {
 	const hasFetchedRules = useRef( false );
 	const hasFetchedCcss = useRef( false );
 
+	const activitiesControllerRef = useRef( null );
+	const rulesControllerRef = useRef( null );
+	const ccssControllerRef = useRef( null );
+
 	const sidebarRef = useRef( null );
 	const toggleBtnRef = useRef( null );
 
@@ -282,24 +286,42 @@ const App = () => {
 	}, [] );
 
 	useEffect( () => {
-		const abortController = new AbortController();
+		if ( activitiesControllerRef.current ) {
+			activitiesControllerRef.current.abort();
+		}
+		const activitiesController = new AbortController();
+		activitiesControllerRef.current = activitiesController;
+
+		if ( rulesControllerRef.current ) {
+			rulesControllerRef.current.abort();
+		}
+		const rulesController = new AbortController();
+		rulesControllerRef.current = rulesController;
+
+		if ( ccssControllerRef.current ) {
+			ccssControllerRef.current.abort();
+		}
+		const ccssController = new AbortController();
+		ccssControllerRef.current = ccssController;
 
 		if (
-			( activeTab === 'dashboard' || recentActivities.length === 0 ) &&
+			( activeTab === 'overview' ||
+				activeTab === 'dashboard' ||
+				recentActivities.length === 0 ) &&
 			! hasFetchedActivities.current
 		) {
 			const fetchActivities = async () => {
 				try {
 					const data = await fetchRecentActivities(
 						1,
-						abortController.signal
+						activitiesController.signal
 					);
-					if ( ! abortController.signal.aborted ) {
+					if ( ! activitiesController.signal.aborted ) {
 						setRecentActivities( data );
 						hasFetchedActivities.current = true;
 					}
 				} catch ( error ) {
-					if ( ! abortController.signal.aborted ) {
+					if ( ! activitiesController.signal.aborted ) {
 						console.error(
 							__(
 								'Failed to fetch activities:',
@@ -320,8 +342,8 @@ const App = () => {
 			}
 			hasFetchedRules.current = true;
 			try {
-				const res = await fetchServerRules( abortController.signal );
-				if ( ! abortController.signal.aborted ) {
+				const res = await fetchServerRules( rulesController.signal );
+				if ( ! rulesController.signal.aborted ) {
 					if ( res.success ) {
 						setServerRules( res.data );
 						setServerRulesError( false );
@@ -334,7 +356,7 @@ const App = () => {
 				}
 			} catch {
 				hasFetchedRules.current = false;
-				if ( ! abortController.signal.aborted ) {
+				if ( ! rulesController.signal.aborted ) {
 					setServerRulesError( true );
 				}
 			}
@@ -351,24 +373,24 @@ const App = () => {
 					'ccss_status',
 					{},
 					'GET',
-					abortController.signal
+					ccssController.signal
 				);
-				if ( ! abortController.signal.aborted && res.success ) {
+				if ( ! ccssController.signal.aborted && res.success ) {
 					setCcssStatus( res.data );
 					setCcssError( false );
-				} else if ( ! abortController.signal.aborted ) {
+				} else if ( ! ccssController.signal.aborted ) {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
 				}
 			} catch {
-				if ( ! abortController.signal.aborted ) {
+				if ( ! ccssController.signal.aborted ) {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
 				}
 			} finally {
 				// Reset the refresh trigger so the guard re-trues and the
 				// status is not re-fetched on every subsequent tab switch.
-				if ( ! abortController.signal.aborted ) {
+				if ( ! ccssController.signal.aborted ) {
 					setCcssRefreshTrigger( 0 );
 				}
 			}
@@ -376,7 +398,9 @@ const App = () => {
 		fetchCcssStatus();
 
 		return () => {
-			abortController.abort();
+			activitiesController.abort();
+			rulesController.abort();
+			ccssController.abort();
 		};
 	}, [
 		activeTab,
