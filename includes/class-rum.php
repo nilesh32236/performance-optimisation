@@ -192,7 +192,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				return;
 			}
 
-			$path = isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/';
+			$parsed_path = isset( $_SERVER['REQUEST_URI'] ) ? wp_parse_url( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), PHP_URL_PATH ) : '/';
+			// Fallback to strict check to prevent '0' being treated as false.
+			$path = is_string( $parsed_path ) && '' !== $parsed_path ? esc_url_raw( substr( $parsed_path, 0, 512 ) ) : '/';
 
 			$config = array(
 				'apiUrl' => esc_url_raw( rest_url( 'performance-optimisation/v1/rum_collect' ) ),
@@ -200,7 +202,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 				'path'   => $path,
 			);
 
-			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON encoded config.
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Primary XSS defense: wp_json_encode hex-escapes tags and quotes.
 			echo '<script id="wppo-rum-config">window.wppoRum=' . wp_json_encode( $config ) . ';</script>' . "\n";
 		}
 
