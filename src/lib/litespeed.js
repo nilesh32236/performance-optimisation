@@ -75,10 +75,18 @@ export const modeLabel = ( mode ) => {
  */
 export const getVaryEnv = ( varyGroups = {} ) => {
 	const parts = [];
-	if ( varyGroups.role ) parts.push( 'wppo_role_hash' );
-	if ( varyGroups.guest ) parts.push( 'guest' );
-	if ( varyGroups.mobile ) parts.push( 'mobile' );
-	if ( varyGroups.webp ) parts.push( 'webp' );
+	if ( varyGroups.role ) {
+		parts.push( 'wppo_role_hash' );
+	}
+	if ( varyGroups.guest ) {
+		parts.push( 'guest' );
+	}
+	if ( varyGroups.mobile ) {
+		parts.push( 'mobile' );
+	}
+	if ( varyGroups.webp ) {
+		parts.push( 'webp' );
+	}
 	return parts.join( ',' );
 };
 
@@ -89,6 +97,8 @@ export const getVaryEnv = ( varyGroups = {} ) => {
  * @return {string} Label.
  */
 export const getCdnMappingLabel = ( mapping = [] ) => {
-	if ( ! Array.isArray( mapping ) || 0 === mapping.length ) return 'None';
+	if ( ! Array.isArray( mapping ) || 0 === mapping.length ) {
+		return 'None';
+	}
 	return mapping.map( ( m ) => m.cdn_url ).join( ', ' );
 };
