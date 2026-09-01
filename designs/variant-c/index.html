@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Variant C — Dense Utility • Performance Optimisation</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<header class="wppo-toolbar" role="banner">
+  <div class="wppo-toolbar__brand"><div class="wppo-toolbar__logo">⚡</div> Performance</div>
+  <div class="wppo-toolbar__search"><input id="search" placeholder="Search settings, run command…"></div>
+  <span class="wppo-toolbar__kbd">⌘ K</span>
+  <div class="wppo-toolbar__actions">
+    <button class="wppo-button" onclick="document.getElementById('cmdk').classList.add('wppo-cmdk--open')">Command</button>
+    <button class="wppo-button wppo-button--primary" id="btnSave">Save changes</button>
+  </div>
+</header>
+
+<div class="wppo-layout">
+  <!-- Nav — light sidebar -->
+  <nav class="wppo-nav" aria-label="Primary">
+    <div class="wppo-nav__section">
+      <div class="wppo-nav__heading">Navigation</div>
+      <div class="wppo-nav__item wppo-nav__item--active" data-view="dashboard"><span class="wppo-nav__icon">◉</span> Dashboard <span class="wppo-nav__count">4</span></div>
+      <div class="wppo-nav__item" data-view="file"><span class="wppo-nav__icon">▭</span> File Optimisation</div>
+      <div class="wppo-nav__item"><span class="wppo-nav__icon">◎</span> Preload <span class="wppo-nav__count">3</span></div>
+      <div class="wppo-nav__item"><span class="wppo-nav__icon">▣</span> Images</div>
+      <div class="wppo-nav__item"><span class="wppo-nav__icon">▤</span> Database</div>
+      <div class="wppo-nav__item"><span class="wppo-nav__icon">⬢</span> Object Cache</div>
+      <div class="wppo-nav__item"><span class="wppo-nav__icon">⚙</span> Tools</div>
+    </div>
+    <div class="wppo-nav__section" id="fileTree" style="display:none;">
+      <div class="wppo-nav__heading">File — Sections</div>
+      <div class="wppo-nav__tree">
+        <div class="wppo-nav__item wppo-nav__item--active">Assets</div>
+        <div class="wppo-nav__item">Scripts</div>
+        <div class="wppo-nav__item">E-Commerce</div>
+        <div class="wppo-nav__item">Network — LiteSpeed</div>
+        <div class="wppo-nav__item">Core</div>
+      </div>
+    </div>
+    <div class="wppo-nav__section">
+      <div class="wppo-nav__heading">System</div>
+      <div class="wppo-nav__item"><span class="wppo-nav__icon">●</span> LiteSpeed: Auto → WPPO</div>
+      <div class="wppo-nav__item wppo-small wppo-muted" style="padding-left:8px;">OpenLiteSpeed 1.9.1 · LSCache inactive</div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <main class="wppo-main">
+    <p class="wppo-small wppo-muted" style="margin:0 0 8px;">Variant C — Dense Utility • Toolbar + table + inspector • Light sidebar • Tabular numbers • 13px dense • Command palette</p>
+
+    <div class="wppo-notice"><span>ⓘ</span><div><strong>LiteSpeed detected</strong> — Effective mode is WPPO owns cache. Inspector on the right shows live values. Press <span class="wppo-toolbar__kbd" style="vertical-align:middle">⌘K</span> to jump.</div></div>
+
+    <!-- Dashboard -->
+    <div id="view-dashboard">
+      <!-- KPIs — tabular -->
+      <div class="wppo-kpis">
+        <div class="wppo-kpi">
+          <div class="wppo-kpi__label">Cache size</div>
+          <div class="wppo-kpi__value">48.3 MB</div>
+          <div class="wppo-kpi__meta">gzip <span class="wppo-badge wppo-badge--ok">Ready</span></div>
+        </div>
+        <div class="wppo-kpi wppo-kpi--files">
+          <div class="wppo-kpi__label">Optimised files</div>
+          <div class="wppo-kpi__value">127</div>
+          <div class="wppo-kpi__meta">38% saved · <span style="color:#8b5cf6">127 files</span></div>
+        </div>
+        <div class="wppo-kpi wppo-kpi--db">
+          <div class="wppo-kpi__label">DB overhead</div>
+          <div class="wppo-kpi__value">12.4 MB</div>
+          <div class="wppo-kpi__meta"><span class="wppo-badge wppo-badge--warn">Medium</span> 42 items</div>
+        </div>
+        <div class="wppo-kpi wppo-kpi--img">
+          <div class="wppo-kpi__label">Images</div>
+          <div class="wppo-kpi__value">1,240</div>
+          <div class="wppo-kpi__meta">WebP/AVIF · 124 pending</div>
+        </div>
+      </div>
+
+      <div class="wppo-tablewrap">
+        <div style="padding:10px 12px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--wppo-border); background:#f8fafc;">
+          <strong style="font-size:12.5px;">Performance audit</strong>
+          <span class="wppo-badge wppo-badge--info">Telemetry · local</span>
+        </div>
+        <table class="wppo-table">
+          <thead><tr><th>Audit</th><th>Value</th><th>Status</th><th style="width:120px">Share</th><th></th></tr></thead>
+          <tbody>
+            <tr><td>Largest Contentful Paint <div class="wppo-table__mono">hero.jpg preload</div></td><td class="wppo-table__mono">1.42s</td><td><span class="wppo-badge wppo-badge--ok">Good</span></td><td><div class="wppo-table__bar"><i style="width:72%"></i></div></td><td><div class="wppo-table__actions"><button class="wppo-button wppo-button--sm">View</button></div></td></tr>
+            <tr><td>Interaction to Next Paint</td><td class="wppo-table__mono">118 ms</td><td><span class="wppo-badge wppo-badge--ok">Good</span></td><td><div class="wppo-table__bar"><i style="width:84%"></i></div></td><td style="text-align:right; color:var(--wppo-text-faint)">—</td></tr>
+            <tr><td>Cumulative Layout Shift</td><td class="wppo-table__mono">0.04</td><td><span class="wppo-badge wppo-badge--ok">Good</span></td><td><div class="wppo-table__bar"><i style="width:92%"></i></div></td><td style="text-align:right; color:var(--wppo-text-faint)">—</td></tr>
+            <tr><td>Autoloaded options <div class="wppo-table__mono">912 KB · wp_options</div></td><td class="wppo-table__mono">912 KB</td><td><span class="wppo-badge wppo-badge--warn">Large</span></td><td><div class="wppo-table__bar"><i style="width:46%; background:#f59e0b"></i></div></td><td><div class="wppo-table__actions"><button class="wppo-button wppo-button--sm">Fix</button></div></td></tr>
+          </tbody>
+        </table>
+        <div style="padding:8px 12px; font-size:11.5px; color:var(--wppo-text-muted); background:#f8fafc; border-top:1px solid var(--wppo-border);">Rows are compact to fit more audits without scrolling. Inspector updates on selection — try clicking a row.</div>
+      </div>
+
+      <div class="wppo-card" style="margin-top:12px;">
+        <div class="wppo-card__head"><h3>Page cache</h3><button class="wppo-button wppo-button--sm wppo-button--primary">Save</button></div>
+        <div class="wppo-card__body" style="padding:0;">
+          <div class="wppo-field" style="padding:12px;">
+            <div>
+              <div class="wppo-field__label">Enable page cache</div>
+              <div class="wppo-field__desc">Static HTML for non-logged-in visitors. Purges on save.</div>
+            </div>
+            <div class="wppo-field__control">
+              <label class="wppo-switch"><span class="wppo-switch__control"><input class="wppo-switch__input" type="checkbox" checked><span class="wppo-switch__track"></span><span class="wppo-switch__thumb"></span></span> Enabled</label>
+              <div style="margin-top:10px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                <div><label class="wppo-small wppo-muted">Lifespan</label><select class="wppo-select"><option>24 hours</option><option>1 week</option></select></div>
+                <div><label class="wppo-small wppo-muted">Preload batch</label><input class="wppo-input" value="200"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- File Optimisation -->
+    <div id="view-file" style="display:none;">
+      <div class="wppo-card">
+        <div class="wppo-card__head"><h3>File optimisation — Assets</h3><button class="wppo-button wppo-button--primary">Save settings</button></div>
+        <div class="wppo-field" style="padding:12px; margin:0;">
+          <div>
+            <div class="wppo-field__label">Minify CSS</div>
+            <div class="wppo-field__desc">Strip whitespace and comments from stylesheets.</div>
+          </div>
+          <div class="wppo-field__control"><label class="wppo-switch"><span class="wppo-switch__control"><input class="wppo-switch__input" type="checkbox" checked><span class="wppo-switch__track"></span><span class="wppo-switch__thumb"></span></span> Enabled</label></div>
+        </div>
+        <div class="wppo-field" style="padding:12px; margin:0;">
+          <div>
+            <div class="wppo-field__label">Combine CSS</div>
+            <div class="wppo-field__desc">Merge all CSS into one file. Exclude patterns below fix FOUC.</div>
+          </div>
+          <div class="wppo-field__control"><label class="wppo-switch"><span class="wppo-switch__control"><input class="wppo-switch__input" type="checkbox"><span class="wppo-switch__track"></span><span class="wppo-switch__thumb"></span></span> Disabled</label></div>
+        </div>
+        <div class="wppo-field" style="padding:12px; margin:0;">
+          <div>
+            <div class="wppo-field__label">Remove unused CSS</div>
+            <div class="wppo-field__desc">Heuristic scan per page. Safelist keeps dynamic selectors.</div>
+          </div>
+          <div class="wppo-field__control">
+            <label class="wppo-switch"><span class="wppo-switch__control"><input class="wppo-switch__input" type="checkbox"><span class="wppo-switch__track"></span><span class="wppo-switch__thumb"></span></span> Disabled</label>
+            <textarea class="wppo-textarea" style="margin-top:8px;" placeholder=".my-dynamic-class&#10;.swiper-slide-active"></textarea>
+            <div class="wppo-small wppo-muted" style="margin-top:4px;">One selector per line.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wppo-card">
+        <div class="wppo-card__head"><h3>Network — Server rules</h3><span class="wppo-badge wppo-badge--info">LiteSpeed / Apache</span></div>
+        <div style="padding:12px;">
+          <label class="wppo-switch"><span class="wppo-switch__control"><input class="wppo-switch__input" type="checkbox" checked><span class="wppo-switch__track"></span><span class="wppo-switch__thumb"></span></span> <span class="wppo-field__label" style="margin:0;">Enable .htaccess rules</span></label>
+          <p class="wppo-small wppo-muted" style="margin:6px 0 8px;">Same .htaccess for Apache and LiteSpeed. Restart OpenLiteSpeed after saving. Nginx shows a server block to copy instead.</p>
+          <div class="wppo-code">&lt;IfModule mod_expires.c&gt;
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+&lt;/IfModule&gt;</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="wppo-small wppo-muted" style="text-align:center; margin-top:14px;">Dense utility keeps height low — tables replace big cards. Inspector pins on 1200px+, collapses on smaller. <span class="wppo-mono">640 · 768 · 992 · 1200</span></p>
+  </main>
+
+  <!-- Inspector -->
+  <aside class="wppo-inspector" aria-label="Inspector">
+    <div class="wppo-inspector__title">Inspector</div>
+    <div class="wppo-inspector__card">
+      <div class="wppo-inspector__label">Selected audit</div>
+      <div style="font-weight:700; margin-top:4px;">Largest Contentful Paint — 1.42s</div>
+      <div class="wppo-small wppo-muted" style="margin-top:4px;">Local telemetry (cURL) + PageSpeed + RUM beacons. Tip: preload the hero image with fetchpriority=high.</div>
+      <div style="margin-top:8px; display:flex; gap:6px;"><span class="wppo-badge wppo-badge--ok">Good</span><span class="wppo-badge wppo-badge--info">Telemetry</span></div>
+    </div>
+    <div class="wppo-inspector__card">
+      <div class="wppo-inspector__label">Cache detail</div>
+      <div class="wppo-inspector__row"><span>Static files</span><span class="wppo-mono">1,482</span></div>
+      <div class="wppo-inspector__row"><span>Size</span><span class="wppo-mono">48.3 MB</span></div>
+      <div class="wppo-inspector__row"><span>Hit rate</span><span class="wppo-mono">94%</span></div>
+      <div class="wppo-inspector__row"><span>Last purge</span><span class="wppo-mono">12 min ago</span></div>
+    </div>
+    <div class="wppo-inspector__card">
+      <div class="wppo-inspector__label">LiteSpeed</div>
+      <div class="wppo-small" style="margin-top:4px;"><strong>Mode:</strong> Auto → WPPO<br><strong>Server:</strong> OpenLiteSpeed 1.9.1<br><strong>Vary:</strong> role-hash · X-LiteSpeed-Cache-Control public</div>
+      <div class="wppo-code" style="margin-top:8px; font-size:10.5px;">&lt;IfModule mod_expires.c&gt;…&lt;/IfModule&gt;</div>
+    </div>
+    <div class="wppo-small wppo-muted">Inspector mirrors the selected table row. On mobile it collapses into the main flow.</div>
+  </aside>
+</div>
+
+<!-- CmdK -->
+<div class="wppo-cmdk" id="cmdk" role="dialog" aria-modal="true" aria-label="Command palette">
+  <div class="wppo-cmdk__panel">
+    <div class="wppo-cmdk__head">⌕ <input placeholder="Type a command or search…" autofocus></div>
+    <div class="wppo-cmdk__list">
+      <div class="wppo-cmdk__item wppo-cmdk__item--active">Go to Dashboard <kbd>↵</kbd></div>
+      <div class="wppo-cmdk__item">Go to File Optimisation → Assets <kbd>G F</kbd></div>
+      <div class="wppo-cmdk__item">Go to File Optimisation → Network <kbd>G N</kbd></div>
+      <div class="wppo-cmdk__item">Purge all cache <kbd>⌘ ⇧ P</kbd></div>
+      <div class="wppo-cmdk__item">Toggle LiteSpeed mode <kbd>L</kbd></div>
+      <div class="wppo-cmdk__item">Search autoloaded options <kbd>/</kbd></div>
+    </div>
+    <div style="padding:8px 12px; border-top:1px solid var(--wppo-border); font-size:11px; color:var(--wppo-text-muted); display:flex; justify-content:space-between;"><span>↑↓ Navigate · ↵ Select · Esc Close</span><span class="wppo-mono">Variant C</span></div>
+  </div>
+</div>
+
+<script>
+  const cmdk = document.getElementById('cmdk');
+  document.getElementById('search').addEventListener('focus', ()=> cmdk.classList.add('wppo-cmdk--open'));
+  cmdk.addEventListener('click', (e)=>{ if(e.target===cmdk) cmdk.classList.remove('wppo-cmdk--open'); });
+  document.addEventListener('keydown', (e)=>{
+    if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); cmdk.classList.toggle('wppo-cmdk--open'); }
+    if(e.key==='Escape') cmdk.classList.remove('wppo-cmdk--open');
+  });
+  // view toggle
+  document.querySelectorAll('[data-view]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      document.querySelectorAll('.wppo-nav__item[data-view]').forEach(i=>i.classList.remove('wppo-nav__item--active'));
+      el.classList.add('wppo-nav__item--active');
+      const v = el.dataset.view;
+      document.getElementById('view-dashboard').style.display = v==='dashboard' ? 'block' : 'none';
+      document.getElementById('view-file').style.display = v==='file' ? 'block' : 'none';
+      document.getElementById('fileTree').style.display = v==='file' ? 'block' : 'none';
+    });
+  });
+  // table row inspector mock
+  document.querySelectorAll('.wppo-table tbody tr').forEach(tr=>{
+    tr.style.cursor='pointer';
+    tr.addEventListener('click', ()=>{
+      document.querySelectorAll('.wppo-table tbody tr').forEach(x=>x.style.background='');
+      tr.style.background='#eff6ff';
+    });
+  });
+</script>
+</body>
+</html>

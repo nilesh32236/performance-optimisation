@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Variant A — Native WordPress • Performance Optimisation</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="wppo-adminbar">
+  <span class="wppo-adminbar__dot" aria-hidden="true"></span>
+  <strong>WordPress</strong> <span style="opacity:.7">— Performance Optimisation preview</span>
+  <span style="margin-left:auto; font-size:12px; opacity:.8">Variant A · Native WP · Inter · 8px grid · No Font Awesome</span>
+</div>
+
+<div class="wppo-wrap">
+  <!-- Page head -->
+  <div class="wppo-pagehead">
+    <div class="wppo-pagehead__title">
+      <h1>Performance Optimisation</h1>
+      <p>Native WordPress styling — cards, tabs and 8px spacing that feels at home in wp-admin. Built for the long term.</p>
+    </div>
+    <div class="wppo-pagehead__actions">
+      <button class="wppo-button">Export settings</button>
+      <button class="wppo-button wppo-button--primary">Purge all cache</button>
+    </div>
+  </div>
+
+  <!-- Tabs — WP primitives -->
+  <nav class="wppo-tabs" role="tablist" aria-label="Primary">
+    <button class="wppo-tabs__item wppo-tabs__item--active" role="tab" aria-selected="true" data-tab="dashboard">Dashboard <span class="wppo-tabs__count">●</span></button>
+    <button class="wppo-tabs__item" role="tab" aria-selected="false" data-tab="file">File Optimisation</button>
+    <button class="wppo-tabs__item" role="tab" aria-selected="false" data-tab="preload">Preload</button>
+    <button class="wppo-tabs__item" role="tab" aria-selected="false" data-tab="images">Image Optimisation</button>
+    <button class="wppo-tabs__item" role="tab" aria-selected="false" data-tab="database">Database</button>
+    <button class="wppo-tabs__item" role="tab" aria-selected="false" data-tab="object">Object Cache</button>
+    <button class="wppo-tabs__item" role="tab" aria-selected="false" data-tab="tools">Tools</button>
+  </nav>
+
+  <!-- LiteSpeed notice -->
+  <div class="wppo-notice wppo-notice--info" role="status">
+    <div class="wppo-notice__icon">i</div>
+    <div class="wppo-notice__content">
+      <div class="wppo-notice__title">LiteSpeed detected — OpenLiteSpeed 1.9.1</div>
+      <div class="wppo-notice__meta">LSCache plugin not active. Effective mode is <strong>WPPO owns cache</strong>. Server rules below are Apache-compatible and restart is required on OpenLiteSpeed after changing .htaccess.</div>
+      <div class="wppo-notice__badges">
+        <span class="wppo-badge wppo-badge--active">Effective: WPPO</span>
+        <span class="wppo-badge">LSCache inactive</span>
+        <span class="wppo-badge">.htaccess supported</span>
+      </div>
+    </div>
+    <button class="wppo-button wppo-button--sm">Change mode</button>
+  </div>
+
+  <!-- ===== Dashboard view (default visible) ===== -->
+  <div id="view-dashboard">
+    <!-- Stats 4-col -->
+    <div class="wppo-stats">
+      <div class="wppo-stat">
+        <div class="wppo-stat__header">
+          <span class="wppo-stat__label">Cache size</span>
+          <span class="wppo-stat__icon">◫</span>
+        </div>
+        <div class="wppo-stat__value">48.3 MB</div>
+        <div class="wppo-stat__meta">Static HTML + gzip variant • <span style="color:#008a20">Ready</span></div>
+        <div class="wppo-stat__footer"><a class="wppo-link" href="#">Manage files →</a></div>
+      </div>
+      <div class="wppo-stat wppo-stat--files">
+        <div class="wppo-stat__header">
+          <span class="wppo-stat__label">Optimised files</span>
+          <span class="wppo-stat__icon">▦</span>
+        </div>
+        <div class="wppo-stat__value">127</div>
+        <div class="wppo-stat__meta">Combined CSS/JS • 38% smaller</div>
+        <div class="wppo-stat__footer"><a class="wppo-link" href="#">Configure →</a></div>
+      </div>
+      <div class="wppo-stat wppo-stat--db">
+        <div class="wppo-stat__header">
+          <span class="wppo-stat__label">Database overhead</span>
+          <span class="wppo-stat__icon">▩</span>
+        </div>
+        <div class="wppo-stat__value">12.4 MB</div>
+        <div class="wppo-stat__meta"><span class="wppo-badge" style="font-size:11px; padding:1px 6px;">Medium</span> 42 orphaned items</div>
+        <div class="wppo-stat__footer"><a class="wppo-link" href="#">Clean up →</a></div>
+      </div>
+      <div class="wppo-stat wppo-stat--img">
+        <div class="wppo-stat__header">
+          <span class="wppo-stat__label">Images optimised</span>
+          <span class="wppo-stat__icon">◐</span>
+        </div>
+        <div class="wppo-stat__value">1,240</div>
+        <div class="wppo-stat__meta">WebP and AVIF copies • <span style="color:#008a20">124 pending</span></div>
+        <div class="wppo-stat__footer"><a class="wppo-link" href="#">View queue →</a></div>
+      </div>
+    </div>
+
+    <!-- Page cache + Logged-in cache -->
+    <div class="wppo-grid">
+      <div class="wppo-card">
+        <div class="wppo-card__header">
+          <div>
+            <h3><span></span> Page cache</h3>
+            <p>Generate static HTML copies and serve them without loading WordPress.</p>
+          </div>
+        </div>
+        <div class="wppo-card__body">
+          <label class="wppo-switch">
+            <span class="wppo-switch__control">
+              <input class="wppo-switch__input" type="checkbox" checked>
+              <span class="wppo-switch__track"></span>
+              <span class="wppo-switch__thumb"></span>
+            </span>
+            <span class="wppo-switch__content">
+              <span class="wppo-switch__label">Enable page cache</span>
+              <span class="wppo-switch__desc">Recommended for faster time to first byte on non-logged-in visits.</span>
+            </span>
+          </label>
+          <div class="wppo-field" style="margin-top:8px;">
+            <label class="wppo-field__label" for="a-cachelife">Cache lifespan</label>
+            <select class="wppo-select" id="a-cachelife">
+              <option>Never expire</option>
+              <option selected>24 hours</option>
+              <option>1 week</option>
+            </select>
+            <p class="wppo-field__help">Content is purged automatically when you update a post or change settings.</p>
+          </div>
+        </div>
+        <div class="wppo-card__footer">
+          <button class="wppo-button wppo-button--primary">Save page cache</button>
+        </div>
+      </div>
+
+      <div class="wppo-card">
+        <div class="wppo-card__header">
+          <div>
+            <h3>Cache for logged-in users</h3>
+            <p>Serve cached pages to selected roles. The admin bar stays dynamic.</p>
+          </div>
+        </div>
+        <div class="wppo-card__body">
+          <label class="wppo-switch">
+            <span class="wppo-switch__control">
+              <input class="wppo-switch__input" type="checkbox">
+              <span class="wppo-switch__track"></span>
+              <span class="wppo-switch__thumb"></span>
+            </span>
+            <span class="wppo-switch__content">
+              <span class="wppo-switch__label">Enable for logged-in users</span>
+              <span class="wppo-switch__desc">When no role is selected, caching applies to all logged-in accounts.</span>
+            </span>
+          </label>
+          <div class="wppo-field">
+            <label class="wppo-field__label">Roles that receive cached pages</label>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px;">
+              <label style="font-size:13px; display:flex; gap:6px; align-items:center;"><input type="checkbox"> Editor</label>
+              <label style="font-size:13px; display:flex; gap:6px; align-items:center;"><input type="checkbox"> Author</label>
+              <label style="font-size:13px; display:flex; gap:6px; align-items:center;"><input type="checkbox"> Subscriber</label>
+            </div>
+          </div>
+        </div>
+        <div class="wppo-card__footer">
+          <button class="wppo-button wppo-button--primary">Save role rules</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Audit + System -->
+    <div class="wppo-card">
+      <div class="wppo-card__header">
+        <div>
+          <h3>Performance audit</h3>
+          <p>Local scan — no external service required</p>
+        </div>
+        <span class="wppo-badge">Telemetry</span>
+      </div>
+      <div class="wppo-card__body">
+        <table class="wppo-table">
+          <thead><tr><th>Metric</th><th>Value</th><th>Status</th><th>Tip</th></tr></thead>
+          <tbody>
+            <tr><td>Largest Contentful Paint</td><td>1.4s</td><td style="color:#008a20">Good</td><td>Preload the hero image</td></tr>
+            <tr><td>Interaction to Next Paint</td><td>120 ms</td><td style="color:#008a20">Good</td><td>—</td></tr>
+            <tr><td>Cumulative Layout Shift</td><td>0.04</td><td style="color:#008a20">Good</td><td>Set image dimensions</td></tr>
+            <tr><td>Autoloaded options</td><td>912 KB</td><td style="color:#d63638">Large</td><td>Review orphaned options</td></tr>
+          </tbody>
+        </table>
+        <p class="wppo-text-sm wppo-text-muted" style="margin-top:12px;">Run history is stored locally and shown as a small chart in the full app. PageSpeed is available as a separate scan when you add an API key.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== File Optimisation view (hidden by default) ===== -->
+  <div id="view-file" style="display:none;">
+    <div class="wppo-card">
+      <div class="wppo-card__header">
+        <div>
+          <h3>File optimisation</h3>
+          <p>Fine-tune how CSS, JS and HTML are delivered. Changes apply on next page cache build.</p>
+        </div>
+        <button class="wppo-button wppo-button--primary">Save settings</button>
+      </div>
+      <div class="wppo-subtabs" role="tablist" aria-label="File subsections">
+        <button class="wppo-subtabs__item wppo-subtabs__item--active">Assets</button>
+        <button class="wppo-subtabs__item">Scripts</button>
+        <button class="wppo-subtabs__item">E-Commerce</button>
+        <button class="wppo-subtabs__item">Network</button>
+        <button class="wppo-subtabs__item">Core</button>
+      </div>
+      <div class="wppo-card__body">
+        <h3 style="margin:0 0 12px; font-size:14px;">CSS optimisation</h3>
+        <label class="wppo-switch">
+          <span class="wppo-switch__control"><input class="wppo-switch__input" type="checkbox" checked><span class="wppo-switch__track"></span><span class="wppo-switch__thumb"></span></span>
+          <span class="wppo-switch__content"><span class="wppo-switch__label">Minify CSS</span><span class="wppo-switch__desc">Remove whitespace and comments from stylesheets to reduce file size.</span></span>
+        </label>
+        <label class="wppo-switch">
+          <span class="wppo-switch__control"><input class="wppo-switch__input" type="checkbox"><span class="wppo-switch__track"></span><span class="wppo-switch__thumb"></span></span>
+          <span class="wppo-switch__content"><span class="wppo-switch__label">Combine CSS</span><span class="wppo-switch__desc">Merge all CSS files into one to reduce requests. Test for flash of unstyled content.</span></span>
+        </label>
+        <label class="wppo-switch">
+          <span class="wppo-switch__control"><input class="wppo-switch__input" type="checkbox"><span class="wppo-switch__track"></span><span class="wppo-switch__thumb"></span></span>
+          <span class="wppo-switch__content"><span class="wppo-switch__label">Remove unused CSS</span><span class="wppo-switch__desc">Scan pages and drop rules not used. Safelist any dynamic selectors below.</span></span>
+        </label>
+        <div class="wppo-field">
+          <label class="wppo-field__label" for="a-exclude">Safelist selectors</label>
+          <textarea class="wppo-textarea" id="a-exclude" rows="3" placeholder=".my-dynamic-class&#10;.swiper-slide-active"></textarea>
+          <p class="wppo-field__help">One selector per line — kept even if unused.</p>
+        </div>
+
+        <h3 style="margin:20px 0 12px; font-size:14px;">Network — Server rules</h3>
+        <div class="wppo-notice" style="margin:0 0 12px; border-left-color:#dba617;">
+          <div class="wppo-notice__icon" style="background:#fffbeb; color:#b45309; border:1px solid #fde68a;">!</div>
+          <div class="wppo-notice__content">
+            <div class="wppo-notice__title">This writes to .htaccess</div>
+            <div class="wppo-notice__meta">On OpenLiteSpeed, restart the service after saving. Keep FTP access handy to recover if needed.</div>
+          </div>
+        </div>
+        <label class="wppo-switch">
+          <span class="wppo-switch__control"><input class="wppo-switch__input" type="checkbox" checked><span class="wppo-switch__track"></span><span class="wppo-switch__thumb"></span></span>
+          <span class="wppo-switch__content"><span class="wppo-switch__label">Enable server rules (.htaccess)</span><span class="wppo-switch__desc">Add browser caching and gzip rules for Apache and LiteSpeed.</span></span>
+        </label>
+        <div class="wppo-code" style="margin-top:12px;">&lt;IfModule mod_expires.c&gt;
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+&lt;/IfModule&gt;</div>
+        <p class="wppo-text-sm wppo-text-muted" style="margin-top:8px;">Nginx users: same rules are shown as a config block to paste into the server block, since .htaccess does not apply.</p>
+      </div>
+    </div>
+  </div>
+
+  <p class="wppo-text-sm wppo-text-muted" style="margin-top:16px; text-align:center;">Preview only — tabs switch with lightweight JS. Real app uses the same tab names and wppoSettings contract. <span style="font-variant-numeric:tabular-nums;">Breakpoints: 640 · 768 · 992 · 1200</span></p>
+</div>
+
+<script>
+  const tabs = document.querySelectorAll('.wppo-tabs__item');
+  const dash = document.getElementById('view-dashboard');
+  const file = document.getElementById('view-file');
+  tabs.forEach(t=>t.addEventListener('click', ()=>{
+    tabs.forEach(x=>{x.classList.remove('wppo-tabs__item--active'); x.setAttribute('aria-selected','false')});
+    t.classList.add('wppo-tabs__item--active'); t.setAttribute('aria-selected','true');
+    const tab = t.dataset.tab;
+    if(tab==='file'){ dash.style.display='none'; file.style.display='block'; }
+    else if(tab==='dashboard'){ dash.style.display='block'; file.style.display='none'; }
+    else { dash.style.display='block'; file.style.display='none'; }
+  }));
+</script>
+</body>
+</html>
