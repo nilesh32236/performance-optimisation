@@ -66,3 +66,39 @@ export const modeLabel = ( mode ) => {
 	};
 	return map[ mode ] || mode;
 };
+
+/**
+ * Get vary env string for P2 groups.
+ *
+ * @param {Object} varyGroups - {guest,mobile,webp,role}
+ * @return {string} Vary env.
+ */
+export const getVaryEnv = ( varyGroups = {} ) => {
+	const parts = [];
+	if ( varyGroups.role ) {
+		parts.push( 'wppo_role_hash' );
+	}
+	if ( varyGroups.guest ) {
+		parts.push( 'guest' );
+	}
+	if ( varyGroups.mobile ) {
+		parts.push( 'mobile' );
+	}
+	if ( varyGroups.webp ) {
+		parts.push( 'webp' );
+	}
+	return parts.join( ',' );
+};
+
+/**
+ * Get CDN mapping label for display.
+ *
+ * @param {Array} mapping - CDN mapping array.
+ * @return {string} Label.
+ */
+export const getCdnMappingLabel = ( mapping = [] ) => {
+	if ( ! Array.isArray( mapping ) || 0 === mapping.length ) {
+		return 'None';
+	}
+	return mapping.map( ( m ) => m.cdn_url ).join( ', ' );
+};

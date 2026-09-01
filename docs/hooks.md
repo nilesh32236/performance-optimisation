@@ -296,6 +296,76 @@ Filters whether WPPO CDN rewriting is allowed. When `false`, `maybe_apply_cdn()`
 
 ---
 
+### `wppo_cdn_mapping`
+Filters CDN mapping array (one-to-many parity with LSCWP `cdn.cls.php:48`). Each entry `cdn_url` sanitized via `esc_url_raw`, capped at 5. @since NEXT.
+
+---
+
+### `wppo_cdn_url`
+Legacy alias for single CDN URL migration (`cdnURL` → `cdnMapping`). @since NEXT.
+
+---
+
+### `wppo_litespeed_swap_purge`
+Filters whether OLS swap fallback purge should run (`find /tmp/lshttpd/swap -type f -delete` + `X-LiteSpeed-Purge`). @since NEXT.
+
+---
+
+### `wppo_litespeed_vary_groups`
+Filters active Vary groups (`role, guest, mobile, webp`) before bridge. @since NEXT.
+
+---
+
+### `wppo_litespeed_vary_header`
+Filters built X-LiteSpeed-Vary header (`cookie=wppo_role_hash,...`). @since NEXT.
+
+---
+
+### `wppo_litespeed_purge_tags`
+Filters queued purge tags before transient store (`F,H,Po.{id},PT.{type},T.{id},A.{id},B.{id}` + scope). @since NEXT.
+
+---
+
+### `wppo_litespeed_purge_tag_string`
+Filters flushed tag string (`tag=...`) on shutdown. @since NEXT.
+
+---
+
+### `wppo_crawler_concurrency`
+Filters crawler concurrency 1-4 (default 2). @since NEXT.
+
+---
+
+### `wppo_crawler_blacklist_threshold`
+Filters crawler BLACKLIST_THRESHOLD (default 3 mirroring `crawler.cls.php:26`). @since NEXT.
+
+---
+
+### `wppo_crawler_variants`
+Filters variant matrix per URL (Accept webp/avif × mobile/desktop × guest/role). @since NEXT.
+
+---
+
+### `wppo_esi_available`
+Filters whether ESI is available (Enterprise only, OLS has no ESI). @since NEXT.
+
+---
+
+### `wppo_esi_enabled`
+Filters whether ESI bridge is enabled (settings `esi.enabled` + availability). @since NEXT.
+
+---
+
+### `wppo_esi_nonces`
+Filters ESI nonce list for widget/cart hole-punching. @since NEXT.
+
+---
+
+### `wppo_esi_fallback`
+Filters whether ESI AJAX fallback should run on OLS (`DONOTCACHEPAGE`). @since NEXT.
+
+---
+
 ### `wppo_htaccess_rules`
 Filters the full htaccess rules array before return. @since NEXT.
 

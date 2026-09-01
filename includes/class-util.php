@@ -98,6 +98,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				'file_optimisation'     => array(
 					'enableServerRules'       => false,
 					'cdnURL'                  => '',
+					'cdnMapping'              => array(),
 					'removeUnusedCSS'         => false,
 					'excludeUnusedCSS'        => '',
 					'criticalCSS'             => false,
@@ -164,6 +165,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enableNextGenRewrite' => false,
 					'enableBrotli'         => false,
 					'purgeSync'            => true,
+					'varyGroups'           => array(
+						'guest'  => false,
+						'mobile' => false,
+						'webp'   => false,
+					),
+					'crawler'              => array(
+						'concurrency'        => 2,
+						'loadLimit'          => 0,
+						'blacklistThreshold' => 3,
+					),
+					'esi'                  => array(
+						'enabled' => false,
+					),
 				),
 				'llms_txt'              => array(
 					'enabled' => false,
@@ -1051,6 +1065,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$raw                    = sanitize_text_field( (string) $value );
 					$mode                   = in_array( $raw, array( 'auto', 'wppo', 'litespeed', 'standalone' ), true ) ? $raw : 'auto';
 					$sanitized[ $safe_key ] = $mode;
+					continue;
+				}
+
+				// P1 CDN mapping — one-to-many (cdn.cls.php:48 parity).
+				if ( 'cdnMapping' === $safe_key && is_array( $value ) ) {
+					$mapping = array();
+					$count   = 0;
+					foreach ( $value as $entry ) {
+						if ( ! is_array( $entry ) || $count >= 5 ) {
+							continue;
+						}
+						$cdn_url = isset( $entry['cdn_url'] ) ? esc_url_raw( (string) $entry['cdn_url'] ) : '';
+						if ( '' === $cdn_url ) {
+							continue;
+						}
+						$include_dirs      = isset( $entry['include_dirs'] ) ? sanitize_text_field( (string) $entry['include_dirs'] ) : 'wp-content|wp-includes';
+						$include_filetypes = isset( $entry['include_filetypes'] ) ? sanitize_text_field( (string) $entry['include_filetypes'] ) : '';
+						$mapping[]         = array(
+							'cdn_url'           => $cdn_url,
+							'include_dirs'      => $include_dirs,
+							'include_filetypes' => $include_filetypes,
+						);
+						++$count;
+					}
+					/**
+					 * Filter CDN mapping array.
+					 *
+					 * @since NEXT
+					 * @param array $mapping Sanitized mapping.
+					 */
+					$mapping                = (array) apply_filters( 'wppo_cdn_mapping', $mapping );
+					$sanitized[ $safe_key ] = $mapping;
 					continue;
 				}
 
