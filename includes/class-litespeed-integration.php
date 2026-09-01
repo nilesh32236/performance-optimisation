@@ -1050,7 +1050,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( empty( $_COOKIE ) ) {
 				return false;
 			}
-			$hash = defined( 'COOKIEHASH' ) ? COOKIEHASH : md5( wp_parse_url( home_url(), PHP_URL_HOST ) ?? '' );
+			// Use COOKIEHASH when available; fallback to wp_hash for accuracy.
+			if ( defined( 'COOKIEHASH' ) ) {
+				$hash = COOKIEHASH;
+			} elseif ( function_exists( 'wp_hash' ) ) {
+				$hash = wp_hash( 'postpass' );
+			} else {
+				$hash = md5( wp_parse_url( home_url(), PHP_URL_HOST ) ?? '' );
+			}
 			foreach ( $_COOKIE as $key => $value ) {
 				if ( is_string( $key ) && 0 === strpos( $key, 'wp-postpass_' . $hash ) ) {
 					return '' !== $value;
@@ -1102,10 +1109,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 			$salt    = defined( 'LOGGED_IN_KEY' ) ? LOGGED_IN_KEY : '';
 			$payload = array(
-				'role'   => $groups['role'] ? ( is_user_logged_in() ? self::get_vary_role_value() : 'guest' ) : '',
-				'guest'  => $groups['guest'] ? '1' : '',
-				'mobile' => $groups['mobile'] && function_exists( 'wp_is_mobile' ) && wp_is_mobile() ? '1' : '',
-				'webp'   => $groups['webp'] && self::client_supports_webp() ? '1' : '',
+				'role'      => $groups['role'] ? ( is_user_logged_in() ? self::get_vary_role_value() : 'guest' ) : '',
+				'guest'     => $groups['guest'] ? '1' : '',
+				'mobile'    => $groups['mobile'] && function_exists( 'wp_is_mobile' ) && wp_is_mobile() ? '1' : '',
+				'webp'      => $groups['webp'] && self::client_supports_webp() ? '1' : '',
+				'commenter' => $groups['commenter'] && self::is_commenter_request() ? '1' : '',
+				'postpass'  => $groups['postpass'] && self::is_postpass_request() ? '1' : '',
 			);
 			$value   = substr( md5( $salt . wp_json_encode( $payload ) ), 0, 12 );
 			/**
@@ -1132,7 +1141,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			if ( is_multisite() && is_super_admin() ) {
 				return '99';
 			}
-			if ( is_admin() ) {
+			// Use capability check instead of is_admin() for accuracy (LSCWP parity).
+			if ( function_exists( 'current_user_can' ) && current_user_can( 'manage_options' ) ) {
 				return '99';
 			}
 			$user = wp_get_current_user();
