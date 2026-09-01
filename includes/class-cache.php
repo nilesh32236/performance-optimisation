@@ -1386,175 +1386,62 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 *
 		 * @since 1.2.0
 		 */
+		/**
+		 * Rewrite local asset URLs via CDN class (LS-410 parity).
+		 *
+		 * Delegates to CDN::rewrite_buffer() which handles tag attrs, srcset, inline url() and origin guards.
+		 * Constant LITESPEED_BYPASS_CDN short-circuits (LSCWP cdn.cls.php:106).
+		 *
+		 * @param string $buffer HTML buffer.
+		 * @return string
+		 * @since 1.2.0
+		 * @since NEXT Added LITESPEED_BYPASS_CDN guard and CDN delegation.
+		 */
 		public function maybe_apply_cdn( string $buffer ): string {
-			// LS-404: CDN mapping awareness — gate when litespeed_can_cdn === false (LS mapping active).
-			// Gate via wppo_litespeed_can_cdn and LiteSpeed_Integration::can_apply_cdn().
-			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
-				if ( ! LiteSpeed_Integration::can_apply_cdn() ) {
-					return $buffer;
-				}
-				if ( LiteSpeed_Integration::should_disable_wppo_optimizer() && has_filter( 'litespeed_can_cdn' ) ) {
-					return $buffer;
-				}
+			if ( defined( 'LITESPEED_BYPASS_CDN' ) && LITESPEED_BYPASS_CDN ) {
+				return $buffer;
 			}
-			// Fallback when LiteSpeed_Integration not loaded: respect ecosystem filters directly.
-			/**
-			 * Filter whether WPPO CDN may be applied (LS-404).
-			 *
-			 * @since NEXT
-			 * @param bool $can_cdn Whether CDN may be applied.
-			 */
+			if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
+				// CDN class owns mapping/bypass/filter gates internally but we also keep Cache::$options sync.
+				return CDN::rewrite_buffer( $buffer );
+			}
+			// Fallback if CDN class not loaded — minimal gate.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && ! LiteSpeed_Integration::can_apply_cdn() ) {
+				return $buffer;
+			}
 			if ( ! apply_filters( 'wppo_litespeed_can_cdn', true ) ) {
 				return $buffer;
 			}
-			// LiteSpeed: if LSCWP also rewrites CDN, skip ours when litespeed_can_cdn says LS will.
 			if ( has_filter( 'litespeed_can_cdn' ) && ! apply_filters( 'litespeed_can_cdn', true ) ) {
 				return $buffer;
 			}
-
-			$mappings = $this->get_cdn_mappings();
-
-			if ( empty( $mappings ) ) {
-				return $buffer;
-			}
-
-			$site_url = Util::cached_home_url();
-
-			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
-				return $buffer;
-			}
-
-			// Cache the expensive regex generation outside the loop to improve performance.
-			$site_url_regex = '#^' . preg_quote( $site_url, '#' ) . '(/|$)#';
-			$tags           = new \WP_HTML_Tag_Processor( $buffer );
-
-			while ( $tags->next_tag() ) {
-				$tag_name = strtolower( $tags->get_tag() );
-				if ( ! in_array( $tag_name, array( 'img', 'script', 'link', 'source', 'video' ), true ) ) {
-					continue;
-				}
-
-				$attributes = array( 'src', 'href', 'data-src' );
-
-				foreach ( $attributes as $attr ) {
-					$val = $tags->get_attribute( $attr );
-
-					if ( $val && preg_match( $site_url_regex, $val ) ) {
-						$cdn = $this->find_cdn_for_url( $val, $mappings );
-						if ( null !== $cdn ) {
-							$tags->set_attribute( $attr, str_replace( $site_url, $cdn, $val ) );
-						}
-					}
-				}
-
-				foreach ( array( 'srcset', 'data-srcset' ) as $attr ) {
-					$srcset_attr = $tags->get_attribute( $attr );
-					if ( $srcset_attr ) {
-						$candidates = explode( ',', $srcset_attr );
-						$new_srcset = array();
-
-						foreach ( $candidates as $candidate ) {
-							$candidate = trim( $candidate );
-							$parts     = preg_split( '/\s+/', $candidate, 2 );
-							$url       = $parts[0];
-							$suffix    = isset( $parts[1] ) ? ' ' . $parts[1] : '';
-
-							if ( preg_match( $site_url_regex, $url ) ) {
-								$cdn = $this->find_cdn_for_url( $url, $mappings );
-								if ( null !== $cdn ) {
-									$url = str_replace( $site_url, $cdn, $url );
-								}
-							}
-							$new_srcset[] = $url . $suffix;
-						}
-
-						$tags->set_attribute( $attr, implode( ', ', $new_srcset ) );
-					}
-				}
-			}
-
-			return $tags->get_updated_html();
+			return $buffer;
 		}
 
 		/**
-		 * Get CDN mappings (one-to-many parity with LSCWP cdn.cls.php:48).
-		 *
-		 * Migrates legacy single cdnURL → one mapping when cdnMapping empty.
+		 * Get CDN mappings — BC proxy to CDN::get_mappings().
 		 *
 		 * @since NEXT
-		 * @return array<int, array{cdn_url:string,include_dirs:string,include_filetypes:string}>
+		 * @return array
 		 */
 		private function get_cdn_mappings(): array {
-			$mappings = $this->options['file_optimisation']['cdnMapping'] ?? array();
-			if ( is_array( $mappings ) && ! empty( $mappings ) ) {
-				$mappings = array_values( array_filter( $mappings, fn( $m ) => is_array( $m ) && ! empty( $m['cdn_url'] ) ) );
-				$mappings = array_map(
-					function ( $m ) {
-						return array(
-							'cdn_url'           => rtrim( (string) $m['cdn_url'], '/' ),
-							'include_dirs'      => isset( $m['include_dirs'] ) ? (string) $m['include_dirs'] : 'wp-content|wp-includes',
-							'include_filetypes' => isset( $m['include_filetypes'] ) ? (string) $m['include_filetypes'] : '',
-						);
-					},
-					$mappings
-				);
-				/**
-				 * Filter CDN mappings before use.
-				 *
-				 * @since NEXT
-				 * @param array $mappings CDN mappings.
-				 */
-				$mappings = (array) apply_filters( 'wppo_cdn_mapping', $mappings );
-				return $mappings;
+			if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
+				return CDN::get_mappings( $this->options );
 			}
-			$cdn_url = $this->options['file_optimisation']['cdnURL'] ?? '';
-			if ( empty( $cdn_url ) ) {
-				return array();
-			}
-			$cdn_url = rtrim( (string) $cdn_url, '/' );
-			/**
-			 * Filter legacy CDN URL alias.
-			 *
-			 * @since NEXT
-			 * @param string $cdn_url Legacy CDN URL.
-			 */
-			$cdn_url = (string) apply_filters( 'wppo_cdn_url', $cdn_url );
-			$single  = array(
-				array(
-					'cdn_url'           => $cdn_url,
-					'include_dirs'      => 'wp-content|wp-includes',
-					'include_filetypes' => '',
-				),
-			);
-			$single  = (array) apply_filters( 'wppo_cdn_mapping', $single );
-			return $single;
+			return array();
 		}
 
 		/**
-		 * Find CDN URL for a given asset URL based on mappings.
+		 * Find CDN URL for a given asset URL — BC proxy to CDN::find_cdn_for_url().
 		 *
 		 * @since NEXT
 		 * @param string $url Asset URL.
 		 * @param array  $mappings CDN mappings.
-		 * @return string|null CDN host or null if no match.
+		 * @return string|null
 		 */
 		private function find_cdn_for_url( string $url, array $mappings ): ?string {
-			foreach ( $mappings as $m ) {
-				$dirs  = $m['include_dirs'] ?? 'wp-content|wp-includes';
-				$types = $m['include_filetypes'] ?? '';
-				if ( '' !== $dirs && ! preg_match( '#/(?:' . $dirs . ')/#', $url ) ) {
-					continue;
-				}
-				if ( '' !== $types ) {
-					$ext     = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ) ?? '', PATHINFO_EXTENSION ) );
-					$allowed = array_map( 'trim', explode( ',', strtolower( $types ) ) );
-					$allowed = array_filter( $allowed );
-					$allowed = array_map( fn( $t ) => ltrim( $t, '.' ), $allowed );
-					if ( '' !== $ext && ! in_array( $ext, $allowed, true ) ) {
-						continue;
-					}
-				}
-				return rtrim( (string) $m['cdn_url'], '/' );
+			if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
+				return CDN::find_cdn_for_url( $url, $mappings );
 			}
 			return null;
 		}

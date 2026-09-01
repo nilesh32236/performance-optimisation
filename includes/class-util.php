@@ -1000,6 +1000,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @since NEXT
 		 * @return bool True when safe mode should bypass optimisations.
 		 */
+		/**
+		 * Convert wildcard pattern to regex fragment (mirrors CDN::wildcard2regex / LSCWP cdn.cls.php:188).
+		 *
+		 * @since NEXT
+		 * @param string $pattern Wildcard pattern.
+		 * @return string Regex fragment.
+		 */
+		public static function wildcard2regex( string $pattern ): string {
+			if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) && method_exists( 'PerformanceOptimise\Inc\CDN', 'wildcard2regex' ) ) {
+				return CDN::wildcard2regex( $pattern );
+			}
+			$pattern = trim( $pattern );
+			if ( '' === $pattern ) {
+				return '';
+			}
+			$escaped = preg_quote( $pattern, '#' );
+			return str_replace( '\*', '.*', $escaped );
+		}
+
+		/**
+		 * Whether safe mode is active for the current request.
+		 *
+		 * @since NEXT
+		 * @return bool True if safe mode is active.
+		 */
 		public static function is_safe_mode(): bool {
 			// Kill-switch via query string `?wppo_safe=1` — also arms the 10-minute cookie.
 			if ( isset( $_GET['wppo_safe'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -1070,23 +1095,78 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 
 				// P1 CDN mapping — one-to-many (cdn.cls.php:48 parity).
 				if ( 'cdnMapping' === $safe_key && is_array( $value ) ) {
+					$max = (int) apply_filters( 'wppo_cdn_mapping_max', 5 );
+					if ( $max < 1 ) {
+						$max = 5;
+					}
 					$mapping = array();
 					$count   = 0;
 					foreach ( $value as $entry ) {
-						if ( ! is_array( $entry ) || $count >= 5 ) {
+						if ( ! is_array( $entry ) || $count >= $max ) {
 							continue;
 						}
 						$cdn_url = isset( $entry['cdn_url'] ) ? esc_url_raw( (string) $entry['cdn_url'] ) : '';
 						if ( '' === $cdn_url ) {
 							continue;
 						}
+						$ori      = isset( $entry['ori'] ) ? esc_url_raw( (string) $entry['ori'] ) : '';
+						$ori_dir  = isset( $entry['ori_dir'] ) ? sanitize_text_field( (string) $entry['ori_dir'] ) : '';
+						$cdn_attr = isset( $entry['cdn_attr'] ) ? sanitize_text_field( (string) $entry['cdn_attr'] ) : '';
+						// Validate ori_dir wildcard pattern via wildcard2regex (allow * and |).
+						if ( '' !== $ori_dir ) {
+							$parts = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
+							$valid = array();
+							foreach ( $parts as $p ) {
+								// Allow alphanum, -, _, /, ., *, and wildcards.
+								if ( preg_match( '/^[a-zA-Z0-9_\-\/\.\*]+$/', $p ) ) {
+									$valid[] = $p;
+								}
+							}
+							$ori_dir = implode( '|', $valid );
+						}
 						$include_dirs      = isset( $entry['include_dirs'] ) ? sanitize_text_field( (string) $entry['include_dirs'] ) : 'wp-content|wp-includes';
 						$include_filetypes = isset( $entry['include_filetypes'] ) ? sanitize_text_field( (string) $entry['include_filetypes'] ) : '';
-						$mapping[]         = array(
+						if ( '' !== $include_filetypes ) {
+							$include_filetypes = strtolower( $include_filetypes );
+							$parts             = array_map( 'trim', explode( ',', $include_filetypes ) );
+							$parts             = array_filter( $parts );
+							$parts             = array_map( fn( $t ) => ltrim( $t, '.' ), $parts );
+							$include_filetypes = implode( ',', $parts );
+						}
+						$data = array(
 							'cdn_url'           => $cdn_url,
 							'include_dirs'      => $include_dirs,
 							'include_filetypes' => $include_filetypes,
 						);
+						if ( '' !== $ori ) {
+							$data['ori'] = $ori;
+						}
+						if ( '' !== $ori_dir ) {
+							$data['ori_dir'] = $ori_dir;
+						}
+						if ( '' !== $cdn_attr ) {
+							$data['cdn_attr'] = $cdn_attr;
+						}
+						// Support cdns/cdn_urls array (filter-only, round-robin).
+						if ( isset( $entry['cdn_urls'] ) && is_array( $entry['cdn_urls'] ) ) {
+							$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdn_urls'] ) ) );
+							if ( ! empty( $cdns ) ) {
+								$data['cdn_urls'] = $cdns;
+							}
+						} elseif ( isset( $entry['cdns'] ) && is_array( $entry['cdns'] ) ) {
+							$cdns = array_values( array_filter( array_map( fn( $u ) => esc_url_raw( (string) $u ), $entry['cdns'] ) ) );
+							if ( ! empty( $cdns ) ) {
+								$data['cdn_urls'] = $cdns;
+							}
+						}
+						/**
+						 * Filter single CDN mapping entry post-sanitize.
+						 *
+						 * @since NEXT
+						 * @param array $data Sanitized entry.
+						 */
+						$data      = (array) apply_filters( 'wppo_cdn_mapping_entry', $data );
+						$mapping[] = $data;
 						++$count;
 					}
 					/**

@@ -1481,6 +1481,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return bool True if CDN rewriting may proceed.
 		 */
 		public static function can_apply_cdn(): bool {
+			if ( defined( 'LITESPEED_BYPASS_CDN' ) && LITESPEED_BYPASS_CDN ) {
+				self::$cached_can_cdn = false;
+				return self::$cached_can_cdn;
+			}
 			if ( null !== self::$cached_can_cdn ) {
 				return self::$cached_can_cdn;
 			}

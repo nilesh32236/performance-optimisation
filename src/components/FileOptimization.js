@@ -61,6 +61,7 @@ const FileOptimization = ( {
 		criticalCSS: false,
 		hostGoogleFontsLocally: false,
 		cdnURL: '',
+		cdnMapping: options.cdnMapping || [],
 		removeUnusedCSS: false,
 		excludeUnusedCSS: '',
 		disableEmojis: false,
@@ -1747,6 +1748,328 @@ const FileOptimization = ( {
 										'performance-optimisation'
 									) }
 								</p>
+								{ settings.cdnURL &&
+									Array.isArray( settings.cdnMapping ) &&
+									settings.cdnMapping.length > 0 && (
+										<div className="wppo-notice wppo-notice--info wppo-mt-12">
+											{ __(
+												'Migrated to mapping #0 — cdnURL kept for backward compatibility.',
+												'performance-optimisation'
+											) }
+										</div>
+									) }
+							</div>
+							<div className="wppo-field wppo-mt-16">
+								{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
+								<label className="wppo-field-label">
+									{ __(
+										'CDN Mapping (parity with LSCWP)',
+										'performance-optimisation'
+									) }
+								</label>
+								<p className="wppo-text-muted wppo-text-small wppo-mb-12">
+									{ __(
+										'One-to-many mapping by origin/dir/filetype. Up to 5 entries. Use * wildcard in Origin Dir (e.g. wp-content/*).',
+										'performance-optimisation'
+									) }
+								</p>
+								{ ( settings.cdnMapping || [] ).map(
+									( entry, idx ) => (
+										<div
+											key={ idx }
+											className="wppo-mt-12"
+											style={ {
+												border: '1px solid var(--wppo-border)',
+												padding: '12px',
+												borderRadius: '6px',
+											} }
+										>
+											<div className="wppo-field">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
+												<label className="wppo-field-label">
+													{ __(
+														'CDN URL',
+														'performance-optimisation'
+													) }
+												</label>
+												<input
+													className="wppo-input"
+													type="url"
+													placeholder="https://cdn.example.com"
+													value={
+														entry.cdn_url || ''
+													}
+													onChange={ ( e ) => {
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	cdn_url: v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
+													} }
+												/>
+											</div>
+											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
+												<label className="wppo-field-label">
+													{ __(
+														'Origin URL (ori)',
+														'performance-optimisation'
+													) }
+												</label>
+												<input
+													className="wppo-input"
+													type="url"
+													placeholder="https://example.com"
+													value={ entry.ori || '' }
+													onChange={ ( e ) => {
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	ori: v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
+													} }
+												/>
+											</div>
+											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
+												<label className="wppo-field-label">
+													{ __(
+														'Origin Dir (ori_dir) — wildcard * allowed, pipe-separated',
+														'performance-optimisation'
+													) }
+												</label>
+												<input
+													className="wppo-input"
+													type="text"
+													placeholder="wp-content|wp-includes"
+													value={
+														entry.ori_dir || ''
+													}
+													onChange={ ( e ) => {
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	ori_dir: v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
+													} }
+												/>
+											</div>
+											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
+												<label className="wppo-field-label">
+													{ __(
+														'Include Dirs',
+														'performance-optimisation'
+													) }
+												</label>
+												<input
+													className="wppo-input"
+													type="text"
+													placeholder="wp-content|wp-includes"
+													value={
+														entry.include_dirs || ''
+													}
+													onChange={ ( e ) => {
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	include_dirs:
+																		v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
+													} }
+												/>
+											</div>
+											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
+												<label className="wppo-field-label">
+													{ __(
+														'Include Filetypes (comma-separated)',
+														'performance-optimisation'
+													) }
+												</label>
+												<input
+													className="wppo-input"
+													type="text"
+													placeholder="jpg,png,css,js"
+													value={
+														entry.include_filetypes ||
+														''
+													}
+													onChange={ ( e ) => {
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	include_filetypes:
+																		v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
+													} }
+												/>
+											</div>
+											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
+												<label className="wppo-field-label">
+													{ __(
+														'CDN Attr allowlist (cdn_attr) — e.g. src,href,srcset',
+														'performance-optimisation'
+													) }
+												</label>
+												<input
+													className="wppo-input"
+													type="text"
+													placeholder="src,href,srcset"
+													value={
+														entry.cdn_attr || ''
+													}
+													onChange={ ( e ) => {
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	cdn_attr: v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
+													} }
+												/>
+											</div>
+											<button
+												className="wppo-button wppo-button--secondary wppo-mt-8"
+												type="button"
+												onClick={ () => {
+													setSettings( ( prev ) => {
+														const m = [
+															...( prev.cdnMapping ||
+																[] ),
+														];
+														m.splice( idx, 1 );
+														return {
+															...prev,
+															cdnMapping: m,
+														};
+													} );
+												} }
+											>
+												{ __(
+													'Remove',
+													'performance-optimisation'
+												) }
+											</button>
+										</div>
+									)
+								) }
+								{ ( settings.cdnMapping || [] ).length < 5 && (
+									<button
+										className="wppo-button wppo-button--secondary wppo-mt-12"
+										type="button"
+										onClick={ () => {
+											setSettings( ( prev ) => {
+												const m = [
+													...( prev.cdnMapping ||
+														[] ),
+												];
+												m.push( {
+													cdn_url: '',
+													ori: '',
+													ori_dir: '',
+													include_dirs:
+														'wp-content|wp-includes',
+													include_filetypes: '',
+													cdn_attr: '',
+												} );
+												return {
+													...prev,
+													cdnMapping: m,
+												};
+											} );
+										} }
+									>
+										{ __(
+											'Add Mapping',
+											'performance-optimisation'
+										) }
+									</button>
+								) }
 							</div>
 						</FeatureCard>
 					</div>
