@@ -9,6 +9,8 @@
  * @since NEXT
  */
 
+// phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_init,WordPress.WP.AlternativeFunctions.curl_curl_multi_init,WordPress.WP.AlternativeFunctions.curl_curl_multi_add_handle,WordPress.WP.AlternativeFunctions.curl_curl_multi_exec,WordPress.WP.AlternativeFunctions.curl_curl_multi_info_read,WordPress.WP.AlternativeFunctions.curl_curl_multi_remove_handle,WordPress.WP.AlternativeFunctions.curl_curl_multi_close,WordPress.WP.AlternativeFunctions.curl_curl_close,WordPress.WP.AlternativeFunctions.curl_curl_setopt,WordPress.WP.AlternativeFunctions.curl_curl_getinfo
+
 namespace PerformanceOptimise\Inc;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -196,7 +198,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		public static function crawl_batch( array $urls, ?int $concurrency = null ): array {
 			$urls = array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) );
 			if ( empty( $urls ) ) {
-				return array( 'success' => 0, 'failed' => 0, 'skipped' => 0 );
+				return array(
+					'success' => 0,
+					'failed'  => 0,
+					'skipped' => 0,
+				);
 			}
 
 			$concurrency = $concurrency ?? self::get_concurrency();
@@ -217,13 +223,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					}
 				} else {
 					// Primary variant only (guest + desktop + webp) to avoid thundering herd.
-					$requests[] = $matrix[0] ?? array( 'url' => $url, 'headers' => array() );
+					$requests[] = $matrix[0] ?? array(
+						'url'     => $url,
+						'headers' => array(),
+					);
 				}
 			}
 
 			if ( empty( $requests ) ) {
 				$skipped = count( $urls ) - 0;
-				return array( 'success' => 0, 'failed' => 0, 'skipped' => $skipped );
+				return array(
+					'success' => 0,
+					'failed'  => 0,
+					'skipped' => $skipped,
+				);
 			}
 
 			// Prefer curl_multi if available, else fallback to wp_remote_get sequentially.
@@ -231,7 +244,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				$success = 0;
 				$failed  = 0;
 				foreach ( $requests as $req ) {
-					$resp = wp_remote_get( $req['url'], array( 'timeout' => 5, 'headers' => $req['headers'] ) );
+					$resp = wp_remote_get(
+						$req['url'],
+						array(
+							'timeout' => 5,
+							'headers' => $req['headers'],
+						)
+					);
 					if ( is_wp_error( $resp ) || (int) wp_remote_retrieve_response_code( $resp ) >= 400 ) {
 						self::record_failure( $req['url'] );
 						++$failed;
@@ -240,20 +259,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 						++$success;
 					}
 				}
-				return array( 'success' => $success, 'failed' => $failed, 'skipped' => 0 );
+				return array(
+					'success' => $success,
+					'failed'  => $failed,
+					'skipped' => 0,
+				);
 			}
 
-			$mh            = curl_multi_init();
-			$handles       = array();
-			$queue         = $requests;
-			$active        = 0;
-			$success       = 0;
-			$failed        = 0;
-			$deadline      = microtime( true ) + 15;
-			$index_to_url  = array();
+			$mh           = curl_multi_init();
+			$handles      = array();
+			$queue        = $requests;
+			$active       = 0;
+			$success      = 0;
+			$failed       = 0;
+			$deadline     = microtime( true ) + 15;
+			$index_to_url = array();
 
 			// Helper to add next handle.
-			$add_next = function() use ( &$queue, &$handles, &$index_to_url, $mh ) {
+			$add_next = function () use ( &$queue, &$handles, &$index_to_url, $mh ) {
 				if ( empty( $queue ) ) {
 					return;
 				}
@@ -272,7 +295,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					curl_setopt( $ch, CURLOPT_HTTPHEADER, $headers );
 				}
 				curl_multi_add_handle( $mh, $ch );
-				$handles[] = $ch;
+				$handles[]                 = $ch;
 				$index_to_url[ (int) $ch ] = $req['url'];
 			};
 
@@ -316,7 +339,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 						$add_next();
 					}
 				}
-			} while ( $active && $status === CURLM_OK && microtime( true ) < $deadline );
+			} while ( $active && CURLM_OK === $status && microtime( true ) < $deadline );
 
 			// Cleanup remaining.
 			foreach ( $handles as $ch ) {
@@ -325,7 +348,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			}
 			curl_multi_close( $mh );
 
-			return array( 'success' => $success, 'failed' => $failed, 'skipped' => 0 );
+			return array(
+				'success' => $success,
+				'failed'  => $failed,
+				'skipped' => 0,
+			);
 		}
 
 		/**
@@ -340,8 +367,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				return;
 			}
 			$variants = self::build_variant_matrix( $url );
-			$primary  = $variants[0] ?? array( 'url' => $url, 'headers' => array() );
-			$resp     = wp_remote_get( $primary['url'], array( 'timeout' => 5, 'headers' => $primary['headers'] ) );
+			$primary  = $variants[0] ?? array(
+				'url'     => $url,
+				'headers' => array(),
+			);
+			$resp     = wp_remote_get(
+				$primary['url'],
+				array(
+					'timeout' => 5,
+					'headers' => $primary['headers'],
+				)
+			);
 			if ( is_wp_error( $resp ) || (int) wp_remote_retrieve_response_code( $resp ) >= 400 ) {
 				self::record_failure( $url );
 			} else {

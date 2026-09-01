@@ -1488,13 +1488,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$mappings = $this->options['file_optimisation']['cdnMapping'] ?? array();
 			if ( is_array( $mappings ) && ! empty( $mappings ) ) {
 				$mappings = array_values( array_filter( $mappings, fn( $m ) => is_array( $m ) && ! empty( $m['cdn_url'] ) ) );
-				$mappings = array_map( function( $m ) {
-					return array(
-						'cdn_url'           => rtrim( (string) $m['cdn_url'], '/' ),
-						'include_dirs'      => isset( $m['include_dirs'] ) ? (string) $m['include_dirs'] : 'wp-content|wp-includes',
-						'include_filetypes' => isset( $m['include_filetypes'] ) ? (string) $m['include_filetypes'] : '',
-					);
-				}, $mappings );
+				$mappings = array_map(
+					function ( $m ) {
+						return array(
+							'cdn_url'           => rtrim( (string) $m['cdn_url'], '/' ),
+							'include_dirs'      => isset( $m['include_dirs'] ) ? (string) $m['include_dirs'] : 'wp-content|wp-includes',
+							'include_filetypes' => isset( $m['include_filetypes'] ) ? (string) $m['include_filetypes'] : '',
+						);
+					},
+					$mappings
+				);
 				/**
 				 * Filter CDN mappings before use.
 				 *
@@ -1523,7 +1526,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					'include_filetypes' => '',
 				),
 			);
-			$single = (array) apply_filters( 'wppo_cdn_mapping', $single );
+			$single  = (array) apply_filters( 'wppo_cdn_mapping', $single );
 			return $single;
 		}
 
@@ -1537,13 +1540,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		private function find_cdn_for_url( string $url, array $mappings ): ?string {
 			foreach ( $mappings as $m ) {
-				$dirs = $m['include_dirs'] ?? 'wp-content|wp-includes';
+				$dirs  = $m['include_dirs'] ?? 'wp-content|wp-includes';
 				$types = $m['include_filetypes'] ?? '';
 				if ( '' !== $dirs && ! preg_match( '#/(?:' . $dirs . ')/#', $url ) ) {
 					continue;
 				}
 				if ( '' !== $types ) {
-					$ext = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ) ?? '', PATHINFO_EXTENSION ) );
+					$ext     = strtolower( pathinfo( wp_parse_url( $url, PHP_URL_PATH ) ?? '', PATHINFO_EXTENSION ) );
 					$allowed = array_map( 'trim', explode( ',', strtolower( $types ) ) );
 					$allowed = array_filter( $allowed );
 					$allowed = array_map( fn( $t ) => ltrim( $t, '.' ), $allowed );
@@ -2349,7 +2352,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 			$swap_dirs = array( '/tmp/lshttpd/swap', '/usr/local/lsws/cachedata' );
 			foreach ( $swap_dirs as $swap_dir ) {
-				if ( is_dir( $swap_dir ) && is_writable( $swap_dir ) ) {
+				if ( is_dir( $swap_dir ) && is_writable( $swap_dir ) ) { // phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_is_dir,WordPressVIPMinimum.Functions.RestrictedFunctions.file_ops_is_writable
 					// Best-effort: find and delete cached files. Suppressed on non-LS hosts.
 					@exec( 'find ' . escapeshellarg( $swap_dir ) . ' -type f -delete 2>/dev/null' ); // phpcs:ignore WordPress.PHP.DiscouragedFunctions.system_calls_exec,WordPress.PHP.NoSilencedErrors.Discouraged
 				}
