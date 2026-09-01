@@ -379,6 +379,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 				$flushed = Cache::flush_group( $group );
 
 				if ( ! $flushed ) {
+					if ( function_exists( 'wp_cache_supports' ) && ! wp_cache_supports( 'flush_group' ) ) {
+						Log::add(
+							sprintf(
+								/* translators: %s: The cache group name */
+								__( 'Object cache does not support flush_group for %s — no action taken', 'performance-optimisation' ),
+								$group
+							)
+						);
+						return $this->send_response( array( 'flushed' => false ), false, 400, __( 'Object cache does not support flush_group — no action taken', 'performance-optimisation' ) );
+					}
+
 					Log::add(
 						sprintf(
 							/* translators: %s: The cache group name */
