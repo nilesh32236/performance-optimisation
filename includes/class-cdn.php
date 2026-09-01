@@ -68,7 +68,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			if ( '' === $pattern ) {
 				return '';
 			}
-			// Escape then unescape * to .*
+			// Escape then unescape * to .*.
 			$escaped = preg_quote( $pattern, '#' );
 			$escaped = str_replace( '\*', '.*', $escaped );
 			return $escaped;
@@ -89,7 +89,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			}
 			$mappings = $options['file_optimisation']['cdnMapping'] ?? array();
 			if ( is_array( $mappings ) && ! empty( $mappings ) ) {
-				$mappings = array_values( array_filter( $mappings, fn( $m ) => is_array( $m ) && ! empty( $m['cdn_url'] ) ) );
+				$mappings   = array_values( array_filter( $mappings, fn( $m ) => is_array( $m ) && ! empty( $m['cdn_url'] ) ) );
 				$normalized = array();
 				foreach ( $mappings as $m ) {
 					$cdn_url = rtrim( (string) $m['cdn_url'], '/' );
@@ -109,10 +109,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 							$cdn_urls = array( $cdn_url );
 						}
 					}
-					$ori       = isset( $m['ori'] ) ? trim( (string) $m['ori'] ) : '';
-					$ori_dir   = isset( $m['ori_dir'] ) ? trim( (string) $m['ori_dir'] ) : '';
-					$cdn_attr  = isset( $m['cdn_attr'] ) ? trim( (string) $m['cdn_attr'] ) : '';
-					$include_dirs = isset( $m['include_dirs'] ) ? (string) $m['include_dirs'] : 'wp-content|wp-includes';
+					$ori               = isset( $m['ori'] ) ? trim( (string) $m['ori'] ) : '';
+					$ori_dir           = isset( $m['ori_dir'] ) ? trim( (string) $m['ori_dir'] ) : '';
+					$cdn_attr          = isset( $m['cdn_attr'] ) ? trim( (string) $m['cdn_attr'] ) : '';
+					$include_dirs      = isset( $m['include_dirs'] ) ? (string) $m['include_dirs'] : 'wp-content|wp-includes';
 					$include_filetypes = isset( $m['include_filetypes'] ) ? (string) $m['include_filetypes'] : '';
 					// Auto filetypes when empty: default image set (parity cdn.cls.php:86-95) — filterable.
 					if ( '' === $include_filetypes ) {
@@ -169,8 +169,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 					'include_filetypes' => (string) apply_filters( 'wppo_cdn_auto_filetypes', '', array( 'cdn_url' => $cdn_url ) ),
 				),
 			);
-			$single = (array) apply_filters( 'wppo_cdn_mapping_hosts', $single );
-			$single = (array) apply_filters( 'wppo_cdn_mapping', $single );
+			$single  = (array) apply_filters( 'wppo_cdn_mapping_hosts', $single );
+			$single  = (array) apply_filters( 'wppo_cdn_mapping', $single );
 			return $single;
 		}
 
@@ -202,16 +202,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 					if ( 0 !== strpos( $url, $ori ) ) {
 						continue;
 					}
-				} else {
-					if ( 0 !== strpos( $url, $site_url ) ) {
+				} elseif ( 0 !== strpos( $url, $site_url ) ) {
 						continue;
-					}
 				}
 				// ori_dir guard via wildcard2regex.
 				$ori_dir = $m['ori_dir'] ?? '';
 				if ( '' !== $ori_dir ) {
-					$path = wp_parse_url( $url, PHP_URL_PATH ) ?? '';
-					$parts = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
+					$path    = wp_parse_url( $url, PHP_URL_PATH ) ?? '';
+					$parts   = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
 					$matched = false;
 					foreach ( $parts as $part ) {
 						$regex = self::wildcard2regex( $part );
@@ -230,7 +228,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				// include_dirs check with wildcard2regex expansion.
 				$dirs = $m['include_dirs'] ?? 'wp-content|wp-includes';
 				if ( '' !== $dirs ) {
-					$dir_parts = array_filter( array_map( 'trim', explode( '|', $dirs ) ) );
+					$dir_parts   = array_filter( array_map( 'trim', explode( '|', $dirs ) ) );
 					$regex_parts = array();
 					foreach ( $dir_parts as $dp ) {
 						$regex_parts[] = self::wildcard2regex( $dp );
@@ -301,7 +299,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				return $url;
 			}
 			$site_url = Util::cached_home_url();
-			$ori = '';
+			$ori      = '';
 			// Prefer ori if url starts with ori.
 			foreach ( $mappings as $m ) {
 				if ( ! empty( $m['ori'] ) && 0 === strpos( $url, $m['ori'] ) ) {
@@ -365,7 +363,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			if ( empty( $mappings ) ) {
 				return $buffer;
 			}
-			$site_url = Util::cached_home_url();
+			$site_url       = Util::cached_home_url();
 			$site_url_regex = '#^' . preg_quote( $site_url, '#' ) . '(/|$)#';
 
 			// Tag processor pass if available.
@@ -383,17 +381,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 					$attrs = array( 'src', 'href', 'data-src', 'content', 'poster' );
 					// Check if tag has cdn_attr restriction: if any mapping defines cdn_attr, intersect.
 					$has_restriction = false;
-					$allowed_attrs = array();
+					$allowed_attrs   = array();
 					foreach ( $mappings as $mm ) {
 						if ( ! empty( $mm['cdn_attr'] ) ) {
 							$has_restriction = true;
-							$parts = array_map( 'trim', explode( ',', strtolower( $mm['cdn_attr'] ) ) );
-							$allowed_attrs = array_merge( $allowed_attrs, $parts );
+							$parts           = array_map( 'trim', explode( ',', strtolower( $mm['cdn_attr'] ) ) );
+							$allowed_attrs   = array_merge( $allowed_attrs, $parts );
 						}
 					}
 					if ( $has_restriction ) {
 						$allowed_attrs = array_unique( array_filter( $allowed_attrs ) );
-						$attrs = array_intersect( $attrs, $allowed_attrs );
+						$attrs         = array_intersect( $attrs, $allowed_attrs );
 						// Also allow srcset attrs if cdn_attr includes srcset.
 						if ( in_array( 'srcset', $allowed_attrs, true ) ) {
 							$attrs[] = 'srcset';
@@ -449,7 +447,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 											}
 										}
 										$origin = '' !== $ori ? $ori : $site_url;
-										$url = $cdn . substr( $url, strlen( $origin ) );
+										$url    = $cdn . substr( $url, strlen( $origin ) );
 									}
 								}
 								$new_srcset[] = $url . $suffix;
@@ -464,7 +462,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 							'#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i',
 							function ( $m2 ) use ( $mappings, $site_url ) {
 								$full_url = $site_url . $m2[2];
-								$cdn = self::find_cdn_for_url( $full_url, $mappings );
+								$cdn      = self::find_cdn_for_url( $full_url, $mappings );
 								if ( null !== $cdn ) {
 									return 'url(' . $m2[1] . $cdn . $m2[2] . $m2[1] . ')';
 								}
@@ -485,7 +483,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 				'#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i',
 				function ( $m ) use ( $mappings, $site_url ) {
 					$full_url = $site_url . $m[2];
-					$cdn = self::find_cdn_for_url( $full_url, $mappings );
+					$cdn      = self::find_cdn_for_url( $full_url, $mappings );
 					if ( null !== $cdn ) {
 						return 'url(' . $m[1] . $cdn . $m[2] . $m[1] . ')';
 					}

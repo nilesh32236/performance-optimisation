@@ -1019,6 +1019,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			return str_replace( '\*', '.*', $escaped );
 		}
 
+		/**
+		 * Whether safe mode is active for the current request.
+		 *
+		 * @since NEXT
+		 * @return bool True if safe mode is active.
+		 */
 		public static function is_safe_mode(): bool {
 			// Kill-switch via query string `?wppo_safe=1` — also arms the 10-minute cookie.
 			if ( isset( $_GET['wppo_safe'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
@@ -1103,9 +1109,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						if ( '' === $cdn_url ) {
 							continue;
 						}
-						$ori       = isset( $entry['ori'] ) ? esc_url_raw( (string) $entry['ori'] ) : '';
-						$ori_dir   = isset( $entry['ori_dir'] ) ? sanitize_text_field( (string) $entry['ori_dir'] ) : '';
-						$cdn_attr  = isset( $entry['cdn_attr'] ) ? sanitize_text_field( (string) $entry['cdn_attr'] ) : '';
+						$ori      = isset( $entry['ori'] ) ? esc_url_raw( (string) $entry['ori'] ) : '';
+						$ori_dir  = isset( $entry['ori_dir'] ) ? sanitize_text_field( (string) $entry['ori_dir'] ) : '';
+						$cdn_attr = isset( $entry['cdn_attr'] ) ? sanitize_text_field( (string) $entry['cdn_attr'] ) : '';
 						// Validate ori_dir wildcard pattern via wildcard2regex (allow * and |).
 						if ( '' !== $ori_dir ) {
 							$parts = array_filter( array_map( 'trim', explode( '|', $ori_dir ) ) );
@@ -1122,9 +1128,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						$include_filetypes = isset( $entry['include_filetypes'] ) ? sanitize_text_field( (string) $entry['include_filetypes'] ) : '';
 						if ( '' !== $include_filetypes ) {
 							$include_filetypes = strtolower( $include_filetypes );
-							$parts = array_map( 'trim', explode( ',', $include_filetypes ) );
-							$parts = array_filter( $parts );
-							$parts = array_map( fn( $t ) => ltrim( $t, '.' ), $parts );
+							$parts             = array_map( 'trim', explode( ',', $include_filetypes ) );
+							$parts             = array_filter( $parts );
+							$parts             = array_map( fn( $t ) => ltrim( $t, '.' ), $parts );
 							$include_filetypes = implode( ',', $parts );
 						}
 						$data = array(

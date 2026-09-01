@@ -1760,6 +1760,7 @@ const FileOptimization = ( {
 									) }
 							</div>
 							<div className="wppo-field wppo-mt-16">
+								{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
 								<label className="wppo-field-label">
 									{ __(
 										'CDN Mapping (parity with LSCWP)',
@@ -1784,6 +1785,7 @@ const FileOptimization = ( {
 											} }
 										>
 											<div className="wppo-field">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
 												<label className="wppo-field-label">
 													{ __(
 														'CDN URL',
@@ -1794,23 +1796,34 @@ const FileOptimization = ( {
 													className="wppo-input"
 													type="url"
 													placeholder="https://cdn.example.com"
-													value={ entry.cdn_url || '' }
+													value={
+														entry.cdn_url || ''
+													}
 													onChange={ ( e ) => {
-														const v = e.target.value;
-														setSettings( ( prev ) => {
-															const m = [
-																...( prev.cdnMapping || [] ),
-															];
-															m[ idx ] = {
-																...m[ idx ],
-																cdn_url: v,
-															};
-															return { ...prev, cdnMapping: m };
-														} );
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	cdn_url: v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
 													} }
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
 												<label className="wppo-field-label">
 													{ __(
 														'Origin URL (ori)',
@@ -1823,18 +1836,30 @@ const FileOptimization = ( {
 													placeholder="https://example.com"
 													value={ entry.ori || '' }
 													onChange={ ( e ) => {
-														const v = e.target.value;
-														setSettings( ( prev ) => {
-															const m = [
-																...( prev.cdnMapping || [] ),
-															];
-															m[ idx ] = { ...m[ idx ], ori: v };
-															return { ...prev, cdnMapping: m };
-														} );
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	ori: v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
 													} }
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
 												<label className="wppo-field-label">
 													{ __(
 														'Origin Dir (ori_dir) — wildcard * allowed, pipe-separated',
@@ -1845,20 +1870,34 @@ const FileOptimization = ( {
 													className="wppo-input"
 													type="text"
 													placeholder="wp-content|wp-includes"
-													value={ entry.ori_dir || '' }
+													value={
+														entry.ori_dir || ''
+													}
 													onChange={ ( e ) => {
-														const v = e.target.value;
-														setSettings( ( prev ) => {
-															const m = [
-																...( prev.cdnMapping || [] ),
-															];
-															m[ idx ] = { ...m[ idx ], ori_dir: v };
-															return { ...prev, cdnMapping: m };
-														} );
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	ori_dir: v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
 													} }
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
 												<label className="wppo-field-label">
 													{ __(
 														'Include Dirs',
@@ -1869,23 +1908,35 @@ const FileOptimization = ( {
 													className="wppo-input"
 													type="text"
 													placeholder="wp-content|wp-includes"
-													value={ entry.include_dirs || '' }
+													value={
+														entry.include_dirs || ''
+													}
 													onChange={ ( e ) => {
-														const v = e.target.value;
-														setSettings( ( prev ) => {
-															const m = [
-																...( prev.cdnMapping || [] ),
-															];
-															m[ idx ] = {
-																...m[ idx ],
-																include_dirs: v,
-															};
-															return { ...prev, cdnMapping: m };
-														} );
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	include_dirs:
+																		v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
 													} }
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
 												<label className="wppo-field-label">
 													{ __(
 														'Include Filetypes (comma-separated)',
@@ -1896,23 +1947,36 @@ const FileOptimization = ( {
 													className="wppo-input"
 													type="text"
 													placeholder="jpg,png,css,js"
-													value={ entry.include_filetypes || '' }
+													value={
+														entry.include_filetypes ||
+														''
+													}
 													onChange={ ( e ) => {
-														const v = e.target.value;
-														setSettings( ( prev ) => {
-															const m = [
-																...( prev.cdnMapping || [] ),
-															];
-															m[ idx ] = {
-																...m[ idx ],
-																include_filetypes: v,
-															};
-															return { ...prev, cdnMapping: m };
-														} );
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	include_filetypes:
+																		v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
 													} }
 												/>
 											</div>
 											<div className="wppo-field wppo-mt-8">
+												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }
 												<label className="wppo-field-label">
 													{ __(
 														'CDN Attr allowlist (cdn_attr) — e.g. src,href,srcset',
@@ -1923,19 +1987,29 @@ const FileOptimization = ( {
 													className="wppo-input"
 													type="text"
 													placeholder="src,href,srcset"
-													value={ entry.cdn_attr || '' }
+													value={
+														entry.cdn_attr || ''
+													}
 													onChange={ ( e ) => {
-														const v = e.target.value;
-														setSettings( ( prev ) => {
-															const m = [
-																...( prev.cdnMapping || [] ),
-															];
-															m[ idx ] = {
-																...m[ idx ],
-																cdn_attr: v,
-															};
-															return { ...prev, cdnMapping: m };
-														} );
+														const v =
+															e.target.value;
+														setSettings(
+															( prev ) => {
+																const m = [
+																	...( prev.cdnMapping ||
+																		[] ),
+																];
+																m[ idx ] = {
+																	...m[ idx ],
+																	cdn_attr: v,
+																};
+																return {
+																	...prev,
+																	cdnMapping:
+																		m,
+																};
+															}
+														);
 													} }
 												/>
 											</div>
@@ -1945,10 +2019,14 @@ const FileOptimization = ( {
 												onClick={ () => {
 													setSettings( ( prev ) => {
 														const m = [
-															...( prev.cdnMapping || [] ),
+															...( prev.cdnMapping ||
+																[] ),
 														];
 														m.splice( idx, 1 );
-														return { ...prev, cdnMapping: m };
+														return {
+															...prev,
+															cdnMapping: m,
+														};
 													} );
 												} }
 											>
@@ -1966,16 +2044,23 @@ const FileOptimization = ( {
 										type="button"
 										onClick={ () => {
 											setSettings( ( prev ) => {
-												const m = [ ...( prev.cdnMapping || [] ) ];
+												const m = [
+													...( prev.cdnMapping ||
+														[] ),
+												];
 												m.push( {
 													cdn_url: '',
 													ori: '',
 													ori_dir: '',
-													include_dirs: 'wp-content|wp-includes',
+													include_dirs:
+														'wp-content|wp-includes',
 													include_filetypes: '',
 													cdn_attr: '',
 												} );
-												return { ...prev, cdnMapping: m };
+												return {
+													...prev,
+													cdnMapping: m,
+												};
 											} );
 										} }
 									>
