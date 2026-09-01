@@ -105,5 +105,7 @@ Plus: **Abilities API** (`wp_register_ability`, 3 REST namespaces, categories), 
 
 Keep `voku/html-min`/`matthiasmullie/minify` as-is. Re-assess `combineCSS` once 7.2 concat-elimination lands (`TODO #624`).
 
+> **LS-903 N9 CVE guard (filter-only, S scope, @since NEXT):** `wppo_cve_guard_handles` (alias `wppo_cve_excluded_handles`) in `includes/class-main.php:setup_hooks()` merges `array_unique` into `exclude_js`/`exclude_css`/`exclude_defer_js`/`exclude_delay_js`; no `wp_options` persistence, default empty (disabled), respects `litespeed_can_optm` gate (see `docs/hooks.md`).
+
 *Sources: wordpress.org/news (7.1 Mary Lou), make.wordpress.org/core field guides (6.8 2025-03-28, 6.9 2025-11-18, 7.0 2026-05-14, 7.1 2026-08-05) + client-side media deep dive 2026-07-22, proposal 7.2 Secrets 2026-08-25, Perf Chat 2026-08-25, developer.wordpress.org since 6.8-7.1, packagist.org 2026-08-27, 2026-09-01.*
 
