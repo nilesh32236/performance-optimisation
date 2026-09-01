@@ -92,6 +92,7 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: payload,
 			credentials: 'omit',
+			keepalive: true,
 		} );
 	};
 
