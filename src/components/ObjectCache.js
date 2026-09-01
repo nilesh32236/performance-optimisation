@@ -634,8 +634,12 @@ const ObjectCache = ( { options = {} } ) => {
 									name="master_name"
 									value={ settings.master_name }
 									onChange={ handleChange( setSettings ) }
+									aria-describedby="master_name-desc"
 								/>
-								<p className="wppo-text-muted wppo-text-small wppo-mt-10">
+								<p
+									id="master_name-desc"
+									className="wppo-text-muted wppo-text-small wppo-mt-10"
+								>
 									{ __(
 										'Name of the Redis master as configured in sentinel.conf.',
 										'performance-optimisation'
