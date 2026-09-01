@@ -1484,7 +1484,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				'performance-optimisation',
 				array( $this, 'admin_page' ),
 				'dashicons-admin-post',
-				2.1,
+				'2.1', // @phpstan-ignore argument.type
 			);
 		}
 

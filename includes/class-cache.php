@@ -505,8 +505,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 				if ( ! $source_newer ) {
 					$css_url = $this->get_cache_file_url( 'css', $css_variant );
-					$version = $cache_mtime;
-					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), (string) $version, 'all' );
+					$version = (string) $cache_mtime;
+					wp_enqueue_style( 'wppo-combine-css', $css_url, array(), $version, 'all' );
 					$this->register_combine_css_path( $css_file_path );
 					$this->set_combine_css_preload( $css_url, $version, $css_file_path );
 					return;
