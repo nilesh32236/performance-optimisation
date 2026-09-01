@@ -93,7 +93,7 @@
 			body: payload,
 			credentials: 'omit',
 			keepalive: true,
-		} );
+		} ).catch( () => {} );
 	};
 
 	// TTFB + FCP from navigation and paint timing.
