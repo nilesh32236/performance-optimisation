@@ -147,6 +147,40 @@ add_filter( 'wppo_exclude_defer_js', function( $exclusions ) {
 
 ---
 
+### `wppo_cve_guard_handles`
+Filter-only (S scope) list of handle strings to auto-exclude from optimization when a CVE is known. Default empty (no auto-exclude). Merged with `array_unique` into `minify_js`/`minify_css` (`exclude_js`/`exclude_css`) and `exclude_defer_js`/`exclude_delay_js` inside `PerformanceOptimisation\Inc\Main::setup_hooks()`; respects the existing `litespeed_can_optm` gate; no `wp_options` persistence and no cron. @since NEXT.
+
+**Parameters:**
+- `$handles` *(string[])* — Array of handle strings to exclude (e.g. `['vulnerable-slider']`).
+
+**Example:**
+```php
+add_filter( 'wppo_cve_guard_handles', function( array $handles ): array {
+    // Auto-exclude vulnerable handle when CVE-2026-XXXX is known.
+    $handles[] = 'vulnerable-slider'; // vulnerable handle
+    $handles[] = 'compromised-gallery';
+    return $handles;
+} );
+```
+
+---
+
+### `wppo_cve_excluded_handles`
+Backward-compatibility alias for `wppo_cve_guard_handles`. Same semantics; chained after the primary filter (`wppo_cve_guard_handles` → `wppo_cve_excluded_handles`). Prefer `wppo_cve_guard_handles`. @since NEXT.
+
+**Parameters:**
+- `$handles` *(string[])* — Array of handle strings to exclude.
+
+**Example:**
+```php
+add_filter( 'wppo_cve_excluded_handles', function( array $handles ): array {
+    $handles[] = 'vulnerable-slider';
+    return $handles;
+} );
+```
+
+---
+
 ### `wppo_exclude_minification`
 Filters whether a specific CSS or JS file should be skipped during minification.
 
@@ -246,7 +280,7 @@ add_filter( 'wppo_cache_ttl', function( $seconds, $uri, $post_id ) {
 ---
 
 ### `wppo_litespeed_ttl`
-Filters LiteSpeed TTL seconds mapped from `cacheLife` hours. File-cache `0` (never expire) maps to `604800` (1 week) for the LS server layer as an explicit policy change — LS cannot store infinite. Tier-1 adds third-arg `$context` (`array{uri:string,post_type:string|null,post_id:int|null}`) resolved without DB (REQUEST_URI + `url_to_postid` / `$post` fallback) so per-route TTL works in the `advanced-cache.php` drop-in; existing 2-arg callbacks remain compatible (extra arg ignored). `wppo_cache_ttl` runs first for LS-only overrides; this filter remains the final TTL gate. @since NEXT.
+Filters LiteSpeed TTL seconds mapped from `cacheLife` hours. File-cache `0` (never expire) maps to `604800` (1 week) for the LS server layer as an explicit policy change — LS cannot store infinite. Tier-1 adds third-arg `$context` (`array{uri:string,post_type:string|null,post_id:int|null}`) resolved without DB (REQUEST_URI + `url_to_postid` / `$post` fallback) so per-route TTL works in the `advanced-cache.php` drop-in; existing 2-arg callbacks remain compatible (extra arg ignored). `wppo_cache_ttl` runs first for LS-only overrides; this filter remains the final TTL gate. **Since N10-T2 (Tier-2) the same per-type resolution also reads `wppo_settings[cache_settings][ttlOverrides][post|page|product]` (hours `0/1/6/12/24/48/168`, default inherit global `cacheLife`, sanitized via `Util::sanitize_settings_recursively()` allowlist + `absint`, stored under `cache_settings` tab via `update_settings`). The settings override is applied **before** filters, so `wppo_cache_ttl` / `wppo_litespeed_ttl` still win; non-singular requests always fall back to global; file-cache `advanced-cache.php` constant stays untouched (LS-only).** @since NEXT.
 
 **Parameters:**
 - `$seconds` *(int)* — TTL in seconds (after `wppo_cache_ttl` when present).
@@ -262,6 +296,11 @@ add_filter( 'wppo_litespeed_ttl', function( $seconds, $hours, $context ) {
     return $hours === 0 ? 86400 : $seconds;
 }, 10, 3 );
 ```
+
+**Settings (N10-T2):** `wppo_settings[cache_settings][ttlOverrides]` stores per-type overrides for `post|page|product` as hours `0|1|6|12|24/48/168` (sanitized `absint` + allowlist, missing = inherit global). UI in Dashboard → Page Cache (LiteSpeed-only). Resolution: `get_post_type($post_id)` → `ttlOverrides[post_type]` → global `cacheLife`; `! is_singular()` → global. Filters above still apply after settings resolution. File-cache `advanced-cache.php` baked `cacheLife` untouched.
+
+### `wppo_cache_ttl_overrides`
+Filters sanitized `ttlOverrides` array after allowlist (`post|page|product` + `0/1/6/12/24/48/168`). @since NEXT.
 
 ---
 

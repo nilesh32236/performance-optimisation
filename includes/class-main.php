@@ -691,6 +691,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 					$this->exclude_js = array_merge( $this->exclude_js, (array) $exclude_js );
 				}
+				$cve_handles = $this->get_cve_guard_handles();
+				if ( ! empty( $cve_handles ) ) {
+					$this->exclude_js = array_values( array_unique( array_merge( $this->exclude_js, $cve_handles ) ) );
+				}
 
 				add_filter( 'script_loader_tag', array( $this, 'minify_js' ), 10, 3 );
 			}
@@ -699,6 +703,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( ! empty( $this->options['file_optimisation']['excludeCSS'] ) ) {
 					$exclude_css       = Util::process_urls( $this->options['file_optimisation']['excludeCSS'] );
 					$this->exclude_css = array_merge( $this->exclude_css, (array) $exclude_css );
+				}
+				$cve_handles = $this->get_cve_guard_handles();
+				if ( ! empty( $cve_handles ) ) {
+					$this->exclude_css = array_values( array_unique( array_merge( $this->exclude_css, $cve_handles ) ) );
 				}
 
 				if ( function_exists( 'wp_maybe_inline_styles' ) ) {
@@ -732,6 +740,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					$this->exclude_defer_js = $exclude_js;
 				}
 				$this->exclude_defer_js = apply_filters( 'wppo_exclude_defer_js', $this->exclude_defer_js );
+				$cve_handles            = $this->get_cve_guard_handles();
+				if ( ! empty( $cve_handles ) ) {
+					$this->exclude_defer_js = array_values( array_unique( array_merge( $this->exclude_defer_js, $cve_handles ) ) );
+				}
 			}
 
 			if ( ! empty( $this->options['file_optimisation']['delayJS'] ) ) {
@@ -753,6 +765,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 
 				$this->exclude_delay_js = apply_filters( 'wppo_exclude_delay_js', $this->exclude_delay_js );
+				$cve_handles            = $this->get_cve_guard_handles();
+				if ( ! empty( $cve_handles ) ) {
+					$this->exclude_delay_js = array_values( array_unique( array_merge( $this->exclude_delay_js, $cve_handles ) ) );
+				}
 
 				// Parse delay strategy lists.
 				$file_opt = $this->options['file_optimisation'];
@@ -2590,6 +2606,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			}
 
 			return $value;
+		}
+
+		/**
+		 * Get handles to exclude from optimization via the CVE guard filter.
+		 *
+		 * Filter-only, S scope (no persistence, no cron). Default empty (disabled).
+		 * When a CVE is known for a handle, site operators can auto-exclude it via
+		 * `wppo_cve_guard_handles` (alias `wppo_cve_excluded_handles` for BC) without
+		 * touching `wppo_settings`. Merged into minify/defer/delay exclude lists with
+		 * `array_unique`; respects the existing `litespeed_can_optm` gate (optimization
+		 * disabled there anyway).
+		 *
+		 * @since NEXT
+		 * @return string[] List of handle strings to exclude.
+		 */
+		private function get_cve_guard_handles(): array {
+			$handles = apply_filters( 'wppo_cve_guard_handles', array() );
+			$handles = apply_filters( 'wppo_cve_excluded_handles', $handles );
+			if ( ! is_array( $handles ) ) {
+				return array();
+			}
+			$handles = array_filter( $handles, 'is_string' );
+			$handles = array_map( 'trim', $handles );
+			$handles = array_filter( $handles );
+			return array_values( array_unique( $handles ) );
 		}
 
 		/**
