@@ -819,20 +819,98 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Resolve per-request TTL context (uri, post_id, post_type) without DB in drop-in.
+		 *
+		 * Tier-1 filter-only: resolves cheap request context for `wppo_cache_ttl` and
+		 * `wppo_litespeed_ttl` third-arg without touching the file-cache or DB
+		 * (drop-in must not hit DB). Tries url_to_postid() and global $post as fallbacks;
+		 * falls back to null post_id when unresolvable. File-cache `cacheLife` stays global.
+		 *
+		 * @since NEXT
+		 * @param string|null $request_uri Optional request URI override (already sanitized).
+		 * @param int|null    $post_id     Optional post ID override.
+		 * @return array{uri:string,post_id:int|null,post_type:string|null}
+		 */
+		private static function get_ttl_context( ?string $request_uri = null, $post_id = null ): array {
+			$uri = null !== $request_uri ? (string) $request_uri : ( isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/' );
+			if ( '' === $uri ) {
+				$uri = '/';
+			}
+
+			$resolved_post_id = null;
+			if ( null !== $post_id && '' !== $post_id ) {
+				$resolved_post_id = (int) $post_id;
+				if ( $resolved_post_id <= 0 ) {
+					$resolved_post_id = null;
+				}
+			}
+
+			if ( null === $resolved_post_id ) {
+				global $post;
+				if ( isset( $post ) && is_object( $post ) && isset( $post->ID ) ) {
+					$pid = (int) $post->ID;
+					if ( $pid > 0 ) {
+						$resolved_post_id = $pid;
+					}
+				}
+			}
+
+			if ( null === $resolved_post_id && function_exists( 'url_to_postid' ) ) {
+				try {
+					$url = function_exists( 'home_url' ) ? home_url( $uri ) : $uri;
+					$pid = (int) url_to_postid( $url );
+					if ( $pid > 0 ) {
+						$resolved_post_id = $pid;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$post_type = null;
+			if ( null !== $resolved_post_id && function_exists( 'get_post_type' ) ) {
+				try {
+					$pt = get_post_type( $resolved_post_id );
+					if ( is_string( $pt ) && '' !== $pt ) {
+						$post_type = $pt;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			return array(
+				'uri'       => $uri,
+				'post_id'   => $resolved_post_id,
+				'post_type' => $post_type,
+			);
+		}
+
+		/**
 		 * Get LiteSpeed cache TTL in seconds mapped from cacheLife hours.
 		 *
 		 * Maps `cache_settings.cacheLife` (hours: 0/1/6/12/24/48/168) to LS
 		 * `max-age` seconds. File-cache `0` = never expire; LS server layer
 		 * cannot store infinite, so `0` maps to 1 week (604800, WEEK_IN_SECONDS)
-		 * as an explicit policy change, documented here and in Cache.
+		 * as an explicit policy change, documented here and in Cache. LS layer
+		 * stays filter-only (S, <1d) — file-cache constant untouched; drop-in must
+		 * not hit DB (no wppo_settings schema change, no UI).
 		 *
-		 * Result is cached per request; filterable via `wppo_litespeed_ttl`.
+		 * Supports per-route overrides:
+		 * - `apply_filters( 'wppo_cache_ttl', $global_ttl_seconds, $request_uri, $post_id )` (new, Tier-1 LS-only).
+		 * - `apply_filters( 'wppo_litespeed_ttl', $seconds, $hours, $context )` where $context is
+		 *   `array{uri:string,post_type:string|null,post_id:int|null}` (third arg added, BC: extra arg ignored by 2-arg callbacks).
+		 *
+		 * Result is cached per request for the global (no-arg) call; per-route calls bypass cache.
 		 *
 		 * @since NEXT
+		 * @param string|null $request_uri Optional request URI for per-route TTL (uses current REQUEST_URI when null).
+		 * @param int|null    $post_id     Optional post ID for per-route TTL (resolves via url_to_postid / $post when null).
 		 * @return int TTL seconds (>=1).
 		 */
-		public static function get_litespeed_ttl(): int {
-			if ( null !== self::$cached_ttl ) {
+		public static function get_litespeed_ttl( ?string $request_uri = null, $post_id = null ): int {
+			$has_override_args = ( null !== $request_uri || null !== $post_id );
+			if ( ! $has_override_args && null !== self::$cached_ttl ) {
 				return self::$cached_ttl;
 			}
 
@@ -845,22 +923,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				$seconds = $hours * ( defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 			}
 
+			$context = self::get_ttl_context( $request_uri, $post_id );
+
+			/**
+			 * Filter LiteSpeed TTL per route (Tier-1, LS layer only).
+			 *
+			 * Allows per-page TTL without DB/UI; file-cache stays global.
+			 *
+			 * @since NEXT
+			 * @param int         $seconds     Global TTL seconds mapped from cacheLife.
+			 * @param string      $request_uri Request URI (sanitized, e.g. "/about/").
+			 * @param int|null    $post_id     Resolved post ID or null when unresolvable.
+			 */
+			$seconds = (int) apply_filters( 'wppo_cache_ttl', $seconds, $context['uri'], $context['post_id'] );
+
 			/**
 			 * Filter LiteSpeed TTL seconds mapped from cacheLife.
 			 *
+			 * Third arg $context added in Tier-1 for per-route decisions without DB in drop-in.
+			 *
 			 * @since NEXT
-			 * @param int $seconds TTL in seconds.
-			 * @param int $hours   Original cacheLife hours (0 = never expire).
+			 * @param int   $seconds TTL in seconds.
+			 * @param int   $hours   Original cacheLife hours (0 = never expire).
+			 * @param array $context Context array with keys uri, post_type, post_id.
 			 */
-			$seconds = (int) apply_filters( 'wppo_litespeed_ttl', $seconds, $hours );
+			$seconds = (int) apply_filters( 'wppo_litespeed_ttl', $seconds, $hours, $context );
 
 			if ( $seconds <= 0 ) {
 				$seconds = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
 			}
 
-			self::$cached_ttl = $seconds;
+			if ( ! $has_override_args ) {
+				self::$cached_ttl = $seconds;
+			}
 
-			return self::$cached_ttl;
+			return $seconds;
 		}
 
 		/**
@@ -1256,9 +1353,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return;
 			}
 
-			// Cacheable + WPPO owner — LS-301.
-			$ttl = self::get_litespeed_ttl();
-			self::send_litespeed_ttl( $ttl );
+			// Cacheable + WPPO owner — LS-301 (Tier-1 per-route TTL, LS layer only; file-cache stays global).
+			$ttl_context = self::get_ttl_context();
+			$ttl         = self::get_litespeed_ttl( $ttl_context['uri'], $ttl_context['post_id'] );
+			self::send_litespeed_ttl( $ttl, $ttl_context );
 			self::send_litespeed_tags();
 
 			// LS-303 + P2 fallback: when LSCWP not active, raw Vary: Cookie + X-LiteSpeed-Vary
@@ -1324,14 +1422,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Uses do_action('litespeed_control_set_ttl') when hook exists (bitmask
 		 * correct when LSCWP active) else raw header('X-LiteSpeed-Cache-Control').
-		 * Filterable via wppo_litespeed_ttl and wppo_litespeed_cache_control_header.
+		 * Filterable via wppo_litespeed_cache_control_header. TTL already filtered
+		 * via wppo_cache_ttl + wppo_litespeed_ttl (with context) in get_litespeed_ttl();
+		 * this sender only sanitizes non-positive values and emits the header.
 		 *
 		 * @since NEXT
-		 * @param int $ttl TTL seconds.
+		 * @param int   $ttl     TTL seconds (already filtered).
+		 * @param array $context Optional TTL context for future header filters (uri, post_type, post_id).
 		 * @return void
 		 */
-		private static function send_litespeed_ttl( int $ttl ): void {
-			$ttl = (int) apply_filters( 'wppo_litespeed_ttl', $ttl );
+		private static function send_litespeed_ttl( int $ttl, array $context = array() ): void {
+			unset( $context );
 			if ( $ttl <= 0 ) {
 				$ttl = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
 			}
