@@ -169,8 +169,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		public function __construct() {
 			$defaults      = array(
 				'cache_settings'        => array(
+					'enableCache'         => false,
+					'cacheLife'           => 0,
 					'enableLoggedInCache' => false,
 					'loggedInCacheRoles'  => array(),
+					'ttlOverrides'        => array(),
 				),
 				'file_optimisation'     => array(
 					'enableServerRules'          => false,

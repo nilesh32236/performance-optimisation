@@ -297,7 +297,7 @@ add_filter( 'wppo_litespeed_ttl', function( $seconds, $hours, $context ) {
 }, 10, 3 );
 ```
 
-**Settings (N10-T2):** `wppo_settings[cache_settings][ttlOverrides]` stores per-type overrides for `post|page|product` as hours `0|1|6|12|24/48/168` (sanitized `absint` + allowlist, missing = inherit global). UI in Dashboard → Page Cache (LiteSpeed-only). Resolution: `get_post_type($post_id)` → `ttlOverrides[post_type]` → global `cacheLife`; `! is_singular()` → global. Filters above still apply after settings resolution. File-cache `advanced-cache.php` baked `cacheLife` untouched.
+**Settings (N10-T2):** `wppo_settings[cache_settings][ttlOverrides]` stores per-type overrides for `post|page|product` as hours `0|1|6|12|24|48|168` (sanitized `absint` + allowlist, missing = inherit global). UI in Dashboard → Page Cache (LiteSpeed-only). Resolution: `get_post_type($post_id)` → `ttlOverrides[post_type]` → global `cacheLife`; `! is_singular()` → global. Filters above still apply after settings resolution. File-cache `advanced-cache.php` baked `cacheLife` untouched.
 
 ### `wppo_cache_ttl_overrides`
 Filters sanitized `ttlOverrides` array after allowlist (`post|page|product` + `0/1/6/12/24/48/168`). @since NEXT.

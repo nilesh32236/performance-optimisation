@@ -140,6 +140,15 @@ const Dashboard = ( {
 	const [ cacheLife, setCacheLife ] = useState(
 		Number( cacheSettings.cacheLife ?? 0 )
 	);
+	const [ ttlPost, setTtlPost ] = useState(
+		cacheSettings.ttlOverrides?.post ?? ''
+	);
+	const [ ttlPage, setTtlPage ] = useState(
+		cacheSettings.ttlOverrides?.page ?? ''
+	);
+	const [ ttlProduct, setTtlProduct ] = useState(
+		cacheSettings.ttlOverrides?.product ?? ''
+	);
 	const [ loggedInCacheEnabled, setLoggedInCacheEnabled ] = useState(
 		!! cacheSettings.enableLoggedInCache
 	);
@@ -169,6 +178,14 @@ const Dashboard = ( {
 	useEffect( () => {
 		setPageCacheEnabled( !! cacheSettings.enableCache );
 		setCacheLife( Number( cacheSettings.cacheLife ?? 0 ) );
+		const ov =
+			cacheSettings.ttlOverrides &&
+			typeof cacheSettings.ttlOverrides === 'object'
+				? cacheSettings.ttlOverrides
+				: {};
+		setTtlPost( ov?.post ?? '' );
+		setTtlPage( ov?.page ?? '' );
+		setTtlProduct( ov?.product ?? '' );
 		setLoggedInCacheEnabled( !! cacheSettings.enableLoggedInCache );
 		setLoggedInCacheRoles(
 			Array.isArray( cacheSettings.loggedInCacheRoles )
@@ -185,6 +202,7 @@ const Dashboard = ( {
 	}, [
 		cacheSettings.enableCache,
 		cacheSettings.cacheLife,
+		cacheSettings.ttlOverrides,
 		cacheSettings.enableLoggedInCache,
 		cacheSettings.loggedInCacheRoles,
 		cacheSettings.cdnPurgeService,
@@ -514,12 +532,27 @@ const Dashboard = ( {
 				: null ) ??
 			cacheSettings ??
 			{};
+		const overrides = {};
+		if ( '' !== ttlPost && null !== ttlPost && undefined !== ttlPost ) {
+			overrides.post = Number( ttlPost );
+		}
+		if ( '' !== ttlPage && null !== ttlPage && undefined !== ttlPage ) {
+			overrides.page = Number( ttlPage );
+		}
+		if (
+			'' !== ttlProduct &&
+			null !== ttlProduct &&
+			undefined !== ttlProduct
+		) {
+			overrides.product = Number( ttlProduct );
+		}
 		apiCall( 'update_settings', {
 			tab: 'cache_settings',
 			settings: {
 				...currentSettings,
 				enableCache: pageCacheEnabled,
 				cacheLife,
+				ttlOverrides: overrides,
 			},
 		} )
 			.then( ( response ) => {
@@ -545,7 +578,15 @@ const Dashboard = ( {
 				} )
 			)
 			.finally( () => setSavingPageCache( false ) );
-	}, [ pageCacheEnabled, cacheLife, cacheSettings, notify ] );
+	}, [
+		pageCacheEnabled,
+		cacheLife,
+		ttlPost,
+		ttlPage,
+		ttlProduct,
+		cacheSettings,
+		notify,
+	] );
 
 	const saveLoggedInCacheSettings = useCallback( () => {
 		setSavingLoggedInCache( true );
@@ -1024,6 +1065,174 @@ const Dashboard = ( {
 							{ __( '1 week', 'performance-optimisation' ) }
 						</option>
 					</select>
+					<p className="wppo-text-muted wppo-text-small">
+						{ __(
+							'File cache uses this lifespan. LiteSpeed server layer may vary per post type below.',
+							'performance-optimisation'
+						) }
+					</p>
+				</div>
+				<div className="wppo-field">
+					<label className="wppo-field-label" htmlFor="wppoTtlPost">
+						{ __(
+							'Posts TTL override',
+							'performance-optimisation'
+						) }
+					</label>
+					<select
+						className="wppo-select"
+						id="wppoTtlPost"
+						name="ttlPost"
+						value={ '' === ttlPost ? '' : String( ttlPost ) }
+						onChange={ ( e ) =>
+							setTtlPost(
+								'' === e.target.value
+									? ''
+									: Number( e.target.value )
+							)
+						}
+						aria-describedby="wppoTtlOverrides-desc"
+					>
+						<option value="">
+							{ __(
+								'Inherit global',
+								'performance-optimisation'
+							) }
+						</option>
+						<option value={ 0 }>
+							{ __( 'Never expire', 'performance-optimisation' ) }
+						</option>
+						<option value={ 1 }>
+							{ __( '1 hour', 'performance-optimisation' ) }
+						</option>
+						<option value={ 6 }>
+							{ __( '6 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 12 }>
+							{ __( '12 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 24 }>
+							{ __( '24 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 48 }>
+							{ __( '48 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 168 }>
+							{ __( '1 week', 'performance-optimisation' ) }
+						</option>
+					</select>
+				</div>
+				<div className="wppo-field">
+					<label className="wppo-field-label" htmlFor="wppoTtlPage">
+						{ __(
+							'Pages TTL override',
+							'performance-optimisation'
+						) }
+					</label>
+					<select
+						className="wppo-select"
+						id="wppoTtlPage"
+						name="ttlPage"
+						value={ '' === ttlPage ? '' : String( ttlPage ) }
+						onChange={ ( e ) =>
+							setTtlPage(
+								'' === e.target.value
+									? ''
+									: Number( e.target.value )
+							)
+						}
+						aria-describedby="wppoTtlOverrides-desc"
+					>
+						<option value="">
+							{ __(
+								'Inherit global',
+								'performance-optimisation'
+							) }
+						</option>
+						<option value={ 0 }>
+							{ __( 'Never expire', 'performance-optimisation' ) }
+						</option>
+						<option value={ 1 }>
+							{ __( '1 hour', 'performance-optimisation' ) }
+						</option>
+						<option value={ 6 }>
+							{ __( '6 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 12 }>
+							{ __( '12 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 24 }>
+							{ __( '24 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 48 }>
+							{ __( '48 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 168 }>
+							{ __( '1 week', 'performance-optimisation' ) }
+						</option>
+					</select>
+				</div>
+				<div className="wppo-field">
+					<label
+						className="wppo-field-label"
+						htmlFor="wppoTtlProduct"
+					>
+						{ __(
+							'Products TTL override',
+							'performance-optimisation'
+						) }
+					</label>
+					<select
+						className="wppo-select"
+						id="wppoTtlProduct"
+						name="ttlProduct"
+						value={ '' === ttlProduct ? '' : String( ttlProduct ) }
+						onChange={ ( e ) =>
+							setTtlProduct(
+								'' === e.target.value
+									? ''
+									: Number( e.target.value )
+							)
+						}
+						aria-describedby="wppoTtlOverrides-desc"
+					>
+						<option value="">
+							{ __(
+								'Inherit global',
+								'performance-optimisation'
+							) }
+						</option>
+						<option value={ 0 }>
+							{ __( 'Never expire', 'performance-optimisation' ) }
+						</option>
+						<option value={ 1 }>
+							{ __( '1 hour', 'performance-optimisation' ) }
+						</option>
+						<option value={ 6 }>
+							{ __( '6 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 12 }>
+							{ __( '12 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 24 }>
+							{ __( '24 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 48 }>
+							{ __( '48 hours', 'performance-optimisation' ) }
+						</option>
+						<option value={ 168 }>
+							{ __( '1 week', 'performance-optimisation' ) }
+						</option>
+					</select>
+					<p
+						id="wppoTtlOverrides-desc"
+						className="wppo-text-muted wppo-text-small"
+					>
+						{ __(
+							'LiteSpeed only — per post type overrides for X-LiteSpeed-Cache-Control. Non-singular pages use the global lifespan. Filter wppo_litespeed_ttl still works.',
+							'performance-optimisation'
+						) }
+					</p>
 				</div>
 				<div className="wppo-feature-card__footer">
 					<LoadingSubmitButton
