@@ -1028,8 +1028,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			$has_trailing_slash = substr( $base_path, -1 ) === '/';
 			$base_parts         = array_filter(
 				explode( '/', $base_path ),
-				function ( string $val ): bool {
-					return '' !== $val;
+				function ( $val ): bool {
+					return is_string( $val ) && '' !== $val;
 				}
 			);
 			$relative_parts     = explode( '/', $relative_path );
