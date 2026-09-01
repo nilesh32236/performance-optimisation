@@ -276,9 +276,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				'wppo_owns_cache'    => true,
 				'optimizer_disabled' => false,
 				'vary_groups'        => array(
-					'guest'  => false,
-					'mobile' => false,
-					'webp'   => false,
+					'guest'     => false,
+					'mobile'    => false,
+					'webp'      => false,
+					'commenter' => false,
+					'postpass'  => false,
 				),
 				'crawler'            => array(
 					'concurrency'        => 2,

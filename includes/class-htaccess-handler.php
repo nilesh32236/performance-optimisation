@@ -208,6 +208,63 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$rules = (array) apply_filters( 'wppo_htaccess_nextgen_rules', $rules );
 			}
 
+			// LS-320: Cache-Vary ismobile/webp env via RewriteRule E=Cache-Vary (htaccess.cls.php:605,673 parity).
+			$groups = array();
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'get_vary_groups' ) ) {
+				$groups = LiteSpeed_Integration::get_vary_groups();
+			} else {
+				$opts   = get_option( 'wppo_settings', array() );
+				$vg     = $opts['litespeed_integration']['varyGroups'] ?? array();
+				$groups = array(
+					'mobile' => ! empty( $vg['mobile'] ),
+					'webp'   => ! empty( $vg['webp'] ),
+				);
+			}
+			$is_ls = class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) && method_exists( 'PerformanceOptimise\Inc\Server_Rules', 'is_litespeed' ) ? Server_Rules::is_litespeed() : false;
+			// Gate strictly opt-in and on LiteSpeed.
+			if ( $is_ls ) {
+				$vary_rules = array();
+				if ( ! empty( $groups['mobile'] ) ) {
+					$vary_rules = array_merge(
+						$vary_rules,
+						array(
+							'',
+							'# WPPO Cache-Vary: ismobile',
+							'<IfModule mod_rewrite.c>',
+							'    RewriteEngine On',
+							'    RewriteCond %{HTTP_USER_AGENT} "Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" [NC]',
+							'    RewriteRule .* - [E=Cache-Vary:ismobile]',
+							'</IfModule>',
+						)
+					);
+				}
+				if ( ! empty( $groups['webp'] ) ) {
+					$vary_rules = array_merge(
+						$vary_rules,
+						array(
+							'',
+							'# WPPO Cache-Vary: webp',
+							'<IfModule mod_rewrite.c>',
+							'    RewriteEngine On',
+							'    RewriteCond %{HTTP:Accept} image/webp [NC]',
+							'    RewriteRule .* - [E=Cache-Vary:webp]',
+							'</IfModule>',
+						)
+					);
+				}
+				if ( ! empty( $vary_rules ) ) {
+					/**
+					 * Filter vary htaccess rules.
+					 *
+					 * @since NEXT
+					 * @param array $vary_rules Vary rules.
+					 * @param array $groups Active groups.
+					 */
+					$vary_rules = (array) apply_filters( 'wppo_htaccess_vary_rules', $vary_rules, $groups );
+					$rules      = array_merge( $rules, $vary_rules );
+				}
+			}
+
 			/**
 			 * Filter htaccess rules.
 			 *

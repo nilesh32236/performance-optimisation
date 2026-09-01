@@ -162,6 +162,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				$rules = (array) apply_filters( 'wppo_nginx_nextgen_rules', $rules );
 			}
 
+			// LS-320: Nginx Cache-Vary for ismobile/webp via map.
+			$vary_groups = array();
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'get_vary_groups' ) ) {
+				$vary_groups = LiteSpeed_Integration::get_vary_groups();
+			} else {
+				$vg_opts     = get_option( 'wppo_settings', array() );
+				$vg          = $vg_opts['litespeed_integration']['varyGroups'] ?? array();
+				$vary_groups = array(
+					'mobile' => ! empty( $vg['mobile'] ),
+					'webp'   => ! empty( $vg['webp'] ),
+				);
+			}
+			if ( ! empty( $vary_groups['mobile'] ) || ! empty( $vary_groups['webp'] ) ) {
+				if ( ! empty( $rules ) ) {
+					$rules[] = '';
+				}
+				$rules[] = '# WPPO Cache-Vary (LS-320)';
+				if ( ! empty( $vary_groups['mobile'] ) ) {
+					$rules[] = 'map $http_user_agent $wppo_mobile_vary {';
+					$rules[] = '    default "";';
+					$rules[] = '    "~*Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" "ismobile";';
+					$rules[] = '}';
+				}
+				if ( ! empty( $vary_groups['webp'] ) ) {
+					$rules[] = 'map $http_accept $wppo_webp_vary {';
+					$rules[] = '    default "";';
+					$rules[] = '    "~*image/webp" "webp";';
+					$rules[] = '}';
+				}
+				$cache_vary_parts = array();
+				if ( ! empty( $vary_groups['mobile'] ) ) {
+					$cache_vary_parts[] = '$wppo_mobile_vary';
+				}
+				if ( ! empty( $vary_groups['webp'] ) ) {
+					$cache_vary_parts[] = '$wppo_webp_vary';
+				}
+				$rules[] = '# add_header Cache-Vary: ' . implode( ',', $cache_vary_parts ) . ' (when non-empty)';
+				/**
+				 * Filter nginx vary rules.
+				 *
+				 * @since NEXT
+				 * @param array $rules Rules array.
+				 * @param array $vary_groups Active vary groups.
+				 */
+				$rules = (array) apply_filters( 'wppo_nginx_vary_rules', $rules, $vary_groups );
+			}
+
 			$rules_str = implode( "\n", $rules );
 
 			/**

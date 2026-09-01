@@ -70,7 +70,7 @@ export const modeLabel = ( mode ) => {
 /**
  * Get vary env string for P2 groups.
  *
- * @param {Object} varyGroups - {guest,mobile,webp,role}
+ * @param {Object} varyGroups - {guest,mobile,webp,role,commenter,postpass}
  * @return {string} Vary env.
  */
 export const getVaryEnv = ( varyGroups = {} ) => {
@@ -87,7 +87,24 @@ export const getVaryEnv = ( varyGroups = {} ) => {
 	if ( varyGroups.webp ) {
 		parts.push( 'webp' );
 	}
-	return parts.join( ',' );
+	if ( varyGroups.commenter ) {
+		parts.push( 'commenter' );
+	}
+	if ( varyGroups.postpass ) {
+		parts.push( 'postpass' );
+	}
+	// Canonical cookie for LSWS.
+	if (
+		varyGroups.role ||
+		varyGroups.guest ||
+		varyGroups.mobile ||
+		varyGroups.webp ||
+		varyGroups.commenter ||
+		varyGroups.postpass
+	) {
+		parts.push( '_lscache_vary' );
+	}
+	return [ ...new Set( parts ) ].join( ',' );
 };
 
 /**

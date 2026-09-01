@@ -93,6 +93,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		private const PURGE_LOCK_TTL = 60;
 
 		/**
+		 * LiteSpeed vary cookie name.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const LSCACHE_VARY_COOKIE = '_lscache_vary';
+
+		/**
 		 * Per-request cached effective mode.
 		 *
 		 * Null means not yet resolved.
@@ -749,6 +757,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// Phase 3 — LS-native header emission (LS-301) + vary bridge (LS-303).
 			add_action( 'send_headers', array( self::class, 'handle_send_headers' ), 0 );
 			add_filter( 'litespeed_vary', array( self::class, 'filter_litespeed_vary' ), 10, 1 );
+			// LS-320 — _lscache_vary cookie lifecycle.
+			add_action( 'init', array( self::class, 'seed_lscache_vary_cookie' ), 1 );
+			add_action( 'wp_logout', array( self::class, 'clear_lscache_vary_cookie' ) );
 		}
 
 		/**
@@ -942,6 +953,217 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Whether current request has a commenter cookie.
+		 *
+		 * Mirrors LSCWP vary.cls.php:261 private toggle.
+		 *
+		 * @since NEXT
+		 * @return bool True if comment_author_* present.
+		 */
+		public static function is_commenter_vary(): bool {
+			if ( empty( $_COOKIE ) || ! is_array( $_COOKIE ) ) {
+				return false;
+			}
+			foreach ( array_keys( $_COOKIE ) as $k ) {
+				if ( 0 === strpos( (string) $k, 'comment_author_' ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * Whether current request has a post-password cookie.
+		 *
+		 * Mirrors LSCWP vary.cls.php:261 private toggle.
+		 *
+		 * @since NEXT
+		 * @return bool True if wp-postpass_* present.
+		 */
+		public static function is_postpass_vary(): bool {
+			if ( empty( $_COOKIE ) || ! is_array( $_COOKIE ) ) {
+				return false;
+			}
+			foreach ( array_keys( $_COOKIE ) as $k ) {
+				if ( 0 === strpos( (string) $k, 'wp-postpass_' ) ) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * Get role value with optional admin→99 coalescing.
+		 *
+		 * When cacheVaryGroup enabled, administrator maps to "99".
+		 *
+		 * @since NEXT
+		 * @return string Role value or empty.
+		 */
+		public static function get_vary_role_value(): string {
+			if ( ! is_user_logged_in() ) {
+				return '';
+			}
+			$user = function_exists( 'wp_get_current_user' ) ? wp_get_current_user() : null;
+			if ( ! $user || empty( $user->roles ) ) {
+				return '';
+			}
+			$options = get_option( 'wppo_settings', array() );
+			$grouped = ! empty( $options['litespeed_integration']['cacheVaryGroup'] );
+			/**
+			 * Filter whether admin role should coalesce to 99.
+			 *
+			 * @since NEXT
+			 * @param bool $grouped Whether grouped.
+			 */
+			$grouped = (bool) apply_filters( 'wppo_litespeed_cache_vary_group', $grouped );
+			if ( $grouped && in_array( 'administrator', (array) $user->roles, true ) ) {
+				return '99';
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\Util' ) && method_exists( 'PerformanceOptimise\Inc\Util', 'get_role_hash' ) ) {
+				return Util::get_role_hash( $user );
+			}
+			$roles = (array) $user->roles;
+			sort( $roles );
+			return substr( md5( implode( ',', $roles ) . ( function_exists( 'wp_salt' ) ? wp_salt() : '' ) ), 0, 12 );
+		}
+
+		/**
+		 * Build deterministic _lscache_vary hash from active groups.
+		 *
+		 * @since NEXT
+		 * @return string 12-char hash or empty when no vary needed.
+		 */
+		public static function get_lscache_vary_value(): string {
+			$groups = self::get_vary_groups();
+			$active = array_filter( $groups );
+			if ( empty( $active ) ) {
+				return '';
+			}
+			$payload = array();
+			if ( ! empty( $groups['role'] ) ) {
+				$payload['role'] = self::get_vary_role_value();
+			}
+			if ( ! empty( $groups['guest'] ) ) {
+				$payload['guest'] = is_user_logged_in() ? '0' : '1';
+			}
+			if ( ! empty( $groups['mobile'] ) ) {
+				$payload['ismobile'] = function_exists( 'wp_is_mobile' ) && wp_is_mobile() ? '1' : '0';
+			}
+			if ( ! empty( $groups['webp'] ) ) {
+				$accept          = isset( $_SERVER['HTTP_ACCEPT'] ) ? (string) $_SERVER['HTTP_ACCEPT'] : '';
+				$payload['webp'] = ( false !== stripos( $accept, 'image/webp' ) || false !== stripos( $accept, 'image/avif' ) ) ? '1' : '0';
+			}
+			if ( ! empty( $groups['commenter'] ) && self::is_commenter_vary() ) {
+				$payload['commenter'] = '1';
+			}
+			if ( ! empty( $groups['postpass'] ) && self::is_postpass_vary() ) {
+				$payload['postpass'] = '1';
+			}
+			$raw = json_encode( $payload );
+			$salt = function_exists( 'wp_salt' ) ? wp_salt() : '';
+			$hash = substr( md5( $salt . $raw ), 0, 12 );
+			/**
+			 * Filter _lscache_vary value.
+			 *
+			 * @since NEXT
+			 * @param string $hash Hash value.
+			 * @param array  $payload Payload.
+			 */
+			return (string) apply_filters( 'wppo_litespeed_lscache_vary_value', $hash, $payload );
+		}
+
+		/**
+		 * Seed _lscache_vary cookie when vary groups active.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function seed_lscache_vary_cookie(): void {
+			if ( ! self::is_litespeed() || ! self::is_wppo_cache_owner() ) {
+				return;
+			}
+			if ( headers_sent() ) {
+				return;
+			}
+			$groups   = self::get_vary_groups();
+			$has_vary = ! empty( $groups['guest'] ) || ! empty( $groups['mobile'] ) || ! empty( $groups['webp'] ) || ! empty( $groups['commenter'] ) || ! empty( $groups['postpass'] ) || ! empty( $groups['role'] );
+			/**
+			 * Filter whether to seed vary cookie.
+			 *
+			 * @since NEXT
+			 * @param bool  $has_vary Whether vary needed.
+			 * @param array $groups Active groups.
+			 */
+			$has_vary = (bool) apply_filters( 'wppo_litespeed_seed_vary', $has_vary, $groups );
+			if ( ! $has_vary ) {
+				if ( isset( $_COOKIE[ self::LSCACHE_VARY_COOKIE ] ) ) {
+					$opts = array(
+						'expires'  => time() - YEAR_IN_SECONDS,
+						'path'     => defined( 'COOKIEPATH' ) ? COOKIEPATH : '/',
+						'domain'   => defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '',
+						'secure'   => function_exists( 'is_ssl' ) ? is_ssl() : false,
+						'httponly' => true,
+						'samesite' => 'Lax',
+					);
+					if ( PHP_VERSION_ID >= 70300 ) {
+						setcookie( self::LSCACHE_VARY_COOKIE, '', $opts );
+					} else {
+						setcookie( self::LSCACHE_VARY_COOKIE, '', $opts['expires'], $opts['path'] . '; SameSite=Lax', $opts['domain'], $opts['secure'], true );
+					}
+					unset( $_COOKIE[ self::LSCACHE_VARY_COOKIE ] );
+				}
+				return;
+			}
+			$value = self::get_lscache_vary_value();
+			if ( '' === $value ) {
+				return;
+			}
+			if ( isset( $_COOKIE[ self::LSCACHE_VARY_COOKIE ] ) && $_COOKIE[ self::LSCACHE_VARY_COOKIE ] === $value ) {
+				return;
+			}
+			$opts = array(
+				'expires'  => time() + DAY_IN_SECONDS,
+				'path'     => defined( 'COOKIEPATH' ) ? COOKIEPATH : '/',
+				'domain'   => defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '',
+				'secure'   => function_exists( 'is_ssl' ) ? is_ssl() : false,
+				'httponly' => true,
+				'samesite' => 'Lax',
+			);
+			if ( PHP_VERSION_ID >= 70300 ) {
+				setcookie( self::LSCACHE_VARY_COOKIE, $value, $opts );
+			} else {
+				setcookie( self::LSCACHE_VARY_COOKIE, $value, $opts['expires'], $opts['path'] . '; SameSite=Lax', $opts['domain'], $opts['secure'], true );
+			}
+			$_COOKIE[ self::LSCACHE_VARY_COOKIE ] = $value;
+		}
+
+		/**
+		 * Clear _lscache_vary cookie.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_lscache_vary_cookie(): void {
+			if ( isset( $_COOKIE[ self::LSCACHE_VARY_COOKIE ] ) ) {
+				$opts = array(
+					'expires'  => time() - YEAR_IN_SECONDS,
+					'path'     => defined( 'COOKIEPATH' ) ? COOKIEPATH : '/',
+					'domain'   => defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '',
+					'secure'   => function_exists( 'is_ssl' ) ? is_ssl() : false,
+					'httponly' => true,
+					'samesite' => 'Lax',
+				);
+				if ( PHP_VERSION_ID >= 70300 ) {
+					setcookie( self::LSCACHE_VARY_COOKIE, '', $opts );
+				} else {
+					setcookie( self::LSCACHE_VARY_COOKIE, '', $opts['expires'], $opts['path'] . '; SameSite=Lax', $opts['domain'], $opts['secure'], true );
+				}
+				unset( $_COOKIE[ self::LSCACHE_VARY_COOKIE ] );
+			}
+		}
+
+		/**
 		 * Whether vary-by-role should be added for LiteSpeed.
 		 *
 		 * True when is_litespeed && is_wppo_cache_owner && enableLoggedInCache.
@@ -979,21 +1201,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Get active Vary groups (P2).
 		 *
-		 * Guest/mobile/webp are opt-in via litespeed_integration.varyGroups.
+		 * Guest/mobile/webp/commenter/postpass are opt-in via litespeed_integration.varyGroups.
 		 * Role vary is derived from enableLoggedInCache. All filtered via
 		 * wppo_litespeed_vary_groups.
 		 *
 		 * @since NEXT
-		 * @return array{role:bool,guest:bool,mobile:bool,webp:bool}
+		 * @return array{role:bool,guest:bool,mobile:bool,webp:bool,commenter:bool,postpass:bool}
 		 */
 		public static function get_vary_groups(): array {
 			$options = get_option( 'wppo_settings', array() );
 			$groups  = $options['litespeed_integration']['varyGroups'] ?? array();
 			$active  = array(
-				'role'   => self::should_vary_by_role(),
-				'guest'  => ! empty( $groups['guest'] ),
-				'mobile' => ! empty( $groups['mobile'] ),
-				'webp'   => ! empty( $groups['webp'] ),
+				'role'      => self::should_vary_by_role(),
+				'guest'     => ! empty( $groups['guest'] ),
+				'mobile'    => ! empty( $groups['mobile'] ),
+				'webp'      => ! empty( $groups['webp'] ),
+				'commenter' => ! empty( $groups['commenter'] ),
+				'postpass'  => ! empty( $groups['postpass'] ),
 			);
 			/**
 			 * Filter active vary groups.
@@ -1003,38 +1227,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			 */
 			$active = (array) apply_filters( 'wppo_litespeed_vary_groups', $active );
 			return array(
-				'role'   => (bool) ( $active['role'] ?? false ),
-				'guest'  => (bool) ( $active['guest'] ?? false ),
-				'mobile' => (bool) ( $active['mobile'] ?? false ),
-				'webp'   => (bool) ( $active['webp'] ?? false ),
+				'role'      => (bool) ( $active['role'] ?? false ),
+				'guest'     => (bool) ( $active['guest'] ?? false ),
+				'mobile'    => (bool) ( $active['mobile'] ?? false ),
+				'webp'      => (bool) ( $active['webp'] ?? false ),
+				'commenter' => (bool) ( $active['commenter'] ?? false ),
+				'postpass'  => (bool) ( $active['postpass'] ?? false ),
 			);
 		}
 
 		/**
 		 * Build fallback vary header value from active groups (P2).
 		 *
+		 * Canonical LSWS: cookie=_lscache_vary + supplemental wppo_role_hash.
+		 *
 		 * @since NEXT
 		 * @return string Vary header value.
 		 */
 		public static function build_vary_header(): string {
 			$groups = self::get_vary_groups();
-			$parts  = array();
-			if ( $groups['role'] ) {
-				$parts[] = 'wppo_role_hash';
-			}
-			if ( $groups['guest'] ) {
-				$parts[] = '_lscache_vary=guest';
-			}
-			if ( $groups['mobile'] ) {
-				$parts[] = '_lscache_vary=mobile';
-			}
-			if ( $groups['webp'] ) {
-				$parts[] = '_lscache_vary=webp';
-			}
-			if ( empty( $parts ) ) {
+			$has_any = $groups['role'] || $groups['guest'] || $groups['mobile'] || $groups['webp'] || $groups['commenter'] || $groups['postpass'];
+			if ( ! $has_any ) {
 				return '';
 			}
-			$cookie_vary = implode( ',', $parts );
+			// Canonical: single _lscache_vary cookie, role hash as supplemental for BC.
+			$cookie_vary = '_lscache_vary';
+			if ( $groups['role'] ) {
+				$cookie_vary .= ',wppo_role_hash';
+			}
 			/**
 			 * Filter built vary header.
 			 *
@@ -1088,15 +1308,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return;
 			}
 
+			// LS-320: commenter/postpass private handling — hard private when toggled.
+			$groups_pre = self::get_vary_groups();
+			if ( ! empty( $groups_pre['commenter'] ) && self::is_commenter_vary() ) {
+				self::send_litespeed_nocache( 'commenter' );
+				if ( has_action( 'litespeed_control_set_private' ) ) {
+					do_action( 'litespeed_control_set_private', 'commenter' );
+				} elseif ( ! headers_sent() ) {
+					header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
+				}
+				return;
+			}
+			if ( ! empty( $groups_pre['postpass'] ) && self::is_postpass_vary() ) {
+				self::send_litespeed_nocache( 'postpass' );
+				if ( has_action( 'litespeed_control_set_private' ) ) {
+					do_action( 'litespeed_control_set_private', 'postpass' );
+				} elseif ( ! headers_sent() ) {
+					header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
+				}
+				return;
+			}
+
 			// Cacheable + WPPO owner — LS-301.
 			$ttl = self::get_litespeed_ttl();
 			self::send_litespeed_ttl( $ttl );
 			self::send_litespeed_tags();
 
 			// LS-303 + P2 fallback: when LSCWP not active, raw Vary: Cookie + X-LiteSpeed-Vary
-			// for role/guest/mobile/webp groups. When LSCWP active, litespeed_vary filter handles it.
+			// for role/guest/mobile/webp/commenter/postpass groups. When LSCWP active, litespeed_vary filter handles it.
 			$groups_for_header = self::get_vary_groups();
-			$needs_vary        = $groups_for_header['role'] || $groups_for_header['guest'] || $groups_for_header['mobile'] || $groups_for_header['webp'];
+			$needs_vary        = $groups_for_header['role'] || $groups_for_header['guest'] || $groups_for_header['mobile'] || $groups_for_header['webp'] || $groups_for_header['commenter'] || $groups_for_header['postpass'];
 			if ( $needs_vary ) {
 				$has_external = false;
 				if ( function_exists( 'has_filter' ) ) {
@@ -1122,7 +1363,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					}
 				}
 				if ( ! $has_external ) {
-					$has_cookie_vary = $groups_for_header['role'] || $groups_for_header['guest'] || $groups_for_header['mobile'];
+					$has_cookie_vary = $groups_for_header['role'] || $groups_for_header['guest'] || $groups_for_header['mobile'] || $groups_for_header['commenter'] || $groups_for_header['postpass'];
 					if ( $has_cookie_vary ) {
 						header( 'Vary: Cookie', false );
 					}
@@ -1290,23 +1531,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 */
 		public static function filter_litespeed_vary( $vary ) {
 			$groups  = self::get_vary_groups();
-			$has_any = $groups['role'] || $groups['guest'] || $groups['mobile'] || $groups['webp'];
+			$has_any = $groups['role'] || $groups['guest'] || $groups['mobile'] || $groups['webp'] || $groups['commenter'] || $groups['postpass'];
 			if ( ! $has_any ) {
 				return $vary;
 			}
 
 			$to_add = array();
+			// Canonical _lscache_vary for LSWS (guest/mobile/webp/commenter/postpass/role all coalesce).
+			$to_add['_lscache_vary'] = '_lscache_vary';
 			if ( $groups['role'] ) {
 				$to_add['wppo_role_hash'] = 'wppo_role_hash';
-			}
-			if ( $groups['guest'] ) {
-				$to_add['wppo_guest'] = 'wppo_guest';
-			}
-			if ( $groups['mobile'] ) {
-				$to_add['wppo_mobile'] = 'wppo_mobile';
-			}
-			if ( $groups['webp'] ) {
-				$to_add['wppo_webp'] = 'wppo_webp';
 			}
 
 			if ( is_array( $vary ) ) {

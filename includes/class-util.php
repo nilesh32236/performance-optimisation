@@ -165,10 +165,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					'enableNextGenRewrite' => false,
 					'enableBrotli'         => false,
 					'purgeSync'            => true,
+					'cacheVaryGroup'       => false,
 					'varyGroups'           => array(
-						'guest'  => false,
-						'mobile' => false,
-						'webp'   => false,
+						'guest'     => false,
+						'mobile'    => false,
+						'webp'      => false,
+						'commenter' => false,
+						'postpass'  => false,
 					),
 					'crawler'              => array(
 						'concurrency'        => 2,
@@ -1090,6 +1093,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$raw                    = sanitize_text_field( (string) $value );
 					$mode                   = in_array( $raw, array( 'auto', 'wppo', 'litespeed', 'standalone' ), true ) ? $raw : 'auto';
 					$sanitized[ $safe_key ] = $mode;
+					continue;
+				}
+
+				// LS-320: cacheVaryGroup enum/bool.
+				if ( 'cacheVaryGroup' === $safe_key && ! is_array( $value ) ) {
+					if ( is_bool( $value ) ) {
+						$sanitized[ $safe_key ] = (bool) $value;
+					} else {
+						$raw                    = sanitize_text_field( (string) $value );
+						$sanitized[ $safe_key ] = in_array( $raw, array( '1', 'true', 'admin_separate' ), true ) ? true : ( '0' === $raw || 'false' === $raw || '' === $raw ? false : (bool) $value );
+					}
 					continue;
 				}
 

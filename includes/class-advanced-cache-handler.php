@@ -152,6 +152,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			// Cache life in hours baked into the drop-in; 0 = never expire.
 			$wppo_options = get_option( 'wppo_settings', array() );
 			$cache_life   = isset( $wppo_options['cache_settings']['cacheLife'] ) ? absint( $wppo_options['cache_settings']['cacheLife'] ) : 0;
+			$wppo_vary    = $wppo_options['litespeed_integration']['varyGroups'] ?? array();
+			$wppo_vary_commenter = ! empty( $wppo_vary['commenter'] ) ? '1' : '0';
+			$wppo_vary_postpass  = ! empty( $wppo_vary['postpass'] ) ? '1' : '0';
 
 			$handler_code = '<?php' . PHP_EOL .
 			'// ' . self::DROPIN_MARKER . PHP_EOL .
@@ -196,7 +199,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'if ( file_exists( $no_cache_marker ) ) {' . PHP_EOL .
 			'	return;' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .
-
+			'$wppo_vary_commenter = \'' . $wppo_vary_commenter . '\';' . PHP_EOL .
+			'$wppo_vary_postpass  = \'' . $wppo_vary_postpass . '\';' . PHP_EOL .
+			'if ( \'1\' === $wppo_vary_commenter ) {' . PHP_EOL .
+			'	foreach ( $_COOKIE as $ck => $cv ) {' . PHP_EOL .
+			'		if ( strpos( $ck, \'comment_author_\' ) === 0 ) { return; }' . PHP_EOL .
+			'	}' . PHP_EOL .
+			'}' . PHP_EOL .
+			'if ( \'1\' === $wppo_vary_postpass ) {' . PHP_EOL .
+			'	foreach ( $_COOKIE as $ck => $cv ) {' . PHP_EOL .
+			'		if ( strpos( $ck, \'wp-postpass_\' ) === 0 ) { return; }' . PHP_EOL .
+			'	}' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
 			'function is_user_logged_in_without_wp( $site_url ) {' . PHP_EOL .
 			'	$logged_in_cookie = \'wordpress_logged_in_\' . \'' . $cookie_hash . '\';' . PHP_EOL .
 			'	$cookie_prefix = \'wp-wpml_\';' . PHP_EOL .
@@ -204,7 +218,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'		return true;' . PHP_EOL .
 			'	}' . PHP_EOL .
 			'	foreach ( $_COOKIE as $name => $value ) {' . PHP_EOL .
-			'		if ( strpos( $name, \'wordpress_logged_in_\' ) === 0 || strpos( $name, \'wp-rs-\' ) === 0 ) {' . PHP_EOL .
+			'		if ( strpos( $name, \'wordpress_logged_in_\' ) === 0 || strpos( $name, \'wp-rs-\' ) === 0 || strpos( $name, \'comment_author_\' ) === 0 || strpos( $name, \'wp-postpass_\' ) === 0 || \'_lscache_vary\' === $name || \'wppo_role_hash\' === $name ) {' . PHP_EOL .
 			'			return true;' . PHP_EOL .
 			'		}' . PHP_EOL .
 			'	}' . PHP_EOL .
@@ -281,6 +295,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			'}' . PHP_EOL . PHP_EOL .
 			'$is_logged_in = is_user_logged_in_without_wp( $site_url );' . PHP_EOL .
 			'$has_query    = ! empty( $_SERVER[\'QUERY_STRING\'] );' . PHP_EOL . PHP_EOL .
+			'if ( ! $has_query && isset( $_COOKIE[\'_lscache_vary\'] ) ) {' . PHP_EOL .
+			'	$vary_hash = preg_replace( \'/[^a-f0-9]/\', \'\', (string) $_COOKIE[\'_lscache_vary\'] );' . PHP_EOL .
+			'	if ( \'\' !== $vary_hash ) {' . PHP_EOL .
+			'		$vary_file_path = preg_replace( \'/index\\.html$/\', \'index-\' . $vary_hash . \'.html\', $file_path );' . PHP_EOL .
+			'		$vary_gzip_path = $vary_file_path . \'.gz\';' . PHP_EOL .
+			'		$vary_brotli_path = $vary_file_path . \'.br\';' . PHP_EOL .
+			'		wppo_serve_cache_file( $vary_file_path, $vary_gzip_path, $vary_brotli_path, $cache_life, $accept_encoding );' . PHP_EOL .
+			'	}' . PHP_EOL .
+			'}' . PHP_EOL . PHP_EOL .
 			'if ( ! $is_logged_in && ! $has_query ) {' . PHP_EOL .
 			'	wppo_serve_cache_file( $file_path, $gzip_file_path, $brotli_file_path, $cache_life, $accept_encoding );' . PHP_EOL .
 			'}' . PHP_EOL . PHP_EOL .

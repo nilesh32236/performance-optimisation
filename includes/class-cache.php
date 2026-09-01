@@ -321,6 +321,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			}
 
 			$user = wp_get_current_user();
+			// LS-320: when cacheVaryGroup enabled, admin coalesces to group 99.
+			$opts = $this->options['litespeed_integration'] ?? array();
+			if ( ! empty( $opts['cacheVaryGroup'] ) && in_array( 'administrator', (array) ( $user->roles ?? array() ), true ) ) {
+				return substr( md5( '99' . ( function_exists( 'wp_salt' ) ? wp_salt() : '' ) ), 0, 12 );
+			}
 			return Util::get_role_hash( $user );
 		}
 
@@ -1540,6 +1545,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
+			// LS-320: commenter/postpass private — hard no-cache when varyGroups toggle on.
+			$ls_opts    = $this->options['litespeed_integration'] ?? array();
+			$ls_vary    = $ls_opts['varyGroups'] ?? array();
+			if ( ! empty( $ls_vary['commenter'] ) ) {
+				foreach ( array_keys( $_COOKIE ?? array() ) as $ck ) {
+					if ( 0 === strpos( (string) $ck, 'comment_author_' ) ) {
+						return true;
+					}
+				}
+			}
+			if ( ! empty( $ls_vary['postpass'] ) ) {
+				foreach ( array_keys( $_COOKIE ?? array() ) as $ck ) {
+					if ( 0 === strpos( (string) $ck, 'wp-postpass_' ) ) {
+						return true;
+					}
+				}
+			}
+
 			/**
 			 * Filters whether the current request should be cached.
 			 *
@@ -1834,6 +1857,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
 				$this->maybe_mark_page_not_cacheable();
 				return false;
+			}
+
+			// LS-320: commenter/postpass private — do not store.
+			$ls_vary = $this->options['litespeed_integration']['varyGroups'] ?? array();
+			if ( ! empty( $ls_vary['commenter'] ) ) {
+				foreach ( array_keys( $_COOKIE ?? array() ) as $ck ) {
+					if ( 0 === strpos( (string) $ck, 'comment_author_' ) ) {
+						return false;
+					}
+				}
+			}
+			if ( ! empty( $ls_vary['postpass'] ) ) {
+				foreach ( array_keys( $_COOKIE ?? array() ) as $ck ) {
+					if ( 0 === strpos( (string) $ck, 'wp-postpass_' ) ) {
+						return false;
+					}
+				}
 			}
 
 			if ( empty( $this->domain ) || strpos( $this->url_path, '..' ) !== false ) {

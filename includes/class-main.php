@@ -242,10 +242,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'enableNextGenRewrite' => false,
 					'enableBrotli'         => false,
 					'purgeSync'            => true,
+					'cacheVaryGroup'       => false,
 					'varyGroups'           => array(
-						'guest'  => false,
-						'mobile' => false,
-						'webp'   => false,
+						'guest'     => false,
+						'mobile'    => false,
+						'webp'      => false,
+						'commenter' => false,
+						'postpass'  => false,
 					),
 					'crawler'              => array(
 						'concurrency'        => 2,
@@ -418,11 +421,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$enable = ! empty( $this->options['cache_settings']['enableLoggedInCache'] ?? false );
 				if ( $enable ) {
 					$user = wp_get_current_user();
-					$hash = Util::get_role_hash( $user );
+					// LS-320: cacheVaryGroup admin→99 coalescing.
+					$hash = '';
+					if ( ! empty( $this->options['litespeed_integration']['cacheVaryGroup'] ?? false ) && in_array( 'administrator', (array) ( $user->roles ?? array() ), true ) ) {
+						$hash = substr( md5( '99' . ( function_exists( 'wp_salt' ) ? wp_salt() : '' ) ), 0, 12 );
+					} else {
+						$hash = Util::get_role_hash( $user );
+					}
 					if ( '' !== $hash && ( ! isset( $_COOKIE['wppo_role_hash'] ) || $_COOKIE['wppo_role_hash'] !== $hash ) ) {
-						setcookie( 'wppo_role_hash', $hash, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+						$opts = array(
+							'expires'  => time() + DAY_IN_SECONDS,
+							'path'     => defined( 'COOKIEPATH' ) ? COOKIEPATH : '/',
+							'domain'   => defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '',
+							'secure'   => is_ssl(),
+							'httponly' => true,
+							'samesite' => 'Lax',
+						);
+						if ( PHP_VERSION_ID >= 70300 ) {
+							setcookie( 'wppo_role_hash', $hash, $opts );
+						} else {
+							setcookie( 'wppo_role_hash', $hash, $opts['expires'], $opts['path'] . '; SameSite=Lax', $opts['domain'], $opts['secure'], true );
+						}
 					}
 				}
+			}
+			// LS-320: keep _lscache_vary in sync.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'seed_lscache_vary_cookie' ) ) {
+				LiteSpeed_Integration::seed_lscache_vary_cookie();
 			}
 		}
 
@@ -434,7 +459,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 */
 		public function clear_role_hash_cookie(): void {
 			if ( isset( $_COOKIE['wppo_role_hash'] ) ) {
-				setcookie( 'wppo_role_hash', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+				$opts = array(
+					'expires'  => time() - YEAR_IN_SECONDS,
+					'path'     => defined( 'COOKIEPATH' ) ? COOKIEPATH : '/',
+					'domain'   => defined( 'COOKIE_DOMAIN' ) ? COOKIE_DOMAIN : '',
+					'secure'   => is_ssl(),
+					'httponly' => true,
+					'samesite' => 'Lax',
+				);
+				if ( PHP_VERSION_ID >= 70300 ) {
+					setcookie( 'wppo_role_hash', '', $opts );
+				} else {
+					setcookie( 'wppo_role_hash', '', $opts['expires'], $opts['path'] . '; SameSite=Lax', $opts['domain'], $opts['secure'], true );
+				}
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'clear_lscache_vary_cookie' ) ) {
+				LiteSpeed_Integration::clear_lscache_vary_cookie();
 			}
 		}
 
@@ -1126,6 +1166,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			$old_nextgen     = isset( $old_value['litespeed_integration']['enableNextGenRewrite'] ) ? (bool) $old_value['litespeed_integration']['enableNextGenRewrite'] : false;
 			$new_nextgen     = isset( $value['litespeed_integration']['enableNextGenRewrite'] ) ? (bool) $value['litespeed_integration']['enableNextGenRewrite'] : false;
 			$nextgen_changed = $old_nextgen !== $new_nextgen;
+			$old_vary        = $old_value['litespeed_integration']['varyGroups'] ?? array();
+			$new_vary        = $value['litespeed_integration']['varyGroups'] ?? array();
+			$vary_changed    = ( ! empty( $old_vary['mobile'] ) !== ! empty( $new_vary['mobile'] ) ) || ( ! empty( $old_vary['webp'] ) !== ! empty( $new_vary['webp'] ) );
 
 			if ( $old_enable !== $new_enable ) {
 				$ok = Htaccess_Handler::update_rules( $new_enable );
@@ -1151,8 +1194,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						}
 					);
 				}
-			} elseif ( $nextgen_changed && $new_enable ) {
-				// Next-gen toggle changed while server rules remain enabled — refresh htaccess to add/remove next-gen block.
+			} elseif ( ( $nextgen_changed || $vary_changed ) && $new_enable ) {
+				// Next-gen or vary toggle changed while server rules remain enabled — refresh htaccess.
 				$ok = Htaccess_Handler::update_rules( true );
 				if ( $ok && class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
 					Log::add( __( 'Server rules updated on LiteSpeed — restart OpenLiteSpeed if changes do not appear immediately.', 'performance-optimisation' ) );
