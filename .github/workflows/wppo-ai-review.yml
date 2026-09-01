@@ -131,7 +131,7 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           git_user_name: nilesh32236
           git_user_email: nilesh32236@gmail.com
-          model: ${{ vars.OPENCODE_MODEL || 'opencode/deepseek-v4-flash-free' }}
+          model: ${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}
           enable_mcp: false
           max_fix_iterations: 1
           run_checks_after_fix: 'npm run lint:js'
@@ -228,7 +228,7 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           git_user_name: nilesh32236
           git_user_email: nilesh32236@gmail.com
-          model: ${{ vars.OPENCODE_MODEL || 'opencode/deepseek-v4-flash-free' }}
+          model: ${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}
           max_files_per_batch: 3
           enable_mcp: false
           include_strengths: true
@@ -320,7 +320,7 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           git_user_name: nilesh32236
           git_user_email: nilesh32236@gmail.com
-          model: ${{ vars.OPENCODE_MODEL || 'opencode/deepseek-v4-flash-free' }}
+          model: ${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}
           max_fix_iterations: 3
           enable_mcp: false
           enable_fix: true
