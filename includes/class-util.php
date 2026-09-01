@@ -1076,13 +1076,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 						if ( ! is_array( $entry ) || $count >= 5 ) {
 							continue;
 						}
-						$cdn_url          = isset( $entry['cdn_url'] ) ? esc_url_raw( (string) $entry['cdn_url'] ) : '';
+						$cdn_url = isset( $entry['cdn_url'] ) ? esc_url_raw( (string) $entry['cdn_url'] ) : '';
 						if ( '' === $cdn_url ) {
 							continue;
 						}
 						$include_dirs      = isset( $entry['include_dirs'] ) ? sanitize_text_field( (string) $entry['include_dirs'] ) : 'wp-content|wp-includes';
 						$include_filetypes = isset( $entry['include_filetypes'] ) ? sanitize_text_field( (string) $entry['include_filetypes'] ) : '';
-						$mapping[] = array(
+						$mapping[]         = array(
 							'cdn_url'           => $cdn_url,
 							'include_dirs'      => $include_dirs,
 							'include_filetypes' => $include_filetypes,
@@ -1095,7 +1095,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					 * @since NEXT
 					 * @param array $mapping Sanitized mapping.
 					 */
-					$mapping = (array) apply_filters( 'wppo_cdn_mapping', $mapping );
+					$mapping                = (array) apply_filters( 'wppo_cdn_mapping', $mapping );
 					$sanitized[ $safe_key ] = $mapping;
 					continue;
 				}

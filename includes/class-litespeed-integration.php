@@ -1289,7 +1289,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * @return mixed Modified vary value.
 		 */
 		public static function filter_litespeed_vary( $vary ) {
-			$groups = self::get_vary_groups();
+			$groups  = self::get_vary_groups();
 			$has_any = $groups['role'] || $groups['guest'] || $groups['mobile'] || $groups['webp'];
 			if ( ! $has_any ) {
 				return $vary;
