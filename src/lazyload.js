@@ -433,6 +433,40 @@ let mutationObserver = null;
 const observedElements = new WeakSet();
 
 /**
+ * IntersectionObserver for lazy background-images.
+ * @type {IntersectionObserver|null}
+ */
+let backgroundObserver = null;
+
+/**
+ * Teardown lazyload observers and safety interval (pagehide/unload).
+ * Idempotent — safe to call multiple times. Exposed for tests/SPA.
+ * @since NEXT
+ */
+const teardownLazyload = () => {
+	if ( window.wppoSafetyScanId ) {
+		clearInterval( window.wppoSafetyScanId );
+		window.wppoSafetyScanId = null;
+	}
+	if ( mutationObserver ) {
+		mutationObserver.disconnect();
+		mutationObserver = null;
+	}
+	if ( globalObserver ) {
+		globalObserver.disconnect();
+		globalObserver = null;
+	}
+	if ( backgroundObserver ) {
+		backgroundObserver.disconnect();
+		backgroundObserver = null;
+	}
+};
+
+window.wppoLazyloadTeardown = teardownLazyload;
+window.addEventListener( 'pagehide', teardownLazyload );
+window.addEventListener( 'beforeunload', teardownLazyload );
+
+/**
  * Apply placeholder styling (dominant color background / LQIP blur) before
  * the full image source is assigned. Called from both the IntersectionObserver
  * and scroll-fallback paths.
@@ -520,6 +554,10 @@ const checkCleanup = () => {
 		if ( globalObserver ) {
 			globalObserver.disconnect();
 			globalObserver = null;
+		}
+		if ( backgroundObserver ) {
+			backgroundObserver.disconnect();
+			backgroundObserver = null;
 		}
 	}
 };
@@ -996,7 +1034,7 @@ const loadBackgrounds = () => {
 		return;
 	}
 
-	const backgroundObserver = new IntersectionObserver(
+	backgroundObserver = new IntersectionObserver(
 		( entries ) => {
 			entries.forEach( ( entry ) => {
 				if ( entry.isIntersecting ) {

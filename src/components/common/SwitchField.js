@@ -47,14 +47,16 @@ const SwitchField = ( {
 					) }
 				</div>
 			) }
-			<ToggleControl
-				__nextHasNoMarginBottom
-				checked={ checked }
-				onChange={ handleToggle }
-				label={ label }
-				hideLabelFromVision={ true }
-				disabled={ disabled }
-			/>
+			<span role="switch" aria-checked={ checked }>
+				<ToggleControl
+					__nextHasNoMarginBottom
+					checked={ checked }
+					onChange={ handleToggle }
+					label={ label }
+					hideLabelFromVision={ true }
+					disabled={ disabled }
+				/>
+			</span>
 		</div>
 	);
 };

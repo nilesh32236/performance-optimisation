@@ -375,10 +375,14 @@ const App = () => {
 					'GET',
 					ccssController.signal
 				);
-				if ( ! ccssController.signal.aborted && res.success ) {
+				if ( ccssController.signal.aborted ) {
+					hasFetchedCcss.current = false;
+					return;
+				}
+				if ( res.success ) {
 					setCcssStatus( res.data );
 					setCcssError( false );
-				} else if ( ! ccssController.signal.aborted ) {
+				} else {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
 				}
@@ -386,12 +390,6 @@ const App = () => {
 				if ( ! ccssController.signal.aborted ) {
 					hasFetchedCcss.current = false;
 					setCcssError( true );
-				}
-			} finally {
-				// Reset the refresh trigger so the guard re-trues and the
-				// status is not re-fetched on every subsequent tab switch.
-				if ( ! ccssController.signal.aborted ) {
-					setCcssRefreshTrigger( 0 );
 				}
 			}
 		};
@@ -402,13 +400,7 @@ const App = () => {
 			rulesController.abort();
 			ccssController.abort();
 		};
-	}, [
-		activeTab,
-		recentActivities.length,
-		serverRules,
-		rulesRetryTrigger,
-		ccssRefreshTrigger,
-	] );
+	}, [ activeTab, rulesRetryTrigger, ccssRefreshTrigger ] );
 
 	useEffect( () => {
 		setTransition( true );
