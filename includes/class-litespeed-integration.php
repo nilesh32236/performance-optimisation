@@ -749,6 +749,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// Phase 3 — LS-native header emission (LS-301) + vary bridge (LS-303).
 			add_action( 'send_headers', array( self::class, 'handle_send_headers' ), 0 );
 			add_filter( 'litespeed_vary', array( self::class, 'filter_litespeed_vary' ), 10, 1 );
+
+			// LS-320 — _lscache_vary cookie seeding for LSWS vary handshake.
+			add_action( 'init', array( self::class, 'seed_lscache_vary_cookie' ), 1 );
+			add_action( 'wp_logout', array( self::class, 'clear_lscache_vary_cookie' ) );
 		}
 
 		/**
@@ -990,10 +994,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$options = get_option( 'wppo_settings', array() );
 			$groups  = $options['litespeed_integration']['varyGroups'] ?? array();
 			$active  = array(
-				'role'   => self::should_vary_by_role(),
-				'guest'  => ! empty( $groups['guest'] ),
-				'mobile' => ! empty( $groups['mobile'] ),
-				'webp'   => ! empty( $groups['webp'] ),
+				'role'      => self::should_vary_by_role(),
+				'guest'     => ! empty( $groups['guest'] ),
+				'mobile'    => ! empty( $groups['mobile'] ),
+				'webp'      => ! empty( $groups['webp'] ),
+				'commenter' => ! empty( $groups['commenter'] ),
+				'postpass'  => ! empty( $groups['postpass'] ),
 			);
 			/**
 			 * Filter active vary groups.
@@ -1003,11 +1009,157 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			 */
 			$active = (array) apply_filters( 'wppo_litespeed_vary_groups', $active );
 			return array(
-				'role'   => (bool) ( $active['role'] ?? false ),
-				'guest'  => (bool) ( $active['guest'] ?? false ),
-				'mobile' => (bool) ( $active['mobile'] ?? false ),
-				'webp'   => (bool) ( $active['webp'] ?? false ),
+				'role'      => (bool) ( $active['role'] ?? false ),
+				'guest'     => (bool) ( $active['guest'] ?? false ),
+				'mobile'    => (bool) ( $active['mobile'] ?? false ),
+				'webp'      => (bool) ( $active['webp'] ?? false ),
+				'commenter' => (bool) ( $active['commenter'] ?? false ),
+				'postpass'  => (bool) ( $active['postpass'] ?? false ),
 			);
+		}
+
+		/**
+		 * Whether current request has a commenter cookie (LS-320).
+		 *
+		 * Mirrors LSCWP vary.cls.php:261 check_commenter.
+		 *
+		 * @since NEXT
+		 * @return bool True if commenter cookie present.
+		 */
+		public static function is_commenter_request(): bool {
+			if ( empty( $_COOKIE ) ) {
+				return false;
+			}
+			foreach ( $_COOKIE as $key => $value ) {
+				if ( is_string( $key ) && 0 === strpos( $key, 'comment_author_' ) ) {
+					return '' !== $value;
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * Whether current request has a post password cookie (LS-320).
+		 *
+		 * Mirrors LSCWP vary.cls.php:707 post_password handling.
+		 *
+		 * @since NEXT
+		 * @return bool True if postpass cookie present.
+		 */
+		public static function is_postpass_request(): bool {
+			if ( empty( $_COOKIE ) ) {
+				return false;
+			}
+			$hash = defined( 'COOKIEHASH' ) ? COOKIEHASH : md5( wp_parse_url( home_url(), PHP_URL_HOST ) ?? '' );
+			foreach ( $_COOKIE as $key => $value ) {
+				if ( is_string( $key ) && 0 === strpos( $key, 'wp-postpass_' . $hash ) ) {
+					return '' !== $value;
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * Whether current request should be treated as private/nocache (LS-320).
+		 *
+		 * True when commenter/postpass cookies present AND corresponding vary
+		 * group enabled. Mirrors LSCWP vary.cls.php:261,707.
+		 *
+		 * @since NEXT
+		 * @return bool True if request should be private/nocache.
+		 */
+		public static function is_private_request(): bool {
+			$groups = self::get_vary_groups();
+			if ( $groups['commenter'] && self::is_commenter_request() ) {
+				return true;
+			}
+			if ( $groups['postpass'] && self::is_postpass_request() ) {
+				return true;
+			}
+			return false;
+		}
+
+		/**
+		 * Seed _lscache_vary cookie for LSWS vary handshake (LS-320).
+		 *
+		 * Called on init priority 1 when is_litespeed && is_wppo_cache_owner.
+		 * Builds deterministic hash from active vary groups.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function seed_lscache_vary_cookie(): void {
+			if ( ! self::is_litespeed() || ! self::is_wppo_cache_owner() ) {
+				return;
+			}
+			$groups = self::get_vary_groups();
+			if ( ! $groups['role'] && ! $groups['guest'] && ! $groups['mobile'] && ! $groups['webp'] ) {
+				// No active vary groups — clear stale cookie if present.
+				if ( isset( $_COOKIE['_lscache_vary'] ) ) {
+					setcookie( '_lscache_vary', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+				}
+				return;
+			}
+			$salt    = defined( 'LOGGED_IN_KEY' ) ? LOGGED_IN_KEY : '';
+			$payload = array(
+				'role'   => $groups['role'] ? ( is_user_logged_in() ? self::get_vary_role_value() : 'guest' ) : '',
+				'guest'  => $groups['guest'] ? '1' : '',
+				'mobile' => $groups['mobile'] && function_exists( 'wp_is_mobile' ) && wp_is_mobile() ? '1' : '',
+				'webp'   => $groups['webp'] && self::client_supports_webp() ? '1' : '',
+			);
+			$value   = substr( md5( $salt . wp_json_encode( $payload ) ), 0, 12 );
+			/**
+			 * Filter the _lscache_vary cookie value.
+			 *
+			 * @since NEXT
+			 * @param string $value 12-char hash.
+			 * @param array  $payload Active vary payload.
+			 */
+			$value   = (string) apply_filters( 'wppo_litespeed_lscache_vary_value', $value, $payload );
+			$current = isset( $_COOKIE['_lscache_vary'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['_lscache_vary'] ) ) : '';
+			if ( $current !== $value ) {
+				setcookie( '_lscache_vary', $value, time() + DAY_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+			}
+		}
+
+		/**
+		 * Get the vary role value — group 99 for admin (LSCWP parity).
+		 *
+		 * @since NEXT
+		 * @return string Role value (99 for admin, role hash otherwise).
+		 */
+		private static function get_vary_role_value(): string {
+			if ( is_multisite() && is_super_admin() ) {
+				return '99';
+			}
+			if ( is_admin() ) {
+				return '99';
+			}
+			$user = wp_get_current_user();
+			return Util::get_role_hash( $user );
+		}
+
+		/**
+		 * Whether the current client supports WebP images.
+		 *
+		 * @since NEXT
+		 * @return bool True if Accept header contains image/webp or image/avif.
+		 */
+		private static function client_supports_webp(): bool {
+			$accept = isset( $_SERVER['HTTP_ACCEPT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_ACCEPT'] ) ) : '';
+			return false !== strpos( $accept, 'image/webp' ) || false !== strpos( $accept, 'image/avif' );
+		}
+
+		/**
+		 * Clear _lscache_vary cookie on logout.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_lscache_vary_cookie(): void {
+			if ( isset( $_COOKIE['_lscache_vary'] ) ) {
+				setcookie( '_lscache_vary', '', time() - YEAR_IN_SECONDS, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true );
+			}
 		}
 
 		/**
@@ -1085,6 +1237,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// WPPO owner path.
 			if ( ! $is_cacheable ) {
 				self::send_litespeed_nocache( 'wppo not cacheable' );
+				return;
+			}
+
+			// LS-320: Commenter/postpass → private, no-cache (LSCWP vary.cls.php:261,707).
+			if ( self::is_private_request() ) {
+				self::send_litespeed_nocache( 'commenter or postpass cookie present' );
 				return;
 			}
 

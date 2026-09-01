@@ -208,6 +208,39 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 				$rules = (array) apply_filters( 'wppo_htaccess_nextgen_rules', $rules );
 			}
 
+			// LS-320: Cache-Vary bridge for mobile/webp vary groups.
+			$ls_active = class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed();
+			if ( $ls_active ) {
+				$groups = LiteSpeed_Integration::get_vary_groups();
+				if ( $groups['mobile'] || $groups['webp'] ) {
+					$cache_vary = array();
+					$rules[]    = '';
+					$rules[]    = '# WPPO LS-320 Cache-Vary bridge (mobile/webp)';
+					$rules[]    = '<IfModule mod_rewrite.c>';
+					$rules[]    = '    RewriteEngine On';
+					if ( $groups['mobile'] ) {
+						$rules[]      = '    # Mobile detection — set Cache-Vary env for LSWS';
+						$rules[]      = '    RewriteCond %{HTTP_USER_AGENT} "Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" [NC]';
+						$rules[]      = '    RewriteRule .* - [E=Cache-Vary:ismobile]';
+						$cache_vary[] = 'ismobile';
+					}
+					if ( $groups['webp'] ) {
+						$rules[]      = '    # WebP detection — set Cache-Vary env for LSWS';
+						$rules[]      = '    RewriteCond %{HTTP:Accept} image/webp [NC]';
+						$rules[]      = '    RewriteRule .* - [E=Cache-Vary:webp]';
+						$cache_vary[] = 'webp';
+					}
+					$rules[] = '</IfModule>';
+					/**
+					 * Filter Cache-Vary htaccess rules.
+					 *
+					 * @since NEXT
+					 * @param array $cache_vary Active Cache-Vary groups.
+					 */
+					$rules = (array) apply_filters( 'wppo_htaccess_cache_vary_rules', $rules, $cache_vary );
+				}
+			}
+
 			/**
 			 * Filter htaccess rules.
 			 *
