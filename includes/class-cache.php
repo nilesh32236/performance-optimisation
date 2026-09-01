@@ -1387,6 +1387,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.2.0
 		 */
 		public function maybe_apply_cdn( string $buffer ): string {
+			// LS-410: LSCWP parity — respect LITESPEED_BYPASS_CDN constant (cdn.cls.php:106).
+			if ( defined( 'LITESPEED_BYPASS_CDN' ) && LITESPEED_BYPASS_CDN ) {
+				return $buffer;
+			}
+
 			// LS-404: CDN mapping awareness — gate when litespeed_can_cdn === false (LS mapping active).
 			// Gate via wppo_litespeed_can_cdn and LiteSpeed_Integration::can_apply_cdn().
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
@@ -1430,7 +1435,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			while ( $tags->next_tag() ) {
 				$tag_name = strtolower( $tags->get_tag() );
-				if ( ! in_array( $tag_name, array( 'img', 'script', 'link', 'source', 'video' ), true ) ) {
+				// LS-410: expanded tag set for LSCWP parity — audio/track/picture added.
+				if ( ! in_array( $tag_name, array( 'img', 'script', 'link', 'source', 'video', 'audio', 'track', 'picture' ), true ) ) {
+					// Handle meta[content] for og:image separately.
+					if ( 'meta' === $tag_name ) {
+						$property = $tags->get_attribute( 'property' ) ?? $tags->get_attribute( 'name' ) ?? '';
+						$content  = $tags->get_attribute( 'content' );
+						if ( $content && 'og:image' === $property && preg_match( $site_url_regex, $content ) ) {
+							$cdn = $this->find_cdn_for_url( $content, $mappings );
+							if ( null !== $cdn ) {
+								$tags->set_attribute( 'content', str_replace( $site_url, $cdn, $content ) );
+							}
+						}
+					}
 					continue;
 				}
 
@@ -1473,7 +1490,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 			}
 
-			return $tags->get_updated_html();
+			$buffer = $tags->get_updated_html();
+
+			// LS-410: Inline url() rewrite — mirrors LSCWP cdn.cls.php:394-440.
+			// Handles url("//site/wp-content/…") and url("/wp-content/…") in inline styles.
+			$site_host = wp_parse_url( $site_url, PHP_URL_HOST ) ?? '';
+			if ( '' !== $site_host ) {
+				$buffer = preg_replace_callback(
+					'#url\(\s*["\']?\s*(?:(?:https?:)?//)' . preg_quote( $site_host, '#' ) . '(/[^"\')\s]+)["\']?\s*\)#',
+					function ( $matches ) use ( $mappings, $site_url ) {
+						$asset_url = $site_url . $matches[1];
+						$cdn       = $this->find_cdn_for_url( $asset_url, $mappings );
+						if ( null !== $cdn ) {
+							$cdn_asset = str_replace( $site_url, $cdn, $asset_url );
+							return 'url(' . $cdn_asset . ')';
+						}
+						return $matches[0];
+					},
+					$buffer
+				);
+			}
+
+			/**
+			 * Filter the CDN-rewritten buffer before return.
+			 *
+			 * @since NEXT
+			 * @param string $buffer CDN-rewritten HTML buffer.
+			 */
+			return (string) apply_filters( 'wppo_cdn_buffer', $buffer );
 		}
 
 		/**
