@@ -487,6 +487,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-edge-purger.php' ) ) {
 				require_once WPPO_PLUGIN_PATH . 'includes/class-edge-purger.php';
 			}
+			if ( file_exists( WPPO_PLUGIN_PATH . 'includes/class-cdn.php' ) ) {
+				require_once WPPO_PLUGIN_PATH . 'includes/class-cdn.php';
+			}
 
 			if ( defined( 'WP_CLI' ) && WP_CLI ) {
 				\WP_CLI::add_command( 'wppo', 'PerformanceOptimise\Inc\WPPO_CLI_Command' );
@@ -645,6 +648,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// N2 Edge HTML adapter — purge alongside CDN_Purger (stale-while-revalidate).
 			if ( class_exists( 'PerformanceOptimise\Inc\Edge_Purger' ) ) {
 				add_action( 'wppo_after_cache_clear', array( 'PerformanceOptimise\Inc\Edge_Purger', 'purge_all' ), 20, 2 );
+			}
+
+			// LS-410 CDN typed hooks + buffer cooperation (LSCWP cdn.cls.php:195,199,203 + litespeed_buffer_finalize).
+			if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
+				add_filter( 'wp_get_attachment_url', array( 'PerformanceOptimise\Inc\CDN', 'rewrite_url' ), 20, 2 );
+				add_filter( 'wp_calculate_image_srcset', array( 'PerformanceOptimise\Inc\CDN', 'rewrite_srcset' ), 20, 1 );
+				add_filter( 'style_loader_src', array( 'PerformanceOptimise\Inc\CDN', 'rewrite_url' ), 20, 2 );
+				add_filter( 'script_loader_src', array( 'PerformanceOptimise\Inc\CDN', 'rewrite_url' ), 20, 2 );
+				add_filter( 'litespeed_buffer_finalize', array( 'PerformanceOptimise\Inc\CDN', 'rewrite_buffer' ), 10, 1 );
 			}
 
 			// LLMs.txt (N8) — rewrite + template_redirect fallback + Link headers.

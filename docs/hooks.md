@@ -297,12 +297,42 @@ Filters whether WPPO CDN rewriting is allowed. When `false`, `maybe_apply_cdn()`
 ---
 
 ### `wppo_cdn_mapping`
-Filters CDN mapping array (one-to-many parity with LSCWP `cdn.cls.php:48`). Each entry `cdn_url` sanitized via `esc_url_raw`, capped at 5. @since NEXT.
+Filters CDN mapping array (one-to-many parity with LSCWP `cdn.cls.php:48`). Each entry keys `cdn_url|ori|ori_dir|include_dirs|include_filetypes|cdn_attr|cdn_urls`, capped at 5 (filter `wppo_cdn_mapping_max`). @since NEXT.
 
 ---
 
 ### `wppo_cdn_url`
 Legacy alias for single CDN URL migration (`cdnURL` → `cdnMapping`). @since NEXT.
+
+---
+
+### `wppo_cdn_mapping_hosts`
+Alias for CDN mapping hosts (round-robin `cdn_urls`/`cdns` per entry). @since NEXT.
+
+---
+
+### `wppo_cdn_mapping_entry`
+Filters single CDN mapping entry post-sanitize. @since NEXT.
+
+---
+
+### `wppo_cdn_mapping_max`
+Filters max CDN mappings (default 5). @since NEXT.
+
+---
+
+### `wppo_cdn_auto_filetypes`
+Filters auto filetypes when `include_filetypes` empty. @since NEXT.
+
+---
+
+### `wppo_cdn_url_for_asset`
+Filters CDN URL chosen for an asset (deterministic `crc32` round-robin when `cdn_urls` >1). @since NEXT.
+
+---
+
+### `wppo_cdn_buffer`
+Filters CDN buffer after tag + inline `url()` rewrite (cooperates with `litespeed_buffer_finalize`). Constant `LITESPEED_BYPASS_CDN` bypasses all CDN rewrites. @since NEXT.
 
 ---
 
