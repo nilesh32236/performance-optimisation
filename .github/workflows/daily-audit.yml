@@ -165,7 +165,7 @@ jobs:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           git_user_name: nilesh32236
           git_user_email: nilesh32236@gmail.com
-          model: ${{ vars.OPENCODE_MODEL || 'opencode/deepseek-v4-flash-free' }}
+          model: ${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}
           audit_create_issues: true
           # audit_auto_fix labels each created issue with autofix-trigger so that
           # wppo-ai-review.yml picks it up automatically — no manual triggering needed.
