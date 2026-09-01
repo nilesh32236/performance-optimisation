@@ -106,3 +106,6 @@
 
 **Learning:** When normalizing URLs or performing string manipulation inside a loop (like iterating through `$exclude_urls` in `Util::is_url_excluded`), using `preg_replace()` for simple scheme stripping adds significant overhead, especially since the same target string may be redundantly normalized for every exclusion rule.
 **Action:** Replace `preg_replace( '#^https?://#i', '', $str )` with a faster native closure using `stripos()` and `substr()`. Additionally, hoist the normalization of any loop-invariant strings out of the `foreach` to execute exactly once.
+## 2026-09-01 - Memoize URL Exclusion Parsing
+**Learning:** High-frequency functions like `Util::is_url_excluded` process the exact same array of exclusion rules across many iterations (e.g., during frontend output buffering or page cron processing). Iterating over and normalizing these rules per URL incurs redundant processing overhead.
+**Action:** Memoize rule normalization (pre-calculating prefix and exact match boundaries) in a static variable keyed by `md5(serialize($exclude_urls))` within the utility method. Transform O(n) regex/string processing operations over rules into O(1) hash map lookups for exact matches.

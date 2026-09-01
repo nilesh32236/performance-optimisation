@@ -671,11 +671,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		public static function is_url_excluded( string $url, array $exclude_urls ): bool {
 			$url = rtrim( $url, '/' );
 
-			// Resolve the home base once per request.
-			$home_base = self::cached_home_url();
-
-			// Replace regex scheme removal with fast string operations and evaluate the base URL once.
-			$strip_scheme   = static function ( $u ) {
+			$strip_scheme = static function ( $u ) {
 				if ( 0 === stripos( $u, 'https://' ) ) {
 					return substr( $u, 8 );
 				}
@@ -684,35 +680,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				}
 				return $u;
 			};
-			$normalized_url = $strip_scheme( $url );
 
-			foreach ( $exclude_urls as $exclude_url ) {
-				$exclude_url = rtrim( $exclude_url, '/' );
+			static $cache = array();
+			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize
+			$cache_key = md5( serialize( $exclude_urls ) ); // We use serialize since it's faster and guaranteed safe for arrays of strings internally generated.
 
-				// Skip empty and whitespace-only rules.
-				if ( '' === $exclude_url ) {
-					continue;
-				}
+			if ( ! isset( $cache[ $cache_key ] ) ) {
+				$home_base = self::cached_home_url();
+				$exact     = array();
+				$prefix    = array();
 
-				if ( 0 !== strpos( $exclude_url, 'http' ) ) {
-					$exclude_url = $home_base . '/' . ltrim( $exclude_url, '/' );
-				}
+				foreach ( $exclude_urls as $exclude_url ) {
+					$exclude_url = rtrim( $exclude_url, '/' );
 
-				// Normalize schemes so http and https rules match interchangeably.
-				$normalized_rule = $strip_scheme( $exclude_url );
+					if ( '' === $exclude_url ) {
+						continue;
+					}
 
-				if ( false !== strpos( $normalized_rule, '(.*)' ) ) {
-					// Normalize the prefix with a trailing slash so the base path
-					// itself (no trailing slash) and all descendants match, while
-					// similar-but-distinct paths (e.g. /cartoon) do not.
-					$exclude_prefix = rtrim( str_replace( '(.*)', '', $normalized_rule ), '/' ) . '/';
+					if ( 0 !== strpos( $exclude_url, 'http' ) ) {
+						$exclude_url = $home_base . '/' . ltrim( $exclude_url, '/' );
+					}
 
-					if ( 0 === strpos( $normalized_url . '/', $exclude_prefix ) ) {
-						return true;
+					$normalized_rule = $strip_scheme( $exclude_url );
+
+					if ( false !== strpos( $normalized_rule, '(.*)' ) ) {
+						$exclude_prefix = rtrim( str_replace( '(.*)', '', $normalized_rule ), '/' ) . '/';
+						$prefix[]       = $exclude_prefix;
+					} else {
+						$exact[ $normalized_rule ] = true;
 					}
 				}
 
-				if ( $normalized_url === $normalized_rule ) {
+				$cache[ $cache_key ] = array(
+					'exact'  => $exact,
+					'prefix' => $prefix,
+				);
+			}
+
+			$normalized_url = $strip_scheme( $url );
+
+			if ( isset( $cache[ $cache_key ]['exact'][ $normalized_url ] ) ) {
+				return true;
+			}
+
+			foreach ( $cache[ $cache_key ]['prefix'] as $exclude_prefix ) {
+				if ( 0 === strpos( $normalized_url . '/', $exclude_prefix ) ) {
 					return true;
 				}
 			}
