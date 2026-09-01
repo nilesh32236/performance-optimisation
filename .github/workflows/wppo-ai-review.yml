@@ -229,6 +229,8 @@ jobs:
           git_user_name: nilesh32236
           git_user_email: nilesh32236@gmail.com
           model: ${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}
+          review_model: ${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}
+          fix_model: ${{ vars.OPENCODE_MODEL || 'opencode-go/muse-spark-1.2-contributor' }}
           max_files_per_batch: 3
           enable_mcp: false
           include_strengths: true
