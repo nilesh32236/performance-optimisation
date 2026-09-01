@@ -228,6 +228,170 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 					),
 				),
 				array(
+					'id'   => 'performance-optimisation/get-system-info',
+					'args' => array(
+						'label'               => __( 'Get System Info', 'performance-optimisation' ),
+						'description'         => __( 'Get PHP, database, WordPress, server, and cache information.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(),
+						),
+						'output_schema'       => array(
+							'type' => 'object',
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_get_system_info' ),
+						'meta'                => array(
+							'readonly'     => true,
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/run-performance-scan',
+					'args' => array(
+						'label'               => __( 'Run Performance Scan', 'performance-optimisation' ),
+						'description'         => __( 'Run a local performance telemetry scan for a URL.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'url' => array(
+									'type'        => 'string',
+									'format'      => 'uri',
+									'description' => __( 'URL to scan.', 'performance-optimisation' ),
+								),
+							),
+						),
+						'output_schema'       => array(
+							'type' => 'object',
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_run_performance_scan' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/queue-pagespeed-scan',
+					'args' => array(
+						'label'               => __( 'Queue PageSpeed Scan', 'performance-optimisation' ),
+						'description'         => __( 'Queue a Google PageSpeed Insights scan for a URL.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'url'      => array(
+									'type'        => 'string',
+									'format'      => 'uri',
+									'description' => __( 'URL to scan.', 'performance-optimisation' ),
+								),
+								'strategy' => array(
+									'type'        => 'string',
+									'enum'        => array( 'mobile', 'desktop' ),
+									'description' => __( 'PageSpeed strategy.', 'performance-optimisation' ),
+								),
+							),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'queued' => array( 'type' => 'boolean' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_queue_pagespeed_scan' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/get-pagespeed-results',
+					'args' => array(
+						'label'               => __( 'Get PageSpeed Results', 'performance-optimisation' ),
+						'description'         => __( 'Get stored PageSpeed Insights results for a URL.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'url'      => array(
+									'type'        => 'string',
+									'format'      => 'uri',
+									'description' => __( 'URL to get results for.', 'performance-optimisation' ),
+								),
+								'strategy' => array(
+									'type'        => 'string',
+									'enum'        => array( 'mobile', 'desktop' ),
+									'description' => __( 'PageSpeed strategy.', 'performance-optimisation' ),
+								),
+							),
+						),
+						'output_schema'       => array(
+							'type' => 'object',
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_get_pagespeed_results' ),
+						'meta'                => array(
+							'readonly'     => true,
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/get-suggestions',
+					'args' => array(
+						'label'               => __( 'Get Suggestions', 'performance-optimisation' ),
+						'description'         => __( 'Get performance improvement suggestions for a URL.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'url' => array(
+									'type'        => 'string',
+									'format'      => 'uri',
+									'description' => __( 'URL to get suggestions for.', 'performance-optimisation' ),
+								),
+							),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'suggestions' => array( 'type' => 'array' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_get_suggestions' ),
+						'meta'                => array(
+							'readonly'     => true,
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/get-database-cleanup-counts',
+					'args' => array(
+						'label'               => __( 'Get Database Cleanup Counts', 'performance-optimisation' ),
+						'description'         => __( 'Get the number of items that can be cleaned for each type.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(),
+						),
+						'output_schema'       => array(
+							'type' => 'object',
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_get_database_cleanup_counts' ),
+						'meta'                => array(
+							'readonly'     => true,
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
 					'id'   => 'performance-optimisation/optimise-image',
 					'args' => array(
 						'label'               => __( 'Optimise Image', 'performance-optimisation' ),
@@ -257,6 +421,96 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 						'permission_callback' => array( __CLASS__, 'permission_check' ),
 						'execute_callback'    => array( __CLASS__, 'execute_optimise_image' ),
 						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/get-image-job-status',
+					'args' => array(
+						'label'               => __( 'Get Image Job Status', 'performance-optimisation' ),
+						'description'         => __( 'Get the status of background image optimisation jobs.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(),
+						),
+						'output_schema'       => array(
+							'type' => 'object',
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_get_image_job_status' ),
+						'meta'                => array(
+							'readonly'     => true,
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/get-page-assets',
+					'args' => array(
+						'label'               => __( 'Get Page Assets', 'performance-optimisation' ),
+						'description'         => __( 'Get captured frontend assets (scripts/styles) for a post.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'post_id' => array(
+									'type'        => 'integer',
+									'description' => __( 'Post ID.', 'performance-optimisation' ),
+								),
+							),
+							'required'   => array( 'post_id' ),
+						),
+						'output_schema'       => array(
+							'type' => 'object',
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_get_page_assets' ),
+						'meta'                => array(
+							'readonly'     => true,
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/get-autoloaded-options',
+					'args' => array(
+						'label'               => __( 'Get Autoloaded Options', 'performance-optimisation' ),
+						'description'         => __( 'Get the largest autoloaded options for bloat auditing.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(),
+						),
+						'output_schema'       => array(
+							'type' => 'object',
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_get_autoloaded_options' ),
+						'meta'                => array(
+							'readonly'     => true,
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'performance-optimisation/get-rum-data',
+					'args' => array(
+						'label'               => __( 'Get RUM Data', 'performance-optimisation' ),
+						'description'         => __( 'Get aggregated real-user Web Vitals data.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(),
+						),
+						'output_schema'       => array(
+							'type' => 'object',
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_get_rum_data' ),
+						'meta'                => array(
+							'readonly'     => true,
 							'show_in_rest' => true,
 						),
 					),
@@ -477,6 +731,186 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				return array( 'cleaned' => 0 );
 			}
 			return array( 'cleaned' => (int) $result );
+		}
+
+		/**
+		 * Execute callback: Get System Info (operational).
+		 *
+		 * Delegates to System_Info::get_all().
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Unused input data.
+		 * @return array System information.
+		 */
+		public static function execute_get_system_info( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return System_Info::get_all();
+		}
+
+		/**
+		 * Execute callback: Run Performance Scan (operational).
+		 *
+		 * Delegates to Telemetry::scan().
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (url).
+		 * @return array Scan results or error.
+		 */
+		public static function execute_run_performance_scan( array $input ): array {
+			$url    = isset( $input['url'] ) ? esc_url_raw( $input['url'] ) : Util::cached_home_url( '/' );
+			$result = Telemetry::scan( $url, 'manual', false );
+			if ( is_wp_error( $result ) ) {
+				return array( 'error' => $result->get_error_message() );
+			}
+			return $result;
+		}
+
+		/**
+		 * Execute callback: Queue PageSpeed Scan (operational).
+		 *
+		 * Delegates to Pagespeed::queue_scan().
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (url, strategy).
+		 * @return array{queued: bool}
+		 */
+		public static function execute_queue_pagespeed_scan( array $input ): array {
+			$url    = isset( $input['url'] ) ? esc_url_raw( $input['url'] ) : Util::cached_home_url( '/' );
+			$format = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
+			$job_id = Pagespeed::queue_scan( $url, $format );
+			return array( 'queued' => $job_id > 0 );
+		}
+
+		/**
+		 * Execute callback: Get PageSpeed Results (operational).
+		 *
+		 * Delegates to Pagespeed::get_results().
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (url, strategy).
+		 * @return array PageSpeed results.
+		 */
+		public static function execute_get_pagespeed_results( array $input ): array {
+			$url     = isset( $input['url'] ) ? esc_url_raw( $input['url'] ) : Util::cached_home_url( '/' );
+			$format  = isset( $input['strategy'] ) ? sanitize_text_field( $input['strategy'] ) : 'mobile';
+			$results = Pagespeed::get_results( $url, $format );
+			return is_array( $results ) ? $results : array();
+		}
+
+		/**
+		 * Execute callback: Get Suggestions (operational).
+		 *
+		 * Delegates to Suggestion_Engine::from_telemetry() using cached scan data.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (url).
+		 * @return array{suggestions: array} Suggestions.
+		 */
+		public static function execute_get_suggestions( array $input ): array {
+			$url           = isset( $input['url'] ) ? esc_url_raw( $input['url'] ) : Util::cached_home_url( '/' );
+			$transient_key = Util::transient_key( 'wppo_audit_' . md5( $url ) );
+			$telemetry     = get_transient( $transient_key );
+			if ( false === $telemetry ) {
+				return array( 'suggestions' => array() );
+			}
+			$suggestions = Suggestion_Engine::from_telemetry( $telemetry );
+			if ( class_exists( 'PerformanceOptimise\\Inc\\AI_Adaptive' ) && AI_Adaptive::is_enabled() ) {
+				$ai = Suggestion_Engine::from_ai_adaptive();
+				if ( ! empty( $ai ) ) {
+					$suggestions = array_merge( $suggestions, $ai );
+				}
+			}
+			return array( 'suggestions' => $suggestions );
+		}
+
+		/**
+		 * Execute callback: Get Database Cleanup Counts (operational).
+		 *
+		 * Delegates to Database_Cleanup::get_cleanup_counts().
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Unused input data.
+		 * @return array Cleanup counts by type.
+		 */
+		public static function execute_get_database_cleanup_counts( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return Database_Cleanup::get_cleanup_counts();
+		}
+
+		/**
+		 * Execute callback: Get Image Job Status (operational).
+		 *
+		 * Delegates to Img_Converter::get_img_info().
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Unused input data.
+		 * @return array Image job status.
+		 */
+		public static function execute_get_image_job_status( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return Img_Converter::get_img_info();
+		}
+
+		/**
+		 * Execute callback: Get Page Assets (operational).
+		 *
+		 * Delegates to Asset_Manager::get_page_assets().
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (post_id).
+		 * @return array Page assets or empty.
+		 */
+		public static function execute_get_page_assets( array $input ): array {
+			$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+			if ( $post_id <= 0 ) {
+				return array(
+					'scripts' => array(),
+					'styles'  => array(),
+				);
+			}
+			$assets = Asset_Manager::get_page_assets( $post_id );
+			return false !== $assets ? $assets : array(
+				'scripts' => array(),
+				'styles'  => array(),
+			);
+		}
+
+		/**
+		 * Execute callback: Get Autoloaded Options (operational).
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Unused input data.
+		 * @return array Autoloaded options data.
+		 */
+		public static function execute_get_autoloaded_options( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			global $wpdb;
+			$autoloaded    = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE autoload = 'yes'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Auditing query, not cached.
+			$autoload_size = (int) $wpdb->get_var( "SELECT SUM(LENGTH(option_value)) FROM {$wpdb->options} WHERE autoload = 'yes'" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Auditing query, not cached.
+			return array(
+				'autoloaded_count'   => $autoloaded,
+				'autoloaded_size'    => $autoload_size,
+				'autoloaded_size_mb' => round( $autoload_size / ( 1024 * 1024 ), 2 ),
+			);
+		}
+
+		/**
+		 * Execute callback: Get RUM Data (operational).
+		 *
+		 * Delegates to RUM::get_data().
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Unused input data.
+		 * @return array RUM data.
+		 */
+		public static function execute_get_rum_data( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			return RUM::get_data();
 		}
 
 		/**
