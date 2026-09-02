@@ -1788,16 +1788,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						);
 					}
 
-					$lazy_args = array(
+					// WP 6.9+ uses native fetchpriority/in_footer via Script Loader / Script Modules.
+					// Guard with version_compare + function_exists so WP <6.9 keeps the legacy path.
+					$wp_version    = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
+					$is_wp69_plus  = version_compare( $wp_version, '6.9-alpha', '>=' );
+					$has_mod_api   = function_exists( 'wp_enqueue_script_module' ) || function_exists( 'wp_register_script_module' );
+					$use_mod_api   = $is_wp69_plus && $has_mod_api;
+					$lazy_mod_args = array(
 						'in_footer'     => true,
 						'fetchpriority' => 'low',
 					);
 
-					if ( function_exists( 'wp_enqueue_script_module' ) ) {
-						// WP 6.5+: load lazyload as a native script module. Modules are always
-						// deferred (non-render-blocking); the in_footer/fetchpriority args are
-						// honoured from WP 6.9 and harmlessly ignored on earlier 6.x releases.
-						wp_enqueue_script_module( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
+					if ( $use_mod_api ) {
+						// WP 6.9+: load lazyload as a native script module with fetchpriority low
+						// and in_footer true. Modules are always deferred (non-render-blocking)
+						// and the native args are rendered by core (Trac #61734, #63486).
+						// @since NEXT.
+						if ( function_exists( 'wp_enqueue_script_module' ) ) {
+							wp_enqueue_script_module( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_mod_args );
+						} elseif ( function_exists( 'wp_register_script_module' ) ) {
+							wp_register_script_module( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION );
+							wp_enqueue_script_module( 'wppo-lazyload' );
+						}
 						add_filter(
 							'script_module_data_wppo-lazyload',
 							static function ( array $data ) use ( $lazy_config ) {
@@ -1805,8 +1817,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 							}
 						);
 					} else {
-						// WP < 6.5 fallback: classic script enqueued with inline config injection.
-						wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_args );
+						// WP <6.9 fallback: classic script enqueued with inline config injection.
+						// @since NEXT.
+						wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, true );
 
 						if ( $use_native_lazy ) {
 							wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
@@ -1822,12 +1835,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
-		 * Apply defer optimisations to script modules (WP 6.5+).
+		 * Apply defer optimisations to script modules (WP 6.9+).
 		 *
 		 * Script modules are already deferred by the browser; the remaining wins
 		 * are printing them in the footer and lowering their fetch priority so
 		 * critical CSS/images win the network queue. Uses the core API when
-		 * available (WP 6.9+) and is a no-op on older core.
+		 * available (WP 6.9+ native fetchpriority/in_footer via
+		 * WP_Script_Modules::set_in_footer / set_fetchpriority or
+		 * wp_register_script_module with fetchpriority/in_footer args) and is a
+		 * no-op on older core. Guarded by version_compare and
+		 * function_exists/class_exists for backward compat.
 		 *
 		 * @since NEXT
 		 * @return void
@@ -1837,6 +1854,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return;
 			}
 			if ( ! $this->should_optimise_for_logged_in() ) {
+				return;
+			}
+			// Prefer wp_script_modules() when available; spec also guards with
+			// class_exists( WP_Script_Modules ) / function_exists( wp_register_script_module ).
+			// Fetchpriority/in_footer are WP 6.9+ native (Trac #61734, #63486) but method_exists
+			// guards keep <6.9 compat, and the harmless version gate documents the intent.
+			// @since NEXT.
+			if ( ! function_exists( 'wp_script_modules' ) && ! class_exists( 'WP_Script_Modules' ) && ! function_exists( 'wp_register_script_module' ) ) {
 				return;
 			}
 			if ( ! function_exists( 'wp_script_modules' ) ) {
