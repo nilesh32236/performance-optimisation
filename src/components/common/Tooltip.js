@@ -22,17 +22,39 @@ const Tooltip = ( { content, children } ) => {
 		return children;
 	}
 
+	const hasChildren = Boolean( children );
+
+	const handleKeyDown = ( e ) => {
+		if ( e.key === 'Escape' || e.key === 'Esc' ) {
+			setVisible( false );
+		}
+	};
+
+	const handleBlur = ( e ) => {
+		// Avoid flicker when focus moves from wrapper to inner interactive control.
+		if ( e.relatedTarget && e.currentTarget.contains( e.relatedTarget ) ) {
+			return;
+		}
+		setVisible( false );
+	};
+
 	return (
+		// eslint-disable-next-line jsx-a11y/no-static-element-interactions
 		<span
 			className={ `wppo-tooltip-container${
-				visible ? ' wppo-tooltip-container--visible' : ''
-			}` }
-			tabIndex="0"
-			aria-describedby={ id }
+				hasChildren
+					? ' wppo-tooltip-container--wrap'
+					: ' wppo-tooltip-container--icon'
+			}${ visible ? ' wppo-tooltip-container--visible' : '' }` }
+			{ ...( hasChildren
+				? {}
+				: { tabIndex: '0', 'aria-describedby': id } ) }
 			onFocus={ () => setVisible( true ) }
-			onBlur={ () => setVisible( false ) }
+			onBlur={ handleBlur }
 			onMouseEnter={ () => setVisible( true ) }
 			onMouseLeave={ () => setVisible( false ) }
+			onKeyDown={ handleKeyDown }
+			onClick={ () => setVisible( ( v ) => ! v ) }
 		>
 			{ children || (
 				<FontAwesomeIcon
