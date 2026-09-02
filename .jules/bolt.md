@@ -109,3 +109,6 @@
 ## 2026-09-01 - Memoize URL Exclusion Parsing
 **Learning:** High-frequency functions like `Util::is_url_excluded` process the exact same array of exclusion rules across many iterations (e.g., during frontend output buffering or page cron processing). Iterating over and normalizing these rules per URL incurs redundant processing overhead.
 **Action:** Memoize rule normalization (pre-calculating prefix and exact match boundaries) in a static variable keyed by `md5(serialize($exclude_urls))` within the utility method. Transform O(n) regex/string processing operations over rules into O(1) hash map lookups for exact matches.
+## 2026-09-02 - [Welcome Panel Sequential API Calls]
+**Learning:** Dismissing a welcome panel feature executed two asynchronous requests (one to update settings, one to dismiss the panel) sequentially, creating unnecessary latency before the UI responded.
+**Action:** Identified and parallelized independent async calls using `Promise.all()` to improve responsiveness.
