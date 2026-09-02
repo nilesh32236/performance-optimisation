@@ -1002,6 +1002,33 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			$options = get_option( 'wppo_settings', array() );
 			$hours   = isset( $options['cache_settings']['cacheLife'] ) ? absint( $options['cache_settings']['cacheLife'] ) : 0;
 
+			// N10-T2 per-post-type TTL overrides (LS-only, file-cache constant untouched).
+			// Reads get_post_type($post_id) → overrides → global fallback. Non-singular → global.
+			$override_hours = null;
+			if ( null !== $context['post_id'] && null !== $context['post_type'] ) {
+				$is_singular_ctx = true;
+				if ( function_exists( 'is_singular' ) ) {
+					try {
+						$is_singular_ctx = (bool) is_singular();
+					} catch ( \Throwable $e ) {
+						$is_singular_ctx = true;
+					}
+				}
+				if ( $is_singular_ctx ) {
+					$overrides = $options['cache_settings']['ttlOverrides'] ?? null;
+					if ( is_array( $overrides ) && isset( $overrides[ $context['post_type'] ] ) ) {
+						$candidate = absint( $overrides[ $context['post_type'] ] );
+						$allowed   = array( 0, 1, 6, 12, 24, 48, 168 );
+						if ( in_array( $candidate, $allowed, true ) ) {
+							$override_hours = $candidate;
+						}
+					}
+				}
+			}
+			if ( null !== $override_hours ) {
+				$hours = $override_hours;
+			}
+
 			if ( 0 === $hours ) {
 				$base_seconds = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
 			} else {

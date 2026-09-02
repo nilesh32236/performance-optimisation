@@ -94,6 +94,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 				'cache_settings'        => array(
 					'enableLoggedInCache' => false,
 					'loggedInCacheRoles'  => array(),
+					'enableCache'         => false,
+					'cacheLife'           => 0,
+					'ttlOverrides'        => array(),
 				),
 				'file_optimisation'     => array(
 					'enableServerRules'          => false,
@@ -1112,6 +1115,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					$raw                    = sanitize_text_field( (string) $value );
 					$mode                   = in_array( $raw, array( 'auto', 'wppo', 'litespeed', 'standalone' ), true ) ? $raw : 'auto';
 					$sanitized[ $safe_key ] = $mode;
+					continue;
+				}
+
+				// Cache TTL overrides — per-post-type hours allowlist (0/1/6/12/24/48/168), absint.
+				if ( 'ttlOverrides' === $safe_key && is_array( $value ) ) {
+					$allowed_hours = array( 0, 1, 6, 12, 24, 48, 168 );
+					$allowed_types = array( 'post', 'page', 'product' );
+					$overrides     = array();
+					foreach ( $value as $ptype => $hours ) {
+						$safe_ptype = preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $ptype );
+						if ( '' === $safe_ptype || ! in_array( $safe_ptype, $allowed_types, true ) ) {
+							continue;
+						}
+						if ( '' === $hours || null === $hours ) {
+							continue;
+						}
+						$int_hours = absint( $hours );
+						if ( ! in_array( $int_hours, $allowed_hours, true ) ) {
+							continue;
+						}
+						$overrides[ $safe_ptype ] = $int_hours;
+					}
+					/**
+					 * Filter sanitized TTL overrides.
+					 *
+					 * @since NEXT
+					 * @param array $overrides Sanitized overrides.
+					 */
+					$overrides              = (array) apply_filters( 'wppo_cache_ttl_overrides', $overrides );
+					$sanitized[ $safe_key ] = $overrides;
 					continue;
 				}
 
