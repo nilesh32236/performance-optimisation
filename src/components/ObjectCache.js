@@ -612,6 +612,7 @@ const ObjectCache = ( { options = {} } ) => {
 										className="wppo-input wppo-input--mono"
 										id="port"
 										type="number"
+										inputMode="numeric"
 										name="port"
 										value={ settings.port }
 										onChange={ handleChange( setSettings ) }
@@ -720,6 +721,7 @@ const ObjectCache = ( { options = {} } ) => {
 									className="wppo-input wppo-input--mono"
 									id="database"
 									type="number"
+									inputMode="numeric"
 									name="database"
 									value={ settings.database }
 									onChange={ handleChange( setSettings ) }

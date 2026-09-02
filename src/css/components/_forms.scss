@@ -203,9 +203,14 @@
 
 @include respond-to('md') {
 	.wppo-dashboard-view .wppo-input,
-	.wppo-dashboard-view .wppo-textarea,
-	.wppo-dashboard-view .wppo-select {
+	.wppo-dashboard-view .wppo-select,
+	.wppo-dashboard-view .wppo-textarea:not(.wppo-textarea--mono) {
 		min-height: 44px;
 		font-size: 16px !important; // prevent iOS zoom on focus
+	}
+
+	.wppo-dashboard-view .wppo-textarea--mono {
+		min-height: 44px;
+		font-size: 13px !important; // keep density for code lists
 	}
 }

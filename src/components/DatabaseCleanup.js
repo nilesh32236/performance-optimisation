@@ -414,6 +414,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								<input
 									className="wppo-input wppo-input--mono"
 									type="number"
+									inputMode="numeric"
 									id="dbRevMaxAge"
 									name="dbRevMaxAge"
 									min="0"
@@ -444,6 +445,7 @@ const DatabaseCleanup = ( { options = {} } ) => {
 								<input
 									className="wppo-input wppo-input--mono"
 									type="number"
+									inputMode="numeric"
 									id="dbRevKeepLatest"
 									name="dbRevKeepLatest"
 									min="0"
