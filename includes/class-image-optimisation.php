@@ -672,23 +672,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return bool
 		 */
 		private function should_use_html_processor(): bool {
+			static $cached = null;
+			if ( null !== $cached ) {
+				return $cached;
+			}
 			if ( ! class_exists( 'WP_HTML_Processor' ) || ! method_exists( 'WP_HTML_Processor', 'serialize_token' ) ) {
-				return false;
+				$cached = false;
+				return $cached;
 			}
 			try {
 				$method = new \ReflectionMethod( 'WP_HTML_Processor', 'serialize_token' );
-				return $method->isPublic();
+				$cached = $method->isPublic();
+				return $cached;
 			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
-				return false;
+				$cached = false;
+				return $cached;
 			}
 		}
 
 		/**
 		 * Map a data attribute name via WP 6.9+ helpers when available.
 		 *
-		 * Guards `wp_js_dataset_name()` / `wp_html_custom_data_attribute_name()`
-		 * so dataset ↔ data-* mapping uses core helpers on WP 6.9+ without
-		 * breaking WP <6.9. Falls back to the raw attribute name.
+		 * Guards `wp_html_custom_data_attribute_name()` so data-* mapping
+		 * uses core helper on WP 6.9+ without breaking WP <6.9. Falls back
+		 * to the raw attribute name.
 		 *
 		 * @since NEXT
 		 * @param string $attr Raw attribute name (e.g. `data-wppo-dominant-color`).
