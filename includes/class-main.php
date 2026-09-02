@@ -2712,10 +2712,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						$candidate = $defaults[ $key ];
 						$is_valid  = true;
 						if ( class_exists( 'WP_Speculation_Rules' ) ) {
-							if ( 'mode' === $key && method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) ) {
-								$is_valid = \WP_Speculation_Rules::is_valid_mode( $candidate );
-							} elseif ( 'eagerness' === $key && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
-								$is_valid = \WP_Speculation_Rules::is_valid_eagerness( $candidate );
+							if ( 'mode' === $key ) {
+								if ( method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) ) {
+									$is_valid = \WP_Speculation_Rules::is_valid_mode( $candidate );
+								} else {
+									$is_valid = in_array( $candidate, array( 'prefetch', 'prerender' ), true );
+								}
+							} elseif ( 'eagerness' === $key ) {
+								if ( method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
+									$is_valid = \WP_Speculation_Rules::is_valid_eagerness( $candidate );
+								} else {
+									$is_valid = in_array( $candidate, array( 'conservative', 'moderate', 'eager' ), true );
+								}
 							}
 						} elseif ( 'mode' === $key ) {
 							$is_valid = in_array( $candidate, array( 'prefetch', 'prerender' ), true );
