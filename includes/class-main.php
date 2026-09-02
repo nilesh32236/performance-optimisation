@@ -173,44 +173,54 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					'loggedInCacheRoles'  => array(),
 				),
 				'file_optimisation'     => array(
-					'enableServerRules'       => false,
-					'cdnURL'                  => '',
-					'removeUnusedCSS'         => false,
-					'excludeUnusedCSS'        => '',
-					'criticalCSS'             => false,
-					'hostGoogleFontsLocally'  => false,
+					'enableServerRules'          => false,
+					'cdnURL'                     => '',
+					'removeUnusedCSS'            => false,
+					'excludeUnusedCSS'           => '',
+					'criticalCSS'                => false,
+					'hostGoogleFontsLocally'     => false,
 					// On WP 6.9+ classic themes load core block assets on demand by default, so
 					// the toggle defaults to ON there and only acts as an opt-out. Pre-6.9 cores
 					// keep the legacy opt-in default (OFF).
-					'blockAssetsOnDemand'     => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
-					'loadAllCoreBlockAssets'  => false,
-					'delayJSDefaultStrategy'  => 'interaction',
-					'delayJSIdleList'         => '',
-					'delayJSViewportList'     => '',
-					'delayJSPriority'         => '',
-					'delayJSIdleTimeout'      => 3000,
-					'minifyHTML'              => false,
-					'minifyJS'                => false,
-					'minifyCSS'               => false,
-					'deferJS'                 => false,
-					'delayJS'                 => false,
-					'combineCSS'              => false,
-					'excludeJS'               => '',
-					'excludeCSS'              => '',
-					'excludeDeferJS'          => '',
-					'excludeDelayJS'          => '',
-					'excludeCombineCSS'       => '',
-					'minifyInlineCSS'         => false,
-					'minifyInlineJS'          => false,
-					'removeHTMLComments'      => true,
-					'removeQueryStrings'      => false,
-					'disableRestApiLinks'     => false,
-					'disableRssFeeds'         => false,
-					'disableShortlinks'       => false,
-					'disableGeneratorTag'     => false,
-					'disableJQueryMigrate'    => false,
-					'disablePasswordStrength' => false,
-					'disableSelfPingbacks'    => false,
+					'blockAssetsOnDemand'        => function_exists( 'wp_load_classic_theme_block_styles_on_demand' ),
+					'loadAllCoreBlockAssets'     => false,
+					'delayJSDefaultStrategy'     => 'interaction',
+					'delayJSIdleList'            => '',
+					'delayJSViewportList'        => '',
+					'delayJSPriority'            => '',
+					'delayJSIdleTimeout'         => 3000,
+					'minifyHTML'                 => false,
+					'minifyJS'                   => false,
+					'minifyCSS'                  => false,
+					'deferJS'                    => false,
+					'delayJS'                    => false,
+					'combineCSS'                 => false,
+					'excludeJS'                  => '',
+					'excludeCSS'                 => '',
+					'excludeDeferJS'             => '',
+					'excludeDelayJS'             => '',
+					'excludeCombineCSS'          => '',
+					'minifyInlineCSS'            => false,
+					'minifyInlineJS'             => false,
+					'removeHTMLComments'         => true,
+					'removeQueryStrings'         => false,
+					'disableRestApiLinks'        => false,
+					'disableRssFeeds'            => false,
+					'disableShortlinks'          => false,
+					'disableGeneratorTag'        => false,
+					'disableJQueryMigrate'       => false,
+					'disablePasswordStrength'    => false,
+					'disableSelfPingbacks'       => false,
+					'disableRSD'                 => false,
+					'disableWLWManifest'         => false,
+					'disableGlobalStyles'        => false,
+					'disableClassicThemeStyles'  => false,
+					'disableWooCartFragments'    => false,
+					'disableRecentCommentsStyle' => false,
+					'disableCommentReply'        => false,
+					'disableOEmbedDiscovery'     => false,
+					'disableBlockWidgets'        => false,
+					'fontMetricFallback'         => false,
 				),
 				'preload_settings'      => array(
 					'enableSpeculationRules' => false,
@@ -754,6 +764,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				} else {
 					$this->exclude_delay_js = $exclude_js;
 				}
+				// Merge curated preset exclusions (jquery, recaptcha, stripe, analytics, etc.)
+				// Filterable via wppo_delay_js_exclusions. Preserves user excludes via array_unique merge.
+				$preset                 = $this->get_delay_js_preset_exclusions();
+				$this->exclude_delay_js = array_values( array_unique( array_merge( $this->exclude_delay_js, $preset ) ) );
 
 				// When both defer JS and delay JS are active, deferred handles must not
 				// be delay-rewritten (wppo-src / wppo/javascript) — otherwise delay JS
@@ -2270,6 +2284,46 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		}
 
 		/**
+		 * Get curated delay JS preset exclusions (jquery, recaptcha, stripe, analytics, etc.).
+		 *
+		 * Filterable via wppo_delay_js_exclusions. Preset prevents breakage on 10% sites.
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		private function get_delay_js_preset_exclusions(): array {
+			$preset = array(
+				'jquery',
+				'jquery-core',
+				'jquery-migrate',
+				'recaptcha',
+				'google-recaptcha',
+				'grecaptcha',
+				'stripe',
+				'gtag',
+				'googletagmanager',
+				'google-analytics',
+				'analytics',
+				'gtm',
+				'fbevents',
+				'facebook',
+				'hotjar',
+				'intercom',
+				'hubspot',
+				'linkedin',
+				'twitter',
+				'paypal',
+			);
+			/**
+			 * Filters delay JS preset exclusions.
+			 *
+			 * @since NEXT
+			 * @param string[] $preset Preset exclusions.
+			 */
+			return (array) apply_filters( 'wppo_delay_js_exclusions', $preset );
+		}
+
+		/**
 		 * Adds fetchpriority="low" to rendered script tags for deferred handles.
 		 *
 		 * Pre-6.9 fallback only: on WP 6.9+ the native fetchpriority arg passed via
@@ -2675,6 +2729,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// enqueue time, so stripping it would let browsers serve stale copies
 			// of regenerated files.
 			if ( $this->is_plugin_cache_url( $src ) ) {
+				return $src;
+			}
+
+			// When CDN mapping is configured, preserve ver for CDN cache busting (versioned URL edge case).
+			$file_opt = $this->options['file_optimisation'] ?? array();
+			if ( ! empty( $file_opt['cdnURL'] ) || ! empty( $file_opt['cdnMapping'] ) ) {
 				return $src;
 			}
 

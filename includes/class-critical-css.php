@@ -936,10 +936,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( file_exists( $file ) ) {
 				$content = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
 				if ( ! empty( $content ) ) {
+					// Fallback when CCSS is too short (<500B) — treat as failed and inject async loadCSS guard.
+					if ( strlen( (string) $content ) < 500 ) {
+						echo '<script>!function(e){"use strict";var n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a),setTimeout(function(){r.media=o||"all"}),r.onload=function(){r.media=o||"all"}};e.wppoLoadCSS=n}(window);</script>' . "\n";
+						return;
+					}
 					echo '<style id="wppo-critical-css">' . "\n";
 					// Sanitized against HTML breakout tokens; see sanitize_inline_css().
 					echo self::sanitize_inline_css( $content ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
 					echo '</style>' . "\n";
+				} else {
+					// Empty CCSS file — fallback to async loader.
+					echo '<script>!function(e){"use strict";var n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a),setTimeout(function(){r.media=o||"all"}),r.onload=function(){r.media=o||"all"}};e.wppoLoadCSS=n}(window);</script>' . "\n";
 				}
 			} elseif ( function_exists( 'as_enqueue_async_action' ) ) {
 				$hook = 'wppo_generate_ccss';
