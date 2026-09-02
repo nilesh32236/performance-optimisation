@@ -117,12 +117,22 @@
 		gap: 12px;
 		flex-shrink: 0;
 		flex-wrap: wrap;
+		align-items: flex-start;
+		min-width: 0;
+
+		.wppo-button {
+			min-width: 0;
+			max-width: 100%;
+			white-space: normal;
+			overflow-wrap: anywhere;
+			text-align: center;
+		}
 
 		@include respond-to('md') {
 			width: 100%;
 
 			.wppo-button {
-				flex: 1;
+				flex: 1 1 140px;
 				justify-content: center;
 			}
 		}
