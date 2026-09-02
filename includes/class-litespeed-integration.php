@@ -872,12 +872,70 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Result is cached per request; filterable via `wppo_litespeed_ttl`.
 		 *
 		 * @since NEXT
+		 * @param string|null $uri     Optional URI for per-page TTL.
+		 * @param int|null    $post_id Optional post ID.
 		 * @return int TTL seconds (>=0, 0 = no-cache).
 		 */
-		public static function get_litespeed_ttl(): int {
-			if ( null !== self::$cached_ttl ) {
+		public static function get_litespeed_ttl( ?string $uri = null, $post_id = null ): int {
+			$is_explicit = null !== $uri || null !== $post_id;
+			if ( ! $is_explicit && null !== self::$cached_ttl ) {
 				return self::$cached_ttl;
 			}
+
+			// Resolve URI.
+			$resolved_uri = $uri;
+			if ( null === $resolved_uri ) {
+				$resolved_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotValidated
+			}
+			if ( '' === $resolved_uri ) {
+				$resolved_uri = '/';
+			}
+
+			// Resolve post ID when not explicitly provided.
+			$resolved_post_id = $post_id;
+			if ( null === $resolved_post_id ) {
+				$pid = 0;
+				if ( function_exists( 'url_to_postid' ) && function_exists( 'home_url' ) ) {
+					try {
+						$pid = (int) url_to_postid( home_url( $resolved_uri ) );
+					} catch ( \Throwable $e ) {
+						$pid = 0;
+					}
+				}
+				if ( $pid > 0 ) {
+					$resolved_post_id = $pid;
+				} elseif ( isset( $GLOBALS['post'] ) && is_object( $GLOBALS['post'] ) && isset( $GLOBALS['post']->ID ) ) {
+					$maybe            = (int) $GLOBALS['post']->ID;
+					$resolved_post_id = $maybe > 0 ? $maybe : null;
+				} else {
+					$resolved_post_id = null;
+				}
+			} elseif ( 0 === $resolved_post_id ) {
+				$resolved_post_id = null;
+			} else {
+				$resolved_post_id = (int) $resolved_post_id;
+				if ( $resolved_post_id <= 0 ) {
+					$resolved_post_id = null;
+				}
+			}
+
+			$post_type = null;
+			if ( null !== $resolved_post_id && function_exists( 'get_post_type' ) ) {
+				try {
+					$pt = get_post_type( $resolved_post_id );
+					if ( $pt ) {
+						$post_type = (string) $pt;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			$context = array(
+				'uri'       => $resolved_uri,
+				'post_id'   => $resolved_post_id,
+				'post_type' => $post_type,
+			);
 
 			// Per-context overrides: feed / 404 / REST => 0.
 			$context_ttl = null;
@@ -941,48 +999,53 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				}
 			}
 
-			if ( null !== $context_ttl ) {
-				/**
-				 * Filter LiteSpeed TTL seconds (per-context).
-				 *
-				 * @since NEXT
-				 * @param int $seconds TTL in seconds (0 = no-cache).
-				 * @param int $hours   Original cacheLife hours (0 = never expire) or -1 for context override.
-				 */
-				$filtered = (int) apply_filters( 'wppo_litespeed_ttl', (int) $context_ttl, -1 );
-				// Allow 0 for feed/404/REST; only fallback for negative.
-				if ( $filtered < 0 ) {
-					$filtered = (int) $context_ttl;
-				}
-				self::$cached_ttl = $filtered;
-				return self::$cached_ttl;
-			}
-
 			$options = get_option( 'wppo_settings', array() );
 			$hours   = isset( $options['cache_settings']['cacheLife'] ) ? absint( $options['cache_settings']['cacheLife'] ) : 0;
 
 			if ( 0 === $hours ) {
-				$seconds = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
+				$base_seconds = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
 			} else {
-				$seconds = $hours * ( defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
+				$base_seconds = $hours * ( defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 			}
+
+			// If per-context override exists, use it as base before filters; otherwise use cacheLife mapping.
+			$seconds      = null !== $context_ttl ? (int) $context_ttl : (int) $base_seconds;
+			$filter_hours = null !== $context_ttl ? -1 : (int) $hours;
 
 			/**
-			 * Filter LiteSpeed TTL seconds mapped from cacheLife.
+			 * Filter per-page TTL (Tier-1, filter-only).
 			 *
 			 * @since NEXT
-			 * @param int $seconds TTL in seconds.
-			 * @param int $hours   Original cacheLife hours (0 = never expire).
+			 * @param int         $seconds TTL seconds.
+			 * @param string      $uri     Request URI.
+			 * @param int|null    $post_id Resolved post ID or null.
 			 */
-			$seconds = (int) apply_filters( 'wppo_litespeed_ttl', $seconds, $hours );
+			$seconds = (int) apply_filters( 'wppo_cache_ttl', $seconds, $resolved_uri, $resolved_post_id );
 
-			if ( $seconds <= 0 ) {
-				$seconds = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
+			/**
+			 * Filter LiteSpeed TTL seconds (per-context).
+			 *
+			 * @since NEXT
+			 * @param int   $seconds TTL in seconds (0 = no-cache).
+			 * @param int   $hours   Original cacheLife hours (0 = never expire) or -1 for context override.
+			 * @param array $context Context array with uri, post_id, post_type.
+			 */
+			$filtered = (int) apply_filters( 'wppo_litespeed_ttl', (int) $seconds, $filter_hours, $context );
+			// For context overrides, allow 0; only fallback for negative. For base mapping, fallback for <=0.
+			if ( null !== $context_ttl ) {
+				if ( $filtered < 0 ) {
+					$filtered = (int) $seconds;
+				}
+			} elseif ( $filtered <= 0 ) {
+				$filtered = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
+			}
+			$seconds = $filtered;
+
+			if ( ! $is_explicit ) {
+				self::$cached_ttl = $seconds;
 			}
 
-			self::$cached_ttl = $seconds;
-
-			return self::$cached_ttl;
+			return $seconds;
 		}
 
 		/**
