@@ -2456,6 +2456,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		/**
 		 * Adds speculation rules for prefetching/prerendering via the WP 6.8+ Speculation Rules API.
 		 *
+		 * When `wp_get_speculation_rules()` exists (WP 6.8+) the plugin does not emit its own
+		 * `<script type="speculationrules">` block. Instead it drives the single core rule set
+		 * via the `wp_speculation_rules_configuration` filter so only one document-level rule
+		 * is printed (avoids duplicate prefetch/prerender waste when multiple rule sets would append).
+		 *
 		 * Excludes sensitive/dynamic paths (login, admin, REST API) from all
 		 * speculation and pins an explicit configuration whenever the plugin owns
 		 * the speculation-rules decision: the user's chosen mode/eagerness when
@@ -2464,19 +2469,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * behind the user's back).
 		 *
 		 * Effective defaults are `prefetch` + `conservative` unless overridden
-		 * via WP_SPECULATIVE_LOADING_DEFAULT_MODE / _EAGERNESS (WP 7.1,
-		 * wp_get_speculation_rules_default_configuration()). The
-		 * wp_speculation_rules_configuration filter (used here) takes precedence
+		 * via `WP_SPECULATIVE_LOADING_DEFAULT_MODE` / `_EAGERNESS` (WP 7.1,
+		 * `wp_get_speculation_rules_default_configuration()`). The
+		 * `wp_speculation_rules_configuration` filter (used here) takes precedence
 		 * over host constants (see filter_speculation_rules_configuration()).
 		 * No auto-elevation to `moderate` is assumed — it must be chosen
 		 * explicitly in the UI.
+		 *
+		 * Host overrides are honored via `WP_SPECULATIVE_LOADING_DEFAULT_*` constants
+		 * or environment variables (WP 7.1 #65624); the filter wins over the host.
+		 * Mode/eagerness are validated via `WP_Speculation_Rules::is_valid_mode()`
+		 * / `is_valid_eagerness()` when the class exists (WP 6.8+), otherwise via
+		 * an allowlist fallback. Excludes are merged via `wp_speculation_rules_href_exclude_paths`
+		 * (user `speculationExcludeUrls` + WooCommerce cart/checkout/account).
+		 *
+		 * Backward compatible: on WP <6.8 `wp_get_speculation_rules()` does not exist,
+		 * so this method is a no-op and no filter is registered (legacy path).
 		 *
 		 * @since NEXT
 		 *
 		 * @return void
 		 */
 		public function add_speculation_rules() {
-			if ( ! function_exists( 'wp_get_speculation_rules_configuration' ) ) {
+			// WP 6.8+ provides the Speculation Rules API. Gate on wp_get_speculation_rules()
+			// per WP 7.1 spec (IO-001); wp_get_speculation_rules_configuration() is the
+			// same 6.8 introduction, but wp_get_speculation_rules is the canonical
+			// presence check for the <script type="speculationrules"> emitter.
+			// Keep backward compat for WP <6.8 (no-op).
+			if ( ! function_exists( 'wp_get_speculation_rules' ) ) {
 				return;
 			}
 
@@ -2569,9 +2589,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * `WP_SPECULATIVE_LOADING_DEFAULT_MODE` /
 		 * `WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS` constants or environment
 		 * variables introduced in WP 7.1 (#65624) are honored as-is, so hosts
-		 * can still pin a different default.
+		 * can still pin a different default. The filter wins over the host
+		 * override (documented precedence).
+		 *
+		 * Mode/eagerness are validated via `WP_Speculation_Rules::is_valid_mode()`
+		 * / `is_valid_eagerness()` when the class exists (WP 6.8+), otherwise via
+		 * an allowlist fallback, with `function_exists`/`class_exists` guards for
+		 * backward compat on WP <6.8.
+		 *
+		 * Excludes are merged via `wp_speculation_rules_href_exclude_paths`
+		 * (user `speculationExcludeUrls` + WooCommerce cart/checkout/account via
+		 * {@see add_speculation_rules()}).
 		 *
 		 * @since 1.9.0
+		 * @since NEXT Honor `wp_get_speculation_rules_default_configuration()` when available (WP 7.1).
 		 *
 		 * @param array<string,string>|null $config            Filter value ('auto' defaults, or null when speculative loading is disabled for the request).
 		 * @param array                     $preload_settings  The plugin's preload_settings option value.
@@ -2587,6 +2618,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				$mode      = $preload_settings['speculationMode'] ?? 'prefetch';
 				$eagerness = $preload_settings['speculationEagerness'] ?? 'conservative';
 				// Validate via WP_Speculation_Rules when available (WP 6.8+), fallback to allowlist.
+				// Guards: class_exists + method_exists for backward compat on WP <6.8.
 				if ( class_exists( 'WP_Speculation_Rules' ) ) {
 					if ( method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) && ! \WP_Speculation_Rules::is_valid_mode( $mode ) ) {
 						$mode = 'prefetch';
@@ -2613,10 +2645,29 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// the caching solution core's detection heuristic would see, so a
 			// site where caching is detected elsewhere keeps core's behavior.
 			// A host that explicitly pinned a different default is left alone.
+			// Host override detection honors both the constant/env lookup and
+			// WP 7.1 wp_get_speculation_rules_default_configuration() when available.
+			$has_host_override = null !== $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' );
+			if ( ! $has_host_override && function_exists( 'wp_get_speculation_rules_default_configuration' ) ) {
+				$defaults = wp_get_speculation_rules_default_configuration();
+				if ( is_array( $defaults ) && isset( $defaults['eagerness'] ) && is_string( $defaults['eagerness'] ) && '' !== $defaults['eagerness'] ) {
+					$eagerness_from_core = $defaults['eagerness'];
+					$is_valid            = true;
+					if ( class_exists( 'WP_Speculation_Rules' ) && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
+						$is_valid = \WP_Speculation_Rules::is_valid_eagerness( $eagerness_from_core );
+					} else {
+						$is_valid = in_array( $eagerness_from_core, array( 'conservative', 'moderate', 'eager' ), true );
+					}
+					// Core's effective default is conservative; any other valid value implies host pinned it.
+					if ( $is_valid && 'conservative' !== $eagerness_from_core ) {
+						$has_host_override = true;
+					}
+				}
+			}
 			if (
 				! empty( $this->options['cache_settings']['enableCache'] ) &&
 				'auto' === ( $config['eagerness'] ?? 'auto' ) &&
-				null === $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' )
+				! $has_host_override
 			) {
 				$config['eagerness'] = 'conservative';
 			}
@@ -2638,12 +2689,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * is treated as absent so the plugin's conservative pin still applies
 		 * instead of silently allowing core's cached-site escalation.
 		 *
+		 * When `wp_get_speculation_rules_default_configuration()` exists (WP 7.1+)
+		 * its effective defaults are also considered: if the host pinned a different
+		 * default (e.g. `moderate`) the function will reflect it, and this helper
+		 * treats that as an override so the plugin's `conservative` pin does not
+		 * fight the host. The `wp_speculation_rules_configuration` filter (used in
+		 * {@see filter_speculation_rules_configuration()}) wins over the host in
+		 * any case (documented precedence). Validation uses
+		 * `WP_Speculation_Rules::is_valid_mode()` / `is_valid_eagerness()` when available.
+		 *
 		 * @since 1.9.0
+		 * @since NEXT Honor `wp_get_speculation_rules_default_configuration()` when available.
 		 *
 		 * @param string $name Override name, e.g. 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS'.
 		 * @return string|null The override value, or null when neither the constant nor the environment variable is set to a valid value.
 		 */
 		private function get_speculation_default_override( string $name ): ?string {
+			// Prefer WP 7.1 core helper when available — it already resolves host overrides.
+			// We still validate via WP_Speculation_Rules when available, with allowlist fallback.
+			if ( function_exists( 'wp_get_speculation_rules_default_configuration' ) ) {
+				$defaults = wp_get_speculation_rules_default_configuration();
+				if ( is_array( $defaults ) ) {
+					$key = null;
+					if ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
+						$key = 'mode';
+					} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name ) {
+						$key = 'eagerness';
+					}
+					if ( null !== $key && isset( $defaults[ $key ] ) && is_string( $defaults[ $key ] ) && '' !== $defaults[ $key ] ) {
+						$candidate = $defaults[ $key ];
+						$is_valid  = true;
+						if ( class_exists( 'WP_Speculation_Rules' ) ) {
+							if ( 'mode' === $key && method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) ) {
+								$is_valid = \WP_Speculation_Rules::is_valid_mode( $candidate );
+							} elseif ( 'eagerness' === $key && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
+								$is_valid = \WP_Speculation_Rules::is_valid_eagerness( $candidate );
+							}
+						} elseif ( 'mode' === $key ) {
+							$is_valid = in_array( $candidate, array( 'prefetch', 'prerender' ), true );
+						} else {
+							$is_valid = in_array( $candidate, array( 'conservative', 'moderate', 'eager' ), true );
+						}
+						if ( $is_valid ) {
+							// Core hardcoded defaults are prefetch and conservative without host override.
+							// Only treat as override when effective value differs from those defaults,
+							// so vanilla 7.1 install does not look pinned when it is not.
+							$hardcoded_default = ( 'mode' === $key ) ? 'prefetch' : 'conservative';
+							if ( $candidate !== $hardcoded_default ) {
+								return $candidate;
+							}
+							// If effective value is the hardcoded default, fall through to
+							// constant/env check to distinguish "host explicitly pinned to conservative"
+							// from "no host pin" — the constant/env path below will still detect an
+							// explicit pin even when it equals the hardcoded default.
+						}
+					}
+				}
+			}
+
 			$value = null;
 
 			if ( function_exists( 'getenv' ) ) {
@@ -2664,7 +2767,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return null;
 			}
 
-			if ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
+			// Validate via WP_Speculation_Rules when available, else allowlist.
+			if ( class_exists( 'WP_Speculation_Rules' ) ) {
+				if ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name && method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) ) {
+					if ( ! \WP_Speculation_Rules::is_valid_mode( $value ) ) {
+						return null;
+					}
+				} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
+					if ( ! \WP_Speculation_Rules::is_valid_eagerness( $value ) ) {
+						return null;
+					}
+				} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
+					if ( ! in_array( $value, array( 'prefetch', 'prerender' ), true ) ) {
+						return null;
+					}
+				} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' === $name ) {
+					if ( ! in_array( $value, array( 'conservative', 'moderate', 'eager' ), true ) ) {
+						return null;
+					}
+				}
+			} elseif ( 'WP_SPECULATIVE_LOADING_DEFAULT_MODE' === $name ) {
 				if ( ! in_array( $value, array( 'prefetch', 'prerender' ), true ) ) {
 					return null;
 				}
