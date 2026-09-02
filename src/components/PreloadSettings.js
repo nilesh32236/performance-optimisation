@@ -521,6 +521,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										name="speculationMode"
 										value={ settings.speculationMode }
 										onChange={ handleChange( setSettings ) }
+										aria-describedby="speculationMode-desc"
 									>
 										<option value="prefetch">
 											{ __(
@@ -535,7 +536,10 @@ const PreloadSettings = ( { options = {} } ) => {
 											) }
 										</option>
 									</select>
-									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+									<p
+										id="speculationMode-desc"
+										className="wppo-text-muted wppo-mt-10 wppo-text-small"
+									>
 										{ __(
 											'Prerender executes JavaScript on hover and may inflate analytics and origin load on uncached routes — use only with caching verified.',
 											'performance-optimisation'
@@ -558,6 +562,7 @@ const PreloadSettings = ( { options = {} } ) => {
 										name="speculationEagerness"
 										value={ settings.speculationEagerness }
 										onChange={ handleChange( setSettings ) }
+										aria-describedby="speculationEagerness-desc"
 									>
 										<option value="conservative">
 											{ __(
@@ -578,7 +583,10 @@ const PreloadSettings = ( { options = {} } ) => {
 											) }
 										</option>
 									</select>
-									<p className="wppo-text-muted wppo-mt-10 wppo-text-small">
+									<p
+										id="speculationEagerness-desc"
+										className="wppo-text-muted wppo-mt-10 wppo-text-small"
+									>
 										{ __(
 											'Conservative waits for hover, Moderate prefetches nearby links, Eager loads immediately on page load.',
 											'performance-optimisation'
