@@ -71,7 +71,8 @@
 		min-width: 0;
 		max-width: 100%;
 		box-sizing: border-box;
-		overflow-wrap: anywhere;
+		overflow-wrap: break-word;
+		word-break: break-word;
 
 		@include respond-to('sm') {
 			padding: 20px;
