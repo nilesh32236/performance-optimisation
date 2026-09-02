@@ -137,8 +137,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				if ( ! empty( $rules ) ) {
 					$rules[] = '';
 				}
-				$rules[] = '# WPPO Next-gen delivery (Nginx) — sibling .webp/.avif via Accept header';
-				$rules[] = '# Note: WPPO converter writes to wppo/ by default; sibling check is for sibling layout — adjust try_files if using wppo/ directory.';
+				$rules[] = '# WPPO Next-gen delivery (Nginx) — sibling .webp/.avif + wppo/ fallback via Accept header';
+				$rules[] = '# Note: WPPO converter writes to wp-content/wppo/ by default; sibling and wppo/ mirrors both checked.';
 				$rules[] = 'map $http_accept $wppo_avif_suffix {';
 				$rules[] = '    default "";';
 				$rules[] = '    "~*image/avif" ".avif";';
@@ -149,8 +149,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				$rules[] = '}';
 				$rules[] = 'server {';
 				$rules[] = '    location ~* \.(jpe?g|png)$ {';
-				$rules[] = '        # Try avif first, then webp, then original — requires sibling .avif/.webp files';
-				$rules[] = '        try_files $uri$wppo_avif_suffix $uri$wppo_webp_suffix $uri =404;';
+				$rules[] = '        # Try avif first (sibling), then wppo/ mirror, then webp sibling/mirror, then original';
+				$rules[] = '        try_files $uri$wppo_avif_suffix /wp-content/wppo$uri$wppo_avif_suffix $uri$wppo_webp_suffix /wp-content/wppo$uri$wppo_webp_suffix $uri =404;';
 				$rules[] = '        add_header Vary Accept;';
 				$rules[] = '    }';
 				$rules[] = '}';

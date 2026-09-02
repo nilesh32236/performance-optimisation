@@ -98,6 +98,47 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 			if ( ! empty( $this->settings['disableSelfPingbacks'] ) ) {
 				add_action( 'pre_ping', array( $this, 'disable_self_pingbacks' ) );
 			}
+
+			if ( ! empty( $this->settings['disableRSD'] ) ) {
+				remove_action( 'wp_head', 'rsd_link' );
+				add_filter( 'after_setup_theme', array( $this, 'remove_rsd_link' ) );
+			}
+
+			if ( ! empty( $this->settings['disableWLWManifest'] ) ) {
+				remove_action( 'wp_head', 'wlwmanifest_link' );
+				add_filter( 'after_setup_theme', array( $this, 'remove_wlwmanifest_link' ) );
+			}
+
+			if ( ! empty( $this->settings['disableGlobalStyles'] ) ) {
+				add_action( 'wp_enqueue_scripts', array( $this, 'remove_global_styles' ), 100 );
+				remove_action( 'wp_enqueue_scripts', 'wp_enqueue_global_styles' );
+				remove_action( 'wp_body_open', 'wp_global_styles_render_svg_filters' );
+			}
+
+			if ( ! empty( $this->settings['disableClassicThemeStyles'] ) ) {
+				add_action( 'wp_enqueue_scripts', array( $this, 'remove_classic_theme_styles' ), 100 );
+			}
+
+			if ( ! empty( $this->settings['disableWooCartFragments'] ) ) {
+				add_action( 'wp_enqueue_scripts', array( $this, 'disable_woo_cart_fragments' ), 100 );
+			}
+
+			if ( ! empty( $this->settings['disableRecentCommentsStyle'] ) ) {
+				add_action( 'widgets_init', array( $this, 'remove_recent_comments_style' ), 100 );
+				add_filter( 'show_recent_comments_widget_style', '__return_false' );
+			}
+
+			if ( ! empty( $this->settings['disableCommentReply'] ) ) {
+				add_action( 'wp_enqueue_scripts', array( $this, 'remove_comment_reply' ), 100 );
+			}
+
+			if ( ! empty( $this->settings['disableOEmbedDiscovery'] ) ) {
+				remove_action( 'wp_head', 'wp_oembed_add_discovery_links' );
+			}
+
+			if ( ! empty( $this->settings['disableBlockWidgets'] ) ) {
+				add_action( 'after_setup_theme', array( $this, 'disable_block_widgets' ) );
+			}
 		}
 
 		/**
@@ -403,6 +444,95 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Core_Tweaks' ) ) {
 				}
 				unset( $pung[ $key ] );
 			}
+		}
+
+		/**
+		 * Remove RSD (EditURI) link.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function remove_rsd_link(): void {
+			remove_action( 'wp_head', 'rsd_link' );
+		}
+
+		/**
+		 * Remove wlwmanifest link.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function remove_wlwmanifest_link(): void {
+			remove_action( 'wp_head', 'wlwmanifest_link' );
+		}
+
+		/**
+		 * Remove global styles and SVG filters.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function remove_global_styles(): void {
+			wp_dequeue_style( 'global-styles' );
+			wp_dequeue_style( 'wp-block-library' );
+			remove_action( 'wp_enqueue_scripts', 'wp_enqueue_global_styles' );
+			remove_action( 'wp_footer', 'wp_enqueue_global_styles', 1 );
+		}
+
+		/**
+		 * Remove classic theme styles.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function remove_classic_theme_styles(): void {
+			wp_dequeue_style( 'classic-theme-styles' );
+			remove_action( 'wp_enqueue_scripts', 'wp_enqueue_classic_theme_styles' );
+		}
+
+		/**
+		 * Disable WooCommerce cart fragments.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function disable_woo_cart_fragments(): void {
+			wp_dequeue_script( 'wc-cart-fragments' );
+			wp_deregister_script( 'wc-cart-fragments' );
+		}
+
+		/**
+		 * Remove recent comments widget style.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function remove_recent_comments_style(): void {
+			global $wp_widget_factory;
+			if ( isset( $wp_widget_factory->widgets['WP_Widget_Recent_Comments'] ) ) {
+				remove_action( 'wp_head', array( $wp_widget_factory->widgets['WP_Widget_Recent_Comments'], 'recent_comments_style' ) );
+			}
+			wp_dequeue_style( 'wp-widget-recent-comments' );
+		}
+
+		/**
+		 * Remove comment-reply script.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function remove_comment_reply(): void {
+			wp_deregister_script( 'comment-reply' );
+		}
+
+		/**
+		 * Disable block widgets editor.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public function disable_block_widgets(): void {
+			remove_theme_support( 'widgets-block-editor' );
 		}
 	}
 }

@@ -340,6 +340,125 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		}
 
 		/**
+		 * Generate metric-matched fallback CSS for a font family (size-adjust etc).
+		 *
+		 * Uses hardcoded metrics for common Google Fonts to reduce CLS vs system fallback.
+		 * Filterable via wppo_font_metric_fallback_css.
+		 *
+		 * @since NEXT
+		 * @param string $family Font family name.
+		 * @return string Fallback @font-face CSS or empty string.
+		 */
+		public function generate_metric_fallback( string $family ): string {
+			$family_key = strtolower( trim( $family ) );
+			// Common metrics table: size-adjust, ascent-override, descent-override, line-gap-override.
+			$metrics = array(
+				'inter'      => array(
+					'size-adjust'       => '107%',
+					'ascent-override'   => '90%',
+					'descent-override'  => '22%',
+					'line-gap-override' => '0%',
+				),
+				'roboto'     => array(
+					'size-adjust'       => '100%',
+					'ascent-override'   => '92%',
+					'descent-override'  => '24%',
+					'line-gap-override' => '0%',
+				),
+				'open sans'  => array(
+					'size-adjust'       => '105%',
+					'ascent-override'   => '88%',
+					'descent-override'  => '20%',
+					'line-gap-override' => '0%',
+				),
+				'lato'       => array(
+					'size-adjust'       => '100%',
+					'ascent-override'   => '90%',
+					'descent-override'  => '22%',
+					'line-gap-override' => '0%',
+				),
+				'montserrat' => array(
+					'size-adjust'       => '107%',
+					'ascent-override'   => '92%',
+					'descent-override'  => '24%',
+					'line-gap-override' => '0%',
+				),
+				'poppins'    => array(
+					'size-adjust'       => '105%',
+					'ascent-override'   => '90%',
+					'descent-override'  => '22%',
+					'line-gap-override' => '0%',
+				),
+				'nested'     => array(
+					'size-adjust'       => '100%',
+					'ascent-override'   => '90%',
+					'descent-override'  => '22%',
+					'line-gap-override' => '0%',
+				),
+			);
+			if ( ! isset( $metrics[ $family_key ] ) ) {
+				// Generic fallback for unknown fonts.
+				$metrics[ $family_key ] = array(
+					'size-adjust'       => '100%',
+					'ascent-override'   => '90%',
+					'descent-override'  => '22%',
+					'line-gap-override' => '0%',
+				);
+			}
+			$m   = $metrics[ $family_key ];
+			$css = sprintf(
+				"@font-face{font-family:'%s Fallback';src:local('Arial');size-adjust:%s;ascent-override:%s;descent-override:%s;line-gap-override:%s;}",
+				esc_html( $family ),
+				$m['size-adjust'],
+				$m['ascent-override'],
+				$m['descent-override'],
+				$m['line-gap-override']
+			);
+			/**
+			 * Filters metric fallback CSS.
+			 *
+			 * @since NEXT
+			 * @param string $css    Fallback CSS.
+			 * @param string $family Font family.
+			 */
+			return (string) apply_filters( 'wppo_font_metric_fallback_css', $css, $family );
+		}
+
+		/**
+		 * Inject metric-matched fallback style into buffer when enabled.
+		 *
+		 * @since NEXT
+		 * @param string $buffer HTML buffer.
+		 * @return string Modified buffer.
+		 */
+		public function inject_metric_fallback( string $buffer ): string {
+			if ( empty( $this->options['file_optimisation']['fontMetricFallback'] ) ) {
+				return $buffer;
+			}
+			// Extract font-family names from buffer Google Fonts links or cached CSS references.
+			preg_match_all( '/font-family:\s*[\'"]?([^\'";,]+)[\'"]?/i', $buffer, $matches );
+			if ( empty( $matches[1] ) ) {
+				return $buffer;
+			}
+			$families     = array_unique( array_map( 'trim', $matches[1] ) );
+			$fallback_css = '';
+			foreach ( $families as $fam ) {
+				$fallback_css .= $this->generate_metric_fallback( $fam ) . "\n";
+			}
+			if ( '' === $fallback_css ) {
+				return $buffer;
+			}
+			$style_tag = '<style id="wppo-font-fallback">' . $fallback_css . '</style>';
+			// Inject before </head> if present, else prepend.
+			if ( false !== stripos( $buffer, '</head>' ) ) {
+				$buffer = preg_replace( '/<\/head>/i', $style_tag . '</head>', $buffer, 1 );
+			} else {
+				$buffer = $style_tag . $buffer;
+			}
+			return $buffer;
+		}
+
+		/**
 		 * Clear the entire Google Fonts cache directory.
 		 *
 		 * @return void

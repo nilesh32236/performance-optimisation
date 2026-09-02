@@ -1297,6 +1297,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$buffer       = $google_fonts->process_buffer( $buffer );
 			}
 
+			// Inject metric-matched font fallback when enabled (OMGF Pro parity).
+			if ( ! empty( $this->options['file_optimisation']['fontMetricFallback'] ?? false ) ) {
+				$google_fonts = $this->google_fonts ? $this->google_fonts : new Google_Fonts( $this->options );
+				$buffer       = $google_fonts->inject_metric_fallback( $buffer );
+			}
+
 			$file_opts         = $this->options['file_optimisation'] ?? array();
 			$needs_minify_pass = ! empty( $file_opts['minifyHTML'] )
 				|| ! empty( $file_opts['delayJS'] )

@@ -59,6 +59,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private array $options;
 
 		/**
+		 * Counter for picture/LCP prioritization (first image = high, rest = async).
+		 *
+		 * @since NEXT
+		 * @var int
+		 */
+		private int $picture_counter = 0;
+
+		/**
 		 * Array of image URLs to exclude from conversion.
 		 *
 		 * @var array
@@ -2176,6 +2184,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 						}
 						$processed_img = $this->process_img_tag( $img_tag, $original_src, $exclude_imgs );
+						// Set fetchpriority high for first image (LCP candidate), else async/low.
+						++$this->picture_counter;
+						$proc = new \WP_HTML_Tag_Processor( $processed_img );
+						if ( $proc->next_tag( array( 'tag_name' => 'img' ) ) ) {
+							if ( 1 === $this->picture_counter ) {
+								if ( null === $proc->get_attribute( 'fetchpriority' ) ) {
+									$proc->set_attribute( 'fetchpriority', 'high' );
+								}
+							} else {
+								if ( null === $proc->get_attribute( 'decoding' ) ) {
+									$proc->set_attribute( 'decoding', 'async' );
+								}
+								if ( null === $proc->get_attribute( 'fetchpriority' ) ) {
+									$proc->set_attribute( 'fetchpriority', 'low' );
+								}
+							}
+							$processed_img = $proc->get_updated_html();
+						}
 						return preg_replace_callback(
 							'#<img\b[^>]*>#i',
 							function () use ( $processed_img ) {

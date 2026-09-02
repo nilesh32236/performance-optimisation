@@ -60,6 +60,7 @@ const FileOptimization = ( {
 		enableServerRules: false,
 		criticalCSS: false,
 		hostGoogleFontsLocally: false,
+		fontMetricFallback: false,
 		cdnURL: '',
 		cdnMapping: options.cdnMapping || [],
 		removeUnusedCSS: false,
@@ -75,6 +76,15 @@ const FileOptimization = ( {
 		disableJQueryMigrate: false,
 		disablePasswordStrength: false,
 		disableSelfPingbacks: false,
+		disableRSD: false,
+		disableWLWManifest: false,
+		disableGlobalStyles: false,
+		disableClassicThemeStyles: false,
+		disableWooCartFragments: false,
+		disableRecentCommentsStyle: false,
+		disableCommentReply: false,
+		disableOEmbedDiscovery: false,
+		disableBlockWidgets: false,
 		// Mirrors the pre-6.9 PHP default. PHP always emits the key on WP 6.9+ (where
 		// core loads block assets on demand by default), so this fallback is only used
 		// on older cores and never contradicts the backend default.
@@ -682,6 +692,26 @@ const FileOptimization = ( {
 										checked={
 											settings.hostGoogleFontsLocally
 										}
+										onChange={ handleChange( setSettings ) }
+										disabled={ optimizerDisabled }
+									/>
+								</Tooltip>
+								<Tooltip
+									content={
+										optimizerDisabled ? pausedTooltip : ''
+									}
+								>
+									<SwitchField
+										label={ __(
+											'Font Metric Fallback',
+											'performance-optimisation'
+										) }
+										description={ __(
+											'Inject metric-matched system fallback (size-adjust/ascent-override) to reduce CLS when Google Fonts load.',
+											'performance-optimisation'
+										) }
+										name="fontMetricFallback"
+										checked={ settings.fontMetricFallback }
 										onChange={ handleChange( setSettings ) }
 										disabled={ optimizerDisabled }
 									/>
@@ -2235,6 +2265,127 @@ const FileOptimization = ( {
 									) }
 									name="disableSelfPingbacks"
 									checked={ settings.disableSelfPingbacks }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable RSD Link',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove the EditURI (RSD) link used by remote clients.',
+										'performance-optimisation'
+									) }
+									name="disableRSD"
+									checked={ settings.disableRSD }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable WLW Manifest',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove the Windows Live Writer manifest link.',
+										'performance-optimisation'
+									) }
+									name="disableWLWManifest"
+									checked={ settings.disableWLWManifest }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable Global Styles',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove WordPress global styles and SVG filters.',
+										'performance-optimisation'
+									) }
+									name="disableGlobalStyles"
+									checked={ settings.disableGlobalStyles }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable Classic Theme Styles',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove classic theme stylesheet.',
+										'performance-optimisation'
+									) }
+									name="disableClassicThemeStyles"
+									checked={
+										settings.disableClassicThemeStyles
+									}
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable Woo Cart Fragments',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Prevent WooCommerce cart fragments AJAX polling.',
+										'performance-optimisation'
+									) }
+									name="disableWooCartFragments"
+									checked={ settings.disableWooCartFragments }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable Recent Comments Style',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove recent comments widget inline CSS.',
+										'performance-optimisation'
+									) }
+									name="disableRecentCommentsStyle"
+									checked={
+										settings.disableRecentCommentsStyle
+									}
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable Comment Reply JS',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove comment-reply script.',
+										'performance-optimisation'
+									) }
+									name="disableCommentReply"
+									checked={ settings.disableCommentReply }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable oEmbed Discovery',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Remove oEmbed discovery links from head.',
+										'performance-optimisation'
+									) }
+									name="disableOEmbedDiscovery"
+									checked={ settings.disableOEmbedDiscovery }
+									onChange={ handleChange( setSettings ) }
+								/>
+								<SwitchField
+									label={ __(
+										'Disable Block Widgets',
+										'performance-optimisation'
+									) }
+									description={ __(
+										'Disable block-based widgets editor.',
+										'performance-optimisation'
+									) }
+									name="disableBlockWidgets"
+									checked={ settings.disableBlockWidgets }
 									onChange={ handleChange( setSettings ) }
 								/>
 								<SwitchField
