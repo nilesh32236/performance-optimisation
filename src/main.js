@@ -6,7 +6,6 @@ document.addEventListener( 'DOMContentLoaded', function () {
 	let pendingRefresh = null;
 	let fallbackTimer = null;
 
-	// Intentionally standalone admin-bar bundle must not import SPA apiRequest, keep sync manually.
 	/**
 	 * Shared helper for POST JSON requests.
 	 *
