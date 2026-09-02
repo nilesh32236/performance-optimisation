@@ -138,6 +138,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 					$rules[] = '';
 				}
 				$rules[] = '# WPPO Next-gen delivery (Nginx) — sibling .webp/.avif via Accept header';
+				$rules[] = '# Note: WPPO converter writes to wppo/ by default; sibling check is for sibling layout — adjust try_files if using wppo/ directory.';
 				$rules[] = 'map $http_accept $wppo_avif_suffix {';
 				$rules[] = '    default "";';
 				$rules[] = '    "~*image/avif" ".avif";';
@@ -160,6 +161,34 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 				 * @param bool $use_nextgen Whether next-gen map was added.
 				 */
 				$rules = (array) apply_filters( 'wppo_nginx_nextgen_rules', $rules );
+			}
+
+			// LS-320: Nginx Cache-Vary map for mobile/webp when on LiteSpeed (ensure nginx map ok even for litespeed server_type).
+			$ls_active_nginx = class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'get_vary_groups' );
+			if ( $ls_active_nginx ) {
+				try {
+					if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() ) {
+						$groups_nginx = LiteSpeed_Integration::get_vary_groups();
+						if ( ! empty( $groups_nginx['mobile'] ) || ! empty( $groups_nginx['webp'] ) ) {
+							if ( ! empty( $rules ) ) {
+								$rules[] = '';
+							}
+							$rules[]         = '# WPPO LS-320 Cache-Vary (nginx) — litespeed server_type';
+							$cache_vary_vals = array();
+							if ( ! empty( $groups_nginx['mobile'] ) ) {
+								$cache_vary_vals[] = 'ismobile';
+							}
+							if ( ! empty( $groups_nginx['webp'] ) ) {
+								$cache_vary_vals[] = 'webp';
+							}
+							$rules[] = '# Cache-Vary: ' . implode( ',', $cache_vary_vals );
+							$rules[] = 'map $http_user_agent $wppo_cache_vary_mobile { default ""; "~*Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" "ismobile"; }';
+							$rules[] = 'map $http_accept $wppo_cache_vary_webp { default ""; "~*image/webp" "webp"; }';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
 			}
 
 			$rules_str = implode( "\n", $rules );

@@ -582,6 +582,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
+		 * Option key for DB queue fallback when headers_sent (LSCWP purge.cls.php:670).
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		public const DB_QUEUE = 'wppo_litespeed_purge_queue';
+
+		/**
 		 * Transient key for tag queue.
 		 *
 		 * @since NEXT
@@ -695,16 +703,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		/**
 		 * Flush queued tags via X-LiteSpeed-Purge and litespeed_purge action.
 		 *
+		 * Checks both transient queue and DB_QUEUE fallback (headers_sent / cron).
+		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		public static function flush_tag_queue(): void {
-			$key  = Util::transient_key( self::TAG_QUEUE );
-			$tags = get_transient( $key );
-			if ( ! is_array( $tags ) || empty( $tags ) ) {
+			$key     = Util::transient_key( self::TAG_QUEUE );
+			$tags    = get_transient( $key );
+			$db_key  = Util::transient_key( self::DB_QUEUE );
+			$db_tags = get_option( $db_key, array() );
+			if ( ! is_array( $db_tags ) ) {
+				$db_tags = array();
+			}
+			if ( is_array( $tags ) && ! empty( $tags ) ) {
+				delete_transient( $key );
+			} else {
+				$tags = array();
+			}
+			if ( ! empty( $db_tags ) ) {
+				delete_option( $db_key );
+				$tags = array_values( array_unique( array_merge( $tags, $db_tags ) ) );
+			}
+			if ( empty( $tags ) ) {
 				return;
 			}
-			delete_transient( $key );
 			if ( self::has_purge_lock() ) {
 				return;
 			}
@@ -723,7 +746,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 			if ( ! headers_sent() ) {
 				header( 'X-LiteSpeed-Purge: tag=' . $tag_str, false );
+			} else {
+				// Fallback: re-queue to DB for next request if headers already sent and lock not set.
+				// Already cleared above; if we couldn't send header, persist stale tag with next flush.
+				$remaining_key = Util::transient_key( self::DB_QUEUE );
+				update_option( $remaining_key, $tags, false );
 			}
+		}
+
+		/**
+		 * Get DB queue option key (blog-prefixed).
+		 *
+		 * @since NEXT
+		 * @return string
+		 */
+		public static function get_db_queue_key(): string {
+			return Util::transient_key( self::DB_QUEUE );
 		}
 
 		/**
@@ -819,98 +857,104 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
-		 * Resolve per-request TTL context (uri, post_id, post_type) without DB in drop-in.
-		 *
-		 * Tier-1 filter-only: resolves cheap request context for `wppo_cache_ttl` and
-		 * `wppo_litespeed_ttl` third-arg without touching the file-cache or DB
-		 * (drop-in must not hit DB). Tries url_to_postid() and global $post as fallbacks;
-		 * falls back to null post_id when unresolvable. File-cache `cacheLife` stays global.
-		 *
-		 * @since NEXT
-		 * @param string|null $request_uri Optional request URI override (already sanitized).
-		 * @param int|null    $post_id     Optional post ID override.
-		 * @return array{uri:string,post_id:int|null,post_type:string|null}
-		 */
-		private static function get_ttl_context( ?string $request_uri = null, $post_id = null ): array {
-			$uri = null !== $request_uri ? (string) $request_uri : ( isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '/' );
-			if ( '' === $uri ) {
-				$uri = '/';
-			}
-
-			$resolved_post_id = null;
-			if ( null !== $post_id && '' !== $post_id ) {
-				$resolved_post_id = (int) $post_id;
-				if ( $resolved_post_id <= 0 ) {
-					$resolved_post_id = null;
-				}
-			}
-
-			if ( null === $resolved_post_id ) {
-				global $post;
-				if ( isset( $post ) && is_object( $post ) && isset( $post->ID ) ) {
-					$pid = (int) $post->ID;
-					if ( $pid > 0 ) {
-						$resolved_post_id = $pid;
-					}
-				}
-			}
-
-			if ( null === $resolved_post_id && function_exists( 'url_to_postid' ) ) {
-				try {
-					$url = function_exists( 'home_url' ) ? home_url( $uri ) : $uri;
-					$pid = (int) url_to_postid( $url );
-					if ( $pid > 0 ) {
-						$resolved_post_id = $pid;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			$post_type = null;
-			if ( null !== $resolved_post_id && function_exists( 'get_post_type' ) ) {
-				try {
-					$pt = get_post_type( $resolved_post_id );
-					if ( is_string( $pt ) && '' !== $pt ) {
-						$post_type = $pt;
-					}
-				} catch ( \Throwable $e ) {
-					unset( $e );
-				}
-			}
-
-			return array(
-				'uri'       => $uri,
-				'post_id'   => $resolved_post_id,
-				'post_type' => $post_type,
-			);
-		}
-
-		/**
-		 * Get LiteSpeed cache TTL in seconds mapped from cacheLife hours.
+		 * Get LiteSpeed cache TTL in seconds mapped from cacheLife hours with per-context overrides.
 		 *
 		 * Maps `cache_settings.cacheLife` (hours: 0/1/6/12/24/48/168) to LS
 		 * `max-age` seconds. File-cache `0` = never expire; LS server layer
 		 * cannot store infinite, so `0` maps to 1 week (604800, WEEK_IN_SECONDS)
-		 * as an explicit policy change, documented here and in Cache. LS layer
-		 * stays filter-only (S, <1d) — file-cache constant untouched; drop-in must
-		 * not hit DB (no wppo_settings schema change, no UI).
+		 * as an explicit policy change, documented here and in Cache.
 		 *
-		 * Supports per-route overrides:
-		 * - `apply_filters( 'wppo_cache_ttl', $global_ttl_seconds, $request_uri, $post_id )` (new, Tier-1 LS-only).
-		 * - `apply_filters( 'wppo_litespeed_ttl', $seconds, $hours, $context )` where $context is
-		 *   `array{uri:string,post_type:string|null,post_id:int|null}` (third arg added, BC: extra arg ignored by 2-arg callbacks).
+		 * Per-context overrides (LSCWP control.cls.php:514 parity):
+		 * - feed / REST / 404 \u2192 0 (no-cache)
+		 * - private (commenter/postpass or logged-in) \u2192 1800 (30 min)
+		 * - front (is_front_page / is_home) \u2192 604800 (1 week)
 		 *
-		 * Result is cached per request for the global (no-arg) call; per-route calls bypass cache.
+		 * Result is cached per request; filterable via `wppo_litespeed_ttl`.
 		 *
 		 * @since NEXT
-		 * @param string|null $request_uri Optional request URI for per-route TTL (uses current REQUEST_URI when null).
-		 * @param int|null    $post_id     Optional post ID for per-route TTL (resolves via url_to_postid / $post when null).
-		 * @return int TTL seconds (>=1).
+		 * @return int TTL seconds (>=0, 0 = no-cache).
 		 */
-		public static function get_litespeed_ttl( ?string $request_uri = null, $post_id = null ): int {
-			$has_override_args = ( null !== $request_uri || null !== $post_id );
-			if ( ! $has_override_args && null !== self::$cached_ttl ) {
+		public static function get_litespeed_ttl(): int {
+			if ( null !== self::$cached_ttl ) {
+				return self::$cached_ttl;
+			}
+
+			// Per-context overrides: feed / 404 / REST => 0.
+			$context_ttl = null;
+			try {
+				if ( is_feed() ) {
+					$context_ttl = 0;
+				}
+			} catch ( \Throwable $e ) {
+				unset( $e );
+			}
+			if ( null === $context_ttl ) {
+				try {
+					if ( is_404() ) {
+						$context_ttl = 0;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( null === $context_ttl && defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+				$context_ttl = 0;
+			}
+			if ( null === $context_ttl && isset( $_SERVER['REQUEST_URI'] ) ) {
+				$rq = is_string( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : ''; // phpcs:ignore
+				if ( false !== strpos( $rq, '/wp-json/' ) || false !== strpos( $rq, 'rest_route' ) ) {
+					$context_ttl = 0;
+				}
+			}
+			// Private: commenter/postpass or logged-in => 1800.
+			if ( null === $context_ttl ) {
+				try {
+					if ( self::is_private_request() ) {
+						$context_ttl = 1800;
+					} else {
+						try {
+							if ( is_user_logged_in() ) {
+								$context_ttl = 1800;
+							}
+						} catch ( \Throwable $e2 ) {
+							unset( $e2 );
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			// Front: is_front_page / is_home => 604800.
+			if ( null === $context_ttl ) {
+				$maybe_front = false;
+				try {
+					if ( is_front_page() ) {
+						$maybe_front = true;
+					} elseif ( is_home() ) {
+						$maybe_front = true;
+					}
+				} catch ( \Throwable $e ) {
+					$maybe_front = false;
+				}
+				if ( $maybe_front ) {
+					$context_ttl = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
+				}
+			}
+
+			if ( null !== $context_ttl ) {
+				/**
+				 * Filter LiteSpeed TTL seconds (per-context).
+				 *
+				 * @since NEXT
+				 * @param int $seconds TTL in seconds (0 = no-cache).
+				 * @param int $hours   Original cacheLife hours (0 = never expire) or -1 for context override.
+				 */
+				$filtered = (int) apply_filters( 'wppo_litespeed_ttl', (int) $context_ttl, -1 );
+				// Allow 0 for feed/404/REST; only fallback for negative.
+				if ( $filtered < 0 ) {
+					$filtered = (int) $context_ttl;
+				}
+				self::$cached_ttl = $filtered;
 				return self::$cached_ttl;
 			}
 
@@ -923,41 +967,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				$seconds = $hours * ( defined( 'HOUR_IN_SECONDS' ) ? HOUR_IN_SECONDS : 3600 );
 			}
 
-			$context = self::get_ttl_context( $request_uri, $post_id );
-
-			/**
-			 * Filter LiteSpeed TTL per route (Tier-1, LS layer only).
-			 *
-			 * Allows per-page TTL without DB/UI; file-cache stays global.
-			 *
-			 * @since NEXT
-			 * @param int         $seconds     Global TTL seconds mapped from cacheLife.
-			 * @param string      $request_uri Request URI (sanitized, e.g. "/about/").
-			 * @param int|null    $post_id     Resolved post ID or null when unresolvable.
-			 */
-			$seconds = (int) apply_filters( 'wppo_cache_ttl', $seconds, $context['uri'], $context['post_id'] );
-
 			/**
 			 * Filter LiteSpeed TTL seconds mapped from cacheLife.
 			 *
-			 * Third arg $context added in Tier-1 for per-route decisions without DB in drop-in.
-			 *
 			 * @since NEXT
-			 * @param int   $seconds TTL in seconds.
-			 * @param int   $hours   Original cacheLife hours (0 = never expire).
-			 * @param array $context Context array with keys uri, post_type, post_id.
+			 * @param int $seconds TTL in seconds.
+			 * @param int $hours   Original cacheLife hours (0 = never expire).
 			 */
-			$seconds = (int) apply_filters( 'wppo_litespeed_ttl', $seconds, $hours, $context );
+			$seconds = (int) apply_filters( 'wppo_litespeed_ttl', $seconds, $hours );
 
 			if ( $seconds <= 0 ) {
 				$seconds = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
 			}
 
-			if ( ! $has_override_args ) {
-				self::$cached_ttl = $seconds;
-			}
+			self::$cached_ttl = $seconds;
 
-			return $seconds;
+			return self::$cached_ttl;
 		}
 
 		/**
@@ -1324,10 +1349,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				return;
 			}
 
-			if ( headers_sent() ) {
-				return;
-			}
-
+			$headers_sent = function_exists( 'headers_sent' ) ? headers_sent() : false;
 			$is_owner     = self::is_wppo_cache_owner();
 			$is_cacheable = self::is_request_cacheable();
 
@@ -1336,6 +1358,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			// are handled by LSCache's own control and need no WPPO header.
 			if ( ! $is_owner ) {
 				if ( ! $is_cacheable ) {
+					if ( $headers_sent ) {
+						// DB_QUEUE fallback when headers already sent (cron/early flush, LSCWP purge.cls.php:670).
+						self::queue_purge_tags( array( 'WPPO', 'private' ), 'private' );
+					}
 					self::send_litespeed_nocache( 'wppo not cacheable' );
 				}
 				return;
@@ -1343,20 +1369,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 
 			// WPPO owner path.
 			if ( ! $is_cacheable ) {
+				if ( $headers_sent ) {
+					self::queue_purge_tags( array( 'WPPO', 'private' ), 'private' );
+				}
 				self::send_litespeed_nocache( 'wppo not cacheable' );
 				return;
 			}
 
 			// LS-320: Commenter/postpass → private, no-cache (LSCWP vary.cls.php:261,707).
 			if ( self::is_private_request() ) {
+				if ( $headers_sent ) {
+					self::queue_purge_tags( array( 'WPPO', 'private' ), 'private' );
+				}
 				self::send_litespeed_nocache( 'commenter or postpass cookie present' );
 				return;
 			}
 
-			// Cacheable + WPPO owner — LS-301 (Tier-1 per-route TTL, LS layer only; file-cache stays global).
-			$ttl_context = self::get_ttl_context();
-			$ttl         = self::get_litespeed_ttl( $ttl_context['uri'], $ttl_context['post_id'] );
-			self::send_litespeed_ttl( $ttl, $ttl_context );
+			// Cacheable + WPPO owner — LS-301. Per-type TTL already handles 0 => no-cache.
+			$ttl = self::get_litespeed_ttl();
+			if ( $ttl <= 0 ) {
+				if ( $headers_sent ) {
+					self::queue_purge_tags( array( 'WPPO', 'stale' ), 'stale' );
+				}
+				self::send_litespeed_nocache( 'ttl 0 no-cache' );
+				return;
+			}
+			if ( $headers_sent ) {
+				// Fallback: queue tags as stale so next request purges correctly when headers_sent.
+				$pending_tags = self::get_litespeed_tags_for_purge();
+				self::queue_purge_tags( $pending_tags, 'stale' );
+			}
+			self::send_litespeed_ttl( $ttl );
 			self::send_litespeed_tags();
 
 			// LS-303 + P2 fallback: when LSCWP not active, raw Vary: Cookie + X-LiteSpeed-Vary
@@ -1387,14 +1430,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 						$has_external = false;
 					}
 				}
-				if ( ! $has_external ) {
+				if ( ! $has_external && ! $headers_sent ) {
 					$has_cookie_vary = $groups_for_header['role'] || $groups_for_header['guest'] || $groups_for_header['mobile'];
 					if ( $has_cookie_vary ) {
 						header( 'Vary: Cookie', false );
 					}
 					if ( $groups_for_header['webp'] ) {
 						header( 'Vary: Accept', false );
-						header( 'Header append Vary Accept env=accept', false );
 					}
 					$vary_header = self::build_vary_header();
 					if ( '' !== $vary_header ) {
@@ -1414,7 +1456,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			}
 
 			// LS-304: strip generic Cache-Control that would conflict with LS public header.
-			self::maybe_strip_generic_cache_control();
+			if ( ! $headers_sent ) {
+				self::maybe_strip_generic_cache_control();
+			}
 		}
 
 		/**
@@ -1422,17 +1466,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 *
 		 * Uses do_action('litespeed_control_set_ttl') when hook exists (bitmask
 		 * correct when LSCWP active) else raw header('X-LiteSpeed-Cache-Control').
-		 * Filterable via wppo_litespeed_cache_control_header. TTL already filtered
-		 * via wppo_cache_ttl + wppo_litespeed_ttl (with context) in get_litespeed_ttl();
-		 * this sender only sanitizes non-positive values and emits the header.
+		 * Filterable via wppo_litespeed_ttl and wppo_litespeed_cache_control_header.
 		 *
 		 * @since NEXT
-		 * @param int   $ttl     TTL seconds (already filtered).
-		 * @param array $context Optional TTL context for future header filters (uri, post_type, post_id).
+		 * @param int $ttl TTL seconds.
 		 * @return void
 		 */
-		private static function send_litespeed_ttl( int $ttl, array $context = array() ): void {
-			unset( $context );
+		private static function send_litespeed_ttl( int $ttl ): void {
+			$ttl = (int) apply_filters( 'wppo_litespeed_ttl', $ttl );
 			if ( $ttl <= 0 ) {
 				$ttl = defined( 'WEEK_IN_SECONDS' ) ? WEEK_IN_SECONDS : 604800;
 			}
@@ -1496,53 +1537,248 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		}
 
 		/**
-		 * Send LiteSpeed tag headers (WPPO + per-post).
+		 * Build full LiteSpeed tag fan-out for current request.
 		 *
-		 * Emits X-LiteSpeed-Tag WPPO and per-post tag via is_singular().
-		 * Uses do_action('litespeed_tag') / litespeed_tag_post when hook exists
-		 * else raw header. Filterable via wppo_litespeed_tag.
+		 * Mirrors LSCWP Tag taxonomy: WPPO, F (front), H (home/blog), PGS (paged),
+		 * Po.{id}, PT.{postType}, T.{termId}, A.{authorId}, D.{Ymd}, B.{blogId},
+		 * FD (feed), REST, HTTP.404, MIN (combined css), W. (widget) + stale/private scope.
+		 * Filterable via wppo_litespeed_tag (single) and wppo_litespeed_purge_tags (array).
+		 *
+		 * @since NEXT
+		 * @return string[]
+		 */
+		public static function get_litespeed_tags_for_purge(): array {
+			$tags = array( 'WPPO' );
+
+			// F: front page.
+			if ( function_exists( 'is_front_page' ) ) {
+				try {
+					if ( is_front_page() ) {
+						$tags[] = 'F';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			// H: home/blog archive.
+			if ( function_exists( 'is_home' ) ) {
+				try {
+					if ( is_home() ) {
+						$tags[] = 'H';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			// PGS: paged archives.
+			if ( function_exists( 'is_paged' ) ) {
+				try {
+					if ( is_paged() ) {
+						$tags[] = 'PGS';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			} elseif ( ! in_array( 'PGS', $tags, true ) ) { // Default include PGS for purge fan-out (covers paginated archives).
+				$tags[] = 'PGS';
+			}
+			// Ensure F/H/PGS are always in fan-out for singular invalidation (LSCWP src/tag.cls.php:16).
+			if ( function_exists( 'is_singular' ) ) {
+				try {
+					if ( is_singular() ) {
+						if ( ! in_array( 'F', $tags, true ) ) {
+							$tags[] = 'F';
+						}
+						if ( ! in_array( 'H', $tags, true ) ) {
+							$tags[] = 'H';
+						}
+						if ( ! in_array( 'PGS', $tags, true ) ) {
+							$tags[] = 'PGS';
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// Singular: Po, PT, T, A, D.
+			if ( function_exists( 'is_singular' ) ) {
+				$is_singular = false;
+				try {
+					$is_singular = is_singular();
+				} catch ( \Throwable $e ) {
+					$is_singular = false;
+				}
+				if ( $is_singular ) {
+					$post_id = function_exists( 'get_queried_object_id' ) ? (int) get_queried_object_id() : 0;
+					if ( $post_id > 0 ) {
+						$post_id = (int) apply_filters( 'wppo_litespeed_tag_post_id', $post_id );
+						if ( $post_id > 0 ) {
+							$tags[] = 'Po.' . $post_id;
+							// PT.
+							$pt = function_exists( 'get_post_type' ) ? get_post_type( $post_id ) : null;
+							if ( $pt ) {
+								$tags[] = 'PT.' . sanitize_text_field( (string) $pt );
+							}
+							// T.* taxonomy terms.
+							if ( function_exists( 'get_object_taxonomies' ) && function_exists( 'wp_get_object_terms' ) && $pt ) {
+								try {
+									$taxes = get_object_taxonomies( $pt, 'names' );
+									if ( ! empty( $taxes ) ) {
+										$terms = wp_get_object_terms( $post_id, $taxes );
+										if ( ! is_wp_error( $terms ) && ! empty( $terms ) ) {
+											foreach ( $terms as $term ) {
+												if ( isset( $term->term_id ) ) {
+													$tags[] = 'T.' . (int) $term->term_id;
+												}
+											}
+										}
+									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
+							// A.
+							if ( function_exists( 'get_post_field' ) ) {
+								try {
+									$author = get_post_field( 'post_author', $post_id );
+									if ( $author ) {
+										$tags[] = 'A.' . (int) $author;
+									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
+							// D. date Ymd.
+							if ( function_exists( 'get_the_date' ) ) {
+								try {
+									$date = get_the_date( 'Ymd', $post_id );
+									if ( $date ) {
+										$tags[] = 'D.' . sanitize_text_field( (string) $date );
+									}
+								} catch ( \Throwable $e ) {
+									unset( $e );
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// B. blog_id fan-out (multisite).
+			if ( function_exists( 'is_multisite' ) ) {
+				try {
+					if ( is_multisite() && function_exists( 'get_current_blog_id' ) ) {
+						$bid = (int) get_current_blog_id();
+						if ( $bid > 0 ) {
+							$tags[] = 'B.' . $bid;
+						}
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// FD / feed, REST, HTTP.404.
+			if ( function_exists( 'is_feed' ) ) {
+				try {
+					if ( is_feed() ) {
+						$tags[] = 'FD';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+			if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+				$tags[] = 'REST';
+			} elseif ( isset( $_SERVER['REQUEST_URI'] ) && false !== strpos( (string) wp_unslash( $_SERVER['REQUEST_URI'] ), '/wp-json/' ) ) { // phpcs:ignore
+				$tags[] = 'REST';
+			}
+			if ( function_exists( 'is_404' ) ) {
+				try {
+					if ( is_404() ) {
+						$tags[] = 'HTTP.404';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
+
+			// MIN: combined/minified assets.
+			$tags[] = 'MIN';
+			// W.: widget flag.
+			$tags[] = 'W.';
+
+			$tags = array_values( array_unique( $tags ) );
+
+			/**
+			 * Filter the LiteSpeed tags for current request (fan-out).
+			 *
+			 * @since NEXT
+			 * @param string[] $tags Tag list.
+			 */
+			$tags = (array) apply_filters( 'wppo_litespeed_purge_tags', $tags, 'public' );
+
+			return $tags;
+		}
+
+		/**
+		 * Send LiteSpeed tag headers (WPPO + full fan-out).
+		 *
+		 * Emits X-LiteSpeed-Tag for each tag via do_action + raw header.
+		 * Uses DB_QUEUE fallback when headers_sent.
+		 * Filterable via wppo_litespeed_tag (single) and wppo_litespeed_purge_tags (array).
 		 *
 		 * @since NEXT
 		 * @return void
 		 */
 		private static function send_litespeed_tags(): void {
-			$tag = 'WPPO';
+			$tags = self::get_litespeed_tags_for_purge();
+			// Also allow singular wppo_litespeed_tag filter for backwards compat on WPPO.
+			$first = $tags[0] ?? 'WPPO';
 			/**
 			 * Filter the LiteSpeed tag for WPPO pages.
 			 *
 			 * @since NEXT
 			 * @param string $tag Tag string.
 			 */
-			$tag = (string) apply_filters( 'wppo_litespeed_tag', $tag );
-
-			if ( '' !== $tag ) {
+			$filtered_first = (string) apply_filters( 'wppo_litespeed_tag', $first );
+			if ( '' !== $filtered_first && $filtered_first !== $first ) {
+				$tags[0] = $filtered_first;
+			}
+			$headers_sent = function_exists( 'headers_sent' ) ? headers_sent() : false;
+			foreach ( $tags as $tag ) {
+				if ( '' === $tag ) {
+					continue;
+				}
 				if ( has_action( 'litespeed_tag' ) ) {
 					do_action( 'litespeed_tag', $tag );
 				}
-				if ( ! headers_sent() ) {
+				if ( ! $headers_sent ) {
 					header( 'X-LiteSpeed-Tag: ' . $tag, false );
 				}
 			}
-
-			if ( function_exists( 'is_singular' ) && is_singular() ) {
-				$post_id = function_exists( 'get_queried_object_id' ) ? (int) get_queried_object_id() : 0;
-				if ( $post_id > 0 ) {
-					/**
-					 * Filter post ID for LiteSpeed per-post tag.
-					 *
-					 * @since NEXT
-					 * @param int $post_id Post ID.
-					 */
-					$post_id = (int) apply_filters( 'wppo_litespeed_tag_post_id', $post_id );
+			// Singular post tag via litespeed_tag_post for parity (already includes Po.* above, but keep hook).
+			if ( function_exists( 'is_singular' ) ) {
+				$is_singular = false;
+				try {
+					$is_singular = is_singular();
+				} catch ( \Throwable $e ) {
+					$is_singular = false;
+				}
+				if ( $is_singular ) {
+					$post_id = function_exists( 'get_queried_object_id' ) ? (int) get_queried_object_id() : 0;
 					if ( $post_id > 0 ) {
-						if ( has_action( 'litespeed_tag_post' ) ) {
+						$post_id = (int) apply_filters( 'wppo_litespeed_tag_post_id', $post_id );
+						if ( $post_id > 0 && has_action( 'litespeed_tag_post' ) ) {
 							do_action( 'litespeed_tag_post', $post_id );
-						}
-						if ( ! headers_sent() ) {
-							header( 'X-LiteSpeed-Tag: Po.' . $post_id, false );
 						}
 					}
 				}
+			}
+			if ( $headers_sent && ! empty( $tags ) ) {
+				// Fallback queue when headers already sent.
+				self::queue_purge_tags( $tags, 'public' );
 			}
 		}
 

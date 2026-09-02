@@ -180,6 +180,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					array(
 						'',
 						'# WPPO Next-gen delivery (LiteSpeed/Apache) — sibling .webp/.avif',
+						'# Note: WPPO converter writes to wppo/ directory by default (wppo/{path}.webp); sibling layout (.webp next to original) is used when sibling files exist.',
+						'# This block checks sibling .webp/.avif existence (REQUEST_FILENAME+.webp). For wppo/ layout, PHP fallback serves wppo/ copy via Accept negotiation.',
 						'<IfModule mod_rewrite.c>',
 						'    RewriteEngine On',
 						'    # Serve .webp when client supports it and file exists',
@@ -192,7 +194,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 						'    RewriteRule ^(.+)\.(jpe?g|png)$ $1.avif [T=image/avif,E=accept:1]',
 						'</IfModule>',
 						'<IfModule mod_headers.c>',
-						'    Header append Vary Accept env=accept',
+						'    Header append Vary Accept',
 						'</IfModule>',
 						'AddType image/webp .webp',
 						'AddType image/avif .avif',
@@ -209,7 +211,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 			}
 
 			// LS-320: Cache-Vary bridge for mobile/webp vary groups.
-			// Uses combined E=Cache-Vary:ismobile,webp to avoid overwrite when both match.
+			// Correct wiring: Cache-Vary: ismobile,webp via env, Vary: Accept without env=accept (LSCWP htaccess.cls.php:605 parity).
+			// Uses combined E=Cache-Vary:ismobile,webp to avoid overwrite when both match, plus per-group fallbacks.
 			$ls_active = class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed();
 			if ( $ls_active ) {
 				$groups = LiteSpeed_Integration::get_vary_groups();
@@ -217,25 +220,41 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Htaccess_Handler' ) ) {
 					$cache_vary = array();
 					$env_values = array();
 					$rules[]    = '';
-					$rules[]    = '# WPPO LS-320 Cache-Vary bridge (mobile/webp)';
+					$rules[]    = '# WPPO LS-320 Cache-Vary bridge (mobile/webp) — Cache-Vary: ismobile,webp (LSCWP htaccess.cls.php:605)';
 					$rules[]    = '<IfModule mod_rewrite.c>';
 					$rules[]    = '    RewriteEngine On';
-					if ( $groups['mobile'] ) {
-						$rules[]      = '    # Mobile detection — set Cache-Vary env for LSWS';
-						$rules[]      = '    RewriteCond %{HTTP_USER_AGENT} "Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" [NC]';
-						$cache_vary[] = 'ismobile';
-						$env_values[] = 'ismobile';
+					if ( $groups['mobile'] && $groups['webp'] ) {
+						$rules[]    = '    # Both mobile & webp — combined vary (prevents overwrite)';
+						$rules[]    = '    RewriteCond %{HTTP_USER_AGENT} "Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" [NC]';
+						$rules[]    = '    RewriteCond %{HTTP:Accept} image/webp [NC]';
+						$rules[]    = '    RewriteRule .* - [E=Cache-Vary:ismobile,webp]';
+						$rules[]    = '    # Mobile only';
+						$rules[]    = '    RewriteCond %{HTTP_USER_AGENT} "Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" [NC]';
+						$rules[]    = '    RewriteCond %{HTTP:Accept} !image/webp [NC]';
+						$rules[]    = '    RewriteRule .* - [E=Cache-Vary:ismobile]';
+						$rules[]    = '    # WebP only';
+						$rules[]    = '    RewriteCond %{HTTP_USER_AGENT} !"Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" [NC]';
+						$rules[]    = '    RewriteCond %{HTTP:Accept} image/webp [NC]';
+						$rules[]    = '    RewriteRule .* - [E=Cache-Vary:webp]';
+						$cache_vary = array( 'ismobile', 'webp' );
+						$env_values = array( 'ismobile', 'webp' );
+					} else {
+						if ( $groups['mobile'] ) {
+							$rules[]      = '    # Mobile detection — set Cache-Vary env for LSWS';
+							$rules[]      = '    RewriteCond %{HTTP_USER_AGENT} "Mobile|Android|Silk|Kindle|BlackBerry|Opera Mini|Opera Mobi" [NC]';
+							$rules[]      = '    RewriteRule .* - [E=Cache-Vary:ismobile]';
+							$cache_vary[] = 'ismobile';
+							$env_values[] = 'ismobile';
+						}
+						if ( $groups['webp'] ) {
+							$rules[]      = '    # WebP detection — set Cache-Vary env for LSWS';
+							$rules[]      = '    RewriteCond %{HTTP:Accept} image/webp [NC]';
+							$rules[]      = '    RewriteRule .* - [E=Cache-Vary:webp]';
+							$cache_vary[] = 'webp';
+							$env_values[] = 'webp';
+						}
 					}
-					if ( $groups['webp'] ) {
-						$rules[]      = '    # WebP detection — set Cache-Vary env for LSWS';
-						$rules[]      = '    RewriteCond %{HTTP:Accept} image/webp [NC]';
-						$cache_vary[] = 'webp';
-						$env_values[] = 'webp';
-					}
-					// Single combined env value avoids overwrite when both match.
-					$combined = implode( ',', $env_values );
-					$rules[]  = '    RewriteRule .* - [E=Cache-Vary:' . $combined . ']';
-					$rules[]  = '</IfModule>';
+					$rules[] = '</IfModule>';
 					/**
 					 * Filter Cache-Vary htaccess rules.
 					 *

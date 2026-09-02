@@ -2000,7 +2000,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				wp_schedule_single_event( time() + wp_rand( 0, 5 ), 'wppo_generate_static_page', array( $page_id ) );
 			}
 
-			// LS-201: invalidate → LSCache purge sync for the post.
+			// LS-201: invalidate → LSCache purge sync for the post with full fan-out D/B/C/W/REST.
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 				LiteSpeed_Integration::sync_purge_post_to_litespeed( (int) $page_id );
 				// P3: queued tag purge with taxonomy fan-out (public,private,stale + blog_id_).
@@ -2023,8 +2023,58 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					if ( $author ) {
 						$tags[] = 'A.' . (int) $author;
 					}
+					// D. date Ymd.
+					if ( function_exists( 'get_the_date' ) ) {
+						$date = get_the_date( 'Ymd', $page_id );
+						if ( $date ) {
+							$tags[] = 'D.' . sanitize_text_field( (string) $date );
+						}
+					}
 				}
-				LiteSpeed_Integration::queue_purge_tags( array_unique( $tags ), 'public' );
+				// B. blog_id fan-out (multisite, via Util::transient_key() blog prefix, also queued explicitly for LS tag).
+				if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) ) {
+					try {
+						if ( is_multisite() ) {
+							$bid = (int) get_current_blog_id();
+							if ( $bid > 0 ) {
+								$tags[] = 'B.' . $bid;
+							}
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				// C. comment tag placeholder (purge comment-related cache).
+				$tags[] = 'C.' . (int) $page_id;
+				// W. widget.
+				$tags[] = 'W.';
+				// REST.
+				$tags[] = 'REST';
+				// MIN.
+				$tags[] = 'MIN';
+				// HTTP.404 placeholder for invalidation context (no-cache).
+				// Stale/private split: private if LiteSpeed private request, stale if TTL 0 or feed/404 context.
+				$scope = 'public';
+				if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_private_request' ) ) {
+					try {
+						if ( LiteSpeed_Integration::is_private_request() ) {
+							$scope = 'private';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( 'public' === $scope && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'get_litespeed_ttl' ) ) {
+					try {
+						$ttl = LiteSpeed_Integration::get_litespeed_ttl();
+						if ( 0 === $ttl ) {
+							$scope = 'stale';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				LiteSpeed_Integration::queue_purge_tags( array_unique( $tags ), $scope );
 			}
 		}
 
@@ -2189,18 +2239,59 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				// LS-201: WPPO → LSCache purge sync (all or single URL). Gated
 				// by is_litespeed() + is_lscache_active() + purgeSync via
 				// LiteSpeed_Integration::is_purge_sync_enabled(); loop-safe via
-				// wppo_litespeed_purge_lock (60s, blog-prefixed).
+				// wppo_litespeed_purge_lock (60s, blog-prefixed). Includes D/B/C/W/REST.
 				if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 					if ( null === $url_path || '' === $url_path ) {
 						LiteSpeed_Integration::sync_purge_all_to_litespeed();
+						// Also queue full fan-out for tag-based purge (stale scope for all).
+						$tags_all = array( 'F', 'H', 'PGS', 'D', 'B', 'C', 'W', 'REST', 'HTTP.404', 'MIN', 'WPPO' );
+						if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) ) {
+							try {
+								if ( is_multisite() ) {
+									$bid = (int) get_current_blog_id();
+									if ( $bid > 0 ) {
+										$tags_all[] = 'B.' . $bid;
+									}
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+						// Stale for full purge (double-cache stale prevention).
+						LiteSpeed_Integration::queue_purge_tags( $tags_all, 'stale' );
 					} else {
 						$path_for_url = '/' . ltrim( (string) $url_path, '/' );
 						LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
+						// Single URL also gets D/B/C/W/REST stale/private split tags.
+						$tags_single = array( 'D', 'B', 'C', 'W', 'REST', 'MIN', 'WPPO' );
+						if ( function_exists( 'is_multisite' ) && function_exists( 'get_current_blog_id' ) ) {
+							try {
+								if ( is_multisite() ) {
+									$bid = (int) get_current_blog_id();
+									if ( $bid > 0 ) {
+										$tags_single[] = 'B.' . $bid;
+									}
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+						$scope = 'public';
+						if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_private_request' ) ) {
+							try {
+								if ( LiteSpeed_Integration::is_private_request() ) {
+									$scope = 'private';
+								}
+							} catch ( \Throwable $e ) {
+								unset( $e );
+							}
+						}
+						LiteSpeed_Integration::queue_purge_tags( $tags_single, $scope );
 					}
 				}
 
 				// P0 fallback: when on LiteSpeed but LSCWP purge action not available,
-				// purge OLS swap directory and emit X-LiteSpeed-Purge header.
+				// purge OLS swap directory and emit X-LiteSpeed-Purge header with stale/private split.
 				self::purge_litespeed_swap_fallback( $url_path );
 			}
 
@@ -2244,13 +2335,43 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 					@exec( 'find ' . escapeshellarg( $swap_dir ) . ' -type f -delete 2>/dev/null' ); // phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.system_calls_exec,WordPress.PHP.NoSilencedErrors.Discouraged
 				}
 			}
+			// Stale/private split: decide scope for header.
+			$scope = 'public';
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_private_request' ) ) {
+				try {
+					if ( LiteSpeed_Integration::is_private_request() ) {
+						$scope = 'private';
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			if ( ! headers_sent() ) {
 				if ( null === $url_path || '' === $url_path ) {
 					header( 'X-LiteSpeed-Purge: *' );
+					// Also emit stale header for LS to know to serve stale while revalidate.
+					if ( 'stale' === $scope || 'private' === $scope ) {
+						header( 'X-LiteSpeed-Purge: stale,*', false );
+					}
 				} else {
 					$clean = '/' . ltrim( (string) $url_path, '/' );
 					header( 'X-LiteSpeed-Purge: ' . $clean );
+					if ( 'private' === $scope ) {
+						header( 'X-LiteSpeed-Purge: private,' . $clean, false );
+					} elseif ( 'stale' === $scope ) {
+						header( 'X-LiteSpeed-Purge: stale,' . $clean, false );
+					}
 				}
+			} elseif ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'queue_purge_tags' ) ) {
+				// headers_sent fallback: queue via DB_QUEUE as stale/private.
+					$tags = array( 'WPPO' );
+				if ( null === $url_path || '' === $url_path ) {
+					$tags[] = '*';
+				} else {
+					$clean  = '/' . ltrim( (string) $url_path, '/' );
+					$tags[] = $clean;
+				}
+					LiteSpeed_Integration::queue_purge_tags( $tags, 'stale' === $scope ? 'stale' : ( 'private' === $scope ? 'private' : 'public' ) );
 			}
 		}
 
