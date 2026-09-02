@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from '@wordpress/element';
+import { useState, useRef, useEffect, useContext } from '@wordpress/element';
 import { apiCall, fetchRecentActivities } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -61,6 +62,7 @@ const validateImportData = ( data ) => {
 const PluginSetting = ( { options } ) => {
 	const [ selectedFile, setSelectedFile ] = useState( null );
 	const [ isImporting, setIsImporting ] = useState( false );
+	const { setIsDirty } = useContext( UnsavedChangesContext );
 	const {
 		notice: importNotice,
 		notify: notifyImport,
@@ -117,6 +119,37 @@ const PluginSetting = ( { options } ) => {
 			: ''
 	);
 	const [ savingMonitoring, setSavingMonitoring ] = useState( false );
+	const [ baseline, setBaseline ] = useState( {
+		newApiKey: '',
+		autoRescan,
+		serverTimingEnabled: !! storedAudit.server_timing_enabled,
+		rumEnabled: !! storedAudit.rum_enabled,
+		highValueUrls: Array.isArray( storedAudit.high_value_urls )
+			? storedAudit.high_value_urls.join( '\n' )
+			: '',
+	} );
+	useEffect( () => {
+		const current = {
+			newApiKey,
+			autoRescan,
+			serverTimingEnabled,
+			rumEnabled,
+			highValueUrls,
+		};
+		const dirty = JSON.stringify( current ) !== JSON.stringify( baseline );
+		setIsDirty( dirty );
+	}, [
+		newApiKey,
+		autoRescan,
+		serverTimingEnabled,
+		rumEnabled,
+		highValueUrls,
+		baseline,
+		setIsDirty,
+	] );
+	useEffect( () => {
+		return () => setIsDirty( false );
+	}, [ setIsDirty ] );
 
 	const saveMonitoring = async () => {
 		setSavingMonitoring( true );
@@ -138,6 +171,12 @@ const PluginSetting = ( { options } ) => {
 				},
 			} );
 			if ( response.success ) {
+				setBaseline( ( prev ) => ( {
+					...prev,
+					serverTimingEnabled,
+					rumEnabled,
+					highValueUrls,
+				} ) );
 				notifyApiKey( {
 					type: 'success',
 					message: __(
@@ -184,6 +223,7 @@ const PluginSetting = ( { options } ) => {
 				},
 			} );
 			if ( response.success ) {
+				setBaseline( ( prev ) => ( { ...prev, autoRescan } ) );
 				notifyApiKey( {
 					type: 'success',
 					message: __(
@@ -233,6 +273,7 @@ const PluginSetting = ( { options } ) => {
 			if ( response.success ) {
 				setNewApiKey( '' );
 				setApiKeyConfigured( true );
+				setBaseline( ( prev ) => ( { ...prev, newApiKey: '' } ) );
 				notifyApiKey( {
 					type: 'success',
 					message: __( 'API key saved.', 'performance-optimisation' ),

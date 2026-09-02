@@ -1,8 +1,14 @@
 import { __, _n, sprintf } from '@wordpress/i18n';
-import { useState, useEffect, useCallback } from '@wordpress/element';
+import {
+	useState,
+	useEffect,
+	useCallback,
+	useContext,
+} from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDatabase, faCalendarAlt } from '@fortawesome/free-solid-svg-icons';
 import FeatureHeader from './common/FeatureHeader';
@@ -137,6 +143,24 @@ const DatabaseCleanup = ( { options = {} } ) => {
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isSaving, setIsSaving ] = useState( false );
+	const { setIsDirty } = useContext( UnsavedChangesContext );
+	const [ baseline, setBaseline ] = useState( defaultSettings );
+	useEffect( () => {
+		setBaseline( { ...defaultSettings, ...options } );
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		options.dbSchedule,
+		options.dbRevMaxAge,
+		options.dbRevKeepLatest,
+		options.dbOptimize,
+	] );
+	useEffect( () => {
+		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
+		setIsDirty( dirty );
+	}, [ settings, baseline, setIsDirty ] );
+	useEffect( () => {
+		return () => setIsDirty( false );
+	}, [ setIsDirty ] );
 	const [ counts, setCounts ] = useState( {} );
 	const [ loading, setLoading ] = useState( {} );
 	const [ loadingCounts, setLoadingCounts ] = useState( true );
@@ -194,10 +218,14 @@ const DatabaseCleanup = ( { options = {} } ) => {
 		}
 		setIsSaving( true );
 		try {
-			await apiCall( 'update_settings', {
+			const res = await apiCall( 'update_settings', {
 				tab: 'database_cleanup',
 				settings,
 			} );
+			if ( res && res.success !== false ) {
+				setBaseline( { ...settings } );
+				setIsDirty( false );
+			}
 			notify( {
 				type: 'success',
 				message: __(

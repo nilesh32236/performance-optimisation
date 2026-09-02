@@ -1,9 +1,10 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useRef, useEffect } from '@wordpress/element';
+import { useState, useRef, useEffect, useContext } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import { modeLabel } from '../lib/litespeed';
 import useNotice from '../lib/useNotice';
+import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faCode,
@@ -100,6 +101,19 @@ const FileOptimization = ( {
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const { setIsDirty } = useContext( UnsavedChangesContext );
+	const [ baseline, setBaseline ] = useState( defaultSettings );
+	useEffect( () => {
+		setBaseline( { ...defaultSettings, ...options } );
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [ JSON.stringify( options ) ] );
+	useEffect( () => {
+		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
+		setIsDirty( dirty );
+	}, [ settings, baseline, setIsDirty ] );
+	useEffect( () => {
+		return () => setIsDirty( false );
+	}, [ setIsDirty ] );
 
 	// H-01: sync local state when parent props change after mount.
 	useEffect( () => {
@@ -242,34 +256,116 @@ const FileOptimization = ( {
 	};
 
 	const handleRegenerateUsedCSS = async () => {
-		await withNotification(
-			( async () => {
-				const saveRes = await apiCall( 'update_settings', {
-					tab: 'file_optimisation',
-					settings: { ...settings },
+		setIsLoading( true );
+		dismiss();
+		try {
+			const saveRes = await apiCall( 'update_settings', {
+				tab: 'file_optimisation',
+				settings: { ...settings },
+			} );
+			if ( ! saveRes.success ) {
+				notify( {
+					type: 'error',
+					message:
+						saveRes.message ||
+						__(
+							'Failed to regenerate used CSS.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
 				} );
-				if ( ! saveRes.success ) {
-					return saveRes;
-				}
-				return await apiCall( 'used_css_regenerate' );
-			} )(),
-			__( 'Used CSS regeneration queued.', 'performance-optimisation' ),
-			__( 'Failed to regenerate used CSS.', 'performance-optimisation' )
-		);
+				return;
+			}
+			setBaseline( { ...settings } );
+			setIsDirty( false );
+			const res = await apiCall( 'used_css_regenerate' );
+			if ( res.success ) {
+				notify( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Used CSS regeneration queued.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'Failed to regenerate used CSS.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			}
+		} catch ( err ) {
+			console.error( 'Failed to regenerate used CSS.', err );
+			notify( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setIsLoading( false );
+		}
 	};
 
 	const handleSubmit = async ( e ) => {
 		if ( e ) {
 			e.preventDefault();
 		}
-		await withNotification(
-			apiCall( 'update_settings', {
+		setIsLoading( true );
+		dismiss();
+		try {
+			const res = await apiCall( 'update_settings', {
 				tab: 'file_optimisation',
 				settings: { ...settings },
-			} ),
-			__( 'Settings updated successfully.', 'performance-optimisation' ),
-			__( 'Failed to update settings.', 'performance-optimisation' )
-		);
+			} );
+			if ( res.success ) {
+				setBaseline( { ...settings } );
+				setIsDirty( false );
+				notify( {
+					type: 'success',
+					message:
+						res.message ||
+						__(
+							'Settings updated successfully.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			} else {
+				notify( {
+					type: 'error',
+					message:
+						res.message ||
+						__(
+							'Failed to update settings.',
+							'performance-optimisation'
+						),
+					durationMs: 3000,
+				} );
+			}
+		} catch ( err ) {
+			console.error( 'Failed to update settings.', err );
+			notify( {
+				type: 'error',
+				message: __(
+					'An unexpected error occurred.',
+					'performance-optimisation'
+				),
+				durationMs: 3000,
+			} );
+		} finally {
+			setIsLoading( false );
+		}
 	};
 
 	const subTabs = [

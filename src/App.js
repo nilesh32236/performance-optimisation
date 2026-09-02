@@ -3,10 +3,13 @@ import {
 	useEffect,
 	useRef,
 	useMemo,
+	useCallback,
 	lazy,
 	Suspense,
 } from '@wordpress/element';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import ConfirmDialog from './components/common/ConfirmDialog';
+import UnsavedChangesContext from './lib/UnsavedChangesContext';
 import {
 	faTachometerAlt,
 	faFileCode,
@@ -83,6 +86,9 @@ const App = () => {
 	const [ ccssStatus, setCcssStatus ] = useState( {} );
 	const [ ccssError, setCcssError ] = useState( false );
 	const [ ccssRefreshTrigger, setCcssRefreshTrigger ] = useState( 0 );
+	const [ isDirty, setIsDirty ] = useState( false );
+	const [ pendingTab, setPendingTab ] = useState( null );
+	const [ showGuard, setShowGuard ] = useState( false );
 	const hasFetchedActivities = useRef( false );
 	const hasFetchedRules = useRef( false );
 	const hasFetchedCcss = useRef( false );
@@ -135,6 +141,47 @@ const App = () => {
 		[]
 	);
 
+	const handleTabChange = useCallback(
+		( nextTab ) => {
+			if ( isDirty && nextTab !== activeTab ) {
+				setPendingTab( nextTab );
+				setShowGuard( true );
+				return;
+			}
+			setActiveTab( nextTab );
+			setMobileMenuOpen( false );
+		},
+		[ isDirty, activeTab ]
+	);
+
+	const confirmDiscard = useCallback( () => {
+		setShowGuard( false );
+		setIsDirty( false );
+		if ( pendingTab ) {
+			setActiveTab( pendingTab );
+			setMobileMenuOpen( false );
+			setPendingTab( null );
+		}
+	}, [ pendingTab ] );
+
+	const cancelGuard = useCallback( () => {
+		setShowGuard( false );
+		setPendingTab( null );
+	}, [] );
+
+	// Block browser unload when dirty — browsers show generic confirmation.
+	useEffect( () => {
+		if ( ! isDirty ) {
+			return;
+		}
+		const handler = ( e ) => {
+			e.preventDefault();
+			e.returnValue = '';
+		};
+		window.addEventListener( 'beforeunload', handler );
+		return () => window.removeEventListener( 'beforeunload', handler );
+	}, [ isDirty ] );
+
 	const renderContent = () => {
 		const settings =
 			typeof wppoSettings !== 'undefined'
@@ -150,7 +197,7 @@ const App = () => {
 							? wppoSettings?.userRoles ?? {}
 							: {}
 					}
-					onNavigate={ setActiveTab }
+					onNavigate={ handleTabChange }
 				/>
 			),
 			fileOptimization: (
@@ -409,134 +456,156 @@ const App = () => {
 	}, [ activeTab ] );
 
 	return (
-		<div className="wppo-container">
-			{ /* Mobile Top Header */ }
-			<div className="wppo-mobile-header">
-				<div
-					className="wppo-mobile-brand"
-					title={ __(
-						'Performance Optimisation',
-						'performance-optimisation'
-					) }
-				>
-					<div className="wppo-mobile-logo">
-						<FontAwesomeIcon icon={ faBolt } />
-					</div>
-					<span className="wppo-mobile-brand__text">
-						{ __(
+		<UnsavedChangesContext.Provider value={ { isDirty, setIsDirty } }>
+			<div className="wppo-container">
+				{ /* Mobile Top Header */ }
+				<div className="wppo-mobile-header">
+					<div
+						className="wppo-mobile-brand"
+						title={ __(
 							'Performance Optimisation',
 							'performance-optimisation'
 						) }
-					</span>
-				</div>
-				<button
-					className="wppo-mobile-toggle"
-					onClick={ toggleMobileMenu }
-					aria-label={ __(
-						'Toggle Menu',
-						'performance-optimisation'
-					) }
-					aria-expanded={ mobileMenuOpen }
-					aria-controls="mobile-sidebar"
-					ref={ toggleBtnRef }
-				>
-					<FontAwesomeIcon
-						icon={ mobileMenuOpen ? faTimes : faBars }
-					/>
-				</button>
-			</div>
-
-			{ /* Sidebar Overlay */ }
-			{ mobileMenuOpen && (
-				<div
-					className="wppo-sidebar-overlay"
-					onClick={ toggleMobileMenu }
-					onKeyDown={ ( e ) => {
-						if ( e.key === 'Enter' || e.key === ' ' ) {
-							toggleMobileMenu();
-						}
-					} }
-					role="button"
-					tabIndex="0"
-					aria-label={ __(
-						'Close Menu',
-						'performance-optimisation'
-					) }
-				/>
-			) }
-
-			<div
-				id="mobile-sidebar"
-				ref={ sidebarRef }
-				className={ `wppo-sidebar ${
-					mobileMenuOpen ? 'wppo-sidebar--mobile-open' : ''
-				}` }
-			>
-				<div className="wppo-sidebar-header">
-					<div className="wppo-sidebar-logo">
-						<FontAwesomeIcon icon={ faBolt } />
-					</div>
-					<h3>
-						{ __( 'Performance', 'performance-optimisation' ) }
-						<span>
-							{ __( 'Optimisation', 'performance-optimisation' ) }
+					>
+						<div className="wppo-mobile-logo">
+							<FontAwesomeIcon icon={ faBolt } />
+						</div>
+						<span className="wppo-mobile-brand__text">
+							{ __(
+								'Performance Optimisation',
+								'performance-optimisation'
+							) }
 						</span>
-					</h3>
+					</div>
+					<button
+						className="wppo-mobile-toggle"
+						onClick={ toggleMobileMenu }
+						aria-label={ __(
+							'Toggle Menu',
+							'performance-optimisation'
+						) }
+						aria-expanded={ mobileMenuOpen }
+						aria-controls="mobile-sidebar"
+						ref={ toggleBtnRef }
+					>
+						<FontAwesomeIcon
+							icon={ mobileMenuOpen ? faTimes : faBars }
+						/>
+					</button>
 				</div>
-				<nav
-					aria-label={ __(
-						'Main Navigation',
+
+				{ /* Sidebar Overlay */ }
+				{ mobileMenuOpen && (
+					<div
+						className="wppo-sidebar-overlay"
+						onClick={ toggleMobileMenu }
+						onKeyDown={ ( e ) => {
+							if ( e.key === 'Enter' || e.key === ' ' ) {
+								toggleMobileMenu();
+							}
+						} }
+						role="button"
+						tabIndex="0"
+						aria-label={ __(
+							'Close Menu',
+							'performance-optimisation'
+						) }
+					/>
+				) }
+
+				<div
+					id="mobile-sidebar"
+					ref={ sidebarRef }
+					className={ `wppo-sidebar ${
+						mobileMenuOpen ? 'wppo-sidebar--mobile-open' : ''
+					}` }
+				>
+					<div className="wppo-sidebar-header">
+						<div className="wppo-sidebar-logo">
+							<FontAwesomeIcon icon={ faBolt } />
+						</div>
+						<h3>
+							{ __( 'Performance', 'performance-optimisation' ) }
+							<span>
+								{ __(
+									'Optimisation',
+									'performance-optimisation'
+								) }
+							</span>
+						</h3>
+					</div>
+					<nav
+						aria-label={ __(
+							'Main Navigation',
+							'performance-optimisation'
+						) }
+					>
+						<ul>
+							{ sidebarItems.map( ( item ) => (
+								<li key={ item.name }>
+									<button
+										className={
+											activeTab === item.name
+												? 'wppo-is-active'
+												: ''
+										}
+										aria-current={
+											activeTab === item.name
+												? 'page'
+												: undefined
+										}
+										onClick={ () =>
+											handleTabChange( item.name )
+										}
+									>
+										<FontAwesomeIcon
+											className="wppo-sidebar-icon"
+											icon={ item.icon }
+										/>
+										<span className="wppo-sidebar-label">
+											{ item.label }
+										</span>
+									</button>
+								</li>
+							) ) }
+						</ul>
+					</nav>
+					<div className="wppo-sidebar-footer">
+						<div className="wppo-sidebar-version">
+							{ wppoSettings?.version
+								? `v${ wppoSettings.version }`
+								: '' }
+						</div>
+					</div>
+				</div>
+
+				<div className="wppo-content">
+					<div className="wppo-main">
+						<div
+							className={ transition ? 'wppo-fadeIn' : undefined }
+						>
+							<ErrorBoundary>{ renderContent() }</ErrorBoundary>
+						</div>
+					</div>
+				</div>
+				<ConfirmDialog
+					isOpen={ showGuard }
+					onConfirm={ confirmDiscard }
+					onCancel={ cancelGuard }
+					title={ __(
+						'Unsaved changes — Discard?',
 						'performance-optimisation'
 					) }
-				>
-					<ul>
-						{ sidebarItems.map( ( item ) => (
-							<li key={ item.name }>
-								<button
-									className={
-										activeTab === item.name
-											? 'wppo-is-active'
-											: ''
-									}
-									aria-current={
-										activeTab === item.name
-											? 'page'
-											: undefined
-									}
-									onClick={ () => {
-										setActiveTab( item.name );
-										setMobileMenuOpen( false );
-									} }
-								>
-									<FontAwesomeIcon
-										className="wppo-sidebar-icon"
-										icon={ item.icon }
-									/>
-									<span className="wppo-sidebar-label">
-										{ item.label }
-									</span>
-								</button>
-							</li>
-						) ) }
-					</ul>
-				</nav>
-				<div className="wppo-sidebar-footer">
-					<div className="wppo-sidebar-version">
-						{ wppoSettings?.version
-							? `v${ wppoSettings.version }`
-							: '' }
-					</div>
-				</div>
+					message={ __(
+						'You have unsaved changes. Leave without saving?',
+						'performance-optimisation'
+					) }
+					confirmLabel={ __( 'Discard', 'performance-optimisation' ) }
+					cancelLabel={ __( 'Cancel', 'performance-optimisation' ) }
+					variant="warning"
+				/>
 			</div>
-
-			<div className="wppo-content">
-				<div className="wppo-main">
-					<div className={ transition ? 'wppo-fadeIn' : undefined }>
-						<ErrorBoundary>{ renderContent() }</ErrorBoundary>
-					</div>
-				</div>
-			</div>
-		</div>
+		</UnsavedChangesContext.Provider>
 	);
 };
 
