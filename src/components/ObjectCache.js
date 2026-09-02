@@ -391,9 +391,9 @@ const ObjectCache = ( { options = {} } ) => {
 							aria-valuenow={ parseFloat( hitRatio ) }
 							aria-valuetext={ `${ hitRatio }%` }
 						>
+							{ /* dynamic progress via CSS var for consistency */ }
 							<div
 								className="wppo-progress-bar__fill"
-								// dynamic progress via CSS var for consistency
 								style={ {
 									'--wppo-hit-ratio': `${ hitRatio }%`,
 								} }
