@@ -587,6 +587,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 					return 'image/heic';
 				case 'heif':
 					return 'image/heif';
+				case 'heics':
+				case 'heic-sequence':
+					return 'image/heic-sequence';
+				case 'heifs':
+				case 'heif-sequence':
+					return 'image/heif-sequence';
 				default:
 					return '';
 			}

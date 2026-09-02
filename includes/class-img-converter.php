@@ -942,24 +942,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// holds the original HEIC basename (e.g. 'photo.heic') when the
 			// browser worker converts it. Include it for deletion parity with
 			// sub-sizes and for CDN/Edge purger documentation.
+			$orig_file = '';
 			if ( isset( $metadata['original'] ) && is_array( $metadata['original'] ) && ! empty( $metadata['original']['file'] ) && is_string( $metadata['original']['file'] ) ) {
 				$orig_file = $metadata['original']['file'];
-				$dir       = dirname( $file_path );
-				// Core stores the companion as a basename relative to the uploads subdir.
-				if ( false === strpos( $orig_file, '/' ) ) {
-					$orig_path = wp_normalize_path( $dir . '/' . $orig_file );
-				} else {
-					$orig_path = wp_normalize_path( $orig_file );
-					if ( false === strpos( $orig_path, wp_normalize_path( ABSPATH ) ) ) {
-						$orig_path = wp_normalize_path( $dir . '/' . ltrim( $orig_file, '/' ) );
-					}
-				}
-				$orig_rel    = str_replace( wp_normalize_path( ABSPATH ), '', $orig_path );
-				$rel_paths[] = $orig_rel;
 			} elseif ( isset( $metadata['original'] ) && is_string( $metadata['original'] ) && '' !== $metadata['original'] ) {
 				// Fallback: some builds store original as a plain string file name.
 				$orig_file = $metadata['original'];
-				$dir       = dirname( $file_path );
+			}
+			if ( '' !== $orig_file ) {
+				$dir = dirname( $file_path );
+				// Core stores the companion as a basename relative to the uploads subdir.
 				if ( false === strpos( $orig_file, '/' ) ) {
 					$orig_path = wp_normalize_path( $dir . '/' . $orig_file );
 				} else {
@@ -1317,6 +1309,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 
 			// HEIC early-exit (WP 7.1+): Skip wasteful GD decode when the browser
 			// worker owns HEIC→JPEG. Guarded by function_exists() for <7.1.
+			// Cached attached file reused for both mime fallback and idempotency guard to reduce I/O.
+			$cached_attached_file = function_exists( 'get_attached_file' ) ? get_attached_file( $attachment_id ) : '';
 			if ( function_exists( 'wp_is_client_side_media_processing_enabled' )
 				&& wp_is_client_side_media_processing_enabled()
 				&& empty( $this->options['image_optimisation']['forceServerSideConversion'] )
@@ -1327,19 +1321,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				}
 				if ( '' === $mime_for_check ) {
 					// Fallback: extension-based when post mime is not yet set (e.g. direct sideload).
-					$attached_file_for_mime = function_exists( 'get_attached_file' ) ? get_attached_file( $attachment_id ) : '';
-					if ( is_string( $attached_file_for_mime ) && '' !== $attached_file_for_mime ) {
-						$ext_for_mime = strtolower( (string) pathinfo( $attached_file_for_mime, PATHINFO_EXTENSION ) );
-						if ( 'heic' === $ext_for_mime ) {
-							$mime_for_check = 'image/heic';
-						} elseif ( 'heif' === $ext_for_mime ) {
-							$mime_for_check = 'image/heif';
+					if ( is_string( $cached_attached_file ) && '' !== $cached_attached_file ) {
+						$ext_for_mime = strtolower( (string) pathinfo( $cached_attached_file, PATHINFO_EXTENSION ) );
+						$ext_to_mime  = array(
+							'heic'          => 'image/heic',
+							'heif'          => 'image/heif',
+							'heics'         => 'image/heic-sequence',
+							'heif-sequence' => 'image/heif-sequence',
+							'heic-sequence' => 'image/heic-sequence',
+							'heifs'         => 'image/heif-sequence',
+						);
+						if ( isset( $ext_to_mime[ $ext_for_mime ] ) ) {
+							$mime_for_check = $ext_to_mime[ $ext_for_mime ];
 						}
 					} elseif ( is_string( $img_url ) && '' !== $img_url ) {
 						$mime_for_check = Util::get_image_mime_type( $img_url );
 					}
 				}
-				if ( in_array( $mime_for_check, array( 'image/heic', 'image/heif', 'image/heic-sequence' ), true ) ) {
+				if ( in_array( $mime_for_check, array( 'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence' ), true ) ) {
 					return;
 				}
 			}
@@ -1347,14 +1346,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			// Double-fire idempotency: WP 7.1+ calls this on both `create` and
 			// `finalize`; if the main file already has a dominant_color entry the
 			// second pass can skip the GD decode when all sub-sizes are also present.
-			$attached_file_for_idem = function_exists( 'get_attached_file' ) ? get_attached_file( $attachment_id ) : '';
-			if ( is_string( $attached_file_for_idem ) && '' !== $attached_file_for_idem && file_exists( $attached_file_for_idem ) ) {
-				$rel_for_idem = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $attached_file_for_idem ) );
+			// Companion placeholder (`metadata['original']`) is intentionally NOT
+			// required here: store_placeholder_data_for_upload() never creates a
+			// companion entry, so requiring it would force a second GD decode for
+			// non-HEIC originals and break HEIC early-exit idempotency.
+			if ( is_string( $cached_attached_file ) && '' !== $cached_attached_file && file_exists( $cached_attached_file ) ) {
+				$rel_for_idem = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $cached_attached_file ) );
 				$existing     = self::get_img_info();
 				if ( isset( $existing['dominant_color'][ $rel_for_idem ] ) ) {
 					$all_sizes_done = true;
 					if ( ! empty( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
-						$dir_for_idem = dirname( $attached_file_for_idem );
+						$dir_for_idem = dirname( $cached_attached_file );
 						foreach ( $metadata['sizes'] as $size_data ) {
 							if ( ! empty( $size_data['file'] ) ) {
 								$size_path_for_idem = wp_normalize_path( $dir_for_idem . '/' . $size_data['file'] );
@@ -1363,14 +1365,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 									$all_sizes_done = false;
 									break;
 								}
-							}
-						}
-						// Also consider HEIC→JPEG companion retained as metadata['original'].
-						if ( $all_sizes_done && isset( $metadata['original']['file'] ) && is_string( $metadata['original']['file'] ) && '' !== $metadata['original']['file'] ) {
-							$orig_rel_for_idem = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( dirname( $attached_file_for_idem ) . '/' . $metadata['original']['file'] ) );
-							// If original companion exists on disk but has no placeholder, we still need to extract.
-							if ( file_exists( dirname( $attached_file_for_idem ) . '/' . $metadata['original']['file'] ) && ! isset( $existing['dominant_color'][ $orig_rel_for_idem ] ) ) {
-								$all_sizes_done = false;
 							}
 						}
 					}
@@ -1423,12 +1417,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				&& wp_is_client_side_media_processing_enabled()
 				&& empty( $this->options['image_optimisation']['forceServerSideConversion'] )
 			) {
-				$mime_check = Util::get_image_mime_type( $file );
-				if ( in_array( $mime_check, array( 'image/heic', 'image/heif', 'image/heic-sequence' ), true ) ) {
+				// Primary: explicit extension check (reliable for absolute filesystem path).
+				$ext_check = strtolower( (string) pathinfo( $file, PATHINFO_EXTENSION ) );
+				if ( in_array( $ext_check, array( 'heic', 'heif', 'heics', 'heifs', 'heic-sequence', 'heif-sequence' ), true ) ) {
 					return;
 				}
-				$ext_check = strtolower( (string) pathinfo( $file, PATHINFO_EXTENSION ) );
-				if ( in_array( $ext_check, array( 'heic', 'heif' ), true ) ) {
+				// Supplemental: mime helper (uses wp_parse_url, intended for URLs — may still match path).
+				$mime_check = Util::get_image_mime_type( $file );
+				if ( in_array( $mime_check, array( 'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence' ), true ) ) {
 					return;
 				}
 			}
