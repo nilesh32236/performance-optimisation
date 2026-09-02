@@ -4,7 +4,7 @@
 	"description": "Performance optimisation plugin for WordPress",
 	"main": "./src/index.js",
 	"scripts": {
-		"build": "wp-scripts build src/index.js src/lazyload.js src/main.js src/rum.js",
+		"build": "wp-scripts build src/index.js src/lazyload.js src/main.js src/rum.js src/esi.js",
 		"start": "wp-scripts start",
 		"test": "wp-scripts test-unit-js",
 		"lint:js": "wp-scripts lint-js src",

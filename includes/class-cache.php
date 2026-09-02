@@ -1595,6 +1595,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return true;
 			}
 
+			// ESI punch-holing: when hole active, treat as not cacheable via DONOTCACHEPAGE.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
+				$needs_hole = false;
+				try {
+					if ( LiteSpeed_ESI::should_punch_hole( 'cart' ) || LiteSpeed_ESI::should_punch_hole( 'checkout' ) || LiteSpeed_ESI::should_punch_hole( 'account' ) || LiteSpeed_ESI::should_punch_hole( 'adminbar' ) ) {
+						$needs_hole = true;
+					}
+				} catch ( \Throwable $e ) {
+					$needs_hole = false;
+				}
+				if ( $needs_hole ) {
+					if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+						define( 'DONOTCACHEPAGE', true );
+					}
+					$this->maybe_mark_page_not_cacheable();
+					return true;
+				}
+			}
+
 			$path_info = pathinfo( $local_url_path, PATHINFO_EXTENSION );
 			return is_404() || ! empty( $path_info );
 		}
@@ -1807,6 +1826,22 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		private function maybe_store_cache() {
+			// ESI punch-holing: skip store when hole-punched.
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
+				try {
+					if ( LiteSpeed_ESI::should_punch_hole( 'cart' ) || LiteSpeed_ESI::should_punch_hole( 'checkout' ) || LiteSpeed_ESI::should_punch_hole( 'account' ) || LiteSpeed_ESI::should_punch_hole( 'adminbar' ) || LiteSpeed_ESI::should_punch_hole( 'nonce' ) ) {
+						if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+							$this->maybe_mark_page_not_cacheable();
+						} elseif ( ! defined( 'DONOTCACHEPAGE' ) ) {
+							define( 'DONOTCACHEPAGE', true );
+							$this->maybe_mark_page_not_cacheable();
+						}
+						return false;
+					}
+				} catch ( \Throwable $e ) {
+					unset( $e );
+				}
+			}
 			// LS-302: Bypass file cache when LiteSpeed owns cache — keep
 			// process_buffer_only() for CDN/used-css but skip save.
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && LiteSpeed_Integration::is_litespeed() && ! LiteSpeed_Integration::is_wppo_cache_owner() ) {
