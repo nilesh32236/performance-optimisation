@@ -191,6 +191,7 @@ const EdgeCachePanel = () => {
 					className="wppo-input"
 					id="wppoEdgeTtl"
 					type="number"
+					inputMode="numeric"
 					min="60"
 					value={ ttl }
 					onChange={ ( e ) => setTtl( e.target.value ) }
@@ -215,6 +216,7 @@ const EdgeCachePanel = () => {
 					className="wppo-input"
 					id="wppoEdgeSwr"
 					type="number"
+					inputMode="numeric"
 					min="0"
 					value={ swr }
 					onChange={ ( e ) => setSwr( e.target.value ) }

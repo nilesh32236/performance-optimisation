@@ -1165,6 +1165,7 @@ const FileOptimization = ( {
 													<input
 														className="wppo-input"
 														type="number"
+														inputMode="numeric"
 														id="delayJSIdleTimeout"
 														name="delayJSIdleTimeout"
 														min="500"

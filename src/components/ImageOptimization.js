@@ -339,6 +339,7 @@ const ImageOptimization = ( { options = {} } ) => {
 										className="wppo-input"
 										id="excludeFirstImages"
 										type="number"
+										inputMode="numeric"
 										name="excludeFirstImages"
 										value={ settings.excludeFirstImages }
 										onChange={ handleChange( setSettings ) }
@@ -819,6 +820,7 @@ const ImageOptimization = ( { options = {} } ) => {
 								className="wppo-input"
 								id="maxWidthImgSize"
 								type="number"
+								inputMode="numeric"
 								name="maxWidthImgSize"
 								value={ settings.maxWidthImgSize }
 								onChange={ handleChange( setSettings ) }
