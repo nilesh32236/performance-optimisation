@@ -1232,6 +1232,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( $this->cache ) {
 				$this->cache->invalidate_dynamic_static_html( $post_id );
 			}
+
+			// Crawler warm on smart purge when preloadSitemap enabled (P4).
+			$options = Util::get_settings();
+			if ( ! empty( $options['preload_settings']['preloadSitemap'] ) && function_exists( 'as_enqueue_async_action' ) && function_exists( 'as_has_scheduled_action' ) ) {
+				$url = get_permalink( $post_id );
+				if ( is_string( $url ) && '' !== $url ) {
+					$url = esc_url_raw( $url );
+					if ( '' !== $url && ! as_has_scheduled_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' ) ) {
+						as_enqueue_async_action( 'wppo_crawler_warm', array( $url ), 'performance_optimisation' );
+					}
+				}
+			}
 		}
 
 		/**

@@ -257,6 +257,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 					'permission_callback' => array( $this, 'permission_callback' ),
 					'schema'              => $schemas,
 				),
+				'crawler'                 => array(
+					'methods'             => 'POST',
+					'callback'            => array( $this, 'handle_crawler' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
+				'crawler_status'          => array(
+					'methods'             => 'GET',
+					'callback'            => array( $this, 'get_crawler_status' ),
+					'permission_callback' => array( $this, 'permission_callback' ),
+					'schema'              => $schemas,
+				),
 			);
 		}
 
@@ -272,6 +284,79 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Rest' ) ) {
 			$result = Database_Cleanup::get_autoloaded_options( $limit );
 
 			return $this->send_response( array( 'options' => $result ) );
+		}
+
+		/**
+		 * Handle crawler manual trigger (POST /crawler).
+		 *
+		 * @since NEXT
+		 * @param \WP_REST_Request $request Request.
+		 * @return \WP_REST_Response Response.
+		 */
+		public function handle_crawler( \WP_REST_Request $request ): \WP_REST_Response {
+			$params = $request->get_params();
+			$url    = isset( $params['url'] ) ? esc_url_raw( $params['url'] ) : '';
+			$urls   = array();
+			if ( '' !== $url ) {
+				$urls[] = $url;
+			} elseif ( isset( $params['urls'] ) && is_array( $params['urls'] ) ) {
+				$urls = array_values( array_filter( array_map( 'esc_url_raw', $params['urls'] ) ) );
+			} elseif ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+				// Default: warm sitemap+post URLs via LiteSpeed_Crawler::get_urls_to_crawl.
+				$urls = LiteSpeed_Crawler::get_urls_to_crawl( 20 );
+			}
+			if ( empty( $urls ) ) {
+				return $this->send_response( null, false, 400, __( 'No URLs to crawl.', 'performance-optimisation' ) );
+			}
+			// Rate-limit 60/min IP via transient (blog-prefixed).
+			$ip_key = Util::transient_key( 'wppo_crawler_ratelimit_' . md5( isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown' ) );
+			$count  = (int) get_transient( $ip_key );
+			if ( $count >= 60 ) {
+				return $this->send_response( null, false, 429, __( 'Rate limit exceeded. Try again later.', 'performance-optimisation' ) );
+			}
+			set_transient( $ip_key, $count + 1, MINUTE_IN_SECONDS );
+
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+				$result = LiteSpeed_Crawler::crawl_batch( $urls );
+				return $this->send_response( $result );
+			}
+			return $this->send_response( null, false, 500, __( 'Crawler not available.', 'performance-optimisation' ) );
+		}
+
+		/**
+		 * Get crawler status (GET /crawler_status).
+		 *
+		 * @since NEXT
+		 * @param \WP_REST_Request $request Request.
+		 * @return \WP_REST_Response Response.
+		 */
+		public function get_crawler_status( \WP_REST_Request $request ): \WP_REST_Response { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			$status = array(
+				'concurrency' => 2,
+				'load_limit'  => 4.0,
+				'overloaded'  => false,
+				'queue_depth' => 0,
+			);
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+				$status                = LiteSpeed_Crawler::get_status();
+				$status['queue_depth'] = 0;
+				if ( function_exists( 'as_get_scheduled_actions' ) ) {
+					try {
+						$actions               = as_get_scheduled_actions(
+							array(
+								'hook'   => 'wppo_crawler_warm',
+								'status' => \ActionScheduler_Store::STATUS_PENDING,
+								'group'  => 'performance_optimisation',
+							),
+							'ARRAY_A'
+						);
+						$status['queue_depth'] = is_array( $actions ) ? count( $actions ) : 0;
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+			}
+			return $this->send_response( $status );
 		}
 
 		/**
