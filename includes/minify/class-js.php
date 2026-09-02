@@ -141,7 +141,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		 *
 		 * @since 1.0.0
 		 */
-		private function get_cache_file_path(): string {
+		public function get_cache_file_path(): string {
 			$filename = md5( $this->file_path ) . '.js';
 			return "{$this->cache_dir}/{$filename}";
 		}
