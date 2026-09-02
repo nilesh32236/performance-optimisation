@@ -558,8 +558,7 @@ const PluginSetting = ( { options } ) => {
 							{ logError }
 							<button
 								type="button"
-								className="wppo-button wppo-button--secondary wppo-button--sm"
-								style={ { marginLeft: '12px' } }
+								className="wppo-button wppo-button--secondary wppo-button--sm wppo-ml-12"
 								onClick={ () => loadActivityLog( logPage ) }
 							>
 								{ __( 'Retry', 'performance-optimisation' ) }
@@ -601,8 +600,7 @@ const PluginSetting = ( { options } ) => {
 				>
 					<p
 						id="pagespeed-api-key-desc"
-						className="wppo-text-muted"
-						style={ { marginBottom: '16px' } }
+						className="wppo-text-muted wppo-mb-16"
 					>
 						{ __(
 							'Required to run PageSpeed Insights scans. Get a free key from',
@@ -628,8 +626,7 @@ const PluginSetting = ( { options } ) => {
 					<div
 						className={ `wppo-notice wppo-notice--${
 							apiKeyConfigured ? 'success' : 'warning'
-						}` }
-						style={ { marginBottom: '16px' } }
+						} wppo-mb-16` }
 					>
 						<FontAwesomeIcon
 							icon={
@@ -637,7 +634,7 @@ const PluginSetting = ( { options } ) => {
 									? faCheckCircle
 									: faExclamationCircle
 							}
-							style={ { marginRight: '8px' } }
+							className="wppo-mr-8"
 						/>
 						{ apiKeyConfigured
 							? __(
@@ -699,10 +696,7 @@ const PluginSetting = ( { options } ) => {
 						) }
 					/>
 
-					<hr
-						className="wppo-divider"
-						style={ { margin: '20px 0' } }
-					/>
+					<hr className="wppo-divider wppo-my-20" />
 
 					<div className="wppo-field">
 						<label
@@ -716,8 +710,7 @@ const PluginSetting = ( { options } ) => {
 						</label>
 						<p
 							id="auto-rescan-desc"
-							className="wppo-text-muted wppo-text-small"
-							style={ { marginBottom: '8px' } }
+							className="wppo-text-muted wppo-text-small wppo-mb-8"
 						>
 							{ __(
 								'Automatically re-run PageSpeed scans on your homepage and high-value URLs to build Web Vitals trend history. Requires a configured API key.',
@@ -858,10 +851,7 @@ const PluginSetting = ( { options } ) => {
 						) }
 						icon={ <FontAwesomeIcon icon={ faFileExport } /> }
 					>
-						<p
-							className="wppo-text-muted"
-							style={ { marginBottom: '16px' } }
-						>
+						<p className="wppo-text-muted wppo-mb-16">
 							{ __(
 								'Download your current plugin settings as a JSON file for backup or migration to another site.',
 								'performance-optimisation'

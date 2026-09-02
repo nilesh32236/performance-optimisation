@@ -843,7 +843,7 @@ const Dashboard = ( {
 								<FontAwesomeIcon
 									icon={ faBroom }
 									aria-hidden="true"
-									style={ { marginRight: '8px' } }
+									className="wppo-mr-8"
 								/>
 								{ __(
 									'Purge All Cache',

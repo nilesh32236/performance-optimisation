@@ -18,7 +18,7 @@
 
 	// Premium hero for dashboard System Health
 	.wppo-dashboard-view > &:first-of-type {
-		background: linear-gradient(135deg, #ffffff 0%, #eef2ff 55%, #f0f9ff 100%);
+		background: linear-gradient(135deg, var(--wppo-header-gradient-start, #ffffff) 0%, var(--wppo-header-gradient-mid, #eef2ff) 55%, var(--wppo-header-gradient-end, #f0f9ff) 100%);
 		border: 1px solid rgba(226, 232, 240, 0.9);
 		border-radius: 16px;
 		padding: 24px 28px 22px;

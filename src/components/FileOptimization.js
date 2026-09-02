@@ -1352,8 +1352,7 @@ const FileOptimization = ( {
 										<span
 											className={ `wppo-status-badge wppo-status-badge--${
 												lscacheActive ? 'poor' : 'good'
-											}` }
-											style={ { marginRight: '8px' } }
+											} wppo-mr-8` }
 										>
 											{ lscacheActive
 												? __(
@@ -1365,10 +1364,7 @@ const FileOptimization = ( {
 														'performance-optimisation'
 												  ) }
 										</span>
-										<span
-											className="wppo-status-badge wppo-status-badge--good"
-											style={ { marginRight: '8px' } }
-										>
+										<span className="wppo-status-badge wppo-status-badge--good wppo-mr-8">
 											{ __(
 												'Detected: LiteSpeed',
 												'performance-optimisation'
@@ -1811,12 +1807,7 @@ const FileOptimization = ( {
 									( entry, idx ) => (
 										<div
 											key={ idx }
-											className="wppo-mt-12"
-											style={ {
-												border: '1px solid var(--wppo-border)',
-												padding: '12px',
-												borderRadius: '6px',
-											} }
+											className="wppo-mt-12 wppo-file-opt-card"
 										>
 											<div className="wppo-field">
 												{ /* eslint-disable-next-line jsx-a11y/label-has-associated-control */ }

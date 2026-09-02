@@ -114,7 +114,8 @@ const ImageOptimizationCard = ( {
 					>
 						<div
 							className="wppo-progress-bar__fill"
-							style={ { width: `${ webpPercent }%` } }
+							// dynamic progress via CSS var for consistency (intentional inline var)
+							style={ { '--wppo-progress': `${ webpPercent }%` } }
 						></div>
 					</div>
 				</div>
@@ -144,7 +145,8 @@ const ImageOptimizationCard = ( {
 					>
 						<div
 							className="wppo-progress-bar__fill"
-							style={ { width: `${ avifPercent }%` } }
+							// dynamic progress via CSS var for consistency (intentional inline var)
+							style={ { '--wppo-progress': `${ avifPercent }%` } }
 						></div>
 					</div>
 				</div>
