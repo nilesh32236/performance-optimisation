@@ -310,6 +310,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $buffer;
 			}
 
+			if ( $this->should_use_html_processor() ) {
+				$processed = $this->post_process_placeholders_with_processor( $buffer );
+				if ( null !== $processed ) {
+					return $processed;
+				}
+			}
+
 			$result = preg_replace_callback(
 				'#<img\b[^>]*\sdata-src=["\']([^"\']+)["\'][^>]*>#i',
 				function ( $matches ) {
@@ -322,7 +329,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					if ( ! empty( $placeholder['src'] ) ) {
 						$extra_attrs = '';
 						foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
-							$extra_attrs .= ' ' . $attr_name . '="' . esc_attr( $attr_value ) . '"';
+							$extra_attrs .= ' ' . $this->normalize_data_attribute_name( $attr_name ) . '="' . esc_attr( $attr_value ) . '"';
 						}
 						$replaced = preg_replace( '#<img\b#i', '<img src="' . esc_attr( $placeholder['src'] ) . '"' . $extra_attrs, $img_tag, 1 );
 						return null !== $replaced ? $replaced : $img_tag;
@@ -335,6 +342,75 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Processor-based placeholder injection using WP_HTML_Processor::serialize_token().
+		 *
+		 * Mirrors the regex fallback byte-for-byte but uses token streaming so
+		 * nested <picture>, comments, SVG/mathML and malformed HTML are handled
+		 * without PCRE fragility. Falls back to regex on parse errors or when
+		 * WP_HTML_Processor is unavailable (WP <6.9 fallback).
+		 *
+		 * @since NEXT
+		 * @param string $buffer The HTML buffer.
+		 * @return string|null Processed buffer or null on failure (triggers regex fallback).
+		 */
+		private function post_process_placeholders_with_processor( string $buffer ): ?string {
+			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
+			$processor = \WP_HTML_Processor::$create( $buffer ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+			if ( null === $processor ) {
+				return null;
+			}
+
+			$out = '';
+			while ( $processor->next_token() ) {
+				$type = $processor->get_token_type();
+				if ( '#tag' !== $type ) {
+					$out .= $processor->serialize_token();
+					continue;
+				}
+
+				$tag       = $processor->get_tag();
+				$is_closer = $processor->is_tag_closer();
+
+				if ( 'IMG' === $tag && ! $is_closer ) {
+					$data_src = $processor->get_attribute( 'data-src' );
+					$src      = $processor->get_attribute( 'src' );
+					if ( null !== $data_src && null === $src ) {
+						$tok_html    = $processor->serialize_token();
+						$decoded     = htmlspecialchars_decode( (string) $data_src, ENT_QUOTES );
+						$placeholder = $this->get_placeholder_src_for_image( $tok_html, $decoded );
+						if ( ! empty( $placeholder['src'] ) ) {
+							$processor->set_attribute( 'src', $placeholder['src'] );
+							foreach ( $placeholder['attrs'] as $attr_name => $attr_value ) {
+								$processor->set_attribute( $this->normalize_data_attribute_name( $attr_name ), $attr_value );
+							}
+							$serialized = $processor->serialize_token();
+							// WP_HTML_Tag_Processor blocks data: URIs in src for security — manual inject when blocked.
+							if ( false === strpos( $serialized, 'src=' ) ) {
+								$extra = '';
+								foreach ( $placeholder['attrs'] as $an => $av ) {
+									$extra .= ' ' . $this->normalize_data_attribute_name( $an ) . '="' . esc_attr( $av ) . '"';
+								}
+								$manual = preg_replace( '#<img\b#i', '<img src="' . esc_attr( $placeholder['src'] ) . '"' . $extra, $tok_html, 1 );
+								$out   .= null !== $manual ? $manual : $tok_html;
+								continue;
+							}
+							$out .= $serialized;
+							continue;
+						}
+					}
+				}
+
+				$out .= $processor->serialize_token();
+			}
+
+			if ( null !== $processor->get_last_error() ) {
+				return null;
+			}
+
+			return $out;
+		}
+
+		/**
 		 * Post-processes the serialized buffer to add missing width/height attributes to lazy-loaded images.
 		 *
 		 * @since NEXT
@@ -343,7 +419,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * @return string The modified buffer.
 		 */
 		private function post_process_img_dimensions( string $buffer ): string {
-			return preg_replace_callback(
+			if ( $this->should_use_html_processor() ) {
+				$processed = $this->post_process_img_dimensions_with_processor( $buffer );
+				if ( null !== $processed ) {
+					return $processed;
+				}
+			}
+
+			$result = preg_replace_callback(
 				'#<img\b[^>]*\sdata-src=["\']([^"\']+)["\'][^>]*>#i',
 				function ( $matches ) {
 					$img_tag    = $matches[0];
@@ -370,6 +453,64 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				},
 				$buffer
 			);
+			return null !== $result ? $result : $buffer;
+		}
+
+		/**
+		 * Processor-based dimension injection using serialize_token().
+		 *
+		 * @since NEXT
+		 * @param string $buffer The HTML buffer.
+		 * @return string|null Processed buffer or null on failure.
+		 */
+		private function post_process_img_dimensions_with_processor( string $buffer ): ?string {
+			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
+			$processor = \WP_HTML_Processor::$create( $buffer ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+			if ( null === $processor ) {
+				return null;
+			}
+
+			$out = '';
+			while ( $processor->next_token() ) {
+				$type = $processor->get_token_type();
+				if ( '#tag' !== $type ) {
+					$out .= $processor->serialize_token();
+					continue;
+				}
+
+				$tag       = $processor->get_tag();
+				$is_closer = $processor->is_tag_closer();
+
+				if ( 'IMG' === $tag && ! $is_closer ) {
+					$data_src = $processor->get_attribute( 'data-src' );
+					if ( null !== $data_src ) {
+						$has_width  = null !== $processor->get_attribute( 'width' );
+						$has_height = null !== $processor->get_attribute( 'height' );
+						if ( ! $has_width || ! $has_height ) {
+							$local_path = Util::get_local_path( (string) $data_src );
+							if ( ! empty( $local_path ) && $this->cached_file_exists( $local_path ) && is_readable( $local_path ) && is_file( $local_path ) ) {
+								$size = $this->get_cached_image_size( $local_path );
+								if ( is_array( $size ) ) {
+									if ( ! $has_width ) {
+										$processor->set_attribute( 'width', (string) (int) $size[0] );
+									}
+									if ( ! $has_height ) {
+										$processor->set_attribute( 'height', (string) (int) $size[1] );
+									}
+								}
+							}
+						}
+					}
+				}
+
+				$out .= $processor->serialize_token();
+			}
+
+			if ( null !== $processor->get_last_error() ) {
+				return null;
+			}
+
+			return $out;
 		}
 
 		/**
@@ -396,7 +537,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				return $buffer;
 			}
 
-			return preg_replace_callback(
+			if ( $this->should_use_html_processor() ) {
+				$processed = $this->post_process_auto_sizes_with_processor( $buffer );
+				if ( null !== $processed ) {
+					return $processed;
+				}
+			}
+
+			$result = preg_replace_callback(
 				'#<(img|source)\b[^>]*\s(?:data-src|data-srcset)=["\'][^"\']+["\'][^>]*>#i',
 				function ( $matches ) {
 					$tag        = $matches[0];
@@ -434,16 +582,135 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				},
 				$buffer
 			);
+			return null !== $result ? $result : $buffer;
+		}
+
+		/**
+		 * Processor-based auto-sizes upgrade using serialize_token().
+		 *
+		 * @since NEXT
+		 * @param string $buffer The HTML buffer.
+		 * @return string|null Processed buffer or null on failure.
+		 */
+		private function post_process_auto_sizes_with_processor( string $buffer ): ?string {
+			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
+			$processor = \WP_HTML_Processor::$create( $buffer ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+			if ( null === $processor ) {
+				return null;
+			}
+
+			$out = '';
+			while ( $processor->next_token() ) {
+				$type = $processor->get_token_type();
+				if ( '#tag' !== $type ) {
+					$out .= $processor->serialize_token();
+					continue;
+				}
+
+				$tag       = $processor->get_tag();
+				$is_closer = $processor->is_tag_closer();
+
+				if ( ( 'IMG' === $tag || 'SOURCE' === $tag ) && ! $is_closer ) {
+					$has_lazy = null !== $processor->get_attribute( 'data-src' ) || null !== $processor->get_attribute( 'data-srcset' );
+					if ( ! $has_lazy ) {
+						$out .= $processor->serialize_token();
+						continue;
+					}
+
+					$has_srcset = null !== $processor->get_attribute( 'srcset' ) || null !== $processor->get_attribute( 'data-srcset' );
+					if ( ! $has_srcset ) {
+						$out .= $processor->serialize_token();
+						continue;
+					}
+
+					if ( 'IMG' === $tag ) {
+						$has_width  = null !== $processor->get_attribute( 'width' );
+						$has_height = null !== $processor->get_attribute( 'height' );
+						if ( ! $has_width || ! $has_height ) {
+							$out .= $processor->serialize_token();
+							continue;
+						}
+					}
+
+					$current = $processor->get_attribute( 'data-sizes' );
+					if ( null !== $current ) {
+						if ( $this->sizes_attribute_includes_auto( (string) $current ) ) {
+							$out .= $processor->serialize_token();
+							continue;
+						}
+						$processor->set_attribute( 'data-sizes', 'auto, ' . (string) $current );
+						$out .= $processor->serialize_token();
+						continue;
+					}
+
+					if ( 'SOURCE' === $tag ) {
+						$out .= $processor->serialize_token();
+						continue;
+					}
+
+					$processor->set_attribute( 'data-sizes', 'auto' );
+				}
+
+				$out .= $processor->serialize_token();
+			}
+
+			if ( null !== $processor->get_last_error() ) {
+				return null;
+			}
+
+			return $out;
 		}
 
 		/**
 		 * Whether the WP 6.9+ HTML API picture parser is available.
 		 *
+		 * Checks for the public `WP_HTML_Processor::serialize_token()` introduced
+		 * in WP 6.9 (private in 6.7). Uses reflection to guard the 6.7 private
+		 * visibility so the fallback remains byte-identical on WP <6.9.
+		 *
 		 * @since NEXT
 		 * @return bool
 		 */
 		private function should_use_html_processor(): bool {
-			return class_exists( 'WP_HTML_Processor' ) && method_exists( 'WP_HTML_Processor', 'serialize_token' );
+			if ( ! class_exists( 'WP_HTML_Processor' ) || ! method_exists( 'WP_HTML_Processor', 'serialize_token' ) ) {
+				return false;
+			}
+			try {
+				$method = new \ReflectionMethod( 'WP_HTML_Processor', 'serialize_token' );
+				return $method->isPublic();
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				return false;
+			}
+		}
+
+		/**
+		 * Map a data attribute name via WP 6.9+ helpers when available.
+		 *
+		 * Guards `wp_js_dataset_name()` / `wp_html_custom_data_attribute_name()`
+		 * so dataset ↔ data-* mapping uses core helpers on WP 6.9+ without
+		 * breaking WP <6.9. Falls back to the raw attribute name.
+		 *
+		 * @since NEXT
+		 * @param string $attr Raw attribute name (e.g. `data-wppo-dominant-color`).
+		 * @return string Normalized attribute name.
+		 */
+		private function normalize_data_attribute_name( string $attr ): string {
+			if ( function_exists( 'wp_html_custom_data_attribute_name' ) ) {
+				// wp_html_custom_data_attribute_name() validates/normalizes custom data attributes on WP 6.9+.
+				$normalized = \wp_html_custom_data_attribute_name( $attr ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound
+				if ( is_string( $normalized ) && '' !== $normalized ) {
+					return $normalized;
+				}
+			}
+			if ( function_exists( 'wp_js_dataset_name' ) ) {
+				// wp_js_dataset_name() maps dataset property → data-* attribute on WP 6.9+.
+				// We pass the attribute directly when the helper expects a dataset key; guard keeps WP <6.9 safe.
+				$maybe = \wp_js_dataset_name( $attr ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound
+				if ( is_string( $maybe ) && '' !== $maybe ) {
+					return $maybe;
+				}
+			}
+			return $attr;
 		}
 
 		/**
