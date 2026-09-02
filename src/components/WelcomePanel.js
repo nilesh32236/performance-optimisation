@@ -71,11 +71,13 @@ const WelcomePanel = () => {
 		setActivatingStep( step.key );
 		dismiss();
 		try {
-			const updateRes = await apiCall( 'update_settings', {
-				tab: step.settings.tab,
-				settings: step.settings.payload,
-			} );
-			const dismissRes = await apiCall( 'dismiss_welcome' );
+			const [ updateRes, dismissRes ] = await Promise.all( [
+				apiCall( 'update_settings', {
+					tab: step.settings.tab,
+					settings: step.settings.payload,
+				} ),
+				apiCall( 'dismiss_welcome' ),
+			] );
 			if ( updateRes.success && dismissRes.success ) {
 				setVisible( false );
 			} else {
