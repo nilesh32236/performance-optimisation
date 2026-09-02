@@ -944,4 +944,29 @@ describe( 'FileOptimization Component', () => {
 			screen.getByLabelText( /Enable Server Rules/i )
 		).not.toBeDisabled();
 	} );
+
+	it( 'Network tab renders LiteSpeed (Apache-compatible) when server_type=litespeed and shows Cache-Vary', () => {
+		global.wppoSettings.litespeed = {
+			detected: true,
+			server_type: 'litespeed',
+			effective_mode: 'wppo',
+			lscache_active: false,
+		};
+		render(
+			<FileOptimization
+				options={ {} }
+				serverRules={ {
+					server_type: 'litespeed',
+					nginx: 'Cache-Vary: ismobile,webp',
+					apache: 'Header append Vary Accept',
+				} }
+			/>
+		);
+		const networkTab = screen.getByRole( 'tab', { name: /Network/i } );
+		fireEvent.click( networkTab );
+		expect( screen.getByText( /LiteSpeed Detected/i ) ).toBeInTheDocument();
+		expect( screen.getAllByText( /Server Rules/i ).length ).toBeGreaterThan(
+			0
+		);
+	} );
 } );

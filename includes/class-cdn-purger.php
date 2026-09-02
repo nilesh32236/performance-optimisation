@@ -68,11 +68,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 		}
 
 		/**
-		 * Purge LiteSpeed/LSCache when purgeSync is enabled.
+		 * Purge LiteSpeed/LSCache when purgeSync is enabled with stale handling.
 		 *
 		 * Delegates to LiteSpeed_Integration's loop-safe sync helpers. Handles
 		 * both "all" (→ litespeed_purge_all) and single-page (→
-		 * litespeed_purge_url) via home_url().
+		 * litespeed_purge_url) via home_url(). Also queues stale tags so LS
+		 * stale cache is cleared (LS-330 stale/private split).
 		 *
 		 * @since NEXT
 		 * @param string      $type     Clear type ('all' or 'single_page').
@@ -86,12 +87,31 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 
 			if ( 'all' === $type ) {
 				LiteSpeed_Integration::sync_purge_all_to_litespeed();
+				// Stale handling: queue full fan-out as stale for double-cache prevention.
+				if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'queue_purge_tags' ) ) {
+					$tags = array( 'F', 'H', 'PGS', 'D', 'B', 'C', 'W', 'REST', 'HTTP.404', 'MIN', 'WPPO' );
+					LiteSpeed_Integration::queue_purge_tags( $tags, 'stale' );
+				}
 				return;
 			}
 
 			if ( 'single_page' === $type && is_string( $url_path ) && '' !== $url_path ) {
 				$path_for_url = '/' . ltrim( $url_path, '/' );
 				LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
+				// Stale/private split for single page.
+				$scope = 'public';
+				if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_private_request' ) ) {
+					try {
+						if ( LiteSpeed_Integration::is_private_request() ) {
+							$scope = 'private';
+						}
+					} catch ( \Throwable $e ) {
+						unset( $e );
+					}
+				}
+				if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'queue_purge_tags' ) ) {
+					LiteSpeed_Integration::queue_purge_tags( array( 'D', 'B', 'C', 'W', 'REST' ), $scope );
+				}
 				return;
 			}
 
@@ -100,6 +120,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN_Purger' ) ) {
 			if ( is_string( $url_path ) && '' !== $url_path ) {
 				$path_for_url = '/' . ltrim( $url_path, '/' );
 				LiteSpeed_Integration::sync_purge_url_to_litespeed( $path_for_url );
+				if ( method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'queue_purge_tags' ) ) {
+					LiteSpeed_Integration::queue_purge_tags( array( 'D', 'B', 'C', 'W', 'REST' ), 'public' );
+				}
 			}
 		}
 
