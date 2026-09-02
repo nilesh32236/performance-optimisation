@@ -87,7 +87,8 @@ const ObjectCache = ( { options = {} } ) => {
 	useEffect( () => {
 		return () => setIsDirty( false );
 	}, [ setIsDirty ] );
-	const [ isActionLoading, setIsActionLoading ] = useState( false );
+	const [ activeAction, setActiveAction ] = useState( null );
+	const isActionLoading = Boolean( activeAction );
 	const [ cacheStatus, setCacheStatus ] = useState( {
 		enabled: false,
 		redis_missing: false,
@@ -191,7 +192,7 @@ const ObjectCache = ( { options = {} } ) => {
 	};
 
 	const handleAction = async ( action ) => {
-		setIsActionLoading( true );
+		setActiveAction( action );
 		dismiss();
 		try {
 			const credentialsRequired = [
@@ -237,7 +238,7 @@ const ObjectCache = ( { options = {} } ) => {
 				durationMs: 5000,
 			} );
 		} finally {
-			setIsActionLoading( false );
+			setActiveAction( null );
 		}
 	};
 
@@ -295,7 +296,7 @@ const ObjectCache = ( { options = {} } ) => {
 								className="wppo-button wppo-button--secondary"
 								onClick={ () => handleAction( 'flush' ) }
 								disabled={ isActionLoading }
-								isLoading={ isActionLoading }
+								isLoading={ activeAction === 'flush' }
 								label={
 									<>
 										<FontAwesomeIcon icon={ faBroom } />{ ' ' }
@@ -317,7 +318,7 @@ const ObjectCache = ( { options = {} } ) => {
 									! cacheStatus.redis_reachable ||
 									cacheStatus.foreign_dropin
 								}
-								isLoading={ isActionLoading }
+								isLoading={ activeAction === 'enable' }
 								label={
 									<>
 										<FontAwesomeIcon
@@ -735,7 +736,7 @@ const ObjectCache = ( { options = {} } ) => {
 								className="wppo-button wppo-button--secondary"
 								onClick={ () => handleAction( 'ping' ) }
 								disabled={ isActionLoading }
-								isLoading={ isActionLoading }
+								isLoading={ activeAction === 'ping' }
 								label={
 									<>
 										<FontAwesomeIcon
@@ -908,7 +909,7 @@ const ObjectCache = ( { options = {} } ) => {
 							className="wppo-button wppo-button--danger"
 							onClick={ () => setConfirmDisable( true ) }
 							disabled={ isActionLoading }
-							isLoading={ isActionLoading }
+							isLoading={ activeAction === 'disable' }
 							label={
 								<>
 									<FontAwesomeIcon icon={ faTimes } />{ ' ' }
