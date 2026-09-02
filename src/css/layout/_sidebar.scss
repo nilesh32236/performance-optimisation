@@ -119,6 +119,11 @@
 					transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 					letter-spacing: 0.01em;
 
+					@include respond-to('lg') {
+						min-height: 44px;
+						padding: 10px 12px;
+					}
+
 					&:hover {
 						background: var(--wppo-bg-sidebar-hover);
 						color: var(--wppo-text-sidebar-active, #fff);
