@@ -191,6 +191,7 @@ class LiteSpeedIntegrationTest extends \PHPUnit\Framework\TestCase {
 		);
 		$captured = null;
 		Functions\when( 'set_transient' )->alias(
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- test mock signature must match WP API.
 			function ( $key, $value, $exp ) use ( &$captured ) {
 				$captured = $value;
 				return true;
@@ -221,6 +222,7 @@ class LiteSpeedIntegrationTest extends \PHPUnit\Framework\TestCase {
 		}
 		$called = false;
 		Functions\when( 'update_option' )->alias(
+			// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- test mock signature must match WP API.
 			function ( $key, $value, $autoload = false ) use ( &$called ) {
 				$called = true;
 				return true;
