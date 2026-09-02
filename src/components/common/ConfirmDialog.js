@@ -95,18 +95,26 @@ const ConfirmDialog = ( {
 	}, [ isOpen ] );
 
 	const prevOverflowRef = useRef( '' );
+	const prevPaddingRef = useRef( '' );
 
 	useEffect( () => {
 		const doc = dialogRef.current?.ownerDocument || document;
 		if ( isOpen ) {
 			previouslyFocusedRef.current = doc.activeElement;
 			prevOverflowRef.current = doc.body.style.overflow;
+			prevPaddingRef.current = doc.body.style.paddingRight;
+			const scrollbarW =
+				window.innerWidth - doc.documentElement.clientWidth;
+			if ( scrollbarW > 0 ) {
+				doc.body.style.paddingRight = `${ scrollbarW }px`;
+			}
 			doc.addEventListener( 'keydown', handleKeyDown );
 			doc.body.style.overflow = 'hidden';
 		}
 		return () => {
 			doc.removeEventListener( 'keydown', handleKeyDown );
 			doc.body.style.overflow = prevOverflowRef.current;
+			doc.body.style.paddingRight = prevPaddingRef.current;
 		};
 	}, [ isOpen, handleKeyDown ] );
 
@@ -134,14 +142,6 @@ const ConfirmDialog = ( {
 		<div
 			className="wppo-dialog-overlay"
 			onClick={ onCancel }
-			onKeyDown={ ( e ) => {
-				if (
-					e.target === e.currentTarget &&
-					( e.key === 'Enter' || e.key === ' ' )
-				) {
-					onCancel();
-				}
-			} }
 			role="presentation"
 		>
 			{ /* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */ }
