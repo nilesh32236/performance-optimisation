@@ -18,7 +18,20 @@ use Brain\Monkey\Functions;
  * @package PerformanceOptimise\Tests
  */
 class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
-	use WPPO_Test_Bootstrap;
+	use WPPO_Test_Bootstrap {
+		setUp as protected wppoSetUp;
+		tearDown as protected wppoTearDown;
+	}
+
+	/**
+	 * Ensure wp_version global is clean between tests (6.9 gate in stub_script_modules).
+	 *
+	 * @return void
+	 */
+	protected function tearDown(): void {
+		unset( $GLOBALS['wp_version'] );
+		$this->wppoTearDown();
+	}
 
 	/**
 	 * Stub the WP environment needed to construct Main with the given
@@ -351,6 +364,10 @@ class MainDelayDeferTest extends \PHPUnit\Framework\TestCase {
 	 * @param object $fake Fake modules instance.
 	 */
 	private function stub_script_modules( object $fake ): void {
+		// WP 6.9+ gate for fetchpriority/in_footer (apply_module_loading_strategies).
+		// @since NEXT.
+		$GLOBALS['wp_version'] = '6.9';
+		Functions\when( 'get_bloginfo' )->justReturn( '6.9' );
 		Functions\when( 'wp_script_modules' )->justReturn( $fake );
 		Functions\when( 'function_exists' )->alias(
 			static function ( $function_name ) use ( $fake ) {
