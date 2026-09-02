@@ -414,6 +414,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
+		 * Whether content contains a block type via streaming processor.
+		 *
+		 * Delegates to {@see Util::content_has_block()} so asset decisions can
+		 * remain block-aware without duplicating the `WP_Block_Processor`
+		 * streaming logic. Reused for LCP/gallery counts (see Image_Optimisation).
+		 *
+		 * @since NEXT
+		 * @param string $content    Post content.
+		 * @param string $block_name Block name e.g. 'core/gallery'.
+		 * @return bool True when the block type is present.
+		 */
+		private function content_has_block( string $content, string $block_name ): bool {
+			return Util::content_has_block( $content, $block_name );
+		}
+
+		/**
+		 * Count blocks of a given type in post content.
+		 *
+		 * Reused for gallery/LCP counts. Streaming via `WP_Block_Processor` on
+		 * WP 6.9+; fallback to `parse_blocks()` recursion.
+		 *
+		 * @since NEXT
+		 * @param string $content    Post content.
+		 * @param string $block_name Block name e.g. 'core/gallery'.
+		 * @return int
+		 */
+		private function count_blocks_by_type( string $content, string $block_name ): int {
+			return Util::count_blocks_by_type( $content, $block_name );
+		}
+
+		/**
 		 * Combines all enqueued CSS files into a single file.
 		 *
 		 * @return void
