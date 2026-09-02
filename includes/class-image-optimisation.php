@@ -356,7 +356,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function post_process_placeholders_with_processor( string $buffer ): ?string {
 			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
 			$processor = \WP_HTML_Processor::$create( $buffer ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
-			if ( null === $processor ) {
+			if ( null === $processor || is_wp_error( $processor ) || ! ( $processor instanceof \WP_HTML_Processor ) ) {
 				return null;
 			}
 
@@ -376,7 +376,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 					$src      = $processor->get_attribute( 'src' );
 					if ( null !== $data_src && null === $src ) {
 						$tok_html    = $processor->serialize_token();
-						$decoded     = htmlspecialchars_decode( (string) $data_src, ENT_QUOTES );
+						$decoded     = (string) $data_src;
 						$placeholder = $this->get_placeholder_src_for_image( $tok_html, $decoded );
 						if ( ! empty( $placeholder['src'] ) ) {
 							$processor->set_attribute( 'src', $placeholder['src'] );
@@ -385,7 +385,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 							}
 							$serialized = $processor->serialize_token();
 							// WP_HTML_Tag_Processor blocks data: URIs in src for security — manual inject when blocked.
-							if ( false === strpos( $serialized, 'src=' ) ) {
+							if ( null === $processor->get_attribute( 'src' ) ) {
 								$extra = '';
 								foreach ( $placeholder['attrs'] as $an => $av ) {
 									$extra .= ' ' . $this->normalize_data_attribute_name( $an ) . '="' . esc_attr( $av ) . '"';
@@ -466,7 +466,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function post_process_img_dimensions_with_processor( string $buffer ): ?string {
 			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
 			$processor = \WP_HTML_Processor::$create( $buffer ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
-			if ( null === $processor ) {
+			if ( null === $processor || is_wp_error( $processor ) || ! ( $processor instanceof \WP_HTML_Processor ) ) {
 				return null;
 			}
 
@@ -595,7 +595,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		private function post_process_auto_sizes_with_processor( string $buffer ): ?string {
 			$create    = method_exists( 'WP_HTML_Processor', 'create_fragment' ) ? 'create_fragment' : 'create_full_parser';
 			$processor = \WP_HTML_Processor::$create( $buffer ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
-			if ( null === $processor ) {
+			if ( null === $processor || is_wp_error( $processor ) || ! ( $processor instanceof \WP_HTML_Processor ) ) {
 				return null;
 			}
 
@@ -700,14 +700,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 				$normalized = \wp_html_custom_data_attribute_name( $attr ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound
 				if ( is_string( $normalized ) && '' !== $normalized ) {
 					return $normalized;
-				}
-			}
-			if ( function_exists( 'wp_js_dataset_name' ) ) {
-				// wp_js_dataset_name() maps dataset property → data-* attribute on WP 6.9+.
-				// We pass the attribute directly when the helper expects a dataset key; guard keeps WP <6.9 safe.
-				$maybe = \wp_js_dataset_name( $attr ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound
-				if ( is_string( $maybe ) && '' !== $maybe ) {
-					return $maybe;
 				}
 			}
 			return $attr;
