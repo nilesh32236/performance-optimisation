@@ -135,10 +135,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Minify\JS' ) ) {
 		}
 
 		/**
-		 * Generates the cache file path based on the original file's MD5 hash.
+		 * Gets the cache file path for the minified JS.
 		 *
-		 * @return string The path to the cache file.
+		 * Public so callers (e.g. Main::minify_js) can access the
+		 * on-disk path of the minified file after {@see Minify\JS::minify()}.
 		 *
+		 * @return string The full path to the cache file.
 		 * @since 1.0.0
 		 */
 		public function get_cache_file_path(): string {
