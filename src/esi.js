@@ -4,6 +4,9 @@
  * Enterprise: <esi:include> is handled by LSWS; OLS uses <div data-wppo-esi>.
  * Hydrates via fetch(admin-ajax.php?action=wppo_esi_fragment) with
  * credentials: 'same-origin', no jQuery, requestAnimationFrame batched.
+ * Intentionally bypasses SPA apiRequest — uses different auth (nonce via query
+ * + same-origin credentials, no X-WP-Nonce REST header) and must remain
+ * decoupled from the admin SPA bundle.
  *
  * @since NEXT
  */

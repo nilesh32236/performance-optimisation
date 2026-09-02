@@ -28,19 +28,25 @@
 	--wppo-text-main: #0f172a;
 	--wppo-text-muted: #475569;
 	--wppo-text-light: #64748b;
+	--wppo-text-light-muted: #94a3b8;
 	--wppo-text-sidebar: #cbd5e1;
 	--wppo-text-sidebar-active: #ffffff;
 
 	/* Semantic Colors */
 	--wppo-success: #059669;
+	--wppo-success-light: #10b981;
 	--wppo-success-bg: #ecfdf5;
 	--wppo-success-border: #a7f3d0;
 	--wppo-error: #dc2626;
 	--wppo-error-bg: #fef2f2;
 	--wppo-error-border: #fecaca;
 	--wppo-warning: #d97706;
+	--wppo-warning-badge: #f59e0b;
+	--wppo-warning-text: #92400e;
 	--wppo-warning-bg: #fffbeb;
-	--wppo-warning-border: #fde68a;
+	--wppo-warning-bg-mid: #fef3c7;
+	--wppo-warning-bg-end: #ffedd5;
+	--wppo-warning-border: #fcd34d;
 	--wppo-info: #0284c7;
 	--wppo-info-bg: #f0f9ff;
 	--wppo-info-border: #bae6fd;
@@ -58,6 +64,11 @@
 	--wppo-accent-db-light: #fbbf24;
 	--wppo-accent-images: #10b981;
 	--wppo-accent-images-light: #34d399;
+
+	/* Header gradient */
+	--wppo-header-gradient-start: #ffffff;
+	--wppo-header-gradient-mid: #eef2ff;
+	--wppo-header-gradient-end: #f0f9ff;
 
 	/* Effects */
 	--wppo-radius: 16px;

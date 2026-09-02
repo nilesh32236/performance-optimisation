@@ -393,6 +393,7 @@ const ObjectCache = ( { options = {} } ) => {
 						>
 							<div
 								className="wppo-progress-bar__fill"
+								// dynamic progress via CSS var for consistency
 								style={ {
 									'--wppo-hit-ratio': `${ hitRatio }%`,
 								} }

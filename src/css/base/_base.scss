@@ -41,6 +41,7 @@
 .wppo-mr-6 { margin-right: 6px; }
 .wppo-ml-6 { margin-left: 6px; }
 .wppo-ml-12 { margin-left: 12px; }
+.wppo-my-20 { margin: 20px 0; }
 .wppo-text-small { font-size: 13px; }
 // Alias for legacy consumers — keep for backward compatibility (P5 will deprecate wppo-text-13).
 .wppo-text-13 { font-size: 13px; }
@@ -53,6 +54,12 @@
 .wppo-cleanup-row__actions { display: flex; align-items: center; gap: 8px; }
 .wppo-cleanup-row__count--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .wppo-input--mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.wppo-file-opt-card {
+	border: 1px solid var(--wppo-border);
+	padding: 12px;
+	border-radius: var(--wppo-radius-xs);
+}
 
 .wppo-loading-placeholder {
 	display: flex;
