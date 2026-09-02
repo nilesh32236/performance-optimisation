@@ -112,9 +112,9 @@ const ImageOptimizationCard = ( {
 						aria-valuemax="100"
 						aria-valuenow={ Math.round( webpPercent ) }
 					>
+						{ /* dynamic progress via CSS var for consistency (intentional inline var) */ }
 						<div
 							className="wppo-progress-bar__fill"
-							// dynamic progress via CSS var for consistency (intentional inline var)
 							style={ { '--wppo-progress': `${ webpPercent }%` } }
 						></div>
 					</div>
@@ -143,9 +143,9 @@ const ImageOptimizationCard = ( {
 						aria-valuemax="100"
 						aria-valuenow={ Math.round( avifPercent ) }
 					>
+						{ /* dynamic progress via CSS var for consistency (intentional inline var) */ }
 						<div
 							className="wppo-progress-bar__fill"
-							// dynamic progress via CSS var for consistency (intentional inline var)
 							style={ { '--wppo-progress': `${ avifPercent }%` } }
 						></div>
 					</div>
