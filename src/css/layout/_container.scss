@@ -42,7 +42,6 @@
 	min-height: 480px;
 	min-width: 0;
 	overflow-wrap: break-word;
-	word-break: break-word;
 
 	@include respond-to('md') {
 		padding: 24px 20px;
