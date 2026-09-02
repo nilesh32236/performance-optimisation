@@ -46,7 +46,3 @@
 ## 2024-05-24 - Link Inputs with Helper Text
 **Learning:** Found inputs lacking explicit `aria-describedby` associations with their description text, leading to accessibility issues.
 **Action:** Always link inputs to accompanying helper text by giving the text an ID and using `aria-describedby` on the input element.
-
-## 2026-09-02 - Form controls missing aria-describedby
-**Learning:** In React components, instructional <p> tags below <select> or <input> elements must be linked using aria-describedby and a matching id so screen readers announce the helper text when the field receives focus.
-**Action:** Always verify that every form control with an associated description paragraph has a corresponding aria-describedby={id} attribute linking to the paragraph's id.
