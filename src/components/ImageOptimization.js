@@ -1,8 +1,9 @@
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useContext } from '@wordpress/element';
 import { __ } from '@wordpress/i18n';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -123,6 +124,62 @@ const ImageOptimization = ( { options = {} } ) => {
 
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const { setIsDirty } = useContext( UnsavedChangesContext );
+	const [ baseline, setBaseline ] = useState( defaultSettings );
+	useEffect( () => {
+		setBaseline( {
+			...defaultSettings,
+			...options,
+			placeholderType:
+				options.placeholderType ??
+				( options.replacePlaceholderWithSVG ? 'svg' : 'none' ),
+			clientSideMimeTypes: Array.isArray( options.clientSideMimeTypes )
+				? options.clientSideMimeTypes
+				: defaultSettings.clientSideMimeTypes,
+			selectedPostType: Array.isArray( options.selectedPostType )
+				? options.selectedPostType
+				: defaultSettings.selectedPostType,
+			availablePostTypes: Array.isArray( options.availablePostTypes )
+				? options.availablePostTypes
+				: defaultSettings.availablePostTypes,
+		} );
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		options.lazyLoadImages,
+		options.lazyLoadNative,
+		options.lazyLoadBackgroundImages,
+		options.wrapInPicture,
+		options.excludeFirstImages,
+		options.excludeImages,
+		options.lazyLoadVideos,
+		options.enableVideoPlaceholder,
+		options.excludeVideos,
+		options.convertImg,
+		options.conversionFormat,
+		options.excludeConvertImages,
+		options.preloadFrontPageImages,
+		options.preloadFrontPageImagesUrls,
+		options.preloadPostTypeImage,
+		options.selectedPostType,
+		options.availablePostTypes,
+		options.excludePostTypeImgUrl,
+		options.maxWidthImgSize,
+		options.excludeSize,
+		options.autoPreloadLCP,
+		options.prioritizeLCPImages,
+		options.clientSideMimeTypeOverride,
+		options.clientSideMimeTypes,
+		options.forceServerSideConversion,
+		options.placeholderType,
+		options.replacePlaceholderWithSVG,
+	] );
+	useEffect( () => {
+		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
+		setIsDirty( dirty );
+	}, [ settings, baseline, setIsDirty ] );
+	useEffect( () => {
+		return () => setIsDirty( false );
+	}, [ setIsDirty ] );
 	const mimeList = Array.isArray( settings.clientSideMimeTypes )
 		? settings.clientSideMimeTypes
 		: [];
@@ -180,6 +237,8 @@ const ImageOptimization = ( { options = {} } ) => {
 			} );
 
 			if ( res.success ) {
+				setBaseline( { ...settings } );
+				setIsDirty( false );
 				notify( {
 					type: 'success',
 					message:

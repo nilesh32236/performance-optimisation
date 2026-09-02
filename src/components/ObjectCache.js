@@ -1,7 +1,14 @@
-import { useState, useEffect, useId, useCallback } from '@wordpress/element';
+import {
+	useState,
+	useEffect,
+	useId,
+	useCallback,
+	useContext,
+} from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
 	faBroom,
@@ -56,6 +63,30 @@ const ObjectCache = ( { options = {} } ) => {
 
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
+	const { setIsDirty } = useContext( UnsavedChangesContext );
+	const [ baseline, setBaseline ] = useState( defaultSettings );
+	useEffect( () => {
+		setBaseline( { ...defaultSettings, ...options } );
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		options.mode,
+		options.host,
+		options.port,
+		options.password,
+		options.database,
+		options.nodes,
+		options.master_name,
+		options.use_tls,
+		options.persistent,
+		options.compression,
+	] );
+	useEffect( () => {
+		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
+		setIsDirty( dirty );
+	}, [ settings, baseline, setIsDirty ] );
+	useEffect( () => {
+		return () => setIsDirty( false );
+	}, [ setIsDirty ] );
 	const [ isActionLoading, setIsActionLoading ] = useState( false );
 	const [ cacheStatus, setCacheStatus ] = useState( {
 		enabled: false,
@@ -124,6 +155,8 @@ const ObjectCache = ( { options = {} } ) => {
 				settings,
 			} );
 			if ( res.success ) {
+				setBaseline( { ...settings } );
+				setIsDirty( false );
 				notify( {
 					type: 'success',
 					message: __(

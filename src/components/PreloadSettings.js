@@ -1,8 +1,9 @@
 import { __, sprintf } from '@wordpress/i18n';
-import { useState, useEffect } from '@wordpress/element';
+import { useState, useEffect, useContext } from '@wordpress/element';
 import { handleChange } from '../lib/util';
 import { apiCall } from '../lib/apiRequest';
 import useNotice from '../lib/useNotice';
+import UnsavedChangesContext from '../lib/UnsavedChangesContext';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import SwitchField from './common/SwitchField';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -39,6 +40,36 @@ const PreloadSettings = ( { options = {} } ) => {
 	const [ settings, setSettings ] = useState( defaultSettings );
 	const [ isLoading, setIsLoading ] = useState( false );
 	const { notice, notify, dismiss } = useNotice();
+	const { setIsDirty } = useContext( UnsavedChangesContext );
+	const [ baseline, setBaseline ] = useState( defaultSettings );
+	// Keep baseline in sync with incoming options on mount / prop change.
+	useEffect( () => {
+		setBaseline( { ...defaultSettings, ...options } );
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [
+		options.enablePreloadCache,
+		options.excludePreloadCache,
+		options.preloadSitemap,
+		options.preconnect,
+		options.preconnectOrigins,
+		options.prefetchDNS,
+		options.dnsPrefetchOrigins,
+		options.preloadFonts,
+		options.preloadFontsUrls,
+		options.preloadCSS,
+		options.preloadCSSUrls,
+		options.enableSpeculationRules,
+		options.speculationMode,
+		options.speculationEagerness,
+		options.speculationExcludeUrls,
+	] );
+	useEffect( () => {
+		const dirty = JSON.stringify( settings ) !== JSON.stringify( baseline );
+		setIsDirty( dirty );
+	}, [ settings, baseline, setIsDirty ] );
+	useEffect( () => {
+		return () => setIsDirty( false );
+	}, [ setIsDirty ] );
 
 	useEffect( () => {
 		if ( ! options || Object.keys( options ).length === 0 ) {
@@ -88,6 +119,8 @@ const PreloadSettings = ( { options = {} } ) => {
 			} );
 
 			if ( res.success ) {
+				setBaseline( { ...settings } );
+				setIsDirty( false );
 				notify( {
 					type: 'success',
 					message:
