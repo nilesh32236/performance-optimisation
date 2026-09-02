@@ -2620,10 +2620,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				// Validate via WP_Speculation_Rules when available (WP 6.8+), fallback to allowlist.
 				// Guards: class_exists + method_exists for backward compat on WP <6.8.
 				if ( class_exists( 'WP_Speculation_Rules' ) ) {
-					if ( method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) && ! \WP_Speculation_Rules::is_valid_mode( $mode ) ) {
+					if ( method_exists( 'WP_Speculation_Rules', 'is_valid_mode' ) ) {
+						if ( ! \WP_Speculation_Rules::is_valid_mode( $mode ) ) {
+							$mode = 'prefetch';
+						}
+					} elseif ( ! in_array( $mode, array( 'prefetch', 'prerender' ), true ) ) {
 						$mode = 'prefetch';
 					}
-					if ( method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) && ! \WP_Speculation_Rules::is_valid_eagerness( $eagerness ) ) {
+					if ( method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
+						if ( ! \WP_Speculation_Rules::is_valid_eagerness( $eagerness ) ) {
+							$eagerness = 'conservative';
+						}
+					} elseif ( ! in_array( $eagerness, array( 'conservative', 'moderate', 'eager' ), true ) ) {
 						$eagerness = 'conservative';
 					}
 				} else {
@@ -2645,25 +2653,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// the caching solution core's detection heuristic would see, so a
 			// site where caching is detected elsewhere keeps core's behavior.
 			// A host that explicitly pinned a different default is left alone.
-			// Host override detection honors both the constant/env lookup and
-			// WP 7.1 wp_get_speculation_rules_default_configuration() when available.
+			// Host override detection via get_speculation_default_override() honors
+			// both the constant/env lookup and WP 7.1 wp_get_speculation_rules_default_configuration() when available.
 			$has_host_override = null !== $this->get_speculation_default_override( 'WP_SPECULATIVE_LOADING_DEFAULT_EAGERNESS' );
-			if ( ! $has_host_override && function_exists( 'wp_get_speculation_rules_default_configuration' ) ) {
-				$defaults = wp_get_speculation_rules_default_configuration();
-				if ( is_array( $defaults ) && isset( $defaults['eagerness'] ) && is_string( $defaults['eagerness'] ) && '' !== $defaults['eagerness'] ) {
-					$eagerness_from_core = $defaults['eagerness'];
-					$is_valid            = true;
-					if ( class_exists( 'WP_Speculation_Rules' ) && method_exists( 'WP_Speculation_Rules', 'is_valid_eagerness' ) ) {
-						$is_valid = \WP_Speculation_Rules::is_valid_eagerness( $eagerness_from_core );
-					} else {
-						$is_valid = in_array( $eagerness_from_core, array( 'conservative', 'moderate', 'eager' ), true );
-					}
-					// Core's effective default is conservative; any other valid value implies host pinned it.
-					if ( $is_valid && 'conservative' !== $eagerness_from_core ) {
-						$has_host_override = true;
-					}
-				}
-			}
 			if (
 				! empty( $this->options['cache_settings']['enableCache'] ) &&
 				'auto' === ( $config['eagerness'] ?? 'auto' ) &&
