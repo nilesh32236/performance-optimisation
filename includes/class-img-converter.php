@@ -843,6 +843,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Store dominant color and LQIP data for an image atomically via the
 		 * existing deferred-commit pattern (wppo_img_info).
 		 *
+		 * Idempotent on WP 7.1+ double-fire (`wp_generate_attachment_metadata`
+		 * fires on both `create` and `finalize`): when the stored values for
+		 * this rel_path already equal the new ones, no atomic update is
+		 * scheduled, avoiding a duplicate DB write. The deferred commit also
+		 * dedupes via array_merge, but this early bail avoids the shutdown
+		 * write entirely.
+		 *
 		 * @since NEXT
 		 *
 		 * @param string $rel_path       The relative image path (ABSPATH-stripped).
@@ -851,6 +858,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return void
 		 */
 		private function store_placeholder_data( string $rel_path, string $dominant_color, string $lqip ): void {
+			// Idempotency for WP 7.1+ double-fire (create+finalize): skip when unchanged.
+			$existing = self::get_img_info();
+			if ( isset( $existing['dominant_color'][ $rel_path ] ) && $existing['dominant_color'][ $rel_path ] === $dominant_color ) {
+				$existing_lqip = $existing['lqip'][ $rel_path ] ?? '';
+				if ( empty( $lqip ) || $existing_lqip === $lqip ) {
+					return;
+				}
+			}
+
 			self::update_img_info_atomic(
 				function ( $img_info ) use ( $rel_path, $dominant_color, $lqip ) {
 					if ( ! isset( $img_info['dominant_color'] ) || ! is_array( $img_info['dominant_color'] ) ) {
@@ -889,7 +905,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * Clean up placeholder data (dominant_color, lqip) when an attachment is deleted.
 		 *
 		 * Removes entries for the main file AND all registered resized versions
-		 * from wppo_img_info.
+		 * from wppo_img_info. On WP 7.1+ HEIC uploads the browser worker (~13 MB
+		 * wasm-vips) converts HEIC→JPEG and retains the original HEIC path in
+		 * `$metadata['original']['file']` as a companion; that companion path is
+		 * also purged here so CDN/Edge purgers (CDN_Purger, Edge_Purger) do not
+		 * retain stale placeholder references for the original file.
 		 *
 		 * @since NEXT
 		 *
@@ -916,6 +936,32 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 						$rel_paths[] = $size_rel;
 					}
 				}
+			}
+
+			// WP 7.1+ HEIC→JPEG companion retention: $metadata['original']['file']
+			// holds the original HEIC basename (e.g. 'photo.heic') when the
+			// browser worker converts it. Include it for deletion parity with
+			// sub-sizes and for CDN/Edge purger documentation.
+			$orig_file = '';
+			if ( isset( $metadata['original'] ) && is_array( $metadata['original'] ) && ! empty( $metadata['original']['file'] ) && is_string( $metadata['original']['file'] ) ) {
+				$orig_file = $metadata['original']['file'];
+			} elseif ( isset( $metadata['original'] ) && is_string( $metadata['original'] ) && '' !== $metadata['original'] ) {
+				// Fallback: some builds store original as a plain string file name.
+				$orig_file = $metadata['original'];
+			}
+			if ( '' !== $orig_file ) {
+				$dir = dirname( $file_path );
+				// Core stores the companion as a basename relative to the uploads subdir.
+				if ( false === strpos( $orig_file, '/' ) ) {
+					$orig_path = wp_normalize_path( $dir . '/' . $orig_file );
+				} else {
+					$orig_path = wp_normalize_path( $orig_file );
+					if ( false === strpos( $orig_path, wp_normalize_path( ABSPATH ) ) ) {
+						$orig_path = wp_normalize_path( $dir . '/' . ltrim( $orig_file, '/' ) );
+					}
+				}
+				$orig_rel    = str_replace( wp_normalize_path( ABSPATH ), '', $orig_path );
+				$rel_paths[] = $orig_rel;
 			}
 
 			// Read the latest state via get_img_info() which may include
@@ -1182,7 +1228,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * (upload metadata, serving, cron, REST) — not only on requests where
 		 * Image_Optimisation has already registered the core opt-out filter.
 		 *
+		 * WP 7.1's in-browser pipeline lazy-loads ~13 MB wasm-vips in a Web
+		 * Worker (gated by Document-Isolation-Policy / SharedArrayBuffer, >2 GB
+		 * RAM, ≥2 cores). It handles compression/resize/crop/format/EXIF and
+		 * HEIC→JPEG companion generation; GD cannot decode HEIC and must not
+		 * wastefully attempt it (see maybe_extract_placeholder_for_upload()).
+		 * HDR gain-map images are preserved via image_max_bit_depth (Imagick
+		 * path not clamped) — already correct.
+		 *
 		 * @since 1.9.0
+		 * @since NEXT Document wasm gating and HDR preservation.
 		 *
 		 * @return bool True if client-side media processing is enabled.
 		 */
@@ -1211,7 +1266,27 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * dominant-color/LQIP data, and on the image not being excluded from
 		 * conversion, to avoid needless file reads and GD decodes.
 		 *
+		 * WP 7.1 fires `wp_generate_attachment_metadata` twice (create +
+		 * finalize/sideload). The store is idempotent via the deferred
+		 * wppo_img_info commit (array_merge + dedupe) so the second call is a
+		 * no-op when data is unchanged; an early check avoids a second GD decode.
+		 *
+		 * HEIC early-exit (WP 7.1+): When client-side media processing is enabled
+		 * and `forceServerSideConversion` is OFF, HEIC/HEIF uploads are owned by
+		 * the browser's wasm-vips worker (~13 MB lazy-loaded, SharedArrayBuffer
+		 * + Document-Isolation-Policy). GD cannot decode HEIC (getimagesize()
+		 * returns empty, imagecreatefromstring would buffer the whole file
+		 * wastefully), so we skip the decode entirely. When forced, the fallback
+		 * path still attempts a decode (likely failing silently) for completeness.
+		 * The browser's HEIC→JPEG companion is retained in `$metadata['original']`
+		 * for CDN/Edge purger parity — see clean_placeholder_on_delete().
+		 *
+		 * Trac #64876: `client_side_supported_mime_types` remains intersected
+		 * with core's list until a public filter lands; this method does not
+		 * widen the list additively.
+		 *
 		 * @since 1.9.0
+		 * @since NEXT Add HEIC early-exit and double-fire idempotency guard.
 		 *
 		 * @param array $metadata      The attachment metadata.
 		 * @param int   $attachment_id The attachment ID.
@@ -1227,6 +1302,73 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			if ( ! empty( $this->exclude_imgs ) ) {
 				foreach ( $this->exclude_imgs as $exclude_img ) {
 					if ( false !== strpos( $img_url, $exclude_img ) ) {
+						return;
+					}
+				}
+			}
+
+			// HEIC early-exit (WP 7.1+): Skip wasteful GD decode when the browser
+			// worker owns HEIC→JPEG. Guarded by function_exists() for <7.1.
+			// Cached attached file reused for both mime fallback and idempotency guard to reduce I/O.
+			$cached_attached_file = function_exists( 'get_attached_file' ) ? get_attached_file( $attachment_id ) : '';
+			if ( function_exists( 'wp_is_client_side_media_processing_enabled' )
+				&& wp_is_client_side_media_processing_enabled()
+				&& empty( $this->options['image_optimisation']['forceServerSideConversion'] )
+			) {
+				$mime_for_check = '';
+				if ( function_exists( 'get_post_mime_type' ) ) {
+					$mime_for_check = (string) get_post_mime_type( $attachment_id );
+				}
+				if ( '' === $mime_for_check ) {
+					// Fallback: extension-based when post mime is not yet set (e.g. direct sideload).
+					if ( is_string( $cached_attached_file ) && '' !== $cached_attached_file ) {
+						$ext_for_mime = strtolower( (string) pathinfo( $cached_attached_file, PATHINFO_EXTENSION ) );
+						$ext_to_mime  = array(
+							'heic'          => 'image/heic',
+							'heif'          => 'image/heif',
+							'heics'         => 'image/heic-sequence',
+							'heif-sequence' => 'image/heif-sequence',
+							'heic-sequence' => 'image/heic-sequence',
+							'heifs'         => 'image/heif-sequence',
+						);
+						if ( isset( $ext_to_mime[ $ext_for_mime ] ) ) {
+							$mime_for_check = $ext_to_mime[ $ext_for_mime ];
+						}
+					} elseif ( is_string( $img_url ) && '' !== $img_url ) {
+						$mime_for_check = Util::get_image_mime_type( $img_url );
+					}
+				}
+				if ( in_array( $mime_for_check, array( 'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence' ), true ) ) {
+					return;
+				}
+			}
+
+			// Double-fire idempotency: WP 7.1+ calls this on both `create` and
+			// `finalize`; if the main file already has a dominant_color entry the
+			// second pass can skip the GD decode when all sub-sizes are also present.
+			// Companion placeholder (`metadata['original']`) is intentionally NOT
+			// required here: store_placeholder_data_for_upload() never creates a
+			// companion entry, so requiring it would force a second GD decode for
+			// non-HEIC originals and break HEIC early-exit idempotency.
+			if ( is_string( $cached_attached_file ) && '' !== $cached_attached_file && file_exists( $cached_attached_file ) ) {
+				$rel_for_idem = str_replace( wp_normalize_path( ABSPATH ), '', wp_normalize_path( $cached_attached_file ) );
+				$existing     = self::get_img_info();
+				if ( isset( $existing['dominant_color'][ $rel_for_idem ] ) ) {
+					$all_sizes_done = true;
+					if ( ! empty( $metadata['sizes'] ) && is_array( $metadata['sizes'] ) ) {
+						$dir_for_idem = dirname( $cached_attached_file );
+						foreach ( $metadata['sizes'] as $size_data ) {
+							if ( ! empty( $size_data['file'] ) ) {
+								$size_path_for_idem = wp_normalize_path( $dir_for_idem . '/' . $size_data['file'] );
+								$size_rel_for_idem  = str_replace( wp_normalize_path( ABSPATH ), '', $size_path_for_idem );
+								if ( ! isset( $existing['dominant_color'][ $size_rel_for_idem ] ) ) {
+									$all_sizes_done = false;
+									break;
+								}
+							}
+						}
+					}
+					if ( $all_sizes_done ) {
 						return;
 					}
 				}
@@ -1263,6 +1405,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			$max_bytes = apply_filters( 'wppo_filesize_limit_bytes', 20 * 1024 * 1024 );
 			if ( filesize( $file ) > $max_bytes ) {
 				return;
+			}
+
+			// HEIC early-exit (WP 7.1+): When client-side media processing owns
+			// HEIC→JPEG (~13 MB wasm-vips worker, SharedArrayBuffer + DIP), skip
+			// wasteful GD decode. GD cannot decode HEIC (getimagesize empty, string
+			// fallback would buffer entire file). Guarded for <7.1 (<7.1 no-op).
+			// When forceServerSideConversion is ON, we still attempt the decode
+			// (likely failing silently) for completeness.
+			if ( function_exists( 'wp_is_client_side_media_processing_enabled' )
+				&& wp_is_client_side_media_processing_enabled()
+				&& empty( $this->options['image_optimisation']['forceServerSideConversion'] )
+			) {
+				// Primary: explicit extension check (reliable for absolute filesystem path).
+				$ext_check = strtolower( (string) pathinfo( $file, PATHINFO_EXTENSION ) );
+				if ( in_array( $ext_check, array( 'heic', 'heif', 'heics', 'heifs', 'heic-sequence', 'heif-sequence' ), true ) ) {
+					return;
+				}
+				// Supplemental: mime helper (uses wp_parse_url, intended for URLs — may still match path).
+				$mime_check = Util::get_image_mime_type( $file );
+				if ( in_array( $mime_check, array( 'image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence' ), true ) ) {
+					return;
+				}
 			}
 
 			if ( $this->is_animated_webp( $file ) ) {
