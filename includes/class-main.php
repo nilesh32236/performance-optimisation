@@ -1790,6 +1790,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 					// WP 6.9+ uses native fetchpriority/in_footer via Script Loader / Script Modules.
 					// Guard with version_compare + function_exists so WP <6.9 keeps the legacy path.
+					// Note: WP 6.5–6.8 previously enqueued wppo-lazyload as a module with
+					// fetchpriority/in_footer args harmlessly ignored by core; now intentionally
+					// falls back to classic until 6.9 where the args are natively rendered
+					// (Trac #61734, #63486). Documented narrowing for backward compat.
 					$wp_version    = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
 					$is_wp69_plus  = version_compare( $wp_version, '6.9-alpha', '>=' );
 					$has_mod_api   = function_exists( 'wp_enqueue_script_module' ) || function_exists( 'wp_register_script_module' );
@@ -1807,8 +1811,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 						if ( function_exists( 'wp_enqueue_script_module' ) ) {
 							wp_enqueue_script_module( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_mod_args );
 						} elseif ( function_exists( 'wp_register_script_module' ) ) {
-							wp_register_script_module( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION );
-							wp_enqueue_script_module( 'wppo-lazyload' );
+							wp_register_script_module( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, $lazy_mod_args );
+							if ( function_exists( 'wp_enqueue_script_module' ) ) {
+								wp_enqueue_script_module( 'wppo-lazyload' );
+							}
 						}
 						add_filter(
 							'script_module_data_wppo-lazyload',
@@ -1819,7 +1825,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					} else {
 						// WP <6.9 fallback: classic script enqueued with inline config injection.
 						// @since NEXT.
-						wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, true );
+						wp_enqueue_script( 'wppo-lazyload', WPPO_PLUGIN_URL . 'build/lazyload.js', array(), WPPO_VERSION, array( 'in_footer' => true ) );
 
 						if ( $use_native_lazy ) {
 							wp_add_inline_script( 'wppo-lazyload', 'window.wppoNativeLazy=true;', 'before' );
@@ -1856,12 +1862,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			if ( ! $this->should_optimise_for_logged_in() ) {
 				return;
 			}
-			// Prefer wp_script_modules() when available; spec also guards with
-			// class_exists( WP_Script_Modules ) / function_exists( wp_register_script_module ).
-			// Fetchpriority/in_footer are WP 6.9+ native (Trac #61734, #63486) but method_exists
-			// guards keep <6.9 compat, and the harmless version gate documents the intent.
+			// WP 6.9+ native fetchpriority/in_footer (Trac #61734, #63486). Guard with
+			// version_compare + function_exists so <6.9 is a no-op; method_exists per
+			// set_in_footer/set_fetchpriority keeps compat if the API is partially present.
+			// Version gate uses same (string) ($GLOBALS['wp_version'] ?? get_bloginfo('version'))
+			// pattern as enqueue_scripts/add_defer_strategy/setup_hooks for consistency.
 			// @since NEXT.
-			if ( ! function_exists( 'wp_script_modules' ) && ! class_exists( 'WP_Script_Modules' ) && ! function_exists( 'wp_register_script_module' ) ) {
+			$wp_version = (string) ( $GLOBALS['wp_version'] ?? get_bloginfo( 'version' ) );
+			if ( version_compare( $wp_version, '6.9-alpha', '<' ) ) {
 				return;
 			}
 			if ( ! function_exists( 'wp_script_modules' ) ) {
