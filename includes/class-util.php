@@ -1018,6 +1018,126 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Whether content contains a block type via streaming processor.
+		 *
+		 * Uses WP 6.9+ `WP_Block_Processor` streaming traversal to avoid OOM on
+		 * 1000+ blocks; falls back to `parse_blocks()` on older cores. Guards
+		 * `class_exists` and `method_exists` for beta API variance (WP 6.9 beta
+		 * exposed `get_block_type` vs `get_block_name`).
+		 *
+		 * @since NEXT
+		 * @param string $content    Post content.
+		 * @param string $block_name Block name e.g. 'core/image'.
+		 * @return bool True when the block type is present.
+		 */
+		public static function content_has_block( string $content, string $block_name ): bool {
+			if ( '' === $content || '' === $block_name ) {
+				return false;
+			}
+			if ( class_exists( 'WP_Block_Processor' ) && method_exists( 'WP_Block_Processor', 'next_block' ) ) {
+				$processor    = new \WP_Block_Processor( $content ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound
+				$has_get_type = method_exists( $processor, 'get_block_type' );
+				$has_get_name = method_exists( $processor, 'get_block_name' );
+				if ( $has_get_type || $has_get_name ) {
+					while ( $processor->next_block() ) { // phpcs:ignore Generic.CodeAnalysis.RequireExplicitParentheses
+						$type = $has_get_type ? $processor->get_block_type() : $processor->get_block_name();
+						if ( $type === $block_name ) {
+							return true;
+						}
+					}
+					return false;
+				}
+			}
+			if ( function_exists( 'parse_blocks' ) ) {
+				$blocks = parse_blocks( $content );
+				if ( self::blocks_contain_type( $blocks, $block_name ) ) {
+					return true;
+				}
+			}
+			return false !== strpos( $content, '<!-- wp:' . $block_name );
+		}
+
+		/**
+		 * Count blocks of a given type in post content.
+		 *
+		 * Streaming via `WP_Block_Processor` on WP 6.9+; fallback to
+		 * `parse_blocks()` recursion. Reused for gallery/LCP counts.
+		 *
+		 * @since NEXT
+		 * @param string $content    Post content.
+		 * @param string $block_name Block name e.g. 'core/gallery'.
+		 * @return int Number of matching blocks.
+		 */
+		public static function count_blocks_by_type( string $content, string $block_name ): int {
+			if ( '' === $content || '' === $block_name ) {
+				return 0;
+			}
+			if ( class_exists( 'WP_Block_Processor' ) && method_exists( 'WP_Block_Processor', 'next_block' ) ) {
+				$processor    = new \WP_Block_Processor( $content ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound
+				$has_get_type = method_exists( $processor, 'get_block_type' );
+				$has_get_name = method_exists( $processor, 'get_block_name' );
+				if ( $has_get_type || $has_get_name ) {
+					$count = 0;
+					while ( $processor->next_block() ) { // phpcs:ignore Generic.CodeAnalysis.RequireExplicitParentheses
+						$type = $has_get_type ? $processor->get_block_type() : $processor->get_block_name();
+						if ( $type === $block_name ) {
+							++$count;
+						}
+					}
+					return $count;
+				}
+			}
+			if ( function_exists( 'parse_blocks' ) ) {
+				$blocks = parse_blocks( $content );
+				return self::count_blocks_recursive( $blocks, $block_name );
+			}
+			return substr_count( $content, '<!-- wp:' . $block_name );
+		}
+
+		/**
+		 * Whether a parsed block tree contains a block type (recursive).
+		 *
+		 * @since NEXT
+		 * @param array  $blocks     Parsed blocks from parse_blocks().
+		 * @param string $block_name Block name.
+		 * @return bool
+		 */
+		private static function blocks_contain_type( array $blocks, string $block_name ): bool {
+			foreach ( $blocks as $block ) {
+				if ( ( $block['blockName'] ?? '' ) === $block_name ) {
+					return true;
+				}
+				if ( ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
+					if ( self::blocks_contain_type( $block['innerBlocks'], $block_name ) ) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		/**
+		 * Count blocks of type in a parsed block tree (recursive).
+		 *
+		 * @since NEXT
+		 * @param array  $blocks     Parsed blocks.
+		 * @param string $block_name Block name.
+		 * @return int
+		 */
+		private static function count_blocks_recursive( array $blocks, string $block_name ): int {
+			$count = 0;
+			foreach ( $blocks as $block ) {
+				if ( ( $block['blockName'] ?? '' ) === $block_name ) {
+					++$count;
+				}
+				if ( ! empty( $block['innerBlocks'] ) && is_array( $block['innerBlocks'] ) ) {
+					$count += self::count_blocks_recursive( $block['innerBlocks'], $block_name );
+				}
+			}
+			return $count;
+		}
+
+		/**
 		 * Whether safe mode is active via ?wppo_safe=1 kill-switch.
 		 *
 		 * Checked in Main::setup_hooks() to bypass Buffer::process_buffer_only

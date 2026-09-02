@@ -447,6 +447,38 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		}
 
 		/**
+		 * Whether content contains a block type via streaming processor.
+		 *
+		 * Thin wrapper around {@see Util::content_has_block()} so block-aware
+		 * checks (LCP/gallery counts) share a single streaming path. Uses WP 6.9+
+		 * `WP_Block_Processor` when available to avoid `parse_blocks()` OOM on
+		 * 1000+ blocks; falls back to `parse_blocks()` + delimiter scan on WP <6.9.
+		 *
+		 * @since NEXT
+		 * @param string $content    Post content.
+		 * @param string $block_name Block name e.g. 'core/image'.
+		 * @return bool True when the block type is present.
+		 */
+		private function content_has_block( string $content, string $block_name ): bool {
+			return Util::content_has_block( $content, $block_name );
+		}
+
+		/**
+		 * Count blocks of a given type in post content.
+		 *
+		 * Reused for gallery/LCP counts. Streaming via `WP_Block_Processor` on
+		 * WP 6.9+; fallback to `parse_blocks()` recursion.
+		 *
+		 * @since NEXT
+		 * @param string $content    Post content.
+		 * @param string $block_name Block name e.g. 'core/gallery'.
+		 * @return int Number of matching blocks.
+		 */
+		private function count_blocks_by_type( string $content, string $block_name ): int {
+			return Util::count_blocks_by_type( $content, $block_name );
+		}
+
+		/**
 		 * Processes <picture> blocks using WP_HTML_Processor for reliable block extraction with depth tracking.
 		 *
 		 * Uses spec-compliant token walking via serialize_token() with manual nesting
