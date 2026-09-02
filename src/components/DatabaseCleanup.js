@@ -17,6 +17,7 @@ import SwitchField from './common/SwitchField';
 import LoadingSubmitButton from './common/LoadingSubmitButton';
 import ConfirmDialog from './common/ConfirmDialog';
 import NoticeBanner from './common/NoticeBanner';
+import Tooltip from './common/Tooltip';
 
 const RISK_BADGE_MAP = {
 	revisions: {
@@ -558,6 +559,32 @@ const DatabaseCleanup = ( { options = {} } ) => {
 				<div className="wppo-grid-2-col wppo-mt-20">
 					{ CLEANUP_TYPES.map( ( item ) => {
 						const risk = RISK_BADGE_MAP[ item.key ];
+						const count = counts[ item.key ] || 0;
+						const isCleanDisabled =
+							count === 0 || loading[ item.key ];
+						const cleanButton = (
+							<LoadingSubmitButton
+								type="button"
+								className="wppo-button wppo-button--secondary wppo-button--sm"
+								onClick={ () =>
+									setConfirmDialog( {
+										isOpen: true,
+										type: item.key,
+										label: item.label,
+									} )
+								}
+								disabled={ isCleanDisabled }
+								isLoading={ loading[ item.key ] }
+								label={ __(
+									'Clean',
+									'performance-optimisation'
+								) }
+								loadingLabel={ __(
+									'Cleaning',
+									'performance-optimisation'
+								) }
+							/>
+						);
 						return (
 							<FeatureCard
 								key={ item.key }
@@ -571,30 +598,26 @@ const DatabaseCleanup = ( { options = {} } ) => {
 												{ risk.label }
 											</span>
 										) }
-										<LoadingSubmitButton
-											type="button"
-											className="wppo-button wppo-button--secondary wppo-button--sm"
-											onClick={ () =>
-												setConfirmDialog( {
-													isOpen: true,
-													type: item.key,
-													label: item.label,
-												} )
-											}
-											disabled={
-												( counts[ item.key ] || 0 ) ===
-													0 || loading[ item.key ]
-											}
-											isLoading={ loading[ item.key ] }
-											label={ __(
-												'Clean',
-												'performance-optimisation'
-											) }
-											loadingLabel={ __(
-												'Cleaning',
-												'performance-optimisation'
-											) }
-										/>
+										{ isCleanDisabled && count === 0 ? (
+											<Tooltip
+												content={ __(
+													'No items to clean',
+													'performance-optimisation'
+												) }
+											>
+												<span
+													tabIndex={ 0 }
+													aria-label={ __(
+														'No items to clean',
+														'performance-optimisation'
+													) }
+												>
+													{ cleanButton }
+												</span>
+											</Tooltip>
+										) : (
+											cleanButton
+										) }
 									</div>
 								}
 							>
