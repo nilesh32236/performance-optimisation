@@ -21,19 +21,27 @@
 		display: none;
 	}
 
-	// right fade indicator for scrollable overflow
+	// fade indicator for scrollable overflow (RTL-aware)
 	&::after {
 		content: '';
 		position: sticky;
-		right: 0;
+		inset-inline-end: 0;
 		top: 0;
 		bottom: 0;
 		width: 24px;
 		flex-shrink: 0;
 		background: linear-gradient(90deg, transparent, var(--wppo-switch-hover, #f1f5f9));
 		pointer-events: none;
-		margin-left: -24px;
+		margin-inline-start: -24px;
 		align-self: stretch;
+	}
+
+	// Focus ring must not be clipped by overflow
+	padding-block: 6px;
+	margin-block: -2px;
+
+	[dir='rtl'] &::after {
+		background: linear-gradient(270deg, transparent, var(--wppo-switch-hover, #f1f5f9));
 	}
 
 	@media (prefers-reduced-motion: reduce) {
