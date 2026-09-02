@@ -38,6 +38,18 @@ const Tooltip = ( { content, children } ) => {
 		setVisible( false );
 	};
 
+	const handleClick = ( e ) => {
+		// Scope click-toggle to tooltip trigger itself; ignore bubbled clicks from inner interactive controls.
+		if (
+			hasChildren &&
+			e.target.closest &&
+			e.target.closest( 'button, input, [role="switch"], a' )
+		) {
+			return;
+		}
+		setVisible( ( v ) => ! v );
+	};
+
 	return (
 		// eslint-disable-next-line jsx-a11y/no-static-element-interactions
 		<span
@@ -54,7 +66,7 @@ const Tooltip = ( { content, children } ) => {
 			onMouseEnter={ () => setVisible( true ) }
 			onMouseLeave={ () => setVisible( false ) }
 			onKeyDown={ handleKeyDown }
-			onClick={ () => setVisible( ( v ) => ! v ) }
+			onClick={ handleClick }
 		>
 			{ children || (
 				<FontAwesomeIcon
