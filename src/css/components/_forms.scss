@@ -96,17 +96,12 @@
 	white-space: nowrap;
 	letter-spacing: 0.01em;
 
-	@include respond-to('md') {
+	@include respond-to('lg') {
 		min-height: 44px;
 		padding: 10px 18px;
 		white-space: normal;
-		overflow-wrap: anywhere;
+		overflow-wrap: break-word;
 		text-align: center;
-	}
-
-	@include respond-to('sm') {
-		white-space: normal;
-		overflow-wrap: anywhere;
 	}
 
 	&--full {
@@ -118,11 +113,7 @@
 		font-size: 12.5px;
 		min-height: 30px;
 
-		@include respond-to('md') {
-			min-height: 36px;
-		}
-
-		@include respond-to('sm') {
+		@include respond-to('lg') {
 			min-height: 44px;
 			padding: 8px 14px;
 		}
