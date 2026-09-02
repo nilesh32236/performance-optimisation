@@ -219,7 +219,13 @@
 
 	&--needs_improvement {
 		background: var(--wppo-warning-bg);
-		color: var(--wppo-warning);
+		color: var(--wppo-warning-text, #92400e);
+		border: 1px solid var(--wppo-warning-border);
+	}
+
+	&--warning {
+		background: var(--wppo-warning-bg);
+		color: var(--wppo-warning-text, #92400e);
 		border: 1px solid var(--wppo-warning-border);
 	}
 
