@@ -234,6 +234,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 		 * JPEG XL) are additive via the same intersection — the UI surfaces
 		 * them but core's list gates availability.
 		 *
+		 * Trac #64876 proposes a public `client_side_supported_mime_types`
+		 * filter; until it lands the plugin keeps the intersection guard so an
+		 * unavailable decoder (e.g. HEIC/JXL without wasm-vips) cannot be added
+		 * additively. When the public filter lands, widen to additive
+		 * HEIC/JPEG-XL pass-through with documented HEIC/JPEG-XL path.
+		 *
+		 * Guarded by `function_exists('wp_is_client_side_media_processing_enabled')`
+		 * for <7.1 (filter not registered there). Wasm gating: ~13 MB lazy-loaded
+		 * wasm-vips gated by Document-Isolation-Policy / SharedArrayBuffer.
+		 *
 		 * @since NEXT
 		 *
 		 * @param string[] $supported_mime_types The MIME types core supports client-side.

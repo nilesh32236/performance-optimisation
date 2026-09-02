@@ -1704,6 +1704,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// here (after Image_Optimisation has registered the opt-out filter)
 					// so it already reflects an enabled "Force Server-Side Conversion"
 					// toggle (false when core's in-browser processing is forced off).
+					// Guarded by function_exists() for <7.1 (no wasm worker there).
+					// WP 7.1 gates the ~13 MB wasm-vips Web Worker on
+					// Document-Isolation-Policy / SharedArrayBuffer + >2 GB RAM /
+					// ≥2 cores; HEIC→JPEG companions are retained as
+					// $metadata['original'] for CDN/Edge purger parity (see
+					// Img_Converter::clean_placeholder_on_delete() and
+					// maybe_extract_placeholder_for_upload() HEIC early-exit).
+					// Trac #64876: client_side_supported_mime_types intersection
+					// guard stays until a public filter lands. @since NEXT.
 					'client_side_media_processing_enabled' => function_exists( 'wp_is_client_side_media_processing_enabled' ) && wp_is_client_side_media_processing_enabled(),
 					'performance_audit'                    => array(
 						'homeUrl'                   => Util::cached_home_url( '/' ),
