@@ -87,7 +87,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			if ( self::is_overloaded() ) {
 				$concurrency = 1;
 			} elseif ( function_exists( 'sys_getloadavg' ) ) {
-				$avg = @sys_getloadavg();
+				$avg = @sys_getloadavg(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- intentional fallback for load check
 				if ( is_array( $avg ) && isset( $avg[0] ) ) {
 					$load  = (float) $avg[0];
 					$limit = self::get_load_limit();
@@ -139,14 +139,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				// Default stays 4.0 for backward compat; operators can expose nproc*2 via filter wppo_crawler_load_limit.
 				$use_nproc = (bool) apply_filters( 'wppo_crawler_use_nproc', false );
 				if ( $use_nproc && function_exists( 'shell_exec' ) ) {
-					$nproc_raw = @shell_exec( 'nproc 2>/dev/null' );
+					$nproc_raw = @shell_exec( 'nproc 2>/dev/null' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec -- nproc fallback for load limit
 					if ( is_string( $nproc_raw ) && '' !== trim( $nproc_raw ) && is_numeric( trim( $nproc_raw ) ) ) {
 						$nproc = (int) trim( $nproc_raw );
 						if ( $nproc > 0 ) {
 							$limit = (float) $nproc * 2;
 						}
-					} elseif ( @is_readable( '/proc/cpuinfo' ) ) {
-						$cpuinfo = @file_get_contents( '/proc/cpuinfo' );
+					} elseif ( @is_readable( '/proc/cpuinfo' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- procfs check fallback
+						$cpuinfo = @file_get_contents( '/proc/cpuinfo' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local procfs read, not remote
 						if ( is_string( $cpuinfo ) ) {
 							$cnt = substr_count( $cpuinfo, 'processor' );
 							if ( $cnt > 0 ) {
@@ -178,13 +178,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			$limit = self::get_load_limit();
 			$load  = null;
 			if ( function_exists( 'sys_getloadavg' ) ) {
-				$avg = @sys_getloadavg();
+				$avg = @sys_getloadavg(); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- intentional fallback for load check
 				if ( is_array( $avg ) && isset( $avg[0] ) && is_numeric( $avg[0] ) ) {
 					$load = (float) $avg[0];
 				}
 			}
-			if ( null === $load && @is_readable( '/proc/loadavg' ) ) {
-				$content = @file_get_contents( '/proc/loadavg' );
+			if ( null === $load && @is_readable( '/proc/loadavg' ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- procfs check fallback
+				$content = @file_get_contents( '/proc/loadavg' ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged,WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local procfs read, not remote
 				if ( is_string( $content ) && '' !== $content ) {
 					$parts = preg_split( '/\s+/', trim( $content ) );
 					if ( isset( $parts[0] ) && is_numeric( $parts[0] ) ) {
@@ -227,7 +227,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			if ( ! is_string( $host ) || '' === $host ) {
 				return '';
 			}
-			$resolved = @gethostbyname( $host );
+			$resolved = @gethostbyname( $host ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- DNS fallback
 			if ( ! is_string( $resolved ) || $resolved === $host || ! filter_var( $resolved, FILTER_VALIDATE_IP ) ) {
 				return '';
 			}
@@ -485,8 +485,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 							// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- $placeholders is count-derived.
 							$post_ids = $wpdb->get_col(
 								// phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- placeholders count-derived.
-								$wpdb->prepare(
-									"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders) AND post_status = 'publish' ORDER BY ID ASC LIMIT 200",
+								$wpdb->prepare( // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- placeholders count-derived
+									"SELECT ID FROM {$wpdb->posts} WHERE post_type IN ($placeholders) AND post_status = 'publish' ORDER BY ID ASC LIMIT 200", // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- placeholders count-derived
 									...$args
 								)
 							);
@@ -514,7 +514,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 						array(
 							'post_type'      => 'any',
 							'post_status'    => 'publish',
-							'posts_per_page' => 200,
+							'posts_per_page' => 200, // phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- bounded sitemap batch 200
 							'fields'         => 'ids',
 						)
 					);
@@ -677,7 +677,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			}
 
 			$server_ip    = self::get_server_ip();
-			$mh           = curl_multi_init();
+			$mh           = curl_multi_init(); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_init -- crawler requires curl_multi for variant matrix
 			$handles      = array();
 			$queue        = $requests;
 			$active       = 0;
@@ -692,10 +692,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					return;
 				}
 				$req = array_shift( $queue );
-				$ch  = curl_init( $req['url'] );
-				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-				curl_setopt( $ch, CURLOPT_TIMEOUT, 5 );
-				curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, true );
+				$ch  = curl_init( $req['url'] ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_init -- crawler requires curl
+				curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
+				curl_setopt( $ch, CURLOPT_TIMEOUT, 5 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
+				curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
 				$headers = array();
 				foreach ( $req['headers'] as $k => $v ) {
 					if ( '' !== $v ) {
@@ -703,7 +703,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					}
 				}
 				if ( ! empty( $headers ) ) {
-					curl_setopt( $ch, CURLOPT_HTTPHEADER, $headers );
+					curl_setopt( $ch, CURLOPT_HTTPHEADER, $headers ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
 				}
 				// CURLOPT_RESOLVE optimization when server IP known.
 				if ( '' !== $server_ip && defined( 'CURLOPT_RESOLVE' ) ) {
@@ -713,10 +713,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 							$host . ':80:' . $server_ip,
 							$host . ':443:' . $server_ip,
 						);
-						curl_setopt( $ch, CURLOPT_RESOLVE, $resolve );
+						curl_setopt( $ch, CURLOPT_RESOLVE, $resolve ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_setopt -- crawler requires curl
 					}
 				}
-				curl_multi_add_handle( $mh, $ch );
+				curl_multi_add_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_add_handle -- crawler requires curl_multi
 				$handles[]                 = $ch;
 				$index_to_url[ (int) $ch ] = $req['url'];
 			};
@@ -730,14 +730,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				if ( microtime( true ) >= $deadline ) {
 					break;
 				}
-				$status = curl_multi_exec( $mh, $active );
+				$status = curl_multi_exec( $mh, $active ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_exec -- crawler requires curl_multi
 				if ( $active ) {
 					curl_multi_select( $mh, 1 ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_select
 				}
 				// Process completed handles.
-				while ( ( $info = curl_multi_info_read( $mh ) ) ) { // phpcs:ignore Generic.CodeAnalysis.AssignmentInCondition.FoundInWhileCondition
+				while ( ( $info = curl_multi_info_read( $mh ) ) ) { // phpcs:ignore Generic.CodeAnalysis.AssignmentInCondition.FoundInWhileCondition,WordPress.WP.AlternativeFunctions.curl_curl_multi_info_read -- intentional loop
 					$ch   = $info['handle'];
-					$code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+					$code = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_getinfo -- crawler requires curl
 					$err  = curl_error( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_error
 					$url  = $index_to_url[ (int) $ch ] ?? '';
 					if ( '' !== $url ) {
@@ -749,8 +749,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 							++$success;
 						}
 					}
-					curl_multi_remove_handle( $mh, $ch );
-					curl_close( $ch );
+					curl_multi_remove_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_remove_handle -- crawler requires curl_multi
+					curl_close( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_close -- crawler requires curl
 					// Remove from handles.
 					$key = array_search( $ch, $handles, true );
 					if ( false !== $key ) {
@@ -765,10 +765,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 
 			// Cleanup remaining.
 			foreach ( $handles as $ch ) {
-				curl_multi_remove_handle( $mh, $ch );
-				curl_close( $ch );
+				curl_multi_remove_handle( $mh, $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_remove_handle -- crawler requires curl_multi
+				curl_close( $ch ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_close -- crawler requires curl
 			}
-			curl_multi_close( $mh );
+			curl_multi_close( $mh ); // phpcs:ignore WordPress.WP.AlternativeFunctions.curl_curl_multi_close -- crawler requires curl_multi
 
 			return array(
 				'success' => $success,
