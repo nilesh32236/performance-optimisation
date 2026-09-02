@@ -34,6 +34,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 		public function __construct() {
 			add_action( 'wp_abilities_api_categories_init', array( $this, 'register_categories' ) );
 			add_action( 'wp_abilities_api_init', array( $this, 'register_abilities' ) );
+			add_action( 'wp_abilities_api_init', array( __CLASS__, 'register_wppo_abilities' ) );
+			add_action( 'wp_abilities_init', array( __CLASS__, 'register_wppo_abilities' ) );
 		}
 
 		/**
@@ -818,7 +820,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 				return array( 'suggestions' => array() );
 			}
 			$suggestions = Suggestion_Engine::from_telemetry( $telemetry );
-			if ( class_exists( 'PerformanceOptimise\\Inc\\AI_Adaptive' ) && AI_Adaptive::is_enabled() ) {
+			if ( class_exists( AI_Adaptive::class ) && AI_Adaptive::is_enabled() ) {
 				$ai = Suggestion_Engine::from_ai_adaptive();
 				if ( ! empty( $ai ) ) {
 					$suggestions = array_merge( $suggestions, $ai );
@@ -925,6 +927,327 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Abilities' ) ) {
 			$object_cache = new Object_Cache();
 			$flushed      = $object_cache->flush();
 			return array( 'flushed' => (bool) $flushed );
+		}
+
+		/**
+		 * Get WPPO optimization ability definitions for AI/MCP.
+		 *
+		 * These are the machine-readable `wppo/*` abilities required by
+		 * WP Monitor issue #826. They delegate to the same service classes
+		 * as the REST routes (`performance-optimisation/v1`) so REST remains
+		 * canonical. Guarded by `function_exists('wp_register_ability')` in
+		 * `register_wppo_abilities()` so WP < 6.9 is no-op.
+		 *
+		 * `wppo/clear-cache` is an intentional alias of
+		 * `performance-optimisation/clear-cache` (same `execute_clear_cache`
+		 * callback) for WP Monitor spec discoverability; both share the
+		 * `performance-optimisation` category.
+		 *
+		 * @since NEXT
+		 *
+		 * @return array[] WPPO ability definitions.
+		 */
+		private static function get_wppo_ability_definitions(): array {
+			$category = 'performance-optimisation';
+
+			return array(
+				array(
+					'id'   => 'wppo/clear-cache',
+					'args' => array(
+						'label'               => __( 'Clear Cache', 'performance-optimisation' ),
+						'description'         => __( 'Clear the static HTML cache (all or a single URL).', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'scope' => array(
+									'type'        => 'string',
+									'enum'        => array( 'all', 'single' ),
+									'description' => __( 'Whether to clear all cache or a single URL.', 'performance-optimisation' ),
+								),
+								'url'   => array(
+									'type'        => 'string',
+									'format'      => 'uri',
+									'description' => __( 'URL to clear when scope is single.', 'performance-optimisation' ),
+								),
+							),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'cleared' => array( 'type' => 'boolean' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_clear_cache' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'wppo/regenerate-ccss',
+					'args' => array(
+						'label'               => __( 'Regenerate Critical CSS', 'performance-optimisation' ),
+						'description'         => __( 'Regenerate critical CSS for all templates.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'queued' => array( 'type' => 'integer' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_regenerate_ccss' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'wppo/used-css-regenerate',
+					'args' => array(
+						'label'               => __( 'Regenerate Used CSS', 'performance-optimisation' ),
+						'description'         => __( 'Regenerate used CSS for a post or for all pages.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'post_id' => array(
+									'type'        => 'integer',
+									'description' => __( 'Post ID to regenerate used CSS for. Omit to regenerate for all pages.', 'performance-optimisation' ),
+								),
+							),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'queued' => array( 'type' => 'integer' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_used_css_regenerate' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+				array(
+					'id'   => 'wppo/crawler',
+					'args' => array(
+						'label'               => __( 'Run Crawler', 'performance-optimisation' ),
+						'description'         => __( 'Crawl a batch of URLs to warm the cache.', 'performance-optimisation' ),
+						'category'            => $category,
+						'input_schema'        => array(
+							'type'       => 'object',
+							'properties' => array(
+								'url'  => array(
+									'type'        => 'string',
+									'format'      => 'uri',
+									'description' => __( 'Single URL to crawl. When both url and urls are supplied, url takes precedence and urls is ignored.', 'performance-optimisation' ),
+								),
+								'urls' => array(
+									'type'        => 'array',
+									'items'       => array(
+										'type'   => 'string',
+										'format' => 'uri',
+									),
+									'description' => __( 'Batch of URLs to crawl (max 20, validated via wp_http_validate_url). Ignored when url is supplied.', 'performance-optimisation' ),
+								),
+							),
+						),
+						'output_schema'       => array(
+							'type'       => 'object',
+							'properties' => array(
+								'success' => array( 'type' => 'integer' ),
+								'failed'  => array( 'type' => 'integer' ),
+								'skipped' => array( 'type' => 'integer' ),
+								'error'   => array( 'type' => 'string' ),
+							),
+						),
+						'permission_callback' => array( __CLASS__, 'permission_check' ),
+						'execute_callback'    => array( __CLASS__, 'execute_crawler' ),
+						'meta'                => array(
+							'show_in_rest' => true,
+						),
+					),
+				),
+			);
+		}
+
+		/**
+		 * Register WPPO optimization abilities for AI/MCP.
+		 *
+		 * Exposes `wppo/clear-cache`, `wppo/regenerate-ccss`,
+		 * `wppo/used-css-regenerate`, and `wppo/crawler` as discoverable
+		 * Abilities on WP 6.9+ (`wp_abilities_api_init`). On WP < 6.9 the
+		 * `function_exists` guard makes this a no-op and REST remains
+		 * canonical. Enables `auto_fix_enabled` AI Adaptive MCP workflows
+		 * without REST round-trips.
+		 *
+		 * @since NEXT
+		 *
+		 * @return void
+		 */
+		public static function register_wppo_abilities(): void {
+			if ( ! function_exists( 'wp_register_ability' ) ) {
+				return;
+			}
+
+			$abilities = self::get_wppo_ability_definitions();
+
+			foreach ( $abilities as $ability ) {
+				$result = wp_register_ability( $ability['id'], $ability['args'] );
+				// Fallback for the `wp_abilities_init` alias used in the
+				// WP Monitor spec: `wp_register_ability()` enforces
+				// `doing_action('wp_abilities_api_init')` and returns null
+				// with `_doing_it_wrong` when invoked on the alias hook.
+				// In that case register directly via the registry to honour
+				// the spec without breaking core's enforcement. This path
+				// is only reached on the alias hook and is guarded by
+				// method_exists to avoid forward-compat breakage if the
+				// registry API changes.
+				if ( null === $result && ! wp_has_ability( $ability['id'] ) && class_exists( 'WP_Abilities_Registry' ) ) {
+					$registry = \WP_Abilities_Registry::get_instance();
+					if ( null !== $registry && method_exists( $registry, 'register' ) ) {
+						$registry->register( $ability['id'], $ability['args'] );
+					}
+				}
+			}
+		}
+
+		/**
+		 * Execute callback: Regenerate Critical CSS (wppo/regenerate-ccss).
+		 *
+		 * Delegates to `Critical_CSS::regenerate_all()` — same path as the
+		 * REST handler `Rest::regenerate_ccss()`.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Unused input data.
+		 * @return array{queued: int}
+		 */
+		public static function execute_regenerate_ccss( array $input = array() ): array { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found
+			if ( ! class_exists( Critical_CSS::class ) ) {
+				return array(
+					'queued' => 0,
+					'error'  => __( 'Critical CSS not available.', 'performance-optimisation' ),
+				);
+			}
+			$queued = Critical_CSS::regenerate_all();
+			return array( 'queued' => (int) $queued );
+		}
+
+		/**
+		 * Execute callback: Regenerate Used CSS (wppo/used-css-regenerate).
+		 *
+		 * Mirrors `Rest::used_css_regenerate()` but for the Abilities API
+		 * input shape (`post_id` optional). Queues a single post job or
+		 * regenerates for all pages.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (post_id).
+		 * @return array{queued: int}
+		 */
+		public static function execute_used_css_regenerate( array $input = array() ): array {
+			$post_id = isset( $input['post_id'] ) ? absint( $input['post_id'] ) : 0;
+
+			if ( $post_id > 0 ) {
+				if ( ! function_exists( 'as_enqueue_async_action' ) ) {
+					return array(
+						'queued' => 0,
+						'error'  => __( 'Action Scheduler not available.', 'performance-optimisation' ),
+					);
+				}
+				if ( function_exists( 'get_post' ) && null === get_post( $post_id ) ) {
+					return array(
+						'queued' => 0,
+						'error'  => __( 'Invalid post ID.', 'performance-optimisation' ),
+					);
+				}
+				if ( ! function_exists( 'as_has_scheduled_action' ) || ! as_has_scheduled_action( 'wppo_used_css_generate', array( 'post_id' => $post_id ), 'performance_optimisation' ) ) {
+					as_enqueue_async_action(
+						'wppo_used_css_generate',
+						array( 'post_id' => $post_id ),
+						'performance_optimisation'
+					);
+				}
+				return array( 'queued' => 1 );
+			}
+
+			if ( ! class_exists( Used_CSS::class ) ) {
+				return array(
+					'queued' => 0,
+					'error'  => __( 'Used CSS not available.', 'performance-optimisation' ),
+				);
+			}
+			$used_css = new Used_CSS();
+			$queued   = $used_css->regenerate_all();
+			return array( 'queued' => (int) $queued );
+		}
+
+		/**
+		 * Execute callback: Run Crawler (wppo/crawler).
+		 *
+		 * Delegates to `LiteSpeed_Crawler::crawl_batch()` when available,
+		 * otherwise returns an error payload. Mirrors `Rest::handle_crawler()`
+		 * without IP rate-limiting (ability is `manage_options` gated and
+		 * therefore not anonymous). Input URLs are validated via
+		 * `wp_http_validate_url()` and capped to 20 (same cap as REST).
+		 * Same-site enforcement aligns with REST's home-host check.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array $input Input data (url, urls).
+		 * @return array Crawler result or error.
+		 */
+		public static function execute_crawler( array $input = array() ): array {
+			$urls = array();
+
+			if ( ! empty( $input['url'] ) ) {
+				$urls[] = esc_url_raw( $input['url'] );
+			}
+			if ( ! empty( $input['urls'] ) && is_array( $input['urls'] ) ) {
+				$urls = array_merge( $urls, array_values( array_filter( array_map( 'esc_url_raw', $input['urls'] ) ) ) );
+			}
+			if ( empty( $urls ) && class_exists( LiteSpeed_Crawler::class ) ) {
+				$urls = LiteSpeed_Crawler::get_urls_to_crawl( 20 );
+			}
+
+			// Validate, filter same-site, and cap 20-500 (spec cap 20 for ability).
+			$urls = array_values( array_filter( $urls ) );
+			$urls = array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) );
+			$urls = array_values( array_filter( $urls, 'wp_http_validate_url' ) );
+			// Same-site check mirrors Rest::handle_crawler home-host validation.
+			$home_host = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
+			if ( is_string( $home_host ) && '' !== $home_host ) {
+				$urls = array_values(
+					array_filter(
+						$urls,
+						static function ( $u ) use ( $home_host ) {
+							$host = wp_parse_url( $u, PHP_URL_HOST );
+							return is_string( $host ) && strtolower( $host ) === strtolower( $home_host );
+						}
+					)
+				);
+			}
+			$urls = array_slice( $urls, 0, 20 );
+
+			if ( empty( $urls ) ) {
+				return array( 'error' => __( 'No valid URLs to crawl.', 'performance-optimisation' ) );
+			}
+
+			if ( class_exists( LiteSpeed_Crawler::class ) ) {
+				$result = LiteSpeed_Crawler::crawl_batch( $urls );
+				return is_array( $result ) ? $result : array( 'result' => $result );
+			}
+
+			return array( 'error' => __( 'Crawler not available.', 'performance-optimisation' ) );
 		}
 	}
 }
