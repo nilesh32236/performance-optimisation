@@ -181,18 +181,18 @@ describe( 'ConfirmDialog', () => {
 		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
 	} );
 
-	it( 'calls onCancel when Enter key is pressed on overlay', () => {
+	it( 'does not call onCancel when Enter key is pressed on overlay (keyboard path removed)', () => {
 		render( <ConfirmDialog { ...defaultProps } /> );
 		const overlay = screen.getByRole( 'presentation' );
 		fireEvent.keyDown( overlay, { key: 'Enter', code: 'Enter' } );
-		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
+		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 0 );
 	} );
 
-	it( 'calls onCancel when Space key is pressed on overlay', () => {
+	it( 'does not call onCancel when Space key is pressed on overlay (keyboard path removed)', () => {
 		render( <ConfirmDialog { ...defaultProps } /> );
 		const overlay = screen.getByRole( 'presentation' );
 		fireEvent.keyDown( overlay, { key: ' ', code: 'Space' } );
-		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 1 );
+		expect( defaultProps.onCancel ).toHaveBeenCalledTimes( 0 );
 	} );
 
 	it( 'does not call onCancel when Enter key is pressed on a child element', () => {

@@ -78,4 +78,16 @@
 	.wppo-dialog-cancel {
 		min-width: 80px;
 	}
+
+	@media (max-width: 480px) {
+		padding: 20px;
+
+		.wppo-dialog-actions {
+			flex-direction: column;
+
+			.wppo-button {
+				width: 100%;
+			}
+		}
+	}
 }
