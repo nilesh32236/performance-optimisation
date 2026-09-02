@@ -63,6 +63,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			add_action( 'wppo_generate_static_page', array( $this, 'process_page' ), 10, 1 );
 			add_action( 'wppo_generate_static_url', array( $this, 'process_url' ), 10, 1 );
 			add_action( 'wppo_litespeed_crawler_batch', array( $this, 'litespeed_crawler_batch' ), 10, 1 );
+			add_action( 'wppo_crawler_warm', array( $this, 'crawler_warm_single' ), 10, 1 );
 
 			add_action( 'wppo_database_cleanup_cron', array( $this, 'database_cleanup_cron' ) );
 
@@ -550,7 +551,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 		 * @param int $cap Maximum number of URLs to return.
 		 * @return string[] List of absolute sitemap URLs.
 		 */
-		private function get_sitemap_urls( int $cap = 500 ): array {
+		public function get_sitemap_urls( int $cap = 500 ): array {
 			$urls       = array();
 			$urls_count = 0;
 			$home_host  = wp_parse_url( Util::cached_home_url(), PHP_URL_HOST );
@@ -673,6 +674,26 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 			}
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 				LiteSpeed_Crawler::crawl_batch( $urls );
+			}
+		}
+
+		/**
+		 * Warm a single URL via crawler (post-publish lane).
+		 *
+		 * @since NEXT
+		 * @param string $url URL.
+		 * @return void
+		 */
+		public function crawler_warm_single( $url ): void {
+			if ( ! is_string( $url ) || '' === trim( $url ) ) {
+				return;
+			}
+			$url = esc_url_raw( $url );
+			if ( '' === $url ) {
+				return;
+			}
+			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+				LiteSpeed_Crawler::crawl_single( $url );
 			}
 		}
 
