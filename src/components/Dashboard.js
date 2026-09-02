@@ -768,7 +768,7 @@ const Dashboard = ( {
 			{ isLiteSpeed && (
 				<div
 					className="wppo-notice wppo-notice--info wppo-litespeed-banner wppo-mb-16"
-					role="alert"
+					role="status"
 					aria-live="polite"
 				>
 					<FontAwesomeIcon icon={ faServer } aria-hidden="true" />

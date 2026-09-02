@@ -20,10 +20,18 @@
 		align-items: flex-start;
 		gap: 10px;
 		flex: 1;
+		min-width: 0;
+		overflow-wrap: anywhere;
 
 		svg {
 			margin-top: 2px;
 			flex-shrink: 0;
+		}
+
+		span {
+			min-width: 0;
+			overflow-wrap: anywhere;
+			word-break: break-word;
 		}
 	}
 
@@ -33,8 +41,8 @@
 		color: inherit;
 		cursor: pointer;
 		padding: 6px;
-		min-width: 32px;
-		min-height: 32px;
+		min-width: 44px;
+		min-height: 44px;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -46,11 +54,6 @@
 
 		&:hover {
 			opacity: 1;
-		}
-
-		@include respond-to('md') {
-			min-width: 44px;
-			min-height: 44px;
 		}
 	}
 
