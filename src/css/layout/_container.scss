@@ -10,6 +10,8 @@
 	-moz-osx-font-smoothing: grayscale;
 	align-items: flex-start;
 	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 
 	@include respond-to('lg') {
 		flex-direction: column;
@@ -19,8 +21,13 @@
 .wppo-content {
 	flex-grow: 1;
 	min-width: 0;
+	max-width: 100%;
+	width: 100%;
+	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
+	overflow-x: hidden;
+	overflow-x: clip;
 }
 
 .wppo-main {
@@ -34,6 +41,7 @@
 	box-sizing: border-box;
 	min-height: 480px;
 	min-width: 0;
+	overflow-wrap: break-word;
 
 	@include respond-to('md') {
 		padding: 24px 20px;

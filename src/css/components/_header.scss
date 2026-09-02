@@ -5,6 +5,10 @@
 	padding-bottom: 28px;
 	border-bottom: 1px solid transparent;
 	position: relative;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+	overflow-wrap: break-word;
 
 	&::after {
 		content: '';

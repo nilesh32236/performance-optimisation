@@ -5,6 +5,8 @@
 	flex-direction: column;
 	gap: 18px;
 	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 }
 
 .wppo-switch-field {
@@ -117,6 +119,8 @@
 
 .wppo-field {
 	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 
 	&--spaced {
 		margin-top: 14px;

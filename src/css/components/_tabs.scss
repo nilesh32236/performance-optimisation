@@ -16,6 +16,9 @@
 	-webkit-overflow-scrolling: touch;
 	position: relative;
 	min-width: 0;
+	max-width: 100%;
+	width: 100%;
+	box-sizing: border-box;
 
 	&::-webkit-scrollbar {
 		display: none;
@@ -106,6 +109,9 @@
 /* Tab content area */
 .wppo-tab-content {
 	margin-top: 24px;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 }
 
 /* Post Type Chips */
