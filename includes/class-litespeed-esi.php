@@ -359,16 +359,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 				$block = 'cart';
 			}
 
-			// Verify nonce if present, but allow public cart without capability.
+			// Require valid 'wppo_esi' nonce for all blocks except public cart.
 			$nonce = '';
 			if ( isset( $_GET['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 				$nonce = sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			} elseif ( isset( $_POST['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
 				$nonce = sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
 			}
-			$nonce_valid = wp_verify_nonce( $nonce, 'wppo_esi' );
+			$nonce_valid = function_exists( 'wp_verify_nonce' ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
 
-			if ( ! $nonce_valid && 'cart' !== $block ) {
+			if ( ! $nonce_valid && 'cart' !== strtolower( $block ) ) {
 				if ( ! headers_sent() ) {
 					header( 'Cache-Control: private,no-cache' );
 					header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
