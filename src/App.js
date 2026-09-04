@@ -351,37 +351,38 @@ const App = () => {
 		const ccssController = new AbortController();
 		ccssControllerRef.current = ccssController;
 
-		if (
-			( activeTab === 'overview' ||
-				activeTab === 'dashboard' ||
-				recentActivities.length === 0 ) &&
-			! hasFetchedActivities.current
-		) {
-			const fetchActivities = async () => {
-				try {
-					const data = await fetchRecentActivities(
-						1,
-						activitiesController.signal
-					);
-					if ( ! activitiesController.signal.aborted ) {
-						setRecentActivities( data );
-						hasFetchedActivities.current = true;
-					}
-				} catch ( error ) {
-					if ( ! activitiesController.signal.aborted ) {
-						console.error(
-							__(
-								'Failed to fetch activities:',
-								'performance-optimisation'
-							),
-							error
-						);
-					}
+		const fetchActivities = async () => {
+			if (
+				! (
+					( activeTab === 'overview' ||
+						activeTab === 'dashboard' ||
+						recentActivities.length === 0 ) &&
+					! hasFetchedActivities.current
+				)
+			) {
+				return;
+			}
+			try {
+				const data = await fetchRecentActivities(
+					1,
+					activitiesController.signal
+				);
+				if ( ! activitiesController.signal.aborted ) {
+					setRecentActivities( data );
+					hasFetchedActivities.current = true;
 				}
-			};
-
-			fetchActivities();
-		}
+			} catch ( error ) {
+				if ( ! activitiesController.signal.aborted ) {
+					console.error(
+						__(
+							'Failed to fetch activities:',
+							'performance-optimisation'
+						),
+						error
+					);
+				}
+			}
+		};
 
 		const fetchRules = async () => {
 			if ( serverRules || hasFetchedRules.current ) {
@@ -408,7 +409,6 @@ const App = () => {
 				}
 			}
 		};
-		fetchRules();
 
 		const fetchCcssStatus = async () => {
 			if ( hasFetchedCcss.current && 0 === ccssRefreshTrigger ) {
@@ -440,7 +440,12 @@ const App = () => {
 				}
 			}
 		};
-		fetchCcssStatus();
+
+		Promise.allSettled( [
+			fetchActivities(),
+			fetchRules(),
+			fetchCcssStatus(),
+		] );
 
 		return () => {
 			activitiesController.abort();
