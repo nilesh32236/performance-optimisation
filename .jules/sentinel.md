@@ -34,3 +34,7 @@
 **Vulnerability:** Symlink path traversal leading to arbitrary directory deletion during uninstall.
 **Learning:** Recursive directory deletion functions must enforce strict prefix matching to ensure they don't escape intended boundaries (like WP_CONTENT_DIR).
 **Prevention:** Always validate that the target directory string starts with the expected normalized root path.
+## 2026-09-04 - Missing Nonce Verification in ESI AJAX Handler
+**Vulnerability:** The ESI AJAX handler ('wppo_esi_fragment') endpoint allowed users to process edge side includes fragments without proper nonce verification. A user could omit the '_wpnonce' query parameter to evade checks.
+**Learning:** The check 'if ( isset( $_GET['_wpnonce'] ) )' is not sufficient because it only enforces the nonce verification conditionally. This can be completely bypassed by omitting the token entirely in the request. The missing nonce verification check allows rendering fragments.
+**Prevention:** Ensure that nonce verification defaults to failing authorization if the nonce isn't present in the request.

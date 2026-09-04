@@ -176,6 +176,7 @@ class LiteSpeedEsiTest extends \PHPUnit\Framework\TestCase {
 				$captured = $data;
 			}
 		);
+		Functions\when( 'wp_verify_nonce' )->justReturn( false );
 		$_GET['block'] = 'cart';
 		LiteSpeed_ESI::handle_ajax_fragment();
 		$this->assertIsArray( $captured );

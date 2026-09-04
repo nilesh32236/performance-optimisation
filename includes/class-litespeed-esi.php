@@ -360,6 +360,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 
 			// Verify nonce if present, but allow public cart without capability.
+			$nonce = '';
+			if ( isset( $_GET['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$nonce = sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			} elseif ( isset( $_POST['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				$nonce = sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			}
+			$nonce_valid = wp_verify_nonce( $nonce, 'wppo_esi' );
+
+			if ( ! $nonce_valid && 'cart' !== $block ) {
+				if ( ! headers_sent() ) {
+					header( 'Cache-Control: private,no-cache' );
+					header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
+				}
+				if ( function_exists( 'wp_send_json_error' ) ) {
+					wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
+				}
+				return;
+			}
+
 			// For adminbar, require logged-in.
 			if ( 'adminbar' === $block || 'admin_bar' === $block ) {
 				if ( ! is_user_logged_in() ) {
