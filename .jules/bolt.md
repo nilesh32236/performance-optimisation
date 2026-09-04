@@ -110,6 +110,6 @@
 **Learning:** High-frequency functions like `Util::is_url_excluded` process the exact same array of exclusion rules across many iterations (e.g., during frontend output buffering or page cron processing). Iterating over and normalizing these rules per URL incurs redundant processing overhead.
 **Action:** Memoize rule normalization (pre-calculating prefix and exact match boundaries) in a static variable keyed by `md5(serialize($exclude_urls))` within the utility method. Transform O(n) regex/string processing operations over rules into O(1) hash map lookups for exact matches.
 
-## 2024-09-04 - Parallelize React Initial Data Fetching
+## 2026-09-04 - Parallelize React Initial Data Fetching
 **Learning:** Sequential async API requests in React `useEffect` hooks cause unnecessary UI latency by delaying the resolution of independent fetch calls.
 **Action:** Use `Promise.allSettled()` to fetch independent data streams (like activity logs, server rules, and status checks) concurrently, ensuring faster component initialization without blocking on individual request failures.

@@ -441,7 +441,7 @@ const App = () => {
 			}
 		};
 
-		Promise.allSettled( [
+		void Promise.allSettled( [
 			fetchActivities(),
 			fetchRules(),
 			fetchCcssStatus(),
