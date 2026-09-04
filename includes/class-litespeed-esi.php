@@ -351,17 +351,36 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		public static function handle_ajax_fragment(): void {
 			$block = '';
 			if ( isset( $_GET['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
-				$block = sanitize_text_field( wp_unslash( $_GET['block'] ) ); // phpcs:ignore WordPress.Security.NonceVerification
+				$block = strtolower( sanitize_text_field( wp_unslash( $_GET['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
 			} elseif ( isset( $_POST['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
-				$block = sanitize_text_field( wp_unslash( $_POST['block'] ) ); // phpcs:ignore WordPress.Security.NonceVerification
+				$block = strtolower( sanitize_text_field( wp_unslash( $_POST['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
 			}
 			if ( '' === $block ) {
 				$block = 'cart';
 			}
 
-			// Verify nonce if present, but allow public cart without capability.
+			// Require valid 'wppo_esi' nonce for all blocks except public cart.
+			$nonce = '';
+			if ( isset( $_GET['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+				$nonce = sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			} elseif ( isset( $_POST['_wpnonce'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing
+				$nonce = sanitize_text_field( wp_unslash( $_POST['_wpnonce'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+			}
+			$nonce_valid = function_exists( 'wp_verify_nonce' ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
+
+			if ( ! $nonce_valid && 'cart' !== $block ) {
+				if ( ! headers_sent() ) {
+					header( 'Cache-Control: private,no-cache' );
+					header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
+				}
+				if ( function_exists( 'wp_send_json_error' ) ) {
+					wp_send_json_error( array( 'message' => 'Unauthorized' ), 403 );
+				}
+				return;
+			}
+
 			// For adminbar, require logged-in.
-			if ( 'adminbar' === $block || 'admin_bar' === $block ) {
+			if ( 'adminbar' === $block || 'admin_bar' === $block || 'admin-bar' === $block ) {
 				if ( ! is_user_logged_in() ) {
 					if ( ! headers_sent() ) {
 						header( 'Cache-Control: private,no-cache' );
@@ -382,6 +401,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					break;
 				case 'adminbar':
 				case 'admin_bar':
+				case 'admin-bar':
 					$fragment = '<div class="wppo-adminbar">adminbar</div>';
 					break;
 				case 'nonce':
