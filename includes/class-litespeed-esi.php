@@ -380,7 +380,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 
 			// For adminbar, require logged-in.
-			if ( 'adminbar' === $block || 'admin_bar' === $block ) {
+			if ( 'adminbar' === $block || 'admin_bar' === $block || 'admin-bar' === $block ) {
 				if ( ! is_user_logged_in() ) {
 					if ( ! headers_sent() ) {
 						header( 'Cache-Control: private,no-cache' );
@@ -401,6 +401,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 					break;
 				case 'adminbar':
 				case 'admin_bar':
+				case 'admin-bar':
 					$fragment = '<div class="wppo-adminbar">adminbar</div>';
 					break;
 				case 'nonce':
