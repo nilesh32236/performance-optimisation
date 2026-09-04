@@ -351,9 +351,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		public static function handle_ajax_fragment(): void {
 			$block = '';
 			if ( isset( $_GET['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
-				$block = sanitize_text_field( wp_unslash( $_GET['block'] ) ); // phpcs:ignore WordPress.Security.NonceVerification
+				$block = strtolower( sanitize_text_field( wp_unslash( $_GET['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
 			} elseif ( isset( $_POST['block'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
-				$block = sanitize_text_field( wp_unslash( $_POST['block'] ) ); // phpcs:ignore WordPress.Security.NonceVerification
+				$block = strtolower( sanitize_text_field( wp_unslash( $_POST['block'] ) ) ); // phpcs:ignore WordPress.Security.NonceVerification
 			}
 			if ( '' === $block ) {
 				$block = 'cart';
@@ -368,7 +368,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			}
 			$nonce_valid = function_exists( 'wp_verify_nonce' ) ? wp_verify_nonce( $nonce, 'wppo_esi' ) : false;
 
-			if ( ! $nonce_valid && 'cart' !== strtolower( $block ) ) {
+			if ( ! $nonce_valid && 'cart' !== $block ) {
 				if ( ! headers_sent() ) {
 					header( 'Cache-Control: private,no-cache' );
 					header( 'X-LiteSpeed-Cache-Control: private,no-vary' );
