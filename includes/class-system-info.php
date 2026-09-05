@@ -533,19 +533,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 
 			// On multisite, also check network-activated plugins.
 			if ( function_exists( 'is_multisite' ) ) {
-				$is_multisite = false;
 				try {
-					$is_multisite = is_multisite();
-				} catch ( \Throwable $e ) {
-					$is_multisite = false;
-				}
-				if ( $is_multisite ) {
-					try {
+					if ( is_multisite() ) {
 						$network_plugins = array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) );
 						$active_plugins  = array_merge( $active_plugins, $network_plugins );
-					} catch ( \Throwable $e ) {
-						unset( $e ); // Missing mock — treat as no network plugins.
 					}
+				} catch ( \Throwable $e ) {
+					unset( $e ); // is_multisite() or get_site_option() threw/missing mock — treat as no network plugins.
 				}
 			}
 
