@@ -123,7 +123,10 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 		}
 
 		$root_trim = rtrim( $normalized_wp_content, '/' );
-		if ( false !== strpos( $decoded_dir, '..' ) || false !== stripos( $normalized_dir, '%2e' ) || ( $normalized_dir !== $root_trim && 0 !== strpos( $normalized_dir, $normalized_wp_content ) ) ) {
+
+		$has_traversal   = false !== strpos( $decoded_dir, '..' );
+		$is_outside_root = $normalized_dir !== $root_trim && 0 !== strpos( $normalized_dir, $normalized_wp_content );
+		if ( $has_traversal || $is_outside_root ) {
 			return;
 		}
 
