@@ -116,20 +116,31 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 		// @since NEXT Symlink traversal hardening.
 		$normalized_dir        = wp_normalize_path( $dir );
 		$normalized_wp_content = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
-		$real_dir_path         = realpath( $dir );
-		$real_dir              = wp_normalize_path( false !== $real_dir_path ? $real_dir_path : $normalized_dir );
-		$real_root_path        = realpath( WP_CONTENT_DIR );
-		$real_root             = trailingslashit( wp_normalize_path( false !== $real_root_path ? $real_root_path : WP_CONTENT_DIR ) );
+
+		$decoded_dir = $normalized_dir;
+		while ( rawurldecode( $decoded_dir ) !== $decoded_dir ) {
+			$decoded_dir = rawurldecode( $decoded_dir );
+		}
 
 		$root_trim = rtrim( $normalized_wp_content, '/' );
-		if ( false !== strpos( rawurldecode( $normalized_dir ), '..' ) || ( $normalized_dir !== $root_trim && 0 !== strpos( $normalized_dir, $normalized_wp_content ) ) || 0 !== strpos( $real_dir, $real_root ) ) {
+		if ( false !== strpos( $decoded_dir, '..' ) || false !== stripos( $normalized_dir, '%2e' ) || ( $normalized_dir !== $root_trim && 0 !== strpos( $normalized_dir, $normalized_wp_content ) ) ) {
 			return;
 		}
 
-		// If $dir itself is a symlink, delete the link only — do not follow.
+		// If $dir itself is a symlink, delete the link only — do not follow and do not enforce realpath.
 		// @since NEXT — added.
 		if ( is_link( $dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 			@unlink( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
+			return;
+		}
+
+		$real_dir_path  = realpath( $dir );
+		$real_dir       = wp_normalize_path( false !== $real_dir_path ? $real_dir_path : $normalized_dir );
+		$real_root_path = realpath( WP_CONTENT_DIR );
+		$real_root      = trailingslashit( wp_normalize_path( false !== $real_root_path ? $real_root_path : WP_CONTENT_DIR ) );
+
+		$real_root_trim = rtrim( $real_root, '/' );
+		if ( $real_dir !== $real_root_trim && 0 !== strpos( $real_dir, $real_root ) ) {
 			return;
 		}
 
