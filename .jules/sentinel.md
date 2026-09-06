@@ -30,7 +30,7 @@
 **Vulnerability:** The RUM beacon config reflected the full `$_SERVER['REQUEST_URI']` (including query strings) directly into an inline script tag. While mitigated by `wp_json_encode`, query parameters could be controlled by an attacker, posing a potential DOM XSS risk.
 **Learning:** `esc_url_raw` allows `?` and `=`, so attacker-controlled query parameters can still be reflected. Relying solely on `wp_json_encode` for protection is insufficient if the query string is not needed for the feature.
 **Prevention:** Always strip query strings from `REQUEST_URI` using `wp_parse_url($uri, PHP_URL_PATH)` before using it in configuration variables if the query string is not explicitly required.
-## 2025-02-12 - Prevent path traversal in directory deletion
+## 2026-09-02 - Prevent path traversal in directory deletion
 **Vulnerability:** Symlink path traversal leading to arbitrary directory deletion during uninstall.
 **Learning:** Recursive directory deletion functions must enforce strict prefix matching to ensure they don't escape intended boundaries (like WP_CONTENT_DIR).
 **Prevention:** Always validate that the target directory string starts with the expected normalized root path.

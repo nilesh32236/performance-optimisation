@@ -116,8 +116,13 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 		// @since NEXT Symlink traversal hardening.
 		$normalized_dir        = wp_normalize_path( $dir );
 		$normalized_wp_content = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
+		$real_dir_path         = realpath( $dir );
+		$real_dir              = wp_normalize_path( false !== $real_dir_path ? $real_dir_path : $normalized_dir );
+		$real_root_path        = realpath( WP_CONTENT_DIR );
+		$real_root             = trailingslashit( wp_normalize_path( false !== $real_root_path ? $real_root_path : WP_CONTENT_DIR ) );
 
-		if ( false !== strpos( $normalized_dir, '..' ) || 0 !== strpos( $normalized_dir, $normalized_wp_content ) ) {
+		$root_trim = rtrim( $normalized_wp_content, '/' );
+		if ( false !== strpos( rawurldecode( $normalized_dir ), '..' ) || ( $normalized_dir !== $root_trim && 0 !== strpos( $normalized_dir, $normalized_wp_content ) ) || 0 !== strpos( $real_dir, $real_root ) ) {
 			return;
 		}
 
