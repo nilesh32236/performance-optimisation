@@ -122,6 +122,8 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 			$decoded_dir = rawurldecode( $decoded_dir );
 		}
 
+		$decoded_dir = wp_normalize_path( $decoded_dir );
+
 		$segments        = explode( '/', $decoded_dir );
 		$has_traversal   = in_array( '..', $segments, true );
 		$is_outside_root = 0 !== strpos( $normalized_dir, $normalized_wp_content );
