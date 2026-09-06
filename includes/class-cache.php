@@ -2530,7 +2530,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return __( 'Unable to initialize filesystem.', 'performance-optimisation' );
 			}
 
-			if ( '' === $stats['cache_dir'] || ! $instance->filesystem->is_dir( $stats['cache_dir'] ) ) {
+			if ( '' === ( $stats['cache_dir'] ?? '' ) || ! $instance->filesystem->is_dir( $stats['cache_dir'] ?? '' ) ) {
 				return __( 'Cache directory does not exist.', 'performance-optimisation' );
 			}
 
