@@ -124,16 +124,18 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 
 		$root_trim = rtrim( $normalized_wp_content, '/' );
 
-		$has_traversal   = false !== strpos( $decoded_dir, '..' );
-		$is_outside_root = $normalized_dir !== $root_trim && 0 !== strpos( $normalized_dir, $normalized_wp_content );
+		$segments        = explode( '/', $decoded_dir );
+		$has_traversal   = in_array( '..', $segments, true );
+		$is_outside_root = 0 !== strpos( $normalized_dir, $normalized_wp_content );
 		if ( $has_traversal || $is_outside_root ) {
 			return;
 		}
 
 		// If $dir itself is a symlink, delete the link only — do not follow and do not enforce realpath.
 		// @since NEXT — added.
-		if ( is_link( $dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-			@unlink( $dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
+		$rtrimmed_dir = rtrim( $dir, '/' );
+		if ( is_link( $rtrimmed_dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			@unlink( $rtrimmed_dir ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.unlink_unlink
 			return;
 		}
 
@@ -142,8 +144,7 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 		$real_root_path = realpath( WP_CONTENT_DIR );
 		$real_root      = trailingslashit( wp_normalize_path( false !== $real_root_path ? $real_root_path : WP_CONTENT_DIR ) );
 
-		$real_root_trim = rtrim( $real_root, '/' );
-		if ( $real_dir !== $real_root_trim && 0 !== strpos( $real_dir, $real_root ) ) {
+		if ( 0 !== strpos( $real_dir, $real_root ) ) {
 			return;
 		}
 
