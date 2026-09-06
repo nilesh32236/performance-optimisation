@@ -112,6 +112,15 @@ if ( ! function_exists( 'wppo_delete_directory' ) ) {
 	 * @since NEXT Symlink traversal hardening (is_link guard).
 	 */
 	function wppo_delete_directory( string $dir ): void {
+		// Security: Prevent path traversal by ensuring the directory is inside WP_CONTENT_DIR.
+		// @since NEXT Symlink traversal hardening.
+		$normalized_dir        = wp_normalize_path( $dir );
+		$normalized_wp_content = trailingslashit( wp_normalize_path( WP_CONTENT_DIR ) );
+
+		if ( false !== strpos( $normalized_dir, '..' ) || 0 !== strpos( $normalized_dir, $normalized_wp_content ) ) {
+			return;
+		}
+
 		// If $dir itself is a symlink, delete the link only — do not follow.
 		// @since NEXT — added.
 		if ( is_link( $dir ) ) { // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
