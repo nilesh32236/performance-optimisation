@@ -2520,11 +2520,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return (string) ( $stats['size'] ?? '' );
 			}
 
-			// If we have a valid cache size that isn't the 'N/A' fallback, return it early.
-			if ( __( 'N/A', 'performance-optimisation' ) !== $stats['size'] && 'N/A' !== $stats['size'] ) {
-				return $stats['size'];
-			}
-
 			$instance = new self();
 			if ( ! $instance->get_filesystem() ) {
 				return __( 'Unable to initialize filesystem.', 'performance-optimisation' );
@@ -2532,6 +2527,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 
 			if ( '' === ( $stats['cache_dir'] ?? '' ) || ! $instance->filesystem->is_dir( $stats['cache_dir'] ?? '' ) ) {
 				return __( 'Cache directory does not exist.', 'performance-optimisation' );
+			}
+
+			// If we have a valid cache size that isn't the 'N/A' fallback, return it early.
+			if ( __( 'N/A', 'performance-optimisation' ) !== $stats['size'] && 'N/A' !== $stats['size'] ) {
+				return $stats['size'];
 			}
 
 			return $stats['size'];
