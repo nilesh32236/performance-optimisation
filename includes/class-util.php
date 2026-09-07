@@ -1495,5 +1495,122 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			}
 			return $sanitized;
 		}
+
+		/**
+		 * Current value of a salted-cache salt (option-backed).
+		 *
+		 * The WP 6.9+ salted cache family compares the salt VALUE passed at
+		 * read/write time against the value stored alongside each entry, so
+		 * callers must pass the current option value — not the option key.
+		 * Passing the key name instead would make every salt bump a no-op
+		 * (the comparison never changes) and reduce invalidation to the
+		 * entry TTL alone.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $option Option key holding the salt.
+		 * @return string Current salt value ('0' until the first bump).
+		 */
+		public static function cache_salt( string $option ): string {
+			$value = get_option( $option, '0' );
+			// false (unset option) maps to the '0' sentinel, never ''.
+			if ( ! is_scalar( $value ) || false === $value ) {
+				return '0';
+			}
+			return (string) $value;
+		}
+
+		/**
+		 * Memoized availability of the WP 6.9+ HTML API token serializer.
+		 *
+		 * Reset per request via {@see reset_html_processor_memo()} (used by the
+		 * test suite to isolate the reflection probe).
+		 *
+		 * @since NEXT
+		 * @var bool|null
+		 */
+		private static ?bool $html_processor_available = null;
+
+		/**
+		 * Whether the WP 6.9+ HTML API token serializer is available.
+		 *
+		 * Checks for the public `WP_HTML_Processor::serialize_token()` introduced
+		 * in WP 6.9 (private in 6.7). Uses reflection to guard the 6.7 private
+		 * visibility so the fallback remains byte-identical on WP <6.9.
+		 *
+		 * Shared by every processor-based buffer rewrite (image optimisation,
+		 * CDN rewriting, used-CSS extraction); memoized per request.
+		 *
+		 * @since NEXT
+		 * @return bool True when `WP_HTML_Processor::serialize_token()` is public.
+		 */
+		public static function should_use_html_processor(): bool {
+			if ( null !== self::$html_processor_available ) {
+				return self::$html_processor_available;
+			}
+			if ( ! class_exists( 'WP_HTML_Processor' ) || ! method_exists( 'WP_HTML_Processor', 'serialize_token' ) ) {
+				self::$html_processor_available = false;
+				return false;
+			}
+			try {
+				$method                         = new \ReflectionMethod( 'WP_HTML_Processor', 'serialize_token' );
+				self::$html_processor_available = $method->isPublic();
+			} catch ( \Throwable $e ) { // phpcs:ignore Generic.CodeAnalysis.EmptyStatement.DetectedCatch
+				self::$html_processor_available = false;
+			}
+			return self::$html_processor_available;
+		}
+
+		/**
+		 * Reset the memoized HTML-processor availability probe.
+		 *
+		 * Same reset pattern as reset_cached_home_urls()/clear_settings_cache();
+		 * used by the test suite so the reflection probe can be re-evaluated
+		 * after HTML API class fixtures change.
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_html_processor_memo(): void {
+			self::$html_processor_available = null;
+		}
+
+		/**
+		 * Create a WP_HTML_Processor for full-buffer rewrites.
+		 *
+		 * Prefers `create_full_parser()` so a complete HTML document keeps its
+		 * `<!DOCTYPE>`, `<html>`, `<head>` and `<body>` wrapper markup: a
+		 * fragment parser (`create_fragment()`) drops those wrappers when it
+		 * re-serializes a full document, which would corrupt page HTML. The
+		 * fragment factory is only a last-resort fallback for cores that ship
+		 * the public serializer without the full-parser factory.
+		 *
+		 * Returns null (triggering the caller's byte-identical fallback path)
+		 * when the processor is unavailable, the factory fails, or the input
+		 * cannot be parsed.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $html HTML document or fragment.
+		 * @return \WP_HTML_Processor|null Processor instance, or null on failure.
+		 */
+		public static function create_html_processor( string $html ): ?\WP_HTML_Processor {
+			if ( ! self::should_use_html_processor() ) {
+				return null;
+			}
+
+			if ( method_exists( 'WP_HTML_Processor', 'create_full_parser' ) ) {
+				$processor = \WP_HTML_Processor::create_full_parser( $html );
+			} elseif ( method_exists( 'WP_HTML_Processor', 'create_fragment' ) ) {
+				$processor = \WP_HTML_Processor::create_fragment( $html );
+			} else {
+				return null;
+			}
+			if ( null === $processor || is_wp_error( $processor ) || ! ( $processor instanceof \WP_HTML_Processor ) ) {
+				return null;
+			}
+
+			return $processor;
+		}
 	}
 }

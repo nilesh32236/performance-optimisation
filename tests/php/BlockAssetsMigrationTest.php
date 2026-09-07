@@ -77,6 +77,9 @@ class BlockAssetsMigrationTest extends \PHPUnit\Framework\TestCase {
 	 * @return Main The Main instance (for asserting synced options).
 	 */
 	private function migrate( bool $loads_on_demand, array $options = array() ): Main {
+		// Salted-cache gate default (issue #882).
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
+
 		$main = ( new ReflectionClass( Main::class ) )->newInstanceWithoutConstructor();
 
 		$options_prop = new ReflectionProperty( Main::class, 'options' );

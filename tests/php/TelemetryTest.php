@@ -237,6 +237,9 @@ class TelemetryTest extends \PHPUnit\Framework\TestCase {
 	private function stub_common_functions(): void {
 		$remote_calls = &$this->remote_calls;
 
+		// Salted-cache gate default (issue #882).
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
+
 		// Stubs the trait would normally provide (its setUp is overridden here).
 		// phpcs:disable WordPress.WP.AlternativeFunctions.parse_url_parse_url -- Test alias for core wrapper.
 		Functions\when( 'wp_parse_url' )->alias( 'parse_url' );

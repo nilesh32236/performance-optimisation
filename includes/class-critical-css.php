@@ -36,6 +36,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private const CCSS_DIR = '/cache/wppo/ccss';
 
 		/**
+		 * Option key of the generation-status cache salt (WP 6.9+ salted
+		 * object cache; issue #882). Bumped by clear_all() so every salted
+		 * status entry invalidates at once without enumerating hashes.
+		 *
+		 * @since NEXT
+		 * @var string
+		 */
+		private const SALT_KEY = 'wppo_ccss_salt';
+
+		/**
 		 * Per-request CCSS existence memo keyed by template hash (audit #874
 		 * finding 7). Reset via reset_ccss_memo() from the mutators.
 		 *
@@ -336,7 +346,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						'label'  => $label,
 					);
 				} else {
-					$cache_status      = get_transient( Util::transient_key( 'wppo_ccss_status_' . $hash ) );
+					$cache_status      = self::get_status_cache( $hash );
 					$statuses[ $hash ] = array(
 						'status' => $cache_status ? $cache_status : 'none',
 						'label'  => $label,
@@ -987,7 +997,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private static function generate_and_store( string $template_hash, string $template ): bool {
 			$url = self::get_sample_url( $template );
 			if ( ! $url ) {
-				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
+				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
 				return false;
 			}
 
@@ -996,13 +1006,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			// Reject generated CSS that could break out of the <style> context when
 			// inlined — a poisoned source stylesheet must never reach the CCSS cache.
 			if ( false === $critical_css || preg_match( '/<\/style|<script/i', $critical_css ) ) {
-				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
+				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
 				return false;
 			}
 
 			$dir = self::get_ccss_dir();
 			if ( ! wp_mkdir_p( $dir ) ) {
-				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
+				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
 				return false;
 			}
 
@@ -1022,11 +1032,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			clearstatcache( true, self::get_ccss_file( $template_hash ) );
 
 			if ( self::ccss_exists( $template_hash ) ) {
-				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'ready', WEEK_IN_SECONDS );
+				self::set_status_cache( $template_hash, 'ready', WEEK_IN_SECONDS );
 				return true;
 			}
 
-			set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
+			self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
 			return false;
 		}
 
@@ -1106,11 +1116,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				}
 
 				if ( $queued ) {
-					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'pending', HOUR_IN_SECONDS );
+					self::set_status_cache( $template_hash, 'pending', HOUR_IN_SECONDS );
 				} else {
 					// Nothing could be scheduled (e.g. cron disabled) — surface
 					// the failure instead of reporting an hour of fake pending.
-					set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
+					self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
 				}
 
 				// Non-blocking fallback: expose the async loader while the
@@ -1201,7 +1211,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			if ( empty( $found_template ) ) {
-				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'failed', DAY_IN_SECONDS );
+				self::set_status_cache( $template_hash, 'failed', DAY_IN_SECONDS );
 				return;
 			}
 
@@ -1254,7 +1264,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 						++$queued;
 					}
 				}
-				set_transient( Util::transient_key( 'wppo_ccss_status_' . $hash ), 'pending', HOUR_IN_SECONDS );
+				self::set_status_cache( $hash, 'pending', HOUR_IN_SECONDS );
 			}
 
 			Log::add(
@@ -1291,12 +1301,69 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			self::reset_ccss_memo();
 			clearstatcache();
 
-			// Also clear status transients.
+			// Also clear status transients (WP <6.9 fallback) and bump the
+			// salted-cache salt so every WP 6.9+ salted status entry invalidates
+			// at once without enumerating hashes (issue #882).
 			$templates = self::get_templates();
 			foreach ( $templates as $template => $label ) {
 				$hash = self::get_template_hash( $template );
 				delete_transient( Util::transient_key( 'wppo_ccss_status_' . $hash ) );
 			}
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				// Monotonic increment: same-second mutations must produce
+				// distinct salts (issue #882 review).
+				update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
+			}
+		}
+
+		/**
+		 * Read a generation status from the salted object cache (WP 6.9+) or
+		 * the transient fallback.
+		 *
+		 * The salt is the current option VALUE (Util::cache_salt) so a
+		 * clear_all() bump invalidates every entry at once (issue #882).
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $hash Template hash.
+		 * @return string|false Status string, or false when unset.
+		 */
+		private static function get_status_cache( string $hash ) {
+			$key = 'wppo_ccss_status_' . $hash;
+			// Salted layer requires a persistent object cache; the transient
+			// fallback keeps the status across requests otherwise (issue #882
+			// review). clear_all() deletes the transients when it bumps.
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				// Salted eviction (TTL) without a bump: the transient written
+				// by set_status_cache() is still fresh — reuse it instead of
+				// reporting 'none' (issue #882 review). clear_all() deletes
+				// the transients when it bumps the salt, so a post-bump read
+				// cannot resurrect stale status.
+				$cached = wp_cache_get_salted( $key, 'wppo', Util::cache_salt( self::SALT_KEY ) );
+				return false !== $cached ? $cached : get_transient( Util::transient_key( $key ) );
+			}
+			return get_transient( Util::transient_key( $key ) );
+		}
+
+		/**
+		 * Store a generation status in the salted object cache (WP 6.9+) or
+		 * the transient fallback.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $hash   Template hash.
+		 * @param string $status Status value ('ready'|'pending'|'failed').
+		 * @param int    $ttl    Time to live in seconds.
+		 * @return void
+		 */
+		private static function set_status_cache( string $hash, string $status, int $ttl ): void {
+			$key = 'wppo_ccss_status_' . $hash;
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				wp_cache_set_salted( $key, $status, 'wppo', Util::cache_salt( self::SALT_KEY ), $ttl );
+			}
+			// Always write the transient too: it is the persistence fallback on
+			// hosts without an external object cache (issue #882 review).
+			set_transient( Util::transient_key( $key ), $status, $ttl );
 		}
 	}
 }

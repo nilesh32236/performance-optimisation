@@ -178,6 +178,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	public function test_lazy_load_native_off_still_uses_data_src(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 		Functions\when( 'get_the_ID' )->justReturn( 0 );
 		Functions\when( 'is_multisite' )->justReturn( false );
 		Functions\when( 'get_option' )->justReturn( array() );
@@ -424,6 +425,7 @@ class ImageOptimisationTest extends \PHPUnit\Framework\TestCase {
 	public function test_prioritize_lcp_in_buffer_matches_relative_url(): void {
 		require_once __DIR__ . '/stubs/wp-html-api.php';
 		Functions\when( 'wp_normalize_path' )->justReturn( '/tmp' );
+		Functions\when( 'home_url' )->justReturn( 'http://example.com' );
 		Functions\when( 'is_admin' )->justReturn( false );
 		Functions\when( 'is_user_logged_in' )->justReturn( false );
 		$this->stub_lcp_resolution( 'https://example.com/wp-content/uploads/hero.jpg' );

@@ -37,6 +37,8 @@ class ImgConverterTest extends \PHPUnit\Framework\TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 		\Brain\Monkey\setUp();
+		// Salted-cache gate default (issue #882).
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( true );
 
 		$this->default_options = array(
 			'image_optimisation' => array(

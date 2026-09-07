@@ -183,9 +183,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Extract used selectors from HTML content.
 		 *
+		 * Uses the WP 6.9+ HTML processor with full-document parse awareness
+		 * when available (issue #883) — correct on malformed markup (SVG,
+		 * nested tables, missing closers) where the tag-at-a-time Tag
+		 * Processor can mis-attribute tokens. Falls back to the original
+		 * Tag Processor walk on WP <6.9 or when the parse fails.
+		 *
 		 * @param string $html The HTML content.
 		 * @return array{tags: array, classes: array, ids: array, attrs: array}
 		 * @since 1.9.0
+		 * @since NEXT Added WP_HTML_Processor path with Tag Processor fallback.
 		 */
 		public function extract_selectors( string $html ): array {
 			$used = array(
@@ -195,57 +202,120 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 				'attrs'   => array(),
 			);
 
+			if ( Util::should_use_html_processor() ) {
+				$from_processor = self::extract_selectors_with_processor( $html );
+				if ( null !== $from_processor ) {
+					return $from_processor;
+				}
+			}
+
 			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
 				return $used;
 			}
 
 			$tags = new \WP_HTML_Tag_Processor( $html );
 			while ( $tags->next_tag() ) {
-				$tag_name                  = strtolower( $tags->get_tag() );
-				$used['tags'][ $tag_name ] = true;
+				self::collect_selectors_from_tag( $tags, $used );
+			}
 
-				$class_attr = $tags->get_attribute( 'class' );
-				if ( $class_attr ) {
-					$classes = preg_split( '/\s+/', trim( $class_attr ) );
-					foreach ( $classes as $cls ) {
-						$cls = trim( $cls );
-						if ( '' !== $cls ) {
-							$used['classes'][ $cls ] = true;
-						}
+			return $used;
+		}
+
+		/**
+		 * Extract used selectors via the WP 6.9+ HTML processor.
+		 *
+		 * Streams tokens through `WP_HTML_Processor` (read-only walk; the
+		 * selector data is collected, the buffer is not rewritten). Returns
+		 * null to trigger the Tag Processor fallback when the parser cannot
+		 * be created or the token stream ended with a parse error.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $html The HTML content.
+		 * @return array{tags: array, classes: array, ids: array, attrs: array}|null Selector data, or null on failure.
+		 */
+		private static function extract_selectors_with_processor( string $html ): ?array {
+			$processor = Util::create_html_processor( $html );
+			if ( null === $processor ) {
+				return null;
+			}
+
+			$used = array(
+				'tags'    => array(),
+				'classes' => array(),
+				'ids'     => array(),
+				'attrs'   => array(),
+			);
+
+			while ( $processor->next_token() ) {
+				if ( '#tag' === $processor->get_token_type() && ! $processor->is_tag_closer() ) {
+					self::collect_selectors_from_tag( $processor, $used );
+				}
+			}
+
+			if ( null !== $processor->get_last_error() ) {
+				return null;
+			}
+
+			return $used;
+		}
+
+		/**
+		 * Collect used selectors from the current tag of a HTML processor.
+		 *
+		 * Shared body of {@see extract_selectors()}, operating on whichever
+		 * processor is walking the document (WP_HTML_Processor extends
+		 * WP_HTML_Tag_Processor).
+		 *
+		 * @since NEXT
+		 *
+		 * @param \WP_HTML_Tag_Processor $tags Processor positioned on the current tag.
+		 * @param array                  $used Selector accumulator (passed by reference).
+		 * @return void
+		 */
+		private static function collect_selectors_from_tag( \WP_HTML_Tag_Processor $tags, array &$used ): void {
+			$tag_name                  = strtolower( (string) $tags->get_tag() );
+			$used['tags'][ $tag_name ] = true;
+
+			$class_attr = $tags->get_attribute( 'class' );
+			if ( $class_attr ) {
+				$classes = preg_split( '/\s+/', trim( $class_attr ) );
+				foreach ( $classes as $cls ) {
+					$cls = trim( $cls );
+					if ( '' !== $cls ) {
+						$used['classes'][ $cls ] = true;
 					}
 				}
+			}
 
-				$id_attr = $tags->get_attribute( 'id' );
-				if ( $id_attr ) {
-					$used['ids'][ trim( $id_attr ) ] = true;
-				}
+			$id_attr = $tags->get_attribute( 'id' );
+			if ( $id_attr ) {
+				$used['ids'][ trim( $id_attr ) ] = true;
+			}
 
-				$common_attrs = array( 'type', 'rel', 'role', 'href', 'src', 'disabled', 'tabindex', 'target', 'title', 'lang', 'dir', 'hidden', 'contenteditable', 'draggable' );
-				foreach ( $common_attrs as $attr_name ) {
-					$val = $tags->get_attribute( $attr_name );
-					if ( null !== $val ) {
-						$used['attrs'][ $attr_name ] = true;
+			$common_attrs = array( 'type', 'rel', 'role', 'href', 'src', 'disabled', 'tabindex', 'target', 'title', 'lang', 'dir', 'hidden', 'contenteditable', 'draggable' );
+			foreach ( $common_attrs as $attr_name ) {
+				$val = $tags->get_attribute( $attr_name );
+				if ( null !== $val ) {
+					$used['attrs'][ $attr_name ] = true;
 
-						if ( 'href' === $attr_name || 'src' === $attr_name ) {
-							$ext = strtolower( pathinfo( (string) wp_parse_url( (string) $val, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
-							if ( $ext && in_array( $ext, array( 'css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'eot' ), true ) ) {
-								$used['attrs'][ '.' . $ext ] = true;
-							}
-						}
-					}
-				}
-
-				// Track all available attributes for CSS selector matching (WP 6.5+).
-				if ( method_exists( $tags, 'get_attribute_names_include_all_private' ) ) {
-					foreach ( $tags->get_attribute_names_include_all_private() as $attr_name ) {
-						if ( ! in_array( $attr_name, array( 'class', 'id' ), true ) ) {
-							$used['attrs'][ $attr_name ] = true;
+					if ( 'href' === $attr_name || 'src' === $attr_name ) {
+						$ext = strtolower( pathinfo( (string) wp_parse_url( (string) $val, PHP_URL_PATH ), PATHINFO_EXTENSION ) );
+						if ( $ext && in_array( $ext, array( 'css', 'js', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'avif', 'ico', 'woff', 'woff2', 'ttf', 'eot' ), true ) ) {
+							$used['attrs'][ '.' . $ext ] = true;
 						}
 					}
 				}
 			}
 
-			return $used;
+			// Track all available attributes for CSS selector matching (WP 6.5+).
+			if ( method_exists( $tags, 'get_attribute_names_include_all_private' ) ) {
+				foreach ( $tags->get_attribute_names_include_all_private() as $attr_name ) {
+					if ( ! in_array( $attr_name, array( 'class', 'id' ), true ) ) {
+						$used['attrs'][ $attr_name ] = true;
+					}
+				}
+			}
 		}
 
 		/**
@@ -1036,31 +1106,97 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 		/**
 		 * Extract CSS assets from HTML content by finding <link rel="stylesheet"> tags.
 		 *
+		 * Uses the WP 6.9+ HTML processor when available (issue #883); falls
+		 * back to the original Tag Processor walk on WP <6.9 or when the
+		 * parse fails.
+		 *
 		 * @param string $html The HTML content.
 		 * @return array Array of CSS content strings keyed by md5 hash of URL.
 		 * @since 1.9.0
+		 * @since NEXT Added WP_HTML_Processor path with Tag Processor fallback.
 		 */
 		private static function extract_css_assets_from_html( string $html ): array {
 			$assets = array();
+
+			if ( Util::should_use_html_processor() ) {
+				$from_processor = self::extract_css_assets_with_processor( $html );
+				if ( null !== $from_processor ) {
+					return $from_processor;
+				}
+			}
+
 			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
 				return $assets;
 			}
 			$tags = new \WP_HTML_Tag_Processor( $html );
 			while ( $tags->next_tag( array( 'tag_name' => 'link' ) ) ) {
-				$rel = $tags->get_attribute( 'rel' );
-				if ( 'stylesheet' !== $rel ) {
-					continue;
-				}
-				$href = $tags->get_attribute( 'href' );
-				if ( ! $href ) {
-					continue;
-				}
-				$content = self::fetch_css_content_static( $href );
-				if ( false !== $content ) {
-					$assets[ md5( $href ) ] = $content;
-				}
+				self::collect_css_asset_from_tag( $tags, $assets );
 			}
 			return $assets;
+		}
+
+		/**
+		 * Extract stylesheet URLs via the WP 6.9+ HTML processor.
+		 *
+		 * Read-only token walk; returns null to trigger the Tag Processor
+		 * fallback when the parser cannot be created or the token stream
+		 * ended with a parse error.
+		 *
+		 * @since NEXT
+		 *
+		 * @param string $html The HTML content.
+		 * @return array<string,string>|null CSS contents keyed by URL hash, or null on failure.
+		 */
+		private static function extract_css_assets_with_processor( string $html ): ?array {
+			$processor = Util::create_html_processor( $html );
+			if ( null === $processor ) {
+				return null;
+			}
+
+			$assets = array();
+			while ( $processor->next_token() ) {
+				if (
+					'#tag' === $processor->get_token_type()
+					&& ! $processor->is_tag_closer()
+					&& 'link' === strtolower( (string) $processor->get_tag() )
+				) {
+					self::collect_css_asset_from_tag( $processor, $assets );
+				}
+			}
+
+			if ( null !== $processor->get_last_error() ) {
+				return null;
+			}
+
+			return $assets;
+		}
+
+		/**
+		 * Collect the stylesheet content linked by the current tag.
+		 *
+		 * Shared body of {@see extract_css_assets_from_html()}, operating on
+		 * whichever processor is walking the document (WP_HTML_Processor
+		 * extends WP_HTML_Tag_Processor).
+		 *
+		 * @since NEXT
+		 *
+		 * @param \WP_HTML_Tag_Processor $tags   Processor positioned on the current tag.
+		 * @param array                  $assets Asset accumulator (passed by reference).
+		 * @return void
+		 */
+		private static function collect_css_asset_from_tag( \WP_HTML_Tag_Processor $tags, array &$assets ): void {
+			$rel = $tags->get_attribute( 'rel' );
+			if ( 'stylesheet' !== $rel ) {
+				return;
+			}
+			$href = $tags->get_attribute( 'href' );
+			if ( ! $href ) {
+				return;
+			}
+			$content = self::fetch_css_content_static( $href );
+			if ( false !== $content ) {
+				$assets[ md5( $href ) ] = $content;
+			}
 		}
 
 		/**

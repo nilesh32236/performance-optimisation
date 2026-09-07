@@ -1924,10 +1924,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 				return self::$deferred_img_info;
 			}
 
-			$has_salted = function_exists( 'wp_cache_get_salted' );
+			// Salted layer requires a persistent object cache; without one the
+			// option read below is the (already persistent) source of truth
+			// (issue #882 review).
+			$has_salted = function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
 
 			if ( $has_salted ) {
-				$cached = wp_cache_get_salted( 'wppo_img_info', 'wppo', self::SALT_KEY );
+				$cached = wp_cache_get_salted( 'wppo_img_info', 'wppo', Util::cache_salt( self::SALT_KEY ) );
 				if ( false !== $cached ) {
 					self::$deferred_img_info = $cached;
 					return self::$deferred_img_info;
@@ -1937,7 +1940,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 			self::$deferred_img_info = get_option( 'wppo_img_info', array() );
 
 			if ( $has_salted ) {
-				wp_cache_set_salted( 'wppo_img_info', self::$deferred_img_info, 'wppo', self::SALT_KEY );
+				// TTL safety net (issue #882 review): a missed salt bump
+				// cannot keep a stale mirror alive indefinitely.
+				wp_cache_set_salted( 'wppo_img_info', self::$deferred_img_info, 'wppo', Util::cache_salt( self::SALT_KEY ), DAY_IN_SECONDS );
 			}
 
 			return self::$deferred_img_info;
@@ -2078,8 +2083,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Img_Converter' ) ) {
 		 * @return void
 		 */
 		public static function invalidate_img_info_cache(): void {
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
-				update_option( self::SALT_KEY, time(), false );
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				// Monotonic increment: same-second mutations must produce
+				// distinct salts (issue #882 review).
+				update_option( self::SALT_KEY, (int) get_option( self::SALT_KEY, 0 ) + 1, false );
 			}
 		}
 

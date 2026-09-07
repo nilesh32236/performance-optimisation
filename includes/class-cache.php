@@ -65,7 +65,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			// stats are bumped so the salted wppo_cache_size /
 			// wppo_total_js_css entries stay consistent outside clear_cache()
 			// (smart purge, combine_css) too.
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
 				$salt = (int) get_option( 'wppo_cache_last_cleared', 0 ) + 1;
 				update_option( 'wppo_cache_last_cleared', $salt, false );
 			}
@@ -126,6 +126,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 2.22.0
 		 */
 		private bool $inline_drift_detected = false;
+
+		/**
+		 * Whether the buffer was enhanced (image/CDN/minify passes) this request.
+		 *
+		 * Nesting balance guard (issue #881): the WP 6.9+ enhancement-buffer
+		 * filter ({@see process_buffer_for_cache()}) and the legacy fallback
+		 * buffer ({@see start_output_buffer()}) share the
+		 * {@see process_buffer_only()} pipeline; when both are registered a
+		 * mid-request flip of `wp_should_output_buffer_template_for_enhancement`
+		 * could otherwise run the pipeline twice. One-shot per request.
+		 *
+		 * @var bool
+		 * @since NEXT
+		 */
+		private static bool $buffer_enhanced = false;
 
 		/**
 		 * Whether the budget-drift notice has been logged this PHP process.
@@ -1194,20 +1209,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		}
 
 		/**
-		 * Whether the combined-CSS file should be skipped on small block-theme bundles.
-		 *
-		 * On block themes with a small total payload (≤ styles_inline_size_limit,
-		 * 40KB on WP 6.9+) core's greedy smallest-first inline budget will already
-		 * inline the eligible styles at their queue positions. Creating a combined
-		 * file would add an extra request without benefit, so it is skipped and the
-		 * styles are left enqueued for core to inline. Classic themes always combine.
-		 *
-		 * @since NEXT
-		 *
-		 * @param string[] $eligible_handles Handles that would be combined.
-		 * @return bool True when combining should be skipped.
-		 */
-		/**
 		 * Retrieve cached src file stat (readable + filesize) with per-request LRU.
 		 *
 		 * Avoids a second filesize()/is_readable() loop over the same handles in
@@ -1243,6 +1244,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * file would add an extra request without benefit, so it is skipped and the
 		 * styles are left enqueued for core to inline. Classic themes always combine.
 		 *
+		 * Guards (issue #880):
+		 * - WP 6.9+ only: the 40KB default budget is what makes small bundles
+		 *   fully inlineable; on older cores (20KB default) the plugin keeps
+		 *   combining — the pre-6.9 behavior is unchanged.
+		 * - CDN: when a CDN URL is configured the combined file is served from
+		 *   the CDN, so it is never redundant and must still be built.
+		 * - `wppo_inline_combined_css`: an operator who disabled plugin inlining
+		 *   (typically to serve the combined file externally) still expects the
+		 *   combined file to exist; the skip premise — "core inlines everything,
+		 *   so the file is redundant" — does not hold.
+		 *
 		 * @since NEXT
 		 *
 		 * @param string[] $eligible_handles Handles that would be combined.
@@ -1252,6 +1264,30 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			if ( empty( $eligible_handles ) ) {
 				return false;
 			}
+
+			// The 40KB inline budget that makes the skip worthwhile is a WP 6.9+
+			// default; on older cores the plugin keeps its always-combine
+			// behavior. An absent $wp_version assumes the newest core, matching
+			// get_styles_inline_limit().
+			if ( isset( $GLOBALS['wp_version'] ) && version_compare( $GLOBALS['wp_version'], '6.9-alpha', '<' ) ) {
+				return false;
+			}
+
+			// A configured CDN serves the combined file — never redundant.
+			// Covers both the legacy cdnURL field and the per-mapping
+			// cdnMapping config (plus wppo_cdn_mapping filters) resolved by
+			// the CDN class (issue #880 review).
+			if ( ! empty( $this->options['file_optimisation']['cdnURL'] ) || ! empty( $this->get_cdn_mappings() ) ) {
+				return false;
+			}
+
+			// Operators who disabled inlining of the combined CSS still expect
+			// the combined file (e.g. served externally from a CDN), so the
+			// budget skip must not remove it.
+			if ( ! apply_filters( 'wppo_inline_combined_css', true ) ) {
+				return false;
+			}
+
 			if ( ! function_exists( 'wp_is_block_theme' ) || ! wp_is_block_theme() ) {
 				return false;
 			}
@@ -1354,6 +1390,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since 1.0.0
 		 */
 		public function start_output_buffer(): void {
+			// WP 6.9+ template-enhancement buffer interplay (issue #881): when
+			// core's enhancement output buffer is active for this request, core
+			// owns output capture and the filter path
+			// ({@see process_buffer_for_cache()}) is responsible for processing.
+			// A plugin-level buffer here would stack on top of core's and
+			// re-process (or cache pre-hoisting) HTML, so it must not open.
+			// When the site opts out (the filter returning false) core does not
+			// buffer at all and this legacy path is the only cache-write path,
+			// so it proceeds.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
+				return;
+			}
+
 			// TODO(#553): remove when minimum supported WP is raised to 6.9.
 			if ( ! $this->is_cache_allowed_for_current_user() || $this->is_not_cacheable() ) {
 				return;
@@ -1433,6 +1482,17 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 * @since NEXT
 		 */
 		private function process_buffer_only( $buffer ) {
+			// Nesting balance (issue #881): the enhancement-buffer filter and the
+			// legacy fallback buffer can both be registered on WP 6.9+ (the
+			// fallback engages only when a site opts out of core's buffer, but a
+			// site filter may flip between template_redirect and
+			// wp_before_include_template). Enhance exactly once per request so a
+			// mid-request flip can never double-minify or double-rewrite.
+			if ( self::$buffer_enhanced ) {
+				return $buffer;
+			}
+			self::$buffer_enhanced = true;
+
 			$image_optimisation = $this->image_optimisation ? $this->image_optimisation : new Image_Optimisation( $this->options );
 
 			$buffer = $image_optimisation->maybe_serve_next_gen_images( $buffer );
@@ -2681,8 +2741,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				return $stats;
 			}
 
-			$stats_key    = Util::transient_key( 'wppo_cache_stats' );
-			$cached_stats = get_transient( $stats_key );
+			// Salted object-cache layer (WP 6.9+, issue #882): the salt is the
+			// `wppo_cache_last_cleared` option VALUE — bump_stats_cache() bumps
+			// it on every stats mutation, so salted entries invalidate together
+			// with the transient (issue #894 follow-up: pass the value, not the
+			// key, or the bump never reaches the comparison).
+			$stats_key = Util::transient_key( 'wppo_cache_stats' );
+			// Salted layer requires a persistent object cache; the transient
+			// fallback keeps the stats across requests otherwise (issue #882 review).
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				$cached_stats = wp_cache_get_salted( 'wppo_cache_stats', 'wppo', Util::cache_salt( 'wppo_cache_last_cleared' ) );
+				// Salted eviction (TTL) without a bump: the unified transient
+				// written by store_cache_stats() is still fresh — reuse it
+				// instead of rescanning the directory (issue #882 review).
+				if ( false === $cached_stats ) {
+					$cached_stats = get_transient( $stats_key );
+				}
+			} else {
+				$cached_stats = get_transient( $stats_key );
+			}
 			if ( is_array( $cached_stats ) && isset( $cached_stats['size'], $cached_stats['count'] ) ) {
 				$stats['size']         = (string) $cached_stats['size'];
 				$stats['cached_pages'] = (int) $cached_stats['count'];
@@ -2697,14 +2774,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				$stats['size']         = (string) $legacy_size;
 				$stats['cached_pages'] = (int) $legacy_count;
 				// Promote to unified key atomically.
-				set_transient(
-					$stats_key,
-					array(
-						'size'  => $stats['size'],
-						'count' => $stats['cached_pages'],
-					),
-					15 * MINUTE_IN_SECONDS
+				$unified = array(
+					'size'  => $stats['size'],
+					'count' => $stats['cached_pages'],
 				);
+				self::store_cache_stats( $unified, $stats_key );
 				$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 				return $stats;
 			}
@@ -2713,13 +2787,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$total_size            = $instance->calculate_directory_size( $cache_dir );
 			$stats['size']         = size_format( $total_size );
 			$stats['cached_pages'] = $instance->count_cached_pages( $cache_dir );
-			set_transient(
-				$stats_key,
+			self::store_cache_stats(
 				array(
 					'size'  => $stats['size'],
 					'count' => $stats['cached_pages'],
 				),
-				15 * MINUTE_IN_SECONDS
+				$stats_key
 			);
 			// Also prime legacy keys for any external consumers still reading them.
 			set_transient( Util::transient_key( 'wppo_cache_size' ), $stats['size'], 15 * MINUTE_IN_SECONDS );
@@ -2728,6 +2801,28 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 			$stats['last_cleared'] = get_option( 'wppo_cache_last_cleared_time', '' );
 
 			return $stats;
+		}
+
+		/**
+		 * Store the unified cache-stats payload in the salted object cache
+		 * (WP 6.9+) and the transient fallback.
+		 *
+		 * The salted entry shares the `wppo_cache_last_cleared` salt with
+		 * {@see bump_stats_cache()} so any stats mutation invalidates it
+		 * immediately (issue #882). The transient write is kept for cores
+		 * without the salted cache family and for BC with external consumers.
+		 *
+		 * @since NEXT
+		 *
+		 * @param array<string,mixed> $unified   Unified stats payload.
+		 * @param string              $stats_key Transient key (multisite-prefixed).
+		 * @return void
+		 */
+		private static function store_cache_stats( array $unified, string $stats_key ): void {
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				wp_cache_set_salted( 'wppo_cache_stats', $unified, 'wppo', Util::cache_salt( 'wppo_cache_last_cleared' ), 15 * MINUTE_IN_SECONDS );
+			}
+			set_transient( $stats_key, $unified, 15 * MINUTE_IN_SECONDS );
 		}
 
 		/**

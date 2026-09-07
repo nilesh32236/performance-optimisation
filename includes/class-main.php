@@ -163,6 +163,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		private float $server_timing_template_start = 0.0;
 
 		/**
+		 * Whether the used-CSS buffer pipeline ran this request.
+		 *
+		 * Nesting balance guard (issue #881): the WP 6.9+ enhancement filter
+		 * ({@see process_used_css_only()}) and the legacy fallback buffer
+		 * ({@see process_used_css_capture()}) share the used-CSS pipeline;
+		 * when both are registered a mid-request flip of
+		 * `wp_should_output_buffer_template_for_enhancement` could otherwise
+		 * run it twice. One-shot per request.
+		 *
+		 * @var   bool
+		 * @since NEXT
+		 */
+		private bool $used_css_buffer_enhanced = false;
+
+		/**
 		 * The most recently constructed Main instance.
 		 *
 		 * The plugin bootstraps a single Main per request (`new Main()` in the
@@ -627,11 +642,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->cache, 'process_buffer_for_cache' ), 10, 2 );
 					add_action( 'wp_finalized_template_enhancement_output_buffer', array( $this->cache, 'stash_cache' ) );
-				} else {
-					// Legacy path (deprecated) — earmarked for removal when WP 6.9+ becomes the minimum supported version.
-					// TODO(#553): remove when minimum supported WP is raised to 6.9.
-					add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				}
+				// Legacy buffer path, dual-purpose on WP 6.9+ (issue #881): on
+				// older cores it is the only cache path; on 6.9+
+				// Cache::start_output_buffer() self-gates on
+				// wp_should_output_buffer_template_for_enhancement() and only
+				// engages when the site opted out of core's enhancement buffer
+				// (which would otherwise silently stop cache generation), and
+				// never stacks on top of an active core buffer.
+				add_action( 'template_redirect', array( $this->cache, 'start_output_buffer' ) );
 				add_action( 'save_post', array( $this, 'on_save_post_invalidate_cache' ), 10, 3 );
 			}
 
@@ -651,11 +670,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && $is_wp69_plus ) {
 					// WP 6.9+ template enhancement output buffer.
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this, 'process_used_css_only' ), 20, 2 );
-				} else {
-					// Legacy path (deprecated) — earmarked for removal when WP 6.9+ becomes the minimum supported version.
-					// TODO(#553): remove when minimum supported WP is raised to 6.9.
-					add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
 				}
+				// Dual-purpose legacy/fallback buffer (issue #881): on older cores
+				// it is the only used-CSS path; on 6.9+ start_used_css_buffer()
+				// self-gates on wp_should_output_buffer_template_for_enhancement()
+				// so it never stacks on top of an active core buffer.
+				add_action( 'template_redirect', array( $this, 'start_used_css_buffer' ) );
 			}
 
 			// Optional LCP image prioritization on the finalized HTML (default off).
@@ -667,13 +687,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) ) {
 					// WP 6.9+ template enhancement output buffer. Runs after cache (10) and used-CSS (20).
 					add_filter( 'wp_template_enhancement_output_buffer', array( $this->image_optimisation, 'prioritize_lcp_in_buffer' ), 30, 2 );
-				} else {
-					// Legacy path: priority 20 runs AFTER the cache buffer (default priority 10),
-					// so its inner callback runs first on the raw buffer and the cache callback
-					// then stores the LCP-enhanced HTML — mirroring the 6.9+ flow.
-					// TODO(#553): remove the legacy LCP buffer path when minimum supported WP is raised to 6.9.
-					add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 20 );
 				}
+				// Dual-purpose legacy/fallback buffer (issue #881): start_lcp_priority_buffer()
+				// self-gates on wp_should_output_buffer_template_for_enhancement() so it
+				// never stacks on top of an active core buffer.
+				add_action( 'template_redirect', array( $this, 'start_lcp_priority_buffer' ), 20 );
 			}
 
 			// Invalidate DB cleanup counts when posts are added or removed (for public post types).
@@ -1368,6 +1386,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				return $filtered_output;
 			}
 
+			// Nesting balance (issue #881): run the used-CSS pipeline at most
+			// once per request (see Main::$used_css_buffer_enhanced).
+			if ( $this->used_css_buffer_enhanced ) {
+				return $filtered_output;
+			}
+			$this->used_css_buffer_enhanced = true;
+
 			if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
 				$filtered_output = $this->google_fonts->process_buffer( $filtered_output );
 			}
@@ -1506,6 +1531,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function start_used_css_buffer() {
+			// Nesting balance (issue #881): when core's template-enhancement
+			// buffer is active, the 6.9+ filter path (process_used_css_only)
+			// handles used-CSS; a legacy buffer would double-process. When the
+			// site opted out of core's buffer, this legacy path is the only
+			// used-CSS path and proceeds.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
+				return;
+			}
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
 				return;
 			}
@@ -1525,6 +1558,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 		 * @since 1.9.0
 		 */
 		public function start_lcp_priority_buffer() {
+			// Nesting balance (issue #881): when core's template-enhancement
+			// buffer is active, the 6.9+ filter path (prioritize_lcp_in_buffer
+			// on wp_template_enhancement_output_buffer) handles LCP
+			// prioritization; never stack a legacy buffer on top of it.
+			if ( function_exists( 'wp_should_output_buffer_template_for_enhancement' ) && wp_should_output_buffer_template_for_enhancement() ) {
+				return;
+			}
 			if ( ! $this->should_optimise_for_logged_in() || is_admin() ) {
 				return;
 			}
@@ -1555,6 +1595,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 			// Fail open returns the PRISTINE input — stash it before mutation.
 			$original = $buffer;
 			try {
+				// Nesting balance (issue #881): run the used-CSS pipeline at
+				// most once per request (see Main::$used_css_buffer_enhanced).
+				if ( $this->used_css_buffer_enhanced ) {
+					return $original;
+				}
+				$this->used_css_buffer_enhanced = true;
+
 				if ( ! empty( $this->options['file_optimisation']['hostGoogleFontsLocally'] ?? false ) ) {
 					$buffer = $this->google_fonts->process_buffer( $buffer );
 				}
@@ -1718,13 +1765,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 
 			$this->add_available_post_types_to_options();
 
-			$cache_salt_key = 'wppo_cache_last_cleared';
-
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
-				$cache_size = wp_cache_get_salted( 'wppo_cache_size', 'wppo', $cache_salt_key );
+			// Salted object-cache reads (WP 6.9+, issue #882): the salt is the
+			// current `wppo_cache_last_cleared` option VALUE (bumped by
+			// Cache::bump_stats_cache()), not the option key — passing the key
+			// made every bump a no-op. Transient fallback keeps multisite
+			// key isolation via Util::transient_key().
+			// One salt read for both dashboard stats (issue #882 review).
+			$cache_salt = Util::cache_salt( 'wppo_cache_last_cleared' );
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				$cache_size = wp_cache_get_salted( 'wppo_cache_size', 'wppo', $cache_salt );
 				if ( false === $cache_size ) {
 					$cache_size = Cache::get_cache_size();
-					wp_cache_set_salted( 'wppo_cache_size', $cache_size, 'wppo', $cache_salt_key );
+					wp_cache_set_salted( 'wppo_cache_size', $cache_size, 'wppo', $cache_salt, 15 * MINUTE_IN_SECONDS );
 				}
 			} else {
 				$cache_size = get_transient( Util::transient_key( 'wppo_cache_size' ) );
@@ -1734,11 +1786,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Main' ) ) {
 				}
 			}
 
-			if ( function_exists( 'wp_cache_get_salted' ) ) {
-				$total_js_css = wp_cache_get_salted( 'wppo_total_js_css', 'wppo', $cache_salt_key );
+			if ( function_exists( 'wp_cache_get_salted' ) && function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ) {
+				$total_js_css = wp_cache_get_salted( 'wppo_total_js_css', 'wppo', $cache_salt );
 				if ( false === $total_js_css ) {
 					$total_js_css = Util::get_js_css_minified_file();
-					wp_cache_set_salted( 'wppo_total_js_css', $total_js_css, 'wppo', $cache_salt_key );
+					wp_cache_set_salted( 'wppo_total_js_css', $total_js_css, 'wppo', $cache_salt, 15 * MINUTE_IN_SECONDS );
 				}
 			} else {
 				$total_js_css = get_transient( Util::transient_key( 'wppo_total_js_css' ) );
