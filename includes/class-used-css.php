@@ -733,9 +733,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Used_CSS' ) ) {
 			}
 
 			if ( ! class_exists( '\WP_HTML_Tag_Processor' ) ) {
-				Log::add(
-					__( 'Used-CSS purging skipped: WP_HTML_Tag_Processor is unavailable (requires WordPress 6.2+). Serving unprocessed CSS instead.', 'performance-optimisation' )
-				);
+				// This runs per page view (and per post in bulk regen) — log
+				// the degraded mode at most once per request (Part 2 review).
+				static $logged_skip = false;
+				if ( ! $logged_skip ) {
+					$logged_skip = true;
+					Log::add(
+						__( 'Used-CSS purging skipped: WP_HTML_Tag_Processor is unavailable (requires WordPress 6.2+). Serving unprocessed CSS instead.', 'performance-optimisation' )
+					);
+				}
 				return $combined_css;
 			}
 

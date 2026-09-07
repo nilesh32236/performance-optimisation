@@ -775,7 +775,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 		 * Accepts the legacy plain string-list shape and the newer
 		 * `['tags' => ..., 'queued_at' => ...]` envelope. Expired envelopes are
 		 * deleted and treated as empty so a never-consumed queue cannot persist
-		 * forever (audit #888 finding 5).
+		 * forever (audit #888 finding 5). Tags are re-sanitized with the same
+		 * allowlist as queue_purge_tags() — values read back from the option
+		 * are interpolated into the X-LiteSpeed-Purge header and must never be
+		 * trusted as-is (Part 2 review: CR/LF header-injection guard).
 		 *
 		 * @param string $db_key Option key (blog-prefixed).
 		 * @return string[] Valid queued tags.
@@ -800,7 +803,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) ) {
 			return array_values(
 				array_unique(
 					array_filter(
-						array_map( 'strval', $stored ),
+						array_map(
+							static fn( $tag ) => preg_replace( '/[^A-Za-z0-9_\.\-]/', '', (string) $tag ),
+							$stored
+						),
 						static fn( $tag ) => '' !== $tag
 					)
 				)

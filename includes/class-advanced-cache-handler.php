@@ -41,15 +41,37 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 		}
 
 		/**
+		 * Log a drop-in inspection problem at most once per hour.
+		 *
+		 * This runs from is_our_dropin()'s error branches on hot per-request
+		 * paths (admin notices, System Info); a persistently broken filesystem
+		 * must not insert an activity row on every page load, so logging is
+		 * transient-rate-limited (audit #888 Part 2 review).
+		 *
+		 * @since NEXT
+		 * @param string $message Message to log.
+		 * @return void
+		 */
+		private static function log_dropin_issue( string $message ): void {
+			$rate_key = Util::transient_key( 'wppo_dropin_issue_logged' );
+			if ( get_transient( $rate_key ) ) {
+				return;
+			}
+			set_transient( $rate_key, 1, HOUR_IN_SECONDS );
+			Log::add( $message );
+		}
+
+		/**
 		 * Whether the existing advanced-cache.php (if any) was created by this plugin.
 		 *
 		 * Error semantics (audit #888 finding 23): on WP_Filesystem init
 		 * failure, missing methods, or read errors the method returns `false`
-		 * and logs via Log::add — the swallowed failure is no longer silent.
-		 * `false` is conservative in every caller: create()/remove() only act
-		 * on a positively identified WPPO drop-in (a foreign or unknown file
-		 * is left untouched, never overwritten or deleted), so an unknown
-		 * status can only skip work, never damage another plugin's drop-in.
+		 * and logs via Log::add (rate-limited to once per hour) — the swallowed
+		 * failure is no longer silent. `false` is conservative in every caller:
+		 * create()/remove() only act on a positively identified WPPO drop-in
+		 * (a foreign or unknown file is left untouched, never overwritten or
+		 * deleted), so an unknown status can only skip work, never damage
+		 * another plugin's drop-in.
 		 *
 		 * @since 1.0.0
 		 * @since NEXT Filesystem errors are logged instead of silently swallowed.
@@ -61,12 +83,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			$handler_file = self::get_dropin_path();
 
 			if ( ! $wp_filesystem && ! Util::init_filesystem() ) {
-				Log::add( __( 'Could not inspect advanced-cache.php: WP_Filesystem unavailable.', 'performance-optimisation' ) );
+				self::log_dropin_issue( __( 'Could not inspect advanced-cache.php: WP_Filesystem unavailable.', 'performance-optimisation' ) );
 				return false;
 			}
 
 			if ( ! is_object( $wp_filesystem ) || ! method_exists( $wp_filesystem, 'exists' ) || ! method_exists( $wp_filesystem, 'get_contents' ) ) {
-				Log::add( __( 'Could not inspect advanced-cache.php: filesystem API incomplete.', 'performance-optimisation' ) );
+				self::log_dropin_issue( __( 'Could not inspect advanced-cache.php: filesystem API incomplete.', 'performance-optimisation' ) );
 				return false;
 			}
 
@@ -77,7 +99,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 
 				$contents = $wp_filesystem->get_contents( $handler_file );
 			} catch ( \Throwable $e ) {
-				Log::add(
+				self::log_dropin_issue(
 					sprintf(
 						/* translators: %s: error message */
 						__( 'Could not read advanced-cache.php: %s', 'performance-optimisation' ),
@@ -88,7 +110,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 			}
 
 			if ( ! is_string( $contents ) ) {
-				Log::add( __( 'Could not read advanced-cache.php: filesystem returned no content.', 'performance-optimisation' ) );
+				self::log_dropin_issue( __( 'Could not read advanced-cache.php: filesystem returned no content.', 'performance-optimisation' ) );
 				return false;
 			}
 
@@ -351,11 +373,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Advanced_Cache_Handler' ) ) {
 				return;
 			}
 
-			$wp_filesystem->delete( $handler_file );
+			$deleted = (bool) $wp_filesystem->delete( $handler_file );
 
 			// The drop-in changed — System Info's cached ownership verdict is
-			// stale (audit #888 finding 25).
-			if ( class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
+			// stale (audit #888 finding 25). Only flush on a successful delete,
+			// mirroring create().
+			if ( $deleted && class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 				System_Info::flush_dropin_cache();
 			}
 		}

@@ -796,7 +796,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 * with only the batch ID as argument. The transient is deleted on
 		 * consumption (Cron::litespeed_crawler_batch()) and expires after
 		 * {@see DEFERRED_BATCH_TTL} even when never consumed; deactivation also
-		 * clears the events via Cron::SCHEDULED_HOOKS.
+		 * clears the events via Cron::SCHEDULED_HOOKS. Orphaned payloads
+		 * (transients whose event was cleared) therefore live at most two hours.
 		 *
 		 * @param string[] $urls URLs to defer.
 		 * @return void
@@ -815,11 +816,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 			$chunks = array_chunk( $urls, self::DEFERRED_BATCH_MAX_URLS );
 
 			foreach ( $chunks as $chunk ) {
-				$chunk         = array_values( $chunk );
-				$batch_id      = md5( microtime() . implode( "\n", $chunk ) );
+				$chunk = array_values( $chunk );
+				// uniqid('', true) adds entropy so two chunks generated within the
+				// same second (or with identical content) cannot collide.
+				$batch_id      = md5( uniqid( '', true ) . implode( "\n", $chunk ) );
 				$transient_key = Util::transient_key( 'wppo_crawler_batch_' . $batch_id );
 
 				if ( set_transient( $transient_key, $chunk, self::DEFERRED_BATCH_TTL ) ) {
+					// WP-Cron unpacks stored args positionally: the callback must
+					// receive the batch ID string as its single argument, so the
+					// args array is exactly array( $batch_id ).
 					$args = array( $batch_id );
 				} else {
 					// Transient storage unavailable — fall back to bounded
@@ -827,8 +833,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					$args = array( $chunk );
 				}
 
-				if ( ! wp_next_scheduled( 'wppo_litespeed_crawler_batch', array( $args ) ) ) {
-					wp_schedule_single_event( time() + $delay, 'wppo_litespeed_crawler_batch', array( $args ) );
+				if ( ! wp_next_scheduled( 'wppo_litespeed_crawler_batch', $args ) ) {
+					wp_schedule_single_event( time() + $delay, 'wppo_litespeed_crawler_batch', $args );
 				}
 			}
 		}

@@ -188,7 +188,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 * @return bool True when the host is exactly fonts.googleapis.com.
 		 */
 		private function is_google_fonts_url( string $url ): bool {
-			return 'fonts.googleapis.com' === wp_parse_url( $url, PHP_URL_HOST );
+			// Hostnames are DNS case-insensitive: FONTS.GOOGLEAPIS.COM must
+			// match too (Part 2 review).
+			return 'fonts.googleapis.com' === strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
 		}
 
 		/**

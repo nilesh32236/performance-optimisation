@@ -415,7 +415,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
 						$obj = 'wppo';
 					} elseif ( ! empty( $status['foreign_dropin'] ) ) {
 						// Try to detect if foreign is LSCache's object cache.
-						$path     = WP_CONTENT_DIR . '/object-cache.php';
+						// Use the instance's containment-validated path — the
+						// wppo_object_cache_dropin_path filter may relocate the
+						// drop-in within wp-content (Part 2 review).
+						$path     = $oc->get_dropin_path();
 						$contents = '';
 						if ( is_readable( $path ) && filesize( $path ) < 1048576 ) {
 							$contents_raw = file_get_contents( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents

@@ -452,16 +452,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 
 				// Hard cap the option size (audit #888 finding 10): 14 days ×
 				// 200 paths × 5 metrics can exceed 1MB on high-traffic sites.
-				// Oldest days (and, within the current day, oldest paths) are
-				// dropped until both the bucket count and the serialized size
-				// stay under budget, regardless of traffic volume.
+				// Oldest days (and, when only one day remains, its oldest
+				// paths) are dropped until both the bucket count and the
+				// serialized size stay under budget, regardless of traffic.
 				while ( ! empty( $all ) ) {
-					$encoded_size = strlen( (string) wp_json_encode( $all ) );
-					$total_paths  = 0;
+					$encoded     = wp_json_encode( $all );
+					$total_paths = 0;
 					foreach ( $all as $day_bucket ) {
 						$total_paths += count( is_array( $day_bucket ) ? $day_bucket : array() );
 					}
-					if ( $total_paths <= self::MAX_TOTAL_PATHS && $encoded_size <= self::MAX_OPTION_BYTES ) {
+
+					$under_path_budget = $total_paths <= self::MAX_TOTAL_PATHS;
+					// A failed encode is treated as over budget so the loop
+					// makes progress (drops the oldest day) instead of
+					// persisting potentially oversized data.
+					$under_byte_budget = false !== $encoded && strlen( (string) $encoded ) <= self::MAX_OPTION_BYTES;
+
+					if ( $under_path_budget && $under_byte_budget ) {
 						break;
 					}
 
@@ -470,18 +477,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\RUM' ) ) {
 						break;
 					}
 
-					$oldest_day = $all[ $oldest_day_key ];
-					if ( 1 === count( $all ) && is_array( $oldest_day ) && count( $oldest_day ) > self::MAX_PATHS_PER_DAY ) {
-						// Single day still over budget — trim its oldest paths.
-						$oldest_day_count = count( $oldest_day );
-						while ( $oldest_day_count > max( 1, (int) ( self::MAX_TOTAL_PATHS / 2 ) ) ) {
-							array_shift( $oldest_day );
-							--$oldest_day_count;
+					if ( 1 === count( $all ) && is_array( $all[ $oldest_day_key ] ) ) {
+						// Never drop the only day entirely — halve it and stop.
+						// Defensive: a single day is already bounded by
+						// MAX_PATHS_PER_DAY paths, so the byte budget should
+						// hold; this keeps a pathological day from being
+						// discarded wholesale before the loop stops.
+						$half = array_slice( $all[ $oldest_day_key ], (int) ( count( $all[ $oldest_day_key ] ) / 2 ) );
+						if ( ! empty( $half ) ) {
+							$all[ $oldest_day_key ] = $half;
 						}
-						$all[ $oldest_day_key ] = $oldest_day;
 						break;
 					}
-
 					unset( $all[ $oldest_day_key ] );
 				}
 

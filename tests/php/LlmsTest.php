@@ -266,7 +266,9 @@ class LlmsTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_query_var' )->justReturn( 0 );
 		Functions\when( 'headers_sent' )->justReturn( true );
 
-		// Log::add writes via $wpdb->insert.
+		// Log::add writes via $wpdb->insert — save the previous instance so
+		// shared state is restored even when assertions fail (Part 2 review).
+		$prev_wpdb = $GLOBALS['wpdb'] ?? null;
 		$GLOBALS['wpdb'] = new class() {
 			/**
 			 * Table prefix.
@@ -289,7 +291,8 @@ class LlmsTest extends \PHPUnit\Framework\TestCase {
 		};
 
 		// Existing readable llms.txt so generate() is not invoked.
-		$path = Llms::get_file_path( 'llms' );
+		$path         = Llms::get_file_path( 'llms' );
+		$prev_request = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
 		if ( ! is_dir( dirname( $path ) ) ) {
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
 			mkdir( dirname( $path ), 0775, true );
@@ -299,14 +302,26 @@ class LlmsTest extends \PHPUnit\Framework\TestCase {
 
 		$_SERVER['REQUEST_URI'] = '/llms.txt';
 
-		ob_start();
-		Llms::serve();
-		$output = ob_get_clean();
+		try {
+			ob_start();
+			Llms::serve();
+			$output = ob_get_clean();
 
-		$this->assertSame( '', $output );
-
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
-		unlink( $path );
+			$this->assertSame( '', $output );
+		} finally {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( $path );
+			if ( null === $prev_request ) {
+				unset( $_SERVER['REQUEST_URI'] );
+			} else {
+				$_SERVER['REQUEST_URI'] = $prev_request;
+			}
+			if ( null === $prev_wpdb ) {
+				unset( $GLOBALS['wpdb'] );
+			} else {
+				$GLOBALS['wpdb'] = $prev_wpdb;
+			}
+		}
 	}
 
 	/**

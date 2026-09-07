@@ -318,11 +318,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 			// #888 finding 7): assistive tech must know content is pending.
 			// Caller-provided attributes are respected — duplicated HTML
 			// attributes make browsers honour the first occurrence, so defaults
-			// are only added for keys absent from $attrs.
-			$aria_defaults = self::get_esi_placeholder_aria( $block );
-			$aria_str      = '';
+			// are only added for keys absent from $attrs. HTML attribute names
+			// are ASCII case-insensitive, so the override check is too (Part 2
+			// review).
+			$attr_keys_lower = array_map( 'strtolower', array_map( 'strval', array_keys( $attrs ) ) );
+			$aria_defaults   = self::get_esi_placeholder_aria( $block );
+			$aria_str        = '';
 			foreach ( $aria_defaults as $attr => $value ) {
-				if ( null === $value || array_key_exists( (string) $attr, $attrs ) ) {
+				if ( null === $value || in_array( strtolower( (string) $attr ), $attr_keys_lower, true ) ) {
 					continue;
 				}
 				$aria_str .= sprintf( ' %s="%s"', esc_attr( (string) $attr ), esc_attr( (string) $value ) );
@@ -355,17 +358,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_ESI' ) ) {
 		 * @return array<string,?string> Attribute => value map (null skips the attribute).
 		 */
 		private static function get_esi_placeholder_aria( string $block ): array {
-			$canonical = strtolower( str_replace( array( '_', ' ' ), '-', $block ) );
+			// Strip separators so documented aliases (admin-bar, admin_bar,
+			// my-account, my_account) all hit the same label entry (Part 2
+			// review).
+			$canonical = strtolower( str_replace( array( '_', ' ', '-' ), '', $block ) );
 
 			if ( 'nonce' === $canonical ) {
 				return array( 'aria-hidden' => 'true' );
 			}
 
 			$labels = array(
-				'cart'     => __( 'Loading shopping cart…', 'performance-optimisation' ),
-				'checkout' => __( 'Loading checkout…', 'performance-optimisation' ),
-				'account'  => __( 'Loading account menu…', 'performance-optimisation' ),
-				'adminbar' => __( 'Loading admin bar…', 'performance-optimisation' ),
+				'cart'      => __( 'Loading shopping cart…', 'performance-optimisation' ),
+				'checkout'  => __( 'Loading checkout…', 'performance-optimisation' ),
+				'account'   => __( 'Loading account menu…', 'performance-optimisation' ),
+				'myaccount' => __( 'Loading account menu…', 'performance-optimisation' ),
+				'adminbar'  => __( 'Loading admin bar…', 'performance-optimisation' ),
 			);
 
 			$default = sprintf(

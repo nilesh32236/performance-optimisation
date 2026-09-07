@@ -496,6 +496,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			}
 
 			// Fallback inline url() rewrite for <style> blocks and remaining style="url(...)" (mirrors LSCWP 394-440).
+			//
+			// Deliberately unrestricted by cdn_attr (Part 2 review): LSCWP's
+			// cdn_attr governs HTML attribute rewriting; CSS url() rewriting in
+			// <style> blocks has no attribute context and has always been
+			// unconditional, so configs that restrict a mapping to e.g. 'src'
+			// still get their stylesheet URLs CDN-rewritten. Inline
+			// style="..." attributes ARE attribute context and are gated on
+			// the mapping's 'style' allowance above.
 			$buffer = preg_replace_callback(
 				'#url\s*\(\s*(["\']?)' . preg_quote( $site_url, '#' ) . '([^"\')\s]*)\1\s*\)#i',
 				function ( $m ) use ( $mappings, $site_url ) {

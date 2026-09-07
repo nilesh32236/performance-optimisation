@@ -68,20 +68,21 @@ const InfoTable = ( { title, data, labels = {} } ) => {
 
 /**
  * Translate a machine boolean from the system_info REST payload into a
- * display label. Falls back to the raw value for legacy string payloads
+ * display label. Numeric/string booleans (1/0/'1'/'0') and legacy translated
+ * string payloads are handled too; anything else falls through unchanged
  * (audit #888 finding 20: booleans are locale-independent; translations
  * belong to the display layer).
  *
- * @param {boolean|string} value      Machine boolean (or legacy translated string).
- * @param {string}         trueLabel  Label for true.
- * @param {string}         falseLabel Label for false.
+ * @param {boolean|number|string|null|undefined} value      Machine boolean (or legacy translated string).
+ * @param {string}                               trueLabel  Label for true.
+ * @param {string}                               falseLabel Label for false.
  * @return {string} Display label.
  */
 const boolLabel = ( value, trueLabel, falseLabel ) => {
-	if ( value === true ) {
+	if ( value === true || value === 1 || value === '1' ) {
 		return trueLabel;
 	}
-	if ( value === false ) {
+	if ( value === false || value === 0 || value === '0' ) {
 		return falseLabel;
 	}
 	return value;

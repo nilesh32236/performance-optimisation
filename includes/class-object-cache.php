@@ -78,7 +78,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 		 */
 		public function __construct() {
 			$default_dropin = wp_normalize_path( WP_CONTENT_DIR . '/object-cache.php' );
-			$dropin_path    = wp_normalize_path( (string) apply_filters( 'wppo_object_cache_dropin_path', WP_CONTENT_DIR . '/object-cache.php' ) );
+			$filtered       = apply_filters( 'wppo_object_cache_dropin_path', WP_CONTENT_DIR . '/object-cache.php' );
+
+			// Non-string filter returns (arrays/objects) are rejected outright —
+			// casting would raise an Array-to-string conversion warning in PHP 8.
+			$dropin_path = is_string( $filtered ) ? wp_normalize_path( $filtered ) : $default_dropin;
 
 			// Path containment (audit #888 finding 22): the filter must never
 			// point reads/writes/deletes outside wp-content. Reject empty paths,
@@ -96,6 +100,20 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 			$this->dropin_path   = $dropin_path;
 			$this->config_path   = WP_CONTENT_DIR . '/wppo-redis-config.php';
 			$this->template_path = WPPO_PLUGIN_PATH . 'templates/object-cache.php';
+		}
+
+		/**
+		 * Active drop-in path (containment-validated).
+		 *
+		 * Consumers (e.g. System_Info::detect_dropin_ownership()) must use this
+		 * instead of assuming the canonical WP_CONTENT_DIR location, so a
+		 * relocated drop-in is still reported correctly.
+		 *
+		 * @since NEXT
+		 * @return string
+		 */
+		public function get_dropin_path(): string {
+			return $this->dropin_path;
 		}
 
 		/**
@@ -376,7 +394,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25).
-			System_Info::flush_dropin_cache();
+			if ( class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
+				System_Info::flush_dropin_cache();
+			}
 
 			// Optionally, ping cache flush if enabled just to clear old cruft.
 			wp_cache_flush();
@@ -415,7 +435,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Object_Cache' ) ) {
 
 			// The drop-in changed — System Info's cached ownership verdict is
 			// stale (audit #888 finding 25).
-			System_Info::flush_dropin_cache();
+			if ( class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
+				System_Info::flush_dropin_cache();
+			}
 
 			return true;
 		}

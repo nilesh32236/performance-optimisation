@@ -47,11 +47,19 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Deactivate' ) ) {
 
 			delete_option( 'wppo_preload_cron_offset' );
 			delete_option( 'wppo_img_scan_cursor' );
+			delete_option( 'wppo_img_scan_cursor_max' );
 
 			// LiteSpeed purge-sync queues (audit #888 finding 5): the fallback
 			// option has no natural expiry path once the plugin stops flushing.
 			delete_option( LiteSpeed_Integration::get_db_queue_key() );
 			delete_transient( Util::transient_key( 'wppo_lscache_tag_queue' ) );
+
+			// Deactivation can change drop-in ownership (WPPO drop-ins removed
+			// above, foreign ones may appear/disappear) — drop System Info's
+			// cached verdicts immediately instead of waiting out the TTL.
+			if ( class_exists( 'PerformanceOptimise\Inc\System_Info' ) ) {
+				System_Info::flush_dropin_cache();
+			}
 
 			Advanced_Cache_Handler::remove();
 
