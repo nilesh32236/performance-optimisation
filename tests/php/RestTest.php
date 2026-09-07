@@ -89,9 +89,9 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 		$result = $this->rest->permission_callback( $request );
 		$this->assertTrue( $result );
 
-		// Test fallback
+		// Test fallback.
 		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce';
-		$result_fallback = $this->rest->permission_callback();
+		$result_fallback            = $this->rest->permission_callback();
 		$this->assertTrue( $result_fallback );
 	}
 
