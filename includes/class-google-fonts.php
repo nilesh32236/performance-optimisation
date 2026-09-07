@@ -81,6 +81,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		}
 
 		/**
+		 * Failure-backoff TTL (seconds) for the Google Fonts fetch sentinels.
+		 *
+		 * Filterable via `wppo_google_fonts_backoff` so operators can tune the
+		 * backoff for slow or persistently blocked endpoints.
+		 *
+		 * @since NEXT
+		 * @return int
+		 */
+		public static function backoff_ttl(): int {
+			/**
+			 * Filters the Google Fonts failure-backoff TTL in seconds.
+			 *
+			 * @since NEXT
+			 * @param int $ttl Default 300 (5 minutes).
+			 */
+			return max( 60, (int) apply_filters( 'wppo_google_fonts_backoff', 5 * MINUTE_IN_SECONDS ) );
+		}
+
+		/**
 		 * Process a stylesheet <link> tag to replace Google Fonts URL with local cache.
 		 *
 		 * Hooked to style_loader_tag filter (priority 9, before minify_css at 10).
@@ -239,13 +258,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			);
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
-				set_transient( $fail_key, 1, 5 * MINUTE_IN_SECONDS );
+				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return '';
 			}
 
 			$css = wp_remote_retrieve_body( $response );
 			if ( empty( $css ) ) {
-				set_transient( $fail_key, 1, 5 * MINUTE_IN_SECONDS );
+				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return '';
 			}
 
@@ -374,7 +393,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}
-				set_transient( $fail_key, 1, 5 * MINUTE_IN_SECONDS );
+				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return false;
 			}
 
@@ -382,7 +401,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}
-				set_transient( $fail_key, 1, 5 * MINUTE_IN_SECONDS );
+				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return false;
 			}
 
@@ -391,10 +410,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				// The file $tmp is guaranteed to exist here due to prior checks,
 				// but rename failure means it was not moved. Clean it up
 				// unconditionally and back off — a persistent disk failure must
-				// not re-issue the remote fetch per request (review round 1,
-				// finding 6).
+				// not re-issue the remote fetch per request.
 				wp_delete_file( $tmp );
-				set_transient( $fail_key, 1, 5 * MINUTE_IN_SECONDS );
+				set_transient( $fail_key, 1, self::backoff_ttl() );
 			} else {
 				// Success — clear any prior failure sentinel.
 				delete_transient( $fail_key );

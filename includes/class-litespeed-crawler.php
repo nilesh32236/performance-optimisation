@@ -543,7 +543,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 					);
 					if ( is_array( $posts ) ) {
 						// Mirror the $wpdb branch: prime before the permalink loop
-						// (review round 1, finding 3). get_posts() may return IDs or
+						// . get_posts() may return IDs or
 						// WP_Post objects depending on fields handling.
 						if ( function_exists( '_prime_post_caches' ) ) {
 							_prime_post_caches( array_map( static fn( $p ) => (int) ( is_object( $p ) ? $p->ID : $p ), $posts ), false, false );
@@ -901,7 +901,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 		 *
 		 * Crawler getters read `Util::get_settings()`'s per-request memo
 		 * (audit #874 finding 2); a reset must also drop that memo so mid-test
-		 * re-stubs of `wppo_settings` take effect (review round 1, finding 5).
+		 * re-stubs of `wppo_settings` take effect.
 		 *
 		 * @since NEXT
 		 * @return void

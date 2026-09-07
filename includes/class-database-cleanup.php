@@ -800,9 +800,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		public static function get_revision_defaults( $settings = null ) {
 			if ( null === $settings ) {
 				$settings = Util::get_settings();
-				if ( ! is_array( $settings ) ) {
-					$settings = array();
-				}
 				$settings = $settings['database_cleanup'] ?? array();
 				if ( ! is_array( $settings ) ) {
 					$settings = array();

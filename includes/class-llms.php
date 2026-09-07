@@ -353,10 +353,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 
 			if ( in_array( $source, array( 'both', 'trends' ), true ) ) {
 				// The trends keys are hashed (md5(url)_strategy) and cannot be
-				// reversed to URLs, so high_value_urls + home are used as the
-				// proxy list whether or not trend history exists yet. The two
-				// former branches were identical — hoisted into one (review
-				// round 1, finding 9).
+				// reversed to URLs, so high_value_urls + home are the proxy list
+				// whether or not trend history exists yet.
 				$opts = Util::get_settings();
 				$high = isset( $opts['performance_audit']['high_value_urls'] ) && is_array( $opts['performance_audit']['high_value_urls'] ) ? $opts['performance_audit']['high_value_urls'] : array(); // phpcs:ignore Generic.Files.LineLength.TooLong
 				foreach ( $high as $h ) {

@@ -214,13 +214,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
-		 * Check if CCSS exists for a template hash.
-		 *
-		 * @param string $template_hash The template hash.
-		 * @return bool
-		 * @since NEXT
-		 */
-		/**
 		 * Reset the per-request CCSS existence/content memos.
 		 *
 		 * Called by the mutators (generate_and_store, clear_all) so a
@@ -240,7 +233,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		 *
 		 * @param string $template_hash The template hash.
 		 * @return bool
-		 * @since NEXT
 		 * @since NEXT Per-request memo (audit #874 finding 7), reset via reset_ccss_memo().
 		 */
 		public static function ccss_exists( string $template_hash ): bool {
@@ -284,7 +276,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			// mtime has 1-second granularity; include the size so two
 			// regenerations within the same second cannot serve stale content
-			// for the rest of the request (review round 1, finding 7).
+			// for the rest of the request.
 			$filesize  = filesize( $file );
 			$cache_key = $template_hash . ':' . $mtime . ':' . ( false === $filesize ? -1 : $filesize );
 			if ( array_key_exists( $cache_key, self::$ccss_content_cache ) ) {
@@ -295,7 +287,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			$content = file_get_contents( $file );
 			// An empty file is a failed generation: treat it as missing so the
 			// caller queues background regeneration instead of looping on the
-			// sub-500B guard forever (review round 1, finding 2).
+			// sub-500B guard forever.
 			self::$ccss_content_cache[ $cache_key ] = is_string( $content ) && '' !== $content ? $content : null;
 
 			return self::$ccss_content_cache[ $cache_key ];
@@ -1000,8 +992,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				file_put_contents( self::get_ccss_file( $template_hash ), $critical_css );
 			}
 
-			// The memo must reflect the fresh file within this request too.
+			// The memo must reflect the fresh file within this request too;
+			// clear PHP's stat cache so file_exists/mtime are not stale.
 			self::reset_ccss_memo();
+			clearstatcache( true, self::get_ccss_file( $template_hash ) );
 
 			if ( self::ccss_exists( $template_hash ) ) {
 				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'ready', WEEK_IN_SECONDS );
@@ -1267,8 +1261,10 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			}
 
 			// Files are gone — the per-request existence memo must not keep
-			// reporting them (audit #874 finding 7).
+			// reporting them (audit #874 finding 7); clear PHP's stat cache so
+			// file_exists does not return stale results for deleted paths.
 			self::reset_ccss_memo();
+			clearstatcache( true, $dir );
 
 			// Also clear status transients.
 			$templates = self::get_templates();

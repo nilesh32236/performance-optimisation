@@ -395,7 +395,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			// Settings and home URLs are blog-keyed and need no destructive
 			// clear; the permalink memo additionally keys by blog ID, but it is
 			// dropped here too so any memo written before the switch (e.g. a
-			// cached ID on the previous site) cannot leak (audit #874 review).
+			// cached ID on the previous site) cannot leak.
 			// The hook params are unused (keys already isolate) — consumed
 			// explicitly to satisfy the unused-parameter sniff.
 			unset( $new_blog_id, $prev_blog_id );

@@ -453,6 +453,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cron' ) ) {
 				foreach ( $query_batch_posts as $page_id ) {
 					$page_url = Util::memoized_permalink( (int) $page_id );
 
+					// Unresolvable IDs (deleted mid-batch, filtered post types)
+					// would otherwise consume a cron slot for nothing — mirror
+					// the crawler's empty-permalink guard.
+					if ( '' === $page_url ) {
+						continue;
+					}
+
 					if ( Util::is_url_excluded( $page_url, $exclude_urls ) ) {
 						continue;
 					}

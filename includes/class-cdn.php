@@ -85,8 +85,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			// page with 3 mappings recompiled the same patterns ~120x. Pure
 			// function of $pattern, so no invalidation is needed (except tests:
 			// reset_cache()). Mirrors the static $cache pattern of
-			// Util::is_url_excluded(); keyed by the raw pattern to keep the hot
-			// path hash-free (review round 1, finding 4).
+			// Util::is_url_excluded(); keyed by the trimmed pattern to keep the hot
+			// path hash-free.
 			if ( array_key_exists( $pattern, self::$regex_cache ) ) {
 				return self::$regex_cache[ $pattern ];
 			}

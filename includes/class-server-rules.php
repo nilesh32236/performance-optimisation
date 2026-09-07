@@ -120,9 +120,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_nextgen_rewrite_enabled_for_nginx' ) ) {
 				$use_nextgen = LiteSpeed_Integration::is_nextgen_rewrite_enabled_for_nginx();
 			} else {
-				$opts        = $options;
-				$enabled     = ! empty( $opts['litespeed_integration']['enableNextGenRewrite'] );
-				$convert     = ! empty( $opts['image_optimisation']['convertImg'] );
+				$enabled     = ! empty( $options['litespeed_integration']['enableNextGenRewrite'] );
+				$convert     = ! empty( $options['image_optimisation']['convertImg'] );
 				$use_nextgen = $enabled && $convert;
 				/**
 				 * Filter whether nginx next-gen map is enabled (fallback).
