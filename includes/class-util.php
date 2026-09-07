@@ -250,6 +250,51 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
+		 * Per-request permalink memo keyed by blog ID + post ID (audit #874
+		 * finding 1).
+		 *
+		 * Batch loops (Cron preload discovery, Crawler URL discovery) and
+		 * repeated calls for the same IDs (sitemap + post merges) would each
+		 * trigger a get_permalink() DB/cache round-trip; this collapses them
+		 * to one lookup per ID per request. Results are non-false strings —
+		 * failed lookups memoize as ''.
+		 *
+		 * @since NEXT
+		 * @var array<string, string>
+		 */
+		private static array $permalink_cache = array();
+
+		/**
+		 * Get a permalink through the per-request memo.
+		 *
+		 * The memo is keyed by blog ID + post ID so a `switch_to_blog()` mid-
+		 * request (cron/crawler loops) can never serve another site's
+		 * permalink for the same numeric ID (audit #874 Part review).
+		 *
+		 * @since NEXT
+		 * @param int $post_id Post ID.
+		 * @return string Permalink, or '' when unavailable (false from get_permalink()).
+		 */
+		public static function memoized_permalink( int $post_id ): string {
+			$key = self::current_blog_id() . ':' . $post_id;
+			if ( ! array_key_exists( $key, self::$permalink_cache ) ) {
+				$permalink                     = get_permalink( $post_id );
+				self::$permalink_cache[ $key ] = is_string( $permalink ) ? $permalink : '';
+			}
+			return self::$permalink_cache[ $key ];
+		}
+
+		/**
+		 * Clear the per-request permalink memo (testing isolation, switch_blog).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function clear_permalink_cache(): void {
+			self::$permalink_cache = array();
+		}
+
+		/**
 		 * Resolve current blog ID safely (handles Brain Monkey stub mis-configuration in tests).
 		 *
 		 * @since NEXT
@@ -348,10 +393,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * @return void
 		 */
 		public static function on_switch_blog( $new_blog_id, $prev_blog_id ): void {
-			// No destructive clear needed because get_settings() is blog-keyed;
-			// this hook exists as a safety net and to satisfy F-COMPAT-03 audit.
-			// Intentionally no-op: per-blog keying already isolates.
+			// Settings and home URLs are blog-keyed and need no destructive
+			// clear; the permalink memo additionally keys by blog ID, but it is
+			// dropped here too so any memo written before the switch (e.g. a
+			// cached ID on the previous site) cannot leak.
+			// The hook params are unused (keys already isolate) — consumed
+			// explicitly to satisfy the unused-parameter sniff.
 			unset( $new_blog_id, $prev_blog_id );
+			self::clear_permalink_cache();
 		}
 
 		/**
@@ -364,6 +413,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			self::$home_url_cache        = array();
 			self::$settings_cache        = array();
 			self::$settings_cache_loaded = array();
+			self::clear_permalink_cache();
 		}
 
 		/**

@@ -71,7 +71,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 		 * @return string Nginx configuration snippet.
 		 */
 		public static function get_nginx_rules(): string {
-			$options = get_option( 'wppo_settings', array() );
+			$options = Util::get_settings();
 			$rules   = array();
 
 			// Gzip Compression.
@@ -120,9 +120,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Server_Rules' ) ) {
 			if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration' ) && method_exists( 'PerformanceOptimise\Inc\LiteSpeed_Integration', 'is_nextgen_rewrite_enabled_for_nginx' ) ) {
 				$use_nextgen = LiteSpeed_Integration::is_nextgen_rewrite_enabled_for_nginx();
 			} else {
-				$opts        = get_option( 'wppo_settings', array() );
-				$enabled     = ! empty( $opts['litespeed_integration']['enableNextGenRewrite'] );
-				$convert     = ! empty( $opts['image_optimisation']['convertImg'] );
+				$enabled     = ! empty( $options['litespeed_integration']['enableNextGenRewrite'] );
+				$convert     = ! empty( $options['image_optimisation']['convertImg'] );
 				$use_nextgen = $enabled && $convert;
 				/**
 				 * Filter whether nginx next-gen map is enabled (fallback).

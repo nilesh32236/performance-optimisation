@@ -394,6 +394,14 @@ Filters the PageSpeed Insights API request timeout in seconds (default `60`, cla
 
 ---
 
+### `wppo_google_fonts_backoff`
+Filters the failure-backoff TTL in seconds for the Google Fonts fetch sentinel transients (`wppo_gf_fail_*`). When a Google Fonts CSS or font-file fetch fails, WPPO stores a short-lived sentinel so subsequent frontend requests skip the synchronous remote call until the sentinel expires (default `300`, clamped to a 60-second floor). @since NEXT.
+
+**Parameters:**
+- `$ttl` *(int)* — Backoff TTL in seconds.
+
+---
+
 ### `wppo_pagespeed_retry_delay`
 Filters the backoff delay in seconds before the single PageSpeed API retry on transport errors (default `2`, clamped 1–10). @since NEXT.
 

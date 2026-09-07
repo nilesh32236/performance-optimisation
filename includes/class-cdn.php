@@ -31,6 +31,16 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		private static bool $buffer_rewritten = false;
 
 		/**
+		 * Per-request compiled-wildcard memo for wildcard2regex().
+		 *
+		 * Keyed by the trimmed pattern string; reset via reset_cache().
+		 *
+		 * @since NEXT
+		 * @var array<string, string>
+		 */
+		private static array $regex_cache = array();
+
+		/**
 		 * Whether bypass constant is active.
 		 *
 		 * Mirrors LSCWP cdn.cls.php:106.
@@ -68,9 +78,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 			if ( '' === $pattern ) {
 				return '';
 			}
+
+			// Per-request memo (audit #874 finding 5): rewrite_buffer() invokes
+			// find_cdn_match() per attribute per asset, and each call re-derives
+			// the same ori_dir / include_dirs regexes per mapping — a 40-asset
+			// page with 3 mappings recompiled the same patterns ~120x. Pure
+			// function of $pattern, so no invalidation is needed (except tests:
+			// reset_cache()). Mirrors the static $cache pattern of
+			// Util::is_url_excluded(); keyed by the trimmed pattern to keep the hot
+			// path hash-free.
+			if ( array_key_exists( $pattern, self::$regex_cache ) ) {
+				return self::$regex_cache[ $pattern ];
+			}
+
 			// Escape then unescape * to .*.
 			$escaped = preg_quote( $pattern, '#' );
 			$escaped = str_replace( '\*', '.*', $escaped );
+
+			self::$regex_cache[ $pattern ] = $escaped;
+
 			return $escaped;
 		}
 
@@ -536,6 +562,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
 		 */
 		public static function reset_cache(): void {
 			self::$buffer_rewritten = false;
+			self::$regex_cache      = array();
 		}
 	}
 }

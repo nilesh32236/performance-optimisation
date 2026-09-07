@@ -36,6 +36,24 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		private const CCSS_DIR = '/cache/wppo/ccss';
 
 		/**
+		 * Per-request CCSS existence memo keyed by template hash (audit #874
+		 * finding 7). Reset via reset_ccss_memo() from the mutators.
+		 *
+		 * @since NEXT
+		 * @var array<string, bool>
+		 */
+		private static array $ccss_exists_cache = array();
+
+		/**
+		 * Per-request CCSS content memo keyed by "hash:mtime" (audit #874
+		 * finding 7). Reset via reset_ccss_memo() from the mutators.
+		 *
+		 * @since NEXT
+		 * @var array<string, string|null>
+		 */
+		private static array $ccss_content_cache = array();
+
+		/**
 		 * Above-fold selectors to match during extraction.
 		 *
 		 * Uses precise token-based matching to avoid false positives.
@@ -196,14 +214,105 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 		}
 
 		/**
+		 * Reset the per-request CCSS existence/content memos.
+		 *
+		 * Called by the mutators (generate_and_store, clear_all) so a
+		 * same-request generation or deletion stays visible to ccss_exists()
+		 * and get_ccss_content() (audit #874 finding 7).
+		 *
+		 * @since NEXT
+		 * @return void
+		 */
+		public static function reset_ccss_memo(): void {
+			self::$ccss_exists_cache  = array();
+			self::$ccss_content_cache = array();
+		}
+
+		/**
+		 * Invalidate the per-request CCSS memos for a single template hash.
+		 *
+		 * Unlike reset_ccss_memo() this keeps entries for other templates so a
+		 * single-template write inside a multi-template loop (get_status_all →
+		 * bulk regeneration) does not evict unrelated memo entries.
+		 *
+		 * @since NEXT
+		 * @param string $template_hash The template hash.
+		 * @return void
+		 */
+		private static function invalidate_ccss_memo( string $template_hash ): void {
+			unset( self::$ccss_exists_cache[ $template_hash ] );
+			foreach ( array_keys( self::$ccss_content_cache ) as $key ) {
+				// Content keys are "{hash}:{mtime}:{size}" — drop every
+				// versioned entry belonging to this hash.
+				if ( 0 === strpos( $key, $template_hash . ':' ) ) {
+					unset( self::$ccss_content_cache[ $key ] );
+				}
+			}
+		}
+
+		/**
 		 * Check if CCSS exists for a template hash.
 		 *
 		 * @param string $template_hash The template hash.
 		 * @return bool
-		 * @since NEXT
+		 * @since NEXT Per-request memo (audit #874 finding 7), reset via reset_ccss_memo().
 		 */
 		public static function ccss_exists( string $template_hash ): bool {
-			return file_exists( self::get_ccss_file( $template_hash ) );
+			// Per-request memo (audit #874 finding 7): get_status_all() stats
+			// one file per template and REST consumers may call it repeatedly
+			// within a request. The memo is invalidated by the mutators
+			// (reset_ccss_memo from generate_and_store / clear_all), so a
+			// same-request generation stays visible.
+			if ( array_key_exists( $template_hash, self::$ccss_exists_cache ) ) {
+				return self::$ccss_exists_cache[ $template_hash ];
+			}
+
+			self::$ccss_exists_cache[ $template_hash ] = file_exists( self::get_ccss_file( $template_hash ) );
+
+			return self::$ccss_exists_cache[ $template_hash ];
+		}
+
+		/**
+		 * Read the critical CSS for a template hash through a per-request
+		 * content memo keyed by mtime.
+		 *
+		 * Avoids the double stat + read per frontend hit (audit #874 finding
+		 * 7): a regenerated file has a new mtime and therefore re-reads, so
+		 * the inline contract is unaffected. Returns null when the file is
+		 * missing or unreadable.
+		 *
+		 * @since NEXT
+		 * @param string $template_hash Template hash.
+		 * @return string|null
+		 */
+		private static function get_ccss_content( string $template_hash ): ?string {
+			$file = self::get_ccss_file( $template_hash );
+			if ( ! self::ccss_exists( $template_hash ) ) {
+				return null;
+			}
+
+			$mtime = filemtime( $file );
+			if ( false === $mtime ) {
+				return null;
+			}
+
+			// mtime has 1-second granularity; include the size so two
+			// regenerations within the same second cannot serve stale content
+			// for the rest of the request.
+			$filesize  = filesize( $file );
+			$cache_key = $template_hash . ':' . $mtime . ':' . ( false === $filesize ? -1 : $filesize );
+			if ( array_key_exists( $cache_key, self::$ccss_content_cache ) ) {
+				return self::$ccss_content_cache[ $cache_key ];
+			}
+
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache file outside the WP filesystem abstraction.
+			$content = file_get_contents( $file );
+			// An empty file is a failed generation: treat it as missing so the
+			// caller queues background regeneration instead of looping on the
+			// sub-500B guard forever.
+			self::$ccss_content_cache[ $cache_key ] = is_string( $content ) && '' !== $content ? $content : null;
+
+			return self::$ccss_content_cache[ $cache_key ];
 		}
 
 		/**
@@ -905,7 +1014,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				file_put_contents( self::get_ccss_file( $template_hash ), $critical_css );
 			}
 
-			if ( file_exists( self::get_ccss_file( $template_hash ) ) ) {
+			// The memo must reflect the fresh file within this request too;
+			// clear PHP's stat cache so file_exists/mtime are not stale. Only
+			// this template's memo entries are invalidated — a bulk loop keeps
+			// the other templates' memo entries.
+			self::invalidate_ccss_memo( $template_hash );
+			clearstatcache( true, self::get_ccss_file( $template_hash ) );
+
+			if ( self::ccss_exists( $template_hash ) ) {
 				set_transient( Util::transient_key( 'wppo_ccss_status_' . $template_hash ), 'ready', WEEK_IN_SECONDS );
 				return true;
 			}
@@ -929,7 +1045,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return;
 			}
 			if ( is_user_logged_in() ) {
-				$options = get_option( 'wppo_settings', array() );
+				$options = Util::get_settings();
 				$enabled = ! empty( $options['cache_settings']['enableLoggedInCache'] ?? false );
 				if ( ! $enabled ) {
 					return;
@@ -938,24 +1054,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 
 			$template_slug = self::get_current_template_slug();
 			$template_hash = self::get_template_hash( $template_slug );
-			$file          = self::get_ccss_file( $template_hash );
 
-			if ( file_exists( $file ) ) {
-				$content = file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-				if ( ! empty( $content ) ) {
-					// Fallback when CCSS is too short (<500B) — treat as failed and inject async loadCSS guard.
-					if ( strlen( (string) $content ) < 500 ) {
-						echo '<script>!function(e){"use strict";var n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a),setTimeout(function(){r.media=o||"all"}),r.onload=function(){r.media=o||"all"}};e.wppoLoadCSS=n}(window);</script>' . "\n";
-						return;
-					}
-					echo '<style id="wppo-critical-css">' . "\n";
-					// Sanitized against HTML breakout tokens; see sanitize_inline_css().
-					echo self::sanitize_inline_css( $content ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
-					echo '</style>' . "\n";
-				} else {
-					// Empty CCSS file — fallback to async loader.
+			$content = self::get_ccss_content( $template_hash );
+			if ( null !== $content ) {
+				// Fallback when CCSS is too short (<500B) — treat as failed and inject async loadCSS guard.
+				if ( strlen( $content ) < 500 ) {
 					echo '<script>!function(e){"use strict";var n=function(n,t,o){var r=e.document.createElement("link"),a=t||e.document.getElementsByTagName("script")[0];r.rel="stylesheet",r.href=n,r.media="only x",a.parentNode.insertBefore(r,a),setTimeout(function(){r.media=o||"all"}),r.onload=function(){r.media=o||"all"}};e.wppoLoadCSS=n}(window);</script>' . "\n";
+					return;
 				}
+				echo '<style id="wppo-critical-css">' . "\n";
+				// Sanitized against HTML breakout tokens; see sanitize_inline_css().
+				echo self::sanitize_inline_css( $content ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- CSS content sanitized for the <style> context by sanitize_inline_css().
+				echo '</style>' . "\n";
 			} else {
 				// No CCSS file yet — queue async generation and never block the
 				// response. generate() fetches the page with a 30s timeout, so
@@ -1173,6 +1283,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 			if ( $wp_filesystem && $wp_filesystem->is_dir( $dir ) ) {
 				$wp_filesystem->delete( $dir, true );
 			}
+
+			// Files are gone — the per-request existence memo must not keep
+			// reporting them (audit #874 finding 7); a plain clearstatcache()
+			// drops all per-path stat entries so file_exists cannot serve stale
+			// results for individual deleted hash files (admin-only path).
+			self::reset_ccss_memo();
+			clearstatcache();
 
 			// Also clear status transients.
 			$templates = self::get_templates();

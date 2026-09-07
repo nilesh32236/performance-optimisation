@@ -81,6 +81,25 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		}
 
 		/**
+		 * Failure-backoff TTL (seconds) for the Google Fonts fetch sentinels.
+		 *
+		 * Filterable via `wppo_google_fonts_backoff` so operators can tune the
+		 * backoff for slow or persistently blocked endpoints.
+		 *
+		 * @since NEXT
+		 * @return int
+		 */
+		public static function backoff_ttl(): int {
+			/**
+			 * Filters the Google Fonts failure-backoff TTL in seconds.
+			 *
+			 * @since NEXT
+			 * @param int $ttl Default 300 (5 minutes).
+			 */
+			return max( 60, (int) apply_filters( 'wppo_google_fonts_backoff', 5 * MINUTE_IN_SECONDS ) );
+		}
+
+		/**
 		 * Process a stylesheet <link> tag to replace Google Fonts URL with local cache.
 		 *
 		 * Hooked to style_loader_tag filter (priority 9, before minify_css at 10).
@@ -196,9 +215,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		/**
 		 * Download Google Fonts CSS, fetch font files, rewrite URLs, and cache locally.
 		 *
+		 * Failure backoff (audit #874 finding 3): a failed CSS fetch sets a
+		 * short-lived transient sentinel so subsequent frontend requests skip
+		 * the synchronous remote call for a few minutes instead of re-issuing
+		 * a 20s wp_remote_get per request (self-DoS while Google is
+		 * unreachable). Mirrors the PageSpeed store_failure() sentinel.
+		 *
 		 * @param string $url The Google Fonts CSS URL.
 		 * @return string Local CSS URL on success, empty string on failure.
-		 * @since NEXT
+		 * @since NEXT Failure sentinel transient (wppo_gf_fail_*).
 		 */
 		public function download_and_rewrite( $url ) {
 			$url = $this->normalize_google_fonts_url( $url );
@@ -215,6 +240,13 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return $css_url;
 			}
 
+			$fail_key = Util::transient_key( 'wppo_gf_fail_' . $key );
+
+			// A recent failure — skip the remote call this cycle (backoff).
+			if ( get_transient( $fail_key ) ) {
+				return '';
+			}
+
 			// Fetch CSS from Google Fonts API.
 			$response = wp_remote_get(
 				$url,
@@ -225,13 +257,18 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			);
 
 			if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
+				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return '';
 			}
 
 			$css = wp_remote_retrieve_body( $response );
 			if ( empty( $css ) ) {
+				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return '';
 			}
+
+			// Success — clear any prior failure sentinel.
+			delete_transient( $fail_key );
 
 			// Ensure cache directories exist.
 			Util::prepare_cache_dir( $this->font_cache_dir . '/css' );
@@ -330,6 +367,15 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				return false;
 			}
 
+			$fail_key = Util::transient_key( 'wppo_gf_fail_' . md5( $url ) );
+
+			// A recent fetch failure — skip the remote call this cycle so a
+			// blocked fonts.gstatic.com cannot stall page generation on every
+			// request (audit #874 finding 3).
+			if ( get_transient( $fail_key ) ) {
+				return false;
+			}
+
 			$tmp = $dest . '.tmp.' . wp_rand();
 
 			$response = wp_remote_get(
@@ -346,6 +392,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}
+				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return false;
 			}
 
@@ -353,14 +400,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 				if ( file_exists( $tmp ) ) {
 					wp_delete_file( $tmp );
 				}
+				set_transient( $fail_key, 1, self::backoff_ttl() );
 				return false;
 			}
 
 			$result = rename( $tmp, $dest ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
 			if ( ! $result ) {
 				// The file $tmp is guaranteed to exist here due to prior checks,
-				// but rename failure means it was not moved. Clean it up unconditionally.
+				// but rename failure means it was not moved. Clean it up
+				// unconditionally and back off — a persistent disk failure must
+				// not re-issue the remote fetch per request.
 				wp_delete_file( $tmp );
+				set_transient( $fail_key, 1, self::backoff_ttl() );
+			} else {
+				// Success — clear any prior failure sentinel.
+				delete_transient( $fail_key );
 			}
 
 			return file_exists( $dest );
