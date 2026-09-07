@@ -389,8 +389,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 			$result = rename( $tmp, $dest ); // phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename
 			if ( ! $result ) {
 				// The file $tmp is guaranteed to exist here due to prior checks,
-				// but rename failure means it was not moved. Clean it up unconditionally.
+				// but rename failure means it was not moved. Clean it up
+				// unconditionally and back off — a persistent disk failure must
+				// not re-issue the remote fetch per request (review round 1,
+				// finding 6).
 				wp_delete_file( $tmp );
+				set_transient( $fail_key, 1, 5 * MINUTE_IN_SECONDS );
 			} else {
 				// Success — clear any prior failure sentinel.
 				delete_transient( $fail_key );

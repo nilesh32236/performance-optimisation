@@ -352,41 +352,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 			$urls = array();
 
 			if ( in_array( $source, array( 'both', 'trends' ), true ) ) {
-				// From wppo_web_vitals_trends keys.
-				$trends = get_option( 'wppo_web_vitals_trends', array() );
-				if ( is_array( $trends ) && ! empty( $trends ) ) {
-					// Also pull high_value_urls from performance_audit.
-					$opts = Util::get_settings();
-					$high = isset( $opts['performance_audit']['high_value_urls'] ) && is_array( $opts['performance_audit']['high_value_urls'] ) ? $opts['performance_audit']['high_value_urls'] : array(); // phpcs:ignore Generic.Files.LineLength.TooLong
-					foreach ( $high as $h ) {
-						$clean = esc_url_raw( (string) $h );
-						if ( '' !== $clean && ! in_array( $clean, $urls, true ) ) {
-							$urls[] = $clean;
-						}
+				// The trends keys are hashed (md5(url)_strategy) and cannot be
+				// reversed to URLs, so high_value_urls + home are used as the
+				// proxy list whether or not trend history exists yet. The two
+				// former branches were identical — hoisted into one (review
+				// round 1, finding 9).
+				$opts = Util::get_settings();
+				$high = isset( $opts['performance_audit']['high_value_urls'] ) && is_array( $opts['performance_audit']['high_value_urls'] ) ? $opts['performance_audit']['high_value_urls'] : array(); // phpcs:ignore Generic.Files.LineLength.TooLong
+				foreach ( $high as $h ) {
+					$clean = esc_url_raw( (string) $h );
+					if ( '' !== $clean && ! in_array( $clean, $urls, true ) ) {
+						$urls[] = $clean;
 					}
+				}
 
-					// Decode trends: keys are md5(url)_strategy; we need actual URLs from stored
-					// high_value list or fallback to home. Since trends keys are hashed, we
-					// cannot reverse — instead use the high_value_urls + home as proxy.
-					// Additionally, if trends exist, ensure home is first.
-					$home = Util::cached_home_url( '/' );
-					if ( ! in_array( $home, $urls, true ) ) {
-						array_unshift( $urls, $home );
-					}
-				} else {
-					// No trends yet — still include high_value_urls if any.
-					$opts = Util::get_settings();
-					$high = isset( $opts['performance_audit']['high_value_urls'] ) && is_array( $opts['performance_audit']['high_value_urls'] ) ? $opts['performance_audit']['high_value_urls'] : array(); // phpcs:ignore Generic.Files.LineLength.TooLong
-					foreach ( $high as $h ) {
-						$clean = esc_url_raw( (string) $h );
-						if ( '' !== $clean && ! in_array( $clean, $urls, true ) ) {
-							$urls[] = $clean;
-						}
-					}
-					$home = Util::cached_home_url( '/' );
-					if ( ! in_array( $home, $urls, true ) ) {
-						array_unshift( $urls, $home );
-					}
+				$home = Util::cached_home_url( '/' );
+				if ( ! in_array( $home, $urls, true ) ) {
+					array_unshift( $urls, $home );
 				}
 			}
 

@@ -13,6 +13,9 @@
 use PerformanceOptimise\Inc\Google_Fonts;
 use PerformanceOptimise\Inc\Cache;
 use PerformanceOptimise\Inc\CDN;
+use PerformanceOptimise\Inc\Critical_CSS;
+use PerformanceOptimise\Inc\LiteSpeed_Crawler;
+use PerformanceOptimise\Inc\Server_Rules;
 use PerformanceOptimise\Inc\Util;
 use Brain\Monkey\Functions;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
@@ -32,6 +35,13 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 	 * @var array<string, mixed>
 	 */
 	private $transients = array();
+
+	/**
+	 * In-memory options map backing the get_option alias.
+	 *
+	 * @var array<string, mixed>
+	 */
+	private $options = array();
 
 	/**
 	 * Remote-fetch call log (URL => count).
@@ -78,7 +88,11 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 		// direct-write fallback is exercised.
 		Functions\when( 'WP_Filesystem' )->justReturn( false );
 		unset( $GLOBALS['wp_filesystem'] );
-		Functions\when( 'get_option' )->justReturn( array() );
+		Functions\when( 'get_option' )->alias(
+			function ( $name, $fallback = false ) {
+				return array_key_exists( $name, $this->options ) ? $this->options[ $name ] : $fallback;
+			}
+		);
 		Functions\when( 'update_option' )->justReturn( true );
 		Functions\when( 'wp_normalize_path' )->returnArg();
 		Functions\when( 'content_url' )->justReturn( 'http://example.com/wp-content' );
@@ -281,6 +295,80 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 		$this->assertNotSame( $first, $other );
 		// Wildcards still expand.
 		$this->assertSame( 'wp\-content.*', CDN::wildcard2regex( 'wp-content*' ) );
+	}
+
+	/**
+	 * Test that a crawler getter honours re-stubbed settings after
+	 * LiteSpeed_Crawler::reset_cache() (review round 1, finding 5).
+	 */
+	public function test_crawler_getter_respects_restubbed_settings_after_reset(): void {
+		$this->install_stubs();
+
+		$this->options['wppo_settings'] = array(
+			'litespeed_integration' => array( 'crawler' => array( 'concurrency' => 4 ) ),
+		);
+		$this->assertSame( 4, LiteSpeed_Crawler::get_concurrency() );
+
+		// Re-stub mid-test; only a reset may expose the new value.
+		$this->options['wppo_settings'] = array(
+			'litespeed_integration' => array( 'crawler' => array( 'concurrency' => 2 ) ),
+		);
+		LiteSpeed_Crawler::reset_cache();
+		$this->assertSame( 2, LiteSpeed_Crawler::get_concurrency() );
+	}
+
+	/**
+	 * Test that Server_Rules reads through the Util settings memo: re-stubbed
+	 * settings apply after Util::clear_settings_cache() (audit #874 finding 4).
+	 */
+	public function test_server_rules_reads_via_memoized_settings(): void {
+		$this->install_stubs();
+
+		$this->options['wppo_settings'] = array(
+			'file_optimisation' => array( 'minifyJS' => true ),
+		);
+		$this->assertStringContainsString( 'gzip on;', Server_Rules::get_nginx_rules() );
+
+		$this->options['wppo_settings'] = array();
+		Util::clear_settings_cache();
+		$this->assertStringNotContainsString( 'gzip on;', Server_Rules::get_nginx_rules() );
+	}
+
+	/**
+	 * Test the CCSS existence memo: stable within a request, invalidated by
+	 * reset_ccss_memo() so deletion/generation in the same request is visible
+	 * (audit #874 finding 7 / review round 1, finding 10).
+	 */
+	public function test_ccss_existence_memo_and_reset(): void {
+		$this->install_stubs();
+
+		$hash = 'perf874memo';
+		$dir  = wp_normalize_path( WP_CONTENT_DIR . '/cache/wppo/ccss' );
+		if ( ! is_dir( $dir ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Test fixture.
+			mkdir( $dir, 0775, true );
+		}
+		$file = $dir . '/' . $hash . '.css';
+		if ( file_exists( $file ) ) {
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+			unlink( $file );
+		}
+
+		$this->assertFalse( Critical_CSS::ccss_exists( $hash ) );
+		// Memoize the miss...
+		$this->assertFalse( Critical_CSS::ccss_exists( $hash ) );
+		// ...then create the file: still false until the memo resets.
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents -- Test fixture.
+		file_put_contents( $file, 'body{}' );
+		$this->assertFalse( Critical_CSS::ccss_exists( $hash ) );
+
+		Critical_CSS::reset_ccss_memo();
+		$this->assertTrue( Critical_CSS::ccss_exists( $hash ) );
+		// Stable on repeat.
+		$this->assertTrue( Critical_CSS::ccss_exists( $hash ) );
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.unlink_unlink -- Test fixture cleanup.
+		unlink( $file );
 	}
 
 	/**

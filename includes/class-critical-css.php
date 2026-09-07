@@ -282,14 +282,21 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
 				return null;
 			}
 
-			$cache_key = $template_hash . ':' . $mtime;
+			// mtime has 1-second granularity; include the size so two
+			// regenerations within the same second cannot serve stale content
+			// for the rest of the request (review round 1, finding 7).
+			$filesize  = filesize( $file );
+			$cache_key = $template_hash . ':' . $mtime . ':' . ( false === $filesize ? -1 : $filesize );
 			if ( array_key_exists( $cache_key, self::$ccss_content_cache ) ) {
 				return self::$ccss_content_cache[ $cache_key ];
 			}
 
 			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local cache file outside the WP filesystem abstraction.
-			$content                                = file_get_contents( $file );
-			self::$ccss_content_cache[ $cache_key ] = is_string( $content ) ? $content : null;
+			$content = file_get_contents( $file );
+			// An empty file is a failed generation: treat it as missing so the
+			// caller queues background regeneration instead of looping on the
+			// sub-500B guard forever (review round 1, finding 2).
+			self::$ccss_content_cache[ $cache_key ] = is_string( $content ) && '' !== $content ? $content : null;
 
 			return self::$ccss_content_cache[ $cache_key ];
 		}
