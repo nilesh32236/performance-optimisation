@@ -78,29 +78,36 @@ class RestTest extends \PHPUnit\Framework\TestCase {
 	 * Test that permission_callback allows authorized users.
 	 */
 	public function test_permission_callback_checks_capability(): void {
-		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce';
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( 'test_nonce' );
 
 		Functions\when( 'wp_verify_nonce' )->justReturn( true );
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'current_user_can' )->justReturn( true );
 
-		$result = $this->rest->permission_callback();
+		$result = $this->rest->permission_callback( $request );
 		$this->assertTrue( $result );
+
+		// Test fallback
+		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce';
+		$result_fallback = $this->rest->permission_callback();
+		$this->assertTrue( $result_fallback );
 	}
 
 	/**
 	 * Test that permission_callback rejects unauthorized users.
 	 */
 	public function test_permission_callback_rejects_unauthorized(): void {
-		$_SERVER['HTTP_X_WP_NONCE'] = 'test_nonce';
+		$request = \Mockery::mock( \WP_REST_Request::class );
+		$request->shouldReceive( 'get_header' )->with( 'X-WP-Nonce' )->andReturn( 'test_nonce' );
 
 		Functions\when( 'wp_verify_nonce' )->justReturn( true );
 		Functions\when( 'sanitize_text_field' )->returnArg();
 		Functions\when( 'wp_unslash' )->returnArg();
 		Functions\when( 'current_user_can' )->justReturn( false );
 
-		$result = $this->rest->permission_callback();
+		$result = $this->rest->permission_callback( $request );
 		$this->assertFalse( $result );
 	}
 
