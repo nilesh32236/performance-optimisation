@@ -9,68 +9,13 @@
 use PerformanceOptimise\Inc\Database_Cleanup;
 use Brain\Monkey\Functions;
 
-// phpcs:disable Generic.Files.OneObjectStructurePerFile -- Minimal WP_Error stand-in is co-located by convention.
-// phpcs:disable WordPress.Files.FileName -- Declares a guarded WP_Error stand-in for error-path assertions.
+// phpcs:disable WordPress.Files.FileName -- Pulls in the shared WP_Error test stand-in from TelemetryTest.php.
 
+// The plugin constructs core's WP_Error on error paths; the unit environment
+// has no WP core, so reuse the guarded stand-in co-located in TelemetryTest.php
+// (require_once keeps it a single declaration whichever file loads first).
 if ( ! class_exists( 'WP_Error' ) ) {
-	/**
-	 * Minimal WP_Error stand-in for tests that exercise plugin error paths.
-	 *
-	 * Mirrors the stand-in declared in TelemetryTest.php (guarded by
-	 * class_exists so whichever test loads first wins).
-	 *
-	 * @package PerformanceOptimise\Tests
-	 */
-	class WP_Error {
-
-		/**
-		 * Error codes mapped to messages.
-		 *
-		 * @var array<string, string>
-		 */
-		public array $errors = array();
-
-		/**
-		 * Error code => arbitrary data map.
-		 *
-		 * @var array<string, mixed>
-		 */
-		public array $error_data = array();
-
-		/**
-		 * Constructor.
-		 *
-		 * @param string|int $code    Error code.
-		 * @param string     $message Error message.
-		 * @param mixed      $data    Optional error data.
-		 */
-		public function __construct( $code = '', $message = '', $data = null ) { // phpcs:ignore WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase
-			if ( '' !== $code ) {
-				$this->errors[ (string) $code ] = $message;
-			}
-			if ( null !== $data ) {
-				$this->error_data[ (string) $code ] = $data;
-			}
-		}
-
-		/**
-		 * First error code, or empty string.
-		 *
-		 * @return string|int
-		 */
-		public function get_error_code() { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
-			return '' === key( $this->errors ) ? '' : (string) key( $this->errors );
-		}
-
-		/**
-		 * First error message, or empty string.
-		 *
-		 * @return string
-		 */
-		public function get_error_message() { // phpcs:ignore WordPress.NamingConventions.ValidFunctionName.MethodNameInvalid
-			return (string) reset( $this->errors );
-		}
-	}
+	require_once __DIR__ . '/TelemetryTest.php';
 }
 
 /**
