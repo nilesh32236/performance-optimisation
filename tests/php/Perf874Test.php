@@ -6,6 +6,8 @@
  * - Cache::bump_stats_cache() transient invalidation (finding 6)
  * - CDN wildcard2regex per-request memo (finding 5)
  * - Util::memoized_permalink per-request memo (finding 1)
+ * - Crawler/Server_Rules settings-memo reads (findings 2, 4)
+ * - CCSS existence memo plus reset paths (finding 7)
  *
  * @package PerformanceOptimise\Tests
  */
@@ -286,6 +288,8 @@ class Perf874Test extends \PHPUnit\Framework\TestCase {
 	 */
 	public function test_wildcard2regex_is_memoized(): void {
 		$this->install_stubs();
+
+		CDN::reset_cache();
 
 		$first  = CDN::wildcard2regex( 'wp-content|wp-includes' );
 		$second = CDN::wildcard2regex( 'wp-content|wp-includes' );

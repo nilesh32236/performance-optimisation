@@ -223,7 +223,6 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Google_Fonts' ) ) {
 		 *
 		 * @param string $url The Google Fonts CSS URL.
 		 * @return string Local CSS URL on success, empty string on failure.
-		 * @since NEXT
 		 * @since NEXT Failure sentinel transient (wppo_gf_fail_*).
 		 */
 		public function download_and_rewrite( $url ) {

@@ -549,7 +549,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
 							_prime_post_caches( array_map( static fn( $p ) => (int) ( is_object( $p ) ? $p->ID : $p ), $posts ), false, false );
 						}
 						foreach ( $posts as $pid ) {
-							$permalink = Util::memoized_permalink( (int) ( is_object( $pid ) ? $pid->ID : $pid ) );
+							$permalink = Util::memoized_permalink( (int) ( is_object( $pid ) && isset( $pid->ID ) ? $pid->ID : ( is_object( $pid ) ? 0 : $pid ) ) );
 							if ( '' !== $permalink ) {
 								$post_urls[] = $permalink;
 							}

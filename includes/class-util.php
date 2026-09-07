@@ -250,7 +250,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		}
 
 		/**
-		 * Per-request permalink memo keyed by post ID (audit #874 finding 1).
+		 * Per-request permalink memo keyed by blog ID + post ID (audit #874
+		 * finding 1).
 		 *
 		 * Batch loops (Cron preload discovery, Crawler URL discovery) and
 		 * repeated calls for the same IDs (sitemap + post merges) would each
@@ -259,7 +260,7 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 		 * failed lookups memoize as ''.
 		 *
 		 * @since NEXT
-		 * @var array<int, string>
+		 * @var array<string, string>
 		 */
 		private static array $permalink_cache = array();
 

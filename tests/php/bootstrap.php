@@ -218,6 +218,15 @@ trait WPPO_Test_Bootstrap {
 		if ( class_exists( 'PerformanceOptimise\Inc\Image_Optimisation' ) ) {
 			\PerformanceOptimise\Inc\Image_Optimisation::clear_runtime_caches();
 		}
+		if ( class_exists( 'PerformanceOptimise\Inc\Critical_CSS' ) ) {
+			\PerformanceOptimise\Inc\Critical_CSS::reset_ccss_memo();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\CDN' ) ) {
+			\PerformanceOptimise\Inc\CDN::reset_cache();
+		}
+		if ( class_exists( 'PerformanceOptimise\Inc\LiteSpeed_Crawler' ) ) {
+			\PerformanceOptimise\Inc\LiteSpeed_Crawler::reset_cache();
+		}
 
 		// Pre-register frequently used WP functions to avoid "Cannot redeclare"
 		// PHP fatal errors when multiple test classes share one process.
