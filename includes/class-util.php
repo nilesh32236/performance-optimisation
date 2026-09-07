@@ -645,12 +645,14 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Util' ) ) {
 			$link_tag = self::get_preload_link( $href, $rel, $resource_type, $crossorigin, $type, $media, $fetchpriority );
 
 			// Only echo in front-end HTML contexts (wp_head / template rendering).
-			// Echoing during REST, AJAX, CLI, or admin contexts can inject HTML
-			// into JSON/CLI output; callers that need the markup there should use
-			// get_preload_link() and handle the string themselves. wp_is_json_request()
-			// also covers early-boot JSON responses that precede REST_REQUEST.
+			// Echoing during REST, AJAX, cron, CLI, or admin contexts can inject
+			// HTML into JSON/CLI output; callers that need the markup there should
+			// use get_preload_link() and handle the string themselves.
+			// wp_is_json_request() also covers early-boot JSON responses that
+			// precede REST_REQUEST.
 			if ( ( function_exists( 'is_admin' ) && is_admin() )
 				|| ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() )
+				|| ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() )
 				|| ( function_exists( 'wp_is_json_request' ) && wp_is_json_request() )
 				|| ( defined( 'REST_REQUEST' ) && REST_REQUEST )
 				|| ( defined( 'WP_CLI' ) && WP_CLI ) ) {

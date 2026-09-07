@@ -18,6 +18,13 @@ if ( ! class_exists( 'WP_Error' ) ) {
 	require_once __DIR__ . '/TelemetryTest.php';
 }
 
+// WPPO_DB_Mock lives in DatabaseCleanupTest.php; guarded require keeps
+// standalone runs of this file working (PHPUnit includes every *Test.php in
+// a full-suite run, so the guard only matters for filtered runs).
+if ( ! class_exists( 'WPPO_DB_Mock' ) ) {
+	require_once __DIR__ . '/DatabaseCleanupTest.php';
+}
+
 /**
  * Cleanup-method dispatch guard tests.
  *
@@ -25,13 +32,6 @@ if ( ! class_exists( 'WP_Error' ) ) {
  */
 class DatabaseCleanupGuardTest extends \PHPUnit\Framework\TestCase {
 	use WPPO_Test_Bootstrap;
-
-	/**
-	 * Tracks counts-cache invalidation.
-	 *
-	 * @var bool
-	 */
-	private bool $invalidated = false;
 
 	/**
 	 * Test that invalid method names return a WP_Error instead of fatals.
@@ -54,10 +54,29 @@ class DatabaseCleanupGuardTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
-	 * Test that non-string method names are rejected.
+	 * Provide non-string method values a malformed caller could send.
+	 *
+	 * @return array<string, array<int, mixed>>
 	 */
-	public function test_non_string_method_returns_wp_error(): void {
-		$res = Database_Cleanup::invoke_cleanup_method( null );
+	public static function invalid_method_provider(): array {
+		return array(
+			'null'           => array( null ),
+			'int'            => array( 123 ),
+			'bool'           => array( true ),
+			'array'          => array( array( 'clean_auto_drafts' ) ),
+			'empty string'   => array( '' ),
+			'unknown method' => array( 'does_not_exist' ),
+		);
+	}
+
+	/**
+	 * Test that non-string/unknown method names are rejected.
+	 *
+	 * @param mixed $method Invalid method value.
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider( 'invalid_method_provider' )]
+	public function test_invalid_method_values_return_wp_error( $method ): void {
+		$res = Database_Cleanup::invoke_cleanup_method( $method );
 
 		$this->assertInstanceOf( WP_Error::class, $res );
 		$this->assertSame( 'wppo_invalid_cleanup_method', $res->get_error_code() );

@@ -988,8 +988,12 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Database_Cleanup' ) ) {
 		 * @return mixed The invoked method's return value, or a `WP_Error` if the method returned `false` or is not callable.
 		 */
 		public static function invoke_cleanup_method( $method, ...$args ) {
+			// Whitelist against the canonical CLEANUP_METHOD_MAP values (single
+			// source of truth). The legacy public clean_revisions() remains
+			// callable directly (WP-CLI) but is intentionally excluded here —
+			// it is superseded by clean_revisions_advanced().
 			if ( ! is_string( $method )
-				|| ! isset( self::METHOD_TO_TYPE[ $method ] )
+				|| ! in_array( $method, array_values( self::CLEANUP_METHOD_MAP ), true )
 				|| ! is_callable( array( self::class, $method ) ) ) {
 				return new WP_Error(
 					'wppo_invalid_cleanup_method',

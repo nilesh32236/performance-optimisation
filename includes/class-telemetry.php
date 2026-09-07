@@ -983,10 +983,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Telemetry' ) ) {
 
 				// Re-read immediately before writing and union in keys another
 				// process registered in the meantime so concurrent scans cannot
-				// overwrite each other's index entries.
+				// overwrite each other's index entries. When a key exists in
+				// both maps the fresher (larger) expiry wins.
 				$fresh = self::read_transient_index();
 				foreach ( $fresh as $stored_key => $stored_expiry ) {
-					if ( ! array_key_exists( $stored_key, $index ) ) {
+					if ( ! array_key_exists( $stored_key, $index ) || $stored_expiry > $index[ $stored_key ] ) {
 						$index[ $stored_key ] = $stored_expiry;
 					}
 				}

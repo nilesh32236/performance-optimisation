@@ -42,9 +42,9 @@ class TelemetryTransientIndexTest extends \PHPUnit\Framework\TestCase {
 	private array $writes = array();
 
 	/**
-	 * Foreign key injected on a chosen read to simulate a concurrent writer.
+	 * Read number on which to inject the concurrent write.
 	 *
-	 * @var string|null
+	 * @var int|null
 	 */
 	private ?int $inject_on_read = null;
 
@@ -68,12 +68,18 @@ class TelemetryTransientIndexTest extends \PHPUnit\Framework\TestCase {
 		Functions\when( 'get_option' )->alias(
 			function ( $name, $fallback = false ) {
 				++$this->reads;
-				if ( null !== $this->inject_on_read && $this->reads === $this->inject_on_read ) {
-					// Simulate a concurrent process having written its key
-					// between our previous read and this (fresh) read.
-					$value                  = array_key_exists( $name, $this->options ) ? $this->options[ $name ] : $fallback;
-					$value                  = is_array( $value ) ? $value : array();
-					$value                  = array_merge( $value, $this->foreign );
+				if ( null !== $this->inject_on_read && $this->reads > $this->inject_on_read ) {
+					// Simulate a concurrent process having written its keys between
+					// our previous read and this one. Keys are added only when
+					// absent (merge semantics), so later reads — including the
+					// verify read — stay consistent with the plugin's own merge.
+					$value = array_key_exists( $name, $this->options ) ? $this->options[ $name ] : $fallback;
+					$value = is_array( $value ) ? $value : array();
+					foreach ( $this->foreign as $foreign_key => $foreign_expiry ) {
+						if ( ! array_key_exists( $foreign_key, $value ) ) {
+							$value[ $foreign_key ] = $foreign_expiry;
+						}
+					}
 					$this->options[ $name ] = $value;
 					return $value;
 				}
@@ -112,9 +118,10 @@ class TelemetryTransientIndexTest extends \PHPUnit\Framework\TestCase {
 	public function test_concurrent_key_is_merged_not_lost(): void {
 		$this->install_option_stubs();
 
-		// register_transient_key() reads: (1) initial read, (2) fresh re-read
-		// before the write, (3) verify read. Inject the concurrent write at
-		// read 2 — after our initial read, before our write.
+		// Inject the concurrent write on every read after the first — i.e. it
+		// lands between our initial read and the write (fresh re-read) and stays
+		// present for the verify read. This keeps the simulation correct even if
+		// the implementation adds or removes a get_option call.
 		$this->inject_on_read = 2;
 		$this->foreign        = array(
 			'wppo_concurrent_scan_key' => time() + HOUR_IN_SECONDS,

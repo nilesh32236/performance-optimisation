@@ -87,6 +87,28 @@ class CronHookParityTest extends \PHPUnit\Framework\TestCase {
 	}
 
 	/**
+	 * Normalizes recorded schedule entries into unique hook names.
+	 *
+	 * The wp_schedule_event() stub records (timestamp, recurrence, hook) while
+	 * the wp_schedule_single_event() stub records (timestamp, hook, args) —
+	 * both shapes are handled so future single-event scheduling keeps the
+	 * parity tests meaningful.
+	 *
+	 * @return string[]
+	 */
+	private function scheduled_hooks(): array {
+		$hooks = array();
+		foreach ( $this->scheduled as $entry ) {
+			if ( is_string( $entry[2] ?? null ) ) {
+				$hooks[] = $entry[2];
+			} elseif ( is_string( $entry[1] ?? null ) ) {
+				$hooks[] = $entry[1];
+			}
+		}
+		return array_values( array_unique( array_filter( $hooks, 'is_string' ) ) );
+	}
+
+	/**
 	 * Settings array with every feature that schedules a recurring cron enabled.
 	 *
 	 * @return array<string, mixed>
@@ -118,7 +140,7 @@ class CronHookParityTest extends \PHPUnit\Framework\TestCase {
 
 		$this->assertNotEmpty( $this->scheduled, 'Precondition: at least one recurring hook scheduled.' );
 
-		$scheduled_hooks = array_unique( array_column( $this->scheduled, 2 ) );
+		$scheduled_hooks = $this->scheduled_hooks();
 		foreach ( $scheduled_hooks as $hook ) {
 			$this->assertContains(
 				$hook,
@@ -162,7 +184,7 @@ class CronHookParityTest extends \PHPUnit\Framework\TestCase {
 		$this->cleared = array();
 		Cron::clear_cron_jobs();
 
-		$scheduled_hooks = array_unique( array_column( $this->scheduled, 2 ) );
+		$scheduled_hooks = $this->scheduled_hooks();
 		foreach ( $scheduled_hooks as $hook ) {
 			$this->assertContains(
 				$hook,
