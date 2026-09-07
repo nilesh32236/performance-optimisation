@@ -111,6 +111,127 @@ describe( 'WelcomePanel', () => {
 			).toBeInTheDocument();
 		} );
 		expect( cacheButton ).not.toHaveAttribute( 'aria-busy', 'true' );
+		// Dismissal is gated on the settings update succeeding.
+		expect( apiCall ).not.toHaveBeenCalledWith( 'dismiss_welcome' );
+		expect(
+			screen.getByText( 'Welcome to Performance Optimisation' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'does not dismiss the panel when update_settings rejects', async () => {
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		apiCall.mockImplementation( ( endpoint ) => {
+			if ( endpoint === 'update_settings' ) {
+				return Promise.reject( new Error( 'Network Error' ) );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <WelcomePanel /> );
+		const cacheButton = screen.getByRole( 'button', {
+			name: 'Enable Enable Page Caching',
+		} );
+
+		await act( async () => {
+			fireEvent.click( cacheButton );
+		} );
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to enable the feature.' )
+			).toBeInTheDocument();
+		} );
+		// A rejected update must never fire dismiss_welcome, otherwise the
+		// panel would disappear server-side with the feature not enabled.
+		expect( apiCall ).not.toHaveBeenCalledWith( 'dismiss_welcome' );
+		expect(
+			screen.getByText( 'Welcome to Performance Optimisation' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'hides the panel when update_settings and dismiss_welcome both succeed', async () => {
+		apiCall.mockImplementation( ( endpoint ) => {
+			if ( endpoint === 'update_settings' ) {
+				return Promise.resolve( { success: true } );
+			}
+			return Promise.resolve( { success: true } );
+		} );
+
+		render( <WelcomePanel /> );
+		const cacheButton = screen.getByRole( 'button', {
+			name: 'Enable Enable Page Caching',
+		} );
+
+		await act( async () => {
+			fireEvent.click( cacheButton );
+		} );
+		await waitFor( () => {
+			expect(
+				screen.queryByText( 'Welcome to Performance Optimisation' )
+			).not.toBeInTheDocument();
+		} );
+		expect( apiCall ).toHaveBeenCalledWith( 'dismiss_welcome' );
+	} );
+
+	it( 'shows the dismiss error when dismiss_welcome throws after a successful update', async () => {
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		apiCall.mockImplementation( ( endpoint ) => {
+			if ( endpoint === 'update_settings' ) {
+				return Promise.resolve( { success: true } );
+			}
+			return Promise.reject( new Error( 'Dismiss Network Error' ) );
+		} );
+
+		render( <WelcomePanel /> );
+		const cacheButton = screen.getByRole( 'button', {
+			name: 'Enable Enable Page Caching',
+		} );
+
+		await act( async () => {
+			fireEvent.click( cacheButton );
+		} );
+		// Per-call granularity: a thrown dismiss must not masquerade as an
+		// enable failure, since the feature was already enabled.
+		await waitFor( () => {
+			expect(
+				screen.getByText( 'Failed to dismiss the welcome panel.' )
+			).toBeInTheDocument();
+		} );
+		expect(
+			screen.queryByText( 'Failed to enable the feature.' )
+		).not.toBeInTheDocument();
+		expect(
+			screen.getByText( 'Welcome to Performance Optimisation' )
+		).toBeInTheDocument();
+	} );
+
+	it( 'keeps the panel visible when dismiss_welcome fails after a successful update', async () => {
+		jest.spyOn( console, 'error' ).mockImplementation( () => {} );
+		apiCall.mockImplementation( ( endpoint ) => {
+			if ( endpoint === 'update_settings' ) {
+				return Promise.resolve( { success: true } );
+			}
+			return Promise.resolve( {
+				success: false,
+				message: 'Dismiss failed',
+			} );
+		} );
+
+		render( <WelcomePanel /> );
+		const cacheButton = screen.getByRole( 'button', {
+			name: 'Enable Enable Page Caching',
+		} );
+
+		await act( async () => {
+			fireEvent.click( cacheButton );
+		} );
+		await waitFor( () => {
+			expect( screen.getByText( 'Dismiss failed' ) ).toBeInTheDocument();
+		} );
+		// Partial success: panel stays so the user can retry dismissal.
+		expect(
+			screen.getByText( 'Welcome to Performance Optimisation' )
+		).toBeInTheDocument();
+		expect( cacheButton ).not.toHaveAttribute( 'aria-busy', 'true' );
 	} );
 
 	it( 'handles API exception when attempting to enable a feature', async () => {
