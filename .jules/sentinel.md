@@ -30,6 +30,14 @@
 **Vulnerability:** The RUM beacon config reflected the full `$_SERVER['REQUEST_URI']` (including query strings) directly into an inline script tag. While mitigated by `wp_json_encode`, query parameters could be controlled by an attacker, posing a potential DOM XSS risk.
 **Learning:** `esc_url_raw` allows `?` and `=`, so attacker-controlled query parameters can still be reflected. Relying solely on `wp_json_encode` for protection is insufficient if the query string is not needed for the feature.
 **Prevention:** Always strip query strings from `REQUEST_URI` using `wp_parse_url($uri, PHP_URL_PATH)` before using it in configuration variables if the query string is not explicitly required.
+## 2026-09-02 - Prevent path traversal in directory deletion
+**Vulnerability:** Symlink path traversal leading to arbitrary directory deletion during uninstall.
+**Learning:** Recursive directory deletion functions must enforce strict prefix matching to ensure they don't escape intended boundaries (like WP_CONTENT_DIR).
+**Prevention:** Always validate that the target directory string starts with the expected normalized root path.
+## 2026-09-04 - Missing Nonce Verification in ESI AJAX Handler
+**Vulnerability:** The ESI AJAX handler ('wppo_esi_fragment') endpoint allowed users to process edge side includes fragments without proper nonce verification. A user could omit the '_wpnonce' query parameter to evade checks.
+**Learning:** The check 'if ( isset( $_GET['_wpnonce'] ) )' is not sufficient because it only enforces the nonce verification conditionally. This can be completely bypassed by omitting the token entirely in the request. The missing nonce verification check allows rendering fragments.
+**Prevention:** Ensure that nonce verification defaults to failing authorization if the nonce isn't present in the request.
 ## 2026-09-07 - Centralize Nonce Extraction in REST Routes
 **Vulnerability:** Reading nonces directly from raw $_SERVER variable bypassing WP REST abstraction layer.
 **Learning:** WP core utilizes WP_REST_Request abstraction and proper lower-casing to avoid bypass scenarios when proxy layers muddle headers.

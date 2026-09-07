@@ -349,7 +349,9 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		/**
 		 * Lazily initializes and returns the WP_Filesystem object.
 		 *
-		 * @return object|false The filesystem object or false on failure.
+		 * @return object|false|null The filesystem object, false when
+		 *                           Util::init_filesystem() fails, or null
+		 *                           before the first initialization attempt.
 		 * @since 1.6.0
 		 */
 		private function get_filesystem() {
@@ -2118,8 +2120,8 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 				}
 				// C. comment tag placeholder (purge comment-related cache).
 				$tags[] = 'C.' . (int) $page_id;
-				// W. widget.
-				$tags[] = 'W.';
+				// W. widget tags (W.{hash}) are only emitted by the ESI bridge —
+				// a bare 'W.' tag has an empty value and is intentionally skipped.
 				// REST.
 				$tags[] = 'REST';
 				// MIN.
@@ -2515,28 +2517,23 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Cache' ) ) {
 		 */
 		public static function get_cache_size(): string {
 			$stats = self::get_cache_stats();
-			// Preserve error strings from get_cache_stats() when filesystem is unavailable.
-			if ( isset( $stats['size'] ) && is_string( $stats['size'] ) ) {
-				// When cache_dir is empty (filesystem unavailable) the stats size is 'N/A' — fall back to legacy error handling.
-				if ( '' === $stats['cache_dir'] ) {
-					$instance = new self();
-					if ( ! $instance->get_filesystem() ) {
-						return __( 'Unable to initialize filesystem.', 'performance-optimisation' );
-					}
-					if ( ! $instance->filesystem->is_dir( $stats['cache_dir'] ) ) {
-						return __( 'Cache directory does not exist.', 'performance-optimisation' );
-					}
-					return __( 'N/A', 'performance-optimisation' );
-				}
-				// Detect dir-existence error: get_cache_stats returns N/A size when dir missing but filesystem ok.
-				// Re-check dir existence to return the historical error string for BC.
-				$instance = new self();
-				if ( $instance->get_filesystem() && ! $instance->filesystem->is_dir( $stats['cache_dir'] ) ) {
-					return __( 'Cache directory does not exist.', 'performance-optimisation' );
-				}
-				return $stats['size'];
+
+			if ( ! isset( $stats['size'] ) || ! is_string( $stats['size'] ) ) {
+				return (string) ( $stats['size'] ?? '' );
 			}
-			return (string) $stats['size'];
+
+			$cache_dir = $stats['cache_dir'] ?? '';
+			$instance  = new self();
+
+			if ( ! $instance->get_filesystem() ) {
+				return '' === $cache_dir ? __( 'Unable to initialize filesystem.', 'performance-optimisation' ) : $stats['size'];
+			}
+
+			if ( '' === $cache_dir || ! $instance->filesystem->is_dir( $cache_dir ) ) {
+				return __( 'Cache directory does not exist.', 'performance-optimisation' );
+			}
+
+			return $stats['size'];
 		}
 
 		/**

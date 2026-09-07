@@ -248,6 +248,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 
 			$site_name = get_bloginfo( 'name' );
 			$site_desc = get_bloginfo( 'description' );
+			// llms.txt is plain text: decode HTML entities (e.g. &amp; in the
+			// tagline) and strip any residual markup before writing. Native
+			// strip_tags() keeps this independent of the WP wrapper.
+			$site_desc = trim( strip_tags( html_entity_decode( (string) $site_desc, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags
+			$site_name = trim( strip_tags( html_entity_decode( (string) $site_name, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ) ); // phpcs:ignore WordPress.WP.AlternativeFunctions.strip_tags_strip_tags
 			$home_url  = Util::cached_home_url( '/' );
 
 			$content      = self::build_markdown( $urls, (string) $site_name, (string) $site_desc, (string) $home_url, false );
@@ -291,11 +296,11 @@ if ( ! class_exists( 'PerformanceOptimise\Inc\Llms' ) ) {
 
 			$ok = true;
 			if ( $fs && method_exists( $fs, 'put_contents' ) ) {
-				$ok = $fs->put_contents( $path, $content, FS_CHMOD_FILE ) && $ok;
+				$ok = $fs->put_contents( $path, $content, FS_CHMOD_FILE );
 				$ok = $fs->put_contents( $path_full, $content_full, FS_CHMOD_FILE ) && $ok;
 			} else {
 				$written = file_put_contents( $path, $content ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
-				$ok      = ( false !== $written ) && $ok;
+				$ok      = false !== $written;
 				$written = file_put_contents( $path_full, $content_full ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
 				$ok      = ( false !== $written ) && $ok;
 			}
